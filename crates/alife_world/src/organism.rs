@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkReceipt};
 use alife_core::{
     BiochemistryState, Blake3Digest, BodyEventDelta, CanonicalDigestBuilder, CreatureGenome,
     CreaturePhenotype, OrganismId, ScaffoldContractError, Tick, Validate, WorldEntityId,
@@ -10,6 +11,14 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 const ORGANISM_REGISTRY_SIGNATURE_ENCODING_VERSION: u16 = 1;
+
+fn is_zero_cognitive_work(value: &CognitiveWorkReceipt) -> bool {
+    *value == CognitiveWorkReceipt::zero()
+}
+
+fn is_zero_energy_debit(value: &f32) -> bool {
+    *value == 0.0
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrganismArchiveIdentity {
@@ -108,6 +117,10 @@ pub struct WorldOrganismRecord {
     birth_tick: Tick,
     lifecycle: OrganismLifecycle,
     archive: OrganismArchiveIdentity,
+    #[serde(default, skip_serializing_if = "is_zero_cognitive_work")]
+    cognitive_work: CognitiveWorkReceipt,
+    #[serde(default, skip_serializing_if = "is_zero_energy_debit")]
+    cognitive_energy_debit: f32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -153,6 +166,14 @@ impl WorldOrganismRecord {
         &self.archive
     }
 
+    pub fn cognitive_work(&self) -> &CognitiveWorkReceipt {
+        &self.cognitive_work
+    }
+
+    pub const fn cognitive_energy_debit(&self) -> f32 {
+        self.cognitive_energy_debit
+    }
+
     pub fn authoritative_admission_at(
         &self,
         world_tick: Tick,
@@ -188,6 +209,8 @@ impl WorldOrganismRecord {
             birth_tick,
             lifecycle: OrganismLifecycle::Alive,
             archive: OrganismArchiveIdentity::default(),
+            cognitive_work: CognitiveWorkReceipt::zero(),
+            cognitive_energy_debit: 0.0,
         };
         record.validate_contract()?;
         Ok(record)
@@ -228,6 +251,10 @@ impl WorldOrganismRecord {
         }
 
         self.biochemistry.validate_contract()?;
+        self.cognitive_work.validate_contract()?;
+        if !self.cognitive_energy_debit.is_finite() || self.cognitive_energy_debit < 0.0 {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
         let expected_age = self.age_at(self.biochemistry.tick)?;
         if self.biochemistry.development.age_ticks != expected_age {
             return Err(ScaffoldContractError::NonMonotonicTick);
@@ -256,6 +283,34 @@ impl WorldOrganismRecord {
     pub fn age_at(&self, current_tick: Tick) -> Result<Tick, ScaffoldContractError> {
         Tick::validate_monotonic(self.birth_tick, current_tick)?;
         Ok(Tick(current_tick.raw() - self.birth_tick.raw()))
+    }
+
+    pub fn account_cognitive_work(
+        &mut self,
+        receipt: CognitiveWorkReceipt,
+        policy: CognitiveWorkCostPolicy,
+    ) -> Result<f32, OrganismRegistryError> {
+        if !self.lifecycle.is_alive() {
+            return Err(OrganismRegistryError::DeadOrganism(self.organism_id));
+        }
+        self.validate_contract()?;
+        receipt.validate_contract()?;
+        let requested_debit = policy.energy_debit(&receipt)?;
+        let original_biochemistry = self.biochemistry;
+        let original_work = self.cognitive_work;
+        let original_debit = self.cognitive_energy_debit;
+        let applied_debit = requested_debit.min(self.biochemistry.body.energy);
+
+        self.biochemistry.body.energy -= applied_debit;
+        self.cognitive_work = receipt;
+        self.cognitive_energy_debit = applied_debit;
+        if let Err(error) = self.validate_contract() {
+            self.biochemistry = original_biochemistry;
+            self.cognitive_work = original_work;
+            self.cognitive_energy_debit = original_debit;
+            return Err(error.into());
+        }
+        Ok(applied_debit)
     }
 
     pub fn advance_biology(
@@ -478,11 +533,22 @@ impl WorldOrganismRegistry {
         next_tick: Tick,
         event: BodyEventDelta,
     ) -> Result<(), OrganismRegistryError> {
-        self
-            .records_by_organism
+        self.records_by_organism
             .get_mut(&organism_id.raw())
             .ok_or(OrganismRegistryError::UnknownOrganism(organism_id))?
             .advance_biology(next_tick, event)
+    }
+
+    pub fn account_cognitive_work(
+        &mut self,
+        organism_id: OrganismId,
+        receipt: CognitiveWorkReceipt,
+        policy: CognitiveWorkCostPolicy,
+    ) -> Result<f32, OrganismRegistryError> {
+        self.records_by_organism
+            .get_mut(&organism_id.raw())
+            .ok_or(OrganismRegistryError::UnknownOrganism(organism_id))?
+            .account_cognitive_work(receipt, policy)
     }
 
     pub fn mark_dead(
@@ -534,7 +600,9 @@ impl WorldOrganismRegistry {
         if record.archive().life_manifest_digest().is_none() {
             return Err(OrganismRegistryError::LifeManifestNotLinked(organism_id));
         }
-        if self.organism_by_world_entity.get(&record.world_entity_id().raw())
+        if self
+            .organism_by_world_entity
+            .get(&record.world_entity_id().raw())
             != Some(&organism_id)
         {
             return Err(OrganismRegistryError::IndexMismatch);

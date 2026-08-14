@@ -7,6 +7,189 @@ use crate::{CanonicalDigestBuilder, ScaffoldContractError, Validate};
 pub const COGNITIVE_WORK_SCHEMA_VERSION: u16 = 1;
 pub const COGNITIVE_WORK_POLICY_VERSION: u16 = 1;
 pub const MAX_COGNITIVE_WORK_COUNTER: u64 = 1_000_000_000;
+pub const MAX_COGNITIVE_ENERGY_PER_WORK_UNIT: f32 = 1.0;
+
+/// Bounded semantic operation counts collected by the cognitive runtime.
+///
+/// These counts describe work performed, not elapsed time or a particular
+/// execution backend. Runtime emitters can accumulate them independently and
+/// seal one deterministic receipt at the end of a tick.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CognitiveWorkCounters {
+    pub neural_updates: u64,
+    pub synapses_evaluated: u64,
+    pub dendritic_ops: u64,
+    pub focal_target_ops: u64,
+    pub memory_ops: u64,
+    pub concept_ops: u64,
+    pub gap_ops: u64,
+    pub prediction_ops: u64,
+    pub replay_ops: u64,
+    pub structural_ops: u64,
+    pub learning_ops: u64,
+    pub sleep_ops: u64,
+}
+
+impl CognitiveWorkCounters {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        neural_updates: u64,
+        synapses_evaluated: u64,
+        dendritic_ops: u64,
+        focal_target_ops: u64,
+        memory_ops: u64,
+        concept_ops: u64,
+        gap_ops: u64,
+        prediction_ops: u64,
+        replay_ops: u64,
+        structural_ops: u64,
+        learning_ops: u64,
+        sleep_ops: u64,
+    ) -> Result<Self, ScaffoldContractError> {
+        let counters = Self {
+            neural_updates,
+            synapses_evaluated,
+            dendritic_ops,
+            focal_target_ops,
+            memory_ops,
+            concept_ops,
+            gap_ops,
+            prediction_ops,
+            replay_ops,
+            structural_ops,
+            learning_ops,
+            sleep_ops,
+        };
+        counters.validate_contract()?;
+        Ok(counters)
+    }
+
+    pub const fn zero() -> Self {
+        Self {
+            neural_updates: 0,
+            synapses_evaluated: 0,
+            dendritic_ops: 0,
+            focal_target_ops: 0,
+            memory_ops: 0,
+            concept_ops: 0,
+            gap_ops: 0,
+            prediction_ops: 0,
+            replay_ops: 0,
+            structural_ops: 0,
+            learning_ops: 0,
+            sleep_ops: 0,
+        }
+    }
+
+    pub fn into_receipt(self) -> Result<CognitiveWorkReceipt, ScaffoldContractError> {
+        CognitiveWorkReceipt::aggregate(self)
+    }
+
+    fn values(self) -> [u64; 12] {
+        [
+            self.neural_updates,
+            self.synapses_evaluated,
+            self.dendritic_ops,
+            self.focal_target_ops,
+            self.memory_ops,
+            self.concept_ops,
+            self.gap_ops,
+            self.prediction_ops,
+            self.replay_ops,
+            self.structural_ops,
+            self.learning_ops,
+            self.sleep_ops,
+        ]
+    }
+
+    fn validate_counter_bounds(self) -> Result<(), ScaffoldContractError> {
+        if self
+            .values()
+            .into_iter()
+            .any(|value| value > MAX_COGNITIVE_WORK_COUNTER)
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        Ok(())
+    }
+}
+
+impl Default for CognitiveWorkCounters {
+    fn default() -> Self {
+        Self::zero()
+    }
+}
+
+impl Validate for CognitiveWorkCounters {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        (*self).validate_counter_bounds()
+    }
+}
+
+/// Optional world/species conversion from semantic work units into body
+/// energy expenditure. A disabled policy still permits the receipt to be
+/// recorded while charging no energy.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct CognitiveWorkCostPolicy {
+    pub enabled: bool,
+    pub energy_per_work_unit: f32,
+}
+
+impl CognitiveWorkCostPolicy {
+    pub const fn disabled() -> Self {
+        Self {
+            enabled: false,
+            energy_per_work_unit: 0.0,
+        }
+    }
+
+    pub fn enabled(energy_per_work_unit: f32) -> Result<Self, ScaffoldContractError> {
+        let policy = Self {
+            enabled: true,
+            energy_per_work_unit,
+        };
+        policy.validate_contract()?;
+        Ok(policy)
+    }
+
+    pub const fn is_enabled(self) -> bool {
+        self.enabled
+    }
+
+    pub fn energy_debit(
+        &self,
+        receipt: &CognitiveWorkReceipt,
+    ) -> Result<f32, ScaffoldContractError> {
+        self.validate_contract()?;
+        receipt.validate_contract()?;
+        if !self.enabled {
+            return Ok(0.0);
+        }
+        let debit = (receipt.weighted_total as f64 * f64::from(self.energy_per_work_unit)) as f32;
+        if !debit.is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        Ok(debit)
+    }
+}
+
+impl Default for CognitiveWorkCostPolicy {
+    fn default() -> Self {
+        Self::disabled()
+    }
+}
+
+impl Validate for CognitiveWorkCostPolicy {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if !self.energy_per_work_unit.is_finite()
+            || self.energy_per_work_unit < 0.0
+            || self.energy_per_work_unit > MAX_COGNITIVE_ENERGY_PER_WORK_UNIT
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CognitiveWorkReceipt {
@@ -43,6 +226,27 @@ impl CognitiveWorkReceipt {
         learning_ops: u64,
         sleep_ops: u64,
     ) -> Result<Self, ScaffoldContractError> {
+        CognitiveWorkCounters::new(
+            neural_updates,
+            synapses_evaluated,
+            dendritic_ops,
+            focal_target_ops,
+            memory_ops,
+            concept_ops,
+            gap_ops,
+            prediction_ops,
+            replay_ops,
+            structural_ops,
+            learning_ops,
+            sleep_ops,
+        )
+        .and_then(Self::aggregate)
+    }
+
+    pub fn aggregate(counters: CognitiveWorkCounters) -> Result<Self, ScaffoldContractError> {
+        counters.validate_contract()?;
+        let [neural_updates, synapses_evaluated, dendritic_ops, focal_target_ops, memory_ops, concept_ops, gap_ops, prediction_ops, replay_ops, structural_ops, learning_ops, sleep_ops] =
+            counters.values();
         let receipt = Self {
             schema_version: COGNITIVE_WORK_SCHEMA_VERSION,
             neural_updates,
@@ -88,21 +292,23 @@ impl CognitiveWorkReceipt {
     }
 
     pub fn recompute_total(&self) -> Result<u64, ScaffoldContractError> {
-        let counters = [
-            self.neural_updates,
-            self.synapses_evaluated,
-            self.dendritic_ops,
-            self.focal_target_ops,
-            self.memory_ops,
-            self.concept_ops,
-            self.gap_ops,
-            self.prediction_ops,
-            self.replay_ops,
-            self.structural_ops,
-            self.learning_ops,
-            self.sleep_ops,
-        ];
-        counters.into_iter().try_fold(0u64, |total, value| {
+        CognitiveWorkCounters {
+            neural_updates: self.neural_updates,
+            synapses_evaluated: self.synapses_evaluated,
+            dendritic_ops: self.dendritic_ops,
+            focal_target_ops: self.focal_target_ops,
+            memory_ops: self.memory_ops,
+            concept_ops: self.concept_ops,
+            gap_ops: self.gap_ops,
+            prediction_ops: self.prediction_ops,
+            replay_ops: self.replay_ops,
+            structural_ops: self.structural_ops,
+            learning_ops: self.learning_ops,
+            sleep_ops: self.sleep_ops,
+        }
+        .values()
+        .into_iter()
+        .try_fold(0u64, |total, value| {
             total
                 .checked_add(value)
                 .ok_or(ScaffoldContractError::ScalarOutOfRange)
@@ -141,25 +347,21 @@ impl CognitiveWorkReceipt {
     }
 
     fn validate_counter_bounds(&self) -> Result<(), ScaffoldContractError> {
-        for value in [
-            self.neural_updates,
-            self.synapses_evaluated,
-            self.dendritic_ops,
-            self.focal_target_ops,
-            self.memory_ops,
-            self.concept_ops,
-            self.gap_ops,
-            self.prediction_ops,
-            self.replay_ops,
-            self.structural_ops,
-            self.learning_ops,
-            self.sleep_ops,
-        ] {
-            if value > MAX_COGNITIVE_WORK_COUNTER {
-                return Err(ScaffoldContractError::ScalarOutOfRange);
-            }
+        CognitiveWorkCounters {
+            neural_updates: self.neural_updates,
+            synapses_evaluated: self.synapses_evaluated,
+            dendritic_ops: self.dendritic_ops,
+            focal_target_ops: self.focal_target_ops,
+            memory_ops: self.memory_ops,
+            concept_ops: self.concept_ops,
+            gap_ops: self.gap_ops,
+            prediction_ops: self.prediction_ops,
+            replay_ops: self.replay_ops,
+            structural_ops: self.structural_ops,
+            learning_ops: self.learning_ops,
+            sleep_ops: self.sleep_ops,
         }
-        Ok(())
+        .validate_counter_bounds()
     }
 }
 
