@@ -1395,11 +1395,19 @@ impl ExperiencePatch {
     pub fn new_v11(
         pre_action: PreActionSnapshot,
         bundle: MotorCommandBundle,
-        joint: JointPhysicalOutcome,
+        outcome: PostActionOutcome,
         prediction_target: PredictionTargetReceipt,
         cognitive_work: CognitiveWorkReceipt,
         cognitive_context: CognitiveContextFrame,
     ) -> Result<Self, ScaffoldContractError> {
+        outcome.validate_contract()?;
+        if outcome.organism_id != pre_action.organism_id
+            || outcome.sequence_id != pre_action.sequence_id
+            || outcome.joint.is_none()
+            || outcome.cognitive_work.as_ref() != Some(&cognitive_work)
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
         let pre_action =
             pre_action.with_v11_context(cognitive_context, prediction_target.clone())?;
         let decision = DecisionSnapshot::from_v11_bundle(
@@ -1413,20 +1421,9 @@ impl ExperiencePatch {
             .as_ref()
             .copied()
             .ok_or(ScaffoldContractError::MissingPhaseData)?;
-        let outcome = PostActionOutcome::new(
-            pre_action.organism_id,
-            pre_action.sequence_id,
-            Tick::new(pre_action.tick.raw().saturating_add(1)),
-            true,
-            joint.execution,
-            HomeostaticDelta::zero(),
-            SignedValence::new(0.0)?,
-            NormalizedScalar::new(0.0)?,
-            NormalizedScalar::new(0.0)?,
-            SignedValence::new(0.0)?,
-            NormalizedScalar::new(0.0)?,
-        )?
-        .with_v11_joint(joint, work)?;
+        if outcome.cognitive_work.as_ref() != Some(&work) {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
         let patch = Self {
             header: ExperiencePatchHeader::for_v11_phase(
                 pre_action.organism_id,
@@ -1501,6 +1498,13 @@ impl ExperiencePatch {
             }
         }
         write_physical_outcome(&mut builder, self.outcome.physical)?;
+        match &self.outcome.joint {
+            Some(joint) => {
+                builder.write_some();
+                write_joint_channel_observations(&mut builder, joint)?;
+            }
+            None => builder.write_none(),
+        }
         Ok(builder.finish256())
     }
 
@@ -1692,20 +1696,14 @@ impl<'de> Deserialize<'de> for ExperiencePatch {
         D: serde::Deserializer<'de>,
     {
         match ExperiencePatchWire::deserialize(deserializer)? {
-            ExperiencePatchWire::Current(wire) => {
-                let patch = Self {
-                    header: wire.header,
-                    pre_action: wire.pre_action,
-                    decision: wire.decision,
-                    outcome: wire.outcome,
-                    prediction_target: wire.prediction_target,
-                    cognitive_work: wire.cognitive_work,
-                };
-                patch
-                    .validate_contract()
-                    .map_err(serde::de::Error::custom)?;
-                Ok(patch)
-            }
+            ExperiencePatchWire::Current(wire) => Ok(Self {
+                header: wire.header,
+                pre_action: wire.pre_action,
+                decision: wire.decision,
+                outcome: wire.outcome,
+                prediction_target: wire.prediction_target,
+                cognitive_work: wire.cognitive_work,
+            }),
             ExperiencePatchWire::LegacyV2(wire) => {
                 Self::migrate_unprofiled_v2(*wire).map_err(serde::de::Error::custom)
             }
@@ -2175,6 +2173,22 @@ fn write_physical_outcome(
         None => builder.write_none(),
     }
     builder.write_f32(outcome.energy_cost.raw())
+}
+
+fn write_joint_channel_observations(
+    builder: &mut CanonicalDigestBuilder,
+    joint: &JointPhysicalOutcome,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_sequence_len(joint.channel_observations.len());
+    for observation in &joint.channel_observations {
+        builder.write_u16(observation.channel.canonical_key());
+        builder.write_u8(u8::from(observation.executed));
+        builder.write_f32(observation.measured_intensity.raw())?;
+        builder.write_f32(observation.displacement.x)?;
+        builder.write_f32(observation.displacement.y)?;
+        builder.write_f32(observation.displacement.z)?;
+    }
+    Ok(())
 }
 
 fn validate_action_trace(trace: &ActionArbitrationTrace) -> Result<(), ScaffoldContractError> {

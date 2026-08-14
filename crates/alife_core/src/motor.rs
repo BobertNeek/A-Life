@@ -27,7 +27,7 @@ pub enum MotorChannel {
 }
 
 impl MotorChannel {
-    fn canonical_key(self) -> u16 {
+    pub(crate) fn canonical_key(self) -> u16 {
         match self {
             Self::Locomotion => 0,
             Self::Orientation => 1,

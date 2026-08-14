@@ -3,8 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ActionId, CanonicalDigestBuilder, ExperienceSequenceId, OrganismId, ScaffoldContractError,
-    Tick, Validate,
+    ActionId, CanonicalDigestBuilder, ExperienceSequenceId, NormalizedScalar, OrganismId,
+    ScaffoldContractError, Tick, Validate,
 };
 
 pub const PREDICTION_TARGET_SCHEMA_VERSION: u16 = 1;
@@ -108,9 +108,6 @@ impl PredictionTargetReceipt {
 impl Validate for PredictionTargetReceipt {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         if self.schema_version != PREDICTION_TARGET_SCHEMA_VERSION
-            || self.successor_feature_abi == 0
-            || self.successor_features.is_empty()
-            || self.successor_features.len() > MAX_SUCCESSOR_FEATURES
             || self.source_digest == [0; 4]
             || self.target_digest == [0; 4]
             || !self.representation_variance.is_finite()
@@ -125,11 +122,7 @@ impl Validate for PredictionTargetReceipt {
         self.organism_id.validate()?;
         self.experience_sequence.validate()?;
         self.decision.validate()?;
-        for value in &self.successor_features {
-            if !value.is_finite() {
-                return Err(ScaffoldContractError::NonFiniteFloat);
-            }
-        }
+        validate_successor_features(self.successor_feature_abi, &self.successor_features)?;
         if digest_successor_features(self.successor_feature_abi, &self.successor_features)?
             != self.target_digest
         {
@@ -143,10 +136,7 @@ fn digest_successor_features(
     successor_feature_abi: u16,
     features: &[f32],
 ) -> Result<[u64; 4], ScaffoldContractError> {
-    if successor_feature_abi == 0 || features.is_empty() || features.len() > MAX_SUCCESSOR_FEATURES
-    {
-        return Err(ScaffoldContractError::InvalidDecisionEvidence);
-    }
+    validate_successor_features(successor_feature_abi, features)?;
     let mut builder = CanonicalDigestBuilder::new(b"ALIFE-V11-SUCCESSOR-FEATURES");
     builder.write_u16(successor_feature_abi);
     builder.write_sequence_len(features.len());
@@ -154,6 +144,22 @@ fn digest_successor_features(
         builder.write_f32(*value)?;
     }
     Ok(builder.finish256())
+}
+
+fn validate_successor_features(
+    successor_feature_abi: u16,
+    features: &[f32],
+) -> Result<(), ScaffoldContractError> {
+    if successor_feature_abi != SUCCESSOR_FEATURE_ABI_V1
+        || features.is_empty()
+        || features.len() > MAX_SUCCESSOR_FEATURES
+    {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    for value in features {
+        NormalizedScalar::new(*value)?;
+    }
+    Ok(())
 }
 
 fn feature_variance(features: &[f32]) -> Result<f32, ScaffoldContractError> {

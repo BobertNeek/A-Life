@@ -1,14 +1,16 @@
+use serde::Serialize;
+
 use alife_core::{
     ActionCandidate, ActionId, ActionKind, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome,
     BrainScaleTier, CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef,
     ChannelCommand, CognitiveContextFrame, CognitiveWorkReceipt, Confidence, DecisionSnapshot,
-    DevelopmentState, DurationTicks, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
-    HomeostaticDelta, HomeostaticSnapshot, Intensity, JointPhysicalOutcome,
-    MeasuredChannelObservation, MemoryExpectancySnapshot, MotorChannel, MotorCommandBundle,
-    NormalizedScalar, OrganismId, PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind,
-    Pose, PostActionOutcome, PredictionTargetReceipt, ScaffoldContractError, SensorProfile,
-    SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence,
-    Tick, Validate, Vec3f, Velocity, WeightSplitContract,
+    DevelopmentState, DurationTicks, ExperiencePatch, ExperienceSequenceId, HomeostaticDelta,
+    HomeostaticSnapshot, Intensity, JointPhysicalOutcome, MeasuredChannelObservation,
+    MemoryExpectancySnapshot, MotorChannel, MotorCommandBundle, NormalizedScalar, OrganismId,
+    PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome,
+    PredictionTargetReceipt, ScaffoldContractError, SensorProfile, SensorProfileProvenance,
+    SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence, Tick, Validate, Vec3f,
+    Velocity, WeightSplitContract,
 };
 
 fn organism() -> OrganismId {
@@ -75,6 +77,25 @@ fn joint_outcome() -> JointPhysicalOutcome {
         )
         .unwrap()],
     )
+    .unwrap()
+}
+
+fn measured_outcome(joint: JointPhysicalOutcome) -> PostActionOutcome {
+    PostActionOutcome::new(
+        organism(),
+        sequence(),
+        Tick::new(12),
+        false,
+        joint.execution,
+        HomeostaticDelta::zero(),
+        SignedValence::new(-0.25).unwrap(),
+        NormalizedScalar::new(0.4).unwrap(),
+        NormalizedScalar::new(0.3).unwrap(),
+        SignedValence::new(-0.2).unwrap(),
+        NormalizedScalar::new(0.6).unwrap(),
+    )
+    .unwrap()
+    .with_v11_joint(joint, work())
     .unwrap()
 }
 
@@ -156,22 +177,88 @@ fn legacy_pre_action(tick: Tick) -> alife_core::PreActionSnapshot {
     .unwrap()
 }
 
-fn legacy_patch() -> ExperiencePatch {
-    let pre = legacy_pre_action(Tick::new(10));
-    let action_decision = alife_core::heuristic_baseline_arbitrate(
-        organism(),
-        &[],
-        alife_core::ActionArbitrationConfig::default(),
-    )
-    .unwrap();
-    let decision = DecisionSnapshot::from_action_decision(
-        sequence(),
-        Tick::new(10),
-        Vec::new(),
-        action_decision,
-    )
-    .unwrap();
-    let outcome = PostActionOutcome::new(
+#[derive(Serialize)]
+struct LegacyV1PreAction {
+    abi_version: u16,
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    tick: Tick,
+    brain_class_id: alife_core::BrainClassId,
+    brain_scale_tier: BrainScaleTier,
+    brain_neuron_count: u32,
+    max_active_synapses: u32,
+    max_active_microtiles: u32,
+    routing_schema_version: u16,
+    lobe_layout: alife_core::LobeLayout,
+    routing_matrix: alife_core::RoutingMatrix,
+    genome_id: alife_core::GenomeId,
+    genome_schema_version: u16,
+    development_state: DevelopmentState,
+    weight_split: WeightSplitContract,
+    sensory_abi_version: SensoryAbiVersion,
+    chemistry_schema_version: u16,
+    body_pose: Pose,
+    body_velocity: Velocity,
+    homeostasis: HomeostaticSnapshot,
+    sensory: SensorySnapshot,
+    memory_expectancy: MemoryExpectancySnapshot,
+}
+
+#[derive(Serialize)]
+struct LegacyV1Decision {
+    abi_version: u16,
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    decision_tick: Tick,
+    action_abi_version: u16,
+    proposals: Vec<alife_core::ActionProposal>,
+    selected_action: alife_core::ActionCommand,
+    rejected_top_proposal: Option<alife_core::RankedActionProposal>,
+    ranked_top_proposals: Vec<alife_core::RankedActionProposal>,
+    arbitration_trace: alife_core::ActionArbitrationTrace,
+    confidence: Confidence,
+    status: alife_core::ActionDecisionStatus,
+}
+
+#[derive(Serialize)]
+struct LegacyHeader {
+    abi_version: u16,
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    world_tick: Tick,
+    phase: alife_core::ExperiencePatchPhase,
+}
+
+#[derive(Serialize)]
+struct LegacyV1Patch {
+    header: LegacyHeader,
+    pre_action: LegacyV1PreAction,
+    decision: LegacyV1Decision,
+    outcome: PostActionOutcome,
+}
+
+#[derive(Serialize)]
+struct LegacyV2Decision {
+    abi_version: u16,
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    decision_tick: Tick,
+    action_abi_version: u16,
+    selected_action: alife_core::ActionCommand,
+    confidence: Confidence,
+    evidence: alife_core::DecisionEvidence,
+}
+
+#[derive(Serialize)]
+struct LegacyV2Patch {
+    header: LegacyHeader,
+    pre_action: serde_json::Value,
+    decision: LegacyV2Decision,
+    outcome: PostActionOutcome,
+}
+
+fn legacy_outcome(abi_version: u16) -> PostActionOutcome {
+    let mut outcome = PostActionOutcome::new(
         organism(),
         sequence(),
         Tick::new(11),
@@ -191,15 +278,121 @@ fn legacy_patch() -> ExperiencePatch {
         NormalizedScalar::new(0.0).unwrap(),
     )
     .unwrap();
-    ExperiencePatchBuilder::new(sequence())
-        .record_pre_action(pre)
-        .unwrap()
-        .record_decision(decision)
-        .unwrap()
-        .record_outcome(outcome)
-        .unwrap()
-        .seal()
-        .unwrap()
+    outcome.abi_version = abi_version;
+    outcome
+}
+
+fn legacy_v1_bytes() -> Vec<u8> {
+    let tick = Tick::new(10);
+    let pre = legacy_pre_action(tick);
+    let evidence = pre.heuristic_evidence().unwrap();
+    let sensory = pre.sensory().clone();
+    let proposal = alife_core::ActionProposal::new(
+        ActionId(300),
+        ActionKind::Move,
+        0.75,
+        Confidence::new(0.8).unwrap(),
+        None,
+        0,
+        ActionTarget::new(None, Some(Vec3f::new(0.0, 0.0, 1.0))),
+        NormalizedScalar::new(0.4).unwrap(),
+    )
+    .unwrap();
+    let proposals = vec![proposal];
+    let action_decision = alife_core::heuristic_baseline_arbitrate(
+        organism(),
+        &proposals,
+        alife_core::ActionArbitrationConfig::default(),
+    )
+    .unwrap();
+    serde_json::to_vec(&LegacyV1Patch {
+        header: LegacyHeader {
+            abi_version: 1,
+            organism_id: organism(),
+            sequence_id: sequence(),
+            world_tick: tick,
+            phase: alife_core::ExperiencePatchPhase::Sealed,
+        },
+        pre_action: LegacyV1PreAction {
+            abi_version: 1,
+            organism_id: pre.organism_id,
+            sequence_id: pre.sequence_id,
+            tick: pre.tick,
+            brain_class_id: evidence.brain_class_id,
+            brain_scale_tier: evidence.brain_scale_tier,
+            brain_neuron_count: evidence.brain_neuron_count,
+            max_active_synapses: evidence.max_active_synapses,
+            max_active_microtiles: evidence.max_active_microtiles,
+            routing_schema_version: evidence.routing_schema_version,
+            lobe_layout: evidence.lobe_layout.clone(),
+            routing_matrix: evidence.routing_matrix.clone(),
+            genome_id: pre.genome_id,
+            genome_schema_version: pre.genome_schema_version,
+            development_state: pre.development_state.clone(),
+            weight_split: evidence.weight_split.clone(),
+            sensory_abi_version: sensory.abi_version,
+            chemistry_schema_version: pre.homeostasis().schema_version,
+            body_pose: pre.body().pose,
+            body_velocity: pre.body().velocity,
+            homeostasis: *pre.homeostasis(),
+            sensory,
+            memory_expectancy: evidence.memory_expectancy,
+        },
+        decision: LegacyV1Decision {
+            abi_version: 1,
+            organism_id: organism(),
+            sequence_id: sequence(),
+            decision_tick: tick,
+            action_abi_version: alife_core::ActionCommand::ABI_VERSION,
+            proposals,
+            selected_action: action_decision.selected,
+            rejected_top_proposal: action_decision.rejected_top_proposal,
+            ranked_top_proposals: action_decision.ranked_top_proposals,
+            arbitration_trace: action_decision.trace,
+            confidence: action_decision.selected.confidence,
+            status: action_decision.status,
+        },
+        outcome: legacy_outcome(1),
+    })
+    .unwrap()
+}
+
+fn legacy_v2_bytes() -> Vec<u8> {
+    let tick = Tick::new(10);
+    let pre = legacy_pre_action(tick);
+    let mut pre_value = serde_json::to_value(pre).unwrap();
+    pre_value["abi_version"] = serde_json::json!(2u16);
+    let action_decision = alife_core::heuristic_baseline_arbitrate(
+        organism(),
+        &[],
+        alife_core::ActionArbitrationConfig::default(),
+    )
+    .unwrap();
+    let decision =
+        DecisionSnapshot::from_action_decision(sequence(), tick, Vec::new(), action_decision)
+            .unwrap();
+    serde_json::to_vec(&LegacyV2Patch {
+        header: LegacyHeader {
+            abi_version: 2,
+            organism_id: organism(),
+            sequence_id: sequence(),
+            world_tick: tick,
+            phase: alife_core::ExperiencePatchPhase::Sealed,
+        },
+        pre_action: pre_value,
+        decision: LegacyV2Decision {
+            abi_version: 2,
+            organism_id: decision.organism_id,
+            sequence_id: decision.sequence_id,
+            decision_tick: decision.decision_tick,
+            action_abi_version: decision.action_abi_version,
+            selected_action: decision.selected_action,
+            confidence: decision.confidence,
+            evidence: decision.evidence,
+        },
+        outcome: legacy_outcome(2),
+    })
+    .unwrap()
 }
 
 #[test]
@@ -216,6 +409,27 @@ fn bounded_contracts_reject_overflow_and_mismatched_identity() {
         mismatched.validate_contract(),
         Err(ScaffoldContractError::MismatchedCreatureId)
     ));
+
+    assert!(PredictionTargetReceipt::for_successor(
+        organism(),
+        sequence(),
+        ActionId(300),
+        Tick::new(10),
+        [1, 2, 3, 4],
+        2,
+        vec![0.2, 0.8],
+    )
+    .is_err());
+    assert!(PredictionTargetReceipt::for_successor(
+        organism(),
+        sequence(),
+        ActionId(300),
+        Tick::new(10),
+        [1, 2, 3, 4],
+        1,
+        vec![1.2, 0.8],
+    )
+    .is_err());
 }
 
 #[test]
@@ -236,21 +450,24 @@ fn v11_patch_binds_exact_prediction_and_work_receipts_and_reads_legacy_explicitl
     let patch = ExperiencePatch::new_v11(
         legacy_pre_action(Tick::new(10)),
         bundle(),
-        joint_outcome(),
+        measured_outcome(joint_outcome()),
         prediction(),
         work(),
         context(),
     )
     .unwrap();
     let digest = patch.causal_digest().unwrap();
+    assert_eq!(patch.outcome(), &measured_outcome(joint_outcome()));
     assert_eq!(patch.prediction_target(), Some(&prediction()));
     assert_eq!(patch.cognitive_work(), Some(&work()));
     assert_ne!(digest, [0; 4]);
 
+    let mut changed_joint = joint_outcome();
+    changed_joint.channel_observations[0].measured_intensity = NormalizedScalar::new(0.2).unwrap();
     let changed = ExperiencePatch::new_v11(
         legacy_pre_action(Tick::new(10)),
         bundle(),
-        joint_outcome(),
+        measured_outcome(changed_joint),
         PredictionTargetReceipt::for_successor(
             organism(),
             sequence(),
@@ -267,11 +484,25 @@ fn v11_patch_binds_exact_prediction_and_work_receipts_and_reads_legacy_explicitl
     .unwrap();
     assert_ne!(digest, changed.causal_digest().unwrap());
 
-    let legacy = legacy_patch();
-    let bytes = serde_json::to_vec(&legacy).unwrap();
-    let decoded: ExperiencePatch = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(decoded.header().abi_version, ExperiencePatch::ABI_VERSION);
-    assert!(decoded.selected_bundle().is_none());
+    let decoded_v1: ExperiencePatch = serde_json::from_slice(&legacy_v1_bytes()).unwrap();
+    assert_eq!(
+        decoded_v1.header().abi_version,
+        ExperiencePatch::ABI_VERSION
+    );
+    assert!(decoded_v1.selected_bundle().is_none());
+    assert_eq!(
+        decoded_v1.pre_action().evidence_kind(),
+        alife_core::EvidenceKind::HeuristicBaseline
+    );
+    assert!(decoded_v1.validate_contract().is_ok());
+
+    let decoded_v2: ExperiencePatch = serde_json::from_slice(&legacy_v2_bytes()).unwrap();
+    assert_eq!(
+        decoded_v2.header().abi_version,
+        ExperiencePatch::ABI_VERSION
+    );
+    assert!(decoded_v2.selected_bundle().is_none());
+    assert!(decoded_v2.validate_contract().is_ok());
     assert_ne!(
         ExperiencePatch::ABI_VERSION,
         ExperiencePatch::V11_ABI_VERSION
