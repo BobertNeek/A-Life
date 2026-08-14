@@ -18,6 +18,8 @@ use alife_core::{
     PerceptionContextBlock, PerceptionFrame, PerceptionFrameDraft, PassiveBodyUpkeepPolicy,
     PhysicalActionOutcome, PhysicalContactKind, PlayerUtterance, Pose, Quatf,
     ReferenceActionExecution,
+    ChannelCommand, JointPhysicalOutcome, MeasuredChannelObservation, MotorChannel,
+    MotorCommandBundle,
     ReferenceActionExecutor, ReferenceActionFailure, ReferenceOutcomeObservation,
     ReferenceOutcomeObserver, ReferenceOutcomeRequest, ReferenceSensoryAdapter,
     ReferenceSensoryRequest, ScaffoldContractError, SensorProfile, SensorProfileProvenance,
@@ -185,6 +187,36 @@ pub struct HeadlessActionBiologyReceipt {
     pub action_result: HeadlessActionResult,
     pub biology_before: BiochemistryState,
     pub biology_after: BiochemistryState,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeadlessMotorChannelReceipt {
+    pub command: ChannelCommand,
+    pub observation: MeasuredChannelObservation,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeadlessMotorTransactionReceipt {
+    pub bundle: MotorCommandBundle,
+    pub outcome_tick: Tick,
+    pub succeeded: bool,
+    pub joint: JointPhysicalOutcome,
+    pub channel_receipts: Vec<HeadlessMotorChannelReceipt>,
+    pub body_event: BodyEventDelta,
+    pub biology_before: BiochemistryState,
+    pub biology_after: BiochemistryState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HeadlessMotorTransactionError {
+    Contract(ScaffoldContractError),
+    UnsupportedChannel(MotorChannel),
+}
+
+impl From<ScaffoldContractError> for HeadlessMotorTransactionError {
+    fn from(error: ScaffoldContractError) -> Self {
+        Self::Contract(error)
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -1898,6 +1930,155 @@ impl HeadlessWorld {
         Ok(result)
     }
 
+    /// Executes a bounded factorized command bundle as one world transaction.
+    ///
+    /// The compatibility adapter may execute several legacy physical actions
+    /// in deterministic channel order, but authoritative biology advances only
+    /// once and the returned outcome remains joint.
+    pub fn apply_registered_motor_bundle(
+        &mut self,
+        bundle: &MotorCommandBundle,
+        world_entity_id: WorldEntityId,
+    ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
+        let before = self.clone();
+        let result = self.apply_registered_motor_bundle_inner(bundle, world_entity_id);
+        if let Err(error) = result {
+            *self = before;
+            return Err(error);
+        }
+        result
+    }
+
+    fn apply_registered_motor_bundle_inner(
+        &mut self,
+        bundle: &MotorCommandBundle,
+        world_entity_id: WorldEntityId,
+    ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
+        let outcome_tick = self.validate_registered_motor_bundle(bundle, world_entity_id)?;
+        let biology_before = *self
+            .organism_registry
+            .get(bundle.organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .biochemistry();
+
+        let mut channels = bundle.channels.iter().collect::<Vec<_>>();
+        channels.sort_by_key(|command| motor_channel_order(command.channel));
+        let mut executed = Vec::with_capacity(channels.len());
+        for channel in channels {
+            let command = legacy_action_for_motor_channel(bundle.organism_id, channel)?;
+            let result = self.execute_command(&command)?;
+            executed.push((Some(channel.clone()), result));
+        }
+
+        let body_event = executed
+            .iter()
+            .fold(BodyEventDelta::zero(), |total, (_, result)| {
+                combine_body_event(total, result.body_event)
+            });
+        body_event.validate_contract()?;
+        self.organism_registry
+            .advance_biology(bundle.organism_id, outcome_tick, body_event)
+            .map_err(map_organism_registry_error)?;
+        self.validate_organism_bindings()?;
+        let biology_after = *self
+            .organism_registry
+            .get(bundle.organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .biochemistry();
+
+        let mut touched = BTreeSet::new();
+        let mut channel_observations = Vec::new();
+        let mut channel_receipts = Vec::new();
+        for (channel, result) in &executed {
+            for entity in &result.touched_entities {
+                touched.insert(entity.raw());
+            }
+            let Some(channel) = channel else {
+                continue;
+            };
+            if let Some(observation) = measured_motor_channel_observation(channel, result)? {
+                channel_observations.push(observation);
+                channel_receipts.push(HeadlessMotorChannelReceipt {
+                    command: channel.clone(),
+                    observation,
+                });
+            }
+        }
+        self.last_touched_entities = touched.into_iter().map(WorldEntityId).collect();
+        self.last_action_result = executed.last().map(|(_, result)| result.clone());
+
+        let joint = JointPhysicalOutcome::new(
+            aggregate_motor_physical_outcome(&executed)?,
+            channel_observations,
+        )?;
+        let succeeded = executed
+            .iter()
+            .all(|(_, result)| result.execution.succeeded);
+
+        #[cfg(test)]
+        if self.injected_post_action_failure {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+
+        Ok(HeadlessMotorTransactionReceipt {
+            bundle: bundle.clone(),
+            outcome_tick,
+            succeeded,
+            joint,
+            channel_receipts,
+            body_event,
+            biology_before,
+            biology_after,
+        })
+    }
+
+    fn validate_registered_motor_bundle(
+        &self,
+        bundle: &MotorCommandBundle,
+        world_entity_id: WorldEntityId,
+    ) -> Result<Tick, HeadlessMotorTransactionError> {
+        bundle.validate_contract()?;
+        world_entity_id.validate()?;
+        self.validate_organism_bindings()?;
+        if bundle.tick != self.tick {
+            return Err(ScaffoldContractError::NonMonotonicTick);
+        }
+        let outcome_tick = self
+            .tick
+            .raw()
+            .checked_add(1)
+            .map(Tick::new)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let record = self
+            .organism_registry
+            .get(bundle.organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if !record.lifecycle().is_alive()
+            || record.world_entity_id() != world_entity_id
+            || record.biochemistry().tick != self.tick
+        {
+            return Err(if record.biochemistry().tick != self.tick {
+                ScaffoldContractError::NonMonotonicTick
+            } else {
+                ScaffoldContractError::InvalidId
+            });
+        }
+        let object = self
+            .objects
+            .get(&world_entity_id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if object.kind != WorldObjectKind::Agent
+            || object.organism_id != Some(bundle.organism_id)
+            || self
+                .organism_registry
+                .get_by_world_entity_id(world_entity_id)
+                .is_none_or(|bound| bound.organism_id() != bundle.organism_id)
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        Ok(outcome_tick)
+    }
+
     pub fn apply_registered_command(
         &mut self,
         command: &ActionCommand,
@@ -3569,6 +3750,162 @@ fn classify_action(command: &ActionCommand) -> HeadlessAction {
     }
 }
 
+fn motor_channel_order(channel: MotorChannel) -> u16 {
+    match channel {
+        MotorChannel::Locomotion => 0,
+        MotorChannel::Orientation => 1,
+        MotorChannel::Manipulation => 2,
+        MotorChannel::Vocal => 3,
+        MotorChannel::Posture => 4,
+        MotorChannel::SpeciesSpecific(id) => 0x100 + u16::from(id),
+    }
+}
+
+fn legacy_action_for_motor_channel(
+    organism_id: OrganismId,
+    command: &ChannelCommand,
+) -> Result<ActionCommand, HeadlessMotorTransactionError> {
+    let (action_id, kind, target) = match command.channel {
+        MotorChannel::Locomotion => (
+            if command.primitive == HeadlessActionIds::APPROACH
+                || command.primitive == HeadlessActionIds::FLEE
+            {
+                command.primitive
+            } else {
+                ActionKind::Move.canonical_id()
+            },
+            ActionKind::Move,
+            command
+                .target
+                .unwrap_or_else(|| alife_core::ActionTarget::new(None, Some(command.direction))),
+        ),
+        MotorChannel::Manipulation => (
+            if command.primitive == HeadlessActionIds::EAT
+                || command.primitive == HeadlessActionIds::GRAB
+            {
+                command.primitive
+            } else {
+                ActionKind::Interact.canonical_id()
+            },
+            if command.primitive == HeadlessActionIds::GRAB {
+                ActionKind::Hold
+            } else {
+                ActionKind::Interact
+            },
+            command
+                .target
+                .unwrap_or_else(|| alife_core::ActionTarget::new(None, Some(command.direction))),
+        ),
+        MotorChannel::Vocal => (
+            ActionKind::Vocalize.canonical_id(),
+            ActionKind::Vocalize,
+            alife_core::ActionTarget::new(None, None),
+        ),
+        MotorChannel::Posture => (
+            ActionKind::Rest.canonical_id(),
+            ActionKind::Rest,
+            alife_core::ActionTarget::new(None, None),
+        ),
+        MotorChannel::Orientation | MotorChannel::SpeciesSpecific(_) => {
+            return Err(HeadlessMotorTransactionError::UnsupportedChannel(
+                command.channel,
+            ));
+        }
+    };
+    Ok(ActionCommand::structured(
+        organism_id,
+        action_id,
+        kind,
+        target,
+        command.intensity,
+        command.duration_ticks,
+        command.confidence,
+        0,
+        None,
+        None,
+        None,
+    )?)
+}
+
+fn combine_body_event(total: BodyEventDelta, event: BodyEventDelta) -> BodyEventDelta {
+    BodyEventDelta {
+        energy: (total.energy + event.energy).clamp(-1.0, 1.0),
+        damage: (total.damage + event.damage).clamp(0.0, 1.0),
+        temperature_stress: (total.temperature_stress + event.temperature_stress).clamp(0.0, 1.0),
+        nutrition: (total.nutrition + event.nutrition).clamp(0.0, 1.0),
+        social_contact: (total.social_contact + event.social_contact).clamp(0.0, 1.0),
+        reward_outcome: (total.reward_outcome + event.reward_outcome).clamp(-1.0, 1.0),
+        sleep_recovery: (total.sleep_recovery + event.sleep_recovery).clamp(0.0, 1.0),
+        mating_opportunity: (total.mating_opportunity + event.mating_opportunity).clamp(0.0, 1.0),
+    }
+}
+
+fn measured_motor_channel_observation(
+    command: &ChannelCommand,
+    result: &HeadlessActionResult,
+) -> Result<Option<MeasuredChannelObservation>, ScaffoldContractError> {
+    if command.channel != MotorChannel::Locomotion {
+        return Ok(None);
+    }
+    let displacement = result.execution.physical.displacement;
+    let measured_intensity = (distance(Vec3f::ZERO, displacement) / MOVE_STEP).clamp(0.0, 1.0);
+    Ok(Some(MeasuredChannelObservation::new(
+        command.channel,
+        result.execution.succeeded,
+        NormalizedScalar::new(measured_intensity)?,
+        displacement,
+    )?))
+}
+
+fn aggregate_motor_physical_outcome(
+    executed: &[(Option<ChannelCommand>, HeadlessActionResult)],
+) -> Result<PhysicalActionOutcome, ScaffoldContractError> {
+    let mut displacement = Vec3f::ZERO;
+    let mut contact = PhysicalContactKind::None;
+    let mut target_entity = None;
+    let mut collision_normal = None;
+    let mut contact_priority = 0;
+    let mut energy_cost = 0.0;
+
+    for (_, result) in executed {
+        let physical = result.execution.physical;
+        displacement = Vec3f::new(
+            displacement.x + physical.displacement.x,
+            displacement.y + physical.displacement.y,
+            displacement.z + physical.displacement.z,
+        );
+        energy_cost = (energy_cost + physical.energy_cost.raw()).clamp(0.0, 1.0);
+        let priority = physical_contact_priority(physical.contact);
+        if priority >= contact_priority && (priority > 0 || physical.target_entity.is_some()) {
+            contact = physical.contact;
+            target_entity = physical.target_entity;
+            collision_normal = physical.collision_normal;
+            contact_priority = priority;
+        }
+    }
+
+    let outcome = PhysicalActionOutcome {
+        contact,
+        target_entity,
+        displacement,
+        collision_normal,
+        energy_cost: NormalizedScalar::new(energy_cost)?,
+    };
+    outcome.validate_contract()?;
+    Ok(outcome)
+}
+
+fn physical_contact_priority(contact: PhysicalContactKind) -> u8 {
+    match contact {
+        PhysicalContactKind::None => 0,
+        PhysicalContactKind::Moved => 1,
+        PhysicalContactKind::Touch => 2,
+        PhysicalContactKind::Consumed => 3,
+        PhysicalContactKind::Blocked => 4,
+        PhysicalContactKind::Collision => 5,
+    }
+}
+
 fn validate_persisted_object(object: &WorldObject) -> Result<(), ScaffoldContractError> {
     object.id.validate()?;
     if object.label.is_empty() {
@@ -4042,6 +4379,237 @@ fn step_away(start: Vec3f, target: Vec3f, step: f32) -> Vec3f {
             start.y + delta.y / length * step,
             start.z + delta.z / length * step,
         )
+    }
+}
+
+#[cfg(test)]
+mod task_6_factorized_motor_tests {
+    use super::*;
+
+    const ORGANISM_ID: OrganismId = OrganismId(7);
+
+    fn record(world_entity_id: WorldEntityId) -> WorldOrganismRecord {
+        let genome = alife_core::CreatureGenome::early_mammal_founder(
+            0xE10_3601,
+            alife_core::FoundationGeneticIdentity::new(
+                10,
+                1,
+                7,
+                alife_core::BrainCapacityClass::N512_ID,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let biochemistry = alife_core::BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+        WorldOrganismRecord::new(
+            ORGANISM_ID,
+            world_entity_id,
+            genome,
+            phenotype,
+            biochemistry,
+            Tick::ZERO,
+        )
+        .unwrap()
+    }
+
+    fn prepared_world() -> (HeadlessWorld, WorldEntityId, WorldEntityId, MotorCommandBundle) {
+        let mut world = HeadlessScenarioBuilder::new(36_001)
+            .agent("agent", ORGANISM_ID, Vec3f::ZERO)
+            .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.6)
+            .build()
+            .unwrap();
+        let agent = world.entity_id("agent").unwrap();
+        let food = world.entity_id("food").unwrap();
+        world.register_organism_record(record(agent)).unwrap();
+
+        let manipulation = ChannelCommand::new(
+            MotorChannel::Manipulation,
+            HeadlessActionIds::EAT,
+            Some(alife_core::ActionTarget::new(Some(food), None)),
+            Vec3f::ZERO,
+            Intensity::new(1.0).unwrap(),
+            alife_core::DurationTicks::new(1),
+            0.0,
+            Confidence::new(0.9).unwrap(),
+            0,
+        )
+        .unwrap();
+        let locomotion = ChannelCommand::new(
+            MotorChannel::Locomotion,
+            HeadlessActionIds::APPROACH,
+            Some(alife_core::ActionTarget::new(Some(food), None)),
+            Vec3f::new(1.0, 0.0, 0.0),
+            Intensity::new(1.0).unwrap(),
+            alife_core::DurationTicks::new(1),
+            0.0,
+            Confidence::new(0.9).unwrap(),
+            0,
+        )
+        .unwrap();
+        let bundle = MotorCommandBundle::new(
+            ORGANISM_ID,
+            alife_core::ExperienceSequenceId::new(1).unwrap(),
+            Tick::ZERO,
+            vec![manipulation, locomotion],
+        )
+        .unwrap();
+        (world, agent, food, bundle)
+    }
+
+    #[test]
+    fn factorized_bundle_executes_as_one_joint_transaction_and_rolls_back() {
+        let (mut world, agent, food, bundle) = prepared_world();
+        let biology_before = *world
+            .organism_registry()
+            .get(ORGANISM_ID)
+            .unwrap()
+            .biochemistry();
+
+        let receipt = world
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+
+        assert_eq!(receipt.bundle, bundle);
+        assert_eq!(receipt.outcome_tick, Tick::new(1));
+        assert!(receipt.succeeded);
+        assert_eq!(receipt.joint.joint_reward(), None);
+        assert_eq!(receipt.joint.channel_observations.len(), 1);
+        assert_eq!(receipt.channel_receipts.len(), 1);
+        assert_eq!(
+            receipt.channel_receipts[0].command.channel,
+            MotorChannel::Locomotion
+        );
+        assert_eq!(receipt.biology_after.tick, Tick::new(1));
+        assert_eq!(
+            receipt.biology_after,
+            biology_before
+                .advance(
+                    Tick::new(1),
+                    receipt.body_event,
+                    world
+                        .organism_registry()
+                        .get(ORGANISM_ID)
+                        .unwrap()
+                        .phenotype(),
+                )
+                .unwrap()
+        );
+        assert!(world.entity(food).unwrap().is_consumed());
+
+        let (mut unsupported_world, unsupported_agent, _, _) = prepared_world();
+        let unsupported_command = |channel| {
+            ChannelCommand::new(
+                channel,
+                HeadlessActionIds::EAT,
+                None,
+                Vec3f::ZERO,
+                Intensity::new(1.0).unwrap(),
+                alife_core::DurationTicks::new(1),
+                0.0,
+                Confidence::new(0.9).unwrap(),
+                0,
+            )
+            .unwrap()
+        };
+        let unsupported_bundle = MotorCommandBundle::new(
+            ORGANISM_ID,
+            alife_core::ExperienceSequenceId::new(2).unwrap(),
+            Tick::ZERO,
+            vec![unsupported_command(MotorChannel::Orientation)],
+        )
+        .unwrap();
+        let unsupported_signature = unsupported_world.canonical_signature_digest().unwrap();
+        let unsupported_objects = unsupported_world.object_snapshots();
+        assert_eq!(
+            unsupported_world.apply_registered_motor_bundle(&unsupported_bundle, unsupported_agent),
+            Err(HeadlessMotorTransactionError::UnsupportedChannel(
+                MotorChannel::Orientation,
+            ))
+        );
+        assert_eq!(
+            unsupported_world.canonical_signature_digest().unwrap(),
+            unsupported_signature
+        );
+        assert_eq!(unsupported_world.object_snapshots(), unsupported_objects);
+        assert_eq!(unsupported_world.tick(), Tick::ZERO);
+
+        let species_bundle = MotorCommandBundle::new(
+            ORGANISM_ID,
+            alife_core::ExperienceSequenceId::new(3).unwrap(),
+            Tick::ZERO,
+            vec![unsupported_command(MotorChannel::SpeciesSpecific(9))],
+        )
+        .unwrap();
+        assert_eq!(
+            unsupported_world.apply_registered_motor_bundle(&species_bundle, unsupported_agent),
+            Err(HeadlessMotorTransactionError::UnsupportedChannel(
+                MotorChannel::SpeciesSpecific(9),
+            ))
+        );
+        assert_eq!(
+            unsupported_world.canonical_signature_digest().unwrap(),
+            unsupported_signature
+        );
+        assert_eq!(unsupported_world.object_snapshots(), unsupported_objects);
+
+        let (mut domain_world, domain_agent, domain_food, _) = prepared_world();
+        let locomotion_with_eat_primitive = ChannelCommand::new(
+            MotorChannel::Locomotion,
+            HeadlessActionIds::EAT,
+            Some(alife_core::ActionTarget::new(Some(domain_food), None)),
+            Vec3f::new(1.0, 0.0, 0.0),
+            Intensity::new(1.0).unwrap(),
+            alife_core::DurationTicks::new(1),
+            0.0,
+            Confidence::new(0.9).unwrap(),
+            0,
+        )
+        .unwrap();
+        let domain_bundle = MotorCommandBundle::new(
+            ORGANISM_ID,
+            alife_core::ExperienceSequenceId::new(4).unwrap(),
+            Tick::ZERO,
+            vec![locomotion_with_eat_primitive],
+        )
+        .unwrap();
+        let domain_receipt = domain_world
+            .apply_registered_motor_bundle(&domain_bundle, domain_agent)
+            .unwrap();
+        assert_eq!(domain_receipt.bundle, domain_bundle);
+        assert_eq!(domain_receipt.channel_receipts.len(), 1);
+        assert_eq!(
+            domain_receipt.channel_receipts[0].command.channel,
+            MotorChannel::Locomotion
+        );
+        assert!(!domain_world.entity(domain_food).unwrap().is_consumed());
+
+        let (mut failing_world, failing_agent, _, failing_bundle) = prepared_world();
+        let before_signature = failing_world.canonical_signature_digest().unwrap();
+        let before_objects = failing_world.object_snapshots();
+        let before_record = failing_world
+            .organism_registry()
+            .get(ORGANISM_ID)
+            .unwrap()
+            .clone();
+        failing_world.inject_post_action_failure();
+
+        assert_eq!(
+            failing_world.apply_registered_motor_bundle(&failing_bundle, failing_agent),
+            Err(HeadlessMotorTransactionError::Contract(
+                ScaffoldContractError::InvalidDecisionEvidence,
+            ))
+        );
+        assert_eq!(
+            failing_world.canonical_signature_digest().unwrap(),
+            before_signature
+        );
+        assert_eq!(failing_world.object_snapshots(), before_objects);
+        assert_eq!(
+            failing_world.organism_registry().get(ORGANISM_ID),
+            Some(&before_record)
+        );
+        assert_eq!(failing_world.tick(), Tick::ZERO);
     }
 }
 
