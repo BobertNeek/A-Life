@@ -4,8 +4,9 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
-    Blake3Digest, BrainCapacityClass, BrainClassId, CanonicalDigestBuilder, FoundationAbiBinding,
-    LanguageCodebookV1, LobeLayout, PhenotypeHash, ScaffoldContractError, SensorProfile,
+    genome::CognitiveArchitectureGenomeParameters, Blake3Digest, BrainCapacityClass,
+    BrainClassId, CanonicalDigestBuilder, FoundationAbiBinding, LanguageCodebookV1, LobeLayout,
+    PhenotypeHash, ScaffoldContractError, SensorProfile,
 };
 
 use super::abi_validation::{
@@ -19,8 +20,94 @@ use super::{
     SleepConsolidationPlan,
 };
 
-const PHENOTYPE_SCHEMA_VERSION: u16 = 3;
-const PHENOTYPE_DOMAIN: &[u8] = b"alife.brain.phenotype.v3";
+const PHENOTYPE_SCHEMA_VERSION: u16 = 4;
+const PHENOTYPE_DOMAIN: &[u8] = b"alife.brain.phenotype.v4";
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct CognitiveArchitecturePlan {
+    parameters: CognitiveArchitectureGenomeParameters,
+}
+
+impl CognitiveArchitecturePlan {
+    pub(super) fn compile(
+        parameters: &CognitiveArchitectureGenomeParameters,
+        capacity: &BrainCapacityClass,
+    ) -> Result<Self, ScaffoldContractError> {
+        parameters.validate_for_brain_class(capacity.id())?;
+        Ok(Self {
+            parameters: *parameters,
+        })
+    }
+
+    pub const fn schema_version(&self) -> u16 {
+        self.parameters.schema_version()
+    }
+    pub const fn attention_capacity(&self) -> u8 {
+        self.parameters.attention_capacity()
+    }
+    pub const fn active_concept_limit(&self) -> u16 {
+        self.parameters.active_concept_limit()
+    }
+    pub const fn active_gap_limit(&self) -> u8 {
+        self.parameters.active_gap_limit()
+    }
+    pub const fn predictor_capacity(&self) -> u16 {
+        self.parameters.predictor_capacity()
+    }
+    pub const fn predictor_learning_rate(&self) -> f32 {
+        self.parameters.predictor_learning_rate()
+    }
+    pub const fn motor_head_count(&self) -> u8 {
+        self.parameters.motor_head_count()
+    }
+    pub const fn motor_head_width(&self) -> u16 {
+        self.parameters.motor_head_width()
+    }
+    pub const fn dendritic_branch_capacity(&self) -> u16 {
+        self.parameters.dendritic_branch_capacity()
+    }
+    pub const fn structural_candidate_budget(&self) -> u16 {
+        self.parameters.structural_candidate_budget()
+    }
+    pub const fn structural_edit_budget(&self) -> u8 {
+        self.parameters.structural_edit_budget()
+    }
+    pub const fn sleep_trigger_threshold(&self) -> f32 {
+        self.parameters.sleep_trigger_threshold()
+    }
+    pub const fn sleep_replay_rate(&self) -> f32 {
+        self.parameters.sleep_replay_rate()
+    }
+    pub const fn sleep_consolidation_rate(&self) -> f32 {
+        self.parameters.sleep_consolidation_rate()
+    }
+    pub const fn attention_learning_rate(&self) -> f32 {
+        self.parameters.attention_learning_rate()
+    }
+    pub const fn concept_learning_rate(&self) -> f32 {
+        self.parameters.concept_learning_rate()
+    }
+    pub const fn motor_learning_rate(&self) -> f32 {
+        self.parameters.motor_learning_rate()
+    }
+    pub const fn structural_learning_rate(&self) -> f32 {
+        self.parameters.structural_learning_rate()
+    }
+
+    pub(crate) fn validate_against(
+        &self,
+        capacity: &BrainCapacityClass,
+    ) -> Result<(), ScaffoldContractError> {
+        self.parameters.validate_for_brain_class(capacity.id())
+    }
+
+    fn write_canonical(
+        &self,
+        digest: &mut CanonicalDigestBuilder,
+    ) -> Result<(), ScaffoldContractError> {
+        self.parameters.write_canonical(digest)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct BrainPhenotype {
@@ -32,6 +119,7 @@ pub struct BrainPhenotype {
     sensor_profile: SensorProfile,
     foundation_abi: FoundationAbiBinding,
     language_codebook: LanguageCodebookV1,
+    cognitive_architecture: CognitiveArchitecturePlan,
     lobe_layout: LobeLayout,
     projections: Vec<CompiledProjection>,
     synapses: Vec<CompiledSynapse>,
@@ -81,6 +169,12 @@ impl BrainPhenotype {
     }
     pub const fn language_codebook(&self) -> &LanguageCodebookV1 {
         &self.language_codebook
+    }
+    pub const fn cognitive_architecture(&self) -> &CognitiveArchitecturePlan {
+        &self.cognitive_architecture
+    }
+    pub const fn cognitive_architecture_plan(&self) -> &CognitiveArchitecturePlan {
+        self.cognitive_architecture()
     }
     pub fn projections(&self) -> &[CompiledProjection] {
         &self.projections
@@ -155,6 +249,10 @@ impl BrainPhenotype {
             compute_abi_digests(capacity, &projections, &synapses);
         let foundation_abi = inputs.foundation_abi().clone();
         let language_codebook = foundation_abi.language_codebook().clone();
+        let cognitive_architecture = CognitiveArchitecturePlan::compile(
+            inputs.genome().cognitive_architecture(),
+            capacity,
+        )?;
         let mut value = Self {
             schema_version: PHENOTYPE_SCHEMA_VERSION,
             compiler_inputs_digest: inputs.canonical_digest(),
@@ -164,6 +262,7 @@ impl BrainPhenotype {
             sensor_profile: inputs.sensor_profile(),
             foundation_abi,
             language_codebook,
+            cognitive_architecture,
             lobe_layout,
             projections,
             synapses,
@@ -196,6 +295,7 @@ impl BrainPhenotype {
         for word in self.compiler_inputs_digest {
             d.write_u64(word);
         }
+        self.cognitive_architecture.write_canonical(&mut d)?;
         d.write_u16(self.brain_class_id.raw());
         d.write_u32(self.neuron_count);
         d.write_u8(self.microstep_count);
@@ -321,6 +421,7 @@ impl BrainPhenotype {
         if self.language_codebook != *self.foundation_abi.language_codebook() {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
+        self.cognitive_architecture.validate_against(capacity)?;
         self.lobe_layout
             .validate_for_neuron_count(self.neuron_count)?;
         self.budgets.validate_against(capacity)?;
@@ -602,6 +703,7 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             sensor_profile: SensorProfile,
             foundation_abi: FoundationAbiBinding,
             language_codebook: LanguageCodebookV1,
+            cognitive_architecture: CognitiveArchitecturePlan,
             lobe_layout: LobeLayout,
             projections: Vec<CompiledProjection>,
             synapses: Vec<CompiledSynapse>,
@@ -630,6 +732,7 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             sensor_profile: w.sensor_profile,
             foundation_abi: w.foundation_abi,
             language_codebook: w.language_codebook,
+            cognitive_architecture: w.cognitive_architecture,
             lobe_layout: w.lobe_layout,
             projections: w.projections,
             synapses: w.synapses,

@@ -46,7 +46,7 @@ pub use persistent_address::{
     PersistentProjectionAddressEntry, PersistentProjectionRole, PersistentSynapseAddress,
     PersistentSynapseAddressEntry,
 };
-pub use record::BrainPhenotype;
+pub use record::{BrainPhenotype, CognitiveArchitecturePlan};
 
 /// Stable content hash of one compiled brain phenotype.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

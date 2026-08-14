@@ -25,6 +25,8 @@ pub struct BrainGenome {
     pub alpha_mask: AlphaMask,
     pub plasticity_mask: PlasticityMask,
     plasticity_parameters: PlasticityGenomeParameters,
+    #[serde(default = "CognitiveArchitectureGenomeParameters::canonical_default")]
+    cognitive_architecture: CognitiveArchitectureGenomeParameters,
     pub endocrine_constants: Vec<EndocrineConstantGene>,
     pub drive_thresholds: Vec<DriveThresholdGene>,
     pub sensor_layout: SensorLayoutGene,
@@ -35,11 +37,336 @@ pub struct BrainGenome {
     pub inheritance: InheritancePolicy,
 }
 
+/// Versioned bounded architecture genes expressed by the ordinary genome
+/// compiler.
+///
+/// These values are capacity and policy inputs for a phenotype, never storage
+/// for lifetime weights, concepts, gaps, predictor state, or other acquired
+/// state.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct CognitiveArchitectureGenomeParameters {
+    schema_version: u16,
+    attention_capacity: u8,
+    active_concept_limit: u16,
+    active_gap_limit: u8,
+    predictor_capacity: u16,
+    predictor_learning_rate: f32,
+    motor_head_count: u8,
+    motor_head_width: u16,
+    dendritic_branch_capacity: u16,
+    structural_candidate_budget: u16,
+    structural_edit_budget: u8,
+    sleep_trigger_threshold: f32,
+    sleep_replay_rate: f32,
+    sleep_consolidation_rate: f32,
+    attention_learning_rate: f32,
+    concept_learning_rate: f32,
+    motor_learning_rate: f32,
+    structural_learning_rate: f32,
+}
+
+pub const COGNITIVE_ARCHITECTURE_SCHEMA_VERSION: u16 = 1;
+
+impl CognitiveArchitectureGenomeParameters {
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_new_v1(
+        attention_capacity: u8,
+        active_concept_limit: u16,
+        active_gap_limit: u8,
+        predictor_capacity: u16,
+        predictor_learning_rate: f32,
+        motor_head_count: u8,
+        motor_head_width: u16,
+        dendritic_branch_capacity: u16,
+        structural_candidate_budget: u16,
+        structural_edit_budget: u8,
+        sleep_trigger_threshold: f32,
+        sleep_replay_rate: f32,
+        sleep_consolidation_rate: f32,
+        attention_learning_rate: f32,
+        concept_learning_rate: f32,
+        motor_learning_rate: f32,
+        structural_learning_rate: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let value = Self {
+            schema_version: COGNITIVE_ARCHITECTURE_SCHEMA_VERSION,
+            attention_capacity,
+            active_concept_limit,
+            active_gap_limit,
+            predictor_capacity,
+            predictor_learning_rate,
+            motor_head_count,
+            motor_head_width,
+            dendritic_branch_capacity,
+            structural_candidate_budget,
+            structural_edit_budget,
+            sleep_trigger_threshold,
+            sleep_replay_rate,
+            sleep_consolidation_rate,
+            attention_learning_rate,
+            concept_learning_rate,
+            motor_learning_rate,
+            structural_learning_rate,
+        };
+        value.validate_contract()?;
+        Ok(value)
+    }
+
+    pub(crate) const fn canonical_default() -> Self {
+        Self {
+            schema_version: COGNITIVE_ARCHITECTURE_SCHEMA_VERSION,
+            attention_capacity: 1,
+            active_concept_limit: 16,
+            active_gap_limit: 4,
+            predictor_capacity: 16,
+            predictor_learning_rate: 0.01,
+            motor_head_count: 1,
+            motor_head_width: 8,
+            dendritic_branch_capacity: 512,
+            structural_candidate_budget: 32,
+            structural_edit_budget: 1,
+            sleep_trigger_threshold: 0.6,
+            sleep_replay_rate: 0.25,
+            sleep_consolidation_rate: 0.5,
+            attention_learning_rate: 0.01,
+            concept_learning_rate: 0.01,
+            motor_learning_rate: 0.01,
+            structural_learning_rate: 0.01,
+        }
+    }
+
+    pub const fn schema_version(&self) -> u16 {
+        self.schema_version
+    }
+    pub const fn attention_capacity(&self) -> u8 {
+        self.attention_capacity
+    }
+    pub const fn active_concept_limit(&self) -> u16 {
+        self.active_concept_limit
+    }
+    pub const fn active_gap_limit(&self) -> u8 {
+        self.active_gap_limit
+    }
+    pub const fn predictor_capacity(&self) -> u16 {
+        self.predictor_capacity
+    }
+    pub const fn predictor_learning_rate(&self) -> f32 {
+        self.predictor_learning_rate
+    }
+    pub const fn motor_head_count(&self) -> u8 {
+        self.motor_head_count
+    }
+    pub const fn motor_head_width(&self) -> u16 {
+        self.motor_head_width
+    }
+    pub const fn dendritic_branch_capacity(&self) -> u16 {
+        self.dendritic_branch_capacity
+    }
+    pub const fn structural_candidate_budget(&self) -> u16 {
+        self.structural_candidate_budget
+    }
+    pub const fn structural_edit_budget(&self) -> u8 {
+        self.structural_edit_budget
+    }
+    pub const fn sleep_trigger_threshold(&self) -> f32 {
+        self.sleep_trigger_threshold
+    }
+    pub const fn sleep_replay_rate(&self) -> f32 {
+        self.sleep_replay_rate
+    }
+    pub const fn sleep_consolidation_rate(&self) -> f32 {
+        self.sleep_consolidation_rate
+    }
+    pub const fn attention_learning_rate(&self) -> f32 {
+        self.attention_learning_rate
+    }
+    pub const fn concept_learning_rate(&self) -> f32 {
+        self.concept_learning_rate
+    }
+    pub const fn motor_learning_rate(&self) -> f32 {
+        self.motor_learning_rate
+    }
+    pub const fn structural_learning_rate(&self) -> f32 {
+        self.structural_learning_rate
+    }
+
+    pub(crate) fn write_canonical(
+        &self,
+        digest: &mut crate::CanonicalDigestBuilder,
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_contract()?;
+        digest.write_u16(self.schema_version);
+        digest.write_u8(self.attention_capacity);
+        digest.write_u16(self.active_concept_limit);
+        digest.write_u8(self.active_gap_limit);
+        digest.write_u16(self.predictor_capacity);
+        digest.write_f32(self.predictor_learning_rate)?;
+        digest.write_u8(self.motor_head_count);
+        digest.write_u16(self.motor_head_width);
+        digest.write_u16(self.dendritic_branch_capacity);
+        digest.write_u16(self.structural_candidate_budget);
+        digest.write_u8(self.structural_edit_budget);
+        for value in [
+            self.sleep_trigger_threshold,
+            self.sleep_replay_rate,
+            self.sleep_consolidation_rate,
+            self.attention_learning_rate,
+            self.concept_learning_rate,
+            self.motor_learning_rate,
+            self.structural_learning_rate,
+        ] {
+            digest.write_f32(value)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_for_brain_class(
+        &self,
+        brain_class_id: BrainClassId,
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_contract()?;
+        let capacity = crate::BrainCapacityClass::supported_for_id(brain_class_id)?;
+        let max_attention = capacity
+            .execution()
+            .max_neurons()
+            .saturating_div(512)
+            .clamp(1, crate::attention::MAX_FOCAL_TARGETS as u32);
+        let max_predictor = capacity
+            .execution()
+            .max_neurons()
+            .min(crate::predictive::MAX_SUCCESSOR_FEATURES as u32)
+            .max(8);
+        let max_branches = capacity
+            .execution()
+            .max_neurons()
+            .saturating_mul(2)
+            .min(crate::dendritic::MAX_DENDRITIC_BRANCHES as u32);
+        let max_candidates = capacity
+            .execution()
+            .max_neurons()
+            .saturating_div(2)
+            .min(crate::structural_plasticity::MAX_EVIDENCE_PER_PHASE as u32);
+        if u32::from(self.attention_capacity) > max_attention
+            || u32::from(self.predictor_capacity) > max_predictor
+            || u32::from(self.dendritic_branch_capacity) > max_branches
+            || u32::from(self.structural_candidate_budget) > max_candidates
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        Ok(())
+    }
+
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.schema_version != COGNITIVE_ARCHITECTURE_SCHEMA_VERSION
+            || self.attention_capacity == 0
+            || usize::from(self.attention_capacity) > crate::attention::MAX_FOCAL_TARGETS
+            || self.active_concept_limit == 0
+            || usize::from(self.active_concept_limit)
+                > crate::cognitive_context::MAX_ACTIVE_CONCEPTS
+            || self.active_gap_limit == 0
+            || usize::from(self.active_gap_limit) > crate::cognitive_context::MAX_ACTIVE_GAPS
+            || self.predictor_capacity < 8
+            || usize::from(self.predictor_capacity) > crate::predictive::MAX_SUCCESSOR_FEATURES
+            || self.motor_head_count == 0
+            || usize::from(self.motor_head_count) > crate::motor::MAX_MOTOR_CHANNELS
+            || self.motor_head_width == 0
+            || self.motor_head_width > 256
+            || self.dendritic_branch_capacity == 0
+            || usize::from(self.dendritic_branch_capacity) > crate::dendritic::MAX_DENDRITIC_BRANCHES
+            || self.structural_candidate_budget == 0
+            || usize::from(self.structural_candidate_budget)
+                > crate::structural_plasticity::MAX_EVIDENCE_PER_PHASE
+            || self.structural_edit_budget == 0
+            || usize::from(self.structural_edit_budget)
+                > crate::structural_plasticity::MAX_ACCEPTED_PER_PHASE
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        for rate in [
+            self.predictor_learning_rate,
+            self.sleep_trigger_threshold,
+            self.sleep_replay_rate,
+            self.sleep_consolidation_rate,
+            self.attention_learning_rate,
+            self.concept_learning_rate,
+            self.motor_learning_rate,
+            self.structural_learning_rate,
+        ] {
+            if !rate.is_finite() || !(0.0..=1.0).contains(&rate) {
+                return Err(ScaffoldContractError::ScalarOutOfRange);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Validate for CognitiveArchitectureGenomeParameters {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        CognitiveArchitectureGenomeParameters::validate_contract(self)
+    }
+}
+
+impl<'de> Deserialize<'de> for CognitiveArchitectureGenomeParameters {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Wire {
+            schema_version: u16,
+            attention_capacity: u8,
+            active_concept_limit: u16,
+            active_gap_limit: u8,
+            predictor_capacity: u16,
+            predictor_learning_rate: f32,
+            motor_head_count: u8,
+            motor_head_width: u16,
+            dendritic_branch_capacity: u16,
+            structural_candidate_budget: u16,
+            structural_edit_budget: u8,
+            sleep_trigger_threshold: f32,
+            sleep_replay_rate: f32,
+            sleep_consolidation_rate: f32,
+            attention_learning_rate: f32,
+            concept_learning_rate: f32,
+            motor_learning_rate: f32,
+            structural_learning_rate: f32,
+        }
+        let wire = Wire::deserialize(deserializer)?;
+        let value = Self {
+            schema_version: wire.schema_version,
+            attention_capacity: wire.attention_capacity,
+            active_concept_limit: wire.active_concept_limit,
+            active_gap_limit: wire.active_gap_limit,
+            predictor_capacity: wire.predictor_capacity,
+            predictor_learning_rate: wire.predictor_learning_rate,
+            motor_head_count: wire.motor_head_count,
+            motor_head_width: wire.motor_head_width,
+            dendritic_branch_capacity: wire.dendritic_branch_capacity,
+            structural_candidate_budget: wire.structural_candidate_budget,
+            structural_edit_budget: wire.structural_edit_budget,
+            sleep_trigger_threshold: wire.sleep_trigger_threshold,
+            sleep_replay_rate: wire.sleep_replay_rate,
+            sleep_consolidation_rate: wire.sleep_consolidation_rate,
+            attention_learning_rate: wire.attention_learning_rate,
+            concept_learning_rate: wire.concept_learning_rate,
+            motor_learning_rate: wire.motor_learning_rate,
+            structural_learning_rate: wire.structural_learning_rate,
+        };
+        value.validate_contract().map_err(D::Error::custom)?;
+        Ok(value)
+    }
+}
+
 impl BrainGenome {
     pub const SCHEMA_VERSION: u16 = SchemaVersions::CURRENT.genome.0;
 
     pub fn scaffold(species_seed: u64, brain_class_id: BrainClassId) -> Self {
         let seeds = GenomeSeedSet::from_species_seed(species_seed, brain_class_id);
+        let cognitive_architecture = CognitiveArchitectureGenomeParameters::canonical_default();
+        cognitive_architecture
+            .validate_for_brain_class(brain_class_id)
+            .expect("canonical cognitive architecture must validate");
         Self {
             schema_version: Self::SCHEMA_VERSION,
             id: GenomeId(seeds.genome_id_seed),
@@ -63,6 +390,7 @@ impl BrainGenome {
             alpha_mask: AlphaMask::default_for_projection(NormalizedScalar(0.25)),
             plasticity_mask: PlasticityMask::scaffold_default(),
             plasticity_parameters: PlasticityGenomeParameters::canonical_default(),
+            cognitive_architecture,
             endocrine_constants: EndocrineConstantGene::baseline_defaults(),
             drive_thresholds: DriveThresholdGene::baseline_defaults(),
             sensor_layout: SensorLayoutGene::minimal_grounded(),
@@ -79,6 +407,16 @@ impl BrainGenome {
         &self.plasticity_parameters
     }
 
+    pub const fn cognitive_architecture(&self) -> &CognitiveArchitectureGenomeParameters {
+        &self.cognitive_architecture
+    }
+
+    pub const fn cognitive_architecture_parameters(
+        &self,
+    ) -> &CognitiveArchitectureGenomeParameters {
+        self.cognitive_architecture()
+    }
+
     /// Replace the heritable plasticity parameters through their validated
     /// constructor boundary. This is the causal mutation/training entrypoint;
     /// callers cannot write unchecked parameter lanes.
@@ -90,6 +428,24 @@ impl BrainGenome {
         self.plasticity_parameters = parameters;
         self.validate_contract()?;
         Ok(self)
+    }
+
+    /// Replace only the bounded heritable cognitive architecture genes.
+    pub fn with_cognitive_architecture(
+        mut self,
+        parameters: CognitiveArchitectureGenomeParameters,
+    ) -> Result<Self, ScaffoldContractError> {
+        parameters.validate_for_brain_class(self.brain_class_id)?;
+        self.cognitive_architecture = parameters;
+        self.validate_contract()?;
+        Ok(self)
+    }
+
+    pub fn with_cognitive_architecture_parameters(
+        self,
+        parameters: CognitiveArchitectureGenomeParameters,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.with_cognitive_architecture(parameters)
     }
 }
 
@@ -120,6 +476,8 @@ impl Validate for BrainGenome {
         self.alpha_mask.validate_contract()?;
         self.plasticity_mask.validate_contract()?;
         self.plasticity_parameters.validate_contract()?;
+        self.cognitive_architecture
+            .validate_for_brain_class(self.brain_class_id)?;
         validate_all(&self.endocrine_constants)?;
         validate_all(&self.drive_thresholds)?;
         self.sensor_layout.validate_contract()?;

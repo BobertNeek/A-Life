@@ -5,6 +5,7 @@ use alife_core::{
     DevelopmentState, FoundationGeneticIdentity, LegacyBrainClassAdapter, NormalizedScalar,
     PhenotypeCompiler, SensorProfile, Tick, CANDIDATE_FEATURE_COUNT,
 };
+use alife_core::genome::CognitiveArchitectureGenomeParameters;
 
 fn compile(class_id: BrainClassId, seed: u64) -> alife_core::BrainPhenotype {
     let capacity = BrainCapacityClass::production_for_id(class_id).unwrap();
@@ -81,6 +82,39 @@ fn connectome_and_density_mutations_change_phenotype() {
     .unwrap();
     assert_ne!(before.phenotype_hash(), after.phenotype_hash());
     assert_ne!(before.synapses().len(), after.synapses().len());
+}
+
+#[test]
+fn heritable_cognitive_architecture_compiles_into_phenotype_plan() {
+    let capacity = BrainCapacityClass::n512();
+    let genome = BrainGenome::scaffold(12, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+    let before = PhenotypeCompiler::compile(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+    let parameters = CognitiveArchitectureGenomeParameters::try_new_v1(
+        1, 24, 6, 32, 0.08, 2, 16, 768, 64, 2, 0.45, 0.4, 0.7, 0.08, 0.06, 0.05, 0.04,
+    )
+    .unwrap();
+    let changed_genome = genome.with_cognitive_architecture(parameters).unwrap();
+    let after = PhenotypeCompiler::compile(
+        &changed_genome,
+        &capacity,
+        &development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+
+    assert_eq!(after.cognitive_architecture().active_concept_limit(), 24);
+    assert_eq!(after.cognitive_architecture().predictor_capacity(), 32);
+    assert_eq!(after.cognitive_architecture().structural_edit_budget(), 2);
+    assert_ne!(before.compiler_inputs_digest(), after.compiler_inputs_digest());
+    assert_ne!(before.phenotype_hash(), after.phenotype_hash());
 }
 
 #[test]

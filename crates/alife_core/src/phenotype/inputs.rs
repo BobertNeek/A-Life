@@ -9,8 +9,8 @@ use crate::{
     Validate,
 };
 
-const INPUTS_SCHEMA_VERSION: u16 = 3;
-const INPUTS_DOMAIN: &[u8] = b"alife.phenotype.compiler-inputs.v3";
+const INPUTS_SCHEMA_VERSION: u16 = 4;
+const INPUTS_DOMAIN: &[u8] = b"alife.phenotype.compiler-inputs.v4";
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PhenotypeCompilerInputs {
@@ -300,6 +300,7 @@ fn encode_genome(
     d.write_f32(plasticity.sleep_staging_rate())?;
     d.write_f32(plasticity.sleep_weight_limit())?;
     d.write_f32(plasticity.sleep_fast_decay_rate())?;
+    g.cognitive_architecture().write_canonical(d)?;
     d.write_sequence_len(g.endocrine_constants.len());
     for row in &g.endocrine_constants {
         d.write_u8(row.kind.raw());
