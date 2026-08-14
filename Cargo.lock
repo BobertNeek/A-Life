@@ -171,6 +171,7 @@ dependencies = [
  "bevy_hanabi",
  "bevy_sprite3d",
  "bevy_voxel_world",
+ "blake3",
  "block-mesh",
  "image",
  "serde",
