@@ -11,12 +11,12 @@ use std::sync::Arc;
 
 use alife_core::{
     Blake3Digest, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId, BrainDispatchIdentity,
-    BrainPhenotype, BrainWorkCounters, BrainWorkReceipt, CanonicalDigestBuilder, Confidence,
-    ExperiencePatch, FinalizedMemoryRecall, GpuPressureSample, GpuPressureSampleInput,
-    LearningCommitToken, LearningSequenceGuard, NeuralActionSelection, NeuralThrottleDecision,
-    NeuralThrottleLevel, OrganismId, OutcomeCreditPacket, PerceptionBaseDigest, PerceptionFrame,
-    PerceptionFrameDigest, PhenotypeHash, ScaffoldContractError, SensorProfile,
-    SpeechMotorPayload,
+    BrainPhenotype, BrainWorkCounters, BrainWorkReceipt, CanonicalDigestBuilder,
+    CoactivationEvidence, Confidence, DendriticBranchSet, ExperiencePatch,
+    FinalizedMemoryRecall, GpuPressureSample, GpuPressureSampleInput, LearningCommitToken,
+    LearningSequenceGuard, NeuralActionSelection, NeuralThrottleDecision, NeuralThrottleLevel,
+    OrganismId, OutcomeCreditPacket, PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest,
+    PhenotypeHash, ScaffoldContractError, SensorProfile, SpeechMotorPayload,
     BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16,
     REQUIRED_GPU_FEATURE_MASK,
 };
@@ -31,7 +31,8 @@ use crate::{
     GpuMemoryContextUpload, GpuOutcomeCreditRecord, GpuPendingEligibilityRecord,
     GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget, GpuRuntimeProfile,
     GpuTimestampQueryResources, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
-    PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
+    PendingEligibilityIdentity, PendingEligibilityReceipt, GpuV11CausalState, GpuV11Checkpoint,
+    GpuV11WorkReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
 };
 use crate::closed_loop_buffers::GpuFixedSlotUpload;
 
@@ -388,6 +389,7 @@ pub struct GpuClosedLoopTick {
     pub pressure: GpuPressureSample,
     pub throttle: NeuralThrottleDecision,
     pub work: BrainWorkReceipt,
+    pub v11_work: GpuV11WorkReceipt,
     pub compact_readback_bytes: usize,
     pub hardware_receipt_generation: u64,
 }
@@ -817,6 +819,7 @@ pub(crate) struct ResidentBrainSlot {
     pub(crate) last_pressure: Option<GpuPressureSample>,
     pub(crate) last_throttle: Option<NeuralThrottleDecision>,
     pub(crate) last_work: Option<BrainWorkReceipt>,
+    pub(crate) v11: GpuV11CausalState,
     pub(crate) sleep_plan: alife_core::SleepConsolidationPlan,
     pub(crate) learning_sequence_guard: LearningSequenceGuard,
     pub(crate) pending_eligibility: Option<PendingEligibilityReceipt>,
@@ -1562,6 +1565,109 @@ impl GpuClosedLoopBackend {
             .and_then(|pool| pool.resident(handle).ok())
             .map(|resident| resident.brain_atp_q16)
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
+    }
+
+    /// Returns the bounded v1.1 work receipt attached to a resident brain.
+    pub fn v11_work(
+        &self,
+        handle: GpuBrainHandle,
+    ) -> Result<GpuV11WorkReceipt, ScaffoldContractError> {
+        self.validate_handle_backend(handle)?;
+        self.class_buckets
+            .get(&handle.class_id.raw())
+            .and_then(|pool| pool.resident(handle).ok())
+            .map(|resident| resident.v11.last_work())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
+    }
+
+    /// Configures bounded dendritic branches on the live backend resident.
+    pub fn set_v11_dendritic_branches(
+        &mut self,
+        handle: GpuBrainHandle,
+        branches: DendriticBranchSet,
+    ) -> Result<(), ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let pool = self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        pool.resident_mut(handle)?
+            .v11
+            .set_dendritic_branches(branches)
+    }
+
+    /// Applies bounded local structural evidence and atomically rebuilds the
+    /// resident's affected sparse spans.
+    pub fn apply_v11_structural_phase(
+        &mut self,
+        handle: GpuBrainHandle,
+        evidence: &[CoactivationEvidence],
+    ) -> Result<GpuV11WorkReceipt, ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let pool = self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        pool.resident_mut(handle)?
+            .v11
+            .apply_structural_phase(evidence)
+    }
+
+    /// Runs the bounded recurrent overlay before the caller's final activation.
+    pub fn v11_recurrent_step<F>(
+        &mut self,
+        handle: GpuBrainHandle,
+        activations: &[f32],
+        base_accumulators: &[f32],
+        final_activation: F,
+    ) -> Result<Vec<f32>, ScaffoldContractError>
+    where
+        F: Fn(f32) -> f32,
+    {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let pool = self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        pool.resident_mut(handle)?.v11.recurrent_step(
+            activations,
+            base_accumulators,
+            final_activation,
+        )
+    }
+
+    pub fn checkpoint_v11(
+        &self,
+        handle: GpuBrainHandle,
+    ) -> Result<GpuV11Checkpoint, ScaffoldContractError> {
+        self.validate_handle_backend(handle)?;
+        self.class_buckets
+            .get(&handle.class_id.raw())
+            .and_then(|pool| pool.resident(handle).ok())
+            .map(|resident| resident.v11.checkpoint())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
+    }
+
+    pub fn restore_v11(
+        &mut self,
+        handle: GpuBrainHandle,
+        checkpoint: GpuV11Checkpoint,
+    ) -> Result<(), ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let pool = self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let resident = pool.resident_mut(handle)?;
+        if checkpoint.neuron_count != resident.phenotype.neuron_count() {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        resident.v11 = GpuV11CausalState::restore(checkpoint)?;
+        Ok(())
     }
 
     pub fn snapshot_activity_state(
@@ -2842,6 +2948,7 @@ impl GpuClosedLoopBackend {
                     .candidates()
                     .get(candidate_index as usize)
                     .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                let v11_work = self.v11_work(handle)?;
                 ticks.push(GpuClosedLoopTick {
                     handle,
                     dispatch_generation: dispatch_generation.get(),
@@ -2862,6 +2969,7 @@ impl GpuClosedLoopBackend {
                     pressure: activity_decisions[index].pressure,
                     throttle: activity_decisions[index].clone(),
                     work: activity_work_receipts[index].clone(),
+                    v11_work,
                     compact_readback_bytes: crate::GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
                     hardware_receipt_generation: self.hardware.generation,
                 });
@@ -3391,6 +3499,11 @@ impl GpuClosedLoopBackend {
             last_pressure: None,
             last_throttle: None,
             last_work: None,
+            v11: GpuV11CausalState::new(
+                phenotype.neuron_count(),
+                DendriticBranchSet::default(),
+                Default::default(),
+            )?,
             sleep_plan: *phenotype.sleep_consolidation_plan(),
             learning_sequence_guard: LearningSequenceGuard::new(
                 organism_id,
@@ -3967,6 +4080,11 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
             last_pressure: None,
             last_throttle: None,
             last_work: None,
+            v11: GpuV11CausalState::new(
+                entry.phenotype.neuron_count(),
+                DendriticBranchSet::default(),
+                Default::default(),
+            )?,
             sleep_plan: *entry.phenotype.sleep_consolidation_plan(),
             learning_sequence_guard: LearningSequenceGuard::new(
                 entry.organism_id,

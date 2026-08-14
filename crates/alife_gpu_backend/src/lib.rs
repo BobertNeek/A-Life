@@ -12,6 +12,7 @@ pub mod closed_loop_memory;
 pub mod closed_loop_pipeline;
 pub mod closed_loop_runtime;
 pub mod closed_loop_sleep;
+pub mod closed_loop_v11;
 pub mod recompaction;
 pub mod routing_masks;
 pub mod runtime;
@@ -38,6 +39,7 @@ pub use closed_loop_memory::*;
 pub use closed_loop_pipeline::*;
 pub use closed_loop_runtime::*;
 pub use closed_loop_sleep::*;
+pub use closed_loop_v11::*;
 pub use recompaction::{
     GpuAffectedTileRef, GpuAutophagyMarker, GpuAutophagyMarkerKind, GpuAutophagyPolicy,
     GpuBufferReplacement, GpuLogicalBufferRef, GpuRecompactionDiagnostics, GpuRecompactionOutput,
