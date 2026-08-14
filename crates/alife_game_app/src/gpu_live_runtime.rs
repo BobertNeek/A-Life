@@ -4,15 +4,18 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::{
+    ActionKind, ActionTarget, BiochemistryState, ChannelCommand, CognitiveWorkCostPolicy,
+    CognitiveWorkCounters, CognitiveWorkReceipt, GroundedSuccessorPredictor, JointPhysicalOutcome,
+    MotorChannel, MotorCommandBundle, PhysicalContactKind, PredictionTargetReceipt,
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
-    BiochemistryState, Blake3Digest, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
+    Blake3Digest, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
     finalized_memory_attention_evidence, select_focal_targets, AttentionFrame,
     AttentionSelectionPolicy, BrainWorkReceipt, CanonicalDigestBuilder, CognitiveConceptActivation,
     CognitiveContextFrame, CognitiveGapActivation, CognitiveMemoryExpectancy,
     FinalizedMemoryAttentionEvidence,
     Confidence, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState,
     DecisionSnapshot, DevelopmentState, EnvironmentalRegime, ExperiencePatch,
-    ExperiencePatchBuilder, ExperienceSequenceId, FinalizedMemoryRecall, FoundationGeneticIdentity,
+    ExperienceSequenceId, FinalizedMemoryRecall, FoundationGeneticIdentity,
     FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot, LanguageGroundingLedger,
     MAX_CONTEXT_MEMORY_EXPECTANCIES, MemoryBankConfig,
     MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState,
@@ -77,6 +80,7 @@ struct ResidentCognition {
     language_grounding: LanguageGroundingLedger,
     life_statistics: PassiveLifeStatistics,
     attention_hysteresis: alife_core::HysteresisState,
+    predictor: GroundedSuccessorPredictor,
 }
 
 struct StagedLiveAuthority {
@@ -327,9 +331,12 @@ impl ResidentAuthorityPlan {
             language_grounding: LanguageGroundingLedger::default(),
             life_statistics: PassiveLifeStatistics::new(self.organism_id, self.world_tick)?,
             attention_hysteresis: alife_core::HysteresisState::default(),
+            predictor: GroundedSuccessorPredictor::default(),
         })
     }
 }
+
+const LIVE_COGNITIVE_ENERGY_PER_WORK_UNIT: f32 = 0.001;
 
 #[derive(Debug, Clone)]
 struct GpuLiveCheckpointDurability {
@@ -344,6 +351,7 @@ struct GpuLiveRuntimeConstructionOptions {
     schedule_sleep: bool,
     observe_sidecars: bool,
     retain_sealed_patch_history: bool,
+    cognitive_work_cost_policy: CognitiveWorkCostPolicy,
 }
 
 impl GpuLiveRuntimeConstructionOptions {
@@ -353,6 +361,10 @@ impl GpuLiveRuntimeConstructionOptions {
             schedule_sleep: true,
             observe_sidecars: true,
             retain_sealed_patch_history: true,
+            cognitive_work_cost_policy: CognitiveWorkCostPolicy {
+                enabled: true,
+                energy_per_work_unit: LIVE_COGNITIVE_ENERGY_PER_WORK_UNIT,
+            },
         }
     }
 
@@ -362,6 +374,7 @@ impl GpuLiveRuntimeConstructionOptions {
             schedule_sleep: false,
             observe_sidecars: false,
             retain_sealed_patch_history: false,
+            cognitive_work_cost_policy: CognitiveWorkCostPolicy::disabled(),
         }
     }
 
@@ -371,6 +384,10 @@ impl GpuLiveRuntimeConstructionOptions {
             schedule_sleep: false,
             observe_sidecars: true,
             retain_sealed_patch_history: true,
+            cognitive_work_cost_policy: CognitiveWorkCostPolicy {
+                enabled: true,
+                energy_per_work_unit: LIVE_COGNITIVE_ENERGY_PER_WORK_UNIT,
+            },
         }
     }
 
@@ -381,6 +398,10 @@ impl GpuLiveRuntimeConstructionOptions {
             schedule_sleep: true,
             observe_sidecars: true,
             retain_sealed_patch_history: false,
+            cognitive_work_cost_policy: CognitiveWorkCostPolicy {
+                enabled: true,
+                energy_per_work_unit: LIVE_COGNITIVE_ENERGY_PER_WORK_UNIT,
+            },
         }
     }
 }
@@ -587,6 +608,7 @@ struct PreparedLiveSelection {
     pending_eligibility: PendingEligibilityReceipt,
     frame: PerceptionFrame,
     memory_recall: FinalizedMemoryRecall,
+    work: BrainWorkReceipt,
     cognitive_context_digest: [u64; 4],
     sequence_id: ExperienceSequenceId,
     outcome_tick: Tick,
@@ -600,8 +622,11 @@ struct PreparedSealInput {
     organism_id: OrganismId,
     world_entity_id: WorldEntityId,
     frame: PerceptionFrame,
+    memory: MemoryRecallReceipt,
     sequence_id: ExperienceSequenceId,
     outcome_tick: Tick,
+    cognitive_context: CognitiveContextFrame,
+    work: BrainWorkReceipt,
     pre_action: PreActionSnapshot,
     decision: DecisionSnapshot,
     speech_payload: Option<alife_core::SpeechMotorPayload>,
@@ -1205,6 +1230,7 @@ pub struct GpuLiveBrainRuntime {
     brain_class: BrainScaleTier,
     sensor_profile: SensorProfile,
     homeostatic_parameters: HomeostaticParameters,
+    cognitive_work_cost_policy: CognitiveWorkCostPolicy,
     schedule_sleep: bool,
     sealed_patches: Vec<ExperiencePatch>,
     sealed_patch_count: usize,
@@ -1213,6 +1239,7 @@ pub struct GpuLiveBrainRuntime {
     retain_sealed_patch_history: bool,
     last_learning_receipts: Vec<GpuLearningReceipt>,
     last_activity_work_receipts: Vec<BrainWorkReceipt>,
+    last_cognitive_work_receipts: Vec<CognitiveWorkReceipt>,
     last_memory_recall_receipts: Vec<MemoryRecallReceipt>,
     last_memory_update_receipts: Vec<MemoryUpdateReceipt>,
     last_cognitive_context_digests: Vec<[u64; 4]>,
@@ -1883,23 +1910,224 @@ fn cognitive_context_with_attention(
     Ok(context)
 }
 
+fn bounded_successor_scalar(value: f32) -> Result<f32, ScaffoldContractError> {
+    if !value.is_finite() {
+        return Err(ScaffoldContractError::NonFiniteFloat);
+    }
+    Ok((0.5 + 0.5 * (value / (1.0 + value.abs()))).clamp(0.0, 1.0))
+}
+
+fn unit_successor_scalar(value: f32) -> Result<f32, ScaffoldContractError> {
+    if !value.is_finite() {
+        return Err(ScaffoldContractError::NonFiniteFloat);
+    }
+    Ok(value.clamp(0.0, 1.0))
+}
+
+fn grounded_successor_features(
+    world: &HeadlessWorld,
+    world_entity_id: WorldEntityId,
+    biology_after: &BiochemistryState,
+    action_result: &alife_world::HeadlessActionResult,
+) -> Result<Vec<f32>, ScaffoldContractError> {
+    let object = world
+        .entity(world_entity_id)
+        .ok_or(ScaffoldContractError::InvalidId)?;
+    let displacement = action_result.execution.physical.displacement;
+    let body = biology_after.body;
+    let contact = match action_result.execution.physical.contact {
+        PhysicalContactKind::None => 0.0,
+        PhysicalContactKind::Touch => 0.2,
+        PhysicalContactKind::Collision => 0.4,
+        PhysicalContactKind::Blocked => 0.6,
+        PhysicalContactKind::Consumed => 0.8,
+        PhysicalContactKind::Moved => 1.0,
+    };
+    let features = [
+        bounded_successor_scalar(object.position.x)?,
+        bounded_successor_scalar(object.position.y)?,
+        bounded_successor_scalar(object.position.z)?,
+        bounded_successor_scalar(displacement.x)?,
+        bounded_successor_scalar(displacement.y)?,
+        bounded_successor_scalar(displacement.z)?,
+        unit_successor_scalar(body.energy)?,
+        unit_successor_scalar(body.health)?,
+        unit_successor_scalar(body.injury)?,
+        unit_successor_scalar(body.temperature_stress)?,
+        contact,
+        if action_result.observation.success {
+            1.0
+        } else {
+            0.0
+        },
+        action_result.observation.pain_delta.raw(),
+    ];
+    Ok(features.to_vec())
+}
+
+fn motor_bundle_for_action(
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    tick: Tick,
+    command: &alife_core::ActionCommand,
+) -> Result<MotorCommandBundle, ScaffoldContractError> {
+    let channel = match command.kind {
+        ActionKind::Idle | ActionKind::Hold | ActionKind::Rest | ActionKind::Inspect => {
+            MotorChannel::Posture
+        }
+        ActionKind::Move => MotorChannel::Locomotion,
+        ActionKind::Interact | ActionKind::Write => MotorChannel::Manipulation,
+        ActionKind::Vocalize => MotorChannel::Vocal,
+        ActionKind::Gesture => MotorChannel::Orientation,
+    };
+    let target = (command.target_entity.is_some() || command.target_position.is_some())
+        .then(|| ActionTarget::new(command.target_entity, command.target_position));
+    let channel_command = ChannelCommand::new(
+        channel,
+        command.action_id,
+        target,
+        command.target_position.unwrap_or(Vec3f::ZERO),
+        command.intensity,
+        command.duration_ticks,
+        0.0,
+        command.confidence,
+        0,
+    )?;
+    MotorCommandBundle::new(organism_id, sequence_id, tick, vec![channel_command])
+}
+
+fn apply_prediction_evidence(
+    context: &mut CognitiveContextFrame,
+    target: &PredictionTargetReceipt,
+    errors: &[f32],
+) -> Result<f32, ScaffoldContractError> {
+    let bounded_errors = errors
+        .iter()
+        .map(|error| error.abs().clamp(0.0, 1.0))
+        .collect::<Vec<_>>();
+    let mean_absolute_error = if bounded_errors.is_empty() {
+        0.0
+    } else {
+        bounded_errors.iter().copied().sum::<f32>() / bounded_errors.len() as f32
+    };
+    context.prediction.source_digest = target.source_digest;
+    context.prediction.successor_feature_abi = target.successor_feature_abi;
+    context.prediction.prediction_error = bounded_errors
+        .iter()
+        .copied()
+        .map(NormalizedScalar::new)
+        .collect::<Result<Vec<_>, _>>()?;
+    context.prediction.action_sensitivity =
+        NormalizedScalar::new(target.action_sensitivity_score.clamp(0.0, 1.0))?;
+
+    let uncertainty = NormalizedScalar::new(mean_absolute_error)?;
+    for summary in &mut context.attention.peripheral_summaries {
+        summary.salience.uncertainty = NormalizedScalar::new(
+            summary
+                .salience
+                .uncertainty
+                .raw()
+                .max(mean_absolute_error),
+        )?;
+        summary.salience.gap_voltage = NormalizedScalar::new(
+            summary.salience.gap_voltage.raw().max(mean_absolute_error),
+        )?;
+    }
+    for salience in &mut context.attention.salience_components {
+        salience.uncertainty = uncertainty;
+        salience.gap_voltage = NormalizedScalar::new(
+            salience.gap_voltage.raw().max(mean_absolute_error),
+        )?;
+    }
+    context.peripheral.summaries = context.attention.peripheral_summaries.clone();
+    context.focal.salience = context.attention.salience_components.clone();
+    context.gap.gap_voltage = NormalizedScalar::new(
+        context.gap.gap_voltage.raw().max(mean_absolute_error),
+    )?;
+    for gap in &mut context.gap.active_gaps {
+        gap.voltage = NormalizedScalar::new(gap.voltage.raw().max(mean_absolute_error))?;
+        gap.uncertainty = NormalizedScalar::new(
+            gap.uncertainty.raw().max(mean_absolute_error),
+        )?;
+    }
+    context.validate_contract()?;
+    Ok(mean_absolute_error)
+}
+
+fn cognitive_work_receipt(
+    context: &CognitiveContextFrame,
+    memory: &MemoryRecallReceipt,
+    neural_work: &BrainWorkReceipt,
+    schedule_sleep: bool,
+) -> Result<CognitiveWorkReceipt, ScaffoldContractError> {
+    let memory_ops = u64::from(memory.exact_bucket_reads)
+        .saturating_add(u64::from(memory.neighbor_bucket_reads))
+        .saturating_add(u64::from(memory.similarity_evaluations));
+    CognitiveWorkCounters::new(
+        u64::from(neural_work.counters.neuron_updates),
+        u64::from(neural_work.counters.synapse_ops),
+        0,
+        context.attention.budget_receipt.work_units,
+        memory_ops,
+        context.concept.active_concepts.len() as u64,
+        context.gap.active_gaps.len() as u64,
+        2,
+        0,
+        0,
+        1,
+        if schedule_sleep { 1 } else { 0 },
+    )?
+    .into_receipt()
+}
+
+fn apply_cognitive_work_cost(
+    world: &mut HeadlessWorld,
+    organism_id: OrganismId,
+    receipt: CognitiveWorkReceipt,
+    policy: CognitiveWorkCostPolicy,
+) -> Result<(), GameAppShellError> {
+    let mut records = world.organism_registry().iter().cloned().collect::<Vec<_>>();
+    let record = records
+        .iter_mut()
+        .find(|record| record.organism_id() == organism_id)
+        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+    record
+        .account_cognitive_work(receipt, policy)
+        .map_err(|error| GameAppShellError::InvalidProductionFrontend {
+            message: error.to_string(),
+        })?;
+    world.replace_organism_registry_exact(records)?;
+    Ok(())
+}
+
 fn seal_prepared_selection_core(
     world: &mut HeadlessWorld,
     residents: &mut BTreeMap<u64, ResidentCognition>,
     sealed_patch_count: usize,
+    cognitive_work_cost_policy: CognitiveWorkCostPolicy,
+    schedule_sleep: bool,
     prepared: PreparedSealInput,
 ) -> Result<SealedWorldSelection, GameAppShellError> {
     let PreparedSealInput {
         organism_id,
         world_entity_id,
         frame,
+        memory,
         sequence_id,
         outcome_tick,
+        mut cognitive_context,
+        work,
         pre_action,
         decision,
         speech_payload,
         speech_prompted,
     } = prepared;
+    let resident = residents
+        .get_mut(&organism_id.raw())
+        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+    if resident.next_sequence != sequence_id.raw() {
+        return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
+    }
     let biology_receipt = world.apply_registered_neural_command(
         &decision.selected_action,
         world_entity_id,
@@ -1908,6 +2136,35 @@ fn seal_prepared_selection_core(
         speech_prompted,
     )?;
     let action_result = &biology_receipt.action_result;
+    let successor_features = grounded_successor_features(
+        world,
+        world_entity_id,
+        &biology_receipt.biology_after,
+        action_result,
+    )?;
+    let prediction_target = PredictionTargetReceipt::for_successor(
+        organism_id,
+        sequence_id,
+        decision.selected_action.action_id,
+        frame.tick(),
+        frame.frame_digest().0,
+        alife_core::SUCCESSOR_FEATURE_ABI_V1,
+        successor_features,
+    )?;
+    let prediction_update = resident.predictor.observe(&prediction_target)?;
+    let grounded_prediction_error =
+        apply_prediction_evidence(&mut cognitive_context, &prediction_target, &prediction_update.error)?;
+    let cognitive_work = cognitive_work_receipt(
+        &cognitive_context,
+        &memory,
+        &work,
+        schedule_sleep,
+    )?;
+    let combined_prediction_error = action_result
+        .observation
+        .prediction_error
+        .raw()
+        .max(grounded_prediction_error);
     let mut outcome = PostActionOutcome::new(
         organism_id,
         sequence_id,
@@ -1919,22 +2176,32 @@ fn seal_prepared_selection_core(
         action_result.observation.frustration_delta,
         action_result.observation.pain_delta,
         action_result.observation.energy_delta,
-        action_result.observation.prediction_error,
+        NormalizedScalar::new(combined_prediction_error)?,
     )?;
     outcome.contradiction_observed =
         action_result.observation.contradiction_observed || !action_result.execution.succeeded;
-    outcome.validate_contract()?;
-    let patch = ExperiencePatchBuilder::new(sequence_id)
-        .record_pre_action(pre_action)?
-        .record_decision(decision.clone())?
-        .record_outcome(outcome)?
-        .seal()?;
-    let resident = residents
-        .get_mut(&organism_id.raw())
-        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-    if resident.next_sequence != sequence_id.raw() {
-        return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
-    }
+    let joint = JointPhysicalOutcome::new(action_result.execution.physical, Vec::new())?;
+    outcome = outcome.with_v11_joint(joint, cognitive_work)?;
+    let bundle = motor_bundle_for_action(
+        organism_id,
+        sequence_id,
+        frame.tick(),
+        &decision.selected_action,
+    )?;
+    let patch = ExperiencePatch::new_v11(
+        pre_action,
+        bundle,
+        outcome,
+        prediction_target,
+        cognitive_work,
+        cognitive_context,
+    )?;
+    apply_cognitive_work_cost(
+        world,
+        organism_id,
+        cognitive_work,
+        cognitive_work_cost_policy,
+    )?;
     resident.language_grounding.observe_sealed(&patch)?;
     resident.next_sequence = resident
         .next_sequence
@@ -2094,6 +2361,7 @@ impl GpuLiveBrainRuntime {
         let brain_class = self.brain_class;
         let preserve_lineage_archive = self.lineage_library.is_some();
         let homeostatic_parameters = self.homeostatic_parameters.clone();
+        let cognitive_work_cost_policy = self.cognitive_work_cost_policy;
         let schedule_sleep = self.schedule_sleep;
         let observe_sidecars = self.observe_sidecars;
         let retain_sealed_patch_history = self.retain_sealed_patch_history;
@@ -2107,6 +2375,7 @@ impl GpuLiveBrainRuntime {
         )
         .map(|mut candidate| {
             candidate.homeostatic_parameters = homeostatic_parameters;
+            candidate.cognitive_work_cost_policy = cognitive_work_cost_policy;
             candidate.schedule_sleep = schedule_sleep;
             candidate.observe_sidecars = observe_sidecars;
             candidate.retain_sealed_patch_history = retain_sealed_patch_history;
@@ -2324,6 +2593,7 @@ impl GpuLiveBrainRuntime {
                         CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
                     })?,
                 attention_hysteresis: alife_core::HysteresisState::default(),
+                predictor: GroundedSuccessorPredictor::default(),
             };
             let raw = entry.organism_id.raw();
             if candidate_residents.insert(raw, resident).is_some()
@@ -2801,6 +3071,7 @@ impl GpuLiveBrainRuntime {
             ));
         }
         options.homeostatic_parameters.validate_contract()?;
+        options.cognitive_work_cost_policy.validate_contract()?;
         let (lineage_library, lineage_run_id, archive_learned_capture_policy) =
             match lineage_archive {
                 Some((library, run_id, policy)) => (Some(library), Some(run_id), policy),
@@ -2818,6 +3089,7 @@ impl GpuLiveBrainRuntime {
             brain_class,
             sensor_profile,
             homeostatic_parameters: options.homeostatic_parameters,
+            cognitive_work_cost_policy: options.cognitive_work_cost_policy,
             schedule_sleep: options.schedule_sleep,
             sealed_patches: Vec::new(),
             sealed_patch_count: 0,
@@ -2826,6 +3098,7 @@ impl GpuLiveBrainRuntime {
             retain_sealed_patch_history: options.retain_sealed_patch_history,
             last_learning_receipts: Vec::new(),
             last_activity_work_receipts: Vec::new(),
+            last_cognitive_work_receipts: Vec::new(),
             last_memory_recall_receipts: Vec::new(),
             last_memory_update_receipts: Vec::new(),
             last_cognitive_context_digests: Vec::new(),
@@ -2928,6 +3201,8 @@ impl GpuLiveBrainRuntime {
             brain_class,
             sensor_profile,
             homeostatic_parameters: HomeostaticParameters::reference(),
+            cognitive_work_cost_policy: GpuLiveRuntimeConstructionOptions::production()
+                .cognitive_work_cost_policy,
             schedule_sleep: true,
             sealed_patches: Vec::new(),
             sealed_patch_count: 0,
@@ -2936,6 +3211,7 @@ impl GpuLiveBrainRuntime {
             retain_sealed_patch_history: true,
             last_learning_receipts: Vec::new(),
             last_activity_work_receipts: Vec::new(),
+            last_cognitive_work_receipts: Vec::new(),
             last_memory_recall_receipts: Vec::new(),
             last_memory_update_receipts: Vec::new(),
             last_cognitive_context_digests: Vec::new(),
@@ -3080,6 +3356,7 @@ impl GpuLiveBrainRuntime {
                         language_grounding: restored.language_grounding,
                         life_statistics,
                         attention_hysteresis: alife_core::HysteresisState::default(),
+                        predictor: GroundedSuccessorPredictor::default(),
                     };
                     Ok((
                         resident,
@@ -4013,6 +4290,7 @@ impl GpuLiveBrainRuntime {
         self.last_sealed_patches.clear();
         self.last_learning_receipts.clear();
         self.last_activity_work_receipts.clear();
+        self.last_cognitive_work_receipts.clear();
         self.last_memory_recall_receipts.clear();
         self.last_memory_update_receipts.clear();
         self.last_cognitive_context_digests.clear();
@@ -4429,6 +4707,26 @@ impl GpuLiveBrainRuntime {
     /// candidate enumeration or action legality.
     pub fn last_activity_work_receipts(&self) -> &[BrainWorkReceipt] {
         &self.last_activity_work_receipts
+    }
+
+    /// Hardware-independent cognitive work sealed by the most recent world
+    /// tick. A cost policy can consume these receipts without changing action
+    /// legality or world candidate enumeration.
+    pub fn last_cognitive_work_receipts(&self) -> &[CognitiveWorkReceipt] {
+        &self.last_cognitive_work_receipts
+    }
+
+    pub fn cognitive_work_cost_policy(&self) -> CognitiveWorkCostPolicy {
+        self.cognitive_work_cost_policy
+    }
+
+    pub fn set_cognitive_work_cost_policy(
+        &mut self,
+        policy: CognitiveWorkCostPolicy,
+    ) -> Result<(), ScaffoldContractError> {
+        policy.validate_contract()?;
+        self.cognitive_work_cost_policy = policy;
+        Ok(())
     }
 
     /// Candidate-conditioned recall receipts consumed by the most recent GPU
@@ -4910,6 +5208,9 @@ impl GpuLiveBrainRuntime {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
         memory_recall.validate_for_frame(&frame)?;
+        memory_recall
+            .cognitive_context()
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
         let cognitive_context_digest = memory_recall.cognitive_context_digest()?;
         let organism_id = handle.organism_id();
         let resident = self
@@ -4980,6 +5281,7 @@ impl GpuLiveBrainRuntime {
             pending_eligibility: gpu_tick.pending_eligibility,
             frame,
             memory_recall,
+            work: gpu_tick.work,
             cognitive_context_digest,
             sequence_id,
             outcome_tick,
@@ -4999,7 +5301,8 @@ impl GpuLiveBrainRuntime {
             world_entity_id,
             pending_eligibility,
             frame,
-            memory_recall: _,
+            memory_recall,
+            work,
             cognitive_context_digest,
             sequence_id,
             outcome_tick,
@@ -5009,16 +5312,25 @@ impl GpuLiveBrainRuntime {
             speech_prompted,
         } = prepared;
         let organism_id = handle.organism_id();
+        let cognitive_context = memory_recall
+            .cognitive_context()
+            .cloned()
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
         let sealed = seal_prepared_selection_core(
             &mut self.world,
             &mut self.residents,
             self.sealed_patch_count,
+            self.cognitive_work_cost_policy,
+            self.schedule_sleep,
             PreparedSealInput {
                 organism_id,
                 world_entity_id,
                 frame,
+                memory: memory_recall.receipt().clone(),
                 sequence_id,
                 outcome_tick,
+                cognitive_context,
+                work,
                 pre_action,
                 decision,
                 speech_payload,
@@ -5173,6 +5485,11 @@ impl GpuLiveBrainRuntime {
             );
             self.last_learning_receipts.extend(learning);
         }
+        self.last_cognitive_work_receipts.extend(
+            sealed
+                .iter()
+                .filter_map(|selection| selection.patch.cognitive_work().copied()),
+        );
         let committed_patches = sealed
             .into_iter()
             .map(|selection| selection.patch)
@@ -6476,6 +6793,7 @@ mod tests {
                         life_statistics: PassiveLifeStatistics::new(OrganismId(raw), world_tick)
                             .unwrap(),
                         attention_hysteresis: alife_core::HysteresisState::default(),
+                        predictor: GroundedSuccessorPredictor::default(),
                     },
                 )
             })
@@ -8081,6 +8399,7 @@ mod tests {
                 language_grounding: LanguageGroundingLedger::default(),
                 life_statistics: PassiveLifeStatistics::new(organism_id, Tick::ZERO).unwrap(),
                 attention_hysteresis: alife_core::HysteresisState::default(),
+                predictor: GroundedSuccessorPredictor::default(),
             },
         )]);
         let confidence = Confidence::new(1.0).unwrap();
@@ -8122,16 +8441,55 @@ mod tests {
                 false,
             )
             .unwrap();
+        let cognitive_context =
+            CognitiveContextFrame::empty(organism_id, sequence_id, frame.tick()).unwrap();
+        let memory = MemoryRecallReceipt {
+            schema_version: 1,
+            organism_id_raw: organism_id.raw(),
+            input_generation: 1,
+            bank_digest: [0; 4],
+            base_frame_digest: frame.base_digest(),
+            context_digest: frame.context().canonical_digest(),
+            candidate_count: 0,
+            exact_bucket_reads: 0,
+            neighbor_bucket_reads: 0,
+            similarity_evaluations: 0,
+            candidates: Vec::new(),
+            degradations: Vec::new(),
+        };
+        let work = BrainWorkReceipt {
+            schema_version: 1,
+            class_id_raw: 0,
+            organism_id_raw: organism_id.raw(),
+            tick: frame.tick().raw(),
+            handle_slot: 0,
+            handle_generation: 0,
+            dispatch_generation: 1,
+            frame_digest: frame.frame_digest().0,
+            sequence_cursor: sequence_id.raw(),
+            counters: Default::default(),
+            route_schedule_digest: [0; 4],
+            neural_cost_q24: 0,
+            atp_before_q16: 0,
+            atp_debit_q16: 0,
+            atp_after_q16: 0,
+            receipt_digest: [0; 4],
+        };
         let sealed = seal_prepared_selection_core(
             &mut world,
             &mut residents,
             0,
+            CognitiveWorkCostPolicy::disabled(),
+            false,
             PreparedSealInput {
                 organism_id,
                 world_entity_id,
                 frame,
+                memory,
                 sequence_id,
                 outcome_tick: Tick::new(1),
+                cognitive_context,
+                work,
                 pre_action,
                 decision,
                 speech_payload: None,
@@ -8144,6 +8502,16 @@ mod tests {
             .get(organism_id)
             .unwrap()
             .biochemistry();
+        assert_eq!(sealed.patch.header().abi_version, ExperiencePatch::V11_ABI_VERSION);
+        assert!(sealed.patch.prediction_target().is_some());
+        assert_eq!(
+            world
+                .organism_registry()
+                .get(organism_id)
+                .unwrap()
+                .cognitive_work(),
+            sealed.patch.cognitive_work().unwrap()
+        );
 
         assert_eq!(expected_receipt.action_result.body_event.sleep_recovery, 1.0);
         assert_eq!(
