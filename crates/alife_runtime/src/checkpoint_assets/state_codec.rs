@@ -15,8 +15,9 @@ use alife_gpu_backend::{
     PendingEligibilityRestoreParts, GPU_BRAIN_CHECKPOINT_SCHEMA_VERSION,
 };
 use alife_world::persistence::{
-    AssetManifest, AssetManifestEntry, GpuBackendProvenanceSave, GpuBrainSaveState,
-    GpuSleepAssetState, MemorySidecarSaveState, NeuralGpuBackendApi, PendingEligibilityCheckpoint,
+    AssetManifest, AssetManifestEntry, DurableFounderCognitiveState, ExactCognitiveCheckpointState,
+    GpuBackendProvenanceSave, GpuBrainAssetRef, GpuBrainSaveState, GpuSleepAssetState,
+    MemorySidecarSaveState, NeuralGpuBackendApi, PendingEligibilityCheckpoint,
     PortableActivationBanksV1, PortableDualWeightBankV1, PortableEligibilityBanksV1,
     PortableNeuronHomeostasisV1, PortableReplayJournalV1, PortableThrottleCheckpoint,
     RetainedLearningRecoverySaveState, ThrottleReplaySaveInput, ThrottleReplaySaveState,
@@ -169,6 +170,7 @@ pub struct GpuBrainCheckpointWrite {
     pub save_state: GpuBrainSaveState,
     pub manifest_entries: Vec<AssetManifestEntry>,
     pub checkpoint_digest: [u64; 4],
+    pub exact_cognitive_state: Option<GpuBrainAssetRef>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -177,6 +179,7 @@ pub struct GpuDurableFounderWrite {
     pub phenotype: BrainPhenotype,
     pub compiler_inputs: PhenotypeCompilerInputs,
     pub next_experience_sequence_raw: u64,
+    pub durable_cognitive_state: Option<GpuBrainAssetRef>,
 }
 
 #[derive(Debug)]
@@ -192,6 +195,7 @@ pub struct RestoredGpuBrainCheckpoint {
     pub language_grounding: LanguageGroundingLedger,
     pub life_statistics: Option<PassiveLifeStatistics>,
     pub retained_learning: Option<RestoredRetainedLearning>,
+    pub exact_cognitive_state: Option<ExactCognitiveCheckpointState>,
 }
 
 pub struct GpuBrainSidecarCapture<'a> {
@@ -230,7 +234,82 @@ struct PendingExperienceTransactionV1 {
     builder: ExperiencePatchBuilder,
 }
 
+impl GpuBrainCheckpointWrite {
+    pub fn attach_exact_cognitive_state(
+        &mut self,
+        store: &GpuCheckpointAssetStore,
+        state: &ExactCognitiveCheckpointState,
+    ) -> Result<(), GameAppShellError> {
+        state.validate()?;
+        if state.organism_id != self.save_state.organism_id
+            || state.checkpoint_tick != self.save_state.checkpoint_tick
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+        }
+        let _ = state.encode()?;
+        let (asset, entry) = store.write_json("v11-exact-cognitive", state)?;
+        self.exact_cognitive_state = Some(asset);
+        self.manifest_entries.push(entry);
+        Ok(())
+    }
+
+    pub fn attach_durable_founder_state(
+        &mut self,
+        store: &GpuCheckpointAssetStore,
+        state: &DurableFounderCognitiveState,
+    ) -> Result<GpuBrainAssetRef, GameAppShellError> {
+        state.validate()?;
+        let _ = state.encode()?;
+        let (asset, entry) = store.write_json("v11-durable-founder-cognitive", state)?;
+        self.manifest_entries.push(entry);
+        Ok(asset)
+    }
+}
+
 impl GpuCheckpointAssetStore {
+    pub fn restore_brain_checkpoint(
+        &self,
+        backend: &mut GpuAuthoritativeSession,
+        manifest: &AssetManifest,
+        checkpoint: &GpuBrainCheckpointWrite,
+    ) -> Result<RestoredGpuBrainCheckpoint, GameAppShellError> {
+        let exact_cognitive_state = checkpoint
+            .exact_cognitive_state
+            .as_ref()
+            .map(|asset| self.read_exact_cognitive_state(manifest, asset))
+            .transpose()?;
+        if let Some(state) = &exact_cognitive_state {
+            if state.organism_id != checkpoint.save_state.organism_id
+                || state.checkpoint_tick != checkpoint.save_state.checkpoint_tick
+            {
+                return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+            }
+        }
+        let mut restored = self.restore_brain(backend, manifest, &checkpoint.save_state)?;
+        restored.exact_cognitive_state = exact_cognitive_state;
+        Ok(restored)
+    }
+
+    fn read_exact_cognitive_state(
+        &self,
+        manifest: &AssetManifest,
+        asset: &GpuBrainAssetRef,
+    ) -> Result<ExactCognitiveCheckpointState, GameAppShellError> {
+        let (_candidate, bytes): (ExactCognitiveCheckpointState, Vec<u8>) =
+            self.read_json(manifest, asset)?;
+        Ok(ExactCognitiveCheckpointState::decode(&bytes)?)
+    }
+
+    pub fn read_durable_founder_state(
+        &self,
+        manifest: &AssetManifest,
+        asset: &GpuBrainAssetRef,
+    ) -> Result<DurableFounderCognitiveState, GameAppShellError> {
+        let (_candidate, bytes): (DurableFounderCognitiveState, Vec<u8>) =
+            self.read_json(manifest, asset)?;
+        Ok(DurableFounderCognitiveState::decode(&bytes)?)
+    }
+
     /// Creates a healthy cross-save mind clone through the production GPU
     /// checkpoint path. Only consolidated lifetime weights and durable learned
     /// sidecars cross the boundary; transient neural and world state come from
@@ -257,6 +336,11 @@ impl GpuCheckpointAssetStore {
         }
 
         let restored = self.restore_brain(backend, manifest, source_state)?;
+        let durable_state = restored
+            .exact_cognitive_state
+            .as_ref()
+            .map(ExactCognitiveCheckpointState::to_durable_founder)
+            .transpose()?;
         let source_handle = restored.receipt.handle;
         let source_snapshot =
             match backend.snapshot_brain(source_handle, source_state.checkpoint_tick) {
@@ -339,13 +423,18 @@ impl GpuCheckpointAssetStore {
             },
         );
         let removal = backend.remove_brain(target_handle);
-        let checkpoint = checkpoint?;
+        let mut checkpoint = checkpoint?;
+        let durable_cognitive_state = durable_state
+            .as_ref()
+            .map(|state| checkpoint.attach_durable_founder_state(self, state))
+            .transpose()?;
         removal?;
         Ok(GpuDurableFounderWrite {
             checkpoint,
             phenotype,
             compiler_inputs,
             next_experience_sequence_raw,
+            durable_cognitive_state,
         })
     }
 
@@ -621,6 +710,7 @@ impl GpuCheckpointAssetStore {
             save_state,
             manifest_entries: entries,
             checkpoint_digest,
+            exact_cognitive_state: None,
         })
     }
 
@@ -865,6 +955,7 @@ impl GpuCheckpointAssetStore {
             language_grounding: state.language_grounding.clone(),
             life_statistics: state.life_statistics.clone(),
             retained_learning,
+            exact_cognitive_state: None,
         })
     }
 
