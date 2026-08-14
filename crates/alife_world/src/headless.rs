@@ -207,7 +207,7 @@ pub struct HeadlessMotorTransactionReceipt {
     pub biology_after: BiochemistryState,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum HeadlessMotorTransactionError {
     Contract(ScaffoldContractError),
     UnsupportedChannel(MotorChannel),
@@ -2041,7 +2041,9 @@ impl HeadlessWorld {
         world_entity_id.validate()?;
         self.validate_organism_bindings()?;
         if bundle.tick != self.tick {
-            return Err(ScaffoldContractError::NonMonotonicTick);
+            return Err(HeadlessMotorTransactionError::Contract(
+                ScaffoldContractError::NonMonotonicTick,
+            ));
         }
         let outcome_tick = self
             .tick
@@ -2057,11 +2059,13 @@ impl HeadlessWorld {
             || record.world_entity_id() != world_entity_id
             || record.biochemistry().tick != self.tick
         {
-            return Err(if record.biochemistry().tick != self.tick {
-                ScaffoldContractError::NonMonotonicTick
-            } else {
-                ScaffoldContractError::InvalidId
-            });
+            return Err(HeadlessMotorTransactionError::Contract(
+                if record.biochemistry().tick != self.tick {
+                    ScaffoldContractError::NonMonotonicTick
+                } else {
+                    ScaffoldContractError::InvalidId
+                },
+            ));
         }
         let object = self
             .objects
@@ -2074,7 +2078,9 @@ impl HeadlessWorld {
                 .get_by_world_entity_id(world_entity_id)
                 .is_none_or(|bound| bound.organism_id() != bundle.organism_id)
         {
-            return Err(ScaffoldContractError::InvalidId);
+            return Err(HeadlessMotorTransactionError::Contract(
+                ScaffoldContractError::InvalidId,
+            ));
         }
         Ok(outcome_tick)
     }
