@@ -4,6 +4,9 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::dendritic::{
+    apply_dendritic_conjunctions, DendriticBranchSet, DendriticWorkReceipt,
+};
 use crate::{
     require_current_version, validate_finite, ActiveTilePolicy, BrainClassId, BrainClassSpec,
     LobeKind, NormalizedScalar, ProjectionType, ScaffoldContractError, SchemaKind, SchemaVersions,
@@ -568,6 +571,7 @@ pub struct CpuNeuralState {
     pub accumulators: Vec<f32>,
     pub lobe_views: Vec<LobeActivationView>,
     pub projections: Vec<SparseProjection>,
+    pub dendritic_branches: DendriticBranchSet,
     pub weight_split: WeightSplitContract,
     pub plasticity_traces: PlasticityTraceBuffers,
     pub update_metadata: NeuralUpdateMetadata,
@@ -601,6 +605,7 @@ impl CpuNeuralState {
             accumulators: vec![0.0; neuron_count],
             lobe_views,
             projections: Vec::new(),
+            dendritic_branches: DendriticBranchSet::default(),
             weight_split,
             plasticity_traces: PlasticityTraceBuffers {
                 h_shadow_decay_reservoir: Vec::new(),
@@ -717,6 +722,7 @@ pub struct NeuralUpdateReport {
     pub range_rejections: u32,
     pub nan_rejections: u32,
     pub unsupported_tiles: u32,
+    pub dendritic_work: DendriticWorkReceipt,
 }
 
 pub fn cpu_spmv_projection(
@@ -776,7 +782,13 @@ pub fn finalize_cpu_activations(
     }
 
     state.previous_activations.clone_from(&state.activations);
+    let dendritic_work = apply_dendritic_conjunctions(
+        &state.activations,
+        &mut state.accumulators,
+        &state.dendritic_branches,
+    )?;
     let mut report = NeuralUpdateReport::default();
+    report.dendritic_work = dendritic_work;
     for (activation, accumulator) in state.activations.iter_mut().zip(&mut state.accumulators) {
         let raw = validate_finite(*accumulator)?;
         let activated = match config.function {

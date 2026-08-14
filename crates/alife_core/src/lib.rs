@@ -14,6 +14,7 @@ pub mod checkpoint;
 pub mod chemistry;
 pub mod cognitive_context;
 pub mod cognitive_work;
+pub mod dendritic;
 pub mod diagnostics;
 pub mod era1_evaluation;
 pub mod error;
@@ -217,6 +218,11 @@ pub use motor::{
     EgocentricDirection, MeasuredChannelObservation, MotorChannel, MotorCommandBundle,
     TargetBinding, MAX_COORDINATION_GROUPS, MAX_MOTOR_CHANNELS, MAX_MOTOR_PAYLOAD_VALUES,
     MOTOR_COMMAND_SCHEMA_VERSION,
+};
+pub use dendritic::{
+    apply_dendritic_conjunctions, DendriticBranch, DendriticBranchSet, DendriticInputRef,
+    DendriticWorkReceipt, MAX_DENDRITIC_BRANCHES, MAX_DENDRITIC_BRANCHES_PER_NEURON,
+    MAX_DENDRITIC_INPUTS,
 };
 pub use neural::{
     cpu_spmv_projection, finalize_cpu_activations, update_oja_shadow_traces, ActivationFunction,
