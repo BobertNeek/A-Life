@@ -451,6 +451,7 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         .expect("publish the captured player-loop checkpoint");
     let durable = GpuDurableSaveManifest::open(&save_path, &asset_root)
         .expect("reopen the captured player-loop checkpoint");
+    let durable_asset_root = durable.asset_root().to_path_buf();
     let loaded = durable
         .load()
         .expect("reload the captured player-loop checkpoint");
@@ -520,7 +521,16 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         ProductionFrontendProfileId::MinimumSettings30x30,
     )
     .expect("production voxel scenario launch config");
+    let launch_manifest_path = durable_asset_root.join("player-loop-asset-manifest.json");
+    fs::write(
+        &launch_manifest_path,
+        serde_json::to_vec_pretty(&loaded.save.assets)
+            .expect("serialize checkpoint asset manifest"),
+    )
+    .expect("materialize checkpoint asset manifest");
     launch.app_launch.save_path = save_path.clone();
+    launch.app_launch.asset_root = durable_asset_root;
+    launch.app_launch.asset_manifest_path = launch_manifest_path;
     launch.population = Some(3);
     launch.dry_run = true;
     launch.graphics_backend = "existing".to_string();
