@@ -547,6 +547,7 @@ pub struct Fvr04CreatureExpressionSample {
     pub stable_id: alife_core::WorldEntityId,
     pub organism_id: alife_core::OrganismId,
     pub display_label: String,
+    pub brain_class_id: Option<u16>,
     pub brain_neuron_count: Option<u32>,
     pub hunger: f32,
     pub fatigue: f32,
@@ -556,11 +557,16 @@ pub struct Fvr04CreatureExpressionSample {
     pub reproductive_drive: f32,
     pub sleep_pressure: f32,
     pub social: f32,
-    pub memory_record_count: u32,
-    pub concept_count: u32,
-    pub unresolved_gap_count: u32,
-    pub lifetime_learning_enabled: bool,
+    pub fast_memory_count: Option<u32>,
+    pub lifetime_memory_count: Option<u32>,
+    pub memory_record_count: Option<u32>,
+    pub concept_count: Option<u32>,
+    pub unresolved_gap_count: Option<u32>,
+    pub lifetime_learning_enabled: Option<bool>,
+    pub sleep_phase_raw: Option<u16>,
+    pub consolidation_state_raw: Option<u16>,
     pub last_consolidated_tick: Option<u64>,
+    pub topology_update_count: Option<u32>,
     pub expression: CreatureExpressionState,
     pub animation: CreatureAnimationState,
 }
@@ -1177,14 +1183,20 @@ struct Fvr04CreatureVisualRecord {
     stable_ref: StableVoxelObjectRef,
     tile: VoxelTileCoord,
     display_label: String,
+    brain_class_id: Option<u16>,
     brain_neuron_count: Option<u32>,
     social_affinity: f32,
     reproductive_drive: f32,
-    memory_record_count: u32,
-    concept_count: u32,
-    unresolved_gap_count: u32,
-    lifetime_learning_enabled: bool,
+    fast_memory_count: Option<u32>,
+    lifetime_memory_count: Option<u32>,
+    memory_record_count: Option<u32>,
+    concept_count: Option<u32>,
+    unresolved_gap_count: Option<u32>,
+    lifetime_learning_enabled: Option<bool>,
+    sleep_phase_raw: Option<u16>,
+    consolidation_state_raw: Option<u16>,
     last_consolidated_tick: Option<u64>,
+    topology_update_count: Option<u32>,
     visual: CreatureVisualSnapshot,
 }
 
@@ -2273,17 +2285,23 @@ fn fvr04_creature_visual_records_from_save(
             },
             tile: anchor.tile,
             display_label: object.label.clone(),
+            brain_class_id: Some(creature.brain_class.default_class_id().raw()),
             brain_neuron_count: creature.brain_class.neuron_count(),
             social_affinity: object.social_affinity,
             reproductive_drive: creature.mind.homeostasis.drives.reproductive_drive,
-            memory_record_count: creature.mind.memory_record_count,
-            concept_count: creature.mind.concept_count,
-            unresolved_gap_count: creature.mind.unresolved_gap_count,
-            lifetime_learning_enabled: creature.learning.lifetime_learning_enabled,
+            fast_memory_count: None,
+            lifetime_memory_count: None,
+            memory_record_count: Some(creature.mind.memory_record_count),
+            concept_count: Some(creature.mind.concept_count),
+            unresolved_gap_count: Some(creature.mind.unresolved_gap_count),
+            lifetime_learning_enabled: Some(creature.learning.lifetime_learning_enabled),
+            sleep_phase_raw: Some(fvr04_sleep_phase_from_creature_save(creature).raw()),
+            consolidation_state_raw: None,
             last_consolidated_tick: creature
                 .learning
                 .last_consolidated_tick
                 .map(|tick| tick.raw()),
+            topology_update_count: None,
             visual,
         });
     }
@@ -4725,6 +4743,7 @@ fn spawn_fvr04_prepared_creature_batch(
             stable_id: visual.stable_id,
             organism_id: visual.organism_id,
             display_label: creature.record.display_label,
+            brain_class_id: creature.record.brain_class_id,
             brain_neuron_count: creature.record.brain_neuron_count,
             hunger: visual.cues.hunger.value,
             fatigue: visual.cues.fatigue.value,
@@ -4734,11 +4753,16 @@ fn spawn_fvr04_prepared_creature_batch(
             reproductive_drive: creature.record.reproductive_drive,
             sleep_pressure: visual.cues.sleep_pressure.value,
             social: ((creature.record.social_affinity + 1.0) * 0.5).clamp(0.0, 1.0),
+            fast_memory_count: creature.record.fast_memory_count,
+            lifetime_memory_count: creature.record.lifetime_memory_count,
             memory_record_count: creature.record.memory_record_count,
             concept_count: creature.record.concept_count,
             unresolved_gap_count: creature.record.unresolved_gap_count,
             lifetime_learning_enabled: creature.record.lifetime_learning_enabled,
+            sleep_phase_raw: creature.record.sleep_phase_raw,
+            consolidation_state_raw: creature.record.consolidation_state_raw,
             last_consolidated_tick: creature.record.last_consolidated_tick,
+            topology_update_count: creature.record.topology_update_count,
             expression: visual.expression,
             animation: visual.animation,
         });
@@ -5154,6 +5178,7 @@ fn spawn_fvr04_creature_batch(
             stable_id: visual.stable_id,
             organism_id: visual.organism_id,
             display_label: creature.display_label.clone(),
+            brain_class_id: creature.brain_class_id,
             brain_neuron_count: creature.brain_neuron_count,
             hunger: visual.cues.hunger.value,
             fatigue: visual.cues.fatigue.value,
@@ -5163,11 +5188,16 @@ fn spawn_fvr04_creature_batch(
             reproductive_drive: creature.reproductive_drive,
             sleep_pressure: visual.cues.sleep_pressure.value,
             social: ((creature.social_affinity + 1.0) * 0.5).clamp(0.0, 1.0),
+            fast_memory_count: creature.fast_memory_count,
+            lifetime_memory_count: creature.lifetime_memory_count,
             memory_record_count: creature.memory_record_count,
             concept_count: creature.concept_count,
             unresolved_gap_count: creature.unresolved_gap_count,
             lifetime_learning_enabled: creature.lifetime_learning_enabled,
+            sleep_phase_raw: creature.sleep_phase_raw,
+            consolidation_state_raw: creature.consolidation_state_raw,
             last_consolidated_tick: creature.last_consolidated_tick,
+            topology_update_count: creature.topology_update_count,
             expression: visual.expression,
             animation: visual.animation,
         });
@@ -5760,6 +5790,13 @@ fn fvr04_live_creature_visual_record(
         ),
     )
     .ok()?;
+    let cognitive = frame.cognitive_for_organism(organism_id);
+    let memory_record_count = cognitive.and_then(|snapshot| {
+        snapshot
+            .fast_memory_count
+            .zip(snapshot.lifetime_memory_count)
+            .and_then(|(fast, lifetime)| fast.checked_add(lifetime))
+    });
     Some(Fvr04CreatureVisualRecord {
         stable_ref: StableVoxelObjectRef {
             kind: StableVoxelRefKind::Creature,
@@ -5769,18 +5806,25 @@ fn fvr04_live_creature_visual_record(
         },
         tile,
         display_label: presentation.object.label.clone(),
-        brain_neuron_count: None,
+        brain_class_id: cognitive.and_then(|snapshot| snapshot.brain_class_id),
+        brain_neuron_count: cognitive.and_then(|snapshot| snapshot.brain_neuron_count),
         social_affinity: presentation.object.social_affinity,
         reproductive_drive: presentation
             .biochemistry
             .homeostasis
             .drives
             .reproductive_drive,
-        memory_record_count: 0,
-        concept_count: 0,
-        unresolved_gap_count: 0,
-        lifetime_learning_enabled: false,
-        last_consolidated_tick: None,
+        fast_memory_count: cognitive.and_then(|snapshot| snapshot.fast_memory_count),
+        lifetime_memory_count: cognitive.and_then(|snapshot| snapshot.lifetime_memory_count),
+        memory_record_count,
+        concept_count: cognitive.and_then(|snapshot| snapshot.concept_count),
+        unresolved_gap_count: cognitive.and_then(|snapshot| snapshot.unresolved_gap_count),
+        lifetime_learning_enabled: cognitive.and_then(|snapshot| snapshot.learning_active),
+        sleep_phase_raw: cognitive.and_then(|snapshot| snapshot.sleep_phase_raw),
+        consolidation_state_raw: cognitive
+            .and_then(|snapshot| snapshot.consolidation_state_raw),
+        last_consolidated_tick: cognitive.and_then(|snapshot| snapshot.last_consolidated_tick),
+        topology_update_count: cognitive.and_then(|snapshot| snapshot.topology_update_count),
         visual,
     })
 }
@@ -6443,22 +6487,47 @@ fn sync_v0_player_control_strip(
 
 fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample, following: bool) -> String {
     let display_name = v0_player_creature_name(&sample.display_label, sample.stable_id.raw());
-    let brain = sample
-        .brain_neuron_count
-        .map(|count| format!("{} neurons", count))
-        .unwrap_or_else(|| "custom brain".to_string());
-    let learning = if sample.lifetime_learning_enabled {
-        "active"
-    } else {
-        "sealed"
+    let brain = match (sample.brain_class_id, sample.brain_neuron_count) {
+        (Some(class_id), Some(count)) => format!("class {class_id}, {count} neurons"),
+        (None, Some(count)) => format!("{count} neurons"),
+        _ => "brain unavailable".to_string(),
     };
+    let learning = match sample.lifetime_learning_enabled {
+        Some(true) => "active",
+        Some(false) => "inactive",
+        None => "unavailable",
+    };
+    let memories = sample
+        .memory_record_count
+        .map(|count| count.to_string())
+        .unwrap_or_else(|| "unavailable".to_string());
+    let fast_memories = sample
+        .fast_memory_count
+        .map(|count| count.to_string())
+        .unwrap_or_else(|| "unavailable".to_string());
+    let lifetime_memories = sample
+        .lifetime_memory_count
+        .map(|count| count.to_string())
+        .unwrap_or_else(|| "unavailable".to_string());
+    let concepts = sample
+        .concept_count
+        .map(|count| count.to_string())
+        .unwrap_or_else(|| "unavailable".to_string());
+    let gaps = sample
+        .unresolved_gap_count
+        .map(|count| count.to_string())
+        .unwrap_or_else(|| "unavailable".to_string());
     let last_sleep = sample
         .last_consolidated_tick
         .map(|tick| format!("Last sleep learning: tick {tick}"))
         .unwrap_or_else(|| "Last sleep learning: none yet".to_string());
+    let consolidation = sample
+        .consolidation_state_raw
+        .map(|state| format!("state {state}"))
+        .unwrap_or_else(|| "state unavailable".to_string());
     let follow_state = if following { "FOLLOWING" } else { "SELECTED" };
     format!(
-        "{display_name}  |  {brain}\n{follow_state}  |  {}  |  {}\n\nNEEDS\nHunger   {} {:>3}%\nFatigue  {} {:>3}%\nSafety   {} {:>3}%\nSleep    {} {:>3}%\n\nSOCIAL\nReadiness {} {:>3}%\n\nLEARNING\n{}  |  memories {}  |  concepts {}\nOpen curiosity gaps: {}\n{}",
+        "{display_name}  |  {brain}\n{follow_state}  |  {}  |  {}\n\nNEEDS\nHunger   {} {:>3}%\nFatigue  {} {:>3}%\nSafety   {} {:>3}%\nSleep    {} {:>3}%\n\nSOCIAL\nReadiness {} {:>3}%\n\nLEARNING\n{}  |  memories {} (fast {} lifetime {})  |  concepts {}\nOpen curiosity gaps: {}\n{}\nConsolidation: {}",
         sample.animation.label(),
         sample.expression.label(),
         v0_need_bar(sample.hunger),
@@ -6472,10 +6541,13 @@ fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample, following: 
         v0_need_bar(sample.social),
         v0_percent(sample.social),
         learning,
-        sample.memory_record_count,
-        sample.concept_count,
-        sample.unresolved_gap_count,
+        memories,
+        fast_memories,
+        lifetime_memories,
+        concepts,
+        gaps,
         last_sleep,
+        consolidation,
     )
 }
 

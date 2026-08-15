@@ -12,7 +12,7 @@ use alife_bevy_adapter::{
     core_vec3_to_bevy, AffordanceTags, AlifeBevyAdapterPlugin, BevyEntityMap, CreatureBody,
     SensoryEmitter,
 };
-use alife_core::{ActionKind, AffordanceBits, Tick, Vec3f, WorldEntityId};
+use alife_core::{ActionKind, AffordanceBits, OrganismId, Tick, Vec3f, WorldEntityId};
 #[cfg(feature = "gpu-runtime")]
 use alife_world::persistence::PortableSaveFile;
 use alife_world::{
@@ -86,7 +86,8 @@ use crate::{
     CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
     GraphicalGpuRuntimeController, GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundLaunchConfig,
     GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode, GraphicalPlaygroundViewMode,
-    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
+    LiveBrainLoop, LiveBrainTickSummary, LiveCognitivePresentationSnapshot,
+    RuntimeControlCommand, RuntimeControlPanel,
     RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
     VisibleWorldObjectPresentation, VisibleWorldPresentation, CA13_FIXED_SIM_TICK_HZ,
     CA13_TARGET_RENDER_FRAME_HZ, S02_MAX_SMOKE_TICKS,
@@ -451,6 +452,7 @@ pub struct LiveBrainPresentationFrame {
     pub authoritative_world_tick: Tick,
     world_objects_by_id: BTreeMap<u64, WorldObject>,
     organisms_by_world_id: BTreeMap<u64, WorldOrganismPresentationRow>,
+    cognitive_by_organism_id: BTreeMap<u64, LiveCognitivePresentationSnapshot>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -481,6 +483,7 @@ impl LiveBrainPresentationFrame {
             authoritative_world_tick,
             world_objects_by_id,
             organisms_by_world_id: BTreeMap::new(),
+            cognitive_by_organism_id: BTreeMap::new(),
         })
     }
 
@@ -516,6 +519,13 @@ impl LiveBrainPresentationFrame {
 
     pub fn organism_count(&self) -> usize {
         self.organisms_by_world_id.len()
+    }
+
+    pub fn cognitive_for_organism(
+        &self,
+        organism_id: OrganismId,
+    ) -> Option<&LiveCognitivePresentationSnapshot> {
+        self.cognitive_by_organism_id.get(&organism_id.raw())
     }
 
     fn install_organism_snapshot(&mut self, snapshot: WorldPresentationSnapshot) {
@@ -587,6 +597,15 @@ impl LiveBrainPresentationFrameResource {
         tick_summaries: Vec<LiveBrainTickSummary>,
         world: &HeadlessWorld,
     ) -> Result<(), LiveBrainPresentationFrameError> {
+        self.try_publish_successful_tick_with_cognitive(tick_summaries, Vec::new(), world)
+    }
+
+    pub fn try_publish_successful_tick_with_cognitive(
+        &mut self,
+        tick_summaries: Vec<LiveBrainTickSummary>,
+        cognitive_snapshots: Vec<LiveCognitivePresentationSnapshot>,
+        world: &HeadlessWorld,
+    ) -> Result<(), LiveBrainPresentationFrameError> {
         let authoritative_world_tick = world.tick();
         if tick_summaries.is_empty()
             || tick_summaries.iter().any(|summary| {
@@ -625,6 +644,10 @@ impl LiveBrainPresentationFrameResource {
             world.object_snapshots(),
         )?;
         next.install_organism_snapshot(snapshot);
+        next.cognitive_by_organism_id = cognitive_snapshots
+            .into_iter()
+            .map(|snapshot| (snapshot.organism_id.raw(), snapshot))
+            .collect();
         self.previous = self.current.clone();
         self.current = next;
         Ok(())
@@ -1117,6 +1140,9 @@ fn tick_production_gpu_brain(
                 return;
             }
         };
+        let cognitive_snapshots = runtime
+            .runtime
+            .live_cognitive_presentation_snapshots(&tick_summaries);
         if let Err(error) = schedule.scheduler.record_executed_ticks(1) {
             schedule.failed = true;
             mark_production_gpu_authority_unavailable(
@@ -1146,7 +1172,11 @@ fn tick_production_gpu_brain(
             );
         }
 
-        match presentation.try_publish_successful_tick(tick_summaries, &world) {
+        match presentation.try_publish_successful_tick_with_cognitive(
+            tick_summaries,
+            cognitive_snapshots,
+            &world,
+        ) {
             Ok(()) => {
                 authority.telemetry = runtime.runtime.authority_telemetry();
             }
@@ -5558,6 +5588,32 @@ fn reconcile_production_presentation(
             return false;
         }
         let homeostasis = &row.biochemistry.homeostasis;
+        let cognitive = frame.current.cognitive_for_organism(sample.organism_id);
+        let memory_record_count = cognitive.and_then(|snapshot| {
+            snapshot
+                .fast_memory_count
+                .zip(snapshot.lifetime_memory_count)
+                .and_then(|(fast, lifetime)| fast.checked_add(lifetime))
+        });
+        sample.brain_class_id = cognitive.and_then(|snapshot| snapshot.brain_class_id);
+        sample.brain_neuron_count =
+            cognitive.and_then(|snapshot| snapshot.brain_neuron_count);
+        sample.fast_memory_count = cognitive.and_then(|snapshot| snapshot.fast_memory_count);
+        sample.lifetime_memory_count =
+            cognitive.and_then(|snapshot| snapshot.lifetime_memory_count);
+        sample.memory_record_count = memory_record_count;
+        sample.concept_count = cognitive.and_then(|snapshot| snapshot.concept_count);
+        sample.unresolved_gap_count =
+            cognitive.and_then(|snapshot| snapshot.unresolved_gap_count);
+        sample.lifetime_learning_enabled =
+            cognitive.and_then(|snapshot| snapshot.learning_active);
+        sample.sleep_phase_raw = cognitive.and_then(|snapshot| snapshot.sleep_phase_raw);
+        sample.consolidation_state_raw =
+            cognitive.and_then(|snapshot| snapshot.consolidation_state_raw);
+        sample.last_consolidated_tick =
+            cognitive.and_then(|snapshot| snapshot.last_consolidated_tick);
+        sample.topology_update_count =
+            cognitive.and_then(|snapshot| snapshot.topology_update_count);
         sample.hunger = homeostasis.drives.hunger;
         sample.fatigue = homeostasis.drives.fatigue;
         sample.fear = homeostasis.drives.fear;

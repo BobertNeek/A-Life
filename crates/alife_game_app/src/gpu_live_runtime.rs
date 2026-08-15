@@ -80,7 +80,8 @@ use crate::{
     GameAppShellError, GpuBrainAuthorityTelemetry, GpuBrainCheckpointWrite, GpuBrainSidecarCapture,
     GpuCheckpointAssetStore, GpuDurableSaveManifest, GpuLoadedSaveManifest,
     GpuSleepConsolidationDriver, GpuSleepScheduleEvent, GpuSleepScheduler, LiveBrainCausalStage,
-    LiveBrainTickSummary, RetainedLearningCapture, CURATED_FOUNDER_RESET_POLICY,
+    LiveBrainTickSummary, LiveCognitivePresentationSnapshot, RetainedLearningCapture,
+    CURATED_FOUNDER_RESET_POLICY,
     G03_LIVE_BRAIN_LOOP_SCHEMA, G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
 };
 
@@ -5049,6 +5050,66 @@ impl GpuLiveBrainRuntime {
             };
             driver.progress(organism_id, state, intent)
         })
+    }
+
+    pub(crate) fn live_cognitive_presentation_snapshots(
+        &self,
+        summaries: &[LiveBrainTickSummary],
+    ) -> Vec<LiveCognitivePresentationSnapshot> {
+        summaries
+            .iter()
+            .filter_map(|summary| {
+                let organism_id = summary.organism_id;
+                let resident = self.residents.get(&organism_id.raw())?;
+                let memory = self.memories.get(&organism_id.raw());
+                let topology = self.topologies.get(&organism_id.raw());
+                let sleep = resident.sleep_scheduler.state();
+                let learning_active = if self
+                    .last_learning_receipts
+                    .iter()
+                    .any(|receipt| receipt.handle.organism_id() == organism_id)
+                {
+                    Some(true)
+                } else if self
+                    .last_post_seal_learning_failures
+                    .iter()
+                    .any(|failure| failure.organism_id == organism_id)
+                    || self.retained_learning.contains_key(&organism_id.raw())
+                {
+                    Some(false)
+                } else {
+                    None
+                };
+                let last_consolidated_tick = resident
+                    .last_sleep_work
+                    .as_ref()
+                    .filter(|work| {
+                        matches!(
+                            work.status,
+                            alife_core::sleep::SleepWorkStatus::Consolidated
+                        )
+                    })
+                    .map(|work| work.tick.raw());
+                let topology_counts = topology.map(|sidecar| sidecar.counts());
+
+                Some(LiveCognitivePresentationSnapshot {
+                    organism_id,
+                    brain_class_id: Some(resident.phenotype.brain_class_id().raw()),
+                    brain_neuron_count: Some(resident.phenotype.neuron_count()),
+                    fast_memory_count: memory
+                        .and_then(|memory| u32::try_from(memory.bank().fast_len()).ok()),
+                    lifetime_memory_count: memory
+                        .and_then(|memory| u32::try_from(memory.bank().lifetime_len()).ok()),
+                    concept_count: topology_counts.map(|counts| counts.concepts),
+                    unresolved_gap_count: topology_counts.map(|counts| counts.unresolved_gaps),
+                    learning_active,
+                    sleep_phase_raw: Some(sleep.phase.raw()),
+                    consolidation_state_raw: Some(sleep.consolidation.kind_raw()),
+                    last_consolidated_tick,
+                    topology_update_count: Some(summary.topology_updates),
+                })
+            })
+            .collect()
     }
 
     pub fn request_recovery_sleep(

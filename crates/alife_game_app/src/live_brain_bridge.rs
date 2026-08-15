@@ -57,6 +57,22 @@ pub enum LiveBrainCausalStage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiveCognitivePresentationSnapshot {
+    pub organism_id: OrganismId,
+    pub brain_class_id: Option<u16>,
+    pub brain_neuron_count: Option<u32>,
+    pub fast_memory_count: Option<u32>,
+    pub lifetime_memory_count: Option<u32>,
+    pub concept_count: Option<u32>,
+    pub unresolved_gap_count: Option<u32>,
+    pub learning_active: Option<bool>,
+    pub sleep_phase_raw: Option<u16>,
+    pub consolidation_state_raw: Option<u16>,
+    pub last_consolidated_tick: Option<u64>,
+    pub topology_update_count: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiveBrainTickSummary {
     pub schema: &'static str,
     pub schema_version: u16,
