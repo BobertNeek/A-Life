@@ -16,7 +16,7 @@ use alife_tools::ei0_exit_gate::{
 };
 use alife_tools::ei0_exit_gate::{
     run_ei0_exit_gate_and_write, validate_committed_ei0_exit_gate_report, Ei0EvidenceStatus,
-    Ei0ExitGateReport,
+    Ei0ExitGateError, Ei0ExitGateReport,
 };
 use alife_world::{HabitatActor, HabitatMode, HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION};
 
@@ -247,6 +247,27 @@ fn committed_report_recomputes_current_source_and_causal_evidence() {
     assert_eq!(binding.adapter_name, "NVIDIA GeForce RTX 3050");
     assert_eq!(binding.backend_api, "vulkan");
 
+    let mut tampered_child_phenotype = report.clone();
+    let birth = tampered_child_phenotype
+        .lifecycle
+        .as_mut()
+        .unwrap()
+        .lanes
+        .iter_mut()
+        .find(|lane| lane.mode == HabitatMode::Wild)
+        .unwrap()
+        .births
+        .first_mut()
+        .unwrap();
+    birth.child_phenotype_hash.0[0] ^= 1;
+    refresh_binding_digests(&mut tampered_child_phenotype);
+    assert!(matches!(
+        validate_committed_ei0_exit_gate_report(&tampered_child_phenotype),
+        Err(Ei0ExitGateError::Evidence(
+            "historical report differs from the committed baseline artifact"
+        ))
+    ));
+
     let mut wrong_hardware = report.clone();
     wrong_hardware
         .artifact_binding
@@ -273,7 +294,10 @@ fn committed_report_recomputes_current_source_and_causal_evidence() {
         .unwrap();
     birth.gpu_selected_mate = Some(birth.breeding_receipt.first_parent);
     refresh_binding_digests(&mut wrong_mate);
-    assert!(validate_committed_ei0_exit_gate_report(&wrong_mate).is_err());
+    assert!(
+        validate_committed_ei0_exit_gate_report(&wrong_mate).is_err(),
+        "a format-stable causal mate-link tamper must be rejected"
+    );
 
     let mut wrong_tick = report.clone();
     let birth = wrong_tick

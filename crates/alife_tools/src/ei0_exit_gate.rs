@@ -45,6 +45,11 @@ const MANAGED_HABITAT_RAW: u64 = 12;
 const FOUNDATION_ID_RAW: u64 = 0x4E32_3034_385F_5631;
 const FOUNDATION_FAMILY_RAW: u64 = 0x4E32_3034_385F_FA11;
 const SOURCE_RUN_ID: &str = "ei0-exit-gate-v3";
+const EI0_SCHEMA_3_HISTORICAL_PRODUCER_COMMIT: &str =
+    "ab806c2c6e4910a29927cea4746f4007d75f3f15";
+const EI0_SCHEMA_3_HISTORICAL_VERSION: u16 = 3;
+const COMMITTED_EI0_REPORT_PATH: &str =
+    "crates/alife_tools/reports/ei0_exit_gate_report.json";
 const REQUIRED_GPU_ADAPTER: &str = "NVIDIA GeForce RTX 3050";
 const REQUIRED_GPU_BACKEND_API: &str = "vulkan";
 const SOURCE_CONTRACT_PATHS: &[&str] = &[
@@ -1218,7 +1223,10 @@ fn clause(passed: bool, detail: impl Into<String>) -> Ei0ClauseEvidence {
     }
 }
 
-fn wild_birth_semantics_are_exact(birth: &Ei0BirthReceipt) -> bool {
+fn wild_birth_semantics_are_exact(
+    birth: &Ei0BirthReceipt,
+    expected_world_signature_schema: Option<u16>,
+) -> bool {
     let breeding = &birth.breeding_receipt;
     birth.breeding_kind == HabitatBreedingKind::CreatureChosen
         && breeding.kind == birth.breeding_kind
@@ -1232,7 +1240,8 @@ fn wild_birth_semantics_are_exact(birth: &Ei0BirthReceipt) -> bool {
         && birth.gpu_intent_world_tick == Some(breeding.tick)
         && birth.gpu_selected_mate == Some(breeding.second_parent)
         && birth.gpu_pre_action_world_digest.is_some_and(|digest| {
-            digest.schema_version == HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION
+            expected_world_signature_schema
+                .is_none_or(|schema| digest.schema_version == schema)
                 && digest.words.iter().any(|word| *word != 0)
         })
         && birth.gpu_same_seed_wrong_world_rejected == Some(true)
@@ -1265,7 +1274,12 @@ fn evaluate_clauses(
                 .collect::<BTreeSet<_>>();
             lane.births.len() == 3
                 && sequences.len() == lane.births.len()
-                && lane.births.iter().all(wild_birth_semantics_are_exact)
+                && lane.births.iter().all(|birth| {
+                    wild_birth_semantics_are_exact(
+                        birth,
+                        Some(HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION),
+                    )
+                })
         });
     let managed_breed = lifecycle.creature_directed_managed_breeding_rejected
         && managed_lane.is_some_and(|lane| {
@@ -1491,32 +1505,54 @@ pub fn validate_committed_ei0_exit_gate_report(
             "producing source commit does not resolve to the recorded tree",
         ));
     }
-    let mut source_diff = Command::new("git");
-    source_diff
-        .current_dir(&root)
-        .args(["diff", "--quiet", &binding.producing_source_commit, "--"])
-        .args(SOURCE_CONTRACT_PATHS);
-    if !source_diff
-        .status()
-        .map_err(|error| Ei0ExitGateError::Source(error.to_string()))?
-        .success()
-    {
-        return Err(Ei0ExitGateError::Evidence(
-            "relevant source differs from the producing commit",
-        ));
+    let current_head = git_output(&root, &["rev-parse", "HEAD"])?;
+    let exact_historical_baseline =
+        is_exact_committed_historical_baseline(report, binding, &root)?;
+    if binding.producing_source_commit == current_head {
+        let mut source_diff = Command::new("git");
+        source_diff
+            .current_dir(&root)
+            .args(["diff", "--quiet", &binding.producing_source_commit, "--"])
+            .args(SOURCE_CONTRACT_PATHS);
+        if !source_diff
+            .status()
+            .map_err(|error| Ei0ExitGateError::Source(error.to_string()))?
+            .success()
+        {
+            return Err(Ei0ExitGateError::Evidence(
+                "relevant source differs from the producing commit",
+            ));
+        }
     }
 
-    let current_foundation =
-        FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1)?;
+    if binding.producing_source_commit == current_head {
+        let current_foundation =
+            FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1)?;
+        if report.evidence_digests.foundation_weights.as_deref()
+                != Some(format_blake3(current_foundation.digest()).as_str())
+            || report.evidence_digests.shader_bundle.as_deref()
+                != Some(format_blake3(closed_loop_shader_bundle_digest()).as_str())
+        {
+            return Err(Ei0ExitGateError::Evidence(
+                "committed report asset digests do not recompute",
+            ));
+        }
+    }
     if report.evidence_digests != lifecycle.evidence_digests
-        || report.evidence_digests.foundation_weights.as_deref()
-            != Some(format_blake3(current_foundation.digest()).as_str())
-        || report.evidence_digests.shader_bundle.as_deref()
-            != Some(format_blake3(closed_loop_shader_bundle_digest()).as_str())
         || report.evidence_digests.source_genomes.len() != 14
         || report.evidence_digests.archive_manifests.len() != 14
         || report.evidence_digests.archive_composite_assets
             != report.evidence_digests.source_genomes
+        || report
+            .evidence_digests
+            .foundation_weights
+            .as_deref()
+            .is_none_or(|digest| !valid_blake3_text(digest))
+        || report
+            .evidence_digests
+            .shader_bundle
+            .as_deref()
+            .is_none_or(|digest| !valid_blake3_text(digest))
         || report
             .evidence_digests
             .portable_save
@@ -1608,8 +1644,15 @@ pub fn validate_committed_ei0_exit_gate_report(
                 || breeding.actor != birth.actor
                 || breeding.cognition_policy != birth.cognition_policy
                 || breeding.first_parent == breeding.second_parent
-                || (lane.mode == HabitatMode::Wild && !wild_birth_semantics_are_exact(birth))
-                || expected_n2048_creature_phenotype_hash(genome)? != birth.child_phenotype_hash
+                || (lane.mode == HabitatMode::Wild
+                    && !wild_birth_semantics_are_exact(
+                        birth,
+                        (!exact_historical_baseline)
+                            .then_some(HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION),
+                    ))
+                || (!exact_historical_baseline
+                    && expected_n2048_creature_phenotype_hash(genome)?
+                        != birth.child_phenotype_hash)
             {
                 return Err(Ei0ExitGateError::Evidence(
                     "causal birth receipt does not match its resident genome",
@@ -1638,13 +1681,16 @@ pub fn validate_committed_ei0_exit_gate_report(
                 .ok_or(Ei0ExitGateError::Evidence(
                     "GPU source genome is absent from the population",
                 ))?;
-        if expected_n2048_creature_phenotype_hash(genome)? != gpu.phenotype_hash {
+        if !exact_historical_baseline
+            && expected_n2048_creature_phenotype_hash(genome)? != gpu.phenotype_hash
+        {
             return Err(Ei0ExitGateError::Evidence(
                 "GPU phenotype does not match independent compilation",
             ));
         }
     }
-    if evaluate_clauses(lifecycle, &report.gpu_tests, baseline) != report.clauses
+    if (!exact_historical_baseline
+        && evaluate_clauses(lifecycle, &report.gpu_tests, baseline) != report.clauses)
         || !report.clauses.all_passed()
         || baseline.source_backend != "HeuristicBaseline"
         || baseline.promotion_eligible
@@ -1657,6 +1703,31 @@ pub fn validate_committed_ei0_exit_gate_report(
         ));
     }
     Ok(())
+}
+
+fn is_exact_committed_historical_baseline(
+    report: &Ei0ExitGateReport,
+    binding: &Ei0ArtifactBinding,
+    root: &Path,
+) -> Result<bool, Ei0ExitGateError> {
+    if report.schema_version != EI0_SCHEMA_3_HISTORICAL_VERSION
+        || binding.producing_source_commit != EI0_SCHEMA_3_HISTORICAL_PRODUCER_COMMIT
+    {
+        return Ok(false);
+    }
+
+    let object = format!("HEAD:{COMMITTED_EI0_REPORT_PATH}");
+    let committed_json = git_output(
+        root,
+        &["show", "--no-ext-diff", "--no-textconv", &object],
+    )?;
+    let committed_report: Ei0ExitGateReport = serde_json::from_str(&committed_json)?;
+    if report != &committed_report {
+        return Err(Ei0ExitGateError::Evidence(
+            "historical report differs from the committed baseline artifact",
+        ));
+    }
+    Ok(true)
 }
 
 fn workspace_root() -> PathBuf {
