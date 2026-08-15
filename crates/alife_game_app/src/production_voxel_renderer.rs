@@ -16,9 +16,10 @@ use alife_core::{OrganismId, Vec3f, WorldEntityId};
 use alife_world::{
     persistence::{CreatureSaveState, GpuRuntimeSaveState, PortableSaveFile},
     CreatureAppearanceGenome, CreatureWorldAnchor, PersistentVoxelWorldBackend,
-    PersistentVoxelWorldSnapshot, ProceduralTerrainMaterial, ProceduralTileCoord,
-    ProceduralWorldConfig, StableVoxelObjectRef, StableVoxelRefKind, VoxelChunkCoord,
-    VoxelTileCoord, WorldObjectKind, CREATURE_APPEARANCE_SPECIES_COUNT,
+    PersistentVoxelWorldSnapshot, PresentationOutcomeSnapshot, ProceduralTerrainMaterial,
+    ProceduralTileCoord, ProceduralWorldConfig, StableVoxelObjectRef, StableVoxelRefKind,
+    VoxelChunkCoord, VoxelTileCoord, WorldObjectKind, WorldOrganismPresentationRow,
+    CREATURE_APPEARANCE_SPECIES_COUNT,
     FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
 };
 use bevy::{
@@ -44,7 +45,10 @@ use bevy::{
     window::PrimaryWindow,
 };
 
-use crate::bevy_shell::{LiveBrainPresentationFrame, LiveBrainPresentationFrameResource};
+use crate::bevy_shell::{
+    LiveBrainPresentationFrame, LiveBrainPresentationFrameResource,
+};
+use crate::LiveBrainTickSummary;
 #[cfg(feature = "gpu-runtime")]
 use crate::bevy_shell::{
     ProductionCuratedFounderResetCommand, ProductionCuratedFounderResetResultResource,
@@ -5931,6 +5935,7 @@ fn fvr04_live_creature_inspector_text(
     selection: Option<StableVoxelObjectRef>,
     creatures: &Fvr04ProductionCreatureSceneResource,
     live_state: Option<(u64, Vec3f)>,
+    frame: Option<&LiveBrainPresentationFrameResource>,
 ) -> String {
     let live_text = selection
         .filter(|selection| selection.kind == StableVoxelRefKind::Creature)
@@ -5946,7 +5951,136 @@ fn fvr04_live_creature_inspector_text(
             ),
         })
         .unwrap_or_else(|| "LIVE AUTHORITATIVE WORLD\nstate: unavailable".to_string());
-    format!("{live_text}\n\n{}", creatures.panel_text(selection))
+    format!(
+        "{live_text}\n\n{}\n\n{}",
+        fvr04_live_learning_explanation(selection, frame),
+        creatures.panel_text(selection)
+    )
+}
+
+fn fvr04_live_learning_explanation(
+    selection: Option<StableVoxelObjectRef>,
+    frame: Option<&LiveBrainPresentationFrameResource>,
+) -> String {
+    let unavailable = || "LEARNING EXPLANATION\nstate: unavailable".to_string();
+    let Some(stable_id) = selection
+        .filter(|selection| selection.kind == StableVoxelRefKind::Creature)
+        .and_then(|selection| selection.stable_id)
+    else {
+        return unavailable();
+    };
+    let Some(frame) = frame else {
+        return unavailable();
+    };
+    let Some(current_row) = frame.current.organism(stable_id) else {
+        return format!(
+            "LEARNING EXPLANATION\nstable {}: unavailable",
+            stable_id.raw()
+        );
+    };
+    let organism_id = current_row.organism_id;
+    let current_summary = frame
+        .current
+        .tick_summaries
+        .iter()
+        .find(|summary| summary.organism_id == organism_id);
+    let previous_row = frame
+        .previous
+        .organism(stable_id)
+        .filter(|row| row.organism_id == organism_id);
+    let previous_summary = previous_row.and_then(|_| {
+        frame
+            .previous
+            .tick_summaries
+            .iter()
+            .find(|summary| summary.organism_id == organism_id)
+    });
+    let previous_action = fvr04_live_action_text(previous_row, previous_summary);
+    let current_action = fvr04_live_action_text(Some(current_row), current_summary);
+    let outcome_change = fvr04_measured_joint_outcome_change(
+        previous_row.and_then(|row| row.outcome.as_ref()),
+        Some(current_row).and_then(|row| row.outcome.as_ref()),
+    );
+    let sleep_phase = fvr04_sleep_phase_text(current_row.sleep_phase);
+
+    format!(
+        "LEARNING EXPLANATION\norganism {} | stable world {}\naction: previous {} -> current {}\nmeasured joint outcome: {}\nsleep current: {} | work units: {}\nupdates previous: {}\nupdates current: {}",
+        organism_id.raw(),
+        stable_id.raw(),
+        previous_action,
+        current_action,
+        outcome_change,
+        sleep_phase,
+        current_row.sleep_work_units,
+        fvr04_live_update_counts(previous_summary),
+        fvr04_live_update_counts(current_summary),
+    )
+}
+
+fn fvr04_live_action_text(
+    row: Option<&WorldOrganismPresentationRow>,
+    summary: Option<&LiveBrainTickSummary>,
+) -> String {
+    let action = summary
+        .map(|summary| (summary.selected_action_kind, summary.selected_action_id))
+        .or_else(|| {
+            row.and_then(|row| {
+                row.motor
+                    .as_ref()
+                    .map(|motor| (motor.action_kind, motor.action_id))
+            })
+        });
+    let Some((kind, action_id)) = action else {
+        return "unavailable".to_string();
+    };
+    match (kind, action_id) {
+        (Some(kind), Some(action_id)) => format!("{kind:?} (id {})", action_id.raw()),
+        (Some(kind), None) => format!("{kind:?} (id unavailable)"),
+        (None, Some(action_id)) => format!("kind unavailable (id {})", action_id.raw()),
+        (None, None) => "none".to_string(),
+    }
+}
+
+fn fvr04_live_update_counts(summary: Option<&LiveBrainTickSummary>) -> String {
+    summary.map_or_else(
+        || "memory=unavailable learning=unavailable topology=unavailable".to_string(),
+        |summary| {
+            format!(
+                "memory={} learning={} topology={}",
+                summary.memory_updates, summary.learning_updates, summary.topology_updates
+            )
+        },
+    )
+}
+
+fn fvr04_measured_joint_outcome_change(
+    previous: Option<&PresentationOutcomeSnapshot>,
+    current: Option<&PresentationOutcomeSnapshot>,
+) -> &'static str {
+    let (Some(previous), Some(current)) = (previous, current) else {
+        return "unavailable";
+    };
+    if !previous.patch_sealed || !current.patch_sealed {
+        return "unavailable";
+    }
+    if previous.patch_success == current.patch_success
+        && previous.physical_contact == current.physical_contact
+        && previous.action_failure == current.action_failure
+    {
+        "unchanged"
+    } else {
+        "changed"
+    }
+}
+
+fn fvr04_sleep_phase_text(phase: alife_core::SleepPhase) -> &'static str {
+    match phase {
+        alife_core::SleepPhase::Awake => "awake",
+        alife_core::SleepPhase::EnteringSleep => "entering sleep",
+        alife_core::SleepPhase::Consolidating => "consolidating",
+        alife_core::SleepPhase::Waking => "waking",
+        alife_core::SleepPhase::ForcedRecoverySleep => "recovery sleep",
+    }
 }
 
 fn spawn_fvr03_selection_marker(
@@ -6832,7 +6966,12 @@ fn sync_fvr05_right_inspector_panel(
     let body = match ux.settings.active_inspector_tab {
         Fvr05ProductionInspectorTab::Creature => format!(
             "{}\n\nDEBUG AUTHORITY\n{}",
-            fvr04_live_creature_inspector_text(selection.selected, &creatures, live_state),
+            fvr04_live_creature_inspector_text(
+                selection.selected,
+                &creatures,
+                live_state,
+                frame.as_ref().map(|frame| &**frame),
+            ),
             ux.authority.compact_line()
         ),
         Fvr05ProductionInspectorTab::Tile => {
@@ -7137,7 +7276,12 @@ fn sync_fvr04_creature_inspector_panel(
     };
     let text = format!(
         "{}\n{}",
-        fvr04_live_creature_inspector_text(selection.selected, &creatures, live_state),
+        fvr04_live_creature_inspector_text(
+            selection.selected,
+            &creatures,
+            live_state,
+            frame.as_ref().map(|frame| &**frame),
+        ),
         suffix
     );
     for mut panel in &mut panels {
