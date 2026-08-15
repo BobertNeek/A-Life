@@ -49,8 +49,9 @@ use alife_runtime::{
 use alife_world::{
     grounded_peripheral_summaries,
     persistence::{AssetManifest, GpuBrainSaveState, PortableSaveFile, RuntimeConfig},
-    HeadlessWorld, HeadlessWorldSignatureDigest, WorldEditorSpawnSpec, WorldObjectKind,
-    WorldOrganismRecord,
+    HabitatActor, HabitatAuthorityError, HabitatId, HabitatOperation, HabitatOperationRequest,
+    HabitatPermissionReceipt, HeadlessWorld, HeadlessWorldSignatureDigest, WorldEditorSpawnSpec,
+    WorldObjectKind, WorldOrganismRecord,
 };
 use thiserror::Error;
 
@@ -4793,6 +4794,27 @@ impl GpuLiveBrainRuntime {
     /// It contains no GPU handles or neural payloads.
     pub fn world_snapshot(&self) -> HeadlessWorld {
         self.world.clone()
+    }
+
+    /// Authorizes structured education against the live world's habitat authority.
+    pub fn authorize_structured_education(
+        &mut self,
+        organism_id: OrganismId,
+        habitat_id: HabitatId,
+        actor: HabitatActor,
+    ) -> Result<HabitatPermissionReceipt, HabitatAuthorityError> {
+        let world = self.world_snapshot();
+        let tick = world.tick();
+        let mut authority = world.habitat_authority().clone();
+        let receipt = authority.authorize_operation(HabitatOperationRequest {
+            habitat_id,
+            organism_id,
+            operation: HabitatOperation::StructuredEducation,
+            actor,
+            tick,
+        })?;
+        self.replace_habitat_authority(authority)?;
+        Ok(receipt)
     }
 
     pub(crate) fn replace_habitat_authority(
