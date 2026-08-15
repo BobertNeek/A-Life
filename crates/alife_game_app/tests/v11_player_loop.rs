@@ -8,10 +8,11 @@
 
 use std::fs;
 
-use alife_archive::{ArchiveLearnedCapturePolicy, LineageLibraryConfig};
+use alife_archive::LineageLibraryConfig;
 use alife_core::{
-    BrainCapacityClass, BrainScaleTier, FoundationGeneticIdentity, FoundationWeightAsset,
-    OrganismId, PolicyBackend, SensorProfile, TeacherPerceptionChannel, Tick, Vec3f,
+    ArchiveLearnedCapturePolicy, BrainCapacityClass, BrainScaleTier, FoundationGeneticIdentity,
+    FoundationWeightAsset, OrganismId, PolicyBackend, SensorProfile, TeacherPerceptionChannel,
+    Tick, Vec3f,
 };
 use alife_game_app::GpuLiveBrainRuntime;
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile};
@@ -109,7 +110,7 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
             .world_snapshot()
             .organism_registry()
             .get(organism_id)
-            .and_then(|record| record.birth_manifest_digest()),
+            .and_then(|record| record.archive().birth_manifest_digest()),
         Some(birth_manifest_digest),
         "the canonical world record must consume the committed birth archive"
     );
