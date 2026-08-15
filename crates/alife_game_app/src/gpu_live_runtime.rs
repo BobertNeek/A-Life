@@ -51,8 +51,13 @@ use alife_runtime::{
 };
 use alife_world::{
     grounded_peripheral_summaries,
-    persistence::{AssetManifest, GpuBrainSaveState, PortableSaveFile, RuntimeConfig},
-    HabitatActor, HabitatAuthorityError, HabitatBreedingKind, HabitatBreedingReceipt,
+    persistence::{
+        AssetManifest, CreatureMindSaveSummary, CreatureSaveState, GpuBrainSaveState,
+        LearningTraceSaveSummary, PortableAssetDigest, PortableSaveFile, RuntimeConfig,
+        WeightLayerSaveSummary,
+    },
+    CreatureAppearanceGenome, HabitatActor, HabitatAuthorityError, HabitatBreedingKind,
+    HabitatBreedingReceipt,
     HabitatBreedingRequest, HabitatId, HabitatMode, HabitatOperation, HabitatOperationRequest,
     HabitatPermissionReceipt, HeadlessWorld, HeadlessWorldSignatureDigest, WorldEditorSpawnSpec,
     WorldObjectKind, WorldOrganismRecord,
@@ -3766,6 +3771,7 @@ impl GpuLiveBrainRuntime {
         store: &GpuCheckpointAssetStore,
     ) -> Result<PortableSaveFile, GameAppShellError> {
         let checkpoint_tick = self.world.tick();
+        self.add_missing_checkpoint_creature_summaries(&mut replacement)?;
         replacement.replace_headless_world_snapshot(&self.world)?;
         let mut manifest_entries = Vec::new();
         for (&raw, &handle) in &self.handles {
@@ -3841,6 +3847,43 @@ impl GpuLiveBrainRuntime {
         merge_gpu_checkpoint_manifest_entries(&mut replacement.assets, manifest_entries)?;
         replacement.validate_with_asset_root(store.root())?;
         Ok(replacement)
+    }
+
+    fn add_missing_checkpoint_creature_summaries(
+        &self,
+        replacement: &mut PortableSaveFile,
+    ) -> Result<(), GameAppShellError> {
+        let live_ids = self.handles.keys().copied().collect::<BTreeSet<_>>();
+        for raw in live_ids {
+            if replacement
+                .creatures
+                .iter()
+                .any(|creature| creature.organism_id.raw() == raw)
+            {
+                continue;
+            }
+            let organism_id = OrganismId(raw);
+            let record = self
+                .world
+                .organism_registry()
+                .get(organism_id)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let resident = self
+                .residents
+                .get(&raw)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let summary = checkpoint_creature_save_state(
+                replacement,
+                record,
+                resident,
+                self.brain_class,
+            )?;
+            replacement.creatures.push(summary);
+        }
+        replacement
+            .creatures
+            .sort_by_key(|creature| creature.organism_id.raw());
+        Ok(())
     }
 
     fn persist_sleep_checkpoint_boundary(&mut self) -> Result<(), GameAppShellError> {
@@ -6232,6 +6275,89 @@ fn validate_candidate_newborn(
         return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
     }
     Ok(world_entity_id)
+}
+
+fn checkpoint_creature_save_state(
+    replacement: &PortableSaveFile,
+    record: &WorldOrganismRecord,
+    resident: &ResidentCognition,
+    brain_class: BrainScaleTier,
+) -> Result<CreatureSaveState, GameAppShellError> {
+    if record.genome().foundation.brain_class_id != brain_class.default_class_id() {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: "live organism genome class differs from GPU runtime class".to_string(),
+        });
+    }
+    let biochemistry = record.biochemistry();
+    let appearance = match (
+        record
+            .genome()
+            .parent_genome_ids
+            .first()
+            .and_then(|genome_id| {
+                replacement
+                    .creatures
+                    .iter()
+                    .find(|creature| creature.genome_id == *genome_id)
+                    .map(|creature| creature.appearance.clone())
+            }),
+        record
+            .genome()
+            .parent_genome_ids
+            .get(1)
+            .and_then(|genome_id| {
+                replacement
+                    .creatures
+                    .iter()
+                    .find(|creature| creature.genome_id == *genome_id)
+                    .map(|creature| creature.appearance.clone())
+            }),
+    ) {
+        (Some(parent_a), Some(parent_b)) => CreatureAppearanceGenome::offspring_from_parents(
+            parent_a,
+            parent_b,
+            record.genome().conception_seed,
+        ),
+        _ => CreatureAppearanceGenome::default(),
+    };
+    Ok(CreatureSaveState {
+        organism_id: record.organism_id(),
+        genome_id: record.genome().id,
+        brain_class,
+        development_tick: biochemistry.development.last_update_tick,
+        appearance,
+        mind: CreatureMindSaveSummary {
+            tick: biochemistry.tick,
+            homeostasis: biochemistry.homeostasis,
+            memory_record_count: 0,
+            memory_source_ids: Vec::new(),
+            concept_count: 0,
+            edge_count: 0,
+            simplex_count: 0,
+            unresolved_gap_count: 0,
+            sleep_state_label: gpu_sleep_state_label(resident.sleep_scheduler.state()),
+            diagnostics: vec!["live canonical organism admitted".to_string()],
+        },
+        weights: WeightLayerSaveSummary {
+            generated_weight_asset_id: None,
+            genetic_fixed_digest: PortableAssetDigest::for_bytes(&serde_json::to_vec(
+                record.genome(),
+            )?)
+            .0,
+            genetic_layer_mutable: false,
+            lifetime_consolidated_entries: 0,
+            h_operational_entries: 0,
+            h_shadow_entries: 0,
+        },
+        learning: LearningTraceSaveSummary {
+            lifetime_learning_enabled: true,
+            lamarckian_mode_enabled: false,
+            last_consolidated_tick: None,
+        },
+        composite_genetics: None,
+        lifetime_state_asset: None,
+        gpu_brain: None,
+    })
 }
 
 fn gpu_sleep_state_label(state: SleepState) -> String {
