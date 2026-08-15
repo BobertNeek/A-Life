@@ -493,6 +493,7 @@ struct AuthoritativeGpuSleepDriver<'a> {
     backend: &'a mut GpuClosedLoopBackend,
     handle: GpuBrainHandle,
     context: Option<AuthoritativeSleepContext<'a>>,
+    replay_evidence_before_commit: Option<SleepReplayEvidence>,
 }
 
 struct AuthoritativeSleepContext<'a> {
@@ -606,12 +607,21 @@ fn run_authoritative_sleep_transaction(
         context.sealed_patches,
         context.last_sealed_patches,
     )?;
+    run_authoritative_sleep_transaction_with_evidence(homeostasis, tick, context, &evidence)
+}
+
+fn run_authoritative_sleep_transaction_with_evidence(
+    homeostasis: &HomeostaticSnapshot,
+    tick: Tick,
+    context: &mut AuthoritativeSleepContext<'_>,
+    evidence: &SleepReplayEvidence,
+) -> Result<SleepWorkReceipt, ScaffoldContractError> {
     let consolidator = SleepConsolidator::new(SleepConsolidationConfig::reference())?;
     context.memory.run_bounded_sleep_transaction(
         &consolidator,
         homeostasis,
         tick,
-        &evidence,
+        evidence,
         context.predictor,
         context.topology,
     )
@@ -722,18 +732,27 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
         if organism_id != self.handle.organism_id() {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
+        let replay_evidence_before_commit = self.replay_evidence_before_commit.take();
         let context = self
             .context
             .as_mut()
             .ok_or(ScaffoldContractError::MissingPhaseData)?;
-        run_authoritative_sleep_transaction(
-            self.backend,
-            self.handle,
-            organism_id,
-            homeostasis,
-            tick,
-            context,
-        )
+        match replay_evidence_before_commit {
+            Some(evidence) => run_authoritative_sleep_transaction_with_evidence(
+                homeostasis,
+                tick,
+                context,
+                &evidence,
+            ),
+            None => run_authoritative_sleep_transaction(
+                self.backend,
+                self.handle,
+                organism_id,
+                homeostasis,
+                tick,
+                context,
+            ),
+        }
         .map(Some)
     }
 }
@@ -761,6 +780,22 @@ where
         state: SleepState,
         intent: Option<ConsolidationIntent>,
     ) -> SleepProgressResult {
+        if matches!(state.consolidation, ConsolidationState::Completed { .. }) {
+            let context = self
+                .authoritative
+                .context
+                .as_mut()
+                .ok_or(ScaffoldContractError::MissingPhaseData)?;
+            self.authoritative.replay_evidence_before_commit = Some(
+                build_authoritative_sleep_evidence(
+                    self.authoritative.backend,
+                    self.authoritative.handle,
+                    organism_id,
+                    context.sealed_patches,
+                    context.last_sealed_patches,
+                )?,
+            );
+        }
         (self.progress)(
             self.authoritative.backend,
             self.authoritative.handle,
@@ -4852,6 +4887,7 @@ impl GpuLiveBrainRuntime {
                 backend,
                 handle,
                 context: None,
+                replay_evidence_before_commit: None,
             };
             driver.progress(organism_id, state, intent)
         })
@@ -5039,6 +5075,7 @@ impl GpuLiveBrainRuntime {
                             sealed_patches: &self.sealed_patches,
                             last_sealed_patches: &self.last_sealed_patches,
                         }),
+                        replay_evidence_before_commit: None,
                     },
                     progress,
                 };
