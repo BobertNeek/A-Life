@@ -319,6 +319,7 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
     let mut saw_completed = false;
     let mut committed_state = None;
     let mut saw_waking = false;
+    let mut saw_sealed_sleep_work = false;
     let mut reached_awake = false;
     for _ in 0..96 {
         let summaries = runtime
@@ -327,6 +328,14 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         assert!(summaries
             .iter()
             .any(|candidate| candidate.organism_id == organism_id));
+        let tick_sleep_seal = runtime
+            .world_snapshot()
+            .organism_registry()
+            .get(organism_id)
+            .expect("focal organism must retain its per-tick sleep seal")
+            .sleep_seal();
+        saw_sealed_sleep_work |=
+            tick_sleep_seal.phase != SleepPhase::Awake && tick_sleep_seal.work_units > 0;
         let state = runtime
             .checkpoint_brain(organism_id, &sleep_checkpoint_store)
             .expect("capture the focal production sleep state")
@@ -361,6 +370,10 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
     assert_ne!(output_digest, [0; 4]);
     assert!(saw_waking, "committed sleep must advance through waking");
     assert!(reached_awake, "bounded recovery sleep must return to Awake");
+    assert!(
+        saw_sealed_sleep_work,
+        "a sealed consolidation/sleep phase must report nonzero work"
+    );
 
     let recovered_world = runtime.world_snapshot();
     let sleep_seal = recovered_world
@@ -370,7 +383,6 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         .sleep_seal();
     assert_eq!(sleep_seal.phase, SleepPhase::Awake);
     assert_eq!(sleep_seal.cycle_id, committed_cycle_id);
-    assert!(sleep_seal.work_units > 0, "sealed sleep work must be nonzero");
 
     let awake_summaries = runtime
         .tick()
