@@ -599,6 +599,25 @@ impl LiveBrainPresentationFrameResource {
             // moved snapshot with an empty or stale summary batch.
             return Ok(());
         }
+        let expected_organism_ids = world
+            .presentation_snapshot()
+            .organisms
+            .into_iter()
+            .filter(|organism| organism.lifecycle.is_alive())
+            .map(|organism| organism.organism_id.raw())
+            .collect::<BTreeSet<_>>();
+        let returned_organism_ids = tick_summaries
+            .iter()
+            .map(|summary| summary.organism_id.raw())
+            .collect::<BTreeSet<_>>();
+        if tick_summaries.len() != expected_organism_ids.len()
+            || returned_organism_ids != expected_organism_ids
+        {
+            // A partial production tick advances the world but does not prove
+            // that absent organisms ticked. Keep the last complete causal
+            // frame until the next all-resident batch arrives.
+            return Ok(());
+        }
         let snapshot = world.presentation_snapshot();
         let mut next = LiveBrainPresentationFrame::try_new(
             tick_summaries,
@@ -1063,9 +1082,6 @@ fn tick_production_gpu_brain(
     if schedule.failed {
         return;
     }
-    if !schedule.take_dispatch_permit() {
-        return;
-    }
 
     let playback = schedule.playback;
     let speed = schedule.run_speed_ticks;
@@ -1083,6 +1099,9 @@ fn tick_production_gpu_brain(
             return;
         }
     };
+    if !schedule.take_dispatch_permit() {
+        return;
+    }
     let (ticks_to_run, consume_step) =
         production_tick_decision(playback, schedule.step_pending, plan.ticks_to_run);
     if consume_step {
