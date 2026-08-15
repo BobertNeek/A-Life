@@ -1497,6 +1497,8 @@ impl MemoryBank {
         sequence_id: ExperienceSequenceId,
         organism_id: OrganismId,
         action_id: ActionId,
+        family: CandidateActionFamily,
+        originating_tick: Tick,
     ) -> Result<Option<MemoryId>, ScaffoldContractError> {
         if let Some(record) = self.fast_record_for_sequence(sequence_id) {
             if record.organism_id != organism_id
@@ -1507,15 +1509,34 @@ impl MemoryBank {
             return Ok(Some(record.memory_id));
         }
 
-        let Some(record) = self
-            .candidate_store
-            .records
-            .values()
-            .find(|record| record.source_sequence_id == sequence_id)
-        else {
+        let exact_sequence = self.candidate_store.records.values().find(|record| {
+            record.source_sequence_id == sequence_id
+                && record.organism_id_raw == organism_id.raw()
+        });
+        if let Some(record) = exact_sequence {
+            if record.family_raw != u16::from(family.raw())
+                || (record.observation_count == 1 && record.action_id_raw != action_id.raw())
+            {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+            return Ok(Some(record.memory_id));
+        }
+
+        // Candidate-memory merging preserves the retained observation's
+        // first tick/action but advances source_sequence_id to the newest
+        // observation. That makes the retained first observation the only
+        // older member whose exact identity remains provable after merging.
+        let mut retained_first = self.candidate_store.records.values().filter(|record| {
+            record.organism_id_raw == organism_id.raw()
+                && record.family_raw == u16::from(family.raw())
+                && record.action_id_raw == action_id.raw()
+                && record.first_tick == originating_tick
+                && record.source_sequence_id.raw() > sequence_id.raw()
+        });
+        let Some(record) = retained_first.next() else {
             return Ok(None);
         };
-        if record.organism_id_raw != organism_id.raw() || record.action_id_raw != action_id.raw() {
+        if retained_first.next().is_some() {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
         Ok(Some(record.memory_id))
@@ -1524,12 +1545,17 @@ impl MemoryBank {
     pub fn memory_ids_for_sleep(
         &mut self,
         source_sequences: &[ExperienceSequenceId],
+        resolved_memory_ids: &[MemoryId],
         max_records_after: usize,
     ) -> Result<Vec<MemoryId>, ScaffoldContractError> {
         if self.candidate_store.records.is_empty() {
+            if source_sequences.len() != resolved_memory_ids.len() {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
             return self.promote_fast_memory_to_lifetime(source_sequences, max_records_after);
         }
         if source_sequences.is_empty()
+            || source_sequences.len() != resolved_memory_ids.len()
             || max_records_after == 0
             || max_records_after > self.config.capacity
             || source_sequences.len() > max_records_after
@@ -1538,21 +1564,22 @@ impl MemoryBank {
         }
 
         let mut seen_sequences = std::collections::BTreeSet::new();
-        source_sequences
-            .iter()
-            .map(|sequence_id| {
-                sequence_id.validate()?;
-                if !seen_sequences.insert(sequence_id.raw()) {
-                    return Err(ScaffoldContractError::MemoryReplayRejected);
-                }
-                self.candidate_store
-                    .records
-                    .values()
-                    .find(|record| record.source_sequence_id == *sequence_id)
-                    .map(|record| record.memory_id)
-                    .ok_or(ScaffoldContractError::MissingPhaseData)
-            })
-            .collect()
+        let mut seen_memory_ids = std::collections::BTreeSet::new();
+        let mut joined = Vec::new();
+        for (sequence_id, memory_id) in source_sequences.iter().zip(resolved_memory_ids) {
+            sequence_id.validate()?;
+            memory_id.validate()?;
+            if !seen_sequences.insert(sequence_id.raw()) {
+                return Err(ScaffoldContractError::MemoryReplayRejected);
+            }
+            if !self.candidate_store.records.contains_key(&memory_id.raw()) {
+                return Err(ScaffoldContractError::MissingPhaseData);
+            }
+            if seen_memory_ids.insert(memory_id.raw()) {
+                joined.push(*memory_id);
+            }
+        }
+        Ok(joined)
     }
 
     /// Moves finalized waking records into a bounded lifetime tier. The

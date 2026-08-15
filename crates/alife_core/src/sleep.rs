@@ -1062,6 +1062,7 @@ impl SleepConsolidator {
         // representation, while stale replay entries remain discardable.
         let mut eligible_events = Vec::with_capacity(evidence.batch.events.len());
         let mut eligible_event_indices = BTreeSet::new();
+        let mut eligible_memory_ids = Vec::with_capacity(evidence.batch.events.len());
         for (event_index, (event, target)) in evidence
             .batch
             .events
@@ -1069,15 +1070,18 @@ impl SleepConsolidator {
             .zip(&evidence.prediction_targets)
             .enumerate()
         {
-            let Some(_memory_id) = memory.memory_id_for_sleep_sequence(
+            let Some(memory_id) = memory.memory_id_for_sleep_sequence(
                 event.sequence_id,
                 target.organism_id,
                 event.action_id,
+                event.family,
+                event.originating_tick,
             )? else {
                 continue;
             };
             eligible_event_indices.insert(event_index);
             eligible_events.push((event, target));
+            eligible_memory_ids.push(memory_id);
         }
         if eligible_events.is_empty() {
             return Err(ScaffoldContractError::MissingPhaseData);
@@ -1092,6 +1096,7 @@ impl SleepConsolidator {
         let mut next_topology = topology.clone();
         let promoted_memory_ids = next_memory.memory_ids_for_sleep(
             &source_sequences,
+            &eligible_memory_ids,
             self.config.memory_max_records_after,
         )?;
         let mut predictor_update_count = 0_u32;
