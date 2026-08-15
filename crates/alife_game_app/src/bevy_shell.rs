@@ -5321,6 +5321,44 @@ pub fn build_production_voxel_frontend_app_shell(
     launch: &crate::ProductionVoxelLaunchConfig,
 ) -> Result<(App, crate::ProductionVoxelLaunchSummary), GameAppShellError> {
     let summary = crate::run_production_voxel_frontend_preflight(launch)?;
+    #[cfg(feature = "gpu-runtime")]
+    {
+        let runtime_launch = prepare_production_gpu_runtime_launch(launch, &summary)?;
+        let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .map_err(|error| GameAppShellError::NeuralBackendUnavailable {
+            message: error.to_string(),
+        })?;
+        let mut runtime = crate::GpuLiveBrainRuntime::from_p34_launch(backend, &runtime_launch)?;
+        runtime.attach_lineage_archive(
+            alife_archive::LineageLibraryConfig::profile_default(
+                crate::production_conversation_lineage_ui::default_lineage_root(),
+            ),
+            alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
+        )?;
+        return build_production_voxel_frontend_app_shell_inner(launch, summary, runtime);
+    }
+    #[cfg(not(feature = "gpu-runtime"))]
+    {
+        build_production_voxel_frontend_app_shell_inner(launch, summary)
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+pub fn build_production_voxel_frontend_app_shell_with_runtime(
+    launch: &crate::ProductionVoxelLaunchConfig,
+    runtime: crate::GpuLiveBrainRuntime,
+) -> Result<(App, crate::ProductionVoxelLaunchSummary), GameAppShellError> {
+    let summary = crate::run_production_voxel_frontend_preflight(launch)?;
+    build_production_voxel_frontend_app_shell_inner(launch, summary, runtime)
+}
+
+fn build_production_voxel_frontend_app_shell_inner(
+    launch: &crate::ProductionVoxelLaunchConfig,
+    summary: crate::ProductionVoxelLaunchSummary,
+    #[cfg(feature = "gpu-runtime")] runtime: crate::GpuLiveBrainRuntime,
+) -> Result<(App, crate::ProductionVoxelLaunchSummary), GameAppShellError> {
     let mut app = App::new();
     if launch.dry_run {
         app.add_plugins(MinimalPlugins);
@@ -5381,20 +5419,6 @@ pub fn build_production_voxel_frontend_app_shell(
         .insert_resource(ProductionCuratedFounderResetResultResource::default());
     #[cfg(feature = "gpu-runtime")]
     {
-        let runtime_launch = prepare_production_gpu_runtime_launch(launch, &summary)?;
-        let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required(
-            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
-        )
-        .map_err(|error| GameAppShellError::NeuralBackendUnavailable {
-            message: error.to_string(),
-        })?;
-        let mut runtime = crate::GpuLiveBrainRuntime::from_p34_launch(backend, &runtime_launch)?;
-        runtime.attach_lineage_archive(
-            alife_archive::LineageLibraryConfig::profile_default(
-                crate::production_conversation_lineage_ui::default_lineage_root(),
-            ),
-            alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
-        )?;
         let telemetry = runtime.authority_telemetry();
         let initial_world = runtime.world_snapshot();
         let presentation = LiveBrainPresentationFrameResource::from_authoritative_world(
