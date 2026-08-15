@@ -7,13 +7,14 @@
 #![cfg(feature = "gpu-runtime")]
 
 use alife_core::{
-    BrainScaleTier, OrganismId, PolicyBackend, TeacherPerceptionChannel, Tick, Vec3f,
+    BrainCapacityClass, BrainScaleTier, FoundationGeneticIdentity, FoundationWeightAsset,
+    OrganismId, PolicyBackend, SensorProfile, TeacherPerceptionChannel, Tick, Vec3f,
 };
 use alife_game_app::GpuLiveBrainRuntime;
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile};
 use alife_world::{
     Habitat, HabitatActor, HabitatAuthority, HabitatId, HabitatMode, HabitatOperation,
-    HeadlessScenarioBuilder,
+    HeadlessScenarioBuilder, WorldOrganismRecord,
 };
 
 #[test]
@@ -33,6 +34,41 @@ fn v11_player_loop_reaches_grounded_body_then_reds_at_next_production_boundary()
         )
         .build()
         .expect("bounded grounded player-loop world");
+    let world_entity_id = world
+        .organism_entity_ids()
+        .into_iter()
+        .find(|(candidate, _)| *candidate == organism_id)
+        .map(|(_, entity)| entity)
+        .expect("learner world entity");
+    let sensor_profile = SensorProfile::PrivilegedAffordanceV1;
+    let foundation_asset = FoundationWeightAsset::builtin_nano512_v1(sensor_profile)
+        .expect("checked Nano512 foundation asset");
+    let foundation_manifest = foundation_asset.manifest();
+    let foundation = FoundationGeneticIdentity::new(
+        foundation_manifest.foundation_id().raw(),
+        foundation_manifest.foundation_version().raw() as u16,
+        foundation_manifest.compatibility_family_id().raw(),
+        BrainCapacityClass::N512_ID,
+    )
+    .expect("valid Nano512 foundation identity");
+    let genome = alife_core::CreatureGenome::early_mammal_founder(13_001, foundation)
+        .expect("valid learner genome");
+    let phenotype = genome.express().expect("valid learner phenotype");
+    let biochemistry = alife_core::BiochemistryState::new(&phenotype, Tick::ZERO)
+        .expect("valid learner biochemistry");
+    world
+        .register_organism_record(
+            WorldOrganismRecord::new(
+                organism_id,
+                world_entity_id,
+                genome,
+                phenotype,
+                biochemistry,
+                Tick::ZERO,
+            )
+            .expect("valid learner world-organism record"),
+        )
+        .expect("register learner world-organism record");
     let mut authority = HabitatAuthority::new(vec![
         Habitat::new(HabitatId::DEFAULT_WILD, "Wild", HabitatMode::Wild)
             .expect("valid wild habitat"),
@@ -47,13 +83,8 @@ fn v11_player_loop_reaches_grounded_body_then_reds_at_next_production_boundary()
         .replace_habitat_authority(authority)
         .expect("world-owned school authority");
 
-    let mut runtime = GpuLiveBrainRuntime::new(
-        backend,
-        world,
-        13_001,
-        BrainScaleTier::Standard2048,
-    )
-    .expect("supported Standard2048 production runtime");
+    let mut runtime = GpuLiveBrainRuntime::new(backend, world, 13_001, BrainScaleTier::Nano512)
+        .expect("supported Nano512 production runtime");
 
     let grounded = runtime.world_snapshot();
     assert!(
