@@ -42,9 +42,9 @@ use bevy::{
         Cone, Cuboid, DefaultPlugins, DirectionalLight, Entity, GlobalTransform, ImageNode,
         KeyCode, Mesh, Mesh3d, MeshBuilder, MeshMaterial3d, Meshable, Message, MessageWriter,
         MinimalPlugins, MouseButton, Name, Node, NonSend, NonSendMut, OrthographicProjection,
-        Plane3d, Plugin, PluginGroup, PositionType, Projection, Quat, Res, ResMut, Resource,
-        SceneRoot, Sphere, Sprite, StandardMaterial, Text, Text2d, TextColor, TextFont, Time,
-        ToRing, Transform, Update, Val, Vec2, Vec3, Visibility, With, Without, World,
+        Plane3d, Plugin, PluginGroup, PositionType, Projection, Query, Quat, Res, ResMut,
+        Resource, SceneRoot, Sphere, Sprite, StandardMaterial, Text, Text2d, TextColor, TextFont,
+        Time, ToRing, Transform, Update, Val, Vec2, Vec3, Visibility, With, Without, World,
     },
     render::{
         extract_component::{
@@ -5485,8 +5485,8 @@ fn reconcile_production_presentation(
         }
     }
 
-    let is_live_creature_ref = |reference: &crate::production_voxel_renderer::StableVoxelObjectRef| {
-        if reference.kind != crate::production_voxel_renderer::StableVoxelRefKind::Creature {
+    let is_live_creature_ref = |reference: &alife_world::StableVoxelObjectRef| {
+        if reference.kind != alife_world::StableVoxelRefKind::Creature {
             return true;
         }
         reference.stable_id.is_some_and(|stable_id| {
