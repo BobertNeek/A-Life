@@ -1400,6 +1400,54 @@ impl ExperiencePatch {
         cognitive_work: CognitiveWorkReceipt,
         cognitive_context: CognitiveContextFrame,
     ) -> Result<Self, ScaffoldContractError> {
+        let pre_action =
+            pre_action.with_v11_context(cognitive_context, prediction_target.clone())?;
+        let decision = DecisionSnapshot::from_v11_bundle(
+            pre_action.sequence_id,
+            bundle,
+            prediction_target.clone(),
+            cognitive_work.clone(),
+        )?;
+        Self::new_v11_from_parts(
+            pre_action,
+            decision,
+            outcome,
+            prediction_target,
+            cognitive_work,
+        )
+    }
+
+    pub fn new_v11_with_decision(
+        pre_action: PreActionSnapshot,
+        mut decision: DecisionSnapshot,
+        bundle: MotorCommandBundle,
+        outcome: PostActionOutcome,
+        prediction_target: PredictionTargetReceipt,
+        cognitive_work: CognitiveWorkReceipt,
+        cognitive_context: CognitiveContextFrame,
+    ) -> Result<Self, ScaffoldContractError> {
+        let pre_action =
+            pre_action.with_v11_context(cognitive_context, prediction_target.clone())?;
+        decision.abi_version = V11_EXPERIENCE_ABI_VERSION;
+        decision.selected_bundle = Some(bundle);
+        decision.prediction_target = Some(prediction_target.clone());
+        decision.cognitive_work = Some(cognitive_work.clone());
+        Self::new_v11_from_parts(
+            pre_action,
+            decision,
+            outcome,
+            prediction_target,
+            cognitive_work,
+        )
+    }
+
+    fn new_v11_from_parts(
+        pre_action: PreActionSnapshot,
+        decision: DecisionSnapshot,
+        outcome: PostActionOutcome,
+        prediction_target: PredictionTargetReceipt,
+        cognitive_work: CognitiveWorkReceipt,
+    ) -> Result<Self, ScaffoldContractError> {
         outcome.validate_contract()?;
         if outcome.organism_id != pre_action.organism_id
             || outcome.sequence_id != pre_action.sequence_id
@@ -1408,14 +1456,10 @@ impl ExperiencePatch {
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
-        let pre_action =
-            pre_action.with_v11_context(cognitive_context, prediction_target.clone())?;
-        let decision = DecisionSnapshot::from_v11_bundle(
-            pre_action.sequence_id,
-            bundle,
-            prediction_target.clone(),
-            cognitive_work,
-        )?;
+        pre_action.validate_contract()?;
+        decision.validate_contract()?;
+        prediction_target.validate_contract()?;
+        cognitive_work.validate_contract()?;
         let work = decision
             .cognitive_work
             .as_ref()

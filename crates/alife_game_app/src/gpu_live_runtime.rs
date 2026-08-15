@@ -2029,23 +2029,6 @@ fn compatibility_bundle_for_selected_action_v1(
     MotorCommandBundle::new(organism_id, sequence_id, tick, vec![channel_command])
 }
 
-fn debug_invalid_decision_evidence(tag: &'static str) -> ScaffoldContractError {
-    if std::env::var_os("ALIFE_DEBUG_DECISION_EVIDENCE").is_some() {
-        eprintln!("ALIFE_DEBUG_DECISION_EVIDENCE:{tag}");
-    }
-    ScaffoldContractError::InvalidDecisionEvidence
-}
-
-fn debug_decision_evidence_error(
-    tag: &'static str,
-    error: ScaffoldContractError,
-) -> ScaffoldContractError {
-    if matches!(&error, ScaffoldContractError::InvalidDecisionEvidence) {
-        let _ = debug_invalid_decision_evidence(tag);
-    }
-    error
-}
-
 fn factorized_motor_bundle_for_candidates(
     organism_id: OrganismId,
     sequence_id: ExperienceSequenceId,
@@ -2071,7 +2054,7 @@ fn factorized_motor_bundle_for_candidates(
         let encoded = candidate_slots
             .get(slot)
             .copied()
-            .ok_or_else(|| debug_invalid_decision_evidence("factorized.slot_missing"))?;
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
         if encoded == 0 {
             continue;
         }
@@ -2079,14 +2062,12 @@ fn factorized_motor_bundle_for_candidates(
         let candidate = *frame
             .candidates()
             .get(usize::from(candidate_index))
-            .ok_or_else(|| debug_invalid_decision_evidence("factorized.candidate_missing"))?;
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
         let command = candidate.to_command(organism_id, candidate.sensor_confidence)?;
         let channel = factorized_motor_channel_for_action(command.kind)
-            .ok_or_else(|| debug_invalid_decision_evidence("factorized.action_without_channel"))?;
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
         if channel != *head_channel {
-            return Err(debug_invalid_decision_evidence(
-                "factorized.channel_mismatch",
-            ));
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
         let mut channel_command = channel_command_for_action(channel, &command)?;
         if channel == MotorChannel::Vocal && candidate_index == selected_candidate_index {
@@ -2266,9 +2247,9 @@ fn seal_prepared_selection_core(
     let motor_receipt = world
         .apply_registered_motor_bundle(&motor_bundle, world_entity_id)
         .map_err(|error| match error {
-            alife_world::HeadlessMotorTransactionError::Contract(error) => GameAppShellError::Core(
-                debug_decision_evidence_error("seal.world_motor_bundle", error),
-            ),
+            alife_world::HeadlessMotorTransactionError::Contract(error) => {
+                GameAppShellError::Core(error)
+            }
             alife_world::HeadlessMotorTransactionError::UnsupportedChannel(_) => {
                 GameAppShellError::Core(ScaffoldContractError::InvalidActionDecision)
             }
@@ -2317,15 +2298,15 @@ fn seal_prepared_selection_core(
     )?;
     outcome.contradiction_observed = !succeeded;
     outcome = outcome.with_v11_joint(motor_receipt.joint, cognitive_work)?;
-    let patch = ExperiencePatch::new_v11(
+    let patch = ExperiencePatch::new_v11_with_decision(
         pre_action,
+        decision,
         motor_bundle,
         outcome,
         prediction_target,
         cognitive_work,
         cognitive_context,
-    )
-    .map_err(|error| debug_decision_evidence_error("seal.v11_patch", error))?;
+    )?;
     apply_cognitive_work_cost(
         world,
         organism_id,
@@ -4643,9 +4624,7 @@ impl GpuLiveBrainRuntime {
                     cognitive_context_with_attention(cognitive_context, attention)?;
                 let prepared_recall = routed_recall.with_cognitive_context(cognitive_context)?;
                 let (frame, memory_recall) = prepared_recall.finalize(routed_draft)?;
-                memory_recall
-                    .validate_for_frame(&frame)
-                    .map_err(|error| debug_decision_evidence_error("stage.memory_recall", error))?;
+                memory_recall.validate_for_frame(&frame)?;
                 let memory_upload =
                     self.backend
                         .prepare_memory_context_upload(handle, &frame, &memory_recall)?;
@@ -4701,7 +4680,7 @@ impl GpuLiveBrainRuntime {
             let memory_batch = GpuClosedLoopMemoryBatchInput::try_new(memory_inputs)?;
             let gpu_ticks = self.backend.tick_memory_batch(&memory_batch)?;
             if gpu_ticks.len() != batch.len() {
-                return Err(debug_invalid_decision_evidence("tick.gpu_batch_length").into());
+                return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
             }
             self.record_gpu_tick_metrics(&gpu_ticks)?;
             let rows = batch.into_iter().zip(gpu_ticks).collect();
@@ -4716,7 +4695,7 @@ impl GpuLiveBrainRuntime {
             self.handles.len()
         };
         if summaries_by_organism.len() != expected_summary_count {
-            return Err(debug_invalid_decision_evidence("tick.summary_count").into());
+            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
         #[cfg(test)]
         if std::mem::take(&mut self.forced_late_advance_failure) {
@@ -5357,7 +5336,7 @@ impl GpuLiveBrainRuntime {
         } = prepared;
         let memory_binding = gpu_tick
             .memory_context_binding
-            .ok_or_else(|| debug_invalid_decision_evidence("prepare.memory_binding_missing"))?;
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
         if gpu_tick.handle != handle
             || gpu_tick.base_digest != frame.base_digest()
             || gpu_tick.frame_digest != frame.frame_digest()
@@ -5369,11 +5348,9 @@ impl GpuLiveBrainRuntime {
             || memory_binding.final_frame_digest != memory_recall.final_frame_digest()
             || usize::from(memory_binding.candidate_count) != frame.candidates().len()
         {
-            return Err(debug_invalid_decision_evidence("prepare.binding_mismatch").into());
+            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
-        memory_recall
-            .validate_for_frame(&frame)
-            .map_err(|error| debug_decision_evidence_error("prepare.memory_recall", error))?;
+        memory_recall.validate_for_frame(&frame)?;
         memory_recall
             .cognitive_context()
             .ok_or(ScaffoldContractError::MissingPhaseData)?;
@@ -5388,7 +5365,7 @@ impl GpuLiveBrainRuntime {
         let candidate = *frame
             .candidates()
             .get(usize::from(gpu_tick.selection.candidate_index))
-            .ok_or_else(|| debug_invalid_decision_evidence("prepare.selected_candidate_missing"))?;
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
         let pending_identity = gpu_tick.pending_eligibility.identity();
         if pending_identity.handle_generation() != handle.generation()
             || pending_identity.phenotype_hash() != handle.phenotype_hash()
@@ -5401,9 +5378,7 @@ impl GpuLiveBrainRuntime {
             || pending_identity.action_family() != candidate.family
             || pending_identity.candidate_feature_digest() != candidate.feature_digest()?
         {
-            return Err(
-                debug_invalid_decision_evidence("prepare.pending_identity_mismatch").into(),
-            );
+            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
         let command = candidate.to_command(organism_id, gpu_tick.selection.confidence)?;
         let speech_prompted = frame
@@ -5416,8 +5391,7 @@ impl GpuLiveBrainRuntime {
         let factorized_channels = resident
             .phenotype
             .candidate_decoder()
-            .factorized_motor_channels(&resident.phenotype)
-            .map_err(|error| debug_decision_evidence_error("prepare.factorized_channels", error))?;
+            .factorized_motor_channels(&resident.phenotype)?;
         let motor_bundle = factorized_motor_bundle_for_candidates(
             organism_id,
             sequence_id,
@@ -5429,8 +5403,7 @@ impl GpuLiveBrainRuntime {
             gpu_tick.selection.candidate_index,
             gpu_tick.speech_payload.as_ref(),
             speech_prompted,
-        )
-        .map_err(|error| debug_decision_evidence_error("prepare.factorized_bundle", error))?;
+        )?;
         let pre_action = PreActionSnapshot::from_neural_frame(
             sequence_id,
             handle.class_id(),
@@ -5454,14 +5427,12 @@ impl GpuLiveBrainRuntime {
                 active_synapses: gpu_tick.selection.active_synapses,
             },
             command,
-        )
-        .map_err(|error| debug_decision_evidence_error("prepare.neural_decision", error))?
+        )?
         .with_finalized_memory_recall(
             &frame,
             &memory_recall,
             gpu_tick.selection.candidate_index,
-        )
-        .map_err(|error| debug_decision_evidence_error("prepare.finalized_memory_recall", error))?;
+        )?;
         let outcome_tick = Tick::new(frame.tick().raw().saturating_add(1));
         Ok(PreparedLiveSelection {
             handle,
@@ -5688,7 +5659,7 @@ impl GpuLiveBrainRuntime {
         self.sealed_patch_count = self
             .sealed_patch_count
             .checked_add(committed_patches.len())
-            .ok_or_else(|| debug_invalid_decision_evidence("commit.sealed_patch_count_overflow"))?;
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
         if self.retain_sealed_patch_history {
             self.sealed_patches.extend(committed_patches);
         } else {
