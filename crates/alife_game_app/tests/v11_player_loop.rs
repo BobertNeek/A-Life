@@ -1,9 +1,8 @@
 //! Smallest v1.1 player-loop RED gate.
 //!
-//! The fixture reaches a grounded teacher token and the production GPU runtime
-//! boundary. It stops at the first missing production seam instead of faking
-//! the later attention, prediction, motor, learning, sleep, reproduction,
-//! persistence, or presentation links.
+//! The fixture reaches a grounded teacher token and one coherent production
+//! GPU tick. It stops at the first later lifecycle seam instead of faking
+//! sleep, reproduction, persistence, or presentation links.
 #![cfg(feature = "gpu-runtime")]
 
 use alife_core::{
@@ -18,7 +17,7 @@ use alife_world::{
 };
 
 #[test]
-fn v11_player_loop_reaches_grounded_body_then_reds_at_next_production_boundary() {
+fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_boundary() {
     let organism_id = OrganismId(1);
     let school_id = HabitatId::new(2).expect("non-zero school habitat id");
     let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())
@@ -122,8 +121,55 @@ fn v11_player_loop_reaches_grounded_body_then_reds_at_next_production_boundary()
         PolicyBackend::NeuralClosedLoopGpu
     );
 
+    let summaries = runtime
+        .tick()
+        .expect("production GPU runtime must complete one coherent causal tick");
+    assert_eq!(summaries.len(), 1);
+    let summary = &summaries[0];
+    assert_eq!(summary.organism_id, organism_id);
+    assert_eq!(summary.tick_before, Tick::ZERO);
+    assert_eq!(summary.tick_after, Tick::new(1));
+    assert_eq!(summary.world_tick_before, Tick::ZERO);
+    assert_eq!(summary.world_tick_after, Tick::new(1));
+    assert!(summary.patch_sealed);
+    assert_eq!(summary.learning_updates, 1);
+    assert_eq!(summary.memory_updates, 1);
+    assert_eq!(summary.topology_updates, 1);
+    assert_eq!(runtime.world_snapshot().tick(), Tick::new(1));
+
+    let patch = runtime
+        .sealed_patches()
+        .last()
+        .expect("the GPU-selected outcome must survive in a sealed ExperiencePatch");
+    assert!(patch.selected_bundle().is_some());
+    assert!(patch.prediction_target().is_some());
+    assert!(patch.cognitive_work().is_some());
+    let joint = patch
+        .outcome()
+        .joint
+        .as_ref()
+        .expect("the sealed patch must contain the measured joint outcome");
+    assert_eq!(joint.execution, patch.outcome().physical);
+    assert!(!joint.channel_observations.is_empty());
+    assert!(joint
+        .channel_observations
+        .iter()
+        .any(|observation| observation.executed));
+
+    assert!(!runtime.last_learning_receipts().is_empty());
+    assert!(!runtime.last_activity_work_receipts().is_empty());
+    assert!(!runtime.last_cognitive_work_receipts().is_empty());
+    assert!(!runtime.last_memory_recall_receipts().is_empty());
+    assert!(!runtime.last_memory_update_receipts().is_empty());
+    assert!(!runtime.last_cognitive_context_digests().is_empty());
+    assert!(!runtime.last_topology_observations().is_empty());
+    assert!(runtime.last_memory_preparation_errors().is_empty());
+    assert!(runtime.last_memory_observation_errors().is_empty());
+    assert!(runtime.last_pre_seal_discard_failures().is_empty());
+    assert!(runtime.last_post_seal_learning_failures().is_empty());
+
     assert!(
         false,
-        "Task 13 RED at the next unavailable production seam: the runtime now returns a measured structured-education authority receipt, but focal attention and the later prediction, motor, outcome, learning, sleep, reproduction, persistence, and presentation links remain unavailable. Do not fake them."
+        "Task 13 RED at the next unavailable lifecycle seam: this public production fixture now proves one measured GPU tick, but continuing into sleep, reproduction, persistence, and presentation requires nontrivial existing setup. Do not fake those links."
     );
 }
