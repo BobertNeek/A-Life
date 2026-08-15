@@ -1057,23 +1057,36 @@ impl SleepConsolidator {
             return Err(ScaffoldContractError::MissingPhaseData);
         }
 
-        let mut source_sequences = Vec::with_capacity(evidence.batch.events.len());
-        for (event, target) in evidence
+        // GPU replay can outlive the bounded fast-memory ring. Keep the
+        // validated event/target pairs that still have their source record,
+        // but do not let one stale replay entry discard the available work.
+        let mut eligible_events = Vec::with_capacity(evidence.batch.events.len());
+        let mut eligible_event_indices = BTreeSet::new();
+        for (event_index, (event, target)) in evidence
             .batch
             .events
             .iter()
             .zip(&evidence.prediction_targets)
+            .enumerate()
         {
-            let record = memory
-                .fast_record_for_sequence(event.sequence_id)
-                .ok_or(ScaffoldContractError::MissingPhaseData)?;
+            let Some(record) = memory.fast_record_for_sequence(event.sequence_id) else {
+                continue;
+            };
             if record.organism_id != target.organism_id
                 || record.selected_action_id != Some(event.action_id)
             {
                 return Err(ScaffoldContractError::InvalidDecisionEvidence);
             }
-            source_sequences.push(event.sequence_id);
+            eligible_event_indices.insert(event_index);
+            eligible_events.push((event, target));
         }
+        if eligible_events.is_empty() {
+            return Err(ScaffoldContractError::MissingPhaseData);
+        }
+        let source_sequences = eligible_events
+            .iter()
+            .map(|(event, _)| event.sequence_id)
+            .collect::<Vec<_>>();
 
         let mut next_memory = memory.clone();
         let mut next_predictor = predictor.clone();
@@ -1083,15 +1096,24 @@ impl SleepConsolidator {
             self.config.memory_max_records_after,
         )?;
         let mut predictor_update_count = 0_u32;
-        for target in &evidence.prediction_targets {
+        for (_, target) in eligible_events.iter().copied() {
             next_predictor.observe(target)?;
             predictor_update_count = predictor_update_count.saturating_add(1);
         }
         let concept = self.consolidate_topology_sidecar(&mut next_topology, 1)?;
-        let replay_event_count = u32::try_from(evidence.batch.events.len())
+        let replay_event_count = u32::try_from(eligible_events.len())
             .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?;
         let replay_eligibility_sample_count =
-            u32::try_from(evidence.batch.eligibility_samples.len())
+            u32::try_from(
+                evidence
+                    .batch
+                    .eligibility_samples
+                    .iter()
+                    .filter(|sample| {
+                        eligible_event_indices.contains(&usize::from(sample.event_index))
+                    })
+                    .count(),
+            )
                 .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?;
         let work_units = u64::from(replay_event_count)
             .saturating_add(u64::from(replay_eligibility_sample_count))
