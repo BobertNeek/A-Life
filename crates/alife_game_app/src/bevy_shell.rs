@@ -5450,7 +5450,9 @@ fn reconcile_production_presentation(
 ) {
     for (entity, root) in roots.iter() {
         let is_live = frame.current.organism(root.stable_id).is_some_and(|row| {
-            row.lifecycle.is_alive() && row.object.kind == WorldObjectKind::Agent
+            row.organism_id == root.organism_id
+                && row.lifecycle.is_alive()
+                && row.object.kind == WorldObjectKind::Agent
         });
         if is_live {
             let _ = entity_map.bind(entity, root.stable_id);

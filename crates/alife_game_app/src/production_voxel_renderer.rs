@@ -892,6 +892,7 @@ pub struct Fvr04ProductionCreatureVisualMarker {
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct ProductionCreatureAssemblyRoot {
     pub stable_id: alife_core::WorldEntityId,
+    pub organism_id: OrganismId,
     pub display_only: bool,
 }
 
@@ -4439,6 +4440,7 @@ fn fvr04_creature_root_bundle(
         visual,
         ProductionCreatureAssemblyRoot {
             stable_id,
+            organism_id,
             display_only,
         },
         Fvr04ProductionRuntimeSceneRoot,
@@ -7802,6 +7804,7 @@ mod tests {
         world.spawn((
             ProductionCreatureAssemblyRoot {
                 stable_id: Default::default(),
+                organism_id: OrganismId(1),
                 display_only: true,
             },
             Fvr04ProductionRuntimeSceneRoot,
