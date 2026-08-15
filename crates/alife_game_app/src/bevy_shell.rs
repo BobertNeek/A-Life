@@ -5374,6 +5374,7 @@ fn build_production_voxel_frontend_app_shell_inner(
         app.init_resource::<Assets<bevy_hanabi::prelude::EffectAsset>>();
         app.init_resource::<ButtonInput<KeyCode>>();
         app.init_resource::<ButtonInput<MouseButton>>();
+        app.add_message::<bevy::input::keyboard::KeyboardInput>();
     } else {
         let present_mode = if launch.record_performance {
             PresentMode::Immediate
