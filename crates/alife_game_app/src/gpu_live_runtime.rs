@@ -6202,9 +6202,10 @@ impl GpuLiveBrainRuntime {
             let organism_id = selection.handle.organism_id();
             let disposition = match self.topologies.get_mut(&organism_id.raw()) {
                 Some(sidecar) if sidecar.organism_id() == organism_id => {
-                    TopologyObservationDisposition::Observed(Box::new(
-                        sidecar.observe_sealed_patch(&selection.patch),
-                    ))
+                    let receipt = sidecar.observe_sealed_patch(&selection.patch);
+                    let _lifecycle_result =
+                        sidecar.advance_lifecycle(selection.patch.outcome().outcome_tick);
+                    TopologyObservationDisposition::Observed(Box::new(receipt))
                 }
                 _ => TopologyObservationDisposition::RejectedMissingOwner { organism_id },
             };

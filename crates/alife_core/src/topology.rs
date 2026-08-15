@@ -1189,6 +1189,96 @@ impl TopologicalMap {
         self.validate_contract()
     }
 
+    fn lifecycle_split_candidate(&self) -> Option<(ConceptCellId, NormalizedScalar)> {
+        if self.concepts.len() >= self.config.max_concepts {
+            return None;
+        }
+
+        let mut candidate: Option<((u16, u64, u64, u64), ConceptCellId, NormalizedScalar)> = None;
+        for gap in &self.unresolved_gaps {
+            if gap.source_concepts.len() != 2
+                || gap.prediction_error.raw() < CONTRADICTION_ERROR_THRESHOLD
+                || gap.curiosity_voltage.raw() < CONCEPT_SPLIT_MIN_GAP_VOLTAGE
+                || gap
+                    .first_tick
+                    .raw()
+                    .saturating_add(CONCEPT_SPLIT_MIN_GAP_TICKS)
+                    > gap.last_tick.raw()
+                || !matches!(
+                    gap.status,
+                    GapResolutionStatus::Open | GapResolutionStatus::BiasingCuriosity
+                )
+            {
+                continue;
+            }
+
+            let Some(secondary_id) = gap
+                .source_concepts
+                .iter()
+                .copied()
+                .find(|concept_id| *concept_id != gap.source_concepts[0])
+            else {
+                continue;
+            };
+            let Some(secondary) = self.concept(secondary_id) else {
+                continue;
+            };
+            if secondary.bindings.actions.is_empty()
+                || secondary.bindings.action_families.is_empty()
+            {
+                continue;
+            }
+
+            for source_id in gap.source_concepts.iter().copied() {
+                let Some(source) = self.concept(source_id) else {
+                    continue;
+                };
+                if source.observation_count < CONCEPT_SPLIT_MIN_OBSERVATIONS
+                    || source.bindings.semantic_refs.len() >= MAX_BINDING_REFS
+                {
+                    continue;
+                }
+                let key = (
+                    q16(gap.curiosity_voltage.raw()),
+                    gap.last_tick.raw(),
+                    gap.id.raw(),
+                    source_id.raw(),
+                );
+                if candidate
+                    .as_ref()
+                    .map_or(true, |(best_key, _, _)| key > *best_key)
+                {
+                    candidate = Some((key, source_id, gap.salience));
+                }
+            }
+        }
+
+        candidate.map(|(_, source_id, salience)| (source_id, salience))
+    }
+
+    fn lifecycle_merge_candidate(&self) -> Option<(ConceptCellId, ConceptCellId)> {
+        for absorbed in &self.concepts {
+            for survivor_id in &absorbed.bindings.semantic_refs {
+                if *survivor_id == absorbed.id {
+                    continue;
+                }
+                let Some(survivor) = self.concept(*survivor_id) else {
+                    continue;
+                };
+                if survivor.observation_count < CONCEPT_MERGE_MIN_SURVIVOR_OBSERVATIONS
+                    || absorbed.observation_count < CONCEPT_MERGE_MIN_ABSORBED_OBSERVATIONS
+                    || !concepts_share_grounded_binding(survivor, absorbed)
+                    || survivor.bindings.emotions.mean_prediction_error.raw()
+                        > CONCEPT_MERGE_MAX_MEAN_PREDICTION_ERROR
+                {
+                    continue;
+                }
+                return Some((*survivor_id, absorbed.id));
+            }
+        }
+        None
+    }
+
     pub fn split_concept(
         &mut self,
         source_id: ConceptCellId,
@@ -2092,6 +2182,22 @@ impl TopologySidecar {
     pub fn decay_active_state(&mut self, elapsed_ticks: u64) -> Result<(), ScaffoldContractError> {
         self.map.decay_active_state(elapsed_ticks)?;
         self.refresh_diagnostics_after_map_mutation()
+    }
+
+    /// Advances topology once between sealed observations and the next
+    /// pre-decision context. The pass is bounded to one split and one merge.
+    pub fn advance_lifecycle(&mut self, tick: Tick) -> Result<(), ScaffoldContractError> {
+        let mut candidate = self.clone();
+        candidate.decay_active_state(1)?;
+        if let Some((source_id, salience)) = candidate.map.lifecycle_split_candidate() {
+            let _ = candidate.split_concept(source_id, tick, salience);
+        }
+        if let Some((survivor_id, absorbed_id)) = candidate.map.lifecycle_merge_candidate() {
+            let _ = candidate.merge_concepts(survivor_id, absorbed_id, tick);
+        }
+        candidate.validate_contract()?;
+        *self = candidate;
+        Ok(())
     }
 
     pub fn split_concept(
