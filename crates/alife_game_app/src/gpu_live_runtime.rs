@@ -271,7 +271,7 @@ fn compare_resident_checkpoint_metadata(
         || checkpoint.phenotype_hash != plan.phenotype.phenotype_hash()
         || checkpoint.phenotype != &plan.phenotype
         || checkpoint.compiler_inputs.genome() != &plan.genome
-        || checkpoint.compiler_inputs.development() != &plan.development
+        || checkpoint.compiler_inputs.development() != plan.compiler_inputs.development()
         || checkpoint.compiler_inputs.sensor_profile() != plan.compiler_inputs.sensor_profile()
     {
         return Err(ScaffoldContractError::PhenotypeCompile);
@@ -5991,6 +5991,37 @@ const fn gpu_consolidation_overlay_label(state: &ConsolidationState) -> &'static
 
 const N512_FOUNDATION_SEED: u64 = 0x4E35_3132_5F00_0001;
 
+fn foundation_construction_development(
+    genome: &BrainGenome,
+    capacity: &BrainCapacityClass,
+    development: &DevelopmentState,
+) -> Result<DevelopmentState, ScaffoldContractError> {
+    development.validate_contract()?;
+    if development.genome_id != genome.id {
+        return Err(ScaffoldContractError::PhenotypeCompile);
+    }
+    if capacity.id() != BrainCapacityClass::N2048_ID
+        || (development.enabled_lobes.is_empty()
+            && development.active_sensor_channels.is_empty()
+            && development.active_motor_affordances.is_empty()
+            && development.open_critical_periods.is_empty())
+    {
+        return Ok(development.clone());
+    }
+
+    // The checked N2048 asset owns a full immutable coordinate ABI. World
+    // development remains authoritative in ResidentCognition; only the
+    // construction input removes dynamic gates that would reshape that ABI.
+    let mut construction = development.clone();
+    construction.maturation = NormalizedScalar::new(1.0)?;
+    construction.enabled_lobes.clear();
+    construction.active_sensor_channels.clear();
+    construction.active_motor_affordances.clear();
+    construction.open_critical_periods.clear();
+    construction.validate_contract()?;
+    Ok(construction)
+}
+
 fn compile_gpu_components_from_genome(
     genome: BrainGenome,
     development: DevelopmentState,
@@ -6002,17 +6033,19 @@ fn compile_gpu_components_from_genome(
         BrainCapacityClass::N512_ID => FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?,
         _ => return Err(ScaffoldContractError::UnsupportedProductionBrainClass),
     };
+    let construction_development =
+        foundation_construction_development(&genome, &capacity, &development)?;
     let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
         &genome,
         &capacity,
-        &development,
+        &construction_development,
         sensor_profile,
         &foundation,
     )?;
     let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
         genome,
         &capacity,
-        development,
+        construction_development,
         sensor_profile,
         phenotype.foundation_abi().clone(),
     )?;
