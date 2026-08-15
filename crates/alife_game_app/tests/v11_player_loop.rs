@@ -1,18 +1,16 @@
 //! Smallest v1.1 player-loop RED gate.
 //!
 //! The fixture reaches a grounded teacher token, a coherent production GPU
-//! tick, and managed breeding with canonical archives before GPU admission.
-//! It stops at the first later unavailable lifecycle seam instead of faking
-//! sleep or presentation links.
+//! tick, bounded recovery sleep, and managed breeding with canonical archives.
 #![cfg(feature = "gpu-runtime")]
 
 use std::fs;
 
 use alife_archive::LineageLibraryConfig;
 use alife_core::{
-    ArchiveLearnedCapturePolicy, BrainCapacityClass, BrainScaleTier, FoundationGeneticIdentity,
-    FoundationWeightAsset, OrganismId, PolicyBackend, SensorProfile, TeacherPerceptionChannel,
-    Tick, Vec3f,
+    ArchiveLearnedCapturePolicy, BrainCapacityClass, BrainScaleTier, ConsolidationState,
+    FoundationGeneticIdentity, FoundationWeightAsset, OrganismId, PolicyBackend, SensorProfile,
+    SleepPhase, TeacherPerceptionChannel, Tick, Vec3f,
 };
 use alife_game_app::{
     default_environment_manifest_path, produce_habitat_lab_explicit_breed_receipt,
@@ -298,10 +296,123 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
     assert!(runtime.last_pre_seal_discard_failures().is_empty());
     assert!(runtime.last_post_seal_learning_failures().is_empty());
 
+    let pre_sleep_action = summary
+        .selected_action_id
+        .expect("pre-sleep production tick must select an action");
+    let pre_sleep_joint = joint.clone();
+
     let durable_root = archive_root.join("player-loop-durable");
     let asset_root = durable_root.join("assets");
     let save_path = durable_root.join("player-loop.json");
     fs::create_dir_all(&asset_root).expect("create durable checkpoint asset root");
+
+    let sleep_checkpoint_store = alife_runtime::GpuCheckpointAssetStore::new(asset_root.clone())
+        .expect("create production sleep checkpoint store");
+    let recovery = runtime
+        .request_recovery_sleep(organism_id)
+        .expect("public production recovery-sleep API must enter recovery sleep");
+    assert_eq!(recovery.from, SleepPhase::Awake);
+    assert_eq!(recovery.to, SleepPhase::ForcedRecoverySleep);
+
+    let mut saw_consolidating = false;
+    let mut saw_submitted = false;
+    let mut saw_completed = false;
+    let mut committed_state = None;
+    let mut saw_waking = false;
+    let mut reached_awake = false;
+    for _ in 0..96 {
+        let summaries = runtime
+            .tick()
+            .expect("bounded production recovery-sleep tick must complete");
+        assert!(summaries
+            .iter()
+            .any(|candidate| candidate.organism_id == organism_id));
+        let state = runtime
+            .checkpoint_brain(organism_id, &sleep_checkpoint_store)
+            .expect("capture the focal production sleep state")
+            .save_state
+            .sleep;
+        saw_consolidating |= state.phase == SleepPhase::Consolidating;
+        saw_waking |= state.phase == SleepPhase::Waking;
+        match state.consolidation {
+            ConsolidationState::Submitted { .. } => saw_submitted = true,
+            ConsolidationState::Completed { .. } => saw_completed = true,
+            ConsolidationState::Committed {
+                cycle_id,
+                output_generation,
+                output_digest,
+            } => {
+                committed_state = Some((cycle_id, output_generation, output_digest));
+            }
+            _ => {}
+        }
+        if state.phase == SleepPhase::Awake && state.last_consolidated_cycle_id != 0 {
+            reached_awake = true;
+            break;
+        }
+    }
+    assert!(saw_consolidating, "recovery sleep must reach consolidation");
+    assert!(saw_submitted, "sleep must submit the real GPU consolidation job");
+    assert!(saw_completed, "sleep must observe completed GPU consolidation output");
+    let (committed_cycle_id, output_generation, output_digest) = committed_state
+        .expect("sleep must commit the real GPU consolidation output");
+    assert!(committed_cycle_id != 0);
+    assert!(output_generation != 0);
+    assert_ne!(output_digest, [0; 4]);
+    assert!(saw_waking, "committed sleep must advance through waking");
+    assert!(reached_awake, "bounded recovery sleep must return to Awake");
+
+    let recovered_world = runtime.world_snapshot();
+    let sleep_seal = recovered_world
+        .organism_registry()
+        .get(organism_id)
+        .expect("focal organism must retain its sealed sleep record")
+        .sleep_seal();
+    assert_eq!(sleep_seal.phase, SleepPhase::Awake);
+    assert_eq!(sleep_seal.cycle_id, committed_cycle_id);
+    assert!(sleep_seal.work_units > 0, "sealed sleep work must be nonzero");
+
+    let awake_summaries = runtime
+        .tick()
+        .expect("later awake production GPU tick must complete");
+    let awake_summary = awake_summaries
+        .iter()
+        .find(|candidate| candidate.organism_id == organism_id)
+        .expect("later awake focal-organism GPU summary");
+    assert!(awake_summary.patch_sealed);
+    let awake_action = awake_summary
+        .selected_action_id
+        .expect("later awake production tick must select an action");
+    assert_ne!(awake_action, pre_sleep_action);
+    let awake_patch = runtime
+        .sealed_patches()
+        .iter()
+        .rev()
+        .find(|patch| {
+            patch.pre_action().organism_id == organism_id
+                && patch.pre_action().tick == awake_summary.tick_before
+        })
+        .expect("later awake action must have a focal sealed patch");
+    let awake_joint = awake_patch
+        .outcome()
+        .joint
+        .as_ref()
+        .expect("later awake patch must contain the measured joint outcome");
+    assert_eq!(awake_joint.execution, awake_patch.outcome().physical);
+    assert!(!awake_joint.channel_observations.is_empty());
+    assert!(awake_joint
+        .channel_observations
+        .iter()
+        .any(|observation| observation.executed));
+    assert_ne!(awake_joint, &pre_sleep_joint);
+    assert!(!runtime.last_memory_recall_receipts().is_empty());
+    assert!(!runtime.last_memory_update_receipts().is_empty());
+    assert!(runtime
+        .last_cognitive_context_digests()
+        .iter()
+        .any(|digest| *digest != [0; 4]));
+    assert!(!runtime.last_topology_observations().is_empty());
+
     let base_save = player_loop_base_save(&runtime);
     runtime
         .attach_durable_checkpoint_boundary(&save_path, &asset_root, base_save)
@@ -429,7 +540,8 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
     let loaded = durable
         .load()
         .expect("load the published player-loop checkpoint");
-    assert_eq!(loaded.save.world.tick, Tick::new(1));
+    let durable_checkpoint_tick = loaded.save.world.tick;
+    assert_eq!(durable_checkpoint_tick, runtime.world_snapshot().tick());
     assert!(loaded
         .save
         .creatures
@@ -440,7 +552,7 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
     let checkpointed = runtime
         .capture_portable_checkpoint()
         .expect("capture the exact live GPU checkpoint");
-    assert_eq!(checkpointed.world.tick, Tick::new(1));
+    assert_eq!(checkpointed.world.tick, durable_checkpoint_tick);
     assert!(checkpointed
         .creatures
         .iter()
@@ -648,8 +760,4 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
 
     drop(app);
     fs::remove_dir_all(&archive_root).expect("remove temporary player-loop archive");
-    assert!(
-        false,
-        "Task 13 RED at the next unavailable lifecycle seam: bounded sleep/consolidation, wake, and a later changed action/outcome remain unproven."
-    );
 }
