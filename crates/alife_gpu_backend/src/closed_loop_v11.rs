@@ -22,6 +22,15 @@ pub struct GpuV11SparseEdge {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AddLifetimeSynapse {
+    pub source: u32,
+    pub target: u32,
+    pub route: u32,
+    pub initial_weight: f32,
+    pub evidence: CoactivationEvidence,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GpuV11SparseSpan {
     pub target: u32,
     pub edges: Vec<GpuV11SparseEdge>,
@@ -58,6 +67,8 @@ pub struct GpuV11Checkpoint {
     pub dendritic_branches: DendriticBranchSet,
     pub structural: StructuralPlasticityState,
     pub sparse_spans: Vec<GpuV11SparseSpan>,
+    #[serde(default)]
+    pub pending_lifetime_synapse: Option<AddLifetimeSynapse>,
     pub work: GpuV11WorkReceipt,
 }
 
@@ -67,6 +78,8 @@ pub struct GpuV11CausalState {
     dendritic_branches: DendriticBranchSet,
     structural: StructuralPlasticityState,
     sparse_spans: Vec<GpuV11SparseSpan>,
+    #[serde(default)]
+    pending_lifetime_synapse: Option<AddLifetimeSynapse>,
     last_work: GpuV11WorkReceipt,
 }
 
@@ -86,6 +99,7 @@ impl GpuV11CausalState {
             dendritic_branches,
             structural,
             sparse_spans: Vec::new(),
+            pending_lifetime_synapse: None,
             last_work: GpuV11WorkReceipt::default(),
         })
     }
@@ -96,6 +110,21 @@ impl GpuV11CausalState {
 
     pub fn sparse_spans(&self) -> &[GpuV11SparseSpan] {
         &self.sparse_spans
+    }
+
+    pub(crate) fn pending_lifetime_synapse(&self) -> Option<AddLifetimeSynapse> {
+        self.pending_lifetime_synapse.clone()
+    }
+
+    pub(crate) fn clear_pending_lifetime_synapse(
+        &mut self,
+        expected: &AddLifetimeSynapse,
+    ) -> Result<(), ScaffoldContractError> {
+        if self.pending_lifetime_synapse.as_ref() != Some(expected) {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        self.pending_lifetime_synapse = None;
+        Ok(())
     }
 
     pub const fn last_work(&self) -> GpuV11WorkReceipt {
@@ -168,18 +197,26 @@ impl GpuV11CausalState {
         &mut self,
         evidence: &[CoactivationEvidence],
     ) -> Result<GpuV11WorkReceipt, ScaffoldContractError> {
-        let _discovery = self
+        if self.pending_lifetime_synapse.is_some()
+            || evidence.iter().any(|item| {
+                item.source >= self.neuron_count || item.target >= self.neuron_count
+            })
+        {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        let mut next = self.clone();
+        let _discovery = next
             .structural
             .discover_candidates(evidence)
             .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
-        let structural = self
+        let structural = next
             .structural
             .apply_structural_phase()
             .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
 
         let mut sources = evidence.iter().map(|item| item.source).collect::<Vec<_>>();
         let mut targets = evidence.iter().map(|item| item.target).collect::<Vec<_>>();
-        for span in &self.sparse_spans {
+        for span in &next.sparse_spans {
             targets.push(span.target);
             sources.extend(span.edges.iter().map(|edge| edge.source));
         }
@@ -224,9 +261,40 @@ impl GpuV11CausalState {
         for span in &mut rebuilt {
             span.edges.sort_unstable_by_key(|edge| edge.source);
         }
-        self.sparse_spans = rebuilt;
-        self.last_work.structural = structural;
-        self.last_work.cognitive = self.make_cognitive_receipt()?;
+        if structural.accepted_edges > 0 {
+            let accepted = evidence.iter().find_map(|item| {
+                let already_present = self.sparse_spans.iter().any(|span| {
+                    span.target == item.target
+                        && span.edges.iter().any(|edge| {
+                            edge.source == item.source && edge.target == item.target
+                        })
+                });
+                if already_present {
+                    return None;
+                }
+                rebuilt
+                    .iter()
+                    .find(|span| span.target == item.target)
+                    .and_then(|span| {
+                        span.edges.iter().find(|edge| {
+                            edge.source == item.source && edge.target == item.target
+                        })
+                    })
+                    .filter(|edge| edge.weight.is_finite() && edge.weight != 0.0)
+                    .map(|edge| AddLifetimeSynapse {
+                        source: item.source,
+                        target: item.target,
+                        route: item.region as u32,
+                        initial_weight: edge.weight,
+                        evidence: item.clone(),
+                    })
+            });
+            next.pending_lifetime_synapse = accepted;
+        }
+        next.sparse_spans = rebuilt;
+        next.last_work.structural = structural;
+        next.last_work.cognitive = next.make_cognitive_receipt()?;
+        *self = next;
         Ok(self.last_work)
     }
 
@@ -237,6 +305,7 @@ impl GpuV11CausalState {
             dendritic_branches: self.dendritic_branches.clone(),
             structural: self.structural.clone(),
             sparse_spans: self.sparse_spans.clone(),
+            pending_lifetime_synapse: self.pending_lifetime_synapse.clone(),
             work: self.last_work,
         }
     }
@@ -252,6 +321,7 @@ impl GpuV11CausalState {
             dendritic_branches: checkpoint.dendritic_branches,
             structural: checkpoint.structural,
             sparse_spans: checkpoint.sparse_spans,
+            pending_lifetime_synapse: checkpoint.pending_lifetime_synapse,
             last_work: checkpoint.work,
         };
         if state.sparse_spans.iter().any(|span| {
@@ -263,6 +333,26 @@ impl GpuV11CausalState {
                 })
         }) {
             return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        if let Some(pending) = &state.pending_lifetime_synapse {
+            let present = state.sparse_spans.iter().any(|span| {
+                span.target == pending.target
+                    && span.edges.iter().any(|edge| {
+                        edge.source == pending.source
+                            && edge.target == pending.target
+                            && edge.weight == pending.initial_weight
+                    })
+            });
+            if pending.source >= state.neuron_count
+                || pending.target >= state.neuron_count
+                || !pending.initial_weight.is_finite()
+                || pending.evidence.source != pending.source
+                || pending.evidence.target != pending.target
+                || pending.route != pending.evidence.region as u32
+                || !present
+            {
+                return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+            }
         }
         Ok(state)
     }
