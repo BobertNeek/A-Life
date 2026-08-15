@@ -28,6 +28,7 @@ use alife_world::{
     WorldObjectKind,
 };
 use bevy::{
+    ecs::schedule::IntoScheduleConfigs,
     input::{keyboard::KeyboardInput, ButtonState},
     prelude::{
         App, BackgroundColor, ButtonInput, ChildOf, Color, Component, FlexDirection, FlexWrap,
