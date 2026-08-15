@@ -186,7 +186,8 @@ fn load_speech_selection(base:u32) -> GpuSelectionRecord {
   return GpuSelectionRecord(
     load_state_u32(base),load_state_u32(base+1u),load_state_u32(base+2u),load_state_u32(base+3u),
     load_state_u32(base+4u),load_state_u32(base+5u),load_state_u32(base+6u),load_state_u32(base+7u),
-    load_state_u32(base+8u),load_state_u32(base+9u),load_state_u32(base+10u),load_state_u32(base+11u)
+    load_state_u32(base+8u),load_state_u32(base+9u),load_state_u32(base+10u),load_state_u32(base+11u),
+    load_state_u32(base+12u),load_state_u32(base+13u),load_state_u32(base+14u),load_state_u32(base+15u)
   );
 }
 

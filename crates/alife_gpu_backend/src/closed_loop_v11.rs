@@ -1,8 +1,8 @@
 //! Pass 1 backend join for bounded dendritic and structural computation.
 //!
 //! The closed-loop GPU path remains authoritative for normal neural execution.
-//! This small backend-owned adapter gives the new core mechanisms a real
-//! production backend seam while the larger shader ABI migration is deferred.
+//! This state owns the bounded descriptors and receipts compiled into the
+//! production WGSL recurrent dispatch.
 
 use alife_core::cognitive_work::CognitiveWorkCounters;
 use alife_core::{
@@ -11,6 +11,7 @@ use alife_core::{
     StructuralPlasticityState, StructuralWorkReceipt,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 pub const GPU_V11_CAUSAL_STATE_SCHEMA_VERSION: u16 = 1;
 
@@ -18,6 +19,8 @@ pub const GPU_V11_CAUSAL_STATE_SCHEMA_VERSION: u16 = 1;
 pub struct GpuV11SparseEdge {
     pub source: u32,
     pub target: u32,
+    #[serde(default)]
+    pub route: u32,
     pub weight: f32,
 }
 
@@ -41,6 +44,15 @@ pub struct GpuV11WorkReceipt {
     pub dendritic: DendriticWorkReceipt,
     pub structural: StructuralWorkReceipt,
     pub cognitive: CognitiveWorkReceipt,
+}
+
+#[cfg(feature = "gpu-tests")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuV11MutableStateProbe {
+    pub lifetime_weight_banks: [u32; 2],
+    pub fast_weight_banks: [u32; 2],
+    pub decoder_eligibility_banks: [u32; 2],
+    pub activation_sides: [u32; 2],
 }
 
 impl Default for GpuV11WorkReceipt {
@@ -131,6 +143,32 @@ impl GpuV11CausalState {
         self.last_work
     }
 
+    pub(crate) fn record_gpu_recurrent_work(&mut self, work: GpuV11WorkReceipt) {
+        self.last_work = work;
+    }
+
+    pub(crate) fn gpu_recurrent_work_receipt(
+        &self,
+        branches_evaluated: u32,
+        inputs_evaluated: u32,
+        gated_branches: u32,
+        structural_edges_evaluated: u32,
+    ) -> Result<GpuV11WorkReceipt, ScaffoldContractError> {
+        if gated_branches > branches_evaluated {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        let mut work = self.last_work;
+        work.dendritic = DendriticWorkReceipt {
+            branches_evaluated,
+            inputs_evaluated,
+            gated_branches,
+            work_units: branches_evaluated.saturating_add(inputs_evaluated),
+        };
+        work.cognitive =
+            self.make_cognitive_receipt_for(work.dendritic.work_units, structural_edges_evaluated)?;
+        Ok(work)
+    }
+
     pub fn set_dendritic_branches(
         &mut self,
         branches: DendriticBranchSet,
@@ -146,8 +184,7 @@ impl GpuV11CausalState {
         Ok(())
     }
 
-    /// Applies sparse recurrent input, then dendritic conjunctions and accepted
-    /// structural spans, before the caller's final activation function.
+    #[cfg(test)]
     pub fn recurrent_step<F>(
         &mut self,
         activations: &[f32],
@@ -198,9 +235,9 @@ impl GpuV11CausalState {
         evidence: &[CoactivationEvidence],
     ) -> Result<GpuV11WorkReceipt, ScaffoldContractError> {
         if self.pending_lifetime_synapse.is_some()
-            || evidence.iter().any(|item| {
-                item.source >= self.neuron_count || item.target >= self.neuron_count
-            })
+            || evidence
+                .iter()
+                .any(|item| item.source >= self.neuron_count || item.target >= self.neuron_count)
         {
             return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
         }
@@ -214,50 +251,51 @@ impl GpuV11CausalState {
             .apply_structural_phase()
             .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
 
-        let mut sources = evidence.iter().map(|item| item.source).collect::<Vec<_>>();
-        let mut targets = evidence.iter().map(|item| item.target).collect::<Vec<_>>();
-        for span in &next.sparse_spans {
-            targets.push(span.target);
-            sources.extend(span.edges.iter().map(|edge| edge.source));
+        let mut indexed_pairs = BTreeMap::<u32, BTreeMap<u32, u32>>::new();
+        for span in &self.sparse_spans {
+            for edge in &span.edges {
+                indexed_pairs
+                    .entry(edge.source)
+                    .or_default()
+                    .insert(edge.target, edge.route);
+            }
         }
-        sources.sort_unstable();
-        sources.dedup();
-        targets.sort_unstable();
-        targets.dedup();
+        for item in evidence {
+            indexed_pairs
+                .entry(item.source)
+                .or_default()
+                .entry(item.target)
+                .or_insert(u32::from(item.region));
+        }
 
-        let mut rebuilt: Vec<GpuV11SparseSpan> = Vec::new();
-        for source in sources {
+        let mut rebuilt_by_target = BTreeMap::<u32, Vec<GpuV11SparseEdge>>::new();
+        for (source, targets) in indexed_pairs {
             let mut input = vec![0.0; self.neuron_count as usize];
             input[source as usize] = 1.0;
-            let output = self
+            let output = next
                 .structural
                 .compute(&input)
                 .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
-            for target in &targets {
-                let weight = output[*target as usize];
+            for (target, route) in targets {
+                let weight = output[target as usize];
                 if weight == 0.0 {
                     continue;
                 }
-                let span = rebuilt.iter_mut().find(|span| span.target == *target);
-                if let Some(span) = span {
-                    span.edges.push(GpuV11SparseEdge {
+                rebuilt_by_target
+                    .entry(target)
+                    .or_default()
+                    .push(GpuV11SparseEdge {
                         source,
-                        target: *target,
+                        target,
+                        route,
                         weight,
                     });
-                } else {
-                    rebuilt.push(GpuV11SparseSpan {
-                        target: *target,
-                        edges: vec![GpuV11SparseEdge {
-                            source,
-                            target: *target,
-                            weight,
-                        }],
-                    });
-                }
             }
         }
-        rebuilt.sort_unstable_by_key(|span| span.target);
+        let mut rebuilt = rebuilt_by_target
+            .into_iter()
+            .map(|(target, edges)| GpuV11SparseSpan { target, edges })
+            .collect::<Vec<_>>();
         for span in &mut rebuilt {
             span.edges.sort_unstable_by_key(|edge| edge.source);
         }
@@ -265,9 +303,10 @@ impl GpuV11CausalState {
             let accepted = evidence.iter().find_map(|item| {
                 let already_present = self.sparse_spans.iter().any(|span| {
                     span.target == item.target
-                        && span.edges.iter().any(|edge| {
-                            edge.source == item.source && edge.target == item.target
-                        })
+                        && span
+                            .edges
+                            .iter()
+                            .any(|edge| edge.source == item.source && edge.target == item.target)
                 });
                 if already_present {
                     return None;
@@ -276,15 +315,15 @@ impl GpuV11CausalState {
                     .iter()
                     .find(|span| span.target == item.target)
                     .and_then(|span| {
-                        span.edges.iter().find(|edge| {
-                            edge.source == item.source && edge.target == item.target
-                        })
+                        span.edges
+                            .iter()
+                            .find(|edge| edge.source == item.source && edge.target == item.target)
                     })
                     .filter(|edge| edge.weight.is_finite() && edge.weight != 0.0)
                     .map(|edge| AddLifetimeSynapse {
                         source: item.source,
                         target: item.target,
-                        route: item.region as u32,
+                        route: edge.route,
                         initial_weight: edge.weight,
                         evidence: item.clone(),
                     })
@@ -329,6 +368,7 @@ impl GpuV11CausalState {
                 || span.edges.iter().any(|edge| {
                     edge.source >= state.neuron_count
                         || edge.target != span.target
+                        || edge.route > u16::MAX as u32
                         || !edge.weight.is_finite()
                 })
         }) {
@@ -358,19 +398,25 @@ impl GpuV11CausalState {
     }
 
     fn make_cognitive_receipt(&self) -> Result<CognitiveWorkReceipt, ScaffoldContractError> {
+        self.make_cognitive_receipt_for(self.last_work.dendritic.work_units, 0)
+    }
+
+    fn make_cognitive_receipt_for(
+        &self,
+        dendritic_work_units: u32,
+        structural_work_units: u32,
+    ) -> Result<CognitiveWorkReceipt, ScaffoldContractError> {
         CognitiveWorkCounters::new(
             0,
             0,
-            u64::from(self.last_work.dendritic.work_units),
+            u64::from(dendritic_work_units),
             0,
             0,
             0,
             0,
             0,
             0,
-            u64::from(self.last_work.structural.candidate_comparisons)
-                .saturating_add(u64::from(self.last_work.structural.accepted_edges))
-                .saturating_add(u64::from(self.last_work.structural.pruned_edges)),
+            u64::from(structural_work_units),
             0,
             0,
         )

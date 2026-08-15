@@ -1,4 +1,5 @@
-const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 3u;
+const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 4u;
+const GPU_SELECTION_RECORD_WORDS:u32 = 16u;
 const GPU_LEARNING_SCHEMA_VERSION:u32 = 1u;
 const GPU_SLEEP_SCHEMA_VERSION:u32 = 1u;
 
@@ -28,6 +29,8 @@ struct GpuSelectionRecord {
   slot:u32, slot_generation:u32, candidate_index:u32, logit_bits:u32,
   confidence_q16:u32, status:u32, active_tiles:u32, active_synapses:u32,
   finite_rejections:u32, dispatch_generation_lo:u32, dispatch_generation_hi:u32, active_activation_side:u32,
+  dendritic_branches_evaluated:u32, dendritic_inputs_evaluated:u32,
+  dendritic_gated_branches:u32, structural_edges_evaluated:u32,
 }
 struct GpuEncoderPlanRecord {
   schema_version:u32, sensor_profile_raw:u32, assignment_offset:u32, assignment_count:u32,
@@ -81,6 +84,13 @@ struct GpuBrainSlotExtensionRecord {
   recurrent_eligibility_bank_1_offset:u32, decoder_eligibility_bank_1_offset:u32, fast_bank_1_offset:u32, lifetime_bank_1_offset:u32,
   sleep_parameter_offset:u32, memory_plan_offset:u32, memory_weight_map_offset:u32, learning_state_offset:u32,
   pending_eligibility_offset:u32, replay_plan_identity_offset:u32, reserved0:u32, reserved1:u32,
+}
+struct GpuDendriticBranchRecord {
+  target_neuron:u32, threshold_bits:u32, output_gain_bits:u32, input_offset:u32,
+  input_count:u32, reserved0:u32, reserved1:u32, reserved2:u32,
+}
+struct GpuDendriticInputRecord {
+  source:u32, weight_bits:u32, reserved0:u32, reserved1:u32,
 }
 struct GpuSlotLearningStateRecord {
   schema_version:u32, active_weight_bank:u32, active_eligibility_bank:u32, pending_valid:u32,
@@ -237,6 +247,10 @@ fn state_span_within(start:u32, count:u32) -> bool {
   let limit = arrayLength(&mutable_state_words);
   return start <= limit && count <= limit - start;
 }
+fn plan_span_within(start:u32, count:u32) -> bool {
+  let limit = arrayLength(&immutable_plan_words);
+  return start <= limit && count <= limit - start;
+}
 fn load_learning_header(base:u32) -> GpuLearningHeader {
   return GpuLearningHeader(
     dispatch_header_words[base],dispatch_header_words[base+1u],dispatch_header_words[base+2u],dispatch_header_words[base+3u],
@@ -272,6 +286,17 @@ fn load_sleep_parameter(base:u32) -> GpuSleepParameterRecord {
     bitcast<f32>(immutable_plan_words[base+2u]),bitcast<f32>(immutable_plan_words[base+3u]),
     immutable_plan_words[base+4u],immutable_plan_words[base+5u],
     vec2<u32>(immutable_plan_words[base+6u],immutable_plan_words[base+7u])
+  );
+}
+fn load_dendritic_branch(base:u32) -> GpuDendriticBranchRecord {
+  return GpuDendriticBranchRecord(
+    immutable_plan_words[base],immutable_plan_words[base+1u],immutable_plan_words[base+2u],immutable_plan_words[base+3u],
+    immutable_plan_words[base+4u],immutable_plan_words[base+5u],immutable_plan_words[base+6u],immutable_plan_words[base+7u]
+  );
+}
+fn load_dendritic_input(base:u32) -> GpuDendriticInputRecord {
+  return GpuDendriticInputRecord(
+    immutable_plan_words[base],immutable_plan_words[base+1u],immutable_plan_words[base+2u],immutable_plan_words[base+3u]
   );
 }
 fn load_sleep_header(base:u32) -> GpuSleepHeader {
@@ -394,7 +419,8 @@ fn validate_slice_a_slot(slot_index:u32, header:GpuPerceptionHeader) -> bool {
   valid = extension.schema_version == GPU_CLOSED_LOOP_LAYOUT_VERSION
     && extension.reserved0 != 0xffffffffu
     && state_span_within(extension.reserved0, 4u)
-    && extension.reserved1 == 0u
+    && extension.reserved1 != 0xffffffffu
+    && plan_span_within(extension.reserved1, 1u)
     && state_span_within(extension.learning_state_offset, 24u)
     && extension.pending_eligibility_offset != 0xffffffffu
     && extension.replay_plan_identity_offset != 0xffffffffu

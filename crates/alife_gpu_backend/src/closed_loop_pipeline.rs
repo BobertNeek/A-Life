@@ -970,6 +970,7 @@ pub(crate) struct GpuClosedLoopKernelSet {
     bind_group_layout: wgpu::BindGroupLayout,
     encode_pipeline: wgpu::ComputePipeline,
     recurrent_pipelines: [wgpu::ComputePipeline; 4],
+    clear_v11_work_pipeline: wgpu::ComputePipeline,
     clear_diagnostics_pipeline: wgpu::ComputePipeline,
     decode_pipeline: wgpu::ComputePipeline,
     memory_context_pipeline: wgpu::ComputePipeline,
@@ -998,7 +999,10 @@ impl GpuClosedLoopKernelSet {
     pub(crate) fn new(device: &wgpu::Device) -> Result<Arc<Self>, GpuClosedLoopError> {
         for (source, entries) in [
             (CLOSED_LOOP_ENCODE_WGSL, &["encode_perception"][..]),
-            (CLOSED_LOOP_RECURRENT_WGSL, &["recurrent_microstep"][..]),
+            (
+                CLOSED_LOOP_RECURRENT_WGSL,
+                &["clear_v11_work", "recurrent_microstep"][..],
+            ),
             (
                 CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
                 &["clear_diagnostics"][..],
@@ -1111,6 +1115,13 @@ impl GpuClosedLoopKernelSet {
                 &[("microstep_index", step as f64)],
             )
         });
+        let clear_v11_work_pipeline = create_compute_pipeline(
+            device,
+            &pipeline_layout,
+            &recurrent_shader,
+            "clear_v11_work",
+            &[],
+        );
         let clear_diagnostics_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
@@ -1269,6 +1280,7 @@ impl GpuClosedLoopKernelSet {
             bind_group_layout: layout,
             encode_pipeline,
             recurrent_pipelines,
+            clear_v11_work_pipeline,
             clear_diagnostics_pipeline,
             decode_pipeline,
             memory_context_pipeline,
@@ -2156,6 +2168,9 @@ impl GpuClosedLoopPipelines {
         pending: &GpuPendingEligibilityRecord,
         expected_transaction_generation: u64,
     ) -> Result<GpuEligibilityDiscardRecord, GpuClosedLoopError> {
+        let selection_words = u32::try_from(crate::GPU_SELECTION_RECORD_BYTES / 4)
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        let selection_bytes = crate::GPU_SELECTION_RECORD_BYTES as u64;
         self.authority.ensure_healthy()?;
         if self.authority.pending.is_some()
             || buffers.ownership_token() != self.bucket_ownership_token
@@ -2163,7 +2178,11 @@ impl GpuClosedLoopPipelines {
             || slot.record().slot != slot.brain_slot_index()
             || slot.record().slot != pending.slot
             || slot.record().slot_generation != pending.slot_generation
-            || slot.record().selection_offset.checked_add(12).is_none()
+            || slot
+                .record()
+                .selection_offset
+                .checked_add(selection_words)
+                .is_none()
             || expected_transaction_generation == 0
         {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
@@ -2208,7 +2227,7 @@ impl GpuClosedLoopPipelines {
             .copy_from_slice(header.words());
         if dispatch_words.len() > buffers.dispatch_capacity_words()
             || crate::GPU_PENDING_ELIGIBILITY_WORDS > buffers.frame_payload_capacity_words()
-            || buffers.compact_readback_capacity_bytes() < 48
+            || buffers.compact_readback_capacity_bytes() < selection_bytes
         {
             return Err(GpuClosedLoopError::CapacityExceeded);
         }
@@ -2245,14 +2264,14 @@ impl GpuClosedLoopPipelines {
             u64::from(slot.record().selection_offset) * 4,
             buffers.compact_readback(),
             0,
-            48,
+            selection_bytes,
         );
         let command_buffer = encoder.finish();
         let (sender, receiver) = mpsc::channel();
         command_buffer.map_buffer_on_submit(
             buffers.compact_readback(),
             wgpu::MapMode::Read,
-            0..48,
+            0..selection_bytes,
             move |result| {
                 let _ = sender.send(result);
             },
@@ -2268,11 +2287,19 @@ impl GpuClosedLoopPipelines {
         {
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
-        let mapped = buffers.compact_readback().slice(..48).get_mapped_range();
+        let mapped = buffers
+            .compact_readback()
+            .slice(..selection_bytes)
+            .get_mapped_range();
         let words = bytemuck::cast_slice::<u8, u32>(&mapped).to_vec();
         drop(mapped);
         buffers.compact_readback().unmap();
-        let record = GpuEligibilityDiscardRecord::from_words(&words)?;
+        let discard_words = std::mem::size_of::<GpuEligibilityDiscardRecord>() / 4;
+        let record = GpuEligibilityDiscardRecord::from_words(
+            words
+                .get(..discard_words)
+                .ok_or(GpuClosedLoopError::SubmissionFailed)?,
+        )?;
         if record.schema_version != u32::from(SchemaVersions::CURRENT.learning.raw())
             || record.slot != slot.record().slot
             || record.slot_generation != slot.record().slot_generation
@@ -2710,6 +2737,7 @@ impl GpuClosedLoopPipelines {
                     || Some(record.active_activation_side) != expected_side
                     || record.active_tiles == 0
                     || record.active_synapses == 0
+                    || record.dendritic_gated_branches > record.dendritic_branches_evaluated
                 {
                     return false;
                 }
@@ -2897,6 +2925,13 @@ impl GpuClosedLoopPipelines {
             .max()
             .ok_or(GpuClosedLoopError::MalformedUpload)?;
         Self::validate_microstep_count(max_microsteps)?;
+        pass.set_pipeline(&self.kernels.clear_v11_work_pipeline);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.dispatch_workgroups(
+            1,
+            u32::try_from(batch.row_count()).map_err(|_| GpuClosedLoopError::CapacityExceeded)?,
+            1,
+        );
         for step in 0..max_microsteps as usize {
             pass.set_pipeline(&self.kernels.recurrent_pipelines[step]);
             pass.set_bind_group(0, &self.bind_group, &[]);

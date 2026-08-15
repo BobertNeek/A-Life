@@ -5,7 +5,7 @@ use super::GpuClosedLoopError;
 pub const GPU_PERCEPTION_HEADER_BYTES: usize = 64;
 pub const GPU_BRAIN_SLOT_RECORD_BYTES: usize = 144;
 pub const GPU_CANDIDATE_RECORD_BYTES: usize = 32;
-pub const GPU_SELECTION_RECORD_BYTES: usize = 48;
+pub const GPU_SELECTION_RECORD_BYTES: usize = 64;
 pub const GPU_SPEECH_PAYLOAD_RECORD_BYTES: usize = 16;
 /// Six fixed channel slots fit in the two reserved words without changing the
 /// closed-loop readback size. Slots 1 and 5 are reserved by the current world
@@ -14,8 +14,10 @@ pub const GPU_MOTOR_CHANNEL_SLOT_COUNT: usize = 6;
 /// Exact number of storage-buffer bindings shared by every production neural pass.
 pub const GPU_CLOSED_LOOP_STORAGE_BINDINGS: u32 = 7;
 /// Exact executable ordering/layout ABI understood by the current closed-loop shaders.
-pub const GPU_CLOSED_LOOP_LAYOUT_VERSION: u32 = 3;
+pub const GPU_CLOSED_LOOP_LAYOUT_VERSION: u32 = 4;
 pub const GPU_NO_EXTENSION_SENTINEL: u32 = u32::MAX;
+pub const GPU_DENDRITIC_BRANCH_RECORD_WORDS: u32 = 8;
+pub const GPU_DENDRITIC_INPUT_RECORD_WORDS: u32 = 4;
 pub const CLOSED_LOOP_ABI_WGSL: &str = include_str!("../../shaders/closed_loop_abi.wgsl");
 
 macro_rules! gpu_record {
@@ -115,7 +117,11 @@ gpu_record!(GpuSelectionRecord {
     finite_rejections: u32,
     dispatch_generation_lo: u32,
     dispatch_generation_hi: u32,
-    active_activation_side: u32
+    active_activation_side: u32,
+    dendritic_branches_evaluated: u32,
+    dendritic_inputs_evaluated: u32,
+    dendritic_gated_branches: u32,
+    structural_edges_evaluated: u32
 });
 gpu_record!(GpuSpeechPayloadRecord {
     packed_header_and_tokens: u32,
@@ -233,6 +239,25 @@ gpu_record!(GpuBrainSlotExtensionRecord {
     learning_state_offset: u32,
     pending_eligibility_offset: u32,
     replay_plan_identity_offset: u32,
+    reserved0: u32,
+    reserved1: u32
+});
+/// Slot-local bounded dendritic descriptor. The descriptor and its inputs live
+/// in the immutable target-major plan heap so a normal recurrent dispatch can
+/// evaluate them without a CPU neural shadow.
+gpu_record!(GpuDendriticBranchRecord {
+    target: u32,
+    threshold_bits: u32,
+    output_gain_bits: u32,
+    input_offset: u32,
+    input_count: u32,
+    reserved0: u32,
+    reserved1: u32,
+    reserved2: u32
+});
+gpu_record!(GpuDendriticInputRecord {
+    source: u32,
+    weight_bits: u32,
     reserved0: u32,
     reserved1: u32
 });

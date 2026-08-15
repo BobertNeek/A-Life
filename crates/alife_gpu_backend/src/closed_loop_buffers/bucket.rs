@@ -1,23 +1,53 @@
+use std::collections::{BTreeMap, VecDeque};
 use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc;
 
 use crate::closed_loop_memory::GpuMemoryChannelPlan;
 use alife_core::{
-    BrainCapacityClass, BrainPhenotype, MAX_ACTION_CANDIDATES, MAX_REPLAY_CAPTURE_SYNAPSES,
+    BrainCapacityClass, BrainPhenotype, DendriticBranchSet, MAX_ACTION_CANDIDATES,
+    MAX_DENDRITIC_BRANCHES, MAX_DENDRITIC_BRANCHES_PER_NEURON, MAX_DENDRITIC_INPUTS,
+    MAX_REPLAY_CAPTURE_SYNAPSES,
 };
 use bytemuck::Zeroable;
 
 use crate::closed_loop_v11::AddLifetimeSynapse;
+#[cfg(feature = "gpu-tests")]
+use crate::closed_loop_v11::GpuV11MutableStateProbe;
 
 use super::{
     GpuBrainSlotExtensionRecord, GpuBrainSlotRecord, GpuClosedLoopError,
-    GpuDecoderEligibilityMetadata, GpuPhenotypeIdentityRecord, GpuPhenotypeUpload,
-    GpuPlasticityReceptorRecord, GpuReplayCaptureIdentityRecord, GpuReplaySynapseSpanRecord,
-    GpuSleepParameterRecord, GpuSlotLearningStateRecord, GpuSynapseLearningMetadata,
-    GPU_CLOSED_LOOP_LAYOUT_VERSION, GPU_NO_EXTENSION_SENTINEL,
+    GpuDecoderEligibilityMetadata, GpuDecoderFamilyRecord, GpuDecoderWeightIndexRecord,
+    GpuDendriticBranchRecord, GpuDendriticInputRecord, GpuPhenotypeIdentityRecord,
+    GpuPhenotypeUpload, GpuPlasticityReceptorRecord, GpuReplayCaptureIdentityRecord,
+    GpuReplaySynapseSpanRecord, GpuSleepParameterRecord, GpuSlotLearningStateRecord,
+    GpuSynapseLearningMetadata, GPU_CLOSED_LOOP_LAYOUT_VERSION, GPU_DENDRITIC_BRANCH_RECORD_WORDS,
+    GPU_DENDRITIC_INPUT_RECORD_WORDS, GPU_NO_EXTENSION_SENTINEL,
 };
 
 const GPU_PENDING_ELIGIBILITY_RECORD_WORDS: u32 = 36;
+
+fn dendritic_branch_capacity(neuron_count: u32) -> Result<u32, GpuClosedLoopError> {
+    neuron_count
+        .checked_mul(MAX_DENDRITIC_BRANCHES_PER_NEURON as u32)
+        .map(|count| count.min(MAX_DENDRITIC_BRANCHES as u32))
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)
+}
+
+fn dendritic_branch_plan_words(neuron_count: u32) -> Result<u32, GpuClosedLoopError> {
+    let branch_capacity = dendritic_branch_capacity(neuron_count)?;
+    let descriptor_words = branch_capacity
+        .checked_mul(GPU_DENDRITIC_BRANCH_RECORD_WORDS)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    let input_words = branch_capacity
+        .checked_mul(MAX_DENDRITIC_INPUTS as u32)
+        .and_then(|count| count.checked_mul(GPU_DENDRITIC_INPUT_RECORD_WORDS))
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    1_u32
+        .checked_add(descriptor_words)
+        .and_then(|count| count.checked_add(input_words))
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)
+}
 
 static NEXT_BUCKET_OWNERSHIP_TOKEN: AtomicU64 = AtomicU64::new(1);
 static NEXT_BUFFER_SET_TOKEN: AtomicU64 = AtomicU64::new(1);
@@ -66,6 +96,7 @@ pub struct GpuSlotWordRanges {
     pub decoder_eligibility_metadata_words: Range<u32>,
     pub replay_plan_identity_words: Range<u32>,
     pub sleep_parameter_words: Range<u32>,
+    pub dendritic_branch_words: Range<u32>,
     pub genetic_weight_words: Range<u32>,
     pub alpha_words: Range<u32>,
     pub activation_a_words: Range<u32>,
@@ -289,6 +320,10 @@ impl GpuClassBucketPlan {
             replay_plan_identity_words.end,
             counts.sleep_parameters * (std::mem::size_of::<GpuSleepParameterRecord>() / 4),
         )?;
+        let dendritic_branch_words = span(
+            sleep_parameter_words.end,
+            dendritic_branch_plan_words(phenotype.neuron_count())? as usize,
+        )?;
 
         let w0 = u32_len(&self.immutable_weight_words)?;
         let genetic_weight_words = span(w0, upload.genetic_weights.len())?;
@@ -315,7 +350,7 @@ impl GpuClassBucketPlan {
         let encoded_input_words = span(decoder_eligibility_bank_1_words.end, n)?;
         let candidate_logit_words = span(encoded_input_words.end, MAX_ACTION_CANDIDATES)?;
         let diagnostic_words = span(candidate_logit_words.end, 4)?;
-        let selection_words = span(diagnostic_words.end, 12)?;
+        let selection_words = span(diagnostic_words.end, 16)?;
         let speech_payload_words = span(selection_words.end, 4)?;
         let extension_words = span(speech_payload_words.end, 20)?;
         let learning_state_words = span(extension_words.end, 24)?;
@@ -355,6 +390,7 @@ impl GpuClassBucketPlan {
             decoder_eligibility_metadata_words,
             replay_plan_identity_words,
             sleep_parameter_words,
+            dendritic_branch_words,
             genetic_weight_words,
             alpha_words,
             activation_a_words,
@@ -382,12 +418,12 @@ impl GpuClassBucketPlan {
             replay_span_words,
         };
 
-        validate_heap_word_end(&self.capacity, ranges.sleep_parameter_words.end)?;
+        validate_heap_word_end(&self.capacity, ranges.dendritic_branch_words.end)?;
         validate_heap_word_end(&self.capacity, ranges.alpha_words.end)?;
         validate_heap_word_end(&self.capacity, ranges.replay_span_words.end)?;
         self.immutable_plan_words
             .try_reserve_exact(
-                (ranges.sleep_parameter_words.end - ranges.encoder_plan_words.start) as usize,
+                (ranges.dendritic_branch_words.end - ranges.encoder_plan_words.start) as usize,
             )
             .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
         self.immutable_weight_words
@@ -458,6 +494,8 @@ impl GpuClassBucketPlan {
         for row in &upload.sleep_parameters {
             push_record(&mut self.immutable_plan_words, row);
         }
+        self.immutable_plan_words
+            .resize(ranges.dendritic_branch_words.end as usize, 0);
         self.immutable_weight_words
             .extend(upload.genetic_weights.iter().map(|v| v.to_bits()));
         self.immutable_weight_words
@@ -752,10 +790,217 @@ fn make_slot_extension(
         pending_eligibility_offset: ranges.pending_eligibility_words.start,
         replay_plan_identity_offset: ranges.replay_plan_identity_words.start,
         // Reserved in the frozen binary layout and activated here as the
-        // slot-local two-word GPU speech payload receipt offset.
+        // slot-local GPU payload offsets.
         reserved0: ranges.speech_payload_words.start,
-        reserved1: 0,
+        reserved1: ranges.dendritic_branch_words.start,
     })
+}
+
+fn write_dendritic_branch_plan(
+    destination: &mut [u32],
+    destination_base: u32,
+    range: &Range<u32>,
+    neuron_count: u32,
+    branches: &DendriticBranchSet,
+) -> Result<(), GpuClosedLoopError> {
+    let capacity = dendritic_branch_capacity(neuron_count)? as usize;
+    let expected_words = dendritic_branch_plan_words(neuron_count)? as usize;
+    let allocated_words = usize::try_from(range.end - range.start)
+        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+    if allocated_words < expected_words || branches.branches().len() > capacity {
+        return Err(GpuClosedLoopError::CapacityExceeded);
+    }
+    store_words_at(
+        destination,
+        destination_base,
+        range.start,
+        &vec![0_u32; allocated_words],
+    )?;
+    store_words_at(
+        destination,
+        destination_base,
+        range.start,
+        &[u32::try_from(branches.branches().len())
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?],
+    )?;
+    let descriptor_start = range
+        .start
+        .checked_add(1)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    let input_start = descriptor_start
+        .checked_add(
+            u32::try_from(capacity)
+                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+                .checked_mul(GPU_DENDRITIC_BRANCH_RECORD_WORDS)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+        )
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    for (index, branch) in branches.branches().iter().enumerate() {
+        if branch.target >= neuron_count
+            || !branch.threshold.is_finite()
+            || !branch.output_gain.is_finite()
+            || branch.inputs.is_empty()
+            || branch.inputs.len() > MAX_DENDRITIC_INPUTS
+            || branch
+                .inputs
+                .iter()
+                .any(|input| input.source >= neuron_count || !input.weight.is_finite())
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        let index = u32::try_from(index).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        let descriptor_offset = descriptor_start
+            .checked_add(
+                index
+                    .checked_mul(GPU_DENDRITIC_BRANCH_RECORD_WORDS)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+            )
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let input_offset = input_start
+            .checked_add(
+                index
+                    .checked_mul(MAX_DENDRITIC_INPUTS as u32)
+                    .and_then(|offset| offset.checked_mul(GPU_DENDRITIC_INPUT_RECORD_WORDS))
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+            )
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        store_pod_at(
+            destination,
+            destination_base,
+            descriptor_offset,
+            &GpuDendriticBranchRecord {
+                target: branch.target,
+                threshold_bits: branch.threshold.to_bits(),
+                output_gain_bits: branch.output_gain.to_bits(),
+                input_offset,
+                input_count: u32::try_from(branch.inputs.len())
+                    .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
+                reserved0: 0,
+                reserved1: 0,
+                reserved2: 0,
+            },
+        )?;
+        for (input_index, input) in branch.inputs.iter().enumerate() {
+            let input_index =
+                u32::try_from(input_index).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+            let input_record_offset = input_offset
+                .checked_add(
+                    input_index
+                        .checked_mul(GPU_DENDRITIC_INPUT_RECORD_WORDS)
+                        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+                )
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+            store_pod_at(
+                destination,
+                destination_base,
+                input_record_offset,
+                &GpuDendriticInputRecord {
+                    source: input.source,
+                    weight_bits: input.weight.to_bits(),
+                    reserved0: 0,
+                    reserved1: 0,
+                },
+            )?;
+        }
+    }
+    validate_dendritic_branch_plan(destination, destination_base, range, neuron_count)
+}
+
+fn validate_dendritic_branch_plan(
+    immutable_plan_words: &[u32],
+    immutable_plan_base: u32,
+    range: &Range<u32>,
+    neuron_count: u32,
+) -> Result<(), GpuClosedLoopError> {
+    let allocated_words = usize::try_from(range.end - range.start)
+        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+    let capacity = dendritic_branch_capacity(neuron_count)?;
+    let expected_words = dendritic_branch_plan_words(neuron_count)?;
+    if allocated_words
+        < usize::try_from(expected_words).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+    {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+    let local_start = usize::try_from(range.start - immutable_plan_base)
+        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+    let local_end = local_start
+        .checked_add(allocated_words)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    let heap = immutable_plan_words
+        .get(local_start..local_end)
+        .ok_or(GpuClosedLoopError::MalformedUpload)?;
+    let count = *heap.first().ok_or(GpuClosedLoopError::MalformedUpload)?;
+    if count > capacity {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+    let descriptor_start = range
+        .start
+        .checked_add(1)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    let input_start = descriptor_start
+        .checked_add(
+            capacity
+                .checked_mul(GPU_DENDRITIC_BRANCH_RECORD_WORDS)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+        )
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    for index in 0..count {
+        let descriptor_offset = descriptor_start
+            .checked_add(
+                index
+                    .checked_mul(GPU_DENDRITIC_BRANCH_RECORD_WORDS)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+            )
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let descriptor = read_pod_at::<GpuDendriticBranchRecord>(
+            immutable_plan_words,
+            immutable_plan_base,
+            descriptor_offset,
+        )?;
+        if descriptor.target >= neuron_count
+            || descriptor.input_count == 0
+            || descriptor.input_count > MAX_DENDRITIC_INPUTS as u32
+            || !f32::from_bits(descriptor.threshold_bits).is_finite()
+            || !f32::from_bits(descriptor.output_gain_bits).is_finite()
+            || descriptor.reserved0 != 0
+            || descriptor.reserved1 != 0
+            || descriptor.reserved2 != 0
+            || descriptor.input_offset < input_start
+            || descriptor
+                .input_offset
+                .checked_add(
+                    descriptor
+                        .input_count
+                        .checked_mul(GPU_DENDRITIC_INPUT_RECORD_WORDS)
+                        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+                )
+                .is_none_or(|end| end > range.end)
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        for input_index in 0..descriptor.input_count {
+            let input = read_pod_at::<GpuDendriticInputRecord>(
+                immutable_plan_words,
+                immutable_plan_base,
+                descriptor
+                    .input_offset
+                    .checked_add(
+                        input_index
+                            .checked_mul(GPU_DENDRITIC_INPUT_RECORD_WORDS)
+                            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+                    )
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+            )?;
+            if input.source >= neuron_count
+                || !f32::from_bits(input.weight_bits).is_finite()
+                || input.reserved0 != 0
+                || input.reserved1 != 0
+            {
+                return Err(GpuClosedLoopError::MalformedUpload);
+            }
+        }
+    }
+    Ok(())
 }
 
 fn make_learning_state(
@@ -852,6 +1097,12 @@ fn validate_learning_slot_layout(
         immutable_weight_base,
         &ranges.alpha_words,
         synapse_count,
+    )?;
+    validate_dendritic_branch_plan(
+        immutable_plan_words,
+        immutable_plan_base,
+        &ranges.dendritic_branch_words,
+        record.neuron_count,
     )?;
     for (range, active_words) in [
         (
@@ -953,7 +1204,7 @@ fn validate_learning_slot_layout(
         || extension.pending_eligibility_offset != ranges.pending_eligibility_words.start
         || extension.replay_plan_identity_offset != ranges.replay_plan_identity_words.start
         || extension.reserved0 != ranges.speech_payload_words.start
-        || extension.reserved1 != 0
+        || extension.reserved1 != ranges.dendritic_branch_words.start
     {
         return Err(GpuClosedLoopError::MalformedUpload);
     }
@@ -1755,6 +2006,7 @@ impl GpuFixedClassArenaPlan {
             u32::try_from(std::mem::size_of::<GpuSleepParameterRecord>() / 4)
                 .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
         )?;
+        let dendritic_branch_words = span_u32(&mut cursor, dendritic_branch_plan_words(n)?)?;
         let immutable_plan_stride =
             align_words(cursor, execution.storage_offset_alignment_bytes())?;
 
@@ -1784,7 +2036,7 @@ impl GpuFixedClassArenaPlan {
         let encoded_input_words = span_u32(&mut cursor, n)?;
         let candidate_logit_words = span_u32(&mut cursor, candidates)?;
         let diagnostic_words = span_u32(&mut cursor, 4)?;
-        let selection_words = span_u32(&mut cursor, 12)?;
+        let selection_words = span_u32(&mut cursor, 16)?;
         let speech_payload_words = span_u32(&mut cursor, 4)?;
         let extension_words = span_u32(&mut cursor, 20)?;
         let learning_state_words = span_u32(&mut cursor, 24)?;
@@ -1827,6 +2079,7 @@ impl GpuFixedClassArenaPlan {
             decoder_eligibility_metadata_words,
             replay_plan_identity_words,
             sleep_parameter_words,
+            dendritic_branch_words,
             genetic_weight_words,
             alpha_words,
             activation_a_words,
@@ -2025,7 +2278,7 @@ impl GpuFixedClassArenaPlan {
 
         let immutable_topology_bytes = (std::mem::size_of::<GpuBrainSlotRecord>() as u64)
             .checked_add(std::mem::size_of::<GpuPhenotypeIdentityRecord>() as u64)
-            .and_then(|value| value.checked_add(u64::from(layout.sleep_parameter_words.end) * 4))
+            .and_then(|value| value.checked_add(u64::from(layout.dendritic_branch_words.end) * 4))
             .and_then(|value| value.checked_add(u64::from(layout.alpha_words.end) * 4))
             .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
         let activation_bytes = sum_ranges(&[
@@ -2181,6 +2434,7 @@ impl GpuFixedClassArenaPlan {
             &mut layout.decoder_eligibility_metadata_words,
             &mut layout.replay_plan_identity_words,
             &mut layout.sleep_parameter_words,
+            &mut layout.dendritic_branch_words,
         ] {
             shift_range(range, plan_base)?;
         }
@@ -2627,6 +2881,22 @@ impl GpuFixedSlotUpload {
         &self.brain_slot
     }
 
+    pub(crate) fn with_dendritic_branches(
+        mut self,
+        branches: &DendriticBranchSet,
+    ) -> Result<Self, GpuClosedLoopError> {
+        let mut immutable_plan_words = self.immutable_plan_words.clone();
+        write_dendritic_branch_plan(
+            &mut immutable_plan_words,
+            self.ranges.immutable_plan_words.start,
+            &self.ranges.layout.dendritic_branch_words,
+            self.brain_slot.record.neuron_count,
+            branches,
+        )?;
+        self.immutable_plan_words = immutable_plan_words;
+        Ok(self)
+    }
+
     pub(crate) fn with_added_lifetime_synapse(
         mut self,
         synapse: &AddLifetimeSynapse,
@@ -2639,10 +2909,10 @@ impl GpuFixedSlotUpload {
             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
         let recurrent_count = usize::try_from(old_record.recurrent_synapse_count)
             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
-        let target = usize::try_from(synapse.target)
-            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
-        let source = usize::try_from(synapse.source)
-            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        let target =
+            usize::try_from(synapse.target).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        let source =
+            usize::try_from(synapse.source).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
         if target >= neuron_count
             || source >= neuron_count
             || !synapse.initial_weight.is_finite()
@@ -2706,7 +2976,9 @@ impl GpuFixedSlotUpload {
         )?;
         if target_offsets.first().copied() != Some(0)
             || target_offsets.last().copied() != Some(old_record.recurrent_synapse_count)
-            || target_offsets.windows(2).any(|window| window[0] > window[1])
+            || target_offsets
+                .windows(2)
+                .any(|window| window[0] > window[1])
         {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
@@ -2731,13 +3003,22 @@ impl GpuFixedSlotUpload {
             &self.ranges.layout.route_index_words,
             recurrent_count,
         )?;
-        if source_indices.iter().any(|value| *value >= old_record.neuron_count)
+        let target_end = usize::try_from(
+            *target_offsets
+                .get(target + 1)
+                .ok_or(GpuClosedLoopError::MalformedUpload)?,
+        )
+        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        if target_end > recurrent_count
+            || source_indices
+                .iter()
+                .any(|value| *value >= old_record.neuron_count)
             || route_indices
                 .iter()
                 .any(|value| *value as usize >= old_counts.route_metadata)
             || source_indices
-                .get(insertion..)
-                .is_some_and(|tail| tail.iter().any(|value| *value == synapse.source))
+                .get(insertion..target_end)
+                .is_some_and(|span| span.iter().any(|value| *value == synapse.source))
         {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
@@ -2762,7 +3043,7 @@ impl GpuFixedSlotUpload {
             synapse_count,
         )?;
         genetic_weights.insert(insertion, synapse.initial_weight.to_bits());
-        alpha.insert(insertion, 0.0_f32.to_bits());
+        alpha.insert(insertion, (-0.0_f32).to_bits());
 
         let mut synapse_metadata = read_pod_prefix::<GpuSynapseLearningMetadata>(
             &self.immutable_plan_words,
@@ -2811,6 +3092,30 @@ impl GpuFixedSlotUpload {
                 .checked_add(1)
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
         }
+        let mut decoder_families = read_pod_prefix::<GpuDecoderFamilyRecord>(
+            &self.immutable_plan_words,
+            plan_base,
+            &self.ranges.layout.decoder_family_words,
+            old_counts.decoder_families,
+        )?;
+        for family in &mut decoder_families {
+            family.decoder_synapse_start = family
+                .decoder_synapse_start
+                .checked_add(1)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        }
+        let mut decoder_weight_indices = read_pod_prefix::<GpuDecoderWeightIndexRecord>(
+            &self.immutable_plan_words,
+            plan_base,
+            &self.ranges.layout.decoder_weight_index_words,
+            old_counts.decoder_weight_indices,
+        )?;
+        for index in &mut decoder_weight_indices {
+            index.global_synapse_id = index
+                .global_synapse_id
+                .checked_add(1)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        }
         let mut memory_weight_indices = active_words_copy(
             &self.immutable_plan_words,
             plan_base,
@@ -2818,8 +3123,8 @@ impl GpuFixedSlotUpload {
             old_counts.memory_weight_indices,
         )?;
         for value in &mut memory_weight_indices {
-            if *value >= u32::try_from(insertion)
-                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+            if *value
+                >= u32::try_from(insertion).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
             {
                 *value = value
                     .checked_add(1)
@@ -2892,6 +3197,18 @@ impl GpuFixedSlotUpload {
             self.ranges.layout.decoder_eligibility_metadata_words.start,
             &decoder_metadata,
         )?;
+        store_pod_slice_at(
+            &mut immutable_plan_words,
+            plan_base,
+            self.ranges.layout.decoder_family_words.start,
+            &decoder_families,
+        )?;
+        store_pod_slice_at(
+            &mut immutable_plan_words,
+            plan_base,
+            self.ranges.layout.decoder_weight_index_words.start,
+            &decoder_weight_indices,
+        )?;
         store_words_at(
             &mut immutable_plan_words,
             plan_base,
@@ -2919,8 +3236,8 @@ impl GpuFixedSlotUpload {
         )?;
 
         let mut record = old_record;
-        record.synapse_count = u32::try_from(new_synapse_count)
-            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        record.synapse_count =
+            u32::try_from(new_synapse_count).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
         record.recurrent_synapse_count = u32::try_from(new_recurrent_count)
             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
         let mut counts = old_counts;
@@ -2955,6 +3272,257 @@ impl GpuFixedSlotUpload {
         self.brain_slot.counts = counts;
         Ok(self)
     }
+
+    pub(crate) fn with_remapped_live_mutable_state(
+        mut self,
+        previous: &GpuFixedSlotUpload,
+        live_words: Vec<u32>,
+    ) -> Result<Self, GpuClosedLoopError> {
+        if self.arena_ownership_token != previous.arena_ownership_token
+            || self.ranges != previous.ranges
+            || self.brain_slot.record.slot_generation != previous.brain_slot.record.slot_generation
+            || live_words.len() != self.mutable_state_words.len()
+        {
+            return Err(GpuClosedLoopError::StaleOrForeignHandle);
+        }
+        let base = self.ranges.mutable_state_words.start;
+        let fresh_extension = read_pod_at::<GpuBrainSlotExtensionRecord>(
+            &self.mutable_state_words,
+            base,
+            self.ranges.layout.extension_words.start,
+        )?;
+        let fresh_replay_spans = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
+            &self.mutable_state_words,
+            base,
+            &self.ranges.layout.replay_span_words,
+            self.brain_slot.counts.replay_capture_synapses,
+        )?;
+        let old_edges = recurrent_edge_identities(previous)?;
+        let new_edges = recurrent_edge_identities(&self)?;
+        let mut old_by_identity = BTreeMap::<(u32, u32, u32), VecDeque<usize>>::new();
+        for (index, identity) in old_edges.into_iter().enumerate() {
+            old_by_identity
+                .entry(identity)
+                .or_default()
+                .push_back(index);
+        }
+        let old_recurrent = previous.brain_slot.record.recurrent_synapse_count as usize;
+        let new_recurrent = self.brain_slot.record.recurrent_synapse_count as usize;
+        let old_total = previous.brain_slot.record.synapse_count as usize;
+        let new_total = self.brain_slot.record.synapse_count as usize;
+        let decoder_count = old_total
+            .checked_sub(old_recurrent)
+            .filter(|count| *count == new_total.saturating_sub(new_recurrent))
+            .ok_or(GpuClosedLoopError::MalformedUpload)?;
+        let mut old_global_for_new = vec![None; new_total];
+        for (new_index, identity) in new_edges.into_iter().enumerate() {
+            old_global_for_new[new_index] = old_by_identity
+                .get_mut(&identity)
+                .and_then(VecDeque::pop_front);
+        }
+        for local in 0..decoder_count {
+            old_global_for_new[new_recurrent + local] = Some(old_recurrent + local);
+        }
+
+        let live_source = live_words.clone();
+        self.mutable_state_words = live_words;
+        for range in [
+            &self.ranges.layout.lifetime_weight_words,
+            &self.ranges.layout.fast_weight_words,
+            &self.ranges.layout.lifetime_weight_bank_1_words,
+            &self.ranges.layout.fast_weight_bank_1_words,
+        ] {
+            remap_word_range(
+                &mut self.mutable_state_words,
+                base,
+                range,
+                &live_source,
+                base,
+                range,
+                &old_global_for_new,
+            )?;
+        }
+        let recurrent_map = &old_global_for_new[..new_recurrent];
+        for range in [
+            &self.ranges.layout.recurrent_eligibility_words,
+            &self.ranges.layout.recurrent_eligibility_bank_1_words,
+        ] {
+            remap_word_range(
+                &mut self.mutable_state_words,
+                base,
+                range,
+                &live_source,
+                base,
+                range,
+                recurrent_map,
+            )?;
+        }
+        for range in [
+            &self.ranges.layout.decoder_eligibility_words,
+            &self.ranges.layout.decoder_eligibility_bank_1_words,
+        ] {
+            let identity = (0..decoder_count).map(Some).collect::<Vec<_>>();
+            remap_word_range(
+                &mut self.mutable_state_words,
+                base,
+                range,
+                &live_source,
+                base,
+                range,
+                &identity,
+            )?;
+        }
+        store_pod_at(
+            &mut self.mutable_state_words,
+            base,
+            self.ranges.layout.extension_words.start,
+            &fresh_extension,
+        )?;
+        store_pod_slice_at(
+            &mut self.mutable_state_words,
+            base,
+            self.ranges.layout.replay_span_words.start,
+            &fresh_replay_spans,
+        )?;
+        validate_learning_slot_layout(
+            &self.brain_slot.record,
+            &self.brain_slot.counts,
+            &self.ranges.layout,
+            &self.immutable_plan_words,
+            self.ranges.immutable_plan_words.start,
+            &self.immutable_weight_words,
+            self.ranges.immutable_weight_words.start,
+            &self.mutable_state_words,
+            base,
+        )?;
+        Ok(self)
+    }
+}
+
+fn recurrent_edge_identities(
+    upload: &GpuFixedSlotUpload,
+) -> Result<Vec<(u32, u32, u32)>, GpuClosedLoopError> {
+    let plan_base = upload.ranges.immutable_plan_words.start;
+    let recurrent = upload.brain_slot.record.recurrent_synapse_count as usize;
+    let targets = active_words_copy(
+        &upload.immutable_plan_words,
+        plan_base,
+        &upload.ranges.layout.target_offset_words,
+        upload.brain_slot.counts.target_offsets,
+    )?;
+    let sources = active_words_copy(
+        &upload.immutable_plan_words,
+        plan_base,
+        &upload.ranges.layout.source_index_words,
+        recurrent,
+    )?;
+    let routes = active_words_copy(
+        &upload.immutable_plan_words,
+        plan_base,
+        &upload.ranges.layout.route_index_words,
+        recurrent,
+    )?;
+    let mut identities = vec![(0, 0, 0); recurrent];
+    for target in 0..upload.brain_slot.record.neuron_count as usize {
+        let begin = *targets
+            .get(target)
+            .ok_or(GpuClosedLoopError::MalformedUpload)? as usize;
+        let end = *targets
+            .get(target + 1)
+            .ok_or(GpuClosedLoopError::MalformedUpload)? as usize;
+        if begin > end || end > recurrent {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        for index in begin..end {
+            identities[index] = (sources[index], target as u32, routes[index]);
+        }
+    }
+    Ok(identities)
+}
+
+fn remap_word_range(
+    destination: &mut [u32],
+    destination_base: u32,
+    destination_range: &Range<u32>,
+    source: &[u32],
+    source_base: u32,
+    source_range: &Range<u32>,
+    old_index_for_new: &[Option<usize>],
+) -> Result<(), GpuClosedLoopError> {
+    let destination_start = destination_range
+        .start
+        .checked_sub(destination_base)
+        .ok_or(GpuClosedLoopError::MalformedUpload)? as usize;
+    let destination_end = destination_range
+        .end
+        .checked_sub(destination_base)
+        .ok_or(GpuClosedLoopError::MalformedUpload)? as usize;
+    destination
+        .get_mut(destination_start..destination_end)
+        .ok_or(GpuClosedLoopError::CapacityExceeded)?
+        .fill(0);
+    let source_start = source_range
+        .start
+        .checked_sub(source_base)
+        .ok_or(GpuClosedLoopError::MalformedUpload)? as usize;
+    for (new_index, old_index) in old_index_for_new.iter().enumerate() {
+        if let Some(old_index) = old_index {
+            let value = *source
+                .get(source_start + old_index)
+                .ok_or(GpuClosedLoopError::MalformedUpload)?;
+            *destination
+                .get_mut(destination_start + new_index)
+                .ok_or(GpuClosedLoopError::CapacityExceeded)? = value;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "gpu-tests")]
+fn v11_probe_offsets(
+    upload: &GpuFixedSlotUpload,
+    decoder_local: u32,
+    neuron: u32,
+) -> Result<[u32; 8], GpuClosedLoopError> {
+    let decoder_count = upload
+        .brain_slot
+        .record
+        .synapse_count
+        .checked_sub(upload.brain_slot.record.recurrent_synapse_count)
+        .ok_or(GpuClosedLoopError::MalformedUpload)?;
+    if decoder_local >= decoder_count || neuron >= upload.brain_slot.record.neuron_count {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+    let global = upload
+        .brain_slot
+        .record
+        .recurrent_synapse_count
+        .checked_add(decoder_local)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    let add = |start: u32, index: u32| {
+        start
+            .checked_add(index)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)
+    };
+    Ok([
+        add(upload.ranges.layout.lifetime_weight_words.start, global)?,
+        add(
+            upload.ranges.layout.lifetime_weight_bank_1_words.start,
+            global,
+        )?,
+        add(upload.ranges.layout.fast_weight_words.start, global)?,
+        add(upload.ranges.layout.fast_weight_bank_1_words.start, global)?,
+        add(
+            upload.ranges.layout.decoder_eligibility_words.start,
+            decoder_local,
+        )?,
+        add(
+            upload.ranges.layout.decoder_eligibility_bank_1_words.start,
+            decoder_local,
+        )?,
+        add(upload.ranges.layout.activation_a_words.start, neuron)?,
+        add(upload.ranges.layout.activation_b_words.start, neuron)?,
+    ])
 }
 
 fn active_words_copy(
@@ -3192,24 +3760,22 @@ impl GpuFixedClassArenaBuffers {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
         }
 
-        let mut record_copy = |label: &'static str,
-                               target: &wgpu::Buffer,
-                               target_offset: u64,
-                               contents: &[u8]| {
-            if contents.is_empty() {
-                return Ok(());
-            }
-            let size = u64::try_from(contents.len())
-                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
-            let source = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(label),
-                contents,
-                usage: wgpu::BufferUsages::COPY_SRC,
-            });
-            encoder.copy_buffer_to_buffer(&source, 0, target, target_offset, size);
-            staging.push(source);
-            Ok(())
-        };
+        let mut record_copy =
+            |label: &'static str, target: &wgpu::Buffer, target_offset: u64, contents: &[u8]| {
+                if contents.is_empty() {
+                    return Ok(());
+                }
+                let size = u64::try_from(contents.len())
+                    .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+                let source = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some(label),
+                    contents,
+                    usage: wgpu::BufferUsages::COPY_SRC,
+                });
+                encoder.copy_buffer_to_buffer(&source, 0, target, target_offset, size);
+                staging.push(source);
+                Ok(())
+            };
 
         record_copy(
             "closed-loop-runtime-curated-brain-slot-upload",
@@ -3262,6 +3828,158 @@ impl GpuFixedClassArenaBuffers {
             u64::from(upload.ranges.mutable_state_words.start) * 4,
             bytemuck::cast_slice(&upload.mutable_state_words),
         );
+        Ok(())
+    }
+
+    pub(crate) fn write_v11_topology_upload(
+        &self,
+        queue: &wgpu::Queue,
+        upload: &GpuFixedSlotUpload,
+    ) -> Result<(), GpuClosedLoopError> {
+        if upload.arena_ownership_token != self.arena_ownership_token
+            || upload.ranges.arena_ownership_token != self.arena_ownership_token
+            || upload.ranges.slot >= self.slot_capacity
+            || upload.immutable_plan_words.len() as u64 * 4
+                != upload.ranges.immutable_plan_words.len() as u64 * 4
+            || upload.immutable_weight_words.len() as u64 * 4
+                != upload.ranges.immutable_weight_words.len() as u64 * 4
+            || upload.mutable_state_words.len() as u64 * 4
+                != upload.ranges.mutable_state_words.len() as u64 * 4
+        {
+            return Err(GpuClosedLoopError::StaleOrForeignHandle);
+        }
+        self.validate_ranges(&upload.ranges)?;
+
+        queue.write_buffer(
+            &self.brain_slots,
+            upload.ranges.brain_slot_bytes.start,
+            bytemuck::bytes_of(upload.record()),
+        );
+        queue.write_buffer(
+            &self.phenotype_identities,
+            upload.ranges.identity_bytes.start,
+            bytemuck::bytes_of(upload.identity()),
+        );
+        queue.write_buffer(
+            &self.immutable_plan_words,
+            u64::from(upload.ranges.immutable_plan_words.start) * 4,
+            bytemuck::cast_slice(&upload.immutable_plan_words),
+        );
+        queue.write_buffer(
+            &self.immutable_weight_words,
+            u64::from(upload.ranges.immutable_weight_words.start) * 4,
+            bytemuck::cast_slice(&upload.immutable_weight_words),
+        );
+        queue.write_buffer(
+            &self.mutable_state_words,
+            u64::from(upload.ranges.mutable_state_words.start) * 4,
+            bytemuck::cast_slice(&upload.mutable_state_words),
+        );
+        Ok(())
+    }
+
+    pub(crate) fn read_live_mutable_slot(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        ranges: &GpuFixedSlotRanges,
+    ) -> Result<Vec<u32>, GpuClosedLoopError> {
+        self.validate_ranges(ranges)?;
+        let byte_count =
+            u64::from(ranges.mutable_state_words.end - ranges.mutable_state_words.start)
+                .checked_mul(4)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let readback = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("closed-loop-v11-mutable-readback"),
+            size: byte_count,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("closed-loop-v11-mutable-readback-encoder"),
+        });
+        encoder.copy_buffer_to_buffer(
+            &self.mutable_state_words,
+            u64::from(ranges.mutable_state_words.start) * 4,
+            &readback,
+            0,
+            byte_count,
+        );
+        queue.submit(Some(encoder.finish()));
+        let (sender, receiver) = mpsc::channel();
+        readback
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, move |result| {
+                let _ = sender.send(result);
+            });
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .map_err(|_| GpuClosedLoopError::SubmissionFailed)?;
+        receiver
+            .recv()
+            .map_err(|_| GpuClosedLoopError::SubmissionFailed)?
+            .map_err(|_| GpuClosedLoopError::SubmissionFailed)?;
+        let mapped = readback.slice(..).get_mapped_range();
+        let words = bytemuck::cast_slice(&mapped).to_vec();
+        drop(mapped);
+        readback.unmap();
+        Ok(words)
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub(crate) fn read_v11_mutable_probe(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        upload: &GpuFixedSlotUpload,
+        decoder_local: u32,
+        neuron: u32,
+    ) -> Result<GpuV11MutableStateProbe, GpuClosedLoopError> {
+        let words = self.read_live_mutable_slot(device, queue, upload.ranges())?;
+        let offsets = v11_probe_offsets(upload, decoder_local, neuron)?;
+        let base = upload.ranges.mutable_state_words.start;
+        let read = |absolute: u32| {
+            words
+                .get((absolute - base) as usize)
+                .copied()
+                .ok_or(GpuClosedLoopError::CapacityExceeded)
+        };
+        Ok(GpuV11MutableStateProbe {
+            lifetime_weight_banks: [read(offsets[0])?, read(offsets[1])?],
+            fast_weight_banks: [read(offsets[2])?, read(offsets[3])?],
+            decoder_eligibility_banks: [read(offsets[4])?, read(offsets[5])?],
+            activation_sides: [read(offsets[6])?, read(offsets[7])?],
+        })
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub(crate) fn seed_v11_mutable_probe(
+        &self,
+        queue: &wgpu::Queue,
+        upload: &GpuFixedSlotUpload,
+        decoder_local: u32,
+        neuron: u32,
+        probe: GpuV11MutableStateProbe,
+    ) -> Result<(), GpuClosedLoopError> {
+        self.validate_ranges(upload.ranges())?;
+        let offsets = v11_probe_offsets(upload, decoder_local, neuron)?;
+        let values = [
+            probe.lifetime_weight_banks[0],
+            probe.lifetime_weight_banks[1],
+            probe.fast_weight_banks[0],
+            probe.fast_weight_banks[1],
+            probe.decoder_eligibility_banks[0],
+            probe.decoder_eligibility_banks[1],
+            probe.activation_sides[0],
+            probe.activation_sides[1],
+        ];
+        for (offset, value) in offsets.into_iter().zip(values) {
+            queue.write_buffer(
+                &self.mutable_state_words,
+                u64::from(offset) * 4,
+                bytemuck::bytes_of(&value),
+            );
+        }
         Ok(())
     }
 

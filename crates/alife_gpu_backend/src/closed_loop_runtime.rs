@@ -12,29 +12,29 @@ use std::sync::Arc;
 use alife_core::{
     Blake3Digest, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId, BrainDispatchIdentity,
     BrainPhenotype, BrainWorkCounters, BrainWorkReceipt, CanonicalDigestBuilder,
-    CoactivationEvidence, Confidence, DendriticBranchSet, ExperiencePatch,
-    FinalizedMemoryRecall, GpuPressureSample, GpuPressureSampleInput, LearningCommitToken,
-    LearningSequenceGuard, NeuralActionSelection, NeuralThrottleDecision, NeuralThrottleLevel,
-    OrganismId, OutcomeCreditPacket, PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest,
+    CoactivationEvidence, Confidence, DendriticBranchSet, ExperiencePatch, FinalizedMemoryRecall,
+    GpuPressureSample, GpuPressureSampleInput, LearningCommitToken, LearningSequenceGuard,
+    NeuralActionSelection, NeuralThrottleDecision, NeuralThrottleLevel, OrganismId,
+    OutcomeCreditPacket, PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest,
     PhenotypeHash, ScaffoldContractError, SensorProfile, SpeechMotorPayload,
     BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16,
     REQUIRED_GPU_FEATURE_MASK,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    derive_executed_work, GpuActiveBatchUpload, GpuAdmissionReceipt, GpuAllocationEventKind,
-    GpuAllocationEventReceipt, GpuBrainSlot, GpuClosedLoopError, GpuClosedLoopKernelSet,
-    GpuClosedLoopPipelines, GpuCompactMapTicket, GpuFastPlasticityBatchEntry,
-    GpuFixedActiveBatchEntry, GpuFixedClassArenaBuffers, GpuFixedClassArenaPlan,
-    GpuFixedSlotRanges, GpuLearningReceipt, GpuMemoryContextDispatchReceipt,
-    GpuMemoryContextUpload, GpuOutcomeCreditRecord, GpuPendingEligibilityRecord,
-    GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget, GpuRuntimeProfile,
-    GpuTimestampQueryResources, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
-    PendingEligibilityIdentity, PendingEligibilityReceipt, GpuV11CausalState, GpuV11Checkpoint,
-    GpuV11WorkReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
-};
 use crate::closed_loop_buffers::GpuFixedSlotUpload;
+use crate::{
+    derive_executed_work, AddLifetimeSynapse, GpuActiveBatchUpload, GpuAdmissionReceipt,
+    GpuAllocationEventKind, GpuAllocationEventReceipt, GpuBrainSlot, GpuClosedLoopError,
+    GpuClosedLoopKernelSet, GpuClosedLoopPipelines, GpuCompactMapTicket,
+    GpuFastPlasticityBatchEntry, GpuFixedActiveBatchEntry, GpuFixedClassArenaBuffers,
+    GpuFixedClassArenaPlan, GpuFixedSlotRanges, GpuLearningReceipt,
+    GpuMemoryContextDispatchReceipt, GpuMemoryContextUpload, GpuOutcomeCreditRecord,
+    GpuPendingEligibilityRecord, GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget,
+    GpuRuntimeProfile, GpuTimestampQueryResources, GpuV11CausalState, GpuV11Checkpoint,
+    GpuV11WorkReceipt, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
+    PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
+};
 
 pub const GPU_HARDWARE_RECEIPT_SCHEMA_VERSION: u16 = 1;
 pub const GPU_DRIVER_DIGEST_DOMAIN: &[u8] = b"alife.gpu.hardware.driver.v1";
@@ -998,10 +998,7 @@ struct CuratedResidencyPortSnapshot {
 trait CuratedResidencyTransactionPort {
     type StagedEntry;
 
-    fn classify_pre_submit(
-        &mut self,
-        error: ScaffoldContractError,
-    ) -> GpuCuratedResidencyOutcome {
+    fn classify_pre_submit(&mut self, error: ScaffoldContractError) -> GpuCuratedResidencyOutcome {
         curated_residency_pre_submit(error)
     }
     fn snapshot(&mut self) -> Result<CuratedResidencyPortSnapshot, ScaffoldContractError>;
@@ -1031,9 +1028,7 @@ trait CuratedResidencyTransactionPort {
     fn mark_unknown(&mut self);
 }
 
-fn curated_residency_pre_submit(
-    error: ScaffoldContractError,
-) -> GpuCuratedResidencyOutcome {
+fn curated_residency_pre_submit(error: ScaffoldContractError) -> GpuCuratedResidencyOutcome {
     GpuCuratedResidencyOutcome::PreSubmitFailure {
         error,
         retryable: true,
@@ -1131,7 +1126,10 @@ fn run_curated_residency_transaction<P: CuratedResidencyTransactionPort>(
             return port.classify_pre_submit(ScaffoldContractError::NeuralBackendUnavailable);
         }
     };
-    if snapshot.live_brains.checked_add(entry_count).is_none_or(|live| live > snapshot.max_hot_brains)
+    if snapshot
+        .live_brains
+        .checked_add(entry_count)
+        .is_none_or(|live| live > snapshot.max_hot_brains)
         || snapshot
             .logical_committed_bytes
             .checked_add(
@@ -1293,6 +1291,37 @@ pub(crate) fn map_gpu_contract_error(error: GpuClosedLoopError) -> ScaffoldContr
     }
 }
 
+fn compile_v11_slot_upload(
+    plan: &GpuFixedClassArenaPlan,
+    slot: &GpuBrainSlot,
+    phenotype: &BrainPhenotype,
+    state: &GpuV11CausalState,
+) -> Result<GpuFixedSlotUpload, GpuClosedLoopError> {
+    let mut upload =
+        plan.prepare_slot_upload(slot.record().slot, slot.record().slot_generation, phenotype)?;
+    upload = upload.with_dendritic_branches(state.dendritic_branches())?;
+    for span in state.sparse_spans() {
+        for edge in &span.edges {
+            upload = upload.with_added_lifetime_synapse(&AddLifetimeSynapse {
+                source: edge.source,
+                target: edge.target,
+                route: edge.route,
+                initial_weight: edge.weight,
+                evidence: CoactivationEvidence {
+                    region: u16::try_from(edge.route)
+                        .map_err(|_| GpuClosedLoopError::MalformedUpload)?,
+                    source: edge.source,
+                    target: edge.target,
+                    coactivation: 1,
+                    eligibility: 0,
+                    concept_gap_support: 0,
+                },
+            })?;
+        }
+    }
+    Ok(upload)
+}
+
 pub struct GpuClosedLoopBackend {
     backend_instance_id: NonZeroU64,
     pub(crate) hardware: GpuHardwareReceipt,
@@ -1344,8 +1373,8 @@ struct EphemeralBackendStatePlan {
 }
 
 fn new_ephemeral_backend_state_plan() -> Result<EphemeralBackendStatePlan, ScaffoldContractError> {
-    let backend_instance_id = next_backend_instance_id()
-        .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?;
+    let backend_instance_id =
+        next_backend_instance_id().map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?;
     Ok(EphemeralBackendStatePlan {
         backend_instance_id,
         state: GpuBackendState::Ready,
@@ -1435,15 +1464,13 @@ impl GpuClosedLoopBackend {
     /// admission, generations, counters, and replay state are new and cannot
     /// accept handles issued by the live backend.
     pub fn new_staging_like_live(&self) -> Result<Self, ScaffoldContractError> {
-        if !matches!(self.state, GpuBackendState::Ready)
-            || self.device_lost.load(Ordering::Acquire)
+        if !matches!(self.state, GpuBackendState::Ready) || self.device_lost.load(Ordering::Acquire)
         {
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
         let plan = new_ephemeral_backend_state_plan()?;
         let timestamp_resources = GpuTimestampResources::new(&self.device, &self.queue)?;
-        let plasticity_timestamp_resources =
-            GpuTimestampResources::new(&self.device, &self.queue)?;
+        let plasticity_timestamp_resources = GpuTimestampResources::new(&self.device, &self.queue)?;
         Ok(Self {
             backend_instance_id: plan.backend_instance_id,
             hardware: self.hardware.clone(),
@@ -1581,6 +1608,65 @@ impl GpuClosedLoopBackend {
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
     }
 
+    #[cfg(feature = "gpu-tests")]
+    pub fn read_v11_mutable_state_for_test(
+        &mut self,
+        handle: GpuBrainHandle,
+        decoder_local: u32,
+        neuron: u32,
+    ) -> Result<crate::GpuV11MutableStateProbe, ScaffoldContractError> {
+        self.validate_handle_backend(handle)?;
+        let pool = self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let (phenotype, slot, state) = {
+            let resident = pool.resident(handle)?;
+            (
+                resident.phenotype.clone(),
+                resident.brain_slot.clone(),
+                resident.v11.clone(),
+            )
+        };
+        let bucket = pool.bucket_for_handle_mut(handle)?;
+        let upload = compile_v11_slot_upload(&bucket.plan, &slot, &phenotype, &state)
+            .map_err(map_gpu_contract_error)?;
+        bucket
+            .buffers
+            .read_v11_mutable_probe(&self.device, &self.queue, &upload, decoder_local, neuron)
+            .map_err(map_gpu_contract_error)
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn seed_v11_mutable_state_for_test(
+        &mut self,
+        handle: GpuBrainHandle,
+        decoder_local: u32,
+        neuron: u32,
+        probe: crate::GpuV11MutableStateProbe,
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_handle_backend(handle)?;
+        let pool = self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let (phenotype, slot, state) = {
+            let resident = pool.resident(handle)?;
+            (
+                resident.phenotype.clone(),
+                resident.brain_slot.clone(),
+                resident.v11.clone(),
+            )
+        };
+        let bucket = pool.bucket_for_handle_mut(handle)?;
+        let upload = compile_v11_slot_upload(&bucket.plan, &slot, &phenotype, &state)
+            .map_err(map_gpu_contract_error)?;
+        bucket
+            .buffers
+            .seed_v11_mutable_probe(&self.queue, &upload, decoder_local, neuron, probe)
+            .map_err(map_gpu_contract_error)
+    }
+
     /// Configures bounded dendritic branches on the live backend resident.
     pub fn set_v11_dendritic_branches(
         &mut self,
@@ -1593,9 +1679,32 @@ impl GpuClosedLoopBackend {
             .class_buckets
             .get_mut(&handle.class_id.raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        pool.resident_mut(handle)?
-            .v11
-            .set_dendritic_branches(branches)
+        let (phenotype, brain_slot, mut next) = {
+            let resident = pool.resident(handle)?;
+            (
+                resident.phenotype.clone(),
+                resident.brain_slot.clone(),
+                resident.v11.clone(),
+            )
+        };
+        next.set_dendritic_branches(branches)?;
+        let upload = {
+            let bucket = pool.bucket_for_handle_mut(handle)?;
+            compile_v11_slot_upload(&bucket.plan, &brain_slot, &phenotype, &next)
+                .map_err(map_gpu_contract_error)?
+        };
+        {
+            let bucket = pool.bucket_for_handle_mut(handle)?;
+            bucket
+                .buffers
+                .write_slot_upload(&self.queue, &upload)
+                .map_err(map_gpu_contract_error)?;
+        }
+        let resident = pool.resident_mut(handle)?;
+        resident.brain_slot = upload.brain_slot().clone();
+        resident.ranges = upload.ranges().clone();
+        resident.v11 = next;
+        Ok(())
     }
 
     /// Applies bounded local structural evidence and atomically rebuilds the
@@ -1611,33 +1720,50 @@ impl GpuClosedLoopBackend {
             .class_buckets
             .get_mut(&handle.class_id.raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        pool.resident_mut(handle)?
-            .v11
-            .apply_structural_phase(evidence)
-    }
-
-    /// Runs the bounded recurrent overlay before the caller's final activation.
-    pub fn v11_recurrent_step<F>(
-        &mut self,
-        handle: GpuBrainHandle,
-        activations: &[f32],
-        base_accumulators: &[f32],
-        final_activation: F,
-    ) -> Result<Vec<f32>, ScaffoldContractError>
-    where
-        F: Fn(f32) -> f32,
-    {
-        self.ensure_ready()?;
-        self.validate_handle_backend(handle)?;
-        let pool = self
-            .class_buckets
-            .get_mut(&handle.class_id.raw())
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        pool.resident_mut(handle)?.v11.recurrent_step(
-            activations,
-            base_accumulators,
-            final_activation,
-        )
+        let (phenotype, brain_slot, previous, mut next) = {
+            let resident = pool.resident(handle)?;
+            (
+                resident.phenotype.clone(),
+                resident.brain_slot.clone(),
+                resident.v11.clone(),
+                resident.v11.clone(),
+            )
+        };
+        let work = next.apply_structural_phase(evidence)?;
+        if let Some(pending) = next.pending_lifetime_synapse() {
+            next.clear_pending_lifetime_synapse(&pending)?;
+        }
+        let (previous_upload, upload) = {
+            let bucket = pool.bucket_for_handle_mut(handle)?;
+            let previous_upload =
+                compile_v11_slot_upload(&bucket.plan, &brain_slot, &phenotype, &previous)
+                    .map_err(map_gpu_contract_error)?;
+            let upload = compile_v11_slot_upload(&bucket.plan, &brain_slot, &phenotype, &next)
+                .map_err(map_gpu_contract_error)?;
+            (previous_upload, upload)
+        };
+        let upload = {
+            let bucket = pool.bucket_for_handle_mut(handle)?;
+            let live = bucket
+                .buffers
+                .read_live_mutable_slot(&self.device, &self.queue, upload.ranges())
+                .map_err(map_gpu_contract_error)?;
+            upload
+                .with_remapped_live_mutable_state(&previous_upload, live)
+                .map_err(map_gpu_contract_error)?
+        };
+        {
+            let bucket = pool.bucket_for_handle_mut(handle)?;
+            bucket
+                .buffers
+                .write_v11_topology_upload(&self.queue, &upload)
+                .map_err(map_gpu_contract_error)?;
+        }
+        let resident = pool.resident_mut(handle)?;
+        resident.brain_slot = upload.brain_slot().clone();
+        resident.ranges = upload.ranges().clone();
+        resident.v11 = next;
+        Ok(work)
     }
 
     pub fn checkpoint_v11(
@@ -1663,11 +1789,48 @@ impl GpuClosedLoopBackend {
             .class_buckets
             .get_mut(&handle.class_id.raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        let resident = pool.resident_mut(handle)?;
-        if checkpoint.neuron_count != resident.phenotype.neuron_count() {
+        let (phenotype, brain_slot, previous) = {
+            let resident = pool.resident(handle)?;
+            (
+                resident.phenotype.clone(),
+                resident.brain_slot.clone(),
+                resident.v11.clone(),
+            )
+        };
+        if checkpoint.neuron_count != phenotype.neuron_count() {
             return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
         }
-        resident.v11 = GpuV11CausalState::restore(checkpoint)?;
+        let next = GpuV11CausalState::restore(checkpoint)?;
+        let (previous_upload, upload) = {
+            let bucket = pool.bucket_for_handle_mut(handle)?;
+            let previous_upload =
+                compile_v11_slot_upload(&bucket.plan, &brain_slot, &phenotype, &previous)
+                    .map_err(map_gpu_contract_error)?;
+            let upload = compile_v11_slot_upload(&bucket.plan, &brain_slot, &phenotype, &next)
+                .map_err(map_gpu_contract_error)?;
+            (previous_upload, upload)
+        };
+        let upload = {
+            let bucket = pool.bucket_for_handle_mut(handle)?;
+            let live = bucket
+                .buffers
+                .read_live_mutable_slot(&self.device, &self.queue, upload.ranges())
+                .map_err(map_gpu_contract_error)?;
+            upload
+                .with_remapped_live_mutable_state(&previous_upload, live)
+                .map_err(map_gpu_contract_error)?
+        };
+        {
+            let bucket = pool.bucket_for_handle_mut(handle)?;
+            bucket
+                .buffers
+                .write_v11_topology_upload(&self.queue, &upload)
+                .map_err(map_gpu_contract_error)?;
+        }
+        let resident = pool.resident_mut(handle)?;
+        resident.brain_slot = upload.brain_slot().clone();
+        resident.ranges = upload.ranges().clone();
+        resident.v11 = next;
         Ok(())
     }
 
@@ -2801,7 +2964,10 @@ impl GpuClosedLoopBackend {
                     .expect("validated batch retains its upload")
                     .memory_context_bindings();
                 for (
-                    ((((original_index, selection), speech_payload), motor_candidates), pending_record),
+                    (
+                        (((original_index, selection), speech_payload), motor_candidates),
+                        pending_record,
+                    ),
                     memory_binding,
                 ) in dispatch
                     .original_indices
@@ -2953,7 +3119,18 @@ impl GpuClosedLoopBackend {
                     .candidates()
                     .get(candidate_index as usize)
                     .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-                let v11_work = self.v11_work(handle)?;
+                let v11_work = self
+                    .class_buckets
+                    .get(&handle.class_id.raw())
+                    .and_then(|pool| pool.resident(handle).ok())
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                    .v11
+                    .gpu_recurrent_work_receipt(
+                        record.dendritic_branches_evaluated,
+                        record.dendritic_inputs_evaluated,
+                        record.dendritic_gated_branches,
+                        record.structural_edges_evaluated,
+                    )?;
                 ticks.push(GpuClosedLoopTick {
                     handle,
                     dispatch_generation: dispatch_generation.get(),
@@ -3026,13 +3203,14 @@ impl GpuClosedLoopBackend {
                 self.mark_device_lost();
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
-            for ((((original_index, record), speech_payload), motor_candidates), pending_record) in dispatch
-                .original_indices
-                .iter()
-                .zip(committed.records)
-                .zip(committed.speech_payloads)
-                .zip(committed.factorized_motor_candidates)
-                .zip(committed.pending_records)
+            for ((((original_index, record), speech_payload), motor_candidates), pending_record) in
+                dispatch
+                    .original_indices
+                    .iter()
+                    .zip(committed.records)
+                    .zip(committed.speech_payloads)
+                    .zip(committed.factorized_motor_candidates)
+                    .zip(committed.pending_records)
             {
                 commit_mismatch |= ordered_records[*original_index] != Some(record)
                     || ordered_speech_payloads[*original_index] != speech_payload
@@ -3095,6 +3273,9 @@ impl GpuClosedLoopBackend {
             resident.last_pressure = Some(activity_decisions[index].pressure);
             resident.last_throttle = Some(activity_decisions[index].clone());
             resident.last_work = Some(activity_work_receipts[index].clone());
+            resident
+                .v11
+                .record_gpu_recurrent_work(prepared_ticks[index].v11_work);
             resident.pending_eligibility = ordered_pending_receipts[index];
             resident.pending_eligibility_record = ordered_pending_records[index];
         }
@@ -3929,10 +4110,7 @@ impl<'a> GpuCuratedResidencyBackendPort<'a> {
 impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
     type StagedEntry = PreparedCuratedBackendEntry;
 
-    fn classify_pre_submit(
-        &mut self,
-        error: ScaffoldContractError,
-    ) -> GpuCuratedResidencyOutcome {
+    fn classify_pre_submit(&mut self, error: ScaffoldContractError) -> GpuCuratedResidencyOutcome {
         if self.backend.device_lost.load(Ordering::Acquire)
             || !matches!(self.backend.state, GpuBackendState::Ready)
         {
@@ -3948,7 +4126,9 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
         let slot_plan = GpuFixedClassArenaPlan::new(
             capacity,
             1,
-            self.backend.runtime_budget.physical_allocation_ceiling_bytes,
+            self.backend
+                .runtime_budget
+                .physical_allocation_ceiling_bytes,
         )
         .map_err(map_gpu_contract_error)?;
         let slot_receipt = slot_plan
@@ -4317,12 +4497,10 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
                 bucket.generations[reservation.slot as usize] = reservation.reserved_generation;
                 bucket.slots[reservation.slot as usize] = Some(prepared.resident);
             }
-            self.backend
-                .slot_generation_watermarks
-                .insert(
-                    (prepared.class_id.raw(), reservation.slot),
-                    reservation.reserved_generation,
-                );
+            self.backend.slot_generation_watermarks.insert(
+                (prepared.class_id.raw(), reservation.slot),
+                reservation.reserved_generation,
+            );
             self.backend
                 .organisms
                 .insert(prepared.handle.organism_id().raw(), prepared.handle);
@@ -4749,8 +4927,8 @@ mod staging_backend_tests {
 mod curated_founder_gpu_cutover_tests {
     use super::*;
     use alife_core::{
-        BrainGenome, DevelopmentState, FoundationWeightAsset, PhenotypeCompiler,
-        NormalizedScalar, Tick,
+        BrainGenome, DevelopmentState, FoundationWeightAsset, NormalizedScalar, PhenotypeCompiler,
+        Tick,
     };
 
     #[test]
@@ -4787,7 +4965,10 @@ mod curated_founder_gpu_cutover_tests {
             other => panic!("expected committed curated cohort, got {other:?}"),
         };
 
-        assert_eq!(receipt.generation_fingerprint, cohort.new_generation_fingerprint);
+        assert_eq!(
+            receipt.generation_fingerprint,
+            cohort.new_generation_fingerprint
+        );
         assert!(receipt.submission_completed);
         assert_eq!(receipt.backend_hardware_generation, 77);
         assert_eq!(receipt.ordered_residents.len(), 2);
@@ -4838,10 +5019,9 @@ mod curated_founder_gpu_cutover_tests {
             Tick::ZERO,
             NormalizedScalar::new(1.0).expect("fixture maturation is valid"),
         );
-        let foundation = FoundationWeightAsset::builtin_nano512_v1(
-            SensorProfile::PrivilegedAffordanceV1,
-        )
-        .expect("fixture foundation is valid");
+        let foundation =
+            FoundationWeightAsset::builtin_nano512_v1(SensorProfile::PrivilegedAffordanceV1)
+                .expect("fixture foundation is valid");
         PhenotypeCompiler::compile_from_foundation_asset(
             &genome,
             &capacity,
@@ -4997,7 +5177,10 @@ mod curated_founder_gpu_cutover_tests {
                 .foundation_abi()
                 .foundation_payload_digest()
                 .expect("fixture foundation digest");
-            assert_eq!(Some(foundation), second.foundation_abi().foundation_payload_digest());
+            assert_eq!(
+                Some(foundation),
+                second.foundation_abi().foundation_payload_digest()
+            );
             GpuCuratedResidencyCohort {
                 expected_old_generation: self.port.generation,
                 new_generation_fingerprint: [5, 6, 7, 8],
