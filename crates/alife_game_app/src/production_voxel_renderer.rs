@@ -1576,10 +1576,10 @@ fn production_entities_with<T: Component>(world: &mut World) -> Vec<Entity> {
 fn despawn_production_entity_hierarchy(world: &mut World, entity: Entity) {
     let children = world
         .get::<Children>(entity)
-        .map(|children| children.iter().collect::<Vec<_>>())
+        .map(|children| children.iter().copied().collect::<Vec<_>>())
         .unwrap_or_default();
     for child in children {
-        despawn_production_entity_hierarchy(world, *child);
+        despawn_production_entity_hierarchy(world, child);
     }
     let _ = world.despawn(entity);
 }
@@ -2339,8 +2339,8 @@ fn validate_fvr04_creature_spawn_inputs(
         }
         for part in recipe.parts.values() {
             let key = part.mesh_key();
-            if context.creature_part_assets.bounds(key).is_none()
-                || context.creature_part_assets.mesh(key).is_none()
+            if context.creature_part_assets.bounds(key.clone()).is_none()
+                || context.creature_part_assets.mesh(key.clone()).is_none()
             {
                 return Err(GameAppShellError::InvalidProductionFrontend {
                     message: format!(

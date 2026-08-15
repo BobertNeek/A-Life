@@ -1710,6 +1710,7 @@ const fn gpu_residency_label(state: CuratedFounderGpuResidencyState) -> &'static
     match state {
         CuratedFounderGpuResidencyState::NotStarted => "Not started",
         CuratedFounderGpuResidencyState::Pending => "Pending",
+        CuratedFounderGpuResidencyState::Committed => "Committed",
         CuratedFounderGpuResidencyState::Unknown => "Unknown",
     }
 }
