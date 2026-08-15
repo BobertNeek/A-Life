@@ -2298,6 +2298,9 @@ fn seal_prepared_selection_core(
     )?;
     outcome.contradiction_observed = !succeeded;
     outcome = outcome.with_v11_joint(motor_receipt.joint, cognitive_work)?;
+    let selected_action_kind = decision.selected_action.kind;
+    let selected_action_id = decision.selected_action.action_id;
+    let target_entity = decision.selected_action.target_entity;
     let patch = ExperiencePatch::new_v11_with_decision(
         pre_action,
         decision,
@@ -2327,9 +2330,9 @@ fn seal_prepared_selection_core(
         world_tick_before: frame.tick(),
         world_tick_after: outcome_tick,
         status: BrainTickStatus::Normal,
-        selected_action_kind: Some(decision.selected_action.kind),
-        selected_action_id: Some(decision.selected_action.action_id),
-        target_entity: decision.selected_action.target_entity,
+        selected_action_kind: Some(selected_action_kind),
+        selected_action_id: Some(selected_action_id),
+        target_entity,
         patch_sealed: true,
         patch_sequence_id: Some(sequence_id.raw()),
         patch_success: Some(patch.outcome().success),
