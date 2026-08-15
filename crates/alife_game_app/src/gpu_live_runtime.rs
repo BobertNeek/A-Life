@@ -201,8 +201,24 @@ fn resident_authority_plan_from_record(
     }
     let development = admission.phenotype.development_state_at(admission.age)?;
     let genome = admission.phenotype.brain_genome.clone();
-    let (phenotype, compiler_inputs) =
-        compile_gpu_components_from_genome(genome.clone(), development.clone(), sensor_profile)?;
+    let (phenotype, compiler_inputs) = if genome.brain_class_id == BrainCapacityClass::N512_ID {
+        let foundation = FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?;
+        let projection = N512FounderFoundationProjection::compile(
+            &admission.phenotype,
+            sensor_profile,
+            &foundation,
+        )?;
+        compile_gpu_components_from_genome(
+            projection.frozen_abi().coordinate_genome().clone(),
+            projection
+                .frozen_abi()
+                .coordinate_development_state()
+                .clone(),
+            sensor_profile,
+        )?
+    } else {
+        compile_gpu_components_from_genome(genome.clone(), development.clone(), sensor_profile)?
+    };
     if phenotype.brain_class_id() != brain_class.default_class_id() {
         return Err(ScaffoldContractError::PhenotypeCompile);
     }
@@ -280,7 +296,7 @@ fn compare_resident_checkpoint_metadata(
     if checkpoint.capacity_class_id != plan.phenotype.brain_class_id()
         || checkpoint.phenotype_hash != plan.phenotype.phenotype_hash()
         || checkpoint.phenotype != &plan.phenotype
-        || checkpoint.compiler_inputs.genome() != &plan.genome
+        || checkpoint.compiler_inputs.genome() != plan.compiler_inputs.genome()
         || checkpoint.compiler_inputs.development() != plan.compiler_inputs.development()
         || checkpoint.compiler_inputs.sensor_profile() != plan.compiler_inputs.sensor_profile()
     {
@@ -2610,8 +2626,8 @@ impl GpuLiveBrainRuntime {
             backend,
             durable_manifest,
             loaded_save,
-            config.deterministic_seed,
-            config.brain_class,
+            save.deterministic_seed,
+            save.config.brain_class,
         )
     }
 
@@ -6712,14 +6728,17 @@ fn foundation_construction_development(
     if development.genome_id != genome.id {
         return Err(ScaffoldContractError::PhenotypeCompile);
     }
-    if capacity.id() != BrainCapacityClass::N2048_ID {
+    if !matches!(
+        capacity.id(),
+        BrainCapacityClass::N512_ID | BrainCapacityClass::N2048_ID
+    ) {
         return Ok(development.clone());
     }
 
-    // The checked N2048 asset owns a full immutable coordinate ABI. World
-    // development remains authoritative in ResidentCognition; the construction
-    // input removes runtime chronology and dynamic gates that would reshape
-    // that ABI.
+    // Checked production foundation assets own a full immutable coordinate ABI.
+    // World development remains authoritative in ResidentCognition; the
+    // construction input removes runtime chronology and dynamic gates that
+    // would reshape that ABI.
     let mut construction = development.clone();
     construction.age_ticks = Tick::ZERO;
     construction.maturation = NormalizedScalar::new(1.0)?;
@@ -6734,7 +6753,7 @@ fn foundation_construction_development(
     Ok(construction)
 }
 
-fn compile_gpu_components_from_genome(
+pub(crate) fn compile_gpu_components_from_genome(
     genome: BrainGenome,
     development: DevelopmentState,
     sensor_profile: SensorProfile,
@@ -8709,23 +8728,36 @@ mod tests {
             .development_state_at(authoritative_age)
             .unwrap();
         assert_eq!(plan.genome, record.phenotype().brain_genome);
-        assert_eq!(
-            plan.compiler_inputs.genome(),
-            &record.phenotype().brain_genome
-        );
         assert_eq!(plan.development.age_ticks, authoritative_age);
         assert_eq!(
             plan.development.genome_id,
             record.phenotype().brain_genome.id
         );
         assert_eq!(plan.development, authoritative_development);
+        let projection = N512FounderFoundationProjection::compile(
+            record.phenotype(),
+            sensor_profile,
+            &foundation_asset,
+        )
+        .unwrap();
         let (expected_phenotype, expected_inputs) = compile_gpu_components_from_genome(
-            record.phenotype().brain_genome.clone(),
-            authoritative_development,
+            projection.frozen_abi().coordinate_genome().clone(),
+            projection
+                .frozen_abi()
+                .coordinate_development_state()
+                .clone(),
             sensor_profile,
         )
         .unwrap();
         assert_eq!(plan.phenotype, expected_phenotype);
+        assert_eq!(
+            plan.compiler_inputs.genome(),
+            projection.frozen_abi().coordinate_genome()
+        );
+        assert_eq!(
+            plan.compiler_inputs.development(),
+            projection.frozen_abi().coordinate_development_state()
+        );
         assert_eq!(plan.compiler_inputs.genome(), expected_inputs.genome());
         assert_eq!(
             plan.compiler_inputs.development(),
