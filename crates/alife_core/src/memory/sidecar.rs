@@ -1,5 +1,8 @@
 use super::candidate_index::target_bins;
 use super::*;
+use crate::predictive::GroundedSuccessorPredictor;
+use crate::sleep::{SleepConsolidator, SleepReplayEvidence, SleepWorkReceipt};
+use crate::{HomeostaticSnapshot, Tick, TopologySidecar};
 
 pub const PORTABLE_MEMORY_BANK_ASSET_SCHEMA_VERSION: u16 = 2;
 
@@ -285,6 +288,33 @@ impl MemorySidecarState {
 
     pub const fn bank(&self) -> &MemoryBank {
         &self.bank
+    }
+
+    pub fn run_bounded_sleep_transaction(
+        &mut self,
+        consolidator: &SleepConsolidator,
+        homeostasis: &HomeostaticSnapshot,
+        tick: Tick,
+        evidence: &SleepReplayEvidence,
+        predictor: &mut GroundedSuccessorPredictor,
+        topology: &mut TopologySidecar,
+    ) -> Result<SleepWorkReceipt, ScaffoldContractError> {
+        evidence.validate_contract()?;
+        if evidence
+            .prediction_targets
+            .iter()
+            .any(|target| target.organism_id != self.organism_id)
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        consolidator.run_bounded_transaction(
+            homeostasis,
+            tick,
+            evidence,
+            &mut self.bank,
+            predictor,
+            topology,
+        )
     }
 
     pub const fn compaction_checkpoint(&self) -> &MemoryCompactionCheckpoint {

@@ -8,6 +8,7 @@ use std::{
 use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkCounters};
 use alife_core::predictive::GroundedSuccessorPredictor;
+use alife_core::sleep::{SleepReplayEvidence, SleepWorkReceipt};
 use alife_core::{
     ActionKind, ActionTarget, BiochemistryState, BoundedCoordinationSummary, BoundedMotorPayload,
     ChannelCommand, CognitiveWorkReceipt, CoordinationGroup,
@@ -30,7 +31,7 @@ use alife_core::{
     PhenotypeCompilerInputs,
     PostActionOutcome, PreActionSnapshot, PreparedMemoryRecall, ScaffoldContractError,
     CandidateObservationRef,
-    SensorProfile, SignedValence,
+    SensorProfile, SignedValence, SleepConsolidator, SleepTransition,
     SensorProfileIdentity, SensoryAbiVersion, SleepConsolidationConfig, SleepPhase, SleepState,
     Tick, TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind,
     Validate, Vec3f, WorldEntityId, LineageId, N512FounderFoundationProjection,
@@ -491,6 +492,69 @@ impl GpuLiveCheckpointDurability {
 struct AuthoritativeGpuSleepDriver<'a> {
     backend: &'a mut GpuClosedLoopBackend,
     handle: GpuBrainHandle,
+    context: Option<AuthoritativeSleepContext<'a>>,
+}
+
+struct AuthoritativeSleepContext<'a> {
+    memory: &'a mut MemorySidecarState,
+    predictor: &'a mut GroundedSuccessorPredictor,
+    topology: &'a mut TopologySidecar,
+    sealed_patches: &'a [ExperiencePatch],
+    last_sealed_patches: &'a [ExperiencePatch],
+}
+
+fn build_authoritative_sleep_evidence(
+    backend: &mut GpuClosedLoopBackend,
+    handle: GpuBrainHandle,
+    organism_id: OrganismId,
+    sealed_patches: &[ExperiencePatch],
+    last_sealed_patches: &[ExperiencePatch],
+) -> Result<SleepReplayEvidence, ScaffoldContractError> {
+    let batch = backend.build_sleep_replay_batch(handle)?;
+    let prediction_targets = batch
+        .events
+        .iter()
+        .map(|event| {
+            last_sealed_patches
+                .iter()
+                .chain(sealed_patches.iter())
+                .find_map(|patch| {
+                    patch.prediction_target().and_then(|target| {
+                        (target.organism_id == organism_id
+                            && target.experience_sequence == event.sequence_id)
+                            .then(|| target.clone())
+                    })
+                })
+                .ok_or(ScaffoldContractError::MissingPhaseData)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    SleepReplayEvidence::new(batch, prediction_targets)
+}
+
+fn run_authoritative_sleep_transaction(
+    backend: &mut GpuClosedLoopBackend,
+    handle: GpuBrainHandle,
+    organism_id: OrganismId,
+    homeostasis: &HomeostaticSnapshot,
+    tick: Tick,
+    context: &mut AuthoritativeSleepContext<'_>,
+) -> Result<SleepWorkReceipt, ScaffoldContractError> {
+    let evidence = build_authoritative_sleep_evidence(
+        backend,
+        handle,
+        organism_id,
+        context.sealed_patches,
+        context.last_sealed_patches,
+    )?;
+    let consolidator = SleepConsolidator::new(SleepConsolidationConfig::reference())?;
+    context.memory.run_bounded_sleep_transaction(
+        &consolidator,
+        homeostasis,
+        tick,
+        &evidence,
+        context.predictor,
+        context.topology,
+    )
 }
 
 impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
@@ -586,13 +650,38 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
         };
         Ok(Some(event))
     }
+
+    fn run_bounded_sleep_transaction(
+        &mut self,
+        organism_id: OrganismId,
+        _state: SleepState,
+        homeostasis: &HomeostaticSnapshot,
+        tick: Tick,
+        _due_work: SleepWorkDue,
+    ) -> Result<Option<SleepWorkReceipt>, ScaffoldContractError> {
+        if organism_id != self.handle.organism_id() {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        let context = self
+            .context
+            .as_mut()
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        run_authoritative_sleep_transaction(
+            self.backend,
+            self.handle,
+            organism_id,
+            homeostasis,
+            tick,
+            context,
+        )
+        .map(Some)
+    }
 }
 
 type SleepProgressResult = Result<Option<ConsolidationDriverEvent>, ScaffoldContractError>;
 
 struct RoutedGpuSleepDriver<'a, F> {
-    backend: &'a mut GpuClosedLoopBackend,
-    handle: GpuBrainHandle,
+    authoritative: AuthoritativeGpuSleepDriver<'a>,
     progress: &'a mut F,
 }
 
@@ -612,7 +701,30 @@ where
         state: SleepState,
         intent: Option<ConsolidationIntent>,
     ) -> SleepProgressResult {
-        (self.progress)(self.backend, self.handle, organism_id, state, intent)
+        (self.progress)(
+            self.authoritative.backend,
+            self.authoritative.handle,
+            organism_id,
+            state,
+            intent,
+        )
+    }
+
+    fn run_bounded_sleep_transaction(
+        &mut self,
+        organism_id: OrganismId,
+        _state: SleepState,
+        homeostasis: &HomeostaticSnapshot,
+        tick: Tick,
+        due_work: SleepWorkDue,
+    ) -> Result<Option<SleepWorkReceipt>, ScaffoldContractError> {
+        self.authoritative.run_bounded_sleep_transaction(
+            organism_id,
+            _state,
+            homeostasis,
+            tick,
+            due_work,
+        )
     }
 }
 
@@ -2222,6 +2334,20 @@ fn apply_cognitive_work_cost(
         })?;
     world.replace_organism_registry_exact(records)?;
     Ok(())
+}
+
+fn replace_canonical_organism_record(
+    world: &mut HeadlessWorld,
+    replacement: WorldOrganismRecord,
+) -> Result<(), ScaffoldContractError> {
+    let organism_id = replacement.organism_id();
+    let mut records = world.organism_registry().iter().cloned().collect::<Vec<_>>();
+    let record = records
+        .iter_mut()
+        .find(|record| record.organism_id() == organism_id)
+        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+    *record = replacement;
+    world.replace_organism_registry_exact(records)
 }
 
 fn seal_prepared_selection_core(
@@ -4662,9 +4788,34 @@ impl GpuLiveBrainRuntime {
 
     pub fn tick(&mut self) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
         self.tick_with_sleep_progress(|backend, handle, organism_id, state, intent| {
-            let mut driver = AuthoritativeGpuSleepDriver { backend, handle };
+            let mut driver = AuthoritativeGpuSleepDriver {
+                backend,
+                handle,
+                context: None,
+            };
             driver.progress(organism_id, state, intent)
         })
+    }
+
+    pub fn request_recovery_sleep(
+        &mut self,
+        organism_id: OrganismId,
+    ) -> Result<SleepTransition, GameAppShellError> {
+        let world_tick = self.world.tick();
+        let record = self
+            .world
+            .organism_registry()
+            .get(organism_id)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        if !record.lifecycle().is_alive() {
+            return Err(ScaffoldContractError::InvalidId.into());
+        }
+        self.residents
+            .get_mut(&organism_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .sleep_scheduler
+            .force_recovery_sleep(world_tick)
+            .map_err(Into::into)
     }
 
     pub fn tick_with_sleep_driver<D: GpuSleepConsolidationDriver>(
@@ -4786,7 +4937,7 @@ impl GpuLiveBrainRuntime {
         for (raw, handle, world_entity_id) in scheduled_handles {
             let retained_learning_pending =
                 self.retry_retained_learning(OrganismId(raw), tick_before)?;
-            let record = self
+            let mut record = self
                 .world
                 .organism_registry()
                 .get(OrganismId(raw))
@@ -4811,17 +4962,34 @@ impl GpuLiveBrainRuntime {
             )?;
             let sleep_event = if self.schedule_sleep {
                 let mut routed_driver = RoutedGpuSleepDriver {
-                    backend: &mut self.backend,
-                    handle,
+                    authoritative: AuthoritativeGpuSleepDriver {
+                        backend: &mut self.backend,
+                        handle,
+                        context: Some(AuthoritativeSleepContext {
+                            memory: self
+                                .memories
+                                .get_mut(&raw)
+                                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?,
+                            predictor: &mut resident.predictor,
+                            topology: self
+                                .topologies
+                                .get_mut(&raw)
+                                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?,
+                            sealed_patches: &self.sealed_patches,
+                            last_sealed_patches: &self.last_sealed_patches,
+                        }),
+                    },
                     progress,
                 };
-                resident.sleep_scheduler.scheduled_tick(
-                    OrganismId(raw),
-                    &resident.homeostasis,
+                let event = resident.sleep_scheduler.scheduled_tick_with_organism(
+                    &mut record,
                     homeostatic_parameters,
-                    tick_before,
+                    tick_after,
                     &mut routed_driver,
-                )?
+                    false,
+                )?;
+                replace_canonical_organism_record(&mut self.world, record)?;
+                event
             } else {
                 if phase_before != SleepPhase::Awake {
                     return Err(ScaffoldContractError::MissingPhaseData.into());
