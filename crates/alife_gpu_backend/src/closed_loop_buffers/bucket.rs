@@ -2593,6 +2593,23 @@ pub(crate) struct GpuFixedSlotUpload {
 }
 
 impl GpuFixedSlotUpload {
+    pub(crate) fn from_existing_slot(
+        brain_slot: GpuBrainSlot,
+        ranges: GpuFixedSlotRanges,
+        immutable_plan_words: Vec<u32>,
+        immutable_weight_words: Vec<u32>,
+        mutable_state_words: Vec<u32>,
+    ) -> Self {
+        Self {
+            arena_ownership_token: ranges.arena_ownership_token,
+            brain_slot,
+            ranges,
+            immutable_plan_words,
+            immutable_weight_words,
+            mutable_state_words,
+        }
+    }
+
     pub(crate) const fn record(&self) -> &GpuBrainSlotRecord {
         self.brain_slot.record()
     }

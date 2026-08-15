@@ -18,10 +18,12 @@ use alife_core::{
 use bytemuck::{Pod, Zeroable};
 
 use crate::{
-    pack_replay_eligibility_sample, unpack_replay_eligibility_sample, GpuBrainHandle, GpuBrainSlot,
-    GpuClosedLoopBackend, GpuConsolidationRequestRecord, GpuFixedSlotRanges, GpuReplayEventRecord,
-    GpuReplaySynapseSpanRecord, GpuSleepHeader, GpuSlotLearningStateRecord,
+    map_gpu_contract_error, pack_replay_eligibility_sample, unpack_replay_eligibility_sample,
+    GpuBrainHandle, GpuBrainSlot, GpuClosedLoopBackend, GpuConsolidationRequestRecord,
+    GpuFixedSlotRanges, GpuReplayEventRecord, GpuReplaySynapseSpanRecord, GpuSleepHeader,
+    GpuSlotLearningStateRecord,
 };
+use crate::closed_loop_buffers::GpuFixedSlotUpload;
 
 pub type GpuSleepJobId = ConsolidationJobId;
 
@@ -396,6 +398,13 @@ impl GpuClosedLoopBackend {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
         }
         let snapshot = self.sleep_slot_snapshot(handle)?;
+        let pending_lifetime_synapse = self
+            .class_buckets
+            .get(&handle.class_id().raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .resident(handle)?
+            .v11
+            .pending_lifetime_synapse();
         staged.validate_against(
             request,
             snapshot.sleep_plan.eligibility_reset_policy_raw(),
@@ -488,6 +497,40 @@ impl GpuClosedLoopBackend {
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
+        let pending_upload = if let Some(synapse) = pending_lifetime_synapse.as_ref() {
+            let bucket = self
+                .class_buckets
+                .get(&handle.class_id().raw())
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .bucket_for_handle(handle)?;
+            let immutable_plan_words = read_gpu_words(
+                &self.device,
+                &self.queue,
+                bucket.buffers.neural_buffers()[2],
+                snapshot.ranges.immutable_plan_words.clone(),
+                "closed-loop-sleep-synaptogenesis-plan-readback",
+            )?;
+            let immutable_weight_words = read_gpu_words(
+                &self.device,
+                &self.queue,
+                bucket.buffers.neural_buffers()[3],
+                snapshot.ranges.immutable_weight_words.clone(),
+                "closed-loop-sleep-synaptogenesis-weight-readback",
+            )?;
+            Some(
+                GpuFixedSlotUpload::from_existing_slot(
+                    snapshot.brain_slot.clone(),
+                    snapshot.ranges.clone(),
+                    immutable_plan_words,
+                    immutable_weight_words,
+                    words.clone(),
+                )
+                .with_added_lifetime_synapse(synapse)
+                .map_err(map_gpu_contract_error)?,
+            )
+        } else {
+            None
+        };
         let mutable_state_digest = compute_gpu_sleep_mutable_state_digest(&words);
         let commit_digest = compute_gpu_sleep_commit_digest(
             staged.staging_digest,
@@ -518,6 +561,21 @@ impl GpuClosedLoopBackend {
             replay_journal_event_count: staged.replay_journal_event_count,
             commit_digest,
         };
+        if let Some(upload) = pending_upload.as_ref() {
+            let bucket = self
+                .class_buckets
+                .get(&handle.class_id().raw())
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .bucket_for_handle(handle)?;
+            bucket
+                .buffers
+                .write_slot_upload(&self.queue, upload)
+                .map_err(map_gpu_contract_error)?;
+            bucket
+                .buffers
+                .write_mutable_slot_upload(&self.queue, upload)
+                .map_err(map_gpu_contract_error)?;
+        }
         let resident = self
             .class_buckets
             .get_mut(&handle.class_id().raw())
@@ -532,8 +590,14 @@ impl GpuClosedLoopBackend {
             state.transaction_generation_lo,
             state.transaction_generation_hi,
         ]);
+        if let Some(upload) = pending_upload.as_ref() {
+            resident.brain_slot = upload.brain_slot().clone();
+        }
         resident.pending_eligibility = None;
         resident.pending_eligibility_record = None;
+        if let Some(synapse) = pending_lifetime_synapse.as_ref() {
+            resident.v11.clear_pending_lifetime_synapse(synapse)?;
+        }
         if self.sleep_jobs.remove(&staged.job_id.raw()).is_none() {
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
