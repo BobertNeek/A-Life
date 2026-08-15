@@ -918,12 +918,18 @@ fn derive_causal_behavior(
             }
             successes[index] = match ability {
                 Era1Ability::FlexibleForaging => {
-                    step.phase == Era1TrialPhase::Acquisition
+                    matches!(
+                        step.phase,
+                        Era1TrialPhase::Acquisition | Era1TrialPhase::Probe
+                    )
                         && step.selected_family == CandidateActionFamily::Ingest
                         && step.target_kind == Some(WorldObjectKind::Food)
                 }
                 Era1Ability::HazardAvoidance => {
-                    step.phase == Era1TrialPhase::Acquisition
+                    matches!(
+                        step.phase,
+                        Era1TrialPhase::Acquisition | Era1TrialPhase::Probe
+                    )
                         && step.selected_family == CandidateActionFamily::Avoid
                         && step.target_kind == Some(WorldObjectKind::Hazard)
                 }
