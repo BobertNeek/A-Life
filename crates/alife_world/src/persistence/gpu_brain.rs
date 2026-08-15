@@ -6,15 +6,17 @@
 use alife_core::{
     ActionId, AttentionFrame, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId,
     CandidateActionFamily, CandidateFeatureDigest, CanonicalDigestBuilder, CognitiveContextFrame,
-    CognitiveWorkReceipt, ConsolidationState, DendriticBranchSet, GroundedSuccessorPredictor,
+    CognitiveWorkReceipt, ConsolidationState, DendriticBranchSet,
     LanguageGroundingLedger, MemoryCompactionCheckpoint, MemoryCompactionPhase, MemorySidecarState,
     MotorCommandBundle, OrganismId, OutcomeCreditReplayKey, PassiveLifeStatistics,
     PerceptionFrameDigest, PhenotypeHash, PortableTopologySidecarAssetV1, ReplayEligibilitySample,
     ReplaySynapseSpan, ScaffoldContractError, SensorProfileIdentity, SleepConsolidationReport,
-    SleepReplayEvent, SleepState, SleepWorkReceipt, StructuralEditBatch, StructuralPlasticityState,
+    SleepReplayEvent, SleepState, StructuralEditBatch, StructuralPlasticityState,
     Tick, TopologyCounts, TopologySidecar, Validate, MAX_CANDIDATES_PER_REGION,
     MAX_REGIONS_PER_STATE, MAX_REPLAY_CAPTURE_SYNAPSES, MAX_STRUCTURAL_EDGES,
 };
+use alife_core::predictive::GroundedSuccessorPredictor;
+use alife_core::sleep::SleepWorkReceipt;
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 
 use crate::TrackedObjectRegistrySaveState;

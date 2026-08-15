@@ -188,7 +188,7 @@ impl GpuV11CausalState {
         targets.sort_unstable();
         targets.dedup();
 
-        let mut rebuilt = Vec::new();
+        let mut rebuilt: Vec<GpuV11SparseSpan> = Vec::new();
         for source in sources {
             let mut input = vec![0.0; self.neuron_count as usize];
             input[source as usize] = 1.0;
