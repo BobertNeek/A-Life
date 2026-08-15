@@ -3677,9 +3677,13 @@ impl GpuLiveBrainRuntime {
             self.brain_class,
         )?;
         let base_world = base.restore_headless_world()?;
-        if base_world.canonical_signature_digest()? != self.world.canonical_signature_digest()? {
+        if base.deterministic_seed != self.deterministic_seed
+            || base.config.deterministic_seed != self.deterministic_seed
+            || base_world.seed() != self.world.seed()
+            || base_world.tick() != self.world.tick()
+        {
             return Err(GameAppShellError::InvalidProductionFrontend {
-                message: "durable checkpoint base does not match the canonical live world"
+                message: "durable checkpoint base seed or tick does not match the canonical live world"
                     .to_string(),
             });
         }
@@ -3702,6 +3706,21 @@ impl GpuLiveBrainRuntime {
         {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "durable checkpoint base contains an incompatible brain class"
+                    .to_string(),
+            });
+        }
+        // The full canonical signature also binds runtime-only tracked-object
+        // state. PortableSaveFile normalizes that state through WorldSaveState,
+        // so compare the supplied durable representation with the exact
+        // normalized representation expected from the live world. This keeps
+        // persisted organisms, archive identity, objects, ecology, habitats,
+        // and counters strict without rejecting a valid save for transient
+        // state that the save authority does not persist.
+        let mut normalized_base = base.clone();
+        normalized_base.replace_headless_world_snapshot(&self.world)?;
+        if normalized_base.world != base.world {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "durable checkpoint base does not match the canonical live world"
                     .to_string(),
             });
         }
