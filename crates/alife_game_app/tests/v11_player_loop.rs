@@ -16,10 +16,76 @@ use alife_core::{
 };
 use alife_game_app::GpuLiveBrainRuntime;
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile};
+use alife_runtime::GpuDurableSaveManifest;
 use alife_world::{
-    Habitat, HabitatActor, HabitatAuthority, HabitatId, HabitatMode, HabitatOperation,
-    HeadlessScenarioBuilder, WorldOrganismRecord,
+    persistence::{
+        AssetManifest, CreatureMindSaveSummary, CreatureSaveState, LearningTraceSaveSummary,
+        PortableAssetDigest, PortableSaveFile, RuntimeConfig, WeightLayerSaveSummary,
+    },
+    CreatureAppearanceGenome, Habitat, HabitatActor, HabitatAuthority, HabitatId, HabitatMode,
+    HabitatOperation, HeadlessScenarioBuilder, WorldOrganismRecord,
 };
+
+fn player_loop_base_save(
+    runtime: &GpuLiveBrainRuntime,
+    organism_id: OrganismId,
+) -> PortableSaveFile {
+    let world = runtime.world_snapshot();
+    let record = world
+        .organism_registry()
+        .get(organism_id)
+        .expect("canonical player-loop organism record");
+    let biochemistry = record.biochemistry().clone();
+    let genetic_fixed_digest = PortableAssetDigest::for_bytes(
+        &serde_json::to_vec(record.phenotype()).expect("canonical phenotype serializes"),
+    )
+    .0;
+    let creature = CreatureSaveState {
+        organism_id,
+        genome_id: record.genome().id,
+        brain_class: BrainScaleTier::Standard2048,
+        development_tick: biochemistry.development.last_update_tick,
+        appearance: CreatureAppearanceGenome::default(),
+        mind: CreatureMindSaveSummary {
+            tick: biochemistry.tick,
+            homeostasis: biochemistry.homeostasis,
+            memory_record_count: 0,
+            memory_source_ids: Vec::new(),
+            concept_count: 0,
+            edge_count: 0,
+            simplex_count: 0,
+            unresolved_gap_count: 0,
+            sleep_state_label: "awake".to_string(),
+            diagnostics: Vec::new(),
+        },
+        weights: WeightLayerSaveSummary {
+            generated_weight_asset_id: None,
+            genetic_fixed_digest,
+            genetic_layer_mutable: false,
+            lifetime_consolidated_entries: 0,
+            h_operational_entries: 0,
+            h_shadow_entries: 0,
+        },
+        learning: LearningTraceSaveSummary {
+            lifetime_learning_enabled: true,
+            lamarckian_mode_enabled: false,
+            last_consolidated_tick: None,
+        },
+        composite_genetics: None,
+        lifetime_state_asset: None,
+        gpu_brain: None,
+    };
+    let mut config = RuntimeConfig::deterministic_default(13_001, BrainScaleTier::Standard2048);
+    config.features.gpu_backend_enabled = true;
+    PortableSaveFile::from_headless_world(
+        "task-13-v11-player-loop",
+        &world,
+        config,
+        AssetManifest::empty(),
+        vec![creature],
+    )
+    .expect("canonical player-loop base save")
+}
 
 #[test]
 fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_boundary() {
@@ -198,14 +264,107 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
     assert!(runtime.last_pre_seal_discard_failures().is_empty());
     assert!(runtime.last_post_seal_learning_failures().is_empty());
 
-    let next_lifecycle_error = match runtime.capture_portable_checkpoint() {
-        Ok(_) => "persistence unexpectedly succeeded without a durable save boundary".to_string(),
-        Err(error) => error.to_string(),
-    };
+    let birth_manifest_digest = runtime
+        .world_snapshot()
+        .organism_registry()
+        .get(organism_id)
+        .and_then(|record| record.archive().birth_manifest_digest())
+        .expect("canonical world retains its birth archive identity");
+    let before_replace_signature = runtime
+        .world_snapshot()
+        .canonical_signature_digest()
+        .expect("canonical world signature before durable replace");
+    let durable_root = archive_root.join("player-loop-durable");
+    let asset_root = durable_root.join("assets");
+    let save_path = durable_root.join("player-loop.json");
+    fs::create_dir_all(&asset_root).expect("create durable checkpoint asset root");
+    let base_save = player_loop_base_save(&runtime, organism_id);
+    runtime
+        .attach_durable_checkpoint_boundary(&save_path, &asset_root, base_save)
+        .expect("attach the runtime-owned durable checkpoint boundary");
+
+    let durable = GpuDurableSaveManifest::open(&save_path, &asset_root)
+        .expect("open the published player-loop checkpoint");
+    let loaded = durable
+        .load()
+        .expect("load the published player-loop checkpoint");
+    assert_eq!(loaded.save.world.tick, Tick::new(1));
+    assert!(loaded
+        .save
+        .creatures
+        .iter()
+        .find(|creature| creature.organism_id == organism_id)
+        .and_then(|creature| creature.gpu_brain.as_ref())
+        .is_none());
+    let checkpointed = runtime
+        .capture_portable_checkpoint()
+        .expect("capture the exact live GPU checkpoint");
+    assert_eq!(checkpointed.world.tick, Tick::new(1));
+    assert!(checkpointed
+        .creatures
+        .iter()
+        .find(|creature| creature.organism_id == organism_id)
+        .and_then(|creature| creature.gpu_brain.as_ref())
+        .is_some());
+    GpuDurableSaveManifest::publish_snapshot(&save_path, &asset_root, &checkpointed)
+        .expect("publish the captured player-loop checkpoint");
+    let durable = GpuDurableSaveManifest::open(&save_path, &asset_root)
+        .expect("reopen the captured player-loop checkpoint");
+    let loaded = durable
+        .load()
+        .expect("reload the captured player-loop checkpoint");
+    assert!(loaded
+        .save
+        .creatures
+        .iter()
+        .find(|creature| creature.organism_id == organism_id)
+        .and_then(|creature| creature.gpu_brain.as_ref())
+        .is_some());
+    assert_eq!(
+        loaded
+            .save
+            .restore_headless_world()
+            .expect("restore the saved canonical world")
+            .organism_registry()
+            .get(organism_id)
+            .and_then(|record| record.archive().birth_manifest_digest()),
+        Some(birth_manifest_digest)
+    );
+
+    runtime
+        .replace_from_durable_save(
+            runtime
+                .new_staging_like_live()
+                .expect("same-adapter staging backend for durable replace"),
+            durable,
+        )
+        .expect("replace the live runtime from its durable checkpoint");
+    assert_eq!(
+        runtime
+            .world_snapshot()
+            .canonical_signature_digest()
+            .expect("canonical world signature after durable replace"),
+        before_replace_signature
+    );
+    assert_eq!(
+        runtime
+            .world_snapshot()
+            .organism_registry()
+            .get(organism_id)
+            .and_then(|record| record.archive().birth_manifest_digest()),
+        Some(birth_manifest_digest)
+    );
+    assert_eq!(
+        runtime
+            .lineage_archive_manifest_count()
+            .expect("archive count after replace"),
+        Some(1)
+    );
+
     drop(runtime);
     fs::remove_dir_all(&archive_root).expect("remove temporary player-loop archive");
     assert!(
         false,
-        "Task 13 RED at the next unavailable lifecycle seam: the archived one-tick production path now reaches persistence, which stops at `{next_lifecycle_error}`. Do not fake the remaining lifecycle links."
+        "Task 13 RED at the next unavailable lifecycle seam: durable save/load/replace now preserves the canonical world and archive identity, but the production voxel presentation link remains unproven. Do not fake the remaining lifecycle links."
     );
 }

@@ -1,6 +1,9 @@
 //! GPU-authoritative live cognition for the explicit neural policy.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+};
 
 use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkCounters};
@@ -3649,6 +3652,76 @@ impl GpuLiveBrainRuntime {
                 retained_learning,
             },
         )?)
+    }
+
+    /// Attaches the runtime-owned durable save boundary to an already
+    /// materialized canonical world. The base save is validated and published
+    /// through the existing portable-save manifest before the live runtime
+    /// adopts its content-addressed store and durable reference.
+    pub fn attach_durable_checkpoint_boundary(
+        &mut self,
+        save_path: impl AsRef<Path>,
+        asset_root: impl AsRef<Path>,
+        mut base: PortableSaveFile,
+    ) -> Result<(), GameAppShellError> {
+        if self.checkpoint_durability.is_some() {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "GPU runtime already has a durable save boundary".to_string(),
+            });
+        }
+        validate_replacement_policy(
+            base.config.brain_policy.policy,
+            base.deterministic_seed,
+            base.config.brain_class,
+            self.deterministic_seed,
+            self.brain_class,
+        )?;
+        let base_world = base.restore_headless_world()?;
+        if base_world.canonical_signature_digest()? != self.world.canonical_signature_digest()? {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "durable checkpoint base does not match the canonical live world"
+                    .to_string(),
+            });
+        }
+        let live_ids = self.handles.keys().copied().collect::<BTreeSet<_>>();
+        let saved_ids = base
+            .creatures
+            .iter()
+            .map(|creature| creature.organism_id.raw())
+            .collect::<BTreeSet<_>>();
+        if saved_ids != live_ids || saved_ids.len() != base.creatures.len() {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "durable checkpoint base does not cover the live GPU residents"
+                    .to_string(),
+            });
+        }
+        if base
+            .creatures
+            .iter()
+            .any(|creature| creature.brain_class != self.brain_class)
+        {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "durable checkpoint base contains an incompatible brain class"
+                    .to_string(),
+            });
+        }
+        base.replace_headless_world_snapshot(&self.world)?;
+
+        let save_path = save_path.as_ref();
+        let asset_root = asset_root.as_ref();
+        GpuDurableSaveManifest::publish_snapshot(save_path, asset_root, &base)?;
+        let durable_manifest = GpuDurableSaveManifest::open(save_path, asset_root)?;
+        let published = durable_manifest.load()?;
+        let store = GpuCheckpointAssetStore::new(durable_manifest.asset_root().to_path_buf())?;
+        let durability = GpuLiveCheckpointDurability {
+            store,
+            durable_manifest,
+            published,
+        };
+        let durable_reference = durability.durable_reference()?;
+        self.backend.note_durable_checkpoint(durable_reference)?;
+        self.checkpoint_durability = Some(durability);
+        Ok(())
     }
 
     /// Captures one exact, sealed-boundary portable save without publishing it.
