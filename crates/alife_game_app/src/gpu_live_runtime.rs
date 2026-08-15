@@ -11,7 +11,7 @@ use alife_core::predictive::GroundedSuccessorPredictor;
 use alife_core::sleep::{SleepReplayEvidence, SleepWorkReceipt};
 use alife_core::{
     ActionKind, ActionTarget, BiochemistryState, BoundedCoordinationSummary, BoundedMotorPayload,
-    ChannelCommand, CognitiveWorkReceipt, CoordinationGroup,
+    BoundedReplayBatch, ChannelCommand, CognitiveWorkReceipt, CoordinationGroup,
     HomeostaticDelta, MotorChannel, MotorCommandBundle,
     PhysicalContactKind, PredictionTargetReceipt,
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
@@ -29,8 +29,8 @@ use alife_core::{
     MemoryUpdateReceipt, NeuralActionSelection, NormalizedScalar, OrganismId, PassiveLifeEvent,
     PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft, PhenotypeCompiler,
     PhenotypeCompilerInputs,
-    PostActionOutcome, PreActionSnapshot, PreparedMemoryRecall, ScaffoldContractError,
-    CandidateObservationRef,
+    PostActionOutcome, PreActionSnapshot, PreparedMemoryRecall, ReplayEligibilitySample,
+    ReplaySynapseSpan, ScaffoldContractError, CandidateObservationRef,
     SensorProfile, SignedValence, SleepConsolidator, SleepTransition,
     SensorProfileIdentity, SensoryAbiVersion, SleepConsolidationConfig, SleepPhase, SleepState,
     Tick, TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind,
@@ -511,11 +511,12 @@ fn build_authoritative_sleep_evidence(
     last_sealed_patches: &[ExperiencePatch],
 ) -> Result<SleepReplayEvidence, ScaffoldContractError> {
     let batch = backend.build_sleep_replay_batch(handle)?;
-    let prediction_targets = batch
+    let retained = batch
         .events
         .iter()
-        .map(|event| {
-            last_sealed_patches
+        .enumerate()
+        .filter_map(|(event_index, event)| {
+            let target = last_sealed_patches
                 .iter()
                 .chain(sealed_patches.iter())
                 .find_map(|patch| {
@@ -524,10 +525,69 @@ fn build_authoritative_sleep_evidence(
                             && target.experience_sequence == event.sequence_id)
                             .then(|| target.clone())
                     })
-                })
-                .ok_or(ScaffoldContractError::MissingPhaseData)
+                });
+            target.map(|target| (event_index, *event, target))
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Vec<_>>();
+    if retained.is_empty() {
+        return Err(ScaffoldContractError::MissingPhaseData);
+    }
+
+    let retained_event_count = u32::try_from(retained.len())
+        .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+    let mut eligibility_samples = Vec::with_capacity(
+        batch
+            .synapse_spans
+            .len()
+            .checked_mul(retained.len())
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?,
+    );
+    let mut synapse_spans = Vec::with_capacity(batch.synapse_spans.len());
+    for span in &batch.synapse_spans {
+        let source_start = usize::try_from(span.sample_start)
+            .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        let source_end = source_start
+            .checked_add(
+                usize::try_from(span.sample_count)
+                    .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?,
+            )
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        let source_samples = batch
+            .eligibility_samples
+            .get(source_start..source_end)
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        let sample_start = u32::try_from(eligibility_samples.len())
+            .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        for (retained_index, (source_index, _, _)) in retained.iter().enumerate() {
+            let source = source_samples
+                .get(*source_index)
+                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+            eligibility_samples.push(ReplayEligibilitySample {
+                event_index: u16::try_from(retained_index)
+                    .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?,
+                eligibility_q15: source.eligibility_q15,
+            });
+        }
+        synapse_spans.push(ReplaySynapseSpan {
+            local_synapse_id: span.local_synapse_id,
+            sample_start,
+            sample_count: retained_event_count,
+            reserved: span.reserved,
+        });
+    }
+
+    let prediction_targets = retained
+        .iter()
+        .map(|(_, _, target)| target.clone())
+        .collect();
+    let mut batch = BoundedReplayBatch {
+        schema_version: batch.schema_version,
+        events: retained.iter().map(|(_, event, _)| *event).collect(),
+        synapse_spans,
+        eligibility_samples,
+        canonical_digest: [0; 4],
+    };
+    batch.canonical_digest = batch.recompute_canonical_digest()?;
     SleepReplayEvidence::new(batch, prediction_targets)
 }
 
