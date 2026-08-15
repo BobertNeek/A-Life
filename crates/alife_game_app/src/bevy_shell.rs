@@ -587,10 +587,22 @@ impl LiveBrainPresentationFrameResource {
         tick_summaries: Vec<LiveBrainTickSummary>,
         world: &HeadlessWorld,
     ) -> Result<(), LiveBrainPresentationFrameError> {
+        let authoritative_world_tick = world.tick();
+        if tick_summaries.is_empty()
+            || tick_summaries.iter().any(|summary| {
+                summary.tick_after != authoritative_world_tick
+                    || summary.world_tick_after != authoritative_world_tick
+            })
+        {
+            // Render-only frames retain the last frame whose summaries were
+            // produced by the same authoritative world tick. Never rotate a
+            // moved snapshot with an empty or stale summary batch.
+            return Ok(());
+        }
         let snapshot = world.presentation_snapshot();
         let mut next = LiveBrainPresentationFrame::try_new(
             tick_summaries,
-            world.tick(),
+            authoritative_world_tick,
             world.object_snapshots(),
         )?;
         next.install_organism_snapshot(snapshot);
