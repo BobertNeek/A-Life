@@ -4984,7 +4984,7 @@ impl GpuLiveBrainRuntime {
                 let event = resident.sleep_scheduler.scheduled_tick_with_organism(
                     &mut record,
                     homeostatic_parameters,
-                    tick_after,
+                    tick_before,
                     &mut routed_driver,
                     false,
                 )?;
