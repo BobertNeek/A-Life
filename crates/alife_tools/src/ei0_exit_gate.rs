@@ -1472,6 +1472,15 @@ pub fn validate_committed_ei0_exit_gate_report(
         .ok_or(Ei0ExitGateError::Evidence(
             "committed report is missing its source binding",
         ))?;
+    let root = workspace_root();
+    let current_head = git_output(&root, &["rev-parse", "HEAD"])?;
+    let exact_historical_baseline =
+        is_exact_committed_historical_baseline(report, binding, &root)?;
+    if binding.producing_source_commit != current_head && !exact_historical_baseline {
+        return Err(Ei0ExitGateError::Evidence(
+            "non-current report is not the exact historical baseline",
+        ));
+    }
 
     let expected_paths = SOURCE_CONTRACT_PATHS
         .iter()
@@ -1482,7 +1491,6 @@ pub fn validate_committed_ei0_exit_gate_report(
             "artifact source-contract path set changed",
         ));
     }
-    let root = workspace_root();
     if source_contract_digest_at_revision(
         &root,
         &binding.producing_source_commit,
@@ -1505,27 +1513,22 @@ pub fn validate_committed_ei0_exit_gate_report(
             "producing source commit does not resolve to the recorded tree",
         ));
     }
-    let current_head = git_output(&root, &["rev-parse", "HEAD"])?;
-    let exact_historical_baseline =
-        is_exact_committed_historical_baseline(report, binding, &root)?;
-    if binding.producing_source_commit == current_head {
-        let mut source_diff = Command::new("git");
-        source_diff
-            .current_dir(&root)
-            .args(["diff", "--quiet", &binding.producing_source_commit, "--"])
-            .args(SOURCE_CONTRACT_PATHS);
-        if !source_diff
-            .status()
-            .map_err(|error| Ei0ExitGateError::Source(error.to_string()))?
-            .success()
-        {
-            return Err(Ei0ExitGateError::Evidence(
-                "relevant source differs from the producing commit",
-            ));
-        }
+    let mut source_diff = Command::new("git");
+    source_diff
+        .current_dir(&root)
+        .args(["diff", "--quiet", "HEAD", "--"])
+        .args(SOURCE_CONTRACT_PATHS);
+    if !source_diff
+        .status()
+        .map_err(|error| Ei0ExitGateError::Source(error.to_string()))?
+        .success()
+    {
+        return Err(Ei0ExitGateError::Evidence(
+            "relevant source differs from current HEAD",
+        ));
     }
 
-    if binding.producing_source_commit == current_head {
+    if !exact_historical_baseline {
         let current_foundation =
             FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1)?;
         if report.evidence_digests.foundation_weights.as_deref()

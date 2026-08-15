@@ -1,6 +1,6 @@
 #[cfg(feature = "gpu-tests")]
 use std::collections::BTreeSet;
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, process::Command};
 
 #[cfg(feature = "gpu-tests")]
 use alife_archive::{CompositeGeneticArchiveInput, LineageLibrary, LineageLibraryConfig};
@@ -265,6 +265,33 @@ fn committed_report_recomputes_current_source_and_causal_evidence() {
         validate_committed_ei0_exit_gate_report(&tampered_child_phenotype),
         Err(Ei0ExitGateError::Evidence(
             "historical report differs from the committed baseline artifact"
+        ))
+    ));
+
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+        .unwrap();
+    let arbitrary_old_commit = Command::new("git")
+        .current_dir(workspace_root)
+        .args(["rev-parse", "HEAD^"])
+        .output()
+        .unwrap();
+    assert!(arbitrary_old_commit.status.success());
+    let mut arbitrary_old_report = report.clone();
+    arbitrary_old_report
+        .artifact_binding
+        .as_mut()
+        .unwrap()
+        .producing_source_commit = String::from_utf8(arbitrary_old_commit.stdout)
+        .unwrap()
+        .trim()
+        .to_string();
+    refresh_binding_digests(&mut arbitrary_old_report);
+    assert!(matches!(
+        validate_committed_ei0_exit_gate_report(&arbitrary_old_report),
+        Err(Ei0ExitGateError::Evidence(
+            "non-current report is not the exact historical baseline"
         ))
     ));
 
