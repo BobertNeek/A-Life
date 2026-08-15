@@ -3,10 +3,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, LineageLibraryConfig};
+use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkCounters};
+use alife_core::predictive::GroundedSuccessorPredictor;
 use alife_core::{
-    ActionKind, ActionTarget, BiochemistryState, BoundedCoordinationSummary,
-    BoundedMotorPayload, ChannelCommand, CognitiveWorkCostPolicy, CognitiveWorkCounters,
-    CognitiveWorkReceipt, CoordinationGroup, GroundedSuccessorPredictor,
+    ActionKind, ActionTarget, BiochemistryState, BoundedCoordinationSummary, BoundedMotorPayload,
+    ChannelCommand, CognitiveWorkReceipt, CoordinationGroup,
     HomeostaticDelta, MotorChannel, MotorCommandBundle,
     PhysicalContactKind, PredictionTargetReceipt,
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
@@ -43,7 +44,7 @@ use alife_gpu_backend::{
 };
 use alife_runtime::{
     DurableGpuCheckpointRef, GpuAuthoritativeSession, GpuSessionAuthority,
-    GpuSessionConsumerKind, GpuSessionFailStopCause,
+    GpuSessionConsumerKind, GpuSessionFailStopCause, SleepPhaseReceipt, SleepWorkDue,
 };
 use alife_world::{
     grounded_peripheral_summaries,
@@ -1774,12 +1775,14 @@ fn cognitive_context_for_recall(
     context.concept.active_concepts = concepts
         .into_iter()
         .take(MAX_ACTIVE_CONCEPTS)
-        .map(|concept| CognitiveConceptActivation {
-            concept_id: concept.id,
-            activation: concept.salience,
-            utility: NormalizedScalar::new(concept.confidence.raw())?,
+        .map(|concept| {
+            Ok(CognitiveConceptActivation {
+                concept_id: concept.id,
+                activation: concept.salience,
+                utility: NormalizedScalar::new(concept.confidence.raw())?,
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>, ScaffoldContractError>>()?;
     context.concept.topology_digest = topology.diagnostics().canonical_digest;
 
     let mut gaps = topology.map().curiosity_biases();
@@ -2101,7 +2104,11 @@ fn factorized_motor_bundle_for_candidates(
         }],
     });
     let bundle = MotorCommandBundle::new(organism_id, sequence_id, tick, channel_commands)?;
-    coordination.map_or(Ok(bundle), |coordination| bundle.with_coordination(coordination))
+    if let Some(coordination) = coordination {
+        bundle.with_coordination(coordination)
+    } else {
+        Ok(bundle)
+    }
 }
 
 fn apply_prediction_evidence(
@@ -2326,13 +2333,13 @@ fn seal_prepared_selection_core(
         patch_sequence_id: Some(sequence_id.raw()),
         patch_success: Some(patch.outcome().success),
         physical_contact: Some(patch.outcome().physical.contact),
-        action_failure: action_result.execution.failure,
+        action_failure: None,
         sealed_patch_count: sealed_patch_count.saturating_add(1),
         packed_record_count: 0,
         memory_updates: 0,
         topology_updates: 0,
         learning_updates: 0,
-        invalid_or_rejected_action_count: u32::from(!action_result.execution.succeeded),
+        invalid_or_rejected_action_count: u32::from(!succeeded),
         last_diagnostic: None,
         causal_stages: vec![
             LiveBrainCausalStage::GatherSensory,
@@ -4491,6 +4498,17 @@ impl GpuLiveBrainRuntime {
                     transition: None,
                     consolidation_kind_raw: sleep_before.consolidation.kind_raw(),
                     selected_action: None,
+                    motor_eligible: true,
+                    sleep_work_units: 0,
+                    phase_receipt: SleepPhaseReceipt {
+                        phase: SleepPhase::Awake,
+                        cycle_id: sleep_before.last_consolidated_cycle_id,
+                        tick: tick_before,
+                        due_work: SleepWorkDue::empty(),
+                        work_units: 0,
+                        cumulative_work_units: 0,
+                        sealed: false,
+                    },
                 }
             };
             let sleep_after = resident.sleep_scheduler.state();
