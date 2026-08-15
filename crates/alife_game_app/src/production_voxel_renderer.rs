@@ -5722,26 +5722,34 @@ fn fvr04_live_creature_visual_record(
     chunk: VoxelChunkCoord,
 ) -> Option<Fvr04CreatureVisualRecord> {
     let organism_id = object.organism_id?;
-    let record = world.organism_registry().get(organism_id)?;
-    let admission = record
-        .authoritative_admission_at(frame.authoritative_world_tick)
-        .ok()?;
-    if admission.world_entity_id != object.id {
+    let presentation = frame.organism(object.id)?;
+    if presentation.organism_id != organism_id
+        || presentation.world_entity_id != object.id
+        || presentation.object.kind != WorldObjectKind::Agent
+        || presentation.object.organism_id != Some(organism_id)
+        || !presentation.lifecycle.is_alive()
+    {
         return None;
     }
+    let (selected_action_kind, target_entity) = presentation.motor.as_ref().map_or(
+        (None, None),
+        |motor| (motor.action_kind.clone(), motor.target_entity),
+    );
+    let target_position = target_entity
+        .and_then(|target| frame.object(target).map(|object| object.position));
     let visual = creature_visual_snapshot_from_parts_with_appearance(
-        organism_id,
-        object.id,
-        object.position,
-        None,
-        None,
-        &admission.biochemistry.homeostasis,
-        record.sleep_phase(),
-        None,
+        presentation.organism_id,
+        presentation.world_entity_id,
+        presentation.object.position,
+        target_entity,
+        target_position,
+        &presentation.biochemistry.homeostasis,
+        presentation.sleep_phase,
+        selected_action_kind,
         CreatureAppearanceGenome::from_ids(
-            organism_id,
-            admission.genome.id,
-            organism_id.raw() as usize,
+            presentation.organism_id,
+            presentation.genome.id,
+            presentation.organism_id.raw() as usize,
             world.seed(),
         ),
     )
@@ -5749,15 +5757,19 @@ fn fvr04_live_creature_visual_record(
     Some(Fvr04CreatureVisualRecord {
         stable_ref: StableVoxelObjectRef {
             kind: StableVoxelRefKind::Creature,
-            stable_id: Some(object.id),
+            stable_id: Some(presentation.world_entity_id),
             chunk,
             tile: Some(tile),
         },
         tile,
-        display_label: object.label.clone(),
+        display_label: presentation.object.label.clone(),
         brain_neuron_count: None,
-        social_affinity: object.social_affinity,
-        reproductive_drive: admission.biochemistry.homeostasis.drives.reproductive_drive,
+        social_affinity: presentation.object.social_affinity,
+        reproductive_drive: presentation
+            .biochemistry
+            .homeostasis
+            .drives
+            .reproductive_drive,
         memory_record_count: 0,
         concept_count: 0,
         unresolved_gap_count: 0,
