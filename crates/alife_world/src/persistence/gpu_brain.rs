@@ -951,6 +951,8 @@ pub struct GpuBrainSaveState {
     pub activation_state: GpuBrainAssetRef,
     pub neuron_homeostasis: GpuBrainAssetRef,
     pub checkpoint_tick: Tick,
+    #[serde(default)]
+    pub exact_cognitive_state: Option<GpuBrainAssetRef>,
     pub last_learning_replay_key: Option<OutcomeCreditReplayKey>,
     pub pending_eligibility: Option<PendingEligibilityCheckpoint>,
     pub pending_experience_transaction: Option<GpuBrainAssetRef>,
@@ -1025,6 +1027,9 @@ impl GpuBrainSaveState {
             asset.validate()?;
         }
         if let Some(asset) = &self.pending_experience_transaction {
+            asset.validate()?;
+        }
+        if let Some(asset) = &self.exact_cognitive_state {
             asset.validate()?;
         }
         self.sleep_assets.validate_refs()?;
@@ -1160,6 +1165,7 @@ impl GpuBrainSaveState {
             &self.neuron_homeostasis,
         ];
         refs.extend(self.pending_experience_transaction.iter());
+        refs.extend(self.exact_cognitive_state.iter());
         refs.push(&self.memory.compaction.active_bank_asset);
         refs.extend(self.memory.compaction.staged_bank_asset.iter());
         refs.push(&self.topology.summary_asset);
@@ -1278,6 +1284,8 @@ struct GpuBrainSaveStateWire {
     last_learning_replay_key: Option<OutcomeCreditReplayKey>,
     pending_eligibility: Option<PendingEligibilityCheckpoint>,
     pending_experience_transaction: Option<GpuBrainAssetRef>,
+    #[serde(default)]
+    exact_cognitive_state: Option<GpuBrainAssetRef>,
     memory: MemorySidecarSaveState,
     topology: TopologySidecarSaveSummary,
     tracked_objects: TrackedObjectRegistrySaveState,
@@ -1322,6 +1330,7 @@ impl From<GpuBrainSaveStateWire> for GpuBrainSaveState {
             last_learning_replay_key: wire.last_learning_replay_key,
             pending_eligibility: wire.pending_eligibility,
             pending_experience_transaction: wire.pending_experience_transaction,
+            exact_cognitive_state: wire.exact_cognitive_state,
             memory: wire.memory,
             topology: wire.topology,
             tracked_objects: wire.tracked_objects,

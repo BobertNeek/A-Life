@@ -185,7 +185,6 @@ pub struct GpuBrainCheckpointWrite {
     pub save_state: GpuBrainSaveState,
     pub manifest_entries: Vec<AssetManifestEntry>,
     pub checkpoint_digest: [u64; 4],
-    pub exact_cognitive_state: Option<GpuBrainAssetRef>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -264,7 +263,7 @@ impl GpuBrainCheckpointWrite {
         }
         let _ = state.encode()?;
         let (asset, entry) = store.write_json("v11-exact-cognitive", state)?;
-        self.exact_cognitive_state = Some(asset);
+        self.save_state.exact_cognitive_state = Some(asset.clone());
         self.manifest_entries.push(entry);
         Ok(())
     }
@@ -289,24 +288,23 @@ impl GpuCheckpointAssetStore {
         manifest: &AssetManifest,
         checkpoint: &GpuBrainCheckpointWrite,
     ) -> Result<RestoredGpuBrainCheckpoint, GameAppShellError> {
-        let exact_cognitive_state = checkpoint
+        let exact_asset = checkpoint
+            .save_state
             .exact_cognitive_state
             .as_ref()
-            .map(|asset| self.read_exact_cognitive_state(manifest, asset))
-            .transpose()?;
-        if let Some(state) = &exact_cognitive_state {
-            if state.organism_id != checkpoint.save_state.organism_id
-                || state.checkpoint_tick != checkpoint.save_state.checkpoint_tick
-            {
-                return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
-            }
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        let exact_cognitive_state = self.read_exact_cognitive_state(manifest, exact_asset)?;
+        if exact_cognitive_state.organism_id != checkpoint.save_state.organism_id
+            || exact_cognitive_state.checkpoint_tick != checkpoint.save_state.checkpoint_tick
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
         }
         let mut restored = self.restore_brain(backend, manifest, &checkpoint.save_state)?;
-        restored.exact_cognitive_state = exact_cognitive_state;
+        restored.exact_cognitive_state = Some(exact_cognitive_state);
         Ok(restored)
     }
 
-    fn read_exact_cognitive_state(
+    pub fn read_exact_cognitive_state(
         &self,
         manifest: &AssetManifest,
         asset: &GpuBrainAssetRef,
@@ -735,6 +733,7 @@ impl GpuCheckpointAssetStore {
             activation_state,
             neuron_homeostasis,
             checkpoint_tick,
+            exact_cognitive_state: None,
             last_learning_replay_key: parts.last_learning_replay_key,
             pending_eligibility: pending_checkpoint,
             pending_experience_transaction,
@@ -757,7 +756,6 @@ impl GpuCheckpointAssetStore {
             save_state,
             manifest_entries: entries,
             checkpoint_digest,
-            exact_cognitive_state: None,
         })
     }
 
@@ -770,6 +768,11 @@ impl GpuCheckpointAssetStore {
         state.validate()?;
         manifest.validate_with_root(self.root())?;
         state.validate_asset_manifest(manifest)?;
+        let exact_cognitive_state = state
+            .exact_cognitive_state
+            .as_ref()
+            .map(|asset| self.read_exact_cognitive_state(manifest, asset))
+            .transpose()?;
         let capacity = BrainCapacityClass::production_for_id(state.capacity_class_id)?;
         let current_provenance = current_backend_provenance(backend, &capacity)?;
         state
@@ -1014,7 +1017,7 @@ impl GpuCheckpointAssetStore {
             language_grounding: state.language_grounding.clone(),
             life_statistics: state.life_statistics.clone(),
             retained_learning,
-            exact_cognitive_state: None,
+            exact_cognitive_state,
             replay_patches,
         })
     }

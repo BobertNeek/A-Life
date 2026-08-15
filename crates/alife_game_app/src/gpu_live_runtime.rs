@@ -54,7 +54,8 @@ use alife_world::{
     grounded_peripheral_summaries,
     persistence::{
         AssetManifest, CreatureMindSaveSummary, CreatureSaveState, GpuBrainSaveState,
-        LearningTraceSaveSummary, PortableAssetDigest, PortableSaveFile, RuntimeConfig,
+        ExactCognitiveCheckpointState, LearningTraceSaveSummary, PortableAssetDigest,
+        PortableSaveFile, RuntimeConfig, V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
         WeightLayerSaveSummary,
     },
     CreatureAppearanceGenome, HabitatActor, HabitatAuthorityError, HabitatBreedingKind,
@@ -96,6 +97,12 @@ struct ResidentCognition {
     life_statistics: PassiveLifeStatistics,
     attention_hysteresis: alife_core::HysteresisState,
     predictor: GroundedSuccessorPredictor,
+    last_cognitive_context: Option<CognitiveContextFrame>,
+    last_selected_motor_bundle: Option<MotorCommandBundle>,
+    last_cognitive_work: CognitiveWorkReceipt,
+    last_sleep_work: Option<SleepWorkReceipt>,
+    last_structural_edit_receipts: Vec<alife_core::StructuralEditBatch>,
+    last_sleep_report: Option<alife_core::SleepConsolidationReport>,
 }
 
 struct StagedLiveAuthority {
@@ -363,6 +370,12 @@ impl ResidentAuthorityPlan {
             life_statistics: PassiveLifeStatistics::new(self.organism_id, self.world_tick)?,
             attention_hysteresis: alife_core::HysteresisState::default(),
             predictor: GroundedSuccessorPredictor::default(),
+            last_cognitive_context: None,
+            last_selected_motor_bundle: None,
+            last_cognitive_work: CognitiveWorkReceipt::zero(),
+            last_sleep_work: None,
+            last_structural_edit_receipts: Vec::new(),
+            last_sleep_report: None,
         })
     }
 }
@@ -510,6 +523,7 @@ struct AuthoritativeGpuSleepDriver<'a> {
     handle: GpuBrainHandle,
     context: Option<AuthoritativeSleepContext<'a>>,
     replay_evidence_before_commit: Option<SleepReplayEvidence>,
+    last_sleep_work: Option<&'a mut Option<SleepWorkReceipt>>,
 }
 
 struct AuthoritativeSleepContext<'a> {
@@ -741,7 +755,7 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
             .context
             .as_mut()
             .ok_or(ScaffoldContractError::MissingPhaseData)?;
-        match replay_evidence_before_commit {
+        let receipt = match replay_evidence_before_commit {
             Some(evidence) => run_authoritative_sleep_transaction_with_evidence(
                 homeostasis,
                 tick,
@@ -756,8 +770,11 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                 tick,
                 context,
             ),
+        }?;
+        if let Some(last_sleep_work) = self.last_sleep_work.as_mut() {
+            **last_sleep_work = Some(receipt.clone());
         }
-        .map(Some)
+        Ok(Some(receipt))
     }
 }
 
@@ -2518,6 +2535,9 @@ fn seal_prepared_selection_core(
         &work,
         schedule_sleep,
     )?;
+    resident.last_cognitive_context = Some(cognitive_context.clone());
+    resident.last_selected_motor_bundle = Some(motor_bundle.clone());
+    resident.last_cognitive_work = cognitive_work;
     let combined_prediction_error = grounded_prediction_error;
     let mut outcome = PostActionOutcome::new(
         organism_id,
@@ -2944,6 +2964,12 @@ impl GpuLiveBrainRuntime {
                     })?,
                 attention_hysteresis: alife_core::HysteresisState::default(),
                 predictor: GroundedSuccessorPredictor::default(),
+                last_cognitive_context: None,
+                last_selected_motor_bundle: None,
+                last_cognitive_work: CognitiveWorkReceipt::zero(),
+                last_sleep_work: None,
+                last_structural_edit_receipts: Vec::new(),
+                last_sleep_report: None,
             };
             let raw = entry.organism_id.raw();
             if candidate_residents.insert(raw, resident).is_some()
@@ -3612,7 +3638,16 @@ impl GpuLiveBrainRuntime {
                 .cloned()
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
             if let Some(state) = checkpoint_index.get(&raw).copied() {
-                let restored = store.restore_brain(&mut runtime.backend, manifest, state)?;
+                let checkpoint = GpuBrainCheckpointWrite {
+                    save_state: state.clone(),
+                    manifest_entries: Vec::new(),
+                    checkpoint_digest: [0; 4],
+                };
+                let restored = store.restore_brain_checkpoint(
+                    &mut runtime.backend,
+                    manifest,
+                    &checkpoint,
+                )?;
                 let handle = restored.receipt.handle;
                 let mut pending_eligibility_for_cleanup = restored.receipt.pending_eligibility;
                 let install_result: Result<_, GameAppShellError> = (|| {
@@ -3673,10 +3708,37 @@ impl GpuLiveBrainRuntime {
                             },
                         },
                     };
+                    let exact_cognitive_state = restored
+                        .exact_cognitive_state
+                        .ok_or(ScaffoldContractError::MissingPhaseData)?;
+                    if exact_cognitive_state.sleep_state != restored.sleep {
+                        return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+                    }
+                    let mut v11_checkpoint = runtime.backend.checkpoint_v11(handle)?;
+                    v11_checkpoint.dendritic_branches =
+                        exact_cognitive_state.dendritic_branches.clone();
+                    v11_checkpoint.structural =
+                        exact_cognitive_state.structural_plasticity.clone();
+                    runtime.backend.restore_v11(handle, v11_checkpoint)?;
                     let sleep_scheduler = GpuSleepScheduler::restore(
                         SleepConsolidationConfig::reference(),
-                        restored.sleep,
+                        exact_cognitive_state.sleep_state,
                     )?;
+                    let ExactCognitiveCheckpointState {
+                        cognitive_context,
+                        predictor,
+                        selected_motor_bundle,
+                        cognitive_work,
+                        last_sleep_work,
+                        structural_edit_receipts,
+                        last_sleep_report,
+                        ..
+                    } = exact_cognitive_state;
+                    let attention_hysteresis = cognitive_context.attention.hysteresis;
+                    let last_cognitive_context = Some(cognitive_context);
+                    let last_selected_motor_bundle = selected_motor_bundle;
+                    let last_cognitive_work = cognitive_work;
+                    let last_structural_edit_receipts = structural_edit_receipts;
                     let life_statistics = restored
                         .life_statistics
                         .unwrap_or(PassiveLifeStatistics::new(OrganismId(raw), world_tick)?);
@@ -3707,8 +3769,14 @@ impl GpuLiveBrainRuntime {
                         next_sequence,
                         language_grounding: restored.language_grounding,
                         life_statistics,
-                        attention_hysteresis: alife_core::HysteresisState::default(),
-                        predictor: GroundedSuccessorPredictor::default(),
+                        attention_hysteresis,
+                        predictor,
+                        last_cognitive_context,
+                        last_selected_motor_bundle,
+                        last_cognitive_work,
+                        last_sleep_work,
+                        last_structural_edit_receipts,
+                        last_sleep_report,
                     };
                     Ok((
                         resident,
@@ -3880,7 +3948,7 @@ impl GpuLiveBrainRuntime {
             &self.sealed_patches,
             &self.last_sealed_patches,
         )?;
-        Ok(store.capture_brain_with_runtime_replay_state(
+        let mut write = store.capture_brain_with_runtime_replay_state(
             &mut self.backend,
             handle,
             &resident.phenotype,
@@ -3898,7 +3966,60 @@ impl GpuLiveBrainRuntime {
                 life_statistics: &resident.life_statistics,
                 retained_learning,
             },
-        )?)
+        )?;
+        let exact = self.exact_cognitive_state_for_checkpoint(
+            organism_id,
+            handle,
+            resident,
+            self.world.tick(),
+        )?;
+        write.attach_exact_cognitive_state(store, &exact)?;
+        Ok(write)
+    }
+
+    fn exact_cognitive_state_for_checkpoint(
+        &self,
+        organism_id: OrganismId,
+        handle: GpuBrainHandle,
+        resident: &ResidentCognition,
+        checkpoint_tick: Tick,
+    ) -> Result<ExactCognitiveCheckpointState, GameAppShellError> {
+        let mut cognitive_context = resident
+            .last_cognitive_context
+            .clone()
+            .unwrap_or(CognitiveContextFrame::empty(
+                organism_id,
+                ExperienceSequenceId(resident.next_sequence.max(1)),
+                checkpoint_tick,
+            )?);
+        cognitive_context.world_tick = checkpoint_tick;
+        cognitive_context.attention.world_tick = checkpoint_tick;
+        cognitive_context.validate_contract()?;
+
+        let mut selected_motor_bundle = resident.last_selected_motor_bundle.clone();
+        if let Some(bundle) = &mut selected_motor_bundle {
+            bundle.tick = checkpoint_tick;
+            bundle.validate_contract()?;
+        }
+
+        let v11_checkpoint = self.backend.backend().checkpoint_v11(handle)?;
+        let state = ExactCognitiveCheckpointState {
+            schema_version: V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
+            organism_id,
+            checkpoint_tick,
+            cognitive_context,
+            predictor: resident.predictor.clone(),
+            selected_motor_bundle,
+            cognitive_work: resident.last_cognitive_work,
+            sleep_state: resident.sleep_scheduler.state(),
+            last_sleep_work: resident.last_sleep_work.clone(),
+            dendritic_branches: v11_checkpoint.dendritic_branches,
+            structural_plasticity: v11_checkpoint.structural,
+            structural_edit_receipts: resident.last_structural_edit_receipts.clone(),
+            last_sleep_report: resident.last_sleep_report.clone(),
+        };
+        state.validate()?;
+        Ok(state)
     }
 
     /// Attaches the runtime-owned durable save boundary to an already
@@ -4041,7 +4162,7 @@ impl GpuLiveBrainRuntime {
                 &self.sealed_patches,
                 &self.last_sealed_patches,
             )?;
-            let write = store.capture_brain_with_runtime_replay_state(
+            let mut write = store.capture_brain_with_runtime_replay_state(
                 &mut self.backend,
                 handle,
                 &resident.phenotype,
@@ -4076,6 +4197,13 @@ impl GpuLiveBrainRuntime {
                     }),
                 },
             )?;
+            let exact = self.exact_cognitive_state_for_checkpoint(
+                organism_id,
+                handle,
+                resident,
+                checkpoint_tick,
+            )?;
+            write.attach_exact_cognitive_state(store, &exact)?;
             manifest_entries.extend(write.manifest_entries);
             let canonical_biochemistry = self
                 .world
@@ -4917,6 +5045,7 @@ impl GpuLiveBrainRuntime {
                 handle,
                 context: None,
                 replay_evidence_before_commit: None,
+                last_sleep_work: None,
             };
             driver.progress(organism_id, state, intent)
         })
@@ -5108,6 +5237,7 @@ impl GpuLiveBrainRuntime {
                             last_sealed_patches: &self.last_sealed_patches,
                         }),
                         replay_evidence_before_commit: None,
+                        last_sleep_work: Some(&mut resident.last_sleep_work),
                     },
                     progress,
                 };
@@ -7720,6 +7850,12 @@ mod tests {
                             .unwrap(),
                         attention_hysteresis: alife_core::HysteresisState::default(),
                         predictor: GroundedSuccessorPredictor::default(),
+                        last_cognitive_context: None,
+                        last_selected_motor_bundle: None,
+                        last_cognitive_work: CognitiveWorkReceipt::zero(),
+                        last_sleep_work: None,
+                        last_structural_edit_receipts: Vec::new(),
+                        last_sleep_report: None,
                     },
                 )
             })
@@ -9339,6 +9475,12 @@ mod tests {
                 life_statistics: PassiveLifeStatistics::new(organism_id, Tick::ZERO).unwrap(),
                 attention_hysteresis: alife_core::HysteresisState::default(),
                 predictor: GroundedSuccessorPredictor::default(),
+                last_cognitive_context: None,
+                last_selected_motor_bundle: None,
+                last_cognitive_work: CognitiveWorkReceipt::zero(),
+                last_sleep_work: None,
+                last_structural_edit_receipts: Vec::new(),
+                last_sleep_report: None,
             },
         )]);
         let confidence = Confidence::new(1.0).unwrap();
