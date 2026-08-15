@@ -52,7 +52,8 @@ use alife_runtime::{
 use alife_world::{
     grounded_peripheral_summaries,
     persistence::{AssetManifest, GpuBrainSaveState, PortableSaveFile, RuntimeConfig},
-    HabitatActor, HabitatAuthorityError, HabitatId, HabitatOperation, HabitatOperationRequest,
+    HabitatActor, HabitatAuthorityError, HabitatBreedingKind, HabitatBreedingReceipt,
+    HabitatBreedingRequest, HabitatId, HabitatMode, HabitatOperation, HabitatOperationRequest,
     HabitatPermissionReceipt, HeadlessWorld, HeadlessWorldSignatureDigest, WorldEditorSpawnSpec,
     WorldObjectKind, WorldOrganismRecord,
 };
@@ -3905,6 +3906,186 @@ impl GpuLiveBrainRuntime {
         for organism_id in dead_ids {
             self.retire_organism(organism_id, "world-authoritative death")?;
         }
+        Ok(())
+    }
+
+    /// Applies an explicit managed-habitat breeding receipt to the live
+    /// world. The receipt is reauthorized before a candidate child world is
+    /// built, then the existing reconciliation path owns archive-before-GPU
+    /// admission for the inherited child record.
+    pub fn apply_managed_breed_receipt(
+        &mut self,
+        receipt: HabitatBreedingReceipt,
+        child_organism_id: OrganismId,
+        conception_seed: u64,
+    ) -> Result<(), GameAppShellError> {
+        let invalid_receipt = |message: String| GameAppShellError::InvalidProductionFrontend {
+            message,
+        };
+        let expected = self
+            .world
+            .habitat_authority()
+            .authorize_breeding(HabitatBreedingRequest {
+                habitat_id: receipt.habitat_id,
+                first_parent: receipt.first_parent,
+                second_parent: receipt.second_parent,
+                kind: receipt.kind,
+                actor: receipt.actor,
+                tick: receipt.tick,
+            })
+            .map_err(|error| {
+                invalid_receipt(format!(
+                    "managed breeding receipt rejected by the live habitat authority: {error}"
+                ))
+            })?;
+        if receipt != expected
+            || receipt.mode != HabitatMode::Managed
+            || receipt.kind != HabitatBreedingKind::Explicit
+            || receipt.tick != self.world.tick()
+            || receipt.cognition_policy != alife_core::PolicyBackend::NeuralClosedLoopGpu
+        {
+            return Err(invalid_receipt(
+                "managed breeding receipt is stale or does not match the live authority"
+                    .to_string(),
+            ));
+        }
+        if self.lineage_library.is_none() || self.lineage_run_id.is_none() {
+            return Err(invalid_receipt(
+                "managed breeding requires an attached lineage archive".to_string(),
+            ));
+        }
+
+        child_organism_id.validate()?;
+        let child_raw = child_organism_id.raw();
+        if self
+            .world
+            .organism_registry()
+            .get(child_organism_id)
+            .is_some()
+            || self
+                .world
+                .organism_entity_ids()
+                .into_iter()
+                .any(|(organism_id, _)| organism_id == child_organism_id)
+            || self.handles.contains_key(&child_raw)
+            || self.residents.contains_key(&child_raw)
+            || self.archive_birth_manifests.contains_key(&child_raw)
+        {
+            return Err(invalid_receipt(format!(
+                "managed breeding child organism {child_raw} is already present"
+            )));
+        }
+
+        let current_tick = self.world.tick();
+        let first_record = self
+            .world
+            .organism_registry()
+            .get(receipt.first_parent)
+            .cloned()
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let second_record = self
+            .world
+            .organism_registry()
+            .get(receipt.second_parent)
+            .cloned()
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let first_admission = first_record.authoritative_admission_at(current_tick)?;
+        let second_admission = second_record.authoritative_admission_at(current_tick)?;
+        for (organism_id, admission) in [
+            (receipt.first_parent, &first_admission),
+            (receipt.second_parent, &second_admission),
+        ] {
+            let resident = self
+                .residents
+                .get(&organism_id.raw())
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let handle = self
+                .handles
+                .get(&organism_id.raw())
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            if resident.genome != admission.phenotype.brain_genome
+                || handle.organism_id() != organism_id
+                || handle.phenotype_hash() != resident.phenotype.phenotype_hash()
+            {
+                return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+            }
+        }
+
+        let first_object = self
+            .world
+            .entity(first_admission.world_entity_id)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let second_object = self
+            .world
+            .entity(second_admission.world_entity_id)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        if first_object.kind != WorldObjectKind::Agent
+            || first_object.organism_id != Some(receipt.first_parent)
+            || second_object.kind != WorldObjectKind::Agent
+            || second_object.organism_id != Some(receipt.second_parent)
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+        }
+
+        let child_genome = alife_core::CreatureGenome::reproduce(
+            first_record.genome(),
+            second_record.genome(),
+            conception_seed,
+        )?;
+        let child_phenotype = child_genome.express()?;
+        let child_position = Vec3f::new(
+            (first_object.position.x + second_object.position.x) * 0.5,
+            (first_object.position.y + second_object.position.y) * 0.5,
+            (first_object.position.z + second_object.position.z) * 0.5,
+        );
+        child_position.validate()?;
+        let child_affinity =
+            ((first_object.social_affinity + second_object.social_affinity) * 0.5).clamp(-1.0, 1.0);
+
+        let mut candidate_world = self.world.clone();
+        let child_entity_id = candidate_world.spawn_social_agent(
+            &format!("organism-{child_raw}"),
+            child_organism_id,
+            child_position,
+            child_affinity,
+        )?;
+        let child_record = WorldOrganismRecord::newborn(
+            child_organism_id,
+            child_entity_id,
+            child_genome,
+            child_phenotype,
+            current_tick,
+        )
+        .map_err(|error| {
+            invalid_receipt(format!("managed breeding child record rejected: {error}"))
+        })?;
+        candidate_world.register_organism_record(child_record)?;
+        let mut authority = candidate_world.habitat_authority().clone();
+        authority
+            .register_creature(child_organism_id, receipt.habitat_id, current_tick)
+            .map_err(|error| {
+                invalid_receipt(format!(
+                    "managed breeding child habitat membership rejected: {error}"
+                ))
+            })?;
+        candidate_world
+            .replace_habitat_authority(authority)
+            .map_err(|error| {
+                invalid_receipt(format!(
+                    "managed breeding child habitat authority rejected: {error}"
+                ))
+            })?;
+        candidate_world.validate_organism_bindings()?;
+        validate_candidate_newborn(&candidate_world, child_organism_id)?;
+        Self::compile_birth(
+            &candidate_world,
+            self.brain_class,
+            self.sensor_profile,
+            child_organism_id,
+        )?;
+
+        self.world = candidate_world;
+        self.reconcile_population()?;
         Ok(())
     }
 
