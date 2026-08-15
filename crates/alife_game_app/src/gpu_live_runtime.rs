@@ -3775,12 +3775,20 @@ impl GpuLiveBrainRuntime {
         replacement.replace_headless_world_snapshot(&self.world)?;
         let mut manifest_entries = Vec::new();
         for (&raw, &handle) in &self.handles {
+            let organism_id = OrganismId(raw);
+            let record = self
+                .world
+                .organism_registry()
+                .get(organism_id)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let authoritative_age = record.age_at(checkpoint_tick)?;
             let resident = self
                 .residents
                 .get(&raw)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            if resident.homeostasis.tick != checkpoint_tick
-                || resident.development.age_ticks != checkpoint_tick
+            if resident.homeostasis != record.biochemistry().homeostasis
+                || resident.homeostasis.tick != checkpoint_tick
+                || resident.development.age_ticks != authoritative_age
             {
                 return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
             }
@@ -3822,7 +3830,7 @@ impl GpuLiveBrainRuntime {
             let canonical_biochemistry = self
                 .world
                 .organism_registry()
-                .get(OrganismId(raw))
+                .get(organism_id)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
                 .biochemistry()
                 .clone();
