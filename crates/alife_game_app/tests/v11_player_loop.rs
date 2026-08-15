@@ -51,9 +51,9 @@ fn v11_player_loop_reaches_grounded_body_then_reds_at_next_production_boundary()
         backend,
         world,
         13_001,
-        BrainScaleTier::Nano512,
+        BrainScaleTier::Standard2048,
     )
-    .expect("supported Nano512 production runtime");
+    .expect("supported Standard2048 production runtime");
 
     let grounded = runtime.world_snapshot();
     assert!(
