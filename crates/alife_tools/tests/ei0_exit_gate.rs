@@ -268,7 +268,8 @@ fn committed_report_recomputes_current_source_and_causal_evidence() {
         ))
     ));
 
-    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = manifest_dir
         .parent()
         .and_then(std::path::Path::parent)
         .unwrap();
