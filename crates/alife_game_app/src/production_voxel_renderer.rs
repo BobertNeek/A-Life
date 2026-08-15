@@ -49,11 +49,13 @@ use crate::bevy_shell::{LiveBrainPresentationFrame, LiveBrainPresentationFrameRe
 use crate::bevy_shell::{
     ProductionCuratedFounderResetCommand, ProductionCuratedFounderResetResultResource,
     ProductionGpuBrainRuntimeResource, ProductionGpuBrainTickScheduleResource,
-    RuntimePlaybackState,
 };
 #[cfg(feature = "gpu-runtime")]
 use crate::gpu_live_runtime::CuratedFounderResetRuntimePort;
+#[cfg(feature = "gpu-runtime")]
+use crate::RuntimePlaybackState;
 use crate::terrain_mesh::{build_production_terrain_meshes, TerrainMeshBuild};
+use crate::terrain_lighting::spawn_production_terrain_lighting;
 #[cfg(feature = "gpu-runtime")]
 use crate::ProductionConversationLineageUiState;
 #[cfg(test)]
@@ -1577,7 +1579,7 @@ fn despawn_production_entity_hierarchy(world: &mut World, entity: Entity) {
         .map(|children| children.iter().collect::<Vec<_>>())
         .unwrap_or_default();
     for child in children {
-        despawn_production_entity_hierarchy(world, child);
+        despawn_production_entity_hierarchy(world, *child);
     }
     let _ = world.despawn(entity);
 }
@@ -1653,12 +1655,12 @@ fn report_production_runtime_load_failure(
 
 #[cfg(feature = "gpu-runtime")]
 fn build_production_load_presentation_frame(
-    save: &crate::PortableSaveFile,
+    save: &PortableSaveFile,
 ) -> Result<LiveBrainPresentationFrameResource, GameAppShellError> {
     let candidate_world = save.restore_headless_world()?;
     LiveBrainPresentationFrameResource::from_authoritative_world(&candidate_world)
         .map_err(|error| GameAppShellError::InvalidProductionFrontend {
-            message: format!("FVR04 presentation frame restore failed: {error}"),
+            message: format!("FVR04 presentation frame restore failed: {error:?}"),
         })
 }
 
