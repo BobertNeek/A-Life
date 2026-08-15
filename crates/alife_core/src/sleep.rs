@@ -15,9 +15,10 @@ mod replay;
 pub use replay::*;
 
 use crate::{
+    predictive::GroundedSuccessorPredictor,
     require_current_version, validate_finite, CanonicalDigestBuilder, ChemistryModulation,
-    Confidence, DurationTicks, GroundedSuccessorPredictor, HomeostaticParameters,
-    HomeostaticSnapshot, LobeKind, MemoryBank, MemoryId, NeuralProjectionSchema, NormalizedScalar,
+    Confidence, DurationTicks, HomeostaticParameters, HomeostaticSnapshot, LobeKind, MemoryBank,
+    MemoryId, NeuralProjectionSchema, NormalizedScalar,
     ProjectionRoutingRef, RecoveryTrigger, ScaffoldContractError, SchemaKind, SchemaVersions,
     SparseTilePayload, SynapseWeightSplit, Tick, TopologicalMap, TopologySidecar, Validate,
 };

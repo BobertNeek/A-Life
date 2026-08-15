@@ -1042,6 +1042,7 @@ fn memory_bank_from_portable(
         records: vec![None; config.capacity],
         next_write_index: 0,
         len: 0,
+        lifetime_records: Vec::new(),
         next_memory_id: 1,
         last_inserted_ticks: Vec::new(),
     })

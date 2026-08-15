@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     ActionId, CandidateActionFamily, CandidateFeatureDigest, CanonicalDigestBuilder,
     ExperienceSequenceId, NeuromodulatorSample, PerceptionFrameDigest, PredictionTargetReceipt,
-    ReplayCapturePlan, ScaffoldContractError, Tick,
+    ReplayCapturePlan, ScaffoldContractError, Tick, Validate,
 };
 
 pub const BOUNDED_REPLAY_BATCH_SCHEMA_VERSION: u16 = 1;
