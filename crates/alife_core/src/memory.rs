@@ -1492,6 +1492,69 @@ impl MemoryBank {
             .find(|record| record.source_sequence_id == sequence_id)
     }
 
+    pub fn memory_id_for_sleep_sequence(
+        &self,
+        sequence_id: ExperienceSequenceId,
+        organism_id: OrganismId,
+        action_id: ActionId,
+    ) -> Result<Option<MemoryId>, ScaffoldContractError> {
+        if let Some(record) = self.fast_record_for_sequence(sequence_id) {
+            if record.organism_id != organism_id
+                || record.selected_action_id != Some(action_id)
+            {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+            return Ok(Some(record.memory_id));
+        }
+
+        let Some(record) = self
+            .candidate_store
+            .records
+            .values()
+            .find(|record| record.source_sequence_id == sequence_id)
+        else {
+            return Ok(None);
+        };
+        if record.organism_id_raw != organism_id.raw() || record.action_id_raw != action_id.raw() {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        Ok(Some(record.memory_id))
+    }
+
+    pub fn memory_ids_for_sleep(
+        &mut self,
+        source_sequences: &[ExperienceSequenceId],
+        max_records_after: usize,
+    ) -> Result<Vec<MemoryId>, ScaffoldContractError> {
+        if self.candidate_store.records.is_empty() {
+            return self.promote_fast_memory_to_lifetime(source_sequences, max_records_after);
+        }
+        if source_sequences.is_empty()
+            || max_records_after == 0
+            || max_records_after > self.config.capacity
+            || source_sequences.len() > max_records_after
+        {
+            return Err(ScaffoldContractError::MemoryModeConflict);
+        }
+
+        let mut seen_sequences = std::collections::BTreeSet::new();
+        source_sequences
+            .iter()
+            .map(|sequence_id| {
+                sequence_id.validate()?;
+                if !seen_sequences.insert(sequence_id.raw()) {
+                    return Err(ScaffoldContractError::MemoryReplayRejected);
+                }
+                self.candidate_store
+                    .records
+                    .values()
+                    .find(|record| record.source_sequence_id == *sequence_id)
+                    .map(|record| record.memory_id)
+                    .ok_or(ScaffoldContractError::MissingPhaseData)
+            })
+            .collect()
+    }
+
     /// Moves finalized waking records into a bounded lifetime tier. The
     /// source records are removed from the fast ring, while the lifetime tier
     /// remains available to later recall.

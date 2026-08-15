@@ -1057,9 +1057,9 @@ impl SleepConsolidator {
             return Err(ScaffoldContractError::MissingPhaseData);
         }
 
-        // GPU replay can outlive the bounded fast-memory ring. Keep the
-        // validated event/target pairs that still have their source record,
-        // but do not let one stale replay entry discard the available work.
+        // GPU replay can outlive bounded memory. Keep validated event/target
+        // pairs whose sealed experience is still retained in either memory
+        // representation, while stale replay entries remain discardable.
         let mut eligible_events = Vec::with_capacity(evidence.batch.events.len());
         let mut eligible_event_indices = BTreeSet::new();
         for (event_index, (event, target)) in evidence
@@ -1069,14 +1069,13 @@ impl SleepConsolidator {
             .zip(&evidence.prediction_targets)
             .enumerate()
         {
-            let Some(record) = memory.fast_record_for_sequence(event.sequence_id) else {
+            let Some(_memory_id) = memory.memory_id_for_sleep_sequence(
+                event.sequence_id,
+                target.organism_id,
+                event.action_id,
+            )? else {
                 continue;
             };
-            if record.organism_id != target.organism_id
-                || record.selected_action_id != Some(event.action_id)
-            {
-                return Err(ScaffoldContractError::InvalidDecisionEvidence);
-            }
             eligible_event_indices.insert(event_index);
             eligible_events.push((event, target));
         }
@@ -1091,7 +1090,7 @@ impl SleepConsolidator {
         let mut next_memory = memory.clone();
         let mut next_predictor = predictor.clone();
         let mut next_topology = topology.clone();
-        let promoted_memory_ids = next_memory.promote_fast_memory_to_lifetime(
+        let promoted_memory_ids = next_memory.memory_ids_for_sleep(
             &source_sequences,
             self.config.memory_max_records_after,
         )?;
