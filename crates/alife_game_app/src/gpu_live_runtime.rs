@@ -344,7 +344,7 @@ impl ResidentAuthorityPlan {
     }
 }
 
-const LIVE_COGNITIVE_ENERGY_PER_WORK_UNIT: f32 = 0.001;
+const LIVE_COGNITIVE_ENERGY_PER_WORK_UNIT: f32 = 0.000_001;
 
 #[derive(Debug, Clone)]
 struct GpuLiveCheckpointDurability {
