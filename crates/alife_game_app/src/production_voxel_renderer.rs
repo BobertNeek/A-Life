@@ -5927,10 +5927,126 @@ fn selected_live_creature_object(
     ))
 }
 
+fn selected_live_brain_summary<'a>(
+    frame: &'a LiveBrainPresentationFrame,
+    stable_id: WorldEntityId,
+    organism_id: OrganismId,
+) -> Option<&'a crate::LiveBrainTickSummary> {
+    let organism = frame.organism(stable_id)?;
+    if organism.organism_id != organism_id
+        || organism.world_entity_id != stable_id
+        || organism.object.kind != WorldObjectKind::Agent
+        || organism.object.organism_id != Some(organism_id)
+        || !organism.lifecycle.is_alive()
+    {
+        return None;
+    }
+    frame
+        .tick_summaries
+        .iter()
+        .find(|summary| summary.organism_id == organism_id)
+}
+
+fn fvr04_live_action_label(summary: Option<&crate::LiveBrainTickSummary>) -> String {
+    let Some(summary) = summary else {
+        return "unavailable".to_string();
+    };
+    match (summary.selected_action_kind, summary.selected_action_id) {
+        (Some(kind), Some(action_id)) => format!("{kind:?} (id {})", action_id.raw()),
+        (Some(kind), None) => format!("{kind:?} (id unavailable)"),
+        (None, Some(action_id)) => format!("kind unavailable (id {})", action_id.raw()),
+        (None, None) => "unavailable".to_string(),
+    }
+}
+
+fn fvr04_live_joint_outcome_change(
+    previous: Option<&crate::LiveBrainTickSummary>,
+    current: Option<&crate::LiveBrainTickSummary>,
+) -> &'static str {
+    let (Some(previous), Some(current)) = (previous, current) else {
+        return "unavailable";
+    };
+    if !previous.patch_sealed || !current.patch_sealed {
+        return "unavailable";
+    }
+    if previous.patch_success == current.patch_success
+        && previous.physical_contact == current.physical_contact
+        && previous.action_failure == current.action_failure
+    {
+        "unchanged"
+    } else {
+        "changed"
+    }
+}
+
+fn fvr04_live_behavior_change_text(
+    selection: Option<StableVoxelObjectRef>,
+    frame: Option<&LiveBrainPresentationFrameResource>,
+) -> String {
+    let Some((stable_id, organism_id, _, _)) = selected_live_creature_object(selection, frame) else {
+        return concat!(
+            "LIVE BEHAVIOR RECEIPT\n",
+            "previous selected action: unavailable\n",
+            "current selected action: unavailable\n",
+            "joint measured outcome: unavailable\n",
+            "current sleep: unavailable\n",
+            "updates this frame: unavailable",
+        )
+        .to_string();
+    };
+    let Some(frame) = frame else {
+        return "LIVE BEHAVIOR RECEIPT\nstate: unavailable".to_string();
+    };
+    let previous = selected_live_brain_summary(&frame.previous, stable_id, organism_id);
+    let current = selected_live_brain_summary(&frame.current, stable_id, organism_id);
+    let sleep = frame
+        .current
+        .organism(stable_id)
+        .filter(|organism| {
+            organism.organism_id == organism_id
+                && organism.world_entity_id == stable_id
+                && organism.object.kind == WorldObjectKind::Agent
+                && organism.object.organism_id == Some(organism_id)
+                && organism.lifecycle.is_alive()
+        })
+        .map(|organism| {
+            format!(
+                "phase={:?} work={}",
+                organism.sleep_phase, organism.sleep_work_units
+            )
+        })
+        .unwrap_or_else(|| "unavailable".to_string());
+    let updates = current.map_or_else(
+        || "unavailable".to_string(),
+        |summary| {
+            format!(
+                "memory={} learning={} topology={}",
+                summary.memory_updates, summary.learning_updates, summary.topology_updates
+            )
+        },
+    );
+    format!(
+        concat!(
+            "LIVE BEHAVIOR RECEIPT\n",
+            "previous selected action: {}\n",
+            "current selected action: {}\n",
+            "joint measured outcome: {}\n",
+            "current sleep: {}\n",
+            "updates this frame: {}"
+        ),
+        fvr04_live_action_label(previous),
+        fvr04_live_action_label(current),
+        fvr04_live_joint_outcome_change(previous, current),
+        sleep,
+        updates,
+    )
+}
+
 fn fvr04_live_creature_inspector_text(
     selection: Option<StableVoxelObjectRef>,
     creatures: &Fvr04ProductionCreatureSceneResource,
     live_state: Option<(u64, Vec3f)>,
+    frame: Option<&LiveBrainPresentationFrameResource>,
 ) -> String {
     let live_text = selection
         .filter(|selection| selection.kind == StableVoxelRefKind::Creature)
@@ -5946,7 +6062,11 @@ fn fvr04_live_creature_inspector_text(
             ),
         })
         .unwrap_or_else(|| "LIVE AUTHORITATIVE WORLD\nstate: unavailable".to_string());
-    format!("{live_text}\n\n{}", creatures.panel_text(selection))
+    format!(
+        "{live_text}\n\n{}\n\n{}",
+        fvr04_live_behavior_change_text(selection, frame),
+        creatures.panel_text(selection)
+    )
 }
 
 fn spawn_fvr03_selection_marker(
@@ -6832,7 +6952,12 @@ fn sync_fvr05_right_inspector_panel(
     let body = match ux.settings.active_inspector_tab {
         Fvr05ProductionInspectorTab::Creature => format!(
             "{}\n\nDEBUG AUTHORITY\n{}",
-            fvr04_live_creature_inspector_text(selection.selected, &creatures, live_state),
+            fvr04_live_creature_inspector_text(
+                selection.selected,
+                &creatures,
+                live_state,
+                frame.as_ref().map(|frame| &**frame),
+            ),
             ux.authority.compact_line()
         ),
         Fvr05ProductionInspectorTab::Tile => {
@@ -7137,7 +7262,12 @@ fn sync_fvr04_creature_inspector_panel(
     };
     let text = format!(
         "{}\n{}",
-        fvr04_live_creature_inspector_text(selection.selected, &creatures, live_state),
+        fvr04_live_creature_inspector_text(
+            selection.selected,
+            &creatures,
+            live_state,
+            frame.as_ref().map(|frame| &**frame),
+        ),
         suffix
     );
     for mut panel in &mut panels {
