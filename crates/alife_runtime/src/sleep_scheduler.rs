@@ -320,6 +320,7 @@ impl GpuSleepScheduler {
             if input.energy <= 0.20 {
                 self.controller
                     .force_sleep(tick, SleepTrigger::RecoveryProtocol)
+                    .map(Some)
             } else {
                 self.controller
                     .evaluate_homeostasis(&input.homeostasis, parameters, tick)
