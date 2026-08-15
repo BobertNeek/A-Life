@@ -5556,11 +5556,15 @@ fn reconcile_production_presentation(
         true
     });
     {
-        let expression_buffer = &scene.expression_buffer;
-        let stable_lookup_by_raw_id = &mut scene.stable_lookup_by_raw_id;
-        stable_lookup_by_raw_id.clear();
-        for (index, sample) in expression_buffer.iter().enumerate() {
-            stable_lookup_by_raw_id.insert(sample.stable_id.raw(), index);
+        let lookup_entries = scene
+            .expression_buffer
+            .iter()
+            .enumerate()
+            .map(|(index, sample)| (sample.stable_id.raw(), index))
+            .collect::<Vec<_>>();
+        scene.stable_lookup_by_raw_id.clear();
+        for (raw_id, index) in lookup_entries {
+            scene.stable_lookup_by_raw_id.insert(raw_id, index);
         }
     }
     scene.rendered_creature_count = scene.expression_buffer.len();
