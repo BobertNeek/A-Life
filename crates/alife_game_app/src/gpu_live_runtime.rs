@@ -3812,6 +3812,13 @@ impl GpuLiveBrainRuntime {
                 },
             )?;
             manifest_entries.extend(write.manifest_entries);
+            let canonical_biochemistry = self
+                .world
+                .organism_registry()
+                .get(OrganismId(raw))
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .biochemistry()
+                .clone();
             let creature = replacement
                 .creatures
                 .iter_mut()
@@ -3820,9 +3827,9 @@ impl GpuLiveBrainRuntime {
             if creature.brain_class != self.brain_class {
                 return Err(ScaffoldContractError::PhenotypeCompile.into());
             }
-            creature.development_tick = checkpoint_tick;
-            creature.mind.tick = checkpoint_tick;
-            creature.mind.homeostasis = resident.homeostasis;
+            creature.development_tick = canonical_biochemistry.development.last_update_tick;
+            creature.mind.tick = canonical_biochemistry.tick;
+            creature.mind.homeostasis = canonical_biochemistry.homeostasis;
             creature.mind.sleep_state_label =
                 gpu_sleep_state_label(resident.sleep_scheduler.state());
             creature.gpu_brain = Some(write.save_state);
