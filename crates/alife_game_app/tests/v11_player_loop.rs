@@ -41,16 +41,16 @@ fn v11_player_loop_reaches_grounded_body_then_reds_at_next_production_boundary()
         .map(|(_, entity)| entity)
         .expect("learner world entity");
     let sensor_profile = SensorProfile::GroundedObjectSlotsV1;
-    let foundation_asset = FoundationWeightAsset::builtin_nano512_v1(sensor_profile)
-        .expect("checked Nano512 foundation asset");
+    let foundation_asset = FoundationWeightAsset::builtin_n2048_v1(sensor_profile)
+        .expect("checked N2048 foundation asset");
     let foundation_manifest = foundation_asset.manifest();
     let foundation = FoundationGeneticIdentity::new(
         foundation_manifest.foundation_id().raw(),
         foundation_manifest.foundation_version().raw() as u16,
         foundation_manifest.compatibility_family_id().raw(),
-        BrainCapacityClass::N512_ID,
+        BrainCapacityClass::N2048_ID,
     )
-    .expect("valid Nano512 foundation identity");
+    .expect("valid N2048 foundation identity");
     let genome = alife_core::CreatureGenome::early_mammal_founder(13_001, foundation)
         .expect("valid learner genome");
     let phenotype = genome.express().expect("valid learner phenotype");
@@ -87,10 +87,10 @@ fn v11_player_loop_reaches_grounded_body_then_reds_at_next_production_boundary()
         backend,
         world,
         13_001,
-        BrainScaleTier::Nano512,
+        BrainScaleTier::Standard2048,
         sensor_profile,
     )
-    .expect("supported profiled Nano512 production runtime");
+    .expect("supported profiled Standard2048 production runtime");
 
     let grounded = runtime.world_snapshot();
     assert!(
