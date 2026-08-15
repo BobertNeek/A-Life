@@ -204,7 +204,11 @@ impl Era1TrialRunEvidence {
         )?;
         if self.learning_assessment != expected_assessment
             || self.receipt.score
-                != score_for_partition(self.receipt.partition, &expected_assessment)
+                != score_for_partition(
+                    self.receipt.ability,
+                    self.receipt.partition,
+                    &expected_assessment,
+                )
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
@@ -765,7 +769,7 @@ impl Era1TrialRunner {
             ability: request.ability,
             control: request.control,
             partition: request.partition,
-            score: score_for_partition(request.partition, &learning_assessment),
+            score: score_for_partition(request.ability, request.partition, &learning_assessment),
             phenotype_hash: handle.phenotype_hash(),
             foundation_id: foundation.foundation_id,
             foundation_version: u32::from(foundation.version),
@@ -1088,9 +1092,16 @@ fn measured_q16(reading: MetricReading) -> Result<u32, ScaffoldContractError> {
 }
 
 fn score_for_partition(
+    ability: Era1Ability,
     partition: Era1EvidencePartition,
     assessment: &Era1LearningAssessment,
 ) -> MetricReading {
+    if matches!(
+        ability,
+        Era1Ability::FlexibleForaging | Era1Ability::HazardAvoidance
+    ) {
+        return assessment.late_acquisition;
+    }
     match partition {
         Era1EvidencePartition::Acquisition => assessment.late_acquisition,
         Era1EvidencePartition::DelayedProbe
