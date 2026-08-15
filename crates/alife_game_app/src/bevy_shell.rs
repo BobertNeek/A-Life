@@ -23,6 +23,7 @@ use alife_world::{
     ProceduralWorldContentKind, ProceduralWorldContentReport, TerrainZoneKind, WorldObject,
     WorldObjectKind,
 };
+use alife_world::presentation::{WorldOrganismPresentationRow, WorldPresentationSnapshot};
 use bevy::{
     app::AppExit,
     asset::{AssetPlugin, Assets, Handle, RenderAssetUsages},
@@ -449,6 +450,7 @@ pub struct LiveBrainPresentationFrame {
     pub tick_summaries: Vec<LiveBrainTickSummary>,
     pub authoritative_world_tick: Tick,
     world_objects_by_id: BTreeMap<u64, WorldObject>,
+    organisms_by_world_id: BTreeMap<u64, WorldOrganismPresentationRow>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -478,6 +480,7 @@ impl LiveBrainPresentationFrame {
             tick_summaries,
             authoritative_world_tick,
             world_objects_by_id,
+            organisms_by_world_id: BTreeMap::new(),
         })
     }
 
@@ -485,7 +488,10 @@ impl LiveBrainPresentationFrame {
         tick_summaries: Vec<LiveBrainTickSummary>,
         world: &HeadlessWorld,
     ) -> Result<Self, LiveBrainPresentationFrameError> {
-        Self::try_new(tick_summaries, world.tick(), world.object_snapshots())
+        let snapshot = world.presentation_snapshot();
+        let mut frame = Self::try_new(tick_summaries, world.tick(), world.object_snapshots())?;
+        frame.install_organism_snapshot(snapshot);
+        Ok(frame)
     }
 
     pub fn object(&self, stable_id: WorldEntityId) -> Option<&WorldObject> {
@@ -498,6 +504,47 @@ impl LiveBrainPresentationFrame {
 
     pub fn object_count(&self) -> usize {
         self.world_objects_by_id.len()
+    }
+
+    pub fn organism(&self, stable_id: WorldEntityId) -> Option<&WorldOrganismPresentationRow> {
+        self.organisms_by_world_id.get(&stable_id.raw())
+    }
+
+    pub fn organism_snapshots(&self) -> Vec<WorldOrganismPresentationRow> {
+        self.organisms_by_world_id.values().cloned().collect()
+    }
+
+    pub fn organism_count(&self) -> usize {
+        self.organisms_by_world_id.len()
+    }
+
+    fn install_organism_snapshot(&mut self, snapshot: WorldPresentationSnapshot) {
+        self.organisms_by_world_id = snapshot
+            .organisms
+            .into_iter()
+            .map(|row| (row.world_entity_id.raw(), row))
+            .collect();
+        for summary in &self.tick_summaries {
+            let Some(row) = self
+                .organisms_by_world_id
+                .values_mut()
+                .find(|row| row.organism_id == summary.organism_id)
+            else {
+                continue;
+            };
+            row.motor = Some(alife_world::PresentationMotorSnapshot {
+                action_kind: summary.selected_action_kind.clone(),
+                action_id: summary.selected_action_id.clone(),
+                target_entity: summary.target_entity.clone(),
+            });
+            row.outcome = Some(alife_world::PresentationOutcomeSnapshot {
+                patch_sealed: summary.patch_sealed,
+                patch_sequence_id: summary.patch_sequence_id,
+                patch_success: summary.patch_success,
+                physical_contact: summary.physical_contact.clone(),
+                action_failure: summary.action_failure.clone(),
+            });
+        }
     }
 }
 
@@ -540,7 +587,16 @@ impl LiveBrainPresentationFrameResource {
         tick_summaries: Vec<LiveBrainTickSummary>,
         world: &HeadlessWorld,
     ) -> Result<(), LiveBrainPresentationFrameError> {
-        self.try_publish(tick_summaries, world.tick(), world.object_snapshots())
+        let snapshot = world.presentation_snapshot();
+        let mut next = LiveBrainPresentationFrame::try_new(
+            tick_summaries,
+            world.tick(),
+            world.object_snapshots(),
+        )?;
+        next.install_organism_snapshot(snapshot);
+        self.previous = self.current.clone();
+        self.current = next;
+        Ok(())
     }
 
     pub fn try_publish(
@@ -5361,6 +5417,13 @@ pub fn build_production_voxel_frontend_app_shell(
             );
     }
     crate::spawn_fvr03_production_voxel_scene(&mut app, &summary)?;
+    #[cfg(feature = "gpu-runtime")]
+    app.add_systems(
+        Update,
+        reconcile_production_presentation.in_set(
+            crate::production_voxel_renderer::ProductionVoxelPresentationSet::ProceduralAnimation,
+        ),
+    );
     if let Some(seconds) = launch.smoke_seconds {
         app.insert_resource(GraphicalPlaygroundSmokeTimer {
             started: Instant::now(),
@@ -5369,6 +5432,77 @@ pub fn build_production_voxel_frontend_app_shell(
         .add_systems(Update, close_after_graphical_smoke_timeout);
     }
     Ok((app, summary))
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn reconcile_production_presentation(
+    frame: Res<LiveBrainPresentationFrameResource>,
+    mut entity_map: ResMut<BevyEntityMap>,
+    roots: Query<(
+        Entity,
+        &crate::production_voxel_renderer::ProductionCreatureAssemblyRoot,
+    )>,
+    mut selection: ResMut<
+        crate::production_voxel_renderer::Fvr03ProductionVoxelSelectionResource,
+    >,
+    mut follow: ResMut<crate::production_voxel_renderer::Fvr04ProductionCreatureFollowResource>,
+    mut scene: ResMut<crate::production_voxel_renderer::Fvr04ProductionCreatureSceneResource>,
+) {
+    for (entity, root) in roots.iter() {
+        let is_live = frame.current.organism(root.stable_id).is_some_and(|row| {
+            row.lifecycle.is_alive() && row.object.kind == WorldObjectKind::Agent
+        });
+        if is_live {
+            let _ = entity_map.bind(entity, root.stable_id);
+        } else {
+            entity_map.remove_by_world_id(root.stable_id);
+        }
+    }
+
+    let is_live_creature_ref = |reference: &crate::production_voxel_renderer::StableVoxelObjectRef| {
+        if reference.kind != crate::production_voxel_renderer::StableVoxelRefKind::Creature {
+            return true;
+        }
+        reference.stable_id.is_some_and(|stable_id| {
+            frame.current.organism(stable_id).is_some_and(|row| {
+                row.lifecycle.is_alive() && entity_map.bevy_entity(stable_id).is_some()
+            })
+        })
+    };
+    selection.selected = selection.selected.filter(|reference| is_live_creature_ref(reference));
+    selection.hovered = selection.hovered.filter(|reference| is_live_creature_ref(reference));
+
+    if follow.enabled
+        && !follow.target_stable_id.is_some_and(|stable_id| {
+            frame.current.organism(stable_id).is_some_and(|row| {
+                row.lifecycle.is_alive() && entity_map.bevy_entity(stable_id).is_some()
+            })
+        })
+    {
+        follow.enabled = false;
+        follow.target_stable_id = None;
+    }
+
+    scene.expression_buffer.retain_mut(|sample| {
+        let Some(row) = frame.current.organism(sample.stable_id) else {
+            return false;
+        };
+        if row.organism_id != sample.organism_id
+            || !row.lifecycle.is_alive()
+            || entity_map.bevy_entity(sample.stable_id).is_none()
+        {
+            return false;
+        }
+        sample.display_label = row.object.label.clone();
+        true
+    });
+    scene.stable_lookup_by_raw_id.clear();
+    for (index, sample) in scene.expression_buffer.iter().enumerate() {
+        scene
+            .stable_lookup_by_raw_id
+            .insert(sample.stable_id.raw(), index);
+    }
+    scene.rendered_creature_count = scene.expression_buffer.len();
 }
 
 fn production_voxel_render_plugin(record_performance: bool) -> RenderPlugin {
