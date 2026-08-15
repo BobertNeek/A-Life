@@ -14,7 +14,11 @@ use alife_core::{
     FoundationWeightAsset, OrganismId, PolicyBackend, SensorProfile, TeacherPerceptionChannel,
     Tick, Vec3f,
 };
-use alife_game_app::{produce_habitat_lab_explicit_breed_receipt, GpuLiveBrainRuntime};
+use alife_game_app::{
+    default_environment_manifest_path, produce_habitat_lab_explicit_breed_receipt,
+    GpuLiveBrainRuntime, ProductionCreatureAssemblyRoot, ProductionFrontendProfileId,
+    ProductionVoxelLaunchConfig,
+};
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile};
 use alife_runtime::GpuDurableSaveManifest;
 use alife_world::{
@@ -498,10 +502,134 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         Some(3)
     );
 
-    drop(runtime);
+    let pre_update_world = runtime.world_snapshot();
+    let pre_update_tick = pre_update_world.tick();
+    let pre_update_position = pre_update_world
+        .object_snapshots()
+        .into_iter()
+        .find(|object| {
+            object.id == world_entity_id
+                && object.organism_id == Some(organism_id)
+        })
+        .map(|object| object.position)
+        .expect("durable replace must retain the learner world object");
+
+    let mut launch = ProductionVoxelLaunchConfig::from_manifest(
+        default_environment_manifest_path(),
+        Some("production-voxel"),
+        ProductionFrontendProfileId::MinimumSettings30x30,
+    )
+    .expect("production voxel scenario launch config");
+    launch.app_launch.save_path = save_path.clone();
+    launch.population = Some(3);
+    launch.dry_run = true;
+    launch.graphics_backend = "existing".to_string();
+
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell_with_runtime(
+            &launch, runtime,
+        )
+        .expect("real production voxel app shell must accept the live runtime");
+
+    let baseline_root_translation = {
+        let world = app.world_mut();
+        let mut roots = world.query::<(
+            bevy::prelude::Entity,
+            &ProductionCreatureAssemblyRoot,
+            &bevy::prelude::Transform,
+        )>();
+        let (_, root, transform) = roots
+            .iter(world)
+            .find(|(_, root, _)| root.organism_id == organism_id)
+            .expect("production FVR04 root for the learner");
+        assert_eq!(root.stable_id, world_entity_id);
+        transform.translation
+    };
+    assert_eq!(
+        baseline_root_translation.x,
+        pre_update_position.x.round() + 0.5
+    );
+    assert_eq!(
+        baseline_root_translation.z,
+        pre_update_position.z.round() + 0.5
+    );
+
+    app.update();
+
+    let (frame_tick, live_position, live_tick_after) = {
+        let frame = app
+            .world()
+            .resource::<alife_game_app::bevy_shell::LiveBrainPresentationFrameResource>();
+        let organism = frame
+            .current
+            .organism(world_entity_id)
+            .expect("live presentation frame learner row");
+        let object = frame
+            .current
+            .object(world_entity_id)
+            .expect("live presentation frame learner object");
+        assert_eq!(organism.organism_id, organism_id);
+        assert_eq!(organism.world_entity_id, world_entity_id);
+        assert_eq!(organism.object.position, object.position);
+        let summary = frame
+            .current
+            .tick_summaries
+            .iter()
+            .find(|summary| summary.organism_id == organism_id)
+            .expect("live presentation frame learner tick summary");
+        assert!(
+            frame.current.authoritative_world_tick.raw() > pre_update_tick.raw(),
+            "production update must publish a post-tick authoritative frame"
+        );
+        assert_eq!(
+            frame.current.authoritative_world_tick,
+            summary.world_tick_after
+        );
+        assert_eq!(frame.current.authoritative_world_tick, summary.tick_after);
+        (
+            frame.current.authoritative_world_tick,
+            organism.object.position,
+            summary.tick_after,
+        )
+    };
+    assert_eq!(frame_tick, live_tick_after);
+    assert_ne!(live_position, pre_update_position);
+
+    let rendered_entity = app
+        .world()
+        .resource::<alife_bevy_adapter::BevyEntityMap>()
+        .bevy_entity(world_entity_id)
+        .expect("stable world ID must map to the rendered learner root");
+    let rendered_root = app
+        .world()
+        .get::<ProductionCreatureAssemblyRoot>(rendered_entity)
+        .expect("mapped rendered entity must be the learner root");
+    assert_eq!(rendered_root.organism_id, organism_id);
+    assert_eq!(rendered_root.stable_id, world_entity_id);
+    let rendered_transform = app
+        .world()
+        .get::<bevy::prelude::Transform>(rendered_entity)
+        .expect("mapped rendered learner root must have a transform");
+    assert!(
+        (rendered_transform.translation.x - baseline_root_translation.x).abs()
+            > f32::EPSILON
+            || (rendered_transform.translation.z - baseline_root_translation.z).abs()
+                > f32::EPSILON,
+        "FVR04 rendered learner root must move after the authoritative GPU tick"
+    );
+    assert_eq!(
+        rendered_transform.translation.x,
+        live_position.x.round() + 0.5
+    );
+    assert_eq!(
+        rendered_transform.translation.z,
+        live_position.z.round() + 0.5
+    );
+
+    drop(app);
     fs::remove_dir_all(&archive_root).expect("remove temporary player-loop archive");
     assert!(
         false,
-        "Task 13 RED at the next unavailable lifecycle seam: managed breeding and durable save/load/replace now preserve canonical world, GPU, and archive identity, but the production voxel presentation link remains unproven. Do not fake the remaining lifecycle link."
+        "Task 13 RED at the next unavailable lifecycle seam: bounded sleep/consolidation, wake, and a later changed action/outcome remain unproven."
     );
 }
