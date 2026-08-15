@@ -1,6 +1,16 @@
 const ACTIVE_DISPATCH_ROW_WORDS:u32 = 332u;
 const INVALID_LOGIT_BITS:u32 = 0x7fc00001u;
 const DECODER_SCHEMA_VERSION:u32 = 1u;
+const FACTORIZED_MOTOR_CHANNEL_SLOT_COUNT:u32 = 6u;
+const ACTION_KIND_IDLE:u32 = 0u;
+const ACTION_KIND_HOLD:u32 = 1u;
+const ACTION_KIND_REST:u32 = 2u;
+const ACTION_KIND_INSPECT:u32 = 3u;
+const ACTION_KIND_MOVE:u32 = 4u;
+const ACTION_KIND_INTERACT:u32 = 5u;
+const ACTION_KIND_VOCALIZE:u32 = 6u;
+const ACTION_KIND_WRITE:u32 = 7u;
+const ACTION_KIND_GESTURE:u32 = 8u;
 
 fn find_decoder_family(decoder:GpuDecoderPlanRecord, family_raw:u32) -> GpuDecoderFamilyRecord {
   for (var index=0u; index<decoder.family_count; index++) {
@@ -129,7 +139,6 @@ fn select_candidate(@builtin(global_invocation_id) gid:vec3<u32>) {
   atomicStore(&mutable_state_words[base + 11u], atomicLoad(&mutable_state_words[brain.diagnostic_offset + 3u]));
 }
 
-const ACTION_KIND_VOCALIZE:u32 = 6u;
 const DECODER_HEAD_SPEECH_PAYLOAD:u32 = 3u;
 const SPEECH_INPUT_WIDTH:u32 = 32u;
 const SPEECH_OUTPUT_WIDTH:u32 = 32u;
@@ -137,6 +146,41 @@ const SPEECH_SOURCE_OFFSET:u32 = 128u;
 const SPEECH_TARGET_OFFSET:u32 = 160u;
 const SPEECH_SYNAPSE_COUNT:u32 = 1024u;
 const MAX_SPEECH_TOKENS:u32 = 6u;
+
+fn factorized_motor_slot(kind:u32) -> u32 {
+  if (kind == ACTION_KIND_MOVE) { return 0u; }
+  if (kind == ACTION_KIND_INTERACT || kind == ACTION_KIND_WRITE) { return 2u; }
+  if (kind == ACTION_KIND_VOCALIZE) { return 3u; }
+  if (kind == ACTION_KIND_HOLD || kind == ACTION_KIND_REST || kind == ACTION_KIND_INSPECT) {
+    return 4u;
+  }
+  return 0xffffffffu;
+}
+
+fn select_factorized_motor_candidate(
+  header:GpuPerceptionHeader,
+  brain:GpuBrainSlotRecord,
+  slot:u32
+) -> u32 {
+  var found = false;
+  var selected = 0xffffffffu;
+  var selected_logit = 0.0;
+  for (var candidate=0u; candidate<header.candidate_count; candidate++) {
+    let record = load_candidate(header.candidate_offset + candidate * 8u);
+    if (factorized_motor_slot(record.kind) != slot) { continue; }
+    let bits = load_state_u32(brain.candidate_logit_offset + candidate);
+    if (bits == INVALID_LOGIT_BITS) { continue; }
+    let logit = bitcast<f32>(bits);
+    if (!finite_decode(logit)) { continue; }
+    if (!found || logit > selected_logit || (logit == selected_logit && candidate < selected)) {
+      found = true;
+      selected = candidate;
+      selected_logit = logit;
+    }
+  }
+  if (!found || selected >= 255u) { return 0u; }
+  return selected + 1u;
+}
 
 fn load_speech_selection(base:u32) -> GpuSelectionRecord {
   return GpuSelectionRecord(
@@ -161,6 +205,16 @@ fn decode_speech_payload(@builtin(global_invocation_id) gid:vec3<u32>) {
   store_state_u32(output_base + 1u, 0u);
   store_state_u32(output_base + 2u, 0u);
   store_state_u32(output_base + 3u, 0u);
+
+  var motor_words:array<u32,2>;
+  motor_words[0] = 0u;
+  motor_words[1] = 0u;
+  for (var slot=0u; slot<FACTORIZED_MOTOR_CHANNEL_SLOT_COUNT; slot++) {
+    let selected = select_factorized_motor_candidate(header, brain, slot);
+    motor_words[slot / 4u] |= selected << ((slot % 4u) * 8u);
+  }
+  store_state_u32(output_base + 2u, motor_words[0]);
+  store_state_u32(output_base + 3u, motor_words[1]);
 
   let selection = load_speech_selection(brain.selection_offset);
   if (selection.status != 1u || selection.candidate_index >= header.candidate_count) { return; }

@@ -4,7 +4,7 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
-    CandidateActionFamily, CanonicalDigestBuilder, LobeKind, ScaffoldContractError,
+    CandidateActionFamily, CanonicalDigestBuilder, LobeKind, MotorChannel, ScaffoldContractError,
     CANDIDATE_FEATURE_COUNT,
 };
 
@@ -13,6 +13,15 @@ use super::{BrainPhenotype, CompiledSynapseKind, DecoderHeadKind, MemoryChannelP
 const DECODER_SCHEMA_VERSION: u16 = 1;
 const DECODER_DOMAIN: &[u8] = b"alife.phenotype.candidate-decoder.v1";
 const FAMILY_COUNT: usize = 8;
+
+pub const FACTORIZED_MOTOR_CHANNEL_COUNT: usize = 4;
+
+const FACTORIZED_MOTOR_CHANNELS: [MotorChannel; FACTORIZED_MOTOR_CHANNEL_COUNT] = [
+    MotorChannel::Locomotion,
+    MotorChannel::Manipulation,
+    MotorChannel::Vocal,
+    MotorChannel::Posture,
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct CandidateDecoderFamilyPlan {
@@ -94,6 +103,26 @@ impl CandidateDecoderPlan {
         self.canonical_digest
     }
 
+    pub fn factorized_motor_channels(
+        &self,
+        phenotype: &BrainPhenotype,
+    ) -> Result<Vec<MotorChannel>, ScaffoldContractError> {
+        let architecture = phenotype.cognitive_architecture();
+        let head_count = usize::from(architecture.motor_head_count());
+        let width = architecture.motor_head_width();
+        if head_count == 0
+            || head_count > FACTORIZED_MOTOR_CHANNEL_COUNT
+            || width == 0
+            || u32::from(width) * head_count as u32 > u32::from(self.motor_width)
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Ok(FACTORIZED_MOTOR_CHANNELS[..head_count]
+            .iter()
+            .copied()
+            .collect())
+    }
+
     pub(super) fn try_new(
         motor_start: u32,
         motor_width: u16,
@@ -122,6 +151,7 @@ impl CandidateDecoderPlan {
         phenotype: &BrainPhenotype,
     ) -> Result<(), ScaffoldContractError> {
         self.validate_local()?;
+        self.factorized_motor_channels(phenotype)?;
         let capacity = crate::BrainCapacityClass::supported_for_id(phenotype.brain_class_id())?;
         let execution = capacity.execution();
         let expected_stride = self

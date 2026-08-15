@@ -4,9 +4,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::{
-    ActionKind, ActionTarget, BiochemistryState, ChannelCommand, CognitiveWorkCostPolicy,
-    CognitiveWorkCounters, CognitiveWorkReceipt, GroundedSuccessorPredictor, JointPhysicalOutcome,
-    MotorChannel, MotorCommandBundle, PhysicalContactKind, PredictionTargetReceipt,
+    ActionKind, ActionTarget, BiochemistryState, BoundedCoordinationSummary,
+    BoundedMotorPayload, ChannelCommand, CognitiveWorkCostPolicy, CognitiveWorkCounters,
+    CognitiveWorkReceipt, CoordinationGroup, GroundedSuccessorPredictor,
+    HomeostaticDelta, MotorChannel, MotorCommandBundle,
+    PhysicalContactKind, PredictionTargetReceipt,
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
     Blake3Digest, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
     finalized_memory_attention_evidence, select_focal_targets, AttentionFrame,
@@ -37,6 +39,7 @@ use alife_gpu_backend::{
     GpuCuratedResidencyTargetIdentity, GpuLearningReceipt, GpuMemoryContextUpload,
     PendingEligibilityDiscardReceipt, PendingEligibilityIdentity, PendingEligibilityReceipt,
     GPU_CLOSED_LOOP_TICK_READBACK_BYTES, GPU_FAST_PLASTICITY_COMMIT_BYTES,
+    GPU_MOTOR_CHANNEL_SLOT_COUNT,
 };
 use alife_runtime::{
     DurableGpuCheckpointRef, GpuAuthoritativeSession, GpuSessionAuthority,
@@ -614,6 +617,7 @@ struct PreparedLiveSelection {
     outcome_tick: Tick,
     pre_action: PreActionSnapshot,
     decision: DecisionSnapshot,
+    motor_bundle: MotorCommandBundle,
     speech_payload: Option<alife_core::SpeechMotorPayload>,
     speech_prompted: bool,
 }
@@ -629,6 +633,7 @@ struct PreparedSealInput {
     work: BrainWorkReceipt,
     pre_action: PreActionSnapshot,
     decision: DecisionSnapshot,
+    motor_bundle: MotorCommandBundle,
     speech_payload: Option<alife_core::SpeechMotorPayload>,
     speech_prompted: bool,
 }
@@ -1928,14 +1933,16 @@ fn grounded_successor_features(
     world: &HeadlessWorld,
     world_entity_id: WorldEntityId,
     biology_after: &BiochemistryState,
-    action_result: &alife_world::HeadlessActionResult,
+    physical: alife_core::PhysicalActionOutcome,
+    succeeded: bool,
+    pain_delta: f32,
 ) -> Result<Vec<f32>, ScaffoldContractError> {
     let object = world
         .entity(world_entity_id)
         .ok_or(ScaffoldContractError::InvalidId)?;
-    let displacement = action_result.execution.physical.displacement;
+    let displacement = physical.displacement;
     let body = biology_after.body;
-    let contact = match action_result.execution.physical.contact {
+    let contact = match physical.contact {
         PhysicalContactKind::None => 0.0,
         PhysicalContactKind::Touch => 0.2,
         PhysicalContactKind::Collision => 0.4,
@@ -1955,34 +1962,25 @@ fn grounded_successor_features(
         unit_successor_scalar(body.injury)?,
         unit_successor_scalar(body.temperature_stress)?,
         contact,
-        if action_result.observation.success {
+        if succeeded {
             1.0
         } else {
             0.0
         },
-        action_result.observation.pain_delta.raw(),
+        pain_delta,
     ];
     Ok(features.to_vec())
 }
 
-fn motor_bundle_for_action(
-    organism_id: OrganismId,
-    sequence_id: ExperienceSequenceId,
-    tick: Tick,
+const SINGLE_ACTION_COMPATIBILITY_ADAPTER_VERSION: u16 = 1;
+
+fn channel_command_for_action(
+    channel: MotorChannel,
     command: &alife_core::ActionCommand,
-) -> Result<MotorCommandBundle, ScaffoldContractError> {
-    let channel = match command.kind {
-        ActionKind::Idle | ActionKind::Hold | ActionKind::Rest | ActionKind::Inspect => {
-            MotorChannel::Posture
-        }
-        ActionKind::Move => MotorChannel::Locomotion,
-        ActionKind::Interact | ActionKind::Write => MotorChannel::Manipulation,
-        ActionKind::Vocalize => MotorChannel::Vocal,
-        ActionKind::Gesture => MotorChannel::Orientation,
-    };
+) -> Result<ChannelCommand, ScaffoldContractError> {
     let target = (command.target_entity.is_some() || command.target_position.is_some())
         .then(|| ActionTarget::new(command.target_entity, command.target_position));
-    let channel_command = ChannelCommand::new(
+    ChannelCommand::new(
         channel,
         command.action_id,
         target,
@@ -1992,8 +1990,116 @@ fn motor_bundle_for_action(
         0.0,
         command.confidence,
         0,
-    )?;
+    )
+}
+
+fn factorized_motor_channel_for_action(kind: ActionKind) -> Option<MotorChannel> {
+    match kind {
+        ActionKind::Move => Some(MotorChannel::Locomotion),
+        ActionKind::Interact | ActionKind::Write => Some(MotorChannel::Manipulation),
+        ActionKind::Vocalize => Some(MotorChannel::Vocal),
+        ActionKind::Hold | ActionKind::Rest | ActionKind::Inspect => Some(MotorChannel::Posture),
+        ActionKind::Idle | ActionKind::Gesture => None,
+    }
+}
+
+/// Versioned migration adapter for the old one-action production ABI.
+fn compatibility_bundle_for_selected_action_v1(
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    tick: Tick,
+    command: &alife_core::ActionCommand,
+) -> Result<MotorCommandBundle, ScaffoldContractError> {
+    debug_assert_eq!(SINGLE_ACTION_COMPATIBILITY_ADAPTER_VERSION, 1);
+    let channel = match command.kind {
+        ActionKind::Idle | ActionKind::Hold | ActionKind::Rest | ActionKind::Inspect => {
+            MotorChannel::Posture
+        }
+        ActionKind::Move => MotorChannel::Locomotion,
+        ActionKind::Interact | ActionKind::Write => MotorChannel::Manipulation,
+        ActionKind::Vocalize => MotorChannel::Vocal,
+        ActionKind::Gesture => MotorChannel::Posture,
+    };
+    let channel_command = channel_command_for_action(channel, command)?;
     MotorCommandBundle::new(organism_id, sequence_id, tick, vec![channel_command])
+}
+
+fn factorized_motor_bundle_for_candidates(
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    tick: Tick,
+    frame: &PerceptionFrame,
+    candidate_slots: [u16; GPU_MOTOR_CHANNEL_SLOT_COUNT],
+    channels: &[MotorChannel],
+    compatibility_command: &alife_core::ActionCommand,
+    selected_candidate_index: u16,
+    speech_payload: Option<&alife_core::SpeechMotorPayload>,
+) -> Result<MotorCommandBundle, ScaffoldContractError> {
+    let mut channel_commands = Vec::with_capacity(channels.len());
+    for head_channel in channels {
+        let slot = match head_channel {
+            MotorChannel::Locomotion => 0,
+            MotorChannel::Manipulation => 2,
+            MotorChannel::Vocal => 3,
+            MotorChannel::Posture => 4,
+            MotorChannel::Orientation | MotorChannel::SpeciesSpecific(_) => {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence)
+            }
+        };
+        let encoded = candidate_slots
+            .get(slot)
+            .copied()
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        if encoded == 0 {
+            continue;
+        }
+        let candidate_index = encoded - 1;
+        let candidate = *frame
+            .candidates()
+            .get(usize::from(candidate_index))
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        let command = candidate.to_command(organism_id, candidate.sensor_confidence)?;
+        let channel = factorized_motor_channel_for_action(command.kind)
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        if channel != *head_channel {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let mut channel_command = channel_command_for_action(channel, &command)?;
+        if channel == MotorChannel::Vocal && candidate_index == selected_candidate_index {
+            if let Some(payload) = speech_payload {
+                let payload = BoundedMotorPayload::new(
+                    payload
+                        .tokens
+                        .iter()
+                        .map(|token| u32::from(token.raw()))
+                        .collect(),
+                )?;
+                channel_command = channel_command.with_payload(payload)?;
+            }
+        }
+        channel_commands.push(channel_command);
+    }
+
+    if channel_commands.is_empty() {
+        return compatibility_bundle_for_selected_action_v1(
+            organism_id,
+            sequence_id,
+            tick,
+            compatibility_command,
+        );
+    }
+
+    let coordination = (channel_commands.len() > 1).then(|| BoundedCoordinationSummary {
+        groups: vec![CoordinationGroup {
+            group_id: 0,
+            channels: channel_commands
+                .iter()
+                .map(|command| command.channel)
+                .collect(),
+        }],
+    });
+    let bundle = MotorCommandBundle::new(organism_id, sequence_id, tick, channel_commands)?;
+    coordination.map_or(Ok(bundle), |coordination| bundle.with_coordination(coordination))
 }
 
 fn apply_prediction_evidence(
@@ -2119,8 +2225,9 @@ fn seal_prepared_selection_core(
         work,
         pre_action,
         decision,
-        speech_payload,
-        speech_prompted,
+        motor_bundle,
+        speech_payload: _speech_payload,
+        speech_prompted: _speech_prompted,
     } = prepared;
     let resident = residents
         .get_mut(&organism_id.raw())
@@ -2128,19 +2235,25 @@ fn seal_prepared_selection_core(
     if resident.next_sequence != sequence_id.raw() {
         return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
     }
-    let biology_receipt = world.apply_registered_neural_command(
-        &decision.selected_action,
-        world_entity_id,
-        outcome_tick,
-        speech_payload,
-        speech_prompted,
-    )?;
-    let action_result = &biology_receipt.action_result;
+    let motor_receipt = world
+        .apply_registered_motor_bundle(&motor_bundle, world_entity_id)
+        .map_err(|error| match error {
+            alife_world::HeadlessMotorTransactionError::Contract(error) => {
+                GameAppShellError::Core(error)
+            }
+            alife_world::HeadlessMotorTransactionError::UnsupportedChannel(_) => {
+                GameAppShellError::Core(ScaffoldContractError::InvalidActionDecision)
+            }
+        })?;
+    let physical = motor_receipt.joint.execution;
+    let succeeded = motor_receipt.succeeded;
     let successor_features = grounded_successor_features(
         world,
         world_entity_id,
-        &biology_receipt.biology_after,
-        action_result,
+        &motor_receipt.biology_after,
+        physical,
+        succeeded,
+        motor_receipt.body_event.damage,
     )?;
     let prediction_target = PredictionTargetReceipt::for_successor(
         organism_id,
@@ -2160,37 +2273,25 @@ fn seal_prepared_selection_core(
         &work,
         schedule_sleep,
     )?;
-    let combined_prediction_error = action_result
-        .observation
-        .prediction_error
-        .raw()
-        .max(grounded_prediction_error);
+    let combined_prediction_error = grounded_prediction_error;
     let mut outcome = PostActionOutcome::new(
         organism_id,
         sequence_id,
         outcome_tick,
-        action_result.observation.success && action_result.execution.succeeded,
-        action_result.execution.physical,
-        action_result.observation.homeostatic_delta,
-        action_result.observation.reward_valence,
-        action_result.observation.frustration_delta,
-        action_result.observation.pain_delta,
-        action_result.observation.energy_delta,
+        succeeded,
+        physical,
+        HomeostaticDelta::zero(),
+        SignedValence::new(motor_receipt.body_event.reward_outcome)?,
+        NormalizedScalar::new(if succeeded { 0.0 } else { 1.0 })?,
+        NormalizedScalar::new(motor_receipt.body_event.damage)?,
+        SignedValence::new(motor_receipt.body_event.energy)?,
         NormalizedScalar::new(combined_prediction_error)?,
     )?;
-    outcome.contradiction_observed =
-        action_result.observation.contradiction_observed || !action_result.execution.succeeded;
-    let joint = JointPhysicalOutcome::new(action_result.execution.physical, Vec::new())?;
-    outcome = outcome.with_v11_joint(joint, cognitive_work)?;
-    let bundle = motor_bundle_for_action(
-        organism_id,
-        sequence_id,
-        frame.tick(),
-        &decision.selected_action,
-    )?;
+    outcome.contradiction_observed = !succeeded;
+    outcome = outcome.with_v11_joint(motor_receipt.joint, cognitive_work)?;
     let patch = ExperiencePatch::new_v11(
         pre_action,
-        bundle,
+        motor_bundle,
         outcome,
         prediction_target,
         cognitive_work,
@@ -5238,6 +5339,21 @@ impl GpuLiveBrainRuntime {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
         let command = candidate.to_command(organism_id, gpu_tick.selection.confidence)?;
+        let factorized_channels = resident
+            .phenotype
+            .candidate_decoder()
+            .factorized_motor_channels(&resident.phenotype)?;
+        let motor_bundle = factorized_motor_bundle_for_candidates(
+            organism_id,
+            sequence_id,
+            frame.tick(),
+            &frame,
+            gpu_tick.factorized_motor_candidates,
+            &factorized_channels,
+            &command,
+            gpu_tick.selection.candidate_index,
+            gpu_tick.speech_payload.as_ref(),
+        )?;
         let speech_prompted = frame
             .sensory()
             .language_context
@@ -5287,6 +5403,7 @@ impl GpuLiveBrainRuntime {
             outcome_tick,
             pre_action,
             decision,
+            motor_bundle,
             speech_payload: gpu_tick.speech_payload,
             speech_prompted,
         })
@@ -5308,6 +5425,7 @@ impl GpuLiveBrainRuntime {
             outcome_tick,
             pre_action,
             decision,
+            motor_bundle,
             speech_payload,
             speech_prompted,
         } = prepared;
@@ -5333,6 +5451,7 @@ impl GpuLiveBrainRuntime {
                 work,
                 pre_action,
                 decision,
+                motor_bundle,
                 speech_payload,
                 speech_prompted,
             },
@@ -8492,6 +8611,13 @@ mod tests {
                 work,
                 pre_action,
                 decision,
+                motor_bundle: compatibility_bundle_for_selected_action_v1(
+                    organism_id,
+                    sequence_id,
+                    frame.tick(),
+                    &decision.selected_action,
+                )
+                .unwrap(),
                 speech_payload: None,
                 speech_prompted: false,
             },

@@ -385,6 +385,7 @@ pub struct GpuClosedLoopTick {
     pub active_activation_side: u8,
     pub selection: NeuralActionSelection,
     pub speech_payload: Option<SpeechMotorPayload>,
+    pub factorized_motor_candidates: [u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT],
     pub pending_eligibility: PendingEligibilityReceipt,
     pub pressure: GpuPressureSample,
     pub throttle: NeuralThrottleDecision,
@@ -2785,6 +2786,8 @@ impl GpuClosedLoopBackend {
 
         let mut ordered_records = vec![None; batch.len()];
         let mut ordered_speech_payloads = vec![None; batch.len()];
+        let mut ordered_factorized_motor_candidates =
+            vec![[0_u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]; batch.len()];
         let mut ordered_pending_receipts = vec![None; batch.len()];
         let mut ordered_pending_records = vec![None; batch.len()];
         let mut ordered_next_transaction_generations = vec![None; batch.len()];
@@ -2798,13 +2801,14 @@ impl GpuClosedLoopBackend {
                     .expect("validated batch retains its upload")
                     .memory_context_bindings();
                 for (
-                    (((original_index, selection), speech_payload), pending_record),
+                    ((((original_index, selection), speech_payload), motor_candidates), pending_record),
                     memory_binding,
                 ) in dispatch
                     .original_indices
                     .iter()
                     .zip(validated.records())
                     .zip(validated.speech_payloads())
+                    .zip(validated.factorized_motor_candidates())
                     .zip(validated.pending_records())
                     .zip(memory_bindings)
                 {
@@ -2874,6 +2878,7 @@ impl GpuClosedLoopBackend {
                         .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
                     ordered_records[*original_index] = Some(*selection);
                     ordered_speech_payloads[*original_index] = speech_payload.clone();
+                    ordered_factorized_motor_candidates[*original_index] = *motor_candidates;
                     ordered_pending_receipts[*original_index] = Some(receipt);
                     ordered_pending_records[*original_index] = Some(*pending_record);
                     ordered_next_transaction_generations[*original_index] =
@@ -2965,6 +2970,7 @@ impl GpuClosedLoopBackend {
                         active_synapses: record.active_synapses,
                     },
                     speech_payload: ordered_speech_payloads[index].clone(),
+                    factorized_motor_candidates: ordered_factorized_motor_candidates[index],
                     pending_eligibility,
                     pressure: activity_decisions[index].pressure,
                     throttle: activity_decisions[index].clone(),
@@ -3014,20 +3020,23 @@ impl GpuClosedLoopBackend {
                 != dispatch.original_indices.len() * crate::GPU_CLOSED_LOOP_TICK_READBACK_BYTES
                 || committed.records.len() != dispatch.original_indices.len()
                 || committed.speech_payloads.len() != dispatch.original_indices.len()
+                || committed.factorized_motor_candidates.len() != dispatch.original_indices.len()
                 || committed.pending_records.len() != dispatch.original_indices.len()
             {
                 self.mark_device_lost();
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
-            for (((original_index, record), speech_payload), pending_record) in dispatch
+            for ((((original_index, record), speech_payload), motor_candidates), pending_record) in dispatch
                 .original_indices
                 .iter()
                 .zip(committed.records)
                 .zip(committed.speech_payloads)
+                .zip(committed.factorized_motor_candidates)
                 .zip(committed.pending_records)
             {
                 commit_mismatch |= ordered_records[*original_index] != Some(record)
                     || ordered_speech_payloads[*original_index] != speech_payload
+                    || ordered_factorized_motor_candidates[*original_index] != motor_candidates
                     || ordered_pending_records[*original_index] != Some(pending_record);
             }
         }

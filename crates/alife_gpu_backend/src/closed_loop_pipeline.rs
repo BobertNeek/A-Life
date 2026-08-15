@@ -801,6 +801,7 @@ pub(crate) struct GpuValidatedClassBatch {
     authority_nonce: u64,
     records: Vec<GpuSelectionRecord>,
     speech_payloads: Vec<Option<SpeechMotorPayload>>,
+    factorized_motor_candidates: Vec<[u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]>,
     pending_records: Vec<GpuPendingEligibilityRecord>,
     final_sides: Vec<(u32, u32, u32)>,
     readback_bytes: u64,
@@ -818,11 +819,18 @@ impl GpuValidatedClassBatch {
     pub(crate) fn speech_payloads(&self) -> &[Option<SpeechMotorPayload>] {
         &self.speech_payloads
     }
+
+    pub(crate) fn factorized_motor_candidates(
+        &self,
+    ) -> &[[u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]] {
+        &self.factorized_motor_candidates
+    }
 }
 
 pub(crate) struct GpuCommittedClassBatch {
     pub(crate) records: Vec<GpuSelectionRecord>,
     pub(crate) speech_payloads: Vec<Option<SpeechMotorPayload>>,
+    pub(crate) factorized_motor_candidates: Vec<[u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]>,
     pub(crate) pending_records: Vec<GpuPendingEligibilityRecord>,
     pub(crate) readback_bytes: u64,
 }
@@ -832,9 +840,6 @@ fn decode_speech_payload_record(
 ) -> Result<Option<SpeechMotorPayload>, GpuClosedLoopError> {
     let word0 = record.packed_header_and_tokens;
     let word1 = record.packed_tokens_and_confidence;
-    if record.reserved != [0; 2] {
-        return Err(GpuClosedLoopError::MalformedUpload);
-    }
     let status = word0 & 0b11;
     if status == 0 {
         return (word0 == 0 && word1 == 0)
@@ -2401,9 +2406,11 @@ impl GpuClosedLoopPipelines {
         let selection_words = crate::GPU_SELECTION_RECORD_BYTES / 4;
         let mut records = Vec::with_capacity(batch.row_count());
         let mut speech_payloads = Vec::with_capacity(batch.row_count());
+        let mut factorized_motor_candidates = Vec::with_capacity(batch.row_count());
         for row in words.chunks_exact(row_words) {
             records.push(GpuSelectionRecord::from_words(&row[..selection_words])?);
             let speech_record = GpuSpeechPayloadRecord::from_words(&row[selection_words..])?;
+            factorized_motor_candidates.push(speech_record.factorized_motor_candidates());
             speech_payloads.push(decode_speech_payload_record(speech_record)?);
         }
         #[cfg(feature = "gpu-tests")]
@@ -2419,6 +2426,7 @@ impl GpuClosedLoopPipelines {
         }
         if !self.validate_selection_records(batch, &records)
             || !self.validate_speech_payloads(batch, &records, &speech_payloads)
+            || !self.validate_factorized_motor_candidates(batch, &factorized_motor_candidates)
         {
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
@@ -2460,6 +2468,7 @@ impl GpuClosedLoopPipelines {
             authority_nonce: batch.authority_nonce,
             records,
             speech_payloads,
+            factorized_motor_candidates,
             pending_records,
             final_sides,
             readback_bytes,
@@ -2488,6 +2497,7 @@ impl GpuClosedLoopPipelines {
         Ok(GpuCommittedClassBatch {
             records: validated.records,
             speech_payloads: validated.speech_payloads,
+            factorized_motor_candidates: validated.factorized_motor_candidates,
             pending_records: validated.pending_records,
             readback_bytes: validated.readback_bytes,
         })
@@ -2751,6 +2761,19 @@ impl GpuClosedLoopPipelines {
                     })
                 },
             )
+    }
+
+    fn validate_factorized_motor_candidates(
+        &self,
+        batch: &GpuActiveBatchUpload,
+        candidates: &[[u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]],
+    ) -> bool {
+        candidates.len() == batch.headers.len()
+            && candidates.iter().zip(&batch.headers).all(|(row, header)| {
+                row.iter().all(|encoded| {
+                    *encoded == 0 || usize::from(*encoded - 1) < header.candidate_count as usize
+                })
+            })
     }
 
     fn build_pending_eligibility_records(
