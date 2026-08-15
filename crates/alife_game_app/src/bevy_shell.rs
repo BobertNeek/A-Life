@@ -5495,6 +5495,33 @@ fn reconcile_production_presentation(
         {
             return false;
         }
+        let homeostasis = &row.biochemistry.homeostasis;
+        sample.hunger = homeostasis.drives.hunger;
+        sample.fatigue = homeostasis.drives.fatigue;
+        sample.fear = homeostasis.drives.fear;
+        sample.cortisol = homeostasis.hormones.cortisol;
+        sample.dopamine = homeostasis.hormones.dopamine;
+        sample.reproductive_drive = homeostasis.drives.reproductive_drive;
+        sample.sleep_pressure = homeostasis.hormones.sleep_pressure;
+        sample.social = ((row.object.social_affinity + 1.0) * 0.5).clamp(0.0, 1.0);
+
+        let selected_action_kind = row
+            .motor
+            .as_ref()
+            .and_then(|motor| motor.action_kind);
+        if let Ok(visual) = crate::creature_visual_snapshot_from_parts(
+            row.organism_id,
+            row.world_entity_id,
+            row.object.position,
+            None,
+            None,
+            homeostasis,
+            row.sleep_phase,
+            selected_action_kind,
+        ) {
+            sample.expression = visual.expression;
+            sample.animation = visual.animation;
+        }
         sample.display_label = row.object.label.clone();
         true
     });
