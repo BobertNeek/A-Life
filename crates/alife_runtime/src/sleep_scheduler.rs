@@ -275,11 +275,15 @@ impl GpuSleepScheduler {
         let work_units = if due_work.is_empty() {
             0
         } else {
+            let work_homeostasis = Self::homeostasis_for_due_work(
+                &input.homeostasis,
+                self.controller.config(),
+            );
             let receipt = driver
                 .run_bounded_sleep_transaction(
                     input.organism_id,
                     state,
-                    &input.homeostasis,
+                    &work_homeostasis,
                     tick,
                     due_work,
                 )?
@@ -307,6 +311,22 @@ impl GpuSleepScheduler {
             seal.work_units,
             true,
         ))
+    }
+
+    fn homeostasis_for_due_work(
+        homeostasis: &HomeostaticSnapshot,
+        config: SleepConsolidationConfig,
+    ) -> HomeostaticSnapshot {
+        let mut effective = *homeostasis;
+        effective.drives.fatigue = effective
+            .drives
+            .fatigue
+            .max(config.fatigue_threshold.raw());
+        effective.hormones.sleep_pressure = effective
+            .hormones
+            .sleep_pressure
+            .max(config.sleep_pressure_threshold.raw());
+        effective
     }
 
     fn advance_authoritative(
