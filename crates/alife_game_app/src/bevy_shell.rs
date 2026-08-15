@@ -921,10 +921,16 @@ fn apply_presentation_retirements(
 fn entity_selection_snapshot_from_world_object(
     object: &WorldObject,
 ) -> EntitySelectionSnapshot {
-    let mut selection = EntitySelectionSnapshot::default();
-    selection.stable_id = object.id;
-    selection.position = object.position;
-    selection
+    EntitySelectionSnapshot {
+        schema: crate::G05_CAMERA_INSPECTOR_SCHEMA,
+        schema_version: crate::G05_CAMERA_INSPECTOR_SCHEMA_VERSION,
+        stable_id: object.id,
+        label: object.label.clone(),
+        kind: object.kind,
+        organism_id: object.organism_id,
+        position: object.position,
+        debug_label: format!("{:04}:{:?}:{}", object.id.raw(), object.kind, object.label),
+    }
 }
 
 fn repair_presentation_focus_after_retirements(
@@ -5549,11 +5555,13 @@ fn reconcile_production_presentation(
         sample.display_label = row.object.label.clone();
         true
     });
-    scene.stable_lookup_by_raw_id.clear();
-    for (index, sample) in scene.expression_buffer.iter().enumerate() {
-        scene
-            .stable_lookup_by_raw_id
-            .insert(sample.stable_id.raw(), index);
+    {
+        let expression_buffer = &scene.expression_buffer;
+        let stable_lookup_by_raw_id = &mut scene.stable_lookup_by_raw_id;
+        stable_lookup_by_raw_id.clear();
+        for (index, sample) in expression_buffer.iter().enumerate() {
+            stable_lookup_by_raw_id.insert(sample.stable_id.raw(), index);
+        }
     }
     scene.rendered_creature_count = scene.expression_buffer.len();
 }
