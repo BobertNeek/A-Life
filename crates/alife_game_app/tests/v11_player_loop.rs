@@ -294,6 +294,15 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
     assert!(runtime.last_pre_seal_discard_failures().is_empty());
     assert!(runtime.last_post_seal_learning_failures().is_empty());
 
+    let durable_root = archive_root.join("player-loop-durable");
+    let asset_root = durable_root.join("assets");
+    let save_path = durable_root.join("player-loop.json");
+    fs::create_dir_all(&asset_root).expect("create durable checkpoint asset root");
+    let base_save = player_loop_base_save(&runtime);
+    runtime
+        .attach_durable_checkpoint_boundary(&save_path, &asset_root, base_save)
+        .expect("attach the runtime-owned durable checkpoint boundary");
+
     let breeding = produce_habitat_lab_explicit_breed_receipt(
         &runtime.world_snapshot(),
         organism_id,
@@ -410,14 +419,6 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         .world_snapshot()
         .canonical_signature_digest()
         .expect("canonical world signature before durable replace");
-    let durable_root = archive_root.join("player-loop-durable");
-    let asset_root = durable_root.join("assets");
-    let save_path = durable_root.join("player-loop.json");
-    fs::create_dir_all(&asset_root).expect("create durable checkpoint asset root");
-    let base_save = player_loop_base_save(&runtime);
-    runtime
-        .attach_durable_checkpoint_boundary(&save_path, &asset_root, base_save)
-        .expect("attach the runtime-owned durable checkpoint boundary");
 
     let durable = GpuDurableSaveManifest::open(&save_path, &asset_root)
         .expect("open the published player-loop checkpoint");
