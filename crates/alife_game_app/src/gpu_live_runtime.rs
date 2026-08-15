@@ -1973,6 +1973,7 @@ fn grounded_successor_features(
 }
 
 const SINGLE_ACTION_COMPATIBILITY_ADAPTER_VERSION: u16 = 1;
+const VOCAL_CHANNEL_PAYLOAD_MAGIC_V1: u32 = 0x5348_5031;
 
 fn channel_command_for_action(
     channel: MotorChannel,
@@ -2034,6 +2035,7 @@ fn factorized_motor_bundle_for_candidates(
     compatibility_command: &alife_core::ActionCommand,
     selected_candidate_index: u16,
     speech_payload: Option<&alife_core::SpeechMotorPayload>,
+    speech_prompted: bool,
 ) -> Result<MotorCommandBundle, ScaffoldContractError> {
     let mut channel_commands = Vec::with_capacity(channels.len());
     for head_channel in channels {
@@ -2067,13 +2069,13 @@ fn factorized_motor_bundle_for_candidates(
         let mut channel_command = channel_command_for_action(channel, &command)?;
         if channel == MotorChannel::Vocal && candidate_index == selected_candidate_index {
             if let Some(payload) = speech_payload {
-                let payload = BoundedMotorPayload::new(
-                    payload
-                        .tokens
-                        .iter()
-                        .map(|token| u32::from(token.raw()))
-                        .collect(),
-                )?;
+                let mut values = Vec::with_capacity(payload.tokens.len() + 4);
+                values.push(VOCAL_CHANNEL_PAYLOAD_MAGIC_V1);
+                values.push(u32::from(payload.speech_act.raw()));
+                values.push(if speech_prompted { 1 } else { 0 });
+                values.push((payload.confidence.raw() * 65_535.0).round() as u32);
+                values.extend(payload.tokens.iter().map(|token| u32::from(token.raw())));
+                let payload = BoundedMotorPayload::new(values)?;
                 channel_command = channel_command.with_payload(payload)?;
             }
         }
@@ -5339,6 +5341,13 @@ impl GpuLiveBrainRuntime {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
         let command = candidate.to_command(organism_id, gpu_tick.selection.confidence)?;
+        let speech_prompted = frame
+            .sensory()
+            .language_context
+            .heard_tokens
+            .iter()
+            .flatten()
+            .any(|token| token.source_kind == UtteranceSourceKind::Player);
         let factorized_channels = resident
             .phenotype
             .candidate_decoder()
@@ -5353,14 +5362,8 @@ impl GpuLiveBrainRuntime {
             &command,
             gpu_tick.selection.candidate_index,
             gpu_tick.speech_payload.as_ref(),
+            speech_prompted,
         )?;
-        let speech_prompted = frame
-            .sensory()
-            .language_context
-            .heard_tokens
-            .iter()
-            .flatten()
-            .any(|token| token.source_kind == UtteranceSourceKind::Player);
         let pre_action = PreActionSnapshot::from_neural_frame(
             sequence_id,
             handle.class_id(),

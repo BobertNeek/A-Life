@@ -14,7 +14,8 @@ use alife_core::{
     ActionCommand, ActionId, ActionKind, AffordanceBits, BiochemistryState, BodyEventDelta,
     BodySnapshot, BrainTickInput, BrainTickOutput, CanonicalDigestBuilder, Confidence,
     ContextStreams, DriveDelta, EndocrineDelta, ExperiencePatch, HeardToken, HomeostaticDelta,
-    HomeostaticSnapshot, Intensity, LanguageContextSnapshot, NormalizedScalar, OrganismId,
+    HomeostaticSnapshot, Intensity, LanguageContextSnapshot, LanguageTokenId, NormalizedScalar,
+    OrganismId,
     PerceptionContextBlock, PerceptionFrame, PerceptionFrameDraft, PassiveBodyUpkeepPolicy,
     PhysicalActionOutcome, PhysicalContactKind, PlayerUtterance, Pose, Quatf,
     ReferenceActionExecution,
@@ -24,7 +25,7 @@ use alife_core::{
     ReferenceOutcomeObserver, ReferenceOutcomeRequest, ReferenceSensoryAdapter,
     ReferenceSensoryRequest, ScaffoldContractError, SensorProfile, SensorProfileProvenance,
     SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence, SleepConsolidationReport,
-    SleepTransition, SocialAgentSnapshot, SocialProximityEntry, SpeechMotorPayload,
+    SleepTransition, SocialAgentSnapshot, SocialProximityEntry, SpeechActKind, SpeechMotorPayload,
     TeacherPerceptionChannel, Tick, UtteranceId, UtteranceSourceKind, Validate, Vec3f, Velocity,
     WorldEntityId, MAX_HEARD_TOKENS, MAX_SOCIAL_AGENTS, SENSORY_AUDITORY_CHANNEL_COUNT,
     SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
@@ -1966,7 +1967,16 @@ impl HeadlessWorld {
         let mut executed = Vec::with_capacity(channels.len());
         for channel in channels {
             let command = legacy_action_for_motor_channel(bundle.organism_id, channel)?;
-            let result = self.execute_command(&command)?;
+            let result = if channel.channel == MotorChannel::Vocal {
+                match decode_vocal_channel_payload(channel)? {
+                    Some((payload, prompted)) => {
+                        self.apply_neural_command(&command, Some(payload), prompted)?
+                    }
+                    None => self.execute_command(&command)?,
+                }
+            } else {
+                self.execute_command(&command)?
+            };
             executed.push((Some(channel.clone()), result));
         }
 
@@ -3767,6 +3777,40 @@ fn motor_channel_order(channel: MotorChannel) -> u16 {
         MotorChannel::Posture => 4,
         MotorChannel::SpeciesSpecific(id) => 0x100 + u16::from(id),
     }
+}
+
+const VOCAL_CHANNEL_PAYLOAD_MAGIC_V1: u32 = 0x5348_5031;
+
+fn decode_vocal_channel_payload(
+    command: &ChannelCommand,
+) -> Result<Option<(SpeechMotorPayload, bool)>, ScaffoldContractError> {
+    let values = &command.payload.values;
+    if values.is_empty() {
+        return Ok(None);
+    }
+    if values.len() < 5 || values[0] != VOCAL_CHANNEL_PAYLOAD_MAGIC_V1 {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    let speech_act = SpeechActKind::try_from_raw(
+        u8::try_from(values[1]).map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
+    )?;
+    let prompted = match values[2] {
+        0 => false,
+        1 => true,
+        _ => return Err(ScaffoldContractError::InvalidDecisionEvidence),
+    };
+    let confidence = Confidence::new(values[3] as f32 / 65_535.0)?;
+    let tokens = values[4..]
+        .iter()
+        .map(|raw| {
+            LanguageTokenId::new(
+                u16::try_from(*raw)
+                    .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    SpeechMotorPayload::try_new(speech_act, tokens, confidence)
+        .map(|payload| Some((payload, prompted)))
 }
 
 fn legacy_action_for_motor_channel(
