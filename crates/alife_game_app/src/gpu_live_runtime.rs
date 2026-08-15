@@ -6102,24 +6102,24 @@ fn foundation_construction_development(
     if development.genome_id != genome.id {
         return Err(ScaffoldContractError::PhenotypeCompile);
     }
-    if capacity.id() != BrainCapacityClass::N2048_ID
-        || (development.enabled_lobes.is_empty()
-            && development.active_sensor_channels.is_empty()
-            && development.active_motor_affordances.is_empty()
-            && development.open_critical_periods.is_empty())
-    {
+    if capacity.id() != BrainCapacityClass::N2048_ID {
         return Ok(development.clone());
     }
 
     // The checked N2048 asset owns a full immutable coordinate ABI. World
-    // development remains authoritative in ResidentCognition; only the
-    // construction input removes dynamic gates that would reshape that ABI.
+    // development remains authoritative in ResidentCognition; the construction
+    // input removes runtime chronology and dynamic gates that would reshape
+    // that ABI.
     let mut construction = development.clone();
+    construction.age_ticks = Tick::ZERO;
     construction.maturation = NormalizedScalar::new(1.0)?;
     construction.enabled_lobes.clear();
     construction.active_sensor_channels.clear();
     construction.active_motor_affordances.clear();
     construction.open_critical_periods.clear();
+    construction.sleep_cycle_count = 0;
+    construction.consolidation_cycle_count = 0;
+    construction.last_sleep_tick = None;
     construction.validate_contract()?;
     Ok(construction)
 }
