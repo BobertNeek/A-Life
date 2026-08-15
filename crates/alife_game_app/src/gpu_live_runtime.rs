@@ -2975,7 +2975,7 @@ impl GpuLiveBrainRuntime {
         let baseline_resident_keys = runtime.residents.keys().copied().collect::<Vec<_>>();
         let baseline_memory_keys = runtime.memories.keys().copied().collect::<Vec<_>>();
         let baseline_topology_keys = runtime.topologies.keys().copied().collect::<Vec<_>>();
-        let mut residency_gate_rejections = 0;
+        let mut residency_gate_rejections: u8 = 0;
         let mut record_rejection = |runtime: &Self| -> Result<(), GameAppShellError> {
             if runtime.curated_first_tick_residency_gate().is_ok()
                 || runtime.world.tick() != baseline_tick
