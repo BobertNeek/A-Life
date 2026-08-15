@@ -4883,7 +4883,8 @@ impl GpuLiveBrainRuntime {
         let curated_first_tick = curated_first_tick_resident.is_some();
         self.retire_dead_organisms()?;
         self.reconcile_population()?;
-        self.last_sealed_patches.clear();
+        self.last_sealed_patches
+            .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
         self.last_learning_receipts.clear();
         self.last_activity_work_receipts.clear();
         self.last_cognitive_work_receipts.clear();
@@ -6163,9 +6164,19 @@ impl GpuLiveBrainRuntime {
             .checked_add(committed_patches.len())
             .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
         if self.retain_sealed_patch_history {
-            self.sealed_patches.extend(committed_patches);
-        } else {
-            self.last_sealed_patches = committed_patches;
+            self.sealed_patches.extend(committed_patches.iter().cloned());
+        }
+        for patch in committed_patches {
+            let organism_id = patch.header().organism_id;
+            if let Some(previous) = self
+                .last_sealed_patches
+                .iter_mut()
+                .find(|previous| previous.header().organism_id == organism_id)
+            {
+                *previous = patch;
+            } else {
+                self.last_sealed_patches.push(patch);
+            }
         }
         if curated_first_tick_succeeded {
             self.curated_first_tick_pending = false;
