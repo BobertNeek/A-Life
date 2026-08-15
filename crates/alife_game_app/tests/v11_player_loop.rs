@@ -246,9 +246,34 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         PolicyBackend::NeuralClosedLoopGpu
     );
 
+    let pre_tick_position = runtime
+        .world_snapshot()
+        .object_snapshots()
+        .into_iter()
+        .find(|object| {
+            object.id == world_entity_id
+                && object.organism_id == Some(organism_id)
+        })
+        .map(|object| object.position)
+        .expect("learner canonical position before first GPU tick");
     let summaries = runtime
         .tick()
         .expect("production GPU runtime must complete one coherent causal tick");
+    let causally_changed_position = runtime
+        .world_snapshot()
+        .object_snapshots()
+        .into_iter()
+        .find(|object| {
+            object.id == world_entity_id
+                && object.organism_id == Some(organism_id)
+        })
+        .map(|object| object.position)
+        .expect("learner canonical position after first GPU tick");
+    assert_ne!(
+        causally_changed_position,
+        pre_tick_position,
+        "the first real GPU tick must change the learner canonical position"
+    );
     assert_eq!(summaries.len(), 2);
     let summary = summaries
         .iter()
@@ -714,7 +739,11 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
             .expect("live presentation frame learner object");
         assert_eq!(organism.organism_id, organism_id);
         assert_eq!(organism.world_entity_id, world_entity_id);
-        assert_eq!(organism.object.position, object.position);
+        assert_eq!(
+            organism.object.position,
+            object.position,
+            "post-load live frame learner object must match the canonical object"
+        );
         let summary = frame
             .current
             .tick_summaries
@@ -732,12 +761,21 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         assert_eq!(frame.current.authoritative_world_tick, summary.tick_after);
         (
             frame.current.authoritative_world_tick,
-            organism.object.position,
+            object.position,
             summary.tick_after,
         )
     };
     assert_eq!(frame_tick, live_tick_after);
-    assert_ne!(live_position, pre_update_position);
+    assert_eq!(
+        pre_update_position,
+        causally_changed_position,
+        "durable restore must preserve the position changed by the first GPU tick"
+    );
+    assert_eq!(
+        live_position,
+        causally_changed_position,
+        "post-load action must retain the earlier causally changed position"
+    );
 
     let rendered_entity = app
         .world()
@@ -754,13 +792,6 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         .world()
         .get::<bevy::prelude::Transform>(rendered_entity)
         .expect("mapped rendered learner root must have a transform");
-    assert!(
-        (rendered_transform.translation.x - baseline_root_translation.x).abs()
-            > f32::EPSILON
-            || (rendered_transform.translation.z - baseline_root_translation.z).abs()
-                > f32::EPSILON,
-        "FVR04 rendered learner root must move after the authoritative GPU tick"
-    );
     assert_eq!(
         rendered_transform.translation.x,
         live_position.x.round() + 0.5
