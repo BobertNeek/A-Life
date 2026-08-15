@@ -564,7 +564,17 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         pre_update_position.z.round() + 0.5
     );
 
-    app.update();
+    // Production intentionally withholds 12 startup render frames. The first
+    // permitted update may be the curated residency pass, so allow that pass
+    // and one normal all-resident tick as well.
+    const PRODUCTION_STARTUP_RENDER_FRAMES: usize = 12;
+    const PRODUCTION_TICK_PROOF_UPDATES: usize = PRODUCTION_STARTUP_RENDER_FRAMES + 2;
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_millis(40),
+    ));
+    for _ in 0..PRODUCTION_TICK_PROOF_UPDATES {
+        app.update();
+    }
 
     let (frame_tick, live_position, live_tick_after) = {
         let frame = app
