@@ -8,11 +8,16 @@ use std::fs;
 
 use crate::prelude::*;
 use crate::*;
-use alife_core::{DriveSnapshot, EndocrineSnapshot};
+use alife_core::{
+    BiochemistryState, CreatureGenome, DriveSnapshot, EndocrineSnapshot,
+    FoundationGeneticIdentity, FoundationWeightAsset, SensorProfile,
+};
 use alife_world::persistence::{
     CreatureMindSaveSummary, CreatureSaveState, LearningTraceSaveSummary, WeightLayerSaveSummary,
 };
-use alife_world::{HabitatAuthority, HabitatAuthoritySnapshot, HabitatMembership, HabitatMode};
+use alife_world::{
+    HabitatAuthority, HabitatAuthoritySnapshot, HabitatMembership, HabitatMode, WorldOrganismRecord,
+};
 
 pub const PRODUCTION_VOXEL_COMMAND: &str = "production-voxel";
 pub const PRODUCTION_VOXEL_WINDOW_TITLE: &str = "A-Life Voxel Frontend";
@@ -1341,11 +1346,92 @@ pub(crate) fn production_voxel_save_with_population(
     let mut production_save = save.clone();
     apply_production_population_target(&mut production_save, usize::from(target_population))?;
     reconcile_production_population_habitats(&mut production_save)?;
+    if production_save.world.organism_records.is_none() {
+        materialize_production_organism_records(&mut production_save)?;
+    }
     production_save.world.voxel_backend = None;
     let production_save =
         production_save.with_migrated_voxel_backend(persistent_profile_id(profile_id))?;
     production_save.validate_with_asset_root(asset_root)?;
     Ok(production_save)
+}
+
+fn materialize_production_organism_records(
+    save: &mut PortableSaveFile,
+) -> Result<(), GameAppShellError> {
+    let deterministic_seed = save.deterministic_seed;
+    let mut world = save.restore_headless_world()?;
+    let world_tick = world.tick();
+    let world_bindings = world
+        .organism_entity_ids()
+        .into_iter()
+        .map(|(organism_id, world_entity_id)| (organism_id.raw(), world_entity_id))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let sensor_profile = SensorProfile::PrivilegedAffordanceV1;
+    let mut records = Vec::with_capacity(save.creatures.len());
+
+    for (slot, creature) in save.creatures.iter_mut().enumerate() {
+        let organism_id = creature.organism_id;
+        let world_entity_id = world_bindings
+            .get(&organism_id.raw())
+            .copied()
+            .ok_or(GameAppShellError::Core(
+                ScaffoldContractError::BrainOwnershipMismatch,
+            ))?;
+        let foundation_asset = match creature.brain_class {
+            BrainScaleTier::Nano512 => {
+                FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?
+            }
+            BrainScaleTier::Standard2048 => {
+                FoundationWeightAsset::builtin_n2048_v1(sensor_profile)?
+            }
+            _ => {
+                return Err(GameAppShellError::Core(
+                    ScaffoldContractError::UnsupportedProductionBrainClass,
+                ));
+            }
+        };
+        let foundation_manifest = foundation_asset.manifest();
+        let foundation = FoundationGeneticIdentity::new(
+            foundation_manifest.foundation_id().raw(),
+            foundation_manifest.foundation_version().raw() as u16,
+            foundation_manifest.compatibility_family_id().raw(),
+            creature.brain_class.default_class_id(),
+        )?;
+        let founder_seed = deterministic_seed
+            ^ organism_id.raw().rotate_left(17)
+            ^ 0x5052_4F44_5543_5449;
+        let mut genome = CreatureGenome::early_mammal_founder(founder_seed, foundation)?;
+        genome.id = creature.genome_id;
+        genome.validate_contract()?;
+        let phenotype = genome.express()?;
+        let mut biochemistry = BiochemistryState::new_with_age(
+            &phenotype,
+            world_tick,
+            Tick::ZERO,
+        )?;
+        biochemistry.homeostasis = production_homeostasis_for_slot(world_tick, slot)?;
+        biochemistry.validate_contract()?;
+
+        creature.mind.tick = biochemistry.tick;
+        creature.mind.homeostasis = biochemistry.homeostasis;
+        creature.development_tick = biochemistry.development.last_update_tick;
+        records.push(WorldOrganismRecord::new(
+            organism_id,
+            world_entity_id,
+            genome,
+            phenotype,
+            biochemistry,
+            world_tick,
+        )
+        .map_err(|error| GameAppShellError::InvalidProductionFrontend {
+            message: format!("production organism record rejected: {error}"),
+        })?);
+    }
+
+    world.replace_organism_registry_exact(records)?;
+    save.replace_headless_world_snapshot(&world)?;
+    Ok(())
 }
 
 fn reconcile_production_population_habitats(
@@ -2290,6 +2376,98 @@ mod tests {
             .hormones
             .sleep_pressure
             > 0.65));
+    }
+
+    #[test]
+    fn fvr05_population_restore_has_complete_organism_bindings() {
+        let root = gpu_alpha_fixture_root();
+        let production = production_voxel_save_with_population(
+            &gpu_alpha_save(),
+            &root,
+            ProductionFrontendProfileId::MinimumSettings30x30,
+            3,
+        )
+        .unwrap();
+        let restored = production.restore_headless_world().unwrap();
+        let agent_ids = production
+            .world
+            .objects
+            .iter()
+            .filter(|object| object.kind == WorldObjectKind::Agent)
+            .filter_map(|object| object.organism_id)
+            .map(|organism_id| organism_id.raw())
+            .collect::<std::collections::BTreeSet<_>>();
+        let creature_ids = production
+            .creatures
+            .iter()
+            .map(|creature| creature.organism_id)
+            .map(|organism_id| organism_id.raw())
+            .collect::<std::collections::BTreeSet<_>>();
+        let record_ids = restored
+            .organism_registry()
+            .iter()
+            .map(|record| record.organism_id().raw())
+            .collect::<std::collections::BTreeSet<_>>();
+
+        assert_eq!(agent_ids, creature_ids);
+        assert_eq!(record_ids, creature_ids);
+        assert_eq!(restored.organism_registry().len(), 3);
+        restored.validate_organism_bindings().unwrap();
+        for record in restored.organism_registry().iter() {
+            let age = record.age_at(restored.tick()).unwrap();
+            let development = record.phenotype().development_state_at(age).unwrap();
+            let compiled = if record.phenotype().brain_genome.brain_class_id
+                == alife_core::BrainCapacityClass::N512_ID
+            {
+                let foundation = FoundationWeightAsset::builtin_nano512_v1(
+                    SensorProfile::PrivilegedAffordanceV1,
+                )
+                .unwrap();
+                let projection = alife_core::N512FounderFoundationProjection::compile(
+                    record.phenotype(),
+                    SensorProfile::PrivilegedAffordanceV1,
+                    &foundation,
+                )
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "organism {} failed production compile_birth foundation gate: {error:?}",
+                        record.organism_id().raw()
+                    )
+                });
+                crate::gpu_live_runtime::compile_gpu_components_from_genome(
+                    projection.frozen_abi().coordinate_genome().clone(),
+                    projection
+                        .frozen_abi()
+                        .coordinate_development_state()
+                        .clone(),
+                    SensorProfile::PrivilegedAffordanceV1,
+                )
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "organism {} failed production checkpoint compiler gate: {error:?}",
+                        record.organism_id().raw()
+                    )
+                })
+                .0
+            } else {
+                crate::gpu_live_runtime::compile_gpu_components_from_genome(
+                    record.phenotype().brain_genome.clone(),
+                    development,
+                    SensorProfile::PrivilegedAffordanceV1,
+                )
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "organism {} failed production compile_birth foundation gate: {error:?}",
+                        record.organism_id().raw()
+                    )
+                })
+                .0
+            };
+            assert_eq!(
+                compiled.brain_class_id(),
+                record.phenotype().brain_genome.brain_class_id
+            );
+        }
     }
 
     #[test]
