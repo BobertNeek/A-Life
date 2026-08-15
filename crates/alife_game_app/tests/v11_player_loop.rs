@@ -1,10 +1,14 @@
 //! Smallest v1.1 player-loop RED gate.
 //!
 //! The fixture reaches a grounded teacher token and one coherent production
-//! GPU tick. It stops at the first later lifecycle seam instead of faking
+//! GPU tick with the canonical organism archived before GPU admission. It
+//! stops at the first later unavailable lifecycle seam instead of faking
 //! sleep, reproduction, persistence, or presentation links.
 #![cfg(feature = "gpu-runtime")]
 
+use std::fs;
+
+use alife_archive::{ArchiveLearnedCapturePolicy, LineageLibraryConfig};
 use alife_core::{
     BrainCapacityClass, BrainScaleTier, FoundationGeneticIdentity, FoundationWeightAsset,
     OrganismId, PolicyBackend, SensorProfile, TeacherPerceptionChannel, Tick, Vec3f,
@@ -82,14 +86,39 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         .replace_habitat_authority(authority)
         .expect("world-owned school authority");
 
-    let mut runtime = GpuLiveBrainRuntime::new_profiled(
+    let archive_root =
+        std::env::temp_dir().join(format!("alife-v11-player-loop-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&archive_root);
+    let mut runtime = GpuLiveBrainRuntime::new_profiled_archived(
         backend,
         world,
         13_001,
         BrainScaleTier::Standard2048,
         sensor_profile,
+        LineageLibraryConfig::profile_default(&archive_root),
+        "task-13-v11-player-loop",
+        ArchiveLearnedCapturePolicy::GeneticOnly,
     )
     .expect("supported profiled Standard2048 production runtime");
+
+    let birth_manifest_digest = runtime
+        .archive_birth_manifest(organism_id)
+        .expect("production admission must commit the learner genetic archive");
+    assert_eq!(
+        runtime
+            .world_snapshot()
+            .organism_registry()
+            .get(organism_id)
+            .and_then(|record| record.birth_manifest_digest()),
+        Some(birth_manifest_digest),
+        "the canonical world record must consume the committed birth archive"
+    );
+    assert_eq!(
+        runtime
+            .lineage_archive_manifest_count()
+            .expect("lineage archive manifest count"),
+        Some(1)
+    );
 
     let grounded = runtime.world_snapshot();
     assert!(
@@ -168,8 +197,14 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
     assert!(runtime.last_pre_seal_discard_failures().is_empty());
     assert!(runtime.last_post_seal_learning_failures().is_empty());
 
+    let next_lifecycle_error = match runtime.capture_portable_checkpoint() {
+        Ok(_) => "persistence unexpectedly succeeded without a durable save boundary".to_string(),
+        Err(error) => error.to_string(),
+    };
+    drop(runtime);
+    fs::remove_dir_all(&archive_root).expect("remove temporary player-loop archive");
     assert!(
         false,
-        "Task 13 RED at the next unavailable lifecycle seam: this public production fixture now proves one measured GPU tick, but continuing into sleep, reproduction, persistence, and presentation requires nontrivial existing setup. Do not fake those links."
+        "Task 13 RED at the next unavailable lifecycle seam: the archived one-tick production path now reaches persistence, which stops at `{next_lifecycle_error}`. Do not fake the remaining lifecycle links."
     );
 }
