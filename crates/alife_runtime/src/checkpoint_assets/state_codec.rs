@@ -40,6 +40,21 @@ use super::{
 };
 
 const PENDING_TRANSACTION_SCHEMA_VERSION: u16 = 1;
+const RUNTIME_REPLAY_STATE_SCHEMA_VERSION: u16 = 1;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct PortableRuntimeReplayStateV1 {
+    schema_version: u16,
+    journal: PortableReplayJournalV1,
+    replay_patches: Vec<ExperiencePatch>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum PortableRuntimeReplayStateWire {
+    Runtime(PortableRuntimeReplayStateV1),
+    Legacy(PortableReplayJournalV1),
+}
 
 pub fn current_backend_provenance(
     backend: &GpuClosedLoopBackend,
@@ -196,6 +211,7 @@ pub struct RestoredGpuBrainCheckpoint {
     pub life_statistics: Option<PassiveLifeStatistics>,
     pub retained_learning: Option<RestoredRetainedLearning>,
     pub exact_cognitive_state: Option<ExactCognitiveCheckpointState>,
+    pub replay_patches: Vec<ExperiencePatch>,
 }
 
 pub struct GpuBrainSidecarCapture<'a> {
@@ -438,7 +454,6 @@ impl GpuCheckpointAssetStore {
         })
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn capture_brain(
         &self,
         backend: &mut GpuAuthoritativeSession,
@@ -448,6 +463,32 @@ impl GpuCheckpointAssetStore {
         sleep: SleepState,
         checkpoint_tick: Tick,
         pending_transaction: Option<&ExperiencePatchBuilder>,
+        sidecars: GpuBrainSidecarCapture<'_>,
+    ) -> Result<GpuBrainCheckpointWrite, GameAppShellError> {
+        self.capture_brain_with_runtime_replay_state(
+            backend,
+            handle,
+            phenotype,
+            compiler_inputs,
+            sleep,
+            checkpoint_tick,
+            pending_transaction,
+            &[],
+            sidecars,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn capture_brain_with_runtime_replay_state(
+        &self,
+        backend: &mut GpuAuthoritativeSession,
+        handle: GpuBrainHandle,
+        phenotype: &BrainPhenotype,
+        compiler_inputs: &PhenotypeCompilerInputs,
+        sleep: SleepState,
+        checkpoint_tick: Tick,
+        pending_transaction: Option<&ExperiencePatchBuilder>,
+        replay_patches: &[ExperiencePatch],
         sidecars: GpuBrainSidecarCapture<'_>,
     ) -> Result<GpuBrainCheckpointWrite, GameAppShellError> {
         sleep.validate_contract()?;
@@ -566,6 +607,12 @@ impl GpuCheckpointAssetStore {
                 samples: parts.replay_samples.clone(),
             },
         )?;
+        let replay = PortableRuntimeReplayStateV1 {
+            schema_version: RUNTIME_REPLAY_STATE_SCHEMA_VERSION,
+            journal: replay,
+            replay_patches: replay_patches.to_vec(),
+        };
+        validate_runtime_replay_state(handle.organism_id(), &replay)?;
 
         let (activation_state, entry) = self.write_json("activation", &activation)?;
         entries.push(entry);
@@ -844,8 +891,20 @@ impl GpuCheckpointAssetStore {
             self.read_json(manifest, &state.fast_weights)?;
         let (eligibility, _): (PortableEligibilityBanksV1, Vec<u8>) =
             self.read_json(manifest, &state.eligibility)?;
-        let (replay, _): (PortableReplayJournalV1, Vec<u8>) =
+        let (replay_state, _): (PortableRuntimeReplayStateWire, Vec<u8>) =
             self.read_json(manifest, &state.replay_journal)?;
+        let (replay, replay_patches) = match replay_state {
+            PortableRuntimeReplayStateWire::Runtime(replay_state) => {
+                validate_runtime_replay_state(state.organism_id, &replay_state)?;
+                (replay_state.journal, replay_state.replay_patches)
+            }
+            PortableRuntimeReplayStateWire::Legacy(replay) => {
+                if replay.event_count != 0 {
+                    return Err(ScaffoldContractError::MissingPhaseData.into());
+                }
+                (replay, Vec::new())
+            }
+        };
         validate_main_assets(
             state,
             &phenotype,
@@ -956,6 +1015,7 @@ impl GpuCheckpointAssetStore {
             life_statistics: state.life_statistics.clone(),
             retained_learning,
             exact_cognitive_state: None,
+            replay_patches,
         })
     }
 
@@ -1493,6 +1553,40 @@ fn validate_main_assets(
         }
     } else if eligibility.inactive_generation != 0 {
         return Err(ScaffoldContractError::LearningEvidenceMismatch);
+    }
+    Ok(())
+}
+
+fn validate_runtime_replay_state(
+    organism_id: OrganismId,
+    state: &PortableRuntimeReplayStateV1,
+) -> Result<(), ScaffoldContractError> {
+    state.journal.validate()?;
+    if state.schema_version != RUNTIME_REPLAY_STATE_SCHEMA_VERSION
+        || state.replay_patches.len() != state.journal.events.len()
+    {
+        return Err(ScaffoldContractError::MissingPhaseData);
+    }
+    for (event, patch) in state
+        .journal
+        .events
+        .iter()
+        .zip(&state.replay_patches)
+    {
+        patch.validate_contract()?;
+        let target = patch
+            .prediction_target()
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        target.validate_contract()?;
+        if patch.header().organism_id != organism_id
+            || target.organism_id != organism_id
+            || target.experience_sequence != event.sequence_id
+            || target.decision != event.action_id
+            || target.source_digest != event.frame_digest.0
+            || target.world_tick.raw() < event.originating_tick.raw()
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
     }
     Ok(())
 }

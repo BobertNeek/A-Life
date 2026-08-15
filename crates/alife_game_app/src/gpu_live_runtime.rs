@@ -11,7 +11,7 @@ use alife_core::predictive::GroundedSuccessorPredictor;
 use alife_core::sleep::{SleepReplayEvidence, SleepWorkReceipt};
 use alife_core::{
     ActionKind, ActionTarget, BiochemistryState, BoundedCoordinationSummary, BoundedMotorPayload,
-    BoundedReplayBatch, ChannelCommand, CognitiveWorkReceipt, CoordinationGroup,
+    ChannelCommand, CognitiveWorkReceipt, CoordinationGroup,
     HomeostaticDelta, MotorChannel, MotorCommandBundle,
     PhysicalContactKind, PredictionTargetReceipt,
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
@@ -29,8 +29,8 @@ use alife_core::{
     MemoryUpdateReceipt, NeuralActionSelection, NormalizedScalar, OrganismId, PassiveLifeEvent,
     PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft, PhenotypeCompiler,
     PhenotypeCompilerInputs,
-    PostActionOutcome, PreActionSnapshot, PreparedMemoryRecall, ReplayEligibilitySample,
-    ReplaySynapseSpan, ScaffoldContractError, CandidateObservationRef,
+    PostActionOutcome, PreActionSnapshot, PreparedMemoryRecall, ScaffoldContractError,
+    CandidateObservationRef,
     SensorProfile, SignedValence, SleepConsolidator, SleepTransition,
     SensorProfileIdentity, SensoryAbiVersion, SleepConsolidationConfig, SleepPhase, SleepState,
     Tick, TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind,
@@ -500,6 +500,7 @@ struct AuthoritativeSleepContext<'a> {
     memory: &'a mut MemorySidecarState,
     predictor: &'a mut GroundedSuccessorPredictor,
     topology: &'a mut TopologySidecar,
+    restored_replay_patches: &'a [ExperiencePatch],
     sealed_patches: &'a [ExperiencePatch],
     last_sealed_patches: &'a [ExperiencePatch],
 }
@@ -508,88 +509,74 @@ fn build_authoritative_sleep_evidence(
     backend: &mut GpuClosedLoopBackend,
     handle: GpuBrainHandle,
     organism_id: OrganismId,
+    restored_replay_patches: &[ExperiencePatch],
     sealed_patches: &[ExperiencePatch],
     last_sealed_patches: &[ExperiencePatch],
 ) -> Result<SleepReplayEvidence, ScaffoldContractError> {
     let batch = backend.build_sleep_replay_batch(handle)?;
-    let retained = batch
+    if batch.events.is_empty() {
+        return Err(ScaffoldContractError::MissingPhaseData);
+    }
+    let prediction_targets = batch
         .events
         .iter()
-        .enumerate()
-        .filter_map(|(event_index, event)| {
-            let target = last_sealed_patches
+        .map(|event| {
+            restored_replay_patches
                 .iter()
+                .chain(last_sealed_patches.iter())
                 .chain(sealed_patches.iter())
                 .find_map(|patch| {
                     patch.prediction_target().and_then(|target| {
                         (target.organism_id == organism_id
                             && target.experience_sequence == event.sequence_id)
                             .then(|| target.clone())
-                    })
-                });
-            target.map(|target| (event_index, *event, target))
+                        })
+                })
+                .ok_or(ScaffoldContractError::MissingPhaseData)
         })
-        .collect::<Vec<_>>();
-    if retained.is_empty() {
-        return Err(ScaffoldContractError::MissingPhaseData);
-    }
-
-    let retained_event_count = u32::try_from(retained.len())
-        .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
-    let mut eligibility_samples = Vec::with_capacity(
-        batch
-            .synapse_spans
-            .len()
-            .checked_mul(retained.len())
-            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?,
-    );
-    let mut synapse_spans = Vec::with_capacity(batch.synapse_spans.len());
-    for span in &batch.synapse_spans {
-        let source_start = usize::try_from(span.sample_start)
-            .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
-        let source_end = source_start
-            .checked_add(
-                usize::try_from(span.sample_count)
-                    .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?,
-            )
-            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
-        let source_samples = batch
-            .eligibility_samples
-            .get(source_start..source_end)
-            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
-        let sample_start = u32::try_from(eligibility_samples.len())
-            .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
-        for (retained_index, (source_index, _, _)) in retained.iter().enumerate() {
-            let source = source_samples
-                .get(*source_index)
-                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
-            eligibility_samples.push(ReplayEligibilitySample {
-                event_index: u16::try_from(retained_index)
-                    .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?,
-                eligibility_q15: source.eligibility_q15,
-            });
-        }
-        synapse_spans.push(ReplaySynapseSpan {
-            local_synapse_id: span.local_synapse_id,
-            sample_start,
-            sample_count: retained_event_count,
-            reserved: span.reserved,
-        });
-    }
-
-    let prediction_targets = retained
-        .iter()
-        .map(|(_, _, target)| target.clone())
-        .collect();
-    let mut batch = BoundedReplayBatch {
-        schema_version: batch.schema_version,
-        events: retained.iter().map(|(_, event, _)| *event).collect(),
-        synapse_spans,
-        eligibility_samples,
-        canonical_digest: [0; 4],
-    };
-    batch.canonical_digest = batch.recompute_canonical_digest()?;
+        .collect::<Result<Vec<_>, _>>()?;
     SleepReplayEvidence::new(batch, prediction_targets)
+}
+
+fn replay_patches_for_checkpoint(
+    backend: &mut GpuClosedLoopBackend,
+    handle: GpuBrainHandle,
+    organism_id: OrganismId,
+    restored_replay_patches: &[ExperiencePatch],
+    sealed_patches: &[ExperiencePatch],
+    last_sealed_patches: &[ExperiencePatch],
+) -> Result<Vec<ExperiencePatch>, ScaffoldContractError> {
+    let batch = backend.build_sleep_replay_batch(handle)?;
+    if batch.events.is_empty() {
+        return Ok(Vec::new());
+    }
+    let patches = batch
+        .events
+        .iter()
+        .map(|event| {
+            restored_replay_patches
+                .iter()
+                .chain(last_sealed_patches.iter())
+                .chain(sealed_patches.iter())
+                .find(|patch| {
+                    patch.header().organism_id == organism_id
+                        && patch.header().sequence_id == event.sequence_id
+                })
+                .cloned()
+                .ok_or(ScaffoldContractError::MissingPhaseData)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let prediction_targets = patches
+        .iter()
+        .map(|patch| {
+            patch
+                .prediction_target()
+                .cloned()
+                .ok_or(ScaffoldContractError::MissingPhaseData)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    SleepReplayEvidence::new(batch, prediction_targets)?;
+    Ok(patches)
 }
 
 fn run_authoritative_sleep_transaction(
@@ -604,6 +591,7 @@ fn run_authoritative_sleep_transaction(
         backend,
         handle,
         organism_id,
+        context.restored_replay_patches,
         context.sealed_patches,
         context.last_sealed_patches,
     )?;
@@ -791,6 +779,7 @@ where
                     self.authoritative.backend,
                     self.authoritative.handle,
                     organism_id,
+                    context.restored_replay_patches,
                     context.sealed_patches,
                     context.last_sealed_patches,
                 )?,
@@ -1457,6 +1446,7 @@ pub struct GpuLiveBrainRuntime {
     schedule_sleep: bool,
     sealed_patches: Vec<ExperiencePatch>,
     sealed_patch_count: usize,
+    restored_replay_patches: Vec<ExperiencePatch>,
     last_sealed_patches: Vec<ExperiencePatch>,
     observe_sidecars: bool,
     retain_sealed_patch_history: bool,
@@ -3437,6 +3427,7 @@ impl GpuLiveBrainRuntime {
             schedule_sleep: options.schedule_sleep,
             sealed_patches: Vec::new(),
             sealed_patch_count: 0,
+            restored_replay_patches: Vec::new(),
             last_sealed_patches: Vec::new(),
             observe_sidecars: options.observe_sidecars,
             retain_sealed_patch_history: options.retain_sealed_patch_history,
@@ -3550,6 +3541,7 @@ impl GpuLiveBrainRuntime {
             schedule_sleep: true,
             sealed_patches: Vec::new(),
             sealed_patch_count: 0,
+            restored_replay_patches: Vec::new(),
             last_sealed_patches: Vec::new(),
             observe_sidecars: true,
             retain_sealed_patch_history: true,
@@ -3707,6 +3699,7 @@ impl GpuLiveBrainRuntime {
                         restored.memory,
                         restored.topology,
                         restored.tracked_objects,
+                        restored.replay_patches,
                         retained_learning,
                         discarded_eligibility,
                     ))
@@ -3716,6 +3709,7 @@ impl GpuLiveBrainRuntime {
                     memory,
                     topology,
                     tracked_objects,
+                    replay_patches,
                     retained_learning,
                     discarded_eligibility,
                 ) = match install_result {
@@ -3740,6 +3734,7 @@ impl GpuLiveBrainRuntime {
                 runtime.residents.insert(raw, resident);
                 runtime.memories.insert(raw, memory);
                 runtime.topologies.insert(raw, topology);
+                runtime.restored_replay_patches.extend(replay_patches);
                 tracked_object_states.push(tracked_objects);
                 if let Some(discard) = discarded_eligibility {
                     runtime.last_eligibility_discard_receipts.push(discard);
@@ -3861,7 +3856,15 @@ impl GpuLiveBrainRuntime {
                 attempts: recovery.attempts,
                 last_error_code: recovery.last_error.slug(),
             });
-        Ok(store.capture_brain(
+        let replay_patches = replay_patches_for_checkpoint(
+            &mut self.backend,
+            handle,
+            organism_id,
+            &self.restored_replay_patches,
+            &self.sealed_patches,
+            &self.last_sealed_patches,
+        )?;
+        Ok(store.capture_brain_with_runtime_replay_state(
             &mut self.backend,
             handle,
             &resident.phenotype,
@@ -3869,6 +3872,7 @@ impl GpuLiveBrainRuntime {
             resident.sleep_scheduler.state(),
             self.world.tick(),
             None,
+            &replay_patches,
             GpuBrainSidecarCapture {
                 sensor_profile: memory.profile(),
                 memory,
@@ -4013,7 +4017,15 @@ impl GpuLiveBrainRuntime {
             {
                 return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
             }
-            let write = store.capture_brain(
+            let replay_patches = replay_patches_for_checkpoint(
+                &mut self.backend,
+                handle,
+                organism_id,
+                &self.restored_replay_patches,
+                &self.sealed_patches,
+                &self.last_sealed_patches,
+            )?;
+            let write = store.capture_brain_with_runtime_replay_state(
                 &mut self.backend,
                 handle,
                 &resident.phenotype,
@@ -4021,6 +4033,7 @@ impl GpuLiveBrainRuntime {
                 resident.sleep_scheduler.state(),
                 checkpoint_tick,
                 None,
+                &replay_patches,
                 GpuBrainSidecarCapture {
                     sensor_profile: self
                         .memories
@@ -4981,6 +4994,8 @@ impl GpuLiveBrainRuntime {
         self.reconcile_population()?;
         self.last_sealed_patches
             .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
+        self.restored_replay_patches
+            .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
         self.last_learning_receipts.clear();
         self.last_activity_work_receipts.clear();
         self.last_cognitive_work_receipts.clear();
@@ -5072,6 +5087,7 @@ impl GpuLiveBrainRuntime {
                                 .topologies
                                 .get_mut(&raw)
                                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?,
+                            restored_replay_patches: &self.restored_replay_patches,
                             sealed_patches: &self.sealed_patches,
                             last_sealed_patches: &self.last_sealed_patches,
                         }),
@@ -5261,6 +5277,8 @@ impl GpuLiveBrainRuntime {
         for (organism_id, committed_sleep) in completed_promotions {
             self.compact_memory_at_sleep_commit(organism_id, committed_sleep)?;
             self.promote_durable_completed_sleep(organism_id, committed_sleep)?;
+            self.restored_replay_patches
+                .retain(|patch| patch.header().organism_id != organism_id);
         }
 
         let awake_summaries = if batch.is_empty() {
