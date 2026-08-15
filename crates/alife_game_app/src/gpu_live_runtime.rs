@@ -2045,12 +2045,11 @@ fn factorized_motor_bundle_for_candidates(
     for head_channel in channels {
         let slot = match head_channel {
             MotorChannel::Locomotion => 0,
+            MotorChannel::Orientation => 1,
             MotorChannel::Manipulation => 2,
             MotorChannel::Vocal => 3,
             MotorChannel::Posture => 4,
-            MotorChannel::Orientation | MotorChannel::SpeciesSpecific(_) => {
-                return Err(ScaffoldContractError::InvalidDecisionEvidence)
-            }
+            MotorChannel::SpeciesSpecific(_) => 5,
         };
         let encoded = candidate_slots
             .get(slot)
