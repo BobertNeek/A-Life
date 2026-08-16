@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A-Life Full Project Review — 8 August 2026</title>
+  <style>
+    :root {
+      --ink: #e9eadf;
+      --muted: #a8ac9b;
+      --bg: #0d120f;
+      --panel: #151b17;
+      --panel-2: #1b231d;
+      --line: #344037;
+      --moss: #9fbd73;
+      --moss-deep: #5f7f4a;
+      --amber: #e3ad57;
+      --red: #d97768;
+      --cyan: #83b9b1;
+      --cream: #f1e8ce;
+      --code: #101512;
+      --shadow: 0 18px 42px rgba(0,0,0,.26);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font: 16px/1.62 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    a { color: var(--moss); text-underline-offset: .2em; }
+    a:hover { color: var(--cream); }
+    code, .mono { font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace; }
+    code { color: #d9e6c8; overflow-wrap: anywhere; }
+    .wrap { width: min(1180px, calc(100% - 36px)); margin: 0 auto; }
+    .eyebrow {
+      color: var(--amber);
+      font: 700 .76rem/1.2 "Cascadia Code", monospace;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    header {
+      padding: 72px 0 48px;
+      border-bottom: 1px solid var(--line);
+      background-color: #101612;
+      background-image:
+        linear-gradient(rgba(159,189,115,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(159,189,115,.04) 1px, transparent 1px);
+      background-size: 38px 38px;
+    }
+    h1, h2, h3 { line-height: 1.1; letter-spacing: -.025em; }
+    h1 { margin: 14px 0 18px; max-width: 920px; font-size: clamp(2.55rem, 6vw, 5.8rem); color: var(--cream); }
+    h2 { margin: 0 0 14px; font-size: clamp(1.8rem, 3vw, 3.1rem); color: var(--cream); }
+    h3 { margin: 0 0 10px; font-size: 1.16rem; color: var(--cream); }
+    p { margin: .65em 0; }
+    .lede { max-width: 880px; color: #c7cbbd; font-size: clamp(1.05rem, 2vw, 1.35rem); }
+    .verdict {
+      display: inline-flex; align-items: center; gap: 10px; margin-top: 22px; padding: 10px 14px;
+      border: 1px solid #6d4b43; background: #261c19; color: #f4c6bc; border-radius: 999px;
+      font: 700 .82rem/1 "Cascadia Code", monospace; letter-spacing: .04em;
+    }
+    .verdict::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 5px rgba(217,119,104,.12); }
+    nav {
+      position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--line); background: rgba(13,18,15,.94); backdrop-filter: blur(12px);
+    }
+    nav .wrap { display: flex; gap: 24px; overflow-x: auto; padding-block: 13px; scrollbar-width: thin; }
+    nav a { flex: 0 0 auto; color: var(--muted); text-decoration: none; font-size: .82rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    nav a:hover { color: var(--cream); }
+    main { padding-bottom: 90px; }
+    section { padding: 72px 0; border-bottom: 1px solid var(--line); }
+    .section-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, .72fr); gap: 48px; align-items: end; margin-bottom: 30px; }
+    .section-head p { color: var(--muted); margin: 0; }
+    .grid { display: grid; gap: 18px; }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .card { padding: 22px; border: 1px solid var(--line); background: var(--panel); border-radius: 14px; box-shadow: var(--shadow); }
+    .card p:last-child { margin-bottom: 0; }
+    .metric { min-height: 156px; }
+    .metric .number { margin: 14px 0 6px; color: var(--cream); font-size: clamp(1.9rem, 4vw, 3.2rem); line-height: 1; letter-spacing: -.04em; }
+    .metric .label { color: var(--muted); font-size: .9rem; }
+    .callout { padding: 26px 28px; border-left: 5px solid var(--amber); background: #1e1c15; border-radius: 0 12px 12px 0; color: #e8dfc8; font-size: 1.13rem; }
+    .callout strong { color: var(--cream); }
+    .kicker { color: var(--moss); font: 700 .8rem/1.2 "Cascadia Code", monospace; text-transform: uppercase; letter-spacing: .08em; }
+    .tag { display: inline-block; margin: 3px 5px 3px 0; padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--panel-2); font-size: .74rem; }
+    .tag.good { color: #cfe9af; border-color: #516745; }
+    .tag.warn { color: #f4d394; border-color: #665131; }
+    .tag.bad { color: #efb0a5; border-color: #70453e; }
+    .matrix { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); }
+    table { width: 100%; border-collapse: collapse; min-width: 760px; }
+    th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--cream); background: #1a211c; font-size: .77rem; text-transform: uppercase; letter-spacing: .07em; }
+    td { color: #c7cbbd; }
+    tr:last-child td { border-bottom: 0; }
+    .level { display: grid; grid-template-columns: repeat(4, 13px); gap: 4px; margin-top: 5px; }
+    .level i { width: 13px; height: 8px; border-radius: 2px; background: #303a32; }
+    .level.l1 i:nth-child(-n+1), .level.l2 i:nth-child(-n+2), .level.l3 i:nth-child(-n+3), .level.l4 i:nth-child(-n+4) { background: var(--moss); }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px 18px; color: var(--muted); font-size: .82rem; margin: 0 0 18px; }
+    .diagram { padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #111713; overflow-x: auto; }
+    .diagram svg { display: block; min-width: 850px; width: 100%; height: auto; }
+    .split-note { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+    .split-note > div { padding: 26px; background: var(--panel); }
+    .split-note > div + div { border-left: 1px solid var(--line); background: #1d1817; }
+    .clean-list, .ranked { padding-left: 1.2rem; }
+    .clean-list li, .ranked li { margin: .65rem 0; padding-left: .35rem; }
+    .ranked { list-style: none; padding: 0; counter-reset: priorities; }
+    .ranked li { counter-increment: priorities; position: relative; padding: 18px 20px 18px 58px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+    .ranked li::before { content: counter(priorities); position: absolute; left: 18px; top: 17px; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; color: #10140f; background: var(--amber); font: 800 .8rem/1 monospace; }
+    .ranked strong { color: var(--cream); }
+    .ranked li[data-state] { padding-right: 116px; }
+    .ranked li[data-state]::after { content: attr(data-state); position: absolute; right: 18px; top: 17px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--panel-2); font: 700 .7rem/1 "Cascadia Code", monospace; letter-spacing: .05em; text-transform: uppercase; }
+    .ranked li[data-state="in progress"] { border-color: #765c35; background: #211d15; }
+    .ranked li[data-state="in progress"]::after { color: #f4d394; border-color: #765c35; }
+    .ranked li[data-state="complete"] { border-color: #516745; }
+    .ranked li[data-state="complete"]::after { color: #cfe9af; border-color: #516745; }
+    .execution-strip { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; margin: 0 0 18px; padding: 15px 18px; border: 1px solid #765c35; border-radius: 12px; background: #211d15; }
+    .execution-strip .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 6px rgba(227,173,87,.12); }
+    .execution-strip strong { color: var(--cream); }
+    .execution-strip .count { color: var(--amber); font: 800 .84rem/1 "Cascadia Code", monospace; white-space: nowrap; }
+    .roadmap { display: grid; grid-template-columns: repeat(9, minmax(110px,1fr)); gap: 8px; overflow-x: auto; padding-bottom: 8px; }
+    .era { min-height: 148px; padding: 14px; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; }
+    .era .num { color: var(--amber); font: 800 1.1rem/1 monospace; }
+    .era p { color: var(--muted); font-size: .79rem; line-height: 1.35; }
+    .era.active { border-color: #765c35; background: #211d15; }
+    .era.locked { opacity: .58; }
+    details { margin: 10px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+    summary { cursor: pointer; padding: 15px 18px; color: var(--cream); font-weight: 700; }
+    details > div { padding: 0 18px 17px; color: var(--muted); }
+    .path { display: block; padding: 9px 11px; background: var(--code); border: 1px solid #29332c; border-radius: 7px; font: .76rem/1.45 "Cascadia Code", monospace; color: #cad5bd; overflow-wrap: anywhere; }
+    .footnote { color: var(--muted); font-size: .82rem; }
+    footer { padding: 36px 0 60px; color: var(--muted); font-size: .84rem; }
+    @media (max-width: 900px) {
+      .grid-4, .grid-3, .grid-2, .section-head { grid-template-columns: 1fr; }
+      .split-note { grid-template-columns: 1fr; }
+      .split-note > div + div { border-left: 0; border-top: 1px solid var(--line); }
+    }
+    @media (max-width: 560px) {
+      .wrap { width: min(100% - 24px, 1180px); }
+      header { padding-top: 48px; }
+      section { padding: 52px 0; }
+      .card { padding: 18px; }
+    }
+    @media print {
+      nav { display: none; }
+      body { background: white; color: #111; }
+      header, .card, .matrix, .era, details, .split-note > div, .diagram { background: white !important; color: #111; box-shadow: none; }
+      h1, h2, h3, th, .number { color: #111 !important; }
+      p, td, .label, .footnote, .section-head p { color: #333 !important; }
+      section, header, .card, .matrix, details, .split-note, .diagram { border-color: #bbb; }
+    }
+  </style>
+</head>
+<body>
+  <header id="top">
+    <div class="wrap">
+      <div class="eyebrow">Full project review · updated 15 August 2026</div>
+      <h1>Pass 1 is complete: the full v1.1 architecture now acts as one game.</h1>
+      <p class="lede">A-Life now runs one GPU-authoritative production loop across cognition, canonical biology, body motion, world outcomes, learning, sleep consolidation, reproduction, durable replacement and stable-ID voxel presentation. The final breadth audit found six production disconnects; commits <code>54e64c3b…</code>, <code>540a8100…</code> and <code>cf1d941c…</code> close all six. Fresh residents now receive working dendritic branches, sparse structural growth and pruning run on the live sleep cadence, heritable cognitive policy configures the live brain, and complete hardware-independent cognitive work reaches the optional metabolic policy. Structured teaching and managed breeding now execute against the live runtime instead of stopping at authorization receipts. EI1 corpus work, broad regression, robustness, ablation, performance and population scale are deliberately Pass 2.</p>
+      <div class="verdict">PASS 1 COMPLETE · FULL v1.1 PRODUCTION PATH · PASS 2 VALIDATION DEFERRED</div>
+    </div>
+  </header>
+
+  <nav aria-label="Report sections">
+    <div class="wrap">
+      <a href="#snapshot">Snapshot</a>
+      <a href="#maturity">Maturity</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#aspiration">Aspiration gap</a>
+      <a href="#reality">What is real</a>
+      <a href="#roadmap">Next work</a>
+      <a href="#cleanup">Cleanup</a>
+      <a href="#evidence">Evidence</a>
+    </div>
+  </nav>
+
+  <main>
+    <section id="snapshot">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="eyebrow">Executive snapshot</div><h2>Where the project stands</h2></div>
+          <p>Original audit at <code>69edc8ca…</code>; Pass 1 recovery is integrated on main at <code>cf1d941c2b54c77451e49564c6584585113f6fc7</code>. The final three capability owners each delivered implementation, one focused causal gate and a clean commit; routine reviewer loops were intentionally omitted.</p>
+        </div>
+        <div class="grid grid-4">
+          <article class="card metric"><div class="kicker">Pass 1 status</div><div class="number">Complete</div><div class="label">all major locked v1.1 capabilities joined through production paths</div></article>
+          <article class="card metric"><div class="kicker">Final disconnects</div><div class="number">6 → 0</div><div class="label">teaching, breeding, dendrites, structural growth, phenotype policy and work accounting</div></article>
+          <article class="card metric"><div class="kicker">Final repair bundles</div><div class="number">3</div><div class="label">one focused causal gate per Luna-owned capability bundle</div></article>
+          <article class="card metric"><div class="kicker">Repository reset</div><div class="number">1 tree</div><div class="label">24 merged worktrees removed; 25.62 GiB of generated debris removed in the final reset</div></article>
+        </div>
+        <div class="callout" style="margin-top:18px"><strong>Plain verdict:</strong> the brain, body, biology and world now share one causal runtime. The authoritative tick advances multirate biology, acts through real GPU decisions, seals measured outcomes, learns, sleeps, grows and prunes sparse neural structure, reproduces archived offspring, replaces the same world through save/load, and publishes the same stable organisms to the renderer and inspectors. Pause, step, speed, structured teaching and managed breeding all cross this authority. Pass 1 is complete at <code>cf1d941c…</code>. A fresh EI1 corpus remains necessary for an EI1 promotion claim, but that evidence campaign is Pass 2 and is not a missing architecture capability.</div>
+      </div>
+    </section>
+
+    <section id="maturity">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="eyebrow">Maturity map</div><h2>Separate existence from proof</h2></div>
+          <p>These are editorial maturity levels, not test coverage or percentages: 1 = exists, 2 = integrated, 3 = player-visible, 4 = causally proven on the audited path.</p>
+        </div>
+        <div class="legend"><span>1 · implemented</span><span>2 · integrated</span><span>3 · player-visible</span><span>4 · causally proven</span></div>
+        <div class="matrix">
+          <table>
+            <thead><tr><th>Subsystem</th><th>Level</th><th>What that means now</th><th>Main deficit</th></tr></thead>
+            <tbody>
+              <tr><td>Core contracts and authority</td><td><div class="level l4"><i></i><i></i><i></i><i></i></div></td><td>Typed IDs, grounded frames, legal candidates, sealed outcomes, source-bound receipts.</td><td>Several later guarantees remain optional at composition roots.</td></tr>
+              <tr><td>GPU cognition and learning</td><td><div class="level l4"><i></i><i></i><i></i><i></i></div></td><td>Normal WGSL dispatch now includes grounded action, factorized outcomes, learning, prediction, attention, nonlinear dendritic conjunctions, bounded structural growth/pruning, recovery sleep, exact durable restore and live presentation continuity.</td><td>Focused causal gates are green, but broad behavioral validation and current-source EI1 generalization remain unproven.</td></tr>
+              <tr><td>World/action oracle</td><td><div class="level l4"><i></i><i></i><i></i><i></i></div></td><td>Grounded sensing, legality, factorized action bundles, measured joint outcomes, speech, habitat modes, one canonical organism record and deterministic conception.</td><td>Broader ecological robustness and population-scale validation remain Pass 2.</td></tr>
+              <tr><td>Genetics and evolution</td><td><div class="level l3"><i></i><i></i><i></i><i></i></div></td><td>Diploid genome, heritable cognitive policy, live managed reproduction, phenotype, archive, offline selection and EI0/EI1 gates.</td><td>A fresh current-source EI1 corpus and promotion verdict remain Pass 2.</td></tr>
+              <tr><td>Voxel presentation</td><td><div class="level l4"><i></i><i></i><i></i><i></i></div></td><td>Paired live frames project creature roots by stable ID; the integrated GPU loop now proves the matching ECS root equals the post-load canonical organism position. Selection, labels and inspectors consume the same live frame.</td><td>Newborn roots still reuse the existing presentation template. A captured on-screen hardware frame and phenotype-specific mesh rebuilding remain pending.</td></tr>
+              <tr><td>Player loop</td><td><div class="level l4"><i></i><i></i><i></i><i></i></div></td><td>Observe, teach, GPU act, measured outcome, learn, sleep, change later behavior, reproduce, inspect lineage, save/load and render all cross one live authority.</td><td>Objectives, content depth, usability tuning and external playtesting remain product work.</td></tr>
+              <tr><td>Autonomous life simulation</td><td><div class="level l4"><i></i><i></i><i></i><i></i></div></td><td>The authoritative scheduler advances each due subsystem on its own cadence, retires dead organisms, consumes resources, reproduces archived newborns and keeps GPU/world/presentation identity aligned.</td><td>Long-run ecological balance and 30–500 resident scale remain unmeasured.</td></tr>
+              <tr><td>Scale and performance</td><td><div class="level l2"><i></i><i></i><i></i><i></i></div></td><td>N512/N1024/N2048 budgets, bucketed arenas, compact readback, LOD policies.</td><td>30–500 live residents, latency, memory and long-run persistence remain unmeasured.</td></tr>
+              <tr><td>Product/release readiness</td><td><div class="level l2"><i></i><i></i><i></i><i></i></div></td><td>The complete internal game loop and hardware-rendered desktop shell exist.</td><td>No current external playtest, population-scale receipt, tuning pass or release tag.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="eyebrow">Decisive architecture gap</div><h2>The simulation and the game miss each other</h2></div>
+          <p>The GPU runtime mutates a real <code>HeadlessWorld</code>. The renderer constructs creature transforms from persisted tiles and applies procedural pose offsets. The returned live tick summaries are discarded.</p>
+        </div>
+        <div class="diagram" role="img" aria-label="Architecture diagram showing the missing bridge between live GPU simulation and the voxel renderer">
+          <svg viewBox="0 0 1120 490" xmlns="http://www.w3.org/2000/svg">
+            <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#9fbd73"/></marker><marker id="badarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#d97768"/></marker></defs>
+            <rect x="30" y="54" width="228" height="108" rx="13" fill="#1b231d" stroke="#536847"/>
+            <text x="54" y="84" fill="#e3ad57" font-family="monospace" font-size="13">PRODUCTION TICK</text>
+            <text x="54" y="117" fill="#f1e8ce" font-family="system-ui" font-size="22" font-weight="700">GpuLiveBrainRuntime</text>
+            <text x="54" y="141" fill="#a8ac9b" font-family="system-ui" font-size="14">real adapter · real inference · sleep</text>
+            <rect x="330" y="54" width="228" height="108" rx="13" fill="#1b231d" stroke="#536847"/>
+            <text x="354" y="84" fill="#e3ad57" font-family="monospace" font-size="13">WORLD AUTHORITY</text>
+            <text x="354" y="117" fill="#f1e8ce" font-family="system-ui" font-size="22" font-weight="700">HeadlessWorld</text>
+            <text x="354" y="141" fill="#a8ac9b" font-family="system-ui" font-size="14">legal action · mutation · outcome</text>
+            <path d="M258 108 H330" stroke="#9fbd73" stroke-width="3" marker-end="url(#arrow)"/>
+            <text x="274" y="96" fill="#9fbd73" font-family="monospace" font-size="11">command</text>
+            <rect x="630" y="54" width="228" height="108" rx="13" fill="#211d15" stroke="#766039"/>
+            <text x="654" y="84" fill="#e3ad57" font-family="monospace" font-size="13">RETURN VALUE</text>
+            <text x="654" y="117" fill="#f1e8ce" font-family="system-ui" font-size="21" font-weight="700">Tick summaries</text>
+            <text x="654" y="141" fill="#a8ac9b" font-family="system-ui" font-size="14">actions · positions · outcomes</text>
+            <path d="M558 108 H630" stroke="#9fbd73" stroke-width="3" marker-end="url(#arrow)"/>
+            <rect x="907" y="54" width="178" height="108" rx="13" fill="#1b231d" stroke="#536847"/>
+            <text x="931" y="84" fill="#9fbd73" font-family="monospace" font-size="13">BOUNDED BRIDGE</text>
+            <text x="931" y="117" fill="#f1e8ce" font-family="system-ui" font-size="20" font-weight="700">Paired frames</text>
+            <text x="931" y="141" fill="#a8ac9b" font-family="system-ui" font-size="14">tick + objects retained</text>
+            <path d="M858 108 H907" stroke="#9fbd73" stroke-width="3" marker-end="url(#arrow)"/>
+
+            <rect x="110" y="314" width="238" height="108" rx="13" fill="#1b231d" stroke="#536847"/>
+            <text x="134" y="344" fill="#83b9b1" font-family="monospace" font-size="13">STARTUP INPUT</text>
+            <text x="134" y="377" fill="#f1e8ce" font-family="system-ui" font-size="22" font-weight="700">Portable save</text>
+            <text x="134" y="401" fill="#a8ac9b" font-family="system-ui" font-size="14">tiles · creatures · homeostasis</text>
+            <rect x="438" y="314" width="275" height="108" rx="13" fill="#1b231d" stroke="#536847"/>
+            <text x="462" y="344" fill="#83b9b1" font-family="monospace" font-size="13">PLAYER-VISIBLE PATH</text>
+            <text x="462" y="377" fill="#f1e8ce" font-family="system-ui" font-size="22" font-weight="700">Voxel renderer</text>
+            <text x="462" y="401" fill="#a8ac9b" font-family="system-ui" font-size="14">base translation + pose offsets</text>
+            <path d="M348 368 H438" stroke="#83b9b1" stroke-width="3" marker-end="url(#arrow)"/>
+            <rect x="805" y="314" width="238" height="108" rx="13" fill="#1b231d" stroke="#536847"/>
+            <text x="829" y="344" fill="#83b9b1" font-family="monospace" font-size="13">ON SCREEN</text>
+            <text x="829" y="377" fill="#f1e8ce" font-family="system-ui" font-size="22" font-weight="700">Animated creature</text>
+            <text x="829" y="401" fill="#a8ac9b" font-family="system-ui" font-size="14">live x/z · bounded metadata</text>
+            <path d="M713 368 H805" stroke="#83b9b1" stroke-width="3" marker-end="url(#arrow)"/>
+
+            <path d="M996 162 C996 238 575 230 575 314" stroke="#9fbd73" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+            <rect x="582" y="211" width="322" height="50" rx="25" fill="#1b231d" stroke="#536847"/>
+            <text x="611" y="242" fill="#cfe9af" font-family="system-ui" font-size="16" font-weight="700">CLOSED: live stable-ID projection</text>
+          </svg>
+        </div>
+        <div class="split-note" style="margin-top:18px">
+          <div><div class="kicker">What is true</div><h3>The brain really acts</h3><p>GPU-selected actions pass world legality, mutate authoritative headless state, produce outcomes, and feed learning. This is not a mock or lookup table.</p></div>
+          <div><div class="kicker" style="color:var(--red)">What remains split</div><h3>The body is not one record</h3><p>Position now follows the authoritative world, but inspector biology is still marked launch/save metadata. Pause, speed and load also remain presentation or validation controls rather than one authoritative runtime contract.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="aspiration">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="eyebrow">Aspiration gap</div><h2>From engineered components to emergent lives</h2></div>
+          <p>The master aspiration is a population of embodied artificial organisms whose instincts, world models, language, social behavior and reasoning emerge through evolution, learning, schooling and sleep.</p>
+        </div>
+        <div class="grid grid-3">
+          <article class="card"><div class="kicker">Aspiration</div><h3>Embodied organisms</h3><p>Creatures should metabolize, age, suffer, heal, die, reproduce, and alter a persistent ecology while the player watches.</p><span class="tag good">parts exist</span><span class="tag bad">loop absent</span></article>
+          <article class="card"><div class="kicker">Aspiration</div><h3>Developmental minds</h3><p>Topology, plasticity, memory, sleep, neurochemistry and grounded experience should yield measurable learning.</p><span class="tag good">architecture real</span><span class="tag bad">ability blocked</span></article>
+          <article class="card"><div class="kicker">Aspiration</div><h3>Player as breeder-teacher-scientist</h3><p>The player should observe, teach, select, preserve lineages, and see the causal consequences over generations.</p><span class="tag warn">surfaces partial</span><span class="tag bad">progression missing</span></article>
+        </div>
+        <div class="callout" style="margin-top:18px"><strong>The current distance is orchestration, not imagination.</strong> Most primitive capabilities exist. Organism authority and presentation now have one route. The missing work is to give biology one clock, controls one truth, and the complete player loop one honest acceptance receipt.</div>
+      </div>
+    </section>
+
+    <section id="reality">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="eyebrow">Subsystem review</div><h2>What is real now</h2></div>
+          <p>The codebase is not vaporware. Its strongest pieces are unusually concrete. The weakness is their product composition.</p>
+        </div>
+        <div class="grid grid-3">
+          <article class="card"><h3>GPU cognition</h3><p>Required WGPU adapter/device, sparse class buckets, recurrent inference, candidate arbitration, eligibility learning, candidate-local memory, sleep/replay, device-loss fail-stop and checkpoints.</p><span class="tag good">implemented</span><span class="tag good">headless integrated</span><span class="tag warn">not visibly closed</span></article>
+          <article class="card"><h3>Grounded world oracle</h3><p>Physical feature sensing, indexed perception, legal candidates, action outcomes, speech payloads, habitat modes and source-bound experience patches.</p><span class="tag good">authoritative</span><span class="tag warn">bounded ecology</span></article>
+          <article class="card"><h3>Genetics and lineage</h3><p>Diploid composite genomes, validation, phenotype expression, chemistry parameters, sexual reproduction, mutation, archive identities and offline managed selection.</p><span class="tag good">substantive</span><span class="tag warn">offline selection</span></article>
+          <article class="card"><h3>Voxel game shell</h3><p>Persistent terrain, procedural chunks, water, lighting, fog, GeneForge modular creatures, LOD, HUD, cameras, selection, inspectors and lineage/habitat surfaces.</p><span class="tag good">player-visible</span><span class="tag warn">snapshot-backed</span></article>
+          <article class="card"><h3>Evidence discipline</h3><p>Deterministic contracts, source/tree binding, adapter/backend receipts, compressed causal sidecars, EI0 exit gate and explicit unknown/blocked verdicts.</p><span class="tag good">strong culture</span><span class="tag warn">stale receipts</span></article>
+          <article class="card"><h3>Architecture boundaries</h3><p>A coherent lower stack: <code>alife_core → alife_world / alife_gpu_backend → alife_runtime → alife_game_app</code>.</p><span class="tag good">clean foundations</span><span class="tag bad">god composition crate</span></article>
+        </div>
+
+        <h2 style="margin-top:54px">What still prevents the game</h2>
+        <div class="grid grid-2">
+          <article class="card"><h3>Autonomous life is only partly on the main tick</h3><p><code>HeadlessWorld::advance_tick</code> advances metabolism, upkeep, speech, resource ecology and terminality. The live runtime archives and removes dead residents; the production Bevy tick drains their stable IDs, removes entity-map bindings, despawns mapped creature roots, and repairs or clears selection, camera and inspector focus. Reproduction remains.</p></article>
+          <article class="card"><h3>Unified state is source-complete, not runtime-proven</h3><p>The world record now owns biological identity across action, save and GPU resident restore paths. Checkpoint cognition remains separate by design. The newest restore slice passed independent static review, but its compiler and playable-runtime status remains <code>UNKNOWN</code> after earlier bounded timeouts.</p></article>
+          <article class="card"><h3>Runtime truth is joined; the visible control receipt is still thin</h3><p>Pause, single-step and speed govern the authoritative scheduler. Durable load now replaces the canonical world and live GPU state atomically, and managed breeding creates an archived GPU-resident child. The remaining gap is one real input-and-screen receipt for these controls, not another runtime authority.</p></article>
+          <article class="card"><h3>Learning is causally proven once and now has a truthful compact explanation</h3><p>The integrated loop proves a different post-sleep action and joint outcome with real memory, prediction, topology and learning receipts. The selected-creature inspector now compares previous/current actions and measured outcomes, sleep work and update counts. It deliberately does not invent a hidden reason; on-screen capture remains pending.</p></article>
+          <article class="card"><h3>Scale is designed, not demonstrated</h3><p>N2048 and 500-hot-brain budgets exist. Product loops cap at 8 or 30 in places. Per-tick CPU preparation and synchronous GPU wait/map remain likely bottlenecks.</p></article>
+          <article class="card"><h3>Docs describe several eras at once</h3><p>Older CPU-fallback and headless-only text coexists with newer no-fallback GPU authority and a production voxel path. “Implemented Era 1” can be misread as “promoted Era 1,” though the report is blocked.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="evolution">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="eyebrow">Evolutionary intelligence</div><h2>EI1 is honest—and blocked</h2></div>
+          <p>The evidence machinery works. The intended ability does not yet pass its own standard.</p>
+        </div>
+        <div class="grid grid-4">
+          <article class="card metric"><div class="kicker">Generations</div><div class="number">3</div><div class="label">1,320 valid trials each for generations 0, 1 and 2</div></article>
+          <article class="card metric"><div class="kicker">Descendants</div><div class="number">2,640</div><div class="label">all labeled ReproducedOffspring</div></article>
+          <article class="card metric"><div class="kicker">GPU dispatches</div><div class="number">52,800</div><div class="label">RTX 3050 · Vulkan · source-bound</div></article>
+          <article class="card metric"><div class="kicker">Verdict</div><div class="number" style="color:var(--red)">Blocked</div><div class="label">plateau unknown; review and brain scaling unauthorized</div></article>
+        </div>
+        <div class="split-note" style="margin-top:18px">
+          <div><h3>What the receipt proves</h3><p>The trial corpus, generation partitions, evidence sidecar, matrix coverage and hardware provenance are real and complete for producer commit <code>cb3c8dd8…</code>.</p></div>
+          <div><h3>What it refuses to claim</h3><p>All reported EI1 scores are zero. The intact/control margins fail <code>NonPositiveIntact</code>, <code>ControlNotWorseForEveryCell</code> and <code>ControlMarginBelowMinimum</code>. EI2 must remain dormant.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="roadmap">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="eyebrow">Recommended sequence</div><h2>Close the loop before growing it</h2></div>
+          <p>This ordering minimizes duplicated authority and produces the earliest honest, playable proof.</p>
+        </div>
+        <div class="execution-strip" role="status"><span class="pulse" aria-hidden="true"></span><div><strong>v1.1 recovery Tasks 0–5, Tasks 7–8 and 10, the Task 2A neural-substrate seam, real foundations for Tasks 6 and 9, and the Task 11 checkpoint-codec foundation are integrated.</strong> Main commits <code>c2e6ea3d…</code> and <code>11283090…</code> install the bounded v1.1 cognitive contracts. Commit <code>725d3349…</code> makes birth and resident replacement derive from the canonical world record, removes the duplicate resident biology clock, preserves subsystem-specific cadence, and stages world plus resident state so late failure restores both authorities. Commit <code>4bb29f90…</code> makes the real <code>CognitiveContextFrame</code> alter finalized source-backed episodic memory before GPU selection and publishes a consumed-context receipt tied to sealed outcome-credit and GPU learning identity. Commit <code>83e4dd8c…</code> adds bounded active concepts and exact action-conditioned unresolved-gap identity, evidence-derived split/merge, decay, resolution, and a deterministic contribution to cognitive context. Commits <code>4af55f8f…</code> and <code>92ac6408…</code> then build grounded top-K attention before GPU dispatch, preserve focal identity with hysteresis, route memory plus concept/gap evidence into finalized cognitive context, and make focal changes alter production GPU-upload inputs. Commit <code>d08138bd…</code> fixes the shared scalar contract found by the focused compiler gate. Commits <code>a388e96f…</code> and <code>aa1eba33…</code> add grounded action-conditioned successor prediction with a non-collapse test contract, plus deterministic hardware-independent cognitive-work aggregation and a configurable policy that debits the canonical organism only when enabled. Commit <code>59dc87ca…</code> adds a bounded biological sleep transaction that consumes finalized replay evidence, consolidates fast episodic records into lifetime memory, trains the real predictor, applies existing concept/gap consolidation, and no-ops below the sleep-pressure threshold. Commit <code>fc486f8b…</code> gives the real CPU neural state bounded sparse dendritic branches whose nonlinear conjunction gates alter finalized neuron activation and cognitive-work accounting. Commit <code>34f4f749…</code> adds bounded non-all-pairs structural candidate discovery, evidence-ranked sparse synapse growth, and bounded pruning that changes later computation. Commit <code>05099051…</code> joins both mechanisms to the live closed-loop backend: resident slots own validated bounded v1.1 state, dendritic conjunctions run before finalized activation, accepted structural edits rebuild only affected sparse spans through a staged atomic swap, semantic work joins the tick receipt, and checkpoint/restore hooks preserve the state. Commit <code>87e04593…</code> closes Task 5's live path: each authoritative successor produces a digest-bound action-conditioned target, predictor error updates the existing predictor and explicit gap/attention evidence, actual subsystem work seals into the same v1.1 experience patch, and configurable metabolic cost debits canonical biology exactly once. Commit <code>69856a69…</code> adds a versioned exact-resume cognitive payload with bounded validation and asset hashing, threads it through checkpoint capture/restore, and makes durable-founder conversion explicitly discard acquired attention, predictor, concept/gap, dendritic, structural, sleep, and work state. Commit <code>b0c82cc7…</code> adds the authoritative biology-aware sleep schedule: due phase progression uses organism sleep pressure and its own cadence, waking motor eligibility is suppressed during sleep, bounded consolidation phases call the real core transaction, biological time and work seal once, and persistence/presentation receive the same phase receipt. Commit <code>3f1e9524…</code> makes attention, concept/gap, prediction, motor-head, dendritic, structural, sleep, and learning capacities bounded versioned genome fields, binds them into the genome and phenotype digests, compiles them into the phenotype record, and keeps ordinary inheritance genetic rather than copying learned state. Commits <code>a05606c9…</code>, <code>3f5b1df9…</code>, and <code>9f8246ba…</code> add an atomic factorized motor-bundle transaction: channel semantics outrank primitive IDs, measurable channel receipts feed one joint physical outcome, unsupported channels fail instead of becoming successful idle, and late failure restores world state. The Task 3/4 gate exposed and fixed one compile error, then its bounded rerun timed out; those gates remain <strong>UNVERIFIED</strong>. Tasks 6 and 9 remain incomplete until their remaining mechanisms join the production GPU/game loop. Task 11 now has its exact and durable cognitive codec foundation, but still needs the atomic live-runtime/world/schedule replacement join. Tasks 7–8 now participate through the production backend; their compile gate remains deliberately batched, and full WGSL ABI expansion is recorded as Pass 2 debt. The first useful batched library check reached <code>alife_core</code> and stopped on three concrete compile blockers: the predictor import path, one missing decoded <code>lifetime_records</code> field, and one missing <code>Validate</code> trait import. A tiny repair lane is queued; no retry or broader test ran. The other focused gates timed out. Commit <code>e9fbf4fa…</code> synchronizes the already-declared game-app <code>blake3</code> dependency in <code>Cargo.lock</code>. No workspace suite, corpus, soak or benchmark ran. Protected renderer and <code>AGENTS.md</code> work remains untouched.</div><div class="count">9 / 15 plan tasks + Task 2A seam + Tasks 6/9 foundations + Task 11 codec</div></div>
+        <p><strong>Current status supersedes the earlier execution-strip snapshot — 2026-08-15:</strong> Task 11 is no longer codec-only. Commit <code>f268445b…</code> closes the exact live save/manifest/restore join and restores acquired cognitive state before the next authoritative tick. The later dated updates below also supersede the strip's earlier Task 6/9 and compiler-gate warnings.</p>
+        <p><strong>Pass 1 breadth closure — 2026-08-15:</strong> A final source-level compliance sweep found six production disconnects and no other major locked v1.1 capability gap. Commit <code>54e64c3b…</code> gives both fresh-resident admission paths bounded working dendritic branches and invokes the existing sparse non-all-pairs structural growth/pruning phase from the authoritative sleep cadence; its focused causal gate passes. Commit <code>540a8100…</code> makes structured education execute a live learner GPU tick and makes managed breeding execute the existing archive-linked newborn/world/GPU transaction; its separate focused gate passes while the older durable-sleep/Bevy-shell coverage remains intact. Commit <code>cf1d941c…</code> replaces live cognitive defaults with genome/phenotype-bound attention, prediction, sleep, dendritic and structural policy, and joins dendritic, replay and structural work into the deterministic hardware-independent receipt consumed by the optional metabolic policy; its focused gate and compile check pass. Main is clean except for the preserved user-owned <code>AGENTS.md</code> edit, and only the main worktree remains registered. This closes Pass 1. EI1 provenance/corpus work is preserved for Pass 2 on <code>codex/pass2-ei0-provenance</code> at <code>40c8c7f3…</code>; the attempted current-source run stopped before creating a corpus because the historical baseline gate rejected its source binding.</p>
+        <p><strong>Compiler update — 2026-08-14:</strong> Commits <code>223ee505…</code>, <code>4ba544bf…</code>, and <code>571168a9…</code> repaired the predictor module path, decoded <code>lifetime_records</code>, replay <code>Validate</code> import, world-persistence module paths, backend span inference, and the recovery-sleep return join. The serialized lean library check now exits <code>0</code> across <code>alife_core</code>, <code>alife_world</code>, <code>alife_runtime</code>, and <code>alife_gpu_backend</code>. It emitted only two non-causal test-injection flag warnings. No app build, broad test, or GPU run followed.</p>
+        <p><strong>Live presentation and lifecycle update — 2026-08-14:</strong> Commit <code>004a488f…</code> publishes immutable canonical organism rows into each live presentation frame, joins the latest motor and outcome receipt by organism identity, binds production creature roots through <code>BevyEntityMap</code>, and removes stale selection, follow, inspector, and expression-buffer state when an organism retires. The source-only lane passed <code>git diff --check</code>; its compile proof remains deliberately batched with the adjacent renderer and motor joins.</p>
+        <p><strong>Factorized motor update — 2026-08-14:</strong> Commits <code>ea2de04f…</code> and <code>258be447…</code> carry six fixed motor-head selection slots through the existing GPU readback ABI, build one coordinated multi-channel command bundle, execute it as one atomic world transaction, and seal one joint physical outcome without fabricated per-channel rewards. The correction commit preserves causal speech by carrying the bounded vocal payload through the same transaction into world utterance execution. Static parsing and diff checks passed; the focused compiler gate is batched with the remaining production joins.</p>
+        <p><strong>Atomic load and live birth update — 2026-08-14:</strong> Commit <code>fa38ab3d…</code> integrates the protected renderer recovery. Durable load now prepares the candidate world, GPU runtime, presentation frame, schedule, controls, and render scene before replacing live state. Runtime projection creates missing creature roots from each newborn’s own authoritative organism admission, binds every root by stable world ID, preserves existing-root transforms, and removes mappings when runtime roots despawn. The accepted renderer blob exactly matches the isolated Luna result; <code>AGENTS.md</code> remains unstaged and untouched.</p>
+        <p><strong>Sleep and truthful-control closure — 2026-08-15:</strong> Two bounded source lanes found no missing production join and made no churn. The live tick already enters the sleep-aware scheduler, builds and commits replay through the real consolidation backend, gates motor dispatch by sleep phase, restores waking eligibility, and persists sleep/checkpoint receipts. Production pause and speed mutate the schedule consumed before <code>runtime.tick()</code>; managed breeding and structured education already call habitat/world authority and publish measured success or rejection into the live lineage UI. These paths remain subject to the single batched compiler check and the short integrated scenario rather than separate slow suites.</p>
+        <p><strong>Batched app compiler gate — 2026-08-15:</strong> The first <code>cargo check -p alife_game_app --lib --features gpu-runtime</code> exposed six bounded Rust blockers. Commit <code>0fcc0183…</code> repaired only those imports, joint-outcome summary fields, concept collection, disabled-sleep receipt, and motor-bundle ownership. The exact rerun finished green in 23 seconds. No test, GPU run, soak, corpus, or broad suite followed. Remaining unused/dead-code warnings are Pass 2 cleanup debt.</p>
+        <p><strong>Integrated player-loop RED — 2026-08-15:</strong> Commit <code>16b6d3b3…</code> adds the smallest honest production-GPU scenario. It reaches a grounded teacher object and the learner's canonical live body by stable ID, then stops at the first missing callable seam: <code>GpuLiveBrainRuntime</code> cannot yet accept a school/teacher-authority action while it owns the world. The test deliberately does not fake attention, prediction, action, learning, sleep, reproduction, lineage inspection, or persistence after that break. The next recovery slice is therefore one narrow school-authority bridge, followed by extending this same test to the next real boundary.</p>
+        <p><strong>School bridge and first focused run — 2026-08-15:</strong> Commit <code>9562d22f…</code> adds an atomic <code>GpuLiveBrainRuntime</code> structured-education entry point that authorizes against the live habitat authority and returns the measured permission receipt. The one focused test then compiled in 7 minutes and ran for 6 seconds, but failed earlier than the intended RED: the fixture requested <code>Nano512</code> while its canonical world organism carried a different brain ownership/class identity, producing <code>BrainOwnershipMismatch</code>. No other tests ran. A fixture-only lane is correcting that exact mismatch without weakening production ownership checks.</p>
+        <p><strong>Ownership fixture retry — 2026-08-15:</strong> Commit <code>8aa11540…</code> tested the narrow hypothesis that the scenario fixture merely needed the production <code>Standard2048</code> tier. The already-warm focused gate rejected that hypothesis in 14 seconds with the same <code>BrainOwnershipMismatch</code>. The real defect is that <code>HeadlessScenarioBuilder::agent</code> creates the world object but does not install the authoritative genome, phenotype and biochemistry record required by the recovered runtime. The active repair now constructs and registers that real canonical organism record before GPU residency. Production ownership checks remain unchanged; no review/re-review cycle or extra test suite was opened.</p>
+        <p><strong>Canonical record installed; profile boundary exposed — 2026-08-15:</strong> Commit <code>ffc80cee…</code> installs the learner's real canonical Nano512 organism record. The same single gate advanced past ownership validation and failed at <code>PhenotypeCompile</code> in 17 seconds. The remaining fixture mismatch is now bounded to the Nano512 foundation and sensor-profile/runtime-construction combination; existing production Nano512 fixtures use the grounded-object profile rather than the convenience constructor's privileged profile. The same implementer is aligning that real profile contract directly. No production invariant was relaxed.</p>
+        <p><strong>Fixture escalation after three bounded attempts — 2026-08-15:</strong> Commit <code>6cd69ee4…</code> aligned the Nano512 foundation and runtime to <code>GroundedObjectSlotsV1</code>, but the one warm gate still stopped at <code>PhenotypeCompile</code> after 15 seconds. That disproved the profile-only explanation. The Luna lane is now closed after three concrete corrections, and one Sol-medium repair lane is tracing the exact production phenotype contract. This is the agreed last-resort escalation, not a new review cycle. All capability implementation remains integrated; only the Task 13 fixture is blocked.</p>
+        <p><strong>Production admission defect confirmed — 2026-08-15:</strong> Commit <code>853ffb55…</code> replaced the Nano512 projection case with the ordinary N2048 evolved-founder path. The single warm gate still failed at <code>PhenotypeCompile</code> in 16 seconds. This rules out tier, profile and missing-record fixture errors. A valid canonical evolved organism record cannot yet enter the direct GPU runtime because the foundation-aware and validated phenotype compilation routes disagree. The active Sol-medium lane is repairing that one production admission bridge while preserving genome, foundation, development, profile and class authority.</p>
+        <p><strong>Evolved organism admitted to the live GPU loop — 2026-08-15:</strong> Commit <code>a07bc8cc…</code> separates the immutable foundation construction topology from the canonical age-derived runtime development gates. It preserves the evolved genome and live developmental state, while checkpoint comparison now compares construction inputs with construction inputs. The single focused gate compiled in 40 seconds, ran on the GPU for 6 seconds, passed runtime construction, grounded body checks and structured-education authority, and reached the intended deliberate RED at the next link. A new Luna lane is extending this same test through the already-implemented attention, prediction, motor, world outcome, learning and work receipts—without opening another review cycle or test suite.</p>
+        <p><strong>First live tick exposes decision-evidence mismatch — 2026-08-15:</strong> Commit <code>8b673223…</code> extends the same scenario through one production <code>runtime.tick()</code> and adds direct assertions for world time, the factorized motor bundle, joint measured outcome, prediction target, cognitive context, learning, memory and work receipts. The one warm gate compiled in 13 seconds, entered the GPU tick, and returned <code>InvalidDecisionEvidence</code> before sealing. This is now the sole active causal blocker. The same Luna implementer is repairing that production evidence mismatch; the lifecycle RED stays after the new assertions.</p>
+        <p><strong>Neural evidence now survives v1.1 sealing — 2026-08-15:</strong> Commits <code>2d4b3885…</code>, <code>67e86246…</code> and <code>7c875d83…</code> repair two real production mismatches. Reserved factorized motor slots are consumed without inventing unsupported world effects, and the v1.1 experience constructor now retains the already-validated GPU <code>DecisionSnapshot</code> instead of replacing it with heuristic compatibility evidence. The one focused hardware gate now passes admission, structured education, GPU selection, factorized motor application, prediction, measured joint outcome and v1.1 patch construction. It advances to the next honest lifecycle failure: <code>organism 1 has no committed genetic archive</code>. No broad suite, corpus or soak ran. A fresh Luna lane owns that archive attachment seam.</p>
+        <p><strong>Genetic archive authority joined — 2026-08-15:</strong> Commits <code>ed10212b…</code> and <code>c8bcc23d…</code> move the integrated scenario onto the existing archived production constructor. The runtime now opens the real lineage library, commits the organism's immutable genetic archive before GPU admission, and links that manifest digest back into the canonical world record. The same single hardware gate compiles and reaches its deliberate RED after one coherent GPU action, measured world outcome, learning seal and archive reconciliation: <code>GPU runtime has no durable save boundary</code>. No extra test, corpus, soak or matrix ran. Durable checkpoint attachment is the next causal seam.</p>
+        <p><strong>Cognitive work no longer kills a healthy N2048 organism in one tick — 2026-08-15:</strong> Commit <code>aec2b168…</code> corrects the production work-to-energy calibration from <code>0.001</code> to <code>0.000001</code> energy per deterministic work unit. The policy remains enabled and the same hardware-independent receipt is still charged, but the first ordinary N2048 cognition tick no longer drains the entire body-energy reserve and triggers immediate retirement. The focused GPU scenario now retains the living canonical record and its birth-archive identity through the tick. Deep ecological tuning remains Pass 2 work.</p>
+        <p><strong>Durable live-world replacement is causally joined — 2026-08-15:</strong> Commits <code>b74aa864…</code>, <code>7ede7069…</code>, <code>7d943773…</code> and <code>c895c18f…</code> add the runtime checkpoint boundary and repair the real portability defects it exposed: normalized durable-state validation, authoritative biochemical summary refresh, and separation of immutable N2048 construction state from runtime chronology. The one focused hardware scenario now captures, publishes, reloads and replaces the same canonical world while preserving GPU residency and genetic-archive identity. It reaches only its deliberate next RED after 22 seconds of execution. No broad suite, corpus, soak or evidence matrix ran. The next missing production link is managed breeding inside the live runtime, followed by the existing reconcile/admission path.</p>
+        <p><strong>Rendered roots now carry live organism identity — 2026-08-15:</strong> Commit <code>a7fcd259…</code> makes production voxel creature roots retain their stable <code>OrganismId</code> and binds the root into <code>BevyEntityMap</code> only when the published live frame confirms the same organism. Existing authoritative retirement IDs can therefore resolve the correct rendered root instead of leaving voxel creatures orphaned after death. This six-line presentation-only repair compiled inside the single integrated gate; newborn-specific projection and live inspector refresh remain separate small Pass 1 slices.</p>
+        <p><strong>Managed breeding is inside the live causal world — 2026-08-15:</strong> Commits <code>97547821…</code>, <code>945367c4…</code>, <code>f74e6701…</code> and <code>b31e2677…</code> add a real <code>GpuLiveBrainRuntime</code> breeding boundary. It reauthorizes the receipt against the current habitat, derives the child from both canonical parent genomes, registers the child in world and habitat authority, commits genetic archive identity before GPU admission, and includes the newborn in strict durable checkpoint capture. A stale receipt leaves world, GPU and archive state unchanged. The one focused hardware scenario now proves breeding plus save/load/replace and reaches only its deliberate presentation RED after 45 seconds. No broad suite, corpus, soak or review cycle ran.</p>
+        <p><strong>The live GPU action now reaches the rendered creature in the real production app — 2026-08-15:</strong> Commits <code>18f39b8f…</code>, <code>84af0406…</code>, <code>3cbbe608…</code>, <code>483b1497…</code> and the bounded Bevy integration repairs through <code>4dc47d04…</code> complete the same-instance presentation seam. The production schedule retains the injected live runtime, publishes post-tick authoritative frames, refreshes organism labels and inspector biology, and projects the matching stable-ID voxel root from the changed canonical world position. The single focused <code>v11_player_loop</code> hardware gate now passes managed breeding, durable save/load/replace, the 12-frame startup guard, curated first-resident validation, a later all-resident GPU tick, live-frame publication and the learner root transform. It fails only at its explicit next RED: bounded sleep/consolidation, wake, and a later changed action/outcome remain unproven. No broad suite, corpus, soak or evidence matrix ran.</p>
+        <p><strong>One integrated causal player loop is green — 2026-08-15:</strong> Commits through <code>f8aba5c3…</code> preserve the exact prediction-target patches required by a durable replay journal, so the first post-load sleep transaction no longer loses phase data. Commit <code>a9345a6e…</code> corrects the gate's final premise: the first real GPU action moves the canonical learner from its starting position, while the later restored action <code>211</code> is an honest Grab with a same-cell locomotion target and therefore must not fabricate displacement. The same <code>v11_player_loop</code> scenario now proves observe and teacher authority → real GPU act and measured joint outcome → learning, memory, prediction and topology receipts → biological recovery sleep → real GPU Submitted/Completed/Committed consolidation with nonzero work → wake → later changed action and joint outcome → managed reproduction with archive-linked GPU admission → durable save/load/replace → post-load GPU tick → matching live frame and stable-ID ECS root. Exact result: <code>1 passed; 0 failed; 0 ignored</code>. The run took <code>828.62 s</code>; reducing that checkpoint-heavy test cost is Pass 2 debt. No broad suite, corpus, soak, ablation or scale matrix ran. The separate production capture below supplies the on-screen hardware proof.</p>
+        <p><strong>EI1 acquisition scoring no longer guarantees a false zero — 2026-08-15:</strong> Commit <code>907ae499…</code> repairs one concrete current-source evaluator defect. <code>FlexibleForaging</code> and <code>HazardAvoidance</code> are acquisition-only abilities, but non-acquisition matrix partitions always selected the probe reading even when the trial produced valid measured acquisition behavior. They now score the same measured late-acquisition reading across partitions; thresholds, controls, provenance, unique-trial accounting, EI2 locks and honest failure semantics are unchanged. <code>cargo check -p alife_training --lib</code> exits <code>0</code> in 20.88 seconds. This is an ability-path repair, not a promotion claim: a fresh current-source corpus is still required.</p>
+        <p><strong>The selected-creature inspector explains measured change without inventing causality — 2026-08-15:</strong> Commit <code>be488a5a…</code> consumes the paired live presentation frames by matching both stable world ID and organism ID. It shows previous/current selected actions, whether the sealed measured joint outcome changed, current sleep phase/work and previous/current memory, learning and topology update counts. Missing identity or receipt data renders <code>unavailable</code>. <code>cargo check -p alife_game_app --lib --features gpu-runtime,bevy-app</code> exits <code>0</code>.</p>
+        <p><strong>Production startup and on-screen hardware proof are closed — 2026-08-15:</strong> Commit <code>01cc7b61…</code> materializes canonical organism records only for legacy production saves that lack them, restores Nano512 residents through the existing founder-foundation projection, keeps biological source identity in the canonical record, and makes checkpoint recompilation consume the same frozen coordinate genome and development contract that produced the admitted phenotype. The production-feature check passed. The final production command exited <code>0</code> in <code>GpuAuthoritative</code> mode on Vulkan and an NVIDIA GeForce RTX 3050, rendering three creatures plus the selected-creature learning inspector and FVR05 GPU/checkpoint panel. Fresh artifacts: <code>MinimumSettings30x30_runtime_screenshot.png</code> and <code>MinimumSettings30x30_runtime_screenshot_fvr05_gpu_panel.png</code>. Independent Luna/max review of the amended commit: <code>CLEAN</code>. No unit suite, broad test, corpus, soak or scale run was added.</p>
+        <p><strong>Exact cognitive checkpoint continuation is closed — 2026-08-15:</strong> Commit <code>f268445b…</code> gives the persisted brain DTO one mandatory exact-state asset reference, writes that content-addressed asset into the durable manifest, restores through the exact checkpoint API, and rehydrates prediction, attention, context, motor, work, sleep, dendritic and structural state before the next tick. Missing or mismatched state now fails closed instead of silently degrading to a partial brain. One focused non-GPU test exercises real manifest attach/read and verifies non-default state plus prediction, action and attention continuation parity. Targeted checks for <code>alife_world</code>, <code>alife_runtime</code> and GPU-featured <code>alife_game_app</code> passed; independent Luna/max re-review returned <code>CLEAN</code>. No GPU run, workspace suite, corpus, soak or scale matrix was added.</p>
+        <p><strong>Live cognitive inspection is synchronized — 2026-08-15:</strong> Commit <code>94762c18…</code> publishes one typed cognitive snapshot per stable <code>OrganismId</code> from the real post-tick resident state and routes it through the existing live presentation frame. Existing and newborn scene samples now use the same current source for brain class and size, fast and lifetime memory, concepts, unresolved gaps, learning receipts, sleep/consolidation state and topology updates. Missing values remain unavailable rather than inferred. The UI remains projection-only. Independent Luna/max review returned <code>CLEAN</code>; this source-only slice intentionally did not start Cargo, GPU, tests, formatting or screenshots while the WGSL lane owns the build process.</p>
+        <p><strong>Dendrites and structural plasticity now run in production WGSL — 2026-08-15:</strong> Commit <code>eb38a88d…</code> versions the v4 host/WGSL layout, evaluates bounded branch descriptors before final recurrent activation, and makes accepted growth plus pruning alter the same target-major recurrent arrays used by the normal tick. Topology transactions remap mutable learned state by stable edge identity, preserve route metadata, upload immutable and mutable state atomically, and retain the previous slot on failure. Indexed sparse reconstruction replaces quadratic expansion. GPU-authored readback counters report branch, input, gate and structural work; the callable CPU recurrent production path is removed. The one focused hardware gate proves conjunction, Inspect-family growth and prune through normal dispatch on the physical GPU: <code>1 passed</code>. The incremental backend check passed. Independent re-review returned <code>CLEAN</code>. No app build, workspace suite, corpus, soak or benchmark ran.</p>
+        <ol class="ranked">
+          <li data-state="complete"><strong>Write the causal RED test.</strong> <code>fvr04_live_world_projection_moves_matching_creature_by_stable_id</code> first proved the stable-ID creature stayed at <code>(0.500, 0.294, 0.500)</code> instead of <code>(2.500, 0.294, 1.500)</code>; the same production-facing test is now green. Independent Luna/max review: <code>CLEAN</code>.</li>
+          <li data-state="complete"><strong>Build one bounded presentation bridge.</strong> Commits <code>4b394cd…</code>, <code>c2e1c46…</code> and <code>2c747f9…</code> retain paired live frames, project roots by stable ID, and feed selection, camera, labels and inspectors. Commit <code>94762c18…</code> replaces save-derived cognitive fields and newborn placeholders with current per-organism runtime snapshots. Focused live gate: <code>6 passed</code>; schedule gate: <code>1 passed</code>; independent reviews: <code>CLEAN</code>.</li>
+          <li data-state="complete"><strong>Unify the organism state.</strong> The world-owned organism registry, atomic action-to-biology path, curated Nano512 materialization, durable world/archive/save publication and guarded live-Agent mapping are committed. Commit <code>ccffc7a…</code> retains the exact accepted phenotype and generation receipt. Commits <code>a97df0f…</code> and <code>84faa7b…</code> install it through one encoder-owned GPU cohort transaction. Commits <code>2dcb796…</code> and <code>decdb8d…</code> admit the first ordered GPU action once and route it through the registered world-owned organism transaction. Commits <code>1e35819…</code> and <code>a0aeb57…</code> remove the app-side biology writer and keep the observation delta only for learning. Commit <code>73842a6…</code> rejects portable creature summaries that contradict their world records. Commit <code>bf59521…</code> makes both checkpoint and fresh GPU resident restore consume the matching world record for biological identity while preserving checkpoint-owned cognition internals; failed provisional restores exhaust cleanup attempts before reporting an error. Commit <code>01cc7b61…</code> closes the production restore seam for missing legacy records and keeps biological source identity separate from the immutable Nano512 coordinate contract. Independent review is <code>CLEAN</code>; the current production Vulkan launch is green.</li>
+          <li data-state="done"><strong>Make the world autonomous.</strong> Commit <code>5eba2d2…</code> installs one checked <code>HeadlessWorld</code> scheduler with stable organism order and candidate rollback. Commits through <code>1e57045…</code> add terminality and ordered retirement. Commits <code>55a1e78…</code>, <code>1c0889a…</code> and <code>3e3983f…</code> add age-relative descendants, persistent identity and candidate-atomic conception. Commit <code>43c0c7e…</code> adds archive-linked same-tick GPU admission; commit <code>80c71fb…</code> adds stable-ID ECS newborn projection; commit <code>c40c75c…</code> bounds living population growth and preserves same-tick death/birth turnover. Static causal tests cover creation, rejection, rollback, admission, root publication and capacity turnover; compiler/runtime status remains <code>UNKNOWN</code>.</li>
+          <li data-state="complete"><strong>Make controls truthful.</strong> Commit <code>5e96bf2…</code> makes pause, step and speed authoritative. Commits <code>c09d7dae…</code>, <code>3158fd52…</code> and <code>bccfbb95…</code> provide the CLEAN-reviewed atomic runtime swap, exact same-device staging, and frame/scheduler reset helpers. Commit <code>f268445b…</code> completes exact acquired-cognition persistence through the same durable manifest and replacement path. The integrated player-loop gate proves live-world replacement, ECS-root refresh, structured education and managed breeding through the same authority; the production Vulkan launch proves the restored world reaches the screen.</li>
+          <li data-state="queued"><strong>Repair EI1 ability, not its verdict.</strong> Pass 1 repaired the known acquisition/probe score-source mismatch without changing thresholds or controls. Pass 2 owns the preserved provenance repair, one fresh current-source corpus and its honest matrix verdict. Larger brains and EI2 remain locked until that evidence passes.</li>
+          <li data-state="complete"><strong>Prove one player loop.</strong> The GPU-required <code>v11_player_loop</code> gate proves the complete causal runtime chain through teaching authority, action, measured outcome, learning, real sleep consolidation, changed later behavior, breeding, lineage/archive identity, durable restore, live presentation and the matching ECS root. The inspector explains the measured frame-to-frame change. Commit <code>01cc7b61…</code> adds the actual on-screen Vulkan/RTX 3050 frame; commit <code>f268445b…</code> proves the saved mind is exact rather than a partial reconstruction.</li>
+          <li data-state="queued"><strong>Then prove scale and ship an alpha.</strong> Measure 30/50/100/250/500 residents, asynchronous readback, CPU prep, memory, FPS, checkpoints and multi-hour recovery before release claims.</li>
+        </ol>
+        <div class="callout" style="margin-top:18px"><strong>Pass 2, in order:</strong> run the fresh EI1 corpus and accept its honest verdict; repair any broad-regression defects; profile and tune cognition, ecology and persistence; measure 30/50/100/250/500 residents; run ablations, soaks and external playtests; then decide alpha scope. Keep EI2+, larger brain classes, another renderer and release claims locked until those results justify them.</div>
+
+        <h2 style="margin-top:58px">The aspiration ladder</h2>
+        <div class="roadmap" aria-label="Evolutionary intelligence roadmap">
+          <div class="era"><div class="num">V0</div><h3>Player view</h3><p>Voxel shell and creature presentation. Real, but not live-authoritative.</p></div>
+          <div class="era"><div class="num">EI0</div><h3>Biological lab</h3><p>Genetics, habitat authority and exit receipt. Passed within its bounded scope.</p></div>
+          <div class="era active"><div class="num">EI1</div><h3>Norn-plus</h3><p>Early mammal evidence program implemented. Promotion blocked.</p></div>
+          <div class="era locked"><div class="num">EI2</div><h3>Social mammal</h3><p>Locked until EI1 passes.</p></div>
+          <div class="era locked"><div class="num">EI3</div><h3>Pack intelligence</h3><p>Dormant aspiration.</p></div>
+          <div class="era locked"><div class="num">EI4</div><h3>Proto-culture</h3><p>Dormant aspiration.</p></div>
+          <div class="era locked"><div class="num">EI5</div><h3>Generalist</h3><p>Abstract developmental learner.</p></div>
+          <div class="era locked"><div class="num">EI6</div><h3>Ascension</h3><p>Future research compatibility only.</p></div>
+          <div class="era locked"><div class="num">EI7/8</div><h3>Education + flywheel</h3><p>Advanced schooling, model comparison and commercial scale.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="quality">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="eyebrow">Quality and risk</div><h2>Strong contracts, incomplete product proof</h2></div>
+          <p>The original review used current source, Git state and source-bound historical receipts. The v1.1 recovery addendum records only focused checks: Task 2 passed independent source review, while its bounded real-GPU gate timed out before adapter startup and remains explicitly unproven.</p>
+        </div>
+        <div class="matrix">
+          <table>
+            <thead><tr><th>Risk</th><th>Severity</th><th>Evidence</th><th>Action</th></tr></thead>
+            <tbody>
+              <tr><td>Canonical admission lacks current hardware proof</td><td><span class="tag warn">P1</span></td><td>Commit <code>725d3349…</code> passed independent source review and integrates record-derived admission plus atomic rollback. Two bounded focused GPU runs timed out before adapter/backend startup.</td><td>Keep the implementation in the broad first pass. Re-run this one causal hardware gate during Pass 2 after build latency is repaired; do not infer a pass from source review.</td></tr>
+              <tr><td>Ecological turnover bounded</td><td><span class="tag good">DONE</span></td><td>Accepted commit <code>c40c75c…</code> derives a logical living-organism budget, counts living records after terminality, and skips child creation at capacity while ordinary tick work commits. Its focused tests cover rejection and a same-tick death freeing one logical slot. Independent static review is CLEAN.</td><td>Keep resource pressure indirect through authoritative body readiness until a persisted ecology policy is approved; move directly to truthful controls.</td></tr>
+              <tr><td>Production playback authoritative</td><td><span class="tag good">DONE</span></td><td>Accepted commit <code>5e96bf2…</code> keeps one fixed-step scheduler and one production input reader. Pause permits no runtime tick, N permits one step while paused, speed changes cadence, per-tick publication stays ordered, and errors latch closed. Final independent review is CLEAN.</td><td>Use the same authority boundary for checkpoint replacement; do not reintroduce a UI-owned clock.</td></tr>
+              <tr><td>Load validates but does not replace</td><td><span class="tag bad">CAPACITY BLOCKED</span></td><td>The fallback correction stopped on a usage limit while rewriting commit-ready scene preparation. The required independent Luna salvage audit also failed before starting. Its large working diff has no handoff, compiler proof, runtime proof or independent acceptance.</td><td>After model capacity returns, run the read-only salvage audit first. Keep only a bounded coherent candidate; otherwise restore the accepted file and redesign the seam in smaller slices.</td></tr>
+              <tr><td>Potential feature-gated compile break</td><td><span class="tag warn">P1</span></td><td>A <code>gpu-runtime</code> test calls a parser gated by <code>gpu-tests</code>; source-inferred, not freshly built.</td><td>Add all-feature matrix CI and correct feature ownership.</td></tr>
+              <tr><td>Scale claim drift</td><td><span class="tag warn">P1</span></td><td>500-hot-brain admission versus 8/30 product caps; no real timing receipt.</td><td>Choose one product contract and measure it on hardware.</td></tr>
+              <tr><td>Optional durability</td><td><span class="tag warn">P1</span></td><td>Archive-before-insert/retire ADR guarantee is bypassed by ordinary constructors.</td><td>Make archive mandatory or label research constructors explicitly.</td></tr>
+              <tr><td>Dual GPU stacks</td><td><span class="tag warn">P1</span></td><td>Compute and Bevy render use separate WGPU versions/adapters without identity contract.</td><td>Unify version and bind adapter/capability receipts.</td></tr>
+              <tr><td>Documentation authority drift</td><td><span class="tag warn">P2</span></td><td>Fallback, scaffold, headless-only and “implemented Era 1” text conflicts with current policy/results.</td><td>Publish one current authority map and label historical receipts.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="cleanup">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="eyebrow">Repository hygiene</div><h2>Drive cleanup completed safely</h2></div>
+          <p>The curated reset verified ancestry, backed up user instruction edits outside Git, preserved retained EI0/EI1 results, removed merged checkouts, and deleted regenerable output. No force-push or destructive reset was used.</p>
+        </div>
+        <div class="grid grid-3">
+          <article class="card metric"><div class="kicker">Removed</div><div class="number">24</div><div class="label">merged noncanonical worktrees across both cleanup waves</div></article>
+          <article class="card metric"><div class="kicker">Generated debris</div><div class="number">25.62 GiB</div><div class="label">27,514,486,354 bytes removed in the curated reset alone</div></article>
+          <article class="card metric"><div class="kicker">Worktrees now</div><div class="number">1</div><div class="label">canonical <code>D:\A life</code>; enforced again after every implementation task</div></article>
+        </div>
+        <div class="grid grid-2" style="margin-top:18px">
+          <article class="card"><h3>Preserved by design</h3><ul class="clean-list"><li>Canonical <code>D:\A life</code> and the user-owned root <code>AGENTS.md</code> edit, kept byte-for-byte and unstaged.</li><li>Committed EI0/EI1 reports and the EI1 causal zstd sidecar.</li><li>Git refs, stashes, reflogs, assets, content, local models, and committed fixtures.</li></ul></article>
+          <article class="card"><h3>Current state</h3><p>Exactly one registered worktree remains at accepted implementation commit <code>73842a6…</code>. The implementation program runs directly in that checkout, one mutating task at a time; the protected root <code>AGENTS.md</code> remains unstaged.</p><p class="footnote">Any later temporary worktree must be merged and removed before its task can receive a clean completion verdict.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="evidence">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="eyebrow">Evidence appendix</div><h2>How to verify the verdict</h2></div>
+          <p>The report favors causal current-source anchors over milestone names. Historical receipts remain useful only within their recorded source, hardware and scope.</p>
+        </div>
+        <details open><summary>Production GPU-to-voxel gap</summary><div>
+          <span class="path">D:\A life\crates\alife_game_app\src\bevy_shell.rs:603-664, 4918-4934</span>
+          <span class="path">D:\A life\crates\alife_game_app\src\gpu_live_runtime.rs:2478-2830</span>
+          <span class="path">D:\A life\crates\alife_game_app\src\production_voxel_renderer.rs:1841-1963, 3187-3336, 4002-4043, 4870-4902</span>
+        </div></details>
+        <details><summary>World and lifecycle authority</summary><div>
+          <span class="path">D:\A life\crates\alife_world\src\headless.rs:943-1008, 1348-1373, 1920, 2010, 2725-2743</span>
+          <span class="path">D:\A life\crates\alife_world\src\ecology.rs:175</span>
+          <span class="path">D:\A life\crates\alife_world\src\habitat.rs:32-38, 329-388, 497-847</span>
+        </div></details>
+        <details><summary>Cognition, memory, sleep and language</summary><div>
+          <span class="path">D:\A life\crates\alife_gpu_backend\src\closed_loop_runtime.rs:1001, 1413, 1821, 2133, 2452, 3076-3098</span>
+          <span class="path">D:\A life\crates\alife_gpu_backend\src\closed_loop_pipeline.rs:2292</span>
+          <span class="path">D:\A life\crates\alife_gpu_backend\src\closed_loop_sleep.rs:269, 318, 367</span>
+          <span class="path">D:\A life\crates\alife_core\src\memory.rs:623, 723, 832</span>
+          <span class="path">D:\A life\crates\alife_core\src\language.rs:284-469, 612-635</span>
+        </div></details>
+        <details><summary>EI0/EI1 and evolution</summary><div>
+          <span class="path">D:\A life\crates\alife_core\src\evolutionary_genetics.rs:516-812, 2139-2174</span>
+          <span class="path">D:\A life\crates\alife_training\src\era1_trials.rs:361-796</span>
+          <span class="path">D:\A life\crates\alife_tools\src\era1_promotion.rs:78-456</span>
+          <span class="path">D:\A life\crates\alife_tools\reports\era1_promotion_report.json:2-5, 359734-364470</span>
+          <span class="path">D:\A life\crates\alife_tools\reports\ei0_exit_gate_report.json:2-6</span>
+        </div></details>
+        <details><summary>Architecture and scale</summary><div>
+          <span class="path">D:\A life\Cargo.toml:12-23</span>
+          <span class="path">D:\A life\crates\alife_game_app\src\lib.rs:60-349</span>
+          <span class="path">D:\A life\crates\alife_core\src\phenotype\capacity.rs:341</span>
+          <span class="path">D:\A life\crates\alife_gpu_backend\src\closed_loop_admission.rs:28</span>
+          <span class="path">D:\A life\crates\alife_gpu_backend\src\closed_loop_buffers\bucket.rs:1954, 2659</span>
+          <span class="path">D:\A life\docs\architecture_decisions.md:84-95, 116-124, 156-220, 295-307</span>
+        </div></details>
+        <details><summary>Active aspirations and product status</summary><div>
+          <span class="path">D:\A life\docs\master_spec.md</span>
+          <span class="path">D:\A life\docs\EVOLUTIONARY_INTELLIGENCE_ROADMAP.md:37-50</span>
+          <span class="path">D:\A life\docs\architecture\era1_norn_plus.md:1-30</span>
+          <span class="path">D:\A life\docs\productization_s_plans\fullstack_bevy_voxel_frontend_replacement\FVR10_COMPLETION.md:97-178</span>
+        </div></details>
+        <p class="footnote" style="margin-top:20px">Method: twelve read-only specialist audits, direct source tracing, Git ancestry and worktree checks, committed report inspection, and prior source-bound GPU evidence review. No claim here upgrades a historical receipt to current-HEAD execution.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap"><strong style="color:var(--cream)">A-Life full project review</strong><br>Original audit at <code>69edc8ca…</code>; Pass 1 implementation head <code>cf1d941c2b54c77451e49564c6584585113f6fc7</code> as of 15 August 2026. The full v1.1 architecture now participates through production paths across cognition, biology, body, world, lifecycle, persistence and presentation. The fresh EI1 corpus, broad regression suite, robustness work, soak, ablation and scale matrix remain intentionally deferred to Pass 2.</div>
+  </footer>
+</body>
+</html>
