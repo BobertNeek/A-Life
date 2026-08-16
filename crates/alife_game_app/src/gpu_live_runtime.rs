@@ -17,7 +17,8 @@ use alife_core::{
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
     Blake3Digest, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
     finalized_memory_attention_evidence, select_focal_targets, AttentionFrame,
-    AttentionSelectionPolicy, BrainWorkReceipt, CanonicalDigestBuilder, CognitiveConceptActivation,
+    AttentionSelectionPolicy, BrainWorkCounters, BrainWorkReceipt, CanonicalDigestBuilder,
+    CognitiveConceptActivation,
     CognitiveContextFrame, CognitiveGapActivation, CognitiveMemoryExpectancy,
     FinalizedMemoryAttentionEvidence,
     Confidence, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState,
@@ -43,6 +44,7 @@ use alife_gpu_backend::{
     GpuCuratedResidencyEntry, GpuCuratedResidencyOutcome, GpuCuratedResidencyReceipt,
     GpuCuratedResidencyTargetIdentity, GpuLearningReceipt, GpuMemoryContextUpload,
     PendingEligibilityDiscardReceipt, PendingEligibilityIdentity, PendingEligibilityReceipt,
+    GpuV11WorkReceipt,
     GPU_CLOSED_LOOP_TICK_READBACK_BYTES, GPU_FAST_PLASTICITY_COMMIT_BYTES,
     GPU_MOTOR_CHANNEL_SLOT_COUNT,
 };
@@ -359,18 +361,20 @@ fn cleanup_restored_gpu_handle(
 
 impl ResidentAuthorityPlan {
     fn into_fresh_resident(self) -> Result<ResidentCognition, ScaffoldContractError> {
+        let sleep_config = sleep_consolidation_config_for(&self.phenotype)?;
+        let predictor = predictor_for_phenotype(&self.phenotype)?;
         Ok(ResidentCognition {
             phenotype: self.phenotype,
             compiler_inputs: self.compiler_inputs,
             genome: self.genome,
             development: self.development,
             homeostasis: self.biochemistry.homeostasis,
-            sleep_scheduler: GpuSleepScheduler::new(SleepConsolidationConfig::reference())?,
+            sleep_scheduler: GpuSleepScheduler::new(sleep_config)?,
             next_sequence: 1,
             language_grounding: LanguageGroundingLedger::default(),
             life_statistics: PassiveLifeStatistics::new(self.organism_id, self.world_tick)?,
             attention_hysteresis: alife_core::HysteresisState::default(),
-            predictor: GroundedSuccessorPredictor::default(),
+            predictor,
             last_cognitive_context: None,
             last_selected_motor_bundle: None,
             last_cognitive_work: CognitiveWorkReceipt::zero(),
@@ -522,6 +526,7 @@ impl GpuLiveCheckpointDurability {
 struct AuthoritativeGpuSleepDriver<'a> {
     backend: &'a mut GpuClosedLoopBackend,
     handle: GpuBrainHandle,
+    sleep_config: Option<SleepConsolidationConfig>,
     context: Option<AuthoritativeSleepContext<'a>>,
     replay_evidence_before_commit: Option<SleepReplayEvidence>,
     last_sleep_work: Option<&'a mut Option<SleepWorkReceipt>>,
@@ -616,6 +621,7 @@ fn run_authoritative_sleep_transaction(
     organism_id: OrganismId,
     homeostasis: &HomeostaticSnapshot,
     tick: Tick,
+    sleep_config: SleepConsolidationConfig,
     context: &mut AuthoritativeSleepContext<'_>,
 ) -> Result<SleepWorkReceipt, ScaffoldContractError> {
     let evidence = build_authoritative_sleep_evidence(
@@ -626,16 +632,23 @@ fn run_authoritative_sleep_transaction(
         context.sealed_patches,
         context.last_sealed_patches,
     )?;
-    run_authoritative_sleep_transaction_with_evidence(homeostasis, tick, context, &evidence)
+    run_authoritative_sleep_transaction_with_evidence(
+        homeostasis,
+        tick,
+        sleep_config,
+        context,
+        &evidence,
+    )
 }
 
 fn run_authoritative_sleep_transaction_with_evidence(
     homeostasis: &HomeostaticSnapshot,
     tick: Tick,
+    sleep_config: SleepConsolidationConfig,
     context: &mut AuthoritativeSleepContext<'_>,
     evidence: &SleepReplayEvidence,
 ) -> Result<SleepWorkReceipt, ScaffoldContractError> {
-    let consolidator = SleepConsolidator::new(SleepConsolidationConfig::reference())?;
+    let consolidator = SleepConsolidator::new(sleep_config)?;
     context.memory.run_bounded_sleep_transaction(
         &consolidator,
         homeostasis,
@@ -760,6 +773,8 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
             Some(evidence) => run_authoritative_sleep_transaction_with_evidence(
                 homeostasis,
                 tick,
+                self.sleep_config
+                    .ok_or(ScaffoldContractError::MissingPhaseData)?,
                 context,
                 &evidence,
             ),
@@ -769,6 +784,8 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                 organism_id,
                 homeostasis,
                 tick,
+                self.sleep_config
+                    .ok_or(ScaffoldContractError::MissingPhaseData)?,
                 context,
             ),
         }?;
@@ -857,6 +874,7 @@ struct PreparedLiveSelection {
     frame: PerceptionFrame,
     memory_recall: FinalizedMemoryRecall,
     work: BrainWorkReceipt,
+    v11_work: GpuV11WorkReceipt,
     cognitive_context_digest: [u64; 4],
     sequence_id: ExperienceSequenceId,
     outcome_tick: Tick,
@@ -876,6 +894,7 @@ struct PreparedSealInput {
     outcome_tick: Tick,
     cognitive_context: CognitiveContextFrame,
     work: BrainWorkReceipt,
+    v11_work: GpuV11WorkReceipt,
     pre_action: PreActionSnapshot,
     decision: DecisionSnapshot,
     motor_bundle: MotorCommandBundle,
@@ -2413,28 +2432,116 @@ fn apply_prediction_evidence(
     Ok(mean_absolute_error)
 }
 
+fn attention_selection_policy_for(
+    phenotype: &alife_core::BrainPhenotype,
+) -> AttentionSelectionPolicy {
+    let capacity = phenotype.cognitive_architecture().attention_capacity();
+    AttentionSelectionPolicy {
+        focal_capacity: capacity,
+        requested_focal_count: capacity,
+        ..AttentionSelectionPolicy::default()
+    }
+}
+
+fn predictor_for_phenotype(
+    phenotype: &alife_core::BrainPhenotype,
+) -> Result<GroundedSuccessorPredictor, ScaffoldContractError> {
+    GroundedSuccessorPredictor::with_learning_rate(
+        phenotype
+            .cognitive_architecture()
+            .predictor_learning_rate(),
+    )
+}
+
+fn sleep_consolidation_config_for(
+    phenotype: &alife_core::BrainPhenotype,
+) -> Result<SleepConsolidationConfig, ScaffoldContractError> {
+    let architecture = phenotype.cognitive_architecture();
+    let plan = phenotype.sleep_consolidation_plan();
+    let mut config = SleepConsolidationConfig::reference();
+    config.sleep_pressure_threshold = NormalizedScalar::new(architecture.sleep_trigger_threshold())?;
+    config.h_shadow_drain_rate = NormalizedScalar::new(plan.staging_rate())?;
+    config.h_shadow_decay_rate = NormalizedScalar::new(plan.fast_decay_rate())?;
+    config.lifetime_staging_rate =
+        NormalizedScalar::new(architecture.sleep_consolidation_rate())?;
+    config.structural_edit_candidate_limit =
+        usize::from(architecture.structural_candidate_budget());
+    config.weight_abs_limit = plan.weight_limit();
+    config.validate_contract()?;
+    Ok(config)
+}
+
 fn cognitive_work_receipt(
     context: &CognitiveContextFrame,
     memory: &MemoryRecallReceipt,
-    neural_work: &BrainWorkReceipt,
-    schedule_sleep: bool,
+    neural_work: &BrainWorkCounters,
+    v11_work: &GpuV11WorkReceipt,
+    prediction_ops: u64,
 ) -> Result<CognitiveWorkReceipt, ScaffoldContractError> {
     let memory_ops = u64::from(memory.exact_bucket_reads)
         .saturating_add(u64::from(memory.neighbor_bucket_reads))
         .saturating_add(u64::from(memory.similarity_evaluations));
-    CognitiveWorkCounters::new(
-        u64::from(neural_work.counters.neuron_updates),
-        u64::from(neural_work.counters.synapse_ops),
-        0,
+    cognitive_work_receipt_from_subsystems(
+        neural_work,
+        v11_work,
         context.attention.budget_receipt.work_units,
         memory_ops,
         context.concept.active_concepts.len() as u64,
         context.gap.active_gaps.len() as u64,
-        2,
-        0,
+        prediction_ops,
         0,
         1,
-        if schedule_sleep { 1 } else { 0 },
+        0,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn cognitive_work_receipt_from_subsystems(
+    neural_work: &BrainWorkCounters,
+    v11_work: &GpuV11WorkReceipt,
+    focal_target_ops: u64,
+    memory_ops: u64,
+    concept_ops: u64,
+    gap_ops: u64,
+    prediction_ops: u64,
+    replay_ops: u64,
+    learning_ops: u64,
+    sleep_ops: u64,
+) -> Result<CognitiveWorkReceipt, ScaffoldContractError> {
+    CognitiveWorkCounters::new(
+        neural_work.neuron_updates,
+        neural_work.synapse_ops,
+        v11_work.cognitive.dendritic_ops,
+        focal_target_ops,
+        memory_ops,
+        concept_ops,
+        gap_ops,
+        prediction_ops,
+        replay_ops,
+        v11_work.cognitive.structural_ops,
+        learning_ops,
+        sleep_ops,
+    )?
+    .into_receipt()
+}
+
+fn sleep_cognitive_work_receipt(
+    sleep_work: &SleepWorkReceipt,
+) -> Result<CognitiveWorkReceipt, ScaffoldContractError> {
+    CognitiveWorkCounters::new(
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        u64::from(sleep_work.predictor_update_count),
+        u64::from(sleep_work.replay_event_count)
+            .saturating_add(u64::from(sleep_work.replay_eligibility_sample_count)),
+        0,
+        0,
+        sleep_work.work_units,
     )?
     .into_receipt()
 }
@@ -2478,7 +2585,7 @@ fn seal_prepared_selection_core(
     residents: &mut BTreeMap<u64, ResidentCognition>,
     sealed_patch_count: usize,
     cognitive_work_cost_policy: CognitiveWorkCostPolicy,
-    schedule_sleep: bool,
+    _schedule_sleep: bool,
     prepared: PreparedSealInput,
 ) -> Result<SealedWorldSelection, GameAppShellError> {
     let PreparedSealInput {
@@ -2490,6 +2597,7 @@ fn seal_prepared_selection_core(
         outcome_tick,
         mut cognitive_context,
         work,
+        v11_work,
         pre_action,
         decision,
         motor_bundle,
@@ -2537,8 +2645,9 @@ fn seal_prepared_selection_core(
     let cognitive_work = cognitive_work_receipt(
         &cognitive_context,
         &memory,
-        &work,
-        schedule_sleep,
+        &work.counters,
+        &v11_work,
+        prediction_update.error.len() as u64,
     )?;
     resident.last_cognitive_context = Some(cognitive_context.clone());
     resident.last_selected_motor_bundle = Some(motor_bundle.clone());
@@ -2957,7 +3066,11 @@ impl GpuLiveBrainRuntime {
                 development: compiler_inputs.development().clone(),
                 compiler_inputs,
                 homeostasis: HomeostaticSnapshot::baseline(plan.world_tick),
-                sleep_scheduler: GpuSleepScheduler::new(SleepConsolidationConfig::reference())
+                sleep_scheduler: GpuSleepScheduler::new(
+                    sleep_consolidation_config_for(&phenotype).map_err(|error| {
+                        CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
+                    })?,
+                )
                     .map_err(|error| {
                         CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
                     })?,
@@ -2968,7 +3081,9 @@ impl GpuLiveBrainRuntime {
                         CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
                     })?,
                 attention_hysteresis: alife_core::HysteresisState::default(),
-                predictor: GroundedSuccessorPredictor::default(),
+                predictor: predictor_for_phenotype(&phenotype).map_err(|error| {
+                    CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
+                })?,
                 last_cognitive_context: None,
                 last_selected_motor_bundle: None,
                 last_cognitive_work: CognitiveWorkReceipt::zero(),
@@ -3726,7 +3841,7 @@ impl GpuLiveBrainRuntime {
                         exact_cognitive_state.structural_plasticity.clone();
                     runtime.backend.restore_v11(handle, v11_checkpoint)?;
                     let sleep_scheduler = GpuSleepScheduler::restore(
-                        SleepConsolidationConfig::reference(),
+                        sleep_consolidation_config_for(&restored.phenotype)?,
                         exact_cognitive_state.sleep_state,
                     )?;
                     let ExactCognitiveCheckpointState {
@@ -5085,6 +5200,7 @@ impl GpuLiveBrainRuntime {
             let mut driver = AuthoritativeGpuSleepDriver {
                 backend,
                 handle,
+                sleep_config: None,
                 context: None,
                 replay_evidence_before_commit: None,
                 last_sleep_work: None,
@@ -5320,10 +5436,12 @@ impl GpuLiveBrainRuntime {
                 recover_brain_atp,
             )?;
             let sleep_event = if self.schedule_sleep {
+                let sleep_config = sleep_consolidation_config_for(&resident.phenotype)?;
                 let mut routed_driver = RoutedGpuSleepDriver {
                     authoritative: AuthoritativeGpuSleepDriver {
                         backend: &mut self.backend,
                         handle,
+                        sleep_config: Some(sleep_config),
                         context: Some(AuthoritativeSleepContext {
                             memory: self
                                 .memories
@@ -5351,6 +5469,21 @@ impl GpuLiveBrainRuntime {
                     false,
                 )?;
                 replace_canonical_organism_record(&mut self.world, record)?;
+                if event.sleep_work_units > 0 {
+                    let sleep_work = resident
+                        .last_sleep_work
+                        .as_ref()
+                        .ok_or(ScaffoldContractError::MissingPhaseData)?;
+                    let cognitive_work = sleep_cognitive_work_receipt(sleep_work)?;
+                    resident.last_cognitive_work = cognitive_work;
+                    self.last_cognitive_work_receipts.push(cognitive_work);
+                    apply_cognitive_work_cost(
+                        &mut self.world,
+                        OrganismId(raw),
+                        cognitive_work,
+                        self.cognitive_work_cost_policy,
+                    )?;
+                }
                 event
             } else {
                 if phase_before != SleepPhase::Awake {
@@ -5473,7 +5606,7 @@ impl GpuLiveBrainRuntime {
                     tick_before,
                     &peripheral_summaries,
                     resident.attention_hysteresis,
-                    AttentionSelectionPolicy::default(),
+                    attention_selection_policy_for(&resident.phenotype),
                 )?;
                 resident.attention_hysteresis = attention.hysteresis;
                 let routed_draft = route_focal_candidates(draft, &attention)?;
@@ -6367,6 +6500,7 @@ impl GpuLiveBrainRuntime {
             frame,
             memory_recall,
             work: gpu_tick.work,
+            v11_work: gpu_tick.v11_work,
             cognitive_context_digest,
             sequence_id,
             outcome_tick,
@@ -6389,6 +6523,7 @@ impl GpuLiveBrainRuntime {
             frame,
             memory_recall,
             work,
+            v11_work,
             cognitive_context_digest,
             sequence_id,
             outcome_tick,
@@ -6418,6 +6553,7 @@ impl GpuLiveBrainRuntime {
                 outcome_tick,
                 cognitive_context,
                 work,
+                v11_work,
                 pre_action,
                 decision,
                 motor_bundle,
@@ -7138,6 +7274,58 @@ mod tests {
         persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
         HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord,
     };
+
+    #[test]
+    fn phenotype_policy_and_subsystem_work_join_are_causal() {
+        let capacity = BrainCapacityClass::n512();
+        let genome = BrainGenome::scaffold(N512_FOUNDATION_SEED, capacity.id())
+            .with_cognitive_architecture(
+                alife_core::genome::CognitiveArchitectureGenomeParameters::try_new_v1(
+                    1, 16, 4, 8, 0.031, 1, 8, 64, 4, 1, 0.41, 0.73, 0.62, 0.11, 0.12,
+                    0.13, 0.14,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let development = DevelopmentState::new(
+            genome.id,
+            Tick::ZERO,
+            NormalizedScalar::new(1.0).unwrap(),
+        );
+        let (phenotype, _) =
+            compile_gpu_components_from_genome(genome, development, SensorProfile::GroundedObjectSlotsV1)
+                .unwrap();
+
+        let attention = attention_selection_policy_for(&phenotype);
+        assert_eq!(attention.focal_capacity, 1);
+        assert_eq!(attention.requested_focal_count, 1);
+        assert_eq!(phenotype.cognitive_architecture().predictor_learning_rate(), 0.031);
+        let sleep = sleep_consolidation_config_for(&phenotype).unwrap();
+        assert_eq!(sleep.sleep_pressure_threshold.raw(), 0.41);
+        assert_eq!(sleep.lifetime_staging_rate.raw(), 0.62);
+        assert_eq!(sleep.structural_edit_candidate_limit, 4);
+
+        let neural = BrainWorkCounters {
+            neuron_updates: 11,
+            synapse_ops: 13,
+            ..BrainWorkCounters::default()
+        };
+        let v11 = GpuV11WorkReceipt {
+            cognitive: CognitiveWorkReceipt::from_counters(
+                0, 0, 5, 0, 0, 0, 0, 0, 0, 7, 0, 0,
+            )
+            .unwrap(),
+            ..GpuV11WorkReceipt::default()
+        };
+        let merged = cognitive_work_receipt_from_subsystems(
+            &neural, &v11, 3, 4, 5, 6, 7, 8, 9, 10,
+        )
+        .unwrap();
+        assert_eq!(merged.dendritic_ops, 5);
+        assert_eq!(merged.replay_ops, 8);
+        assert_eq!(merged.structural_ops, 7);
+        assert_eq!(merged.weighted_total, 88);
+    }
 
     #[test]
     fn v11_attention_causally_changes_finalized_upload_and_holds_top_k_primary() {
@@ -9727,14 +9915,15 @@ mod tests {
             PreparedSealInput {
                 organism_id,
                 world_entity_id,
-                frame,
+                frame: frame.clone(),
                 memory,
                 sequence_id,
                 outcome_tick: Tick::new(1),
                 cognitive_context,
                 work,
+                v11_work: GpuV11WorkReceipt::default(),
                 pre_action,
-                decision,
+                decision: decision.clone(),
                 motor_bundle: compatibility_bundle_for_selected_action_v1(
                     organism_id,
                     sequence_id,

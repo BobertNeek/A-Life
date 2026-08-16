@@ -9,7 +9,7 @@ use alife_core::{
     apply_dendritic_conjunctions, BrainPhenotype, CoactivationEvidence, CognitiveWorkReceipt,
     DendriticBranch, DendriticBranchSet, DendriticInputRef, DendriticWorkReceipt,
     ScaffoldContractError, StructuralPlasticityConfig, StructuralPlasticityState,
-    StructuralWorkReceipt,
+    StructuralWorkReceipt, MAX_ACCEPTED_PER_PHASE, MAX_CANDIDATES_PER_REGION,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -168,6 +168,29 @@ impl GpuV11CausalState {
             pending_lifetime_synapse: None,
             last_work: GpuV11WorkReceipt::default(),
         })
+    }
+
+    pub fn new_for_phenotype(
+        neuron_count: u32,
+        dendritic_branches: DendriticBranchSet,
+        phenotype: &BrainPhenotype,
+    ) -> Result<Self, ScaffoldContractError> {
+        let plan = phenotype.cognitive_architecture();
+        if phenotype.neuron_count() != neuron_count
+            || dendritic_branches.branches().len()
+                > usize::from(plan.dendritic_branch_capacity())
+        {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        let structural_config = StructuralPlasticityConfig {
+            max_candidates_per_region: plan
+                .structural_candidate_budget()
+                .min(MAX_CANDIDATES_PER_REGION as u16),
+            max_accepted_per_phase: u16::from(plan.structural_edit_budget())
+                .min(MAX_ACCEPTED_PER_PHASE as u16),
+            ..StructuralPlasticityConfig::default()
+        };
+        Self::new(neuron_count, dendritic_branches, structural_config)
     }
 
     pub fn dendritic_branches(&self) -> &DendriticBranchSet {
@@ -452,7 +475,17 @@ impl GpuV11CausalState {
     }
 
     fn make_cognitive_receipt(&self) -> Result<CognitiveWorkReceipt, ScaffoldContractError> {
-        self.make_cognitive_receipt_for(self.last_work.dendritic.work_units, 0)
+        let structural = self.last_work.structural;
+        let structural_work_units = u64::from(structural.candidate_comparisons)
+            .saturating_add(u64::from(structural.candidates_kept))
+            .saturating_add(u64::from(structural.accepted_edges))
+            .saturating_add(u64::from(structural.pruned_edges))
+            .saturating_add(u64::from(structural.active_edges));
+        self.make_cognitive_receipt_for(
+            self.last_work.dendritic.work_units,
+            u32::try_from(structural_work_units)
+                .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?,
+        )
     }
 
     fn make_cognitive_receipt_for(

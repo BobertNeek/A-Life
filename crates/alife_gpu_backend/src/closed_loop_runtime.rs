@@ -1781,6 +1781,15 @@ impl GpuClosedLoopBackend {
                 resident.v11.clone(),
             )
         };
+        if branches.branches().len()
+            > usize::from(
+                phenotype
+                    .cognitive_architecture()
+                    .dendritic_branch_capacity(),
+            )
+        {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
         next.set_dendritic_branches(branches)?;
         let upload = {
             let bucket = pool.bucket_for_handle_mut(handle)?;
@@ -1892,6 +1901,15 @@ impl GpuClosedLoopBackend {
             )
         };
         if checkpoint.neuron_count != phenotype.neuron_count() {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        if checkpoint.dendritic_branches.branches().len()
+            > usize::from(
+                phenotype
+                    .cognitive_architecture()
+                    .dendritic_branch_capacity(),
+            )
+        {
             return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
         }
         let next = GpuV11CausalState::restore(checkpoint)?;
