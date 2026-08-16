@@ -90,6 +90,9 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
     let branch_subject = backend.insert_brain(OrganismId(2), phenotype.clone())?;
     let growth_subject = backend.insert_brain(OrganismId(3), phenotype.clone())?;
     let prune_subject = backend.insert_brain(OrganismId(4), phenotype.clone())?;
+    let fresh_checkpoint = backend.checkpoint_v11(control)?;
+    assert!(!fresh_checkpoint.dendritic_branches.is_empty());
+    backend.set_v11_dendritic_branches(control, DendriticBranchSet::default())?;
 
     let frame = |organism: u64, tick: u64| {
         support::perception_frame_for_profile_at_tick(
@@ -111,7 +114,6 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
         discard(&mut backend, tick)?;
     }
 
-    backend.set_v11_dendritic_branches(branch_subject, branches.clone())?;
     backend.set_v11_dendritic_branches(growth_subject, branches.clone())?;
     backend.set_v11_dendritic_branches(prune_subject, branches)?;
     let branch_ticks = backend.tick_batch(&[
@@ -220,6 +222,7 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
         )?,
         learned_state
     );
+    backend.apply_v11_sleep_structural_phase(prune_subject)?;
 
     let structural_ticks = backend.tick_batch(&[
         (control, frame(1, 79)),

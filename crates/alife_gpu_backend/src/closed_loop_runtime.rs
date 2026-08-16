@@ -1667,7 +1667,101 @@ impl GpuClosedLoopBackend {
             .map_err(map_gpu_contract_error)
     }
 
-    /// Configures bounded dendritic branches on the live backend resident.
+    /// Runs bounded sparse structural plasticity from the live sleep replay.
+    pub fn apply_v11_sleep_structural_phase(
+        &mut self,
+        handle: GpuBrainHandle,
+    ) -> Result<(), ScaffoldContractError> {
+        let replay = self.build_sleep_replay_batch(handle)?;
+        let phenotype = self
+            .class_buckets
+            .get(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .resident(handle)?
+            .phenotype
+            .clone();
+        let base_pairs = phenotype
+            .synapses()
+            .iter()
+            .map(|synapse| (synapse.source(), synapse.target()))
+            .collect::<std::collections::BTreeSet<_>>();
+        let active = replay
+            .synapse_spans
+            .iter()
+            .filter_map(|span| {
+                let start = usize::try_from(span.sample_start).ok()?;
+                let count = usize::try_from(span.sample_count).ok()?;
+                let samples = replay
+                    .eligibility_samples
+                    .get(start..start.checked_add(count)?)?;
+                let eligibility = samples
+                    .iter()
+                    .map(|sample| u32::from(sample.eligibility_q15.unsigned_abs()))
+                    .max()
+                    .unwrap_or(0);
+                if eligibility == 0 {
+                    return None;
+                }
+                let synapse = phenotype
+                    .synapses()
+                    .get(usize::try_from(span.local_synapse_id).ok()?)?;
+                Some((
+                    synapse.source(),
+                    synapse.target(),
+                    synapse.route_index(),
+                    eligibility,
+                ))
+            })
+            .take(32)
+            .collect::<Vec<_>>();
+        let mut evidence = Vec::new();
+        for pair in active.windows(2).take(32) {
+            let (source, target, route, eligibility) = (pair[0].0, pair[1].1, pair[0].2, pair[0].3);
+            if source == target || base_pairs.contains(&(source, target)) {
+                continue;
+            }
+            let Some(region) = u16::try_from(route).ok() else {
+                continue;
+            };
+            evidence.push(CoactivationEvidence {
+                region,
+                source,
+                target,
+                coactivation: 1,
+                eligibility,
+                concept_gap_support: 0,
+            });
+        }
+        if evidence.is_empty() {
+            if let Some((source, target, route, eligibility)) = active.first().copied() {
+                for offset in 1..=8_u32 {
+                    let candidate_target =
+                        (target % phenotype.neuron_count()).wrapping_add(offset)
+                            % phenotype.neuron_count();
+                    if candidate_target == source
+                        || base_pairs.contains(&(source, candidate_target))
+                    {
+                        continue;
+                    }
+                    let Some(region) = u16::try_from(route).ok() else {
+                        break;
+                    };
+                    evidence.push(CoactivationEvidence {
+                        region,
+                        source,
+                        target: candidate_target,
+                        coactivation: 1,
+                        eligibility,
+                        concept_gap_support: 0,
+                    });
+                    break;
+                }
+            }
+        }
+        self.apply_v11_structural_phase(handle, &evidence)?;
+        Ok(())
+    }
+
     pub fn set_v11_dendritic_branches(
         &mut self,
         handle: GpuBrainHandle,
@@ -3605,6 +3699,16 @@ impl GpuClosedLoopBackend {
                     transient_peak,
                 )
             };
+        let v11 = GpuV11CausalState::for_phenotype(&phenotype)?;
+        let upload = {
+            let bucket = self
+                .class_buckets
+                .get(&class_raw)
+                .and_then(|pool| pool.chunks.get(chunk_index))
+                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+            compile_v11_slot_upload(&bucket.plan, upload.brain_slot(), &phenotype, &v11)
+                .map_err(map_gpu_contract_error)?
+        };
         let bucket = self
             .class_buckets
             .get_mut(&class_raw)
@@ -3689,11 +3793,7 @@ impl GpuClosedLoopBackend {
             last_pressure: None,
             last_throttle: None,
             last_work: None,
-            v11: GpuV11CausalState::new(
-                phenotype.neuron_count(),
-                DendriticBranchSet::default(),
-                Default::default(),
-            )?,
+            v11,
             sleep_plan: *phenotype.sleep_consolidation_plan(),
             learning_sequence_guard: LearningSequenceGuard::new(
                 organism_id,
@@ -4236,6 +4336,14 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
                 &entry.phenotype,
             )
             .map_err(map_gpu_contract_error)?;
+        let v11 = GpuV11CausalState::for_phenotype(&entry.phenotype)?;
+        let upload = compile_v11_slot_upload(
+            &bucket.plan,
+            upload.brain_slot(),
+            &entry.phenotype,
+            &v11,
+        )
+        .map_err(map_gpu_contract_error)?;
         let handle = GpuBrainHandle {
             backend_instance_id: self.backend.backend_instance_id,
             class_id: reservation.class_id,
@@ -4269,11 +4377,7 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
             last_pressure: None,
             last_throttle: None,
             last_work: None,
-            v11: GpuV11CausalState::new(
-                entry.phenotype.neuron_count(),
-                DendriticBranchSet::default(),
-                Default::default(),
-            )?,
+            v11,
             sleep_plan: *entry.phenotype.sleep_consolidation_plan(),
             learning_sequence_guard: LearningSequenceGuard::new(
                 entry.organism_id,

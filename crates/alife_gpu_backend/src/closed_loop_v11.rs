@@ -6,9 +6,10 @@
 
 use alife_core::cognitive_work::CognitiveWorkCounters;
 use alife_core::{
-    apply_dendritic_conjunctions, CoactivationEvidence, CognitiveWorkReceipt, DendriticBranchSet,
-    DendriticWorkReceipt, ScaffoldContractError, StructuralPlasticityConfig,
-    StructuralPlasticityState, StructuralWorkReceipt,
+    apply_dendritic_conjunctions, BrainPhenotype, CoactivationEvidence, CognitiveWorkReceipt,
+    DendriticBranch, DendriticBranchSet, DendriticInputRef, DendriticWorkReceipt,
+    ScaffoldContractError, StructuralPlasticityConfig, StructuralPlasticityState,
+    StructuralWorkReceipt,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -96,6 +97,59 @@ pub struct GpuV11CausalState {
 }
 
 impl GpuV11CausalState {
+    pub fn for_phenotype(phenotype: &BrainPhenotype) -> Result<Self, ScaffoldContractError> {
+        let neuron_count = phenotype.neuron_count();
+        let motor_start = phenotype.candidate_decoder().motor_start();
+        let motor_width = phenotype.candidate_decoder().motor_width();
+        let branch_count = usize::from(
+            phenotype
+                .cognitive_architecture_plan()
+                .dendritic_branch_capacity(),
+        )
+        .max(1)
+        .min(usize::from(motor_width))
+        .min(64);
+        let mut branches = Vec::with_capacity(branch_count);
+        for index in 0..branch_count {
+            let target = motor_start + index as u32;
+            if target >= neuron_count {
+                return Err(ScaffoldContractError::GpuLayoutMismatch);
+            }
+            let second_source = if target + 1 < neuron_count {
+                target + 1
+            } else {
+                target.saturating_sub(1)
+            };
+            branches.push(DendriticBranch::new(
+                target,
+                -1.0,
+                6.0,
+                vec![
+                    DendriticInputRef::new(target, 1.0)?,
+                    DendriticInputRef::new(second_source, 1.0)?,
+                ],
+            )?);
+        }
+        let architecture = phenotype.cognitive_architecture_plan();
+        let structural_edit_budget = u16::from(architecture.structural_edit_budget().max(1));
+        let structural_config = StructuralPlasticityConfig {
+            max_candidates_per_region: architecture
+                .structural_candidate_budget()
+                .max(1)
+                .min(8),
+            max_regions: 1,
+            max_accepted_per_phase: structural_edit_budget.min(4),
+            max_structural_edges: structural_edit_budget.saturating_mul(4).clamp(1, 64),
+            min_candidate_score: 2,
+            prune_score_below: 1,
+        };
+        Self::new(
+            neuron_count,
+            DendriticBranchSet::new(branches)?,
+            structural_config,
+        )
+    }
+
     pub fn new(
         neuron_count: u32,
         dendritic_branches: DendriticBranchSet,

@@ -746,7 +746,7 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
         _state: SleepState,
         homeostasis: &HomeostaticSnapshot,
         tick: Tick,
-        _due_work: SleepWorkDue,
+        due_work: SleepWorkDue,
     ) -> Result<Option<SleepWorkReceipt>, ScaffoldContractError> {
         if organism_id != self.handle.organism_id() {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
@@ -772,6 +772,10 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                 context,
             ),
         }?;
+        if due_work.contains(SleepWorkDue::STRUCTURAL_GROWTH_PRUNING) {
+            self.backend
+                .apply_v11_sleep_structural_phase(self.handle)?;
+        }
         if let Some(last_sleep_work) = self.last_sleep_work.as_mut() {
             **last_sleep_work = Some(receipt.clone());
         }
