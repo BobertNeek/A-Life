@@ -4347,6 +4347,43 @@ impl GpuLiveBrainRuntime {
     /// world. The receipt is reauthorized before a candidate child world is
     /// built, then the existing reconciliation path owns archive-before-GPU
     /// admission for the inherited child record.
+    pub fn execute_managed_breed(
+        &mut self,
+        receipt: HabitatBreedingReceipt,
+    ) -> Result<OrganismId, GameAppShellError> {
+        let max_live_id = self
+            .world
+            .organism_registry()
+            .iter()
+            .map(|record| record.organism_id().raw())
+            .chain(
+                self.world
+                    .organism_entity_ids()
+                    .into_iter()
+                    .map(|(organism_id, _)| organism_id.raw()),
+            )
+            .chain(self.handles.keys().copied())
+            .chain(self.residents.keys().copied())
+            .chain(self.archive_birth_manifests.keys().copied())
+            .max()
+            .unwrap_or(0);
+        let child_raw = max_live_id
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let child_organism_id = OrganismId(child_raw);
+        let conception_seed = receipt
+            .tick
+            .raw()
+            .rotate_left(17)
+            .wrapping_add(receipt.first_parent.raw().rotate_left(31))
+            .wrapping_add(receipt.second_parent.raw().rotate_right(11))
+            .wrapping_add(receipt.habitat_id.raw().rotate_left(7))
+            .wrapping_add(0xC0A1_CE71_4A2D_0001);
+
+        self.apply_managed_breed_receipt(receipt, child_organism_id, conception_seed)?;
+        Ok(child_organism_id)
+    }
+
     pub fn apply_managed_breed_receipt(
         &mut self,
         receipt: HabitatBreedingReceipt,
@@ -5644,6 +5681,66 @@ impl GpuLiveBrainRuntime {
         })?;
         self.replace_habitat_authority(authority)?;
         Ok(receipt)
+    }
+
+    /// Executes an authorized school action against the live learner and GPU
+    /// cognition. The teacher cue is ordinary spatial perception, and the
+    /// resulting sealed tick is published by the existing production loop.
+    pub fn execute_structured_education(
+        &mut self,
+        receipt: HabitatPermissionReceipt,
+    ) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
+        let expected = self
+            .authorize_structured_education(
+                receipt.organism_id,
+                receipt.habitat_id,
+                receipt.actor,
+            )
+            .map_err(|error| GameAppShellError::InvalidProductionFrontend {
+                message: format!(
+                    "structured education receipt rejected by the live habitat authority: {error}"
+                ),
+            })?;
+        if receipt != expected || receipt.tick != self.world.tick() {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "structured education receipt is stale or does not match the live authority"
+                    .to_string(),
+            });
+        }
+        if !self.residents.contains_key(&receipt.organism_id.raw()) {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: format!(
+                    "structured education learner {} is not admitted to live GPU cognition",
+                    receipt.organism_id.raw()
+                ),
+            });
+        }
+        let sensory = self.world.sensory_report(receipt.organism_id, receipt.tick)?;
+        if sensory.core_snapshot.language_context.teacher_channel_marker.is_none() {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "structured education requires a grounded teacher perception".to_string(),
+            });
+        }
+
+        let summaries = self.tick()?;
+        let learner_summary = summaries
+            .iter()
+            .find(|summary| summary.organism_id == receipt.organism_id)
+            .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
+                message: format!(
+                    "structured education learner {} did not receive a live GPU summary",
+                    receipt.organism_id.raw()
+                ),
+            })?;
+        if !learner_summary.patch_sealed {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: format!(
+                    "structured education learner {} did not seal a live experience patch",
+                    receipt.organism_id.raw()
+                ),
+            });
+        }
+        Ok(summaries)
     }
 
     pub(crate) fn replace_habitat_authority(

@@ -91,6 +91,120 @@ fn player_loop_base_save(
     .expect("canonical player-loop base save")
 }
 
+fn focused_player_action_runtime() -> (
+    GpuLiveBrainRuntime,
+    OrganismId,
+    HabitatId,
+    std::path::PathBuf,
+) {
+    let organism_id = OrganismId(1);
+    let managed_id = HabitatId::new(2).expect("non-zero managed habitat id");
+    let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())
+        .expect("focused player actions require the production GPU backend");
+    let mut world = HeadlessScenarioBuilder::new(13_001)
+        .agent("learner", organism_id, Vec3f::ZERO)
+        .agent("parent-b", OrganismId(2), Vec3f::new(-1.0, 0.0, 0.0))
+        .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
+        .teacher_token(
+            "teacher-word",
+            Vec3f::new(0.5, 0.0, 0.0),
+            77,
+            TeacherPerceptionChannel::Hearing,
+        )
+        .build()
+        .expect("bounded focused player-action world");
+    let world_entity_id = world
+        .organism_entity_ids()
+        .into_iter()
+        .find(|(candidate, _)| *candidate == organism_id)
+        .map(|(_, entity)| entity)
+        .expect("learner world entity");
+    let sensor_profile = SensorProfile::GroundedObjectSlotsV1;
+    let foundation_asset = FoundationWeightAsset::builtin_n2048_v1(sensor_profile)
+        .expect("checked N2048 foundation asset");
+    let foundation_manifest = foundation_asset.manifest();
+    let foundation = FoundationGeneticIdentity::new(
+        foundation_manifest.foundation_id().raw(),
+        foundation_manifest.foundation_version().raw() as u16,
+        foundation_manifest.compatibility_family_id().raw(),
+        BrainCapacityClass::N2048_ID,
+    )
+    .expect("valid N2048 foundation identity");
+    let genome = alife_core::CreatureGenome::early_mammal_founder(13_001, foundation.clone())
+        .expect("valid learner genome");
+    let phenotype = genome.express().expect("valid learner phenotype");
+    let biochemistry = alife_core::BiochemistryState::new(&phenotype, Tick::ZERO)
+        .expect("valid learner biochemistry");
+    world
+        .register_organism_record(
+            WorldOrganismRecord::new(
+                organism_id,
+                world_entity_id,
+                genome,
+                phenotype,
+                biochemistry,
+                Tick::ZERO,
+            )
+            .expect("valid learner world-organism record"),
+        )
+        .expect("register learner world-organism record");
+    let second_world_entity_id = world
+        .entity_id("parent-b")
+        .expect("second parent world entity");
+    let second_genome = alife_core::CreatureGenome::early_mammal_founder(13_002, foundation)
+        .expect("valid second-parent genome");
+    let second_phenotype = second_genome.express().expect("valid second-parent phenotype");
+    let second_biochemistry = alife_core::BiochemistryState::new(&second_phenotype, Tick::ZERO)
+        .expect("valid second-parent biochemistry");
+    world
+        .register_organism_record(
+            WorldOrganismRecord::new(
+                OrganismId(2),
+                second_world_entity_id,
+                second_genome,
+                second_phenotype,
+                second_biochemistry,
+                Tick::ZERO,
+            )
+            .expect("valid second-parent world-organism record"),
+        )
+        .expect("register second-parent world-organism record");
+    let mut authority = HabitatAuthority::new(vec![
+        Habitat::new(HabitatId::DEFAULT_WILD, "Wild", HabitatMode::Wild)
+            .expect("valid wild habitat"),
+        Habitat::new(managed_id, "Managed Nursery", HabitatMode::Managed)
+            .expect("valid managed habitat"),
+    ])
+    .expect("valid habitat authority");
+    authority
+        .register_creature(organism_id, managed_id, Tick::ZERO)
+        .expect("managed membership for the learner");
+    authority
+        .register_creature(OrganismId(2), managed_id, Tick::ZERO)
+        .expect("managed membership for the second parent");
+    world
+        .replace_habitat_authority(authority)
+        .expect("world-owned focused action authority");
+
+    let archive_root = std::env::temp_dir().join(format!(
+        "alife-v11-player-actions-{}",
+        std::process::id()
+    ));
+    let _ = fs::remove_dir_all(&archive_root);
+    let runtime = GpuLiveBrainRuntime::new_profiled_archived(
+        backend,
+        world,
+        13_001,
+        BrainScaleTier::Standard2048,
+        sensor_profile,
+        LineageLibraryConfig::profile_default(&archive_root),
+        "task-13-v11-player-actions",
+        ArchiveLearnedCapturePolicy::GeneticOnly,
+    )
+    .expect("supported profiled Standard2048 production runtime");
+    (runtime, organism_id, managed_id, archive_root)
+}
+
 #[test]
 fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_boundary() {
     let organism_id = OrganismId(1);
@@ -803,4 +917,90 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
 
     drop(app);
     fs::remove_dir_all(&archive_root).expect("remove temporary player-loop archive");
+}
+
+#[test]
+fn v11_player_actions_execute_live_school_and_managed_breeding() {
+    let (mut runtime, organism_id, managed_id, archive_root) = focused_player_action_runtime();
+
+    let education = runtime
+        .authorize_structured_education(organism_id, managed_id, HabitatActor::Teacher)
+        .expect("teacher structured education must return an authority receipt");
+    let summaries = runtime
+        .execute_structured_education(education)
+        .expect("structured education must execute against live learner cognition");
+    let learner_summary = summaries
+        .iter()
+        .find(|summary| summary.organism_id == organism_id)
+        .expect("live school action learner summary");
+    assert_eq!(learner_summary.tick_before, Tick::ZERO);
+    assert_eq!(learner_summary.tick_after, Tick::new(1));
+    assert!(learner_summary.patch_sealed);
+    assert_eq!(learner_summary.learning_updates, 1);
+    assert!(runtime
+        .sealed_patches()
+        .iter()
+        .any(|patch| patch.pre_action().organism_id == organism_id));
+
+    let durable_root = archive_root.join("focused-durable");
+    let asset_root = durable_root.join("assets");
+    let save_path = durable_root.join("player-actions.json");
+    fs::create_dir_all(&asset_root).expect("create focused durable asset root");
+    runtime
+        .attach_durable_checkpoint_boundary(&save_path, &asset_root, player_loop_base_save(&runtime))
+        .expect("attach focused durable checkpoint boundary");
+
+    let breeding = produce_habitat_lab_explicit_breed_receipt(
+        &runtime.world_snapshot(),
+        organism_id,
+        managed_id,
+        OrganismId(2),
+    )
+    .expect("managed habitat authority must authorize explicit breeding");
+    let before_stale_world = runtime
+        .world_snapshot()
+        .canonical_signature_digest()
+        .expect("canonical world signature before stale breeding");
+    let stale_breeding = alife_world::HabitatBreedingReceipt {
+        tick: Tick::ZERO,
+        ..breeding.clone()
+    };
+    assert!(runtime
+        .apply_managed_breed_receipt(stale_breeding, OrganismId(3), 0xBEEF_1301)
+        .is_err());
+    assert_eq!(
+        runtime
+            .world_snapshot()
+            .canonical_signature_digest()
+            .expect("canonical world signature after stale breeding"),
+        before_stale_world
+    );
+
+    let child_id = runtime
+        .execute_managed_breed(breeding)
+        .expect("managed breeding must execute through the live runtime executor");
+    assert_eq!(child_id, OrganismId(3));
+    let child_world = runtime.world_snapshot();
+    let child = child_world
+        .organism_registry()
+        .get(child_id)
+        .expect("live managed-breeding child record");
+    assert!(child.archive().birth_manifest_digest().is_some());
+    assert_eq!(runtime.lineage_archive_manifest_count().unwrap(), Some(3));
+    assert!(runtime
+        .capture_portable_checkpoint()
+        .expect("GPU checkpoint after live managed breeding")
+        .creatures
+        .into_iter()
+        .any(|creature| creature.organism_id == child_id && creature.gpu_brain.is_some()));
+    assert_eq!(
+        child_world
+            .habitat_authority()
+            .membership(child_id)
+            .map(|membership| membership.habitat_id),
+        Some(managed_id)
+    );
+
+    drop(runtime);
+    fs::remove_dir_all(&archive_root).expect("remove temporary focused action archive");
 }

@@ -2217,11 +2217,44 @@ fn handle_habitat_lab_input(
         state.habitat_partner_id,
         command,
     );
-    state.status = habitat_operation_status(&result);
-    if result.is_ok() {
-        if let Err(error) = runtime.replace_habitat_authority(working.habitat_authority().clone()) {
-            state.status = format!("Rejected: {error}");
+    match result {
+        Ok(HabitatLabOutcome::Breeding(receipt)) => {
+            state.status = match runtime.execute_managed_breed(receipt) {
+                Ok(child_id) => format!(
+                    "Managed breeding executed: newborn creature {} admitted to live GPU and lineage archive",
+                    child_id.raw()
+                ),
+                Err(error) => format!("Rejected: {error}"),
+            };
         }
+        Ok(HabitatLabOutcome::Authorized(receipt))
+            if receipt.operation == HabitatOperation::StructuredEducation =>
+        {
+            state.status = match runtime.execute_structured_education(receipt) {
+                Ok(summaries) => summaries
+                    .iter()
+                    .find(|summary| summary.organism_id == organism_id)
+                    .map_or_else(
+                        || "Structured education executed on the live GPU runtime".to_string(),
+                        |summary| {
+                            format!(
+                                "Structured education executed for learner {} on live GPU tick {} -> {}; sealed experience patch",
+                                organism_id.raw(),
+                                summary.tick_before.raw(),
+                                summary.tick_after.raw()
+                            )
+                        },
+                    ),
+                Err(error) => format!("Rejected: {error}"),
+            };
+        }
+        Ok(outcome) => {
+            state.status = habitat_operation_status(&Ok(outcome));
+            if let Err(error) = runtime.replace_habitat_authority(working.habitat_authority().clone()) {
+                state.status = format!("Rejected: {error}");
+            }
+        }
+        Err(error) => state.status = format!("Rejected: {error}"),
     }
 }
 
