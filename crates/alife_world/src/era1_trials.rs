@@ -176,11 +176,11 @@ pub fn build_era1_trial_world(
             .grounded_physical(OBJECT_A_LABEL, physical(1))
             .food(OBJECT_B_LABEL, position(manifest, -3.0, 2.0), 0.45)
             .grounded_physical(OBJECT_B_LABEL, physical(2))
-            .hazard("era1-hazard-a", position(manifest, 1.0, -2.0), 0.8)
+            .hazard("era1-hazard-a", position(manifest, 1.0, 0.0), 0.8)
             .grounded_physical("era1-hazard-a", physical(3))
             .hazard("era1-hazard-b", position(manifest, -2.0, -2.0), 0.55)
             .grounded_physical("era1-hazard-b", physical(4))
-            .obstacle("era1-wall-a", position(manifest, 1.0, 0.0), 0.45)
+            .obstacle("era1-wall-a", position(manifest, 1.0, -2.0), 0.45)
             .obstacle("era1-wall-b", position(manifest, -1.0, 1.0), 0.45)
             .obstacle("era1-wall-c", position(manifest, -1.0, -1.0), 0.45),
         Era1WorldFamily::DelayedLocation => builder

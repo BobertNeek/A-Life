@@ -1,7 +1,11 @@
-use alife_core::{HomeostaticSnapshot, OrganismId, SensorProfile, Tick};
+use alife_core::{
+    CandidateActionFamily, CandidateObservationRef, HomeostaticSnapshot, OrganismId, SensorProfile,
+    Tick,
+};
 use alife_world::{
     apply_era1_world_transition, build_era1_trial_world, Era1TrialManifest, Era1TrialPhase,
-    Era1WorldFamily, ERA1_ACQUISITION_END_TICK, ERA1_PROBE_START_TICK, ERA1_WORLD_FAMILY_COUNT,
+    Era1WorldFamily, WorldObjectKind, ERA1_ACQUISITION_END_TICK, ERA1_PROBE_START_TICK,
+    ERA1_WORLD_FAMILY_COUNT,
 };
 
 const SUBJECT: OrganismId = OrganismId(101);
@@ -110,6 +114,38 @@ fn grounded_frames_expose_only_physical_slots_and_stable_tracked_ids() {
             .map(|slot| slot.tracked_object_id)
             .collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn hazard_avoidance_exposure_resolves_real_hazard_through_production_candidates() {
+    let manifest = manifest(Era1WorldFamily::ForagingHazardMaze, false);
+    let mut world = build_era1_trial_world(&manifest).unwrap();
+    let draft = world
+        .perception_frame_draft(
+            SUBJECT,
+            Tick::ZERO,
+            SensorProfile::GroundedObjectSlotsV1,
+            HomeostaticSnapshot::baseline(Tick::ZERO),
+        )
+        .unwrap();
+    let exposure_slot = draft.grounded_object_slots().first().unwrap();
+    let exposure = draft
+        .candidates()
+        .iter()
+        .find(|candidate| {
+            candidate.family == CandidateActionFamily::Avoid
+                && matches!(
+                    candidate.observation,
+                    CandidateObservationRef::ObjectSlot(slot_index)
+                        if slot_index == exposure_slot.slot_index
+                )
+        })
+        .unwrap();
+    let target = exposure.target.entity.unwrap();
+    let object = world.entity(target).unwrap();
+
+    assert_eq!(object.kind, WorldObjectKind::Hazard);
+    assert!(object.hazard_pain > 0.0);
 }
 
 #[test]
