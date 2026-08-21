@@ -2,7 +2,7 @@ const MEMORY_SCHEMA_VERSION:u32 = 1u;
 const TOPOLOGY_CONTEXT_ABI_VERSION:u32 = 1u;
 const ACTIVE_DISPATCH_ROW_WORDS:u32 = 332u;
 const MEMORY_HEADER_ROW_OFFSET:u32 = 292u;
-const MEMORY_RECORD_WORDS:u32 = 20u;
+const MEMORY_RECORD_WORDS:u32 = 32u;
 const MEMORY_FAMILY_COUNT:u32 = 8u;
 const MEMORY_TARGET_WIDTH:u32 = 8u;
 const MEMORY_VALUE_WIDTH:u32 = 4u;
@@ -15,7 +15,8 @@ fn finite_memory_value(value:f32) -> bool {
 
 fn memory_sample(context:GpuCandidateMemoryRecord, channel:u32) -> f32 {
   if (channel < MEMORY_TARGET_WIDTH) {
-    return context.target_latent[channel] * clamp(context.target_confidence, 0.0, 1.0);
+    return context.target_latent[channel] * clamp(context.target_confidence, 0.0, 1.0)
+      + context.prediction_latent[channel];
   }
   return context.family_value[channel - MEMORY_TARGET_WIDTH]
     * clamp(context.family_confidence, 0.0, 1.0);
@@ -25,7 +26,9 @@ fn topology_sample(context:GpuCandidateMemoryRecord, channel:u32) -> f32 {
   if (channel == MEMORY_TARGET_WIDTH) { return context.concept_signal; }
   if (channel == MEMORY_TARGET_WIDTH + 1u) { return context.gap_signal; }
   if (channel == MEMORY_TARGET_WIDTH + 2u) { return context.causal_signal; }
-  if (channel == MEMORY_TARGET_WIDTH + 3u) { return context.uncertainty_signal; }
+  if (channel == MEMORY_TARGET_WIDTH + 3u) {
+    return max(context.uncertainty_signal, context.prediction_uncertainty);
+  }
   return 0.0;
 }
 

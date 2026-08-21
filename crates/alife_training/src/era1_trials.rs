@@ -3,7 +3,8 @@
 use alife_core::cognitive_work::CognitiveWorkCostPolicy;
 use alife_core::{
     ActionCommand, ActionKind, BiochemistryState, BrainCapacityClass, BrainGenome,
-    CandidateActionFamily, CandidateObservationRef, CanonicalDigestBuilder, Confidence,
+    CandidateActionFamily, CandidateObservationRef, CanonicalDigestBuilder, CognitiveContextFrame,
+    Confidence,
     ConsolidationIntent, CreatureGenome, DevelopmentState, Era1Ability, Era1Control,
     Era1EvidencePartition, Era1TrialIdentity, Era1TrialReceipt, ExperiencePatch,
     ExperienceSequenceId, FoundationWeightAsset, LanguageGroundingLedger, MemoryBankConfig,
@@ -23,6 +24,7 @@ use alife_gpu_backend::{
     GpuSelectorDiagnosticReceipt,
 };
 use alife_runtime::{
+    prepare_predecision_context,
     run_production_causal_transaction, GpuAuthoritativeSession, GpuSessionConsumerKind,
     ProductionCausalMechanismMask, ProductionCausalStageHooks, ProductionCausalStep,
     ProductionCausalStepInput,
@@ -816,6 +818,29 @@ impl Era1TrialRunner {
                 homeostasis,
             )?;
             let prepared_recall = memory.recall_frame(&draft)?;
+            let preview_recall = prepared_recall.clone().with_cognitive_context(
+                CognitiveContextFrame::empty(
+                    request.organism_id,
+                    ExperienceSequenceId(next_sequence),
+                    draft.tick(),
+                )?,
+            )?;
+            let (preview_frame, preview_finalized) = preview_recall.finalize(draft.clone())?;
+            let mut cognitive_context = preview_finalized
+                .cognitive_context()
+                .cloned()
+                .ok_or(ScaffoldContractError::MissingPhaseData)?;
+            prepare_predecision_context(
+                &world,
+                &predictor,
+                request.organism_id,
+                ExperienceSequenceId(next_sequence),
+                &preview_frame,
+                &phenotype,
+                &admission.biochemistry,
+                &mut cognitive_context,
+            )?;
+            let prepared_recall = prepared_recall.with_cognitive_context(cognitive_context)?;
             let (frame, finalized_recall) = prepared_recall.finalize(draft)?;
             let memory_upload =
                 self.session

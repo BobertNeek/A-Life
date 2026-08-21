@@ -99,12 +99,14 @@ pub use chemistry::{
     DRIVE_EXTENSION_SLOTS, ENDOCRINE_EXTENSION_SLOTS,
 };
 pub use cognitive_context::{
-    CognitiveBudgetView, CognitiveConceptActivation, CognitiveConceptView, CognitiveContextFrame,
+    CognitiveBudgetView, CognitiveCandidatePrediction, CognitiveConceptActivation,
+    CognitiveConceptView, CognitiveContextFrame,
     CognitiveTargetContext,
     CognitiveFocalView, CognitiveGapActivation, CognitiveGapView, CognitiveInteroceptiveView,
     CognitiveMemoryExpectancy, CognitiveMemoryView, CognitivePeripheralView,
     CognitivePredictionView, COGNITIVE_CONTEXT_SCHEMA_VERSION, MAX_ACTIVE_CONCEPTS,
-    MAX_ACTIVE_GAPS, MAX_CONTEXT_MEMORY_EXPECTANCIES, MAX_PREDICTION_ERROR_FEATURES,
+    MAX_ACTIVE_GAPS, MAX_CANDIDATE_PREDICTIONS, MAX_CONTEXT_MEMORY_EXPECTANCIES,
+    MAX_PREDICTION_ERROR_FEATURES,
     MAX_TOPOLOGY_TARGET_CONTEXTS,
 };
 pub use cognitive_work::{

@@ -6,16 +6,18 @@
 
 use alife_core::cognitive_work::CognitiveWorkCounters;
 use alife_core::{
-    ActionCommand, ActionKind, ActionTarget, BiochemistryState, BoundedCoordinationSummary,
-    BoundedMotorPayload, BrainCapacityClass, BrainGenome, BrainPhenotype, BrainWorkCounters,
-    CandidateActionFamily, CandidateObservationRef, CognitiveContextFrame, CognitiveWorkReceipt,
-    CognitiveInteroceptiveView, DevelopmentState, ExperiencePatch, ExperienceSequenceId,
-    GroundedFocalDetail, GroundedSuccessorPredictor, JointMotorCondition, LanguageGroundingLedger,
-    MAX_FOCAL_FEATURE_WIDTH, MAX_FOCAL_TARGETS, MemoryRecallReceipt, MotorChannel,
-    MotorCommandBundle, NeuralActionSelection, NormalizedScalar, PerceptionFrame,
+    ActionCommand, ActionKind, ActionTarget, BiochemistryState, BodyState,
+    BoundedCoordinationSummary, BoundedMotorPayload, BrainCapacityClass, BrainGenome,
+    BrainPhenotype, BrainWorkCounters, CandidateActionFamily, CandidateObservationRef,
+    CognitiveCandidatePrediction, CognitiveContextFrame, CognitiveInteroceptiveView,
+    CognitiveWorkReceipt, DevelopmentState, ExperiencePatch, ExperienceSequenceId,
+    GroundedFocalDetail, GroundedOutcomeFeatures, GroundedSuccessorPredictor, HomeostaticSnapshot,
+    JointMotorCondition, LanguageGroundingLedger, MemoryRecallReceipt, MotorChannel,
+    MotorCommandBundle, MotorFamily, NeuralActionSelection, NormalizedScalar, PerceptionFrame,
     PerceptionFrameDigest, PostActionOutcome, PreActionSnapshot, PredictionTargetReceipt,
     ScaffoldContractError, SemanticStateVector, SignedValence, SpeechMotorPayload,
-    StableFocusIdentity, Validate, Vec3f, WorldEntityId,
+    StableFocusIdentity, Validate, Vec3f, WorldEntityId, MAX_FOCAL_FEATURE_WIDTH,
+    MAX_FOCAL_TARGETS,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopTick, GpuSelectorDiagnosticReceipt, GpuV11WorkReceipt,
@@ -27,6 +29,148 @@ use crate::GpuAuthoritativeSession;
 
 const SINGLE_ACTION_COMPATIBILITY_ADAPTER_VERSION: u16 = 1;
 const VOCAL_CHANNEL_PAYLOAD_MAGIC_V1: u32 = 0x5348_5031;
+
+pub const MAX_PREDECISION_PREDICTIONS: usize = 8;
+
+#[derive(Debug, Clone)]
+pub struct PredecisionCandidatePrediction {
+    pub candidate_index: u16,
+    pub motor_condition: JointMotorCondition,
+    pub prediction: alife_core::predictive::SuccessorPrediction,
+}
+
+#[derive(Debug, Clone)]
+pub struct PredecisionPredictionPreparation {
+    pub source_state: SemanticStateVector,
+    pub candidates: Vec<PredecisionCandidatePrediction>,
+}
+
+/// Builds one stable source state and bounded categorical motor conditions.
+/// This API only prepares consequence facts for the GPU context. It never
+/// ranks, scores, or selects a candidate.
+pub fn prepare_predecision_predictions(
+    predictor: &GroundedSuccessorPredictor,
+    organism_id: alife_core::OrganismId,
+    sequence_id: ExperienceSequenceId,
+    frame: &PerceptionFrame,
+    phenotype: &BrainPhenotype,
+    canonical_biochemistry: &BiochemistryState,
+) -> Result<PredecisionPredictionPreparation, ScaffoldContractError> {
+    canonical_biochemistry.validate_contract()?;
+    let source_state = grounded_semantic_state_from_frame(frame, canonical_biochemistry)?;
+    let limit = usize::from(phenotype.cognitive_architecture().predictor_capacity())
+        .min(MAX_PREDECISION_PREDICTIONS);
+    if limit == 0 || frame.candidates().is_empty() {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    let mut conditions = Vec::with_capacity(limit);
+    for candidate in frame.candidates().iter().take(limit) {
+        let command = candidate.to_command(organism_id, candidate.sensor_confidence)?;
+        let bundle = compatibility_bundle_for_selected_action_v1(
+            organism_id,
+            sequence_id,
+            frame.tick(),
+            &command,
+        )?;
+        conditions.push((
+            candidate.candidate_index,
+            JointMotorCondition::from_bundle(&bundle)?,
+        ));
+    }
+    let joint_conditions = conditions
+        .iter()
+        .map(|(_, condition)| condition.clone())
+        .collect::<Vec<_>>();
+    let predictions = predictor.predict_candidates(&source_state, &joint_conditions)?;
+    let candidates = conditions
+        .into_iter()
+        .zip(predictions)
+        .map(
+            |((candidate_index, motor_condition), prediction)| PredecisionCandidatePrediction {
+                candidate_index,
+                motor_condition,
+                prediction,
+            },
+        )
+        .collect();
+    Ok(PredecisionPredictionPreparation {
+        source_state,
+        candidates,
+    })
+}
+
+/// Completes all predecision context before the memory-context upload. The
+/// admission is canonical world state, while topology and memory context are
+/// retained on the supplied frame.
+pub fn prepare_predecision_context(
+    world: &HeadlessWorld,
+    predictor: &GroundedSuccessorPredictor,
+    organism_id: alife_core::OrganismId,
+    sequence_id: ExperienceSequenceId,
+    frame: &PerceptionFrame,
+    phenotype: &BrainPhenotype,
+    canonical_biochemistry: &BiochemistryState,
+    context: &mut CognitiveContextFrame,
+) -> Result<PredecisionPredictionPreparation, ScaffoldContractError> {
+    context.interoceptive = CognitiveInteroceptiveView::from_biochemistry(canonical_biochemistry)?;
+    reacquire_focal_context(world, frame, phenotype, context)?;
+    let preparation = prepare_predecision_predictions(
+        predictor,
+        organism_id,
+        sequence_id,
+        frame,
+        phenotype,
+        canonical_biochemistry,
+    )?;
+    context.apply_predecision_predictions(
+        preparation.source_state.clone(),
+        cognitive_predictions_for_predecision(&preparation)?,
+    )?;
+    Ok(preparation)
+}
+
+pub fn cognitive_predictions_for_predecision(
+    preparation: &PredecisionPredictionPreparation,
+) -> Result<Vec<CognitiveCandidatePrediction>, ScaffoldContractError> {
+    preparation
+        .candidates
+        .iter()
+        .map(
+            |candidate| -> Result<CognitiveCandidatePrediction, ScaffoldContractError> {
+                Ok(CognitiveCandidatePrediction {
+                    candidate_index: candidate.candidate_index,
+                    action_family: candidate_family_for_motor(
+                        candidate
+                            .motor_condition
+                            .channels
+                            .first()
+                            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?
+                            .family(),
+                    ),
+                    predicted_successor: candidate
+                        .prediction
+                        .predicted_successor
+                        .iter()
+                        .copied()
+                        .map(NormalizedScalar::new)
+                        .collect::<Result<Vec<_>, _>>()?,
+                    uncertainty: NormalizedScalar::new(candidate.prediction.uncertainty)?,
+                })
+            },
+        )
+        .collect::<Result<Vec<_>, _>>()
+}
+
+fn candidate_family_for_motor(family: MotorFamily) -> CandidateActionFamily {
+    match family {
+        MotorFamily::Locomotion => CandidateActionFamily::Approach,
+        MotorFamily::Manipulation => CandidateActionFamily::Contact,
+        MotorFamily::Posture => CandidateActionFamily::Rest,
+        MotorFamily::Orientation | MotorFamily::Vocal | MotorFamily::SpeciesSpecific => {
+            CandidateActionFamily::Other
+        }
+    }
+}
 
 /// Explicit mechanism controls crossing the shared production boundary.
 /// Hosts may choose the mask, but they cannot substitute another cognition
@@ -268,14 +412,6 @@ pub fn run_production_causal_step(
         .cognitive_context()
         .cloned()
         .ok_or(ScaffoldContractError::MissingPhaseData)?;
-    let admission = world
-        .organism_registry()
-        .get(organism_id)
-        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-        .authoritative_admission_at(frame.tick())?;
-    cognitive_context.interoceptive =
-        CognitiveInteroceptiveView::from_biochemistry(&admission.biochemistry)?;
-    reacquire_focal_context(world, &frame, phenotype, &mut cognitive_context)?;
     let sequence_id = ExperienceSequenceId(*next_sequence);
     sequence_id.validate()?;
     let selected_candidate = *frame
@@ -351,22 +487,38 @@ pub fn run_production_causal_step(
         gpu_tick.selection.candidate_index,
     )?;
 
-    let source_state = grounded_semantic_state_from_frame(&frame)?;
+    let source_state = cognitive_context
+        .prediction
+        .source_state
+        .clone()
+        .ok_or(ScaffoldContractError::MissingPhaseData)?;
     let motor_condition = JointMotorCondition::from_bundle(&motor_bundle)?;
     let motor_receipt = world
         .apply_registered_motor_bundle(&motor_bundle, world_entity_id)
         .map_err(map_motor_transaction_error)?;
     let physical = motor_receipt.joint.execution;
     let succeeded = motor_receipt.succeeded;
-    let target_state = grounded_successor_state(
-        world,
-        world_entity_id,
-        &motor_receipt.biology_after,
-        physical,
-        succeeded,
-        motor_receipt.body_event.damage,
+    let outcome_features =
+        grounded_outcome_features(physical, succeeded, motor_receipt.body_event)?;
+    let action_sensitivity_score = prediction_action_sensitivity(
+        predictor,
+        &frame,
+        organism_id,
+        sequence_id,
+        &source_state,
+        &motor_condition,
     )?;
-    let prediction_target = PredictionTargetReceipt::for_successor(
+    let successor_separability_score = prediction_successor_separability(
+        predictor,
+        &frame,
+        organism_id,
+        sequence_id,
+        &source_state,
+        &motor_condition,
+    )?;
+    let target_state =
+        grounded_successor_state(world, world_entity_id, &motor_receipt.biology_after)?;
+    let prediction_target = PredictionTargetReceipt::for_successor_with_outcome(
         organism_id,
         sequence_id,
         selected_action.action_id,
@@ -375,7 +527,9 @@ pub fn run_production_causal_step(
         source_state,
         motor_condition,
         target_state,
-    )?;
+        outcome_features,
+    )?
+    .with_information_diagnostics(action_sensitivity_score, successor_separability_score)?;
     let prediction_update = predictor.observe(&prediction_target)?;
     let grounded_prediction_error = apply_prediction_evidence(
         &mut cognitive_context,
@@ -461,8 +615,8 @@ fn reacquire_focal_context(
     context: &mut CognitiveContextFrame,
 ) -> Result<(), ScaffoldContractError> {
     let class = BrainCapacityClass::supported_for_id(phenotype.brain_class_id())?;
-    let class_focal_capacity = usize::from(class.execution().max_object_slots())
-        .min(MAX_FOCAL_TARGETS);
+    let class_focal_capacity =
+        usize::from(class.execution().max_object_slots()).min(MAX_FOCAL_TARGETS);
     let phenotype_focal_capacity =
         usize::from(phenotype.cognitive_architecture().attention_capacity());
     let current_focal_capacity = usize::from(context.budget.focal_capacity)
@@ -486,7 +640,8 @@ fn reacquire_focal_context(
             _ => None,
         })
         .collect::<Vec<_>>();
-    let observations = world.reacquire_grounded_focal(frame.organism_id(), frame.tick(), &tracked_targets)?;
+    let observations =
+        world.reacquire_grounded_focal(frame.organism_id(), frame.tick(), &tracked_targets)?;
     let current_feature_width = match context.budget.focal_feature_width {
         0 => MAX_FOCAL_FEATURE_WIDTH,
         width => width,
@@ -519,7 +674,10 @@ fn reacquire_focal_context(
     let focal_work_units = (details.len() as u64).saturating_mul(u64::from(feature_width));
     let work_used = peripheral_work_units.saturating_add(focal_work_units);
     context.focal.identities = selected_identities;
-    context.focal.salience.truncate(context.focal.identities.len());
+    context
+        .focal
+        .salience
+        .truncate(context.focal.identities.len());
     context.focal.grounded_details = details;
     context.budget.focal_capacity = focal_capacity as u8;
     context.budget.focal_feature_width = if context.focal.grounded_details.is_empty() {
@@ -604,62 +762,144 @@ fn unit_successor_scalar(value: f32) -> Result<f32, ScaffoldContractError> {
 
 fn grounded_semantic_state_from_frame(
     frame: &PerceptionFrame,
+    canonical_biochemistry: &BiochemistryState,
 ) -> Result<SemanticStateVector, ScaffoldContractError> {
     let body = frame.body();
-    let drives = frame.homeostasis().drives.to_array();
-    SemanticStateVector::new(vec![
-        bounded_successor_scalar(body.pose.translation.x)?,
-        bounded_successor_scalar(body.pose.translation.y)?,
-        bounded_successor_scalar(body.pose.translation.z)?,
-        bounded_successor_scalar(body.velocity.linear.x)?,
-        bounded_successor_scalar(body.velocity.linear.y)?,
-        bounded_successor_scalar(body.velocity.linear.z)?,
-        unit_successor_scalar(drives[0])?,
-        unit_successor_scalar(drives[1])?,
-        unit_successor_scalar(drives[2])?,
-        unit_successor_scalar(drives[3])?,
-        unit_successor_scalar(drives[4])?,
-        unit_successor_scalar(drives[5])?,
-        unit_successor_scalar(drives[6])?,
-    ])
+    grounded_semantic_state(
+        body.pose.translation,
+        body.velocity.linear,
+        &canonical_biochemistry.body,
+        &canonical_biochemistry.homeostasis,
+    )
 }
 
 fn grounded_successor_state(
     world: &HeadlessWorld,
     world_entity_id: WorldEntityId,
     biology_after: &BiochemistryState,
-    physical: alife_core::PhysicalActionOutcome,
-    succeeded: bool,
-    pain_delta: f32,
 ) -> Result<SemanticStateVector, ScaffoldContractError> {
     let object = world
         .entity(world_entity_id)
         .ok_or(ScaffoldContractError::InvalidId)?;
-    let displacement = physical.displacement;
-    let body = biology_after.body;
-    let contact = match physical.contact {
+    grounded_semantic_state(
+        object.position,
+        object.grounded_physical.velocity,
+        &biology_after.body,
+        &biology_after.homeostasis,
+    )
+}
+
+fn grounded_semantic_state(
+    position: Vec3f,
+    velocity: Vec3f,
+    body: &BodyState,
+    homeostasis: &HomeostaticSnapshot,
+) -> Result<SemanticStateVector, ScaffoldContractError> {
+    let drives = homeostasis.drives.to_array();
+    // This order is the append-only SemanticStateMeaning V2 prefix:
+    // body position, body velocity, four drive lanes, then canonical body
+    // energy/health/temperature/injury. Both pre and post call this builder.
+    SemanticStateVector::new(vec![
+        bounded_successor_scalar(position.x)?,
+        bounded_successor_scalar(position.y)?,
+        bounded_successor_scalar(position.z)?,
+        bounded_successor_scalar(velocity.x)?,
+        bounded_successor_scalar(velocity.y)?,
+        bounded_successor_scalar(velocity.z)?,
+        unit_successor_scalar(drives[0])?,
+        unit_successor_scalar(drives[1])?,
+        unit_successor_scalar(drives[2])?,
+        unit_successor_scalar(drives[3])?,
+        unit_successor_scalar(body.energy)?,
+        unit_successor_scalar(body.health)?,
+        unit_successor_scalar(body.temperature_stress)?,
+        unit_successor_scalar(body.injury)?,
+    ])
+}
+
+fn grounded_contact_intensity(contact: alife_core::PhysicalContactKind) -> f32 {
+    match contact {
         alife_core::PhysicalContactKind::None => 0.0,
         alife_core::PhysicalContactKind::Touch => 0.2,
         alife_core::PhysicalContactKind::Collision => 0.4,
         alife_core::PhysicalContactKind::Blocked => 0.6,
         alife_core::PhysicalContactKind::Consumed => 0.8,
         alife_core::PhysicalContactKind::Moved => 1.0,
-    };
-    SemanticStateVector::new(vec![
-        bounded_successor_scalar(object.position.x)?,
-        bounded_successor_scalar(object.position.y)?,
-        bounded_successor_scalar(object.position.z)?,
-        bounded_successor_scalar(displacement.x)?,
-        bounded_successor_scalar(displacement.y)?,
-        bounded_successor_scalar(displacement.z)?,
-        unit_successor_scalar(body.energy)?,
-        unit_successor_scalar(body.health)?,
-        unit_successor_scalar(body.injury)?,
-        unit_successor_scalar(body.temperature_stress)?,
-        contact,
-        if succeeded { 1.0 } else { 0.0 },
-        unit_successor_scalar(pain_delta)?,
-    ])
+    }
+}
+
+fn grounded_outcome_features(
+    physical: alife_core::PhysicalActionOutcome,
+    succeeded: bool,
+    body_event: alife_core::BodyEventDelta,
+) -> Result<GroundedOutcomeFeatures, ScaffoldContractError> {
+    GroundedOutcomeFeatures::from_parts(
+        physical.displacement,
+        grounded_contact_intensity(physical.contact),
+        succeeded,
+        body_event.damage,
+        body_event.energy,
+        0.0,
+    )
+}
+
+fn prediction_action_sensitivity(
+    predictor: &GroundedSuccessorPredictor,
+    frame: &PerceptionFrame,
+    organism_id: alife_core::OrganismId,
+    sequence_id: ExperienceSequenceId,
+    source_state: &SemanticStateVector,
+    selected: &JointMotorCondition,
+) -> Result<f32, ScaffoldContractError> {
+    for candidate in frame.candidates().iter().take(MAX_PREDECISION_PREDICTIONS) {
+        let command = candidate.to_command(organism_id, candidate.sensor_confidence)?;
+        let bundle = compatibility_bundle_for_selected_action_v1(
+            organism_id,
+            sequence_id,
+            frame.tick(),
+            &command,
+        )?;
+        let other = JointMotorCondition::from_bundle(&bundle)?;
+        if other.canonical_digest()? == selected.canonical_digest()? {
+            continue;
+        }
+        if let Ok(evidence) = predictor.action_sensitivity(source_state, selected, &other) {
+            return Ok(evidence.predicted_successor_distance.clamp(0.0, 1.0));
+        }
+    }
+    Ok(0.0)
+}
+
+fn prediction_successor_separability(
+    predictor: &GroundedSuccessorPredictor,
+    frame: &PerceptionFrame,
+    organism_id: alife_core::OrganismId,
+    sequence_id: ExperienceSequenceId,
+    source_state: &SemanticStateVector,
+    selected: &JointMotorCondition,
+) -> Result<f32, ScaffoldContractError> {
+    let first = predictor.predict(source_state, selected)?;
+    let first_state = SemanticStateVector::new(first.predicted_successor)?;
+    for candidate in frame.candidates().iter().take(MAX_PREDECISION_PREDICTIONS) {
+        let command = candidate.to_command(organism_id, candidate.sensor_confidence)?;
+        let bundle = compatibility_bundle_for_selected_action_v1(
+            organism_id,
+            sequence_id,
+            frame.tick(),
+            &command,
+        )?;
+        let other = JointMotorCondition::from_bundle(&bundle)?;
+        if other.canonical_digest()? == selected.canonical_digest()? {
+            continue;
+        }
+        let second = predictor.predict(source_state, &other)?;
+        let second_state = SemanticStateVector::new(second.predicted_successor)?;
+        let evidence = predictor.successor_separability(&first_state, &second_state)?;
+        if evidence.materially_different {
+            return Ok(evidence.successor_distance.clamp(0.0, 1.0));
+        }
+    }
+    Ok(0.0)
 }
 
 fn channel_command_for_action(

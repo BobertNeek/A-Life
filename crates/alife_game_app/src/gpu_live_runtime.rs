@@ -43,6 +43,7 @@ use alife_gpu_backend::{
     GPU_FAST_PLASTICITY_COMMIT_BYTES, GPU_MOTOR_CHANNEL_SLOT_COUNT,
 };
 use alife_runtime::{
+    prepare_predecision_context,
     run_production_causal_transaction, DurableGpuCheckpointRef, GpuAuthoritativeSession,
     GpuSessionAuthority, GpuSessionConsumerKind, GpuSessionFailStopCause,
     ProductionCausalMechanismMask, ProductionCausalStageHooks, ProductionCausalStep,
@@ -5529,9 +5530,21 @@ impl GpuLiveBrainRuntime {
                     OrganismId(raw),
                     tick_before,
                     self.sensor_profile,
-                    resident.homeostasis,
+                    self.world
+                        .organism_registry()
+                        .get(OrganismId(raw))
+                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                        .authoritative_admission_at(tick_before)?
+                        .biochemistry
+                        .homeostasis,
                     &perception_index,
                 )?;
+                let admission = self
+                    .world
+                    .organism_registry()
+                    .get(OrganismId(raw))
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                    .authoritative_admission_at(tick_before)?;
                 let memory = self
                     .memories
                     .get(&raw)
@@ -5589,6 +5602,25 @@ impl GpuLiveBrainRuntime {
                 )?;
                 let cognitive_context =
                     cognitive_context_with_attention(cognitive_context, attention)?;
+                let preview_recall = routed_recall
+                    .clone()
+                    .with_cognitive_context(cognitive_context)?;
+                let (preview_frame, preview_finalized) =
+                    preview_recall.finalize(routed_draft.clone())?;
+                let mut cognitive_context = preview_finalized
+                    .cognitive_context()
+                    .cloned()
+                    .ok_or(ScaffoldContractError::MissingPhaseData)?;
+                prepare_predecision_context(
+                    &self.world,
+                    &resident.predictor,
+                    OrganismId(raw),
+                    sequence_id,
+                    &preview_frame,
+                    &resident.phenotype,
+                    &admission.biochemistry,
+                    &mut cognitive_context,
+                )?;
                 let prepared_recall = routed_recall.with_cognitive_context(cognitive_context)?;
                 let (frame, memory_recall) = prepared_recall.finalize(routed_draft)?;
                 memory_recall.validate_for_frame(&frame)?;

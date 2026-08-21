@@ -17,6 +17,7 @@ pub const MAX_CONTEXT_MEMORY_EXPECTANCIES: usize = 32;
 pub const MAX_ACTIVE_CONCEPTS: usize = 32;
 pub const MAX_ACTIVE_GAPS: usize = 32;
 pub const MAX_PREDICTION_ERROR_FEATURES: usize = MAX_SEMANTIC_STATE_VALUES;
+pub const MAX_CANDIDATE_PREDICTIONS: usize = 8;
 pub const MAX_TOPOLOGY_TARGET_CONTEXTS: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -305,6 +306,30 @@ impl Validate for CognitiveGapView {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CognitiveCandidatePrediction {
+    pub candidate_index: u16,
+    pub action_family: CandidateActionFamily,
+    pub predicted_successor: Vec<NormalizedScalar>,
+    pub uncertainty: NormalizedScalar,
+}
+
+impl Validate for CognitiveCandidatePrediction {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        CandidateActionFamily::try_from_raw(self.action_family.raw())?;
+        if self.predicted_successor.len() < 2
+            || self.predicted_successor.len() > MAX_SEMANTIC_STATE_VALUES
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        for value in &self.predicted_successor {
+            NormalizedScalar::new(value.raw())?;
+        }
+        NormalizedScalar::new(self.uncertainty.raw())?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CognitivePredictionView {
     pub source_digest: [u64; 4],
     pub semantic_state_abi: u16,
@@ -312,6 +337,8 @@ pub struct CognitivePredictionView {
     pub source_state: Option<SemanticStateVector>,
     pub prediction_error: Vec<NormalizedScalar>,
     pub action_sensitivity: NormalizedScalar,
+    #[serde(default)]
+    pub candidate_predictions: Vec<CognitiveCandidatePrediction>,
 }
 
 impl Default for CognitivePredictionView {
@@ -322,6 +349,7 @@ impl Default for CognitivePredictionView {
             source_state: None,
             prediction_error: Vec::new(),
             action_sensitivity: NormalizedScalar(0.0),
+            candidate_predictions: Vec::new(),
         }
     }
 }
@@ -329,6 +357,14 @@ impl Default for CognitivePredictionView {
 impl Validate for CognitivePredictionView {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         if self.prediction_error.len() > MAX_PREDICTION_ERROR_FEATURES {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        if self.candidate_predictions.len() > MAX_CANDIDATE_PREDICTIONS
+            || self
+                .candidate_predictions
+                .windows(2)
+                .any(|pair| pair[0].candidate_index >= pair[1].candidate_index)
+        {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
         match (&self.source_state, self.semantic_state_abi) {
@@ -344,6 +380,9 @@ impl Validate for CognitivePredictionView {
         NormalizedScalar::new(self.action_sensitivity.raw())?;
         for value in &self.prediction_error {
             NormalizedScalar::new(value.raw())?;
+        }
+        for prediction in &self.candidate_predictions {
+            prediction.validate_contract()?;
         }
         Ok(())
     }
@@ -449,6 +488,23 @@ impl CognitiveContextFrame {
             active_gaps: contribution.active_gaps.clone(),
             gap_voltage: contribution.gap_voltage,
         };
+        self.validate_contract()
+    }
+
+    pub fn apply_predecision_predictions(
+        &mut self,
+        source_state: SemanticStateVector,
+        candidate_predictions: Vec<CognitiveCandidatePrediction>,
+    ) -> Result<(), ScaffoldContractError> {
+        source_state.validate_contract()?;
+        if candidate_predictions.len() > MAX_CANDIDATE_PREDICTIONS {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let source_digest = source_state.canonical_digest()?;
+        self.prediction.source_digest = source_digest;
+        self.prediction.semantic_state_abi = source_state.abi_version;
+        self.prediction.source_state = Some(source_state);
+        self.prediction.candidate_predictions = candidate_predictions;
         self.validate_contract()
     }
 
@@ -588,6 +644,16 @@ impl CognitiveContextFrame {
             None => builder.write_none(),
         }
         builder.write_f32(self.prediction.action_sensitivity.raw())?;
+        builder.write_sequence_len(self.prediction.candidate_predictions.len());
+        for prediction in &self.prediction.candidate_predictions {
+            builder.write_u16(prediction.candidate_index);
+            builder.write_u8(prediction.action_family.raw());
+            builder.write_sequence_len(prediction.predicted_successor.len());
+            for value in &prediction.predicted_successor {
+                builder.write_f32(value.raw())?;
+            }
+            builder.write_f32(prediction.uncertainty.raw())?;
+        }
         builder.write_u16(self.budget.peripheral_capacity);
         builder.write_u8(self.budget.focal_capacity);
         builder.write_u16(self.budget.focal_feature_width);

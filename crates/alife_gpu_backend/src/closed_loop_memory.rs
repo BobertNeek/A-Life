@@ -9,7 +9,7 @@ use bytemuck::{Pod, Zeroable};
 use crate::{GpuBrainSlot, GpuClosedLoopError};
 
 pub const GPU_MEMORY_CONTEXT_HEADER_WORDS: usize = 16;
-pub const GPU_CANDIDATE_MEMORY_RECORD_WORDS: usize = 20;
+pub const GPU_CANDIDATE_MEMORY_RECORD_WORDS: usize = 32;
 pub const GPU_MEMORY_CHANNEL_PLAN_WORDS: usize = 8;
 pub const GPU_TOPOLOGY_CONTEXT_ABI_VERSION: u32 = 1;
 
@@ -149,9 +149,13 @@ impl GpuMemoryContextUpload {
                         &row.gap_signal,
                         &row.causal_signal,
                         &row.uncertainty_signal,
+                        &row.prediction_uncertainty,
+                        &row.prediction_residual,
                     ])
                     .chain([&row.target_confidence, &row.family_confidence])
                     .any(|value| !value.is_finite())
+                || row.prediction_latent.iter().any(|value| !value.is_finite())
+                || row.reserved != [0; 2]
             {
                 return Err(GpuClosedLoopError::NonFinitePayload);
             }
@@ -261,6 +265,25 @@ impl GpuMemoryContextUpload {
                     gap_signal: topology.1,
                     causal_signal: topology.2,
                     uncertainty_signal: topology.3,
+                    prediction_latent: prediction_context_for_candidate(
+                        recall.cognitive_context().ok_or(GpuClosedLoopError::MalformedUpload)?,
+                        u16::try_from(index)
+                            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
+                    )
+                    .0,
+                    prediction_uncertainty: prediction_context_for_candidate(
+                        recall.cognitive_context().ok_or(GpuClosedLoopError::MalformedUpload)?,
+                        u16::try_from(index)
+                            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
+                    )
+                    .1,
+                    prediction_residual: prediction_context_for_candidate(
+                        recall.cognitive_context().ok_or(GpuClosedLoopError::MalformedUpload)?,
+                        u16::try_from(index)
+                            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
+                    )
+                    .2,
+                    reserved: [0; 2],
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -339,6 +362,33 @@ fn topology_context_for_candidate(
         })
 }
 
+fn prediction_context_for_candidate(
+    cognitive_context: &CognitiveContextFrame,
+    candidate_index: u16,
+) -> ([f32; 8], f32, f32) {
+    let Some(prediction) = cognitive_context
+        .prediction
+        .candidate_predictions
+        .iter()
+        .find(|prediction| prediction.candidate_index == candidate_index)
+    else {
+        return ([0.0; 8], 1.0, 0.0);
+    };
+    let mut latent = [0.0; 8];
+    for (lane, value) in prediction.predicted_successor.iter().take(8).enumerate() {
+        latent[lane] = (value.raw() * 2.0 - 1.0).clamp(-1.0, 1.0);
+    }
+    let residual = prediction
+        .predicted_successor
+        .iter()
+        .skip(8)
+        .copied()
+        .map(|value| value.raw())
+        .sum::<f32>()
+        / prediction.predicted_successor.len().max(1) as f32;
+    (latent, prediction.uncertainty.raw(), residual.clamp(0.0, 1.0))
+}
+
 /// One finalized candidate-local retrieval row. It contains no raw entity ID.
 #[repr(C, align(16))]
 #[derive(Debug, Clone, Copy, PartialEq, Pod, Zeroable)]
@@ -353,6 +403,10 @@ pub struct GpuCandidateMemoryRecord {
     pub gap_signal: f32,
     pub causal_signal: f32,
     pub uncertainty_signal: f32,
+    pub prediction_latent: [f32; 8],
+    pub prediction_uncertainty: f32,
+    pub prediction_residual: f32,
+    pub reserved: [u32; 2],
 }
 
 impl GpuCandidateMemoryRecord {
