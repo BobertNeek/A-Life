@@ -8,7 +8,10 @@ use std::{
 use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkCounters};
 use alife_core::predictive::GroundedSuccessorPredictor;
-use alife_core::sleep::{SleepReplayEvidence, SleepWorkReceipt};
+use alife_core::sleep::{
+    memory_sleep_digest, SleepReplayEvidence, SleepReplayEvidenceSnapshot,
+    SleepTransactionIdentity, SleepTransactionState, SleepWorkReceipt,
+};
 use alife_core::{
     finalized_memory_attention_evidence, select_focal_targets, ActionKind, ActionTarget,
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
@@ -34,13 +37,14 @@ use alife_core::{
     WorldEntityId, MAX_ACTIVE_CONCEPTS, MAX_ACTIVE_GAPS, MAX_CONTEXT_MEMORY_EXPECTANCIES,
 };
 use alife_gpu_backend::{
-    GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
-    GpuClosedLoopMemoryTickInput, GpuClosedLoopTick, GpuCuratedResidencyCohort,
-    GpuCuratedResidencyEntry, GpuCuratedResidencyOutcome, GpuCuratedResidencyReceipt,
-    GpuCuratedResidencyTargetIdentity, GpuLearningReceipt, GpuMemoryContextUpload,
-    GpuV11WorkReceipt, PendingEligibilityDiscardReceipt, PendingEligibilityIdentity,
-    PendingEligibilityReceipt, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
-    GPU_FAST_PLASTICITY_COMMIT_BYTES, GPU_MOTOR_CHANNEL_SLOT_COUNT,
+    GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuClosedLoopBackend,
+    GpuClosedLoopMemoryBatchInput, GpuClosedLoopMemoryTickInput, GpuClosedLoopTick,
+    GpuCuratedResidencyCohort, GpuCuratedResidencyEntry, GpuCuratedResidencyOutcome,
+    GpuCuratedResidencyReceipt, GpuCuratedResidencyTargetIdentity, GpuLearningReceipt,
+    GpuMemoryContextUpload, GpuSleepTransactionStage, GpuV11WorkReceipt,
+    PendingEligibilityDiscardReceipt, PendingEligibilityIdentity, PendingEligibilityReceipt,
+    GPU_CLOSED_LOOP_TICK_READBACK_BYTES, GPU_FAST_PLASTICITY_COMMIT_BYTES,
+    GPU_MOTOR_CHANNEL_SLOT_COUNT,
 };
 use alife_runtime::{
     prepare_predecision_context,
@@ -519,10 +523,16 @@ impl GpuLiveCheckpointDurability {
 struct AuthoritativeGpuSleepDriver<'a> {
     backend: &'a mut GpuClosedLoopBackend,
     handle: GpuBrainHandle,
+    foundation: Option<FoundationGeneticIdentity>,
     sleep_config: Option<SleepConsolidationConfig>,
     context: Option<AuthoritativeSleepContext<'a>>,
     replay_evidence_before_commit: Option<SleepReplayEvidence>,
     last_sleep_work: Option<&'a mut Option<SleepWorkReceipt>>,
+    transaction_state: SleepTransactionState,
+    transaction_identity: Option<SleepTransactionIdentity>,
+    transaction_snapshot: Option<SleepReplayEvidenceSnapshot>,
+    gpu_stage: Option<GpuSleepTransactionStage>,
+    gpu_rollback: Option<GpuBrainCheckpointSnapshot>,
 }
 
 struct AuthoritativeSleepContext<'a> {
@@ -608,48 +618,187 @@ fn replay_patches_for_checkpoint(
     Ok(patches)
 }
 
-fn run_authoritative_sleep_transaction(
+fn sleep_patch_digests(
+    evidence: &SleepReplayEvidence,
+    organism_id: OrganismId,
+    restored_replay_patches: &[ExperiencePatch],
+    sealed_patches: &[ExperiencePatch],
+    last_sealed_patches: &[ExperiencePatch],
+) -> Result<Vec<[u64; 4]>, ScaffoldContractError> {
+    evidence
+        .batch
+        .events
+        .iter()
+        .map(|event| {
+            restored_replay_patches
+                .iter()
+                .chain(last_sealed_patches.iter())
+                .chain(sealed_patches.iter())
+                .find(|patch| {
+                    patch.header().organism_id == organism_id
+                        && patch.header().sequence_id == event.sequence_id
+                })
+                .ok_or(ScaffoldContractError::MissingPhaseData)
+                .and_then(ExperiencePatch::causal_digest)
+        })
+        .collect()
+}
+
+fn sleep_digest_words(domain: &'static [u8], words: impl IntoIterator<Item = u64>) -> [u64; 4] {
+    let mut digest = CanonicalDigestBuilder::new(domain);
+    for word in words {
+        digest.write_u64(word);
+    }
+    digest.finish256()
+}
+
+fn sleep_branch_digest(checkpoint: &alife_gpu_backend::GpuV11Checkpoint) -> [u64; 4] {
+    let mut words = Vec::new();
+    for branch in checkpoint.dendritic_branches.branches() {
+        words.extend([
+            branch.branch_id,
+            u64::from(branch.target),
+            u64::from(branch.structural_utility),
+            u64::from(branch.observations),
+            branch.last_tick,
+            branch.source_identity,
+        ]);
+        for input in &branch.inputs {
+            words.extend([u64::from(input.source), u64::from(input.weight.to_bits())]);
+        }
+    }
+    sleep_digest_words(b"ALIFE-SLEEP-BRANCH-IDENTITY-V1", words)
+}
+
+fn build_sleep_transaction_identity(
     backend: &mut GpuClosedLoopBackend,
     handle: GpuBrainHandle,
-    organism_id: OrganismId,
-    homeostasis: &HomeostaticSnapshot,
+    state: SleepState,
     tick: Tick,
-    sleep_config: SleepConsolidationConfig,
-    context: &mut AuthoritativeSleepContext<'_>,
-) -> Result<SleepWorkReceipt, ScaffoldContractError> {
-    let evidence = build_authoritative_sleep_evidence(
-        backend,
-        handle,
-        organism_id,
+    foundation: FoundationGeneticIdentity,
+    checkpoint: &GpuBrainCheckpointSnapshot,
+    context: &AuthoritativeSleepContext<'_>,
+    evidence: &SleepReplayEvidence,
+) -> Result<(SleepTransactionIdentity, SleepReplayEvidenceSnapshot), ScaffoldContractError> {
+    let v11_checkpoint = backend.checkpoint_v11(handle)?;
+    let patch_digests = sleep_patch_digests(
+        evidence,
+        handle.organism_id(),
         context.restored_replay_patches,
         context.sealed_patches,
         context.last_sealed_patches,
     )?;
-    run_authoritative_sleep_transaction_with_evidence(
-        homeostasis,
+    let mut patch_digest_builder = CanonicalDigestBuilder::new(b"ALIFE-SLEEP-PATCH-SET-V1");
+    for patch in &patch_digests {
+        for word in *patch {
+            patch_digest_builder.write_u64(word);
+        }
+    }
+    let identity = SleepTransactionIdentity::new(
+        handle.organism_id(),
+        state.active_cycle_id,
         tick,
-        sleep_config,
-        context,
-        &evidence,
-    )
+        handle.phenotype_hash(),
+        foundation,
+        checkpoint.canonical_digest(),
+        patch_digest_builder.finish256(),
+        evidence.canonical_digest,
+        memory_sleep_digest(context.memory.bank()),
+        context.topology.diagnostics().canonical_digest,
+        sleep_digest_words(
+            b"ALIFE-SLEEP-STRUCTURAL-IDENTITY-V1",
+            [v11_checkpoint.work.structural.deterministic_digest],
+        ),
+        sleep_branch_digest(&v11_checkpoint),
+    )?;
+    let snapshot = SleepReplayEvidenceSnapshot::new(identity, evidence.clone(), patch_digests)?;
+    Ok((identity, snapshot))
 }
 
-fn run_authoritative_sleep_transaction_with_evidence(
-    homeostasis: &HomeostaticSnapshot,
-    tick: Tick,
-    sleep_config: SleepConsolidationConfig,
-    context: &mut AuthoritativeSleepContext<'_>,
-    evidence: &SleepReplayEvidence,
-) -> Result<SleepWorkReceipt, ScaffoldContractError> {
-    let consolidator = SleepConsolidator::new(sleep_config)?;
-    context.memory.run_bounded_sleep_transaction(
-        &consolidator,
-        homeostasis,
-        tick,
+impl<'a> AuthoritativeGpuSleepDriver<'a> {
+    fn prepare_transaction_before_gpu_commit(
+        &mut self,
+        state: SleepState,
+        request: &alife_core::GpuConsolidationRequest,
+        replay: &alife_core::BoundedReplayBatch,
+    ) -> Result<(), ScaffoldContractError> {
+        let foundation = self
+            .foundation
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        let context = self
+            .context
+            .as_ref()
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        let evidence = self
+            .replay_evidence_before_commit
+            .as_ref()
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        let rollback = self
+            .backend
+            .snapshot_brain(self.handle, state.phase_started_tick)?;
+        let (identity, snapshot) = build_sleep_transaction_identity(
+            self.backend,
+            self.handle,
+            state,
+            state.phase_started_tick,
+            foundation,
+            &rollback,
+            context,
         evidence,
-        context.predictor,
-        context.topology,
-    )
+        )?;
+        let gpu_stage = self.backend.prepare_sleep_transaction(
+            self.handle,
+            ConsolidationIntent {
+                cycle_id: state.active_cycle_id,
+            },
+            replay,
+            identity,
+            snapshot.snapshot_digest,
+        )?;
+        if gpu_stage.request != *request {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        self.transaction_identity = Some(identity);
+        self.transaction_snapshot = Some(snapshot);
+        self.gpu_stage = Some(gpu_stage.clone());
+        self.gpu_rollback = Some(rollback);
+        self.transaction_state = SleepTransactionState::Pending {
+            identity,
+            snapshot_digest: self
+                .transaction_snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.snapshot_digest)
+                .ok_or(ScaffoldContractError::MissingPhaseData)?,
+            staged_digest: gpu_stage.staged_digest,
+        };
+        self.transaction_state.validate_contract()?;
+        Ok(())
+    }
+
+    fn rollback_gpu_transaction(&mut self, reason_code: u16) -> Result<(), ScaffoldContractError> {
+        let identity = self
+            .transaction_identity
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        let snapshot_digest = self
+            .transaction_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.snapshot_digest)
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        let checkpoint = self
+            .gpu_rollback
+            .take()
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        self.backend
+            .restore_brain_snapshot_in_place(self.handle, checkpoint)?;
+        let next = SleepTransactionState::Interrupted {
+            identity,
+            snapshot_digest,
+            reason_code,
+        };
+        next.validate_contract()?;
+        self.transaction_state = next;
+        Ok(())
+    }
 }
 
 impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
@@ -731,9 +880,19 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                 }
             }
             (ConsolidationState::Completed { request, staged }, None) => {
+                let replay = self.backend.build_sleep_replay_batch(self.handle)?;
+                self.prepare_transaction_before_gpu_commit(state, &request, &replay)?;
                 let receipt =
-                    self.backend
-                        .commit_sleep_consolidation(self.handle, &request, &staged)?;
+                    match self
+                        .backend
+                        .commit_sleep_consolidation(self.handle, &request, &staged)
+                    {
+                        Ok(receipt) => receipt,
+                        Err(error) => {
+                            self.rollback_gpu_transaction(1)?;
+                            return Err(error);
+                        }
+                    };
                 ConsolidationDriverEvent::Committed {
                     cycle_id: request.cycle_id,
                     output_generation: receipt.output_generation,
@@ -749,7 +908,7 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
     fn run_bounded_sleep_transaction(
         &mut self,
         organism_id: OrganismId,
-        _state: SleepState,
+        state: SleepState,
         homeostasis: &HomeostaticSnapshot,
         tick: Tick,
         due_work: SleepWorkDue,
@@ -757,39 +916,126 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
         if organism_id != self.handle.organism_id() {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
-        let replay_evidence_before_commit = self.replay_evidence_before_commit.take();
+        let context = self
+            .context
+            .as_ref()
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        let evidence = match self.replay_evidence_before_commit.take() {
+            Some(evidence) => evidence,
+            None => build_authoritative_sleep_evidence(
+                self.backend,
+                self.handle,
+                organism_id,
+                context.restored_replay_patches,
+                context.sealed_patches,
+                context.last_sealed_patches,
+            )?,
+        };
+        let (identity, snapshot) =
+            match (self.transaction_identity, self.transaction_snapshot.clone()) {
+                (Some(identity), Some(snapshot)) => (identity, snapshot),
+                _ => {
+                    let foundation = self
+                        .foundation
+                        .ok_or(ScaffoldContractError::MissingPhaseData)?;
+                    let rollback = self.backend.snapshot_brain(self.handle, tick)?;
+                    let (identity, snapshot) = build_sleep_transaction_identity(
+                        self.backend,
+                        self.handle,
+                        state,
+                tick,
+                        foundation,
+                        &rollback,
+                        context,
+                        &evidence,
+                    )?;
+                    self.transaction_identity = Some(identity);
+                    self.transaction_snapshot = Some(snapshot.clone());
+                    self.gpu_rollback = Some(rollback);
+                    (identity, snapshot)
+                }
+            };
+        if identity.replay_digest != evidence.canonical_digest {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        let consolidator = SleepConsolidator::new(
+                self.sleep_config
+                    .ok_or(ScaffoldContractError::MissingPhaseData)?,
+        )?;
+        let cpu_stage = consolidator.stage_bounded_transaction(
+            homeostasis,
+            tick,
+            &snapshot,
+            context.memory.bank(),
+            context.predictor,
+            context.topology,
+        )?;
+        let staged_digest = sleep_digest_words(
+            b"ALIFE-SLEEP-COMBINED-STAGE-V1",
+            cpu_stage.staged_digest.into_iter().chain(
+                self.gpu_stage
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|stage| stage.staged_digest.into_iter()),
+            ),
+        );
+        self.transaction_state = SleepTransactionState::Pending {
+            identity,
+            snapshot_digest: snapshot.snapshot_digest,
+            staged_digest,
+        };
+        let mut candidate_memory = context.memory.clone();
+        let mut candidate_predictor = context.predictor.clone();
+        let mut candidate_topology = context.topology.clone();
+        drop(context);
+        let receipt = match candidate_memory.commit_staged_sleep_transaction(
+            cpu_stage,
+            &snapshot,
+            &mut candidate_predictor,
+            &mut candidate_topology,
+        ) {
+            Ok(receipt) => receipt,
+            Err(error) => {
+                self.rollback_gpu_transaction(2)?;
+                return Err(error);
+            }
+        };
+        if due_work.contains(SleepWorkDue::STRUCTURAL_GROWTH_PRUNING) {
+            if let Err(error) = self.backend.apply_v11_sleep_structural_phase(self.handle) {
+                self.rollback_gpu_transaction(3)?;
+                return Err(error);
+            }
+        }
         let context = self
             .context
             .as_mut()
             .ok_or(ScaffoldContractError::MissingPhaseData)?;
-        let receipt = match replay_evidence_before_commit {
-            Some(evidence) => run_authoritative_sleep_transaction_with_evidence(
-                homeostasis,
-                tick,
-                self.sleep_config
-                    .ok_or(ScaffoldContractError::MissingPhaseData)?,
-                context,
-                &evidence,
-            ),
-            None => run_authoritative_sleep_transaction(
-                self.backend,
-                self.handle,
-                organism_id,
-                homeostasis,
-                tick,
-                self.sleep_config
-                    .ok_or(ScaffoldContractError::MissingPhaseData)?,
-                context,
-            ),
-        }?;
-        if due_work.contains(SleepWorkDue::STRUCTURAL_GROWTH_PRUNING) {
-            self.backend
-                .apply_v11_sleep_structural_phase(self.handle)?;
-        }
+        *context.memory = candidate_memory;
+        *context.predictor = candidate_predictor;
+        *context.topology = candidate_topology;
+        let commit_digest = sleep_digest_words(
+            b"ALIFE-SLEEP-COMMIT-V1",
+            identity
+                .transaction_digest
+                .into_iter()
+                .chain(receipt.canonical_digest)
+                .chain(staged_digest),
+        );
+        self.transaction_state = SleepTransactionState::Committed {
+            identity,
+            commit_digest,
+        };
+        self.transaction_state.validate_contract()?;
+        self.gpu_rollback = None;
         if let Some(last_sleep_work) = self.last_sleep_work.as_mut() {
             **last_sleep_work = Some(receipt.clone());
         }
         Ok(Some(receipt))
+    }
+
+    fn sleep_transaction_state(&self) -> Option<SleepTransactionState> {
+        (!matches!(self.transaction_state, SleepTransactionState::Idle))
+            .then_some(self.transaction_state)
     }
 }
 
@@ -856,6 +1102,10 @@ where
             tick,
             due_work,
         )
+    }
+
+    fn sleep_transaction_state(&self) -> Option<SleepTransactionState> {
+        self.authoritative.sleep_transaction_state()
     }
 }
 
@@ -5171,10 +5421,16 @@ impl GpuLiveBrainRuntime {
             let mut driver = AuthoritativeGpuSleepDriver {
                 backend,
                 handle,
+                foundation: None,
                 sleep_config: None,
                 context: None,
                 replay_evidence_before_commit: None,
                 last_sleep_work: None,
+                transaction_state: SleepTransactionState::Idle,
+                transaction_identity: None,
+                transaction_snapshot: None,
+                gpu_stage: None,
+                gpu_rollback: None,
             };
             driver.progress(organism_id, state, intent)
         })
@@ -5412,6 +5668,7 @@ impl GpuLiveBrainRuntime {
                     authoritative: AuthoritativeGpuSleepDriver {
                         backend: &mut self.backend,
                         handle,
+                        foundation: Some(resident.genome.foundation),
                         sleep_config: Some(sleep_config),
                         context: Some(AuthoritativeSleepContext {
                             memory: self
@@ -5429,6 +5686,11 @@ impl GpuLiveBrainRuntime {
                         }),
                         replay_evidence_before_commit: None,
                         last_sleep_work: Some(&mut resident.last_sleep_work),
+                        transaction_state: SleepTransactionState::Idle,
+                        transaction_identity: None,
+                        transaction_snapshot: None,
+                        gpu_stage: None,
+                        gpu_rollback: None,
                     },
                     progress,
                 };
@@ -8268,7 +8530,8 @@ mod tests {
             |_durability, _expected_digest| {
                 Err(GameAppShellError::InvalidProductionFrontend {
                     message: "test-forced post-publication refresh failure".to_string(),
-                })
+                }
+            )
             },
         )
     }
@@ -8518,8 +8781,7 @@ mod tests {
             CuratedFounderResetRuntimeError::PreCommit(
                 CuratedFounderStagingError::Mismatch {
                     field: "apply world tick"
-                }
-            )
+            })
         ));
         assert!(
             retained_operation.is_some(),

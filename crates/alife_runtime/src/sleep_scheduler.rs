@@ -1,6 +1,6 @@
 //! Engine-neutral orchestration seam for automatic GPU-authoritative sleep.
 
-use alife_core::sleep::SleepWorkReceipt;
+use alife_core::sleep::{SleepTransactionIdentity, SleepTransactionState, SleepWorkReceipt};
 use alife_core::{
     ActionId, BodyEventDelta, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState,
     HomeostaticParameters, HomeostaticSnapshot, OrganismId, ScaffoldContractError,
@@ -107,6 +107,13 @@ pub trait GpuSleepConsolidationDriver {
     ) -> Result<Option<SleepWorkReceipt>, ScaffoldContractError> {
         Ok(None)
     }
+
+    /// Optional durable transaction state supplied by a host that stages the
+    /// full CPU/GPU sleep result.  Older drivers remain source-compatible and
+    /// report no state until they adopt the shared transaction boundary.
+    fn sleep_transaction_state(&self) -> Option<SleepTransactionState> {
+        None
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -129,6 +136,7 @@ pub struct GpuSleepScheduler {
     last_emitted_intent_cycle: Option<u64>,
     last_sleep_work_cycle: Option<u64>,
     last_sleep_work_ticks: [Option<Tick>; 5],
+    transaction: SleepTransactionState,
 }
 
 impl GpuSleepScheduler {
@@ -147,6 +155,7 @@ impl GpuSleepScheduler {
             last_emitted_intent_cycle: None,
             last_sleep_work_cycle: None,
             last_sleep_work_ticks: [None; 5],
+            transaction: SleepTransactionState::Idle,
         })
     }
 
@@ -162,8 +171,23 @@ impl GpuSleepScheduler {
         state: SleepState,
         cadence: SleepSubsystemCadence,
     ) -> Result<Self, ScaffoldContractError> {
+        Self::restore_with_cadence_and_transaction(
+            config,
+            state,
+            cadence,
+            SleepTransactionState::Idle,
+        )
+    }
+
+    pub fn restore_with_cadence_and_transaction(
+        config: SleepConsolidationConfig,
+        state: SleepState,
+        cadence: SleepSubsystemCadence,
+        transaction: SleepTransactionState,
+    ) -> Result<Self, ScaffoldContractError> {
         cadence.validate()?;
         let controller = SleepController::restore(config, state)?;
+        transaction.validate_contract()?;
         let last_emitted_intent_cycle = if state.phase == SleepPhase::Consolidating
             && state.consolidation != ConsolidationState::None
         {
@@ -177,6 +201,7 @@ impl GpuSleepScheduler {
             last_emitted_intent_cycle,
             last_sleep_work_cycle: None,
             last_sleep_work_ticks: [None; 5],
+            transaction,
         })
     }
 
@@ -186,6 +211,64 @@ impl GpuSleepScheduler {
 
     pub const fn cadence(&self) -> SleepSubsystemCadence {
         self.cadence
+    }
+
+    pub const fn sleep_transaction_state(&self) -> SleepTransactionState {
+        self.transaction
+    }
+
+    pub fn begin_sleep_transaction(
+        &mut self,
+        identity: SleepTransactionIdentity,
+        snapshot_digest: [u64; 4],
+        staged_digest: [u64; 4],
+    ) -> Result<(), ScaffoldContractError> {
+        identity.validate_contract()?;
+        let next = SleepTransactionState::Pending {
+            identity,
+            snapshot_digest,
+            staged_digest,
+        };
+        next.validate_contract()?;
+        self.transaction = next;
+        Ok(())
+    }
+
+    pub fn commit_sleep_transaction(
+        &mut self,
+        identity: SleepTransactionIdentity,
+        commit_digest: [u64; 4],
+    ) -> Result<(), ScaffoldContractError> {
+        if !matches!(
+            self.transaction,
+            SleepTransactionState::Pending { identity: current, .. } if current == identity
+        ) {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        let next = SleepTransactionState::Committed {
+            identity,
+            commit_digest,
+        };
+        next.validate_contract()?;
+        self.transaction = next;
+        Ok(())
+    }
+
+    pub fn interrupt_sleep_transaction(
+        &mut self,
+        identity: SleepTransactionIdentity,
+        snapshot_digest: [u64; 4],
+        reason_code: u16,
+    ) -> Result<(), ScaffoldContractError> {
+        identity.validate_contract()?;
+        let next = SleepTransactionState::Interrupted {
+            identity,
+            snapshot_digest,
+            reason_code,
+        };
+        next.validate_contract()?;
+        self.transaction = next;
+        Ok(())
     }
 
     pub fn force_recovery_sleep(
@@ -275,10 +358,8 @@ impl GpuSleepScheduler {
         let work_units = if due_work.is_empty() {
             0
         } else {
-            let work_homeostasis = Self::homeostasis_for_due_work(
-                &input.homeostasis,
-                self.controller.config(),
-            );
+            let work_homeostasis =
+                Self::homeostasis_for_due_work(&input.homeostasis, self.controller.config());
             let receipt = driver
                 .run_bounded_sleep_transaction(
                     input.organism_id,
@@ -289,6 +370,10 @@ impl GpuSleepScheduler {
                 )?
                 .ok_or(ScaffoldContractError::MissingPhaseData)?;
             receipt.validate_contract()?;
+            if let Some(transaction) = driver.sleep_transaction_state() {
+                transaction.validate_contract()?;
+                self.transaction = transaction;
+            }
             self.commit_sleep_work(state.active_cycle_id, tick, due_work);
             receipt.work_units
         };
@@ -318,10 +403,7 @@ impl GpuSleepScheduler {
         config: SleepConsolidationConfig,
     ) -> HomeostaticSnapshot {
         let mut effective = *homeostasis;
-        effective.drives.fatigue = effective
-            .drives
-            .fatigue
-            .max(config.fatigue_threshold.raw());
+        effective.drives.fatigue = effective.drives.fatigue.max(config.fatigue_threshold.raw());
         effective.hormones.sleep_pressure = effective
             .hormones
             .sleep_pressure

@@ -1,33 +1,38 @@
 //! GPU-authoritative causal trial loop for the Era 1 Norn-plus battery.
 
 use alife_core::cognitive_work::CognitiveWorkCostPolicy;
+use alife_core::sleep::{
+    memory_sleep_digest, SleepReplayEvidence, SleepReplayEvidenceSnapshot,
+    SleepTransactionIdentity, SleepTransactionState, SleepWorkReceipt,
+};
 use alife_core::{
     ActionCommand, ActionKind, BiochemistryState, BrainCapacityClass, BrainGenome,
     CandidateActionFamily, CandidateObservationRef, CanonicalDigestBuilder, CognitiveContextFrame,
-    Confidence,
-    ConsolidationIntent, CreatureGenome, DevelopmentState, Era1Ability, Era1Control,
-    Era1EvidencePartition, Era1TrialIdentity, Era1TrialReceipt, ExperiencePatch,
-    ExperienceSequenceId, FoundationWeightAsset, LanguageGroundingLedger, MemoryBankConfig,
-    MemorySidecarState, MetricReading, OrganismId, PerceptionFrameDigest, PhenotypeCompiler,
-    PhenotypeHash, PolicyBackend, ScaffoldContractError, SensorProfile, SensorProfileIdentity,
-    SensoryAbiVersion, SpeechMotorPayload, Tick, TrackedObjectId, UtteranceGroundingReceiptV2,
+    Confidence, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState, CreatureGenome,
+    DevelopmentState, Era1Ability, Era1Control, Era1EvidencePartition, Era1TrialIdentity,
+    Era1TrialReceipt, ExperiencePatch, ExperienceSequenceId, FoundationWeightAsset,
+    HomeostaticParameters, LanguageGroundingLedger, MemoryBankConfig, MemorySidecarState,
+    MetricReading, OrganismId, PerceptionFrameDigest, PhenotypeCompiler, PhenotypeHash,
+    PolicyBackend, ScaffoldContractError, SensorProfile, SensorProfileIdentity, SensoryAbiVersion,
+    SleepConsolidationConfig, SleepConsolidator, SleepState, SpeechMotorPayload, Tick,
+    TopologicalMapConfig, TopologySidecar, TrackedObjectId, UtteranceGroundingReceiptV2,
     UtteranceSourceKind, Validate, WorldEntityId,
 };
 use alife_gpu_backend::{
-    GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
-    GpuClosedLoopMemoryTickInput, GpuLearningEvidenceMismatchReceipt,
-    GpuRuntimeApplyFastPlasticityFailureReceipt, GpuRuntimeProfile,
-    GpuRuntimeSelectorDiagnosticBuildFailureReceipt,
+    GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuClosedLoopBackend,
+    GpuClosedLoopMemoryBatchInput, GpuClosedLoopMemoryTickInput,
+    GpuLearningEvidenceMismatchReceipt, GpuRuntimeApplyFastPlasticityFailureReceipt,
+    GpuRuntimeProfile, GpuRuntimeSelectorDiagnosticBuildFailureReceipt,
     GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
     GpuRuntimeSelectorDiagnosticEnableFailure, GpuRuntimeSelectorDiagnosticError,
     GpuRuntimeSelectorDiagnosticFailureReceipt, GpuRuntimeSelectorDiagnosticStage,
-    GpuSelectorDiagnosticReceipt,
+    GpuSelectorDiagnosticReceipt, GpuSleepTransactionStage,
 };
 use alife_runtime::{
-    prepare_predecision_context,
-    run_production_causal_transaction, GpuAuthoritativeSession, GpuSessionConsumerKind,
+    prepare_predecision_context, run_production_causal_transaction, GpuAuthoritativeSession,
+    GpuSessionConsumerKind, GpuSleepConsolidationDriver, GpuSleepScheduler,
     ProductionCausalMechanismMask, ProductionCausalStageHooks, ProductionCausalStep,
-    ProductionCausalStepInput,
+    ProductionCausalStepInput, SleepWorkDue,
 };
 use alife_world::{
     apply_era1_world_transition, build_era1_trial_world, Era1TrialManifest, Era1TrialPhase,
@@ -604,6 +609,449 @@ pub struct Era1TrialRunner {
     backend_api: String,
 }
 
+struct Era1SleepDriver<'a> {
+    session: &'a mut GpuAuthoritativeSession,
+    handle: GpuBrainHandle,
+    foundation: alife_core::FoundationGeneticIdentity,
+    sleep_config: SleepConsolidationConfig,
+    memory: &'a mut MemorySidecarState,
+    predictor: &'a mut alife_core::GroundedSuccessorPredictor,
+    topology: &'a mut TopologySidecar,
+    sealed_patches: &'a [ExperiencePatch],
+    replay_evidence_before_commit: Option<SleepReplayEvidence>,
+    transaction_state: SleepTransactionState,
+    transaction_identity: Option<SleepTransactionIdentity>,
+    transaction_snapshot: Option<SleepReplayEvidenceSnapshot>,
+    gpu_stage: Option<GpuSleepTransactionStage>,
+    gpu_rollback: Option<GpuBrainCheckpointSnapshot>,
+}
+
+fn era1_sleep_digest_words(
+    domain: &'static [u8],
+    words: impl IntoIterator<Item = u64>,
+) -> [u64; 4] {
+    let mut digest = CanonicalDigestBuilder::new(domain);
+    for word in words {
+        digest.write_u64(word);
+    }
+    digest.finish256()
+}
+
+fn era1_sleep_branch_digest(checkpoint: &alife_gpu_backend::GpuV11Checkpoint) -> [u64; 4] {
+    let mut words = Vec::new();
+    for branch in checkpoint.dendritic_branches.branches() {
+        words.extend([
+            branch.branch_id,
+            u64::from(branch.target),
+            u64::from(branch.structural_utility),
+            u64::from(branch.observations),
+            branch.last_tick,
+            branch.source_identity,
+        ]);
+        for input in &branch.inputs {
+            words.extend([u64::from(input.source), u64::from(input.weight.to_bits())]);
+        }
+    }
+    era1_sleep_digest_words(b"ALIFE-SLEEP-BRANCH-IDENTITY-V1", words)
+}
+
+fn build_era1_sleep_evidence(
+    session: &mut GpuAuthoritativeSession,
+    handle: GpuBrainHandle,
+    sealed_patches: &[ExperiencePatch],
+) -> Result<SleepReplayEvidence, ScaffoldContractError> {
+    let batch = session.build_sleep_replay_batch(handle)?;
+    if batch.events.is_empty() {
+        return Err(ScaffoldContractError::MissingPhaseData);
+    }
+    let prediction_targets = batch
+        .events
+        .iter()
+        .map(|event| {
+            sealed_patches
+                .iter()
+                .find_map(|patch| {
+                    patch.prediction_target().and_then(|target| {
+                        (target.organism_id == handle.organism_id()
+                            && target.experience_sequence == event.sequence_id)
+                            .then(|| target.clone())
+                    })
+                })
+                .ok_or(ScaffoldContractError::MissingPhaseData)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    SleepReplayEvidence::new(batch, prediction_targets)
+}
+
+fn build_era1_sleep_transaction_identity(
+    session: &mut GpuAuthoritativeSession,
+    handle: GpuBrainHandle,
+    foundation: alife_core::FoundationGeneticIdentity,
+    state: SleepState,
+    tick: Tick,
+    rollback: &GpuBrainCheckpointSnapshot,
+    memory: &MemorySidecarState,
+    topology: &TopologySidecar,
+    sealed_patches: &[ExperiencePatch],
+    evidence: &SleepReplayEvidence,
+) -> Result<(SleepTransactionIdentity, SleepReplayEvidenceSnapshot), ScaffoldContractError> {
+    let patch_digests = evidence
+        .batch
+        .events
+        .iter()
+        .map(|event| {
+            sealed_patches
+                .iter()
+                .find(|patch| {
+                    patch.header().organism_id == handle.organism_id()
+                        && patch.header().sequence_id == event.sequence_id
+                })
+                .ok_or(ScaffoldContractError::MissingPhaseData)
+                .and_then(ExperiencePatch::causal_digest)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut patch_digest = CanonicalDigestBuilder::new(b"ALIFE-SLEEP-PATCH-SET-V1");
+    for digest in &patch_digests {
+        for word in *digest {
+            patch_digest.write_u64(word);
+        }
+    }
+    let v11_checkpoint = session.checkpoint_v11(handle)?;
+    let identity = SleepTransactionIdentity::new(
+        handle.organism_id(),
+        state.active_cycle_id,
+        tick,
+        handle.phenotype_hash(),
+        foundation,
+        rollback.canonical_digest(),
+        patch_digest.finish256(),
+        evidence.canonical_digest,
+        memory_sleep_digest(memory.bank()),
+        topology.diagnostics().canonical_digest,
+        era1_sleep_digest_words(
+            b"ALIFE-SLEEP-STRUCTURAL-IDENTITY-V1",
+            [v11_checkpoint.work.structural.deterministic_digest],
+        ),
+        era1_sleep_branch_digest(&v11_checkpoint),
+    )?;
+    let snapshot = SleepReplayEvidenceSnapshot::new(identity, evidence.clone(), patch_digests)?;
+    Ok((identity, snapshot))
+}
+
+impl Era1SleepDriver<'_> {
+    fn prepare_transaction_before_gpu_commit(
+        &mut self,
+        state: SleepState,
+        request: &alife_core::GpuConsolidationRequest,
+        replay: &alife_core::BoundedReplayBatch,
+    ) -> Result<(), ScaffoldContractError> {
+        let evidence = self
+            .replay_evidence_before_commit
+            .as_ref()
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        let rollback = self
+            .session
+            .snapshot_brain(self.handle, state.phase_started_tick)?;
+        let (identity, snapshot) = build_era1_sleep_transaction_identity(
+            self.session,
+            self.handle,
+            self.foundation,
+            state,
+            state.phase_started_tick,
+            &rollback,
+            self.memory,
+            self.topology,
+            self.sealed_patches,
+            evidence,
+        )?;
+        let gpu_stage = self.session.prepare_sleep_transaction(
+            self.handle,
+            ConsolidationIntent {
+                cycle_id: state.active_cycle_id,
+            },
+            replay,
+            identity,
+            snapshot.snapshot_digest,
+        )?;
+        if gpu_stage.request != *request {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        self.transaction_identity = Some(identity);
+        self.transaction_snapshot = Some(snapshot);
+        self.gpu_stage = Some(gpu_stage.clone());
+        self.gpu_rollback = Some(rollback);
+        self.transaction_state = SleepTransactionState::Pending {
+            identity,
+            snapshot_digest: gpu_stage.snapshot_digest,
+            staged_digest: gpu_stage.staged_digest,
+        };
+        self.transaction_state.validate_contract()
+    }
+
+    fn rollback_gpu_transaction(&mut self, reason_code: u16) -> Result<(), ScaffoldContractError> {
+        let identity = self
+            .transaction_identity
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        let snapshot_digest = self
+            .transaction_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.snapshot_digest)
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        let rollback = self
+            .gpu_rollback
+            .take()
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        self.session
+            .restore_brain_snapshot_in_place(self.handle, rollback)?;
+        self.transaction_state = SleepTransactionState::Interrupted {
+            identity,
+            snapshot_digest,
+            reason_code,
+        };
+        self.transaction_state.validate_contract()
+    }
+}
+
+impl GpuSleepConsolidationDriver for Era1SleepDriver<'_> {
+    fn progress(
+        &mut self,
+        organism_id: OrganismId,
+        state: SleepState,
+        intent: Option<ConsolidationIntent>,
+    ) -> Result<Option<ConsolidationDriverEvent>, ScaffoldContractError> {
+        if organism_id != self.handle.organism_id() {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        let event = match (state.consolidation, intent) {
+            (ConsolidationState::None, Some(intent)) => {
+                let replay = self.session.build_sleep_replay_batch(self.handle)?;
+                ConsolidationDriverEvent::ReplayAssetPersisted {
+                    intent,
+                    replay_digest: replay.canonical_digest,
+                    replay_event_count: replay.events.len() as u32,
+                    replay_eligibility_sample_count: replay.eligibility_samples.len() as u32,
+                }
+            }
+            (
+                ConsolidationState::Pending {
+                    intent,
+                    replay_digest,
+                    replay_event_count,
+                    replay_eligibility_sample_count,
+                },
+                None,
+            ) => {
+                let replay = self.session.build_sleep_replay_batch(self.handle)?;
+                if replay.canonical_digest != replay_digest
+                    || replay.events.len() as u32 != replay_event_count
+                    || replay.eligibility_samples.len() as u32 != replay_eligibility_sample_count
+                {
+                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+                }
+                let request =
+                    self.session
+                        .prepare_sleep_consolidation(self.handle, intent, &replay)?;
+                ConsolidationDriverEvent::Prepared { request }
+            }
+            (ConsolidationState::Prepared { request }, None) => {
+                let replay = self.session.build_sleep_replay_batch(self.handle)?;
+                if replay.canonical_digest != request.replay_digest {
+                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+                }
+                let job =
+                    self.session
+                        .submit_sleep_consolidation(self.handle, &request, &replay)?;
+                ConsolidationDriverEvent::Submitted {
+                    request,
+                    job_id: job,
+                }
+            }
+            (ConsolidationState::Submitted { request, job_id }, None) => {
+                match self.session.poll_sleep_consolidation(self.handle, job_id) {
+                    Ok(Some(staged)) => ConsolidationDriverEvent::Completed {
+                        request,
+                        staged: staged.staged,
+                    },
+                    Ok(None) => return Ok(None),
+                    Err(ScaffoldContractError::ConsolidationGenerationMismatch) => {
+                        let replay = self.session.build_sleep_replay_batch(self.handle)?;
+                        if replay.canonical_digest != request.replay_digest {
+                            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+                        }
+                        let recovered = self.session.recover_submitted_sleep_consolidation(
+                            self.handle,
+                            &request,
+                            &replay,
+                            job_id,
+                        )?;
+                        ConsolidationDriverEvent::RecoveredSubmitted {
+                            request,
+                            lost_job_id: job_id,
+                            recovered_job_id: recovered,
+                        }
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+            (ConsolidationState::Completed { request, staged }, None) => {
+                let replay = self.session.build_sleep_replay_batch(self.handle)?;
+                self.replay_evidence_before_commit = Some(build_era1_sleep_evidence(
+                    self.session,
+                    self.handle,
+                    self.sealed_patches,
+                )?);
+                self.prepare_transaction_before_gpu_commit(state, &request, &replay)?;
+                let receipt =
+                    match self
+                        .session
+                        .commit_sleep_consolidation(self.handle, &request, &staged)
+                    {
+                        Ok(receipt) => receipt,
+                        Err(error) => {
+                            self.rollback_gpu_transaction(1)?;
+                            return Err(error);
+                        }
+                    };
+                ConsolidationDriverEvent::Committed {
+                    cycle_id: request.cycle_id,
+                    output_generation: receipt.output_generation,
+                    output_digest: receipt.output_digest,
+                }
+            }
+            (ConsolidationState::Committed { .. }, None) => return Ok(None),
+            _ => return Err(ScaffoldContractError::ConsolidationGenerationMismatch),
+        };
+        Ok(Some(event))
+    }
+
+    fn run_bounded_sleep_transaction(
+        &mut self,
+        organism_id: OrganismId,
+        state: SleepState,
+        homeostasis: &alife_core::HomeostaticSnapshot,
+        tick: Tick,
+        due_work: SleepWorkDue,
+    ) -> Result<Option<SleepWorkReceipt>, ScaffoldContractError> {
+        if organism_id != self.handle.organism_id() {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        let evidence = match self.replay_evidence_before_commit.take() {
+            Some(evidence) => evidence,
+            None => build_era1_sleep_evidence(self.session, self.handle, self.sealed_patches)?,
+        };
+        let (identity, snapshot) =
+            match (self.transaction_identity, self.transaction_snapshot.clone()) {
+                (Some(identity), Some(snapshot)) => (identity, snapshot),
+                _ => {
+                    let rollback = self.session.snapshot_brain(self.handle, tick)?;
+                    let (identity, snapshot) = build_era1_sleep_transaction_identity(
+                        self.session,
+                        self.handle,
+                        self.foundation,
+                        state,
+                        tick,
+                        &rollback,
+                        self.memory,
+                        self.topology,
+                        self.sealed_patches,
+                        &evidence,
+                    )?;
+                    self.transaction_identity = Some(identity);
+                    self.transaction_snapshot = Some(snapshot.clone());
+                    self.gpu_rollback = Some(rollback);
+                    (identity, snapshot)
+                }
+            };
+        if identity.replay_digest != evidence.canonical_digest {
+            self.rollback_gpu_transaction(2)?;
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        let cpu_stage = match SleepConsolidator::new(self.sleep_config).and_then(|consolidator| {
+            consolidator.stage_bounded_transaction(
+                homeostasis,
+                tick,
+                &snapshot,
+                self.memory.bank(),
+                self.predictor,
+                self.topology,
+            )
+        }) {
+            Ok(stage) => stage,
+            Err(error) => {
+                self.rollback_gpu_transaction(2)?;
+                return Err(error);
+            }
+        };
+        let staged_digest = era1_sleep_digest_words(
+            b"ALIFE-SLEEP-COMBINED-STAGE-V1",
+            cpu_stage.staged_digest.into_iter().chain(
+                self.gpu_stage
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|stage| stage.staged_digest),
+            ),
+        );
+        self.transaction_state = SleepTransactionState::Pending {
+            identity,
+            snapshot_digest: snapshot.snapshot_digest,
+            staged_digest,
+        };
+        if let Err(error) = self.transaction_state.validate_contract() {
+            self.rollback_gpu_transaction(2)?;
+            return Err(error);
+        }
+
+        let mut candidate_memory = self.memory.clone();
+        let mut candidate_predictor = self.predictor.clone();
+        let mut candidate_topology = self.topology.clone();
+        let receipt = match candidate_memory.commit_staged_sleep_transaction(
+            cpu_stage,
+            &snapshot,
+            &mut candidate_predictor,
+            &mut candidate_topology,
+        ) {
+            Ok(receipt) => receipt,
+            Err(error) => {
+                self.rollback_gpu_transaction(2)?;
+                return Err(error);
+            }
+        };
+        let commit_digest = era1_sleep_digest_words(
+            b"ALIFE-SLEEP-COMMIT-V1",
+            identity
+                .transaction_digest
+                .into_iter()
+                .chain(receipt.canonical_digest)
+                .chain(staged_digest),
+        );
+        let committed = SleepTransactionState::Committed {
+            identity,
+            commit_digest,
+        };
+        if let Err(error) = committed.validate_contract() {
+            self.rollback_gpu_transaction(2)?;
+            return Err(error);
+        }
+        if due_work.contains(SleepWorkDue::STRUCTURAL_GROWTH_PRUNING) {
+            if let Err(error) = self.session.apply_v11_sleep_structural_phase(self.handle) {
+                self.rollback_gpu_transaction(3)?;
+                return Err(error);
+            }
+        }
+        *self.memory = candidate_memory;
+        *self.predictor = candidate_predictor;
+        *self.topology = candidate_topology;
+        self.transaction_state = committed;
+        self.gpu_rollback = None;
+        Ok(Some(receipt))
+    }
+
+    fn sleep_transaction_state(&self) -> Option<SleepTransactionState> {
+        (!matches!(self.transaction_state, SleepTransactionState::Idle))
+            .then_some(self.transaction_state)
+    }
+}
+
 impl Era1TrialRunner {
     pub fn new_required() -> Result<Self, TrainingError> {
         let foundation =
@@ -727,6 +1175,16 @@ impl Era1TrialRunner {
         let mut predictor = alife_core::GroundedSuccessorPredictor::with_learning_rate(
             phenotype.cognitive_architecture().predictor_learning_rate(),
         )?;
+        let profile_identity = SensorProfileIdentity {
+            profile_id: SensorProfile::GroundedObjectSlotsV1.into(),
+            profile_schema_version: 1,
+            sensory_abi_version: SensoryAbiVersion::CURRENT.raw(),
+        };
+        let mut topology = TopologySidecar::new_profiled(
+            request.organism_id,
+            profile_identity,
+            TopologicalMapConfig::default(),
+        )?;
         let mut next_sequence = 1_u64;
         let mut last_cognitive_context = None;
         let mut last_selected_motor_bundle = None;
@@ -736,6 +1194,9 @@ impl Era1TrialRunner {
         let mut eligibility_discards = 0_u64;
         let mut memory_updates = 0_u64;
         let mut sleep_commits = 0_u32;
+        let sleep_config = SleepConsolidationConfig::reference();
+        let mut sleep_scheduler =
+            GpuSleepScheduler::new(sleep_config).map_err(Era1TrialRunError::from)?;
         let mut grounding_receipts = Vec::new();
         let mut language_grounding = LanguageGroundingLedger::default();
         let mut transition_receipts = Vec::new();
@@ -768,28 +1229,6 @@ impl Era1TrialRunner {
             if request.control == Era1Control::SocialDisabled {
                 remove_peer_agents(&mut world, request.organism_id)?;
             }
-            if request.ability == Era1Ability::PostSleepRetention
-                && request.control != Era1Control::SleepDisabled
-                && world.tick().raw() == ERA1_PROBE_START_TICK
-            {
-                let replay = self.session.build_sleep_replay_batch(handle)?;
-                let consolidation = self.session.prepare_sleep_consolidation(
-                    handle,
-                    ConsolidationIntent { cycle_id: 1 },
-                    &replay,
-                )?;
-                let job =
-                    self.session
-                        .submit_sleep_consolidation(handle, &consolidation, &replay)?;
-                let staged = self
-                    .session
-                    .poll_sleep_consolidation(handle, job)?
-                    .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
-                self.session
-                    .commit_sleep_consolidation(handle, &consolidation, &staged.staged)?;
-                sleep_commits = sleep_commits.saturating_add(1);
-            }
-
             let world_before = world.canonical_signature_digest()?.words;
             let admission = world
                 .organism_registry()
@@ -818,13 +1257,14 @@ impl Era1TrialRunner {
                 homeostasis,
             )?;
             let prepared_recall = memory.recall_frame(&draft)?;
-            let preview_recall = prepared_recall.clone().with_cognitive_context(
-                CognitiveContextFrame::empty(
+            let preview_recall =
+                prepared_recall
+                    .clone()
+                    .with_cognitive_context(CognitiveContextFrame::empty(
                     request.organism_id,
                     ExperienceSequenceId(next_sequence),
                     draft.tick(),
-                )?,
-            )?;
+                    )?)?;
             let (preview_frame, preview_finalized) = preview_recall.finalize(draft.clone())?;
             let mut cognitive_context = preview_finalized
                 .cognitive_context()
@@ -898,28 +1338,71 @@ impl Era1TrialRunner {
                 plasticity: request.control != Era1Control::PlasticityDisabled,
             };
             let mut learning_failure = None;
-            let mut due_sleep = || Ok(false);
-            let mut gpu_plasticity =
-                |session: &mut GpuAuthoritativeSession,
+            let sleep_stage_due = if mechanisms.sleep {
+                let sleep_before = sleep_scheduler.state();
+                let mut organism_record = world
+                    .organism_registry()
+                    .get(request.organism_id)
+                    .cloned()
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                let sealed_patches = steps
+                    .iter()
+                    .map(|step: &Era1CausalStepReceipt| step.sealed_patch.clone())
+                    .collect::<Vec<_>>();
+                let mut sleep_driver = Era1SleepDriver {
+                    session: &mut self.session,
+                    handle,
+                    foundation: request.genome.foundation,
+                    sleep_config,
+                    memory: &mut memory,
+                    predictor: &mut predictor,
+                    topology: &mut topology,
+                    sealed_patches: &sealed_patches,
+                    replay_evidence_before_commit: None,
+                    transaction_state: SleepTransactionState::Idle,
+                    transaction_identity: None,
+                    transaction_snapshot: None,
+                    gpu_stage: None,
+                    gpu_rollback: None,
+                };
+                let _sleep_event = sleep_scheduler.scheduled_tick_with_organism(
+                    &mut organism_record,
+                    HomeostaticParameters::reference(),
+                    frame.tick(),
+                    &mut sleep_driver,
+                    false,
+                )?;
+                replace_era1_organism_record(&mut world, organism_record)?;
+                let sleep_after = sleep_scheduler.state();
+                if matches!(
+                    sleep_before.consolidation,
+                    ConsolidationState::Completed { .. }
+                ) && matches!(
+                    sleep_after.consolidation,
+                    ConsolidationState::Committed { .. }
+                ) {
+                    sleep_commits = sleep_commits.saturating_add(1);
+                }
+                sleep_after.phase != alife_core::SleepPhase::Awake
+            } else {
+                false
+            };
+            let mut due_sleep = || Ok(sleep_stage_due);
+            let mut gpu_plasticity = |session: &mut GpuAuthoritativeSession,
                  step: &ProductionCausalStep|
                  -> Result<bool, ScaffoldContractError> {
-                    if let Some(receipt) = session
-                        .sealed_outcome_credit_mismatch_receipt(handle, &step.patch)?
+                if let Some(receipt) =
+                    session.sealed_outcome_credit_mismatch_receipt(handle, &step.patch)?
                     {
-                        learning_failure =
-                            Some(Era1TrialRunError::LearningEvidenceMismatch(receipt));
+                    learning_failure = Some(Era1TrialRunError::LearningEvidenceMismatch(receipt));
                         return Err(ScaffoldContractError::LearningEvidenceMismatch);
                     }
                     if let Err(error) = session.apply_sealed_outcome(handle, &step.patch) {
-                        if let Some(receipt) = session.take_apply_fast_plasticity_failure_receipt()
-                        {
-                            learning_failure =
-                                Some(Era1TrialRunError::ApplyFastPlasticity(receipt));
+                    if let Some(receipt) = session.take_apply_fast_plasticity_failure_receipt() {
+                        learning_failure = Some(Era1TrialRunError::ApplyFastPlasticity(receipt));
                         } else {
-                            let receipt = if matches!(
-                                &error,
-                                ScaffoldContractError::LearningEvidenceMismatch
-                            ) {
+                        let receipt =
+                            if matches!(&error, ScaffoldContractError::LearningEvidenceMismatch) {
                                 session
                                     .sealed_outcome_credit_mismatch_receipt(handle, &step.patch)
                                     .ok()
@@ -927,8 +1410,7 @@ impl Era1TrialRunner {
                             } else {
                                 None
                             };
-                            learning_failure =
-                                Some(map_learning_apply_failure(error, receipt));
+                        learning_failure = Some(map_learning_apply_failure(error, receipt));
                         }
                         return Err(ScaffoldContractError::LearningEvidenceMismatch);
                     }
@@ -940,7 +1422,10 @@ impl Era1TrialRunner {
                 memory_updates = memory_updates.saturating_add(1);
                 Ok::<_, ScaffoldContractError>(())
             };
-            let mut topology_observation = |_step: &ProductionCausalStep| Ok(());
+            let mut topology_observation = |step: &ProductionCausalStep| {
+                topology.observe_sealed_patch(&step.patch);
+                Ok(())
+            };
             let mut world_after_action_digest = None;
             let mut due_world_advance =
                 |world: &mut HeadlessWorld, _step: &ProductionCausalStep| {
@@ -1003,8 +1488,8 @@ impl Era1TrialRunner {
                 .target_entity
                 .and_then(|entity| world.entity(entity))
                 .map(|entity| entity.kind);
-            let world_after_action = world_after_action_digest
-                .ok_or(ScaffoldContractError::MissingPhaseData)?;
+            let world_after_action =
+                world_after_action_digest.ok_or(ScaffoldContractError::MissingPhaseData)?;
             let selector_diagnostic =
                 step.selector_diagnostic
                     .map(|dispatch| Era1SelectorDiagnosticReceipt {
@@ -1474,6 +1959,24 @@ fn remove_peer_agents(
         world.remove_organism(peer)?;
     }
     Ok(())
+}
+
+fn replace_era1_organism_record(
+    world: &mut HeadlessWorld,
+    replacement: WorldOrganismRecord,
+) -> Result<(), ScaffoldContractError> {
+    let organism_id = replacement.organism_id();
+    let mut records = world
+        .organism_registry()
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    let record = records
+        .iter_mut()
+        .find(|record| record.organism_id() == organism_id)
+        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+    *record = replacement;
+    world.replace_organism_registry_exact(records)
 }
 
 fn run_peer_demonstration(

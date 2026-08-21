@@ -15,10 +15,10 @@ mod replay;
 pub use replay::*;
 
 use crate::{
-    predictive::GroundedSuccessorPredictor,
-    require_current_version, validate_finite, CanonicalDigestBuilder, ChemistryModulation,
-    Confidence, DurationTicks, HomeostaticParameters, HomeostaticSnapshot, LobeKind, MemoryBank,
-    MemoryId, NeuralProjectionSchema, NormalizedScalar,
+    predictive::GroundedSuccessorPredictor, require_current_version, validate_finite,
+    CanonicalDigestBuilder, ChemistryModulation, Confidence, DurationTicks,
+    FoundationGeneticIdentity, HomeostaticParameters, HomeostaticSnapshot, LobeKind, MemoryBank,
+    MemoryId, NeuralProjectionSchema, NormalizedScalar, OrganismId, PhenotypeHash,
     ProjectionRoutingRef, RecoveryTrigger, ScaffoldContractError, SchemaKind, SchemaVersions,
     SparseTilePayload, SynapseWeightSplit, Tick, TopologicalMap, TopologySidecar, Validate,
 };
@@ -868,6 +868,392 @@ impl Validate for SleepWorkReceipt {
     }
 }
 
+/// Stable identity shared by every result staged for one biology-scheduled
+/// sleep cycle.  The identity is deliberately independent of any backend so
+/// CPU sidecars and the GPU can reject a mixed replay or checkpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SleepTransactionIdentity {
+    pub schema_version: u16,
+    pub organism_id: OrganismId,
+    pub cycle_id: u64,
+    pub tick: Tick,
+    pub phenotype_hash: PhenotypeHash,
+    pub foundation: FoundationGeneticIdentity,
+    pub checkpoint_digest: [u64; 4],
+    pub patch_digest: [u64; 4],
+    pub replay_digest: [u64; 4],
+    pub memory_digest: [u64; 4],
+    pub concept_gap_digest: [u64; 4],
+    pub structural_digest: [u64; 4],
+    pub branch_digest: [u64; 4],
+    pub transaction_digest: [u64; 4],
+}
+
+impl SleepTransactionIdentity {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        organism_id: OrganismId,
+        cycle_id: u64,
+        tick: Tick,
+        phenotype_hash: PhenotypeHash,
+        foundation: FoundationGeneticIdentity,
+        checkpoint_digest: [u64; 4],
+        patch_digest: [u64; 4],
+        replay_digest: [u64; 4],
+        memory_digest: [u64; 4],
+        concept_gap_digest: [u64; 4],
+        structural_digest: [u64; 4],
+        branch_digest: [u64; 4],
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut identity = Self {
+            schema_version: SLEEP_CONSOLIDATION_SCHEMA_VERSION,
+            organism_id,
+            cycle_id,
+            tick,
+            phenotype_hash,
+            foundation,
+            checkpoint_digest,
+            patch_digest,
+            replay_digest,
+            memory_digest,
+            concept_gap_digest,
+            structural_digest,
+            branch_digest,
+            transaction_digest: [0; 4],
+        };
+        identity.transaction_digest = identity.recompute_transaction_digest()?;
+        identity.validate_contract()?;
+        Ok(identity)
+    }
+
+    pub fn recompute_transaction_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
+        let mut digest = CanonicalDigestBuilder::new(b"ALIFE-SLEEP-TRANSACTION-IDENTITY-V1");
+        digest.write_u16(self.schema_version);
+        digest.write_u64(self.organism_id.raw());
+        digest.write_u64(self.cycle_id);
+        digest.write_u64(self.tick.raw());
+        for word in self.phenotype_hash.0 {
+            digest.write_u64(word);
+        }
+        digest.write_u64(self.foundation.foundation_id);
+        digest.write_u16(self.foundation.version);
+        digest.write_u64(self.foundation.compatibility_family_id);
+        digest.write_u16(self.foundation.brain_class_id.0);
+        for words in [
+            self.checkpoint_digest,
+            self.patch_digest,
+            self.replay_digest,
+            self.memory_digest,
+            self.concept_gap_digest,
+            self.structural_digest,
+            self.branch_digest,
+        ] {
+            for word in words {
+                digest.write_u64(word);
+            }
+        }
+        Ok(digest.finish256())
+    }
+}
+
+impl Validate for SleepTransactionIdentity {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        require_current_version(SchemaKind::SleepConsolidation, self.schema_version)?;
+        self.organism_id.validate()?;
+        self.foundation.validate_contract()?;
+        if self.cycle_id == 0
+            || self.phenotype_hash.0 == [0; 4]
+            || [
+                self.checkpoint_digest,
+                self.patch_digest,
+                self.replay_digest,
+                self.memory_digest,
+                self.concept_gap_digest,
+                self.structural_digest,
+                self.branch_digest,
+                self.transaction_digest,
+            ]
+            .iter()
+            .any(|digest| *digest == [0; 4])
+            || self.transaction_digest != self.recompute_transaction_digest()?
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        Ok(())
+    }
+}
+
+/// Immutable replay and patch identity captured before any sleep subsystem
+/// runs.  Every staged result must use this exact value.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SleepReplayEvidenceSnapshot {
+    pub schema_version: u16,
+    pub identity: SleepTransactionIdentity,
+    pub evidence: SleepReplayEvidence,
+    pub patch_digests: Vec<[u64; 4]>,
+    pub snapshot_digest: [u64; 4],
+}
+
+impl SleepReplayEvidenceSnapshot {
+    pub fn new(
+        identity: SleepTransactionIdentity,
+        evidence: SleepReplayEvidence,
+        patch_digests: Vec<[u64; 4]>,
+    ) -> Result<Self, ScaffoldContractError> {
+        identity.validate_contract()?;
+        evidence.validate_contract()?;
+        if patch_digests.is_empty()
+            || patch_digests.len() > MAX_SLEEP_TRANSACTION_PATCHES
+            || identity.replay_digest != evidence.canonical_digest
+            || patch_digests.iter().any(|digest| *digest == [0; 4])
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        let mut snapshot = Self {
+            schema_version: SLEEP_CONSOLIDATION_SCHEMA_VERSION,
+            identity,
+            evidence,
+            patch_digests,
+            snapshot_digest: [0; 4],
+        };
+        snapshot.snapshot_digest = snapshot.recompute_snapshot_digest()?;
+        snapshot.validate_contract()?;
+        Ok(snapshot)
+    }
+
+    pub fn recompute_snapshot_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
+        let mut digest = CanonicalDigestBuilder::new(b"ALIFE-SLEEP-REPLAY-SNAPSHOT-V1");
+        digest.write_u16(self.schema_version);
+        for word in self.identity.transaction_digest {
+            digest.write_u64(word);
+        }
+        for word in self.evidence.canonical_digest {
+            digest.write_u64(word);
+        }
+        digest.write_sequence_len(self.patch_digests.len());
+        for patch in &self.patch_digests {
+            for word in *patch {
+                digest.write_u64(word);
+            }
+        }
+        Ok(digest.finish256())
+    }
+}
+
+impl Validate for SleepReplayEvidenceSnapshot {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        require_current_version(SchemaKind::SleepConsolidation, self.schema_version)?;
+        self.identity.validate_contract()?;
+        self.evidence.validate_contract()?;
+        if self.identity.replay_digest != self.evidence.canonical_digest
+            || self.patch_digests.is_empty()
+            || self.patch_digests.len() > MAX_SLEEP_TRANSACTION_PATCHES
+            || self.patch_digests.iter().any(|digest| *digest == [0; 4])
+            || self.snapshot_digest != self.recompute_snapshot_digest()?
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        Ok(())
+    }
+}
+
+pub const MAX_SLEEP_TRANSACTION_PATCHES: usize = 256;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SleepTransactionState {
+    Idle,
+    Pending {
+        identity: SleepTransactionIdentity,
+        snapshot_digest: [u64; 4],
+        staged_digest: [u64; 4],
+    },
+    Committed {
+        identity: SleepTransactionIdentity,
+        commit_digest: [u64; 4],
+    },
+    Interrupted {
+        identity: SleepTransactionIdentity,
+        snapshot_digest: [u64; 4],
+        reason_code: u16,
+    },
+}
+
+impl Default for SleepTransactionState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
+impl Validate for SleepTransactionState {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        match self {
+            Self::Idle => Ok(()),
+            Self::Pending {
+                identity,
+                snapshot_digest,
+                staged_digest,
+            } => {
+                identity.validate_contract()?;
+                if *snapshot_digest == [0; 4] || *staged_digest == [0; 4] {
+                    Err(ScaffoldContractError::ConsolidationGenerationMismatch)
+                } else {
+                    Ok(())
+                }
+            }
+            Self::Committed {
+                identity,
+                commit_digest,
+            } => {
+                identity.validate_contract()?;
+                if *commit_digest == [0; 4] {
+                    Err(ScaffoldContractError::ConsolidationGenerationMismatch)
+                } else {
+                    Ok(())
+                }
+            }
+            Self::Interrupted {
+                identity,
+                snapshot_digest,
+                reason_code,
+            } => {
+                identity.validate_contract()?;
+                if *snapshot_digest == [0; 4] || *reason_code == 0 {
+                    Err(ScaffoldContractError::ConsolidationGenerationMismatch)
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
+/// CPU-owned sleep state prepared from an immutable snapshot.  The live
+/// sidecars are untouched until `commit` verifies the captured input digests.
+#[derive(Debug, Clone)]
+pub struct SleepCpuTransactionStage {
+    pub identity: SleepTransactionIdentity,
+    pub snapshot_digest: [u64; 4],
+    pub input_memory_digest: [u64; 4],
+    pub output_memory_digest: [u64; 4],
+    pub input_predictor_digest: [u64; 4],
+    pub output_predictor_digest: [u64; 4],
+    pub input_topology_digest: [u64; 4],
+    pub output_topology_digest: [u64; 4],
+    pub receipt: SleepWorkReceipt,
+    pub memory: MemoryBank,
+    pub predictor: GroundedSuccessorPredictor,
+    pub topology: TopologySidecar,
+    pub staged_digest: [u64; 4],
+}
+
+impl SleepCpuTransactionStage {
+    pub fn validate_contract(
+        &self,
+        snapshot: &SleepReplayEvidenceSnapshot,
+    ) -> Result<(), ScaffoldContractError> {
+        snapshot.validate_contract()?;
+        self.identity.validate_contract()?;
+        self.receipt.validate_contract()?;
+        if self.identity != snapshot.identity
+            || self.snapshot_digest != snapshot.snapshot_digest
+            || self.input_memory_digest == [0; 4]
+            || self.output_memory_digest == [0; 4]
+            || self.input_predictor_digest == [0; 4]
+            || self.output_predictor_digest == [0; 4]
+            || self.input_topology_digest == [0; 4]
+            || self.output_topology_digest == [0; 4]
+            || self.identity.memory_digest != self.input_memory_digest
+            || self.identity.concept_gap_digest != self.input_topology_digest
+            || self.staged_digest != self.recompute_staged_digest()?
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        Ok(())
+    }
+
+    pub fn recompute_staged_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
+        let mut digest = CanonicalDigestBuilder::new(b"ALIFE-SLEEP-CPU-STAGE-V1");
+        for word in self.identity.transaction_digest {
+            digest.write_u64(word);
+        }
+        for word in self.snapshot_digest {
+            digest.write_u64(word);
+        }
+        for words in [
+            self.input_memory_digest,
+            self.output_memory_digest,
+            self.input_predictor_digest,
+            self.output_predictor_digest,
+            self.input_topology_digest,
+            self.output_topology_digest,
+            self.receipt.canonical_digest,
+        ] {
+            for word in words {
+                digest.write_u64(word);
+            }
+        }
+        Ok(digest.finish256())
+    }
+
+    pub fn commit(
+        self,
+        snapshot: &SleepReplayEvidenceSnapshot,
+        memory: &mut MemoryBank,
+        predictor: &mut GroundedSuccessorPredictor,
+        topology: &mut TopologySidecar,
+    ) -> Result<SleepWorkReceipt, ScaffoldContractError> {
+        self.validate_contract(snapshot)?;
+        if memory_sleep_digest(memory) != self.input_memory_digest
+            || predictor_sleep_digest(predictor)? != self.input_predictor_digest
+            || topology.diagnostics().canonical_digest != self.input_topology_digest
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        *memory = self.memory;
+        *predictor = self.predictor;
+        *topology = self.topology;
+        Ok(self.receipt)
+    }
+}
+
+pub fn memory_sleep_digest(bank: &MemoryBank) -> [u64; 4] {
+    let mut digest = CanonicalDigestBuilder::new(b"ALIFE-SLEEP-MEMORY-STATE-V1");
+    digest.write_u64(bank.fast_len() as u64);
+    digest.write_u64(bank.lifetime_len() as u64);
+    for record in bank.all_records_chronological() {
+        digest.write_u64(record.memory_id.raw());
+        digest.write_u64(record.organism_id.raw());
+        digest.write_u64(record.source_sequence_id.raw());
+        digest.write_u64(record.source_tick.raw());
+        digest.write_sequence_len(record.features.len());
+        for feature in &record.features {
+            digest.write_u32(feature.to_bits());
+        }
+    }
+    digest.finish256()
+}
+
+fn predictor_sleep_digest(
+    predictor: &GroundedSuccessorPredictor,
+) -> Result<[u64; 4], ScaffoldContractError> {
+    let mut digest = CanonicalDigestBuilder::new(b"ALIFE-SLEEP-PREDICTOR-STATE-V1");
+    if let Some(update) = predictor.last_update() {
+        for word in update.prediction.source_state.canonical_digest()? {
+            digest.write_u64(word);
+        }
+        for word in update.target_digest {
+            digest.write_u64(word);
+        }
+        digest.write_sequence_len(update.error.len());
+        for error in &update.error {
+            digest.write_f32(*error)?;
+        }
+    } else {
+        digest.write_u8(0);
+    }
+    Ok(digest.finish256())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum StructuralEditKind {
     PruneMarker,
@@ -1022,6 +1408,59 @@ impl SleepConsolidator {
         self.config
     }
 
+    /// Builds the complete CPU sleep result against an immutable replay
+    /// snapshot.  No live sidecar is changed until the returned stage is
+    /// committed by its identity-checked method.
+    pub fn stage_bounded_transaction(
+        &self,
+        homeostasis: &HomeostaticSnapshot,
+        tick: Tick,
+        snapshot: &SleepReplayEvidenceSnapshot,
+        memory: &MemoryBank,
+        predictor: &GroundedSuccessorPredictor,
+        topology: &TopologySidecar,
+    ) -> Result<SleepCpuTransactionStage, ScaffoldContractError> {
+        snapshot.validate_contract()?;
+        if snapshot.identity.organism_id != topology.organism_id() {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        let input_memory_digest = memory_sleep_digest(memory);
+        let input_predictor_digest = predictor_sleep_digest(predictor)?;
+        let input_topology_digest = topology.diagnostics().canonical_digest;
+        let mut staged_memory = memory.clone();
+        let mut staged_predictor = predictor.clone();
+        let mut staged_topology = topology.clone();
+        let receipt = self.run_bounded_transaction(
+            homeostasis,
+            tick,
+            &snapshot.evidence,
+            &mut staged_memory,
+            &mut staged_predictor,
+            &mut staged_topology,
+        )?;
+        let output_memory_digest = memory_sleep_digest(&staged_memory);
+        let output_predictor_digest = predictor_sleep_digest(&staged_predictor)?;
+        let output_topology_digest = staged_topology.diagnostics().canonical_digest;
+        let mut stage = SleepCpuTransactionStage {
+            identity: snapshot.identity,
+            snapshot_digest: snapshot.snapshot_digest,
+            input_memory_digest,
+            output_memory_digest,
+            input_predictor_digest,
+            output_predictor_digest,
+            input_topology_digest,
+            output_topology_digest,
+            receipt,
+            memory: staged_memory,
+            predictor: staged_predictor,
+            topology: staged_topology,
+            staged_digest: [0; 4],
+        };
+        stage.staged_digest = stage.recompute_staged_digest()?;
+        stage.validate_contract(snapshot)?;
+        Ok(stage)
+    }
+
     pub fn run_bounded_transaction(
         &self,
         homeostasis: &HomeostaticSnapshot,
@@ -1076,7 +1515,8 @@ impl SleepConsolidator {
                 event.action_id,
                 event.family,
                 event.originating_tick,
-            )? else {
+            )?
+            else {
                 continue;
             };
             eligible_event_indices.insert(event_index);
@@ -1107,15 +1547,12 @@ impl SleepConsolidator {
         let concept = self.consolidate_topology_sidecar(&mut next_topology, 1)?;
         let replay_event_count = u32::try_from(eligible_events.len())
             .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?;
-        let replay_eligibility_sample_count =
-            u32::try_from(
+        let replay_eligibility_sample_count = u32::try_from(
                 evidence
                     .batch
                     .eligibility_samples
                     .iter()
-                    .filter(|sample| {
-                        eligible_event_indices.contains(&usize::from(sample.event_index))
-                    })
+                .filter(|sample| eligible_event_indices.contains(&usize::from(sample.event_index)))
                     .count(),
             )
                 .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?;

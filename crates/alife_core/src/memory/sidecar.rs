@@ -1,7 +1,10 @@
 use super::candidate_index::target_bins;
 use super::*;
 use crate::predictive::GroundedSuccessorPredictor;
-use crate::sleep::{SleepConsolidator, SleepReplayEvidence, SleepWorkReceipt};
+use crate::sleep::{
+    SleepConsolidator, SleepCpuTransactionStage, SleepReplayEvidence, SleepReplayEvidenceSnapshot,
+    SleepWorkReceipt,
+};
 use crate::{HomeostaticSnapshot, Tick, TopologySidecar};
 
 pub const PORTABLE_MEMORY_BANK_ASSET_SCHEMA_VERSION: u16 = 2;
@@ -315,6 +318,22 @@ impl MemorySidecarState {
             predictor,
             topology,
         )
+    }
+
+    /// Applies a previously validated CPU sleep stage to this sidecar.  The
+    /// caller may invoke this on a cloned sidecar and publish the clone only
+    /// after the matching GPU and structural stages succeed.
+    pub fn commit_staged_sleep_transaction(
+        &mut self,
+        stage: SleepCpuTransactionStage,
+        snapshot: &SleepReplayEvidenceSnapshot,
+        predictor: &mut GroundedSuccessorPredictor,
+        topology: &mut TopologySidecar,
+    ) -> Result<SleepWorkReceipt, ScaffoldContractError> {
+        let mut next_bank = self.bank.clone();
+        let receipt = stage.commit(snapshot, &mut next_bank, predictor, topology)?;
+        self.bank = next_bank;
+        Ok(receipt)
     }
 
     pub const fn compaction_checkpoint(&self) -> &MemoryCompactionCheckpoint {

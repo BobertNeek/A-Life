@@ -12,18 +12,19 @@ use alife_core::{
     BoundedReplayBatch, CandidateActionFamily, CandidateFeatureDigest, CanonicalDigestBuilder,
     ConsolidationIntent, ConsolidationJobId, ConsolidationStagedOutput, ExperienceSequenceId,
     GpuConsolidationRequest, NeuromodulatorSample, PerceptionFrameDigest, PhenotypeHash,
-    ReplayEligibilitySample, ReplaySynapseSpan, ScaffoldContractError, SleepReplayEvent, Tick,
-    Validate, BOUNDED_REPLAY_BATCH_SCHEMA_VERSION, GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
+    ReplayEligibilitySample, ReplaySynapseSpan, ScaffoldContractError, SleepReplayEvent,
+    SleepTransactionIdentity, Tick, Validate, BOUNDED_REPLAY_BATCH_SCHEMA_VERSION,
+    GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
 };
 use bytemuck::{Pod, Zeroable};
 
+use crate::closed_loop_buffers::GpuFixedSlotUpload;
 use crate::{
     map_gpu_contract_error, pack_replay_eligibility_sample, unpack_replay_eligibility_sample,
     GpuBrainHandle, GpuBrainSlot, GpuClosedLoopBackend, GpuConsolidationRequestRecord,
     GpuFixedSlotRanges, GpuReplayEventRecord, GpuReplaySynapseSpanRecord, GpuSleepHeader,
     GpuSlotLearningStateRecord,
 };
-use crate::closed_loop_buffers::GpuFixedSlotUpload;
 
 pub type GpuSleepJobId = ConsolidationJobId;
 
@@ -82,6 +83,60 @@ pub struct GpuSleepConsolidationReceipt {
     pub replay_journal_cursor: u32,
     pub replay_journal_event_count: u32,
     pub commit_digest: [u64; 4],
+}
+
+/// Host-side GPU staging identity.  Preparing this value only reads the
+/// active slot and builds the request; alternate GPU banks are not committed
+/// until the CPU and structural stages validate the same identity.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GpuSleepTransactionStage {
+    pub handle: GpuBrainHandle,
+    pub identity: SleepTransactionIdentity,
+    pub snapshot_digest: [u64; 4],
+    pub replay: BoundedReplayBatch,
+    pub request: GpuConsolidationRequest,
+    pub staged_digest: [u64; 4],
+}
+
+impl GpuSleepTransactionStage {
+    pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.identity.validate_contract()?;
+        self.replay.validate_contract(
+            self.request.max_replay_events,
+            self.request.max_replay_eligibility_samples,
+            u32::MAX,
+        )?;
+        self.request.validate_contract()?;
+        if self.identity.organism_id != self.handle.organism_id()
+            || self.identity.cycle_id != self.request.cycle_id
+            || self.identity.phenotype_hash != self.handle.phenotype_hash()
+            || self.identity.phenotype_hash != self.request.phenotype_hash
+            || self.identity.replay_digest != self.replay.canonical_digest
+            || self.request.replay_digest != self.replay.canonical_digest
+            || self.snapshot_digest == [0; 4]
+            || self.staged_digest != self.recompute_staged_digest()?
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        Ok(())
+    }
+
+    pub fn recompute_staged_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
+        let mut digest = CanonicalDigestBuilder::new(b"ALIFE-SLEEP-GPU-STAGE-V1");
+        for word in self.identity.transaction_digest {
+            digest.write_u64(word);
+        }
+        for word in self.snapshot_digest {
+            digest.write_u64(word);
+        }
+        for word in self.replay.canonical_digest {
+            digest.write_u64(word);
+        }
+        for word in self.request.request_digest {
+            digest.write_u64(word);
+        }
+        Ok(digest.finish256())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -315,6 +370,43 @@ impl GpuClosedLoopBackend {
         request.request_digest = request.recompute_request_digest()?;
         request.validate_contract()?;
         Ok(request)
+    }
+
+    /// Captures the immutable GPU input for the shared sleep transaction.
+    /// This is intentionally separate from submission: no live resident
+    /// metadata or CPU sidecar is changed while the complete staged identity
+    /// is assembled.
+    pub fn prepare_sleep_transaction(
+        &self,
+        handle: GpuBrainHandle,
+        intent: ConsolidationIntent,
+        replay: &BoundedReplayBatch,
+        identity: SleepTransactionIdentity,
+        snapshot_digest: [u64; 4],
+    ) -> Result<GpuSleepTransactionStage, ScaffoldContractError> {
+        identity.validate_contract()?;
+        if identity.organism_id != handle.organism_id()
+            || identity.phenotype_hash != handle.phenotype_hash()
+            || snapshot_digest == [0; 4]
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        let request = self.prepare_sleep_consolidation(handle, intent, replay)?;
+        if request.cycle_id != identity.cycle_id || request.replay_digest != identity.replay_digest
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        let mut stage = GpuSleepTransactionStage {
+            handle,
+            identity,
+            snapshot_digest,
+            replay: replay.clone(),
+            request,
+            staged_digest: [0; 4],
+        };
+        stage.staged_digest = stage.recompute_staged_digest()?;
+        stage.validate_contract()?;
+        Ok(stage)
     }
 
     pub fn submit_sleep_consolidation(

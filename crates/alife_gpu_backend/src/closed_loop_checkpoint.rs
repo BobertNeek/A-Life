@@ -1485,6 +1485,27 @@ impl GpuClosedLoopBackend {
         restore
     }
 
+    /// Restores an existing resident from an exact checkpoint without
+    /// allocating a replacement handle.  Sleep transactions use this as the
+    /// recovery edge after a GPU commit precedes a CPU or structural failure.
+    pub fn restore_brain_snapshot_in_place(
+        &mut self,
+        handle: GpuBrainHandle,
+        snapshot: GpuBrainCheckpointSnapshot,
+    ) -> Result<GpuBrainRestoreReceipt, ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        snapshot.validate()?;
+        let checkpoint_digest = snapshot.canonical_digest();
+        let parts = snapshot.into_parts();
+        if parts.organism_id != handle.organism_id()
+            || parts.phenotype_hash != handle.phenotype_hash()
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        self.restore_brain_inner(handle, parts, checkpoint_digest)
+    }
+
     pub fn restore_research_brain(
         &mut self,
         organism_id: OrganismId,
