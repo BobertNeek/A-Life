@@ -4069,6 +4069,12 @@ mod lifecycle_tests {
     use super::*;
 
     #[test]
+    fn selected_candidate_status_matches_precommit_contract() {
+        assert!(CLOSED_LOOP_DECODE_WGSL.contains("select(2u, 3u, found)"));
+        assert!(!CLOSED_LOOP_DECODE_WGSL.contains("select(2u, 1u, found)"));
+    }
+
+    #[test]
     fn selector_diagnostic_error_receipt_preserves_failure_class_and_boundary() {
         let capacity = selector_diagnostic_detail_plan(2048, 3, 2, 100, 2, 10, 580, 200)
             .expect_err("diagnostic detail must exceed the fixed payload capacity");
