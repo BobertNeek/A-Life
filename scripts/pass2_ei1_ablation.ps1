@@ -28,7 +28,34 @@ function Get-Sha256Text {
     try { (($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($Text)) | ForEach-Object { $_.ToString('x2') }) -join '') }
     finally { $sha.Dispose() }
 }
-function Get-CanonicalJson { param($Value) ($Value | ConvertTo-Json -Compress -Depth 30) }
+function ConvertTo-CanonicalValue {
+    param([AllowNull()]$Value)
+    if ($null -eq $Value) { return $null }
+    if ($Value -is [Collections.IDictionary]) {
+        $canonical = [ordered]@{}
+        foreach ($key in @($Value.Keys | ForEach-Object { [string]$_ } | Sort-Object -CaseSensitive)) {
+            $canonical[$key] = ConvertTo-CanonicalValue $Value[$key]
+        }
+        return $canonical
+    }
+    if ($Value -is [pscustomobject]) {
+        $canonical = [ordered]@{}
+        foreach ($property in @($Value.PSObject.Properties | Sort-Object Name -CaseSensitive)) {
+            $canonical[$property.Name] = ConvertTo-CanonicalValue $property.Value
+        }
+        return [pscustomobject]$canonical
+    }
+    if ($Value -is [Collections.IEnumerable] -and $Value -isnot [string]) {
+        $canonical = [Collections.Generic.List[object]]::new()
+        foreach ($item in $Value) { $canonical.Add((ConvertTo-CanonicalValue $item)) }
+        return ,$canonical.ToArray()
+    }
+    $Value
+}
+function Get-CanonicalJson {
+    param($Value)
+    ConvertTo-Json -InputObject (ConvertTo-CanonicalValue $Value) -Compress -Depth 30
+}
 function Get-SourceCommit {
     $commit = (& git rev-parse HEAD 2>$null | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or $commit -notmatch '^[0-9a-f]{40}$') { Stop-Ei1Ablation 'git rev-parse HEAD did not return a lower-case commit SHA' }
