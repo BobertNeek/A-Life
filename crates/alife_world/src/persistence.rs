@@ -104,6 +104,8 @@ pub enum PersistenceError {
         from_schema_version: u16,
         to_schema_version: u16,
     },
+    #[error("exact resume unavailable: {reason}")]
+    ExactResumeUnavailable { reason: &'static str },
     #[error("inline save payload is too large: {bytes} bytes")]
     HugeInlinePayload { bytes: u64 },
 }

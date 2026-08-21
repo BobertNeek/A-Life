@@ -196,6 +196,7 @@ impl SaveLoadErrorDisplay {
             PersistenceError::MissingAssetReference { .. } => "missing-asset-reference",
             PersistenceError::GeneticLayerMutable => "genetic-layer-mutable",
             PersistenceError::MigrationUnsupported { .. } => "migration-unsupported",
+            PersistenceError::ExactResumeUnavailable { .. } => "exact-resume-unavailable",
             PersistenceError::HugeInlinePayload { .. } => "huge-inline-payload",
             PersistenceError::Contract(_) => "core-contract",
             PersistenceError::Habitat(_) => "habitat",

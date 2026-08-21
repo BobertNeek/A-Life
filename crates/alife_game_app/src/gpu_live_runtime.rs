@@ -37,11 +37,12 @@ use alife_core::{
     WorldEntityId, MAX_ACTIVE_CONCEPTS, MAX_ACTIVE_GAPS, MAX_CONTEXT_MEMORY_EXPECTANCIES,
 };
 use alife_gpu_backend::{
-    GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuClosedLoopBackend,
+    AddLifetimeSynapse, GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuClosedLoopBackend,
     GpuClosedLoopMemoryBatchInput, GpuClosedLoopMemoryTickInput, GpuClosedLoopTick,
     GpuCuratedResidencyCohort, GpuCuratedResidencyEntry, GpuCuratedResidencyOutcome,
     GpuCuratedResidencyReceipt, GpuCuratedResidencyTargetIdentity, GpuLearningReceipt,
-    GpuMemoryContextUpload, GpuSleepTransactionStage, GpuV11WorkReceipt,
+    GpuMemoryContextUpload, GpuSleepTransactionStage, GpuV11SparseEdge, GpuV11SparseSpan,
+    GpuV11WorkReceipt,
     PendingEligibilityDiscardReceipt, PendingEligibilityIdentity, PendingEligibilityReceipt,
     GPU_CLOSED_LOOP_TICK_READBACK_BYTES, GPU_FAST_PLASTICITY_COMMIT_BYTES,
     GPU_MOTOR_CHANNEL_SLOT_COUNT,
@@ -57,8 +58,10 @@ use alife_world::{
     grounded_peripheral_summaries,
     persistence::{
         AssetManifest, CreatureMindSaveSummary, CreatureSaveState, ExactCognitiveCheckpointState,
-        GpuBrainSaveState, LearningTraceSaveSummary, PortableAssetDigest, PortableSaveFile,
-        RuntimeConfig, WeightLayerSaveSummary, V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
+        ExactV11PendingLifetimeSynapse, ExactV11SparseEdge, ExactV11SparseSpan,
+        ExactV11WorkReceipt, GpuBrainSaveState, LearningTraceSaveSummary, PortableAssetDigest,
+        PortableSaveFile, RuntimeConfig, WeightLayerSaveSummary,
+        V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
     },
     CreatureAppearanceGenome, HabitatActor, HabitatAuthorityError, HabitatBreedingKind,
     HabitatBreedingReceipt,
@@ -4063,10 +4066,46 @@ impl GpuLiveBrainRuntime {
                         return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
                     }
                     let mut v11_checkpoint = runtime.backend.checkpoint_v11(handle)?;
+                    if v11_checkpoint.neuron_count != exact_cognitive_state.v11_neuron_count {
+                        return Err(ScaffoldContractError::InvalidSparseProjectionSchema.into());
+                    }
                     v11_checkpoint.dendritic_branches =
                         exact_cognitive_state.dendritic_branches.clone();
                     v11_checkpoint.structural =
                         exact_cognitive_state.structural_plasticity.clone();
+                    v11_checkpoint.sparse_spans = exact_cognitive_state
+                        .v11_sparse_spans
+                        .iter()
+                        .map(|span| GpuV11SparseSpan {
+                            target: span.target,
+                            edges: span
+                                .edges
+                                .iter()
+                                .map(|edge| GpuV11SparseEdge {
+                                    source: edge.source,
+                                    target: edge.target,
+                                    route: edge.route,
+                                    weight: edge.weight,
+                                })
+                                .collect(),
+                        })
+                        .collect();
+                    v11_checkpoint.pending_lifetime_synapse = exact_cognitive_state
+                        .v11_pending_lifetime_synapse
+                        .as_ref()
+                        .map(|pending| AddLifetimeSynapse {
+                            source: pending.source,
+                            target: pending.target,
+                            route: pending.route,
+                            initial_weight: pending.initial_weight,
+                            evidence: pending.evidence,
+                            evidence_event: pending.evidence_event,
+                        });
+                    v11_checkpoint.work = GpuV11WorkReceipt {
+                        dendritic: exact_cognitive_state.v11_work.dendritic,
+                        structural: exact_cognitive_state.v11_work.structural,
+                        cognitive: exact_cognitive_state.v11_work.cognitive,
+                    };
                     runtime.backend.restore_v11(handle, v11_checkpoint)?;
                     let sleep_scheduler = GpuSleepScheduler::restore(
                         sleep_consolidation_config_for(&restored.phenotype)?,
@@ -4089,7 +4128,7 @@ impl GpuLiveBrainRuntime {
                     let last_structural_edit_receipts = structural_edit_receipts;
                     let life_statistics = restored
                         .life_statistics
-                        .unwrap_or(PassiveLifeStatistics::new(OrganismId(raw), world_tick)?);
+                        .ok_or(ScaffoldContractError::MissingPhaseData)?;
                     let retained_learning = if let Some(recovery) = restored.retained_learning {
                         let pending = pending_eligibility_for_cleanup
                             .as_ref()
@@ -4310,6 +4349,7 @@ impl GpuLiveBrainRuntime {
             organism_id,
             handle,
             resident,
+            memory.profile(),
             self.world.tick(),
         )?;
         write.attach_exact_cognitive_state(store, &exact)?;
@@ -4321,31 +4361,43 @@ impl GpuLiveBrainRuntime {
         organism_id: OrganismId,
         handle: GpuBrainHandle,
         resident: &ResidentCognition,
+        sensor_profile: SensorProfileIdentity,
         checkpoint_tick: Tick,
     ) -> Result<ExactCognitiveCheckpointState, GameAppShellError> {
-        let mut cognitive_context = resident
+        let cognitive_context = resident
             .last_cognitive_context
             .clone()
-            .unwrap_or(CognitiveContextFrame::empty(
-                organism_id,
-                ExperienceSequenceId(resident.next_sequence.max(1)),
-                checkpoint_tick,
-            )?);
-        cognitive_context.world_tick = checkpoint_tick;
-        cognitive_context.attention.world_tick = checkpoint_tick;
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        if cognitive_context.world_tick != checkpoint_tick
+            || cognitive_context.attention.world_tick != checkpoint_tick
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+        }
         cognitive_context.validate_contract()?;
 
-        let mut selected_motor_bundle = resident.last_selected_motor_bundle.clone();
-        if let Some(bundle) = &mut selected_motor_bundle {
-            bundle.tick = checkpoint_tick;
+        let selected_motor_bundle = resident.last_selected_motor_bundle.clone();
+        if let Some(bundle) = &selected_motor_bundle {
             bundle.validate_contract()?;
+            if bundle.tick != checkpoint_tick {
+                return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+            }
         }
 
         let v11_checkpoint = self.backend.backend().checkpoint_v11(handle)?;
+        let runtime_profile = *self.backend.runtime_profile();
+        let activity_policy = *self.backend.backend().activity_policy();
         let state = ExactCognitiveCheckpointState {
             schema_version: V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
             organism_id,
             checkpoint_tick,
+            world_seed: self.deterministic_seed,
+            phenotype_hash: resident.phenotype.phenotype_hash(),
+            capacity_class_id: resident.phenotype.brain_class_id(),
+            sensor_profile,
+            runtime_profile_id: runtime_profile.profile_id,
+            runtime_profile_digest: runtime_profile.canonical_digest()?,
+            activity_policy_version: activity_policy.policy_version,
+            activity_policy_digest: activity_policy.policy_digest,
             cognitive_context,
             predictor: resident.predictor.clone(),
             selected_motor_bundle,
@@ -4356,6 +4408,40 @@ impl GpuLiveBrainRuntime {
             structural_plasticity: v11_checkpoint.structural,
             structural_edit_receipts: resident.last_structural_edit_receipts.clone(),
             last_sleep_report: resident.last_sleep_report.clone(),
+            v11_neuron_count: v11_checkpoint.neuron_count,
+            v11_sparse_spans: v11_checkpoint
+                .sparse_spans
+                .iter()
+                .map(|span| ExactV11SparseSpan {
+                    target: span.target,
+                    edges: span
+                        .edges
+                        .iter()
+                        .map(|edge| ExactV11SparseEdge {
+                            source: edge.source,
+                            target: edge.target,
+                            route: edge.route,
+                            weight: edge.weight,
+                        })
+                        .collect(),
+                })
+                .collect(),
+            v11_pending_lifetime_synapse: v11_checkpoint
+                .pending_lifetime_synapse
+                .as_ref()
+                .map(|pending| ExactV11PendingLifetimeSynapse {
+                    source: pending.source,
+                    target: pending.target,
+                    route: pending.route,
+                    initial_weight: pending.initial_weight,
+                    evidence: pending.evidence,
+                    evidence_event: pending.evidence_event,
+                }),
+            v11_work: ExactV11WorkReceipt {
+                dendritic: v11_checkpoint.work.dendritic,
+                structural: v11_checkpoint.work.structural,
+                cognitive: v11_checkpoint.work.cognitive,
+            },
         };
         state.validate()?;
         Ok(state)
@@ -4540,6 +4626,10 @@ impl GpuLiveBrainRuntime {
                 organism_id,
                 handle,
                 resident,
+                self.memories
+                    .get(&raw)
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                    .profile(),
                 checkpoint_tick,
             )?;
             write.attach_exact_cognitive_state(store, &exact)?;

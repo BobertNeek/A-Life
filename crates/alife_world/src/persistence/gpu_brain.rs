@@ -3,20 +3,22 @@
 //! This module owns serialization contracts only. It contains no neural math,
 //! GPU handles, packed arena offsets, or fallback execution path.
 
-use alife_core::{
-    ActionId, AttentionFrame, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId,
-    CandidateActionFamily, CandidateFeatureDigest, CanonicalDigestBuilder, CognitiveContextFrame,
-    CognitiveWorkReceipt, ConsolidationState, DendriticBranchSet,
-    LanguageGroundingLedger, MemoryCompactionCheckpoint, MemoryCompactionPhase, MemorySidecarState,
-    MotorCommandBundle, OrganismId, OutcomeCreditReplayKey, PassiveLifeStatistics,
-    PerceptionFrameDigest, PhenotypeHash, PortableTopologySidecarAssetV1, ReplayEligibilitySample,
-    ReplaySynapseSpan, ScaffoldContractError, SensorProfileIdentity, SleepConsolidationReport,
-    SleepReplayEvent, SleepState, StructuralEditBatch, StructuralPlasticityState,
-    Tick, TopologyCounts, TopologySidecar, Validate, MAX_CANDIDATES_PER_REGION,
-    MAX_REGIONS_PER_STATE, MAX_REPLAY_CAPTURE_SYNAPSES, MAX_STRUCTURAL_EDGES,
-};
 use alife_core::predictive::GroundedSuccessorPredictor;
 use alife_core::sleep::SleepWorkReceipt;
+use alife_core::{
+    ActionId, AttentionFrame, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId,
+    CandidateActionFamily, CandidateFeatureDigest, CanonicalDigestBuilder, CoactivationEvidence,
+    CognitiveContextFrame, CognitiveWorkReceipt, ConsolidationState, DendriticBranchSet,
+    DendriticWorkReceipt, LanguageGroundingLedger, MemoryCompactionCheckpoint,
+    MemoryCompactionPhase, MemorySidecarState, MotorCommandBundle, OrganismId,
+    OutcomeCreditReplayKey, PassiveLifeStatistics, PerceptionFrameDigest, PhenotypeHash,
+    PortableTopologySidecarAssetV1, ReplayEligibilitySample, ReplaySynapseSpan,
+    ScaffoldContractError, SensorProfileId, SensorProfileIdentity, SleepConsolidationReport,
+    SleepReplayEvent, SleepState, StructuralEditBatch, StructuralEvidenceEvent,
+    StructuralPlasticityState, StructuralWorkReceipt, Tick, TopologyCounts, TopologySidecar,
+    Validate, MAX_CANDIDATES_PER_REGION, MAX_REGIONS_PER_STATE, MAX_REPLAY_CAPTURE_SYNAPSES,
+    MAX_STRUCTURAL_EDGES,
+};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 
 use crate::TrackedObjectRegistrySaveState;
@@ -26,7 +28,7 @@ use super::{
     AssetManifest, PersistenceError, PortableAssetDigest,
 };
 
-pub const GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION: u16 = 3;
+pub const GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION: u16 = 4;
 pub const GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION: u16 = 1;
 pub const MEMORY_SIDECAR_SAVE_SCHEMA_VERSION: u16 = 1;
 pub const TOPOLOGY_SIDECAR_SAVE_SCHEMA_VERSION: u16 = 1;
@@ -34,8 +36,8 @@ pub const RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION: u16 = 1;
 pub const GPU_BRAIN_WEIGHT_LAYER_LIFETIME: u16 = 1;
 pub const GPU_BRAIN_WEIGHT_LAYER_FAST: u16 = 2;
 pub const GPU_BRAIN_HOMEOSTASIS_LANES_PER_NEURON: u16 = 2;
-pub const V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION: u16 = 1;
-pub const V11_DURABLE_FOUNDER_COGNITIVE_STATE_SCHEMA_VERSION: u16 = 1;
+pub const V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION: u16 = 2;
+pub const V11_DURABLE_FOUNDER_COGNITIVE_STATE_SCHEMA_VERSION: u16 = 2;
 
 const ACTIVATION_DIGEST_DOMAIN: &[u8] = b"ALIFE-GPU-ACTIVATION-BANKS-V1";
 const HOMEOSTASIS_DIGEST_DOMAIN: &[u8] = b"ALIFE-GPU-NEURON-HOMEOSTASIS-V1";
@@ -54,6 +56,22 @@ pub struct ExactCognitiveCheckpointState {
     pub schema_version: u16,
     pub organism_id: OrganismId,
     pub checkpoint_tick: Tick,
+    #[serde(default)]
+    pub world_seed: u64,
+    #[serde(default)]
+    pub phenotype_hash: PhenotypeHash,
+    #[serde(default = "default_brain_class_id")]
+    pub capacity_class_id: BrainClassId,
+    #[serde(default = "default_sensor_profile_identity")]
+    pub sensor_profile: SensorProfileIdentity,
+    #[serde(default)]
+    pub runtime_profile_id: u16,
+    #[serde(default)]
+    pub runtime_profile_digest: [u64; 4],
+    #[serde(default)]
+    pub activity_policy_version: u16,
+    #[serde(default)]
+    pub activity_policy_digest: [u64; 4],
     pub cognitive_context: CognitiveContextFrame,
     pub predictor: GroundedSuccessorPredictor,
     pub selected_motor_bundle: Option<MotorCommandBundle>,
@@ -64,6 +82,82 @@ pub struct ExactCognitiveCheckpointState {
     pub structural_plasticity: StructuralPlasticityState,
     pub structural_edit_receipts: Vec<StructuralEditBatch>,
     pub last_sleep_report: Option<SleepConsolidationReport>,
+    #[serde(default)]
+    pub v11_neuron_count: u32,
+    #[serde(default)]
+    pub v11_sparse_spans: Vec<ExactV11SparseSpan>,
+    #[serde(default)]
+    pub v11_pending_lifetime_synapse: Option<ExactV11PendingLifetimeSynapse>,
+    #[serde(default)]
+    pub v11_work: ExactV11WorkReceipt,
+}
+
+/// Portable mirrors for GPU-authored v1.1 causal state. These records keep
+/// the persistence layer independent from backend implementation layouts while
+/// retaining sparse accepted edges and the pending growth transaction exactly.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExactV11SparseEdge {
+    pub source: u32,
+    pub target: u32,
+    pub route: u32,
+    pub weight: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExactV11SparseSpan {
+    pub target: u32,
+    pub edges: Vec<ExactV11SparseEdge>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExactV11PendingLifetimeSynapse {
+    pub source: u32,
+    pub target: u32,
+    pub route: u32,
+    pub initial_weight: f32,
+    pub evidence: CoactivationEvidence,
+    pub evidence_event: Option<StructuralEvidenceEvent>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExactV11WorkReceipt {
+    pub dendritic: DendriticWorkReceipt,
+    pub structural: StructuralWorkReceipt,
+    pub cognitive: CognitiveWorkReceipt,
+}
+
+impl Default for ExactV11WorkReceipt {
+    fn default() -> Self {
+        Self {
+            dendritic: DendriticWorkReceipt::default(),
+            structural: StructuralWorkReceipt {
+                candidate_comparisons: 0,
+                candidates_kept: 0,
+                accepted_edges: 0,
+                pruned_edges: 0,
+                active_edges: 0,
+                maintenance_ops: 0,
+                ranking_ops: 0,
+                recompaction_ops: 0,
+                growth_ops: 0,
+                pruning_ops: 0,
+                deterministic_digest: 0,
+            },
+            cognitive: CognitiveWorkReceipt::zero(),
+        }
+    }
+}
+
+fn default_brain_class_id() -> BrainClassId {
+    BrainClassId(0)
+}
+
+fn default_sensor_profile_identity() -> SensorProfileIdentity {
+    SensorProfileIdentity {
+        profile_id: SensorProfileId(0),
+        profile_schema_version: 0,
+        sensory_abi_version: 0,
+    }
 }
 
 impl ExactCognitiveCheckpointState {
@@ -81,15 +175,38 @@ impl ExactCognitiveCheckpointState {
     pub fn validate(&self) -> Result<(), PersistenceError> {
         if self.schema_version != V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION {
             return Err(PersistenceError::SchemaVersion {
-                schema: "alife.v11.exact_cognitive_state.v1",
+                schema: "alife.v11.exact_cognitive_state.v2",
                 expected: V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
                 actual: self.schema_version,
             });
         }
         self.organism_id.validate()?;
+        if self.world_seed == 0
+            || self.phenotype_hash == PhenotypeHash([0; 4])
+            || self.runtime_profile_id == 0
+            || self.runtime_profile_digest == [0; 4]
+            || self.activity_policy_version == 0
+            || self.activity_policy_digest == [0; 4]
+            || self.v11_neuron_count == 0
+        {
+            return Err(PersistenceError::Contract(
+                ScaffoldContractError::ConsolidationGenerationMismatch,
+            ));
+        }
+        BrainCapacityClass::production_for_id(self.capacity_class_id)?;
+        self.sensor_profile.validate_contract()?;
+        let activity_policy = BrainActivityPolicyV1::production_v1();
+        if self.activity_policy_version != activity_policy.policy_version
+            || self.activity_policy_digest != activity_policy.policy_digest
+        {
+            return Err(PersistenceError::Contract(
+                ScaffoldContractError::BrainActivitySequenceMismatch,
+            ));
+        }
         self.cognitive_context.validate_contract()?;
         if self.cognitive_context.organism_id != self.organism_id
             || self.cognitive_context.world_tick != self.checkpoint_tick
+            || self.cognitive_context.attention.world_tick != self.checkpoint_tick
         {
             return Err(PersistenceError::Contract(
                 ScaffoldContractError::BrainOwnershipMismatch,
@@ -127,6 +244,12 @@ impl ExactCognitiveCheckpointState {
                 ));
             }
         }
+        validate_v11_sparse_state(
+            self.v11_neuron_count,
+            &self.v11_sparse_spans,
+            self.v11_pending_lifetime_synapse.as_ref(),
+        )?;
+        validate_v11_work(&self.v11_work)?;
         Ok(())
     }
 
@@ -142,6 +265,8 @@ impl ExactCognitiveCheckpointState {
             predictor: self.predictor.clone(),
             dendritic_branches: self.dendritic_branches.clone(),
             structural_plasticity: self.structural_plasticity.clone(),
+            v11_neuron_count: self.v11_neuron_count,
+            v11_sparse_spans: self.v11_sparse_spans.clone(),
         })
     }
 
@@ -160,6 +285,8 @@ pub struct DurableFounderCognitiveState {
     pub predictor: GroundedSuccessorPredictor,
     pub dendritic_branches: DendriticBranchSet,
     pub structural_plasticity: StructuralPlasticityState,
+    pub v11_neuron_count: u32,
+    pub v11_sparse_spans: Vec<ExactV11SparseSpan>,
 }
 
 impl DurableFounderCognitiveState {
@@ -177,7 +304,7 @@ impl DurableFounderCognitiveState {
     pub fn validate(&self) -> Result<(), PersistenceError> {
         if self.schema_version != V11_DURABLE_FOUNDER_COGNITIVE_STATE_SCHEMA_VERSION {
             return Err(PersistenceError::SchemaVersion {
-                schema: "alife.v11.durable_founder_cognitive_state.v1",
+                schema: "alife.v11.durable_founder_cognitive_state.v2",
                 expected: V11_DURABLE_FOUNDER_COGNITIVE_STATE_SCHEMA_VERSION,
                 actual: self.schema_version,
             });
@@ -186,8 +313,82 @@ impl DurableFounderCognitiveState {
         validate_predictor(&self.predictor)?;
         validate_dendritic_branches(&self.dendritic_branches)?;
         validate_structural_plasticity(&self.structural_plasticity)?;
+        validate_v11_sparse_state(self.v11_neuron_count, &self.v11_sparse_spans, None)?;
         Ok(())
     }
+}
+
+fn validate_v11_sparse_state(
+    neuron_count: u32,
+    spans: &[ExactV11SparseSpan],
+    pending: Option<&ExactV11PendingLifetimeSynapse>,
+) -> Result<(), PersistenceError> {
+    if neuron_count == 0 || spans.len() > MAX_STRUCTURAL_EDGES {
+        return Err(ScaffoldContractError::InvalidSparseProjectionSchema.into());
+    }
+    let mut edge_count = 0usize;
+    for pair in spans.windows(2) {
+        if pair[0].target >= pair[1].target {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema.into());
+        }
+    }
+    for span in spans {
+        if span.target >= neuron_count {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema.into());
+        }
+        edge_count = edge_count.saturating_add(span.edges.len());
+        if edge_count > MAX_STRUCTURAL_EDGES {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema.into());
+        }
+        for edge in &span.edges {
+            if edge.source >= neuron_count
+                || edge.target != span.target
+                || edge.route > u16::MAX as u32
+                || !edge.weight.is_finite()
+            {
+                return Err(ScaffoldContractError::InvalidSparseProjectionSchema.into());
+            }
+        }
+    }
+    if let Some(pending) = pending {
+        let present = spans.iter().any(|span| {
+            span.target == pending.target
+                && span.edges.iter().any(|edge| {
+                    edge.source == pending.source
+                        && edge.target == pending.target
+                        && edge.weight == pending.initial_weight
+                })
+        });
+        if pending.source >= neuron_count
+            || pending.target >= neuron_count
+            || pending.route > u16::MAX as u32
+            || !pending.initial_weight.is_finite()
+            || pending.evidence.source != pending.source
+            || pending.evidence.target != pending.target
+            || pending.route != pending.evidence.region as u32
+            || !present
+        {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema.into());
+        }
+        if let Some(event) = pending.evidence_event {
+            if event.source != pending.source
+                || event.target != pending.target
+                || event.region != pending.evidence.region
+            {
+                return Err(ScaffoldContractError::InvalidSparseProjectionSchema.into());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_v11_work(work: &ExactV11WorkReceipt) -> Result<(), PersistenceError> {
+    let encoded = serde_json::to_vec(work)?;
+    let decoded: ExactV11WorkReceipt = serde_json::from_slice(&encoded)?;
+    if decoded != *work {
+        return Err(ScaffoldContractError::InvalidSparseProjectionSchema.into());
+    }
+    Ok(())
 }
 
 fn validate_predictor(predictor: &GroundedSuccessorPredictor) -> Result<(), PersistenceError> {
@@ -988,7 +1189,6 @@ pub struct GpuBrainSaveState {
     pub activation_state: GpuBrainAssetRef,
     pub neuron_homeostasis: GpuBrainAssetRef,
     pub checkpoint_tick: Tick,
-    #[serde(default)]
     pub exact_cognitive_state: Option<GpuBrainAssetRef>,
     pub last_learning_replay_key: Option<OutcomeCreditReplayKey>,
     pub pending_eligibility: Option<PendingEligibilityCheckpoint>,
@@ -1012,7 +1212,7 @@ impl GpuBrainSaveState {
     pub fn validate(&self) -> Result<(), PersistenceError> {
         if self.schema_version != GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION {
             return Err(PersistenceError::SchemaVersion {
-                schema: "alife.gpu_brain_save_state.v3",
+                schema: "alife.gpu_brain_save_state.v4",
                 expected: GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
                 actual: self.schema_version,
             });
@@ -1124,6 +1324,24 @@ impl GpuBrainSaveState {
         }
 
         self.validate_sleep_transaction()
+    }
+
+    /// Exact resume is stricter than the intermediate capture record used by
+    /// founder materialization. No acquired-state asset or life-statistics
+    /// record may be absent on this production load path.
+    pub fn validate_exact_resume(&self) -> Result<(), PersistenceError> {
+        self.validate()?;
+        if self.exact_cognitive_state.is_none() {
+            return Err(PersistenceError::ExactResumeUnavailable {
+                reason: "exact cognitive state asset is missing",
+            });
+        }
+        if self.life_statistics.is_none() {
+            return Err(PersistenceError::ExactResumeUnavailable {
+                reason: "passive life statistics are missing",
+            });
+        }
+        Ok(())
     }
 
     /// Builds the post-manifest-CAS state for an already committed GPU sleep
@@ -1321,14 +1539,11 @@ struct GpuBrainSaveStateWire {
     last_learning_replay_key: Option<OutcomeCreditReplayKey>,
     pending_eligibility: Option<PendingEligibilityCheckpoint>,
     pending_experience_transaction: Option<GpuBrainAssetRef>,
-    #[serde(default)]
     exact_cognitive_state: Option<GpuBrainAssetRef>,
     memory: MemorySidecarSaveState,
     topology: TopologySidecarSaveSummary,
     tracked_objects: TrackedObjectRegistrySaveState,
-    #[serde(default)]
     language_grounding: LanguageGroundingLedger,
-    #[serde(default)]
     life_statistics: Option<PassiveLifeStatistics>,
     sleep: SleepState,
     sleep_assets: GpuSleepAssetState,

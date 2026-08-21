@@ -258,6 +258,14 @@ impl GpuBrainCheckpointWrite {
         state.validate()?;
         if state.organism_id != self.save_state.organism_id
             || state.checkpoint_tick != self.save_state.checkpoint_tick
+            || state.world_seed != self.save_state.tracked_objects.world_seed
+            || state.phenotype_hash != self.save_state.phenotype_hash
+            || state.capacity_class_id != self.save_state.capacity_class_id
+            || state.sensor_profile != self.save_state.sensor_profile
+            || state.runtime_profile_id != self.save_state.runtime_profile_id
+            || state.runtime_profile_digest != self.save_state.runtime_profile_digest
+            || state.activity_policy_version != self.save_state.activity_policy_version
+            || state.activity_policy_digest != self.save_state.activity_policy_digest
         {
             return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
         }
@@ -288,6 +296,7 @@ impl GpuCheckpointAssetStore {
         manifest: &AssetManifest,
         checkpoint: &GpuBrainCheckpointWrite,
     ) -> Result<RestoredGpuBrainCheckpoint, GameAppShellError> {
+        checkpoint.save_state.validate_exact_resume()?;
         let exact_asset = checkpoint
             .save_state
             .exact_cognitive_state
@@ -296,6 +305,17 @@ impl GpuCheckpointAssetStore {
         let exact_cognitive_state = self.read_exact_cognitive_state(manifest, exact_asset)?;
         if exact_cognitive_state.organism_id != checkpoint.save_state.organism_id
             || exact_cognitive_state.checkpoint_tick != checkpoint.save_state.checkpoint_tick
+            || exact_cognitive_state.world_seed != checkpoint.save_state.tracked_objects.world_seed
+            || exact_cognitive_state.phenotype_hash != checkpoint.save_state.phenotype_hash
+            || exact_cognitive_state.capacity_class_id != checkpoint.save_state.capacity_class_id
+            || exact_cognitive_state.sensor_profile != checkpoint.save_state.sensor_profile
+            || exact_cognitive_state.runtime_profile_id != checkpoint.save_state.runtime_profile_id
+            || exact_cognitive_state.runtime_profile_digest
+                != checkpoint.save_state.runtime_profile_digest
+            || exact_cognitive_state.activity_policy_version
+                != checkpoint.save_state.activity_policy_version
+            || exact_cognitive_state.activity_policy_digest
+                != checkpoint.save_state.activity_policy_digest
         {
             return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
         }
@@ -349,12 +369,21 @@ impl GpuCheckpointAssetStore {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
         }
 
-        let restored = self.restore_brain(backend, manifest, source_state)?;
+        let source_checkpoint = GpuBrainCheckpointWrite {
+            save_state: source_state.clone(),
+            manifest_entries: Vec::new(),
+            checkpoint_digest: [0; 4],
+        };
+        let restored = self.restore_brain_checkpoint(backend, manifest, &source_checkpoint)?;
         let durable_state = restored
             .exact_cognitive_state
             .as_ref()
-            .map(ExactCognitiveCheckpointState::to_durable_founder)
-            .transpose()?;
+            .ok_or(
+                alife_world::persistence::PersistenceError::ExactResumeUnavailable {
+                    reason: "durable founder source has no exact cognitive state",
+                },
+            )?
+            .to_durable_founder()?;
         let source_handle = restored.receipt.handle;
         let source_snapshot =
             match backend.snapshot_brain(source_handle, source_state.checkpoint_tick) {
@@ -438,10 +467,8 @@ impl GpuCheckpointAssetStore {
         );
         let removal = backend.remove_brain(target_handle);
         let mut checkpoint = checkpoint?;
-        let durable_cognitive_state = durable_state
-            .as_ref()
-            .map(|state| checkpoint.attach_durable_founder_state(self, state))
-            .transpose()?;
+        let durable_cognitive_state =
+            Some(checkpoint.attach_durable_founder_state(self, &durable_state)?);
         removal?;
         Ok(GpuDurableFounderWrite {
             checkpoint,
