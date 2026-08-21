@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a-life.local/schemas/pass2-experiment-manifest-v1.schema.json",
+  "title": "A-Life Pass 2 behavioural experiment manifest",
+  "type": "object",
+  "required": ["schema_version", "source_commit", "configuration_hash", "scenario_corpus_version", "seed_set", "brain_class", "population", "hardware_toolchain", "mechanisms", "stage", "command", "artifacts", "metrics", "outcome", "cache_lineage"],
+  "properties": {
+    "schema_version": {"const": "pass2-experiment-manifest-v1"},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "configuration_hash": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{7,}$"},
+    "scenario_corpus_version": {"type": "string", "minLength": 1},
+    "seed_set": {"type": "object", "required": ["identity", "seeds"], "properties": {"identity": {"type": "string", "minLength": 1}, "seeds": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": "integer", "minimum": 0}}}, "additionalProperties": false},
+    "brain_class": {"enum": ["Nano512", "N512", "N1024", "N2048"]},
+    "population": {"type": "integer", "minimum": 1},
+    "hardware_toolchain": {"type": "object", "required": ["adapter_identity", "driver_identity", "os_identity", "rustc_identity", "wgpu_identity"], "properties": {"adapter_identity": {"type": "string", "minLength": 1}, "driver_identity": {"type": "string", "minLength": 1}, "os_identity": {"type": "string", "minLength": 1}, "rustc_identity": {"type": "string", "minLength": 1}, "wgpu_identity": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+    "mechanisms": {"type": "object", "required": ["attention", "concept_gap_context", "prediction", "dendritic_conjunctions", "structural_plasticity", "weight_learning", "sleep_consolidation", "episodic_recall"], "properties": {"attention": {"type": "boolean"}, "concept_gap_context": {"type": "boolean"}, "prediction": {"type": "boolean"}, "dendritic_conjunctions": {"type": "boolean"}, "structural_plasticity": {"type": "boolean"}, "weight_learning": {"type": "boolean"}, "sleep_consolidation": {"type": "boolean"}, "episodic_recall": {"type": "boolean"}}, "additionalProperties": false},
+    "stage": {"enum": ["screen", "confirm", "certify"]},
+    "command": {"type": "object", "required": ["runner_id", "arguments"], "properties": {"runner_id": {"type": "string", "minLength": 1}, "arguments": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": false},
+    "artifacts": {"type": "object", "required": ["raw_output_path", "receipt_path"], "properties": {"raw_output_path": {"type": "string", "minLength": 1}, "receipt_path": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+    "metrics": {"type": "object", "required": ["capability", "cognitive_work_fields"], "properties": {"capability": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "cognitive_work_fields": {"type": "array", "minItems": 1, "items": {"type": "string"}}}, "additionalProperties": false},
+    "outcome": {"type": "object", "required": ["status", "execution_state"], "properties": {"status": {"enum": ["planned", "completed", "unavailable", "invalid", "causal_failure", "diverged", "evaluator_corrupt"]}, "execution_state": {"enum": ["not_run", "executed"]}}, "additionalProperties": false},
+    "cache_lineage": {"type": "object", "required": ["source_digest", "configuration_hash", "parent_receipt_path"], "properties": {"source_digest": {"type": "string", "minLength": 1}, "configuration_hash": {"type": "string", "minLength": 1}, "parent_receipt_path": {"type": ["string", "null"]}}, "additionalProperties": false}
+  },
+  "additionalProperties": false
+}
