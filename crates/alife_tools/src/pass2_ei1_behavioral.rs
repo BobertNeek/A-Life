@@ -145,7 +145,7 @@ pub fn run_planned_manifest(
             &source_tree,
         )
         .map_err(core_failure)?
-        .with_selector_diagnostics();
+        .with_selector_diagnostics_for_candidates([3, 5]);
         let trial = runner.run(request).map_err(|error| {
             Pass2Ei1BehavioralError::Runner(format!("run rejected causal execution: {error}"))
         })?;

@@ -76,7 +76,22 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
   valid = valid && final_side <= 1u;
   let activation_offset = select(brain.activation_a_offset, brain.activation_b_offset, final_side == 1u);
   var logit = bitcast<f32>(family.bias_bits);
-  let decoder_synapse_count = brain.synapse_count - brain.recurrent_synapse_count;
+  var diagnostic_requested = false;
+  var diagnostic_base = 0u;
+  var diagnostic_synapse_count = 0u;
+  if (header.reserved != 0u) {
+    let request_count = frame_payload_words[header.reserved];
+    valid = valid && request_count > 0u && request_count <= 8u;
+    for (var request = 0u; request < request_count && valid; request++) {
+      let request_base = header.reserved + 1u + request * 3u;
+      if (frame_payload_words[request_base] == candidate) {
+        diagnostic_requested = true;
+        diagnostic_base = header.reserved + frame_payload_words[request_base + 1u];
+        diagnostic_synapse_count = frame_payload_words[request_base + 2u];
+      }
+    }
+    valid = valid && (!diagnostic_requested || diagnostic_synapse_count == family.weight_index_count);
+  }
   for (var index=0u; index<family.weight_index_count && valid; index++) {
     let map = load_decoder_weight_index(family.weight_index_start + index * 4u);
     valid = map.reserved0 == 0u
@@ -95,10 +110,8 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
       let effective = genetic + lifetime + alpha * fast;
       let contribution = motor * feature * effective;
       logit += contribution;
-      if (header.reserved != 0u) {
-        let receipt_base = header.reserved
-          + candidate * decoder_synapse_count * SELECTOR_DIAGNOSTIC_RECORD_WORDS
-          + index * SELECTOR_DIAGNOSTIC_RECORD_WORDS;
+      if (diagnostic_requested) {
+        let receipt_base = diagnostic_base + index * SELECTOR_DIAGNOSTIC_RECORD_WORDS;
         frame_payload_words[receipt_base] = candidate;
         frame_payload_words[receipt_base + 1u] = index;
         frame_payload_words[receipt_base + 2u] = map.global_synapse_id;

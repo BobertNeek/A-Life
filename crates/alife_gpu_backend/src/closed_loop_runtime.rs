@@ -397,7 +397,7 @@ pub struct GpuClosedLoopTick {
     pub selector_diagnostic: Option<GpuSelectorDiagnosticReceipt>,
 }
 
-pub const GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION: u16 = 2;
+pub const GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION: u16 = 3;
 const GPU_SELECTOR_INVALID_LOGIT_BITS: u32 = 0x7fc0_0001;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -490,6 +490,7 @@ pub struct GpuSelectorDiagnosticReceipt {
     pub phenotype_hash: PhenotypeHash,
     pub dispatch_generation: u64,
     pub policy: GpuSelectorPolicyIdentity,
+    pub requested_candidate_indices: Vec<u16>,
     pub candidates: Vec<GpuSelectorCandidateDiagnostic>,
     pub argmax_candidate_index: u16,
     pub equal_max_candidate_indices: Vec<u16>,
@@ -1352,6 +1353,15 @@ impl GpuSelectorDiagnosticReceipt {
             || self.phenotype_hash.0 == [0; 4]
             || self.dispatch_generation == 0
             || self.policy != GpuSelectorPolicyIdentity::PRODUCTION_V1
+            || self.requested_candidate_indices.is_empty()
+            || self
+                .requested_candidate_indices
+                .windows(2)
+                .any(|window| window[0] >= window[1])
+            || self
+                .requested_candidate_indices
+                .iter()
+                .any(|index| usize::from(*index) >= self.candidates.len())
             || self.candidates.is_empty()
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
@@ -1362,6 +1372,10 @@ impl GpuSelectorDiagnosticReceipt {
             {
                 return Err(ScaffoldContractError::InvalidDecisionEvidence);
             }
+            let requested = self
+                .requested_candidate_indices
+                .binary_search(&candidate.candidate_index)
+                .is_ok();
             match candidate.validity {
                 GpuSelectorCandidateValidity::Valid => {
                     let (Some(pre), Some(delta), Some(final_logit)) = (
@@ -1377,6 +1391,12 @@ impl GpuSelectorDiagnosticReceipt {
                         || (final_logit - pre).to_bits() != delta.to_bits()
                     {
                         return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                    }
+                    if !requested {
+                        if candidate.binding.is_some() || !candidate.contributions.is_empty() {
+                            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                        }
+                        continue;
                     }
                     let binding = candidate
                         .binding
@@ -1523,21 +1543,9 @@ fn build_selector_diagnostic(
     {
         return Err(ScaffoldContractError::InvalidDecisionEvidence);
     }
-    let decoder_synapse_count = slot
-        .record()
-        .synapse_count
-        .checked_sub(slot.record().recurrent_synapse_count)
-        .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-    let expected_detail_words = frame
-        .candidates()
-        .len()
-        .checked_mul(
-            usize::try_from(decoder_synapse_count)
-                .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
-        )
-        .and_then(|count| count.checked_mul(GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS))
-        .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-    if capture.synapse_words.len() != expected_detail_words {
+    if capture.requested_candidate_indices.is_empty()
+        || capture.contributions.len() != capture.requested_candidate_indices.len()
+    {
         return Err(ScaffoldContractError::InvalidDecisionEvidence);
     }
     let lifetime_weight_offset = if active_weight_bank == 0 {
@@ -1569,14 +1577,10 @@ fn build_selector_diagnostic(
                 .iter()
                 .find(|family| family.family() == candidate.family)
                 .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-            let candidate_index = usize::from(candidate.candidate_index);
-            let block_base = candidate_index
-                .checked_mul(
-                    usize::try_from(decoder_synapse_count)
-                        .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
-                )
-                .and_then(|base| base.checked_mul(GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS))
-                .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+            let contribution_capture = capture
+                .contributions
+                .iter()
+                .find(|detail| detail.candidate_index == candidate.candidate_index);
             let pre = selector_logit(*pre_bits);
             let final_logit = selector_logit(*final_bits);
             let (validity, pre_context_logit, memory_context_delta, final_logit) =
@@ -1589,34 +1593,31 @@ fn build_selector_diagnostic(
                     ),
                     _ => (GpuSelectorCandidateValidity::InvalidLogit, None, None, None),
                 };
-            let (binding, contributions) = if validity == GpuSelectorCandidateValidity::Valid {
-                let first = block_base;
-                let family_start = selector_detail_word(&capture.synapse_words, first, 19)?;
-                let family_count = selector_detail_word(&capture.synapse_words, first, 20)?;
+            let (binding, contributions) = if validity == GpuSelectorCandidateValidity::Valid
+                && contribution_capture.is_some()
+            {
+                let words = &contribution_capture
+                    .expect("checked sparse contribution capture")
+                    .synapse_words;
+                let first = 0;
+                let family_start = selector_detail_word(words, first, 19)?;
+                let family_count = selector_detail_word(words, first, 20)?;
                 let binding = GpuSelectorBindingIdentity {
-                    decoder_plan_offset: selector_detail_word(&capture.synapse_words, first, 18)?,
-                    decoder_family_offset: selector_detail_word(&capture.synapse_words, first, 28)?,
+                    decoder_plan_offset: selector_detail_word(words, first, 18)?,
+                    decoder_family_offset: selector_detail_word(words, first, 28)?,
                     decoder_family_start: family_start,
                     decoder_family_count: family_count,
-                    weight_index_start: selector_detail_word(&capture.synapse_words, first, 21)?,
-                    weight_index_count: selector_detail_word(&capture.synapse_words, first, 22)?,
-                    activation_side: u8::try_from(selector_detail_word(
-                        &capture.synapse_words,
-                        first,
-                        14,
-                    )?)
-                    .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
-                    activation_offset: selector_detail_word(&capture.synapse_words, first, 15)?,
-                    motor_start: selector_detail_word(&capture.synapse_words, first, 16)?,
-                    feature_offset: selector_detail_word(&capture.synapse_words, first, 17)?,
-                    genetic_weight_offset: selector_detail_word(&capture.synapse_words, first, 23)?,
-                    alpha_offset: selector_detail_word(&capture.synapse_words, first, 24)?,
-                    lifetime_weight_offset: selector_detail_word(
-                        &capture.synapse_words,
-                        first,
-                        25,
-                    )?,
-                    fast_weight_offset: selector_detail_word(&capture.synapse_words, first, 26)?,
+                    weight_index_start: selector_detail_word(words, first, 21)?,
+                    weight_index_count: selector_detail_word(words, first, 22)?,
+                    activation_side: u8::try_from(selector_detail_word(words, first, 14)?)
+                        .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
+                    activation_offset: selector_detail_word(words, first, 15)?,
+                    motor_start: selector_detail_word(words, first, 16)?,
+                    feature_offset: selector_detail_word(words, first, 17)?,
+                    genetic_weight_offset: selector_detail_word(words, first, 23)?,
+                    alpha_offset: selector_detail_word(words, first, 24)?,
+                    lifetime_weight_offset: selector_detail_word(words, first, 25)?,
+                    fast_weight_offset: selector_detail_word(words, first, 26)?,
                 };
                 let expected_family_start = slot
                     .record()
@@ -1657,75 +1658,49 @@ fn build_selector_diagnostic(
                     .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
                 let mut contributions = Vec::with_capacity(family_count_usize);
                 for synapse_index in 0..family_count_usize {
-                    let base = block_base
-                        .checked_add(
-                            synapse_index
-                                .checked_mul(GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS)
-                                .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?,
-                        )
+                    let base = synapse_index
+                        .checked_mul(GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS)
                         .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-                    if selector_detail_word(&capture.synapse_words, base, 0)?
-                        != u32::from(candidate.candidate_index)
-                        || selector_detail_word(&capture.synapse_words, base, 1)?
+                    if selector_detail_word(words, base, 0)? != u32::from(candidate.candidate_index)
+                        || selector_detail_word(words, base, 1)?
                             != u32::try_from(synapse_index)
                                 .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?
-                        || selector_detail_word(&capture.synapse_words, base, 14)?
+                        || selector_detail_word(words, base, 14)?
                             != u32::from(binding.activation_side)
-                        || selector_detail_word(&capture.synapse_words, base, 15)?
-                            != binding.activation_offset
-                        || selector_detail_word(&capture.synapse_words, base, 16)?
-                            != binding.motor_start
-                        || selector_detail_word(&capture.synapse_words, base, 17)?
-                            != binding.feature_offset
-                        || selector_detail_word(&capture.synapse_words, base, 18)?
-                            != binding.decoder_plan_offset
-                        || selector_detail_word(&capture.synapse_words, base, 19)?
-                            != binding.decoder_family_start
-                        || selector_detail_word(&capture.synapse_words, base, 20)?
-                            != binding.decoder_family_count
-                        || selector_detail_word(&capture.synapse_words, base, 21)?
-                            != binding.weight_index_start
-                        || selector_detail_word(&capture.synapse_words, base, 22)?
-                            != binding.weight_index_count
-                        || selector_detail_word(&capture.synapse_words, base, 23)?
-                            != binding.genetic_weight_offset
-                        || selector_detail_word(&capture.synapse_words, base, 24)?
-                            != binding.alpha_offset
-                        || selector_detail_word(&capture.synapse_words, base, 25)?
-                            != binding.lifetime_weight_offset
-                        || selector_detail_word(&capture.synapse_words, base, 26)?
-                            != binding.fast_weight_offset
-                        || selector_detail_word(&capture.synapse_words, base, 27)?
+                        || selector_detail_word(words, base, 15)? != binding.activation_offset
+                        || selector_detail_word(words, base, 16)? != binding.motor_start
+                        || selector_detail_word(words, base, 17)? != binding.feature_offset
+                        || selector_detail_word(words, base, 18)? != binding.decoder_plan_offset
+                        || selector_detail_word(words, base, 19)? != binding.decoder_family_start
+                        || selector_detail_word(words, base, 20)? != binding.decoder_family_count
+                        || selector_detail_word(words, base, 21)? != binding.weight_index_start
+                        || selector_detail_word(words, base, 22)? != binding.weight_index_count
+                        || selector_detail_word(words, base, 23)? != binding.genetic_weight_offset
+                        || selector_detail_word(words, base, 24)? != binding.alpha_offset
+                        || selector_detail_word(words, base, 25)? != binding.lifetime_weight_offset
+                        || selector_detail_word(words, base, 26)? != binding.fast_weight_offset
+                        || selector_detail_word(words, base, 27)?
                             != u32::from(candidate.family.raw())
-                        || selector_detail_word(&capture.synapse_words, base, 28)?
-                            != binding.decoder_family_offset
+                        || selector_detail_word(words, base, 28)? != binding.decoder_family_offset
                     {
                         return Err(ScaffoldContractError::InvalidDecisionEvidence);
                     }
                     contributions.push(GpuSelectorSynapseContribution {
-                        synapse_index: selector_detail_word(&capture.synapse_words, base, 1)?,
-                        global_synapse_id: selector_detail_word(&capture.synapse_words, base, 2)?,
-                        input_lane: u16::try_from(selector_detail_word(
-                            &capture.synapse_words,
-                            base,
-                            3,
-                        )?)
-                        .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
-                        motor_index: u16::try_from(selector_detail_word(
-                            &capture.synapse_words,
-                            base,
-                            4,
-                        )?)
-                        .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
-                        motor: selector_detail_f32(&capture.synapse_words, base, 5)?,
-                        feature: selector_detail_f32(&capture.synapse_words, base, 6)?,
-                        genetic: selector_detail_f32(&capture.synapse_words, base, 7)?,
-                        lifetime: selector_detail_f32(&capture.synapse_words, base, 8)?,
-                        alpha: selector_detail_f32(&capture.synapse_words, base, 9)?,
-                        fast: selector_detail_f32(&capture.synapse_words, base, 10)?,
-                        effective_weight: selector_detail_f32(&capture.synapse_words, base, 11)?,
-                        signed_contribution: selector_detail_f32(&capture.synapse_words, base, 12)?,
-                        running_logit: selector_detail_f32(&capture.synapse_words, base, 13)?,
+                        synapse_index: selector_detail_word(words, base, 1)?,
+                        global_synapse_id: selector_detail_word(words, base, 2)?,
+                        input_lane: u16::try_from(selector_detail_word(words, base, 3)?)
+                            .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
+                        motor_index: u16::try_from(selector_detail_word(words, base, 4)?)
+                            .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
+                        motor: selector_detail_f32(words, base, 5)?,
+                        feature: selector_detail_f32(words, base, 6)?,
+                        genetic: selector_detail_f32(words, base, 7)?,
+                        lifetime: selector_detail_f32(words, base, 8)?,
+                        alpha: selector_detail_f32(words, base, 9)?,
+                        fast: selector_detail_f32(words, base, 10)?,
+                        effective_weight: selector_detail_f32(words, base, 11)?,
+                        signed_contribution: selector_detail_f32(words, base, 12)?,
+                        running_logit: selector_detail_f32(words, base, 13)?,
                     });
                 }
                 (Some(binding), contributions)
@@ -1778,6 +1753,7 @@ fn build_selector_diagnostic(
         phenotype_hash: phenotype.phenotype_hash(),
         dispatch_generation,
         policy: GpuSelectorPolicyIdentity::PRODUCTION_V1,
+        requested_candidate_indices: capture.requested_candidate_indices.clone(),
         candidates,
         argmax_candidate_index,
         equal_max_candidate_indices,
@@ -3139,7 +3115,7 @@ impl GpuClosedLoopBackend {
                 memory_upload: None,
             })
             .collect::<Vec<_>>();
-        self.tick_inputs(&inputs, false)
+        self.tick_inputs(&inputs, None)
     }
 
     pub fn tick_memory_batch(
@@ -3155,12 +3131,13 @@ impl GpuClosedLoopBackend {
                 memory_upload: Some(member.memory_upload),
             })
             .collect::<Vec<_>>();
-        self.tick_inputs(&inputs, false)
+        self.tick_inputs(&inputs, None)
     }
 
     pub fn tick_memory_batch_with_selector_diagnostics(
         &mut self,
         batch: &GpuClosedLoopMemoryBatchInput<'_>,
+        requested_candidate_indices: &[u16],
     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
         let inputs = batch
             .members
@@ -3171,14 +3148,15 @@ impl GpuClosedLoopBackend {
                 memory_upload: Some(member.memory_upload),
             })
             .collect::<Vec<_>>();
-        self.tick_inputs(&inputs, true)
+        self.tick_inputs(&inputs, Some(requested_candidate_indices))
     }
 
     fn tick_inputs(
         &mut self,
         batch: &[GpuRuntimeTickInput<'_>],
-        capture_selector_diagnostics: bool,
+        selector_diagnostic_candidate_indices: Option<&[u16]>,
     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
+        let capture_selector_diagnostics = selector_diagnostic_candidate_indices.is_some();
         self.ensure_ready()?;
         if batch.is_empty() {
             return Err(ScaffoldContractError::InvalidPerceptionFrame);
@@ -3391,6 +3369,8 @@ impl GpuClosedLoopBackend {
                         let enable_result = active.enable_selector_diagnostics(
                             class_id,
                             dispatches[index].chunk_index,
+                            selector_diagnostic_candidate_indices
+                                .expect("capture flag follows requested candidates"),
                             capacity,
                         );
                         if let Err(error) = enable_result {

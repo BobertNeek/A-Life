@@ -79,6 +79,7 @@ pub struct Era1CausalStepReceipt {
 pub struct Era1SelectorDiagnosticReceipt {
     pub source_commit: String,
     pub source_tree: String,
+    pub requested_candidate_indices: Vec<u16>,
     pub dispatch: GpuSelectorDiagnosticReceipt,
 }
 
@@ -115,6 +116,7 @@ impl Era1SelectorDiagnosticReceipt {
             || chosen.action_id != neural.action_id
             || chosen.family != step.selected_family
             || chosen.target.entity != step.target_entity
+            || self.requested_candidate_indices != self.dispatch.requested_candidate_indices
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
@@ -376,7 +378,7 @@ pub struct Era1TrialRunRequest<'a> {
     partition: Era1EvidencePartition,
     source_commit: &'a str,
     source_tree: &'a str,
-    selector_diagnostics: bool,
+    selector_diagnostic_candidate_indices: Vec<u16>,
 }
 
 impl<'a> Era1TrialRunRequest<'a> {
@@ -402,14 +404,19 @@ impl<'a> Era1TrialRunRequest<'a> {
             partition,
             source_commit,
             source_tree,
-            selector_diagnostics: false,
+            selector_diagnostic_candidate_indices: Vec::new(),
         };
         request.validate_contract()?;
         Ok(request)
     }
 
-    pub fn with_selector_diagnostics(mut self) -> Self {
-        self.selector_diagnostics = true;
+    pub fn with_selector_diagnostics_for_candidates<const N: usize>(
+        mut self,
+        candidate_indices: [u16; N],
+    ) -> Self {
+        self.selector_diagnostic_candidate_indices = candidate_indices.to_vec();
+        self.selector_diagnostic_candidate_indices.sort_unstable();
+        self.selector_diagnostic_candidate_indices.dedup();
         self
     }
 
@@ -424,6 +431,7 @@ impl<'a> Era1TrialRunRequest<'a> {
             || expected_family(self.ability) != self.manifest.family
             || !valid_git_object_id(self.source_commit)
             || !valid_git_object_id(self.source_tree)
+            || self.selector_diagnostic_candidate_indices.len() > 8
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
@@ -595,9 +603,11 @@ impl Era1TrialRunner {
                     .prepare_memory_context_upload(handle, &frame, &finalized_recall)?;
             let member = GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &memory_upload)?;
             let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![member])?;
-            let mut gpu_ticks = if request.selector_diagnostics {
-                self.session
-                    .tick_memory_batch_with_selector_diagnostics(&batch)?
+            let mut gpu_ticks = if !request.selector_diagnostic_candidate_indices.is_empty() {
+                self.session.tick_memory_batch_with_selector_diagnostics(
+                    &batch,
+                    &request.selector_diagnostic_candidate_indices,
+                )?
             } else {
                 self.session.tick_memory_batch(&batch)?
             };
@@ -708,6 +718,9 @@ impl Era1TrialRunner {
                     .map(|dispatch| Era1SelectorDiagnosticReceipt {
                         source_commit: request.source_commit.to_owned(),
                         source_tree: request.source_tree.to_owned(),
+                        requested_candidate_indices: request
+                            .selector_diagnostic_candidate_indices
+                            .clone(),
                         dispatch,
                     });
             let action_result = world.apply_neural_command(
@@ -886,7 +899,7 @@ impl Era1TrialRunner {
             backend_api: self.backend_api.clone(),
             language_grounding,
             learning_assessment,
-            selector_diagnostics_enabled: request.selector_diagnostics,
+            selector_diagnostics_enabled: !request.selector_diagnostic_candidate_indices.is_empty(),
             steps,
         };
         evidence.validate_contract()?;
@@ -1528,6 +1541,7 @@ mod selector_diagnostic_receipt_tests {
         action_id: u32,
         pre: f32,
         final_logit: f32,
+        detailed: bool,
     ) -> GpuSelectorCandidateDiagnostic {
         GpuSelectorCandidateDiagnostic {
             candidate_index: index,
@@ -1536,7 +1550,7 @@ mod selector_diagnostic_receipt_tests {
             target: alife_core::ActionTarget::NONE,
             validity: GpuSelectorCandidateValidity::Valid,
             decoder_family_bias: 0.125,
-            binding: Some(GpuSelectorBindingIdentity {
+            binding: detailed.then_some(GpuSelectorBindingIdentity {
                 decoder_plan_offset: 1,
                 decoder_family_offset: 2,
                 decoder_family_start: 2,
@@ -1552,21 +1566,25 @@ mod selector_diagnostic_receipt_tests {
                 lifetime_weight_offset: 9,
                 fast_weight_offset: 10,
             }),
-            contributions: vec![GpuSelectorSynapseContribution {
-                synapse_index: 0,
-                global_synapse_id: 11,
-                input_lane: 0,
-                motor_index: 0,
-                motor: 1.0,
-                feature: pre - 0.125,
-                genetic: 1.0,
-                lifetime: 0.0,
-                alpha: 0.0,
-                fast: 1.0,
-                effective_weight: 1.0,
-                signed_contribution: pre - 0.125,
-                running_logit: pre,
-            }],
+            contributions: detailed
+                .then(|| {
+                    vec![GpuSelectorSynapseContribution {
+                        synapse_index: 0,
+                        global_synapse_id: 11,
+                        input_lane: 0,
+                        motor_index: 0,
+                        motor: 1.0,
+                        feature: pre - 0.125,
+                        genetic: 1.0,
+                        lifetime: 0.0,
+                        alpha: 0.0,
+                        fast: 1.0,
+                        effective_weight: 1.0,
+                        signed_contribution: pre - 0.125,
+                        running_logit: pre,
+                    }]
+                })
+                .unwrap_or_default(),
             pre_context_logit: Some(pre),
             memory_context_delta: Some(final_logit - pre),
             final_logit: Some(final_logit),
@@ -1574,22 +1592,24 @@ mod selector_diagnostic_receipt_tests {
     }
 
     #[test]
-    fn serialization_preserves_exact_source_and_gpu_selector_identity() {
+    fn sparse_selector_diagnostic_binds_requested_ranges_and_rejects_unrequested_rows() {
         let source_commit = "1111111111111111111111111111111111111111";
         let source_tree = "2222222222222222222222222222222222222222";
         let receipt = Era1SelectorDiagnosticReceipt {
             source_commit: source_commit.to_owned(),
             source_tree: source_tree.to_owned(),
+            requested_candidate_indices: vec![0, 2],
             dispatch: GpuSelectorDiagnosticReceipt {
                 schema_version: GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
                 frame_digest: PerceptionFrameDigest([1, 2, 3, 4]),
                 phenotype_hash: PhenotypeHash([5, 6, 7, 8]),
                 dispatch_generation: 9,
                 policy: GpuSelectorPolicyIdentity::PRODUCTION_V1,
+                requested_candidate_indices: vec![0, 2],
                 candidates: vec![
-                    candidate(0, 4, 0.5, 0.75),
-                    candidate(1, 5, 0.0, 0.25),
-                    candidate(2, 6, 0.5, 0.75),
+                    candidate(0, 4, 0.5, 0.75, true),
+                    candidate(1, 5, 0.0, 0.25, false),
+                    candidate(2, 6, 0.5, 0.75, true),
                 ],
                 argmax_candidate_index: 0,
                 equal_max_candidate_indices: vec![0, 2],
@@ -1598,6 +1618,19 @@ mod selector_diagnostic_receipt_tests {
         };
 
         receipt.dispatch.validate_contract().unwrap();
+        assert!(receipt.dispatch.candidates[1].binding.is_none());
+        assert!(receipt.dispatch.candidates[1].contributions.is_empty());
+        assert_eq!(
+            receipt.dispatch.candidates[0].contributions[0].global_synapse_id,
+            11
+        );
+        assert_eq!(
+            receipt.dispatch.candidates[0].contributions[0].running_logit,
+            0.5
+        );
+        let mut invalid = receipt.dispatch.clone();
+        invalid.candidates[1] = candidate(1, 5, 0.0, 0.25, true);
+        assert!(invalid.validate_contract().is_err());
         assert_eq!(receipt.dispatch.candidates[1].final_logit, Some(0.25));
         assert_eq!(
             receipt.dispatch.policy.exploration_mode,
