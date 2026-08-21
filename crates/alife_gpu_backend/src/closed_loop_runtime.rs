@@ -505,7 +505,7 @@ pub struct GpuSelectorDiagnosticReceipt {
 /// Stable class for a selector-diagnostic enable failure. This mirrors the
 /// crate-private pipeline boundary at the public runtime boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum GpuSelectorDiagnosticFailureClass {
+pub enum GpuRuntimeSelectorDiagnosticFailureClass {
     CapacityExceeded,
     ArithmeticOverflow,
 }
@@ -513,8 +513,8 @@ pub enum GpuSelectorDiagnosticFailureClass {
 /// Complete selector-diagnostic enable receipt translated out of the
 /// crate-private pipeline module without dropping any planning inputs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GpuSelectorDiagnosticErrorReceipt {
-    pub class: GpuSelectorDiagnosticFailureClass,
+pub struct GpuRuntimeSelectorDiagnosticErrorReceipt {
+    pub class: GpuRuntimeSelectorDiagnosticFailureClass,
     pub class_id: u16,
     pub chunk_index: usize,
     pub row: usize,
@@ -526,7 +526,7 @@ pub struct GpuSelectorDiagnosticErrorReceipt {
     pub frame_payload_capacity_words: usize,
 }
 
-impl From<PipelineSelectorDiagnosticFailureClass> for GpuSelectorDiagnosticFailureClass {
+impl From<PipelineSelectorDiagnosticFailureClass> for GpuRuntimeSelectorDiagnosticFailureClass {
     fn from(class: PipelineSelectorDiagnosticFailureClass) -> Self {
         match class {
             PipelineSelectorDiagnosticFailureClass::CapacityExceeded => Self::CapacityExceeded,
@@ -535,7 +535,7 @@ impl From<PipelineSelectorDiagnosticFailureClass> for GpuSelectorDiagnosticFailu
     }
 }
 
-impl From<PipelineSelectorDiagnosticErrorReceipt> for GpuSelectorDiagnosticErrorReceipt {
+impl From<PipelineSelectorDiagnosticErrorReceipt> for GpuRuntimeSelectorDiagnosticErrorReceipt {
     fn from(receipt: PipelineSelectorDiagnosticErrorReceipt) -> Self {
         Self {
             class: receipt.class.into(),
@@ -552,7 +552,7 @@ impl From<PipelineSelectorDiagnosticErrorReceipt> for GpuSelectorDiagnosticError
     }
 }
 
-impl std::fmt::Display for GpuSelectorDiagnosticErrorReceipt {
+impl std::fmt::Display for GpuRuntimeSelectorDiagnosticErrorReceipt {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             formatter,
@@ -571,16 +571,16 @@ impl std::fmt::Display for GpuSelectorDiagnosticErrorReceipt {
     }
 }
 
-impl std::error::Error for GpuSelectorDiagnosticErrorReceipt {}
+impl std::error::Error for GpuRuntimeSelectorDiagnosticErrorReceipt {}
 
 /// Typed failure from the opt-in selector-diagnostic enable boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GpuSelectorDiagnosticEnableFailure {
+pub enum GpuRuntimeSelectorDiagnosticEnableFailure {
     Contract(GpuClosedLoopError),
-    Receipt(GpuSelectorDiagnosticErrorReceipt),
+    Receipt(GpuRuntimeSelectorDiagnosticErrorReceipt),
 }
 
-impl std::fmt::Display for GpuSelectorDiagnosticEnableFailure {
+impl std::fmt::Display for GpuRuntimeSelectorDiagnosticEnableFailure {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Contract(error) => {
@@ -591,7 +591,7 @@ impl std::fmt::Display for GpuSelectorDiagnosticEnableFailure {
     }
 }
 
-impl std::error::Error for GpuSelectorDiagnosticEnableFailure {
+impl std::error::Error for GpuRuntimeSelectorDiagnosticEnableFailure {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Contract(error) => Some(error),
@@ -600,8 +600,8 @@ impl std::error::Error for GpuSelectorDiagnosticEnableFailure {
     }
 }
 
-impl GpuSelectorDiagnosticEnableFailure {
-    pub const fn receipt(self) -> Option<GpuSelectorDiagnosticErrorReceipt> {
+impl GpuRuntimeSelectorDiagnosticEnableFailure {
+    pub const fn receipt(self) -> Option<GpuRuntimeSelectorDiagnosticErrorReceipt> {
         match self {
             Self::Contract(_) => None,
             Self::Receipt(receipt) => Some(receipt),
@@ -612,10 +612,10 @@ impl GpuSelectorDiagnosticEnableFailure {
         match self {
             Self::Contract(error) => error,
             Self::Receipt(receipt) => match receipt.class {
-                GpuSelectorDiagnosticFailureClass::CapacityExceeded => {
+                GpuRuntimeSelectorDiagnosticFailureClass::CapacityExceeded => {
                     GpuClosedLoopError::CapacityExceeded
                 }
-                GpuSelectorDiagnosticFailureClass::ArithmeticOverflow => {
+                GpuRuntimeSelectorDiagnosticFailureClass::ArithmeticOverflow => {
                     GpuClosedLoopError::ArithmeticOverflow
                 }
             },
@@ -630,13 +630,13 @@ impl GpuSelectorDiagnosticEnableFailure {
 /// Failure from the opt-in diagnostic path, retaining whether it happened
 /// before enable, while enabling, or after the GPU batch was staged.
 #[derive(Debug, PartialEq, Eq)]
-pub enum GpuSelectorDiagnosticError {
+pub enum GpuRuntimeSelectorDiagnosticError {
     Preflight(ScaffoldContractError),
-    Enable(GpuSelectorDiagnosticEnableFailure),
+    Enable(GpuRuntimeSelectorDiagnosticEnableFailure),
     LaterStage(ScaffoldContractError),
 }
 
-impl std::fmt::Display for GpuSelectorDiagnosticError {
+impl std::fmt::Display for GpuRuntimeSelectorDiagnosticError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Preflight(error) => {
@@ -654,7 +654,7 @@ impl std::fmt::Display for GpuSelectorDiagnosticError {
     }
 }
 
-impl std::error::Error for GpuSelectorDiagnosticError {
+impl std::error::Error for GpuRuntimeSelectorDiagnosticError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Preflight(error) | Self::LaterStage(error) => Some(error),
@@ -1514,7 +1514,7 @@ struct PreparedClassDispatch {
 
 #[derive(Default)]
 struct SelectorDiagnosticErrorCapture {
-    enable_error: Option<GpuSelectorDiagnosticEnableFailure>,
+    enable_error: Option<GpuRuntimeSelectorDiagnosticEnableFailure>,
     enable_completed: bool,
 }
 
@@ -1987,13 +1987,13 @@ pub(crate) fn map_gpu_contract_error(error: GpuClosedLoopError) -> ScaffoldContr
 
 fn translate_selector_diagnostic_enable_error(
     error: PipelineSelectorDiagnosticEnableError,
-) -> GpuSelectorDiagnosticEnableFailure {
+) -> GpuRuntimeSelectorDiagnosticEnableFailure {
     match error {
         PipelineSelectorDiagnosticEnableError::Contract(error) => {
-            GpuSelectorDiagnosticEnableFailure::Contract(error)
+            GpuRuntimeSelectorDiagnosticEnableFailure::Contract(error)
         }
         PipelineSelectorDiagnosticEnableError::Receipt(receipt) => {
-            GpuSelectorDiagnosticEnableFailure::Receipt(receipt.into())
+            GpuRuntimeSelectorDiagnosticEnableFailure::Receipt(receipt.into())
         }
     }
 }
@@ -3323,7 +3323,7 @@ impl GpuClosedLoopBackend {
         &mut self,
         batch: &GpuClosedLoopMemoryBatchInput<'_>,
         requested_candidate_indices: &[u16],
-    ) -> Result<Vec<GpuClosedLoopTick>, GpuSelectorDiagnosticError> {
+    ) -> Result<Vec<GpuClosedLoopTick>, GpuRuntimeSelectorDiagnosticError> {
         let inputs = batch
             .members
             .iter()
@@ -3341,11 +3341,11 @@ impl GpuClosedLoopBackend {
         ) {
             Ok(ticks) => Ok(ticks),
             Err(error) => match capture.enable_error {
-                Some(enable_error) => Err(GpuSelectorDiagnosticError::Enable(enable_error)),
+                Some(enable_error) => Err(GpuRuntimeSelectorDiagnosticError::Enable(enable_error)),
                 None if capture.enable_completed => {
-                    Err(GpuSelectorDiagnosticError::LaterStage(error))
+                    Err(GpuRuntimeSelectorDiagnosticError::LaterStage(error))
                 }
-                None => Err(GpuSelectorDiagnosticError::Preflight(error)),
+                None => Err(GpuRuntimeSelectorDiagnosticError::Preflight(error)),
             },
         }
     }

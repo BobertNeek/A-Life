@@ -12,7 +12,7 @@ use alife_core::{
     BrainCapacityClass, CreatureGenome, Era1Ability, Era1Control, Era1EvidencePartition,
     FoundationGeneticIdentity, LanguageCodebookV1, OrganismId, ScaffoldContractError,
 };
-use alife_gpu_backend::GpuSelectorDiagnosticEnableFailure;
+use alife_gpu_backend::GpuRuntimeSelectorDiagnosticEnableFailure;
 use alife_training::{
     Era1TrialRunError, Era1TrialRunEvidence, Era1TrialRunRequest, Era1TrialRunner,
 };
@@ -43,7 +43,7 @@ pub enum Pass2Ei1BehavioralError {
     #[error("Era 1 production runner failed: {0}")]
     Runner(String),
     #[error("Era 1 selector diagnostic enable-stage failure: {0}")]
-    SelectorDiagnosticEnable(GpuSelectorDiagnosticEnableFailure),
+    SelectorDiagnosticEnable(GpuRuntimeSelectorDiagnosticEnableFailure),
     #[error("Era 1 selector diagnostic later-stage GPU failure: {0}")]
     SelectorDiagnosticLaterStage(ScaffoldContractError),
 }
@@ -530,13 +530,15 @@ fn integer(object: &Map<String, Value>, key: &'static str) -> Result<u64, Pass2E
 #[cfg(test)]
 mod selector_diagnostic_error_tests {
     use super::*;
-    use alife_gpu_backend::{GpuSelectorDiagnosticErrorReceipt, GpuSelectorDiagnosticFailureClass};
+    use alife_gpu_backend::{
+        GpuRuntimeSelectorDiagnosticErrorReceipt, GpuRuntimeSelectorDiagnosticFailureClass,
+    };
     use alife_training::Era1TrialRunError;
 
     #[test]
     fn task3_preserves_selector_enable_receipt_and_later_stage_classification() {
-        let receipt = GpuSelectorDiagnosticErrorReceipt {
-            class: GpuSelectorDiagnosticFailureClass::CapacityExceeded,
+        let receipt = GpuRuntimeSelectorDiagnosticErrorReceipt {
+            class: GpuRuntimeSelectorDiagnosticFailureClass::CapacityExceeded,
             class_id: 2048,
             chunk_index: 3,
             row: 2,
@@ -548,7 +550,7 @@ mod selector_diagnostic_error_tests {
             frame_payload_capacity_words: 200,
         };
         let enable = runner_failure(Era1TrialRunError::SelectorDiagnosticEnable(
-            GpuSelectorDiagnosticEnableFailure::Receipt(receipt),
+            GpuRuntimeSelectorDiagnosticEnableFailure::Receipt(receipt),
         ));
         let rendered = enable.to_string();
         for field in [
