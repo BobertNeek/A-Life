@@ -400,6 +400,33 @@ impl std::fmt::Display for GpuLearningEvidenceMismatchReceipt {
     }
 }
 
+/// The bounded failure classes produced by the GPU fast-plasticity apply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuRuntimeApplyFastPlasticityFailureClass {
+    MalformedUpload,
+    StaleOrForeignHandle,
+}
+
+/// Lossless identity for a rejected fast-plasticity submission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuRuntimeApplyFastPlasticityFailureReceipt {
+    pub class: GpuRuntimeApplyFastPlasticityFailureClass,
+    pub class_id: u16,
+    pub chunk_index: usize,
+    /// Original batch index of the first entry in the rejected GPU submission.
+    pub submitted_entry: usize,
+}
+
+impl std::fmt::Display for GpuRuntimeApplyFastPlasticityFailureReceipt {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "apply_fast_plasticity {:?}: class_id={}, chunk_index={}, submitted_entry={}",
+            self.class, self.class_id, self.chunk_index, self.submitted_entry
+        )
+    }
+}
+
 /// Stable target identity carried opaquely through the backend residency
 /// transaction. The backend only validates non-zero and uniqueness.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -2563,6 +2590,7 @@ pub struct GpuClosedLoopBackend {
     last_compact_readback_bytes: usize,
     pending_inference_timing: Option<PendingInferenceTiming>,
     completed_neural_timing: Option<GpuNeuralTimingSample>,
+    last_apply_fast_plasticity_failure: Option<GpuRuntimeApplyFastPlasticityFailureReceipt>,
     pub(crate) next_sleep_job_id: u64,
     pub(crate) sleep_jobs: BTreeMap<u64, crate::GpuSleepJobState>,
     pub(crate) committed_sleep: BTreeMap<(u16, u32, u32, u64), crate::GpuSleepConsolidationReceipt>,
@@ -2658,6 +2686,7 @@ impl GpuClosedLoopBackend {
             last_compact_readback_bytes: 0,
             pending_inference_timing: None,
             completed_neural_timing: None,
+            last_apply_fast_plasticity_failure: None,
             next_sleep_job_id: 1,
             sleep_jobs: BTreeMap::new(),
             committed_sleep: BTreeMap::new(),
@@ -2711,6 +2740,7 @@ impl GpuClosedLoopBackend {
             last_compact_readback_bytes: 0,
             pending_inference_timing: None,
             completed_neural_timing: None,
+            last_apply_fast_plasticity_failure: None,
             next_sleep_job_id: plan.next_sleep_job_id,
             sleep_jobs: BTreeMap::new(),
             committed_sleep: BTreeMap::new(),
@@ -3408,6 +3438,13 @@ impl GpuClosedLoopBackend {
             .ok_or(ScaffoldContractError::LearningEvidenceMismatch)
     }
 
+    /// Takes the diagnostic receipt from the most recent sealed-outcome apply.
+    pub fn take_apply_fast_plasticity_failure_receipt(
+        &mut self,
+    ) -> Option<GpuRuntimeApplyFastPlasticityFailureReceipt> {
+        self.last_apply_fast_plasticity_failure.take()
+    }
+
     /// Read-only field receipt for the exact evidence contract enforced by
     /// `apply_sealed_outcome`. `None` means the sealed packet matches the
     /// currently installed pending decision evidence.
@@ -3666,6 +3703,7 @@ impl GpuClosedLoopBackend {
         &mut self,
         batch: &[(GpuBrainHandle, &ExperiencePatch)],
     ) -> Result<Vec<GpuLearningReceipt>, ScaffoldContractError> {
+        self.last_apply_fast_plasticity_failure = None;
         self.ensure_ready()?;
         if batch.is_empty() {
             return Err(ScaffoldContractError::LearningEvidenceMismatch);
@@ -3757,6 +3795,10 @@ impl GpuClosedLoopBackend {
         let mut ordered_gpu_records = vec![None; prepared.len()];
         let mut plasticity_timestamp_ticks = 0_u64;
         for (chunk_index, indices) in grouped_indices {
+            let submitted_entry = indices
+                .first()
+                .copied()
+                .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
             let gpu_entries = indices
                 .iter()
                 .map(|index| {
@@ -3792,8 +3834,27 @@ impl GpuClosedLoopBackend {
             let gpu_timed_result = match gpu_result {
                 Ok(result) => result,
                 Err(
-                    GpuClosedLoopError::MalformedUpload | GpuClosedLoopError::StaleOrForeignHandle,
-                ) => return Err(ScaffoldContractError::LearningEvidenceMismatch),
+                    error @ (GpuClosedLoopError::MalformedUpload
+                    | GpuClosedLoopError::StaleOrForeignHandle),
+                ) => {
+                    let class = match error {
+                        GpuClosedLoopError::MalformedUpload => {
+                            GpuRuntimeApplyFastPlasticityFailureClass::MalformedUpload
+                        }
+                        GpuClosedLoopError::StaleOrForeignHandle => {
+                            GpuRuntimeApplyFastPlasticityFailureClass::StaleOrForeignHandle
+                        }
+                        _ => unreachable!("matched bounded fast-plasticity failure class"),
+                    };
+                    self.last_apply_fast_plasticity_failure =
+                        Some(GpuRuntimeApplyFastPlasticityFailureReceipt {
+                            class,
+                            class_id,
+                            chunk_index,
+                            submitted_entry,
+                        });
+                    return Err(ScaffoldContractError::LearningEvidenceMismatch);
+                }
                 Err(_) => {
                     self.mark_device_lost();
                     return Err(ScaffoldContractError::NeuralBackendUnavailable);

@@ -13,7 +13,8 @@ use alife_core::{
     FoundationGeneticIdentity, LanguageCodebookV1, OrganismId, ScaffoldContractError,
 };
 use alife_gpu_backend::{
-    GpuLearningEvidenceMismatchReceipt, GpuRuntimeSelectorDiagnosticBuildFailureReceipt,
+    GpuLearningEvidenceMismatchReceipt, GpuRuntimeApplyFastPlasticityFailureReceipt,
+    GpuRuntimeSelectorDiagnosticBuildFailureReceipt,
     GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
     GpuRuntimeSelectorDiagnosticEnableFailure, GpuRuntimeSelectorDiagnosticFailureReceipt,
 };
@@ -48,6 +49,8 @@ pub enum Pass2Ei1BehavioralError {
     Runner(String),
     #[error("Era 1 sealed outcome evidence mismatch: {0}")]
     LearningEvidenceMismatch(GpuLearningEvidenceMismatchReceipt),
+    #[error("Era 1 fast-plasticity apply failure: {0}")]
+    ApplyFastPlasticity(GpuRuntimeApplyFastPlasticityFailureReceipt),
     #[error("Era 1 selector diagnostic enable-stage failure: {0}")]
     SelectorDiagnosticEnable(GpuRuntimeSelectorDiagnosticEnableFailure),
     #[error("Era 1 selector diagnostic later-stage GPU failure: {0}")]
@@ -251,6 +254,9 @@ fn runner_failure(error: Era1TrialRunError) -> Pass2Ei1BehavioralError {
     match error {
         Era1TrialRunError::LearningEvidenceMismatch(receipt) => {
             Pass2Ei1BehavioralError::LearningEvidenceMismatch(receipt)
+        }
+        Era1TrialRunError::ApplyFastPlasticity(receipt) => {
+            Pass2Ei1BehavioralError::ApplyFastPlasticity(receipt)
         }
         Era1TrialRunError::SelectorDiagnosticEnable(error) => {
             Pass2Ei1BehavioralError::SelectorDiagnosticEnable(error)
@@ -591,6 +597,40 @@ mod selector_diagnostic_error_tests {
             "actual=[5, 0, 0, 0]",
         ] {
             assert!(rendered.contains(field), "missing {field} in {rendered}");
+        }
+    }
+
+    #[test]
+    fn task3_preserves_apply_fast_plasticity_failure_receipt() {
+        use alife_gpu_backend::GpuRuntimeApplyFastPlasticityFailureClass;
+
+        for (class, class_name) in [
+            (
+                GpuRuntimeApplyFastPlasticityFailureClass::MalformedUpload,
+                "MalformedUpload",
+            ),
+            (
+                GpuRuntimeApplyFastPlasticityFailureClass::StaleOrForeignHandle,
+                "StaleOrForeignHandle",
+            ),
+        ] {
+            let decoded = runner_failure(Era1TrialRunError::ApplyFastPlasticity(
+                GpuRuntimeApplyFastPlasticityFailureReceipt {
+                    class,
+                    class_id: 2048,
+                    chunk_index: 3,
+                    submitted_entry: 7,
+                },
+            ));
+            let rendered = decoded.to_string();
+            for field in [
+                class_name,
+                "class_id=2048",
+                "chunk_index=3",
+                "submitted_entry=7",
+            ] {
+                assert!(rendered.contains(field), "missing {field} in {rendered}");
+            }
         }
     }
 

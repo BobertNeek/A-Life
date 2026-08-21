@@ -14,7 +14,8 @@ use alife_core::{
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
-    GpuClosedLoopMemoryTickInput, GpuLearningEvidenceMismatchReceipt, GpuRuntimeProfile,
+    GpuClosedLoopMemoryTickInput, GpuLearningEvidenceMismatchReceipt,
+    GpuRuntimeApplyFastPlasticityFailureReceipt, GpuRuntimeProfile,
     GpuRuntimeSelectorDiagnosticBuildFailureReceipt,
     GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
     GpuRuntimeSelectorDiagnosticEnableFailure, GpuRuntimeSelectorDiagnosticError,
@@ -94,6 +95,8 @@ pub enum Era1TrialRunError {
     Contract(#[from] ScaffoldContractError),
     #[error("Era 1 sealed outcome evidence mismatch: {0}")]
     LearningEvidenceMismatch(GpuLearningEvidenceMismatchReceipt),
+    #[error("Era 1 fast-plasticity apply failure: {0}")]
+    ApplyFastPlasticity(GpuRuntimeApplyFastPlasticityFailureReceipt),
     #[error("Era 1 selector diagnostic enable-stage failure: {0}")]
     SelectorDiagnosticEnable(GpuRuntimeSelectorDiagnosticEnableFailure),
     #[error("Era 1 selector diagnostic later-stage GPU failure: {0}")]
@@ -116,6 +119,9 @@ impl Era1TrialRunError {
         match self {
             Self::Contract(error) => TrainingError::Contract(error),
             Self::LearningEvidenceMismatch(_) => {
+                TrainingError::Contract(ScaffoldContractError::LearningEvidenceMismatch)
+            }
+            Self::ApplyFastPlasticity(_) => {
                 TrainingError::Contract(ScaffoldContractError::LearningEvidenceMismatch)
             }
             Self::SelectorDiagnosticLaterStageContract { error, .. } => {
@@ -897,6 +903,10 @@ impl Era1TrialRunner {
                     return Err(Era1TrialRunError::LearningEvidenceMismatch(receipt));
                 }
                 if let Err(error) = self.session.apply_sealed_outcome(handle, &patch) {
+                    if let Some(receipt) = self.session.take_apply_fast_plasticity_failure_receipt()
+                    {
+                        return Err(Era1TrialRunError::ApplyFastPlasticity(receipt));
+                    }
                     let receipt =
                         if matches!(&error, ScaffoldContractError::LearningEvidenceMismatch) {
                             self.session
