@@ -10,9 +10,9 @@ use alife_core::{
     BoundedCoordinationSummary, BoundedMotorPayload, BrainCapacityClass, BrainGenome,
     BrainPhenotype, BrainWorkCounters, CandidateActionFamily, CandidateObservationRef,
     CognitiveCandidatePrediction, CognitiveContextFrame, CognitiveInteroceptiveView,
-    CognitiveWorkReceipt, DevelopmentState, ExperiencePatch, ExperienceSequenceId,
+    CognitiveWorkReceipt, DevelopmentState, DurationTicks, ExperiencePatch, ExperienceSequenceId,
     GroundedFocalDetail, GroundedOutcomeFeatures, GroundedSuccessorPredictor, HomeostaticSnapshot,
-    JointMotorCondition, LanguageGroundingLedger, MemoryRecallReceipt, MotorChannel,
+    Intensity, JointMotorCondition, LanguageGroundingLedger, MemoryRecallReceipt, MotorChannel,
     MotorCommandBundle, MotorFamily, NeuralActionSelection, NormalizedScalar, PerceptionFrame,
     PerceptionFrameDigest, PostActionOutcome, PreActionSnapshot, PredictionTargetReceipt,
     ScaffoldContractError, SemanticStateVector, SignedValence, SpeechMotorPayload,
@@ -27,7 +27,6 @@ use alife_world::{HeadlessMotorTransactionError, HeadlessWorld};
 
 use crate::GpuAuthoritativeSession;
 
-const SINGLE_ACTION_COMPATIBILITY_ADAPTER_VERSION: u16 = 1;
 const VOCAL_CHANNEL_PAYLOAD_MAGIC_V1: u32 = 0x5348_5031;
 
 pub const MAX_PREDECISION_PREDICTIONS: usize = 8;
@@ -66,12 +65,8 @@ pub fn prepare_predecision_predictions(
     let mut conditions = Vec::with_capacity(limit);
     for candidate in frame.candidates().iter().take(limit) {
         let command = candidate.to_command(organism_id, candidate.sensor_confidence)?;
-        let bundle = compatibility_bundle_for_selected_action_v1(
-            organism_id,
-            sequence_id,
-            frame.tick(),
-            &command,
-        )?;
+        let bundle =
+            factorized_bundle_for_action(organism_id, sequence_id, frame.tick(), &command)?;
         conditions.push((
             candidate.candidate_index,
             JointMotorCondition::from_bundle(&bundle)?,
@@ -382,7 +377,6 @@ pub fn run_production_causal_step(
     let organism_id = input.organism_id;
     let world_entity_id = input.world_entity_id;
     let handle = input.handle;
-    let phenotype = input.phenotype;
     let genome = input.genome;
     let development = input.development.clone();
     let frame = input.frame.clone();
@@ -429,6 +423,7 @@ pub fn run_production_causal_step(
         || pending_identity.action_id() != selected_candidate.action_id
         || pending_identity.action_family() != selected_candidate.family
         || pending_identity.candidate_feature_digest() != selected_candidate.feature_digest()?
+        || pending_identity.motor_channel_candidates() != gpu_tick.factorized_motor_candidates
     {
         return Err(ScaffoldContractError::InvalidDecisionEvidence);
     }
@@ -442,18 +437,21 @@ pub fn run_production_causal_step(
         .iter()
         .flatten()
         .any(|token| token.source_kind == alife_core::UtteranceSourceKind::Player);
-    let factorized_channels = phenotype
+    let _ = input
+        .phenotype
         .candidate_decoder()
-        .factorized_motor_channels(phenotype)?;
+        .factorized_motor_channels(input.phenotype)?;
+    let factorized_channels = production_factorized_motor_channels();
     let motor_bundle = factorized_motor_bundle_for_candidates(
         organism_id,
         sequence_id,
         frame.tick(),
         &frame,
         gpu_tick.factorized_motor_candidates,
+        gpu_tick.factorized_motor_parameters,
         &factorized_channels,
-        &selected_action,
         gpu_tick.selection.candidate_index,
+        gpu_tick.selection.logit,
         gpu_tick.speech_payload.as_ref(),
         speech_prompted,
     )?;
@@ -853,12 +851,8 @@ fn prediction_action_sensitivity(
 ) -> Result<f32, ScaffoldContractError> {
     for candidate in frame.candidates().iter().take(MAX_PREDECISION_PREDICTIONS) {
         let command = candidate.to_command(organism_id, candidate.sensor_confidence)?;
-        let bundle = compatibility_bundle_for_selected_action_v1(
-            organism_id,
-            sequence_id,
-            frame.tick(),
-            &command,
-        )?;
+        let bundle =
+            factorized_bundle_for_action(organism_id, sequence_id, frame.tick(), &command)?;
         let other = JointMotorCondition::from_bundle(&bundle)?;
         if other.canonical_digest()? == selected.canonical_digest()? {
             continue;
@@ -882,12 +876,8 @@ fn prediction_successor_separability(
     let first_state = SemanticStateVector::new(first.predicted_successor)?;
     for candidate in frame.candidates().iter().take(MAX_PREDECISION_PREDICTIONS) {
         let command = candidate.to_command(organism_id, candidate.sensor_confidence)?;
-        let bundle = compatibility_bundle_for_selected_action_v1(
-            organism_id,
-            sequence_id,
-            frame.tick(),
-            &command,
-        )?;
+        let bundle =
+            factorized_bundle_for_action(organism_id, sequence_id, frame.tick(), &command)?;
         let other = JointMotorCondition::from_bundle(&bundle)?;
         if other.canonical_digest()? == selected.canonical_digest()? {
             continue;
@@ -905,17 +895,62 @@ fn prediction_successor_separability(
 fn channel_command_for_action(
     channel: MotorChannel,
     command: &ActionCommand,
+    neural_logit: f32,
+    neural_parameters: Option<[f32; 6]>,
+    duration_bounds: Option<(DurationTicks, DurationTicks)>,
 ) -> Result<alife_core::ChannelCommand, ScaffoldContractError> {
     let target = (command.target_entity.is_some() || command.target_position.is_some())
         .then(|| ActionTarget::new(command.target_entity, command.target_position));
+    let logit_scalar = if neural_logit.is_finite() {
+        (0.5 + 0.5 * neural_logit.tanh()).clamp(0.0, 1.0)
+    } else {
+        0.5
+    };
+    let (direction, intensity_scalar, duration_scalar, stand_off_distance) = neural_parameters
+        .map_or(
+            (
+                command.target_position.unwrap_or(Vec3f::ZERO),
+                logit_scalar,
+                logit_scalar,
+                0.0,
+            ),
+            |parameters| {
+                let direction = Vec3f::new(parameters[0], parameters[1], parameters[2]);
+                (
+                    if (direction.x * direction.x
+                        + direction.y * direction.y
+                        + direction.z * direction.z)
+                        .sqrt()
+                        > 0.0001
+                    {
+                        direction
+                    } else {
+                        command.target_position.unwrap_or(Vec3f::ZERO)
+                    },
+                    (0.5 + 0.5 * parameters[3].clamp(-1.0, 1.0)).clamp(0.0, 1.0),
+                    (0.5 + 0.5 * parameters[4].clamp(-1.0, 1.0)).clamp(0.0, 1.0),
+                    parameters[5].abs().clamp(0.0, 1.0),
+                )
+            },
+        );
+    let intensity = Intensity::new(intensity_scalar)?;
+    let duration_ticks = duration_bounds.map_or(command.duration_ticks, |(minimum, maximum)| {
+        let span = maximum.raw().saturating_sub(minimum.raw());
+        DurationTicks::new(
+            minimum
+                .raw()
+                .saturating_add((span as f32 * duration_scalar).round() as u32)
+                .max(1),
+        )
+    });
     alife_core::ChannelCommand::new(
         channel,
         command.action_id,
         target,
-        command.target_position.unwrap_or(Vec3f::ZERO),
-        command.intensity,
-        command.duration_ticks,
-        0.0,
+        direction,
+        intensity,
+        duration_ticks,
+        stand_off_distance,
         command.confidence,
         0,
     )
@@ -924,30 +959,34 @@ fn channel_command_for_action(
 fn factorized_motor_channel_for_action(kind: ActionKind) -> Option<MotorChannel> {
     match kind {
         ActionKind::Move => Some(MotorChannel::Locomotion),
+        ActionKind::Inspect => Some(MotorChannel::Orientation),
         ActionKind::Interact | ActionKind::Write => Some(MotorChannel::Manipulation),
         ActionKind::Vocalize => Some(MotorChannel::Vocal),
-        ActionKind::Hold | ActionKind::Rest | ActionKind::Inspect => Some(MotorChannel::Posture),
-        ActionKind::Idle | ActionKind::Gesture => None,
+        ActionKind::Idle | ActionKind::Hold | ActionKind::Rest => Some(MotorChannel::Posture),
+        ActionKind::Gesture => Some(MotorChannel::species_specific_v1()),
     }
 }
 
-fn compatibility_bundle_for_selected_action_v1(
+fn production_factorized_motor_channels() -> [MotorChannel; 6] {
+    [
+        MotorChannel::Locomotion,
+        MotorChannel::Orientation,
+        MotorChannel::Manipulation,
+        MotorChannel::Vocal,
+        MotorChannel::Posture,
+        MotorChannel::species_specific_v1(),
+    ]
+}
+
+fn factorized_bundle_for_action(
     organism_id: alife_core::OrganismId,
     sequence_id: ExperienceSequenceId,
     tick: alife_core::Tick,
     command: &ActionCommand,
 ) -> Result<MotorCommandBundle, ScaffoldContractError> {
-    debug_assert_eq!(SINGLE_ACTION_COMPATIBILITY_ADAPTER_VERSION, 1);
-    let channel = match command.kind {
-        ActionKind::Idle | ActionKind::Hold | ActionKind::Rest | ActionKind::Inspect => {
-            MotorChannel::Posture
-        }
-        ActionKind::Move => MotorChannel::Locomotion,
-        ActionKind::Interact | ActionKind::Write => MotorChannel::Manipulation,
-        ActionKind::Vocalize => MotorChannel::Vocal,
-        ActionKind::Gesture => MotorChannel::Posture,
-    };
-    let channel_command = channel_command_for_action(channel, command)?;
+    let channel = factorized_motor_channel_for_action(command.kind)
+        .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+    let channel_command = channel_command_for_action(channel, command, 0.0, None, None)?;
     MotorCommandBundle::new(organism_id, sequence_id, tick, vec![channel_command])
 }
 
@@ -957,22 +996,16 @@ fn factorized_motor_bundle_for_candidates(
     tick: alife_core::Tick,
     frame: &PerceptionFrame,
     candidate_slots: [u16; GPU_MOTOR_CHANNEL_SLOT_COUNT],
+    motor_parameters: [[f32; 6]; GPU_MOTOR_CHANNEL_SLOT_COUNT],
     channels: &[MotorChannel],
-    compatibility_command: &ActionCommand,
     selected_candidate_index: u16,
+    neural_logit: f32,
     speech_payload: Option<&SpeechMotorPayload>,
     speech_prompted: bool,
 ) -> Result<MotorCommandBundle, ScaffoldContractError> {
     let mut channel_commands = Vec::with_capacity(channels.len());
     for head_channel in channels {
-        let slot = match head_channel {
-            MotorChannel::Locomotion => 0,
-            MotorChannel::Orientation => 1,
-            MotorChannel::Manipulation => 2,
-            MotorChannel::Vocal => 3,
-            MotorChannel::Posture => 4,
-            MotorChannel::SpeciesSpecific(_) => 5,
-        };
+        let slot = head_channel.slot();
         let encoded = candidate_slots
             .get(slot)
             .copied()
@@ -991,7 +1024,13 @@ fn factorized_motor_bundle_for_candidates(
         if channel != *head_channel {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
-        let mut channel_command = channel_command_for_action(channel, &command)?;
+        let mut channel_command = channel_command_for_action(
+            channel,
+            &command,
+            neural_logit,
+            motor_parameters.get(slot).copied(),
+            Some((candidate.min_duration, candidate.max_duration)),
+        )?;
         if channel == MotorChannel::Vocal && candidate_index == selected_candidate_index {
             if let Some(payload) = speech_payload {
                 let mut values = Vec::with_capacity(payload.tokens.len() + 4);
@@ -1007,12 +1046,7 @@ fn factorized_motor_bundle_for_candidates(
         channel_commands.push(channel_command);
     }
     if channel_commands.is_empty() {
-        return compatibility_bundle_for_selected_action_v1(
-            organism_id,
-            sequence_id,
-            tick,
-            compatibility_command,
-        );
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
     }
     let coordination = (channel_commands.len() > 1).then(|| BoundedCoordinationSummary {
         groups: vec![alife_core::CoordinationGroup {

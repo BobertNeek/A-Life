@@ -1210,6 +1210,7 @@ pub(crate) struct GpuValidatedClassBatch {
     records: Vec<GpuSelectionRecord>,
     speech_payloads: Vec<Option<SpeechMotorPayload>>,
     factorized_motor_candidates: Vec<[u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]>,
+    factorized_motor_parameters: Vec<[[f32; 6]; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]>,
     pending_records: Vec<GpuPendingEligibilityRecord>,
     final_sides: Vec<(u32, u32, u32)>,
     readback_bytes: u64,
@@ -1247,12 +1248,19 @@ impl GpuValidatedClassBatch {
     ) -> &[[u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]] {
         &self.factorized_motor_candidates
     }
+
+    pub(crate) fn factorized_motor_parameters(
+        &self,
+    ) -> &[[[f32; 6]; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]] {
+        &self.factorized_motor_parameters
+    }
 }
 
 pub(crate) struct GpuCommittedClassBatch {
     pub(crate) records: Vec<GpuSelectionRecord>,
     pub(crate) speech_payloads: Vec<Option<SpeechMotorPayload>>,
     pub(crate) factorized_motor_candidates: Vec<[u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]>,
+    pub(crate) factorized_motor_parameters: Vec<[[f32; 6]; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]>,
     pub(crate) pending_records: Vec<GpuPendingEligibilityRecord>,
     pub(crate) readback_bytes: u64,
 }
@@ -3407,10 +3415,12 @@ impl GpuClosedLoopPipelines {
         let mut records = Vec::with_capacity(batch.row_count());
         let mut speech_payloads = Vec::with_capacity(batch.row_count());
         let mut factorized_motor_candidates = Vec::with_capacity(batch.row_count());
+        let mut factorized_motor_parameters = Vec::with_capacity(batch.row_count());
         for row in words.chunks_exact(row_words) {
             records.push(GpuSelectionRecord::from_words(&row[..selection_words])?);
             let speech_record = GpuSpeechPayloadRecord::from_words(&row[selection_words..])?;
             factorized_motor_candidates.push(speech_record.factorized_motor_candidates());
+            factorized_motor_parameters.push(speech_record.factorized_motor_parameters());
             speech_payloads.push(decode_speech_payload_record(speech_record)?);
         }
         #[cfg(feature = "gpu-tests")]
@@ -3444,7 +3454,17 @@ impl GpuClosedLoopPipelines {
             }
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
-        let pending_records = match self.build_pending_eligibility_records(batch, &records) {
+        if !self.validate_factorized_motor_parameters(&factorized_motor_parameters) {
+            if let Some(diagnostic) = diagnostic.as_deref_mut() {
+                diagnostic.substage = Some(GpuDecodeMappedRecordsSubstage::FactorizedValidation);
+            }
+            return Err(GpuClosedLoopError::SubmissionFailed);
+        }
+        let pending_records = match self.build_pending_eligibility_records(
+            batch,
+            &records,
+            &factorized_motor_candidates,
+        ) {
             Some(records) => records,
             None => {
                 if let Some(diagnostic) = diagnostic.as_deref_mut() {
@@ -3489,6 +3509,7 @@ impl GpuClosedLoopPipelines {
             records,
             speech_payloads,
             factorized_motor_candidates,
+            factorized_motor_parameters,
             pending_records,
             final_sides,
             readback_bytes,
@@ -3518,6 +3539,7 @@ impl GpuClosedLoopPipelines {
             records: validated.records,
             speech_payloads: validated.speech_payloads,
             factorized_motor_candidates: validated.factorized_motor_candidates,
+            factorized_motor_parameters: validated.factorized_motor_parameters,
             pending_records: validated.pending_records,
             readback_bytes: validated.readback_bytes,
         })
@@ -3961,22 +3983,38 @@ impl GpuClosedLoopPipelines {
             })
     }
 
+    fn validate_factorized_motor_parameters(
+        &self,
+        parameters: &[[[f32; 6]; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]],
+    ) -> bool {
+        parameters.iter().all(|row| {
+            row.iter().all(|channel| {
+                channel
+                    .iter()
+                    .all(|value| value.is_finite() && (-1.0..=1.0).contains(value))
+            })
+        })
+    }
+
     fn build_pending_eligibility_records(
         &self,
         batch: &GpuActiveBatchUpload,
         selections: &[GpuSelectionRecord],
+        factorized_motor_candidates: &[[u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]],
     ) -> Option<Vec<GpuPendingEligibilityRecord>> {
         if selections.len() != batch.row_count()
             || batch.pending_templates.len() != batch.row_count()
             || batch.learning_headers.len() != batch.row_count()
+            || factorized_motor_candidates.len() != batch.row_count()
         {
             return None;
         }
         let mut pending_records = Vec::with_capacity(batch.row_count());
-        for ((selection, template), learning_header) in selections
+        for (((selection, template), learning_header), motor_candidates) in selections
             .iter()
             .zip(&batch.pending_templates)
             .zip(&batch.learning_headers)
+            .zip(factorized_motor_candidates)
         {
             if selection.status == 2 {
                 if selection.candidate_index != u32::MAX {
@@ -4041,6 +4079,9 @@ impl GpuClosedLoopPipelines {
             expected
                 .candidate_feature_digest
                 .copy_from_slice(&batch.frame_payload_words[digest_base..digest_end]);
+            for (index, candidate) in motor_candidates.iter().enumerate() {
+                expected.motor_channel_candidates[index] = u32::from(*candidate);
+            }
             pending_records.push(expected);
         }
         Some(pending_records)

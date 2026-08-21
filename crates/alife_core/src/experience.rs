@@ -13,9 +13,8 @@ use crate::{
     EpisodicDecisionKeyV2, ExperienceSequenceId, FinalizedMemoryRecall, GenomeId, HomeostaticDelta,
     HomeostaticSnapshot, JointMotorCondition, LobeLayout, MeasuredChannelObservation, MemoryId,
     MotorChannel, MotorCommandBundle, NeuralActionSelection, NormalizedScalar, OrganismId,
-    PerceptionBaseDigest,
-    PerceptionFrame, PerceptionFrameDigest, PhenotypeHash, PolicyBackend, Pose,
-    PredictionTargetReceipt, RankedActionProposal, RoutingMatrix, ScaffoldContractError,
+    PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest, PhenotypeHash, PolicyBackend,
+    Pose, PredictionTargetReceipt, RankedActionProposal, RoutingMatrix, ScaffoldContractError,
     SchemaKind, SchemaVersions, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
     SensorySnapshot, SignedValence, TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity,
     WeightSplitContract, WorldEntityId, MAX_ACTION_CANDIDATES,
@@ -520,6 +519,11 @@ pub struct NeuralDecisionEvidence {
     pub action_id: crate::ActionId,
     pub action_family: CandidateActionFamily,
     pub candidate_feature_digest: CandidateFeatureDigest,
+    /// Digest of the complete factorized bundle consumed by the world. It is
+    /// populated when the v1.1 decision is sealed, so every active channel is
+    /// part of neural decision identity rather than only the global winner.
+    #[serde(default)]
+    pub motor_bundle_digest: Option<[u64; 4]>,
     pub logit: f32,
     pub confidence: Confidence,
 }
@@ -686,6 +690,7 @@ impl DecisionSnapshot {
                 action_id: candidate.action_id,
                 action_family: candidate.family,
                 candidate_feature_digest: candidate.feature_digest()?,
+                motor_bundle_digest: None,
                 logit: selection.logit,
                 confidence: selection.confidence,
             }),
@@ -858,35 +863,21 @@ fn legacy_action_for_bundle(
         .channels
         .iter()
         .find(|command| command.primitive == action_id)
-        .or_else(|| bundle.channels.first());
-    let (kind, target, intensity, duration_ticks, confidence) = match command {
-        Some(command) => {
-            let kind = match command.channel {
-                MotorChannel::Locomotion => crate::ActionKind::Move,
-                MotorChannel::Orientation => crate::ActionKind::Inspect,
-                MotorChannel::Manipulation => crate::ActionKind::Interact,
-                MotorChannel::Vocal => crate::ActionKind::Vocalize,
-                MotorChannel::Posture => crate::ActionKind::Gesture,
-                MotorChannel::SpeciesSpecific(_) => crate::ActionKind::Gesture,
-            };
-            (
-                kind,
-                command
-                    .target
-                    .unwrap_or_else(|| crate::ActionTarget::new(None, None)),
-                command.intensity,
-                command.duration_ticks,
-                command.confidence,
-            )
-        }
-        None => (
-            crate::ActionKind::Idle,
-            crate::ActionTarget::new(None, None),
-            crate::Intensity::new(0.0)?,
-            crate::DurationTicks::new(1),
-            crate::Confidence::new(0.0)?,
-        ),
+        .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+    let kind = match command.channel {
+        MotorChannel::Locomotion => crate::ActionKind::Move,
+        MotorChannel::Orientation => crate::ActionKind::Inspect,
+        MotorChannel::Manipulation => crate::ActionKind::Interact,
+        MotorChannel::Vocal => crate::ActionKind::Vocalize,
+        MotorChannel::Posture => crate::ActionKind::Gesture,
+        MotorChannel::SpeciesSpecific(_) => crate::ActionKind::Gesture,
     };
+    let target = command
+        .target
+        .unwrap_or_else(|| crate::ActionTarget::new(None, None));
+    let intensity = command.intensity;
+    let duration_ticks = command.duration_ticks;
+    let confidence = command.confidence;
     ActionCommand::structured(
         bundle.organism_id,
         action_id,
@@ -977,6 +968,15 @@ impl Validate for DecisionSnapshot {
                     )
                 {
                     return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+                if self.abi_version == V11_EXPERIENCE_ABI_VERSION {
+                    let bundle = self
+                        .selected_bundle
+                        .as_ref()
+                        .ok_or(ScaffoldContractError::MissingPhaseData)?;
+                    if evidence.motor_bundle_digest != Some(bundle.canonical_digest()?) {
+                        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                    }
                 }
                 if let Some(key) = &self.episodic_key {
                     key.validate_contract()?;
@@ -1435,6 +1435,10 @@ impl ExperiencePatch {
         let pre_action =
             pre_action.with_v11_context(cognitive_context, prediction_target.clone())?;
         decision.abi_version = V11_EXPERIENCE_ABI_VERSION;
+        let bundle_digest = bundle.canonical_digest()?;
+        if let DecisionEvidence::NeuralClosedLoopGpu(evidence) = &mut decision.evidence {
+            evidence.motor_bundle_digest = Some(bundle_digest);
+        }
         decision.selected_bundle = Some(bundle);
         decision.prediction_target = Some(prediction_target.clone());
         decision.cognitive_work = Some(cognitive_work.clone());

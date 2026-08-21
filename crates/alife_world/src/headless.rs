@@ -1563,10 +1563,11 @@ impl HeadlessWorld {
                 };
                 let candidates =
                     HeadlessCandidateEnumerator.enumerate_candidates(&report, profile)?;
+                let orientation = self.agent_for(organism_id)?.grounded_physical.velocity;
                 let body = BodySnapshot {
                     pose: Pose {
                         translation: report.core_snapshot.observer_position,
-                        rotation: Quatf::IDENTITY,
+                        rotation: orientation_rotation(orientation),
                     },
                     velocity: Velocity::ZERO,
                 };
@@ -1713,7 +1714,7 @@ impl HeadlessWorld {
     ) -> Result<PhysicalObservationSnapshot, ScaffoldContractError> {
         let observer_pose = Pose {
             translation: observer.position,
-            rotation: Quatf::IDENTITY,
+            rotation: orientation_rotation(observer.grounded_physical.velocity),
         };
         let observer_velocity = Velocity {
             linear: observer.grounded_physical.velocity,
@@ -1981,9 +1982,8 @@ impl HeadlessWorld {
 
     /// Executes a bounded factorized command bundle as one world transaction.
     ///
-    /// The compatibility adapter may execute several legacy physical actions
-    /// in deterministic channel order, but authoritative biology advances only
-    /// once and the returned outcome remains joint.
+    /// Each selected channel executes in deterministic order, but authoritative
+    /// biology advances only once and the returned outcome remains joint.
     pub fn apply_registered_motor_bundle(
         &mut self,
         bundle: &MotorCommandBundle,
@@ -2015,7 +2015,11 @@ impl HeadlessWorld {
         let mut executed = Vec::with_capacity(channels.len());
         for channel in channels {
             let command = legacy_action_for_motor_channel(bundle.organism_id, channel)?;
-            let result = if channel.channel == MotorChannel::Vocal {
+            let result = if channel.channel == MotorChannel::Orientation {
+                self.execute_orientation_channel(channel, command)?
+            } else if matches!(channel.channel, MotorChannel::SpeciesSpecific(_)) {
+                self.execute_species_specific_channel(channel, command)?
+            } else if channel.channel == MotorChannel::Vocal {
                 match decode_vocal_channel_payload(channel)? {
                     Some((payload, prompted)) => {
                         self.apply_neural_command(&command, Some(payload), prompted)?
@@ -2503,6 +2507,63 @@ impl HeadlessWorld {
                 )
             }
         }
+    }
+
+    fn execute_orientation_channel(
+        &mut self,
+        channel: &ChannelCommand,
+        command: ActionCommand,
+    ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+        let agent_id = self.agent_entity_id(command.organism_id)?;
+        let direction = channel.direction;
+        let magnitude =
+            (direction.x * direction.x + direction.y * direction.y + direction.z * direction.z)
+                .sqrt();
+        let direction = if magnitude > 0.0001 {
+            Vec3f::new(
+                direction.x / magnitude,
+                direction.y / magnitude,
+                direction.z / magnitude,
+            )
+        } else {
+            Vec3f::new(0.0, 0.0, 1.0)
+        };
+        if let Some(agent) = self.objects.get_mut(&agent_id.raw()) {
+            agent.grounded_physical.velocity = Vec3f::new(
+                direction.x * channel.intensity.raw(),
+                direction.y * channel.intensity.raw(),
+                direction.z * channel.intensity.raw(),
+            );
+        }
+        self.finish_action(
+            command,
+            true,
+            None,
+            physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.01)?,
+            OutcomeProfile::inspect(),
+            Vec::new(),
+        )
+    }
+
+    fn execute_species_specific_channel(
+        &mut self,
+        channel: &ChannelCommand,
+        command: ActionCommand,
+    ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+        if !matches!(channel.channel, MotorChannel::SpeciesSpecific(1)) {
+            return Err(ScaffoldContractError::InvalidActionDecision);
+        }
+        if channel.payload.values.len() > alife_core::MAX_MOTOR_PAYLOAD_VALUES {
+            return Err(ScaffoldContractError::InvalidActionDecision);
+        }
+        self.finish_action(
+            command,
+            true,
+            None,
+            physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.02)?,
+            OutcomeProfile::vocalize(),
+            Vec::new(),
+        )
     }
 
     fn emit_vocalization_token(
@@ -3909,15 +3970,25 @@ fn legacy_action_for_motor_channel(
             alife_core::ActionTarget::new(None, None),
         ),
         MotorChannel::Posture => (
-            ActionKind::Rest.canonical_id(),
-            ActionKind::Rest,
+            command.primitive,
+            match command.primitive {
+                id if id == ActionKind::Idle.canonical_id() => ActionKind::Idle,
+                _ => ActionKind::Rest,
+            },
             alife_core::ActionTarget::new(None, None),
         ),
-        MotorChannel::Orientation | MotorChannel::SpeciesSpecific(_) => {
-            return Err(HeadlessMotorTransactionError::UnsupportedChannel(
-                command.channel,
-            ));
-        }
+        MotorChannel::Orientation => (
+            ActionKind::Inspect.canonical_id(),
+            ActionKind::Inspect,
+            command
+                .target
+                .unwrap_or_else(|| alife_core::ActionTarget::new(None, Some(command.direction))),
+        ),
+        MotorChannel::SpeciesSpecific(_) => (
+            ActionKind::Gesture.canonical_id(),
+            ActionKind::Gesture,
+            alife_core::ActionTarget::new(None, None),
+        ),
     };
     Ok(ActionCommand::structured(
         organism_id,
@@ -3951,11 +4022,18 @@ fn measured_motor_channel_observation(
     command: &ChannelCommand,
     result: &HeadlessActionResult,
 ) -> Result<Option<MeasuredChannelObservation>, ScaffoldContractError> {
-    if command.channel != MotorChannel::Locomotion {
+    if !matches!(
+        command.channel,
+        MotorChannel::Locomotion | MotorChannel::Orientation
+    ) {
         return Ok(None);
     }
     let displacement = result.execution.physical.displacement;
-    let measured_intensity = (distance(Vec3f::ZERO, displacement) / MOVE_STEP).clamp(0.0, 1.0);
+    let measured_intensity = if command.channel == MotorChannel::Orientation {
+        distance(Vec3f::ZERO, command.direction).clamp(0.0, 1.0)
+    } else {
+        (distance(Vec3f::ZERO, displacement) / MOVE_STEP).clamp(0.0, 1.0)
+    };
     Ok(Some(MeasuredChannelObservation::new(
         command.channel,
         result.execution.succeeded,
@@ -4439,6 +4517,16 @@ fn distance(a: Vec3f, b: Vec3f) -> f32 {
     let dy = a.y - b.y;
     let dz = a.z - b.z;
     (dx * dx + dy * dy + dz * dz).sqrt()
+}
+
+fn orientation_rotation(direction: Vec3f) -> Quatf {
+    let horizontal = (direction.x * direction.x + direction.z * direction.z).sqrt();
+    if horizontal <= 0.0001 {
+        return Quatf::IDENTITY;
+    }
+    let yaw = direction.x.atan2(direction.z);
+    let half = yaw * 0.5;
+    Quatf::new(0.0, half.sin(), 0.0, half.cos())
 }
 
 fn perception_cell(position: Vec3f) -> (i32, i32, i32) {

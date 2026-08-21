@@ -3,6 +3,8 @@ const INVALID_LOGIT_BITS:u32 = 0x7fc00001u;
 const DECODER_SCHEMA_VERSION:u32 = 1u;
 const SELECTOR_DIAGNOSTIC_RECORD_WORDS:u32 = 29u;
 const FACTORIZED_MOTOR_CHANNEL_SLOT_COUNT:u32 = 6u;
+const FACTORIZED_MOTOR_PARAMETER_WIDTH:u32 = 6u;
+const FACTORIZED_MOTOR_OUTPUT_WORDS:u32 = 40u;
 const ACTION_KIND_IDLE:u32 = 0u;
 const ACTION_KIND_HOLD:u32 = 1u;
 const ACTION_KIND_REST:u32 = 2u;
@@ -200,11 +202,13 @@ const MAX_SPEECH_TOKENS:u32 = 6u;
 
 fn factorized_motor_slot(kind:u32) -> u32 {
   if (kind == ACTION_KIND_MOVE) { return 0u; }
+  if (kind == ACTION_KIND_INSPECT) { return 1u; }
   if (kind == ACTION_KIND_INTERACT || kind == ACTION_KIND_WRITE) { return 2u; }
   if (kind == ACTION_KIND_VOCALIZE) { return 3u; }
-  if (kind == ACTION_KIND_HOLD || kind == ACTION_KIND_REST || kind == ACTION_KIND_INSPECT) {
+  if (kind == ACTION_KIND_IDLE || kind == ACTION_KIND_HOLD || kind == ACTION_KIND_REST) {
     return 4u;
   }
+  if (kind == ACTION_KIND_GESTURE) { return 5u; }
   return 0xffffffffu;
 }
 
@@ -243,8 +247,8 @@ fn load_speech_selection(base:u32) -> GpuSelectionRecord {
 }
 
 // Runs after candidate selection in the same authoritative command buffer.
-// The host receives only the packed act/token receipt and never reads neural
-// activations or authors creature speech.
+// The host receives bounded speech, channel-selection, and continuous motor
+// parameter receipts. It never authors creature speech or selects channels.
 @compute @workgroup_size(1)
 fn decode_speech_payload(@builtin(global_invocation_id) gid:vec3<u32>) {
   let header = load_perception_header(gid.y * ACTIVE_DISPATCH_ROW_WORDS);
@@ -252,11 +256,10 @@ fn decode_speech_payload(@builtin(global_invocation_id) gid:vec3<u32>) {
   let brain = brain_slots[header.brain_slot_index];
   let extension = load_slot_extension(brain);
   let output_base = extension.reserved0;
-  if (!state_span_within(output_base, 4u)) { return; }
-  store_state_u32(output_base, 0u);
-  store_state_u32(output_base + 1u, 0u);
-  store_state_u32(output_base + 2u, 0u);
-  store_state_u32(output_base + 3u, 0u);
+  if (!state_span_within(output_base, FACTORIZED_MOTOR_OUTPUT_WORDS)) { return; }
+  for (var output_word = 0u; output_word < FACTORIZED_MOTOR_OUTPUT_WORDS; output_word += 1u) {
+    store_state_u32(output_base + output_word, 0u);
+  }
 
   var motor_words:array<u32,2>;
   motor_words[0] = 0u;
@@ -268,14 +271,36 @@ fn decode_speech_payload(@builtin(global_invocation_id) gid:vec3<u32>) {
   store_state_u32(output_base + 2u, motor_words[0]);
   store_state_u32(output_base + 3u, motor_words[1]);
 
+  let decoder = load_decoder_plan(extension.decoder_input_plan_offset);
+  let motor_activation_base = select(
+    brain.activation_a_offset,
+    brain.activation_b_offset,
+    load_speech_selection(brain.selection_offset).active_activation_side == 1u
+  );
+  for (var slot = 0u; slot < FACTORIZED_MOTOR_CHANNEL_SLOT_COUNT; slot += 1u) {
+    let parameter_base = decoder.motor_start + slot * FACTORIZED_MOTOR_PARAMETER_WIDTH;
+    let parameters_available = span_within(parameter_base, FACTORIZED_MOTOR_PARAMETER_WIDTH, brain.neuron_count);
+    for (var parameter = 0u; parameter < FACTORIZED_MOTOR_PARAMETER_WIDTH; parameter += 1u) {
+      var value = 0.0;
+      if (parameters_available) {
+        value = load_state_f32(motor_activation_base + parameter_base + parameter);
+        if (!finite_decode(value)) { value = 0.0; }
+      }
+      store_state_u32(
+        output_base + 4u + slot * FACTORIZED_MOTOR_PARAMETER_WIDTH + parameter,
+        bitcast<u32>(clamp(value, -1.0, 1.0))
+      );
+    }
+  }
+
   let selection = load_speech_selection(brain.selection_offset);
   if (selection.status != 1u || selection.candidate_index >= header.candidate_count) { return; }
   let selected = load_candidate(header.candidate_offset + selection.candidate_index * 8u);
   if (selected.kind != ACTION_KIND_VOCALIZE) { return; }
 
-  let decoder = load_decoder_plan(extension.decoder_input_plan_offset);
-  let source_start = decoder.motor_start + SPEECH_SOURCE_OFFSET;
-  let target_start = decoder.motor_start + SPEECH_TARGET_OFFSET;
+  let speech_decoder = load_decoder_plan(extension.decoder_input_plan_offset);
+  let source_start = speech_decoder.motor_start + SPEECH_SOURCE_OFFSET;
+  let target_start = speech_decoder.motor_start + SPEECH_TARGET_OFFSET;
   if (!span_within(source_start, SPEECH_INPUT_WIDTH, brain.neuron_count)
       || !span_within(target_start, SPEECH_OUTPUT_WIDTH, brain.neuron_count)) { return; }
 

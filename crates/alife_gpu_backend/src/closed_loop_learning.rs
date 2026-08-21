@@ -8,7 +8,7 @@ use alife_core::{
 use bytemuck::{Pod, Zeroable};
 
 pub const GPU_LEARNING_HEADER_WORDS: usize = 20;
-pub const GPU_PENDING_ELIGIBILITY_WORDS: usize = 36;
+pub const GPU_PENDING_ELIGIBILITY_WORDS: usize = 44;
 pub const GPU_PENDING_ELIGIBILITY_BYTES: usize = GPU_PENDING_ELIGIBILITY_WORDS * 4;
 pub const GPU_OUTCOME_CREDIT_WORDS: usize = 40;
 pub const GPU_OUTCOME_CREDIT_BYTES: usize = GPU_OUTCOME_CREDIT_WORDS * 4;
@@ -269,6 +269,7 @@ pub struct GpuPendingEligibilityRecord {
     pub candidate_feature_digest: [u32; 4],
     pub active_eligibility_generation: [u32; 2],
     pub staging_eligibility_generation: [u32; 2],
+    pub motor_channel_candidates: [u32; 8],
 }
 
 #[repr(C, align(16))]
@@ -370,6 +371,7 @@ impl GpuPendingEligibilityRecord {
             candidate_feature_digest: [0; 4],
             active_eligibility_generation: split_u64(active_eligibility_generation),
             staging_eligibility_generation: split_u64(staging_eligibility_generation),
+            motor_channel_candidates: [0; 8],
         })
     }
 }
@@ -386,6 +388,7 @@ pub struct PendingEligibilityIdentity {
     action_id: ActionId,
     action_family: CandidateActionFamily,
     candidate_feature_digest: CandidateFeatureDigest,
+    motor_channel_candidates: [u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT],
     active_eligibility_generation: u64,
     staging_eligibility_generation: u64,
 }
@@ -421,6 +424,9 @@ impl PendingEligibilityIdentity {
     pub const fn candidate_feature_digest(&self) -> CandidateFeatureDigest {
         self.candidate_feature_digest
     }
+    pub const fn motor_channel_candidates(&self) -> [u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT] {
+        self.motor_channel_candidates
+    }
     pub const fn active_eligibility_generation(&self) -> u64 {
         self.active_eligibility_generation
     }
@@ -444,6 +450,9 @@ impl PendingEligibilityIdentity {
         digest.write_u8(self.action_family.raw());
         for word in self.candidate_feature_digest.0 {
             digest.write_u64(word);
+        }
+        for candidate in self.motor_channel_candidates {
+            digest.write_u16(candidate);
         }
         digest.write_u64(self.active_eligibility_generation);
         digest.write_u64(self.staging_eligibility_generation);
@@ -492,6 +501,11 @@ impl PendingEligibilityReceipt {
         action_id.validate()?;
         let candidate_feature_digest =
             CandidateFeatureDigest(join_u32x4(record.candidate_feature_digest));
+        let mut motor_channel_candidates = [0_u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT];
+        for (index, candidate) in motor_channel_candidates.iter_mut().enumerate() {
+            *candidate = u16::try_from(record.motor_channel_candidates[index])
+                .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
+        }
         let active_eligibility_generation = join_u64(
             record.active_eligibility_generation[0],
             record.active_eligibility_generation[1],
@@ -512,6 +526,9 @@ impl PendingEligibilityReceipt {
             || frame_digest == PerceptionFrameDigest([0; 4])
             || reserved != 0
             || candidate_feature_digest == CandidateFeatureDigest([0; 2])
+            || record.motor_channel_candidates[crate::GPU_MOTOR_CHANNEL_SLOT_COUNT..]
+                .iter()
+                .any(|candidate| *candidate != 0)
             || active_eligibility_generation == 0
             || staging_eligibility_generation
                 != active_eligibility_generation
@@ -531,6 +548,7 @@ impl PendingEligibilityReceipt {
             action_id,
             action_family,
             candidate_feature_digest,
+            motor_channel_candidates,
             active_eligibility_generation,
             staging_eligibility_generation,
         };

@@ -839,6 +839,7 @@ pub struct PendingEligibilityCheckpoint {
     pub action_id: ActionId,
     pub action_family: CandidateActionFamily,
     pub candidate_feature_digest: CandidateFeatureDigest,
+    pub motor_channel_candidates: [u16; 6],
     pub active_eligibility_generation: u64,
     pub staging_eligibility_generation: u64,
 }
@@ -857,6 +858,35 @@ impl PendingEligibilityCheckpoint {
         active_eligibility_generation: u64,
         staging_eligibility_generation: u64,
     ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_motor_channel_candidates(
+            dispatch_generation,
+            originating_tick,
+            frame_digest,
+            active_activation_side,
+            candidate_index,
+            action_id,
+            action_family,
+            candidate_feature_digest,
+            [0; 6],
+            active_eligibility_generation,
+            staging_eligibility_generation,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_new_with_motor_channel_candidates(
+        dispatch_generation: u64,
+        originating_tick: Tick,
+        frame_digest: PerceptionFrameDigest,
+        active_activation_side: u8,
+        candidate_index: u16,
+        action_id: ActionId,
+        action_family: CandidateActionFamily,
+        candidate_feature_digest: CandidateFeatureDigest,
+        motor_channel_candidates: [u16; 6],
+        active_eligibility_generation: u64,
+        staging_eligibility_generation: u64,
+    ) -> Result<Self, ScaffoldContractError> {
         let value = Self {
             dispatch_generation,
             originating_tick,
@@ -866,6 +896,7 @@ impl PendingEligibilityCheckpoint {
             action_id,
             action_family,
             candidate_feature_digest,
+            motor_channel_candidates,
             active_eligibility_generation,
             staging_eligibility_generation,
         };
@@ -880,6 +911,10 @@ impl PendingEligibilityCheckpoint {
             || self.frame_digest == PerceptionFrameDigest([0; 4])
             || self.active_activation_side > 1
             || self.candidate_feature_digest == CandidateFeatureDigest([0; 2])
+            || self
+                .motor_channel_candidates
+                .iter()
+                .any(|candidate| *candidate > 255)
             || self.active_eligibility_generation == 0
             || Some(self.staging_eligibility_generation) != expected_staging
         {

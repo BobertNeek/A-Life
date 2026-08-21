@@ -22,10 +22,10 @@ use super::{
     GpuPhenotypeUpload, GpuPlasticityReceptorRecord, GpuReplayCaptureIdentityRecord,
     GpuReplaySynapseSpanRecord, GpuSleepParameterRecord, GpuSlotLearningStateRecord,
     GpuSynapseLearningMetadata, GPU_CLOSED_LOOP_LAYOUT_VERSION, GPU_DENDRITIC_BRANCH_RECORD_WORDS,
-    GPU_DENDRITIC_INPUT_RECORD_WORDS, GPU_NO_EXTENSION_SENTINEL,
+    GPU_DENDRITIC_INPUT_RECORD_WORDS, GPU_NO_EXTENSION_SENTINEL, GPU_SPEECH_PAYLOAD_RECORD_WORDS,
 };
 
-const GPU_PENDING_ELIGIBILITY_RECORD_WORDS: u32 = 36;
+const GPU_PENDING_ELIGIBILITY_RECORD_WORDS: u32 = 44;
 
 fn dendritic_branch_capacity(neuron_count: u32) -> Result<u32, GpuClosedLoopError> {
     neuron_count
@@ -355,7 +355,7 @@ impl GpuClassBucketPlan {
         let candidate_logit_words = span(encoded_input_words.end, MAX_ACTION_CANDIDATES)?;
         let diagnostic_words = span(candidate_logit_words.end, 4)?;
         let selection_words = span(diagnostic_words.end, 16)?;
-        let speech_payload_words = span(selection_words.end, 4)?;
+        let speech_payload_words = span(selection_words.end, GPU_SPEECH_PAYLOAD_RECORD_WORDS)?;
         let extension_words = span(speech_payload_words.end, 20)?;
         let learning_state_words = span(extension_words.end, 24)?;
         let pending_eligibility_words = span(
@@ -2100,7 +2100,7 @@ impl GpuFixedClassArenaPlan {
         let candidate_logit_words = span_u32(&mut cursor, candidates)?;
         let diagnostic_words = span_u32(&mut cursor, 4)?;
         let selection_words = span_u32(&mut cursor, 16)?;
-        let speech_payload_words = span_u32(&mut cursor, 4)?;
+        let speech_payload_words = span_u32(&mut cursor, GPU_SPEECH_PAYLOAD_RECORD_WORDS as u32)?;
         let extension_words = span_u32(&mut cursor, 20)?;
         let learning_state_words = span_u32(&mut cursor, 24)?;
         let pending_eligibility_words =

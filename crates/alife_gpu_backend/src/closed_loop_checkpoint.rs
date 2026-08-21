@@ -55,6 +55,7 @@ pub struct PendingEligibilityRestoreParts {
     action_id: ActionId,
     action_family: CandidateActionFamily,
     candidate_feature_digest: CandidateFeatureDigest,
+    motor_channel_candidates: [u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT],
     active_eligibility_generation: u64,
     staging_eligibility_generation: u64,
 }
@@ -70,6 +71,7 @@ impl PendingEligibilityRestoreParts {
         action_id: ActionId,
         action_family: CandidateActionFamily,
         candidate_feature_digest: CandidateFeatureDigest,
+        motor_channel_candidates: [u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT],
         active_eligibility_generation: u64,
         staging_eligibility_generation: u64,
     ) -> Result<Self, ScaffoldContractError> {
@@ -78,6 +80,9 @@ impl PendingEligibilityRestoreParts {
             || frame_digest == PerceptionFrameDigest([0; 4])
             || active_activation_side > 1
             || candidate_feature_digest == CandidateFeatureDigest([0; 2])
+            || motor_channel_candidates
+                .iter()
+                .any(|candidate| *candidate > 255)
             || active_eligibility_generation == 0
             || active_eligibility_generation.checked_add(1) != Some(staging_eligibility_generation)
         {
@@ -92,6 +97,7 @@ impl PendingEligibilityRestoreParts {
             action_id,
             action_family,
             candidate_feature_digest,
+            motor_channel_candidates,
             active_eligibility_generation,
             staging_eligibility_generation,
         })
@@ -129,6 +135,10 @@ impl PendingEligibilityRestoreParts {
         self.candidate_feature_digest
     }
 
+    pub const fn motor_channel_candidates(self) -> [u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT] {
+        self.motor_channel_candidates
+    }
+
     pub const fn active_eligibility_generation(self) -> u64 {
         self.active_eligibility_generation
     }
@@ -146,6 +156,9 @@ impl PendingEligibilityRestoreParts {
         digest.write_u32(self.action_id.raw());
         digest.write_u8(self.action_family.raw());
         write_digest2(digest, self.candidate_feature_digest.0);
+        for candidate in self.motor_channel_candidates {
+            digest.write_u16(candidate);
+        }
         digest.write_u64(self.active_eligibility_generation);
         digest.write_u64(self.staging_eligibility_generation);
     }
@@ -1111,6 +1124,7 @@ fn pending_parts_from_receipt(
         identity.action_id(),
         identity.action_family(),
         identity.candidate_feature_digest(),
+        identity.motor_channel_candidates(),
         identity.active_eligibility_generation(),
         identity.staging_eligibility_generation(),
     )
@@ -1136,6 +1150,9 @@ fn restored_pending_record(
         pack_candidate_index_and_family(pending.candidate_index(), pending.action_family());
     record.action_id = pending.action_id().raw();
     record.candidate_feature_digest = split_u64x2(pending.candidate_feature_digest().0);
+    for (index, candidate) in pending.motor_channel_candidates().iter().enumerate() {
+        record.motor_channel_candidates[index] = u32::from(*candidate);
+    }
     let receipt = PendingEligibilityReceipt::from_gpu_record(
         record,
         handle.slot(),

@@ -1,4 +1,4 @@
-const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 4u;
+const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 5u;
 const GPU_SELECTION_RECORD_WORDS:u32 = 16u;
 const GPU_LEARNING_SCHEMA_VERSION:u32 = 1u;
 const GPU_SLEEP_SCHEMA_VERSION:u32 = 1u;
@@ -153,6 +153,7 @@ struct GpuPendingEligibilityRecord {
   phenotype_hash:array<u32,8>, organism_id:vec2<u32>, dispatch_generation:vec2<u32>, originating_tick:vec2<u32>,
   frame_digest:array<u32,8>, candidate_index_and_family:u32, action_id:u32,
   candidate_feature_digest:vec4<u32>, active_eligibility_generation:vec2<u32>, staging_eligibility_generation:vec2<u32>,
+  motor_channel_candidates:array<u32,8>,
 }
 struct GpuOutcomeCreditRecord {
   schema_version:u32, selected_candidate_and_family:u32, organism_id:vec2<u32>,
@@ -462,7 +463,7 @@ fn validate_slice_a_slot(slot_index:u32, header:GpuPerceptionHeader) -> bool {
   let extension = load_slot_extension(slot);
   valid = extension.schema_version == GPU_CLOSED_LOOP_LAYOUT_VERSION
     && extension.reserved0 != 0xffffffffu
-    && state_span_within(extension.reserved0, 4u)
+    && state_span_within(extension.reserved0, 40u)
     && extension.reserved1 != 0xffffffffu
     && plan_span_within(extension.reserved1, 1u)
     && state_span_within(extension.learning_state_offset, 24u)

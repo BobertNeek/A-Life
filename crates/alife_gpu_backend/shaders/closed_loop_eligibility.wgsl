@@ -5,7 +5,7 @@ const DECODER_HEAD_ACTION_CANDIDATE:u32 = 1u;
 const DECODER_HEAD_MEMORY_CONTEXT:u32 = 2u;
 const DECODER_HEAD_SPEECH_PAYLOAD:u32 = 3u;
 const CANDIDATE_FEATURE_COUNT:u32 = 24u;
-const PENDING_ELIGIBILITY_WORDS:u32 = 36u;
+const PENDING_ELIGIBILITY_WORDS:u32 = 44u;
 const ELIGIBILITY_DIAGNOSTIC_LANE:u32 = 2u;
 const ELIGIBILITY_DIAGNOSTIC_UNKNOWN_DECODER_HEAD:u32 = 0x80000000u;
 
@@ -35,6 +35,12 @@ fn load_selection_record(base:u32) -> GpuSelectionRecord {
     load_state_u32(base+8u),load_state_u32(base+9u),load_state_u32(base+10u),load_state_u32(base+11u),
     load_state_u32(base+12u),load_state_u32(base+13u),load_state_u32(base+14u),load_state_u32(base+15u)
   );
+}
+
+fn factorized_motor_candidate(extension:GpuBrainSlotExtensionRecord, slot:u32) -> u32 {
+  if (slot >= 6u) { return 0u; }
+  let word = load_state_u32(extension.reserved0 + 2u + slot / 4u);
+  return (word >> ((slot % 4u) * 8u)) & 0xffu;
 }
 
 fn pending_row_is_zero(base:u32) -> bool {
@@ -197,17 +203,23 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
   let staging_index = staging_bases.decoder + metadata.eligibility_local_index;
   var local = 0.0;
   if (metadata.decoder_head == DECODER_HEAD_ACTION_CANDIDATE) {
-    if (metadata.family == selected.family) {
-      if (metadata.input_lane >= CANDIDATE_FEATURE_COUNT) { return; }
+    if (metadata.input_lane >= CANDIDATE_FEATURE_COUNT) { return; }
+    let activation_offset = select(
+      brain.activation_a_offset,
+      brain.activation_b_offset,
+      header.active_activation_side == 1u
+    );
+    for (var motor_slot = 0u; motor_slot < 6u; motor_slot += 1u) {
+      let encoded = factorized_motor_candidate(extension, motor_slot);
+      if (encoded == 0u) { continue; }
+      let candidate_index = encoded - 1u;
+      if (candidate_index >= header.candidate_count) { continue; }
+      let candidate = load_candidate(header.candidate_offset + candidate_index * 8u);
+      if (metadata.family != candidate.family) { continue; }
       let feature_index = header.decoder_learning_input_offset
-        + selection.candidate_index * header.decoder_input_stride
+        + candidate_index * header.decoder_input_stride
         + metadata.input_lane;
-      let activation_offset = select(
-        brain.activation_a_offset,
-        brain.activation_b_offset,
-        header.active_activation_side == 1u
-      );
-      local = load_state_f32(activation_offset + metadata.motor_index)
+      local += load_state_f32(activation_offset + metadata.motor_index)
         * bitcast<f32>(frame_payload_words[feature_index]);
     }
   } else if (metadata.decoder_head == DECODER_HEAD_MEMORY_CONTEXT) {
@@ -220,7 +232,9 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
       local = bitcast<f32>(frame_payload_words[feature_index]);
     }
   } else if (metadata.decoder_head == DECODER_HEAD_SPEECH_PAYLOAD) {
-    if (selected.kind == 6u) {
+    let vocal_encoded = factorized_motor_candidate(extension, 3u);
+    if (vocal_encoded != 0u && vocal_encoded - 1u < header.candidate_count
+        && load_candidate(header.candidate_offset + (vocal_encoded - 1u) * 8u).kind == 6u) {
       let activation_offset = select(
         brain.activation_a_offset,
         brain.activation_b_offset,
@@ -322,6 +336,12 @@ fn finalize_pending_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
       frame_payload_words[template_base + generation_index]
     );
   }
+  for (var motor_slot = 0u; motor_slot < 6u; motor_slot += 1u) {
+    store_state_u32(
+      header.pending_eligibility_offset + 36u + motor_slot,
+      factorized_motor_candidate(extension, motor_slot)
+    );
+  }
   let state_base = extension.learning_state_offset;
   store_state_u32(state_base + 8u, next_generation_lo);
   store_state_u32(state_base + 9u, next_generation_hi);
@@ -332,7 +352,7 @@ fn finalize_pending_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
   storageBarrier();
   // Status 3 proves that the GPU completed eligibility after winner selection.
   // The host validates this proof and normalizes the public winner record back
-  // to status 1; the 36-word pending identity remains resident on the GPU.
+  // to status 1; the 44-word pending identity remains resident on the GPU.
   store_state_u32(header.selection_offset + 5u, 3u);
 }
 

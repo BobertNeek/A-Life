@@ -6,15 +6,15 @@ pub const GPU_PERCEPTION_HEADER_BYTES: usize = 64;
 pub const GPU_BRAIN_SLOT_RECORD_BYTES: usize = 144;
 pub const GPU_CANDIDATE_RECORD_BYTES: usize = 32;
 pub const GPU_SELECTION_RECORD_BYTES: usize = 64;
-pub const GPU_SPEECH_PAYLOAD_RECORD_BYTES: usize = 16;
-/// Six fixed channel slots fit in the two reserved words without changing the
-/// closed-loop readback size. Slots 1 and 5 are reserved by the current world
-/// adapter for orientation and species-specific channels.
+pub const GPU_SPEECH_PAYLOAD_RECORD_WORDS: usize = 40;
+pub const GPU_SPEECH_PAYLOAD_RECORD_BYTES: usize = GPU_SPEECH_PAYLOAD_RECORD_WORDS * 4;
+/// Six fixed channel slots use two packed words, followed by six bounded
+/// neural parameter lanes for each channel.
 pub const GPU_MOTOR_CHANNEL_SLOT_COUNT: usize = 6;
 /// Exact number of storage-buffer bindings shared by every production neural pass.
 pub const GPU_CLOSED_LOOP_STORAGE_BINDINGS: u32 = 7;
 /// Exact executable ordering/layout ABI understood by the current closed-loop shaders.
-pub const GPU_CLOSED_LOOP_LAYOUT_VERSION: u32 = 4;
+pub const GPU_CLOSED_LOOP_LAYOUT_VERSION: u32 = 5;
 pub const GPU_NO_EXTENSION_SENTINEL: u32 = u32::MAX;
 pub const GPU_DENDRITIC_BRANCH_RECORD_WORDS: u32 = 8;
 pub const GPU_DENDRITIC_INPUT_RECORD_WORDS: u32 = 4;
@@ -126,18 +126,29 @@ gpu_record!(GpuSelectionRecord {
 gpu_record!(GpuSpeechPayloadRecord {
     packed_header_and_tokens: u32,
     packed_tokens_and_confidence: u32,
-    reserved: [u32; 2]
+    factorized_motor_candidates: [u32; 2],
+    factorized_motor_parameters: [[u32; 6]; 6]
 });
 
 impl GpuSpeechPayloadRecord {
     pub fn factorized_motor_candidates(&self) -> [u16; GPU_MOTOR_CHANNEL_SLOT_COUNT] {
-        let words = self.reserved;
+        let words = self.factorized_motor_candidates;
         let mut candidates = [0_u16; GPU_MOTOR_CHANNEL_SLOT_COUNT];
         for (index, candidate) in candidates.iter_mut().enumerate() {
             let word = words[index / 4];
             *candidate = ((word >> ((index % 4) * 8)) & 0xff) as u16;
         }
         candidates
+    }
+
+    pub fn factorized_motor_parameters(&self) -> [[f32; 6]; GPU_MOTOR_CHANNEL_SLOT_COUNT] {
+        let mut parameters = [[0.0_f32; 6]; GPU_MOTOR_CHANNEL_SLOT_COUNT];
+        for (slot, row) in parameters.iter_mut().enumerate() {
+            for (component, value) in row.iter_mut().enumerate() {
+                *value = f32::from_bits(self.factorized_motor_parameters[slot][component]);
+            }
+        }
+        parameters
     }
 }
 gpu_record!(GpuEncoderPlanRecord {

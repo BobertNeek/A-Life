@@ -14,13 +14,12 @@ use alife_core::{
     BrainDispatchIdentity, BrainPhenotype, BrainWorkCounters, BrainWorkReceipt,
     CandidateActionFamily, CanonicalDigestBuilder, CoactivationEvidence, Confidence,
     DendriticAllocationEvidence, DendriticBranchSet, DendriticInputRef, ExperiencePatch,
-    FinalizedMemoryRecall, GpuPressureSample,
-    GpuPressureSampleInput, LearningCommitToken, LearningSequenceGuard, NeuralActionSelection,
-    NeuralThrottleDecision, NeuralThrottleLevel, OrganismId, OutcomeCreditPacket,
-    PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest, PhenotypeHash,
-    ScaffoldContractError, SensorProfile, SpeechMotorPayload, StructuralEvidenceEvent,
-    StructuralSource, BRAIN_ATP_BASAL_DEBIT_Q16,
-    BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16, REQUIRED_GPU_FEATURE_MASK,
+    FinalizedMemoryRecall, GpuPressureSample, GpuPressureSampleInput, LearningCommitToken,
+    LearningSequenceGuard, NeuralActionSelection, NeuralThrottleDecision, NeuralThrottleLevel,
+    OrganismId, OutcomeCreditPacket, PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest,
+    PhenotypeHash, ScaffoldContractError, SensorProfile, SpeechMotorPayload,
+    StructuralEvidenceEvent, StructuralSource, BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX,
+    BRAIN_ATP_SLEEP_RECOVERY_Q16, REQUIRED_GPU_FEATURE_MASK,
 };
 use serde::{Deserialize, Serialize};
 
@@ -619,6 +618,7 @@ pub struct GpuClosedLoopTick {
     pub selection: NeuralActionSelection,
     pub speech_payload: Option<SpeechMotorPayload>,
     pub factorized_motor_candidates: [u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT],
+    pub factorized_motor_parameters: [[f32; 6]; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT],
     pub pending_eligibility: PendingEligibilityReceipt,
     pub pressure: GpuPressureSample,
     pub throttle: NeuralThrottleDecision,
@@ -2627,7 +2627,11 @@ fn replay_signal(value: f32) -> u32 {
 }
 
 fn nonzero_structural_identity(value: u64) -> u64 {
-    if value == 0 { 1 } else { value }
+    if value == 0 {
+        1
+    } else {
+        value
+    }
 }
 
 pub(crate) fn map_gpu_contract_error(error: GpuClosedLoopError) -> ScaffoldContractError {
@@ -3058,10 +3062,7 @@ impl GpuClosedLoopBackend {
         for span in replay.synapse_spans.iter().take(64) {
             let local_synapse_id = usize::try_from(span.local_synapse_id)
                 .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
-            let Some(synapse) = phenotype
-                .synapses()
-                .get(local_synapse_id)
-            else {
+            let Some(synapse) = phenotype.synapses().get(local_synapse_id) else {
                 continue;
             };
             let start = usize::try_from(span.sample_start)
@@ -3070,9 +3071,12 @@ impl GpuClosedLoopBackend {
                 .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
             let samples = replay
                 .eligibility_samples
-                .get(start..start.checked_add(count).ok_or(
-                    ScaffoldContractError::ConsolidationGenerationMismatch,
-                )?)
+                .get(
+                    start
+                        ..start
+                            .checked_add(count)
+                            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?,
+                )
                 .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
             for (event_index, sample) in samples.iter().enumerate() {
                 let eligibility = u32::from(sample.eligibility_q15.unsigned_abs());
@@ -3204,12 +3208,8 @@ impl GpuClosedLoopBackend {
                 .cognitive_architecture()
                 .dendritic_branch_capacity(),
         );
-        let _ = self.apply_v11_structural_events(
-            handle,
-            &evidence,
-            &branch_evidence,
-            branch_capacity,
-        )?;
+        let _ =
+            self.apply_v11_structural_events(handle, &evidence, &branch_evidence, branch_capacity)?;
         Ok(())
     }
 
@@ -5160,6 +5160,8 @@ impl GpuClosedLoopBackend {
         let mut ordered_speech_payloads = vec![None; batch.len()];
         let mut ordered_factorized_motor_candidates =
             vec![[0_u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]; batch.len()];
+        let mut ordered_factorized_motor_parameters =
+            vec![[[0.0_f32; 6]; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]; batch.len()];
         let mut ordered_pending_receipts = vec![None; batch.len()];
         let mut ordered_pending_records = vec![None; batch.len()];
         let mut ordered_next_transaction_generations = vec![None; batch.len()];
@@ -5178,7 +5180,10 @@ impl GpuClosedLoopBackend {
                     .memory_context_bindings();
                 for (
                     (
-                        (((original_index, selection), speech_payload), motor_candidates),
+                        (
+                            (((original_index, selection), speech_payload), motor_candidates),
+                            motor_parameters,
+                        ),
                         pending_record,
                     ),
                     memory_binding,
@@ -5188,6 +5193,7 @@ impl GpuClosedLoopBackend {
                     .zip(validated.records())
                     .zip(validated.speech_payloads())
                     .zip(validated.factorized_motor_candidates())
+                    .zip(validated.factorized_motor_parameters())
                     .zip(validated.pending_records())
                     .zip(memory_bindings)
                 {
@@ -5225,6 +5231,7 @@ impl GpuClosedLoopBackend {
                         || identity.action_id() != candidate.action_id
                         || identity.action_family() != candidate.family
                         || identity.candidate_feature_digest() != candidate.feature_digest()?
+                        || identity.motor_channel_candidates() != *motor_candidates
                         || identity.active_eligibility_generation()
                             != resident.active_eligibility_generation
                         || identity.staging_eligibility_generation()
@@ -5258,6 +5265,7 @@ impl GpuClosedLoopBackend {
                     ordered_records[*original_index] = Some(*selection);
                     ordered_speech_payloads[*original_index] = speech_payload.clone();
                     ordered_factorized_motor_candidates[*original_index] = *motor_candidates;
+                    ordered_factorized_motor_parameters[*original_index] = *motor_parameters;
                     ordered_pending_receipts[*original_index] = Some(receipt);
                     ordered_pending_records[*original_index] = Some(*pending_record);
                     ordered_next_transaction_generations[*original_index] =
@@ -5447,6 +5455,7 @@ impl GpuClosedLoopBackend {
                     },
                     speech_payload: ordered_speech_payloads[index].clone(),
                     factorized_motor_candidates: ordered_factorized_motor_candidates[index],
+                    factorized_motor_parameters: ordered_factorized_motor_parameters[index],
                     pending_eligibility,
                     pressure: activity_decisions[index].pressure,
                     throttle: activity_decisions[index].clone(),
@@ -5507,6 +5516,7 @@ impl GpuClosedLoopBackend {
                 || committed.records.len() != dispatch.original_indices.len()
                 || committed.speech_payloads.len() != dispatch.original_indices.len()
                 || committed.factorized_motor_candidates.len() != dispatch.original_indices.len()
+                || committed.factorized_motor_parameters.len() != dispatch.original_indices.len()
                 || committed.pending_records.len() != dispatch.original_indices.len()
             {
                 self.mark_device_lost();
@@ -5516,18 +5526,22 @@ impl GpuClosedLoopBackend {
                 capture.later_stage =
                     Some(GpuRuntimeSelectorDiagnosticStage::ValidateCommitContents);
             }
-            for ((((original_index, record), speech_payload), motor_candidates), pending_record) in
-                dispatch
-                    .original_indices
-                    .iter()
-                    .zip(committed.records)
-                    .zip(committed.speech_payloads)
-                    .zip(committed.factorized_motor_candidates)
-                    .zip(committed.pending_records)
+            for (
+                ((((original_index, record), speech_payload), motor_candidates), motor_parameters),
+                pending_record,
+            ) in dispatch
+                .original_indices
+                .iter()
+                .zip(committed.records)
+                .zip(committed.speech_payloads)
+                .zip(committed.factorized_motor_candidates)
+                .zip(committed.factorized_motor_parameters)
+                .zip(committed.pending_records)
             {
                 commit_mismatch |= ordered_records[*original_index] != Some(record)
                     || ordered_speech_payloads[*original_index] != speech_payload
                     || ordered_factorized_motor_candidates[*original_index] != motor_candidates
+                    || ordered_factorized_motor_parameters[*original_index] != motor_parameters
                     || ordered_pending_records[*original_index] != Some(pending_record);
             }
         }

@@ -1444,7 +1444,7 @@ fn make_eligibility_asset(
 fn pending_checkpoint_from_parts(
     parts: PendingEligibilityRestoreParts,
 ) -> Result<PendingEligibilityCheckpoint, ScaffoldContractError> {
-    PendingEligibilityCheckpoint::try_new(
+    PendingEligibilityCheckpoint::try_new_with_motor_channel_candidates(
         parts.dispatch_generation(),
         parts.originating_tick(),
         parts.frame_digest(),
@@ -1453,6 +1453,7 @@ fn pending_checkpoint_from_parts(
         parts.action_id(),
         parts.action_family(),
         parts.candidate_feature_digest(),
+        parts.motor_channel_candidates(),
         parts.active_eligibility_generation(),
         parts.staging_eligibility_generation(),
     )
@@ -1470,6 +1471,7 @@ fn pending_restore_parts(
         pending.action_id,
         pending.action_family,
         pending.candidate_feature_digest,
+        pending.motor_channel_candidates,
         pending.active_eligibility_generation,
         pending.staging_eligibility_generation,
     )

@@ -9,6 +9,7 @@ use crate::{
 };
 
 pub const MOTOR_COMMAND_SCHEMA_VERSION: u16 = 1;
+pub const SPECIES_SPECIFIC_CHANNEL_VERSION_V1: u8 = 1;
 pub const MAX_MOTOR_CHANNELS: usize = 6;
 pub const MAX_MOTOR_PAYLOAD_VALUES: usize = 32;
 pub const MAX_COORDINATION_GROUPS: usize = 8;
@@ -27,6 +28,25 @@ pub enum MotorChannel {
 }
 
 impl MotorChannel {
+    pub const fn slot(self) -> usize {
+        match self {
+            Self::Locomotion => 0,
+            Self::Orientation => 1,
+            Self::Manipulation => 2,
+            Self::Vocal => 3,
+            Self::Posture => 4,
+            Self::SpeciesSpecific(_) => 5,
+        }
+    }
+
+    pub const fn is_species_specific(self) -> bool {
+        matches!(self, Self::SpeciesSpecific(_))
+    }
+
+    pub const fn species_specific_v1() -> Self {
+        Self::SpeciesSpecific(SPECIES_SPECIFIC_CHANNEL_VERSION_V1)
+    }
+
     pub(crate) fn canonical_key(self) -> u16 {
         match self {
             Self::Locomotion => 0,
@@ -264,6 +284,7 @@ impl MotorCommandBundle {
 impl Validate for MotorCommandBundle {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         if self.schema_version != MOTOR_COMMAND_SCHEMA_VERSION
+            || self.channels.is_empty()
             || self.channels.len() > MAX_MOTOR_CHANNELS
         {
             return Err(ScaffoldContractError::InvalidActionDecision);
