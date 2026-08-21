@@ -75,6 +75,7 @@ if ($ScenarioId.Count -gt 0) {
 $sourceCommit = Get-SourceCommit
 $runnerIdentity = if ([string]::IsNullOrWhiteSpace($RunnerId)) { [string]$catalog.run_contract.runner_id } else { $RunnerId.Trim() }
 $runnerArgs = if ($RunnerCommand.Count -gt 1) { @($RunnerCommand[1..($RunnerCommand.Count - 1)]) } else { @() }
+$runnerArgs += @($catalog.run_contract.arguments)
 $runnerForIdentity = if ($RunnerCommand.Count -eq 0) { 'runner-not-configured' } else { $RunnerCommand -join "`0" }
 $artifactRootAbsolute = [IO.Path]::GetFullPath($ArtifactRoot)
 $cacheRootAbsolute = [IO.Path]::GetFullPath($CacheRoot)
