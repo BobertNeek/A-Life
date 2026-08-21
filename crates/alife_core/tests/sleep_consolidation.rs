@@ -4,12 +4,13 @@ use alife_core::{
     ActionCandidate, ActionId, ActionKind, ActionTarget, BodySnapshot, BrainClassSpec,
     BrainScaleTier, CandidateActionFamily, CandidateFeatureDigest, CandidateObservationRef,
     Confidence, CreatureMind, DenseTile, DriveDelta, DurationTicks, EndocrineDelta,
-    HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot, LobeKind, MemoryBank,
-    MemoryBankConfig, MemoryExpectancy, MemoryOutcomeSummary, MemoryRecord, NeuralActionSelection,
-    NeuralProjectionSchema, NeuromodulatorSample, NormalizedScalar, OrganismId,
-    PerceptionFrameDigest, PerceptionFrameDraft, PhenotypeHash, PhysicalActionOutcome,
-    PhysicalContactKind, PostActionOutcome, PredictionTargetReceipt, ProjectionRoutingRef,
-    ProjectionTile, ReplayCapturePlan, ScaffoldContractError, SensorProfile,
+    HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition, LobeKind,
+    MemoryBank, MemoryBankConfig, MemoryExpectancy, MemoryOutcomeSummary, MemoryRecord,
+    MotorChannel, MotorChannelFactor, NeuralActionSelection, NeuralProjectionSchema,
+    NeuromodulatorSample, NormalizedScalar, OrganismId, PerceptionFrameDigest,
+    PerceptionFrameDraft, PhenotypeHash, PhysicalActionOutcome, PhysicalContactKind,
+    PostActionOutcome, PredictionTargetReceipt, ProjectionRoutingRef, ProjectionTile,
+    ReplayCapturePlan, ScaffoldContractError, SemanticStateVector, SensorProfile,
     SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence,
     SleepConsolidationConfig, SleepConsolidator, SleepController, SleepPhase, SleepReplayEvent,
     SleepReplayJournal, SleepTrigger, SparseTileCoord, SparseTilePayload, StableLifetimeTraitKind,
@@ -698,14 +699,28 @@ fn biologically_due_sleep_commits_replayed_memory_prediction_and_concept_state()
     let mut journal = SleepReplayJournal::new(plan).unwrap();
     journal.push(replay_event(1), &[0.75]).unwrap();
     let batch = journal.build_bounded_batch(1, 1, u32::MAX).unwrap();
+    let source_state = SemanticStateVector::new(vec![0.5, 0.25]).unwrap();
+    let motor_condition = JointMotorCondition::new(vec![MotorChannelFactor {
+        channel: MotorChannel::Locomotion,
+        primitive: ActionId(400),
+        intensity: 0.8,
+        duration_ticks: 1,
+        direction: Vec3f::new(1.0, 0.0, 0.0),
+        stand_off_distance: 0.0,
+        confidence: 0.9,
+        payload_len: 0,
+        coordination_group: 0,
+    }])
+    .unwrap();
     let target = PredictionTargetReceipt::for_successor(
         organism(),
         alife_core::ExperienceSequenceId(1),
         ActionId(400),
         Tick::new(1),
         [1, 2, 3, 4],
-        1,
-        vec![0.9, 0.1],
+        source_state.clone(),
+        motor_condition.clone(),
+        SemanticStateVector::new(vec![0.9, 0.1]).unwrap(),
     )
     .unwrap();
     let evidence = SleepReplayEvidence::new(batch, vec![target]).unwrap();
@@ -714,7 +729,7 @@ fn biologically_due_sleep_commits_replayed_memory_prediction_and_concept_state()
     let mut memory = memory_bank_with_three_records();
     let mut predictor = GroundedSuccessorPredictor::default();
     let mut topology = topology_with_gap();
-    let before_prediction = predictor.predict([1, 2, 3, 4], ActionId(400), 2).unwrap();
+    let before_prediction = predictor.predict(&source_state, &motor_condition).unwrap();
     let before_topology_digest = topology.diagnostics().canonical_digest;
 
     let receipt = consolidator
@@ -733,7 +748,7 @@ fn biologically_due_sleep_commits_replayed_memory_prediction_and_concept_state()
     assert_eq!(receipt.promoted_memory_ids.len(), 1);
     assert_eq!(memory.fast_len(), 2);
     assert_eq!(memory.lifetime_len(), 1);
-    let after_prediction = predictor.predict([1, 2, 3, 4], ActionId(400), 2).unwrap();
+    let after_prediction = predictor.predict(&source_state, &motor_condition).unwrap();
     assert_ne!(
         before_prediction.predicted_successor,
         after_prediction.predicted_successor
