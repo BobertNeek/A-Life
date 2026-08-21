@@ -244,6 +244,124 @@ const GPU_CANDIDATE_RECORD_WORDS: usize = 8;
 const WORKGROUP_SIZE: u32 = 64;
 const GPU_REQUIRED_MAX_BUFFER_WORDS: usize = 268_435_456 / 4;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GpuSelectorDiagnosticFailureClass {
+    CapacityExceeded,
+    ArithmeticOverflow,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct GpuSelectorDiagnosticErrorReceipt {
+    pub class: GpuSelectorDiagnosticFailureClass,
+    pub class_id: u16,
+    pub chunk_index: usize,
+    pub row: usize,
+    pub base_words: usize,
+    pub candidate_count: u32,
+    pub decoder_synapse_count: u32,
+    pub record_words: usize,
+    pub detail_words: u128,
+    pub frame_payload_capacity_words: usize,
+}
+
+impl std::fmt::Display for GpuSelectorDiagnosticErrorReceipt {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "selector diagnostic {:?}: class_id={} chunk_index={} row={} base_words={} candidate_count={} decoder_synapse_count={} record_words={} detail_words={} frame_payload_capacity_words={}",
+            self.class,
+            self.class_id,
+            self.chunk_index,
+            self.row,
+            self.base_words,
+            self.candidate_count,
+            self.decoder_synapse_count,
+            self.record_words,
+            self.detail_words,
+            self.frame_payload_capacity_words,
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GpuSelectorDiagnosticEnableError {
+    Contract(GpuClosedLoopError),
+    Receipt(GpuSelectorDiagnosticErrorReceipt),
+}
+
+impl GpuSelectorDiagnosticEnableError {
+    pub(crate) const fn receipt(self) -> Option<GpuSelectorDiagnosticErrorReceipt> {
+        match self {
+            Self::Contract(_) => None,
+            Self::Receipt(receipt) => Some(receipt),
+        }
+    }
+
+    pub(crate) const fn gpu_error(self) -> GpuClosedLoopError {
+        match self {
+            Self::Contract(error) => error,
+            Self::Receipt(receipt) => match receipt.class {
+                GpuSelectorDiagnosticFailureClass::CapacityExceeded => {
+                    GpuClosedLoopError::CapacityExceeded
+                }
+                GpuSelectorDiagnosticFailureClass::ArithmeticOverflow => {
+                    GpuClosedLoopError::ArithmeticOverflow
+                }
+            },
+        }
+    }
+}
+
+impl From<GpuClosedLoopError> for GpuSelectorDiagnosticEnableError {
+    fn from(error: GpuClosedLoopError) -> Self {
+        Self::Contract(error)
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn selector_diagnostic_detail_plan(
+    class_id: u16,
+    chunk_index: usize,
+    row: usize,
+    base_words: usize,
+    candidate_count: u32,
+    decoder_synapse_count: u32,
+    frame_payload_capacity_words: usize,
+) -> Result<(usize, u32, usize), GpuSelectorDiagnosticErrorReceipt> {
+    let detail_words = u128::from(candidate_count)
+        * u128::from(decoder_synapse_count)
+        * GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS as u128;
+    let receipt = |class| GpuSelectorDiagnosticErrorReceipt {
+        class,
+        class_id,
+        chunk_index,
+        row,
+        base_words,
+        candidate_count,
+        decoder_synapse_count,
+        record_words: GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS,
+        detail_words,
+        frame_payload_capacity_words,
+    };
+    let detail_words_usize = usize::try_from(detail_words)
+        .map_err(|_| receipt(GpuSelectorDiagnosticFailureClass::ArithmeticOverflow))?;
+    if base_words == 0
+        || base_words.checked_add(detail_words_usize).is_none()
+        || base_words + detail_words_usize > frame_payload_capacity_words
+    {
+        return Err(receipt(
+            GpuSelectorDiagnosticFailureClass::CapacityExceeded,
+        ));
+    }
+    let base_words_u32 = u32::try_from(base_words)
+        .map_err(|_| receipt(GpuSelectorDiagnosticFailureClass::ArithmeticOverflow))?;
+    let header_reserved_index = row
+        .checked_mul(GPU_ACTIVE_DISPATCH_ROW_WORDS)
+        .and_then(|index| index.checked_add(15))
+        .ok_or_else(|| receipt(GpuSelectorDiagnosticFailureClass::ArithmeticOverflow))?;
+    Ok((detail_words_usize, base_words_u32, header_reserved_index))
+}
+
 pub const CLOSED_LOOP_ENCODE_WGSL: &str = concat!(
     include_str!("../shaders/closed_loop_abi.wgsl"),
     include_str!("../shaders/closed_loop_activity_validation.wgsl"),
@@ -767,43 +885,41 @@ impl GpuActiveBatchUpload {
 
     pub(crate) fn enable_selector_diagnostics(
         &mut self,
+        class_id: u16,
+        chunk_index: usize,
         frame_payload_capacity_words: usize,
-    ) -> Result<(), GpuClosedLoopError> {
+    ) -> Result<(), GpuSelectorDiagnosticEnableError> {
         if self
             .selector_diagnostic_offsets
             .iter()
             .any(|offset| *offset != 0)
         {
-            return Err(GpuClosedLoopError::MalformedUpload);
+            return Err(GpuClosedLoopError::MalformedUpload.into());
         }
         for row in 0..self.headers.len() {
             let header = &mut self.headers[row];
             let learning = self
                 .learning_headers
                 .get(row)
-                .ok_or(GpuClosedLoopError::MalformedUpload)?;
-            let detail_words = usize::try_from(header.candidate_count)
-                .ok()
-                .and_then(|count| {
-                    count.checked_mul(usize::try_from(learning.decoder_synapse_count).ok()?)
-                })
-                .and_then(|count| count.checked_mul(GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS))
-                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+                .ok_or(GpuSelectorDiagnosticEnableError::Contract(
+                    GpuClosedLoopError::MalformedUpload,
+                ))?;
             let base = self.frame_payload_words.len();
-            if base == 0
-                || base.checked_add(detail_words).is_none()
-                || base + detail_words > frame_payload_capacity_words
-            {
-                return Err(GpuClosedLoopError::CapacityExceeded);
-            }
+            let (detail_words, reserved_offset, header_reserved_index) =
+                selector_diagnostic_detail_plan(
+                    class_id,
+                    chunk_index,
+                    row,
+                    base,
+                    header.candidate_count,
+                    learning.decoder_synapse_count,
+                    frame_payload_capacity_words,
+                )
+                .map_err(GpuSelectorDiagnosticEnableError::Receipt)?;
             self.frame_payload_words
                 .extend(std::iter::repeat(u32::MAX).take(detail_words));
-            header.reserved =
-                u32::try_from(base).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
-            let row_base = row
-                .checked_mul(GPU_ACTIVE_DISPATCH_ROW_WORDS)
-                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
-            self.dispatch_header_words[row_base + 15] = header.reserved;
+            header.reserved = reserved_offset;
+            self.dispatch_header_words[header_reserved_index] = header.reserved;
             self.selector_diagnostic_offsets[row] = header.reserved;
         }
         Ok(())
@@ -3742,6 +3858,54 @@ mod lifecycle_tests {
     use bytemuck::Zeroable;
 
     use super::*;
+
+    #[test]
+    fn selector_diagnostic_error_receipt_preserves_failure_class_and_boundary() {
+        let capacity = selector_diagnostic_detail_plan(2048, 3, 2, 100, 2, 10, 200)
+            .expect_err("diagnostic detail must exceed the fixed payload capacity");
+        assert_eq!(
+            capacity,
+            GpuSelectorDiagnosticErrorReceipt {
+                class: GpuSelectorDiagnosticFailureClass::CapacityExceeded,
+                class_id: 2048,
+                chunk_index: 3,
+                row: 2,
+                base_words: 100,
+                candidate_count: 2,
+                decoder_synapse_count: 10,
+                record_words: 29,
+                detail_words: 580,
+                frame_payload_capacity_words: 200,
+            }
+        );
+        assert_eq!(
+            GpuSelectorDiagnosticEnableError::Receipt(capacity).gpu_error(),
+            GpuClosedLoopError::CapacityExceeded
+        );
+        assert!(capacity.to_string().contains("detail_words=580"));
+
+        let arithmetic = selector_diagnostic_detail_plan(
+            2048,
+            3,
+            2,
+            100,
+            u32::MAX,
+            u32::MAX,
+            usize::MAX,
+        )
+        .expect_err("diagnostic detail must not fit in a platform usize");
+        assert_eq!(
+            arithmetic.class,
+            GpuSelectorDiagnosticFailureClass::ArithmeticOverflow
+        );
+        assert_eq!(arithmetic.candidate_count, u32::MAX);
+        assert_eq!(arithmetic.decoder_synapse_count, u32::MAX);
+        assert_eq!(arithmetic.record_words, 29);
+        assert_eq!(
+            GpuSelectorDiagnosticEnableError::Receipt(arithmetic).gpu_error(),
+            GpuClosedLoopError::ArithmeticOverflow
+        );
+    }
 
     #[test]
     fn compact_mapping_status_does_not_wait_for_a_missing_callback() {

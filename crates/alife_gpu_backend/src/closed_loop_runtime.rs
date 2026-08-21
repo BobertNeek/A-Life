@@ -3388,8 +3388,15 @@ impl GpuClosedLoopBackend {
                             .expect("preflight bucket exists")
                             .buffers
                             .frame_payload_capacity_words();
-                        let enable_result = active.enable_selector_diagnostics(capacity);
+                        let enable_result = active.enable_selector_diagnostics(
+                            class_id,
+                            dispatches[index].chunk_index,
+                            capacity,
+                        );
                         if let Err(error) = enable_result {
+                            if let Some(receipt) = error.receipt() {
+                                eprintln!("gpu_selector_diagnostic_error_receipt: {receipt}");
+                            }
                             let _ = self
                                 .class_buckets
                                 .get_mut(&class_id)
@@ -3408,7 +3415,7 @@ impl GpuClosedLoopBackend {
                                         .abandon_unsubmitted_batch(active);
                                 }
                             }
-                            return Err(map_gpu_contract_error(error));
+                            return Err(map_gpu_contract_error(error.gpu_error()));
                         }
                     }
                     dispatches[index].batch = Some(active)
