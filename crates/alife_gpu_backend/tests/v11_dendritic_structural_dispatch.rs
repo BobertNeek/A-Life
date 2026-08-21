@@ -20,6 +20,45 @@ fn discard(
         .map(|_| ())
 }
 
+#[test]
+fn target_indexed_dendrites_visit_only_the_target_span(
+) -> Result<(), alife_core::ScaffoldContractError> {
+    let phenotype = support::controlled_sensory_n512_phenotype();
+    let target = phenotype.candidate_decoder().motor_start();
+    let second_source = if target + 1 < phenotype.neuron_count() {
+        target + 1
+    } else {
+        target
+    };
+    let branches = DendriticBranchSet::new(vec![DendriticBranch::new(
+        target,
+        -1.0,
+        1.0,
+        vec![
+            DendriticInputRef::new(target, 1.0).unwrap(),
+            DendriticInputRef::new(second_source, 1.0).unwrap(),
+        ],
+    )?])?;
+
+    let mut backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
+    let handle = backend.insert_brain(OrganismId(10), phenotype)?;
+    backend.set_v11_dendritic_branches(handle, branches)?;
+    let frame = support::perception_frame_for_profile_at_tick(
+        10,
+        80,
+        SensorProfile::PrivilegedAffordanceV1,
+        true,
+        1,
+    );
+    let mut ticks = backend.tick_batch(&[(handle, frame)])?;
+    let tick = ticks.pop().expect("one dendritic tick");
+    assert_eq!(tick.v11_work.dendritic.branches_evaluated, 1);
+    assert_eq!(tick.v11_work.dendritic.inputs_evaluated, 2);
+    assert_eq!(tick.v11_work.dendritic.work_units, 3);
+    discard(&mut backend, &tick)?;
+    Ok(())
+}
+
 fn prune_config(max_regions: u16) -> StructuralPlasticityConfig {
     StructuralPlasticityConfig {
         max_candidates_per_region: 8,

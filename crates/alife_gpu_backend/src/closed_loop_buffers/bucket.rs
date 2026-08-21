@@ -36,6 +36,9 @@ fn dendritic_branch_capacity(neuron_count: u32) -> Result<u32, GpuClosedLoopErro
 
 fn dendritic_branch_plan_words(neuron_count: u32) -> Result<u32, GpuClosedLoopError> {
     let branch_capacity = dendritic_branch_capacity(neuron_count)?;
+    let target_offset_words = neuron_count
+        .checked_add(1)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
     let descriptor_words = branch_capacity
         .checked_mul(GPU_DENDRITIC_BRANCH_RECORD_WORDS)
         .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
@@ -44,7 +47,8 @@ fn dendritic_branch_plan_words(neuron_count: u32) -> Result<u32, GpuClosedLoopEr
         .and_then(|count| count.checked_mul(GPU_DENDRITIC_INPUT_RECORD_WORDS))
         .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
     1_u32
-        .checked_add(descriptor_words)
+        .checked_add(target_offset_words)
+        .and_then(|count| count.checked_add(descriptor_words))
         .and_then(|count| count.checked_add(input_words))
         .ok_or(GpuClosedLoopError::ArithmeticOverflow)
 }
@@ -827,6 +831,13 @@ fn write_dendritic_branch_plan(
         .start
         .checked_add(1)
         .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    let target_offset_count = neuron_count
+        .checked_add(1)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    let target_offset_start = descriptor_start;
+    let descriptor_start = descriptor_start
+        .checked_add(target_offset_count)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
     let input_start = descriptor_start
         .checked_add(
             u32::try_from(capacity)
@@ -835,6 +846,11 @@ fn write_dendritic_branch_plan(
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
         )
         .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    let mut target_offsets = vec![
+        0_u32;
+        usize::try_from(target_offset_count)
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+    ];
     for (index, branch) in branches.branches().iter().enumerate() {
         if branch.target >= neuron_count
             || !branch.threshold.is_finite()
@@ -848,6 +864,13 @@ fn write_dendritic_branch_plan(
         {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
+        let target_offset = usize::try_from(branch.target)
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+            .checked_add(1)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        target_offsets[target_offset] = target_offsets[target_offset]
+            .checked_add(1)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
         let index = u32::try_from(index).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
         let descriptor_offset = descriptor_start
             .checked_add(
@@ -903,6 +926,17 @@ fn write_dendritic_branch_plan(
             )?;
         }
     }
+    for index in 1..target_offsets.len() {
+        target_offsets[index] = target_offsets[index]
+            .checked_add(target_offsets[index - 1])
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    }
+    store_words_at(
+        destination,
+        destination_base,
+        target_offset_start,
+        &target_offsets,
+    )?;
     validate_dendritic_branch_plan(destination, destination_base, range, neuron_count)
 }
 
@@ -933,9 +967,30 @@ fn validate_dendritic_branch_plan(
     if count > capacity {
         return Err(GpuClosedLoopError::MalformedUpload);
     }
+    let target_offset_count = usize::try_from(neuron_count)
+        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+        .checked_add(1)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    let target_offsets = heap
+        .get(1..1 + target_offset_count)
+        .ok_or(GpuClosedLoopError::MalformedUpload)?;
+    if target_offsets.first() != Some(&0)
+        || target_offsets.last() != Some(&count)
+        || target_offsets
+            .windows(2)
+            .any(|span| span[0] > span[1] || span[1] > count)
+    {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
     let descriptor_start = range
         .start
         .checked_add(1)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    let descriptor_start = descriptor_start
+        .checked_add(
+            u32::try_from(target_offset_count)
+                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
+        )
         .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
     let input_start = descriptor_start
         .checked_add(
@@ -966,6 +1021,14 @@ fn validate_dendritic_branch_plan(
             || descriptor.reserved1 != 0
             || descriptor.reserved2 != 0
             || descriptor.input_offset < input_start
+            || usize::try_from(descriptor.target)
+                .ok()
+                .and_then(|target| target_offsets.get(target))
+                .is_none_or(|start| index < *start)
+            || usize::try_from(descriptor.target)
+                .ok()
+                .and_then(|target| target_offsets.get(target + 1))
+                .is_none_or(|end| index >= *end)
             || descriptor
                 .input_offset
                 .checked_add(

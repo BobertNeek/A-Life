@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::ops::Range;
 
 use crate::{validate_finite, ScaffoldContractError};
 
@@ -110,6 +111,16 @@ impl DendriticBranchSet {
         &self.branches
     }
 
+    /// Returns the stable branch span for one target without adding derived
+    /// offsets to the serialized logical checkpoint state.
+    pub fn target_span(&self, target: u32) -> Range<usize> {
+        let start = self
+            .branches
+            .partition_point(|branch| branch.target < target);
+        let end = self.branches[start..].partition_point(|branch| branch.target == target) + start;
+        start..end
+    }
+
     pub fn is_empty(&self) -> bool {
         self.branches.is_empty()
     }
@@ -200,5 +211,24 @@ mod tests {
 
         assert_eq!(report.dendritic_work.gated_branches, 1);
         assert!(state.activations[0] > 0.0);
+    }
+
+    #[test]
+    fn target_spans_are_sorted_bounded_and_skip_empty_targets() {
+        let branches = DendriticBranchSet::new(vec![
+            DendriticBranch::new(5, 0.0, 1.0, vec![DendriticInputRef::new(0, 1.0).unwrap()])
+                .unwrap(),
+            DendriticBranch::new(2, 0.0, 1.0, vec![DendriticInputRef::new(1, 1.0).unwrap()])
+                .unwrap(),
+            DendriticBranch::new(5, 0.0, 1.0, vec![DendriticInputRef::new(2, 1.0).unwrap()])
+                .unwrap(),
+        ])
+        .unwrap();
+
+        assert_eq!(branches.target_span(0), 0..0);
+        assert_eq!(branches.target_span(2), 0..1);
+        assert_eq!(branches.target_span(3), 1..1);
+        assert_eq!(branches.target_span(5), 1..3);
+        assert_eq!(branches.branches()[branches.target_span(5)].len(), 2);
     }
 }

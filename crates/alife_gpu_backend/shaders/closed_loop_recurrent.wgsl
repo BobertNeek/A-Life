@@ -50,16 +50,28 @@ fn apply_dendritic_branches(
   target_index:u32,
 ) -> f32 {
   let branch_count = immutable_plan_words[extension.reserved1];
+  let target_offset_count = brain.neuron_count + 1u;
+  let target_offset_base = extension.reserved1 + 1u;
+  let descriptor_base = target_offset_base + target_offset_count;
   if (branch_count > MAX_DENDRITIC_BRANCHES_GPU
-      || !plan_span_within(extension.reserved1, 1u + branch_count * DENDRITIC_BRANCH_WORDS_GPU)) {
+      || !plan_span_within(target_offset_base, target_offset_count)
+      || !plan_span_within(descriptor_base, branch_count * DENDRITIC_BRANCH_WORDS_GPU)) {
+    atomicAdd(&mutable_state_words[brain.diagnostic_offset + 2u], 1u);
+    return 0.0;
+  }
+  let begin = immutable_plan_words[target_offset_base + target_index];
+  let end = immutable_plan_words[target_offset_base + target_index + 1u];
+  if (begin > end || end > branch_count) {
     atomicAdd(&mutable_state_words[brain.diagnostic_offset + 2u], 1u);
     return 0.0;
   }
   var dendritic_sum = 0.0;
-  let descriptor_base = extension.reserved1 + 1u;
-  for (var branch_index = 0u; branch_index < branch_count; branch_index++) {
+  for (var branch_index = begin; branch_index < end; branch_index++) {
     let branch = load_dendritic_branch(descriptor_base + branch_index * DENDRITIC_BRANCH_WORDS_GPU);
-    if (branch.target_neuron != target_index) { continue; }
+    if (branch.target_neuron != target_index) {
+      atomicAdd(&mutable_state_words[brain.diagnostic_offset + 2u], 1u);
+      continue;
+    }
     atomicAdd(&mutable_state_words[brain.selection_offset + 12u], 1u);
     if (branch.input_count == 0u || branch.input_count > MAX_DENDRITIC_INPUTS_GPU
         || !plan_span_within(branch.input_offset, branch.input_count * DENDRITIC_INPUT_WORDS_GPU)) {
