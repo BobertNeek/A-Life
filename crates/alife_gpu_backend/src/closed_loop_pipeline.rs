@@ -534,6 +534,7 @@ pub(crate) enum GpuFastPlasticityMalformedField {
     CommitSlot,
     CommitSlotGeneration,
     CommitStatus,
+    CommitGuardRejected,
     CommitInputFastGeneration,
     CommitOutputFastGeneration,
     CommitOutputEligibilityGeneration,
@@ -2686,6 +2687,13 @@ impl GpuClosedLoopPipelines {
                 }
                 Err(error) => return Err(error),
             };
+            if let Some(actual) = record.guard_rejection_payload() {
+                malformed!(GpuFastPlasticityMalformedReceipt {
+                    field: GpuFastPlasticityMalformedField::CommitGuardRejected,
+                    expected: [0; 4],
+                    actual,
+                });
+            }
             let expected_fast = entry
                 .active_weight_generation
                 .checked_add(1)

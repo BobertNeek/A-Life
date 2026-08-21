@@ -14,6 +14,7 @@ pub const GPU_OUTCOME_CREDIT_WORDS: usize = 40;
 pub const GPU_OUTCOME_CREDIT_BYTES: usize = GPU_OUTCOME_CREDIT_WORDS * 4;
 pub const GPU_FAST_PLASTICITY_COMMIT_WORDS: usize = 16;
 pub const GPU_FAST_PLASTICITY_COMMIT_BYTES: usize = GPU_FAST_PLASTICITY_COMMIT_WORDS * 4;
+const GPU_FAST_PLASTICITY_GUARD_REJECTED_STATUS: u32 = 512;
 pub const GPU_CLOSED_LOOP_TICK_READBACK_BYTES: usize =
     std::mem::size_of::<crate::GpuSelectionRecord>()
         + std::mem::size_of::<crate::GpuSpeechPayloadRecord>();
@@ -147,6 +148,20 @@ impl GpuFastPlasticityCommitRecord {
 
     pub(crate) const fn input_fast_generation(&self) -> u64 {
         join_u64(self.input_fast_generation[0], self.input_fast_generation[1])
+    }
+
+    /// On guard rejection, success-only words 6..=9 carry the bounded WGSL
+    /// guard receipt without widening the fixed 16-word record.
+    pub(crate) const fn guard_rejection_payload(&self) -> Option<[u64; 4]> {
+        if self.status != GPU_FAST_PLASTICITY_GUARD_REJECTED_STATUS {
+            return None;
+        }
+        Some([
+            self.output_fast_generation[0] as u64,
+            self.output_fast_generation[1] as u64,
+            self.output_eligibility_generation[0] as u64,
+            self.output_eligibility_generation[1] as u64,
+        ])
     }
 
     pub(crate) const fn output_fast_generation(&self) -> u64 {
@@ -597,4 +612,32 @@ pub(crate) fn phenotype_hash_from_gpu_words(values: [u32; 8]) -> PhenotypeHash {
 
 fn join_u32x4(values: [u32; 4]) -> [u64; 2] {
     std::array::from_fn(|index| join_u64(values[index * 2], values[index * 2 + 1]))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GpuFastPlasticityCommitRecord;
+
+    #[test]
+    fn guard_rejected_commit_decodes_failure_payload_without_widening_record() {
+        let record = GpuFastPlasticityCommitRecord {
+            schema_version: 1,
+            slot: 2,
+            slot_generation: 3,
+            status: 512,
+            input_fast_generation: [11, 12],
+            output_fast_generation: [4, 0x55aa_00ff],
+            output_eligibility_generation: [0x1234_5678, 19],
+            replay_generation: [0, 0],
+            transaction_generation: [0, 0],
+            fast_weights_changed: 0,
+            max_abs_delta_bits: 0,
+        };
+
+        assert_eq!(
+            record.guard_rejection_payload(),
+            Some([4, 0x55aa_00ff, 0x1234_5678, 19])
+        );
+        assert_eq!(std::mem::size_of_val(&record), 16 * 4);
+    }
 }

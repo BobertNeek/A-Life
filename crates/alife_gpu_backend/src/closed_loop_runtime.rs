@@ -443,6 +443,7 @@ pub enum GpuRuntimeApplyFastPlasticityMalformedField {
     CommitSlot,
     CommitSlotGeneration,
     CommitStatus,
+    CommitGuardRejected,
     CommitInputFastGeneration,
     CommitOutputFastGeneration,
     CommitOutputEligibilityGeneration,
@@ -495,6 +496,7 @@ impl From<PipelineFastPlasticityMalformedField> for GpuRuntimeApplyFastPlasticit
             Pipeline::CommitSlot => Runtime::CommitSlot,
             Pipeline::CommitSlotGeneration => Runtime::CommitSlotGeneration,
             Pipeline::CommitStatus => Runtime::CommitStatus,
+            Pipeline::CommitGuardRejected => Runtime::CommitGuardRejected,
             Pipeline::CommitInputFastGeneration => Runtime::CommitInputFastGeneration,
             Pipeline::CommitOutputFastGeneration => Runtime::CommitOutputFastGeneration,
             Pipeline::CommitOutputEligibilityGeneration => {

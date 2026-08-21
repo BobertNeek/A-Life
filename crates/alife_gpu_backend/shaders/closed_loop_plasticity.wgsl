@@ -8,6 +8,13 @@ const SYNAPSE_KIND_DECODER_PLASTICITY:u32 = 2u;
 const PLASTICITY_STATUS_PREPARED:u32 = 256u;
 const PLASTICITY_STATUS_SUCCESS:u32 = 1u;
 const PLASTICITY_STATUS_GUARD_REJECTED:u32 = 512u;
+const PLASTICITY_GUARD_HEADER_LAYOUT:u32 = 1u;
+const PLASTICITY_GUARD_EXTENSION_LAYOUT:u32 = 2u;
+const PLASTICITY_GUARD_STATE_EVIDENCE:u32 = 3u;
+const PLASTICITY_GUARD_SYNAPSE_FINITE:u32 = 4u;
+const PLASTICITY_GUARD_REPLAY_SPAN:u32 = 5u;
+const PLASTICITY_GUARD_REPLAY_ELIGIBILITY:u32 = 6u;
+const PLASTICITY_GUARD_GENERATION_OVERFLOW:u32 = 7u;
 
 fn finite_plasticity(value:f32) -> bool {
   return value == value && abs(value) <= 3.402823466e+38;
@@ -114,8 +121,19 @@ fn receptor_valid_for_plasticity(receptor:GpuPlasticityReceptorRecord) -> bool {
     && bitcast<u32>(receptor.reserved) == 0u;
 }
 
-fn reject_plasticity(receipt_base:u32) {
+fn plasticity_guard_bit(bit:u32, failed:bool) -> u32 {
+  return select(0u, 1u << bit, failed);
+}
+
+fn reject_plasticity(receipt_base:u32, guard_id:u32, operand0:u32, operand1:u32, context:u32) {
   if (state_span_within(receipt_base, FAST_PLASTICITY_RECEIPT_WORDS)) {
+    let previous = atomicMin(&mutable_state_words[receipt_base+6u], guard_id);
+    if (previous > guard_id) {
+      store_state_u32(receipt_base+7u, operand0);
+      store_state_u32(receipt_base+8u, operand1);
+      store_state_u32(receipt_base+9u, context);
+    }
+    storageBarrier();
     atomicMax(&mutable_state_words[receipt_base+3u], PLASTICITY_STATUS_GUARD_REJECTED);
   }
 }
@@ -146,94 +164,108 @@ fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
   for (var word=0u; word<FAST_PLASTICITY_RECEIPT_WORDS; word+=1u) {
     store_state_u32(receipt_base+word, 0u);
   }
+  store_state_u32(receipt_base+6u, 0xffffffffu);
   store_state_u32(receipt_base, GPU_LEARNING_SCHEMA_VERSION);
   store_state_u32(receipt_base+1u, brain.slot);
   store_state_u32(receipt_base+2u, brain.slot_generation);
-  if (header.schema_version != GPU_LEARNING_SCHEMA_VERSION
-      || header.class_id != brain.class_id
-      || header.slot != brain.slot
-      || header.slot_generation != brain.slot_generation
-      || header.brain_slot_index != brain.slot
-      || header.active_activation_side > 1u
-      || !pair_nonzero(vec2<u32>(header.dispatch_generation_lo,header.dispatch_generation_hi))
-      || header.candidate_count != 0u || header.candidate_offset != 0u
-      || header.decoder_learning_input_offset != 0u
-      || header.selection_offset != receipt_base
-      || brain.selection_offset != receipt_base + 4u
-      || header.recurrent_synapse_count != brain.recurrent_synapse_count
-      || header.decoder_synapse_count != brain.synapse_count - brain.recurrent_synapse_count
-      || header.decoder_input_stride != 0u
-      || header.scheduled_tile_visits != 0u
-      || header.scheduled_synapse_ops != 0u
-      || header.scheduled_work_checksum != 0u
-      || !state_span_within(brain.extension_record_offset,20u)
-      || !plasticity_frame_span_within(header.outcome_offset,OUTCOME_CREDIT_WORDS)) {
-    reject_plasticity(receipt_base); return;
+  let header_guard =
+      plasticity_guard_bit(0u, header.schema_version != GPU_LEARNING_SCHEMA_VERSION)
+    | plasticity_guard_bit(1u, header.class_id != brain.class_id)
+    | plasticity_guard_bit(2u, header.slot != brain.slot)
+    | plasticity_guard_bit(3u, header.slot_generation != brain.slot_generation)
+    | plasticity_guard_bit(4u, header.brain_slot_index != brain.slot)
+    | plasticity_guard_bit(5u, header.active_activation_side > 1u)
+    | plasticity_guard_bit(6u, !pair_nonzero(vec2<u32>(header.dispatch_generation_lo,header.dispatch_generation_hi)))
+    | plasticity_guard_bit(7u, header.candidate_count != 0u)
+    | plasticity_guard_bit(8u, header.candidate_offset != 0u)
+    | plasticity_guard_bit(9u, header.decoder_learning_input_offset != 0u)
+    | plasticity_guard_bit(10u, header.selection_offset != receipt_base)
+    | plasticity_guard_bit(11u, brain.selection_offset != receipt_base + 4u)
+    | plasticity_guard_bit(12u, header.recurrent_synapse_count != brain.recurrent_synapse_count)
+    | plasticity_guard_bit(13u, header.decoder_synapse_count != brain.synapse_count - brain.recurrent_synapse_count)
+    | plasticity_guard_bit(14u, header.decoder_input_stride != 0u)
+    | plasticity_guard_bit(15u, header.scheduled_tile_visits != 0u)
+    | plasticity_guard_bit(16u, header.scheduled_synapse_ops != 0u)
+    | plasticity_guard_bit(17u, header.scheduled_work_checksum != 0u)
+    | plasticity_guard_bit(18u, !state_span_within(brain.extension_record_offset,20u))
+    | plasticity_guard_bit(19u, !plasticity_frame_span_within(header.outcome_offset,OUTCOME_CREDIT_WORDS));
+  if (header_guard != 0u) {
+    reject_plasticity(receipt_base, PLASTICITY_GUARD_HEADER_LAYOUT, header_guard, 0u, 0u); return;
   }
   let extension = load_slot_extension(brain);
-  if (extension.schema_version != GPU_CLOSED_LOOP_LAYOUT_VERSION
-      || extension.pending_eligibility_offset != header.pending_eligibility_offset
-      || !state_span_within(extension.learning_state_offset,24u)
-      || !state_span_within(extension.pending_eligibility_offset,PENDING_ELIGIBILITY_WORDS_PLASTICITY)) {
-    reject_plasticity(receipt_base); return;
+  let extension_guard =
+      plasticity_guard_bit(0u, extension.schema_version != GPU_CLOSED_LOOP_LAYOUT_VERSION)
+    | plasticity_guard_bit(1u, extension.pending_eligibility_offset != header.pending_eligibility_offset)
+    | plasticity_guard_bit(2u, !state_span_within(extension.learning_state_offset,24u))
+    | plasticity_guard_bit(3u, !state_span_within(extension.pending_eligibility_offset,PENDING_ELIGIBILITY_WORDS_PLASTICITY));
+  if (extension_guard != 0u) {
+    reject_plasticity(receipt_base, PLASTICITY_GUARD_EXTENSION_LAYOUT, extension_guard, 0u, 0u); return;
   }
   let learning = load_slot_learning_state(extension);
   let outcome = load_outcome_credit(header.outcome_offset);
   let pending = load_pending_eligibility(extension.pending_eligibility_offset);
   let family = (outcome.selected_candidate_and_family >> 16u) & 0xffu;
-  if (learning.schema_version != GPU_LEARNING_SCHEMA_VERSION
-      || learning.pending_valid != 1u
-      || learning.active_weight_bank > 1u || learning.active_eligibility_bank > 1u
-      || learning.pending_eligibility_offset != extension.pending_eligibility_offset
-      || learning.replay_plan_identity_offset != extension.replay_plan_identity_offset
-      || !pair_nonzero(vec2<u32>(learning.active_weight_generation_lo,learning.active_weight_generation_hi))
-      || !pair_nonzero(vec2<u32>(learning.active_eligibility_generation_lo,learning.active_eligibility_generation_hi))
-      || !pair_nonzero(vec2<u32>(learning.inactive_eligibility_generation_lo,learning.inactive_eligibility_generation_hi))
-      || !pair_nonzero(vec2<u32>(learning.replay_generation_lo,learning.replay_generation_hi))
-      || learning.replay_event_capacity == 0u || learning.replay_event_capacity > 65536u
-      || learning.replay_cursor >= learning.replay_event_capacity
-      || learning.replay_event_count > learning.replay_event_capacity
-      || learning.replay_span_count == 0u
-      || learning.replay_sample_capacity != learning.replay_event_capacity * learning.replay_span_count
-      || outcome.schema_version != GPU_LEARNING_SCHEMA_VERSION
-      || (outcome.selected_candidate_and_family >> 24u) != 0u || family >= 8u
-      || !pair_nonzero(outcome.organism_id) || !pair_nonzero(outcome.sequence_id)
-      || !pair_less(outcome.originating_tick,outcome.outcome_tick)
-      || outcome.active_activation_side != header.active_activation_side
-      || !pair_equal(outcome.dispatch_generation,vec2<u32>(header.dispatch_generation_lo,header.dispatch_generation_hi))
-      || !finite_plasticity(outcome.reward_prediction_error) || abs(outcome.reward_prediction_error) > 1.0
-      || !finite_plasticity(outcome.pain) || abs(outcome.pain) > 1.0
-      || !finite_plasticity(outcome.homeostatic_improvement) || abs(outcome.homeostatic_improvement) > 1.0
-      || !finite_plasticity(outcome.frustration) || abs(outcome.frustration) > 1.0
-      || !finite_plasticity(outcome.novelty) || abs(outcome.novelty) > 1.0
-      || !finite_plasticity(outcome.modulator_value) || abs(outcome.modulator_value) > 1.0
-      || pending.schema_version != GPU_LEARNING_SCHEMA_VERSION
-      || pending.slot != brain.slot || pending.slot_generation != brain.slot_generation
-      || pending.active_activation_side != outcome.active_activation_side
-      || !pair_equal(pending.organism_id,outcome.organism_id)
-      || !pair_equal(pending.dispatch_generation,outcome.dispatch_generation)
-      || !pair_equal(pending.originating_tick,outcome.originating_tick)
-      || pending.candidate_index_and_family != outcome.selected_candidate_and_family
-      || pending.action_id != outcome.selected_action
-      || any(pending.candidate_feature_digest != outcome.candidate_feature_digest)
-      || !array8_equal(pending.phenotype_hash,outcome.phenotype_hash)
-      || !array8_equal(pending.frame_digest,outcome.frame_digest)
-      || !array8_equal(outcome.phenotype_hash,phenotype_identities[header.brain_slot_index].phenotype_hash)
-      || !pair_equal(pending.active_eligibility_generation,vec2<u32>(learning.active_eligibility_generation_lo,learning.active_eligibility_generation_hi))
-      || !pair_equal(pending.staging_eligibility_generation,vec2<u32>(learning.inactive_eligibility_generation_lo,learning.inactive_eligibility_generation_hi))
-      || !state_span_within(learning.replay_event_rows_offset,learning.replay_event_capacity*24u)
-      || !state_span_within(learning.replay_sample_offset,learning.replay_sample_capacity)
-      || !state_span_within(learning.replay_span_offset,learning.replay_span_count*4u)
-      || !state_span_within(brain.activation_a_offset,brain.neuron_count)
-      || !state_span_within(brain.activation_b_offset,brain.neuron_count)
-      || !state_span_within(brain.lifetime_weight_offset,brain.synapse_count)
-      || !state_span_within(brain.fast_weight_offset,brain.synapse_count)
-      || !state_span_within(extension.lifetime_bank_1_offset,brain.synapse_count)
-      || !state_span_within(extension.fast_bank_1_offset,brain.synapse_count)
-      || !immutable_weight_span_within(brain.genetic_weight_offset,brain.synapse_count)
-      || !immutable_weight_span_within(brain.alpha_offset,brain.synapse_count)
-      || !immutable_plan_span_within(extension.synapse_metadata_offset,brain.synapse_count*8u)) {
-    reject_plasticity(receipt_base); return;
+  let state_guard_lo =
+      plasticity_guard_bit(0u, learning.schema_version != GPU_LEARNING_SCHEMA_VERSION)
+    | plasticity_guard_bit(1u, learning.pending_valid != 1u)
+    | plasticity_guard_bit(2u, learning.active_weight_bank > 1u)
+    | plasticity_guard_bit(3u, learning.active_eligibility_bank > 1u)
+    | plasticity_guard_bit(4u, learning.pending_eligibility_offset != extension.pending_eligibility_offset)
+    | plasticity_guard_bit(5u, learning.replay_plan_identity_offset != extension.replay_plan_identity_offset)
+    | plasticity_guard_bit(6u, !pair_nonzero(vec2<u32>(learning.active_weight_generation_lo,learning.active_weight_generation_hi)))
+    | plasticity_guard_bit(7u, !pair_nonzero(vec2<u32>(learning.active_eligibility_generation_lo,learning.active_eligibility_generation_hi)))
+    | plasticity_guard_bit(8u, !pair_nonzero(vec2<u32>(learning.inactive_eligibility_generation_lo,learning.inactive_eligibility_generation_hi)))
+    | plasticity_guard_bit(9u, !pair_nonzero(vec2<u32>(learning.replay_generation_lo,learning.replay_generation_hi)))
+    | plasticity_guard_bit(10u, learning.replay_event_capacity == 0u)
+    | plasticity_guard_bit(11u, learning.replay_event_capacity > 65536u)
+    | plasticity_guard_bit(12u, learning.replay_cursor >= learning.replay_event_capacity)
+    | plasticity_guard_bit(13u, learning.replay_event_count > learning.replay_event_capacity)
+    | plasticity_guard_bit(14u, learning.replay_span_count == 0u)
+    | plasticity_guard_bit(15u, learning.replay_sample_capacity != learning.replay_event_capacity * learning.replay_span_count)
+    | plasticity_guard_bit(16u, outcome.schema_version != GPU_LEARNING_SCHEMA_VERSION)
+    | plasticity_guard_bit(17u, (outcome.selected_candidate_and_family >> 24u) != 0u)
+    | plasticity_guard_bit(18u, family >= 8u)
+    | plasticity_guard_bit(19u, !pair_nonzero(outcome.organism_id))
+    | plasticity_guard_bit(20u, !pair_nonzero(outcome.sequence_id))
+    | plasticity_guard_bit(21u, !pair_less(outcome.originating_tick,outcome.outcome_tick))
+    | plasticity_guard_bit(22u, outcome.active_activation_side != header.active_activation_side)
+    | plasticity_guard_bit(23u, !pair_equal(outcome.dispatch_generation,vec2<u32>(header.dispatch_generation_lo,header.dispatch_generation_hi)))
+    | plasticity_guard_bit(24u, !finite_plasticity(outcome.reward_prediction_error) || abs(outcome.reward_prediction_error) > 1.0)
+    | plasticity_guard_bit(25u, !finite_plasticity(outcome.pain) || abs(outcome.pain) > 1.0)
+    | plasticity_guard_bit(26u, !finite_plasticity(outcome.homeostatic_improvement) || abs(outcome.homeostatic_improvement) > 1.0)
+    | plasticity_guard_bit(27u, !finite_plasticity(outcome.frustration) || abs(outcome.frustration) > 1.0)
+    | plasticity_guard_bit(28u, !finite_plasticity(outcome.novelty) || abs(outcome.novelty) > 1.0)
+    | plasticity_guard_bit(29u, !finite_plasticity(outcome.modulator_value) || abs(outcome.modulator_value) > 1.0)
+    | plasticity_guard_bit(30u, pending.schema_version != GPU_LEARNING_SCHEMA_VERSION)
+    | plasticity_guard_bit(31u, pending.slot != brain.slot);
+  let state_guard_hi =
+      plasticity_guard_bit(0u, pending.slot_generation != brain.slot_generation)
+    | plasticity_guard_bit(1u, pending.active_activation_side != outcome.active_activation_side)
+    | plasticity_guard_bit(2u, !pair_equal(pending.organism_id,outcome.organism_id))
+    | plasticity_guard_bit(3u, !pair_equal(pending.dispatch_generation,outcome.dispatch_generation))
+    | plasticity_guard_bit(4u, !pair_equal(pending.originating_tick,outcome.originating_tick))
+    | plasticity_guard_bit(5u, pending.candidate_index_and_family != outcome.selected_candidate_and_family)
+    | plasticity_guard_bit(6u, pending.action_id != outcome.selected_action)
+    | plasticity_guard_bit(7u, any(pending.candidate_feature_digest != outcome.candidate_feature_digest))
+    | plasticity_guard_bit(8u, !array8_equal(pending.phenotype_hash,outcome.phenotype_hash))
+    | plasticity_guard_bit(9u, !array8_equal(pending.frame_digest,outcome.frame_digest))
+    | plasticity_guard_bit(10u, !array8_equal(outcome.phenotype_hash,phenotype_identities[header.brain_slot_index].phenotype_hash))
+    | plasticity_guard_bit(11u, !pair_equal(pending.active_eligibility_generation,vec2<u32>(learning.active_eligibility_generation_lo,learning.active_eligibility_generation_hi)))
+    | plasticity_guard_bit(12u, !pair_equal(pending.staging_eligibility_generation,vec2<u32>(learning.inactive_eligibility_generation_lo,learning.inactive_eligibility_generation_hi)))
+    | plasticity_guard_bit(13u, !state_span_within(learning.replay_event_rows_offset,learning.replay_event_capacity*24u))
+    | plasticity_guard_bit(14u, !state_span_within(learning.replay_sample_offset,learning.replay_sample_capacity))
+    | plasticity_guard_bit(15u, !state_span_within(learning.replay_span_offset,learning.replay_span_count*4u))
+    | plasticity_guard_bit(16u, !state_span_within(brain.activation_a_offset,brain.neuron_count))
+    | plasticity_guard_bit(17u, !state_span_within(brain.activation_b_offset,brain.neuron_count))
+    | plasticity_guard_bit(18u, !state_span_within(brain.lifetime_weight_offset,brain.synapse_count))
+    | plasticity_guard_bit(19u, !state_span_within(brain.fast_weight_offset,brain.synapse_count))
+    | plasticity_guard_bit(20u, !state_span_within(extension.lifetime_bank_1_offset,brain.synapse_count))
+    | plasticity_guard_bit(21u, !state_span_within(extension.fast_bank_1_offset,brain.synapse_count))
+    | plasticity_guard_bit(22u, !immutable_weight_span_within(brain.genetic_weight_offset,brain.synapse_count))
+    | plasticity_guard_bit(23u, !immutable_weight_span_within(brain.alpha_offset,brain.synapse_count))
+    | plasticity_guard_bit(24u, !immutable_plan_span_within(extension.synapse_metadata_offset,brain.synapse_count*8u));
+  if (state_guard_lo != 0u || state_guard_hi != 0u) {
+    reject_plasticity(receipt_base, PLASTICITY_GUARD_STATE_EVIDENCE, state_guard_lo, state_guard_hi, 0u); return;
   }
   store_state_u32(receipt_base+4u,learning.active_weight_generation_lo);
   store_state_u32(receipt_base+5u,learning.active_weight_generation_hi);
@@ -278,11 +310,17 @@ fn apply_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
   let delta = learning_rate*alpha*(modulator_value*modulator_sign)*staging_eligibility
     - normalization_rate*post*post*effective;
   let next_fast = clamp(fast+delta,fast_min,fast_max);
-  if (!finite_plasticity(staging_eligibility) || !finite_plasticity(post)
-      || !finite_plasticity(genetic) || !finite_plasticity(alpha)
-      || !finite_plasticity(lifetime) || !finite_plasticity(fast)
-      || !finite_plasticity(delta) || !finite_plasticity(next_fast)) {
-    reject_plasticity(receipt_base); return;
+  let synapse_guard =
+      plasticity_guard_bit(0u, !finite_plasticity(staging_eligibility))
+    | plasticity_guard_bit(1u, !finite_plasticity(post))
+    | plasticity_guard_bit(2u, !finite_plasticity(genetic))
+    | plasticity_guard_bit(3u, !finite_plasticity(alpha))
+    | plasticity_guard_bit(4u, !finite_plasticity(lifetime))
+    | plasticity_guard_bit(5u, !finite_plasticity(fast))
+    | plasticity_guard_bit(6u, !finite_plasticity(delta))
+    | plasticity_guard_bit(7u, !finite_plasticity(next_fast));
+  if (synapse_guard != 0u) {
+    reject_plasticity(receipt_base, PLASTICITY_GUARD_SYNAPSE_FINITE, synapse_guard, 0u, local_synapse); return;
   }
   store_state_f32(inactive_lifetime_index,lifetime);
   store_state_f32(inactive_fast_index,canonicalize_state_zero(next_fast));
@@ -307,14 +345,20 @@ fn capture_fast_plasticity_replay(@builtin(global_invocation_id) gid:vec3<u32>) 
   let local_synapse = load_state_u32(span_base);
   let sample_start = load_state_u32(span_base+1u);
   let reserved = load_state_u32(span_base+3u);
-  if (local_synapse >= brain.synapse_count || reserved != 0u
-      || sample_start > learning.replay_sample_capacity
-      || learning.replay_event_capacity > learning.replay_sample_capacity-sample_start) {
-    reject_plasticity(receipt_base); return;
+  let replay_span_guard =
+      plasticity_guard_bit(0u, local_synapse >= brain.synapse_count)
+    | plasticity_guard_bit(1u, reserved != 0u)
+    | plasticity_guard_bit(2u, sample_start > learning.replay_sample_capacity)
+    | plasticity_guard_bit(3u, sample_start <= learning.replay_sample_capacity
+      && learning.replay_event_capacity > learning.replay_sample_capacity-sample_start);
+  if (replay_span_guard != 0u) {
+    reject_plasticity(receipt_base, PLASTICITY_GUARD_REPLAY_SPAN, replay_span_guard, 0u, gid.x); return;
   }
   let metadata = load_synapse_learning_metadata(extension.synapse_metadata_offset+local_synapse*8u);
   let eligibility = load_staging_eligibility_value(brain,extension,learning,metadata);
-  if (!finite_plasticity(eligibility)) { reject_plasticity(receipt_base); return; }
+  if (!finite_plasticity(eligibility)) {
+    reject_plasticity(receipt_base, PLASTICITY_GUARD_REPLAY_ELIGIBILITY, bitcast<u32>(eligibility), 0u, gid.x); return;
+  }
   let signed_q15 = i32(round(clamp(eligibility,-1.0,1.0)*32767.0));
   let packed = (learning.replay_cursor & 0xffffu) | ((u32(signed_q15)&0xffffu)<<16u);
   store_state_u32(learning.replay_sample_offset+sample_start+learning.replay_cursor,packed);
@@ -334,8 +378,12 @@ fn finalize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
   let output_fast = increment_pair(vec2<u32>(learning.active_weight_generation_lo,learning.active_weight_generation_hi));
   let output_replay = increment_pair(vec2<u32>(learning.replay_generation_lo,learning.replay_generation_hi));
   let output_transaction = increment_pair(vec2<u32>(learning.transaction_generation_lo,learning.transaction_generation_hi));
-  if (!pair_nonzero(output_fast) || !pair_nonzero(output_replay) || !pair_nonzero(output_transaction)) {
-    reject_plasticity(receipt_base); return;
+  let generation_guard =
+      plasticity_guard_bit(0u, !pair_nonzero(output_fast))
+    | plasticity_guard_bit(1u, !pair_nonzero(output_replay))
+    | plasticity_guard_bit(2u, !pair_nonzero(output_transaction));
+  if (generation_guard != 0u) {
+    reject_plasticity(receipt_base, PLASTICITY_GUARD_GENERATION_OVERFLOW, generation_guard, 0u, 0u); return;
   }
   let family = (outcome.selected_candidate_and_family>>16u)&0xffu;
   let event_base = learning.replay_event_rows_offset + learning.replay_cursor*24u;
