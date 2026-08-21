@@ -1,6 +1,7 @@
 //! v0 scaffold: developer tooling contracts.
 
 pub mod benchmark;
+pub mod pass2_ei1_behavioral;
 pub mod creature_part_builder;
 pub mod ei0_exit_gate;
 pub mod era1_evolution;

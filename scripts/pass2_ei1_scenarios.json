@@ -10,7 +10,7 @@
     {"identity": "pass2-certify-common-v1", "seeds": [104729, 130363, 155921, 196613, 223757, 262147, 299993, 324161], "intended_stage": "certify"}
   ],
   "run_contract": {
-    "brain_class": "N512",
+    "brain_class": "N2048",
     "population": 1,
     "configuration_hash_policy": "SHA-256 of the canonical mechanism configuration and runner arguments captured at launch.",
     "hardware_toolchain_capture": ["GpuRuntimeCapabilityManifest", "adapter_identity", "driver_identity", "os_identity", "rustc_identity", "wgpu_identity"],
@@ -32,8 +32,8 @@
     {"id": "ablate_episodic_recall", "attention": true, "concept_gap_context": true, "prediction": true, "dendritic_conjunctions": true, "structural_plasticity": true, "weight_learning": true, "sleep_consolidation": true, "episodic_recall": false}
   ],
   "scenarios": [
-    {"id": "few_shot_avoidance", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": [], "capability_metric": "hazard_avoidance_success_rate"},
-    {"id": "reversal_learning", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": [], "capability_metric": "reversal_adaptation_trials"},
+    {"id": "few_shot_avoidance", "corpus_version": "ei1-behavioural-v1", "support": "available", "unavailable_reason": null, "required_mechanisms": [], "capability_metric": "hazard_avoidance_success_rate"},
+    {"id": "reversal_learning", "corpus_version": "ei1-behavioural-v1", "support": "available", "unavailable_reason": null, "required_mechanisms": [], "capability_metric": "reversal_adaptation_trials"},
     {"id": "contradiction_resolution", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": ["concept_gap_context"], "capability_metric": "contradiction_resolution_rate"},
     {"id": "targeted_curiosity_unresolved_gap", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": ["concept_gap_context"], "capability_metric": "gap_targeting_rate"},
     {"id": "passive_observational_learning", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": [], "capability_metric": "observation_transfer_rate"},
