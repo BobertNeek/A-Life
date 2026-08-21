@@ -31,6 +31,8 @@ function Get-Sha256Text {
 function ConvertTo-CanonicalValue {
     param([AllowNull()]$Value)
     if ($null -eq $Value) { return $null }
+    $type = $Value.GetType()
+    if ($Value -is [string] -or $type.IsPrimitive -or $type.IsEnum -or $Value -is [decimal]) { return $Value }
     if ($Value -is [Collections.IDictionary]) {
         $canonical = [ordered]@{}
         foreach ($key in @($Value.Keys | ForEach-Object { [string]$_ } | Sort-Object -CaseSensitive)) {
