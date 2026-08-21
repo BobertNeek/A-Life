@@ -2056,6 +2056,24 @@ fn selector_logit(bits: u32) -> Option<f32> {
     (bits != GPU_SELECTOR_INVALID_LOGIT_BITS && value.is_finite()).then_some(value)
 }
 
+fn selector_diagnostic_family_binding_offsets(
+    recurrent_synapse_count: u32,
+    decoder_weight_indices_offset: u32,
+    decoder_synapse_start: u32,
+) -> Result<(u32, u32), ScaffoldContractError> {
+    let local_decoder_synapse_start = decoder_synapse_start
+        .checked_sub(recurrent_synapse_count)
+        .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+    let weight_index_start = decoder_weight_indices_offset
+        .checked_add(
+            local_decoder_synapse_start
+                .checked_mul(4)
+                .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?,
+        )
+        .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+    Ok((decoder_synapse_start, weight_index_start))
+}
+
 fn selector_detail_word(
     words: &[u32],
     base: usize,
@@ -2176,22 +2194,13 @@ fn build_selector_diagnostic(
                     fast_weight_offset: selector_detail_word(words, first, 26)?,
                 };
                 *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::FamilyStart;
-                let expected_family_start = slot
-                    .record()
-                    .recurrent_synapse_count
-                    .checked_add(family_plan.decoder_synapse_start())
-                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                let (expected_family_start, expected_weight_index_start) =
+                    selector_diagnostic_family_binding_offsets(
+                        slot.record().recurrent_synapse_count,
+                        slot.record().decoder_weight_indices_offset,
+                        family_plan.decoder_synapse_start(),
+                    )?;
                 *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::WeightIndexStart;
-                let expected_weight_index_start = slot
-                    .record()
-                    .decoder_weight_indices_offset
-                    .checked_add(
-                        family_plan
-                            .decoder_synapse_start()
-                            .checked_mul(4)
-                            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?,
-                    )
-                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
                 let expected_activation_offset = if binding.activation_side == 0 {
                     slot.record().activation_a_offset
                 } else {
@@ -6567,6 +6576,19 @@ mod staging_backend_tests {
             assert_eq!(staging.curated_residency_generation, 0);
             assert!(staging.recorded_pressure_replay_empty);
         });
+    }
+}
+
+#[cfg(test)]
+mod selector_diagnostic_binding_tests {
+    use super::*;
+
+    #[test]
+    fn selector_binding_uses_global_family_start_and_local_weight_index() {
+        let binding = selector_diagnostic_family_binding_offsets(24_576, 108_370, 25_344)
+            .expect("measured N2048 binding is valid");
+
+        assert_eq!(binding, (25_344, 111_442));
     }
 }
 
