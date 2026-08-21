@@ -217,7 +217,7 @@ pub fn run_playable_survival_loop_smoke() -> Result<PlayableSurvivalLoopSummary,
                 0.94,
                 1.0,
             )?,
-            "entered visible hazard; pain/fear rise and topology gap remains bias-only",
+            "entered visible hazard; pain/fear rise and topology gap supplies active bounded context, not direct action selection",
         ),
         (
             PlayableSurvivalEventKind::RestSleep,

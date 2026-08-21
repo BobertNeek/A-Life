@@ -448,7 +448,7 @@ impl RuntimeControlPanel {
         }
         if summary.topology_updates > 0 {
             self.push_player_event(format!(
-                "Concept map updated from sealed patch; topology+{} bias-only.",
+                "Concept map updated from sealed patch; topology+{} active bounded context, no direct action selection.",
                 summary.topology_updates
             ));
         }

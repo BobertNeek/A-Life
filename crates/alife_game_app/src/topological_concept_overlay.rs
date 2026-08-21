@@ -268,7 +268,7 @@ impl TopologicalConceptOverlaySnapshot {
 
     pub fn compact_line(&self) -> String {
         format!(
-            "Concepts: nodes={} edges={} gaps={} read-only bias-only",
+            "Concepts: nodes={} edges={} gaps={} read-only; active bounded context, no direct action selection",
             self.concept_count, self.edge_count, self.gap_count
         )
     }
