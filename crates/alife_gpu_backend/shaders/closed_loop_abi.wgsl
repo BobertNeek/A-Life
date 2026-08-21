@@ -2,6 +2,7 @@ const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 4u;
 const GPU_SELECTION_RECORD_WORDS:u32 = 16u;
 const GPU_LEARNING_SCHEMA_VERSION:u32 = 1u;
 const GPU_SLEEP_SCHEMA_VERSION:u32 = 1u;
+const SELECTOR_RECEIPT_RECORD_WORDS:u32 = 29u;
 
 struct GpuPerceptionHeader {
   schema_version:u32, class_id:u32, slot:u32, slot_generation:u32,
@@ -399,6 +400,17 @@ fn inactive_eligibility_bases(
 }
 fn validate_slice_a_slot(slot_index:u32, header:GpuPerceptionHeader) -> bool {
   let slot = brain_slots[slot_index];
+  let decoder_synapse_count = select(0u, slot.synapse_count - slot.recurrent_synapse_count,
+    slot.recurrent_synapse_count <= slot.synapse_count);
+  let selector_span_valid = header.reserved == 0u || (
+    header.reserved < arrayLength(&frame_payload_words)
+    && decoder_synapse_count > 0u
+    && header.candidate_count <= 0x3fffffffu
+    && decoder_synapse_count <= 0x3fffffffu
+    && header.candidate_count <=
+      (arrayLength(&frame_payload_words) - header.reserved) /
+        (decoder_synapse_count * SELECTOR_RECEIPT_RECORD_WORDS)
+  );
   var valid = header.brain_slot_index == slot_index
     && slot.schema_version == GPU_CLOSED_LOOP_LAYOUT_VERSION
     && header.schema_version == GPU_CLOSED_LOOP_LAYOUT_VERSION
@@ -413,7 +425,7 @@ fn validate_slice_a_slot(slot_index:u32, header:GpuPerceptionHeader) -> bool {
     && state_span_within(slot.extension_record_offset, 20u)
     && slot.reserved[0] == 0u && slot.reserved[1] == 0u && slot.reserved[2] == 0u
     && (header.dispatch_generation_lo != 0u || header.dispatch_generation_hi != 0u)
-    && header.reserved == 0u;
+    && selector_span_valid;
   if (!valid) { return false; }
   let extension = load_slot_extension(slot);
   valid = extension.schema_version == GPU_CLOSED_LOOP_LAYOUT_VERSION

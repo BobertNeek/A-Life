@@ -1,6 +1,7 @@
 const ACTIVE_DISPATCH_ROW_WORDS:u32 = 332u;
 const INVALID_LOGIT_BITS:u32 = 0x7fc00001u;
 const DECODER_SCHEMA_VERSION:u32 = 1u;
+const SELECTOR_DIAGNOSTIC_RECORD_WORDS:u32 = 29u;
 const FACTORIZED_MOTOR_CHANNEL_SLOT_COUNT:u32 = 6u;
 const ACTION_KIND_IDLE:u32 = 0u;
 const ACTION_KIND_HOLD:u32 = 1u;
@@ -75,6 +76,7 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
   valid = valid && final_side <= 1u;
   let activation_offset = select(brain.activation_a_offset, brain.activation_b_offset, final_side == 1u);
   var logit = bitcast<f32>(family.bias_bits);
+  let decoder_synapse_count = brain.synapse_count - brain.recurrent_synapse_count;
   for (var index=0u; index<family.weight_index_count && valid; index++) {
     let map = load_decoder_weight_index(family.weight_index_start + index * 4u);
     valid = map.reserved0 == 0u
@@ -90,7 +92,43 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
       let alpha = bitcast<f32>(immutable_weight_words[brain.alpha_offset + map.global_synapse_id]);
       let lifetime = load_state_f32(weight_bases.lifetime + map.global_synapse_id);
       let fast = load_state_f32(weight_bases.fast + map.global_synapse_id);
-      logit += motor * feature * (genetic + lifetime + alpha * fast);
+      let effective = genetic + lifetime + alpha * fast;
+      let contribution = motor * feature * effective;
+      logit += contribution;
+      if (header.reserved != 0u) {
+        let receipt_base = header.reserved
+          + candidate * decoder_synapse_count * SELECTOR_DIAGNOSTIC_RECORD_WORDS
+          + index * SELECTOR_DIAGNOSTIC_RECORD_WORDS;
+        frame_payload_words[receipt_base] = candidate;
+        frame_payload_words[receipt_base + 1u] = index;
+        frame_payload_words[receipt_base + 2u] = map.global_synapse_id;
+        frame_payload_words[receipt_base + 3u] = map.input_lane;
+        frame_payload_words[receipt_base + 4u] = map.motor_index;
+        frame_payload_words[receipt_base + 5u] = bitcast<u32>(motor);
+        frame_payload_words[receipt_base + 6u] = bitcast<u32>(feature);
+        frame_payload_words[receipt_base + 7u] = bitcast<u32>(genetic);
+        frame_payload_words[receipt_base + 8u] = bitcast<u32>(lifetime);
+        frame_payload_words[receipt_base + 9u] = bitcast<u32>(alpha);
+        frame_payload_words[receipt_base + 10u] = bitcast<u32>(fast);
+        frame_payload_words[receipt_base + 11u] = bitcast<u32>(effective);
+        frame_payload_words[receipt_base + 12u] = bitcast<u32>(contribution);
+        frame_payload_words[receipt_base + 13u] = bitcast<u32>(logit);
+        frame_payload_words[receipt_base + 14u] = final_side;
+        frame_payload_words[receipt_base + 15u] = activation_offset;
+        frame_payload_words[receipt_base + 16u] = decoder.motor_start;
+        frame_payload_words[receipt_base + 17u] = candidate_record.feature_offset;
+        frame_payload_words[receipt_base + 18u] = brain.decoder_plan_offset;
+        frame_payload_words[receipt_base + 19u] = family.decoder_synapse_start;
+        frame_payload_words[receipt_base + 20u] = family.decoder_synapse_count;
+        frame_payload_words[receipt_base + 21u] = family.weight_index_start;
+        frame_payload_words[receipt_base + 22u] = family.weight_index_count;
+        frame_payload_words[receipt_base + 23u] = brain.genetic_weight_offset;
+        frame_payload_words[receipt_base + 24u] = brain.alpha_offset;
+        frame_payload_words[receipt_base + 25u] = weight_bases.lifetime;
+        frame_payload_words[receipt_base + 26u] = weight_bases.fast;
+        frame_payload_words[receipt_base + 27u] = family.family_raw;
+        frame_payload_words[receipt_base + 28u] = brain.decoder_family_offset;
+      }
       valid = finite_decode(logit);
     }
   }

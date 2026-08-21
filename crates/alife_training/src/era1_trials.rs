@@ -1518,9 +1518,60 @@ fn valid_git_object_id(value: &str) -> bool {
 mod selector_diagnostic_receipt_tests {
     use super::*;
     use alife_gpu_backend::{
-        GpuSelectorCandidateDiagnostic, GpuSelectorCandidateValidity, GpuSelectorExplorationMode,
-        GpuSelectorPolicyIdentity, GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
+        GpuSelectorBindingIdentity, GpuSelectorCandidateDiagnostic, GpuSelectorCandidateValidity,
+        GpuSelectorExplorationMode, GpuSelectorPolicyIdentity, GpuSelectorSynapseContribution,
+        GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
     };
+
+    fn candidate(
+        index: u16,
+        action_id: u32,
+        pre: f32,
+        final_logit: f32,
+    ) -> GpuSelectorCandidateDiagnostic {
+        GpuSelectorCandidateDiagnostic {
+            candidate_index: index,
+            action_id: alife_core::ActionId(action_id),
+            family: CandidateActionFamily::Inspect,
+            target: alife_core::ActionTarget::NONE,
+            validity: GpuSelectorCandidateValidity::Valid,
+            decoder_family_bias: 0.125,
+            binding: Some(GpuSelectorBindingIdentity {
+                decoder_plan_offset: 1,
+                decoder_family_offset: 2,
+                decoder_family_start: 2,
+                decoder_family_count: 1,
+                weight_index_start: 3,
+                weight_index_count: 1,
+                activation_side: 0,
+                activation_offset: 4,
+                motor_start: 5,
+                feature_offset: 6,
+                genetic_weight_offset: 7,
+                alpha_offset: 8,
+                lifetime_weight_offset: 9,
+                fast_weight_offset: 10,
+            }),
+            contributions: vec![GpuSelectorSynapseContribution {
+                synapse_index: 0,
+                global_synapse_id: 11,
+                input_lane: 0,
+                motor_index: 0,
+                motor: 1.0,
+                feature: pre - 0.125,
+                genetic: 1.0,
+                lifetime: 0.0,
+                alpha: 0.0,
+                fast: 1.0,
+                effective_weight: 1.0,
+                signed_contribution: pre - 0.125,
+                running_logit: pre,
+            }],
+            pre_context_logit: Some(pre),
+            memory_context_delta: Some(final_logit - pre),
+            final_logit: Some(final_logit),
+        }
+    }
 
     #[test]
     fn serialization_preserves_exact_source_and_gpu_selector_identity() {
@@ -1536,39 +1587,9 @@ mod selector_diagnostic_receipt_tests {
                 dispatch_generation: 9,
                 policy: GpuSelectorPolicyIdentity::PRODUCTION_V1,
                 candidates: vec![
-                    GpuSelectorCandidateDiagnostic {
-                        candidate_index: 0,
-                        action_id: alife_core::ActionId(4),
-                        family: CandidateActionFamily::Inspect,
-                        target: alife_core::ActionTarget::NONE,
-                        validity: GpuSelectorCandidateValidity::Valid,
-                        decoder_family_bias: 0.125,
-                        pre_context_logit: Some(0.5),
-                        memory_context_delta: Some(0.25),
-                        final_logit: Some(0.75),
-                    },
-                    GpuSelectorCandidateDiagnostic {
-                        candidate_index: 1,
-                        action_id: alife_core::ActionId(5),
-                        family: CandidateActionFamily::Inspect,
-                        target: alife_core::ActionTarget::NONE,
-                        validity: GpuSelectorCandidateValidity::Valid,
-                        decoder_family_bias: 0.125,
-                        pre_context_logit: Some(0.0),
-                        memory_context_delta: Some(0.25),
-                        final_logit: Some(0.25),
-                    },
-                    GpuSelectorCandidateDiagnostic {
-                        candidate_index: 2,
-                        action_id: alife_core::ActionId(6),
-                        family: CandidateActionFamily::Inspect,
-                        target: alife_core::ActionTarget::NONE,
-                        validity: GpuSelectorCandidateValidity::Valid,
-                        decoder_family_bias: 0.125,
-                        pre_context_logit: Some(0.5),
-                        memory_context_delta: Some(0.25),
-                        final_logit: Some(0.75),
-                    },
+                    candidate(0, 4, 0.5, 0.75),
+                    candidate(1, 5, 0.0, 0.25),
+                    candidate(2, 6, 0.5, 0.75),
                 ],
                 argmax_candidate_index: 0,
                 equal_max_candidate_indices: vec![0, 2],

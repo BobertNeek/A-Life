@@ -239,6 +239,7 @@ pub const GPU_ACTIVE_DISPATCH_ROW_WORDS: usize = GPU_PERCEPTION_DISPATCH_ROW_WOR
     + crate::GPU_ACTIVITY_DISPATCH_HEADER_WORDS;
 pub const GPU_ACTIVE_SIDE_DIAGNOSTIC_LANE: u32 = 3;
 const GPU_PERCEPTION_HEADER_WORDS: usize = 16;
+pub(crate) const GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS: usize = 29;
 const GPU_CANDIDATE_RECORD_WORDS: usize = 8;
 const WORKGROUP_SIZE: u32 = 64;
 const GPU_REQUIRED_MAX_BUFFER_WORDS: usize = 268_435_456 / 4;
@@ -401,6 +402,7 @@ pub struct GpuActiveBatchUpload {
     selection_offsets: Vec<u32>,
     speech_payload_offsets: Vec<u32>,
     candidate_logit_offsets: Vec<u32>,
+    selector_diagnostic_offsets: Vec<u32>,
     memory_context_bindings: Vec<Option<GpuMemoryContextDispatchReceipt>>,
 }
 
@@ -707,6 +709,7 @@ impl GpuActiveBatchUpload {
                 .iter()
                 .map(|entry| entry.slot.record().candidate_logit_offset)
                 .collect(),
+            selector_diagnostic_offsets: vec![0; entries.len()],
             memory_context_bindings,
         })
     }
@@ -734,14 +737,76 @@ impl GpuActiveBatchUpload {
     }
 
     pub(crate) fn selector_diagnostic_bytes(&self) -> Result<u64, GpuClosedLoopError> {
-        self.headers
+        let logit_words = self
+            .headers
             .iter()
             .try_fold(0_u64, |words, header| {
                 words.checked_add(u64::from(header.candidate_count))
             })
-            .and_then(|words| words.checked_mul(8))
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let detail_words = self
+            .headers
+            .iter()
+            .zip(&self.learning_headers)
+            .try_fold(0_u64, |words, (header, learning)| {
+                u64::from(header.candidate_count)
+                    .checked_mul(u64::from(learning.decoder_synapse_count))
+                    .and_then(|words| {
+                        words.checked_mul(GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS as u64)
+                    })
+                    .and_then(|row_words| words.checked_add(row_words))
+            })
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        logit_words
+            .checked_mul(2)
+            .and_then(|words| words.checked_add(detail_words))
+            .and_then(|words| words.checked_mul(4))
             .filter(|bytes| *bytes != 0)
             .ok_or(GpuClosedLoopError::ArithmeticOverflow)
+    }
+
+    pub(crate) fn enable_selector_diagnostics(
+        &mut self,
+        frame_payload_capacity_words: usize,
+    ) -> Result<(), GpuClosedLoopError> {
+        if self
+            .selector_diagnostic_offsets
+            .iter()
+            .any(|offset| *offset != 0)
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        for row in 0..self.headers.len() {
+            let header = &mut self.headers[row];
+            let learning = self
+                .learning_headers
+                .get(row)
+                .ok_or(GpuClosedLoopError::MalformedUpload)?;
+            let detail_words = usize::try_from(header.candidate_count)
+                .ok()
+                .and_then(|count| {
+                    count.checked_mul(usize::try_from(learning.decoder_synapse_count).ok()?)
+                })
+                .and_then(|count| count.checked_mul(GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS))
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+            let base = self.frame_payload_words.len();
+            if base == 0
+                || base.checked_add(detail_words).is_none()
+                || base + detail_words > frame_payload_capacity_words
+            {
+                return Err(GpuClosedLoopError::CapacityExceeded);
+            }
+            self.frame_payload_words
+                .extend(std::iter::repeat(u32::MAX).take(detail_words));
+            header.reserved =
+                u32::try_from(base).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+            let row_base = row
+                .checked_mul(GPU_ACTIVE_DISPATCH_ROW_WORDS)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+            self.dispatch_header_words[row_base + 15] = header.reserved;
+            self.selector_diagnostic_offsets[row] = header.reserved;
+        }
+        Ok(())
     }
     #[cfg(feature = "gpu-tests")]
     pub fn tamper_activity_digest_for_hardware_diagnostic(
@@ -827,6 +892,7 @@ pub(crate) struct GpuValidatedClassBatch {
 pub(crate) struct GpuSelectorLogitCapture {
     pub(crate) pre_context_logit_bits: Vec<u32>,
     pub(crate) final_logit_bits: Vec<u32>,
+    pub(crate) synapse_words: Vec<u32>,
 }
 
 impl GpuValidatedClassBatch {
@@ -2451,11 +2517,17 @@ impl GpuClosedLoopPipelines {
         readback: &wgpu::Buffer,
         final_logits: bool,
     ) -> Result<(), GpuClosedLoopError> {
-        let phase_base = if final_logits {
-            batch.selector_diagnostic_bytes()? / 2
-        } else {
-            0
-        };
+        let logit_words = batch
+            .headers
+            .iter()
+            .try_fold(0_u64, |words, header| {
+                words.checked_add(u64::from(header.candidate_count))
+            })
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let logit_bytes = logit_words
+            .checked_mul(4)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let phase_base = if final_logits { logit_bytes } else { 0 };
         let neural = buffers.neural_buffers();
         let mut destination = phase_base;
         for (header, source_word) in batch.headers.iter().zip(&batch.candidate_logit_offsets) {
@@ -2472,6 +2544,37 @@ impl GpuClosedLoopPipelines {
             destination = destination
                 .checked_add(bytes)
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        }
+        if final_logits {
+            let mut detail_destination = logit_bytes
+                .checked_mul(2)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+            for ((header, source_word), learning) in batch
+                .headers
+                .iter()
+                .zip(&batch.selector_diagnostic_offsets)
+                .zip(&batch.learning_headers)
+            {
+                let words = u64::from(header.candidate_count)
+                    .checked_mul(u64::from(learning.decoder_synapse_count))
+                    .and_then(|count| {
+                        count.checked_mul(GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS as u64)
+                    })
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+                let bytes = words
+                    .checked_mul(4)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+                encoder.copy_buffer_to_buffer(
+                    neural[5],
+                    u64::from(*source_word) * 4,
+                    readback,
+                    detail_destination,
+                    bytes,
+                );
+                detail_destination = detail_destination
+                    .checked_add(bytes)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+            }
         }
         Ok(())
     }
@@ -2545,29 +2648,53 @@ impl GpuClosedLoopPipelines {
         let words: Vec<u32> = bytemuck::cast_slice(&mapped).to_vec();
         drop(mapped);
         readback.unmap();
-        let phase_words = words.len() / 2;
-        if words.len() % 2 != 0 {
+        let logit_words = batch
+            .headers
+            .iter()
+            .try_fold(0_usize, |words, header| {
+                words.checked_add(usize::try_from(header.candidate_count).ok()?)
+            })
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        if words.len() < logit_words * 2 {
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
-        let (pre, final_logits) = words.split_at(phase_words);
+        let (pre, rest) = words.split_at(logit_words);
+        let (final_logits, details) = rest.split_at(logit_words);
         let mut captures = Vec::with_capacity(batch.row_count());
         let mut cursor = 0_usize;
+        let mut detail_cursor = 0_usize;
         for header in &batch.headers {
             let count = usize::try_from(header.candidate_count)
                 .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
             let end = cursor
                 .checked_add(count)
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
-            if end > phase_words {
+            if end > logit_words {
+                return Err(GpuClosedLoopError::SubmissionFailed);
+            }
+            let learning = &batch.learning_headers[captures.len()];
+            let detail_count = usize::try_from(header.candidate_count)
+                .ok()
+                .and_then(|count| {
+                    count.checked_mul(usize::try_from(learning.decoder_synapse_count).ok()?)
+                })
+                .and_then(|count| count.checked_mul(GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS))
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+            let detail_end = detail_cursor
+                .checked_add(detail_count)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+            if detail_end > details.len() {
                 return Err(GpuClosedLoopError::SubmissionFailed);
             }
             captures.push(GpuSelectorLogitCapture {
                 pre_context_logit_bits: pre[cursor..end].to_vec(),
                 final_logit_bits: final_logits[cursor..end].to_vec(),
+                synapse_words: details[detail_cursor..detail_end].to_vec(),
             });
             cursor = end;
+            detail_cursor = detail_end;
         }
-        if cursor != phase_words {
+        if cursor != logit_words || detail_cursor != details.len() {
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
         Ok(captures)
@@ -3266,6 +3393,7 @@ fn validate_dispatch(
         || batch.pending_templates.len() != batch.headers.len()
         || batch.selection_offsets.len() != batch.headers.len()
         || batch.speech_payload_offsets.len() != batch.headers.len()
+        || batch.selector_diagnostic_offsets.len() != batch.headers.len()
         || batch.memory_context_bindings.len() != batch.headers.len()
         || batch.headers.iter().any(|header| {
             header.neuron_count == 0
@@ -3684,6 +3812,7 @@ mod lifecycle_tests {
             selection_offsets: vec![0],
             speech_payload_offsets: vec![0],
             candidate_logit_offsets: vec![0],
+            selector_diagnostic_offsets: vec![0],
             memory_context_bindings: vec![None],
         };
 
