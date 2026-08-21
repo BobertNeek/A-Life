@@ -566,6 +566,7 @@ mod selector_diagnostic_error_tests {
         GpuRuntimeSelectorDiagnosticFailureStage,
         GpuRuntimeSelectorDiagnosticSelectionValidationFailureReceipt,
         GpuRuntimeSelectorDiagnosticSelectionValidationField, GpuRuntimeSelectorDiagnosticStage,
+        GpuSelectorBindingIdentity,
     };
     use alife_training::Era1TrialRunError;
 
@@ -725,11 +726,45 @@ mod selector_diagnostic_error_tests {
             GpuRuntimeSelectorDiagnosticBuildFailureReceipt {
                 class: GpuRuntimeSelectorDiagnosticBuildFailureClass::InvalidDecisionEvidence,
                 field: GpuRuntimeSelectorDiagnosticBuildFailureField::BindingIdentity,
+                expected_binding_identity: Some(GpuSelectorBindingIdentity {
+                    decoder_plan_offset: 41,
+                    decoder_family_offset: 2,
+                    decoder_family_start: 3,
+                    decoder_family_count: 4,
+                    weight_index_start: 5,
+                    weight_index_count: 6,
+                    activation_side: 0,
+                    activation_offset: 7,
+                    motor_start: 8,
+                    feature_offset: 9,
+                    genetic_weight_offset: 10,
+                    alpha_offset: 11,
+                    lifetime_weight_offset: 12,
+                    fast_weight_offset: 13,
+                }),
+                actual_binding_identity: Some(GpuSelectorBindingIdentity {
+                    decoder_plan_offset: 42,
+                    decoder_family_offset: 2,
+                    decoder_family_start: 3,
+                    decoder_family_count: 4,
+                    weight_index_start: 5,
+                    weight_index_count: 6,
+                    activation_side: 0,
+                    activation_offset: 7,
+                    motor_start: 8,
+                    feature_offset: 9,
+                    genetic_weight_offset: 10,
+                    alpha_offset: 11,
+                    lifetime_weight_offset: 12,
+                    fast_weight_offset: 13,
+                }),
             },
         ));
         let build_rendered = build.to_string();
         assert!(build_rendered.contains("BuildSelectorDiagnostic"));
         assert!(build_rendered.contains("InvalidDecisionEvidence"));
         assert!(build_rendered.contains("BindingIdentity"));
+        assert!(build_rendered.contains("decoder_plan_offset: 41"));
+        assert!(build_rendered.contains("decoder_plan_offset: 42"));
     }
 }

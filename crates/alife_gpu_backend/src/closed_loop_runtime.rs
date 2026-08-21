@@ -797,6 +797,8 @@ pub enum GpuRuntimeSelectorDiagnosticBuildFailureField {
 pub struct GpuRuntimeSelectorDiagnosticBuildFailureReceipt {
     pub class: GpuRuntimeSelectorDiagnosticBuildFailureClass,
     pub field: GpuRuntimeSelectorDiagnosticBuildFailureField,
+    pub expected_binding_identity: Option<GpuSelectorBindingIdentity>,
+    pub actual_binding_identity: Option<GpuSelectorBindingIdentity>,
 }
 
 impl GpuRuntimeSelectorDiagnosticBuildFailureReceipt {
@@ -818,7 +820,13 @@ impl std::fmt::Display for GpuRuntimeSelectorDiagnosticBuildFailureReceipt {
             formatter,
             "BuildSelectorDiagnostic {:?} at {:?}",
             self.class, self.field
-        )
+        )?;
+        if let (Some(expected), Some(actual)) =
+            (self.expected_binding_identity, self.actual_binding_identity)
+        {
+            write!(formatter, ": expected={expected:?} actual={actual:?}")?;
+        }
+        Ok(())
     }
 }
 
@@ -2079,6 +2087,7 @@ fn build_selector_diagnostic(
     chosen_candidate_index: u16,
     capture: &GpuSelectorLogitCapture,
     failure_field: &mut GpuRuntimeSelectorDiagnosticBuildFailureField,
+    binding_identity_failure: &mut Option<(GpuSelectorBindingIdentity, GpuSelectorBindingIdentity)>,
 ) -> Result<GpuSelectorDiagnosticReceipt, ScaffoldContractError> {
     *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::CandidateLogitShape;
     if capture.pre_context_logit_bits.len() != frame.candidates().len()
@@ -2188,6 +2197,22 @@ fn build_selector_diagnostic(
                 } else {
                     slot.record().activation_b_offset
                 };
+                let expected_binding = GpuSelectorBindingIdentity {
+                    decoder_plan_offset: slot.record().decoder_plan_offset,
+                    decoder_family_offset: slot.record().decoder_family_offset,
+                    decoder_family_start: expected_family_start,
+                    decoder_family_count: family_plan.decoder_synapse_count(),
+                    weight_index_start: expected_weight_index_start,
+                    weight_index_count: family_plan.decoder_synapse_count(),
+                    activation_side: binding.activation_side,
+                    activation_offset: expected_activation_offset,
+                    motor_start: phenotype.candidate_decoder().motor_start(),
+                    feature_offset: binding.feature_offset,
+                    genetic_weight_offset: slot.record().genetic_weight_offset,
+                    alpha_offset: slot.record().alpha_offset,
+                    lifetime_weight_offset,
+                    fast_weight_offset,
+                };
                 *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::BindingIdentity;
                 if binding.decoder_plan_offset != slot.record().decoder_plan_offset
                     || binding.decoder_family_offset != slot.record().decoder_family_offset
@@ -2202,6 +2227,7 @@ fn build_selector_diagnostic(
                     || binding.lifetime_weight_offset != lifetime_weight_offset
                     || binding.fast_weight_offset != fast_weight_offset
                 {
+                    *binding_identity_failure = Some((expected_binding, binding));
                     return Err(ScaffoldContractError::InvalidDecisionEvidence);
                 }
                 *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::FamilyCount;
@@ -4573,6 +4599,7 @@ impl GpuClosedLoopBackend {
                     Some(GpuRuntimeSelectorDiagnosticStage::BuildSelectorDiagnostic);
             }
             let mut failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::MissingCapture;
+            let mut binding_identity_failure = None;
             let selector_validation = (|| -> Result<(), ScaffoldContractError> {
                 for dispatch in &dispatches {
                     failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::MissingCapture;
@@ -4612,6 +4639,7 @@ impl GpuClosedLoopBackend {
                                 chosen,
                                 capture,
                                 &mut failure_field,
+                                &mut binding_identity_failure,
                             )?);
                     }
                 }
@@ -4634,6 +4662,10 @@ impl GpuClosedLoopBackend {
                         Some(GpuRuntimeSelectorDiagnosticBuildFailureReceipt {
                             class,
                             field: failure_field,
+                            expected_binding_identity: binding_identity_failure
+                                .map(|(expected, _)| expected),
+                            actual_binding_identity: binding_identity_failure
+                                .map(|(_, actual)| actual),
                         });
                 }
                 self.poison_submitted_dispatches(&dispatches);
