@@ -1,0 +1,71 @@
+name: Pass 2 fast gates
+
+on:
+  push:
+    branches: ["main", "codex/**"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-fast-gates:
+    name: Tier 0-1 host fast gates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: List Tier 0-3 command surface
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/pass2_fast_gates.ps1 -List
+
+      - name: Resolve Tier 0 cache key
+        id: tier0-cache
+        shell: pwsh
+        run: |
+          $key = (& pwsh -NoProfile -File scripts/pass2_fast_gates.ps1 -Tier 0 -ResolveCacheKey).Trim()
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($key)) { exit 1 }
+          "cache_key=$key" >> $env:GITHUB_OUTPUT
+
+      - name: Restore Tier 0 receipt cache
+        uses: actions/cache@v4
+        with:
+          path: target/artifacts/pass2/tier0
+          key: ${{ steps.tier0-cache.outputs.cache_key }}
+
+      - name: Run Tier 0 source gates
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/pass2_fast_gates.ps1 -Tier 0
+
+      - name: Resolve Tier 1 cache key
+        id: tier1-cache
+        shell: pwsh
+        run: |
+          $key = (& pwsh -NoProfile -File scripts/pass2_fast_gates.ps1 -Tier 1 -ResolveCacheKey).Trim()
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($key)) { exit 1 }
+          "cache_key=$key" >> $env:GITHUB_OUTPUT
+
+      - name: Restore Tier 1 receipt cache
+        uses: actions/cache@v4
+        with:
+          path: target/artifacts/pass2/tier1
+          key: ${{ steps.tier1-cache.outputs.cache_key }}
+
+      - name: Run Tier 1 host smoke
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/pass2_fast_gates.ps1 -Tier 1
+
+      - name: Upload compact receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pass2-fast-gate-receipts
+          path: target/artifacts/pass2
+          if-no-files-found: error
