@@ -553,6 +553,8 @@ mod selector_diagnostic_error_tests {
         GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
         GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage,
         GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstageReceipt,
+        GpuRuntimeSelectorDiagnosticSelectionValidationFailureReceipt,
+        GpuRuntimeSelectorDiagnosticSelectionValidationField,
         GpuRuntimeSelectorDiagnosticErrorReceipt, GpuRuntimeSelectorDiagnosticFailureClass,
         GpuRuntimeSelectorDiagnosticFailureStage, GpuRuntimeSelectorDiagnosticStage,
     };
@@ -658,6 +660,14 @@ mod selector_diagnostic_error_tests {
                                 GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage::SelectionValidation,
                             expected_words: None,
                             actual_words: None,
+                            selection_failure: Some(
+                                GpuRuntimeSelectorDiagnosticSelectionValidationFailureReceipt {
+                                    field:
+                                        GpuRuntimeSelectorDiagnosticSelectionValidationField::ActiveSynapsesNonZero,
+                                    expected: 1,
+                                    actual: 0,
+                                },
+                            ),
                         },
                     ),
                 },
@@ -670,6 +680,9 @@ mod selector_diagnostic_error_tests {
                 "class_id=2048",
                 "chunk_index=3",
                 "SelectionValidation",
+                "ActiveSynapsesNonZero",
+                "expected: 1",
+                "actual: 0",
             ] {
                 assert!(
                     decoded_rendered.contains(field),

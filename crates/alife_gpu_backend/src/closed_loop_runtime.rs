@@ -27,6 +27,8 @@ use crate::closed_loop_pipeline::{
     GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS,
     GpuDecodeMappedRecordsDiagnostic as PipelineDecodeMappedRecordsDiagnostic,
     GpuDecodeMappedRecordsSubstage as PipelineDecodeMappedRecordsSubstage,
+    GpuSelectionValidationFailure as PipelineSelectionValidationFailure,
+    GpuSelectionValidationField as PipelineSelectionValidationField,
     GpuSelectorDiagnosticEnableError as PipelineSelectorDiagnosticEnableError,
     GpuSelectorDiagnosticErrorReceipt as PipelineSelectorDiagnosticErrorReceipt,
     GpuSelectorDiagnosticFailureClass as PipelineSelectorDiagnosticFailureClass,
@@ -603,10 +605,40 @@ pub enum GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuRuntimeSelectorDiagnosticSelectionValidationField {
+    RecordCount,
+    Slot,
+    SlotGeneration,
+    DispatchGenerationNonZero,
+    DispatchGeneration,
+    ActiveActivationSide,
+    ActiveTilesNonZero,
+    ActiveSynapsesNonZero,
+    DendriticGatedBranches,
+    Status,
+    CandidateIndex,
+    LogitFinite,
+    CandidateRecord,
+    ConfidenceQ16,
+    EmptyCandidateIndex,
+    EmptyLogitBits,
+    EmptyConfidenceQ16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuRuntimeSelectorDiagnosticSelectionValidationFailureReceipt {
+    pub field: GpuRuntimeSelectorDiagnosticSelectionValidationField,
+    pub expected: u64,
+    pub actual: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstageReceipt {
     pub substage: GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage,
     pub expected_words: Option<usize>,
     pub actual_words: Option<usize>,
+    pub selection_failure:
+        Option<GpuRuntimeSelectorDiagnosticSelectionValidationFailureReceipt>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -658,6 +690,38 @@ impl GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {
                     },
                     expected_words: diagnostic.expected_words,
                     actual_words: diagnostic.actual_words,
+                    selection_failure: match diagnostic.selection_failure {
+                        Some(PipelineSelectionValidationFailure {
+                            field,
+                            expected,
+                            actual,
+                        }) => Some(
+                            GpuRuntimeSelectorDiagnosticSelectionValidationFailureReceipt {
+                                field: match field {
+                                    PipelineSelectionValidationField::RecordCount => GpuRuntimeSelectorDiagnosticSelectionValidationField::RecordCount,
+                                    PipelineSelectionValidationField::Slot => GpuRuntimeSelectorDiagnosticSelectionValidationField::Slot,
+                                    PipelineSelectionValidationField::SlotGeneration => GpuRuntimeSelectorDiagnosticSelectionValidationField::SlotGeneration,
+                                    PipelineSelectionValidationField::DispatchGenerationNonZero => GpuRuntimeSelectorDiagnosticSelectionValidationField::DispatchGenerationNonZero,
+                                    PipelineSelectionValidationField::DispatchGeneration => GpuRuntimeSelectorDiagnosticSelectionValidationField::DispatchGeneration,
+                                    PipelineSelectionValidationField::ActiveActivationSide => GpuRuntimeSelectorDiagnosticSelectionValidationField::ActiveActivationSide,
+                                    PipelineSelectionValidationField::ActiveTilesNonZero => GpuRuntimeSelectorDiagnosticSelectionValidationField::ActiveTilesNonZero,
+                                    PipelineSelectionValidationField::ActiveSynapsesNonZero => GpuRuntimeSelectorDiagnosticSelectionValidationField::ActiveSynapsesNonZero,
+                                    PipelineSelectionValidationField::DendriticGatedBranches => GpuRuntimeSelectorDiagnosticSelectionValidationField::DendriticGatedBranches,
+                                    PipelineSelectionValidationField::Status => GpuRuntimeSelectorDiagnosticSelectionValidationField::Status,
+                                    PipelineSelectionValidationField::CandidateIndex => GpuRuntimeSelectorDiagnosticSelectionValidationField::CandidateIndex,
+                                    PipelineSelectionValidationField::LogitFinite => GpuRuntimeSelectorDiagnosticSelectionValidationField::LogitFinite,
+                                    PipelineSelectionValidationField::CandidateRecord => GpuRuntimeSelectorDiagnosticSelectionValidationField::CandidateRecord,
+                                    PipelineSelectionValidationField::ConfidenceQ16 => GpuRuntimeSelectorDiagnosticSelectionValidationField::ConfidenceQ16,
+                                    PipelineSelectionValidationField::EmptyCandidateIndex => GpuRuntimeSelectorDiagnosticSelectionValidationField::EmptyCandidateIndex,
+                                    PipelineSelectionValidationField::EmptyLogitBits => GpuRuntimeSelectorDiagnosticSelectionValidationField::EmptyLogitBits,
+                                    PipelineSelectionValidationField::EmptyConfidenceQ16 => GpuRuntimeSelectorDiagnosticSelectionValidationField::EmptyConfidenceQ16,
+                                },
+                                expected,
+                                actual,
+                            },
+                        ),
+                        None => None,
+                    },
                 }),
                 None => None,
             },

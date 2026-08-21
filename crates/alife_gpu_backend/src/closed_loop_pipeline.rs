@@ -262,11 +262,40 @@ pub(crate) enum GpuDecodeMappedRecordsSubstage {
     PendingEligibility,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GpuSelectionValidationField {
+    RecordCount,
+    Slot,
+    SlotGeneration,
+    DispatchGenerationNonZero,
+    DispatchGeneration,
+    ActiveActivationSide,
+    ActiveTilesNonZero,
+    ActiveSynapsesNonZero,
+    DendriticGatedBranches,
+    Status,
+    CandidateIndex,
+    LogitFinite,
+    CandidateRecord,
+    ConfidenceQ16,
+    EmptyCandidateIndex,
+    EmptyLogitBits,
+    EmptyConfidenceQ16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct GpuSelectionValidationFailure {
+    pub(crate) field: GpuSelectionValidationField,
+    pub(crate) expected: u64,
+    pub(crate) actual: u64,
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct GpuDecodeMappedRecordsDiagnostic {
     pub(crate) substage: Option<GpuDecodeMappedRecordsSubstage>,
     pub(crate) expected_words: Option<usize>,
     pub(crate) actual_words: Option<usize>,
+    pub(crate) selection_failure: Option<GpuSelectionValidationFailure>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3055,6 +3084,8 @@ impl GpuClosedLoopPipelines {
         if !self.validate_selection_records(batch, &records) {
             if let Some(diagnostic) = diagnostic.as_deref_mut() {
                 diagnostic.substage = Some(GpuDecodeMappedRecordsSubstage::SelectionValidation);
+                diagnostic.selection_failure =
+                    self.first_selection_validation_failure(batch, &records);
             }
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
@@ -3402,6 +3433,152 @@ impl GpuClosedLoopPipelines {
                     _ => false,
                 }
             })
+    }
+
+    fn first_selection_validation_failure(
+        &self,
+        batch: &GpuActiveBatchUpload,
+        records: &[GpuSelectionRecord],
+    ) -> Option<GpuSelectionValidationFailure> {
+        let failure = |field, expected, actual| {
+            Some(GpuSelectionValidationFailure {
+                field,
+                expected,
+                actual,
+            })
+        };
+        if records.len() != batch.headers.len() {
+            return failure(
+                GpuSelectionValidationField::RecordCount,
+                batch.headers.len() as u64,
+                records.len() as u64,
+            );
+        }
+        for (record, header) in records.iter().zip(&batch.headers) {
+            let generation = u64::from(record.dispatch_generation_lo)
+                | (u64::from(record.dispatch_generation_hi) << 32);
+            let expected_generation = u64::from(header.dispatch_generation_lo)
+                | (u64::from(header.dispatch_generation_hi) << 32);
+            let expected_side = Self::final_activation_side(
+                header.active_activation_side,
+                header.microstep_count,
+            )
+            .ok();
+            if record.slot != header.slot {
+                return failure(
+                    GpuSelectionValidationField::Slot,
+                    u64::from(header.slot),
+                    u64::from(record.slot),
+                );
+            }
+            if record.slot_generation != header.slot_generation {
+                return failure(
+                    GpuSelectionValidationField::SlotGeneration,
+                    u64::from(header.slot_generation),
+                    u64::from(record.slot_generation),
+                );
+            }
+            if generation == 0 {
+                return failure(
+                    GpuSelectionValidationField::DispatchGenerationNonZero,
+                    1,
+                    generation,
+                );
+            }
+            if generation != expected_generation {
+                return failure(
+                    GpuSelectionValidationField::DispatchGeneration,
+                    expected_generation,
+                    generation,
+                );
+            }
+            if Some(record.active_activation_side) != expected_side {
+                return failure(
+                    GpuSelectionValidationField::ActiveActivationSide,
+                    u64::from(expected_side.unwrap_or(u32::MAX)),
+                    u64::from(record.active_activation_side),
+                );
+            }
+            if record.active_tiles == 0 {
+                return failure(GpuSelectionValidationField::ActiveTilesNonZero, 1, 0);
+            }
+            if record.active_synapses == 0 {
+                return failure(GpuSelectionValidationField::ActiveSynapsesNonZero, 1, 0);
+            }
+            if record.dendritic_gated_branches > record.dendritic_branches_evaluated {
+                return failure(
+                    GpuSelectionValidationField::DendriticGatedBranches,
+                    u64::from(record.dendritic_branches_evaluated),
+                    u64::from(record.dendritic_gated_branches),
+                );
+            }
+            match record.status {
+                3 => {
+                    if record.candidate_index >= header.candidate_count {
+                        return failure(
+                            GpuSelectionValidationField::CandidateIndex,
+                            u64::from(header.candidate_count.saturating_sub(1)),
+                            u64::from(record.candidate_index),
+                        );
+                    }
+                    if !f32::from_bits(record.logit_bits).is_finite() {
+                        return failure(
+                            GpuSelectionValidationField::LogitFinite,
+                            u64::from(f32::MAX.to_bits()),
+                            u64::from(record.logit_bits),
+                        );
+                    }
+                    let base = header.candidate_offset as usize
+                        + record.candidate_index as usize * GPU_CANDIDATE_RECORD_WORDS;
+                    let candidate = match GpuCandidateRecord::from_words(
+                        &batch.dispatch_header_words[base..base + GPU_CANDIDATE_RECORD_WORDS],
+                    ) {
+                        Ok(candidate) => candidate,
+                        Err(_) => {
+                            return failure(GpuSelectionValidationField::CandidateRecord, 1, 0);
+                        }
+                    };
+                    if candidate.confidence_q16 != record.confidence_q16 {
+                        return failure(
+                            GpuSelectionValidationField::ConfidenceQ16,
+                            u64::from(candidate.confidence_q16),
+                            u64::from(record.confidence_q16),
+                        );
+                    }
+                }
+                2 => {
+                    if record.candidate_index != u32::MAX {
+                        return failure(
+                            GpuSelectionValidationField::EmptyCandidateIndex,
+                            u64::from(u32::MAX),
+                            u64::from(record.candidate_index),
+                        );
+                    }
+                    if record.logit_bits != 0 {
+                        return failure(
+                            GpuSelectionValidationField::EmptyLogitBits,
+                            0,
+                            u64::from(record.logit_bits),
+                        );
+                    }
+                    if record.confidence_q16 != 0 {
+                        return failure(
+                            GpuSelectionValidationField::EmptyConfidenceQ16,
+                            0,
+                            u64::from(record.confidence_q16),
+                        );
+                    }
+                }
+                status => {
+                    return failure(
+                        GpuSelectionValidationField::Status,
+                        (u64::from(2_u32) << 32) | u64::from(3_u32),
+                        u64::from(status),
+                    );
+                }
+            }
+        }
+        None
     }
 
     fn validate_speech_payloads(
