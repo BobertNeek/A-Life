@@ -25,6 +25,8 @@ use serde::{Deserialize, Serialize};
 use crate::closed_loop_buffers::GpuFixedSlotUpload;
 use crate::closed_loop_pipeline::{
     GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS,
+    GpuDecodeMappedRecordsDiagnostic as PipelineDecodeMappedRecordsDiagnostic,
+    GpuDecodeMappedRecordsSubstage as PipelineDecodeMappedRecordsSubstage,
     GpuSelectorDiagnosticEnableError as PipelineSelectorDiagnosticEnableError,
     GpuSelectorDiagnosticErrorReceipt as PipelineSelectorDiagnosticErrorReceipt,
     GpuSelectorDiagnosticFailureClass as PipelineSelectorDiagnosticFailureClass,
@@ -591,10 +593,28 @@ pub enum GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage {
+    AuthorityPoisoned,
+    CompactWordCount,
+    SelectionValidation,
+    SpeechValidation,
+    FactorizedValidation,
+    PendingEligibility,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstageReceipt {
+    pub substage: GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage,
+    pub expected_words: Option<usize>,
+    pub actual_words: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {
     pub class: GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass,
     pub class_id: u16,
     pub chunk_index: usize,
+    pub substage: Option<GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstageReceipt>,
 }
 
 impl GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {
@@ -602,6 +622,7 @@ impl GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {
         error: GpuClosedLoopError,
         class_id: u16,
         chunk_index: usize,
+        diagnostic: PipelineDecodeMappedRecordsDiagnostic,
     ) -> Option<Self> {
         let class = match error {
             GpuClosedLoopError::StaleOrForeignHandle => {
@@ -625,6 +646,21 @@ impl GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {
             class,
             class_id,
             chunk_index,
+            substage: match diagnostic.substage {
+                Some(substage) => Some(GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstageReceipt {
+                    substage: match substage {
+                        PipelineDecodeMappedRecordsSubstage::AuthorityPoisoned => GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage::AuthorityPoisoned,
+                        PipelineDecodeMappedRecordsSubstage::CompactWordCount => GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage::CompactWordCount,
+                        PipelineDecodeMappedRecordsSubstage::SelectionValidation => GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage::SelectionValidation,
+                        PipelineDecodeMappedRecordsSubstage::SpeechValidation => GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage::SpeechValidation,
+                        PipelineDecodeMappedRecordsSubstage::FactorizedValidation => GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage::FactorizedValidation,
+                        PipelineDecodeMappedRecordsSubstage::PendingEligibility => GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage::PendingEligibility,
+                    },
+                    expected_words: diagnostic.expected_words,
+                    actual_words: diagnostic.actual_words,
+                }),
+                None => None,
+            },
         })
     }
 
@@ -657,8 +693,8 @@ impl std::fmt::Display for GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailur
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             formatter,
-            "DecodeMappedRecords GPU failure {:?} (class_id={}, chunk_index={})",
-            self.class, self.class_id, self.chunk_index
+            "DecodeMappedRecords GPU failure {:?} (class_id={}, chunk_index={}, substage={:?})",
+            self.class, self.class_id, self.chunk_index, self.substage
         )
     }
 }
@@ -4182,10 +4218,20 @@ impl GpuClosedLoopBackend {
                 .get_mut(&dispatch.class_id)
                 .and_then(|pool| pool.chunks.get_mut(dispatch.chunk_index))
                 .expect("mapped bucket exists");
-            match bucket.pipelines.decode_validate_mapped_records(
-                &bucket.buffers,
-                dispatch.batch.as_ref().expect("mapped batch"),
-            ) {
+            let mut decode_diagnostic = PipelineDecodeMappedRecordsDiagnostic::default();
+            let decoded = if selector_diagnostic_error_capture.is_some() {
+                bucket.pipelines.decode_validate_mapped_records_with_diagnostic(
+                    &bucket.buffers,
+                    dispatch.batch.as_ref().expect("mapped batch"),
+                    &mut decode_diagnostic,
+                )
+            } else {
+                bucket.pipelines.decode_validate_mapped_records(
+                    &bucket.buffers,
+                    dispatch.batch.as_ref().expect("mapped batch"),
+                )
+            };
+            match decoded {
                 Ok(validated) => dispatches[index].validated = Some(validated),
                 Err(error) => {
                     if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
@@ -4194,6 +4240,7 @@ impl GpuClosedLoopBackend {
                                 error,
                                 dispatch.class_id,
                                 dispatch.chunk_index,
+                                decode_diagnostic,
                             );
                     }
                     for still_mapped in &dispatches[index + 1..] {

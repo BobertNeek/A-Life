@@ -551,6 +551,8 @@ mod selector_diagnostic_error_tests {
     use alife_gpu_backend::{
         GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass,
         GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
+        GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage,
+        GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstageReceipt,
         GpuRuntimeSelectorDiagnosticErrorReceipt, GpuRuntimeSelectorDiagnosticFailureClass,
         GpuRuntimeSelectorDiagnosticFailureStage, GpuRuntimeSelectorDiagnosticStage,
     };
@@ -650,6 +652,14 @@ mod selector_diagnostic_error_tests {
                     class,
                     class_id: 2048,
                     chunk_index: 3,
+                    substage: Some(
+                        GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstageReceipt {
+                            substage:
+                                GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage::SelectionValidation,
+                            expected_words: None,
+                            actual_words: None,
+                        },
+                    ),
                 },
                 ),
             );
@@ -659,6 +669,7 @@ mod selector_diagnostic_error_tests {
                 "DecodeMappedRecords",
                 "class_id=2048",
                 "chunk_index=3",
+                "SelectionValidation",
             ] {
                 assert!(
                     decoded_rendered.contains(field),

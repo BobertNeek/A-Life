@@ -253,6 +253,23 @@ pub(crate) enum GpuSelectorDiagnosticFailureClass {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GpuDecodeMappedRecordsSubstage {
+    AuthorityPoisoned,
+    CompactWordCount,
+    SelectionValidation,
+    SpeechValidation,
+    FactorizedValidation,
+    PendingEligibility,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct GpuDecodeMappedRecordsDiagnostic {
+    pub(crate) substage: Option<GpuDecodeMappedRecordsSubstage>,
+    pub(crate) expected_words: Option<usize>,
+    pub(crate) actual_words: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct GpuSelectorDiagnosticErrorReceipt {
     pub class: GpuSelectorDiagnosticFailureClass,
     pub class_id: u16,
@@ -2959,11 +2976,43 @@ impl GpuClosedLoopPipelines {
         buffers: &impl ClosedLoopBufferSet,
         batch: &GpuActiveBatchUpload,
     ) -> Result<GpuValidatedClassBatch, GpuClosedLoopError> {
-        self.validate_buffers_and_dispatch(buffers, batch)?;
-        self.authority.require_stage(
+        self.decode_validate_mapped_records_inner(buffers, batch, None)
+    }
+
+    pub(crate) fn decode_validate_mapped_records_with_diagnostic(
+        &mut self,
+        buffers: &impl ClosedLoopBufferSet,
+        batch: &GpuActiveBatchUpload,
+        diagnostic: &mut GpuDecodeMappedRecordsDiagnostic,
+    ) -> Result<GpuValidatedClassBatch, GpuClosedLoopError> {
+        self.decode_validate_mapped_records_inner(buffers, batch, Some(diagnostic))
+    }
+
+    fn decode_validate_mapped_records_inner(
+        &mut self,
+        buffers: &impl ClosedLoopBufferSet,
+        batch: &GpuActiveBatchUpload,
+        mut diagnostic: Option<&mut GpuDecodeMappedRecordsDiagnostic>,
+    ) -> Result<GpuValidatedClassBatch, GpuClosedLoopError> {
+        if let Err(error) = self.validate_buffers_and_dispatch(buffers, batch) {
+            if matches!(error, GpuClosedLoopError::SubmissionFailed) {
+                if let Some(diagnostic) = diagnostic.as_deref_mut() {
+                    diagnostic.substage = Some(GpuDecodeMappedRecordsSubstage::AuthorityPoisoned);
+                }
+            }
+            return Err(error);
+        }
+        if let Err(error) = self.authority.require_stage(
             batch.authority_nonce,
             BatchLifecycleStage::EligibilityRecorded,
-        )?;
+        ) {
+            if matches!(error, GpuClosedLoopError::SubmissionFailed) {
+                if let Some(diagnostic) = diagnostic.as_deref_mut() {
+                    diagnostic.substage = Some(GpuDecodeMappedRecordsSubstage::AuthorityPoisoned);
+                }
+            }
+            return Err(error);
+        }
         let readback_bytes = self.readback_bytes(buffers, batch)?;
         let mapped = buffers
             .compact_readback()
@@ -2973,7 +3022,13 @@ impl GpuClosedLoopPipelines {
         drop(mapped);
         buffers.compact_readback().unmap();
         let row_words = GPU_CLOSED_LOOP_TICK_READBACK_BYTES / 4;
-        if words.len() != batch.row_count() * row_words {
+        let expected_words = batch.row_count() * row_words;
+        if words.len() != expected_words {
+            if let Some(diagnostic) = diagnostic.as_deref_mut() {
+                diagnostic.substage = Some(GpuDecodeMappedRecordsSubstage::CompactWordCount);
+                diagnostic.expected_words = Some(expected_words);
+                diagnostic.actual_words = Some(words.len());
+            }
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
         let selection_words = crate::GPU_SELECTION_RECORD_BYTES / 4;
@@ -2997,15 +3052,33 @@ impl GpuClosedLoopPipelines {
             record.confidence_q16 = 0;
             record.status = 2;
         }
-        if !self.validate_selection_records(batch, &records)
-            || !self.validate_speech_payloads(batch, &records, &speech_payloads)
-            || !self.validate_factorized_motor_candidates(batch, &factorized_motor_candidates)
-        {
+        if !self.validate_selection_records(batch, &records) {
+            if let Some(diagnostic) = diagnostic.as_deref_mut() {
+                diagnostic.substage = Some(GpuDecodeMappedRecordsSubstage::SelectionValidation);
+            }
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
-        let pending_records = self
-            .build_pending_eligibility_records(batch, &records)
-            .ok_or(GpuClosedLoopError::SubmissionFailed)?;
+        if !self.validate_speech_payloads(batch, &records, &speech_payloads) {
+            if let Some(diagnostic) = diagnostic.as_deref_mut() {
+                diagnostic.substage = Some(GpuDecodeMappedRecordsSubstage::SpeechValidation);
+            }
+            return Err(GpuClosedLoopError::SubmissionFailed);
+        }
+        if !self.validate_factorized_motor_candidates(batch, &factorized_motor_candidates) {
+            if let Some(diagnostic) = diagnostic.as_deref_mut() {
+                diagnostic.substage = Some(GpuDecodeMappedRecordsSubstage::FactorizedValidation);
+            }
+            return Err(GpuClosedLoopError::SubmissionFailed);
+        }
+        let pending_records = match self.build_pending_eligibility_records(batch, &records) {
+            Some(records) => records,
+            None => {
+                if let Some(diagnostic) = diagnostic.as_deref_mut() {
+                    diagnostic.substage = Some(GpuDecodeMappedRecordsSubstage::PendingEligibility);
+                }
+                return Err(GpuClosedLoopError::SubmissionFailed);
+            }
+        };
         #[cfg(feature = "gpu-tests")]
         let mut pending_records = pending_records;
         #[cfg(feature = "gpu-tests")]
