@@ -637,8 +637,7 @@ pub struct GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstageReceipt {
     pub substage: GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage,
     pub expected_words: Option<usize>,
     pub actual_words: Option<usize>,
-    pub selection_failure:
-        Option<GpuRuntimeSelectorDiagnosticSelectionValidationFailureReceipt>,
+    pub selection_failure: Option<GpuRuntimeSelectorDiagnosticSelectionValidationFailureReceipt>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -765,6 +764,66 @@ impl std::fmt::Display for GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailur
 
 impl std::error::Error for GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuRuntimeSelectorDiagnosticBuildFailureClass {
+    InvalidDecisionEvidence,
+    BrainOwnershipMismatch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuRuntimeSelectorDiagnosticBuildFailureField {
+    MissingCapture,
+    CaptureCount,
+    MissingSelectionRecord,
+    ChosenCandidateIndex,
+    ResidentBrainOwnership,
+    CandidateLogitShape,
+    RequestedContributionShape,
+    DecoderFamily,
+    ContributionDetailWord,
+    ActivationSide,
+    FamilyStart,
+    WeightIndexStart,
+    BindingIdentity,
+    FamilyCount,
+    ContributionRecordIdentity,
+    InputLane,
+    MotorIndex,
+    Argmax,
+    ReceiptContract,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuRuntimeSelectorDiagnosticBuildFailureReceipt {
+    pub class: GpuRuntimeSelectorDiagnosticBuildFailureClass,
+    pub field: GpuRuntimeSelectorDiagnosticBuildFailureField,
+}
+
+impl GpuRuntimeSelectorDiagnosticBuildFailureReceipt {
+    pub const fn mapped_contract_error(self) -> ScaffoldContractError {
+        match self.class {
+            GpuRuntimeSelectorDiagnosticBuildFailureClass::InvalidDecisionEvidence => {
+                ScaffoldContractError::InvalidDecisionEvidence
+            }
+            GpuRuntimeSelectorDiagnosticBuildFailureClass::BrainOwnershipMismatch => {
+                ScaffoldContractError::BrainOwnershipMismatch
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for GpuRuntimeSelectorDiagnosticBuildFailureReceipt {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "BuildSelectorDiagnostic {:?} at {:?}",
+            self.class, self.field
+        )
+    }
+}
+
+impl std::error::Error for GpuRuntimeSelectorDiagnosticBuildFailureReceipt {}
+
 /// Complete selector-diagnostic enable receipt translated out of the
 /// crate-private pipeline module without dropping any planning inputs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -870,12 +929,12 @@ impl GpuRuntimeSelectorDiagnosticEnableFailure {
                 GpuRuntimeSelectorDiagnosticFailureClass::CapacityExceeded => {
                     GpuClosedLoopError::CapacityExceeded
                 }
-            GpuRuntimeSelectorDiagnosticFailureClass::ArithmeticOverflow => {
-                GpuClosedLoopError::ArithmeticOverflow
-            }
-            GpuRuntimeSelectorDiagnosticFailureClass::SubmissionFailed => {
-                GpuClosedLoopError::SubmissionFailed
-            }
+                GpuRuntimeSelectorDiagnosticFailureClass::ArithmeticOverflow => {
+                    GpuClosedLoopError::ArithmeticOverflow
+                }
+                GpuRuntimeSelectorDiagnosticFailureClass::SubmissionFailed => {
+                    GpuClosedLoopError::SubmissionFailed
+                }
             },
         }
     }
@@ -921,6 +980,7 @@ pub enum GpuRuntimeSelectorDiagnosticError {
     Enable(GpuRuntimeSelectorDiagnosticEnableFailure),
     LaterStage(GpuRuntimeSelectorDiagnosticFailureReceipt),
     DecodeMappedRecords(GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt),
+    BuildSelectorDiagnostic(GpuRuntimeSelectorDiagnosticBuildFailureReceipt),
     LaterStageContract {
         stage: GpuRuntimeSelectorDiagnosticStage,
         error: ScaffoldContractError,
@@ -945,6 +1005,7 @@ impl std::fmt::Display for GpuRuntimeSelectorDiagnosticError {
                 formatter,
                 "selector diagnostic DecodeMappedRecords GPU failure: {error}"
             ),
+            Self::BuildSelectorDiagnostic(error) => error.fmt(formatter),
             Self::LaterStageContract { stage, error } => write!(
                 formatter,
                 "selector diagnostic later-stage GPU failure at {stage:?}: {error}"
@@ -960,6 +1021,7 @@ impl std::error::Error for GpuRuntimeSelectorDiagnosticError {
             Self::LaterStageContract { error, .. } => Some(error),
             Self::LaterStage(error) => Some(error),
             Self::DecodeMappedRecords(error) => Some(error),
+            Self::BuildSelectorDiagnostic(error) => Some(error),
             Self::Enable(error) => Some(error),
         }
     }
@@ -1820,6 +1882,7 @@ struct SelectorDiagnosticErrorCapture {
     later_stage_receipt: Option<GpuRuntimeSelectorDiagnosticFailureReceipt>,
     decode_mapped_records_receipt:
         Option<GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt>,
+    build_selector_diagnostic_receipt: Option<GpuRuntimeSelectorDiagnosticBuildFailureReceipt>,
     enable_completed: bool,
     later_stage: Option<GpuRuntimeSelectorDiagnosticStage>,
 }
@@ -2015,12 +2078,15 @@ fn build_selector_diagnostic(
     dispatch_generation: u64,
     chosen_candidate_index: u16,
     capture: &GpuSelectorLogitCapture,
+    failure_field: &mut GpuRuntimeSelectorDiagnosticBuildFailureField,
 ) -> Result<GpuSelectorDiagnosticReceipt, ScaffoldContractError> {
+    *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::CandidateLogitShape;
     if capture.pre_context_logit_bits.len() != frame.candidates().len()
         || capture.final_logit_bits.len() != frame.candidates().len()
     {
         return Err(ScaffoldContractError::InvalidDecisionEvidence);
     }
+    *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::RequestedContributionShape;
     if capture.requested_candidate_indices.is_empty()
         || capture.contributions.len() != capture.requested_candidate_indices.len()
     {
@@ -2042,6 +2108,7 @@ fn build_selector_diagnostic(
         .zip(&capture.pre_context_logit_bits)
         .zip(&capture.final_logit_bits)
         .map(|((candidate, pre_bits), final_bits)| {
+            *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::DecoderFamily;
             let family_bias = phenotype
                 .candidate_decoder()
                 .families()
@@ -2074,6 +2141,8 @@ fn build_selector_diagnostic(
             let (binding, contributions) = if validity == GpuSelectorCandidateValidity::Valid
                 && contribution_capture.is_some()
             {
+                *failure_field =
+                    GpuRuntimeSelectorDiagnosticBuildFailureField::ContributionDetailWord;
                 let words = &contribution_capture
                     .expect("checked sparse contribution capture")
                     .synapse_words;
@@ -2097,11 +2166,13 @@ fn build_selector_diagnostic(
                     lifetime_weight_offset: selector_detail_word(words, first, 25)?,
                     fast_weight_offset: selector_detail_word(words, first, 26)?,
                 };
+                *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::FamilyStart;
                 let expected_family_start = slot
                     .record()
                     .recurrent_synapse_count
                     .checked_add(family_plan.decoder_synapse_start())
                     .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::WeightIndexStart;
                 let expected_weight_index_start = slot
                     .record()
                     .decoder_weight_indices_offset
@@ -2117,6 +2188,7 @@ fn build_selector_diagnostic(
                 } else {
                     slot.record().activation_b_offset
                 };
+                *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::BindingIdentity;
                 if binding.decoder_plan_offset != slot.record().decoder_plan_offset
                     || binding.decoder_family_offset != slot.record().decoder_family_offset
                     || binding.decoder_family_start != expected_family_start
@@ -2132,10 +2204,13 @@ fn build_selector_diagnostic(
                 {
                     return Err(ScaffoldContractError::InvalidDecisionEvidence);
                 }
+                *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::FamilyCount;
                 let family_count_usize = usize::try_from(family_count)
                     .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
                 let mut contributions = Vec::with_capacity(family_count_usize);
                 for synapse_index in 0..family_count_usize {
+                    *failure_field =
+                        GpuRuntimeSelectorDiagnosticBuildFailureField::ContributionRecordIdentity;
                     let base = synapse_index
                         .checked_mul(GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS)
                         .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
@@ -2163,13 +2238,19 @@ fn build_selector_diagnostic(
                     {
                         return Err(ScaffoldContractError::InvalidDecisionEvidence);
                     }
+                    *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::InputLane;
+                    let input_lane = u16::try_from(selector_detail_word(words, base, 3)?)
+                        .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
+                    *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::MotorIndex;
+                    let motor_index = u16::try_from(selector_detail_word(words, base, 4)?)
+                        .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
+                    *failure_field =
+                        GpuRuntimeSelectorDiagnosticBuildFailureField::ContributionDetailWord;
                     contributions.push(GpuSelectorSynapseContribution {
                         synapse_index: selector_detail_word(words, base, 1)?,
                         global_synapse_id: selector_detail_word(words, base, 2)?,
-                        input_lane: u16::try_from(selector_detail_word(words, base, 3)?)
-                            .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
-                        motor_index: u16::try_from(selector_detail_word(words, base, 4)?)
-                            .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
+                        input_lane,
+                        motor_index,
                         motor: selector_detail_f32(words, base, 5)?,
                         feature: selector_detail_f32(words, base, 6)?,
                         genetic: selector_detail_f32(words, base, 7)?,
@@ -2200,6 +2281,7 @@ fn build_selector_diagnostic(
             })
         })
         .collect::<Result<Vec<_>, ScaffoldContractError>>()?;
+    *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::Argmax;
     let mut argmax = None::<(u16, f32)>;
     let mut equal_max_candidate_indices = Vec::new();
     for candidate in &candidates {
@@ -2237,6 +2319,7 @@ fn build_selector_diagnostic(
         equal_max_candidate_indices,
         chosen_candidate_index,
     };
+    *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::ReceiptContract;
     receipt.validate_contract()?;
     Ok(receipt)
 }
@@ -3651,19 +3734,22 @@ impl GpuClosedLoopBackend {
                 None if let Some(receipt) = capture.later_stage_receipt.take() => {
                     Err(GpuRuntimeSelectorDiagnosticError::LaterStage(receipt))
                 }
-                None if let Some(receipt) = capture.decode_mapped_records_receipt.take() => {
-                    Err(GpuRuntimeSelectorDiagnosticError::DecodeMappedRecords(
+                None if let Some(receipt) = capture.decode_mapped_records_receipt.take() => Err(
+                    GpuRuntimeSelectorDiagnosticError::DecodeMappedRecords(receipt),
+                ),
+                None if let Some(receipt) = capture.build_selector_diagnostic_receipt.take() => {
+                    Err(GpuRuntimeSelectorDiagnosticError::BuildSelectorDiagnostic(
                         receipt,
                     ))
                 }
-                None if capture.enable_completed => Err(
-                    GpuRuntimeSelectorDiagnosticError::LaterStageContract {
+                None if capture.enable_completed => {
+                    Err(GpuRuntimeSelectorDiagnosticError::LaterStageContract {
                         stage: capture
                             .later_stage
                             .expect("enabled selector diagnostics record their current stage"),
                         error,
-                    },
-                ),
+                    })
+                }
                 None => Err(GpuRuntimeSelectorDiagnosticError::Preflight(error)),
             },
         }
@@ -4192,11 +4278,13 @@ impl GpuClosedLoopBackend {
             }
             self.timestamp_resources.readback_buffer.unmap();
             self.mark_device_lost();
-            return Err(if stage == GpuRuntimeSelectorDiagnosticStage::TimestampMappingCompletion {
-                ScaffoldContractError::GpuTimestampQueryUnavailable
-            } else {
-                ScaffoldContractError::NeuralBackendUnavailable
-            });
+            return Err(
+                if stage == GpuRuntimeSelectorDiagnosticStage::TimestampMappingCompletion {
+                    ScaffoldContractError::GpuTimestampQueryUnavailable
+                } else {
+                    ScaffoldContractError::NeuralBackendUnavailable
+                },
+            );
         }
 
         if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
@@ -4284,11 +4372,13 @@ impl GpuClosedLoopBackend {
                 .expect("mapped bucket exists");
             let mut decode_diagnostic = PipelineDecodeMappedRecordsDiagnostic::default();
             let decoded = if selector_diagnostic_error_capture.is_some() {
-                bucket.pipelines.decode_validate_mapped_records_with_diagnostic(
-                    &bucket.buffers,
-                    dispatch.batch.as_ref().expect("mapped batch"),
-                    &mut decode_diagnostic,
-                )
+                bucket
+                    .pipelines
+                    .decode_validate_mapped_records_with_diagnostic(
+                        &bucket.buffers,
+                        dispatch.batch.as_ref().expect("mapped batch"),
+                        &mut decode_diagnostic,
+                    )
             } else {
                 bucket.pipelines.decode_validate_mapped_records(
                     &bucket.buffers,
@@ -4372,8 +4462,7 @@ impl GpuClosedLoopBackend {
         let mut ordered_memory_receipts = vec![None; batch.len()];
         let mut ordered_selector_diagnostics = vec![None; batch.len()];
         if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
-            capture.later_stage =
-                Some(GpuRuntimeSelectorDiagnosticStage::ValidateReceiptIdentity);
+            capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::ValidateReceiptIdentity);
         }
         let receipt_validation = (|| -> Result<(), ScaffoldContractError> {
             for dispatch in &dispatches {
@@ -4483,22 +4572,31 @@ impl GpuClosedLoopBackend {
                 capture.later_stage =
                     Some(GpuRuntimeSelectorDiagnosticStage::BuildSelectorDiagnostic);
             }
+            let mut failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::MissingCapture;
             let selector_validation = (|| -> Result<(), ScaffoldContractError> {
                 for dispatch in &dispatches {
+                    failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::MissingCapture;
                     let captures = dispatch
                         .selector_captures
                         .as_ref()
                         .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                    failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::CaptureCount;
                     if captures.len() != dispatch.original_indices.len() {
                         return Err(ScaffoldContractError::InvalidDecisionEvidence);
                     }
                     for (original_index, capture) in dispatch.original_indices.iter().zip(captures)
                     {
                         let input = batch[*original_index];
+                        failure_field =
+                            GpuRuntimeSelectorDiagnosticBuildFailureField::MissingSelectionRecord;
                         let record = ordered_records[*original_index]
                             .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                        failure_field =
+                            GpuRuntimeSelectorDiagnosticBuildFailureField::ChosenCandidateIndex;
                         let chosen = u16::try_from(record.candidate_index)
                             .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
+                        failure_field =
+                            GpuRuntimeSelectorDiagnosticBuildFailureField::ResidentBrainOwnership;
                         let resident = self
                             .class_buckets
                             .get(&input.handle.class_id.raw())
@@ -4513,12 +4611,31 @@ impl GpuClosedLoopBackend {
                                 dispatch_generation.get(),
                                 chosen,
                                 capture,
+                                &mut failure_field,
                             )?);
                     }
                 }
                 Ok(())
             })();
-            if selector_validation.is_err() {
+            if let Err(error) = selector_validation {
+                let class = match error {
+                    ScaffoldContractError::InvalidDecisionEvidence => {
+                        Some(GpuRuntimeSelectorDiagnosticBuildFailureClass::InvalidDecisionEvidence)
+                    }
+                    ScaffoldContractError::BrainOwnershipMismatch => {
+                        Some(GpuRuntimeSelectorDiagnosticBuildFailureClass::BrainOwnershipMismatch)
+                    }
+                    _ => None,
+                };
+                if let (Some(capture), Some(class)) =
+                    (selector_diagnostic_error_capture.as_deref_mut(), class)
+                {
+                    capture.build_selector_diagnostic_receipt =
+                        Some(GpuRuntimeSelectorDiagnosticBuildFailureReceipt {
+                            class,
+                            field: failure_field,
+                        });
+                }
                 self.poison_submitted_dispatches(&dispatches);
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
@@ -4655,8 +4772,7 @@ impl GpuClosedLoopBackend {
         let mut commit_mismatch = false;
         for dispatch in &mut dispatches {
             if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
-                capture.later_stage =
-                    Some(GpuRuntimeSelectorDiagnosticStage::CommitValidatedBatch);
+                capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::CommitValidatedBatch);
             }
             let bucket = self
                 .class_buckets

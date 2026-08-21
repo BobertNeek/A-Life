@@ -14,10 +14,12 @@ use alife_core::{
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
-    GpuClosedLoopMemoryTickInput, GpuRuntimeProfile, GpuRuntimeSelectorDiagnosticEnableFailure,
+    GpuClosedLoopMemoryTickInput, GpuRuntimeProfile,
+    GpuRuntimeSelectorDiagnosticBuildFailureReceipt,
     GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
-    GpuRuntimeSelectorDiagnosticError, GpuRuntimeSelectorDiagnosticFailureReceipt,
-    GpuRuntimeSelectorDiagnosticStage, GpuSelectorDiagnosticReceipt,
+    GpuRuntimeSelectorDiagnosticEnableFailure, GpuRuntimeSelectorDiagnosticError,
+    GpuRuntimeSelectorDiagnosticFailureReceipt, GpuRuntimeSelectorDiagnosticStage,
+    GpuSelectorDiagnosticReceipt,
 };
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use alife_world::{
@@ -98,6 +100,8 @@ pub enum Era1TrialRunError {
     SelectorDiagnosticDecodeMappedRecords(
         GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
     ),
+    #[error("Era 1 selector diagnostic build failure: {0}")]
+    SelectorDiagnosticBuild(GpuRuntimeSelectorDiagnosticBuildFailureReceipt),
     #[error("Era 1 selector diagnostic later-stage GPU failure at {stage:?}: {error}")]
     SelectorDiagnosticLaterStageContract {
         stage: GpuRuntimeSelectorDiagnosticStage,
@@ -118,6 +122,9 @@ impl Era1TrialRunError {
             Self::SelectorDiagnosticDecodeMappedRecords(error) => {
                 TrainingError::Contract(error.mapped_contract_error())
             }
+            Self::SelectorDiagnosticBuild(error) => {
+                TrainingError::Contract(error.mapped_contract_error())
+            }
             Self::SelectorDiagnosticEnable(error) => {
                 TrainingError::Contract(error.mapped_contract_error())
             }
@@ -136,6 +143,9 @@ fn map_selector_diagnostic_error(error: GpuRuntimeSelectorDiagnosticError) -> Er
         }
         GpuRuntimeSelectorDiagnosticError::DecodeMappedRecords(error) => {
             Era1TrialRunError::SelectorDiagnosticDecodeMappedRecords(error)
+        }
+        GpuRuntimeSelectorDiagnosticError::BuildSelectorDiagnostic(error) => {
+            Era1TrialRunError::SelectorDiagnosticBuild(error)
         }
         GpuRuntimeSelectorDiagnosticError::LaterStageContract { stage, error } => {
             Era1TrialRunError::SelectorDiagnosticLaterStageContract { stage, error }

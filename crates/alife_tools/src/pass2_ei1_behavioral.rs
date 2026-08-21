@@ -13,6 +13,7 @@ use alife_core::{
     FoundationGeneticIdentity, LanguageCodebookV1, OrganismId, ScaffoldContractError,
 };
 use alife_gpu_backend::{
+    GpuRuntimeSelectorDiagnosticBuildFailureReceipt,
     GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
     GpuRuntimeSelectorDiagnosticEnableFailure, GpuRuntimeSelectorDiagnosticFailureReceipt,
 };
@@ -53,6 +54,8 @@ pub enum Pass2Ei1BehavioralError {
     SelectorDiagnosticDecodeMappedRecords(
         GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
     ),
+    #[error("Era 1 selector diagnostic build failure: {0}")]
+    SelectorDiagnosticBuild(GpuRuntimeSelectorDiagnosticBuildFailureReceipt),
     #[error("Era 1 selector diagnostic later-stage GPU failure at {stage:?}: {error}")]
     SelectorDiagnosticLaterStageContract {
         stage: alife_gpu_backend::GpuRuntimeSelectorDiagnosticStage,
@@ -252,6 +255,9 @@ fn runner_failure(error: Era1TrialRunError) -> Pass2Ei1BehavioralError {
         }
         Era1TrialRunError::SelectorDiagnosticDecodeMappedRecords(error) => {
             Pass2Ei1BehavioralError::SelectorDiagnosticDecodeMappedRecords(error)
+        }
+        Era1TrialRunError::SelectorDiagnosticBuild(error) => {
+            Pass2Ei1BehavioralError::SelectorDiagnosticBuild(error)
         }
         Era1TrialRunError::SelectorDiagnosticLaterStageContract { stage, error } => {
             Pass2Ei1BehavioralError::SelectorDiagnosticLaterStageContract { stage, error }
@@ -549,14 +555,17 @@ fn integer(object: &Map<String, Value>, key: &'static str) -> Result<u64, Pass2E
 mod selector_diagnostic_error_tests {
     use super::*;
     use alife_gpu_backend::{
+        GpuRuntimeSelectorDiagnosticBuildFailureClass,
+        GpuRuntimeSelectorDiagnosticBuildFailureField,
+        GpuRuntimeSelectorDiagnosticBuildFailureReceipt,
         GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass,
         GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
         GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage,
         GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstageReceipt,
-        GpuRuntimeSelectorDiagnosticSelectionValidationFailureReceipt,
-        GpuRuntimeSelectorDiagnosticSelectionValidationField,
         GpuRuntimeSelectorDiagnosticErrorReceipt, GpuRuntimeSelectorDiagnosticFailureClass,
-        GpuRuntimeSelectorDiagnosticFailureStage, GpuRuntimeSelectorDiagnosticStage,
+        GpuRuntimeSelectorDiagnosticFailureStage,
+        GpuRuntimeSelectorDiagnosticSelectionValidationFailureReceipt,
+        GpuRuntimeSelectorDiagnosticSelectionValidationField, GpuRuntimeSelectorDiagnosticStage,
     };
     use alife_training::Era1TrialRunError;
 
@@ -616,7 +625,12 @@ mod selector_diagnostic_error_tests {
                 },
             ));
             let later_rendered = later.to_string();
-            for field in [class_name, "SelectorDiagnosticBytes", "class_id=2048", "chunk_index=3"] {
+            for field in [
+                class_name,
+                "SelectorDiagnosticBytes",
+                "class_id=2048",
+                "chunk_index=3",
+            ] {
                 assert!(
                     later_rendered.contains(field),
                     "missing {field} in {later_rendered}"
@@ -691,17 +705,31 @@ mod selector_diagnostic_error_tests {
             }
         }
 
-        let later_contract = runner_failure(
-            Era1TrialRunError::SelectorDiagnosticLaterStageContract {
+        let later_contract =
+            runner_failure(Era1TrialRunError::SelectorDiagnosticLaterStageContract {
                 stage: GpuRuntimeSelectorDiagnosticStage::DecodeSelectorDiagnostics,
                 error: ScaffoldContractError::NeuralBackendUnavailable,
-            },
+            });
+        assert!(
+            later_contract
+                .to_string()
+                .contains("later-stage GPU failure")
         );
-        assert!(later_contract.to_string().contains("later-stage GPU failure"));
         assert!(
             later_contract
                 .to_string()
                 .contains("DecodeSelectorDiagnostics")
         );
+
+        let build = runner_failure(Era1TrialRunError::SelectorDiagnosticBuild(
+            GpuRuntimeSelectorDiagnosticBuildFailureReceipt {
+                class: GpuRuntimeSelectorDiagnosticBuildFailureClass::InvalidDecisionEvidence,
+                field: GpuRuntimeSelectorDiagnosticBuildFailureField::BindingIdentity,
+            },
+        ));
+        let build_rendered = build.to_string();
+        assert!(build_rendered.contains("BuildSelectorDiagnostic"));
+        assert!(build_rendered.contains("InvalidDecisionEvidence"));
+        assert!(build_rendered.contains("BindingIdentity"));
     }
 }
