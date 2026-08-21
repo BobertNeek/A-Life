@@ -10,7 +10,7 @@ use std::{
 
 use alife_core::{
     BrainCapacityClass, CreatureGenome, Era1Ability, Era1Control, Era1EvidencePartition,
-    FoundationGeneticIdentity, OrganismId,
+    FoundationGeneticIdentity, LanguageCodebookV1, OrganismId,
 };
 use alife_training::{Era1TrialRunEvidence, Era1TrialRunRequest, Era1TrialRunner};
 use alife_world::{Era1TrialManifest, Era1WorldFamily};
@@ -117,9 +117,9 @@ pub fn run_planned_manifest(
         let subject = derived_organism(seed, 1)?;
         let familiar = derived_organism(seed, 2)?;
         let novel = derived_organism(seed, 3)?;
-        let taught_token = u16::try_from(seed % u64::from(u16::MAX))
-            .map_err(core_failure)?
-            .max(1);
+        let taught_token =
+            u16::try_from((seed % u64::from(LanguageCodebookV1::CODE_COUNT - 1)) + 1)
+                .map_err(core_failure)?;
         let manifest_trial = Era1TrialManifest::new(
             seed,
             family,
