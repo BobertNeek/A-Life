@@ -58,6 +58,19 @@ function Get-CanonicalJson {
     param($Value)
     ConvertTo-Json -InputObject (ConvertTo-CanonicalValue $Value) -Compress -Depth 30
 }
+function Write-Utf8JsonNoBom {
+    param(
+        [string]$Path,
+        $Value,
+        [int]$Depth = 30
+    )
+    $json = ConvertTo-Json -InputObject $Value -Depth $Depth
+    [System.IO.File]::WriteAllText(
+        $Path,
+        $json,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+}
 function Get-SourceCommit {
     $commit = (& git rev-parse HEAD 2>$null | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or $commit -notmatch '^[0-9a-f]{40}$') { Stop-Ei1Ablation 'git rev-parse HEAD did not return a lower-case commit SHA' }
@@ -156,7 +169,7 @@ if ($Mode -eq 'execute') {
     New-Item -ItemType Directory -Force -Path $artifactRootAbsolute, $cacheRootAbsolute | Out-Null
     foreach ($row in $manifestRows) {
         $plannedPath = Join-Path $artifactRootAbsolute "$($row.cache_key).planned.json"
-        $row.manifest | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $plannedPath -Encoding utf8
+        Write-Utf8JsonNoBom -Path $plannedPath -Value $row.manifest -Depth 30
         $output = (& $RunnerCommand[0] @($runnerArgs + @('--planned-manifest', $plannedPath, '--manifest-identity', $row.cache_key)) 2>&1 | Out-String)
         if ($LASTEXITCODE -ne 0) { Stop-Ei1Ablation "runner $RunnerId failed for $($row.scenario_id)/$($row.configuration_id): $output" }
         if (-not (Test-Path -LiteralPath $row.manifest.artifacts.receipt_path -PathType Leaf)) { Stop-Ei1Ablation "runner $RunnerId did not produce the requested receipt" }
