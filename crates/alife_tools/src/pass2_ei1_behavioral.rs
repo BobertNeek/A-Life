@@ -541,8 +541,9 @@ fn integer(object: &Map<String, Value>, key: &'static str) -> Result<u64, Pass2E
 mod selector_diagnostic_error_tests {
     use super::*;
     use alife_gpu_backend::{
-        GpuRuntimeSelectorDiagnosticErrorReceipt, GpuRuntimeSelectorDiagnosticFailureClass,
-        GpuRuntimeSelectorDiagnosticFailureStage, GpuRuntimeSelectorDiagnosticStage,
+        GpuClosedLoopError, GpuRuntimeSelectorDiagnosticErrorReceipt,
+        GpuRuntimeSelectorDiagnosticFailureClass, GpuRuntimeSelectorDiagnosticFailureStage,
+        GpuRuntimeSelectorDiagnosticStage,
     };
     use alife_training::Era1TrialRunError;
 
@@ -579,37 +580,58 @@ mod selector_diagnostic_error_tests {
             assert!(rendered.contains(field), "missing {field} in {rendered}");
         }
 
-        for (class, class_name) in [
+        for (stage, stage_name) in [
             (
-                GpuRuntimeSelectorDiagnosticFailureClass::CapacityExceeded,
-                "CapacityExceeded",
+                GpuRuntimeSelectorDiagnosticFailureStage::SelectorDiagnosticBytes,
+                "SelectorDiagnosticBytes",
             ),
             (
-                GpuRuntimeSelectorDiagnosticFailureClass::ArithmeticOverflow,
-                "ArithmeticOverflow",
-            ),
-            (
-                GpuRuntimeSelectorDiagnosticFailureClass::SubmissionFailed,
-                "SubmissionFailed",
+                GpuRuntimeSelectorDiagnosticFailureStage::DecodeMappedRecords,
+                "DecodeMappedRecords",
             ),
         ] {
-            let later = runner_failure(Era1TrialRunError::SelectorDiagnosticLaterStage(
-                GpuRuntimeSelectorDiagnosticFailureReceipt {
-                    stage: GpuRuntimeSelectorDiagnosticFailureStage::SelectorDiagnosticBytes,
-                    class,
-                    class_id: 2048,
-                    chunk_index: 3,
-                },
-            ));
-            let later_rendered = later.to_string();
-            for field in [class_name, "SelectorDiagnosticBytes", "class_id=2048", "chunk_index=3"] {
-                assert!(
-                    later_rendered.contains(field),
-                    "missing {field} in {later_rendered}"
-                );
+            for (error, class_name) in [
+                (
+                    GpuClosedLoopError::StaleOrForeignHandle,
+                    "StaleOrForeignHandle",
+                ),
+                (
+                    GpuClosedLoopError::SubmissionFailed,
+                    "SubmissionFailed",
+                ),
+                (
+                    GpuClosedLoopError::MalformedUpload,
+                    "MalformedUpload",
+                ),
+                (
+                    GpuClosedLoopError::ArithmeticOverflow,
+                    "ArithmeticOverflow",
+                ),
+                (
+                    GpuClosedLoopError::CapacityExceeded,
+                    "CapacityExceeded",
+                ),
+            ] {
+                let receipt = GpuRuntimeSelectorDiagnosticFailureReceipt::from_gpu_error_at_stage(
+                    stage,
+                    error,
+                    2048,
+                    3,
+                )
+                .expect("the five measured errors must retain receipts");
+                let later = runner_failure(Era1TrialRunError::SelectorDiagnosticLaterStage(
+                    receipt,
+                ));
+                let later_rendered = later.to_string();
+                for field in [class_name, stage_name, "class_id=2048", "chunk_index=3"] {
+                    assert!(
+                        later_rendered.contains(field),
+                        "missing {field} in {later_rendered}"
+                    );
+                }
+                assert!(later_rendered.contains("later-stage GPU failure"));
+                assert_ne!(rendered, later_rendered);
             }
-            assert!(later_rendered.contains("later-stage GPU failure"));
-            assert_ne!(rendered, later_rendered);
         }
 
         let later_contract = runner_failure(

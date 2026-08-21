@@ -506,14 +506,17 @@ pub struct GpuSelectorDiagnosticReceipt {
 /// crate-private pipeline boundary at the public runtime boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GpuRuntimeSelectorDiagnosticFailureClass {
-    CapacityExceeded,
-    ArithmeticOverflow,
+    StaleOrForeignHandle,
     SubmissionFailed,
+    MalformedUpload,
+    ArithmeticOverflow,
+    CapacityExceeded,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GpuRuntimeSelectorDiagnosticFailureStage {
     SelectorDiagnosticBytes,
+    DecodeMappedRecords,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -530,20 +533,40 @@ impl GpuRuntimeSelectorDiagnosticFailureReceipt {
         class_id: u16,
         chunk_index: usize,
     ) -> Option<Self> {
+        Self::from_gpu_error_at_stage(
+            GpuRuntimeSelectorDiagnosticFailureStage::SelectorDiagnosticBytes,
+            error,
+            class_id,
+            chunk_index,
+        )
+    }
+
+    pub const fn from_gpu_error_at_stage(
+        stage: GpuRuntimeSelectorDiagnosticFailureStage,
+        error: GpuClosedLoopError,
+        class_id: u16,
+        chunk_index: usize,
+    ) -> Option<Self> {
         let class = match error {
-            GpuClosedLoopError::CapacityExceeded => {
-                GpuRuntimeSelectorDiagnosticFailureClass::CapacityExceeded
-            }
-            GpuClosedLoopError::ArithmeticOverflow => {
-                GpuRuntimeSelectorDiagnosticFailureClass::ArithmeticOverflow
+            GpuClosedLoopError::StaleOrForeignHandle => {
+                GpuRuntimeSelectorDiagnosticFailureClass::StaleOrForeignHandle
             }
             GpuClosedLoopError::SubmissionFailed => {
                 GpuRuntimeSelectorDiagnosticFailureClass::SubmissionFailed
             }
+            GpuClosedLoopError::MalformedUpload => {
+                GpuRuntimeSelectorDiagnosticFailureClass::MalformedUpload
+            }
+            GpuClosedLoopError::ArithmeticOverflow => {
+                GpuRuntimeSelectorDiagnosticFailureClass::ArithmeticOverflow
+            }
+            GpuClosedLoopError::CapacityExceeded => {
+                GpuRuntimeSelectorDiagnosticFailureClass::CapacityExceeded
+            }
             _ => return None,
         };
         Some(Self {
-            stage: GpuRuntimeSelectorDiagnosticFailureStage::SelectorDiagnosticBytes,
+            stage,
             class,
             class_id,
             chunk_index,
@@ -552,14 +575,20 @@ impl GpuRuntimeSelectorDiagnosticFailureReceipt {
 
     pub const fn gpu_error(self) -> GpuClosedLoopError {
         match self.class {
-            GpuRuntimeSelectorDiagnosticFailureClass::CapacityExceeded => {
-                GpuClosedLoopError::CapacityExceeded
+            GpuRuntimeSelectorDiagnosticFailureClass::StaleOrForeignHandle => {
+                GpuClosedLoopError::StaleOrForeignHandle
+            }
+            GpuRuntimeSelectorDiagnosticFailureClass::SubmissionFailed => {
+                GpuClosedLoopError::SubmissionFailed
+            }
+            GpuRuntimeSelectorDiagnosticFailureClass::MalformedUpload => {
+                GpuClosedLoopError::MalformedUpload
             }
             GpuRuntimeSelectorDiagnosticFailureClass::ArithmeticOverflow => {
                 GpuClosedLoopError::ArithmeticOverflow
             }
-            GpuRuntimeSelectorDiagnosticFailureClass::SubmissionFailed => {
-                GpuClosedLoopError::SubmissionFailed
+            GpuRuntimeSelectorDiagnosticFailureClass::CapacityExceeded => {
+                GpuClosedLoopError::CapacityExceeded
             }
         }
     }
@@ -683,15 +712,21 @@ impl GpuRuntimeSelectorDiagnosticEnableFailure {
         match self {
             Self::Contract(error) => error,
             Self::Receipt(receipt) => match receipt.class {
+                GpuRuntimeSelectorDiagnosticFailureClass::StaleOrForeignHandle => {
+                    GpuClosedLoopError::StaleOrForeignHandle
+                }
+                GpuRuntimeSelectorDiagnosticFailureClass::SubmissionFailed => {
+                    GpuClosedLoopError::SubmissionFailed
+                }
+                GpuRuntimeSelectorDiagnosticFailureClass::MalformedUpload => {
+                    GpuClosedLoopError::MalformedUpload
+                }
+                GpuRuntimeSelectorDiagnosticFailureClass::ArithmeticOverflow => {
+                    GpuClosedLoopError::ArithmeticOverflow
+                }
                 GpuRuntimeSelectorDiagnosticFailureClass::CapacityExceeded => {
                     GpuClosedLoopError::CapacityExceeded
                 }
-            GpuRuntimeSelectorDiagnosticFailureClass::ArithmeticOverflow => {
-                GpuClosedLoopError::ArithmeticOverflow
-            }
-            GpuRuntimeSelectorDiagnosticFailureClass::SubmissionFailed => {
-                GpuClosedLoopError::SubmissionFailed
-            }
             },
         }
     }
@@ -4090,7 +4125,16 @@ impl GpuClosedLoopBackend {
                 dispatch.batch.as_ref().expect("mapped batch"),
             ) {
                 Ok(validated) => dispatches[index].validated = Some(validated),
-                Err(_) => {
+                Err(error) => {
+                    if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+                        capture.later_stage_receipt =
+                            GpuRuntimeSelectorDiagnosticFailureReceipt::from_gpu_error_at_stage(
+                                GpuRuntimeSelectorDiagnosticFailureStage::DecodeMappedRecords,
+                                error,
+                                dispatch.class_id,
+                                dispatch.chunk_index,
+                            );
+                    }
                     for still_mapped in &dispatches[index + 1..] {
                         self.class_buckets
                             .get(&still_mapped.class_id)
@@ -4111,7 +4155,7 @@ impl GpuClosedLoopBackend {
                         );
                     }
                     self.mark_device_lost();
-                    return Err(ScaffoldContractError::NeuralBackendUnavailable);
+                    return Err(map_gpu_contract_error(error));
                 }
             }
         }
