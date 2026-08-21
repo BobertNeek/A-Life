@@ -602,7 +602,9 @@ mod selector_diagnostic_error_tests {
 
     #[test]
     fn task3_preserves_apply_fast_plasticity_failure_receipt() {
-        use alife_gpu_backend::GpuRuntimeApplyFastPlasticityFailureClass;
+        use alife_gpu_backend::{
+            GpuRuntimeApplyFastPlasticityFailureClass, GpuRuntimeApplyFastPlasticityMalformedField,
+        };
 
         for (class, class_name) in [
             (
@@ -620,6 +622,13 @@ mod selector_diagnostic_error_tests {
                     class_id: 2048,
                     chunk_index: 3,
                     submitted_entry: 7,
+                    malformed_field: (class
+                        == GpuRuntimeApplyFastPlasticityFailureClass::MalformedUpload)
+                        .then_some(GpuRuntimeApplyFastPlasticityMalformedField::PendingSlot),
+                    expected: (class == GpuRuntimeApplyFastPlasticityFailureClass::MalformedUpload)
+                        .then_some([11, 0, 0, 0]),
+                    actual: (class == GpuRuntimeApplyFastPlasticityFailureClass::MalformedUpload)
+                        .then_some([12, 0, 0, 0]),
                 },
             ));
             let rendered = decoded.to_string();
@@ -630,6 +639,20 @@ mod selector_diagnostic_error_tests {
                 "submitted_entry=7",
             ] {
                 assert!(rendered.contains(field), "missing {field} in {rendered}");
+            }
+            if class == GpuRuntimeApplyFastPlasticityFailureClass::MalformedUpload {
+                for field in [
+                    "PendingSlot",
+                    "expected=[b, 0, 0, 0]",
+                    "actual=[c, 0, 0, 0]",
+                ] {
+                    assert!(rendered.contains(field), "missing {field} in {rendered}");
+                }
+            } else {
+                assert!(
+                    !rendered.contains("expected="),
+                    "unexpected values in {rendered}"
+                );
             }
         }
     }

@@ -499,6 +499,86 @@ pub(crate) struct GpuFastPlasticityBatchEntry<'a> {
     pub transaction_generation: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GpuFastPlasticityMalformedField {
+    BrainSlotIndex,
+    DuplicateSlotGeneration,
+    PendingSlot,
+    PendingSlotGeneration,
+    RecordSchemaVersion,
+    SelectionOffset,
+    SynapseCountNonZero,
+    RecurrentSynapseCountNonZero,
+    RecurrentSynapseCountLessThanTotal,
+    OutcomeSchemaVersion,
+    OutcomeActiveActivationSideRange,
+    OutcomeActiveActivationSide,
+    OutcomeOrganismId,
+    OutcomePhenotypeHash,
+    OutcomeDispatchGeneration,
+    OutcomeOriginatingTick,
+    OutcomeFrameDigest,
+    OutcomeCandidateAndFamily,
+    OutcomeActionId,
+    OutcomeCandidateFeatureDigest,
+    PendingSchemaVersion,
+    StagingEligibilityGeneration,
+    ActiveWeightGenerationNonZero,
+    ReplayGenerationNonZero,
+    TransactionGenerationNonZero,
+    ReplaySpanEndAtLeastStart,
+    ReplaySpanNonZero,
+    ReplaySpanMultipleOfFour,
+    CommitRecordWordCount,
+    CommitSchemaVersion,
+    CommitSlot,
+    CommitSlotGeneration,
+    CommitStatus,
+    CommitInputFastGeneration,
+    CommitOutputFastGeneration,
+    CommitOutputEligibilityGeneration,
+    CommitReplayGeneration,
+    CommitTransactionGeneration,
+    CommitFastWeightsChangedRange,
+    CommitMaxAbsDeltaFinite,
+    CommitMaxAbsDeltaNonNegative,
+    CommitZeroChangeDelta,
+    CommitPositiveChangeDelta,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct GpuFastPlasticityMalformedReceipt {
+    pub field: GpuFastPlasticityMalformedField,
+    pub expected: [u64; 4],
+    pub actual: [u64; 4],
+}
+
+impl GpuFastPlasticityMalformedReceipt {
+    const fn scalar(field: GpuFastPlasticityMalformedField, expected: u64, actual: u64) -> Self {
+        Self {
+            field,
+            expected: [expected, 0, 0, 0],
+            actual: [actual, 0, 0, 0],
+        }
+    }
+
+    fn words(field: GpuFastPlasticityMalformedField, expected: &[u32], actual: &[u32]) -> Self {
+        fn pack(words: &[u32]) -> [u64; 4] {
+            let mut packed = [0_u64; 4];
+            for (index, pair) in words.chunks(2).take(4).enumerate() {
+                packed[index] =
+                    u64::from(pair[0]) | (pair.get(1).copied().map(u64::from).unwrap_or(0) << 32);
+            }
+            packed
+        }
+        Self {
+            field,
+            expected: pack(expected),
+            actual: pack(actual),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct GpuActiveBatchEntry<'a> {
     frame: &'a PerceptionFrame,
@@ -1659,6 +1739,7 @@ pub struct GpuClosedLoopPipelines {
     dispatch_capacity_words: usize,
     frame_payload_capacity_words: usize,
     next_authority_nonce: u64,
+    last_fast_plasticity_malformed: Option<GpuFastPlasticityMalformedReceipt>,
     #[cfg(feature = "gpu-tests")]
     force_all_invalid_slot: Option<(u32, u32)>,
     #[cfg(feature = "gpu-tests")]
@@ -1723,6 +1804,7 @@ impl GpuClosedLoopPipelines {
             dispatch_capacity_words: buffers.dispatch_capacity_words(),
             frame_payload_capacity_words: buffers.frame_payload_capacity_words(),
             next_authority_nonce: 1,
+            last_fast_plasticity_malformed: None,
             #[cfg(feature = "gpu-tests")]
             force_all_invalid_slot: None,
             #[cfg(feature = "gpu-tests")]
@@ -2143,6 +2225,12 @@ impl GpuClosedLoopPipelines {
         Ok(())
     }
 
+    pub(crate) fn take_fast_plasticity_malformed_receipt(
+        &mut self,
+    ) -> Option<GpuFastPlasticityMalformedReceipt> {
+        self.last_fast_plasticity_malformed.take()
+    }
+
     pub(crate) fn apply_fast_plasticity(
         &mut self,
         device: &wgpu::Device,
@@ -2151,6 +2239,7 @@ impl GpuClosedLoopPipelines {
         entries: &[GpuFastPlasticityBatchEntry<'_>],
         timestamp: GpuTimestampQueryResources<'_>,
     ) -> Result<GpuTimedFastPlasticityResult, GpuClosedLoopError> {
+        self.last_fast_plasticity_malformed = None;
         self.authority.ensure_healthy()?;
         if self.authority.pending.is_some()
             || entries.is_empty()
@@ -2169,57 +2258,223 @@ impl GpuClosedLoopPipelines {
         let mut frame_words = Vec::with_capacity(entries.len() * GPU_OUTCOME_CREDIT_WORDS);
         let mut max_synapse_count = 0_u32;
         let mut max_replay_span_count = 0_u32;
+        macro_rules! malformed {
+            ($receipt:expr) => {{
+                self.last_fast_plasticity_malformed = Some($receipt);
+                return Err(GpuClosedLoopError::MalformedUpload);
+            }};
+        }
         for (row, entry) in entries.iter().enumerate() {
             let record = entry.slot.record();
             let pending = entry.pending;
             let outcome = entry.outcome;
-            if entry.slot.brain_slot_index() != record.slot
-                || !seen.insert((record.slot, record.slot_generation))
-                || record.slot != pending.slot
-                || record.slot_generation != pending.slot_generation
-                || record.schema_version != crate::GPU_CLOSED_LOOP_LAYOUT_VERSION
-                || record.selection_offset != record.diagnostic_offset + 4
-                || record.synapse_count == 0
-                || record.recurrent_synapse_count == 0
-                || record.recurrent_synapse_count >= record.synapse_count
-                || outcome.schema_version != u32::from(SchemaVersions::CURRENT.learning.raw())
-                || outcome.active_activation_side > 1
-                || outcome.active_activation_side != pending.active_activation_side
-                || outcome.organism_id != pending.organism_id
-                || outcome.phenotype_hash != pending.phenotype_hash
-                || outcome.dispatch_generation != pending.dispatch_generation
-                || outcome.originating_tick != pending.originating_tick
-                || outcome.frame_digest != pending.frame_digest
-                || outcome.selected_candidate_and_family != pending.candidate_index_and_family
-                || outcome.selected_action != pending.action_id
-                || outcome.candidate_feature_digest != pending.candidate_feature_digest
-                || pending.schema_version != u32::from(SchemaVersions::CURRENT.learning.raw())
-                || (u64::from(pending.staging_eligibility_generation[0])
-                    | (u64::from(pending.staging_eligibility_generation[1]) << 32))
-                    != (u64::from(pending.active_eligibility_generation[0])
-                        | (u64::from(pending.active_eligibility_generation[1]) << 32))
-                        .checked_add(1)
-                        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?
-                || entry.active_weight_generation == 0
-                || entry.replay_generation == 0
-                || entry.transaction_generation == 0
-            {
-                return Err(GpuClosedLoopError::MalformedUpload);
+            let scalar = GpuFastPlasticityMalformedReceipt::scalar;
+            let words = GpuFastPlasticityMalformedReceipt::words;
+            if entry.slot.brain_slot_index() != record.slot {
+                malformed!(scalar(
+                    GpuFastPlasticityMalformedField::BrainSlotIndex,
+                    u64::from(record.slot),
+                    u64::from(entry.slot.brain_slot_index()),
+                ));
             }
-            let decoder_synapse_count = record
-                .synapse_count
-                .checked_sub(record.recurrent_synapse_count)
-                .ok_or(GpuClosedLoopError::MalformedUpload)?;
-            let replay_span_words = entry
-                .slot
-                .word_ranges()
-                .replay_span_words
-                .end
-                .checked_sub(entry.slot.word_ranges().replay_span_words.start)
-                .ok_or(GpuClosedLoopError::MalformedUpload)?;
-            if replay_span_words == 0 || replay_span_words % 4 != 0 {
-                return Err(GpuClosedLoopError::MalformedUpload);
+            if !seen.insert((record.slot, record.slot_generation)) {
+                malformed!(GpuFastPlasticityMalformedReceipt {
+                    field: GpuFastPlasticityMalformedField::DuplicateSlotGeneration,
+                    expected: [0; 4],
+                    actual: [
+                        u64::from(record.slot) | (u64::from(record.slot_generation) << 32),
+                        0,
+                        0,
+                        0,
+                    ],
+                });
             }
+            for (field, expected, actual) in [
+                (
+                    GpuFastPlasticityMalformedField::PendingSlot,
+                    record.slot,
+                    pending.slot,
+                ),
+                (
+                    GpuFastPlasticityMalformedField::PendingSlotGeneration,
+                    record.slot_generation,
+                    pending.slot_generation,
+                ),
+                (
+                    GpuFastPlasticityMalformedField::RecordSchemaVersion,
+                    crate::GPU_CLOSED_LOOP_LAYOUT_VERSION,
+                    record.schema_version,
+                ),
+                (
+                    GpuFastPlasticityMalformedField::SelectionOffset,
+                    record
+                        .diagnostic_offset
+                        .checked_add(4)
+                        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+                    record.selection_offset,
+                ),
+            ] {
+                if actual != expected {
+                    malformed!(scalar(field, u64::from(expected), u64::from(actual)));
+                }
+            }
+            for (field, actual) in [
+                (
+                    GpuFastPlasticityMalformedField::SynapseCountNonZero,
+                    record.synapse_count,
+                ),
+                (
+                    GpuFastPlasticityMalformedField::RecurrentSynapseCountNonZero,
+                    record.recurrent_synapse_count,
+                ),
+            ] {
+                if actual == 0 {
+                    malformed!(scalar(field, 1, 0));
+                }
+            }
+            if record.recurrent_synapse_count >= record.synapse_count {
+                malformed!(scalar(
+                    GpuFastPlasticityMalformedField::RecurrentSynapseCountLessThanTotal,
+                    u64::from(record.synapse_count.saturating_sub(1)),
+                    u64::from(record.recurrent_synapse_count),
+                ));
+            }
+            let current_learning_schema = u32::from(SchemaVersions::CURRENT.learning.raw());
+            if outcome.schema_version != current_learning_schema {
+                malformed!(scalar(
+                    GpuFastPlasticityMalformedField::OutcomeSchemaVersion,
+                    u64::from(current_learning_schema),
+                    u64::from(outcome.schema_version),
+                ));
+            }
+            if outcome.active_activation_side > 1 {
+                malformed!(scalar(
+                    GpuFastPlasticityMalformedField::OutcomeActiveActivationSideRange,
+                    1,
+                    u64::from(outcome.active_activation_side),
+                ));
+            }
+            if outcome.active_activation_side != pending.active_activation_side {
+                malformed!(scalar(
+                    GpuFastPlasticityMalformedField::OutcomeActiveActivationSide,
+                    u64::from(pending.active_activation_side),
+                    u64::from(outcome.active_activation_side),
+                ));
+            }
+            for (field, expected, actual) in [
+                (
+                    GpuFastPlasticityMalformedField::OutcomeOrganismId,
+                    pending.organism_id.as_slice(),
+                    outcome.organism_id.as_slice(),
+                ),
+                (
+                    GpuFastPlasticityMalformedField::OutcomePhenotypeHash,
+                    pending.phenotype_hash.as_slice(),
+                    outcome.phenotype_hash.as_slice(),
+                ),
+                (
+                    GpuFastPlasticityMalformedField::OutcomeDispatchGeneration,
+                    pending.dispatch_generation.as_slice(),
+                    outcome.dispatch_generation.as_slice(),
+                ),
+                (
+                    GpuFastPlasticityMalformedField::OutcomeOriginatingTick,
+                    pending.originating_tick.as_slice(),
+                    outcome.originating_tick.as_slice(),
+                ),
+                (
+                    GpuFastPlasticityMalformedField::OutcomeFrameDigest,
+                    pending.frame_digest.as_slice(),
+                    outcome.frame_digest.as_slice(),
+                ),
+                (
+                    GpuFastPlasticityMalformedField::OutcomeCandidateFeatureDigest,
+                    pending.candidate_feature_digest.as_slice(),
+                    outcome.candidate_feature_digest.as_slice(),
+                ),
+            ] {
+                if actual != expected {
+                    malformed!(words(field, expected, actual));
+                }
+            }
+            for (field, expected, actual) in [
+                (
+                    GpuFastPlasticityMalformedField::OutcomeCandidateAndFamily,
+                    pending.candidate_index_and_family,
+                    outcome.selected_candidate_and_family,
+                ),
+                (
+                    GpuFastPlasticityMalformedField::OutcomeActionId,
+                    pending.action_id,
+                    outcome.selected_action,
+                ),
+                (
+                    GpuFastPlasticityMalformedField::PendingSchemaVersion,
+                    current_learning_schema,
+                    pending.schema_version,
+                ),
+            ] {
+                if actual != expected {
+                    malformed!(scalar(field, u64::from(expected), u64::from(actual)));
+                }
+            }
+            let active_eligibility_generation = u64::from(pending.active_eligibility_generation[0])
+                | (u64::from(pending.active_eligibility_generation[1]) << 32);
+            let staging_eligibility_generation =
+                u64::from(pending.staging_eligibility_generation[0])
+                    | (u64::from(pending.staging_eligibility_generation[1]) << 32);
+            let expected_staging = active_eligibility_generation
+                .checked_add(1)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+            if staging_eligibility_generation != expected_staging {
+                malformed!(scalar(
+                    GpuFastPlasticityMalformedField::StagingEligibilityGeneration,
+                    expected_staging,
+                    staging_eligibility_generation,
+                ));
+            }
+            for (field, actual) in [
+                (
+                    GpuFastPlasticityMalformedField::ActiveWeightGenerationNonZero,
+                    entry.active_weight_generation,
+                ),
+                (
+                    GpuFastPlasticityMalformedField::ReplayGenerationNonZero,
+                    entry.replay_generation,
+                ),
+                (
+                    GpuFastPlasticityMalformedField::TransactionGenerationNonZero,
+                    entry.transaction_generation,
+                ),
+            ] {
+                if actual == 0 {
+                    malformed!(scalar(field, 1, 0));
+                }
+            }
+            let replay_range = &entry.slot.word_ranges().replay_span_words;
+            if replay_range.end < replay_range.start {
+                malformed!(scalar(
+                    GpuFastPlasticityMalformedField::ReplaySpanEndAtLeastStart,
+                    u64::from(replay_range.start),
+                    u64::from(replay_range.end),
+                ));
+            }
+            let replay_span_words = replay_range.end - replay_range.start;
+            if replay_span_words == 0 {
+                malformed!(scalar(
+                    GpuFastPlasticityMalformedField::ReplaySpanNonZero,
+                    1,
+                    0,
+                ));
+            }
+            if replay_span_words % 4 != 0 {
+                malformed!(scalar(
+                    GpuFastPlasticityMalformedField::ReplaySpanMultipleOfFour,
+                    0,
+                    u64::from(replay_span_words % 4),
+                ));
+            }
+            let decoder_synapse_count = record.synapse_count - record.recurrent_synapse_count;
             let replay_span_count = replay_span_words / 4;
             max_synapse_count = max_synapse_count.max(record.synapse_count);
             max_replay_span_count = max_replay_span_count.max(replay_span_count);
@@ -2420,7 +2675,17 @@ impl GpuClosedLoopPipelines {
             .chunks_exact(GPU_FAST_PLASTICITY_COMMIT_WORDS)
             .zip(entries)
         {
-            let record = GpuFastPlasticityCommitRecord::from_words(row)?;
+            let record = match GpuFastPlasticityCommitRecord::from_words(row) {
+                Ok(record) => record,
+                Err(GpuClosedLoopError::MalformedUpload) => {
+                    malformed!(GpuFastPlasticityMalformedReceipt::scalar(
+                        GpuFastPlasticityMalformedField::CommitRecordWordCount,
+                        GPU_FAST_PLASTICITY_COMMIT_WORDS as u64,
+                        row.len() as u64,
+                    ))
+                }
+                Err(error) => return Err(error),
+            };
             let expected_fast = entry
                 .active_weight_generation
                 .checked_add(1)
@@ -2436,22 +2701,92 @@ impl GpuClosedLoopPipelines {
             let expected_eligibility = u64::from(entry.pending.staging_eligibility_generation[0])
                 | (u64::from(entry.pending.staging_eligibility_generation[1]) << 32);
             let max_abs_delta = record.max_abs_delta();
-            if record.schema_version != u32::from(SchemaVersions::CURRENT.learning.raw())
-                || record.slot != entry.slot.record().slot
-                || record.slot_generation != entry.slot.record().slot_generation
-                || record.status != 1
-                || record.input_fast_generation() != entry.active_weight_generation
-                || record.output_fast_generation() != expected_fast
-                || record.output_eligibility_generation() != expected_eligibility
-                || record.replay_generation() != expected_replay
-                || record.transaction_generation() != expected_transaction
-                || record.fast_weights_changed > entry.slot.record().synapse_count
-                || !max_abs_delta.is_finite()
-                || max_abs_delta < 0.0
-                || (record.fast_weights_changed == 0 && max_abs_delta != 0.0)
-                || (record.fast_weights_changed > 0 && max_abs_delta <= 0.0)
-            {
-                return Err(GpuClosedLoopError::MalformedUpload);
+            let scalar = GpuFastPlasticityMalformedReceipt::scalar;
+            for (field, expected, actual) in [
+                (
+                    GpuFastPlasticityMalformedField::CommitSchemaVersion,
+                    u64::from(SchemaVersions::CURRENT.learning.raw()),
+                    u64::from(record.schema_version),
+                ),
+                (
+                    GpuFastPlasticityMalformedField::CommitSlot,
+                    u64::from(entry.slot.record().slot),
+                    u64::from(record.slot),
+                ),
+                (
+                    GpuFastPlasticityMalformedField::CommitSlotGeneration,
+                    u64::from(entry.slot.record().slot_generation),
+                    u64::from(record.slot_generation),
+                ),
+                (
+                    GpuFastPlasticityMalformedField::CommitStatus,
+                    1,
+                    u64::from(record.status),
+                ),
+                (
+                    GpuFastPlasticityMalformedField::CommitInputFastGeneration,
+                    entry.active_weight_generation,
+                    record.input_fast_generation(),
+                ),
+                (
+                    GpuFastPlasticityMalformedField::CommitOutputFastGeneration,
+                    expected_fast,
+                    record.output_fast_generation(),
+                ),
+                (
+                    GpuFastPlasticityMalformedField::CommitOutputEligibilityGeneration,
+                    expected_eligibility,
+                    record.output_eligibility_generation(),
+                ),
+                (
+                    GpuFastPlasticityMalformedField::CommitReplayGeneration,
+                    expected_replay,
+                    record.replay_generation(),
+                ),
+                (
+                    GpuFastPlasticityMalformedField::CommitTransactionGeneration,
+                    expected_transaction,
+                    record.transaction_generation(),
+                ),
+            ] {
+                if actual != expected {
+                    malformed!(scalar(field, expected, actual));
+                }
+            }
+            if record.fast_weights_changed > entry.slot.record().synapse_count {
+                malformed!(scalar(
+                    GpuFastPlasticityMalformedField::CommitFastWeightsChangedRange,
+                    u64::from(entry.slot.record().synapse_count),
+                    u64::from(record.fast_weights_changed),
+                ));
+            }
+            if !max_abs_delta.is_finite() {
+                malformed!(scalar(
+                    GpuFastPlasticityMalformedField::CommitMaxAbsDeltaFinite,
+                    1,
+                    0,
+                ));
+            }
+            if max_abs_delta < 0.0 {
+                malformed!(scalar(
+                    GpuFastPlasticityMalformedField::CommitMaxAbsDeltaNonNegative,
+                    0_f32.to_bits().into(),
+                    max_abs_delta.to_bits().into(),
+                ));
+            }
+            if record.fast_weights_changed == 0 && max_abs_delta != 0.0 {
+                malformed!(scalar(
+                    GpuFastPlasticityMalformedField::CommitZeroChangeDelta,
+                    0_f32.to_bits().into(),
+                    max_abs_delta.to_bits().into(),
+                ));
+            }
+            if record.fast_weights_changed > 0 && max_abs_delta <= 0.0 {
+                malformed!(scalar(
+                    GpuFastPlasticityMalformedField::CommitPositiveChangeDelta,
+                    0_f32.to_bits().into(),
+                    max_abs_delta.to_bits().into(),
+                ));
             }
             records.push(record);
         }
@@ -3459,11 +3794,9 @@ impl GpuClosedLoopPipelines {
                 | (u64::from(record.dispatch_generation_hi) << 32);
             let expected_generation = u64::from(header.dispatch_generation_lo)
                 | (u64::from(header.dispatch_generation_hi) << 32);
-            let expected_side = Self::final_activation_side(
-                header.active_activation_side,
-                header.microstep_count,
-            )
-            .ok();
+            let expected_side =
+                Self::final_activation_side(header.active_activation_side, header.microstep_count)
+                    .ok();
             if record.slot != header.slot {
                 return failure(
                     GpuSelectionValidationField::Slot,
@@ -4294,8 +4627,8 @@ mod lifecycle_tests {
                 {
                     return false;
                 }
-                let Some(detail_words) = synapse_count
-                    .checked_mul(GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS)
+                let Some(detail_words) =
+                    synapse_count.checked_mul(GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS)
                 else {
                     return false;
                 };
@@ -4324,9 +4657,7 @@ mod lifecycle_tests {
         ));
         let abi_shader = include_str!("../shaders/closed_loop_abi.wgsl");
         assert!(abi_shader.contains("sparse_selector_request_spans_valid(header)"));
-        assert!(!abi_shader.contains(
-            "decoder_synapse_count * SELECTOR_RECEIPT_RECORD_WORDS"
-        ));
+        assert!(!abi_shader.contains("decoder_synapse_count * SELECTOR_RECEIPT_RECORD_WORDS"));
     }
 
     #[test]

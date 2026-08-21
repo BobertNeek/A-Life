@@ -26,6 +26,7 @@ use crate::closed_loop_buffers::GpuFixedSlotUpload;
 use crate::closed_loop_pipeline::{
     GpuDecodeMappedRecordsDiagnostic as PipelineDecodeMappedRecordsDiagnostic,
     GpuDecodeMappedRecordsSubstage as PipelineDecodeMappedRecordsSubstage,
+    GpuFastPlasticityMalformedField as PipelineFastPlasticityMalformedField,
     GpuSelectionValidationFailure as PipelineSelectionValidationFailure,
     GpuSelectionValidationField as PipelineSelectionValidationField,
     GpuSelectorDiagnosticEnableError as PipelineSelectorDiagnosticEnableError,
@@ -407,6 +408,109 @@ pub enum GpuRuntimeApplyFastPlasticityFailureClass {
     StaleOrForeignHandle,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuRuntimeApplyFastPlasticityMalformedField {
+    BrainSlotIndex,
+    DuplicateSlotGeneration,
+    PendingSlot,
+    PendingSlotGeneration,
+    RecordSchemaVersion,
+    SelectionOffset,
+    SynapseCountNonZero,
+    RecurrentSynapseCountNonZero,
+    RecurrentSynapseCountLessThanTotal,
+    OutcomeSchemaVersion,
+    OutcomeActiveActivationSideRange,
+    OutcomeActiveActivationSide,
+    OutcomeOrganismId,
+    OutcomePhenotypeHash,
+    OutcomeDispatchGeneration,
+    OutcomeOriginatingTick,
+    OutcomeFrameDigest,
+    OutcomeCandidateAndFamily,
+    OutcomeActionId,
+    OutcomeCandidateFeatureDigest,
+    PendingSchemaVersion,
+    StagingEligibilityGeneration,
+    ActiveWeightGenerationNonZero,
+    ReplayGenerationNonZero,
+    TransactionGenerationNonZero,
+    ReplaySpanEndAtLeastStart,
+    ReplaySpanNonZero,
+    ReplaySpanMultipleOfFour,
+    CommitRecordWordCount,
+    CommitSchemaVersion,
+    CommitSlot,
+    CommitSlotGeneration,
+    CommitStatus,
+    CommitInputFastGeneration,
+    CommitOutputFastGeneration,
+    CommitOutputEligibilityGeneration,
+    CommitReplayGeneration,
+    CommitTransactionGeneration,
+    CommitFastWeightsChangedRange,
+    CommitMaxAbsDeltaFinite,
+    CommitMaxAbsDeltaNonNegative,
+    CommitZeroChangeDelta,
+    CommitPositiveChangeDelta,
+}
+
+impl From<PipelineFastPlasticityMalformedField> for GpuRuntimeApplyFastPlasticityMalformedField {
+    fn from(field: PipelineFastPlasticityMalformedField) -> Self {
+        use GpuRuntimeApplyFastPlasticityMalformedField as Runtime;
+        use PipelineFastPlasticityMalformedField as Pipeline;
+        match field {
+            Pipeline::BrainSlotIndex => Runtime::BrainSlotIndex,
+            Pipeline::DuplicateSlotGeneration => Runtime::DuplicateSlotGeneration,
+            Pipeline::PendingSlot => Runtime::PendingSlot,
+            Pipeline::PendingSlotGeneration => Runtime::PendingSlotGeneration,
+            Pipeline::RecordSchemaVersion => Runtime::RecordSchemaVersion,
+            Pipeline::SelectionOffset => Runtime::SelectionOffset,
+            Pipeline::SynapseCountNonZero => Runtime::SynapseCountNonZero,
+            Pipeline::RecurrentSynapseCountNonZero => Runtime::RecurrentSynapseCountNonZero,
+            Pipeline::RecurrentSynapseCountLessThanTotal => {
+                Runtime::RecurrentSynapseCountLessThanTotal
+            }
+            Pipeline::OutcomeSchemaVersion => Runtime::OutcomeSchemaVersion,
+            Pipeline::OutcomeActiveActivationSideRange => Runtime::OutcomeActiveActivationSideRange,
+            Pipeline::OutcomeActiveActivationSide => Runtime::OutcomeActiveActivationSide,
+            Pipeline::OutcomeOrganismId => Runtime::OutcomeOrganismId,
+            Pipeline::OutcomePhenotypeHash => Runtime::OutcomePhenotypeHash,
+            Pipeline::OutcomeDispatchGeneration => Runtime::OutcomeDispatchGeneration,
+            Pipeline::OutcomeOriginatingTick => Runtime::OutcomeOriginatingTick,
+            Pipeline::OutcomeFrameDigest => Runtime::OutcomeFrameDigest,
+            Pipeline::OutcomeCandidateAndFamily => Runtime::OutcomeCandidateAndFamily,
+            Pipeline::OutcomeActionId => Runtime::OutcomeActionId,
+            Pipeline::OutcomeCandidateFeatureDigest => Runtime::OutcomeCandidateFeatureDigest,
+            Pipeline::PendingSchemaVersion => Runtime::PendingSchemaVersion,
+            Pipeline::StagingEligibilityGeneration => Runtime::StagingEligibilityGeneration,
+            Pipeline::ActiveWeightGenerationNonZero => Runtime::ActiveWeightGenerationNonZero,
+            Pipeline::ReplayGenerationNonZero => Runtime::ReplayGenerationNonZero,
+            Pipeline::TransactionGenerationNonZero => Runtime::TransactionGenerationNonZero,
+            Pipeline::ReplaySpanEndAtLeastStart => Runtime::ReplaySpanEndAtLeastStart,
+            Pipeline::ReplaySpanNonZero => Runtime::ReplaySpanNonZero,
+            Pipeline::ReplaySpanMultipleOfFour => Runtime::ReplaySpanMultipleOfFour,
+            Pipeline::CommitRecordWordCount => Runtime::CommitRecordWordCount,
+            Pipeline::CommitSchemaVersion => Runtime::CommitSchemaVersion,
+            Pipeline::CommitSlot => Runtime::CommitSlot,
+            Pipeline::CommitSlotGeneration => Runtime::CommitSlotGeneration,
+            Pipeline::CommitStatus => Runtime::CommitStatus,
+            Pipeline::CommitInputFastGeneration => Runtime::CommitInputFastGeneration,
+            Pipeline::CommitOutputFastGeneration => Runtime::CommitOutputFastGeneration,
+            Pipeline::CommitOutputEligibilityGeneration => {
+                Runtime::CommitOutputEligibilityGeneration
+            }
+            Pipeline::CommitReplayGeneration => Runtime::CommitReplayGeneration,
+            Pipeline::CommitTransactionGeneration => Runtime::CommitTransactionGeneration,
+            Pipeline::CommitFastWeightsChangedRange => Runtime::CommitFastWeightsChangedRange,
+            Pipeline::CommitMaxAbsDeltaFinite => Runtime::CommitMaxAbsDeltaFinite,
+            Pipeline::CommitMaxAbsDeltaNonNegative => Runtime::CommitMaxAbsDeltaNonNegative,
+            Pipeline::CommitZeroChangeDelta => Runtime::CommitZeroChangeDelta,
+            Pipeline::CommitPositiveChangeDelta => Runtime::CommitPositiveChangeDelta,
+        }
+    }
+}
+
 /// Lossless identity for a rejected fast-plasticity submission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GpuRuntimeApplyFastPlasticityFailureReceipt {
@@ -415,6 +519,9 @@ pub struct GpuRuntimeApplyFastPlasticityFailureReceipt {
     pub chunk_index: usize,
     /// Original batch index of the first entry in the rejected GPU submission.
     pub submitted_entry: usize,
+    pub malformed_field: Option<GpuRuntimeApplyFastPlasticityMalformedField>,
+    pub expected: Option<[u64; 4]>,
+    pub actual: Option<[u64; 4]>,
 }
 
 impl std::fmt::Display for GpuRuntimeApplyFastPlasticityFailureReceipt {
@@ -423,7 +530,16 @@ impl std::fmt::Display for GpuRuntimeApplyFastPlasticityFailureReceipt {
             formatter,
             "apply_fast_plasticity {:?}: class_id={}, chunk_index={}, submitted_entry={}",
             self.class, self.class_id, self.chunk_index, self.submitted_entry
-        )
+        )?;
+        if let (Some(field), Some(expected), Some(actual)) =
+            (self.malformed_field, self.expected, self.actual)
+        {
+            write!(
+                formatter,
+                ", field={field:?}, expected={expected:x?}, actual={actual:x?}"
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -3813,13 +3929,13 @@ impl GpuClosedLoopBackend {
                     }
                 })
                 .collect::<Vec<_>>();
-            let gpu_result = {
+            let (gpu_result, malformed_receipt) = {
                 let bucket = self
                     .class_buckets
                     .get_mut(&class_id)
                     .and_then(|pool| pool.chunks.get_mut(chunk_index))
                     .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-                bucket.pipelines.apply_fast_plasticity(
+                let result = bucket.pipelines.apply_fast_plasticity(
                     &self.device,
                     &self.queue,
                     &bucket.buffers,
@@ -3829,7 +3945,9 @@ impl GpuClosedLoopBackend {
                         &self.plasticity_timestamp_resources.resolve_buffer,
                         &self.plasticity_timestamp_resources.readback_buffer,
                     ),
-                )
+                );
+                let malformed_receipt = bucket.pipelines.take_fast_plasticity_malformed_receipt();
+                (result, malformed_receipt)
             };
             let gpu_timed_result = match gpu_result {
                 Ok(result) => result,
@@ -3852,6 +3970,9 @@ impl GpuClosedLoopBackend {
                             class_id,
                             chunk_index,
                             submitted_entry,
+                            malformed_field: malformed_receipt.map(|receipt| receipt.field.into()),
+                            expected: malformed_receipt.map(|receipt| receipt.expected),
+                            actual: malformed_receipt.map(|receipt| receipt.actual),
                         });
                     return Err(ScaffoldContractError::LearningEvidenceMismatch);
                 }
