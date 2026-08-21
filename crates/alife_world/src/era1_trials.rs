@@ -23,6 +23,12 @@ const NOVEL_LABEL: &str = "era1-novel";
 const OBJECT_A_LABEL: &str = "era1-object-a";
 const OBJECT_B_LABEL: &str = "era1-object-b";
 const CUE_LABEL: &str = "era1-cue";
+const HAZARD_A_LABEL: &str = "era1-hazard-a";
+const HAZARD_B_LABEL: &str = "era1-hazard-b";
+const WALL_A_LABEL: &str = "era1-wall-a";
+const WALL_B_LABEL: &str = "era1-wall-b";
+const WALL_C_LABEL: &str = "era1-wall-c";
+const ACQUISITION_HIDDEN_DISTANCE: f32 = 16.0;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -172,17 +178,37 @@ pub fn build_era1_trial_world(
 
     builder = match manifest.family {
         Era1WorldFamily::ForagingHazardMaze => builder
-            .food(OBJECT_A_LABEL, position(manifest, 2.0, 1.0), 0.7)
+            .food(
+                OBJECT_A_LABEL,
+                position(manifest, ACQUISITION_HIDDEN_DISTANCE, 1.0),
+                0.7,
+            )
             .grounded_physical(OBJECT_A_LABEL, physical(1))
-            .food(OBJECT_B_LABEL, position(manifest, -3.0, 2.0), 0.45)
+            .food(
+                OBJECT_B_LABEL,
+                position(manifest, -ACQUISITION_HIDDEN_DISTANCE, 2.0),
+                0.45,
+            )
             .grounded_physical(OBJECT_B_LABEL, physical(2))
-            .hazard("era1-hazard-a", position(manifest, 1.0, 0.0), 0.8)
-            .grounded_physical("era1-hazard-a", physical(3))
-            .hazard("era1-hazard-b", position(manifest, -2.0, -2.0), 0.55)
-            .grounded_physical("era1-hazard-b", physical(4))
-            .obstacle("era1-wall-a", position(manifest, 1.0, -2.0), 0.45)
-            .obstacle("era1-wall-b", position(manifest, -1.0, 1.0), 0.45)
-            .obstacle("era1-wall-c", position(manifest, -1.0, -1.0), 0.45),
+            .hazard(HAZARD_A_LABEL, position(manifest, 1.0, 0.0), 0.8)
+            .grounded_physical(HAZARD_A_LABEL, physical(3))
+            .hazard(HAZARD_B_LABEL, position(manifest, -2.0, -2.0), 0.55)
+            .grounded_physical(HAZARD_B_LABEL, physical(4))
+            .obstacle(
+                WALL_A_LABEL,
+                position(manifest, ACQUISITION_HIDDEN_DISTANCE, -2.0),
+                0.45,
+            )
+            .obstacle(
+                WALL_B_LABEL,
+                position(manifest, -ACQUISITION_HIDDEN_DISTANCE, 1.0),
+                0.45,
+            )
+            .obstacle(
+                WALL_C_LABEL,
+                position(manifest, -ACQUISITION_HIDDEN_DISTANCE, -1.0),
+                0.45,
+            ),
         Era1WorldFamily::DelayedLocation => builder
             .food(OBJECT_A_LABEL, position(manifest, 3.0, 0.0), 0.65)
             .grounded_physical(OBJECT_A_LABEL, physical(1))
@@ -286,6 +312,13 @@ pub fn apply_era1_world_transition(
     }
 
     match (manifest.family, transition.to) {
+        (Era1WorldFamily::ForagingHazardMaze, Era1TrialPhase::Delay) => {
+            move_label_preserving_physical(world, OBJECT_A_LABEL, position(manifest, 2.0, 1.0))?;
+            move_label_preserving_physical(world, OBJECT_B_LABEL, position(manifest, -3.0, 2.0))?;
+            move_label_preserving_physical(world, WALL_A_LABEL, position(manifest, 1.0, -2.0))?;
+            move_label_preserving_physical(world, WALL_B_LABEL, position(manifest, -1.0, 1.0))?;
+            move_label_preserving_physical(world, WALL_C_LABEL, position(manifest, -1.0, -1.0))?;
+        }
         (Era1WorldFamily::DelayedLocation, Era1TrialPhase::Delay)
         | (Era1WorldFamily::TwoStepAccessProblem, Era1TrialPhase::Delay) => {
             remove_label(world, CUE_LABEL)?;
@@ -353,6 +386,22 @@ fn move_label(
         .entity_id(label)
         .ok_or(ScaffoldContractError::InvalidId)?;
     world.editor_move_object(id, destination)
+}
+
+fn move_label_preserving_physical(
+    world: &mut HeadlessWorld,
+    label: &str,
+    destination: Vec3f,
+) -> Result<(), ScaffoldContractError> {
+    let id = world
+        .entity_id(label)
+        .ok_or(ScaffoldContractError::InvalidId)?;
+    let physical = world
+        .entity(id)
+        .ok_or(ScaffoldContractError::InvalidId)?
+        .grounded_physical;
+    world.editor_move_object(id, destination)?;
+    world.set_grounded_physical_properties(id, physical)
 }
 
 fn swap_positions(

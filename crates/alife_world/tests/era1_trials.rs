@@ -117,10 +117,22 @@ fn grounded_frames_expose_only_physical_slots_and_stable_tracked_ids() {
 }
 
 #[test]
-fn hazard_avoidance_exposure_resolves_real_hazard_through_production_candidates() {
+fn hazard_avoidance_acquisition_senses_only_hazards_then_restores_full_maze() {
     let manifest = manifest(Era1WorldFamily::ForagingHazardMaze, false);
     let mut world = build_era1_trial_world(&manifest).unwrap();
-    let draft = world
+    let safe_labels = [
+        "era1-object-a",
+        "era1-object-b",
+        "era1-wall-a",
+        "era1-wall-b",
+        "era1-wall-c",
+    ];
+    let safe_before = safe_labels.map(|label| {
+        let id = world.entity_id(label).unwrap();
+        (label, id, world.entity(id).unwrap().clone())
+    });
+
+    let acquisition = world
         .perception_frame_draft(
             SUBJECT,
             Tick::ZERO,
@@ -128,24 +140,85 @@ fn hazard_avoidance_exposure_resolves_real_hazard_through_production_candidates(
             HomeostaticSnapshot::baseline(Tick::ZERO),
         )
         .unwrap();
-    let exposure_slot = draft.grounded_object_slots().first().unwrap();
-    let exposure = draft
+
+    assert!(!acquisition.grounded_object_slots().is_empty());
+    assert!(acquisition
         .candidates()
         .iter()
-        .find(|candidate| {
-            candidate.family == CandidateActionFamily::Avoid
-                && matches!(
-                    candidate.observation,
-                    CandidateObservationRef::ObjectSlot(slot_index)
-                        if slot_index == exposure_slot.slot_index
-                )
+        .filter_map(|candidate| candidate.target.entity)
+        .all(|target| world.entity(target).unwrap().kind == WorldObjectKind::Hazard));
+    let grounded_inspect_or_avoid = acquisition
+        .candidates()
+        .iter()
+        .filter(|candidate| {
+            matches!(
+                candidate.family,
+                CandidateActionFamily::Inspect | CandidateActionFamily::Avoid
+            ) && matches!(
+                candidate.observation,
+                CandidateObservationRef::ObjectSlot(_)
+            )
         })
-        .unwrap();
-    let target = exposure.target.entity.unwrap();
-    let object = world.entity(target).unwrap();
+        .collect::<Vec<_>>();
+    assert!(grounded_inspect_or_avoid
+        .iter()
+        .any(|candidate| candidate.family == CandidateActionFamily::Inspect));
+    assert!(grounded_inspect_or_avoid
+        .iter()
+        .any(|candidate| candidate.family == CandidateActionFamily::Avoid));
+    assert!(grounded_inspect_or_avoid.iter().all(|candidate| {
+        let target = candidate.target.entity.unwrap();
+        world.entity(target).unwrap().kind == WorldObjectKind::Hazard
+    }));
+    assert!(acquisition
+        .candidates()
+        .iter()
+        .any(|candidate| candidate.target.entity.is_none()));
 
-    assert_eq!(object.kind, WorldObjectKind::Hazard);
-    assert!(object.hazard_pain > 0.0);
+    while world.tick().raw() < ERA1_ACQUISITION_END_TICK {
+        world.advance_tick();
+    }
+    apply_era1_world_transition(&manifest, manifest.transitions()[0], &mut world).unwrap();
+
+    let later_phase = world
+        .perception_frame_draft(
+            SUBJECT,
+            Tick::new(ERA1_ACQUISITION_END_TICK),
+            SensorProfile::GroundedObjectSlotsV1,
+            HomeostaticSnapshot::baseline(Tick::new(ERA1_ACQUISITION_END_TICK)),
+        )
+        .unwrap();
+    let visible_kinds = later_phase
+        .candidates()
+        .iter()
+        .filter_map(|candidate| candidate.target.entity)
+        .map(|target| world.entity(target).unwrap().kind)
+        .collect::<Vec<_>>();
+    assert!(visible_kinds.contains(&WorldObjectKind::Food));
+    assert!(visible_kinds.contains(&WorldObjectKind::Obstacle));
+    assert!(visible_kinds.contains(&WorldObjectKind::Hazard));
+
+    let restored_positions = [
+        ("era1-object-a", alife_core::Vec3f::new(2.0, 1.0, 0.0)),
+        ("era1-object-b", alife_core::Vec3f::new(-3.0, 2.0, 0.0)),
+        ("era1-wall-a", alife_core::Vec3f::new(1.0, -2.0, 0.0)),
+        ("era1-wall-b", alife_core::Vec3f::new(-1.0, 1.0, 0.0)),
+        ("era1-wall-c", alife_core::Vec3f::new(-1.0, -1.0, 0.0)),
+    ];
+    for ((label, id, mut before), (expected_label, expected_position)) in
+        safe_before.into_iter().zip(restored_positions)
+    {
+        assert_eq!(label, expected_label);
+        let after = world.entity(id).unwrap();
+        assert_eq!(after.position, expected_position);
+        before.position = expected_position;
+        assert_eq!(after, &before, "{label} changed beyond its phase position");
+    }
+
+    assert!(later_phase
+        .candidates()
+        .iter()
+        .any(|candidate| candidate.target.entity.is_none()));
 }
 
 #[test]
