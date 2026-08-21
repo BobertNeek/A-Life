@@ -10,13 +10,12 @@ use crate::{
 
 pub use crate::predictor_contract::{
     CategoricalMotorPrimitive, GroundedOutcomeFeatures, GroundedOutcomeMeaning, MotorFamily,
-    MotorPrimitiveEmbedding, SemanticStateMeaning, SemanticStateSchemaV2,
-    SemanticStateTransition, SemanticStateVector, GROUNDED_OUTCOME_ABI_V1,
-    GROUNDED_OUTCOME_FEATURE_COUNT, GROUNDED_OUTCOME_MEANINGS_V1, GROUNDED_OUTCOME_SCHEMA_VERSION,
-    MAX_PRIMITIVE_EMBEDDINGS, MAX_SEMANTIC_STATE_VALUES, MOTOR_CATEGORY_ABI_V1,
-    MOTOR_CATEGORY_SCHEMA_VERSION, MOTOR_PRIMITIVE_EMBEDDING_DIM, SEMANTIC_STATE_MEANINGS_V2,
-    SEMANTIC_STATE_VECTOR_ABI_V1, SEMANTIC_STATE_VECTOR_ABI_V2,
-    SEMANTIC_STATE_VECTOR_SCHEMA_VERSION,
+    MotorPrimitiveEmbedding, SemanticStateMeaning, SemanticStateSchemaV2, SemanticStateTransition,
+    SemanticStateVector, GROUNDED_OUTCOME_ABI_V1, GROUNDED_OUTCOME_FEATURE_COUNT,
+    GROUNDED_OUTCOME_MEANINGS_V1, GROUNDED_OUTCOME_SCHEMA_VERSION, MAX_PRIMITIVE_EMBEDDINGS,
+    MAX_SEMANTIC_STATE_VALUES, MOTOR_CATEGORY_ABI_V1, MOTOR_CATEGORY_SCHEMA_VERSION,
+    MOTOR_PRIMITIVE_EMBEDDING_DIM, SEMANTIC_STATE_MEANINGS_V2, SEMANTIC_STATE_VECTOR_ABI_V1,
+    SEMANTIC_STATE_VECTOR_ABI_V2, SEMANTIC_STATE_VECTOR_SCHEMA_VERSION,
 };
 
 pub const PREDICTION_TARGET_SCHEMA_VERSION: u16 = 3;
@@ -214,7 +213,8 @@ impl JointMotorCondition {
                         difference += 1.0;
                     }
                     let continuous_left = left.feature_values([0.0; MOTOR_PRIMITIVE_EMBEDDING_DIM]);
-                    let continuous_right = right.feature_values([0.0; MOTOR_PRIMITIVE_EMBEDDING_DIM]);
+                    let continuous_right =
+                        right.feature_values([0.0; MOTOR_PRIMITIVE_EMBEDDING_DIM]);
                     difference += continuous_left
                         .iter()
                         .zip(continuous_right.iter())
@@ -380,6 +380,8 @@ pub struct GroundedSuccessorPredictor {
     motor_condition_abi: u16,
     input_feature_count: usize,
     interaction_rank: usize,
+    #[serde(default)]
+    requested_interaction_rank: usize,
     learning_rate: f32,
     weights: Vec<f32>,
     source_projection: Vec<f32>,
@@ -401,6 +403,7 @@ impl Default for GroundedSuccessorPredictor {
             motor_condition_abi: 0,
             input_feature_count: 0,
             interaction_rank: 0,
+            requested_interaction_rank: 0,
             learning_rate: DEFAULT_PREDICTOR_LEARNING_RATE,
             weights: Vec::new(),
             source_projection: Vec::new(),
@@ -416,10 +419,28 @@ impl Default for GroundedSuccessorPredictor {
 
 impl GroundedSuccessorPredictor {
     pub fn with_learning_rate(learning_rate: f32) -> Result<Self, ScaffoldContractError> {
-        if !learning_rate.is_finite() || !(0.0..=1.0).contains(&learning_rate) || learning_rate == 0.0 {
+        if !learning_rate.is_finite()
+            || !(0.0..=1.0).contains(&learning_rate)
+            || learning_rate == 0.0
+        {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
-        Ok(Self { learning_rate, ..Self::default() })
+        Ok(Self {
+            learning_rate,
+            ..Self::default()
+        })
+    }
+
+    pub fn with_policy(
+        learning_rate: f32,
+        interaction_rank: u8,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut predictor = Self::with_learning_rate(learning_rate)?;
+        if interaction_rank == 0 || usize::from(interaction_rank) > MAX_INTERACTION_RANK {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        predictor.requested_interaction_rank = usize::from(interaction_rank);
+        Ok(predictor)
     }
 
     pub fn predict(
@@ -443,8 +464,9 @@ impl GroundedSuccessorPredictor {
                         .zip(&inputs)
                         .map(|(weight, input)| weight * input)
                         .sum::<f32>();
-                    let interaction_value = self.interaction_weights
-                        [feature_index * self.interaction_rank..(feature_index + 1) * self.interaction_rank]
+                    let interaction_value = self.interaction_weights[feature_index
+                        * self.interaction_rank
+                        ..(feature_index + 1) * self.interaction_rank]
                         .iter()
                         .zip(&interaction)
                         .map(|(weight, value)| weight * value)
@@ -479,7 +501,20 @@ impl GroundedSuccessorPredictor {
         source_state: &SemanticStateVector,
         candidates: &[JointMotorCondition],
     ) -> Result<Vec<SuccessorPrediction>, ScaffoldContractError> {
-        if candidates.is_empty() || candidates.len() > MAX_PREDICTION_SHORTLIST {
+        self.predict_candidates_bounded(source_state, candidates, MAX_PREDICTION_SHORTLIST)
+    }
+
+    pub fn predict_candidates_bounded(
+        &self,
+        source_state: &SemanticStateVector,
+        candidates: &[JointMotorCondition],
+        limit: usize,
+    ) -> Result<Vec<SuccessorPrediction>, ScaffoldContractError> {
+        if limit == 0
+            || limit > MAX_PREDICTION_SHORTLIST
+            || candidates.is_empty()
+            || candidates.len() > limit
+        {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
         candidates
@@ -614,7 +649,11 @@ impl GroundedSuccessorPredictor {
             self.semantic_state_count = state_count;
             self.motor_condition_abi = receipt.motor_condition.abi_version;
             self.input_feature_count = input_feature_count;
-            self.interaction_rank = DEFAULT_INTERACTION_RANK;
+            self.interaction_rank = if self.requested_interaction_rank == 0 {
+                DEFAULT_INTERACTION_RANK
+            } else {
+                self.requested_interaction_rank
+            };
             self.weights = vec![0.0; state_count * input_feature_count];
             self.source_projection = vec![0.0; self.interaction_rank * state_count];
             self.motor_projection =
@@ -672,9 +711,8 @@ impl GroundedSuccessorPredictor {
         source_state: &SemanticStateVector,
         condition: &JointMotorCondition,
     ) -> Vec<f32> {
-        let mut inputs = Vec::with_capacity(
-            1 + source_state.len() + MAX_MOTOR_CHANNELS * MOTOR_FACTOR_FEATURES,
-        );
+        let mut inputs =
+            Vec::with_capacity(1 + source_state.len() + MAX_MOTOR_CHANNELS * MOTOR_FACTOR_FEATURES);
         inputs.push(1.0);
         inputs.extend(source_state.values.iter().copied());
         inputs.extend(condition.feature_vector_with(|factor| self.embedding_for(factor)));
@@ -690,11 +728,7 @@ impl GroundedSuccessorPredictor {
             .unwrap_or_else(|| seeded_embedding(primitive))
     }
 
-    fn interaction_features(
-        &self,
-        source_state: &SemanticStateVector,
-        inputs: &[f32],
-    ) -> Vec<f32> {
+    fn interaction_features(&self, source_state: &SemanticStateVector, inputs: &[f32]) -> Vec<f32> {
         if self.interaction_rank == 0 {
             return Vec::new();
         }
@@ -754,6 +788,7 @@ impl Validate for GroundedSuccessorPredictor {
                 || self.motor_condition_abi != 0
                 || self.input_feature_count != 0
                 || self.interaction_rank != 0
+                || self.requested_interaction_rank > MAX_INTERACTION_RANK
                 || !self.weights.is_empty()
                 || !self.source_projection.is_empty()
                 || !self.motor_projection.is_empty()
@@ -767,7 +802,8 @@ impl Validate for GroundedSuccessorPredictor {
             }
             return Ok(());
         }
-        let expected_input = 1 + self.semantic_state_count + MAX_MOTOR_CHANNELS * MOTOR_FACTOR_FEATURES;
+        let expected_input =
+            1 + self.semantic_state_count + MAX_MOTOR_CHANNELS * MOTOR_FACTOR_FEATURES;
         let parameter_count = self.weights.len()
             + self.source_projection.len()
             + self.motor_projection.len()
@@ -778,6 +814,7 @@ impl Validate for GroundedSuccessorPredictor {
             || self.motor_condition_abi != JOINT_MOTOR_CONDITION_ABI_V1
             || self.interaction_rank == 0
             || self.interaction_rank > MAX_INTERACTION_RANK
+            || self.requested_interaction_rank > MAX_INTERACTION_RANK
             || self.input_feature_count != expected_input
             || self.weights.len() != self.semantic_state_count * expected_input
             || self.source_projection.len() != self.interaction_rank * self.semantic_state_count
@@ -940,10 +977,8 @@ impl Validate for PredictionTargetReceipt {
         self.organism_id.validate()?;
         self.experience_sequence.validate()?;
         self.decision.validate()?;
-        let transition = SemanticStateTransition::new(
-            self.source_state.clone(),
-            self.target_state.clone(),
-        )?;
+        let transition =
+            SemanticStateTransition::new(self.source_state.clone(), self.target_state.clone())?;
         self.motor_condition.validate_contract()?;
         self.outcome_features.validate_contract()?;
         if self.target_state.canonical_digest()? != self.target_digest {
@@ -984,9 +1019,7 @@ fn seed_model_parameters(predictor: &mut GroundedSuccessorPredictor) {
     }
 }
 
-fn seeded_embedding(
-    primitive: CategoricalMotorPrimitive,
-) -> [f32; MOTOR_PRIMITIVE_EMBEDDING_DIM] {
+fn seeded_embedding(primitive: CategoricalMotorPrimitive) -> [f32; MOTOR_PRIMITIVE_EMBEDDING_DIM] {
     let mut values = [0.0; MOTOR_PRIMITIVE_EMBEDDING_DIM];
     for (index, value) in values.iter_mut().enumerate() {
         *value = deterministic_weight(primitive.identity[index] as usize, 0.8);
@@ -998,10 +1031,7 @@ fn deterministic_weight(index: usize, amplitude: f32) -> f32 {
     (((index as f32 + 1.0) * 0.618_034).sin() * amplitude).clamp(-amplitude, amplitude)
 }
 
-fn cold_start_prediction(
-    source: &SemanticStateVector,
-    motor: &JointMotorCondition,
-) -> Vec<f32> {
+fn cold_start_prediction(source: &SemanticStateVector, motor: &JointMotorCondition) -> Vec<f32> {
     let motor_signal = motor
         .feature_vector()
         .iter()

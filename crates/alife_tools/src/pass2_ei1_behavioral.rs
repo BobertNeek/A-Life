@@ -10,7 +10,9 @@ use std::{
 
 use alife_core::{
     BrainCapacityClass, CreatureGenome, Era1Ability, Era1Control, Era1EvidencePartition,
-    FoundationGeneticIdentity, LanguageCodebookV1, OrganismId, ScaffoldContractError,
+    FoundationGeneticIdentity, FoundationVersion, FoundationWeightAsset, LanguageCodebookV1,
+    OrganismId,
+    ScaffoldContractError, SensorProfile,
 };
 use alife_gpu_backend::{
     GpuLearningEvidenceMismatchReceipt, GpuRuntimeApplyFastPlasticityFailureReceipt,
@@ -19,7 +21,7 @@ use alife_gpu_backend::{
     GpuRuntimeSelectorDiagnosticEnableFailure, GpuRuntimeSelectorDiagnosticFailureReceipt,
 };
 use alife_training::{
-    Era1InvalidIdReceipt, Era1TrialRunError, Era1TrialRunEvidence, Era1TrialRunRequest,
+    Era1StageContext, Era1TrialRunError, Era1TrialRunEvidence, Era1TrialRunRequest,
     Era1TrialRunner,
 };
 use alife_world::{Era1TrialManifest, Era1WorldFamily};
@@ -29,9 +31,6 @@ use thiserror::Error;
 
 pub const RUNNER_ID: &str = "pass2_ei1_behavioral_harness_v1";
 const MANIFEST_SCHEMA: &str = "pass2-experiment-manifest-v1";
-const FOUNDATION_ID: u64 = 0x4E32_3034_385F_5631;
-const FOUNDATION_VERSION: u16 = 1;
-const FOUNDATION_CHECKSUM: u64 = 0x4E32_3034_385F_FA11;
 const SCENARIO_CATALOG: &str = include_str!("../../../scripts/pass2_ei1_scenarios.json");
 
 #[derive(Debug, Error)]
@@ -49,7 +48,7 @@ pub enum Pass2Ei1BehavioralError {
     #[error("Era 1 production runner failed: {0}")]
     Runner(String),
     #[error("Era 1 invalid ID provenance: {0}")]
-    InvalidId(Era1InvalidIdReceipt),
+    InvalidId(Era1StageContext),
     #[error("Era 1 sealed outcome evidence mismatch: {0}")]
     LearningEvidenceMismatch(GpuLearningEvidenceMismatchReceipt),
     #[error("Era 1 fast-plasticity apply failure: {0}")]
@@ -120,11 +119,20 @@ pub fn run_planned_manifest(
             "only the implemented full_system configuration is available",
         ));
     }
-    if string(object, "brain_class")? != "N2048" || integer(object, "population")? != 1 {
+    if integer(object, "population")? != 1 {
         return Err(Pass2Ei1BehavioralError::Unsupported(
-            "Era1TrialRunner requires one N2048 organism",
+            "Era1TrialRunner requires one organism",
         ));
     }
+    let brain_class = match string(object, "brain_class")? {
+        "N512" => BrainCapacityClass::n512(),
+        "N2048" => BrainCapacityClass::n2048(),
+        _ => {
+            return Err(Pass2Ei1BehavioralError::Unsupported(
+                "requested brain class has no bundled Era1 foundation asset",
+            ));
+        }
+    };
     let source_commit = string(object, "source_commit")?.to_owned();
     let source_tree = git_identity("HEAD^{tree}")?;
     if source_commit != git_identity("HEAD")? {
@@ -132,14 +140,30 @@ pub fn run_planned_manifest(
             "planned source commit is not the checked-out commit",
         ));
     }
+    let foundation_asset = match brain_class.id() {
+        BrainCapacityClass::N512_ID => FoundationWeightAsset::builtin_nano512_v1(
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .map_err(core_failure)?,
+        BrainCapacityClass::N2048_ID => FoundationWeightAsset::builtin_n2048_v1(
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .map_err(core_failure)?,
+        _ => {
+            return Err(Pass2Ei1BehavioralError::Unsupported(
+                "requested brain class has no bundled Era1 foundation asset",
+            ));
+        }
+    };
     let foundation = FoundationGeneticIdentity::new(
-        FOUNDATION_ID,
-        FOUNDATION_VERSION,
-        FOUNDATION_CHECKSUM,
-        BrainCapacityClass::N2048_ID,
+        foundation_asset.manifest().foundation_id().raw(),
+        FoundationVersion::V1.raw() as u16,
+        foundation_asset.manifest().compatibility_family_id().raw(),
+        brain_class.id(),
     )
     .map_err(core_failure)?;
-    let mut runner = Era1TrialRunner::new_required().map_err(|error| {
+    let mut runner = Era1TrialRunner::new_required_with_foundation(brain_class, foundation_asset)
+        .map_err(|error| {
         Pass2Ei1BehavioralError::Runner(format!("new_required rejected production GPU: {error}"))
     })?;
     let mut evidence = Vec::new();
@@ -584,13 +608,17 @@ mod selector_diagnostic_error_tests {
         GpuRuntimeSelectorDiagnosticSelectionValidationField, GpuRuntimeSelectorDiagnosticStage,
         GpuSelectorBindingIdentity,
     };
-    use alife_training::{Era1InvalidIdFieldTag, Era1InvalidIdReceipt, Era1TrialRunError};
+    use alife_training::{
+        Era1InvalidIdFieldTag, Era1StageContext, Era1StageContextValue, Era1TrialRunError,
+    };
 
     #[test]
     fn task3_preserves_era1_invalid_id_receipt() {
-        let receipt = Era1InvalidIdReceipt {
+        let receipt = Era1StageContext {
             tick: Tick::new(3),
             field_tag: Era1InvalidIdFieldTag::WorldTransitionEntityLookup,
+            value: Era1StageContextValue::Tick(Tick::new(3)),
+            original_error: "ID value zero is reserved as invalid".to_owned(),
         };
 
         let decoded = runner_failure(Era1TrialRunError::InvalidId(receipt));

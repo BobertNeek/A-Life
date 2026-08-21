@@ -76,7 +76,12 @@ pub fn prepare_predecision_predictions(
         .iter()
         .map(|(_, condition)| condition.clone())
         .collect::<Vec<_>>();
-    let predictions = predictor.predict_candidates(&source_state, &joint_conditions)?;
+    let predictions = predictor.predict_candidates_bounded(
+        &source_state,
+        &joint_conditions,
+        usize::from(phenotype.cognitive_architecture().predictor_capacity())
+            .min(MAX_PREDECISION_PREDICTIONS),
+    )?;
     let candidates = conditions
         .into_iter()
         .zip(predictions)
@@ -541,7 +546,9 @@ pub fn run_production_causal_step(
         memory_recall.receipt(),
         &gpu_tick.work.counters,
         &gpu_tick.v11_work,
-        prediction_update.error.len() as u64,
+        (cognitive_context.prediction.candidate_predictions.len() as u64)
+            .saturating_add(prediction_update.error.len() as u64),
+        motor_bundle.channels.len() as u64,
     )?;
     *last_cognitive_context = Some(cognitive_context.clone());
     *last_selected_motor_bundle = Some(motor_bundle.clone());
@@ -678,7 +685,7 @@ fn reacquire_focal_context(
     };
     let feature_width = phenotype
         .cognitive_architecture()
-        .motor_head_width()
+        .focal_feature_width()
         .min(class.execution().max_decoder_input_lanes())
         .min(current_feature_width)
         .min(MAX_FOCAL_FEATURE_WIDTH);
@@ -1163,6 +1170,7 @@ fn cognitive_work_receipt(
     neural_work: &BrainWorkCounters,
     v11_work: &GpuV11WorkReceipt,
     prediction_ops: u64,
+    motor_ops: u64,
 ) -> Result<CognitiveWorkReceipt, ScaffoldContractError> {
     let memory_ops = u64::from(memory.exact_bucket_reads)
         .saturating_add(u64::from(memory.neighbor_bucket_reads))
@@ -1171,7 +1179,7 @@ fn cognitive_work_receipt(
         neural_work.neuron_updates,
         neural_work.synapse_ops,
         v11_work.cognitive.dendritic_ops,
-        context.budget.work_used,
+        context.budget.focal_work_units,
         memory_ops,
         context.concept.active_concepts.len() as u64,
         context.gap.active_gaps.len() as u64,
@@ -1181,6 +1189,7 @@ fn cognitive_work_receipt(
         1,
         0,
     )?
+    .with_motor_ops(motor_ops)?
     .into_receipt()
 }
 

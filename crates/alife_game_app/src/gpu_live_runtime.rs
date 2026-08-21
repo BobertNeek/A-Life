@@ -382,8 +382,6 @@ impl ResidentAuthorityPlan {
     }
 }
 
-const LIVE_COGNITIVE_ENERGY_PER_WORK_UNIT: f32 = 0.000_001;
-
 #[derive(Debug, Clone)]
 struct GpuLiveCheckpointDurability {
     store: GpuCheckpointAssetStore,
@@ -407,10 +405,7 @@ impl GpuLiveRuntimeConstructionOptions {
             schedule_sleep: true,
             observe_sidecars: true,
             retain_sealed_patch_history: true,
-            cognitive_work_cost_policy: CognitiveWorkCostPolicy {
-                enabled: true,
-                energy_per_work_unit: LIVE_COGNITIVE_ENERGY_PER_WORK_UNIT,
-            },
+            cognitive_work_cost_policy: CognitiveWorkCostPolicy::production_default(),
         }
     }
 
@@ -430,10 +425,7 @@ impl GpuLiveRuntimeConstructionOptions {
             schedule_sleep: false,
             observe_sidecars: true,
             retain_sealed_patch_history: true,
-            cognitive_work_cost_policy: CognitiveWorkCostPolicy {
-                enabled: true,
-                energy_per_work_unit: LIVE_COGNITIVE_ENERGY_PER_WORK_UNIT,
-            },
+            cognitive_work_cost_policy: CognitiveWorkCostPolicy::production_default(),
         }
     }
 
@@ -444,10 +436,7 @@ impl GpuLiveRuntimeConstructionOptions {
             schedule_sleep: true,
             observe_sidecars: true,
             retain_sealed_patch_history: false,
-            cognitive_work_cost_policy: CognitiveWorkCostPolicy {
-                enabled: true,
-                energy_per_work_unit: LIVE_COGNITIVE_ENERGY_PER_WORK_UNIT,
-            },
+            cognitive_work_cost_policy: CognitiveWorkCostPolicy::production_default(),
         }
     }
 }
@@ -2669,10 +2658,13 @@ fn attention_selection_policy_for(
 fn predictor_for_phenotype(
     phenotype: &alife_core::BrainPhenotype,
 ) -> Result<GroundedSuccessorPredictor, ScaffoldContractError> {
-    GroundedSuccessorPredictor::with_learning_rate(
+    GroundedSuccessorPredictor::with_policy(
         phenotype
             .cognitive_architecture()
             .predictor_learning_rate(),
+        phenotype
+            .cognitive_architecture()
+            .predictor_interaction_rank(),
     )
 }
 
@@ -2689,6 +2681,7 @@ fn sleep_consolidation_config_for(
         NormalizedScalar::new(architecture.sleep_consolidation_rate())?;
     config.structural_edit_candidate_limit =
         usize::from(architecture.structural_candidate_budget());
+    config.concept_simplex_consolidation_limit = usize::from(architecture.sleep_concept_limit());
     config.weight_abs_limit = plan.weight_limit();
     config.validate_contract()?;
     Ok(config)
@@ -5664,11 +5657,30 @@ impl GpuLiveBrainRuntime {
             )?;
             let sleep_event = if self.schedule_sleep {
                 let sleep_config = sleep_consolidation_config_for(&resident.phenotype)?;
+                let foundation_abi = resident.compiler_inputs.foundation_abi();
+                let foundation = FoundationGeneticIdentity::new(
+                    foundation_abi
+                        .foundation_id()
+                        .ok_or(ScaffoldContractError::MissingPhaseData)?
+                        .raw(),
+                    u16::try_from(
+                        foundation_abi
+                            .foundation_version()
+                            .ok_or(ScaffoldContractError::MissingPhaseData)?
+                            .raw(),
+                    )
+                    .map_err(|_| ScaffoldContractError::PhenotypeCompile)?,
+                    foundation_abi
+                        .compatibility_family_id()
+                        .ok_or(ScaffoldContractError::MissingPhaseData)?
+                        .raw(),
+                    resident.phenotype.brain_class_id(),
+                )?;
                 let mut routed_driver = RoutedGpuSleepDriver {
                     authoritative: AuthoritativeGpuSleepDriver {
                         backend: &mut self.backend,
                         handle,
-                        foundation: Some(resident.genome.foundation),
+                        foundation: Some(foundation),
                         sleep_config: Some(sleep_config),
                         context: Some(AuthoritativeSleepContext {
                             memory: self
@@ -6808,7 +6820,7 @@ impl GpuLiveBrainRuntime {
         drop(due_world_advance);
         drop(canonical_resync);
         drop(due_sleep);
-        result
+        result.map_err(GameAppShellError::from)
     }
 
     fn commit_sealed_batch(

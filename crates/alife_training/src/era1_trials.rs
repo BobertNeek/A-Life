@@ -1056,6 +1056,16 @@ impl Era1TrialRunner {
     pub fn new_required() -> Result<Self, TrainingError> {
         let foundation =
             FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1)?;
+        Self::new_required_with_foundation(BrainCapacityClass::n2048(), foundation)
+    }
+
+    pub fn new_required_with_foundation(
+        capacity: BrainCapacityClass,
+        foundation: FoundationWeightAsset,
+    ) -> Result<Self, TrainingError> {
+        if foundation.manifest().capacity_class_id() != capacity.id() {
+            return Err(ScaffoldContractError::IncompatibleGeneticClass.into());
+        }
         let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
         let hardware = backend.hardware_receipt();
         Ok(Self {
@@ -1063,7 +1073,7 @@ impl Era1TrialRunner {
             backend_api: hardware.backend_api.clone(),
             session: GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Challenge),
             foundation,
-            capacity: BrainCapacityClass::n2048(),
+            capacity,
         })
     }
 

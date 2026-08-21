@@ -158,7 +158,8 @@ pub use foundation::{
     N2048FoundationLayoutV1, N2048FoundationRouteSpec, TrainingStageManifest,
 };
 pub use genome::{
-    AlphaMask, AlphaStoragePolicy, BrainGenome, CriticalPeriod, CrossoverPolicy, DevelopmentStage,
+    AlphaMask, AlphaStoragePolicy, BrainGenome, CognitiveArchitectureGenomeParameters,
+    CriticalPeriod, CrossoverPolicy, DevelopmentStage,
     DevelopmentState, DevelopmentalMilestone, DevelopmentalSchedule, DriveThresholdGene,
     DriveThresholdKind, EffectiveWeightSample, EndocrineConstantGene, EndocrineConstantKind,
     GenomeSeedSet, HOperational, HShadow, InheritancePolicy, LifetimeConsolidationDelta,

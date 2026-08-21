@@ -53,9 +53,13 @@ pub struct CognitiveArchitectureGenomeParameters {
     predictor_learning_rate: f32,
     motor_head_count: u8,
     motor_head_width: u16,
+    focal_feature_width: u16,
+    predictor_interaction_rank: u8,
     dendritic_branch_capacity: u16,
     structural_candidate_budget: u16,
     structural_edit_budget: u8,
+    structural_edge_capacity: u16,
+    sleep_concept_limit: u16,
     sleep_trigger_threshold: f32,
     sleep_replay_rate: f32,
     sleep_consolidation_rate: f32,
@@ -66,6 +70,22 @@ pub struct CognitiveArchitectureGenomeParameters {
 }
 
 pub const COGNITIVE_ARCHITECTURE_SCHEMA_VERSION: u16 = 1;
+
+fn default_focal_feature_width() -> u16 {
+    crate::attention::MAX_FOCAL_FEATURE_WIDTH
+}
+
+fn default_predictor_interaction_rank() -> u8 {
+    crate::predictive::DEFAULT_INTERACTION_RANK as u8
+}
+
+fn default_structural_edge_capacity() -> u16 {
+    crate::structural_plasticity::MAX_STRUCTURAL_EDGES as u16
+}
+
+fn default_sleep_concept_limit() -> u16 {
+    64
+}
 
 impl CognitiveArchitectureGenomeParameters {
     #[allow(clippy::too_many_arguments)]
@@ -97,9 +117,13 @@ impl CognitiveArchitectureGenomeParameters {
             predictor_learning_rate,
             motor_head_count,
             motor_head_width,
+            focal_feature_width: 29,
+            predictor_interaction_rank: 4,
             dendritic_branch_capacity,
             structural_candidate_budget,
             structural_edit_budget,
+            structural_edge_capacity: 64,
+            sleep_concept_limit: 64,
             sleep_trigger_threshold,
             sleep_replay_rate,
             sleep_consolidation_rate,
@@ -122,9 +146,13 @@ impl CognitiveArchitectureGenomeParameters {
             predictor_learning_rate: 0.01,
             motor_head_count: 1,
             motor_head_width: 8,
+            focal_feature_width: crate::attention::MAX_FOCAL_FEATURE_WIDTH,
+            predictor_interaction_rank: crate::predictive::DEFAULT_INTERACTION_RANK as u8,
             dendritic_branch_capacity: 512,
             structural_candidate_budget: 32,
             structural_edit_budget: 1,
+            structural_edge_capacity: crate::structural_plasticity::MAX_STRUCTURAL_EDGES as u16,
+            sleep_concept_limit: 64,
             sleep_trigger_threshold: 0.6,
             sleep_replay_rate: 0.25,
             sleep_consolidation_rate: 0.5,
@@ -159,6 +187,12 @@ impl CognitiveArchitectureGenomeParameters {
     pub const fn motor_head_width(&self) -> u16 {
         self.motor_head_width
     }
+    pub const fn focal_feature_width(&self) -> u16 {
+        self.focal_feature_width
+    }
+    pub const fn predictor_interaction_rank(&self) -> u8 {
+        self.predictor_interaction_rank
+    }
     pub const fn dendritic_branch_capacity(&self) -> u16 {
         self.dendritic_branch_capacity
     }
@@ -167,6 +201,27 @@ impl CognitiveArchitectureGenomeParameters {
     }
     pub const fn structural_edit_budget(&self) -> u8 {
         self.structural_edit_budget
+    }
+    pub const fn structural_edge_capacity(&self) -> u16 {
+        self.structural_edge_capacity
+    }
+    pub const fn sleep_concept_limit(&self) -> u16 {
+        self.sleep_concept_limit
+    }
+
+    pub fn with_runtime_policy(
+        mut self,
+        focal_feature_width: u16,
+        predictor_interaction_rank: u8,
+        structural_edge_capacity: u16,
+        sleep_concept_limit: u16,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.focal_feature_width = focal_feature_width;
+        self.predictor_interaction_rank = predictor_interaction_rank;
+        self.structural_edge_capacity = structural_edge_capacity;
+        self.sleep_concept_limit = sleep_concept_limit;
+        self.validate_contract()?;
+        Ok(self)
     }
     pub const fn sleep_trigger_threshold(&self) -> f32 {
         self.sleep_trigger_threshold
@@ -203,9 +258,13 @@ impl CognitiveArchitectureGenomeParameters {
         digest.write_f32(self.predictor_learning_rate)?;
         digest.write_u8(self.motor_head_count);
         digest.write_u16(self.motor_head_width);
+        digest.write_u16(self.focal_feature_width);
+        digest.write_u8(self.predictor_interaction_rank);
         digest.write_u16(self.dendritic_branch_capacity);
         digest.write_u16(self.structural_candidate_budget);
         digest.write_u8(self.structural_edit_budget);
+        digest.write_u16(self.structural_edge_capacity);
+        digest.write_u16(self.sleep_concept_limit);
         for value in [
             self.sleep_trigger_threshold,
             self.sleep_replay_rate,
@@ -241,6 +300,20 @@ impl CognitiveArchitectureGenomeParameters {
             .max_neurons()
             .saturating_mul(2)
             .min(crate::dendritic::MAX_DENDRITIC_BRANCHES as u32);
+        let max_focal_feature_width = capacity
+            .execution()
+            .max_decoder_input_lanes()
+            .min(crate::attention::MAX_FOCAL_FEATURE_WIDTH);
+        let max_structural_edges = capacity
+            .execution()
+            .max_neurons()
+            .saturating_div(8)
+            .min(crate::structural_plasticity::MAX_STRUCTURAL_EDGES as u32);
+        let max_sleep_concepts = capacity
+            .execution()
+            .max_neurons()
+            .saturating_div(8)
+            .min(256);
         let max_candidates = capacity
             .execution()
             .max_neurons()
@@ -250,6 +323,9 @@ impl CognitiveArchitectureGenomeParameters {
             || u32::from(self.predictor_capacity) > max_predictor
             || u32::from(self.dendritic_branch_capacity) > max_branches
             || u32::from(self.structural_candidate_budget) > max_candidates
+            || self.focal_feature_width > max_focal_feature_width
+            || u32::from(self.structural_edge_capacity) > max_structural_edges
+            || u32::from(self.sleep_concept_limit) > max_sleep_concepts
         {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
@@ -271,14 +347,25 @@ impl CognitiveArchitectureGenomeParameters {
             || usize::from(self.motor_head_count) > crate::motor::MAX_MOTOR_CHANNELS
             || self.motor_head_width == 0
             || self.motor_head_width > 256
+            || self.focal_feature_width == 0
+            || self.focal_feature_width > crate::attention::MAX_FOCAL_FEATURE_WIDTH
+            || self.predictor_interaction_rank == 0
+            || usize::from(self.predictor_interaction_rank)
+                > crate::predictive::MAX_INTERACTION_RANK
             || self.dendritic_branch_capacity == 0
-            || usize::from(self.dendritic_branch_capacity) > crate::dendritic::MAX_DENDRITIC_BRANCHES
+            || usize::from(self.dendritic_branch_capacity)
+                > crate::dendritic::MAX_DENDRITIC_BRANCHES
             || self.structural_candidate_budget == 0
             || usize::from(self.structural_candidate_budget)
                 > crate::structural_plasticity::MAX_EVIDENCE_PER_PHASE
             || self.structural_edit_budget == 0
             || usize::from(self.structural_edit_budget)
                 > crate::structural_plasticity::MAX_ACCEPTED_PER_PHASE
+            || self.structural_edge_capacity == 0
+            || usize::from(self.structural_edge_capacity)
+                > crate::structural_plasticity::MAX_STRUCTURAL_EDGES
+            || self.sleep_concept_limit == 0
+            || self.sleep_concept_limit > 256
         {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
@@ -321,9 +408,17 @@ impl<'de> Deserialize<'de> for CognitiveArchitectureGenomeParameters {
             predictor_learning_rate: f32,
             motor_head_count: u8,
             motor_head_width: u16,
+            #[serde(default = "default_focal_feature_width")]
+            focal_feature_width: u16,
+            #[serde(default = "default_predictor_interaction_rank")]
+            predictor_interaction_rank: u8,
             dendritic_branch_capacity: u16,
             structural_candidate_budget: u16,
             structural_edit_budget: u8,
+            #[serde(default = "default_structural_edge_capacity")]
+            structural_edge_capacity: u16,
+            #[serde(default = "default_sleep_concept_limit")]
+            sleep_concept_limit: u16,
             sleep_trigger_threshold: f32,
             sleep_replay_rate: f32,
             sleep_consolidation_rate: f32,
@@ -342,9 +437,13 @@ impl<'de> Deserialize<'de> for CognitiveArchitectureGenomeParameters {
             predictor_learning_rate: wire.predictor_learning_rate,
             motor_head_count: wire.motor_head_count,
             motor_head_width: wire.motor_head_width,
+            focal_feature_width: wire.focal_feature_width,
+            predictor_interaction_rank: wire.predictor_interaction_rank,
             dendritic_branch_capacity: wire.dendritic_branch_capacity,
             structural_candidate_budget: wire.structural_candidate_budget,
             structural_edit_budget: wire.structural_edit_budget,
+            structural_edge_capacity: wire.structural_edge_capacity,
+            sleep_concept_limit: wire.sleep_concept_limit,
             sleep_trigger_threshold: wire.sleep_trigger_threshold,
             sleep_replay_rate: wire.sleep_replay_rate,
             sleep_consolidation_rate: wire.sleep_consolidation_rate,

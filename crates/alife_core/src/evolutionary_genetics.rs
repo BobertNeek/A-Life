@@ -3,14 +3,15 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    validate_finite, BrainCapacityClass, BrainClassId, BrainGenome, CriticalPeriod,
-    CrossoverPolicy, DevelopmentStage, DevelopmentState, DevelopmentalMilestone,
-    DevelopmentalSchedule, DriveThresholdGene, DriveThresholdKind, EndocrineConstantGene,
-    EndocrineConstantKind, EndocrineProfile, EndocrineSnapshot, GenomeId, HomeostaticParameters,
-    InheritancePolicy, LanguageTokenId, LineageId, LobeKind, LobeRatioOverride, LobeRatioPlan,
-    MotorAffordanceGene, MotorAffordanceKind, MutationRates, NormalizedScalar,
-    ProjectionPlasticityMask, ScaffoldContractError, SchemaKind, SensorChannelGene,
-    SensorChannelKind, SensorLayoutGene, Tick, Validate,
+    validate_finite, BrainCapacityClass, BrainClassId, BrainGenome,
+    CognitiveArchitectureGenomeParameters, CriticalPeriod, CrossoverPolicy, DevelopmentStage,
+    DevelopmentState, DevelopmentalMilestone, DevelopmentalSchedule, DriveThresholdGene,
+    DriveThresholdKind, EndocrineConstantGene, EndocrineConstantKind, EndocrineProfile,
+    EndocrineSnapshot, GenomeId, HomeostaticParameters, InheritancePolicy, LanguageTokenId,
+    LineageId, LobeKind, LobeRatioOverride, LobeRatioPlan, MotorAffordanceGene,
+    MotorAffordanceKind, MutationRates, NormalizedScalar, ProjectionPlasticityMask,
+    ScaffoldContractError, SchemaKind, SensorChannelGene, SensorChannelKind, SensorLayoutGene,
+    Tick, Validate,
 };
 
 pub const CREATURE_GENOME_SCHEMA_VERSION: u16 = 1;
@@ -327,6 +328,8 @@ pub struct BrainChromosome {
     pub plasticity: ContinuousLocus,
     pub receptor_sensitivity: ContinuousLocus,
     pub genetic_weight_bias: ContinuousLocus,
+    #[serde(default = "CognitiveArchitectureGenomeParameters::canonical_default")]
+    pub cognitive_architecture: CognitiveArchitectureGenomeParameters,
 }
 
 impl BrainChromosome {
@@ -352,6 +355,8 @@ impl Validate for BrainChromosome {
         BrainCapacityClass::production_for_id(self.brain_class.maternal.value)?;
         BrainCapacityClass::production_for_id(self.brain_class.paternal.value)?;
         self.expressed_brain_class()?;
+        self.cognitive_architecture
+            .validate_for_brain_class(self.expressed_brain_class()?)?;
         validate_loci(&[
             &self.sensory_lobe_ratio,
             &self.association_lobe_ratio,
@@ -651,6 +656,7 @@ impl CreatureGenome {
                 plasticity: ContinuousLocus::mean(0.48, 0.56)?,
                 receptor_sensitivity: ContinuousLocus::mean(0.50, 0.58)?,
                 genetic_weight_bias: ContinuousLocus::mean(0.47, 0.53)?,
+                cognitive_architecture: CognitiveArchitectureGenomeParameters::canonical_default(),
             },
             chemistry: ChemistryChromosome {
                 stress_baseline: ContinuousLocus::mean(0.18, 0.24)?,
@@ -1035,6 +1041,7 @@ fn express_brain_genome(
 ) -> Result<BrainGenome, ScaffoldContractError> {
     let brain_class_id = source.expressed_brain_class()?;
     let mut genome = BrainGenome::scaffold(source.conception_seed, brain_class_id);
+    genome = genome.with_cognitive_architecture(source.brain.cognitive_architecture)?;
     genome.id = source.id;
     genome.parent_genome_ids = source.parent_genome_ids.clone();
     genome.lineage_id = Some(source.lineage_id);
@@ -1926,6 +1933,11 @@ fn recombine_brain(
             7,
             None,
         )?,
+        cognitive_architecture: if context.rng.next_bool() {
+            maternal.cognitive_architecture
+        } else {
+            paternal.cognitive_architecture
+        },
     };
     context.finish_chromosome(chromosome, maternal_selector, paternal_selector);
     Ok(result)

@@ -7,10 +7,10 @@
 use alife_core::cognitive_work::CognitiveWorkCounters;
 use alife_core::{
     apply_dendritic_conjunctions, BrainPhenotype, CoactivationEvidence, CognitiveWorkReceipt,
-    DendriticAllocationEvidence, DendriticBranchSet, DendriticWorkReceipt,
-    ScaffoldContractError, StructuralEvidenceEvent, StructuralPlasticityConfig,
-    StructuralPlasticityState, StructuralWorkReceipt, MAX_ACCEPTED_PER_PHASE,
-    MAX_CANDIDATES_PER_REGION, MAX_REGIONS_PER_STATE,
+    DendriticAllocationEvidence, DendriticBranchSet, DendriticWorkReceipt, ScaffoldContractError,
+    StructuralEvidenceEvent, StructuralPlasticityConfig, StructuralPlasticityState,
+    StructuralWorkReceipt, MAX_ACCEPTED_PER_PHASE, MAX_CANDIDATES_PER_REGION,
+    MAX_REGIONS_PER_STATE,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -110,15 +110,15 @@ impl GpuV11CausalState {
         let architecture = phenotype.cognitive_architecture_plan();
         let structural_edit_budget = u16::from(architecture.structural_edit_budget().max(1));
         let structural_config = StructuralPlasticityConfig {
-            max_candidates_per_region: architecture
-                .structural_candidate_budget()
-                .max(1)
-                .min(8),
+            max_candidates_per_region: architecture.structural_candidate_budget().max(1).min(8),
             max_regions: u16::try_from(phenotype.projections().len())
                 .unwrap_or(MAX_REGIONS_PER_STATE as u16)
                 .clamp(1, MAX_REGIONS_PER_STATE as u16),
             max_accepted_per_phase: structural_edit_budget.min(4),
-            max_structural_edges: structural_edit_budget.saturating_mul(4).clamp(1, 64),
+            max_structural_edges: architecture
+                .structural_edge_capacity()
+                .max(structural_edit_budget)
+                .min(64),
             min_candidate_score: 2,
             prune_score_below: 1,
         };
@@ -156,8 +156,7 @@ impl GpuV11CausalState {
     ) -> Result<Self, ScaffoldContractError> {
         let plan = phenotype.cognitive_architecture();
         if phenotype.neuron_count() != neuron_count
-            || dendritic_branches.branches().len()
-                > usize::from(plan.dendritic_branch_capacity())
+            || dendritic_branches.branches().len() > usize::from(plan.dendritic_branch_capacity())
         {
             return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
         }
@@ -498,7 +497,12 @@ impl GpuV11CausalState {
             .saturating_add(u64::from(structural.candidates_kept))
             .saturating_add(u64::from(structural.accepted_edges))
             .saturating_add(u64::from(structural.pruned_edges))
-            .saturating_add(u64::from(structural.active_edges));
+            .saturating_add(u64::from(structural.active_edges))
+            .saturating_add(u64::from(structural.maintenance_ops))
+            .saturating_add(u64::from(structural.ranking_ops))
+            .saturating_add(u64::from(structural.recompaction_ops))
+            .saturating_add(u64::from(structural.growth_ops))
+            .saturating_add(u64::from(structural.pruning_ops));
         self.make_cognitive_receipt_for(
             self.last_work.dendritic.work_units,
             u32::try_from(structural_work_units)

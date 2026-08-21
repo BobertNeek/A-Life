@@ -377,12 +377,18 @@ impl WorldOrganismRecord {
         self.validate_contract()?;
         receipt.validate_contract()?;
         let requested_debit = policy.energy_debit(&receipt)?;
+        let fatigue_debit = policy.fatigue_debit(&receipt)?;
+        let heat_debit = policy.heat_debit(&receipt)?;
         let original_biochemistry = self.biochemistry;
         let original_work = self.cognitive_work;
         let original_debit = self.cognitive_energy_debit;
         let applied_debit = requested_debit.min(self.biochemistry.body.energy);
 
         self.biochemistry.body.energy -= applied_debit;
+        self.biochemistry.homeostasis.drives.fatigue =
+            (self.biochemistry.homeostasis.drives.fatigue + fatigue_debit).clamp(0.0, 1.0);
+        self.biochemistry.body.temperature_stress =
+            (self.biochemistry.body.temperature_stress + heat_debit).clamp(0.0, 1.0);
         self.cognitive_work = receipt;
         self.cognitive_energy_debit = applied_debit;
         if let Err(error) = self.validate_contract() {

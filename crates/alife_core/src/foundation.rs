@@ -597,6 +597,10 @@ impl FoundationManifest {
         self.compatibility_family_id
     }
 
+    pub const fn capacity_class_id(&self) -> BrainClassId {
+        self.capacity_class_id
+    }
+
     pub const fn weight_asset(&self) -> FoundationWeightAssetRef {
         self.weight_asset
     }

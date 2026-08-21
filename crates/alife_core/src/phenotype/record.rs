@@ -4,9 +4,9 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
-    genome::CognitiveArchitectureGenomeParameters, Blake3Digest, BrainCapacityClass,
-    BrainClassId, CanonicalDigestBuilder, FoundationAbiBinding, LanguageCodebookV1, LobeLayout,
-    PhenotypeHash, ScaffoldContractError, SensorProfile,
+    genome::CognitiveArchitectureGenomeParameters, Blake3Digest, BrainCapacityClass, BrainClassId,
+    CanonicalDigestBuilder, FoundationAbiBinding, LanguageCodebookV1, LobeLayout, PhenotypeHash,
+    ScaffoldContractError, SensorProfile,
 };
 
 use super::abi_validation::{
@@ -63,6 +63,12 @@ impl CognitiveArchitecturePlan {
     pub const fn motor_head_width(&self) -> u16 {
         self.parameters.motor_head_width()
     }
+    pub const fn focal_feature_width(&self) -> u16 {
+        self.parameters.focal_feature_width()
+    }
+    pub const fn predictor_interaction_rank(&self) -> u8 {
+        self.parameters.predictor_interaction_rank()
+    }
     pub const fn dendritic_branch_capacity(&self) -> u16 {
         self.parameters.dendritic_branch_capacity()
     }
@@ -71,6 +77,12 @@ impl CognitiveArchitecturePlan {
     }
     pub const fn structural_edit_budget(&self) -> u8 {
         self.parameters.structural_edit_budget()
+    }
+    pub const fn structural_edge_capacity(&self) -> u16 {
+        self.parameters.structural_edge_capacity()
+    }
+    pub const fn sleep_concept_limit(&self) -> u16 {
+        self.parameters.sleep_concept_limit()
     }
     pub const fn sleep_trigger_threshold(&self) -> f32 {
         self.parameters.sleep_trigger_threshold()
@@ -249,10 +261,8 @@ impl BrainPhenotype {
             compute_abi_digests(capacity, &projections, &synapses);
         let foundation_abi = inputs.foundation_abi().clone();
         let language_codebook = foundation_abi.language_codebook().clone();
-        let cognitive_architecture = CognitiveArchitecturePlan::compile(
-            inputs.genome().cognitive_architecture(),
-            capacity,
-        )?;
+        let cognitive_architecture =
+            CognitiveArchitecturePlan::compile(inputs.genome().cognitive_architecture(), capacity)?;
         let mut value = Self {
             schema_version: PHENOTYPE_SCHEMA_VERSION,
             compiler_inputs_digest: inputs.canonical_digest(),

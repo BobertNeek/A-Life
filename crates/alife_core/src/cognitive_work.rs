@@ -6,8 +6,13 @@ use crate::{CanonicalDigestBuilder, ScaffoldContractError, Validate};
 
 pub const COGNITIVE_WORK_SCHEMA_VERSION: u16 = 1;
 pub const COGNITIVE_WORK_POLICY_VERSION: u16 = 1;
+pub const COGNITIVE_WORK_COST_POLICY_VERSION: u16 = 1;
 pub const MAX_COGNITIVE_WORK_COUNTER: u64 = 1_000_000_000;
 pub const MAX_COGNITIVE_ENERGY_PER_WORK_UNIT: f32 = 1.0;
+
+fn default_cognitive_work_cost_policy_version() -> u16 {
+    COGNITIVE_WORK_COST_POLICY_VERSION
+}
 
 /// Bounded semantic operation counts collected by the cognitive runtime.
 ///
@@ -28,6 +33,8 @@ pub struct CognitiveWorkCounters {
     pub structural_ops: u64,
     pub learning_ops: u64,
     pub sleep_ops: u64,
+    #[serde(default)]
+    pub motor_ops: u64,
 }
 
 impl CognitiveWorkCounters {
@@ -59,6 +66,7 @@ impl CognitiveWorkCounters {
             structural_ops,
             learning_ops,
             sleep_ops,
+            motor_ops: 0,
         };
         counters.validate_contract()?;
         Ok(counters)
@@ -78,6 +86,7 @@ impl CognitiveWorkCounters {
             structural_ops: 0,
             learning_ops: 0,
             sleep_ops: 0,
+            motor_ops: 0,
         }
     }
 
@@ -85,7 +94,13 @@ impl CognitiveWorkCounters {
         CognitiveWorkReceipt::aggregate(self)
     }
 
-    fn values(self) -> [u64; 12] {
+    pub fn with_motor_ops(mut self, motor_ops: u64) -> Result<Self, ScaffoldContractError> {
+        self.motor_ops = motor_ops;
+        self.validate_contract()?;
+        Ok(self)
+    }
+
+    fn values(self) -> [u64; 13] {
         [
             self.neural_updates,
             self.synapses_evaluated,
@@ -99,6 +114,7 @@ impl CognitiveWorkCounters {
             self.structural_ops,
             self.learning_ops,
             self.sleep_ops,
+            self.motor_ops,
         ]
     }
 
@@ -132,21 +148,43 @@ impl Validate for CognitiveWorkCounters {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct CognitiveWorkCostPolicy {
     pub enabled: bool,
+    #[serde(default = "default_cognitive_work_cost_policy_version")]
+    pub schema_version: u16,
     pub energy_per_work_unit: f32,
+    #[serde(default)]
+    pub fatigue_per_work_unit: f32,
+    #[serde(default)]
+    pub heat_per_work_unit: f32,
 }
 
 impl CognitiveWorkCostPolicy {
     pub const fn disabled() -> Self {
         Self {
             enabled: false,
+            schema_version: COGNITIVE_WORK_COST_POLICY_VERSION,
             energy_per_work_unit: 0.0,
+            fatigue_per_work_unit: 0.0,
+            heat_per_work_unit: 0.0,
+        }
+    }
+
+    pub const fn production_default() -> Self {
+        Self {
+            enabled: true,
+            schema_version: COGNITIVE_WORK_COST_POLICY_VERSION,
+            energy_per_work_unit: 0.000_001,
+            fatigue_per_work_unit: 0.000_000_5,
+            heat_per_work_unit: 0.000_000_25,
         }
     }
 
     pub fn enabled(energy_per_work_unit: f32) -> Result<Self, ScaffoldContractError> {
         let policy = Self {
             enabled: true,
+            schema_version: COGNITIVE_WORK_COST_POLICY_VERSION,
             energy_per_work_unit,
+            fatigue_per_work_unit: 0.0,
+            heat_per_work_unit: 0.0,
         };
         policy.validate_contract()?;
         Ok(policy)
@@ -154,6 +192,29 @@ impl CognitiveWorkCostPolicy {
 
     pub const fn is_enabled(self) -> bool {
         self.enabled
+    }
+
+    pub fn fatigue_debit(
+        &self,
+        receipt: &CognitiveWorkReceipt,
+    ) -> Result<f32, ScaffoldContractError> {
+        self.validate_contract()?;
+        receipt.validate_contract()?;
+        Ok(if self.enabled {
+            (receipt.weighted_total as f64 * f64::from(self.fatigue_per_work_unit)) as f32
+        } else {
+            0.0
+        })
+    }
+
+    pub fn heat_debit(&self, receipt: &CognitiveWorkReceipt) -> Result<f32, ScaffoldContractError> {
+        self.validate_contract()?;
+        receipt.validate_contract()?;
+        Ok(if self.enabled {
+            (receipt.weighted_total as f64 * f64::from(self.heat_per_work_unit)) as f32
+        } else {
+            0.0
+        })
     }
 
     pub fn energy_debit(
@@ -181,9 +242,16 @@ impl Default for CognitiveWorkCostPolicy {
 
 impl Validate for CognitiveWorkCostPolicy {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        if !self.energy_per_work_unit.is_finite()
+        if self.schema_version != COGNITIVE_WORK_COST_POLICY_VERSION
+            || !self.energy_per_work_unit.is_finite()
             || self.energy_per_work_unit < 0.0
             || self.energy_per_work_unit > MAX_COGNITIVE_ENERGY_PER_WORK_UNIT
+            || !self.fatigue_per_work_unit.is_finite()
+            || self.fatigue_per_work_unit < 0.0
+            || self.fatigue_per_work_unit > MAX_COGNITIVE_ENERGY_PER_WORK_UNIT
+            || !self.heat_per_work_unit.is_finite()
+            || self.heat_per_work_unit < 0.0
+            || self.heat_per_work_unit > MAX_COGNITIVE_ENERGY_PER_WORK_UNIT
         {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
@@ -208,6 +276,8 @@ pub struct CognitiveWorkReceipt {
     pub sleep_ops: u64,
     pub weighted_total: u64,
     pub policy_version: u16,
+    #[serde(default)]
+    pub motor_ops: u64,
 }
 
 impl CognitiveWorkReceipt {
@@ -245,7 +315,7 @@ impl CognitiveWorkReceipt {
 
     pub fn aggregate(counters: CognitiveWorkCounters) -> Result<Self, ScaffoldContractError> {
         counters.validate_contract()?;
-        let [neural_updates, synapses_evaluated, dendritic_ops, focal_target_ops, memory_ops, concept_ops, gap_ops, prediction_ops, replay_ops, structural_ops, learning_ops, sleep_ops] =
+        let [neural_updates, synapses_evaluated, dendritic_ops, focal_target_ops, memory_ops, concept_ops, gap_ops, prediction_ops, replay_ops, structural_ops, learning_ops, sleep_ops, motor_ops] =
             counters.values();
         let receipt = Self {
             schema_version: COGNITIVE_WORK_SCHEMA_VERSION,
@@ -263,8 +333,15 @@ impl CognitiveWorkReceipt {
             sleep_ops,
             weighted_total: 0,
             policy_version: COGNITIVE_WORK_POLICY_VERSION,
+            motor_ops,
         };
         receipt.with_computed_total()
+    }
+
+    pub fn with_motor_ops(mut self, motor_ops: u64) -> Result<Self, ScaffoldContractError> {
+        self.motor_ops = motor_ops;
+        self.validate_contract()?;
+        Ok(self)
     }
 
     pub const fn zero() -> Self {
@@ -282,6 +359,7 @@ impl CognitiveWorkReceipt {
             structural_ops: 0,
             learning_ops: 0,
             sleep_ops: 0,
+            motor_ops: 0,
             weighted_total: 0,
             policy_version: COGNITIVE_WORK_POLICY_VERSION,
         }
@@ -305,6 +383,7 @@ impl CognitiveWorkReceipt {
             structural_ops: self.structural_ops,
             learning_ops: self.learning_ops,
             sleep_ops: self.sleep_ops,
+            motor_ops: self.motor_ops,
         }
         .values()
         .into_iter()
@@ -338,6 +417,7 @@ impl CognitiveWorkReceipt {
             self.structural_ops,
             self.learning_ops,
             self.sleep_ops,
+            self.motor_ops,
         ] {
             builder.write_u64(value);
         }
@@ -360,6 +440,7 @@ impl CognitiveWorkReceipt {
             structural_ops: self.structural_ops,
             learning_ops: self.learning_ops,
             sleep_ops: self.sleep_ops,
+            motor_ops: self.motor_ops,
         }
         .validate_counter_bounds()
     }
