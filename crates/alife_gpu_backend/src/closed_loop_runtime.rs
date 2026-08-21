@@ -5428,47 +5428,6 @@ impl RuntimePreflightTestHarness {
 mod task7_private_tests;
 
 #[cfg(test)]
-mod selector_diagnostic_tests {
-    use super::*;
-
-    fn candidate(index: u16, logit: f32) -> GpuSelectorCandidateDiagnostic {
-        GpuSelectorCandidateDiagnostic {
-            candidate_index: index,
-            action_id: ActionId(u32::from(index) + 1),
-            family: CandidateActionFamily::Inspect,
-            target: ActionTarget::NONE,
-            validity: GpuSelectorCandidateValidity::Valid,
-            decoder_family_bias: 0.125,
-            pre_context_logit: Some(logit - 0.25),
-            memory_context_delta: Some(0.25),
-            final_logit: Some(logit),
-        }
-    }
-
-    #[test]
-    fn receipt_preserves_losing_logits_and_exact_selector_identity() {
-        let receipt = GpuSelectorDiagnosticReceipt {
-            schema_version: GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
-            frame_digest: PerceptionFrameDigest([1, 2, 3, 4]),
-            phenotype_hash: PhenotypeHash([5, 6, 7, 8]),
-            dispatch_generation: 9,
-            policy: GpuSelectorPolicyIdentity::PRODUCTION_V1,
-            candidates: vec![candidate(0, 0.75), candidate(1, 0.25), candidate(2, 0.75)],
-            argmax_candidate_index: 0,
-            equal_max_candidate_indices: vec![0, 2],
-            chosen_candidate_index: 0,
-        };
-
-        receipt.validate_contract().unwrap();
-        assert_eq!(receipt.candidates[1].final_logit, Some(0.25));
-        assert_eq!(
-            receipt.policy.exploration_mode,
-            GpuSelectorExplorationMode::Disabled
-        );
-    }
-}
-
-#[cfg(test)]
 mod staging_backend_tests {
     use super::*;
 

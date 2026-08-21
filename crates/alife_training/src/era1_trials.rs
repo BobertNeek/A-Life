@@ -1518,8 +1518,8 @@ fn valid_git_object_id(value: &str) -> bool {
 mod selector_diagnostic_receipt_tests {
     use super::*;
     use alife_gpu_backend::{
-        GpuSelectorCandidateDiagnostic, GpuSelectorCandidateValidity, GpuSelectorPolicyIdentity,
-        GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
+        GpuSelectorCandidateDiagnostic, GpuSelectorCandidateValidity, GpuSelectorExplorationMode,
+        GpuSelectorPolicyIdentity, GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
     };
 
     #[test]
@@ -1535,24 +1535,53 @@ mod selector_diagnostic_receipt_tests {
                 phenotype_hash: PhenotypeHash([5, 6, 7, 8]),
                 dispatch_generation: 9,
                 policy: GpuSelectorPolicyIdentity::PRODUCTION_V1,
-                candidates: vec![GpuSelectorCandidateDiagnostic {
-                    candidate_index: 0,
-                    action_id: alife_core::ActionId(4),
-                    family: CandidateActionFamily::Inspect,
-                    target: alife_core::ActionTarget::NONE,
-                    validity: GpuSelectorCandidateValidity::Valid,
-                    decoder_family_bias: 0.125,
-                    pre_context_logit: Some(0.25),
-                    memory_context_delta: Some(0.25),
-                    final_logit: Some(0.5),
-                }],
+                candidates: vec![
+                    GpuSelectorCandidateDiagnostic {
+                        candidate_index: 0,
+                        action_id: alife_core::ActionId(4),
+                        family: CandidateActionFamily::Inspect,
+                        target: alife_core::ActionTarget::NONE,
+                        validity: GpuSelectorCandidateValidity::Valid,
+                        decoder_family_bias: 0.125,
+                        pre_context_logit: Some(0.5),
+                        memory_context_delta: Some(0.25),
+                        final_logit: Some(0.75),
+                    },
+                    GpuSelectorCandidateDiagnostic {
+                        candidate_index: 1,
+                        action_id: alife_core::ActionId(5),
+                        family: CandidateActionFamily::Inspect,
+                        target: alife_core::ActionTarget::NONE,
+                        validity: GpuSelectorCandidateValidity::Valid,
+                        decoder_family_bias: 0.125,
+                        pre_context_logit: Some(0.0),
+                        memory_context_delta: Some(0.25),
+                        final_logit: Some(0.25),
+                    },
+                    GpuSelectorCandidateDiagnostic {
+                        candidate_index: 2,
+                        action_id: alife_core::ActionId(6),
+                        family: CandidateActionFamily::Inspect,
+                        target: alife_core::ActionTarget::NONE,
+                        validity: GpuSelectorCandidateValidity::Valid,
+                        decoder_family_bias: 0.125,
+                        pre_context_logit: Some(0.5),
+                        memory_context_delta: Some(0.25),
+                        final_logit: Some(0.75),
+                    },
+                ],
                 argmax_candidate_index: 0,
-                equal_max_candidate_indices: vec![0],
+                equal_max_candidate_indices: vec![0, 2],
                 chosen_candidate_index: 0,
             },
         };
 
         receipt.dispatch.validate_contract().unwrap();
+        assert_eq!(receipt.dispatch.candidates[1].final_logit, Some(0.25));
+        assert_eq!(
+            receipt.dispatch.policy.exploration_mode,
+            GpuSelectorExplorationMode::Disabled
+        );
         receipt
             .validate_source_identity(source_commit, source_tree)
             .unwrap();
