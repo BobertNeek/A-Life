@@ -14,7 +14,7 @@ use alife_core::{
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
-    GpuClosedLoopMemoryTickInput, GpuRuntimeProfile,
+    GpuClosedLoopMemoryTickInput, GpuRuntimeProfile, GpuSelectorDiagnosticReceipt,
 };
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use alife_world::{
@@ -70,7 +70,56 @@ pub struct Era1CausalStepReceipt {
     pub novel_tracked_id: Option<TrackedObjectId>,
     pub behavior_success: bool,
     pub speech_payload: Option<SpeechMotorPayload>,
+    #[serde(default)]
+    pub selector_diagnostic: Option<Era1SelectorDiagnosticReceipt>,
     pub sealed_patch: ExperiencePatch,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Era1SelectorDiagnosticReceipt {
+    pub source_commit: String,
+    pub source_tree: String,
+    pub dispatch: GpuSelectorDiagnosticReceipt,
+}
+
+impl Era1SelectorDiagnosticReceipt {
+    fn validate_source_identity(
+        &self,
+        source_commit: &str,
+        source_tree: &str,
+    ) -> Result<(), ScaffoldContractError> {
+        if self.source_commit != source_commit || self.source_tree != source_tree {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        Ok(())
+    }
+
+    fn validate_for_step(
+        &self,
+        source_commit: &str,
+        source_tree: &str,
+        step: &Era1CausalStepReceipt,
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_source_identity(source_commit, source_tree)?;
+        self.dispatch.validate_contract()?;
+        let neural = step.sealed_patch.decision().neural_evidence()?;
+        let chosen = self
+            .dispatch
+            .candidates
+            .get(usize::from(self.dispatch.chosen_candidate_index))
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        if self.dispatch.frame_digest != step.frame_digest
+            || self.dispatch.phenotype_hash != step.phenotype_hash
+            || self.dispatch.dispatch_generation != neural.dispatch_generation
+            || self.dispatch.chosen_candidate_index != neural.candidate_index
+            || chosen.action_id != neural.action_id
+            || chosen.family != step.selected_family
+            || chosen.target.entity != step.target_entity
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -133,6 +182,8 @@ pub struct Era1TrialRunEvidence {
     pub backend_api: String,
     pub language_grounding: LanguageGroundingLedger,
     pub learning_assessment: Era1LearningAssessment,
+    #[serde(default)]
+    pub selector_diagnostics_enabled: bool,
 }
 
 impl Era1TrialRunEvidence {
@@ -157,6 +208,10 @@ impl Era1TrialRunEvidence {
             || self.backend_api != self.receipt.backend_api
             || aggregate_perception(&self.steps) != self.receipt.perception_digest
             || aggregate_sealed(&self.steps) != self.receipt.sealed_evidence_digest
+            || self
+                .steps
+                .iter()
+                .any(|step| step.selector_diagnostic.is_some() != self.selector_diagnostics_enabled)
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
@@ -244,6 +299,13 @@ impl Era1TrialRunEvidence {
             {
                 return Err(ScaffoldContractError::InvalidDecisionEvidence);
             }
+            if let Some(diagnostic) = &step.selector_diagnostic {
+                diagnostic.validate_for_step(
+                    &self.receipt.source_commit,
+                    &self.receipt.source_tree,
+                    step,
+                )?;
+            }
         }
 
         match self.receipt.control {
@@ -314,6 +376,7 @@ pub struct Era1TrialRunRequest<'a> {
     partition: Era1EvidencePartition,
     source_commit: &'a str,
     source_tree: &'a str,
+    selector_diagnostics: bool,
 }
 
 impl<'a> Era1TrialRunRequest<'a> {
@@ -339,9 +402,15 @@ impl<'a> Era1TrialRunRequest<'a> {
             partition,
             source_commit,
             source_tree,
+            selector_diagnostics: false,
         };
         request.validate_contract()?;
         Ok(request)
+    }
+
+    pub fn with_selector_diagnostics(mut self) -> Self {
+        self.selector_diagnostics = true;
+        self
     }
 
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
@@ -526,7 +595,12 @@ impl Era1TrialRunner {
                     .prepare_memory_context_upload(handle, &frame, &finalized_recall)?;
             let member = GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &memory_upload)?;
             let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![member])?;
-            let mut gpu_ticks = self.session.tick_memory_batch(&batch)?;
+            let mut gpu_ticks = if request.selector_diagnostics {
+                self.session
+                    .tick_memory_batch_with_selector_diagnostics(&batch)?
+            } else {
+                self.session.tick_memory_batch(&batch)?
+            };
             let gpu_tick = gpu_ticks
                 .pop()
                 .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
@@ -628,6 +702,14 @@ impl Era1TrialRunner {
                 .flatten()
                 .any(|token| token.source_kind == UtteranceSourceKind::Player);
             let speech_payload = gpu_tick.speech_payload.clone();
+            let selector_diagnostic =
+                gpu_tick
+                    .selector_diagnostic
+                    .map(|dispatch| Era1SelectorDiagnosticReceipt {
+                        source_commit: request.source_commit.to_owned(),
+                        source_tree: request.source_tree.to_owned(),
+                        dispatch,
+                    });
             let action_result = world.apply_neural_command(
                 &decision.selected_action,
                 speech_payload.clone(),
@@ -728,6 +810,7 @@ impl Era1TrialRunner {
                 novel_tracked_id,
                 behavior_success: false,
                 speech_payload,
+                selector_diagnostic,
                 sealed_patch: patch.clone(),
             });
             homeostasis = homeostasis.advance(
@@ -803,6 +886,7 @@ impl Era1TrialRunner {
             backend_api: self.backend_api.clone(),
             language_grounding,
             learning_assessment,
+            selector_diagnostics_enabled: request.selector_diagnostics,
             steps,
         };
         evidence.validate_contract()?;
@@ -1428,4 +1512,55 @@ fn valid_git_object_id(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+#[cfg(test)]
+mod selector_diagnostic_receipt_tests {
+    use super::*;
+    use alife_gpu_backend::{
+        GpuSelectorCandidateDiagnostic, GpuSelectorCandidateValidity, GpuSelectorPolicyIdentity,
+        GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
+    };
+
+    #[test]
+    fn serialization_preserves_exact_source_and_gpu_selector_identity() {
+        let source_commit = "1111111111111111111111111111111111111111";
+        let source_tree = "2222222222222222222222222222222222222222";
+        let receipt = Era1SelectorDiagnosticReceipt {
+            source_commit: source_commit.to_owned(),
+            source_tree: source_tree.to_owned(),
+            dispatch: GpuSelectorDiagnosticReceipt {
+                schema_version: GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
+                frame_digest: PerceptionFrameDigest([1, 2, 3, 4]),
+                phenotype_hash: PhenotypeHash([5, 6, 7, 8]),
+                dispatch_generation: 9,
+                policy: GpuSelectorPolicyIdentity::PRODUCTION_V1,
+                candidates: vec![GpuSelectorCandidateDiagnostic {
+                    candidate_index: 0,
+                    action_id: alife_core::ActionId(4),
+                    family: CandidateActionFamily::Inspect,
+                    target: alife_core::ActionTarget::NONE,
+                    validity: GpuSelectorCandidateValidity::Valid,
+                    decoder_family_bias: 0.125,
+                    pre_context_logit: Some(0.25),
+                    memory_context_delta: Some(0.25),
+                    final_logit: Some(0.5),
+                }],
+                argmax_candidate_index: 0,
+                equal_max_candidate_indices: vec![0],
+                chosen_candidate_index: 0,
+            },
+        };
+
+        receipt.dispatch.validate_contract().unwrap();
+        receipt
+            .validate_source_identity(source_commit, source_tree)
+            .unwrap();
+        assert!(receipt
+            .validate_source_identity("3333333333333333333333333333333333333333", source_tree,)
+            .is_err());
+        let encoded = serde_json::to_vec(&receipt).unwrap();
+        let decoded: Era1SelectorDiagnosticReceipt = serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(decoded, receipt);
+    }
 }

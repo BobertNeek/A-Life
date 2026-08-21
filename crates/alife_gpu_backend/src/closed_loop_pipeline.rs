@@ -400,6 +400,7 @@ pub struct GpuActiveBatchUpload {
     authority_nonce: u64,
     selection_offsets: Vec<u32>,
     speech_payload_offsets: Vec<u32>,
+    candidate_logit_offsets: Vec<u32>,
     memory_context_bindings: Vec<Option<GpuMemoryContextDispatchReceipt>>,
 }
 
@@ -702,6 +703,10 @@ impl GpuActiveBatchUpload {
                 .iter()
                 .map(|entry| entry.slot.word_ranges().speech_payload_words.start)
                 .collect(),
+            candidate_logit_offsets: entries
+                .iter()
+                .map(|entry| entry.slot.record().candidate_logit_offset)
+                .collect(),
             memory_context_bindings,
         })
     }
@@ -726,6 +731,17 @@ impl GpuActiveBatchUpload {
     }
     pub fn memory_context_bindings(&self) -> &[Option<GpuMemoryContextDispatchReceipt>] {
         &self.memory_context_bindings
+    }
+
+    pub(crate) fn selector_diagnostic_bytes(&self) -> Result<u64, GpuClosedLoopError> {
+        self.headers
+            .iter()
+            .try_fold(0_u64, |words, header| {
+                words.checked_add(u64::from(header.candidate_count))
+            })
+            .and_then(|words| words.checked_mul(8))
+            .filter(|bytes| *bytes != 0)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)
     }
     #[cfg(feature = "gpu-tests")]
     pub fn tamper_activity_digest_for_hardware_diagnostic(
@@ -805,6 +821,12 @@ pub(crate) struct GpuValidatedClassBatch {
     pending_records: Vec<GpuPendingEligibilityRecord>,
     final_sides: Vec<(u32, u32, u32)>,
     readback_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GpuSelectorLogitCapture {
+    pub(crate) pre_context_logit_bits: Vec<u32>,
+    pub(crate) final_logit_bits: Vec<u32>,
 }
 
 impl GpuValidatedClassBatch {
@@ -2327,11 +2349,39 @@ impl GpuClosedLoopPipelines {
         buffers: &impl ClosedLoopBufferSet,
         batch: &GpuActiveBatchUpload,
     ) -> Result<u64, GpuClosedLoopError> {
+        self.record_staged_closed_loop_inner(encoder, buffers, batch, None)
+    }
+
+    pub(crate) fn record_staged_closed_loop_with_selector_diagnostics(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        buffers: &impl ClosedLoopBufferSet,
+        batch: &GpuActiveBatchUpload,
+        selector_readback: &wgpu::Buffer,
+    ) -> Result<u64, GpuClosedLoopError> {
+        self.record_staged_closed_loop_inner(encoder, buffers, batch, Some(selector_readback))
+    }
+
+    fn record_staged_closed_loop_inner(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        buffers: &impl ClosedLoopBufferSet,
+        batch: &GpuActiveBatchUpload,
+        selector_readback: Option<&wgpu::Buffer>,
+    ) -> Result<u64, GpuClosedLoopError> {
         self.validate_buffers_and_dispatch(buffers, batch)?;
         let readback_bytes = self.readback_bytes(buffers, batch)?;
         self.authority.record_encode(batch.authority_nonce)?;
         let result = (|| {
-            self.record_staged_compute_pass(encoder, batch)?;
+            match selector_readback {
+                Some(readback) => {
+                    self.record_pre_context_compute_pass(encoder, batch)?;
+                    self.record_selector_logit_copy(encoder, buffers, batch, readback, false)?;
+                    self.record_post_context_compute_pass(encoder, batch)?;
+                    self.record_selector_logit_copy(encoder, buffers, batch, readback, true)?;
+                }
+                None => self.record_staged_compute_pass(encoder, batch)?,
+            }
             self.authority.record_recurrent(batch.authority_nonce)?;
             self.authority.record_selection(batch.authority_nonce)?;
             self.authority.record_eligibility(batch.authority_nonce)?;
@@ -2364,6 +2414,66 @@ impl GpuClosedLoopPipelines {
             self.authority.recording_failed(batch.authority_nonce)?;
         }
         result
+    }
+
+    fn record_pre_context_compute_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<(), GpuClosedLoopError> {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("closed-loop-selector-diagnostic-pre-context"),
+            timestamp_writes: None,
+        });
+        self.record_encode(&mut pass, batch)?;
+        self.record_microsteps(&mut pass, batch)?;
+        self.record_decode_candidates(&mut pass, batch)
+    }
+
+    fn record_post_context_compute_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<(), GpuClosedLoopError> {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("closed-loop-selector-diagnostic-post-context"),
+            timestamp_writes: None,
+        });
+        self.record_context_select(&mut pass, batch)?;
+        self.record_eligibility(&mut pass, batch)
+    }
+
+    fn record_selector_logit_copy(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        buffers: &impl ClosedLoopBufferSet,
+        batch: &GpuActiveBatchUpload,
+        readback: &wgpu::Buffer,
+        final_logits: bool,
+    ) -> Result<(), GpuClosedLoopError> {
+        let phase_base = if final_logits {
+            batch.selector_diagnostic_bytes()? / 2
+        } else {
+            0
+        };
+        let neural = buffers.neural_buffers();
+        let mut destination = phase_base;
+        for (header, source_word) in batch.headers.iter().zip(&batch.candidate_logit_offsets) {
+            let bytes = u64::from(header.candidate_count)
+                .checked_mul(4)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+            encoder.copy_buffer_to_buffer(
+                neural[6],
+                u64::from(*source_word) * 4,
+                readback,
+                destination,
+                bytes,
+            );
+            destination = destination
+                .checked_add(bytes)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        }
+        Ok(())
     }
 
     fn record_staged_compute_pass(
@@ -2404,6 +2514,63 @@ impl GpuClosedLoopPipelines {
             },
         );
         Ok(GpuCompactMapTicket { receiver })
+    }
+
+    pub(crate) fn register_selector_diagnostic_mapping(
+        &self,
+        command_buffer: &wgpu::CommandBuffer,
+        readback: &wgpu::Buffer,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<GpuCompactMapTicket, GpuClosedLoopError> {
+        let bytes = batch.selector_diagnostic_bytes()?;
+        let (sender, receiver) = mpsc::channel();
+        command_buffer.map_buffer_on_submit(
+            readback,
+            wgpu::MapMode::Read,
+            0..bytes,
+            move |result| {
+                let _ = sender.send(result);
+            },
+        );
+        Ok(GpuCompactMapTicket { receiver })
+    }
+
+    pub(crate) fn decode_mapped_selector_diagnostics(
+        &self,
+        readback: &wgpu::Buffer,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<Vec<GpuSelectorLogitCapture>, GpuClosedLoopError> {
+        let bytes = batch.selector_diagnostic_bytes()?;
+        let mapped = readback.slice(..bytes).get_mapped_range();
+        let words: Vec<u32> = bytemuck::cast_slice(&mapped).to_vec();
+        drop(mapped);
+        readback.unmap();
+        let phase_words = words.len() / 2;
+        if words.len() % 2 != 0 {
+            return Err(GpuClosedLoopError::SubmissionFailed);
+        }
+        let (pre, final_logits) = words.split_at(phase_words);
+        let mut captures = Vec::with_capacity(batch.row_count());
+        let mut cursor = 0_usize;
+        for header in &batch.headers {
+            let count = usize::try_from(header.candidate_count)
+                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+            let end = cursor
+                .checked_add(count)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+            if end > phase_words {
+                return Err(GpuClosedLoopError::SubmissionFailed);
+            }
+            captures.push(GpuSelectorLogitCapture {
+                pre_context_logit_bits: pre[cursor..end].to_vec(),
+                final_logit_bits: final_logits[cursor..end].to_vec(),
+            });
+            cursor = end;
+        }
+        if cursor != phase_words {
+            return Err(GpuClosedLoopError::SubmissionFailed);
+        }
+        Ok(captures)
     }
 
     /// Copies and validates compact GPU records but deliberately leaves the
@@ -2696,12 +2863,32 @@ impl GpuClosedLoopPipelines {
         pass: &mut wgpu::ComputePass<'pass>,
         batch: &GpuActiveBatchUpload,
     ) -> Result<(), GpuClosedLoopError> {
+        self.record_decode_candidates(pass, batch)?;
+        self.record_context_select(pass, batch)
+    }
+
+    fn record_decode_candidates<'pass>(
+        &'pass self,
+        pass: &mut wgpu::ComputePass<'pass>,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<(), GpuClosedLoopError> {
         self.validate_dispatch(batch)?;
         let rows =
             u32::try_from(batch.row_count()).map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
         pass.set_pipeline(&self.kernels.decode_pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.dispatch_workgroups(1, rows, 1);
+        Ok(())
+    }
+
+    fn record_context_select<'pass>(
+        &'pass self,
+        pass: &mut wgpu::ComputePass<'pass>,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<(), GpuClosedLoopError> {
+        self.validate_dispatch(batch)?;
+        let rows =
+            u32::try_from(batch.row_count()).map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
         pass.set_pipeline(&self.kernels.memory_context_pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.dispatch_workgroups(1, rows, 1);
@@ -3496,6 +3683,7 @@ mod lifecycle_tests {
             authority_nonce: 7,
             selection_offsets: vec![0],
             speech_payload_offsets: vec![0],
+            candidate_logit_offsets: vec![0],
             memory_context_bindings: vec![None],
         };
 

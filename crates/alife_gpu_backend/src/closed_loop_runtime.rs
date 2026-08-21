@@ -10,15 +10,15 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use alife_core::{
-    Blake3Digest, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId, BrainDispatchIdentity,
-    BrainPhenotype, BrainWorkCounters, BrainWorkReceipt, CanonicalDigestBuilder,
-    CoactivationEvidence, Confidence, DendriticBranchSet, ExperiencePatch, FinalizedMemoryRecall,
-    GpuPressureSample, GpuPressureSampleInput, LearningCommitToken, LearningSequenceGuard,
-    NeuralActionSelection, NeuralThrottleDecision, NeuralThrottleLevel, OrganismId,
-    OutcomeCreditPacket, PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest,
-    PhenotypeHash, ScaffoldContractError, SensorProfile, SpeechMotorPayload,
-    BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16,
-    REQUIRED_GPU_FEATURE_MASK,
+    ActionId, ActionTarget, Blake3Digest, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId,
+    BrainDispatchIdentity, BrainPhenotype, BrainWorkCounters, BrainWorkReceipt,
+    CandidateActionFamily, CanonicalDigestBuilder, CoactivationEvidence, Confidence,
+    DendriticBranchSet, ExperiencePatch, FinalizedMemoryRecall, GpuPressureSample,
+    GpuPressureSampleInput, LearningCommitToken, LearningSequenceGuard, NeuralActionSelection,
+    NeuralThrottleDecision, NeuralThrottleLevel, OrganismId, OutcomeCreditPacket,
+    PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest, PhenotypeHash,
+    ScaffoldContractError, SensorProfile, SpeechMotorPayload, BRAIN_ATP_BASAL_DEBIT_Q16,
+    BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16, REQUIRED_GPU_FEATURE_MASK,
 };
 use serde::{Deserialize, Serialize};
 
@@ -31,8 +31,8 @@ use crate::{
     GpuFixedClassArenaPlan, GpuFixedSlotRanges, GpuLearningReceipt,
     GpuMemoryContextDispatchReceipt, GpuMemoryContextUpload, GpuOutcomeCreditRecord,
     GpuPendingEligibilityRecord, GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget,
-    GpuRuntimeProfile, GpuTimestampQueryResources, GpuV11CausalState, GpuV11Checkpoint,
-    GpuV11WorkReceipt, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
+    GpuRuntimeProfile, GpuSelectorLogitCapture, GpuTimestampQueryResources, GpuV11CausalState,
+    GpuV11Checkpoint, GpuV11WorkReceipt, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
     PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
 };
 
@@ -393,6 +393,69 @@ pub struct GpuClosedLoopTick {
     pub v11_work: GpuV11WorkReceipt,
     pub compact_readback_bytes: usize,
     pub hardware_receipt_generation: u64,
+    pub selector_diagnostic: Option<GpuSelectorDiagnosticReceipt>,
+}
+
+pub const GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION: u16 = 1;
+const GPU_SELECTOR_INVALID_LOGIT_BITS: u32 = 0x7fc0_0001;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuSelectorCandidateValidity {
+    Valid,
+    InvalidLogit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuSelectorTieBreak {
+    LowestCandidateIndex,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuSelectorExplorationMode {
+    Disabled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuSelectorPolicyIdentity {
+    pub schema_version: u16,
+    pub invalid_logit_bits: u32,
+    pub tie_break: GpuSelectorTieBreak,
+    pub exploration_mode: GpuSelectorExplorationMode,
+}
+
+impl GpuSelectorPolicyIdentity {
+    pub const PRODUCTION_V1: Self = Self {
+        schema_version: GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
+        invalid_logit_bits: GPU_SELECTOR_INVALID_LOGIT_BITS,
+        tie_break: GpuSelectorTieBreak::LowestCandidateIndex,
+        exploration_mode: GpuSelectorExplorationMode::Disabled,
+    };
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GpuSelectorCandidateDiagnostic {
+    pub candidate_index: u16,
+    pub action_id: ActionId,
+    pub family: CandidateActionFamily,
+    pub target: ActionTarget,
+    pub validity: GpuSelectorCandidateValidity,
+    pub decoder_family_bias: f32,
+    pub pre_context_logit: Option<f32>,
+    pub memory_context_delta: Option<f32>,
+    pub final_logit: Option<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GpuSelectorDiagnosticReceipt {
+    pub schema_version: u16,
+    pub frame_digest: PerceptionFrameDigest,
+    pub phenotype_hash: PhenotypeHash,
+    pub dispatch_generation: u64,
+    pub policy: GpuSelectorPolicyIdentity,
+    pub candidates: Vec<GpuSelectorCandidateDiagnostic>,
+    pub argmax_candidate_index: u16,
+    pub equal_max_candidate_indices: Vec<u16>,
+    pub chosen_candidate_index: u16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1238,7 +1301,182 @@ struct PreparedClassDispatch {
     batch: Option<GpuActiveBatchUpload>,
     recorded: bool,
     map_ticket: Option<GpuCompactMapTicket>,
+    selector_readback: Option<wgpu::Buffer>,
+    selector_map_ticket: Option<GpuCompactMapTicket>,
+    selector_captures: Option<Vec<GpuSelectorLogitCapture>>,
     validated: Option<GpuValidatedClassBatch>,
+}
+
+impl GpuSelectorDiagnosticReceipt {
+    pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.schema_version != GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION
+            || self.frame_digest.0 == [0; 4]
+            || self.phenotype_hash.0 == [0; 4]
+            || self.dispatch_generation == 0
+            || self.policy != GpuSelectorPolicyIdentity::PRODUCTION_V1
+            || self.candidates.is_empty()
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        for (index, candidate) in self.candidates.iter().enumerate() {
+            if usize::from(candidate.candidate_index) != index
+                || !candidate.decoder_family_bias.is_finite()
+            {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+            match candidate.validity {
+                GpuSelectorCandidateValidity::Valid => {
+                    let (Some(pre), Some(delta), Some(final_logit)) = (
+                        candidate.pre_context_logit,
+                        candidate.memory_context_delta,
+                        candidate.final_logit,
+                    ) else {
+                        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                    };
+                    if !pre.is_finite()
+                        || !delta.is_finite()
+                        || !final_logit.is_finite()
+                        || (final_logit - pre).to_bits() != delta.to_bits()
+                    {
+                        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                    }
+                }
+                GpuSelectorCandidateValidity::InvalidLogit => {
+                    if candidate.pre_context_logit.is_some()
+                        || candidate.memory_context_delta.is_some()
+                        || candidate.final_logit.is_some()
+                    {
+                        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                    }
+                }
+            }
+        }
+        let mut argmax = None::<(u16, f32)>;
+        let mut equal_max = Vec::new();
+        for candidate in &self.candidates {
+            let Some(logit) = candidate.final_logit else {
+                continue;
+            };
+            match argmax {
+                None => {
+                    argmax = Some((candidate.candidate_index, logit));
+                    equal_max.push(candidate.candidate_index);
+                }
+                Some((_, maximum)) if logit > maximum => {
+                    argmax = Some((candidate.candidate_index, logit));
+                    equal_max.clear();
+                    equal_max.push(candidate.candidate_index);
+                }
+                Some((_, maximum)) if logit == maximum => {
+                    equal_max.push(candidate.candidate_index);
+                }
+                _ => {}
+            }
+        }
+        let (argmax_index, _) = argmax.ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        if self.argmax_candidate_index != argmax_index
+            || self.equal_max_candidate_indices != equal_max
+            || self.chosen_candidate_index != argmax_index
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        Ok(())
+    }
+}
+
+fn selector_logit(bits: u32) -> Option<f32> {
+    let value = f32::from_bits(bits);
+    (bits != GPU_SELECTOR_INVALID_LOGIT_BITS && value.is_finite()).then_some(value)
+}
+
+fn build_selector_diagnostic(
+    frame: &PerceptionFrame,
+    phenotype: &BrainPhenotype,
+    dispatch_generation: u64,
+    chosen_candidate_index: u16,
+    capture: &GpuSelectorLogitCapture,
+) -> Result<GpuSelectorDiagnosticReceipt, ScaffoldContractError> {
+    if capture.pre_context_logit_bits.len() != frame.candidates().len()
+        || capture.final_logit_bits.len() != frame.candidates().len()
+    {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    let candidates = frame
+        .candidates()
+        .iter()
+        .zip(&capture.pre_context_logit_bits)
+        .zip(&capture.final_logit_bits)
+        .map(|((candidate, pre_bits), final_bits)| {
+            let family_bias = phenotype
+                .candidate_decoder()
+                .families()
+                .iter()
+                .find(|family| family.family() == candidate.family)
+                .map(|family| family.bias())
+                .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+            let pre = selector_logit(*pre_bits);
+            let final_logit = selector_logit(*final_bits);
+            let (validity, pre_context_logit, memory_context_delta, final_logit) =
+                match (pre, final_logit) {
+                    (Some(pre), Some(final_logit)) => (
+                        GpuSelectorCandidateValidity::Valid,
+                        Some(pre),
+                        Some(final_logit - pre),
+                        Some(final_logit),
+                    ),
+                    _ => (GpuSelectorCandidateValidity::InvalidLogit, None, None, None),
+                };
+            Ok(GpuSelectorCandidateDiagnostic {
+                candidate_index: candidate.candidate_index,
+                action_id: candidate.action_id,
+                family: candidate.family,
+                target: candidate.target,
+                validity,
+                decoder_family_bias: family_bias,
+                pre_context_logit,
+                memory_context_delta,
+                final_logit,
+            })
+        })
+        .collect::<Result<Vec<_>, ScaffoldContractError>>()?;
+    let mut argmax = None::<(u16, f32)>;
+    let mut equal_max_candidate_indices = Vec::new();
+    for candidate in &candidates {
+        let Some(logit) = candidate.final_logit else {
+            continue;
+        };
+        match argmax {
+            None => {
+                argmax = Some((candidate.candidate_index, logit));
+                equal_max_candidate_indices.push(candidate.candidate_index);
+            }
+            Some((_, maximum)) if logit > maximum => {
+                argmax = Some((candidate.candidate_index, logit));
+                equal_max_candidate_indices.clear();
+                equal_max_candidate_indices.push(candidate.candidate_index);
+            }
+            Some((_, maximum)) if logit == maximum => {
+                equal_max_candidate_indices.push(candidate.candidate_index);
+            }
+            _ => {}
+        }
+    }
+    let argmax_candidate_index = argmax
+        .map(|(index, _)| index)
+        .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+    let receipt = GpuSelectorDiagnosticReceipt {
+        schema_version: GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
+        frame_digest: frame.frame_digest(),
+        phenotype_hash: phenotype.phenotype_hash(),
+        dispatch_generation,
+        policy: GpuSelectorPolicyIdentity::PRODUCTION_V1,
+        candidates,
+        argmax_candidate_index,
+        equal_max_candidate_indices,
+        chosen_candidate_index,
+    };
+    receipt.validate_contract()?;
+    Ok(receipt)
 }
 
 fn capacity_for_promoted_class(
@@ -2594,7 +2832,7 @@ impl GpuClosedLoopBackend {
                 memory_upload: None,
             })
             .collect::<Vec<_>>();
-        self.tick_inputs(&inputs)
+        self.tick_inputs(&inputs, false)
     }
 
     pub fn tick_memory_batch(
@@ -2610,12 +2848,29 @@ impl GpuClosedLoopBackend {
                 memory_upload: Some(member.memory_upload),
             })
             .collect::<Vec<_>>();
-        self.tick_inputs(&inputs)
+        self.tick_inputs(&inputs, false)
+    }
+
+    pub fn tick_memory_batch_with_selector_diagnostics(
+        &mut self,
+        batch: &GpuClosedLoopMemoryBatchInput<'_>,
+    ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
+        let inputs = batch
+            .members
+            .iter()
+            .map(|member| GpuRuntimeTickInput {
+                handle: member.handle,
+                frame: member.frame,
+                memory_upload: Some(member.memory_upload),
+            })
+            .collect::<Vec<_>>();
+        self.tick_inputs(&inputs, true)
     }
 
     fn tick_inputs(
         &mut self,
         batch: &[GpuRuntimeTickInput<'_>],
+        capture_selector_diagnostics: bool,
     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
         self.ensure_ready()?;
         if batch.is_empty() {
@@ -2796,6 +3051,9 @@ impl GpuClosedLoopBackend {
                 batch: None,
                 recorded: false,
                 map_ticket: None,
+                selector_readback: None,
+                selector_map_ticket: None,
+                selector_captures: None,
                 validated: None,
             });
         }
@@ -2829,6 +3087,24 @@ impl GpuClosedLoopBackend {
                     }
                     return Err(map_gpu_contract_error(error));
                 }
+            }
+        }
+
+        if capture_selector_diagnostics {
+            for dispatch in &mut dispatches {
+                let bytes = dispatch
+                    .batch
+                    .as_ref()
+                    .expect("begun batch")
+                    .selector_diagnostic_bytes()
+                    .map_err(map_gpu_contract_error)?;
+                dispatch.selector_readback =
+                    Some(self.device.create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("closed-loop-selector-diagnostic-readback"),
+                        size: bytes,
+                        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                        mapped_at_creation: false,
+                    }));
             }
         }
 
@@ -2872,11 +3148,22 @@ impl GpuClosedLoopBackend {
                 .get_mut(&dispatch.class_id)
                 .and_then(|pool| pool.chunks.get_mut(dispatch.chunk_index))
                 .expect("begun bucket exists");
-            if let Err(error) = bucket.pipelines.record_staged_closed_loop(
-                &mut encoder,
-                &bucket.buffers,
-                dispatch.batch.as_ref().expect("begun batch"),
-            ) {
+            let result = match dispatch.selector_readback.as_ref() {
+                Some(readback) => bucket
+                    .pipelines
+                    .record_staged_closed_loop_with_selector_diagnostics(
+                        &mut encoder,
+                        &bucket.buffers,
+                        dispatch.batch.as_ref().expect("begun batch"),
+                        readback,
+                    ),
+                None => bucket.pipelines.record_staged_closed_loop(
+                    &mut encoder,
+                    &bucket.buffers,
+                    dispatch.batch.as_ref().expect("begun batch"),
+                ),
+            };
+            if let Err(error) = result {
                 self.cleanup_unsubmitted_dispatches(&mut dispatches);
                 return Err(map_gpu_contract_error(error));
             }
@@ -2924,6 +3211,19 @@ impl GpuClosedLoopBackend {
                     return Err(map_gpu_contract_error(error));
                 }
             }
+            if let Some(readback) = dispatch.selector_readback.as_ref() {
+                match bucket.pipelines.register_selector_diagnostic_mapping(
+                    &command_buffer,
+                    readback,
+                    dispatch.batch.as_ref().expect("recorded batch"),
+                ) {
+                    Ok(ticket) => dispatch.selector_map_ticket = Some(ticket),
+                    Err(error) => {
+                        self.cleanup_unsubmitted_dispatches(&mut dispatches);
+                        return Err(map_gpu_contract_error(error));
+                    }
+                }
+            }
         }
         let (timestamp_sender, timestamp_receiver) = std::sync::mpsc::channel();
         command_buffer.map_buffer_on_submit(
@@ -2949,10 +3249,18 @@ impl GpuClosedLoopBackend {
                 .take()
                 .is_some_and(GpuCompactMapTicket::mapping_succeeded)
         });
+        let selector_mappings_succeeded = dispatches.iter_mut().all(|dispatch| {
+            dispatch.selector_readback.is_none()
+                || dispatch
+                    .selector_map_ticket
+                    .take()
+                    .is_some_and(GpuCompactMapTicket::mapping_succeeded)
+        });
         let timestamp_mapping_succeeded = timestamp_mapping_completed(&timestamp_receiver);
         if forced_loss
             || poll_failed
             || !mappings_succeeded
+            || !selector_mappings_succeeded
             || !timestamp_mapping_succeeded
             || self.device_lost.load(Ordering::Acquire)
         {
@@ -2963,6 +3271,9 @@ impl GpuClosedLoopBackend {
                     .and_then(|pool| pool.chunks.get_mut(dispatch.chunk_index))
                     .expect("submitted bucket exists");
                 bucket.buffers.compact_readback().unmap();
+                if let Some(readback) = dispatch.selector_readback.as_ref() {
+                    readback.unmap();
+                }
                 let _ = bucket
                     .pipelines
                     .mark_post_submit_poison(dispatch.batch.as_ref().expect("submitted batch"));
@@ -2988,11 +3299,59 @@ impl GpuClosedLoopBackend {
                             .buffers
                             .compact_readback()
                             .unmap();
+                        if let Some(readback) = dispatch.selector_readback.as_ref() {
+                            readback.unmap();
+                        }
                     }
                     self.poison_submitted_dispatches(&dispatches);
                     return Err(error);
                 }
             };
+
+        if capture_selector_diagnostics {
+            for index in 0..dispatches.len() {
+                let result = {
+                    let dispatch = &dispatches[index];
+                    let bucket = self
+                        .class_buckets
+                        .get(&dispatch.class_id)
+                        .and_then(|pool| pool.chunks.get(dispatch.chunk_index))
+                        .expect("mapped bucket exists");
+                    bucket.pipelines.decode_mapped_selector_diagnostics(
+                        dispatch
+                            .selector_readback
+                            .as_ref()
+                            .expect("diagnostic capture was requested"),
+                        dispatch.batch.as_ref().expect("mapped batch"),
+                    )
+                };
+                match result {
+                    Ok(captures) => dispatches[index].selector_captures = Some(captures),
+                    Err(_) => {
+                        for still_mapped in &dispatches[index + 1..] {
+                            still_mapped
+                                .selector_readback
+                                .as_ref()
+                                .expect("diagnostic capture was requested")
+                                .unmap();
+                        }
+                        for submitted in &dispatches {
+                            let bucket = self
+                                .class_buckets
+                                .get_mut(&submitted.class_id)
+                                .and_then(|pool| pool.chunks.get_mut(submitted.chunk_index))
+                                .expect("submitted bucket exists");
+                            bucket.buffers.compact_readback().unmap();
+                            let _ = bucket.pipelines.mark_post_submit_poison(
+                                submitted.batch.as_ref().expect("submitted batch"),
+                            );
+                        }
+                        self.mark_device_lost();
+                        return Err(ScaffoldContractError::NeuralBackendUnavailable);
+                    }
+                }
+            }
+        }
 
         for index in 0..dispatches.len() {
             let dispatch = &dispatches[index];
@@ -3067,6 +3426,7 @@ impl GpuClosedLoopBackend {
         let mut ordered_pending_records = vec![None; batch.len()];
         let mut ordered_next_transaction_generations = vec![None; batch.len()];
         let mut ordered_memory_receipts = vec![None; batch.len()];
+        let mut ordered_selector_diagnostics = vec![None; batch.len()];
         let receipt_validation = (|| -> Result<(), ScaffoldContractError> {
             for dispatch in &dispatches {
                 let validated = dispatch.validated.as_ref().expect("validated batch");
@@ -3170,6 +3530,47 @@ impl GpuClosedLoopBackend {
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
 
+        if capture_selector_diagnostics {
+            let selector_validation = (|| -> Result<(), ScaffoldContractError> {
+                for dispatch in &dispatches {
+                    let captures = dispatch
+                        .selector_captures
+                        .as_ref()
+                        .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                    if captures.len() != dispatch.original_indices.len() {
+                        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                    }
+                    for (original_index, capture) in dispatch.original_indices.iter().zip(captures)
+                    {
+                        let input = batch[*original_index];
+                        let record = ordered_records[*original_index]
+                            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                        let chosen = u16::try_from(record.candidate_index)
+                            .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
+                        let phenotype = &self
+                            .class_buckets
+                            .get(&input.handle.class_id.raw())
+                            .and_then(|pool| pool.resident(input.handle).ok())
+                            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                            .phenotype;
+                        ordered_selector_diagnostics[*original_index] =
+                            Some(build_selector_diagnostic(
+                                input.frame,
+                                phenotype,
+                                dispatch_generation.get(),
+                                chosen,
+                                capture,
+                            )?);
+                    }
+                }
+                Ok(())
+            })();
+            if selector_validation.is_err() {
+                self.poison_submitted_dispatches(&dispatches);
+                return Err(ScaffoldContractError::NeuralBackendUnavailable);
+            }
+        }
+
         let activity_work_receipts: Result<Vec<BrainWorkReceipt>, ScaffoldContractError> = batch
             .iter()
             .enumerate()
@@ -3267,6 +3668,7 @@ impl GpuClosedLoopBackend {
                     v11_work,
                     compact_readback_bytes: crate::GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
                     hardware_receipt_generation: self.hardware.generation,
+                    selector_diagnostic: ordered_selector_diagnostics[index].clone(),
                 });
             }
             Ok(ticks)
@@ -5024,6 +5426,47 @@ impl RuntimePreflightTestHarness {
 #[cfg(test)]
 #[path = "../tests/support/closed_loop_runtime_private.rs"]
 mod task7_private_tests;
+
+#[cfg(test)]
+mod selector_diagnostic_tests {
+    use super::*;
+
+    fn candidate(index: u16, logit: f32) -> GpuSelectorCandidateDiagnostic {
+        GpuSelectorCandidateDiagnostic {
+            candidate_index: index,
+            action_id: ActionId(u32::from(index) + 1),
+            family: CandidateActionFamily::Inspect,
+            target: ActionTarget::NONE,
+            validity: GpuSelectorCandidateValidity::Valid,
+            decoder_family_bias: 0.125,
+            pre_context_logit: Some(logit - 0.25),
+            memory_context_delta: Some(0.25),
+            final_logit: Some(logit),
+        }
+    }
+
+    #[test]
+    fn receipt_preserves_losing_logits_and_exact_selector_identity() {
+        let receipt = GpuSelectorDiagnosticReceipt {
+            schema_version: GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
+            frame_digest: PerceptionFrameDigest([1, 2, 3, 4]),
+            phenotype_hash: PhenotypeHash([5, 6, 7, 8]),
+            dispatch_generation: 9,
+            policy: GpuSelectorPolicyIdentity::PRODUCTION_V1,
+            candidates: vec![candidate(0, 0.75), candidate(1, 0.25), candidate(2, 0.75)],
+            argmax_candidate_index: 0,
+            equal_max_candidate_indices: vec![0, 2],
+            chosen_candidate_index: 0,
+        };
+
+        receipt.validate_contract().unwrap();
+        assert_eq!(receipt.candidates[1].final_logit, Some(0.25));
+        assert_eq!(
+            receipt.policy.exploration_mode,
+            GpuSelectorExplorationMode::Disabled
+        );
+    }
+}
 
 #[cfg(test)]
 mod staging_backend_tests {

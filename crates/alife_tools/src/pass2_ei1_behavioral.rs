@@ -144,7 +144,8 @@ pub fn run_planned_manifest(
             &source_commit,
             &source_tree,
         )
-        .map_err(core_failure)?;
+        .map_err(core_failure)?
+        .with_selector_diagnostics();
         let trial = runner.run(request).map_err(|error| {
             Pass2Ei1BehavioralError::Runner(format!("run rejected causal execution: {error}"))
         })?;
