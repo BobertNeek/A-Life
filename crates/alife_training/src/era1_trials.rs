@@ -1,16 +1,16 @@
 //! GPU-authoritative causal trial loop for the Era 1 Norn-plus battery.
 
 use alife_core::{
-    ActionKind, BrainCapacityClass, BrainGenome, CandidateActionFamily, CandidateObservationRef,
-    CanonicalDigestBuilder, Confidence, ConsolidationIntent, CreatureGenome, DecisionSnapshot,
-    DevelopmentState, Era1Ability, Era1Control, Era1EvidencePartition, Era1TrialIdentity,
-    Era1TrialReceipt, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
-    FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot, LanguageGroundingLedger,
-    MemoryBankConfig, MemorySidecarState, MetricReading, NeuralActionSelection, OrganismId,
-    PerceptionFrameDigest, PhenotypeCompiler, PhenotypeHash, PolicyBackend, PostActionOutcome,
-    PreActionSnapshot, ScaffoldContractError, SensorProfile, SensorProfileIdentity,
-    SensoryAbiVersion, SpeechMotorPayload, Tick, TrackedObjectId, UtteranceGroundingReceiptV2,
-    UtteranceSourceKind, Validate, WorldEntityId,
+    ActionCommand, ActionKind, BiochemistryState, BrainCapacityClass, BrainGenome,
+    CandidateActionFamily, CandidateObservationRef, CanonicalDigestBuilder, Confidence,
+    ConsolidationIntent, CreatureGenome, DecisionSnapshot, DevelopmentState, Era1Ability,
+    Era1Control, Era1EvidencePartition, Era1TrialIdentity, Era1TrialReceipt, ExperiencePatch,
+    ExperiencePatchBuilder, ExperienceSequenceId, FoundationWeightAsset, HomeostaticParameters,
+    HomeostaticSnapshot, LanguageGroundingLedger, MemoryBankConfig, MemorySidecarState,
+    MetricReading, NeuralActionSelection, OrganismId, PerceptionFrameDigest, PhenotypeCompiler,
+    PhenotypeHash, PolicyBackend, PostActionOutcome, PreActionSnapshot, ScaffoldContractError,
+    SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SpeechMotorPayload, Tick,
+    TrackedObjectId, UtteranceGroundingReceiptV2, UtteranceSourceKind, Validate, WorldEntityId,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
@@ -25,8 +25,9 @@ use alife_gpu_backend::{
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use alife_world::{
     apply_era1_world_transition, build_era1_trial_world, Era1TrialManifest, Era1TrialPhase,
-    Era1WorldFamily, Era1WorldTransition, HeadlessWorld, HeadlessWorldCommand, WorldObjectKind,
-    ERA1_ACQUISITION_END_TICK, ERA1_PROBE_START_TICK, ERA1_TRIAL_END_TICK,
+    Era1WorldFamily, Era1WorldTransition, HeadlessActionBiologyReceipt, HeadlessWorld,
+    HeadlessWorldCommand, WorldObjectKind, WorldOrganismRecord, ERA1_ACQUISITION_END_TICK,
+    ERA1_PROBE_START_TICK, ERA1_TRIAL_END_TICK,
 };
 use serde::{Deserialize, Serialize};
 
@@ -323,7 +324,6 @@ impl Era1TrialRunEvidence {
             self.peer_demonstration.as_ref(),
             &self.steps,
         )?;
-        validate_world_replay(self)?;
         if self.language_grounding.utterance_receipts_v2()
             != self.learning_assessment.grounding_receipts
         {
@@ -606,6 +606,8 @@ impl Era1TrialRunner {
         handle: GpuBrainHandle,
     ) -> Result<Era1TrialRunEvidence, Era1TrialRunError> {
         let mut world = build_era1_trial_world(request.manifest)?;
+        let initial_organism_record =
+            register_trial_organism(&mut world, request.organism_id, request.genome)?;
         if request.control == Era1Control::SocialDisabled {
             remove_peer_agents(&mut world, request.organism_id)?;
         }
@@ -834,12 +836,16 @@ impl Era1TrialRunner {
                             .clone(),
                         dispatch,
                     });
-            let action_result = world.apply_neural_command(
+            let outcome_tick = Tick::new(world.tick().raw().saturating_add(1));
+            let action_result = apply_trial_neural_command(
+                &mut world,
                 &decision.selected_action,
+                initial_organism_record.world_entity_id(),
+                outcome_tick,
                 speech_payload.clone(),
                 speech_prompted,
-            )?;
-            let outcome_tick = Tick::new(world.tick().raw().saturating_add(1));
+            )?
+            .action_result;
             let mut outcome = PostActionOutcome::new(
                 request.organism_id,
                 sequence_id,
@@ -1035,6 +1041,7 @@ impl Era1TrialRunner {
             steps,
         };
         evidence.validate_contract()?;
+        validate_world_replay(&evidence, &initial_organism_record)?;
         Ok(evidence)
     }
 
@@ -1444,8 +1451,54 @@ fn validate_transition_receipts(
     Ok(())
 }
 
-fn validate_world_replay(evidence: &Era1TrialRunEvidence) -> Result<(), ScaffoldContractError> {
+fn register_trial_organism(
+    world: &mut HeadlessWorld,
+    organism_id: OrganismId,
+    genome: &CreatureGenome,
+) -> Result<WorldOrganismRecord, ScaffoldContractError> {
+    let world_entity_id = world
+        .organism_entity_ids()
+        .into_iter()
+        .find_map(|(candidate, entity)| (candidate == organism_id).then_some(entity))
+        .ok_or(ScaffoldContractError::InvalidId)?;
+    let phenotype = genome.express()?;
+    let biochemistry = BiochemistryState::new(&phenotype, world.tick())?;
+    let record = WorldOrganismRecord::new(
+        organism_id,
+        world_entity_id,
+        genome.clone(),
+        phenotype,
+        biochemistry,
+        world.tick(),
+    )
+    .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
+    world.register_organism_record(record.clone())?;
+    Ok(record)
+}
+
+fn apply_trial_neural_command(
+    world: &mut HeadlessWorld,
+    command: &ActionCommand,
+    world_entity_id: WorldEntityId,
+    outcome_tick: Tick,
+    speech_payload: Option<SpeechMotorPayload>,
+    prompted: bool,
+) -> Result<HeadlessActionBiologyReceipt, ScaffoldContractError> {
+    world.apply_registered_neural_command(
+        command,
+        world_entity_id,
+        outcome_tick,
+        speech_payload,
+        prompted,
+    )
+}
+
+fn validate_world_replay(
+    evidence: &Era1TrialRunEvidence,
+    initial_organism_record: &WorldOrganismRecord,
+) -> Result<(), ScaffoldContractError> {
     let mut world = build_era1_trial_world(&evidence.manifest)?;
+    world.register_organism_record(initial_organism_record.clone())?;
     if evidence.receipt.control == Era1Control::SocialDisabled {
         remove_peer_agents(&mut world, evidence.receipt.identity.organism_id)?;
     }
@@ -1502,11 +1555,15 @@ fn validate_world_replay(evidence: &Era1TrialRunEvidence) -> Result<(), Scaffold
             .iter()
             .flatten()
             .any(|token| token.source_kind == UtteranceSourceKind::Player);
-        let replayed = world.apply_neural_command(
+        let replayed = apply_trial_neural_command(
+            &mut world,
             &step.sealed_patch.decision().selected_action,
+            initial_organism_record.world_entity_id(),
+            step.sealed_patch.outcome().outcome_tick,
             step.speech_payload.clone(),
             prompted,
-        )?;
+        )?
+        .action_result;
         if (replayed.execution.succeeded && replayed.observation.success)
             != step.sealed_patch.outcome().success
             || replayed.execution.physical != step.sealed_patch.outcome().physical
@@ -1657,6 +1714,83 @@ fn valid_git_object_id(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+#[cfg(test)]
+mod registered_trial_world_tests {
+    use super::*;
+    use alife_core::{BrainCapacityClass, FoundationGeneticIdentity, Vec3f};
+    use alife_world::HeadlessScenarioBuilder;
+
+    const SUBJECT: OrganismId = OrganismId(41);
+
+    fn trial_genome() -> CreatureGenome {
+        CreatureGenome::early_mammal_founder(
+            0xE10_4101,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn trial_world() -> HeadlessWorld {
+        HeadlessScenarioBuilder::new(41_001)
+            .agent("subject", SUBJECT, Vec3f::ZERO)
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn registered_trial_command_advances_biology_and_replay_matches() {
+        // This catches either trial path bypassing the registered transaction and
+        // silently leaving canonical organism biology unchanged.
+        let genome = trial_genome();
+        let command = HeadlessWorldCommand::idle(SUBJECT).unwrap();
+
+        let mut live = trial_world();
+        let initial_record = register_trial_organism(&mut live, SUBJECT, &genome).unwrap();
+        let live_receipt = apply_trial_neural_command(
+            &mut live,
+            &command,
+            initial_record.world_entity_id(),
+            Tick(1),
+            None,
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(live_receipt.biology_before.tick, Tick::ZERO);
+        assert_eq!(live_receipt.biology_after.tick, Tick(1));
+        assert_ne!(live_receipt.biology_before, live_receipt.biology_after);
+        assert_eq!(
+            live.organism_registry()
+                .get(SUBJECT)
+                .unwrap()
+                .biochemistry(),
+            &live_receipt.biology_after
+        );
+
+        let mut replay = trial_world();
+        replay
+            .register_organism_record(initial_record.clone())
+            .unwrap();
+        let replay_receipt = apply_trial_neural_command(
+            &mut replay,
+            &command,
+            initial_record.world_entity_id(),
+            Tick(1),
+            None,
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(replay_receipt.action_result, live_receipt.action_result);
+        assert_eq!(replay_receipt.biology_before, live_receipt.biology_before);
+        assert_eq!(replay_receipt.biology_after, live_receipt.biology_after);
+        assert_eq!(
+            replay.canonical_signature_digest().unwrap(),
+            live.canonical_signature_digest().unwrap()
+        );
+    }
 }
 
 #[cfg(test)]
