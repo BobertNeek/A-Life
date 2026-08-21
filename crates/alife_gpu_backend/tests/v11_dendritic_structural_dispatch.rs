@@ -24,6 +24,7 @@ fn discard(
 fn target_indexed_dendrites_visit_only_the_target_span(
 ) -> Result<(), alife_core::ScaffoldContractError> {
     let phenotype = support::controlled_sensory_n512_phenotype();
+    let microsteps = u32::from(phenotype.microstep_count());
     let target = phenotype.candidate_decoder().motor_start();
     let second_source = if target + 1 < phenotype.neuron_count() {
         target + 1
@@ -52,9 +53,9 @@ fn target_indexed_dendrites_visit_only_the_target_span(
     );
     let mut ticks = backend.tick_batch(&[(handle, frame)])?;
     let tick = ticks.pop().expect("one dendritic tick");
-    assert_eq!(tick.v11_work.dendritic.branches_evaluated, 1);
-    assert_eq!(tick.v11_work.dendritic.inputs_evaluated, 2);
-    assert_eq!(tick.v11_work.dendritic.work_units, 3);
+    assert_eq!(tick.v11_work.dendritic.branches_evaluated, microsteps);
+    assert_eq!(tick.v11_work.dendritic.inputs_evaluated, 2 * microsteps);
+    assert_eq!(tick.v11_work.dendritic.work_units, 3 * microsteps);
     discard(&mut backend, &tick)?;
     Ok(())
 }
