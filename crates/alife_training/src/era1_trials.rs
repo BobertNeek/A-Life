@@ -1,16 +1,16 @@
 //! GPU-authoritative causal trial loop for the Era 1 Norn-plus battery.
 
+use alife_core::cognitive_work::CognitiveWorkCostPolicy;
 use alife_core::{
     ActionCommand, ActionKind, BiochemistryState, BrainCapacityClass, BrainGenome,
     CandidateActionFamily, CandidateObservationRef, CanonicalDigestBuilder, Confidence,
-    ConsolidationIntent, CreatureGenome, DecisionSnapshot, DevelopmentState, Era1Ability,
-    Era1Control, Era1EvidencePartition, Era1TrialIdentity, Era1TrialReceipt, ExperiencePatch,
-    ExperiencePatchBuilder, ExperienceSequenceId, FoundationWeightAsset, HomeostaticParameters,
-    HomeostaticSnapshot, LanguageGroundingLedger, MemoryBankConfig, MemorySidecarState,
-    MetricReading, NeuralActionSelection, OrganismId, PerceptionFrameDigest, PhenotypeCompiler,
-    PhenotypeHash, PolicyBackend, PostActionOutcome, PreActionSnapshot, ScaffoldContractError,
-    SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SpeechMotorPayload, Tick,
-    TrackedObjectId, UtteranceGroundingReceiptV2, UtteranceSourceKind, Validate, WorldEntityId,
+    ConsolidationIntent, CreatureGenome, DevelopmentState, Era1Ability, Era1Control,
+    Era1EvidencePartition, Era1TrialIdentity, Era1TrialReceipt, ExperiencePatch,
+    ExperienceSequenceId, FoundationWeightAsset, LanguageGroundingLedger, MemoryBankConfig,
+    MemorySidecarState, MetricReading, OrganismId, PerceptionFrameDigest, PhenotypeCompiler,
+    PhenotypeHash, PolicyBackend, ScaffoldContractError, SensorProfile, SensorProfileIdentity,
+    SensoryAbiVersion, SpeechMotorPayload, Tick, TrackedObjectId, UtteranceGroundingReceiptV2,
+    UtteranceSourceKind, Validate, WorldEntityId,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
@@ -22,7 +22,11 @@ use alife_gpu_backend::{
     GpuRuntimeSelectorDiagnosticFailureReceipt, GpuRuntimeSelectorDiagnosticStage,
     GpuSelectorDiagnosticReceipt,
 };
-use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
+use alife_runtime::{
+    run_production_causal_transaction, GpuAuthoritativeSession, GpuSessionConsumerKind,
+    ProductionCausalMechanismMask, ProductionCausalStageHooks, ProductionCausalStep,
+    ProductionCausalStepInput,
+};
 use alife_world::{
     apply_era1_world_transition, build_era1_trial_world, Era1TrialManifest, Era1TrialPhase,
     Era1WorldFamily, Era1WorldTransition, HeadlessActionBiologyReceipt, HeadlessWorld,
@@ -100,18 +104,29 @@ pub enum Era1InvalidIdFieldTag {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Era1InvalidIdReceipt {
-    pub tick: Tick,
-    pub field_tag: Era1InvalidIdFieldTag,
+pub enum Era1StageContextValue {
+    Organism(OrganismId),
+    WorldEntity(WorldEntityId),
+    Tick(Tick),
 }
 
-impl std::fmt::Display for Era1InvalidIdReceipt {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Era1StageContext {
+    pub tick: Tick,
+    pub field_tag: Era1InvalidIdFieldTag,
+    pub value: Era1StageContextValue,
+    pub original_error: String,
+}
+
+impl std::fmt::Display for Era1StageContext {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             formatter,
-            "tick={} field_tag={:?}",
+            "tick={} field_tag={:?} value={:?} error={}",
             self.tick.raw(),
-            self.field_tag
+            self.field_tag,
+            self.value,
+            self.original_error,
         )
     }
 }
@@ -121,7 +136,7 @@ pub enum Era1TrialRunError {
     #[error("Era 1 contract error: {0}")]
     Contract(#[from] ScaffoldContractError),
     #[error("Era 1 invalid ID provenance: {0}")]
-    InvalidId(Era1InvalidIdReceipt),
+    InvalidId(Era1StageContext),
     #[error("Era 1 sealed outcome evidence mismatch: {0}")]
     LearningEvidenceMismatch(GpuLearningEvidenceMismatchReceipt),
     #[error("Era 1 fast-plasticity apply failure: {0}")]
@@ -177,9 +192,15 @@ fn tag_invalid_id(
     error: ScaffoldContractError,
     tick: Tick,
     field_tag: Era1InvalidIdFieldTag,
+    value: Era1StageContextValue,
 ) -> Era1TrialRunError {
     if error == ScaffoldContractError::InvalidId {
-        Era1TrialRunError::InvalidId(Era1InvalidIdReceipt { tick, field_tag })
+        Era1TrialRunError::InvalidId(Era1StageContext {
+            tick,
+            field_tag,
+            value,
+            original_error: error.to_string(),
+        })
     } else {
         Era1TrialRunError::Contract(error)
     }
@@ -620,6 +641,7 @@ impl Era1TrialRunner {
                 error,
                 Tick::ZERO,
                 Era1InvalidIdFieldTag::RequestIdentityValidation,
+                Era1StageContextValue::Organism(request.organism_id),
             )
         })?;
         let (brain_genome, development) = self.express_compatible_creature(request.genome)?;
@@ -630,8 +652,10 @@ impl Era1TrialRunner {
             SensorProfile::GroundedObjectSlotsV1,
             &self.foundation,
         )?;
-        let handle = self.session.insert_brain(request.organism_id, phenotype)?;
-        let attempt = self.run_inserted(request, brain_genome, development, handle);
+        let handle = self
+            .session
+            .insert_brain(request.organism_id, phenotype.clone())?;
+        let attempt = self.run_inserted(request, brain_genome, phenotype, handle);
         if let Ok(Some(pending)) = self.session.pending_eligibility(handle) {
             let _ = self
                 .session
@@ -649,7 +673,7 @@ impl Era1TrialRunner {
         &mut self,
         request: Era1TrialRunRequest<'_>,
         brain_genome: BrainGenome,
-        mut development: DevelopmentState,
+        phenotype: alife_core::BrainPhenotype,
         handle: GpuBrainHandle,
     ) -> Result<Era1TrialRunEvidence, Era1TrialRunError> {
         let mut world = build_era1_trial_world(request.manifest).map_err(|error| {
@@ -657,6 +681,7 @@ impl Era1TrialRunner {
                 error,
                 Tick::ZERO,
                 Era1InvalidIdFieldTag::TrialWorldIdentityValidation,
+                Era1StageContextValue::Organism(request.manifest.subject),
             )
         })?;
         let registration_tick = world.tick();
@@ -667,6 +692,7 @@ impl Era1TrialRunner {
                         error,
                         registration_tick,
                         Era1InvalidIdFieldTag::TrialSubjectEntityLookup,
+                        Era1StageContextValue::Organism(request.organism_id),
                     )
                 },
             )?;
@@ -696,8 +722,13 @@ impl Era1TrialRunner {
                 Confidence::new(0.0)?,
             )?,
         )?;
-        let mature_age = development.age_ticks.raw();
-        let mut homeostasis = HomeostaticSnapshot::baseline(world.tick());
+        let mut predictor = alife_core::GroundedSuccessorPredictor::with_learning_rate(
+            phenotype.cognitive_architecture().predictor_learning_rate(),
+        )?;
+        let mut next_sequence = 1_u64;
+        let mut last_cognitive_context = None;
+        let mut last_selected_motor_bundle = None;
+        let mut last_cognitive_work = alife_core::CognitiveWorkReceipt::zero();
         let mut steps = Vec::with_capacity(ERA1_TRIAL_END_TICK as usize);
         let mut learning_commits = 0_u64;
         let mut eligibility_discards = 0_u64;
@@ -722,6 +753,7 @@ impl Era1TrialRunner {
                             error,
                             transition_tick,
                             Era1InvalidIdFieldTag::WorldTransitionEntityLookup,
+                            Era1StageContextValue::Tick(transition_tick),
                         )
                     },
                 )?;
@@ -757,6 +789,13 @@ impl Era1TrialRunner {
             }
 
             let world_before = world.canonical_signature_digest()?.words;
+            let admission = world
+                .organism_registry()
+                .get(request.organism_id)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .authoritative_admission_at(world.tick())?;
+            let homeostasis = admission.biochemistry.homeostasis;
+            let development = admission.phenotype.development_state_at(admission.age)?;
             let visibility =
                 world.physical_observation_snapshot(request.organism_id, world.tick())?;
             let visible_entities = visibility
@@ -770,7 +809,6 @@ impl Era1TrialRunner {
                     .and_then(|object| object.organism_id)
                     .is_some_and(|organism| organism != request.organism_id)
             });
-            development.age_ticks = Tick::new(mature_age.saturating_add(world.tick().raw()));
             let draft = world.perception_frame_draft(
                 request.organism_id,
                 world.tick(),
@@ -778,7 +816,6 @@ impl Era1TrialRunner {
                 homeostasis,
             )?;
             let prepared_recall = memory.recall_frame(&draft)?;
-            let memory_bank_digest = prepared_recall.receipt().bank_digest;
             let (frame, finalized_recall) = prepared_recall.finalize(draft)?;
             let memory_upload =
                 self.session
@@ -798,31 +835,10 @@ impl Era1TrialRunner {
             let gpu_tick = gpu_ticks
                 .pop()
                 .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-            let binding = gpu_tick
-                .memory_context_binding
-                .ok_or(ScaffoldContractError::InvalidMemoryQuery)?;
-            let pending = gpu_tick.pending_eligibility;
-            let pending_identity = pending.identity();
             let selected = *frame
                 .candidates()
                 .get(usize::from(gpu_tick.selection.candidate_index))
                 .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-            if binding.final_frame_digest != frame.frame_digest()
-                || pending_identity.phenotype_hash() != handle.phenotype_hash()
-                || pending_identity.originating_tick() != frame.tick()
-                || pending_identity.frame_digest() != frame.frame_digest()
-                || pending_identity.candidate_index() != gpu_tick.selection.candidate_index
-                || pending_identity.action_id() != selected.action_id
-                || pending_identity.action_family() != selected.family
-                || pending_identity.candidate_feature_digest() != selected.feature_digest()?
-            {
-                return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
-            }
-            let target_kind = selected
-                .target
-                .entity
-                .and_then(|entity| world.entity(entity))
-                .map(|entity| entity.kind);
             let target_organism = selected
                 .target
                 .entity
@@ -850,55 +866,122 @@ impl Era1TrialRunner {
             );
             let cue_present = world.entity_id("era1-cue").is_some();
             let phase = request.manifest.phase_at(frame.tick())?;
-
-            let sequence_id = ExperienceSequenceId(
-                u64::try_from(steps.len())
-                    .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?
-                    .checked_add(1)
-                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?,
-            );
-            let command =
-                selected.to_command(request.organism_id, gpu_tick.selection.confidence)?;
-            let pre_action = PreActionSnapshot::from_neural_frame(
-                sequence_id,
-                handle.class_id(),
-                handle.phenotype_hash(),
-                brain_genome.id,
-                brain_genome.schema_version,
-                development.clone(),
-                frame.clone(),
-            )?;
-            let decision = DecisionSnapshot::from_neural_selection(
-                sequence_id,
-                handle.phenotype_hash(),
-                gpu_tick.dispatch_generation,
-                gpu_tick.active_activation_side,
-                &frame,
-                NeuralActionSelection {
-                    candidate_index: gpu_tick.selection.candidate_index,
-                    logit: gpu_tick.selection.logit,
-                    confidence: gpu_tick.selection.confidence,
-                    active_tiles: gpu_tick.selection.active_tiles,
-                    active_synapses: gpu_tick.selection.active_synapses,
+            let mechanisms = ProductionCausalMechanismMask {
+                sleep: request.control != Era1Control::SleepDisabled,
+                memory_observation: request.control != Era1Control::MemoryDisabled,
+                topology_observation: true,
+                plasticity: request.control != Era1Control::PlasticityDisabled,
+            };
+            let mut learning_failure = None;
+            let mut due_sleep = || Ok(false);
+            let mut gpu_plasticity =
+                |session: &mut GpuAuthoritativeSession,
+                 step: &ProductionCausalStep|
+                 -> Result<bool, ScaffoldContractError> {
+                    if let Some(receipt) = session
+                        .sealed_outcome_credit_mismatch_receipt(handle, &step.patch)?
+                    {
+                        learning_failure =
+                            Some(Era1TrialRunError::LearningEvidenceMismatch(receipt));
+                        return Err(ScaffoldContractError::LearningEvidenceMismatch);
+                    }
+                    if let Err(error) = session.apply_sealed_outcome(handle, &step.patch) {
+                        if let Some(receipt) = session.take_apply_fast_plasticity_failure_receipt()
+                        {
+                            learning_failure =
+                                Some(Era1TrialRunError::ApplyFastPlasticity(receipt));
+                        } else {
+                            let receipt = if matches!(
+                                &error,
+                                ScaffoldContractError::LearningEvidenceMismatch
+                            ) {
+                                session
+                                    .sealed_outcome_credit_mismatch_receipt(handle, &step.patch)
+                                    .ok()
+                                    .flatten()
+                            } else {
+                                None
+                            };
+                            learning_failure =
+                                Some(map_learning_apply_failure(error, receipt));
+                        }
+                        return Err(ScaffoldContractError::LearningEvidenceMismatch);
+                    }
+                    learning_commits = learning_commits.saturating_add(1);
+                    Ok(true)
+                };
+            let mut memory_observation = |step: &ProductionCausalStep| {
+                memory.observe_sealed_patch(&step.patch)?;
+                memory_updates = memory_updates.saturating_add(1);
+                Ok::<_, ScaffoldContractError>(())
+            };
+            let mut topology_observation = |_step: &ProductionCausalStep| Ok(());
+            let mut world_after_action_digest = None;
+            let mut due_world_advance =
+                |world: &mut HeadlessWorld, _step: &ProductionCausalStep| {
+                    world_after_action_digest = Some(world.canonical_signature_digest()?.words);
+                    world.advance_tick();
+                    Ok::<_, ScaffoldContractError>(true)
+                };
+            let mut canonical_resync =
+                |_world: &HeadlessWorld, _step: &ProductionCausalStep| Ok(true);
+            let mut hooks = ProductionCausalStageHooks {
+                due_sleep: &mut due_sleep,
+                gpu_plasticity: &mut gpu_plasticity,
+                memory_observation: &mut memory_observation,
+                topology_observation: &mut topology_observation,
+                due_world_advance: &mut due_world_advance,
+                canonical_resync: &mut canonical_resync,
+            };
+            let step_result = run_production_causal_transaction(
+                &mut self.session,
+                ProductionCausalStepInput {
+                world: &mut world,
+                predictor: &mut predictor,
+                language_grounding: &mut language_grounding,
+                last_cognitive_context: &mut last_cognitive_context,
+                last_selected_motor_bundle: &mut last_selected_motor_bundle,
+                last_cognitive_work: &mut last_cognitive_work,
+                next_sequence: &mut next_sequence,
+                organism_id: request.organism_id,
+                world_entity_id: initial_organism_record.world_entity_id(),
+                handle,
+                phenotype: &phenotype,
+                genome: &brain_genome,
+                development,
+                frame,
+                memory_recall: finalized_recall,
+                gpu_tick,
+                mechanisms,
+                cognitive_work_cost_policy: &CognitiveWorkCostPolicy::disabled(),
                 },
-                command,
-            )?
-            .with_finalized_memory_recall(
-                &frame,
-                &finalized_recall,
-                gpu_tick.selection.candidate_index,
-            )?;
-            let speech_prompted = frame
-                .sensory()
-                .language_context
-                .heard_tokens
-                .iter()
-                .flatten()
-                .any(|token| token.source_kind == UtteranceSourceKind::Player);
-            let speech_payload = gpu_tick.speech_payload.clone();
+                &mut hooks,
+            );
+            drop(hooks);
+            drop(gpu_plasticity);
+            drop(memory_observation);
+            drop(due_world_advance);
+            let step = match step_result {
+                Ok(step) => step,
+                Err(error) => {
+                    if let Some(learning_failure) = learning_failure {
+                        return Err(learning_failure);
+                    }
+                    return Err(error.into());
+                }
+            };
+            let pending = step.pending_eligibility;
+            let pending_identity = pending.identity();
+            let patch = step.patch.clone();
+            let target_kind = step
+                .selected_action
+                .target_entity
+                .and_then(|entity| world.entity(entity))
+                .map(|entity| entity.kind);
+            let world_after_action = world_after_action_digest
+                .ok_or(ScaffoldContractError::MissingPhaseData)?;
             let selector_diagnostic =
-                gpu_tick
-                    .selector_diagnostic
+                step.selector_diagnostic
                     .map(|dispatch| Era1SelectorDiagnosticReceipt {
                         source_commit: request.source_commit.to_owned(),
                         source_tree: request.source_tree.to_owned(),
@@ -907,38 +990,6 @@ impl Era1TrialRunner {
                             .clone(),
                         dispatch,
                     });
-            let outcome_tick = Tick::new(world.tick().raw().saturating_add(1));
-            let action_result = apply_trial_neural_command(
-                &mut world,
-                &decision.selected_action,
-                initial_organism_record.world_entity_id(),
-                outcome_tick,
-                speech_payload.clone(),
-                speech_prompted,
-            )?
-            .action_result;
-            let mut outcome = PostActionOutcome::new(
-                request.organism_id,
-                sequence_id,
-                outcome_tick,
-                action_result.observation.success && action_result.execution.succeeded,
-                action_result.execution.physical,
-                action_result.observation.homeostatic_delta,
-                action_result.observation.reward_valence,
-                action_result.observation.frustration_delta,
-                action_result.observation.pain_delta,
-                action_result.observation.energy_delta,
-                action_result.observation.prediction_error,
-            )?;
-            outcome.contradiction_observed = action_result.observation.contradiction_observed
-                || !action_result.execution.succeeded;
-            let patch = ExperiencePatchBuilder::new(sequence_id)
-                .record_pre_action(pre_action)?
-                .record_decision(decision)?
-                .record_outcome(outcome)?
-                .seal()?;
-            let world_after_action = world.canonical_signature_digest()?.words;
-            language_grounding.observe_sealed(&patch)?;
 
             let grounding_before = grounding_receipts.len();
             if request.ability == Era1Ability::GroundedLanguage && patch.outcome().success {
@@ -967,53 +1018,24 @@ impl Era1TrialRunner {
             }
             let _grounded_utterance = grounding_receipts.len() > grounding_before;
 
-            let learning = if request.control == Era1Control::PlasticityDisabled {
-                self.session
-                    .discard_pending_eligibility(handle, pending_identity)?;
+            let learning = if step.learning_applied {
+                Era1LearningDisposition::Applied
+            } else {
                 eligibility_discards = eligibility_discards.saturating_add(1);
                 Era1LearningDisposition::Discarded
-            } else {
-                if let Some(receipt) = self
-                    .session
-                    .sealed_outcome_credit_mismatch_receipt(handle, &patch)?
-                {
-                    return Err(Era1TrialRunError::LearningEvidenceMismatch(receipt));
-                }
-                if let Err(error) = self.session.apply_sealed_outcome(handle, &patch) {
-                    if let Some(receipt) = self.session.take_apply_fast_plasticity_failure_receipt()
-                    {
-                        return Err(Era1TrialRunError::ApplyFastPlasticity(receipt));
-                    }
-                    let receipt =
-                        if matches!(&error, ScaffoldContractError::LearningEvidenceMismatch) {
-                            self.session
-                                .sealed_outcome_credit_mismatch_receipt(handle, &patch)
-                                .ok()
-                                .flatten()
-                        } else {
-                            None
-                        };
-                    return Err(map_learning_apply_failure(error, receipt));
-                }
-                learning_commits = learning_commits.saturating_add(1);
-                Era1LearningDisposition::Applied
             };
-            let memory_observed = request.control != Era1Control::MemoryDisabled;
-            if memory_observed {
-                memory.observe_sealed_patch(&patch)?;
-                memory_updates = memory_updates.saturating_add(1);
-            }
+            let memory_observed = step.memory_observed;
             steps.push(Era1CausalStepReceipt {
                 organism_id: request.organism_id,
                 phenotype_hash: handle.phenotype_hash(),
-                sequence_id,
-                tick: frame.tick(),
+                sequence_id: step.sequence_id,
+                tick: step.frame.tick(),
                 world_before_digest: world_before,
                 world_after_action_digest: world_after_action,
-                frame_digest: frame.frame_digest(),
+                frame_digest: step.frame_digest,
                 memory_organism_id: memory.organism_id(),
-                memory_bank_digest,
-                memory_context_final_digest: binding.final_frame_digest,
+                memory_bank_digest: step.memory_recall.bank_digest,
+                memory_context_final_digest: step.memory_context_final_digest,
                 pending_frame_digest: pending_identity.frame_digest(),
                 pending_receipt_digest: pending.receipt_digest(),
                 learning,
@@ -1021,9 +1043,9 @@ impl Era1TrialRunner {
                 peer_visible,
                 outcome_success: patch.outcome().success,
                 phase,
-                selected_action: selected.kind,
-                selected_family: selected.family,
-                target_entity: selected.target.entity,
+                selected_action: step.selected_action_kind,
+                selected_family: step.selected_family,
+                target_entity: step.selected_action.target_entity,
                 target_kind,
                 target_organism,
                 tracked_target,
@@ -1031,16 +1053,10 @@ impl Era1TrialRunner {
                 familiar_tracked_id,
                 novel_tracked_id,
                 behavior_success: false,
-                speech_payload,
+                speech_payload: step.speech_payload,
                 selector_diagnostic,
                 sealed_patch: patch.clone(),
             });
-            homeostasis = homeostasis.advance(
-                outcome_tick,
-                patch.outcome().homeostatic_delta,
-                HomeostaticParameters::reference(),
-            )?;
-            world.advance_tick();
         }
 
         let (behavior_success, causal_proof) = derive_causal_behavior(
@@ -1547,7 +1563,9 @@ fn register_trial_organism(
     Ok(record)
 }
 
-fn apply_trial_neural_command(
+/// Legacy replay-only adapter. Evidence production uses the shared factorized
+/// transaction; this helper only replays an already sealed command.
+fn apply_trial_replay_command(
     world: &mut HeadlessWorld,
     command: &ActionCommand,
     world_entity_id: WorldEntityId,
@@ -1582,7 +1600,6 @@ fn validate_world_replay(
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
     }
-    let mut homeostasis = HomeostaticSnapshot::baseline(world.tick());
     for step in &evidence.steps {
         if let Some(transition) = evidence
             .manifest
@@ -1610,11 +1627,18 @@ fn validate_world_replay(
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
+        let canonical_homeostasis = world
+            .organism_registry()
+            .get(evidence.receipt.identity.organism_id)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .authoritative_admission_at(world.tick())?
+            .biochemistry
+            .homeostasis;
         let _draft = world.perception_frame_draft(
             evidence.receipt.identity.organism_id,
             world.tick(),
             SensorProfile::GroundedObjectSlotsV1,
-            homeostasis,
+            canonical_homeostasis,
         )?;
         let prompted = step
             .sealed_patch
@@ -1626,7 +1650,7 @@ fn validate_world_replay(
             .iter()
             .flatten()
             .any(|token| token.source_kind == UtteranceSourceKind::Player);
-        let replayed = apply_trial_neural_command(
+        let replayed = apply_trial_replay_command(
             &mut world,
             &step.sealed_patch.decision().selected_action,
             initial_organism_record.world_entity_id(),
@@ -1642,11 +1666,6 @@ fn validate_world_replay(
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
-        homeostasis = homeostasis.advance(
-            step.sealed_patch.outcome().outcome_tick,
-            step.sealed_patch.outcome().homeostatic_delta,
-            HomeostaticParameters::reference(),
-        )?;
         world.advance_tick();
     }
     if world.tick().raw() != ERA1_TRIAL_END_TICK {
@@ -1819,7 +1838,7 @@ mod registered_trial_world_tests {
 
         let mut live = trial_world();
         let initial_record = register_trial_organism(&mut live, SUBJECT, &genome).unwrap();
-        let live_receipt = apply_trial_neural_command(
+        let live_receipt = apply_trial_replay_command(
             &mut live,
             &command,
             initial_record.world_entity_id(),
@@ -1844,7 +1863,7 @@ mod registered_trial_world_tests {
         replay
             .register_organism_record(initial_record.clone())
             .unwrap();
-        let replay_receipt = apply_trial_neural_command(
+        let replay_receipt = apply_trial_replay_command(
             &mut replay,
             &command,
             initial_record.world_entity_id(),

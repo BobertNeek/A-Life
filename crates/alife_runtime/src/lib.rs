@@ -1,9 +1,11 @@
 //! Shared GPU-authoritative brain runtime boundary.
 
+mod causal_step;
 mod checkpoint_assets;
 mod session;
 mod sleep_scheduler;
 
+pub use causal_step::*;
 pub use checkpoint_assets::{
     current_backend_provenance, merge_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite,
     GpuBrainSidecarCapture, GpuCheckpointAssetStore, GpuDurableFounderWrite,
