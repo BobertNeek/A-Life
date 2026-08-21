@@ -38,6 +38,7 @@ pub mod neural;
 pub mod packed_log;
 pub mod perception;
 pub mod phenotype;
+pub mod predictor_contract;
 pub mod predictive;
 pub mod reference_brain;
 pub mod routing;
@@ -279,11 +280,19 @@ pub use phenotype::{
     REQUIRED_GPU_FEATURE_MASK,
 };
 pub use predictive::{
-    GroundedSuccessorPredictor, JointMotorCondition, MotorChannelFactor, PredictionTargetFamily,
-    PredictionTargetReceipt, SemanticStateVector, MAX_SEMANTIC_STATE_VALUES,
+    compare_successor_states, ActionSensitivityEvidence, CategoricalMotorPrimitive,
+    GroundedOutcomeFeatures, GroundedOutcomeMeaning, GroundedSuccessorPredictor,
+    JointMotorCondition, MotorChannelFactor, MotorFamily, MotorPrimitiveEmbedding,
+    PredictionTargetFamily, PredictionTargetReceipt, SemanticStateMeaning,
+    SemanticStateSchemaV2, SemanticStateTransition, SemanticStateVector,
+    SuccessorSeparabilityEvidence, MAX_SEMANTIC_STATE_VALUES,
     MAX_SUCCESSOR_FEATURES, JOINT_MOTOR_CONDITION_ABI_V1, JOINT_MOTOR_CONDITION_SCHEMA_VERSION,
-    PREDICTION_TARGET_SCHEMA_VERSION, SEMANTIC_STATE_VECTOR_ABI_V1,
-    SEMANTIC_STATE_VECTOR_SCHEMA_VERSION, SUCCESSOR_FEATURE_ABI_V1,
+    PREDICTION_TARGET_SCHEMA_VERSION, PREDICTOR_STATE_ABI_VERSION,
+    PREDICTOR_STATE_SCHEMA_VERSION, SEMANTIC_STATE_VECTOR_ABI_V1,
+    SEMANTIC_STATE_VECTOR_ABI_V2, SEMANTIC_STATE_VECTOR_SCHEMA_VERSION,
+    SUCCESSOR_FEATURE_ABI_V1, GROUNDED_OUTCOME_ABI_V1, GROUNDED_OUTCOME_FEATURE_COUNT,
+    GROUNDED_OUTCOME_SCHEMA_VERSION, MOTOR_CATEGORY_ABI_V1, MOTOR_CATEGORY_SCHEMA_VERSION,
+    MOTOR_PRIMITIVE_EMBEDDING_DIM, MAX_PRIMITIVE_EMBEDDINGS,
 };
 pub use reference_brain::{
     BrainTickDiagnostics, BrainTickInput, BrainTickOutput, BrainTickStatus, CreatureActionState,
