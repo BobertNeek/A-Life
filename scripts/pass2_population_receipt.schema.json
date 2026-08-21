@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a-life.local/schemas/pass2-population-profile-receipt-v1.schema.json",
+  "title": "A-Life Pass 2 population profile receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_kind",
+    "execution",
+    "identity",
+    "artifacts",
+    "cache_lineage",
+    "metrics",
+    "decision"
+  ],
+  "properties": {
+    "schema_version": {"const": "pass2-population-profile-receipt-v1"},
+    "receipt_kind": {"const": "population_profile"},
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "state", "status", "runner_id"],
+      "properties": {
+        "mode": {"enum": ["plan", "execute", "cached"]},
+        "state": {"enum": ["not_run", "executed"]},
+        "status": {
+          "enum": [
+            "planned",
+            "completed",
+            "unavailable",
+            "invalid",
+            "causal_failure",
+            "diverged",
+            "evaluator_corrupt"
+          ]
+        },
+        "runner_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_commit",
+        "configuration_hash",
+        "scenario_corpus_version",
+        "seed_set_hash",
+        "brain_class",
+        "population",
+        "hardware_identity",
+        "toolchain",
+        "schema_version",
+        "cache_key"
+      ],
+      "properties": {
+        "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "configuration_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "scenario_corpus_version": {"type": "string", "minLength": 1},
+        "seed_set_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "brain_class": {"enum": ["Nano512", "N512", "N1024", "N2048"]},
+        "population": {"type": "integer", "minimum": 1},
+        "hardware_identity": {"type": "string", "minLength": 1},
+        "toolchain": {"type": "string", "minLength": 1},
+        "schema_version": {"const": "pass2-population-profile-receipt-v1"},
+        "cache_key": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw_output_path", "receipt_path", "cache_receipt_path"],
+      "properties": {
+        "raw_output_path": {"type": "string", "minLength": 1},
+        "receipt_path": {"type": "string", "minLength": 1},
+        "cache_receipt_path": {"type": "string", "minLength": 1}
+      }
+    },
+    "cache_lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cache_key",
+        "lookup",
+        "parent_receipt_path",
+        "origin_receipt_path"
+      ],
+      "properties": {
+        "cache_key": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "lookup": {"enum": ["not_checked", "miss", "hit", "invalid"]},
+        "parent_receipt_path": {"type": ["string", "null"]},
+        "origin_receipt_path": {"type": ["string", "null"]}
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timing_ms",
+        "gpu_time_ms",
+        "cpu_time_ms",
+        "transfer",
+        "work",
+        "attention",
+        "structural",
+        "sleep",
+        "residency",
+        "lifecycle",
+        "budget"
+      ],
+      "properties": {
+        "timing_ms": {
+          "$ref": "#/$defs/metric_group",
+          "required": ["total_tick", "total_frame"]
+        },
+        "gpu_time_ms": {
+          "$ref": "#/$defs/metric_group",
+          "required": [
+            "recurrent",
+            "dendritic",
+            "prediction",
+            "motor",
+            "learning",
+            "sleep",
+            "structural"
+          ]
+        },
+        "cpu_time_ms": {
+          "$ref": "#/$defs/metric_group",
+          "required": [
+            "perception",
+            "attention",
+            "memory",
+            "topology",
+            "lifecycle",
+            "persistence_staging",
+            "presentation"
+          ]
+        },
+        "transfer": {
+          "$ref": "#/$defs/metric_group",
+          "required": ["upload_bytes", "readback_bytes", "upload_stalls", "readback_stalls"]
+        },
+        "work": {
+          "$ref": "#/$defs/metric_group",
+          "required": ["evaluated_neural_work", "evaluated_cognitive_work"]
+        },
+        "attention": {
+          "$ref": "#/$defs/metric_group",
+          "required": ["attention_count"]
+        },
+        "structural": {
+          "$ref": "#/$defs/metric_group",
+          "required": [
+            "candidate_count",
+            "ranking_work",
+            "edit_work",
+            "recompaction_work"
+          ]
+        },
+        "sleep": {
+          "$ref": "#/$defs/metric_group",
+          "required": ["burst_frequency_hz", "worst_case_latency_ms"]
+        },
+        "residency": {
+          "$ref": "#/$defs/metric_group",
+          "required": ["memory_bytes", "buffer_residency_bytes"]
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/metric_group",
+          "required": ["admission_ms", "retirement_ms", "save_load_ms"]
+        },
+        "budget": {
+          "$ref": "#/$defs/metric_group",
+          "required": [
+            "throttled_frames",
+            "missed_budgets",
+            "causal_failures",
+            "all_pairs_or_all_branches_regression"
+          ]
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "basis",
+        "causal_correctness",
+        "resource_headroom",
+        "predicted_value",
+        "severe_budget_breach",
+        "all_pairs_or_all_branches_regression",
+        "specific_blocker",
+        "next_population"
+      ],
+      "properties": {
+        "action": {"enum": ["planned", "advance", "stop"]},
+        "basis": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "planned",
+              "causal_correctness",
+              "memory_resource_headroom",
+              "predicted_value",
+              "severe_budget_breach",
+              "all_pairs_or_all_branches_regression",
+              "specific_blocker"
+            ]
+          }
+        },
+        "causal_correctness": {"enum": ["not_evaluated", "pass", "fail", "unknown"]},
+        "resource_headroom": {"enum": ["not_evaluated", "pass", "fail", "unknown"]},
+        "predicted_value": {"enum": ["not_evaluated", "positive", "insufficient", "unknown"]},
+        "severe_budget_breach": {"type": ["boolean", "null"]},
+        "all_pairs_or_all_branches_regression": {
+          "enum": ["not_evaluated", "absent", "present", "unknown"]
+        },
+        "specific_blocker": {"type": ["string", "null"]},
+        "next_population": {"type": ["integer", "null"], "minimum": 1}
+      }
+    }
+  },
+  "$defs": {
+    "metric_group": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {},
+      "patternProperties": {
+        ".*": {"type": ["number", "null"]}
+      }
+    }
+  }
+}
+

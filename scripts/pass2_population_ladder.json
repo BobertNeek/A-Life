@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a-life.local/schemas/pass2-population-ladder-v1.schema.json",
+  "title": "A-Life Pass 2 progressive population profile ladder",
+  "schema_version": "pass2-population-ladder-v1",
+  "receipt_schema": "scripts/pass2_population_receipt.schema.json",
+  "source_contracts": {
+    "experiment_manifest_schema": "scripts/pass2_experiment_manifest.schema.json",
+    "scenario_catalog": "scripts/pass2_ei1_scenarios.json"
+  },
+  "ladder": [
+    {"ordinal": 1, "population": 1, "stage": "screen", "next_population": 10},
+    {"ordinal": 2, "population": 10, "stage": "screen", "next_population": 30},
+    {"ordinal": 3, "population": 30, "stage": "screen", "next_population": 100},
+    {"ordinal": 4, "population": 100, "stage": "confirm", "next_population": 500},
+    {"ordinal": 5, "population": 500, "stage": "certify", "next_population": null}
+  ],
+  "required_metrics": {
+    "timing_ms": ["total_tick", "total_frame"],
+    "gpu_time_ms": ["recurrent", "dendritic", "prediction", "motor", "learning", "sleep", "structural"],
+    "cpu_time_ms": ["perception", "attention", "memory", "topology", "lifecycle", "persistence_staging", "presentation"],
+    "transfer": ["upload_bytes", "readback_bytes", "upload_stalls", "readback_stalls"],
+    "work": ["evaluated_neural_work", "evaluated_cognitive_work"],
+    "attention": ["attention_count"],
+    "structural": ["candidate_count", "ranking_work", "edit_work", "recompaction_work"],
+    "sleep": ["burst_frequency_hz", "worst_case_latency_ms"],
+    "residency": ["memory_bytes", "buffer_residency_bytes"],
+    "lifecycle": ["admission_ms", "retirement_ms", "save_load_ms"],
+    "budget": ["throttled_frames", "missed_budgets", "causal_failures", "all_pairs_or_all_branches_regression"]
+  },
+  "decision_policy": {
+    "advance_only_when": [
+      "causal_correctness",
+      "memory_resource_headroom",
+      "predicted_value"
+    ],
+    "stop_when": [
+      "severe_budget_breach",
+      "all_pairs_or_all_branches_regression",
+      "specific_blocker",
+      "causal_correctness"
+    ],
+    "planned_action": "planned",
+    "required_executed_actions": ["advance", "stop"]
+  },
+  "runner_contract": {
+    "existing_entrypoint": {
+      "runner_id": "alife_tools.benchmark_tiers.gpu_closed_loop.v1",
+      "command": [
+        "cargo",
+        "run",
+        "-p",
+        "alife_tools",
+        "--bin",
+        "benchmark_tiers",
+        "--",
+        "--backend",
+        "gpu-closed-loop"
+      ],
+      "status": "existing_dormant_matrix_entrypoint",
+      "limitation": "It emits the existing benchmark matrix contract, not this per-rung receipt. Do not treat it as an executed Task 4 profile without a receipt adapter."
+    },
+    "required_later_runner": {
+      "runner_id": "pass2_population_profile_runner_v1",
+      "must_accept": [
+        "--population",
+        "--brain-class",
+        "--source-commit",
+        "--configuration-hash",
+        "--scenario-corpus-version",
+        "--seed-set-hash",
+        "--hardware-identity",
+        "--toolchain",
+        "--receipt-schema",
+        "--raw-output",
+        "--receipt-output",
+        "--cache-key"
+      ],
+      "must_emit": [
+        "one executed receipt conforming to scripts/pass2_population_receipt.schema.json",
+        "raw output at the requested path",
+        "an explicit advance or stop decision"
+      ],
+      "honesty_rule": "Mark execution and completion only when the requested raw output and validated receipt exist."
+    }
+  }
+}
+
