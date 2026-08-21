@@ -4272,11 +4272,15 @@ mod fixed_arena_tests {
 
         assert_eq!(
             plan.sizes.compact_readback,
-            u64::from(slots) * crate::GPU_FAST_PLASTICITY_COMMIT_BYTES as u64
+            u64::from(slots) * crate::GPU_COMPACT_READBACK_CAPACITY_PER_ROW_BYTES as u64
         );
         const {
             assert!(
-                crate::GPU_FAST_PLASTICITY_COMMIT_BYTES
+                crate::GPU_COMPACT_READBACK_CAPACITY_PER_ROW_BYTES
+                    >= crate::GPU_FAST_PLASTICITY_COMMIT_BYTES
+            );
+            assert!(
+                crate::GPU_COMPACT_READBACK_CAPACITY_PER_ROW_BYTES
                     >= crate::GPU_CLOSED_LOOP_TICK_READBACK_BYTES
             );
         }
