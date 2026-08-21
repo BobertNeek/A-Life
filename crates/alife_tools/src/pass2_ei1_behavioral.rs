@@ -19,7 +19,8 @@ use alife_gpu_backend::{
     GpuRuntimeSelectorDiagnosticEnableFailure, GpuRuntimeSelectorDiagnosticFailureReceipt,
 };
 use alife_training::{
-    Era1TrialRunError, Era1TrialRunEvidence, Era1TrialRunRequest, Era1TrialRunner,
+    Era1InvalidIdReceipt, Era1TrialRunError, Era1TrialRunEvidence, Era1TrialRunRequest,
+    Era1TrialRunner,
 };
 use alife_world::{Era1TrialManifest, Era1WorldFamily};
 use serde::Serialize;
@@ -47,6 +48,8 @@ pub enum Pass2Ei1BehavioralError {
     Json(#[from] serde_json::Error),
     #[error("Era 1 production runner failed: {0}")]
     Runner(String),
+    #[error("Era 1 invalid ID provenance: {0}")]
+    InvalidId(Era1InvalidIdReceipt),
     #[error("Era 1 sealed outcome evidence mismatch: {0}")]
     LearningEvidenceMismatch(GpuLearningEvidenceMismatchReceipt),
     #[error("Era 1 fast-plasticity apply failure: {0}")]
@@ -273,6 +276,7 @@ fn runner_failure(error: Era1TrialRunError) -> Pass2Ei1BehavioralError {
         Era1TrialRunError::SelectorDiagnosticLaterStageContract { stage, error } => {
             Pass2Ei1BehavioralError::SelectorDiagnosticLaterStageContract { stage, error }
         }
+        Era1TrialRunError::InvalidId(receipt) => Pass2Ei1BehavioralError::InvalidId(receipt),
         Era1TrialRunError::Contract(error) => {
             Pass2Ei1BehavioralError::Runner(format!("run rejected causal execution: {error}"))
         }
@@ -565,6 +569,7 @@ fn integer(object: &Map<String, Value>, key: &'static str) -> Result<u64, Pass2E
 #[cfg(test)]
 mod selector_diagnostic_error_tests {
     use super::*;
+    use alife_core::Tick;
     use alife_gpu_backend::{
         GpuRuntimeSelectorDiagnosticBuildFailureClass,
         GpuRuntimeSelectorDiagnosticBuildFailureField,
@@ -579,7 +584,27 @@ mod selector_diagnostic_error_tests {
         GpuRuntimeSelectorDiagnosticSelectionValidationField, GpuRuntimeSelectorDiagnosticStage,
         GpuSelectorBindingIdentity,
     };
-    use alife_training::Era1TrialRunError;
+    use alife_training::{Era1InvalidIdFieldTag, Era1InvalidIdReceipt, Era1TrialRunError};
+
+    #[test]
+    fn task3_preserves_era1_invalid_id_receipt() {
+        let receipt = Era1InvalidIdReceipt {
+            tick: Tick::new(3),
+            field_tag: Era1InvalidIdFieldTag::WorldTransitionEntityLookup,
+        };
+
+        let decoded = runner_failure(Era1TrialRunError::InvalidId(receipt));
+        match &decoded {
+            Pass2Ei1BehavioralError::InvalidId(actual) => assert_eq!(actual, &receipt),
+            other => panic!("invalid-ID provenance was collapsed: {other}"),
+        }
+        let rendered = decoded.to_string();
+        assert!(rendered.contains("tick=3"), "missing tick in {rendered}");
+        assert!(
+            rendered.contains("WorldTransitionEntityLookup"),
+            "missing field tag in {rendered}"
+        );
+    }
 
     #[test]
     fn task3_preserves_learning_evidence_mismatch_receipt() {

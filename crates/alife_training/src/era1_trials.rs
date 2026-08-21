@@ -90,10 +90,38 @@ pub struct Era1SelectorDiagnosticReceipt {
     pub dispatch: GpuSelectorDiagnosticReceipt,
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Era1InvalidIdFieldTag {
+    RequestIdentityValidation = 1,
+    TrialWorldIdentityValidation = 2,
+    TrialSubjectEntityLookup = 3,
+    WorldTransitionEntityLookup = 4,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Era1InvalidIdReceipt {
+    pub tick: Tick,
+    pub field_tag: Era1InvalidIdFieldTag,
+}
+
+impl std::fmt::Display for Era1InvalidIdReceipt {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "tick={} field_tag={:?}",
+            self.tick.raw(),
+            self.field_tag
+        )
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Era1TrialRunError {
     #[error("Era 1 contract error: {0}")]
     Contract(#[from] ScaffoldContractError),
+    #[error("Era 1 invalid ID provenance: {0}")]
+    InvalidId(Era1InvalidIdReceipt),
     #[error("Era 1 sealed outcome evidence mismatch: {0}")]
     LearningEvidenceMismatch(GpuLearningEvidenceMismatchReceipt),
     #[error("Era 1 fast-plasticity apply failure: {0}")]
@@ -119,6 +147,7 @@ impl Era1TrialRunError {
     fn into_training_error(self) -> TrainingError {
         match self {
             Self::Contract(error) => TrainingError::Contract(error),
+            Self::InvalidId(_) => TrainingError::Contract(ScaffoldContractError::InvalidId),
             Self::LearningEvidenceMismatch(_) => {
                 TrainingError::Contract(ScaffoldContractError::LearningEvidenceMismatch)
             }
@@ -141,6 +170,18 @@ impl Era1TrialRunError {
                 TrainingError::Contract(error.mapped_contract_error())
             }
         }
+    }
+}
+
+fn tag_invalid_id(
+    error: ScaffoldContractError,
+    tick: Tick,
+    field_tag: Era1InvalidIdFieldTag,
+) -> Era1TrialRunError {
+    if error == ScaffoldContractError::InvalidId {
+        Era1TrialRunError::InvalidId(Era1InvalidIdReceipt { tick, field_tag })
+    } else {
+        Era1TrialRunError::Contract(error)
     }
 }
 
@@ -574,7 +615,13 @@ impl Era1TrialRunner {
         &mut self,
         request: Era1TrialRunRequest<'_>,
     ) -> Result<Era1TrialRunEvidence, Era1TrialRunError> {
-        request.validate_contract()?;
+        request.validate_contract().map_err(|error| {
+            tag_invalid_id(
+                error,
+                Tick::ZERO,
+                Era1InvalidIdFieldTag::RequestIdentityValidation,
+            )
+        })?;
         let (brain_genome, development) = self.express_compatible_creature(request.genome)?;
         let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
             &brain_genome,
@@ -605,9 +652,24 @@ impl Era1TrialRunner {
         mut development: DevelopmentState,
         handle: GpuBrainHandle,
     ) -> Result<Era1TrialRunEvidence, Era1TrialRunError> {
-        let mut world = build_era1_trial_world(request.manifest)?;
+        let mut world = build_era1_trial_world(request.manifest).map_err(|error| {
+            tag_invalid_id(
+                error,
+                Tick::ZERO,
+                Era1InvalidIdFieldTag::TrialWorldIdentityValidation,
+            )
+        })?;
+        let registration_tick = world.tick();
         let initial_organism_record =
-            register_trial_organism(&mut world, request.organism_id, request.genome)?;
+            register_trial_organism(&mut world, request.organism_id, request.genome).map_err(
+                |error| {
+                    tag_invalid_id(
+                        error,
+                        registration_tick,
+                        Era1InvalidIdFieldTag::TrialSubjectEntityLookup,
+                    )
+                },
+            )?;
         if request.control == Era1Control::SocialDisabled {
             remove_peer_agents(&mut world, request.organism_id)?;
         }
@@ -653,7 +715,16 @@ impl Era1TrialRunner {
                 .find(|transition| transition.at_tick == world.tick())
             {
                 let world_before_digest = world.canonical_signature_digest()?.words;
-                apply_era1_world_transition(request.manifest, transition, &mut world)?;
+                let transition_tick = world.tick();
+                apply_era1_world_transition(request.manifest, transition, &mut world).map_err(
+                    |error| {
+                        tag_invalid_id(
+                            error,
+                            transition_tick,
+                            Era1InvalidIdFieldTag::WorldTransitionEntityLookup,
+                        )
+                    },
+                )?;
                 transition_receipts.push(Era1TransitionReceipt {
                     transition,
                     world_before_digest,
