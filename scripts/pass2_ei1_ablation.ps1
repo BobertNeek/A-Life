@@ -122,14 +122,15 @@ foreach ($scenario in $selected) {
         $mechanisms = Get-Mechanisms $configuration
         $configurationMaterial = [ordered]@{
             format = 'pass2-ei1-ablation-configuration-v1'; mechanism_configuration = $mechanisms
-            scenario_id = [string]$scenario.id; scenario_corpus_version = [string]$scenario.corpus_version
+            scenario_id = [string]$scenario.id; configuration_id = [string]$configuration.id
+            scenario_corpus_version = [string]$scenario.corpus_version; stage = $Stage
             seed_set_identity = [string]$seedSet[0].identity; seeds = @($seedSet[0].seeds)
             brain_class = $BrainClass; population = $Population; hardware_toolchain = $HardwareToolchain
             runner_id = $runnerIdentity; runner_command = $runnerForIdentity; runner_arguments = $runnerArgs
             manifest_schema_version = 'pass2-experiment-manifest-v1'
         }
         $configurationHash = Get-Sha256Text (Get-CanonicalJson $configurationMaterial)
-        $identityMaterial = [ordered]@{ source_commit = $sourceCommit; canonical_mechanism_configuration = $mechanisms; scenario_corpus_version = [string]$scenario.corpus_version; seed_set_identity = [string]$seedSet[0].identity; seeds = @($seedSet[0].seeds); brain_class = $BrainClass; population = $Population; hardware_toolchain = $HardwareToolchain; runner_id = $runnerIdentity; runner_command = $runnerForIdentity; runner_arguments = $runnerArgs; schema_version = 'pass2-experiment-manifest-v1' }
+        $identityMaterial = [ordered]@{ source_commit = $sourceCommit; canonical_mechanism_configuration = $mechanisms; scenario_id = [string]$scenario.id; configuration_id = [string]$configuration.id; scenario_corpus_version = [string]$scenario.corpus_version; stage = $Stage; seed_set_identity = [string]$seedSet[0].identity; seeds = @($seedSet[0].seeds); brain_class = $BrainClass; population = $Population; hardware_toolchain = $HardwareToolchain; runner_id = $runnerIdentity; runner_command = $runnerForIdentity; runner_arguments = $runnerArgs; schema_version = 'pass2-experiment-manifest-v1' }
         $cacheKey = Get-Sha256Text (Get-CanonicalJson $identityMaterial)
         $receiptPath = Join-Path $artifactRootAbsolute "$cacheKey.receipt.json"
         $manifest = [ordered]@{
