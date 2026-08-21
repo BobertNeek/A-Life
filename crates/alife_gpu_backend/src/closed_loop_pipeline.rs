@@ -4587,9 +4587,14 @@ mod lifecycle_tests {
     use super::*;
 
     #[test]
-    fn selected_candidate_status_matches_precommit_contract() {
-        assert!(CLOSED_LOOP_DECODE_WGSL.contains("select(2u, 3u, found)"));
-        assert!(!CLOSED_LOOP_DECODE_WGSL.contains("select(2u, 1u, found)"));
+    fn selection_status_protocol_installs_pending_state_before_readback() {
+        assert!(CLOSED_LOOP_DECODE_WGSL.contains("select(2u, 1u, found)"));
+        assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("selection.status != 1u"));
+        assert!(CLOSED_LOOP_ELIGIBILITY_WGSL
+            .contains("store_state_u32(header.selection_offset + 5u, 2u)"));
+        assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("selection.status != 2u"));
+        assert!(CLOSED_LOOP_ELIGIBILITY_WGSL
+            .contains("store_state_u32(header.selection_offset + 5u, 3u)"));
     }
 
     #[test]

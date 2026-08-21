@@ -181,7 +181,7 @@ fn select_candidate(@builtin(global_invocation_id) gid:vec3<u32>) {
   atomicStore(&mutable_state_words[base + 2u], select(0xffffffffu, selected_candidate, found));
   atomicStore(&mutable_state_words[base + 3u], select(0u, bitcast<u32>(selected_logit), found));
   atomicStore(&mutable_state_words[base + 4u], select(0u, selected_confidence, found));
-  atomicStore(&mutable_state_words[base + 5u], select(2u, 3u, found));
+  atomicStore(&mutable_state_words[base + 5u], select(2u, 1u, found));
   atomicStore(&mutable_state_words[base + 6u], atomicLoad(&mutable_state_words[brain.diagnostic_offset]));
   atomicStore(&mutable_state_words[base + 7u], atomicLoad(&mutable_state_words[brain.diagnostic_offset + 1u]));
   atomicStore(&mutable_state_words[base + 8u], atomicLoad(&mutable_state_words[brain.diagnostic_offset + 2u]));
