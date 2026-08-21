@@ -14,8 +14,8 @@ use alife_core::{
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
-    GpuClosedLoopMemoryTickInput, GpuRuntimeProfile, GpuSelectorDiagnosticEnableFailure,
-    GpuSelectorDiagnosticError, GpuSelectorDiagnosticReceipt,
+    GpuClosedLoopMemoryTickInput, GpuRuntimeProfile, GpuRuntimeSelectorDiagnosticEnableFailure,
+    GpuRuntimeSelectorDiagnosticError, GpuSelectorDiagnosticReceipt,
 };
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use alife_world::{
@@ -89,7 +89,7 @@ pub enum Era1TrialRunError {
     #[error("Era 1 contract error: {0}")]
     Contract(#[from] ScaffoldContractError),
     #[error("Era 1 selector diagnostic enable-stage failure: {0}")]
-    SelectorDiagnosticEnable(GpuSelectorDiagnosticEnableFailure),
+    SelectorDiagnosticEnable(GpuRuntimeSelectorDiagnosticEnableFailure),
     #[error("Era 1 selector diagnostic later-stage GPU failure: {0}")]
     SelectorDiagnosticLaterStage(ScaffoldContractError),
 }
@@ -107,13 +107,13 @@ impl Era1TrialRunError {
     }
 }
 
-fn map_selector_diagnostic_error(error: GpuSelectorDiagnosticError) -> Era1TrialRunError {
+fn map_selector_diagnostic_error(error: GpuRuntimeSelectorDiagnosticError) -> Era1TrialRunError {
     match error {
-        GpuSelectorDiagnosticError::Preflight(error) => Era1TrialRunError::Contract(error),
-        GpuSelectorDiagnosticError::Enable(error) => {
+        GpuRuntimeSelectorDiagnosticError::Preflight(error) => Era1TrialRunError::Contract(error),
+        GpuRuntimeSelectorDiagnosticError::Enable(error) => {
             Era1TrialRunError::SelectorDiagnosticEnable(error)
         }
-        GpuSelectorDiagnosticError::LaterStage(error) => {
+        GpuRuntimeSelectorDiagnosticError::LaterStage(error) => {
             Era1TrialRunError::SelectorDiagnosticLaterStage(error)
         }
     }
