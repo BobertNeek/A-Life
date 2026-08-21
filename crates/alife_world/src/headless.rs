@@ -27,8 +27,8 @@ use alife_core::{
     SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence, SleepConsolidationReport,
     SleepTransition, SocialAgentSnapshot, SocialProximityEntry, SpeechActKind, SpeechMotorPayload,
     TeacherPerceptionChannel, Tick, UtteranceId, UtteranceSourceKind, Validate, Vec3f, Velocity,
-    WorldEntityId, MAX_HEARD_TOKENS, MAX_SOCIAL_AGENTS, SENSORY_AUDITORY_CHANNEL_COUNT,
-    SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
+    TrackedObjectId, WorldEntityId, MAX_FOCAL_TARGETS, MAX_HEARD_TOKENS, MAX_SOCIAL_AGENTS,
+    SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
     SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
 
@@ -48,8 +48,8 @@ use crate::presentation::{
     PresentationEvidence,
 };
 use crate::{
-    AudibleUtterance, GroundedPhysicalProperties, GroundedSensorExtractor,
-    PhysicalObservationSnapshot, PhysicalObservedObject, PhysicalTrackingKey,
+    AudibleUtterance, GroundedFocalObservation, GroundedPhysicalProperties,
+    GroundedSensorExtractor, PhysicalObservationSnapshot, PhysicalObservedObject, PhysicalTrackingKey,
     PhysicalTrackingProvenance, SpatialSpeechBus, TrackedObjectRegistry,
     DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM, PHYSICAL_TRACKING_PROVENANCE_SCHEMA_VERSION,
 };
@@ -1654,6 +1654,54 @@ impl HeadlessWorld {
             observer,
             self.indexed_nearby_objects(observer, index)?.into_iter(),
         )
+    }
+
+    /// Reacquires bounded rich facts for the selected stable identities. The
+    /// registry key, rather than a transient world entity, is authoritative.
+    pub fn reacquire_grounded_focal(
+        &self,
+        organism_id: OrganismId,
+        tick: Tick,
+        targets: &[TrackedObjectId],
+    ) -> Result<Vec<GroundedFocalObservation>, ScaffoldContractError> {
+        organism_id.validate()?;
+        if targets.len() > MAX_FOCAL_TARGETS {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let snapshot = self.physical_observation_snapshot(organism_id, tick)?;
+        let mut seen = BTreeSet::new();
+        let mut observations = Vec::with_capacity(targets.len());
+        for tracked_object_id in targets {
+            tracked_object_id.validate()?;
+            if !seen.insert(tracked_object_id.raw()) {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+            let Some(record) = self
+                .tracked_objects
+                .record(organism_id, *tracked_object_id)
+            else {
+                continue;
+            };
+            let Some(object) = snapshot
+                .visible
+                .iter()
+                .find(|object| object.tracking_key == record.tracking_key)
+            else {
+                continue;
+            };
+            let relative_position = subtract(object.position, snapshot.observer_pose.translation);
+            let observation = GroundedFocalObservation {
+                tracked_object_id: *tracked_object_id,
+                transport_entity: object.transport_entity,
+                relative_position,
+                properties: object.properties,
+                contact: object.contact,
+                confidence: object.confidence,
+            };
+            observation.validate_contract()?;
+            observations.push(observation);
+        }
+        Ok(observations)
     }
 
     fn physical_observation_snapshot_from_objects<'a>(

@@ -3,14 +3,19 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    CanonicalDigestBuilder, ConceptCellId, Confidence, ExperienceSequenceId, NormalizedScalar,
-    OrganismId, ScaffoldContractError, Tick, TrackedObjectId, Validate,
+    CanonicalDigestBuilder, ConceptCellId, Confidence, ExperienceSequenceId,
+    GroundedObjectSlotV1, NormalizedScalar, OrganismId, ScaffoldContractError, Tick,
+    TrackedObjectId, Validate, Vec3f, WorldEntityId,
 };
 
 pub const ATTENTION_SCHEMA_VERSION: u16 = 1;
 pub const MAX_PERIPHERAL_SUMMARIES: usize = 64;
 pub const MAX_FOCAL_TARGETS: usize = 8;
 pub const MAX_ATTENTION_SALIENCE_COMPONENTS: usize = 64;
+/// Number of bounded physical/sensory values exposed by one focal detail.
+/// The typed fields remain grounded facts; this width is the current
+/// phenotype-owned encoding/accounting ceiling.
+pub const MAX_FOCAL_FEATURE_WIDTH: u16 = 29;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -135,6 +140,105 @@ impl Validate for PeripheralSummary {
         self.identity.validate_contract()?;
         self.salience.validate_contract()?;
         Confidence::new(self.confidence.raw())?;
+        Ok(())
+    }
+}
+
+/// Rich grounded facts reacquired for one stable tracked object after focal
+/// selection. Peripheral summaries intentionally do not carry these fields.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct GroundedFocalDetail {
+    pub identity: StableFocusIdentity,
+    pub transport_entity: WorldEntityId,
+    pub relative_position: Vec3f,
+    pub velocity: Vec3f,
+    pub slot: GroundedObjectSlotV1,
+    pub confidence: Confidence,
+    pub feature_width: u16,
+}
+
+impl GroundedFocalDetail {
+    pub fn new(
+        transport_entity: WorldEntityId,
+        relative_position: Vec3f,
+        velocity: Vec3f,
+        slot: GroundedObjectSlotV1,
+        confidence: Confidence,
+        feature_width: u16,
+    ) -> Result<Self, ScaffoldContractError> {
+        let detail = Self {
+            identity: StableFocusIdentity::TrackedObject(slot.tracked_object_id),
+            transport_entity,
+            relative_position,
+            velocity,
+            slot,
+            confidence,
+            feature_width,
+        };
+        detail.validate_contract()?;
+        Ok(detail)
+    }
+
+    pub fn feature_values(self) -> [f32; MAX_FOCAL_FEATURE_WIDTH as usize] {
+        [
+            self.slot.bearing[0],
+            self.slot.bearing[1],
+            self.slot.distance,
+            self.slot.relative_velocity[0],
+            self.slot.relative_velocity[1],
+            self.slot.relative_velocity[2],
+            self.slot.color[0],
+            self.slot.color[1],
+            self.slot.color[2],
+            self.slot.material[0],
+            self.slot.material[1],
+            self.slot.material[2],
+            self.slot.shape[0],
+            self.slot.shape[1],
+            self.slot.shape[2],
+            self.slot.chemical[0],
+            self.slot.chemical[1],
+            self.slot.chemical[2],
+            self.slot.contact,
+            self.slot.proprioception[0],
+            self.slot.proprioception[1],
+            self.slot.temperature,
+            self.slot.terrain[0],
+            self.slot.terrain[1],
+            self.relative_position.x,
+            self.relative_position.y,
+            self.relative_position.z,
+            self.velocity.x,
+            self.velocity.y,
+        ]
+    }
+}
+
+impl Validate for GroundedFocalDetail {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.identity.validate_contract()?;
+        let StableFocusIdentity::TrackedObject(tracked_object_id) = self.identity else {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        };
+        if tracked_object_id != self.slot.tracked_object_id
+            || self.feature_width == 0
+            || self.feature_width > MAX_FOCAL_FEATURE_WIDTH
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        self.transport_entity.validate()?;
+        self.relative_position.validate()?;
+        self.velocity.validate()?;
+        self.slot.validate_contract()?;
+        Confidence::new(self.confidence.raw())?;
+        if self
+            .feature_values()
+            .into_iter()
+            .take(usize::from(self.feature_width))
+            .any(|value| !value.is_finite())
+        {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
         Ok(())
     }
 }

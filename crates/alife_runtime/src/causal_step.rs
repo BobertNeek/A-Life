@@ -7,14 +7,15 @@
 use alife_core::cognitive_work::CognitiveWorkCounters;
 use alife_core::{
     ActionCommand, ActionKind, ActionTarget, BiochemistryState, BoundedCoordinationSummary,
-    BoundedMotorPayload, BrainGenome, BrainPhenotype, BrainWorkCounters,
+    BoundedMotorPayload, BrainCapacityClass, BrainGenome, BrainPhenotype, BrainWorkCounters,
     CandidateActionFamily, CandidateObservationRef, CognitiveContextFrame, CognitiveWorkReceipt,
-    DevelopmentState, ExperiencePatch, ExperienceSequenceId, GroundedSuccessorPredictor,
-    JointMotorCondition, LanguageGroundingLedger, MemoryRecallReceipt, MotorChannel,
+    CognitiveInteroceptiveView, DevelopmentState, ExperiencePatch, ExperienceSequenceId,
+    GroundedFocalDetail, GroundedSuccessorPredictor, JointMotorCondition, LanguageGroundingLedger,
+    MAX_FOCAL_FEATURE_WIDTH, MAX_FOCAL_TARGETS, MemoryRecallReceipt, MotorChannel,
     MotorCommandBundle, NeuralActionSelection, NormalizedScalar, PerceptionFrame,
     PerceptionFrameDigest, PostActionOutcome, PreActionSnapshot, PredictionTargetReceipt,
-    ScaffoldContractError, SemanticStateVector, SignedValence, SpeechMotorPayload, Validate, Vec3f,
-    WorldEntityId,
+    ScaffoldContractError, SemanticStateVector, SignedValence, SpeechMotorPayload,
+    StableFocusIdentity, Validate, Vec3f, WorldEntityId,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopTick, GpuSelectorDiagnosticReceipt, GpuV11WorkReceipt,
@@ -263,10 +264,18 @@ pub fn run_production_causal_step(
         return Err(ScaffoldContractError::InvalidDecisionEvidence);
     }
     memory_recall.validate_for_frame(&frame)?;
-    let cognitive_context = memory_recall
+    let mut cognitive_context = memory_recall
         .cognitive_context()
         .cloned()
         .ok_or(ScaffoldContractError::MissingPhaseData)?;
+    let admission = world
+        .organism_registry()
+        .get(organism_id)
+        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+        .authoritative_admission_at(frame.tick())?;
+    cognitive_context.interoceptive =
+        CognitiveInteroceptiveView::from_biochemistry(&admission.biochemistry)?;
+    reacquire_focal_context(world, &frame, phenotype, &mut cognitive_context)?;
     let sequence_id = ExperienceSequenceId(*next_sequence);
     sequence_id.validate()?;
     let selected_candidate = *frame
@@ -368,7 +377,6 @@ pub fn run_production_causal_step(
         target_state,
     )?;
     let prediction_update = predictor.observe(&prediction_target)?;
-    let mut cognitive_context = cognitive_context;
     let grounded_prediction_error = apply_prediction_evidence(
         &mut cognitive_context,
         &prediction_target,
@@ -443,6 +451,87 @@ pub fn run_production_causal_step(
             ordered: Vec::new(),
         },
     })
+}
+
+fn reacquire_focal_context(
+    world: &HeadlessWorld,
+    frame: &PerceptionFrame,
+    phenotype: &BrainPhenotype,
+    context: &mut CognitiveContextFrame,
+) -> Result<(), ScaffoldContractError> {
+    let class = BrainCapacityClass::supported_for_id(phenotype.brain_class_id())?;
+    let class_focal_capacity = usize::from(class.execution().max_object_slots())
+        .min(MAX_FOCAL_TARGETS);
+    let phenotype_focal_capacity =
+        usize::from(phenotype.cognitive_architecture().attention_capacity());
+    let current_focal_capacity = usize::from(context.budget.focal_capacity)
+        .min(usize::from(context.attention.budget_receipt.focal_capacity));
+    let granted_focal_capacity = usize::from(context.attention.budget_receipt.granted_focal_count);
+    let focal_capacity = class_focal_capacity
+        .min(phenotype_focal_capacity)
+        .min(current_focal_capacity)
+        .min(granted_focal_capacity);
+    let selected_identities = context
+        .attention
+        .focal_targets
+        .iter()
+        .copied()
+        .take(focal_capacity)
+        .collect::<Vec<_>>();
+    let tracked_targets = selected_identities
+        .iter()
+        .filter_map(|identity| match identity {
+            StableFocusIdentity::TrackedObject(tracked_object_id) => Some(*tracked_object_id),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let observations = world.reacquire_grounded_focal(frame.organism_id(), frame.tick(), &tracked_targets)?;
+    let current_feature_width = match context.budget.focal_feature_width {
+        0 => MAX_FOCAL_FEATURE_WIDTH,
+        width => width,
+    };
+    let feature_width = phenotype
+        .cognitive_architecture()
+        .motor_head_width()
+        .min(class.execution().max_decoder_input_lanes())
+        .min(current_feature_width)
+        .min(MAX_FOCAL_FEATURE_WIDTH);
+    let mut details = Vec::with_capacity(observations.len());
+    for observation in observations {
+        let Some(slot) = frame
+            .grounded_object_slots()
+            .iter()
+            .find(|slot| slot.tracked_object_id == observation.tracked_object_id)
+        else {
+            continue;
+        };
+        details.push(GroundedFocalDetail::new(
+            observation.transport_entity,
+            observation.relative_position,
+            observation.properties.velocity,
+            *slot,
+            observation.confidence,
+            feature_width,
+        )?);
+    }
+    let peripheral_work_units = context.attention.peripheral_summaries.len() as u64;
+    let focal_work_units = (details.len() as u64).saturating_mul(u64::from(feature_width));
+    let work_used = peripheral_work_units.saturating_add(focal_work_units);
+    context.focal.identities = selected_identities;
+    context.focal.salience.truncate(context.focal.identities.len());
+    context.focal.grounded_details = details;
+    context.budget.focal_capacity = focal_capacity as u8;
+    context.budget.focal_feature_width = if context.focal.grounded_details.is_empty() {
+        0
+    } else {
+        feature_width
+    };
+    context.budget.peripheral_work_units = peripheral_work_units;
+    context.budget.focal_work_units = focal_work_units;
+    context.budget.work_used = work_used;
+    context.budget.work_limit = context.budget.work_limit.max(work_used);
+    context.attention.budget_receipt.work_units = work_used;
+    context.validate_contract()
 }
 
 fn validate_canonical_sync(
@@ -763,7 +852,7 @@ fn cognitive_work_receipt(
         neural_work.neuron_updates,
         neural_work.synapse_ops,
         v11_work.cognitive.dendritic_ops,
-        context.attention.budget_receipt.work_units,
+        context.budget.work_used,
         memory_ops,
         context.concept.active_concepts.len() as u64,
         context.gap.active_gaps.len() as u64,

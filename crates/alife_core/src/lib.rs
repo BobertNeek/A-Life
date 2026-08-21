@@ -75,9 +75,10 @@ pub use archive::{
 };
 pub use attention::{
     select_focal_targets, AttentionBudgetReceipt, AttentionFrame, AttentionSelectionPolicy,
-    HysteresisState, NeuralStructuralIdentity, PeripheralSummary, SalienceComponents,
-    StableFocusIdentity, ATTENTION_SCHEMA_VERSION, MAX_ATTENTION_SALIENCE_COMPONENTS,
-    MAX_FOCAL_TARGETS, MAX_PERIPHERAL_SUMMARIES,
+    GroundedFocalDetail, HysteresisState, NeuralStructuralIdentity, PeripheralSummary,
+    SalienceComponents, StableFocusIdentity, ATTENTION_SCHEMA_VERSION,
+    MAX_ATTENTION_SALIENCE_COMPONENTS, MAX_FOCAL_FEATURE_WIDTH, MAX_FOCAL_TARGETS,
+    MAX_PERIPHERAL_SUMMARIES,
 };
 pub use biochemistry::{
     BiochemistryCadence, BiochemistryState, BodyEventDelta, BodyState, DevelopmentReadiness,

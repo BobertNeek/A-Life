@@ -3,10 +3,12 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AttentionFrame, CanonicalDigestBuilder, ConceptCellId, ExperienceSequenceId, HysteresisState,
-    MemoryId, NormalizedScalar, OrganismId, SalienceComponents, ScaffoldContractError,
-    SemanticStateVector, SignedValence, StableFocusIdentity, Tick, UnresolvedGapId, Validate,
-    MAX_FOCAL_TARGETS, MAX_PERIPHERAL_SUMMARIES, MAX_SEMANTIC_STATE_VALUES,
+    AttentionFrame, BiochemistryState, CanonicalDigestBuilder, ConceptCellId,
+    ExperienceSequenceId, GroundedFocalDetail, HysteresisState, MemoryId, NormalizedScalar,
+    OrganismId, SalienceComponents, ScaffoldContractError, SemanticStateVector, SignedValence,
+    StableFocusIdentity, Tick, UnresolvedGapId, Validate, MAX_COGNITIVE_WORK_COUNTER,
+    MAX_FOCAL_FEATURE_WIDTH, MAX_FOCAL_TARGETS, MAX_PERIPHERAL_SUMMARIES,
+    MAX_SEMANTIC_STATE_VALUES,
 };
 
 pub const COGNITIVE_CONTEXT_SCHEMA_VERSION: u16 = 1;
@@ -36,12 +38,17 @@ impl Validate for CognitivePeripheralView {
 pub struct CognitiveFocalView {
     pub identities: Vec<StableFocusIdentity>,
     pub salience: Vec<SalienceComponents>,
+    #[serde(default)]
+    pub grounded_details: Vec<GroundedFocalDetail>,
     pub hysteresis: HysteresisState,
 }
 
 impl Validate for CognitiveFocalView {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        if self.identities.len() > MAX_FOCAL_TARGETS || self.salience.len() > MAX_FOCAL_TARGETS {
+        if self.identities.len() > MAX_FOCAL_TARGETS
+            || self.salience.len() > MAX_FOCAL_TARGETS
+            || self.grounded_details.len() > MAX_FOCAL_TARGETS
+        {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
         for identity in &self.identities {
@@ -53,6 +60,18 @@ impl Validate for CognitiveFocalView {
         for salience in &self.salience {
             salience.validate_contract()?;
         }
+        for (index, detail) in self.grounded_details.iter().enumerate() {
+            detail.validate_contract()?;
+            if !self.identities.contains(&detail.identity)
+                || self
+                    .grounded_details
+                    .iter()
+                    .take(index)
+                    .any(|candidate| candidate.identity == detail.identity)
+            {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+        }
         self.hysteresis.validate_contract()?;
         Ok(())
     }
@@ -63,9 +82,11 @@ pub struct CognitiveInteroceptiveView {
     pub hunger: NormalizedScalar,
     pub fatigue: NormalizedScalar,
     pub pain: NormalizedScalar,
+    pub injury: NormalizedScalar,
     pub temperature_stress: NormalizedScalar,
     pub sleep_pressure: NormalizedScalar,
     pub energy: NormalizedScalar,
+    pub brain_atp: NormalizedScalar,
 }
 
 impl Default for CognitiveInteroceptiveView {
@@ -74,10 +95,38 @@ impl Default for CognitiveInteroceptiveView {
             hunger: NormalizedScalar(0.0),
             fatigue: NormalizedScalar(0.0),
             pain: NormalizedScalar(0.0),
+            injury: NormalizedScalar(0.0),
             temperature_stress: NormalizedScalar(0.0),
             sleep_pressure: NormalizedScalar(0.0),
             energy: NormalizedScalar(1.0),
+            brain_atp: NormalizedScalar(1.0),
         }
+    }
+}
+
+impl CognitiveInteroceptiveView {
+    pub fn from_biochemistry(
+        state: &BiochemistryState,
+    ) -> Result<Self, ScaffoldContractError> {
+        state.validate_contract()?;
+        let view = Self {
+            hunger: NormalizedScalar::new(state.homeostasis.drives.hunger)?,
+            fatigue: NormalizedScalar::new(state.homeostasis.drives.fatigue)?,
+            pain: NormalizedScalar::new(state.homeostasis.drives.pain)?,
+            injury: NormalizedScalar::new(state.body.injury)?,
+            temperature_stress: NormalizedScalar::new(
+                state
+                    .homeostasis
+                    .drives
+                    .temperature_stress
+                    .max(state.body.temperature_stress),
+            )?,
+            sleep_pressure: NormalizedScalar::new(state.homeostasis.hormones.sleep_pressure)?,
+            energy: NormalizedScalar::new(state.body.energy)?,
+            brain_atp: NormalizedScalar::new(state.homeostasis.drives.brain_atp)?,
+        };
+        view.validate_contract()?;
+        Ok(view)
     }
 }
 
@@ -87,9 +136,11 @@ impl Validate for CognitiveInteroceptiveView {
             self.hunger,
             self.fatigue,
             self.pain,
+            self.injury,
             self.temperature_stress,
             self.sleep_pressure,
             self.energy,
+            self.brain_atp,
         ] {
             NormalizedScalar::new(value.raw())?;
         }
@@ -257,8 +308,14 @@ impl Validate for CognitivePredictionView {
 pub struct CognitiveBudgetView {
     pub peripheral_capacity: u16,
     pub focal_capacity: u8,
+    #[serde(default)]
+    pub focal_feature_width: u16,
     pub work_limit: u64,
     pub work_used: u64,
+    #[serde(default)]
+    pub peripheral_work_units: u64,
+    #[serde(default)]
+    pub focal_work_units: u64,
 }
 
 impl Default for CognitiveBudgetView {
@@ -266,8 +323,11 @@ impl Default for CognitiveBudgetView {
         Self {
             peripheral_capacity: MAX_PERIPHERAL_SUMMARIES as u16,
             focal_capacity: MAX_FOCAL_TARGETS as u8,
+            focal_feature_width: 0,
             work_limit: 0,
             work_used: 0,
+            peripheral_work_units: 0,
+            focal_work_units: 0,
         }
     }
 }
@@ -276,7 +336,10 @@ impl Validate for CognitiveBudgetView {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         if usize::from(self.peripheral_capacity) > MAX_PERIPHERAL_SUMMARIES
             || usize::from(self.focal_capacity) > MAX_FOCAL_TARGETS
+            || self.focal_feature_width > MAX_FOCAL_FEATURE_WIDTH
             || self.work_used > self.work_limit
+            || self.peripheral_work_units > MAX_COGNITIVE_WORK_COUNTER
+            || self.focal_work_units > MAX_COGNITIVE_WORK_COUNTER
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
@@ -388,6 +451,31 @@ impl CognitiveContextFrame {
         }
         builder.write_u16(self.focal.hysteresis.retained_ticks);
         builder.write_f32(self.focal.hysteresis.switch_margin.raw())?;
+        builder.write_sequence_len(self.focal.grounded_details.len());
+        for detail in &self.focal.grounded_details {
+            builder.write_u8(detail.identity.kind_tag());
+            builder.write_u64(detail.identity.raw());
+            builder.write_u64(detail.transport_entity.raw());
+            for value in [
+                detail.relative_position.x,
+                detail.relative_position.y,
+                detail.relative_position.z,
+                detail.velocity.x,
+                detail.velocity.y,
+                detail.velocity.z,
+            ] {
+                builder.write_f32(value)?;
+            }
+            builder.write_u16(detail.feature_width);
+            for value in detail
+                .feature_values()
+                .into_iter()
+                .take(usize::from(detail.feature_width))
+            {
+                builder.write_f32(value)?;
+            }
+            builder.write_f32(detail.confidence.raw())?;
+        }
         write_interoceptive(&mut builder, self.interoceptive)?;
         builder.write_sequence_len(self.memory.expectancies.len());
         for entry in &self.memory.expectancies {
@@ -431,8 +519,11 @@ impl CognitiveContextFrame {
         builder.write_f32(self.prediction.action_sensitivity.raw())?;
         builder.write_u16(self.budget.peripheral_capacity);
         builder.write_u8(self.budget.focal_capacity);
+        builder.write_u16(self.budget.focal_feature_width);
         builder.write_u64(self.budget.work_limit);
         builder.write_u64(self.budget.work_used);
+        builder.write_u64(self.budget.peripheral_work_units);
+        builder.write_u64(self.budget.focal_work_units);
         Ok(builder.finish256())
     }
 }
@@ -465,6 +556,7 @@ impl Validate for CognitiveContextFrame {
         self.budget.validate_contract()?;
         if self.peripheral.summaries.len() > usize::from(self.budget.peripheral_capacity)
             || self.focal.identities.len() > usize::from(self.budget.focal_capacity)
+            || self.focal.grounded_details.len() > self.focal.identities.len()
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
@@ -507,9 +599,11 @@ fn write_interoceptive(
         view.hunger,
         view.fatigue,
         view.pain,
+        view.injury,
         view.temperature_stress,
         view.sleep_pressure,
         view.energy,
+        view.brain_atp,
     ] {
         builder.write_f32(value.raw())?;
     }

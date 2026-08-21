@@ -198,6 +198,29 @@ impl PhysicalObservedObject {
     }
 }
 
+/// Rich world facts reacquired for a selected stable tracked identity. This
+/// remains a score-free observation and carries no action or desirability data.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct GroundedFocalObservation {
+    pub tracked_object_id: TrackedObjectId,
+    pub transport_entity: WorldEntityId,
+    pub relative_position: Vec3f,
+    pub properties: GroundedPhysicalProperties,
+    pub contact: bool,
+    pub confidence: Confidence,
+}
+
+impl GroundedFocalObservation {
+    pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.tracked_object_id.validate()?;
+        self.transport_entity.validate()?;
+        self.relative_position.validate()?;
+        self.properties.validate_contract()?;
+        Confidence::new(self.confidence.raw())?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GroundedObjectTransport {
     pub slot_index: u16,
