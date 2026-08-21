@@ -2624,7 +2624,7 @@ fn seal_prepared_selection_core(
     if resident.next_sequence != sequence_id.raw() {
         return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
     }
-    let source_state = grounded_semantic_state_from_frame(frame)?;
+    let source_state = grounded_semantic_state_from_frame(&frame)?;
     let motor_condition = JointMotorCondition::from_bundle(&motor_bundle)?;
     let motor_receipt = world
         .apply_registered_motor_bundle(&motor_bundle, world_entity_id)
