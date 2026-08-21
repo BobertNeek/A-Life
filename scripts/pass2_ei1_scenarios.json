@@ -3,14 +3,14 @@
   "experiment_manifest_schema": "scripts/pass2_experiment_manifest.schema.json",
   "catalog_version": "pass2-ei1-scenarios-v1",
   "execution_state": "not_run",
-  "source_commit": "5d1082c01ab8d98854b29049064cfd8b691a523b",
+  "source_commit": "0504a6cbe4761d4be4d5f6ca7c4aa91fc02a7548",
   "common_seed_sets": [
     {"identity": "pass2-screen-common-v1", "seeds": [104729, 130363, 155921], "intended_stage": "screen"},
     {"identity": "pass2-confirm-common-v1", "seeds": [104729, 130363, 155921, 196613, 223757], "intended_stage": "confirm"},
     {"identity": "pass2-certify-common-v1", "seeds": [104729, 130363, 155921, 196613, 223757, 262147, 299993, 324161], "intended_stage": "certify"}
   ],
   "run_contract": {
-    "brain_class": "N512",
+    "brain_class": "N2048",
     "population": 1,
     "configuration_hash_policy": "SHA-256 of the canonical mechanism configuration and runner arguments captured at launch.",
     "hardware_toolchain_capture": ["GpuRuntimeCapabilityManifest", "adapter_identity", "driver_identity", "os_identity", "rustc_identity", "wgpu_identity"],
@@ -32,16 +32,16 @@
     {"id": "ablate_episodic_recall", "attention": true, "concept_gap_context": true, "prediction": true, "dendritic_conjunctions": true, "structural_plasticity": true, "weight_learning": true, "sleep_consolidation": true, "episodic_recall": false}
   ],
   "scenarios": [
-    {"id": "few_shot_avoidance", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": [], "capability_metric": "hazard_avoidance_success_rate"},
-    {"id": "reversal_learning", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": [], "capability_metric": "reversal_adaptation_trials"},
-    {"id": "contradiction_resolution", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": ["concept_gap_context"], "capability_metric": "contradiction_resolution_rate"},
-    {"id": "targeted_curiosity_unresolved_gap", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": ["concept_gap_context"], "capability_metric": "gap_targeting_rate"},
-    {"id": "passive_observational_learning", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": [], "capability_metric": "observation_transfer_rate"},
-    {"id": "delayed_episodic_recall", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": ["episodic_recall"], "capability_metric": "delayed_recall_accuracy"},
-    {"id": "related_context_generalization", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": ["concept_gap_context"], "capability_metric": "related_context_transfer_rate"},
-    {"id": "simultaneous_motor_combinations", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": [], "capability_metric": "joint_motor_success_rate"},
-    {"id": "experience_dependent_structural_differences", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": ["structural_plasticity"], "capability_metric": "structural_difference_rate"},
-    {"id": "continual_learning_retention_interference", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "No Task 3 behavioural evaluator is implemented in this source snapshot.", "required_mechanisms": ["weight_learning"], "capability_metric": "retention_minus_interference"}
+    {"id": "few_shot_avoidance", "corpus_version": "ei1-behavioural-v1", "support": "available", "unavailable_reason": null, "required_mechanisms": [], "capability_metric": "hazard_avoidance_success_rate"},
+    {"id": "reversal_learning", "corpus_version": "ei1-behavioural-v1", "support": "available", "unavailable_reason": null, "required_mechanisms": [], "capability_metric": "reversal_adaptation_trials"},
+    {"id": "contradiction_resolution", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "Era1TrialRunner does not expose concept-gap contradiction semantics in this slice.", "required_mechanisms": ["concept_gap_context"], "capability_metric": "contradiction_resolution_rate"},
+    {"id": "targeted_curiosity_unresolved_gap", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "Era1TrialRunner does not expose unresolved-gap curiosity targeting in this slice.", "required_mechanisms": ["concept_gap_context"], "capability_metric": "gap_targeting_rate"},
+    {"id": "passive_observational_learning", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "Era1TrialRunner requires the subject to act and has no passive-observation transfer semantics.", "required_mechanisms": [], "capability_metric": "observation_transfer_rate"},
+    {"id": "delayed_episodic_recall", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "Era1TrialRunner does not expose delayed episodic recall semantics in this slice.", "required_mechanisms": ["episodic_recall"], "capability_metric": "delayed_recall_accuracy"},
+    {"id": "related_context_generalization", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "Era1TrialRunner does not expose related-context generalization semantics in this slice.", "required_mechanisms": ["concept_gap_context"], "capability_metric": "related_context_transfer_rate"},
+    {"id": "simultaneous_motor_combinations", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "Era1TrialRunner selects one candidate action and does not expose factorized simultaneous motor semantics.", "required_mechanisms": [], "capability_metric": "joint_motor_success_rate"},
+    {"id": "experience_dependent_structural_differences", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "Era1TrialRunner does not expose experience-dependent structural-difference semantics in this slice.", "required_mechanisms": ["structural_plasticity"], "capability_metric": "structural_difference_rate"},
+    {"id": "continual_learning_retention_interference", "corpus_version": "ei1-behavioural-v1", "support": "unavailable", "unavailable_reason": "Era1TrialRunner runs one bounded trial and does not expose continual retention/interference semantics.", "required_mechanisms": ["weight_learning"], "capability_metric": "retention_minus_interference"}
   ],
   "stage_policy": {
     "screen": {"seed_set_identity": "pass2-screen-common-v1", "scenario_scope": "short", "configuration_scope": "full_system_and_all_required_ablations"},
