@@ -4252,6 +4252,84 @@ mod lifecycle_tests {
     }
 
     #[test]
+    fn sparse_selector_prevalidation_accepts_requested_ranges_only() {
+        fn sparse_spans_are_valid(
+            block: &[u32],
+            candidate_count: u32,
+            frame_word_count: usize,
+        ) -> bool {
+            let Some(&request_count) = block.first() else {
+                return false;
+            };
+            if request_count == 0 || request_count > 8 {
+                return false;
+            }
+            let Ok(request_count) = usize::try_from(request_count) else {
+                return false;
+            };
+            let Some(control_words) = request_count
+                .checked_mul(GPU_SELECTOR_DIAGNOSTIC_REQUEST_WORDS)
+                .and_then(|words| words.checked_add(1))
+            else {
+                return false;
+            };
+            if control_words > block.len() || block.len() > frame_word_count {
+                return false;
+            }
+            let mut expected_detail_offset = control_words;
+            let mut previous_candidate = None;
+            for request in 0..request_count {
+                let base = 1 + request * GPU_SELECTOR_DIAGNOSTIC_REQUEST_WORDS;
+                let candidate = block[base];
+                let Ok(detail_offset) = usize::try_from(block[base + 1]) else {
+                    return false;
+                };
+                let Ok(synapse_count) = usize::try_from(block[base + 2]) else {
+                    return false;
+                };
+                if candidate >= candidate_count
+                    || previous_candidate.is_some_and(|previous| candidate <= previous)
+                    || synapse_count == 0
+                    || detail_offset != expected_detail_offset
+                {
+                    return false;
+                }
+                let Some(detail_words) = synapse_count
+                    .checked_mul(GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS)
+                else {
+                    return false;
+                };
+                let Some(detail_end) = detail_offset.checked_add(detail_words) else {
+                    return false;
+                };
+                if detail_end > block.len() || detail_end > frame_word_count {
+                    return false;
+                }
+                expected_detail_offset = detail_end;
+                previous_candidate = Some(candidate);
+            }
+            true
+        }
+
+        let family_synapse_counts = [1, 1, 1, 2, 1, 3];
+        let block = selector_diagnostic_sparse_block(&family_synapse_counts, &[3, 5]).unwrap();
+        assert!(sparse_spans_are_valid(&block, 6, block.len()));
+
+        let mut out_of_range = block.clone();
+        out_of_range[5] = u32::try_from(out_of_range.len()).unwrap();
+        assert!(!sparse_spans_are_valid(
+            &out_of_range,
+            6,
+            out_of_range.len()
+        ));
+        let abi_shader = include_str!("../shaders/closed_loop_abi.wgsl");
+        assert!(abi_shader.contains("sparse_selector_request_spans_valid(header)"));
+        assert!(!abi_shader.contains(
+            "decoder_synapse_count * SELECTOR_RECEIPT_RECORD_WORDS"
+        ));
+    }
+
+    #[test]
     fn selector_diagnostic_error_receipt_preserves_failure_class_and_boundary() {
         let capacity = selector_diagnostic_detail_plan(2048, 3, 2, 100, 2, 10, 580, 200)
             .expect_err("diagnostic detail must exceed the fixed payload capacity");

@@ -398,19 +398,38 @@ fn inactive_eligibility_bases(
     select(brain.decoder_eligibility_offset, extension.decoder_eligibility_bank_1_offset, bank_1)
   );
 }
+fn sparse_selector_request_spans_valid(header:GpuPerceptionHeader) -> bool {
+  if (header.reserved == 0u) { return true; }
+  let frame_word_count = arrayLength(&frame_payload_words);
+  if (header.reserved >= frame_word_count) { return false; }
+  let block_word_count = frame_word_count - header.reserved;
+  let request_count = frame_payload_words[header.reserved];
+  if (request_count == 0u || request_count > 8u
+      || request_count > (block_word_count - 1u) / 3u) { return false; }
+  var expected_detail_offset = 1u + request_count * 3u;
+  var previous_candidate = 0u;
+  for (var request = 0u; request < request_count; request++) {
+    let request_base = header.reserved + 1u + request * 3u;
+    let candidate = frame_payload_words[request_base];
+    let detail_offset = frame_payload_words[request_base + 1u];
+    let synapse_count = frame_payload_words[request_base + 2u];
+    if (candidate >= header.candidate_count
+        || (request > 0u && candidate <= previous_candidate)
+        || synapse_count == 0u
+        || detail_offset != expected_detail_offset
+        || detail_offset > block_word_count
+        || synapse_count > (block_word_count - detail_offset) / SELECTOR_RECEIPT_RECORD_WORDS) {
+      return false;
+    }
+    previous_candidate = candidate;
+    expected_detail_offset = detail_offset + synapse_count * SELECTOR_RECEIPT_RECORD_WORDS;
+  }
+  return true;
+}
+
 fn validate_slice_a_slot(slot_index:u32, header:GpuPerceptionHeader) -> bool {
   let slot = brain_slots[slot_index];
-  let decoder_synapse_count = select(0u, slot.synapse_count - slot.recurrent_synapse_count,
-    slot.recurrent_synapse_count <= slot.synapse_count);
-  let selector_span_valid = header.reserved == 0u || (
-    header.reserved < arrayLength(&frame_payload_words)
-    && decoder_synapse_count > 0u
-    && header.candidate_count <= 0x3fffffffu
-    && decoder_synapse_count <= 0x3fffffffu
-    && header.candidate_count <=
-      (arrayLength(&frame_payload_words) - header.reserved) /
-        (decoder_synapse_count * SELECTOR_RECEIPT_RECORD_WORDS)
-  );
+  let selector_span_valid = sparse_selector_request_spans_valid(header);
   var valid = header.brain_slot_index == slot_index
     && slot.schema_version == GPU_CLOSED_LOOP_LAYOUT_VERSION
     && header.schema_version == GPU_CLOSED_LOOP_LAYOUT_VERSION
