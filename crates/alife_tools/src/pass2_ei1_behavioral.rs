@@ -13,7 +13,7 @@ use alife_core::{
     FoundationGeneticIdentity, LanguageCodebookV1, OrganismId, ScaffoldContractError,
 };
 use alife_gpu_backend::{
-    GpuRuntimeSelectorDiagnosticBuildFailureReceipt,
+    GpuLearningEvidenceMismatchReceipt, GpuRuntimeSelectorDiagnosticBuildFailureReceipt,
     GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
     GpuRuntimeSelectorDiagnosticEnableFailure, GpuRuntimeSelectorDiagnosticFailureReceipt,
 };
@@ -46,6 +46,8 @@ pub enum Pass2Ei1BehavioralError {
     Json(#[from] serde_json::Error),
     #[error("Era 1 production runner failed: {0}")]
     Runner(String),
+    #[error("Era 1 sealed outcome evidence mismatch: {0}")]
+    LearningEvidenceMismatch(GpuLearningEvidenceMismatchReceipt),
     #[error("Era 1 selector diagnostic enable-stage failure: {0}")]
     SelectorDiagnosticEnable(GpuRuntimeSelectorDiagnosticEnableFailure),
     #[error("Era 1 selector diagnostic later-stage GPU failure: {0}")]
@@ -247,6 +249,9 @@ fn core_failure(error: impl std::fmt::Display) -> Pass2Ei1BehavioralError {
 
 fn runner_failure(error: Era1TrialRunError) -> Pass2Ei1BehavioralError {
     match error {
+        Era1TrialRunError::LearningEvidenceMismatch(receipt) => {
+            Pass2Ei1BehavioralError::LearningEvidenceMismatch(receipt)
+        }
         Era1TrialRunError::SelectorDiagnosticEnable(error) => {
             Pass2Ei1BehavioralError::SelectorDiagnosticEnable(error)
         }
@@ -571,6 +576,25 @@ mod selector_diagnostic_error_tests {
     use alife_training::Era1TrialRunError;
 
     #[test]
+    fn task3_preserves_learning_evidence_mismatch_receipt() {
+        let decoded = runner_failure(Era1TrialRunError::LearningEvidenceMismatch(
+            GpuLearningEvidenceMismatchReceipt {
+                field: alife_gpu_backend::GpuLearningEvidenceMismatchField::CandidateIndex,
+                expected: [3, 0, 0, 0],
+                actual: [5, 0, 0, 0],
+            },
+        ));
+        let rendered = decoded.to_string();
+        for field in [
+            "CandidateIndex",
+            "expected=[3, 0, 0, 0]",
+            "actual=[5, 0, 0, 0]",
+        ] {
+            assert!(rendered.contains(field), "missing {field} in {rendered}");
+        }
+    }
+
+    #[test]
     fn task3_preserves_selector_diagnostic_failure_receipts() {
         let receipt = GpuRuntimeSelectorDiagnosticErrorReceipt {
             class: GpuRuntimeSelectorDiagnosticFailureClass::CapacityExceeded,
@@ -711,16 +735,12 @@ mod selector_diagnostic_error_tests {
                 stage: GpuRuntimeSelectorDiagnosticStage::DecodeSelectorDiagnostics,
                 error: ScaffoldContractError::NeuralBackendUnavailable,
             });
-        assert!(
-            later_contract
-                .to_string()
-                .contains("later-stage GPU failure")
-        );
-        assert!(
-            later_contract
-                .to_string()
-                .contains("DecodeSelectorDiagnostics")
-        );
+        assert!(later_contract
+            .to_string()
+            .contains("later-stage GPU failure"));
+        assert!(later_contract
+            .to_string()
+            .contains("DecodeSelectorDiagnostics"));
 
         let build = runner_failure(Era1TrialRunError::SelectorDiagnosticBuild(
             GpuRuntimeSelectorDiagnosticBuildFailureReceipt {

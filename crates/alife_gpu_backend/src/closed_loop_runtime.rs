@@ -6,25 +6,24 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::num::NonZeroU64;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 
 use alife_core::{
-    ActionId, ActionTarget, BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX,
-    BRAIN_ATP_SLEEP_RECOVERY_Q16, Blake3Digest, BrainActivityPolicyV1, BrainCapacityClass,
-    BrainClassId, BrainDispatchIdentity, BrainPhenotype, BrainWorkCounters, BrainWorkReceipt,
+    ActionId, ActionTarget, Blake3Digest, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId,
+    BrainDispatchIdentity, BrainPhenotype, BrainWorkCounters, BrainWorkReceipt,
     CandidateActionFamily, CanonicalDigestBuilder, CoactivationEvidence, Confidence,
     DendriticBranchSet, ExperiencePatch, FinalizedMemoryRecall, GpuPressureSample,
     GpuPressureSampleInput, LearningCommitToken, LearningSequenceGuard, NeuralActionSelection,
     NeuralThrottleDecision, NeuralThrottleLevel, OrganismId, OutcomeCreditPacket,
     PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest, PhenotypeHash,
-    REQUIRED_GPU_FEATURE_MASK, ScaffoldContractError, SensorProfile, SpeechMotorPayload,
+    ScaffoldContractError, SensorProfile, SpeechMotorPayload, BRAIN_ATP_BASAL_DEBIT_Q16,
+    BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16, REQUIRED_GPU_FEATURE_MASK,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::closed_loop_buffers::GpuFixedSlotUpload;
 use crate::closed_loop_pipeline::{
-    GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS,
     GpuDecodeMappedRecordsDiagnostic as PipelineDecodeMappedRecordsDiagnostic,
     GpuDecodeMappedRecordsSubstage as PipelineDecodeMappedRecordsSubstage,
     GpuSelectionValidationFailure as PipelineSelectionValidationFailure,
@@ -32,9 +31,10 @@ use crate::closed_loop_pipeline::{
     GpuSelectorDiagnosticEnableError as PipelineSelectorDiagnosticEnableError,
     GpuSelectorDiagnosticErrorReceipt as PipelineSelectorDiagnosticErrorReceipt,
     GpuSelectorDiagnosticFailureClass as PipelineSelectorDiagnosticFailureClass,
+    GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS,
 };
 use crate::{
-    AddLifetimeSynapse, GPU_CLOSED_LOOP_LAYOUT_VERSION, GpuActiveBatchUpload, GpuAdmissionReceipt,
+    derive_executed_work, AddLifetimeSynapse, GpuActiveBatchUpload, GpuAdmissionReceipt,
     GpuAllocationEventKind, GpuAllocationEventReceipt, GpuBrainSlot, GpuClosedLoopError,
     GpuClosedLoopKernelSet, GpuClosedLoopPipelines, GpuCompactMapTicket,
     GpuFastPlasticityBatchEntry, GpuFixedActiveBatchEntry, GpuFixedClassArenaBuffers,
@@ -43,7 +43,7 @@ use crate::{
     GpuPendingEligibilityRecord, GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget,
     GpuRuntimeProfile, GpuSelectorLogitCapture, GpuTimestampQueryResources, GpuV11CausalState,
     GpuV11Checkpoint, GpuV11WorkReceipt, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
-    PendingEligibilityIdentity, PendingEligibilityReceipt, derive_executed_work,
+    PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
 };
 
 pub const GPU_HARDWARE_RECEIPT_SCHEMA_VERSION: u16 = 1;
@@ -321,6 +321,82 @@ impl GpuBrainHandle {
 
     pub const fn phenotype_hash(self) -> PhenotypeHash {
         self.phenotype_hash
+    }
+}
+
+/// First value that disagrees between a sealed outcome packet and the
+/// decision evidence currently installed for its resident GPU brain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuLearningEvidenceMismatchField {
+    OutcomeTickAfterOriginating,
+    ActiveActivationSide,
+    DispatchGeneration,
+    PhenotypeHashNonZero,
+    FrameDigestNonZero,
+    CandidateFeatureDigestNonZero,
+    RewardPredictionErrorRange,
+    PainRange,
+    HomeostaticImprovementRange,
+    FrustrationRange,
+    NoveltyRange,
+    ModulatorValueRange,
+    PendingEligibilityPresent,
+    PendingEligibilityRecordPresent,
+    OrganismId,
+    PhenotypeHash,
+    HandleGeneration,
+    PendingPhenotypeHash,
+    DispatchGenerationIdentity,
+    OriginatingTick,
+    FrameDigest,
+    ActiveActivationSideIdentity,
+    CandidateIndex,
+    ActionId,
+    ActionFamily,
+    CandidateFeatureDigest,
+    ActiveEligibilityGeneration,
+    StagingEligibilityGeneration,
+    ActiveWeightGenerationNonZero,
+    ReplayJournalGenerationNonZero,
+    TransactionGenerationNonZero,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuLearningEvidenceMismatchReceipt {
+    pub field: GpuLearningEvidenceMismatchField,
+    pub expected: [u64; 4],
+    pub actual: [u64; 4],
+}
+
+impl GpuLearningEvidenceMismatchReceipt {
+    const fn scalar(field: GpuLearningEvidenceMismatchField, expected: u64, actual: u64) -> Self {
+        Self {
+            field,
+            expected: [expected, 0, 0, 0],
+            actual: [actual, 0, 0, 0],
+        }
+    }
+
+    const fn words(
+        field: GpuLearningEvidenceMismatchField,
+        expected: [u64; 4],
+        actual: [u64; 4],
+    ) -> Self {
+        Self {
+            field,
+            expected,
+            actual,
+        }
+    }
+}
+
+impl std::fmt::Display for GpuLearningEvidenceMismatchReceipt {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "sealed outcome credit mismatch at {:?}: expected={:x?}, actual={:x?}",
+            self.field, self.expected, self.actual
+        )
     }
 }
 
@@ -3330,6 +3406,257 @@ impl GpuClosedLoopBackend {
         receipts
             .pop()
             .ok_or(ScaffoldContractError::LearningEvidenceMismatch)
+    }
+
+    /// Read-only field receipt for the exact evidence contract enforced by
+    /// `apply_sealed_outcome`. `None` means the sealed packet matches the
+    /// currently installed pending decision evidence.
+    pub fn sealed_outcome_credit_mismatch_receipt(
+        &self,
+        handle: GpuBrainHandle,
+        patch: &ExperiencePatch,
+    ) -> Result<Option<GpuLearningEvidenceMismatchReceipt>, ScaffoldContractError> {
+        self.validate_handle_backend(handle)?;
+        let packet = OutcomeCreditPacket::from_sealed_patch(patch)?;
+
+        let scalar = GpuLearningEvidenceMismatchReceipt::scalar;
+        let words = GpuLearningEvidenceMismatchReceipt::words;
+        let originating_tick = packet.originating_tick().raw();
+        let outcome_tick = packet.outcome_tick().raw();
+        if outcome_tick <= originating_tick {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::OutcomeTickAfterOriginating,
+                originating_tick.saturating_add(1),
+                outcome_tick,
+            )));
+        }
+        if packet.active_activation_side() > 1 {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::ActiveActivationSide,
+                1,
+                u64::from(packet.active_activation_side()),
+            )));
+        }
+        if packet.dispatch_generation() == 0 {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::DispatchGeneration,
+                1,
+                0,
+            )));
+        }
+        if packet.phenotype_hash() == PhenotypeHash([0; 4]) {
+            return Ok(Some(words(
+                GpuLearningEvidenceMismatchField::PhenotypeHashNonZero,
+                [1, 0, 0, 0],
+                packet.phenotype_hash().0,
+            )));
+        }
+        if packet.frame_digest() == PerceptionFrameDigest([0; 4]) {
+            return Ok(Some(words(
+                GpuLearningEvidenceMismatchField::FrameDigestNonZero,
+                [1, 0, 0, 0],
+                packet.frame_digest().0,
+            )));
+        }
+        if packet.candidate_feature_digest().0 == [0; 2] {
+            let digest = packet.candidate_feature_digest().0;
+            return Ok(Some(words(
+                GpuLearningEvidenceMismatchField::CandidateFeatureDigestNonZero,
+                [1, 0, 0, 0],
+                [digest[0], digest[1], 0, 0],
+            )));
+        }
+
+        let modulator = packet.modulator();
+        for (field, value) in [
+            (
+                GpuLearningEvidenceMismatchField::RewardPredictionErrorRange,
+                modulator.reward_prediction_error(),
+            ),
+            (
+                GpuLearningEvidenceMismatchField::PainRange,
+                modulator.pain(),
+            ),
+            (
+                GpuLearningEvidenceMismatchField::HomeostaticImprovementRange,
+                modulator.homeostatic_improvement(),
+            ),
+            (
+                GpuLearningEvidenceMismatchField::FrustrationRange,
+                modulator.frustration(),
+            ),
+            (
+                GpuLearningEvidenceMismatchField::NoveltyRange,
+                modulator.novelty(),
+            ),
+            (
+                GpuLearningEvidenceMismatchField::ModulatorValueRange,
+                modulator.value(),
+            ),
+        ] {
+            if !(-1.0..=1.0).contains(&value) {
+                return Ok(Some(words(
+                    field,
+                    [
+                        u64::from((-1.0_f32).to_bits()),
+                        u64::from(1.0_f32.to_bits()),
+                        0,
+                        0,
+                    ],
+                    [u64::from(value.to_bits()), 0, 0, 0],
+                )));
+            }
+        }
+
+        // This conversion now cannot collapse one of its learning-evidence
+        // checks without the receipt above naming the same first bad value.
+        let _ = GpuOutcomeCreditRecord::try_from(&packet)?;
+        let pool = self
+            .class_buckets
+            .get(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let resident = pool.resident(handle)?;
+        if packet.organism_id() != handle.organism_id {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::OrganismId,
+                handle.organism_id.raw(),
+                packet.organism_id().raw(),
+            )));
+        }
+        if packet.phenotype_hash() != handle.phenotype_hash {
+            return Ok(Some(words(
+                GpuLearningEvidenceMismatchField::PhenotypeHash,
+                handle.phenotype_hash.0,
+                packet.phenotype_hash().0,
+            )));
+        }
+        resident
+            .learning_sequence_guard
+            .validate_next(packet.replay_key())?;
+        let Some(pending_receipt) = resident.pending_eligibility else {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::PendingEligibilityPresent,
+                1,
+                0,
+            )));
+        };
+        if resident.pending_eligibility_record.is_none() {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::PendingEligibilityRecordPresent,
+                1,
+                0,
+            )));
+        }
+        let identity = pending_receipt.identity();
+        if identity.handle_generation() != handle.generation {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::HandleGeneration,
+                u64::from(handle.generation),
+                u64::from(identity.handle_generation()),
+            )));
+        }
+        if identity.phenotype_hash() != packet.phenotype_hash() {
+            return Ok(Some(words(
+                GpuLearningEvidenceMismatchField::PendingPhenotypeHash,
+                identity.phenotype_hash().0,
+                packet.phenotype_hash().0,
+            )));
+        }
+        if identity.dispatch_generation() != packet.dispatch_generation() {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::DispatchGenerationIdentity,
+                identity.dispatch_generation(),
+                packet.dispatch_generation(),
+            )));
+        }
+        if identity.originating_tick() != packet.originating_tick() {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::OriginatingTick,
+                identity.originating_tick().raw(),
+                packet.originating_tick().raw(),
+            )));
+        }
+        if identity.frame_digest() != packet.frame_digest() {
+            return Ok(Some(words(
+                GpuLearningEvidenceMismatchField::FrameDigest,
+                identity.frame_digest().0,
+                packet.frame_digest().0,
+            )));
+        }
+        if identity.active_activation_side() != packet.active_activation_side() {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::ActiveActivationSideIdentity,
+                u64::from(identity.active_activation_side()),
+                u64::from(packet.active_activation_side()),
+            )));
+        }
+        if identity.candidate_index() != packet.selected_candidate() {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::CandidateIndex,
+                u64::from(identity.candidate_index()),
+                u64::from(packet.selected_candidate()),
+            )));
+        }
+        if identity.action_id() != packet.selected_action() {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::ActionId,
+                u64::from(identity.action_id().raw()),
+                u64::from(packet.selected_action().raw()),
+            )));
+        }
+        if identity.action_family() != packet.selected_family() {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::ActionFamily,
+                u64::from(identity.action_family().raw()),
+                u64::from(packet.selected_family().raw()),
+            )));
+        }
+        if identity.candidate_feature_digest() != packet.candidate_feature_digest() {
+            let expected = identity.candidate_feature_digest().0;
+            let actual = packet.candidate_feature_digest().0;
+            return Ok(Some(words(
+                GpuLearningEvidenceMismatchField::CandidateFeatureDigest,
+                [expected[0], expected[1], 0, 0],
+                [actual[0], actual[1], 0, 0],
+            )));
+        }
+        if identity.active_eligibility_generation() != resident.active_eligibility_generation {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::ActiveEligibilityGeneration,
+                resident.active_eligibility_generation,
+                identity.active_eligibility_generation(),
+            )));
+        }
+        let expected_staging_generation = resident
+            .active_eligibility_generation
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
+        if identity.staging_eligibility_generation() != expected_staging_generation {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::StagingEligibilityGeneration,
+                expected_staging_generation,
+                identity.staging_eligibility_generation(),
+            )));
+        }
+        for (field, actual) in [
+            (
+                GpuLearningEvidenceMismatchField::ActiveWeightGenerationNonZero,
+                resident.active_weight_generation,
+            ),
+            (
+                GpuLearningEvidenceMismatchField::ReplayJournalGenerationNonZero,
+                resident.replay_journal_generation,
+            ),
+            (
+                GpuLearningEvidenceMismatchField::TransactionGenerationNonZero,
+                resident.transaction_generation,
+            ),
+        ] {
+            if actual == 0 {
+                return Ok(Some(scalar(field, 1, actual)));
+            }
+        }
+        Ok(None)
     }
 
     /// Apply a same-class batch. Rows may span fixed arenas, but every row is

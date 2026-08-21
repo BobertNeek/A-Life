@@ -14,7 +14,7 @@ use alife_core::{
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
-    GpuClosedLoopMemoryTickInput, GpuRuntimeProfile,
+    GpuClosedLoopMemoryTickInput, GpuLearningEvidenceMismatchReceipt, GpuRuntimeProfile,
     GpuRuntimeSelectorDiagnosticBuildFailureReceipt,
     GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
     GpuRuntimeSelectorDiagnosticEnableFailure, GpuRuntimeSelectorDiagnosticError,
@@ -23,9 +23,9 @@ use alife_gpu_backend::{
 };
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use alife_world::{
-    ERA1_ACQUISITION_END_TICK, ERA1_PROBE_START_TICK, ERA1_TRIAL_END_TICK, Era1TrialManifest,
-    Era1TrialPhase, Era1WorldFamily, Era1WorldTransition, HeadlessWorld, HeadlessWorldCommand,
-    WorldObjectKind, apply_era1_world_transition, build_era1_trial_world,
+    apply_era1_world_transition, build_era1_trial_world, Era1TrialManifest, Era1TrialPhase,
+    Era1WorldFamily, Era1WorldTransition, HeadlessWorld, HeadlessWorldCommand, WorldObjectKind,
+    ERA1_ACQUISITION_END_TICK, ERA1_PROBE_START_TICK, ERA1_TRIAL_END_TICK,
 };
 use serde::{Deserialize, Serialize};
 
@@ -92,6 +92,8 @@ pub struct Era1SelectorDiagnosticReceipt {
 pub enum Era1TrialRunError {
     #[error("Era 1 contract error: {0}")]
     Contract(#[from] ScaffoldContractError),
+    #[error("Era 1 sealed outcome evidence mismatch: {0}")]
+    LearningEvidenceMismatch(GpuLearningEvidenceMismatchReceipt),
     #[error("Era 1 selector diagnostic enable-stage failure: {0}")]
     SelectorDiagnosticEnable(GpuRuntimeSelectorDiagnosticEnableFailure),
     #[error("Era 1 selector diagnostic later-stage GPU failure: {0}")]
@@ -113,6 +115,9 @@ impl Era1TrialRunError {
     fn into_training_error(self) -> TrainingError {
         match self {
             Self::Contract(error) => TrainingError::Contract(error),
+            Self::LearningEvidenceMismatch(_) => {
+                TrainingError::Contract(ScaffoldContractError::LearningEvidenceMismatch)
+            }
             Self::SelectorDiagnosticLaterStageContract { error, .. } => {
                 TrainingError::Contract(error)
             }
@@ -873,6 +878,12 @@ impl Era1TrialRunner {
                 eligibility_discards = eligibility_discards.saturating_add(1);
                 Era1LearningDisposition::Discarded
             } else {
+                if let Some(receipt) = self
+                    .session
+                    .sealed_outcome_credit_mismatch_receipt(handle, &patch)?
+                {
+                    return Err(Era1TrialRunError::LearningEvidenceMismatch(receipt));
+                }
                 self.session.apply_sealed_outcome(handle, &patch)?;
                 learning_commits = learning_commits.saturating_add(1);
                 Era1LearningDisposition::Applied
@@ -1619,9 +1630,9 @@ fn valid_git_object_id(value: &str) -> bool {
 mod selector_diagnostic_receipt_tests {
     use super::*;
     use alife_gpu_backend::{
-        GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION, GpuSelectorBindingIdentity,
-        GpuSelectorCandidateDiagnostic, GpuSelectorCandidateValidity, GpuSelectorExplorationMode,
-        GpuSelectorPolicyIdentity, GpuSelectorSynapseContribution,
+        GpuSelectorBindingIdentity, GpuSelectorCandidateDiagnostic, GpuSelectorCandidateValidity,
+        GpuSelectorExplorationMode, GpuSelectorPolicyIdentity, GpuSelectorSynapseContribution,
+        GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
     };
 
     fn candidate(
@@ -1727,11 +1738,9 @@ mod selector_diagnostic_receipt_tests {
         receipt
             .validate_source_identity(source_commit, source_tree)
             .unwrap();
-        assert!(
-            receipt
-                .validate_source_identity("3333333333333333333333333333333333333333", source_tree,)
-                .is_err()
-        );
+        assert!(receipt
+            .validate_source_identity("3333333333333333333333333333333333333333", source_tree,)
+            .is_err());
         let encoded = serde_json::to_vec(&receipt).unwrap();
         let decoded: Era1SelectorDiagnosticReceipt = serde_json::from_slice(&encoded).unwrap();
         assert_eq!(decoded, receipt);
