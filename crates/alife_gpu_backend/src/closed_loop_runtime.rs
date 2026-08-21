@@ -6,26 +6,31 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::num::NonZeroU64;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use alife_core::{
-    ActionId, ActionTarget, Blake3Digest, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId,
-    BrainDispatchIdentity, BrainPhenotype, BrainWorkCounters, BrainWorkReceipt,
+    ActionId, ActionTarget, BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX,
+    BRAIN_ATP_SLEEP_RECOVERY_Q16, Blake3Digest, BrainActivityPolicyV1, BrainCapacityClass,
+    BrainClassId, BrainDispatchIdentity, BrainPhenotype, BrainWorkCounters, BrainWorkReceipt,
     CandidateActionFamily, CanonicalDigestBuilder, CoactivationEvidence, Confidence,
     DendriticBranchSet, ExperiencePatch, FinalizedMemoryRecall, GpuPressureSample,
     GpuPressureSampleInput, LearningCommitToken, LearningSequenceGuard, NeuralActionSelection,
     NeuralThrottleDecision, NeuralThrottleLevel, OrganismId, OutcomeCreditPacket,
     PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest, PhenotypeHash,
-    ScaffoldContractError, SensorProfile, SpeechMotorPayload, BRAIN_ATP_BASAL_DEBIT_Q16,
-    BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16, REQUIRED_GPU_FEATURE_MASK,
+    REQUIRED_GPU_FEATURE_MASK, ScaffoldContractError, SensorProfile, SpeechMotorPayload,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::closed_loop_buffers::GpuFixedSlotUpload;
-use crate::closed_loop_pipeline::GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS;
+use crate::closed_loop_pipeline::{
+    GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS,
+    GpuSelectorDiagnosticEnableError as PipelineSelectorDiagnosticEnableError,
+    GpuSelectorDiagnosticErrorReceipt as PipelineSelectorDiagnosticErrorReceipt,
+    GpuSelectorDiagnosticFailureClass as PipelineSelectorDiagnosticFailureClass,
+};
 use crate::{
-    derive_executed_work, AddLifetimeSynapse, GpuActiveBatchUpload, GpuAdmissionReceipt,
+    AddLifetimeSynapse, GPU_CLOSED_LOOP_LAYOUT_VERSION, GpuActiveBatchUpload, GpuAdmissionReceipt,
     GpuAllocationEventKind, GpuAllocationEventReceipt, GpuBrainSlot, GpuClosedLoopError,
     GpuClosedLoopKernelSet, GpuClosedLoopPipelines, GpuCompactMapTicket,
     GpuFastPlasticityBatchEntry, GpuFixedActiveBatchEntry, GpuFixedClassArenaBuffers,
@@ -34,7 +39,7 @@ use crate::{
     GpuPendingEligibilityRecord, GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget,
     GpuRuntimeProfile, GpuSelectorLogitCapture, GpuTimestampQueryResources, GpuV11CausalState,
     GpuV11Checkpoint, GpuV11WorkReceipt, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
-    PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
+    PendingEligibilityIdentity, PendingEligibilityReceipt, derive_executed_work,
 };
 
 pub const GPU_HARDWARE_RECEIPT_SCHEMA_VERSION: u16 = 1;
@@ -495,6 +500,167 @@ pub struct GpuSelectorDiagnosticReceipt {
     pub argmax_candidate_index: u16,
     pub equal_max_candidate_indices: Vec<u16>,
     pub chosen_candidate_index: u16,
+}
+
+/// Stable class for a selector-diagnostic enable failure. This mirrors the
+/// crate-private pipeline boundary at the public runtime boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuSelectorDiagnosticFailureClass {
+    CapacityExceeded,
+    ArithmeticOverflow,
+}
+
+/// Complete selector-diagnostic enable receipt translated out of the
+/// crate-private pipeline module without dropping any planning inputs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuSelectorDiagnosticErrorReceipt {
+    pub class: GpuSelectorDiagnosticFailureClass,
+    pub class_id: u16,
+    pub chunk_index: usize,
+    pub row: usize,
+    pub base_words: usize,
+    pub candidate_count: u32,
+    pub decoder_synapse_count: u32,
+    pub record_words: usize,
+    pub detail_words: u128,
+    pub frame_payload_capacity_words: usize,
+}
+
+impl From<PipelineSelectorDiagnosticFailureClass> for GpuSelectorDiagnosticFailureClass {
+    fn from(class: PipelineSelectorDiagnosticFailureClass) -> Self {
+        match class {
+            PipelineSelectorDiagnosticFailureClass::CapacityExceeded => Self::CapacityExceeded,
+            PipelineSelectorDiagnosticFailureClass::ArithmeticOverflow => Self::ArithmeticOverflow,
+        }
+    }
+}
+
+impl From<PipelineSelectorDiagnosticErrorReceipt> for GpuSelectorDiagnosticErrorReceipt {
+    fn from(receipt: PipelineSelectorDiagnosticErrorReceipt) -> Self {
+        Self {
+            class: receipt.class.into(),
+            class_id: receipt.class_id,
+            chunk_index: receipt.chunk_index,
+            row: receipt.row,
+            base_words: receipt.base_words,
+            candidate_count: receipt.candidate_count,
+            decoder_synapse_count: receipt.decoder_synapse_count,
+            record_words: receipt.record_words,
+            detail_words: receipt.detail_words,
+            frame_payload_capacity_words: receipt.frame_payload_capacity_words,
+        }
+    }
+}
+
+impl std::fmt::Display for GpuSelectorDiagnosticErrorReceipt {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "selector diagnostic {:?}: class_id={} chunk_index={} row={} base_words={} candidate_count={} decoder_synapse_count={} record_words={} detail_words={} frame_payload_capacity_words={}",
+            self.class,
+            self.class_id,
+            self.chunk_index,
+            self.row,
+            self.base_words,
+            self.candidate_count,
+            self.decoder_synapse_count,
+            self.record_words,
+            self.detail_words,
+            self.frame_payload_capacity_words,
+        )
+    }
+}
+
+impl std::error::Error for GpuSelectorDiagnosticErrorReceipt {}
+
+/// Typed failure from the opt-in selector-diagnostic enable boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuSelectorDiagnosticEnableFailure {
+    Contract(GpuClosedLoopError),
+    Receipt(GpuSelectorDiagnosticErrorReceipt),
+}
+
+impl std::fmt::Display for GpuSelectorDiagnosticEnableFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Contract(error) => {
+                write!(formatter, "selector diagnostic enable contract: {error}")
+            }
+            Self::Receipt(receipt) => receipt.fmt(formatter),
+        }
+    }
+}
+
+impl std::error::Error for GpuSelectorDiagnosticEnableFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Contract(error) => Some(error),
+            Self::Receipt(receipt) => Some(receipt),
+        }
+    }
+}
+
+impl GpuSelectorDiagnosticEnableFailure {
+    pub const fn receipt(self) -> Option<GpuSelectorDiagnosticErrorReceipt> {
+        match self {
+            Self::Contract(_) => None,
+            Self::Receipt(receipt) => Some(receipt),
+        }
+    }
+
+    pub const fn gpu_error(self) -> GpuClosedLoopError {
+        match self {
+            Self::Contract(error) => error,
+            Self::Receipt(receipt) => match receipt.class {
+                GpuSelectorDiagnosticFailureClass::CapacityExceeded => {
+                    GpuClosedLoopError::CapacityExceeded
+                }
+                GpuSelectorDiagnosticFailureClass::ArithmeticOverflow => {
+                    GpuClosedLoopError::ArithmeticOverflow
+                }
+            },
+        }
+    }
+
+    pub fn mapped_contract_error(self) -> ScaffoldContractError {
+        map_gpu_contract_error(self.gpu_error())
+    }
+}
+
+/// Failure from the opt-in diagnostic path, retaining whether it happened
+/// before enable, while enabling, or after the GPU batch was staged.
+#[derive(Debug, PartialEq, Eq)]
+pub enum GpuSelectorDiagnosticError {
+    Preflight(ScaffoldContractError),
+    Enable(GpuSelectorDiagnosticEnableFailure),
+    LaterStage(ScaffoldContractError),
+}
+
+impl std::fmt::Display for GpuSelectorDiagnosticError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Preflight(error) => {
+                write!(formatter, "selector diagnostic preflight failed: {error}")
+            }
+            Self::Enable(error) => write!(
+                formatter,
+                "selector diagnostic enable-stage failure: {error}"
+            ),
+            Self::LaterStage(error) => write!(
+                formatter,
+                "selector diagnostic later-stage GPU failure: {error}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for GpuSelectorDiagnosticError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Preflight(error) | Self::LaterStage(error) => Some(error),
+            Self::Enable(error) => Some(error),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1346,6 +1512,12 @@ struct PreparedClassDispatch {
     validated: Option<GpuValidatedClassBatch>,
 }
 
+#[derive(Default)]
+struct SelectorDiagnosticErrorCapture {
+    enable_error: Option<GpuSelectorDiagnosticEnableFailure>,
+    enable_completed: bool,
+}
+
 impl GpuSelectorDiagnosticReceipt {
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         if self.schema_version != GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION
@@ -1810,6 +1982,19 @@ pub(crate) fn map_gpu_contract_error(error: GpuClosedLoopError) -> ScaffoldContr
         GpuClosedLoopError::CapacityExceeded
         | GpuClosedLoopError::ArithmeticOverflow
         | GpuClosedLoopError::SubmissionFailed => ScaffoldContractError::NeuralBackendUnavailable,
+    }
+}
+
+fn translate_selector_diagnostic_enable_error(
+    error: PipelineSelectorDiagnosticEnableError,
+) -> GpuSelectorDiagnosticEnableFailure {
+    match error {
+        PipelineSelectorDiagnosticEnableError::Contract(error) => {
+            GpuSelectorDiagnosticEnableFailure::Contract(error)
+        }
+        PipelineSelectorDiagnosticEnableError::Receipt(receipt) => {
+            GpuSelectorDiagnosticEnableFailure::Receipt(receipt.into())
+        }
     }
 }
 
@@ -3138,7 +3323,7 @@ impl GpuClosedLoopBackend {
         &mut self,
         batch: &GpuClosedLoopMemoryBatchInput<'_>,
         requested_candidate_indices: &[u16],
-    ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
+    ) -> Result<Vec<GpuClosedLoopTick>, GpuSelectorDiagnosticError> {
         let inputs = batch
             .members
             .iter()
@@ -3148,13 +3333,40 @@ impl GpuClosedLoopBackend {
                 memory_upload: Some(member.memory_upload),
             })
             .collect::<Vec<_>>();
-        self.tick_inputs(&inputs, Some(requested_candidate_indices))
+        let mut capture = SelectorDiagnosticErrorCapture::default();
+        match self.tick_inputs_with_selector_diagnostic_capture(
+            &inputs,
+            Some(requested_candidate_indices),
+            Some(&mut capture),
+        ) {
+            Ok(ticks) => Ok(ticks),
+            Err(error) => match capture.enable_error {
+                Some(enable_error) => Err(GpuSelectorDiagnosticError::Enable(enable_error)),
+                None if capture.enable_completed => {
+                    Err(GpuSelectorDiagnosticError::LaterStage(error))
+                }
+                None => Err(GpuSelectorDiagnosticError::Preflight(error)),
+            },
+        }
     }
 
     fn tick_inputs(
         &mut self,
         batch: &[GpuRuntimeTickInput<'_>],
         selector_diagnostic_candidate_indices: Option<&[u16]>,
+    ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
+        self.tick_inputs_with_selector_diagnostic_capture(
+            batch,
+            selector_diagnostic_candidate_indices,
+            None,
+        )
+    }
+
+    fn tick_inputs_with_selector_diagnostic_capture(
+        &mut self,
+        batch: &[GpuRuntimeTickInput<'_>],
+        selector_diagnostic_candidate_indices: Option<&[u16]>,
+        mut selector_diagnostic_error_capture: Option<&mut SelectorDiagnosticErrorCapture>,
     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
         let capture_selector_diagnostics = selector_diagnostic_candidate_indices.is_some();
         self.ensure_ready()?;
@@ -3374,6 +3586,12 @@ impl GpuClosedLoopBackend {
                             capacity,
                         );
                         if let Err(error) = enable_result {
+                            let translated_error =
+                                translate_selector_diagnostic_enable_error(error);
+                            if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut()
+                            {
+                                capture.enable_error = Some(translated_error.clone());
+                            }
                             if let Some(receipt) = error.receipt() {
                                 eprintln!("gpu_selector_diagnostic_error_receipt: {receipt}");
                             }
@@ -3414,6 +3632,12 @@ impl GpuClosedLoopBackend {
                     }
                     return Err(map_gpu_contract_error(error));
                 }
+            }
+        }
+
+        if capture_selector_diagnostics {
+            if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+                capture.enable_completed = true;
             }
         }
 

@@ -14,13 +14,14 @@ use alife_core::{
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
-    GpuClosedLoopMemoryTickInput, GpuRuntimeProfile, GpuSelectorDiagnosticReceipt,
+    GpuClosedLoopMemoryTickInput, GpuRuntimeProfile, GpuSelectorDiagnosticEnableFailure,
+    GpuSelectorDiagnosticError, GpuSelectorDiagnosticReceipt,
 };
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use alife_world::{
-    apply_era1_world_transition, build_era1_trial_world, Era1TrialManifest, Era1TrialPhase,
-    Era1WorldFamily, Era1WorldTransition, HeadlessWorld, HeadlessWorldCommand, WorldObjectKind,
-    ERA1_ACQUISITION_END_TICK, ERA1_PROBE_START_TICK, ERA1_TRIAL_END_TICK,
+    ERA1_ACQUISITION_END_TICK, ERA1_PROBE_START_TICK, ERA1_TRIAL_END_TICK, Era1TrialManifest,
+    Era1TrialPhase, Era1WorldFamily, Era1WorldTransition, HeadlessWorld, HeadlessWorldCommand,
+    WorldObjectKind, apply_era1_world_transition, build_era1_trial_world,
 };
 use serde::{Deserialize, Serialize};
 
@@ -81,6 +82,41 @@ pub struct Era1SelectorDiagnosticReceipt {
     pub source_tree: String,
     pub requested_candidate_indices: Vec<u16>,
     pub dispatch: GpuSelectorDiagnosticReceipt,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Era1TrialRunError {
+    #[error("Era 1 contract error: {0}")]
+    Contract(#[from] ScaffoldContractError),
+    #[error("Era 1 selector diagnostic enable-stage failure: {0}")]
+    SelectorDiagnosticEnable(GpuSelectorDiagnosticEnableFailure),
+    #[error("Era 1 selector diagnostic later-stage GPU failure: {0}")]
+    SelectorDiagnosticLaterStage(ScaffoldContractError),
+}
+
+impl Era1TrialRunError {
+    fn into_training_error(self) -> TrainingError {
+        match self {
+            Self::Contract(error) | Self::SelectorDiagnosticLaterStage(error) => {
+                TrainingError::Contract(error)
+            }
+            Self::SelectorDiagnosticEnable(error) => {
+                TrainingError::Contract(error.mapped_contract_error())
+            }
+        }
+    }
+}
+
+fn map_selector_diagnostic_error(error: GpuSelectorDiagnosticError) -> Era1TrialRunError {
+    match error {
+        GpuSelectorDiagnosticError::Preflight(error) => Era1TrialRunError::Contract(error),
+        GpuSelectorDiagnosticError::Enable(error) => {
+            Era1TrialRunError::SelectorDiagnosticEnable(error)
+        }
+        GpuSelectorDiagnosticError::LaterStage(error) => {
+            Era1TrialRunError::SelectorDiagnosticLaterStage(error)
+        }
+    }
 }
 
 impl Era1SelectorDiagnosticReceipt {
@@ -299,7 +335,7 @@ impl Era1TrialRunEvidence {
                 || neural_evidence.action_family != step.selected_family
                 || step.sealed_patch.outcome().success != step.outcome_success
             {
-                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
             }
             if let Some(diagnostic) = &step.selector_diagnostic {
                 diagnostic.validate_for_step(
@@ -466,6 +502,21 @@ impl Era1TrialRunner {
         &mut self,
         request: Era1TrialRunRequest<'_>,
     ) -> Result<Era1TrialRunEvidence, TrainingError> {
+        self.run_internal(request)
+            .map_err(Era1TrialRunError::into_training_error)
+    }
+
+    pub fn run_with_selector_diagnostics(
+        &mut self,
+        request: Era1TrialRunRequest<'_>,
+    ) -> Result<Era1TrialRunEvidence, Era1TrialRunError> {
+        self.run_internal(request)
+    }
+
+    fn run_internal(
+        &mut self,
+        request: Era1TrialRunRequest<'_>,
+    ) -> Result<Era1TrialRunEvidence, Era1TrialRunError> {
         request.validate_contract()?;
         let (brain_genome, development) = self.express_compatible_creature(request.genome)?;
         let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
@@ -485,7 +536,8 @@ impl Era1TrialRunner {
         let removal = self.session.remove_brain(handle);
         match (attempt, removal) {
             (Ok(evidence), Ok(())) => Ok(evidence),
-            (Err(error), _) | (_, Err(error)) => Err(error.into()),
+            (Err(error), _) => Err(error),
+            (_, Err(error)) => Err(error.into()),
         }
     }
 
@@ -495,7 +547,7 @@ impl Era1TrialRunner {
         brain_genome: BrainGenome,
         mut development: DevelopmentState,
         handle: GpuBrainHandle,
-    ) -> Result<Era1TrialRunEvidence, ScaffoldContractError> {
+    ) -> Result<Era1TrialRunEvidence, Era1TrialRunError> {
         let mut world = build_era1_trial_world(request.manifest)?;
         if request.control == Era1Control::SocialDisabled {
             remove_peer_agents(&mut world, request.organism_id)?;
@@ -604,10 +656,12 @@ impl Era1TrialRunner {
             let member = GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &memory_upload)?;
             let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![member])?;
             let mut gpu_ticks = if !request.selector_diagnostic_candidate_indices.is_empty() {
-                self.session.tick_memory_batch_with_selector_diagnostics(
-                    &batch,
-                    &request.selector_diagnostic_candidate_indices,
-                )?
+                self.session
+                    .tick_memory_batch_with_selector_diagnostics(
+                        &batch,
+                        &request.selector_diagnostic_candidate_indices,
+                    )
+                    .map_err(map_selector_diagnostic_error)?
             } else {
                 self.session.tick_memory_batch(&batch)?
             };
@@ -632,7 +686,7 @@ impl Era1TrialRunner {
                 || pending_identity.action_family() != selected.family
                 || pending_identity.candidate_feature_digest() != selected.feature_digest()?
             {
-                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
             }
             let target_kind = selected
                 .target
@@ -1531,9 +1585,9 @@ fn valid_git_object_id(value: &str) -> bool {
 mod selector_diagnostic_receipt_tests {
     use super::*;
     use alife_gpu_backend::{
-        GpuSelectorBindingIdentity, GpuSelectorCandidateDiagnostic, GpuSelectorCandidateValidity,
-        GpuSelectorExplorationMode, GpuSelectorPolicyIdentity, GpuSelectorSynapseContribution,
-        GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
+        GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION, GpuSelectorBindingIdentity,
+        GpuSelectorCandidateDiagnostic, GpuSelectorCandidateValidity, GpuSelectorExplorationMode,
+        GpuSelectorPolicyIdentity, GpuSelectorSynapseContribution,
     };
 
     fn candidate(
@@ -1639,9 +1693,11 @@ mod selector_diagnostic_receipt_tests {
         receipt
             .validate_source_identity(source_commit, source_tree)
             .unwrap();
-        assert!(receipt
-            .validate_source_identity("3333333333333333333333333333333333333333", source_tree,)
-            .is_err());
+        assert!(
+            receipt
+                .validate_source_identity("3333333333333333333333333333333333333333", source_tree,)
+                .is_err()
+        );
         let encoded = serde_json::to_vec(&receipt).unwrap();
         let decoded: Era1SelectorDiagnosticReceipt = serde_json::from_slice(&encoded).unwrap();
         assert_eq!(decoded, receipt);

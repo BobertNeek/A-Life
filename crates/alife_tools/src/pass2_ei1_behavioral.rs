@@ -10,9 +10,12 @@ use std::{
 
 use alife_core::{
     BrainCapacityClass, CreatureGenome, Era1Ability, Era1Control, Era1EvidencePartition,
-    FoundationGeneticIdentity, LanguageCodebookV1, OrganismId,
+    FoundationGeneticIdentity, LanguageCodebookV1, OrganismId, ScaffoldContractError,
 };
-use alife_training::{Era1TrialRunEvidence, Era1TrialRunRequest, Era1TrialRunner};
+use alife_gpu_backend::GpuSelectorDiagnosticEnableFailure;
+use alife_training::{
+    Era1TrialRunError, Era1TrialRunEvidence, Era1TrialRunRequest, Era1TrialRunner,
+};
 use alife_world::{Era1TrialManifest, Era1WorldFamily};
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -39,6 +42,10 @@ pub enum Pass2Ei1BehavioralError {
     Json(#[from] serde_json::Error),
     #[error("Era 1 production runner failed: {0}")]
     Runner(String),
+    #[error("Era 1 selector diagnostic enable-stage failure: {0}")]
+    SelectorDiagnosticEnable(GpuSelectorDiagnosticEnableFailure),
+    #[error("Era 1 selector diagnostic later-stage GPU failure: {0}")]
+    SelectorDiagnosticLaterStage(ScaffoldContractError),
 }
 
 #[derive(Debug, Serialize)]
@@ -82,7 +89,7 @@ pub fn run_planned_manifest(
         _ => {
             return Err(Pass2Ei1BehavioralError::Unsupported(
                 "scenario is unavailable",
-            ))
+            ));
         }
     };
     if configuration_id != "full_system" || !all_mechanisms_enabled(object)? {
@@ -146,9 +153,9 @@ pub fn run_planned_manifest(
         )
         .map_err(core_failure)?
         .with_selector_diagnostics_for_candidates([3, 5]);
-        let trial = runner.run(request).map_err(|error| {
-            Pass2Ei1BehavioralError::Runner(format!("run rejected causal execution: {error}"))
-        })?;
+        let trial = runner
+            .run_with_selector_diagnostics(request)
+            .map_err(runner_failure)?;
         trial.validate_contract().map_err(core_failure)?;
         validate_production_evidence(&trial, ability)?;
         evidence.push(trial);
@@ -221,6 +228,20 @@ fn validate_contract_paths(object: &Map<String, Value>) -> Result<(), Pass2Ei1Be
 
 fn core_failure(error: impl std::fmt::Display) -> Pass2Ei1BehavioralError {
     Pass2Ei1BehavioralError::Runner(format!("production contract rejected the request: {error}"))
+}
+
+fn runner_failure(error: Era1TrialRunError) -> Pass2Ei1BehavioralError {
+    match error {
+        Era1TrialRunError::SelectorDiagnosticEnable(error) => {
+            Pass2Ei1BehavioralError::SelectorDiagnosticEnable(error)
+        }
+        Era1TrialRunError::SelectorDiagnosticLaterStage(error) => {
+            Pass2Ei1BehavioralError::SelectorDiagnosticLaterStage(error)
+        }
+        Era1TrialRunError::Contract(error) => {
+            Pass2Ei1BehavioralError::Runner(format!("run rejected causal execution: {error}"))
+        }
+    }
 }
 
 fn validate_identity(
@@ -504,4 +525,51 @@ fn integer(object: &Map<String, Value>, key: &'static str) -> Result<u64, Pass2E
         .get(key)
         .and_then(Value::as_u64)
         .ok_or(Pass2Ei1BehavioralError::InvalidManifest(key))
+}
+
+#[cfg(test)]
+mod selector_diagnostic_error_tests {
+    use super::*;
+    use alife_gpu_backend::{GpuSelectorDiagnosticErrorReceipt, GpuSelectorDiagnosticFailureClass};
+    use alife_training::Era1TrialRunError;
+
+    #[test]
+    fn task3_preserves_selector_enable_receipt_and_later_stage_classification() {
+        let receipt = GpuSelectorDiagnosticErrorReceipt {
+            class: GpuSelectorDiagnosticFailureClass::CapacityExceeded,
+            class_id: 2048,
+            chunk_index: 3,
+            row: 2,
+            base_words: 100,
+            candidate_count: 2,
+            decoder_synapse_count: 10,
+            record_words: 29,
+            detail_words: 580,
+            frame_payload_capacity_words: 200,
+        };
+        let enable = runner_failure(Era1TrialRunError::SelectorDiagnosticEnable(
+            GpuSelectorDiagnosticEnableFailure::Receipt(receipt),
+        ));
+        let rendered = enable.to_string();
+        for field in [
+            "CapacityExceeded",
+            "class_id=2048",
+            "chunk_index=3",
+            "row=2",
+            "base_words=100",
+            "candidate_count=2",
+            "decoder_synapse_count=10",
+            "record_words=29",
+            "detail_words=580",
+            "frame_payload_capacity_words=200",
+        ] {
+            assert!(rendered.contains(field), "missing {field} in {rendered}");
+        }
+
+        let later = runner_failure(Era1TrialRunError::SelectorDiagnosticLaterStage(
+            ScaffoldContractError::NeuralBackendUnavailable,
+        ));
+        assert!(later.to_string().contains("later-stage GPU failure"));
+        assert_ne!(rendered, later.to_string());
+    }
 }
