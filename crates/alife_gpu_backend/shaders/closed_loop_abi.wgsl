@@ -68,6 +68,7 @@ struct GpuDecoderWeightIndexRecord {
 struct GpuCandidateMemoryRecord {
   @align(16) candidate_index:u32, target_confidence:f32, family_confidence:f32, source_counts_packed:u32,
   target_latent:array<f32,8>, family_value:array<f32,4>,
+  concept_signal:f32, gap_signal:f32, causal_signal:f32, uncertainty_signal:f32,
 }
 struct GpuMemoryContextHeader {
   @align(16) schema_version:u32, class_id:u32, slot:u32, slot_generation:u32,
@@ -223,7 +224,9 @@ fn load_candidate_memory(base:u32) -> GpuCandidateMemoryRecord {
     array<f32,4>(
       bitcast<f32>(frame_payload_words[base+12u]),bitcast<f32>(frame_payload_words[base+13u]),
       bitcast<f32>(frame_payload_words[base+14u]),bitcast<f32>(frame_payload_words[base+15u])
-    )
+    ),
+    bitcast<f32>(frame_payload_words[base+16u]),bitcast<f32>(frame_payload_words[base+17u]),
+    bitcast<f32>(frame_payload_words[base+18u]),bitcast<f32>(frame_payload_words[base+19u])
   );
 }
 fn load_memory_channel_plan(base:u32) -> GpuMemoryChannelPlan {

@@ -99,10 +99,12 @@ pub use chemistry::{
 };
 pub use cognitive_context::{
     CognitiveBudgetView, CognitiveConceptActivation, CognitiveConceptView, CognitiveContextFrame,
+    CognitiveTargetContext,
     CognitiveFocalView, CognitiveGapActivation, CognitiveGapView, CognitiveInteroceptiveView,
     CognitiveMemoryExpectancy, CognitiveMemoryView, CognitivePeripheralView,
     CognitivePredictionView, COGNITIVE_CONTEXT_SCHEMA_VERSION, MAX_ACTIVE_CONCEPTS,
     MAX_ACTIVE_GAPS, MAX_CONTEXT_MEMORY_EXPECTANCIES, MAX_PREDICTION_ERROR_FEATURES,
+    MAX_TOPOLOGY_TARGET_CONTEXTS,
 };
 pub use cognitive_work::{
     CognitiveWorkReceipt, COGNITIVE_WORK_POLICY_VERSION, COGNITIVE_WORK_SCHEMA_VERSION,

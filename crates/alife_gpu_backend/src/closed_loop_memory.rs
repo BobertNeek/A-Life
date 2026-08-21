@@ -1,16 +1,17 @@
 //! Candidate-local episodic-context ABI and production WGSL entry point.
 
 use alife_core::{
-    FinalizedMemoryRecall, MemoryChannelPlan, PerceptionBaseDigest, PerceptionContextDigest,
-    PerceptionFrame, PerceptionFrameDigest, Tick,
+    CognitiveContextFrame, FinalizedMemoryRecall, MemoryChannelPlan, PerceptionBaseDigest,
+    PerceptionContextDigest, PerceptionFrame, PerceptionFrameDigest, StableFocusIdentity, Tick,
 };
 use bytemuck::{Pod, Zeroable};
 
 use crate::{GpuBrainSlot, GpuClosedLoopError};
 
 pub const GPU_MEMORY_CONTEXT_HEADER_WORDS: usize = 16;
-pub const GPU_CANDIDATE_MEMORY_RECORD_WORDS: usize = 16;
+pub const GPU_CANDIDATE_MEMORY_RECORD_WORDS: usize = 20;
 pub const GPU_MEMORY_CHANNEL_PLAN_WORDS: usize = 8;
+pub const GPU_TOPOLOGY_CONTEXT_ABI_VERSION: u32 = 1;
 
 pub const CLOSED_LOOP_MEMORY_CONTEXT_WGSL: &str = concat!(
     include_str!("../shaders/closed_loop_abi.wgsl"),
@@ -142,7 +143,13 @@ impl GpuMemoryContextUpload {
                 || row
                     .target_latent
                     .iter()
-                    .chain(row.family_value.iter())
+                .chain(row.family_value.iter())
+                    .chain([
+                        &row.concept_signal,
+                        &row.gap_signal,
+                        &row.causal_signal,
+                        &row.uncertainty_signal,
+                    ])
                     .chain([&row.target_confidence, &row.family_confidence])
                     .any(|value| !value.is_finite())
             {
@@ -231,6 +238,16 @@ impl GpuMemoryContextUpload {
                 if usize::from(context.candidate_index) != index {
                     return Err(GpuClosedLoopError::MalformedUpload);
                 }
+                let topology = topology_context_for_candidate(
+                    frame,
+                    recall
+                        .cognitive_context()
+                        .ok_or(GpuClosedLoopError::MalformedUpload)?,
+                    frame
+                        .candidates()
+                        .get(index)
+                        .ok_or(GpuClosedLoopError::MalformedUpload)?,
+                );
                 Ok(GpuCandidateMemoryRecord {
                     candidate_index: u32::try_from(index)
                         .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
@@ -240,6 +257,10 @@ impl GpuMemoryContextUpload {
                         | (u32::from(context.family_source_count) << 16),
                     target_latent: context.target_latent,
                     family_value: context.family_value,
+                    concept_signal: topology.0,
+                    gap_signal: topology.1,
+                    causal_signal: topology.2,
+                    uncertainty_signal: topology.3,
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -285,6 +306,39 @@ impl GpuMemoryContextUpload {
     }
 }
 
+fn topology_context_for_candidate(
+    frame: &PerceptionFrame,
+    cognitive_context: &CognitiveContextFrame,
+    candidate: &alife_core::ActionCandidate,
+) -> (f32, f32, f32, f32) {
+    let target = match candidate.observation {
+        alife_core::CandidateObservationRef::ObjectSlot(slot) => frame
+            .grounded_object_slots()
+            .get(usize::from(slot))
+            .map(|object| StableFocusIdentity::TrackedObject(object.tracked_object_id)),
+        alife_core::CandidateObservationRef::None => None,
+    };
+    cognitive_context
+        .concept
+        .target_contexts
+        .iter()
+        .filter(|context| context.action_family == candidate.family && context.target == target)
+        .max_by_key(|context| {
+            (
+                ((context.concept_signal.raw() + context.gap_signal.raw()) * 65_535.0) as u32,
+                context.concept_id.raw(),
+            )
+        })
+        .map_or((0.0, 0.0, 0.0, 0.0), |context| {
+            (
+                context.concept_signal.raw(),
+                context.gap_signal.raw(),
+                context.causal_signal.raw(),
+                context.uncertainty.raw(),
+            )
+        })
+}
+
 /// One finalized candidate-local retrieval row. It contains no raw entity ID.
 #[repr(C, align(16))]
 #[derive(Debug, Clone, Copy, PartialEq, Pod, Zeroable)]
@@ -295,6 +349,10 @@ pub struct GpuCandidateMemoryRecord {
     pub source_counts_packed: u32,
     pub target_latent: [f32; 8],
     pub family_value: [f32; 4],
+    pub concept_signal: f32,
+    pub gap_signal: f32,
+    pub causal_signal: f32,
+    pub uncertainty_signal: f32,
 }
 
 impl GpuCandidateMemoryRecord {

@@ -1,7 +1,8 @@
 const MEMORY_SCHEMA_VERSION:u32 = 1u;
+const TOPOLOGY_CONTEXT_ABI_VERSION:u32 = 1u;
 const ACTIVE_DISPATCH_ROW_WORDS:u32 = 332u;
 const MEMORY_HEADER_ROW_OFFSET:u32 = 292u;
-const MEMORY_RECORD_WORDS:u32 = 16u;
+const MEMORY_RECORD_WORDS:u32 = 20u;
 const MEMORY_FAMILY_COUNT:u32 = 8u;
 const MEMORY_TARGET_WIDTH:u32 = 8u;
 const MEMORY_VALUE_WIDTH:u32 = 4u;
@@ -18,6 +19,14 @@ fn memory_sample(context:GpuCandidateMemoryRecord, channel:u32) -> f32 {
   }
   return context.family_value[channel - MEMORY_TARGET_WIDTH]
     * clamp(context.family_confidence, 0.0, 1.0);
+}
+
+fn topology_sample(context:GpuCandidateMemoryRecord, channel:u32) -> f32 {
+  if (channel == MEMORY_TARGET_WIDTH) { return context.concept_signal; }
+  if (channel == MEMORY_TARGET_WIDTH + 1u) { return context.gap_signal; }
+  if (channel == MEMORY_TARGET_WIDTH + 2u) { return context.causal_signal; }
+  if (channel == MEMORY_TARGET_WIDTH + 3u) { return context.uncertainty_signal; }
+  return 0.0;
 }
 
 @compute @workgroup_size(32)
@@ -37,6 +46,7 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (extension.memory_plan_offset == 0xffffffffu || extension.memory_weight_map_offset == 0xffffffffu) { return; }
   let plan = load_memory_channel_plan(extension.memory_plan_offset);
   let valid_plan = plan.schema_version == MEMORY_SCHEMA_VERSION
+    && TOPOLOGY_CONTEXT_ABI_VERSION == 1u
     && plan.target_latent_lane_start == 24u
     && plan.family_value_lane_start == 32u
     && plan.decoder_input_stride == 36u
@@ -51,13 +61,17 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
   }
   let candidate = load_candidate(header.candidate_offset + gid.x * 8u);
   let context = load_candidate_memory(header.memory_context_offset + gid.x * MEMORY_RECORD_WORDS);
-  if (candidate.candidate_index != gid.x || context.candidate_index != gid.x || candidate.family >= MEMORY_FAMILY_COUNT) {
+  if (candidate.candidate_index != gid.x || context.candidate_index != gid.x || candidate.family >= MEMORY_FAMILY_COUNT
+      || !finite_memory_value(context.concept_signal)
+      || !finite_memory_value(context.gap_signal)
+      || !finite_memory_value(context.causal_signal)
+      || !finite_memory_value(context.uncertainty_signal)) {
     atomicAdd(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], 1u);
     return;
   }
   var samples:array<f32,12>;
   for (var channel=0u; channel<MEMORY_CHANNEL_WIDTH; channel++) {
-    let sample = memory_sample(context, channel);
+    let sample = memory_sample(context, channel) + topology_sample(context, channel);
     if (!finite_memory_value(sample)) {
       atomicAdd(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], 1u);
       return;

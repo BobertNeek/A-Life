@@ -1,10 +1,11 @@
-//! v0 scaffold: CPU-side topological concept map and curiosity gap contracts.
+//! Bounded active cognitive topology and curiosity-gap contracts.
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     validate_finite, ActionId, ActionKind, AffordanceBits, CandidateActionFamily,
-    CanonicalDigestBuilder, CognitiveConceptActivation, CognitiveGapActivation, ConceptCellId,
+    CanonicalDigestBuilder, CognitiveConceptActivation, CognitiveGapActivation,
+    CognitiveTargetContext, ConceptCellId,
     Confidence, DriveSnapshot, ExperiencePatch, ExperienceSequenceId, GaussianClusterId,
     NormalizedScalar, OrganismId, ScaffoldContractError, SignedValence, Tick, TrackedObjectId,
     Validate, Vec3f,
@@ -912,6 +913,7 @@ pub struct CuriosityBias {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TopologyContextContribution {
     pub active_concepts: Vec<CognitiveConceptActivation>,
+    pub target_contexts: Vec<CognitiveTargetContext>,
     pub active_gaps: Vec<CognitiveGapActivation>,
     pub topology_digest: [u64; 4],
     pub gap_voltage: NormalizedScalar,
@@ -920,12 +922,16 @@ pub struct TopologyContextContribution {
 impl Validate for TopologyContextContribution {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         if self.active_concepts.len() > crate::MAX_ACTIVE_CONCEPTS
+            || self.target_contexts.len() > crate::MAX_TOPOLOGY_TARGET_CONTEXTS
             || self.active_gaps.len() > crate::MAX_ACTIVE_GAPS
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
         for concept in &self.active_concepts {
             concept.validate_contract()?;
+        }
+        for context in &self.target_contexts {
+            context.validate_contract()?;
         }
         for gap in &self.active_gaps {
             gap.validate_contract()?;
@@ -940,6 +946,41 @@ fn has_grounded_binding(bindings: &ConceptBindings) -> bool {
         || !bindings.actions.is_empty()
         || !bindings.agents.is_empty()
         || !bindings.locations.is_empty()
+}
+
+fn concept_predictive_utility(concept: &ConceptCell, residual_contradiction: f32) -> f32 {
+    let predictive = 1.0 - concept.bindings.emotions.mean_prediction_error.raw();
+    let affordance = concept.bindings.affordances.raw().count_ones() as f32 / 32.0;
+    let drive = concept
+        .bindings
+        .drives
+        .iter()
+        .map(|binding| binding.value)
+        .fold(0.0, f32::max);
+    let memory = concept.bindings.semantic_refs.len() as f32 / MAX_BINDING_REFS as f32;
+    let social = concept.bindings.agents.len() as f32 / MAX_BINDING_REFS as f32;
+    let language = concept.bindings.words.len() as f32 / MAX_BINDING_REFS as f32;
+    let complexity = (concept.bindings.objects.len()
+        + concept.bindings.actions.len()
+        + concept.bindings.action_families.len()
+        + concept.bindings.cluster_refs.len()) as f32
+        / (MAX_BINDING_REFS as f32 * 4.0);
+    (0.24 * predictive
+        + 0.16 * affordance
+        + 0.14 * drive
+        + 0.14 * memory
+        + 0.1 * social
+        + 0.1 * language
+        + 0.06 * complexity
+        + 0.06 * residual_contradiction)
+        .clamp(0.0, 1.0)
+}
+
+fn concept_residual_contradiction(gaps: &[UnresolvedGap], concept_id: ConceptCellId) -> f32 {
+    gaps.iter()
+        .filter(|gap| gap.source_concepts.contains(&concept_id))
+        .map(|gap| gap.prediction_error.raw())
+        .fold(0.0, f32::max)
 }
 
 fn causal_identity_matches(left: &[ConceptCellId], right: &[ConceptCellId]) -> bool {
@@ -1106,25 +1147,125 @@ impl TopologicalMap {
             .concepts
             .iter()
             .filter_map(|concept| {
+                let residual = self
+                    .unresolved_gaps
+                    .iter()
+                    .filter(|gap| gap.source_concepts.contains(&concept.id))
+                    .map(|gap| gap.prediction_error.raw())
+                    .fold(0.0, f32::max);
+                let utility = concept_predictive_utility(concept, residual);
                 let activation = concept.confidence.raw() * concept.salience.raw();
-                (activation > 0.0).then_some((q16(activation), concept.id.raw(), concept))
+                (activation > 0.0).then_some((q16(utility), concept.id.raw(), concept, utility))
             })
             .collect::<Vec<_>>();
-        concepts.sort_by_key(|(score, id, _)| (std::cmp::Reverse(*score), *id));
+        concepts.sort_by_key(|(score, id, _, _)| (std::cmp::Reverse(*score), *id));
 
         let active_concepts = concepts
             .into_iter()
             .take(crate::MAX_ACTIVE_CONCEPTS)
-            .map(|(_, _, concept)| {
+            .map(|(_, _, concept, utility)| {
                 Ok(CognitiveConceptActivation {
                     concept_id: concept.id,
                     activation: NormalizedScalar::new(
                         concept.confidence.raw() * concept.salience.raw(),
                     )?,
-                    utility: concept.salience,
+                    utility: NormalizedScalar::new(utility)?,
                 })
             })
             .collect::<Result<Vec<_>, ScaffoldContractError>>()?;
+
+        let mut target_contexts = Vec::new();
+        for concept in &self.concepts {
+            let residual_gap = self
+                .unresolved_gaps
+                .iter()
+                .filter(|gap| {
+                    gap.source_concepts.contains(&concept.id)
+                        && matches!(
+                            gap.status,
+                            GapResolutionStatus::Open | GapResolutionStatus::BiasingCuriosity
+                        )
+                })
+                .max_by_key(|gap| {
+                    (q16(gap.curiosity_voltage.raw() * gap.salience.raw()), gap.id.raw())
+                });
+            let concept_signal = concept_predictive_utility(
+                concept,
+                residual_gap.map_or(0.0, |gap| gap.prediction_error.raw()),
+            );
+            let causal_signal = self
+                .edges
+                .iter()
+                .filter(|edge| {
+                    (edge.from == concept.id || edge.to == concept.id)
+                        && matches!(
+                            edge.relation,
+                            EdgeRelationKind::Predicts
+                                | EdgeRelationKind::Causes
+                                | EdgeRelationKind::Enables
+                                | EdgeRelationKind::Blocks
+                        )
+                })
+                .map(|edge| edge.strength.raw())
+                .fold(0.0, f32::max);
+            let (gap_id, gap_signal, contradiction_signal, uncertainty) = residual_gap.map_or(
+                (None, 0.0, 0.0, 0.0),
+                |gap| {
+                    (
+                        Some(gap.id),
+                        gap.curiosity_voltage.raw() * gap.salience.raw(),
+                        gap.prediction_error.raw(),
+                        (gap.prediction_error.raw() + (1.0 - gap.confidence.raw())) * 0.5,
+                    )
+                },
+            );
+            let families = concept.bindings.action_families.iter().copied();
+            for family in families {
+                let targets = concept
+                    .bindings
+                    .objects
+                    .iter()
+                    .copied()
+                    .map(Some)
+                    .chain(std::iter::once(None));
+                for target in targets {
+                    let row = CognitiveTargetContext {
+                        target: target.map(crate::StableFocusIdentity::TrackedObject),
+                        action_family: family,
+                        concept_id: concept.id,
+                        concept_signal: NormalizedScalar::new(concept_signal)?,
+                        gap_id,
+                        gap_signal: NormalizedScalar::new(gap_signal)?,
+                        causal_signal: NormalizedScalar::new(causal_signal)?,
+                        contradiction_signal: NormalizedScalar::new(contradiction_signal)?,
+                        uncertainty: NormalizedScalar::new(uncertainty)?,
+                    };
+                    if let Some(existing_index) = target_contexts
+                        .iter()
+                        .position(|existing: &CognitiveTargetContext| {
+                        existing.target == row.target && existing.action_family == row.action_family
+                        })
+                    {
+                        if row.concept_signal.raw()
+                            > target_contexts[existing_index].concept_signal.raw()
+                        {
+                            target_contexts[existing_index] = row;
+                        }
+                    } else if target_contexts.len() < crate::MAX_TOPOLOGY_TARGET_CONTEXTS {
+                        target_contexts.push(row);
+                    }
+                }
+            }
+        }
+        target_contexts.sort_by_key(|context| {
+            (
+                std::cmp::Reverse(q16(
+                    context.concept_signal.raw() + context.gap_signal.raw(),
+                )),
+                context.concept_id.raw(),
+                context.action_family.raw(),
+            )
+        });
 
         let mut gaps = self
             .unresolved_gaps
@@ -1165,6 +1306,7 @@ impl TopologicalMap {
 
         let contribution = TopologyContextContribution {
             active_concepts,
+            target_contexts,
             active_gaps,
             topology_digest: self.canonical_digest()?,
             gap_voltage: NormalizedScalar::new(gap_voltage)?,
@@ -1194,7 +1336,7 @@ impl TopologicalMap {
             return None;
         }
 
-        let mut candidate: Option<((u16, u64, u64, u64), ConceptCellId, NormalizedScalar)> = None;
+        let mut candidate: Option<((u16, u16, u64, u64, u64), ConceptCellId, NormalizedScalar)> = None;
         for gap in &self.unresolved_gaps {
             if gap.source_concepts.len() != 2
                 || gap.prediction_error.raw() < CONTRADICTION_ERROR_THRESHOLD
@@ -1240,6 +1382,10 @@ impl TopologicalMap {
                 }
                 let key = (
                     q16(gap.curiosity_voltage.raw()),
+                    q16(concept_predictive_utility(
+                        source,
+                        gap.prediction_error.raw(),
+                    )),
                     gap.last_tick.raw(),
                     gap.id.raw(),
                     source_id.raw(),
@@ -1270,6 +1416,15 @@ impl TopologicalMap {
                     || !concepts_share_grounded_binding(survivor, absorbed)
                     || survivor.bindings.emotions.mean_prediction_error.raw()
                         > CONCEPT_MERGE_MAX_MEAN_PREDICTION_ERROR
+                    || (concept_predictive_utility(
+                        survivor,
+                        concept_residual_contradiction(&self.unresolved_gaps, survivor.id),
+                    ) - concept_predictive_utility(
+                        absorbed,
+                        concept_residual_contradiction(&self.unresolved_gaps, absorbed.id),
+                    ))
+                        .abs()
+                        > 0.5
                 {
                     continue;
                 }
@@ -1707,7 +1862,10 @@ impl TopologicalMap {
                 .enumerate()
                 .min_by_key(|(_, concept)| {
                     (
-                        q16(concept.salience.raw()),
+                        q16(concept_predictive_utility(
+                            concept,
+                            concept_residual_contradiction(&self.unresolved_gaps, concept.id),
+                        )),
                         concept.last_tick.raw(),
                         concept.id.raw(),
                     )

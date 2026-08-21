@@ -381,6 +381,7 @@ pub fn run_production_causal_step(
         &mut cognitive_context,
         &prediction_target,
         &prediction_update.error,
+        candidate_target_identity(&frame, &selected_candidate),
     )?;
     let cognitive_context_digest = cognitive_context.canonical_digest()?;
     let cognitive_work = cognitive_work_receipt(
@@ -794,6 +795,7 @@ fn apply_prediction_evidence(
     context: &mut CognitiveContextFrame,
     target: &PredictionTargetReceipt,
     errors: &[f32],
+    selected_target: Option<StableFocusIdentity>,
 ) -> Result<f32, ScaffoldContractError> {
     let bounded_errors = errors
         .iter()
@@ -816,26 +818,37 @@ fn apply_prediction_evidence(
         NormalizedScalar::new(target.action_sensitivity_score.clamp(0.0, 1.0))?;
     let uncertainty = NormalizedScalar::new(mean_absolute_error)?;
     for summary in &mut context.attention.peripheral_summaries {
-        summary.salience.uncertainty =
-            NormalizedScalar::new(summary.salience.uncertainty.raw().max(mean_absolute_error))?;
-        summary.salience.gap_voltage =
-            NormalizedScalar::new(summary.salience.gap_voltage.raw().max(mean_absolute_error))?;
+        if selected_target == Some(summary.identity) {
+            summary.salience.uncertainty =
+                NormalizedScalar::new(summary.salience.uncertainty.raw().max(mean_absolute_error))?;
+            summary.salience.gap_voltage =
+                NormalizedScalar::new(summary.salience.gap_voltage.raw().max(mean_absolute_error))?;
+        }
     }
-    for salience in &mut context.attention.salience_components {
-        salience.uncertainty = uncertainty;
-        salience.gap_voltage =
-            NormalizedScalar::new(salience.gap_voltage.raw().max(mean_absolute_error))?;
+    for (index, salience) in context.attention.salience_components.iter_mut().enumerate() {
+        if context.focal.identities.get(index).copied() == selected_target {
+            salience.uncertainty = uncertainty;
+            salience.gap_voltage =
+                NormalizedScalar::new(salience.gap_voltage.raw().max(mean_absolute_error))?;
+        }
     }
     context.peripheral.summaries = context.attention.peripheral_summaries.clone();
     context.focal.salience = context.attention.salience_components.clone();
-    context.gap.gap_voltage =
-        NormalizedScalar::new(context.gap.gap_voltage.raw().max(mean_absolute_error))?;
-    for gap in &mut context.gap.active_gaps {
-        gap.voltage = NormalizedScalar::new(gap.voltage.raw().max(mean_absolute_error))?;
-        gap.uncertainty = NormalizedScalar::new(gap.uncertainty.raw().max(mean_absolute_error))?;
-    }
     context.validate_contract()?;
     Ok(mean_absolute_error)
+}
+
+fn candidate_target_identity(
+    frame: &PerceptionFrame,
+    candidate: &alife_core::ActionCandidate,
+) -> Option<StableFocusIdentity> {
+    match candidate.observation {
+        alife_core::CandidateObservationRef::ObjectSlot(slot) => frame
+            .grounded_object_slots()
+            .get(usize::from(slot))
+            .map(|object| StableFocusIdentity::TrackedObject(object.tracked_object_id)),
+        alife_core::CandidateObservationRef::None => None,
+    }
 }
 
 fn cognitive_work_receipt(

@@ -3,7 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AttentionFrame, BiochemistryState, CanonicalDigestBuilder, ConceptCellId,
+    AttentionFrame, BiochemistryState, CandidateActionFamily,
+    CanonicalDigestBuilder, ConceptCellId,
     ExperienceSequenceId, GroundedFocalDetail, HysteresisState, MemoryId, NormalizedScalar,
     OrganismId, SalienceComponents, ScaffoldContractError, SemanticStateVector, SignedValence,
     StableFocusIdentity, Tick, UnresolvedGapId, Validate, MAX_COGNITIVE_WORK_COUNTER,
@@ -11,11 +12,48 @@ use crate::{
     MAX_SEMANTIC_STATE_VALUES,
 };
 
-pub const COGNITIVE_CONTEXT_SCHEMA_VERSION: u16 = 1;
+pub const COGNITIVE_CONTEXT_SCHEMA_VERSION: u16 = 2;
 pub const MAX_CONTEXT_MEMORY_EXPECTANCIES: usize = 32;
 pub const MAX_ACTIVE_CONCEPTS: usize = 32;
 pub const MAX_ACTIVE_GAPS: usize = 32;
 pub const MAX_PREDICTION_ERROR_FEATURES: usize = MAX_SEMANTIC_STATE_VALUES;
+pub const MAX_TOPOLOGY_TARGET_CONTEXTS: usize = 64;
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct CognitiveTargetContext {
+    pub target: Option<StableFocusIdentity>,
+    pub action_family: CandidateActionFamily,
+    pub concept_id: ConceptCellId,
+    pub concept_signal: NormalizedScalar,
+    pub gap_id: Option<UnresolvedGapId>,
+    pub gap_signal: NormalizedScalar,
+    pub causal_signal: NormalizedScalar,
+    pub contradiction_signal: NormalizedScalar,
+    pub uncertainty: NormalizedScalar,
+}
+
+impl Validate for CognitiveTargetContext {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if let Some(target) = self.target {
+            validate_focus_identity(target)?;
+        }
+        CandidateActionFamily::try_from_raw(self.action_family.raw())?;
+        self.concept_id.validate()?;
+        if let Some(gap_id) = self.gap_id {
+            gap_id.validate()?;
+        }
+        for value in [
+            self.concept_signal,
+            self.gap_signal,
+            self.causal_signal,
+            self.contradiction_signal,
+            self.uncertainty,
+        ] {
+            NormalizedScalar::new(value.raw())?;
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct CognitivePeripheralView {
@@ -200,16 +238,23 @@ impl Validate for CognitiveConceptActivation {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct CognitiveConceptView {
     pub active_concepts: Vec<CognitiveConceptActivation>,
+    #[serde(default)]
+    pub target_contexts: Vec<CognitiveTargetContext>,
     pub topology_digest: [u64; 4],
 }
 
 impl Validate for CognitiveConceptView {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        if self.active_concepts.len() > MAX_ACTIVE_CONCEPTS {
+        if self.active_concepts.len() > MAX_ACTIVE_CONCEPTS
+            || self.target_contexts.len() > MAX_TOPOLOGY_TARGET_CONTEXTS
+        {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
         for concept in &self.active_concepts {
             concept.validate_contract()?;
+        }
+        for context in &self.target_contexts {
+            context.validate_contract()?;
         }
         Ok(())
     }
@@ -397,6 +442,7 @@ impl CognitiveContextFrame {
         contribution.validate_contract()?;
         self.concept = CognitiveConceptView {
             active_concepts: contribution.active_concepts.clone(),
+            target_contexts: contribution.target_contexts.clone(),
             topology_digest: contribution.topology_digest,
         };
         self.gap = CognitiveGapView {
@@ -488,6 +534,31 @@ impl CognitiveContextFrame {
             builder.write_u64(concept.concept_id.raw());
             builder.write_f32(concept.activation.raw())?;
             builder.write_f32(concept.utility.raw())?;
+        }
+        builder.write_sequence_len(self.concept.target_contexts.len());
+        for context in &self.concept.target_contexts {
+            match context.target {
+                Some(target) => {
+                    builder.write_some();
+                    builder.write_u8(target.kind_tag());
+                    builder.write_u64(target.raw());
+                }
+                None => builder.write_none(),
+            }
+            builder.write_u8(context.action_family.raw());
+            builder.write_u64(context.concept_id.raw());
+            builder.write_f32(context.concept_signal.raw())?;
+            match context.gap_id {
+                Some(gap_id) => {
+                    builder.write_some();
+                    builder.write_u64(gap_id.raw());
+                }
+                None => builder.write_none(),
+            }
+            builder.write_f32(context.gap_signal.raw())?;
+            builder.write_f32(context.causal_signal.raw())?;
+            builder.write_f32(context.contradiction_signal.raw())?;
+            builder.write_f32(context.uncertainty.raw())?;
         }
         for word in self.concept.topology_digest {
             builder.write_u64(word);
