@@ -18,7 +18,9 @@ pub const MAX_SUCCESSOR_FEATURES: usize = MAX_SEMANTIC_STATE_VALUES;
 pub const SUCCESSOR_FEATURE_ABI_V1: u16 = 1;
 pub const DEFAULT_PREDICTOR_LEARNING_RATE: f32 = 0.25;
 
-const MAX_MOTOR_FACTOR_FEATURES: usize = 15;
+const MOTOR_FACTOR_BASE_FEATURES: usize = 15;
+const MOTOR_PRIMITIVE_BIT_FEATURES: usize = u32::BITS as usize;
+const MAX_MOTOR_FACTOR_FEATURES: usize = MOTOR_FACTOR_BASE_FEATURES + MOTOR_PRIMITIVE_BIT_FEATURES;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -152,7 +154,7 @@ impl MotorChannelFactor {
 
     fn feature_values(self) -> [f32; MAX_MOTOR_FACTOR_FEATURES] {
         let primitive = self.primitive.raw();
-        [
+        let base_features = [
             1.0,
             f32::from(self.channel.canonical_key()) / f32::from(u16::MAX),
             (primitive & 0xff) as f32 / f32::from(u8::MAX),
@@ -168,7 +170,20 @@ impl MotorChannelFactor {
             self.confidence,
             f32::from(self.payload_len) / MAX_MOTOR_PAYLOAD_VALUES as f32,
             f32::from(self.coordination_group) / f32::from(u8::MAX),
-        ]
+        ];
+        let mut features = [0.0; MAX_MOTOR_FACTOR_FEATURES];
+        features[..MOTOR_FACTOR_BASE_FEATURES].copy_from_slice(&base_features);
+        // Primitive IDs are logical categories, not ordinal magnitudes. Signed
+        // bits give the shared predictor a centered condition signal.
+        for bit in 0..u32::BITS {
+            let feature_index = MOTOR_FACTOR_BASE_FEATURES + bit as usize;
+            features[feature_index] = if primitive & (1_u32 << bit) != 0 {
+                1.0
+            } else {
+                -1.0
+            };
+        }
+        features
     }
 }
 
