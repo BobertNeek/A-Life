@@ -158,6 +158,18 @@ fn map_selector_diagnostic_error(error: GpuRuntimeSelectorDiagnosticError) -> Er
     }
 }
 
+fn map_learning_apply_failure(
+    error: ScaffoldContractError,
+    receipt: Option<GpuLearningEvidenceMismatchReceipt>,
+) -> Era1TrialRunError {
+    if matches!(&error, ScaffoldContractError::LearningEvidenceMismatch) {
+        if let Some(receipt) = receipt {
+            return Era1TrialRunError::LearningEvidenceMismatch(receipt);
+        }
+    }
+    Era1TrialRunError::Contract(error)
+}
+
 impl Era1SelectorDiagnosticReceipt {
     fn validate_source_identity(
         &self,
@@ -884,7 +896,18 @@ impl Era1TrialRunner {
                 {
                     return Err(Era1TrialRunError::LearningEvidenceMismatch(receipt));
                 }
-                self.session.apply_sealed_outcome(handle, &patch)?;
+                if let Err(error) = self.session.apply_sealed_outcome(handle, &patch) {
+                    let receipt =
+                        if matches!(&error, ScaffoldContractError::LearningEvidenceMismatch) {
+                            self.session
+                                .sealed_outcome_credit_mismatch_receipt(handle, &patch)
+                                .ok()
+                                .flatten()
+                        } else {
+                            None
+                        };
+                    return Err(map_learning_apply_failure(error, receipt));
+                }
                 learning_commits = learning_commits.saturating_add(1);
                 Era1LearningDisposition::Applied
             };
@@ -1744,5 +1767,30 @@ mod selector_diagnostic_receipt_tests {
         let encoded = serde_json::to_vec(&receipt).unwrap();
         let decoded: Era1SelectorDiagnosticReceipt = serde_json::from_slice(&encoded).unwrap();
         assert_eq!(decoded, receipt);
+    }
+}
+
+#[cfg(test)]
+mod learning_error_receipt_tests {
+    use super::*;
+    use alife_gpu_backend::GpuLearningEvidenceMismatchField;
+
+    #[test]
+    fn learning_apply_failure_preserves_existing_mismatch_receipt() {
+        let receipt = GpuLearningEvidenceMismatchReceipt {
+            field: GpuLearningEvidenceMismatchField::ActionId,
+            expected: [211, 0, 0, 0],
+            actual: [101, 0, 0, 0],
+        };
+
+        let error = map_learning_apply_failure(
+            ScaffoldContractError::LearningEvidenceMismatch,
+            Some(receipt),
+        );
+
+        match error {
+            Era1TrialRunError::LearningEvidenceMismatch(actual) => assert_eq!(actual, receipt),
+            other => panic!("receipt collapsed into {other}"),
+        }
     }
 }
