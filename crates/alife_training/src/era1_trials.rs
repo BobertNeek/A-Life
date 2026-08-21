@@ -15,7 +15,8 @@ use alife_core::{
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
     GpuClosedLoopMemoryTickInput, GpuRuntimeProfile, GpuRuntimeSelectorDiagnosticEnableFailure,
-    GpuRuntimeSelectorDiagnosticError, GpuSelectorDiagnosticReceipt,
+    GpuRuntimeSelectorDiagnosticError, GpuRuntimeSelectorDiagnosticFailureReceipt,
+    GpuSelectorDiagnosticReceipt,
 };
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use alife_world::{
@@ -91,14 +92,19 @@ pub enum Era1TrialRunError {
     #[error("Era 1 selector diagnostic enable-stage failure: {0}")]
     SelectorDiagnosticEnable(GpuRuntimeSelectorDiagnosticEnableFailure),
     #[error("Era 1 selector diagnostic later-stage GPU failure: {0}")]
-    SelectorDiagnosticLaterStage(ScaffoldContractError),
+    SelectorDiagnosticLaterStage(GpuRuntimeSelectorDiagnosticFailureReceipt),
+    #[error("Era 1 selector diagnostic later-stage GPU failure: {0}")]
+    SelectorDiagnosticLaterStageContract(ScaffoldContractError),
 }
 
 impl Era1TrialRunError {
     fn into_training_error(self) -> TrainingError {
         match self {
-            Self::Contract(error) | Self::SelectorDiagnosticLaterStage(error) => {
+            Self::Contract(error) | Self::SelectorDiagnosticLaterStageContract(error) => {
                 TrainingError::Contract(error)
+            }
+            Self::SelectorDiagnosticLaterStage(error) => {
+                TrainingError::Contract(error.mapped_contract_error())
             }
             Self::SelectorDiagnosticEnable(error) => {
                 TrainingError::Contract(error.mapped_contract_error())
@@ -115,6 +121,9 @@ fn map_selector_diagnostic_error(error: GpuRuntimeSelectorDiagnosticError) -> Er
         }
         GpuRuntimeSelectorDiagnosticError::LaterStage(error) => {
             Era1TrialRunError::SelectorDiagnosticLaterStage(error)
+        }
+        GpuRuntimeSelectorDiagnosticError::LaterStageContract(error) => {
+            Era1TrialRunError::SelectorDiagnosticLaterStageContract(error)
         }
     }
 }
