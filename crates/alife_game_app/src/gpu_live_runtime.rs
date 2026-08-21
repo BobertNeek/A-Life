@@ -6332,9 +6332,9 @@ impl GpuLiveBrainRuntime {
         &self.last_memory_observation_errors
     }
 
-    /// Diagnostic-only topology dispositions from the most recent sealed
-    /// transaction batch. These receipts are never uploaded to candidate
-    /// memory, neural inputs, or arbitration.
+    /// Active topology dispositions from the most recent sealed transaction
+    /// batch. The bounded concept/gap state feeds subsequent cognition, while
+    /// world legality remains authoritative for action execution.
     pub fn last_topology_observations(&self) -> &[TopologyObservationDisposition] {
         &self.last_topology_observations
     }

@@ -17,8 +17,8 @@ Rules:
 - In the GPU live loop, seal the measured world outcome before applying or
   explicitly discarding the matching pending eligibility transaction.
 - Observe each sealed patch in its organism-owned memory sidecar and then its
-  diagnostic topology sidecar even when post-seal GPU learning is rejected;
-  neither sidecar may abort or influence candidate arbitration.
+  active topology sidecar even when post-seal GPU learning is rejected; neither
+  sidecar may bypass world legality or directly select an action.
 - Update one fixed-size passive-statistics record per resident tick and archive
   that typed record before GPU retirement; never scan unbounded life history.
 - Use `docs/ROADMAP.md` for product sequencing and exit gates. Do not infer

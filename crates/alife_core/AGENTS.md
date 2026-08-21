@@ -39,6 +39,7 @@ Rules:
 - Phenotypes own versioned receptor, bounded replay-capture, and sleep plans.
   The replay identity ceiling is the shared `MAX_REPLAY_CAPTURE_SYNAPSES`
   contract; GPU crates must not duplicate that value.
-- Topology is an organism-owned, diagnostic-only `TopologySidecar`. It consumes
-  sealed episodic keys, binds objects only by `TrackedObjectId`, degrades
-  deterministically at capacity, and never returns action or score authority.
+- Topology is an organism-owned active `TopologySidecar`. It consumes sealed
+  episodic keys, binds objects only by `TrackedObjectId`, contributes bounded
+  concept/gap context to subsequent cognition, degrades deterministically at
+  capacity, and never directly returns action or score authority.
