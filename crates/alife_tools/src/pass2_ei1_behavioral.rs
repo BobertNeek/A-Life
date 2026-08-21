@@ -48,8 +48,11 @@ pub enum Pass2Ei1BehavioralError {
     SelectorDiagnosticEnable(GpuRuntimeSelectorDiagnosticEnableFailure),
     #[error("Era 1 selector diagnostic later-stage GPU failure: {0}")]
     SelectorDiagnosticLaterStage(GpuRuntimeSelectorDiagnosticFailureReceipt),
-    #[error("Era 1 selector diagnostic later-stage GPU failure: {0}")]
-    SelectorDiagnosticLaterStageContract(ScaffoldContractError),
+    #[error("Era 1 selector diagnostic later-stage GPU failure at {stage:?}: {error}")]
+    SelectorDiagnosticLaterStageContract {
+        stage: alife_gpu_backend::GpuRuntimeSelectorDiagnosticStage,
+        error: ScaffoldContractError,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -242,8 +245,8 @@ fn runner_failure(error: Era1TrialRunError) -> Pass2Ei1BehavioralError {
         Era1TrialRunError::SelectorDiagnosticLaterStage(error) => {
             Pass2Ei1BehavioralError::SelectorDiagnosticLaterStage(error)
         }
-        Era1TrialRunError::SelectorDiagnosticLaterStageContract(error) => {
-            Pass2Ei1BehavioralError::SelectorDiagnosticLaterStageContract(error)
+        Era1TrialRunError::SelectorDiagnosticLaterStageContract { stage, error } => {
+            Pass2Ei1BehavioralError::SelectorDiagnosticLaterStageContract { stage, error }
         }
         Era1TrialRunError::Contract(error) => {
             Pass2Ei1BehavioralError::Runner(format!("run rejected causal execution: {error}"))
@@ -539,7 +542,7 @@ mod selector_diagnostic_error_tests {
     use super::*;
     use alife_gpu_backend::{
         GpuRuntimeSelectorDiagnosticErrorReceipt, GpuRuntimeSelectorDiagnosticFailureClass,
-        GpuRuntimeSelectorDiagnosticFailureStage,
+        GpuRuntimeSelectorDiagnosticFailureStage, GpuRuntimeSelectorDiagnosticStage,
     };
     use alife_training::Era1TrialRunError;
 
@@ -610,10 +613,16 @@ mod selector_diagnostic_error_tests {
         }
 
         let later_contract = runner_failure(
-            Era1TrialRunError::SelectorDiagnosticLaterStageContract(
-                ScaffoldContractError::NeuralBackendUnavailable,
-            ),
+            Era1TrialRunError::SelectorDiagnosticLaterStageContract {
+                stage: GpuRuntimeSelectorDiagnosticStage::DecodeSelectorDiagnostics,
+                error: ScaffoldContractError::NeuralBackendUnavailable,
+            },
         );
         assert!(later_contract.to_string().contains("later-stage GPU failure"));
+        assert!(
+            later_contract
+                .to_string()
+                .contains("DecodeSelectorDiagnostics")
+        );
     }
 }

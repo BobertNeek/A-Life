@@ -701,6 +701,34 @@ impl GpuRuntimeSelectorDiagnosticEnableFailure {
     }
 }
 
+/// Ordered production stage reached by the opt-in selector-diagnostic path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuRuntimeSelectorDiagnosticStage {
+    WriteStagedUploads,
+    RecordDispatch,
+    RegisterCompactMapping,
+    RegisterSelectorDiagnosticMapping,
+    DevicePoll,
+    CompactMappingCompletion,
+    SelectorMappingCompletion,
+    TimestampMappingCompletion,
+    DeviceLostAfterSubmit,
+    TimestampReadback,
+    DecodeSelectorDiagnostics,
+    DecodeMappedRecords,
+    PrevalidateCommit,
+    ValidateReceiptIdentity,
+    BuildSelectorDiagnostic,
+    AccountActivityWork,
+    PrepareTicks,
+    ComputeReadbackBytes,
+    CommitValidatedBatch,
+    ValidateCommitShape,
+    ValidateCommitContents,
+    ValidateHostPrecommit,
+    ConvertPopulation,
+}
+
 /// Failure from the opt-in diagnostic path, retaining whether it happened
 /// before enable, while enabling, or after the GPU batch was staged.
 #[derive(Debug, PartialEq, Eq)]
@@ -708,7 +736,10 @@ pub enum GpuRuntimeSelectorDiagnosticError {
     Preflight(ScaffoldContractError),
     Enable(GpuRuntimeSelectorDiagnosticEnableFailure),
     LaterStage(GpuRuntimeSelectorDiagnosticFailureReceipt),
-    LaterStageContract(ScaffoldContractError),
+    LaterStageContract {
+        stage: GpuRuntimeSelectorDiagnosticStage,
+        error: ScaffoldContractError,
+    },
 }
 
 impl std::fmt::Display for GpuRuntimeSelectorDiagnosticError {
@@ -725,9 +756,9 @@ impl std::fmt::Display for GpuRuntimeSelectorDiagnosticError {
                 formatter,
                 "selector diagnostic later-stage GPU failure: {error}"
             ),
-            Self::LaterStageContract(error) => write!(
+            Self::LaterStageContract { stage, error } => write!(
                 formatter,
-                "selector diagnostic later-stage GPU failure: {error}"
+                "selector diagnostic later-stage GPU failure at {stage:?}: {error}"
             ),
         }
     }
@@ -736,7 +767,8 @@ impl std::fmt::Display for GpuRuntimeSelectorDiagnosticError {
 impl std::error::Error for GpuRuntimeSelectorDiagnosticError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Preflight(error) | Self::LaterStageContract(error) => Some(error),
+            Self::Preflight(error) => Some(error),
+            Self::LaterStageContract { error, .. } => Some(error),
             Self::LaterStage(error) => Some(error),
             Self::Enable(error) => Some(error),
         }
@@ -1597,6 +1629,7 @@ struct SelectorDiagnosticErrorCapture {
     enable_error: Option<GpuRuntimeSelectorDiagnosticEnableFailure>,
     later_stage_receipt: Option<GpuRuntimeSelectorDiagnosticFailureReceipt>,
     enable_completed: bool,
+    later_stage: Option<GpuRuntimeSelectorDiagnosticStage>,
 }
 
 impl GpuSelectorDiagnosticReceipt {
@@ -3426,9 +3459,14 @@ impl GpuClosedLoopBackend {
                 None if let Some(receipt) = capture.later_stage_receipt.take() => {
                     Err(GpuRuntimeSelectorDiagnosticError::LaterStage(receipt))
                 }
-                None if capture.enable_completed => {
-                    Err(GpuRuntimeSelectorDiagnosticError::LaterStageContract(error))
-                }
+                None if capture.enable_completed => Err(
+                    GpuRuntimeSelectorDiagnosticError::LaterStageContract {
+                        stage: capture
+                            .later_stage
+                            .expect("enabled selector diagnostics record their current stage"),
+                        error,
+                    },
+                ),
                 None => Err(GpuRuntimeSelectorDiagnosticError::Preflight(error)),
             },
         }
@@ -3757,6 +3795,9 @@ impl GpuClosedLoopBackend {
         }
 
         for index in 0..dispatches.len() {
+            if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+                capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::WriteStagedUploads);
+            }
             let dispatch = &dispatches[index];
             let bucket = self
                 .class_buckets
@@ -3790,6 +3831,9 @@ impl GpuClosedLoopBackend {
             });
         }
         for index in 0..dispatches.len() {
+            if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+                capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::RecordDispatch);
+            }
             let dispatch = &mut dispatches[index];
             let bucket = self
                 .class_buckets
@@ -3842,6 +3886,10 @@ impl GpuClosedLoopBackend {
         );
         let command_buffer = encoder.finish();
         for index in 0..dispatches.len() {
+            if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+                capture.later_stage =
+                    Some(GpuRuntimeSelectorDiagnosticStage::RegisterCompactMapping);
+            }
             let dispatch = &mut dispatches[index];
             let bucket = self
                 .class_buckets
@@ -3860,6 +3908,10 @@ impl GpuClosedLoopBackend {
                 }
             }
             if let Some(readback) = dispatch.selector_readback.as_ref() {
+                if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+                    capture.later_stage =
+                        Some(GpuRuntimeSelectorDiagnosticStage::RegisterSelectorDiagnosticMapping);
+                }
                 match bucket.pipelines.register_selector_diagnostic_mapping(
                     &command_buffer,
                     readback,
@@ -3884,6 +3936,9 @@ impl GpuClosedLoopBackend {
         );
         let submission = self.queue.submit(Some(command_buffer));
         let forced_loss = std::mem::take(&mut self.force_device_lost_after_submit);
+        if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+            capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::DevicePoll);
+        }
         let poll_failed = self
             .device
             .poll(wgpu::PollType::Wait {
@@ -3905,13 +3960,25 @@ impl GpuClosedLoopBackend {
                     .is_some_and(GpuCompactMapTicket::mapping_succeeded)
         });
         let timestamp_mapping_succeeded = timestamp_mapping_completed(&timestamp_receiver);
-        if forced_loss
-            || poll_failed
-            || !mappings_succeeded
-            || !selector_mappings_succeeded
-            || !timestamp_mapping_succeeded
-            || self.device_lost.load(Ordering::Acquire)
-        {
+        let post_submit_failure_stage = if forced_loss {
+            Some(GpuRuntimeSelectorDiagnosticStage::DeviceLostAfterSubmit)
+        } else if poll_failed {
+            Some(GpuRuntimeSelectorDiagnosticStage::DevicePoll)
+        } else if !mappings_succeeded {
+            Some(GpuRuntimeSelectorDiagnosticStage::CompactMappingCompletion)
+        } else if !selector_mappings_succeeded {
+            Some(GpuRuntimeSelectorDiagnosticStage::SelectorMappingCompletion)
+        } else if !timestamp_mapping_succeeded {
+            Some(GpuRuntimeSelectorDiagnosticStage::TimestampMappingCompletion)
+        } else if self.device_lost.load(Ordering::Acquire) {
+            Some(GpuRuntimeSelectorDiagnosticStage::DeviceLostAfterSubmit)
+        } else {
+            None
+        };
+        if let Some(stage) = post_submit_failure_stage {
+            if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+                capture.later_stage = Some(stage);
+            }
             for dispatch in &dispatches {
                 let bucket = self
                     .class_buckets
@@ -3928,13 +3995,16 @@ impl GpuClosedLoopBackend {
             }
             self.timestamp_resources.readback_buffer.unmap();
             self.mark_device_lost();
-            return Err(if !timestamp_mapping_succeeded {
+            return Err(if stage == GpuRuntimeSelectorDiagnosticStage::TimestampMappingCompletion {
                 ScaffoldContractError::GpuTimestampQueryUnavailable
             } else {
                 ScaffoldContractError::NeuralBackendUnavailable
             });
         }
 
+        if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+            capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::TimestampReadback);
+        }
         let (inference_timestamp_ticks, completed_gpu_time_ns) =
             match self.timestamp_resources.read_delta_and_elapsed_ns() {
                 Ok(timing) => timing,
@@ -3957,6 +4027,10 @@ impl GpuClosedLoopBackend {
             };
 
         if capture_selector_diagnostics {
+            if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+                capture.later_stage =
+                    Some(GpuRuntimeSelectorDiagnosticStage::DecodeSelectorDiagnostics);
+            }
             for index in 0..dispatches.len() {
                 let result = {
                     let dispatch = &dispatches[index];
@@ -4001,6 +4075,9 @@ impl GpuClosedLoopBackend {
             }
         }
 
+        if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+            capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::DecodeMappedRecords);
+        }
         for index in 0..dispatches.len() {
             let dispatch = &dispatches[index];
             let bucket = self
@@ -4039,6 +4116,9 @@ impl GpuClosedLoopBackend {
             }
         }
 
+        if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+            capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::PrevalidateCommit);
+        }
         if dispatches.iter().any(|dispatch| {
             let bucket = self
                 .class_buckets
@@ -4075,6 +4155,10 @@ impl GpuClosedLoopBackend {
         let mut ordered_next_transaction_generations = vec![None; batch.len()];
         let mut ordered_memory_receipts = vec![None; batch.len()];
         let mut ordered_selector_diagnostics = vec![None; batch.len()];
+        if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+            capture.later_stage =
+                Some(GpuRuntimeSelectorDiagnosticStage::ValidateReceiptIdentity);
+        }
         let receipt_validation = (|| -> Result<(), ScaffoldContractError> {
             for dispatch in &dispatches {
                 let validated = dispatch.validated.as_ref().expect("validated batch");
@@ -4179,6 +4263,10 @@ impl GpuClosedLoopBackend {
         }
 
         if capture_selector_diagnostics {
+            if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+                capture.later_stage =
+                    Some(GpuRuntimeSelectorDiagnosticStage::BuildSelectorDiagnostic);
+            }
             let selector_validation = (|| -> Result<(), ScaffoldContractError> {
                 for dispatch in &dispatches {
                     let captures = dispatch
@@ -4220,6 +4308,9 @@ impl GpuClosedLoopBackend {
             }
         }
 
+        if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+            capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::AccountActivityWork);
+        }
         let activity_work_receipts: Result<Vec<BrainWorkReceipt>, ScaffoldContractError> = batch
             .iter()
             .enumerate()
@@ -4266,6 +4357,9 @@ impl GpuClosedLoopBackend {
             }
         };
 
+        if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+            capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::PrepareTicks);
+        }
         let prepared_ticks = (|| -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
             let mut ticks = Vec::with_capacity(batch.len());
             for (index, input) in batch.iter().enumerate() {
@@ -4329,6 +4423,9 @@ impl GpuClosedLoopBackend {
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
         };
+        if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+            capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::ComputeReadbackBytes);
+        }
         let total_readback_bytes = match batch
             .len()
             .checked_mul(crate::GPU_CLOSED_LOOP_TICK_READBACK_BYTES)
@@ -4341,6 +4438,10 @@ impl GpuClosedLoopBackend {
         };
         let mut commit_mismatch = false;
         for dispatch in &mut dispatches {
+            if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+                capture.later_stage =
+                    Some(GpuRuntimeSelectorDiagnosticStage::CommitValidatedBatch);
+            }
             let bucket = self
                 .class_buckets
                 .get_mut(&dispatch.class_id)
@@ -4356,6 +4457,9 @@ impl GpuClosedLoopBackend {
                     return Err(ScaffoldContractError::NeuralBackendUnavailable);
                 }
             };
+            if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+                capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::ValidateCommitShape);
+            }
             if committed.readback_bytes as usize
                 != dispatch.original_indices.len() * crate::GPU_CLOSED_LOOP_TICK_READBACK_BYTES
                 || committed.records.len() != dispatch.original_indices.len()
@@ -4365,6 +4469,10 @@ impl GpuClosedLoopBackend {
             {
                 self.mark_device_lost();
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
+            }
+            if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+                capture.later_stage =
+                    Some(GpuRuntimeSelectorDiagnosticStage::ValidateCommitContents);
             }
             for ((((original_index, record), speech_payload), motor_candidates), pending_record) in
                 dispatch
@@ -4386,6 +4494,9 @@ impl GpuClosedLoopBackend {
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
 
+        if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+            capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::ValidateHostPrecommit);
+        }
         let host_precommit_valid = batch.iter().enumerate().all(|(index, input)| {
             let handle = input.handle;
             let Some(expected_generation) = ordered_next_transaction_generations[index] else {
@@ -4448,6 +4559,9 @@ impl GpuClosedLoopBackend {
         self.next_dispatch_generation = next_dispatch_generation;
         self.completed_selection_count = next_completed_selection_count;
         self.completed_neural_timing = None;
+        if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+            capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::ConvertPopulation);
+        }
         self.pending_inference_timing = Some(PendingInferenceTiming {
             dispatch_generation: dispatch_generation.get(),
             class_id_raw: timing_class_id,
