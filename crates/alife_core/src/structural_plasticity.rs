@@ -15,6 +15,7 @@ pub const MAX_REGIONS_PER_STATE: usize = 16;
 pub const MAX_EVIDENCE_PER_PHASE: usize = 256;
 pub const MAX_ACCEPTED_PER_PHASE: usize = 4;
 pub const MAX_STRUCTURAL_EDGES: usize = 64;
+pub const MAX_ROUTE_INDEX: u16 = MAX_REGIONS_PER_STATE as u16;
 
 const RECEIPT_FNV_OFFSET: u64 = 14_695_981_039_346_656_037;
 const RECEIPT_FNV_PRIME: u64 = 1_099_511_628_211;
@@ -72,11 +73,119 @@ pub struct CoactivationEvidence {
     pub concept_gap_support: u32,
 }
 
+/// The source of a bounded event.  Source identity is deliberately separate
+/// from the candidate identity: a concept, replay event, and neural pair may
+/// all support the same candidate without becoming that synapse's identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum StructuralSource {
+    NeuralActivity,
+    Eligibility,
+    PredictionResidual,
+    WorkingMemory,
+    ConceptGap,
+    RouteLocality,
+    ReplayExploration,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StructuralEvidenceEvent {
+    pub event_id: u64,
+    pub tick: u64,
+    pub region: u16,
+    pub source: u32,
+    pub target: u32,
+    pub source_identity: u64,
+    #[serde(default)]
+    pub concept_hint_id: Option<u64>,
+    pub neural_coactivity: u32,
+    pub eligibility: u32,
+    pub prediction_residual: u32,
+    pub working_memory: u32,
+    pub concept_gap_support: u32,
+    pub route_locality: u32,
+    pub exploration: u32,
+    pub novelty: u32,
+    pub outcome_utility: u32,
+    pub redundancy: u32,
+    pub maintenance_cost: u32,
+    pub source_kind: StructuralSource,
+}
+
+impl StructuralEvidenceEvent {
+    pub fn from_legacy(item: CoactivationEvidence, event_id: u64) -> Self {
+        Self {
+            event_id,
+            tick: 0,
+            region: item.region,
+            source: item.source,
+            target: item.target,
+            source_identity: event_id,
+            concept_hint_id: None,
+            neural_coactivity: item.coactivation,
+            eligibility: item.eligibility,
+            prediction_residual: 0,
+            working_memory: 0,
+            concept_gap_support: item.concept_gap_support,
+            route_locality: 0,
+            exploration: 0,
+            novelty: 0,
+            outcome_utility: 0,
+            redundancy: 0,
+            maintenance_cost: 1,
+            source_kind: if item.eligibility > 0 {
+                StructuralSource::Eligibility
+            } else {
+                StructuralSource::NeuralActivity
+            },
+        }
+    }
+
+    fn validate(&self, neuron_count: u32, max_regions: u16) -> Result<(), StructuralPlasticityError> {
+        if self.source >= neuron_count
+            || self.target >= neuron_count
+            || self.region >= max_regions
+            || self.source == self.target
+            || self.event_id == 0
+            || self.maintenance_cost == 0
+        {
+            return Err(StructuralPlasticityError::NodeOutOfRange);
+        }
+        Ok(())
+    }
+
+    fn candidate_score(&self) -> u32 {
+        self.neural_coactivity
+            .saturating_add(self.eligibility)
+            .saturating_add(self.prediction_residual)
+            .saturating_add(self.working_memory)
+            .saturating_add(self.concept_gap_support)
+            .saturating_add(self.route_locality)
+            .saturating_add(self.exploration)
+            .saturating_add(self.novelty)
+            .saturating_add(self.outcome_utility)
+            .saturating_sub(self.redundancy)
+            .saturating_sub(self.maintenance_cost)
+    }
+
+    fn has_neural_anchor(&self) -> bool {
+        self.neural_coactivity > 0
+            || self.eligibility > 0
+            || self.prediction_residual > 0
+            || self.working_memory > 0
+            || self.route_locality > 0
+            || self.exploration > 0
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StructuralDiscoveryReceipt {
     pub evidence_items: u16,
     pub candidate_comparisons: u32,
     pub candidates_kept: u16,
+    #[serde(default)]
+    pub events_retained: u16,
+    #[serde(default)]
+    pub maintenance_ops: u32,
     pub deterministic_digest: u64,
 }
 
@@ -87,7 +196,29 @@ pub struct StructuralWorkReceipt {
     pub accepted_edges: u16,
     pub pruned_edges: u16,
     pub active_edges: u16,
+    #[serde(default)]
+    pub maintenance_ops: u32,
+    #[serde(default)]
+    pub ranking_ops: u32,
+    #[serde(default)]
+    pub recompaction_ops: u32,
+    #[serde(default)]
+    pub growth_ops: u32,
+    #[serde(default)]
+    pub pruning_ops: u32,
     pub deterministic_digest: u64,
+}
+
+impl StructuralWorkReceipt {
+    pub const fn work_units(self) -> u64 {
+        (self.candidate_comparisons as u64)
+            .saturating_add(self.candidates_kept as u64)
+            .saturating_add(self.maintenance_ops as u64)
+            .saturating_add(self.ranking_ops as u64)
+            .saturating_add(self.recompaction_ops as u64)
+            .saturating_add(self.growth_ops as u64)
+            .saturating_add(self.pruning_ops as u64)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,22 +236,124 @@ pub enum StructuralPlasticityError {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 struct StructuralCandidate {
+    candidate_id: u64,
     region: u16,
     source: u32,
     target: u32,
+    source_identity: u64,
+    concept_hint_id: Option<u64>,
     coactivation: u32,
     eligibility: u32,
+    prediction_residual: u32,
+    working_memory: u32,
     concept_gap_support: u32,
+    route_locality: u32,
+    exploration: u32,
+    novelty: u32,
+    outcome_utility: u32,
+    redundancy: u32,
+    maintenance_cost: u32,
+    source_kind: StructuralSource,
+    observations: u16,
+    last_tick: u64,
     age: u32,
     score: u32,
 }
 
+impl StructuralCandidate {
+    fn from_event(candidate_id: u64, event: StructuralEvidenceEvent) -> Self {
+        Self {
+            candidate_id,
+            region: event.region,
+            source: event.source,
+            target: event.target,
+            source_identity: event.source_identity,
+            concept_hint_id: event.concept_hint_id,
+            coactivation: event.neural_coactivity,
+            eligibility: event.eligibility,
+            prediction_residual: event.prediction_residual,
+            working_memory: event.working_memory,
+            concept_gap_support: event.concept_gap_support,
+            route_locality: event.route_locality,
+            exploration: event.exploration,
+            novelty: event.novelty,
+            outcome_utility: event.outcome_utility,
+            redundancy: event.redundancy,
+            maintenance_cost: event.maintenance_cost,
+            source_kind: event.source_kind,
+            observations: 1,
+            last_tick: event.tick,
+            age: 0,
+            score: event.candidate_score(),
+        }
+    }
+
+    fn merge_event(&mut self, event: StructuralEvidenceEvent) {
+        self.source_identity = event.source_identity;
+        self.concept_hint_id = event.concept_hint_id.or(self.concept_hint_id);
+        self.coactivation = self.coactivation.saturating_add(event.neural_coactivity);
+        self.eligibility = self.eligibility.saturating_add(event.eligibility);
+        self.prediction_residual = self
+            .prediction_residual
+            .saturating_add(event.prediction_residual);
+        self.working_memory = self.working_memory.saturating_add(event.working_memory);
+        self.concept_gap_support = self
+            .concept_gap_support
+            .saturating_add(event.concept_gap_support);
+        self.route_locality = self.route_locality.saturating_add(event.route_locality);
+        self.exploration = self.exploration.saturating_add(event.exploration);
+        self.novelty = self.novelty.saturating_add(event.novelty);
+        self.outcome_utility = self.outcome_utility.saturating_add(event.outcome_utility);
+        self.redundancy = self.redundancy.saturating_add(event.redundancy);
+        self.maintenance_cost = self
+            .maintenance_cost
+            .saturating_add(event.maintenance_cost);
+        self.source_kind = event.source_kind;
+        self.observations = self.observations.saturating_add(1);
+        self.last_tick = self.last_tick.max(event.tick);
+        self.age = self.age.saturating_add(1);
+        self.score = event.candidate_score_from(self);
+    }
+
+    fn utility(self) -> u32 {
+        self.outcome_utility
+            .saturating_add(self.prediction_residual)
+            .saturating_add(self.working_memory)
+            .saturating_add(self.novelty)
+            .saturating_sub(self.redundancy)
+    }
+}
+
+impl StructuralEvidenceEvent {
+    fn candidate_score_from(self, candidate: &StructuralCandidate) -> u32 {
+        candidate
+            .coactivation
+            .saturating_add(candidate.eligibility)
+            .saturating_add(candidate.prediction_residual)
+            .saturating_add(candidate.working_memory)
+            .saturating_add(candidate.concept_gap_support)
+            .saturating_add(candidate.route_locality)
+            .saturating_add(candidate.exploration)
+            .saturating_add(candidate.novelty)
+            .saturating_add(candidate.outcome_utility)
+            .saturating_sub(candidate.redundancy)
+            .saturating_sub(candidate.maintenance_cost)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 struct SparseConnection {
+    candidate_id: u64,
+    route: u16,
     source: u32,
     target: u32,
     weight: f32,
     score: u32,
+    eligibility: u32,
+    structural_utility: u32,
+    maintenance_cost: u32,
+    observations: u16,
+    last_tick: u64,
     age: u32,
 }
 
@@ -155,6 +388,23 @@ impl StructuralPlasticityState {
         &mut self,
         evidence: &[CoactivationEvidence],
     ) -> Result<StructuralDiscoveryReceipt, StructuralPlasticityError> {
+        let events = evidence
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(index, item)| {
+                StructuralEvidenceEvent::from_legacy(item, event_identity(item, index as u64))
+            })
+            .collect::<Vec<_>>();
+        self.discover_events(&events)
+    }
+
+    /// Retains only bounded event-nominated partners.  This is the structural
+    /// discovery boundary: no absent source/target pair is ever generated here.
+    pub fn discover_events(
+        &mut self,
+        evidence: &[StructuralEvidenceEvent],
+    ) -> Result<StructuralDiscoveryReceipt, StructuralPlasticityError> {
         if evidence.len() > MAX_EVIDENCE_PER_PHASE {
             return Err(StructuralPlasticityError::EvidenceBudgetExceeded);
         }
@@ -168,65 +418,44 @@ impl StructuralPlasticityState {
             return Err(StructuralPlasticityError::RegionBudgetExceeded);
         }
         for item in evidence {
-            if item.source >= self.neuron_count || item.target >= self.neuron_count {
-                return Err(StructuralPlasticityError::NodeOutOfRange);
-            }
+            item.validate(self.neuron_count, self.config.max_regions)?;
         }
 
         let mut ordered = evidence.to_vec();
         ordered.sort_unstable_by_key(|item| {
             (
+                item.tick,
+                item.event_id,
                 item.region,
                 item.source,
                 item.target,
-                item.coactivation,
-                item.eligibility,
-                item.concept_gap_support,
+                item.source_kind,
             )
         });
 
         let mut comparisons = 0_u32;
+        let mut maintenance_ops = 0_u32;
+        let mut events_retained = 0_u16;
         for item in ordered {
-            if item.source == item.target
-                || (item.coactivation == 0 && item.eligibility == 0)
-            {
+            if !item.has_neural_anchor() || item.candidate_score() < self.config.min_candidate_score {
                 continue;
             }
-            let score = item
-                .coactivation
-                .saturating_add(item.eligibility)
-                .saturating_add(item.concept_gap_support);
-            if score < self.config.min_candidate_score {
-                continue;
-            }
-
             let candidates = self.candidates.entry(item.region).or_default();
             comparisons = comparisons.saturating_add(candidates.len() as u32);
+            let candidate_id = candidate_identity(item.region, item.source, item.target);
             if let Some(candidate) = candidates
                 .iter_mut()
-                .find(|candidate| candidate.source == item.source && candidate.target == item.target)
+                .find(|candidate| candidate.candidate_id == candidate_id)
             {
-                candidate.coactivation = candidate.coactivation.saturating_add(item.coactivation);
-                candidate.eligibility = candidate.eligibility.saturating_add(item.eligibility);
-                candidate.concept_gap_support = candidate
-                    .concept_gap_support
-                    .saturating_add(item.concept_gap_support);
-                candidate.age = candidate.age.saturating_add(1);
-                candidate.score = candidate_score(*candidate);
+                candidate.merge_event(item);
+                maintenance_ops = maintenance_ops.saturating_add(1);
             } else {
-                candidates.push(StructuralCandidate {
-                    region: item.region,
-                    source: item.source,
-                    target: item.target,
-                    coactivation: item.coactivation,
-                    eligibility: item.eligibility,
-                    concept_gap_support: item.concept_gap_support,
-                    age: 0,
-                    score,
-                });
+                candidates.push(StructuralCandidate::from_event(candidate_id, item));
+                maintenance_ops = maintenance_ops.saturating_add(1);
             }
             candidates.sort_unstable_by(candidate_order);
             candidates.truncate(usize::from(self.config.max_candidates_per_region));
+            events_retained = events_retained.saturating_add(1);
         }
 
         self.last_candidate_comparisons = comparisons;
@@ -234,6 +463,8 @@ impl StructuralPlasticityState {
             evidence_items: evidence.len() as u16,
             candidate_comparisons: comparisons,
             candidates_kept: self.candidate_count() as u16,
+            events_retained,
+            maintenance_ops,
             deterministic_digest: self.deterministic_digest(),
         })
     }
@@ -249,33 +480,61 @@ impl StructuralPlasticityState {
         candidates.sort_unstable_by(candidate_order);
 
         let candidate_comparisons = self.last_candidate_comparisons;
+        let mut ranking_ops = 0_u32;
+        let mut maintenance_ops = 0_u32;
         let mut accepted = 0_usize;
+        let mut replaced = 0_usize;
         for candidate in candidates {
-            if accepted >= usize::from(self.config.max_accepted_per_phase)
-                || self.connection_count() >= usize::from(self.config.max_structural_edges)
-            {
+            if accepted >= usize::from(self.config.max_accepted_per_phase) {
                 break;
             }
+            ranking_ops = ranking_ops.saturating_add(1);
             if self.has_connection(candidate.source, candidate.target) {
                 self.remove_candidate(candidate);
+                maintenance_ops = maintenance_ops.saturating_add(1);
                 continue;
             }
             let weight = score_to_weight(candidate.score);
             if weight <= 0.0 {
                 continue;
             }
+            let replacement = if self.connection_count()
+                >= usize::from(self.config.max_structural_edges)
+            {
+                let Some(weakest) = self.weakest_connection() else {
+                    break;
+                };
+                if candidate.score <= weakest.score.saturating_add(1) {
+                    continue;
+                }
+                Some((weakest.target, weakest.source))
+            } else {
+                None
+            };
+            if let Some((target, source)) = replacement {
+                self.remove_connection(source, target);
+                replaced = replaced.saturating_add(1);
+            }
             self.insert_connection(SparseConnection {
+                candidate_id: candidate.candidate_id,
+                route: candidate.region,
                 source: candidate.source,
                 target: candidate.target,
                 weight,
                 score: candidate.score,
-                age: candidate.age,
+                eligibility: candidate.eligibility,
+                structural_utility: candidate.utility(),
+                maintenance_cost: candidate.maintenance_cost,
+                observations: candidate.observations,
+                last_tick: candidate.last_tick,
+                age: candidate.age.saturating_add(1),
             })?;
             self.remove_candidate(candidate);
             accepted += 1;
         }
 
-        let pruned = self.prune_weak_connections_internal();
+        let pruned = self.prune_weak_connections_internal().saturating_add(replaced);
+        let recompaction_ops = self.connection_count() as u32;
         self.last_candidate_comparisons = 0;
         Ok(StructuralWorkReceipt {
             candidate_comparisons,
@@ -283,6 +542,11 @@ impl StructuralPlasticityState {
             accepted_edges: accepted as u16,
             pruned_edges: pruned as u16,
             active_edges: self.connection_count() as u16,
+            maintenance_ops,
+            ranking_ops,
+            recompaction_ops,
+            growth_ops: accepted as u32,
+            pruning_ops: pruned as u32,
             deterministic_digest: self.deterministic_digest(),
         })
     }
@@ -302,6 +566,8 @@ impl StructuralPlasticityState {
             .and_then(|edges| edges.iter_mut().find(|edge| edge.source == source))
             .ok_or(StructuralPlasticityError::ConnectionNotFound)?;
         edge.score = support;
+        edge.structural_utility = support;
+        edge.eligibility = support;
         edge.weight = score_to_weight(support);
         Ok(())
     }
@@ -340,6 +606,33 @@ impl StructuralPlasticityState {
         self.connections
             .get(&target)
             .is_some_and(|edges| edges.iter().any(|edge| edge.source == source))
+    }
+
+    fn weakest_connection(&self) -> Option<SparseConnection> {
+        self.connections
+            .values()
+            .flat_map(|edges| edges.iter().copied())
+            .min_by_key(|edge| {
+                (
+                    edge.score,
+                    edge.structural_utility,
+                    edge.eligibility,
+                    edge.age,
+                    edge.target,
+                    edge.source,
+                )
+            })
+    }
+
+    fn remove_connection(&mut self, source: u32, target: u32) {
+        let mut empty = false;
+        if let Some(edges) = self.connections.get_mut(&target) {
+            edges.retain(|edge| edge.source != source);
+            empty = edges.is_empty();
+        }
+        if empty {
+            self.connections.remove(&target);
+        }
     }
 
     fn insert_connection(
@@ -392,29 +685,33 @@ impl StructuralPlasticityState {
         for (region, candidates) in &self.candidates {
             digest = mix_digest(digest, u64::from(*region));
             for candidate in candidates {
+                digest = mix_digest(digest, candidate.candidate_id);
                 digest = mix_digest(digest, candidate.source as u64);
                 digest = mix_digest(digest, candidate.target as u64);
+                digest = mix_digest(digest, candidate.source_identity);
+                digest = mix_digest(digest, candidate.concept_hint_id.unwrap_or(0));
                 digest = mix_digest(digest, u64::from(candidate.score));
+                digest = mix_digest(digest, u64::from(candidate.observations));
+                digest = mix_digest(digest, candidate.last_tick);
                 digest = mix_digest(digest, u64::from(candidate.age));
             }
         }
         for (target, edges) in &self.connections {
             digest = mix_digest(digest, *target as u64);
             for edge in edges {
+                digest = mix_digest(digest, edge.candidate_id);
+                digest = mix_digest(digest, u64::from(edge.route));
                 digest = mix_digest(digest, edge.source as u64);
                 digest = mix_digest(digest, u64::from(edge.score));
+                digest = mix_digest(digest, u64::from(edge.eligibility));
+                digest = mix_digest(digest, u64::from(edge.structural_utility));
+                digest = mix_digest(digest, u64::from(edge.observations));
+                digest = mix_digest(digest, edge.last_tick);
                 digest = mix_digest(digest, u64::from(edge.age));
             }
         }
         digest
     }
-}
-
-fn candidate_score(candidate: StructuralCandidate) -> u32 {
-    candidate
-        .coactivation
-        .saturating_add(candidate.eligibility)
-        .saturating_add(candidate.concept_gap_support)
 }
 
 fn candidate_order(left: &StructuralCandidate, right: &StructuralCandidate) -> Ordering {
@@ -424,6 +721,7 @@ fn candidate_order(left: &StructuralCandidate, right: &StructuralCandidate) -> O
         .then_with(|| left.region.cmp(&right.region))
         .then_with(|| left.source.cmp(&right.source))
         .then_with(|| left.target.cmp(&right.target))
+        .then_with(|| left.candidate_id.cmp(&right.candidate_id))
 }
 
 fn score_to_weight(score: u32) -> f32 {
@@ -436,6 +734,22 @@ fn mix_digest(mut digest: u64, value: u64) -> u64 {
         digest = digest.wrapping_mul(RECEIPT_FNV_PRIME);
     }
     digest
+}
+
+fn candidate_identity(region: u16, source: u32, target: u32) -> u64 {
+    let mut digest = RECEIPT_FNV_OFFSET;
+    digest = mix_digest(digest, u64::from(region));
+    digest = mix_digest(digest, u64::from(source));
+    mix_digest(digest, u64::from(target))
+}
+
+fn event_identity(item: CoactivationEvidence, index: u64) -> u64 {
+    let mut digest = candidate_identity(item.region, item.source, item.target);
+    digest = mix_digest(digest, u64::from(item.coactivation));
+    digest = mix_digest(digest, u64::from(item.eligibility));
+    let digest = mix_digest(digest, u64::from(item.concept_gap_support));
+    let digest = mix_digest(digest, index);
+    if digest == 0 { 1 } else { digest }
 }
 
 #[cfg(test)]

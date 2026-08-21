@@ -13,11 +13,13 @@ use alife_core::{
     ActionId, ActionTarget, Blake3Digest, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId,
     BrainDispatchIdentity, BrainPhenotype, BrainWorkCounters, BrainWorkReceipt,
     CandidateActionFamily, CanonicalDigestBuilder, CoactivationEvidence, Confidence,
-    DendriticBranchSet, ExperiencePatch, FinalizedMemoryRecall, GpuPressureSample,
+    DendriticAllocationEvidence, DendriticBranchSet, DendriticInputRef, ExperiencePatch,
+    FinalizedMemoryRecall, GpuPressureSample,
     GpuPressureSampleInput, LearningCommitToken, LearningSequenceGuard, NeuralActionSelection,
     NeuralThrottleDecision, NeuralThrottleLevel, OrganismId, OutcomeCreditPacket,
     PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest, PhenotypeHash,
-    ScaffoldContractError, SensorProfile, SpeechMotorPayload, BRAIN_ATP_BASAL_DEBIT_Q16,
+    ScaffoldContractError, SensorProfile, SpeechMotorPayload, StructuralEvidenceEvent,
+    StructuralSource, BRAIN_ATP_BASAL_DEBIT_Q16,
     BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16, REQUIRED_GPU_FEATURE_MASK,
 };
 use serde::{Deserialize, Serialize};
@@ -2617,6 +2619,17 @@ fn live_pressure_sample(
     )
 }
 
+fn replay_signal(value: f32) -> u32 {
+    if !value.is_finite() {
+        return 0;
+    }
+    (value.abs().clamp(0.0, 1.0) * 1_000.0).round() as u32
+}
+
+fn nonzero_structural_identity(value: u64) -> u64 {
+    if value == 0 { 1 } else { value }
+}
+
 pub(crate) fn map_gpu_contract_error(error: GpuClosedLoopError) -> ScaffoldContractError {
     match error {
         GpuClosedLoopError::LayoutMismatch => ScaffoldContractError::GpuLayoutMismatch,
@@ -2668,6 +2681,7 @@ fn compile_v11_slot_upload(
                     eligibility: 0,
                     concept_gap_support: 0,
                 },
+                evidence_event: None,
             })?;
         }
     }
@@ -3040,79 +3054,162 @@ impl GpuClosedLoopBackend {
             .iter()
             .map(|synapse| (synapse.source(), synapse.target()))
             .collect::<std::collections::BTreeSet<_>>();
-        let active = replay
-            .synapse_spans
-            .iter()
-            .filter_map(|span| {
-                let start = usize::try_from(span.sample_start).ok()?;
-                let count = usize::try_from(span.sample_count).ok()?;
-                let samples = replay
-                    .eligibility_samples
-                    .get(start..start.checked_add(count)?)?;
-                let eligibility = samples
-                    .iter()
-                    .map(|sample| u32::from(sample.eligibility_q15.unsigned_abs()))
-                    .max()
-                    .unwrap_or(0);
+        let mut active = Vec::new();
+        for span in replay.synapse_spans.iter().take(64) {
+            let local_synapse_id = usize::try_from(span.local_synapse_id)
+                .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+            let Some(synapse) = phenotype
+                .synapses()
+                .get(local_synapse_id)
+            else {
+                continue;
+            };
+            let start = usize::try_from(span.sample_start)
+                .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+            let count = usize::try_from(span.sample_count)
+                .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+            let samples = replay
+                .eligibility_samples
+                .get(start..start.checked_add(count).ok_or(
+                    ScaffoldContractError::ConsolidationGenerationMismatch,
+                )?)
+                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+            for (event_index, sample) in samples.iter().enumerate() {
+                let eligibility = u32::from(sample.eligibility_q15.unsigned_abs());
                 if eligibility == 0 {
-                    return None;
+                    continue;
                 }
-                let synapse = phenotype
-                    .synapses()
-                    .get(usize::try_from(span.local_synapse_id).ok()?)?;
-                Some((
+                active.push((
+                    event_index,
                     synapse.source(),
                     synapse.target(),
                     synapse.route_index(),
                     eligibility,
-                ))
-            })
-            .take(32)
-            .collect::<Vec<_>>();
-        let mut evidence = Vec::new();
-        for pair in active.windows(2).take(32) {
-            let (source, target, route, eligibility) = (pair[0].0, pair[1].1, pair[0].2, pair[0].3);
-            if source == target || base_pairs.contains(&(source, target)) {
-                continue;
-            }
-            let Some(region) = u16::try_from(route).ok() else {
-                continue;
-            };
-            evidence.push(CoactivationEvidence {
-                region,
-                source,
-                target,
-                coactivation: 1,
-                eligibility,
-                concept_gap_support: 0,
-            });
-        }
-        if evidence.is_empty() {
-            if let Some((source, target, route, eligibility)) = active.first().copied() {
-                for offset in 1..=8_u32 {
-                    let candidate_target = (target % phenotype.neuron_count()).wrapping_add(offset)
-                        % phenotype.neuron_count();
-                    if candidate_target == source
-                        || base_pairs.contains(&(source, candidate_target))
-                    {
-                        continue;
-                    }
-                    let Some(region) = u16::try_from(route).ok() else {
-                        break;
-                    };
-                    evidence.push(CoactivationEvidence {
-                        region,
-                        source,
-                        target: candidate_target,
-                        coactivation: 1,
-                        eligibility,
-                        concept_gap_support: 0,
-                    });
+                ));
+                if active.len() == 64 {
                     break;
                 }
             }
+            if active.len() == 64 {
+                break;
+            }
         }
-        self.apply_v11_structural_phase(handle, &evidence)?;
+        let mut evidence = Vec::new();
+        let mut branch_evidence = Vec::new();
+        for event_index in 0..replay.events.len().min(32) {
+            let Some(event) = replay.events.get(event_index).copied() else {
+                continue;
+            };
+            let records = active
+                .iter()
+                .filter(|record| record.0 == event_index)
+                .take(8)
+                .copied()
+                .collect::<Vec<_>>();
+            if records.len() < 2 {
+                continue;
+            }
+            let source_identity = nonzero_structural_identity(
+                event.sequence_id.raw()
+                    ^ event.frame_digest.0[0]
+                    ^ event.candidate_feature_digest.0[0],
+            );
+            let prediction_residual = replay_signal(event.modulator.reward_prediction_error());
+            let concept_gap_support = replay_signal(event.modulator.frustration())
+                .saturating_add(replay_signal(event.modulator.novelty()));
+            let novelty = replay_signal(event.modulator.novelty());
+            let outcome_utility = replay_signal(event.modulator.value().max(0.0));
+            let mut target_inputs = BTreeMap::<u32, Vec<(u32, u32, u16)>>::new();
+            for record in &records {
+                target_inputs
+                    .entry(record.2)
+                    .or_default()
+                    .push((record.1, record.4, record.3));
+            }
+            for (target, inputs) in &target_inputs {
+                if inputs.len() < 2 {
+                    continue;
+                }
+                let route_match = inputs.windows(2).any(|pair| pair[0].2 == pair[1].2);
+                let branch_inputs = inputs
+                    .iter()
+                    .take(alife_core::MAX_DENDRITIC_INPUTS)
+                    .map(|(source, _, _)| DendriticInputRef::new(*source, 1.0))
+                    .collect::<Result<Vec<_>, _>>()?;
+                branch_evidence.push(DendriticAllocationEvidence {
+                    target: *target,
+                    inputs: branch_inputs,
+                    conjunction_score: inputs
+                        .iter()
+                        .map(|(_, eligibility, _)| *eligibility)
+                        .min()
+                        .unwrap_or(0),
+                    working_memory: route_match.then_some(1_000).unwrap_or(0),
+                    prediction_residual,
+                    concept_gap_support,
+                    route_locality: route_match.then_some(1_000).unwrap_or(0),
+                    novelty,
+                    observations: 1,
+                    tick: event.originating_tick.raw(),
+                    source_identity,
+                });
+            }
+            for pair in records.windows(2).take(8) {
+                let source = pair[0].1;
+                let target = pair[1].2;
+                let route = pair[0].3;
+                if source == target || base_pairs.contains(&(source, target)) {
+                    continue;
+                }
+                let route_match = pair[0].3 == pair[1].3;
+                let source_kind = if novelty >= 500 {
+                    StructuralSource::ReplayExploration
+                } else if prediction_residual > 0 {
+                    StructuralSource::PredictionResidual
+                } else if route_match {
+                    StructuralSource::WorkingMemory
+                } else {
+                    StructuralSource::Eligibility
+                };
+                evidence.push(StructuralEvidenceEvent {
+                    event_id: nonzero_structural_identity(
+                        source_identity ^ u64::from(source) ^ (u64::from(target) << 32),
+                    ),
+                    tick: event.originating_tick.raw(),
+                    region: route,
+                    source,
+                    target,
+                    source_identity,
+                    concept_hint_id: Some(event.candidate_feature_digest.0[0]),
+                    neural_coactivity: pair[0].4.min(pair[1].4),
+                    eligibility: pair[0].4.max(pair[1].4),
+                    prediction_residual,
+                    working_memory: route_match.then_some(500).unwrap_or(0),
+                    concept_gap_support,
+                    route_locality: route_match.then_some(500).unwrap_or(0),
+                    exploration: novelty,
+                    novelty,
+                    outcome_utility,
+                    redundancy: 0,
+                    maintenance_cost: 1,
+                    source_kind,
+                });
+            }
+        }
+        if evidence.is_empty() && branch_evidence.is_empty() {
+            return Ok(());
+        }
+        let branch_capacity = usize::from(
+            phenotype
+                .cognitive_architecture()
+                .dendritic_branch_capacity(),
+        );
+        let _ = self.apply_v11_structural_events(
+            handle,
+            &evidence,
+            &branch_evidence,
+            branch_capacity,
+        )?;
         Ok(())
     }
 
@@ -3187,6 +3284,67 @@ impl GpuClosedLoopBackend {
             )
         };
         let work = next.apply_structural_phase(evidence)?;
+        if let Some(pending) = next.pending_lifetime_synapse() {
+            next.clear_pending_lifetime_synapse(&pending)?;
+        }
+        let (previous_upload, upload) = {
+            let bucket = pool.bucket_for_handle_mut(handle)?;
+            let previous_upload =
+                compile_v11_slot_upload(&bucket.plan, &brain_slot, &phenotype, &previous)
+                    .map_err(map_gpu_contract_error)?;
+            let upload = compile_v11_slot_upload(&bucket.plan, &brain_slot, &phenotype, &next)
+                .map_err(map_gpu_contract_error)?;
+            (previous_upload, upload)
+        };
+        let upload = {
+            let bucket = pool.bucket_for_handle_mut(handle)?;
+            let live = bucket
+                .buffers
+                .read_live_mutable_slot(&self.device, &self.queue, upload.ranges())
+                .map_err(map_gpu_contract_error)?;
+            upload
+                .with_remapped_live_mutable_state(&previous_upload, live)
+                .map_err(map_gpu_contract_error)?
+        };
+        {
+            let bucket = pool.bucket_for_handle_mut(handle)?;
+            bucket
+                .buffers
+                .write_v11_topology_upload(&self.queue, &upload)
+                .map_err(map_gpu_contract_error)?;
+        }
+        let resident = pool.resident_mut(handle)?;
+        resident.brain_slot = upload.brain_slot().clone();
+        resident.ranges = upload.ranges().clone();
+        resident.v11 = next;
+        Ok(work)
+    }
+
+    /// Stages event-driven structural and dendritic edits through the same
+    /// dormant upload and live-state remap boundary as legacy v1.1 edits.
+    pub fn apply_v11_structural_events(
+        &mut self,
+        handle: GpuBrainHandle,
+        evidence: &[StructuralEvidenceEvent],
+        branch_evidence: &[DendriticAllocationEvidence],
+        branch_capacity: usize,
+    ) -> Result<GpuV11WorkReceipt, ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let pool = self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let (phenotype, brain_slot, previous, mut next) = {
+            let resident = pool.resident(handle)?;
+            (
+                resident.phenotype.clone(),
+                resident.brain_slot.clone(),
+                resident.v11.clone(),
+                resident.v11.clone(),
+            )
+        };
+        let work = next.apply_structural_events(evidence, branch_evidence, branch_capacity)?;
         if let Some(pending) = next.pending_lifetime_synapse() {
             next.clear_pending_lifetime_synapse(&pending)?;
         }

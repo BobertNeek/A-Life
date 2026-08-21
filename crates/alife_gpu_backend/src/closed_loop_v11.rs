@@ -7,9 +7,10 @@
 use alife_core::cognitive_work::CognitiveWorkCounters;
 use alife_core::{
     apply_dendritic_conjunctions, BrainPhenotype, CoactivationEvidence, CognitiveWorkReceipt,
-    DendriticBranch, DendriticBranchSet, DendriticInputRef, DendriticWorkReceipt,
-    ScaffoldContractError, StructuralPlasticityConfig, StructuralPlasticityState,
-    StructuralWorkReceipt, MAX_ACCEPTED_PER_PHASE, MAX_CANDIDATES_PER_REGION,
+    DendriticAllocationEvidence, DendriticBranchSet, DendriticWorkReceipt,
+    ScaffoldContractError, StructuralEvidenceEvent, StructuralPlasticityConfig,
+    StructuralPlasticityState, StructuralWorkReceipt, MAX_ACCEPTED_PER_PHASE,
+    MAX_CANDIDATES_PER_REGION, MAX_REGIONS_PER_STATE,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -32,6 +33,8 @@ pub struct AddLifetimeSynapse {
     pub route: u32,
     pub initial_weight: f32,
     pub evidence: CoactivationEvidence,
+    #[serde(default)]
+    pub evidence_event: Option<StructuralEvidenceEvent>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -66,6 +69,11 @@ impl Default for GpuV11WorkReceipt {
                 accepted_edges: 0,
                 pruned_edges: 0,
                 active_edges: 0,
+                maintenance_ops: 0,
+                ranking_ops: 0,
+                recompaction_ops: 0,
+                growth_ops: 0,
+                pruning_ops: 0,
                 deterministic_digest: 0,
             },
             cognitive: CognitiveWorkReceipt::zero(),
@@ -99,37 +107,6 @@ pub struct GpuV11CausalState {
 impl GpuV11CausalState {
     pub fn for_phenotype(phenotype: &BrainPhenotype) -> Result<Self, ScaffoldContractError> {
         let neuron_count = phenotype.neuron_count();
-        let motor_start = phenotype.candidate_decoder().motor_start();
-        let motor_width = phenotype.candidate_decoder().motor_width();
-        let branch_count = usize::from(
-            phenotype
-                .cognitive_architecture_plan()
-                .dendritic_branch_capacity(),
-        )
-        .max(1)
-        .min(usize::from(motor_width))
-        .min(64);
-        let mut branches = Vec::with_capacity(branch_count);
-        for index in 0..branch_count {
-            let target = motor_start + index as u32;
-            if target >= neuron_count {
-                return Err(ScaffoldContractError::GpuLayoutMismatch);
-            }
-            let second_source = if target + 1 < neuron_count {
-                target + 1
-            } else {
-                target.saturating_sub(1)
-            };
-            branches.push(DendriticBranch::new(
-                target,
-                -1.0,
-                6.0,
-                vec![
-                    DendriticInputRef::new(target, 1.0)?,
-                    DendriticInputRef::new(second_source, 1.0)?,
-                ],
-            )?);
-        }
         let architecture = phenotype.cognitive_architecture_plan();
         let structural_edit_budget = u16::from(architecture.structural_edit_budget().max(1));
         let structural_config = StructuralPlasticityConfig {
@@ -137,7 +114,9 @@ impl GpuV11CausalState {
                 .structural_candidate_budget()
                 .max(1)
                 .min(8),
-            max_regions: 1,
+            max_regions: u16::try_from(phenotype.projections().len())
+                .unwrap_or(MAX_REGIONS_PER_STATE as u16)
+                .clamp(1, MAX_REGIONS_PER_STATE as u16),
             max_accepted_per_phase: structural_edit_budget.min(4),
             max_structural_edges: structural_edit_budget.saturating_mul(4).clamp(1, 64),
             min_candidate_score: 2,
@@ -145,7 +124,7 @@ impl GpuV11CausalState {
         };
         Self::new(
             neuron_count,
-            DendriticBranchSet::new(branches)?,
+            DendriticBranchSet::default(),
             structural_config,
         )
     }
@@ -240,6 +219,7 @@ impl GpuV11CausalState {
             inputs_evaluated,
             gated_branches,
             work_units: branches_evaluated.saturating_add(inputs_evaluated),
+            ..self.last_work.dendritic
         };
         work.cognitive =
             self.make_cognitive_receipt_for(work.dendritic.work_units, structural_edges_evaluated)?;
@@ -311,6 +291,23 @@ impl GpuV11CausalState {
         &mut self,
         evidence: &[CoactivationEvidence],
     ) -> Result<GpuV11WorkReceipt, ScaffoldContractError> {
+        let events = evidence
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(index, item)| {
+                StructuralEvidenceEvent::from_legacy(item, u64::try_from(index + 1).unwrap_or(1))
+            })
+            .collect::<Vec<_>>();
+        self.apply_structural_events(&events, &[], usize::MAX)
+    }
+
+    pub fn apply_structural_events(
+        &mut self,
+        evidence: &[StructuralEvidenceEvent],
+        branch_evidence: &[DendriticAllocationEvidence],
+        branch_capacity: usize,
+    ) -> Result<GpuV11WorkReceipt, ScaffoldContractError> {
         if self.pending_lifetime_synapse.is_some()
             || evidence
                 .iter()
@@ -321,12 +318,21 @@ impl GpuV11CausalState {
         let mut next = self.clone();
         let _discovery = next
             .structural
-            .discover_candidates(evidence)
+            .discover_events(evidence)
             .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
         let structural = next
             .structural
             .apply_structural_phase()
             .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
+        let allocation = if branch_evidence.is_empty() {
+            None
+        } else {
+            Some(
+                next.dendritic_branches
+                    .allocate_from_evidence(self.neuron_count, branch_capacity, branch_evidence)
+                    .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?,
+            )
+        };
 
         let mut indexed_pairs = BTreeMap::<u32, BTreeMap<u32, u32>>::new();
         for span in &self.sparse_spans {
@@ -402,13 +408,25 @@ impl GpuV11CausalState {
                         target: item.target,
                         route: edge.route,
                         initial_weight: edge.weight,
-                        evidence: item.clone(),
+                        evidence: legacy_evidence_from_event(*item),
+                        evidence_event: Some(*item),
                     })
             });
             next.pending_lifetime_synapse = accepted;
         }
         next.sparse_spans = rebuilt;
         next.last_work.structural = structural;
+        if let Some(allocation) = allocation {
+            next.last_work.dendritic.allocation_candidates = allocation.branch_candidates;
+            next.last_work.dendritic.allocated_branches = allocation.allocated;
+            next.last_work.dendritic.replaced_branches = allocation.replaced;
+            next.last_work.dendritic.allocation_work_units = allocation.work_units;
+            next.last_work.dendritic.work_units = next
+                .last_work
+                .dendritic
+                .work_units
+                .saturating_add(allocation.work_units);
+        }
         next.last_work.cognitive = next.make_cognitive_receipt()?;
         *self = next;
         Ok(self.last_work)
@@ -508,6 +526,17 @@ impl GpuV11CausalState {
             0,
         )
         .and_then(|counters| counters.into_receipt())
+    }
+}
+
+fn legacy_evidence_from_event(event: StructuralEvidenceEvent) -> CoactivationEvidence {
+    CoactivationEvidence {
+        region: event.region,
+        source: event.source,
+        target: event.target,
+        coactivation: event.neural_coactivity,
+        eligibility: event.eligibility,
+        concept_gap_support: event.concept_gap_support,
     }
 }
 

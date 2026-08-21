@@ -221,8 +221,9 @@ pub use motor::{
 };
 pub use dendritic::{
     apply_dendritic_conjunctions, DendriticBranch, DendriticBranchSet, DendriticInputRef,
-    DendriticWorkReceipt, MAX_DENDRITIC_BRANCHES, MAX_DENDRITIC_BRANCHES_PER_NEURON,
-    MAX_DENDRITIC_INPUTS,
+    DendriticAllocationEvidence, DendriticAllocationReceipt, DendriticWorkReceipt,
+    MAX_DENDRITIC_ALLOCATION_EVIDENCE, MAX_DENDRITIC_BRANCHES,
+    MAX_DENDRITIC_BRANCHES_PER_NEURON, MAX_DENDRITIC_INPUTS,
 };
 pub use neural::{
     cpu_spmv_projection, finalize_cpu_activations, update_oja_shadow_traces, ActivationFunction,
@@ -234,8 +235,9 @@ pub use neural::{
     SUPERTILE_EDGE, SUPERTILE_MICROTILES,
 };
 pub use structural_plasticity::{
-    CoactivationEvidence, StructuralDiscoveryReceipt, StructuralPlasticityConfig,
-    StructuralPlasticityError, StructuralPlasticityState, StructuralWorkReceipt,
+    CoactivationEvidence, StructuralDiscoveryReceipt, StructuralEvidenceEvent,
+    StructuralPlasticityConfig, StructuralPlasticityError, StructuralPlasticityState,
+    StructuralSource, StructuralWorkReceipt,
     MAX_ACCEPTED_PER_PHASE, MAX_CANDIDATES_PER_REGION, MAX_EVIDENCE_PER_PHASE,
     MAX_REGIONS_PER_STATE, MAX_STRUCTURAL_EDGES,
 };
