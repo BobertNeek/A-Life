@@ -581,6 +581,90 @@ impl std::fmt::Display for GpuRuntimeSelectorDiagnosticFailureReceipt {
 
 impl std::error::Error for GpuRuntimeSelectorDiagnosticFailureReceipt {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass {
+    StaleOrForeignHandle,
+    SubmissionFailed,
+    MalformedUpload,
+    ArithmeticOverflow,
+    CapacityExceeded,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {
+    pub class: GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass,
+    pub class_id: u16,
+    pub chunk_index: usize,
+}
+
+impl GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {
+    const fn from_gpu_error(
+        error: GpuClosedLoopError,
+        class_id: u16,
+        chunk_index: usize,
+    ) -> Option<Self> {
+        let class = match error {
+            GpuClosedLoopError::StaleOrForeignHandle => {
+                GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::StaleOrForeignHandle
+            }
+            GpuClosedLoopError::SubmissionFailed => {
+                GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::SubmissionFailed
+            }
+            GpuClosedLoopError::MalformedUpload => {
+                GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::MalformedUpload
+            }
+            GpuClosedLoopError::ArithmeticOverflow => {
+                GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::ArithmeticOverflow
+            }
+            GpuClosedLoopError::CapacityExceeded => {
+                GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::CapacityExceeded
+            }
+            _ => return None,
+        };
+        Some(Self {
+            class,
+            class_id,
+            chunk_index,
+        })
+    }
+
+    pub const fn gpu_error(self) -> GpuClosedLoopError {
+        match self.class {
+            GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::StaleOrForeignHandle => {
+                GpuClosedLoopError::StaleOrForeignHandle
+            }
+            GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::SubmissionFailed => {
+                GpuClosedLoopError::SubmissionFailed
+            }
+            GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::MalformedUpload => {
+                GpuClosedLoopError::MalformedUpload
+            }
+            GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::ArithmeticOverflow => {
+                GpuClosedLoopError::ArithmeticOverflow
+            }
+            GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::CapacityExceeded => {
+                GpuClosedLoopError::CapacityExceeded
+            }
+        }
+    }
+
+    pub fn mapped_contract_error(self) -> ScaffoldContractError {
+        map_gpu_contract_error(self.gpu_error())
+    }
+}
+
+impl std::fmt::Display for GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "DecodeMappedRecords GPU failure {:?} (class_id={}, chunk_index={})",
+            self.class, self.class_id, self.chunk_index
+        )
+    }
+}
+
+impl std::error::Error for GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {}
+
 /// Complete selector-diagnostic enable receipt translated out of the
 /// crate-private pipeline module without dropping any planning inputs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -736,6 +820,7 @@ pub enum GpuRuntimeSelectorDiagnosticError {
     Preflight(ScaffoldContractError),
     Enable(GpuRuntimeSelectorDiagnosticEnableFailure),
     LaterStage(GpuRuntimeSelectorDiagnosticFailureReceipt),
+    DecodeMappedRecords(GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt),
     LaterStageContract {
         stage: GpuRuntimeSelectorDiagnosticStage,
         error: ScaffoldContractError,
@@ -756,6 +841,10 @@ impl std::fmt::Display for GpuRuntimeSelectorDiagnosticError {
                 formatter,
                 "selector diagnostic later-stage GPU failure: {error}"
             ),
+            Self::DecodeMappedRecords(error) => write!(
+                formatter,
+                "selector diagnostic DecodeMappedRecords GPU failure: {error}"
+            ),
             Self::LaterStageContract { stage, error } => write!(
                 formatter,
                 "selector diagnostic later-stage GPU failure at {stage:?}: {error}"
@@ -770,6 +859,7 @@ impl std::error::Error for GpuRuntimeSelectorDiagnosticError {
             Self::Preflight(error) => Some(error),
             Self::LaterStageContract { error, .. } => Some(error),
             Self::LaterStage(error) => Some(error),
+            Self::DecodeMappedRecords(error) => Some(error),
             Self::Enable(error) => Some(error),
         }
     }
@@ -1628,6 +1718,8 @@ struct PreparedClassDispatch {
 struct SelectorDiagnosticErrorCapture {
     enable_error: Option<GpuRuntimeSelectorDiagnosticEnableFailure>,
     later_stage_receipt: Option<GpuRuntimeSelectorDiagnosticFailureReceipt>,
+    decode_mapped_records_receipt:
+        Option<GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt>,
     enable_completed: bool,
     later_stage: Option<GpuRuntimeSelectorDiagnosticStage>,
 }
@@ -3459,6 +3551,11 @@ impl GpuClosedLoopBackend {
                 None if let Some(receipt) = capture.later_stage_receipt.take() => {
                     Err(GpuRuntimeSelectorDiagnosticError::LaterStage(receipt))
                 }
+                None if let Some(receipt) = capture.decode_mapped_records_receipt.take() => {
+                    Err(GpuRuntimeSelectorDiagnosticError::DecodeMappedRecords(
+                        receipt,
+                    ))
+                }
                 None if capture.enable_completed => Err(
                     GpuRuntimeSelectorDiagnosticError::LaterStageContract {
                         stage: capture
@@ -4090,7 +4187,15 @@ impl GpuClosedLoopBackend {
                 dispatch.batch.as_ref().expect("mapped batch"),
             ) {
                 Ok(validated) => dispatches[index].validated = Some(validated),
-                Err(_) => {
+                Err(error) => {
+                    if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+                        capture.decode_mapped_records_receipt =
+                            GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt::from_gpu_error(
+                                error,
+                                dispatch.class_id,
+                                dispatch.chunk_index,
+                            );
+                    }
                     for still_mapped in &dispatches[index + 1..] {
                         self.class_buckets
                             .get(&still_mapped.class_id)

@@ -13,6 +13,7 @@ use alife_core::{
     FoundationGeneticIdentity, LanguageCodebookV1, OrganismId, ScaffoldContractError,
 };
 use alife_gpu_backend::{
+    GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
     GpuRuntimeSelectorDiagnosticEnableFailure, GpuRuntimeSelectorDiagnosticFailureReceipt,
 };
 use alife_training::{
@@ -48,6 +49,10 @@ pub enum Pass2Ei1BehavioralError {
     SelectorDiagnosticEnable(GpuRuntimeSelectorDiagnosticEnableFailure),
     #[error("Era 1 selector diagnostic later-stage GPU failure: {0}")]
     SelectorDiagnosticLaterStage(GpuRuntimeSelectorDiagnosticFailureReceipt),
+    #[error("Era 1 selector diagnostic DecodeMappedRecords GPU failure: {0}")]
+    SelectorDiagnosticDecodeMappedRecords(
+        GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
+    ),
     #[error("Era 1 selector diagnostic later-stage GPU failure at {stage:?}: {error}")]
     SelectorDiagnosticLaterStageContract {
         stage: alife_gpu_backend::GpuRuntimeSelectorDiagnosticStage,
@@ -244,6 +249,9 @@ fn runner_failure(error: Era1TrialRunError) -> Pass2Ei1BehavioralError {
         }
         Era1TrialRunError::SelectorDiagnosticLaterStage(error) => {
             Pass2Ei1BehavioralError::SelectorDiagnosticLaterStage(error)
+        }
+        Era1TrialRunError::SelectorDiagnosticDecodeMappedRecords(error) => {
+            Pass2Ei1BehavioralError::SelectorDiagnosticDecodeMappedRecords(error)
         }
         Era1TrialRunError::SelectorDiagnosticLaterStageContract { stage, error } => {
             Pass2Ei1BehavioralError::SelectorDiagnosticLaterStageContract { stage, error }
@@ -541,6 +549,8 @@ fn integer(object: &Map<String, Value>, key: &'static str) -> Result<u64, Pass2E
 mod selector_diagnostic_error_tests {
     use super::*;
     use alife_gpu_backend::{
+        GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass,
+        GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
         GpuRuntimeSelectorDiagnosticErrorReceipt, GpuRuntimeSelectorDiagnosticFailureClass,
         GpuRuntimeSelectorDiagnosticFailureStage, GpuRuntimeSelectorDiagnosticStage,
     };
@@ -610,6 +620,51 @@ mod selector_diagnostic_error_tests {
             }
             assert!(later_rendered.contains("later-stage GPU failure"));
             assert_ne!(rendered, later_rendered);
+        }
+
+        for (class, class_name) in [
+            (
+                GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::StaleOrForeignHandle,
+                "StaleOrForeignHandle",
+            ),
+            (
+                GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::SubmissionFailed,
+                "SubmissionFailed",
+            ),
+            (
+                GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::MalformedUpload,
+                "MalformedUpload",
+            ),
+            (
+                GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::ArithmeticOverflow,
+                "ArithmeticOverflow",
+            ),
+            (
+                GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass::CapacityExceeded,
+                "CapacityExceeded",
+            ),
+        ] {
+            let decoded = runner_failure(
+                Era1TrialRunError::SelectorDiagnosticDecodeMappedRecords(
+                    GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {
+                    class,
+                    class_id: 2048,
+                    chunk_index: 3,
+                },
+                ),
+            );
+            let decoded_rendered = decoded.to_string();
+            for field in [
+                class_name,
+                "DecodeMappedRecords",
+                "class_id=2048",
+                "chunk_index=3",
+            ] {
+                assert!(
+                    decoded_rendered.contains(field),
+                    "missing {field} in {decoded_rendered}"
+                );
+            }
         }
 
         let later_contract = runner_failure(

@@ -15,6 +15,7 @@ use alife_core::{
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
     GpuClosedLoopMemoryTickInput, GpuRuntimeProfile, GpuRuntimeSelectorDiagnosticEnableFailure,
+    GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
     GpuRuntimeSelectorDiagnosticError, GpuRuntimeSelectorDiagnosticFailureReceipt,
     GpuRuntimeSelectorDiagnosticStage, GpuSelectorDiagnosticReceipt,
 };
@@ -93,6 +94,10 @@ pub enum Era1TrialRunError {
     SelectorDiagnosticEnable(GpuRuntimeSelectorDiagnosticEnableFailure),
     #[error("Era 1 selector diagnostic later-stage GPU failure: {0}")]
     SelectorDiagnosticLaterStage(GpuRuntimeSelectorDiagnosticFailureReceipt),
+    #[error("Era 1 selector diagnostic DecodeMappedRecords GPU failure: {0}")]
+    SelectorDiagnosticDecodeMappedRecords(
+        GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt,
+    ),
     #[error("Era 1 selector diagnostic later-stage GPU failure at {stage:?}: {error}")]
     SelectorDiagnosticLaterStageContract {
         stage: GpuRuntimeSelectorDiagnosticStage,
@@ -110,6 +115,9 @@ impl Era1TrialRunError {
             Self::SelectorDiagnosticLaterStage(error) => {
                 TrainingError::Contract(error.mapped_contract_error())
             }
+            Self::SelectorDiagnosticDecodeMappedRecords(error) => {
+                TrainingError::Contract(error.mapped_contract_error())
+            }
             Self::SelectorDiagnosticEnable(error) => {
                 TrainingError::Contract(error.mapped_contract_error())
             }
@@ -125,6 +133,9 @@ fn map_selector_diagnostic_error(error: GpuRuntimeSelectorDiagnosticError) -> Er
         }
         GpuRuntimeSelectorDiagnosticError::LaterStage(error) => {
             Era1TrialRunError::SelectorDiagnosticLaterStage(error)
+        }
+        GpuRuntimeSelectorDiagnosticError::DecodeMappedRecords(error) => {
+            Era1TrialRunError::SelectorDiagnosticDecodeMappedRecords(error)
         }
         GpuRuntimeSelectorDiagnosticError::LaterStageContract { stage, error } => {
             Era1TrialRunError::SelectorDiagnosticLaterStageContract { stage, error }
