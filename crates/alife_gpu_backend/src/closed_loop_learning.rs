@@ -10,7 +10,7 @@ use bytemuck::{Pod, Zeroable};
 pub const GPU_LEARNING_HEADER_WORDS: usize = 20;
 pub const GPU_PENDING_ELIGIBILITY_WORDS: usize = 44;
 pub const GPU_PENDING_ELIGIBILITY_BYTES: usize = GPU_PENDING_ELIGIBILITY_WORDS * 4;
-pub const GPU_OUTCOME_CREDIT_WORDS: usize = 40;
+pub const GPU_OUTCOME_CREDIT_WORDS: usize = 48;
 pub const GPU_OUTCOME_CREDIT_BYTES: usize = GPU_OUTCOME_CREDIT_WORDS * 4;
 pub const GPU_FAST_PLASTICITY_COMMIT_WORDS: usize = 16;
 pub const GPU_FAST_PLASTICITY_COMMIT_BYTES: usize = GPU_FAST_PLASTICITY_COMMIT_WORDS * 4;
@@ -49,12 +49,18 @@ pub struct GpuOutcomeCreditRecord {
     pub candidate_feature_digest: [u32; 4],
     pub frame_digest: [u32; 8],
     pub dispatch_generation: [u32; 2],
+    pub raw_reward: f32,
+    pub expected_value: f32,
     pub reward_prediction_error: f32,
     pub pain: f32,
+    pub injury: f32,
     pub homeostatic_improvement: f32,
     pub frustration: f32,
     pub novelty: f32,
+    pub sensory_prediction_residual: f32,
+    pub social: f32,
     pub modulator_value: f32,
+    pub reserved: [u32; 3],
 }
 
 impl TryFrom<&OutcomeCreditPacket> for GpuOutcomeCreditRecord {
@@ -68,17 +74,33 @@ impl TryFrom<&OutcomeCreditPacket> for GpuOutcomeCreditRecord {
         let family = CandidateActionFamily::try_from_raw(packet.selected_family().raw())?;
         let modulator = packet.modulator();
         let components = [
+            modulator.raw_reward(),
+            modulator.expected_value(),
             modulator.reward_prediction_error(),
             modulator.pain(),
+            modulator.injury(),
             modulator.homeostatic_improvement(),
             modulator.frustration(),
             modulator.novelty(),
+            modulator.sensory_prediction_residual(),
+            modulator.social(),
             modulator.value(),
         ];
         if components.iter().any(|value| !value.is_finite()) {
             return Err(ScaffoldContractError::NonFiniteFloat);
         }
-        if components.iter().any(|value| !(-1.0..=1.0).contains(value))
+        if !(-1.0..=1.0).contains(&components[0])
+            || !(-1.0..=1.0).contains(&components[1])
+            || !(-2.0..=2.0).contains(&components[2])
+            || !(0.0..=1.0).contains(&components[3])
+            || !(0.0..=1.0).contains(&components[4])
+            || !(-1.0..=1.0).contains(&components[5])
+            || !(0.0..=1.0).contains(&components[6])
+            || !(0.0..=1.0).contains(&components[7])
+            || !(0.0..=1.0).contains(&components[8])
+            || !(-1.0..=1.0).contains(&components[9])
+            || !(-1.0..=1.0).contains(&components[10])
+            || (components[2] - (components[0] - components[1])).abs() > 1.0e-6
             || packet.active_activation_side() > 1
             || packet.dispatch_generation() == 0
             || packet.outcome_tick().raw() <= packet.originating_tick().raw()
@@ -104,12 +126,18 @@ impl TryFrom<&OutcomeCreditPacket> for GpuOutcomeCreditRecord {
             candidate_feature_digest: split_u64x2(packet.candidate_feature_digest().0),
             frame_digest: split_u64x4(packet.frame_digest().0),
             dispatch_generation: split_u64(packet.dispatch_generation()),
-            reward_prediction_error: components[0],
-            pain: components[1],
-            homeostatic_improvement: components[2],
-            frustration: components[3],
-            novelty: components[4],
-            modulator_value: components[5],
+            raw_reward: components[0],
+            expected_value: components[1],
+            reward_prediction_error: components[2],
+            pain: components[3],
+            injury: components[4],
+            homeostatic_improvement: components[5],
+            frustration: components[6],
+            novelty: components[7],
+            sensory_prediction_residual: components[8],
+            social: components[9],
+            modulator_value: components[10],
+            reserved: [0; 3],
         })
     }
 }

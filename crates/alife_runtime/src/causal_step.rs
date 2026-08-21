@@ -12,12 +12,12 @@ use alife_core::{
     CognitiveCandidatePrediction, CognitiveContextFrame, CognitiveInteroceptiveView,
     CognitiveWorkReceipt, DevelopmentState, DurationTicks, ExperiencePatch, ExperienceSequenceId,
     GroundedFocalDetail, GroundedOutcomeFeatures, GroundedSuccessorPredictor, HomeostaticSnapshot,
-    Intensity, JointMotorCondition, LanguageGroundingLedger, MemoryRecallReceipt, MotorChannel,
-    MotorCommandBundle, MotorFamily, NeuralActionSelection, NormalizedScalar, PerceptionFrame,
-    PerceptionFrameDigest, PostActionOutcome, PreActionSnapshot, PredictionTargetReceipt,
-    ScaffoldContractError, SemanticStateVector, SignedValence, SpeechMotorPayload,
-    StableFocusIdentity, Validate, Vec3f, WorldEntityId, MAX_FOCAL_FEATURE_WIDTH,
-    MAX_FOCAL_TARGETS,
+    Intensity, JointMotorCondition, LanguageGroundingLedger, MeasuredBiologyOutcome,
+    MemoryRecallReceipt, MotorChannel, MotorCommandBundle, MotorFamily, NeuralActionSelection,
+    NormalizedScalar, PerceptionFrame, PerceptionFrameDigest, PostActionOutcome, PreActionSnapshot,
+    PredictionTargetReceipt, ScaffoldContractError, SemanticStateVector, SignedValence,
+    SpeechMotorPayload, StableFocusIdentity, Validate, Vec3f, WorldEntityId,
+    MAX_FOCAL_FEATURE_WIDTH, MAX_FOCAL_TARGETS,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopTick, GpuSelectorDiagnosticReceipt, GpuV11WorkReceipt,
@@ -546,19 +546,34 @@ pub fn run_production_causal_step(
     *last_cognitive_context = Some(cognitive_context.clone());
     *last_selected_motor_bundle = Some(motor_bundle.clone());
     *last_cognitive_work = cognitive_work;
+    let expected_value = bounded_expected_value(&cognitive_context)?;
+    let measured_biology =
+        MeasuredBiologyOutcome::new(motor_receipt.biology_before, motor_receipt.biology_after)?;
+    let measured_body_delta = measured_biology.body_delta()?;
+    let measured_homeostatic_delta = measured_biology.homeostatic_delta()?;
+    let measured_frustration = NormalizedScalar::new(
+        (measured_homeostatic_delta.hormones.cortisol.max(0.0)
+            + measured_homeostatic_delta.drives.fear.max(0.0)
+            + measured_body_delta.injury.raw().max(0.0))
+            / 3.0,
+    )?;
+    let novelty = frame.sensory().channels.novelty_signal;
+    let social_outcome = SignedValence::new(motor_receipt.body_event.social_contact)?;
     let mut outcome = PostActionOutcome::new(
         organism_id,
         sequence_id,
         motor_receipt.outcome_tick,
         succeeded,
         physical,
-        alife_core::HomeostaticDelta::zero(),
+        measured_homeostatic_delta,
         SignedValence::new(motor_receipt.body_event.reward_outcome)?,
-        NormalizedScalar::new(if succeeded { 0.0 } else { 1.0 })?,
-        NormalizedScalar::new(motor_receipt.body_event.damage)?,
-        SignedValence::new(motor_receipt.body_event.energy)?,
+        measured_frustration,
+        NormalizedScalar::new(measured_homeostatic_delta.drives.pain.max(0.0))?,
+        measured_body_delta.energy,
         NormalizedScalar::new(grounded_prediction_error)?,
     )?;
+    outcome =
+        outcome.with_measured_biology(measured_biology, expected_value, novelty, social_outcome)?;
     outcome.contradiction_observed = !succeeded;
     outcome = outcome.with_v11_joint(motor_receipt.joint, cognitive_work)?;
     let patch = ExperiencePatch::new_v11_with_decision(
@@ -604,6 +619,23 @@ pub fn run_production_causal_step(
             ordered: Vec::new(),
         },
     })
+}
+
+/// Use only learned pre-action expectancy evidence for the bounded value head.
+/// This is not a task label or a host desirability score.
+fn bounded_expected_value(
+    context: &CognitiveContextFrame,
+) -> Result<SignedValence, ScaffoldContractError> {
+    let mut weighted_sum = 0.0;
+    let mut confidence_sum = 0.0;
+    for expectancy in &context.memory.expectancies {
+        weighted_sum += expectancy.expected_valence.raw() * expectancy.confidence.raw();
+        confidence_sum += expectancy.confidence.raw();
+    }
+    if confidence_sum <= f32::EPSILON {
+        return SignedValence::new(0.0);
+    }
+    SignedValence::new((weighted_sum / confidence_sum).clamp(-1.0, 1.0))
 }
 
 fn reacquire_focal_context(

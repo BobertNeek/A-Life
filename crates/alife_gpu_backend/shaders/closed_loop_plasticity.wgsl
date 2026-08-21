@@ -1,6 +1,6 @@
 const PLASTICITY_DISPATCH_ROW_WORDS:u32 = 332u;
 const PLASTICITY_HEADER_WORD_OFFSET:u32 = 272u;
-const OUTCOME_CREDIT_WORDS:u32 = 40u;
+const OUTCOME_CREDIT_WORDS:u32 = 48u;
 const PENDING_ELIGIBILITY_WORDS_PLASTICITY:u32 = 36u;
 const FAST_PLASTICITY_RECEIPT_WORDS:u32 = 16u;
 const SYNAPSE_KIND_RECURRENT_PLASTICITY:u32 = 1u;
@@ -72,7 +72,11 @@ fn load_outcome_credit(base:u32) -> GpuOutcomeCreditRecord {
     vec2<u32>(frame_payload_words[base+32u],frame_payload_words[base+33u]),
     bitcast<f32>(frame_payload_words[base+34u]),bitcast<f32>(frame_payload_words[base+35u]),
     bitcast<f32>(frame_payload_words[base+36u]),bitcast<f32>(frame_payload_words[base+37u]),
-    bitcast<f32>(frame_payload_words[base+38u]),bitcast<f32>(frame_payload_words[base+39u])
+    bitcast<f32>(frame_payload_words[base+38u]),bitcast<f32>(frame_payload_words[base+39u]),
+    bitcast<f32>(frame_payload_words[base+40u]),bitcast<f32>(frame_payload_words[base+41u]),
+    bitcast<f32>(frame_payload_words[base+42u]),bitcast<f32>(frame_payload_words[base+43u]),
+    bitcast<f32>(frame_payload_words[base+44u]),
+    vec3<u32>(frame_payload_words[base+45u],frame_payload_words[base+46u],frame_payload_words[base+47u])
   );
 }
 
@@ -115,6 +119,7 @@ fn receptor_valid_for_plasticity(receptor:GpuPlasticityReceptorRecord) -> bool {
     && receptor.eligibility_decay >= 0.0 && receptor.eligibility_decay <= 1.0
     && receptor.learning_rate >= 0.0 && receptor.learning_rate <= 1.0
     && receptor.normalization_rate >= 0.0 && receptor.normalization_rate <= 1.0
+    && receptor.normalization_rate <= receptor.learning_rate
     && (receptor.modulator_sign == -1.0 || receptor.modulator_sign == 1.0)
     && receptor.fast_min >= -8.0 && receptor.fast_max <= 8.0
     && receptor.fast_min < receptor.fast_max
@@ -203,6 +208,16 @@ fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
   }
   let learning = load_slot_learning_state(extension);
   let outcome = load_outcome_credit(header.outcome_offset);
+  let measured_rpe = outcome.raw_reward - outcome.expected_value;
+  let measured_modulator = clamp(
+      measured_rpe - outcome.pain - outcome.injury
+      + 0.75 * outcome.homeostatic_improvement
+      - 0.5 * outcome.frustration
+      + 0.2 * outcome.novelty
+      + 0.2 * outcome.social,
+      -1.0,
+      1.0
+  );
   let pending = load_pending_eligibility(extension.pending_eligibility_offset);
   let family = (outcome.selected_candidate_and_family >> 16u) & 0xffu;
   let state_guard_lo =
@@ -230,12 +245,27 @@ fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
     | plasticity_guard_bit(21u, !pair_less(outcome.originating_tick,outcome.outcome_tick))
     | plasticity_guard_bit(22u, outcome.active_activation_side != header.active_activation_side)
     | plasticity_guard_bit(23u, !pair_equal(outcome.dispatch_generation,vec2<u32>(header.dispatch_generation_lo,header.dispatch_generation_hi)))
-    | plasticity_guard_bit(24u, !finite_plasticity(outcome.reward_prediction_error) || abs(outcome.reward_prediction_error) > 1.0)
-    | plasticity_guard_bit(25u, !finite_plasticity(outcome.pain) || abs(outcome.pain) > 1.0)
-    | plasticity_guard_bit(26u, !finite_plasticity(outcome.homeostatic_improvement) || abs(outcome.homeostatic_improvement) > 1.0)
-    | plasticity_guard_bit(27u, !finite_plasticity(outcome.frustration) || abs(outcome.frustration) > 1.0)
-    | plasticity_guard_bit(28u, !finite_plasticity(outcome.novelty) || abs(outcome.novelty) > 1.0)
-    | plasticity_guard_bit(29u, !finite_plasticity(outcome.modulator_value) || abs(outcome.modulator_value) > 1.0)
+    | plasticity_guard_bit(24u,
+        !finite_plasticity(outcome.raw_reward) || abs(outcome.raw_reward) > 1.0
+        || !finite_plasticity(outcome.expected_value) || abs(outcome.expected_value) > 1.0
+        || !finite_plasticity(outcome.reward_prediction_error) || abs(outcome.reward_prediction_error) > 2.0
+        || abs(outcome.reward_prediction_error - measured_rpe) > 0.0001)
+    | plasticity_guard_bit(25u,
+        !finite_plasticity(outcome.pain) || outcome.pain < 0.0 || outcome.pain > 1.0
+        || !finite_plasticity(outcome.injury) || outcome.injury < 0.0 || outcome.injury > 1.0)
+    | plasticity_guard_bit(26u,
+        !finite_plasticity(outcome.homeostatic_improvement) || abs(outcome.homeostatic_improvement) > 1.0
+        || !finite_plasticity(outcome.frustration) || outcome.frustration < 0.0 || outcome.frustration > 1.0)
+    | plasticity_guard_bit(27u,
+        !finite_plasticity(outcome.novelty) || outcome.novelty < 0.0 || outcome.novelty > 1.0
+        || !finite_plasticity(outcome.sensory_prediction_residual)
+        || outcome.sensory_prediction_residual < 0.0 || outcome.sensory_prediction_residual > 1.0)
+    | plasticity_guard_bit(28u,
+        !finite_plasticity(outcome.social) || abs(outcome.social) > 1.0
+        || !finite_plasticity(outcome.modulator_value) || abs(outcome.modulator_value) > 1.0)
+    | plasticity_guard_bit(29u,
+        abs(outcome.modulator_value - measured_modulator) > 0.0001
+        || any(outcome.reserved != vec3<u32>(0u,0u,0u)))
     | plasticity_guard_bit(30u, pending.schema_version != GPU_LEARNING_SCHEMA_VERSION)
     | plasticity_guard_bit(31u, pending.slot != brain.slot);
   let state_guard_hi =
@@ -305,10 +335,11 @@ fn apply_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
   let alpha = bitcast<f32>(immutable_weight_words[brain.alpha_offset+local_synapse]);
   let lifetime = load_state_f32(active_lifetime_index);
   let fast = load_state_f32(active_fast_index);
-  let modulator_value = bitcast<f32>(frame_payload_words[header.outcome_offset+39u]);
+  let joint_modulator = bitcast<f32>(frame_payload_words[header.outcome_offset+44u]);
   let effective = genetic + lifetime + alpha*fast;
-  let delta = learning_rate*alpha*(modulator_value*modulator_sign)*staging_eligibility
-    - normalization_rate*post*post*effective;
+  let outcome_gated_update = learning_rate*alpha*(joint_modulator*modulator_sign)*staging_eligibility;
+  let slow_normalization = normalization_rate*post*post*effective;
+  let delta = outcome_gated_update - slow_normalization;
   let next_fast = clamp(fast+delta,fast_min,fast_max);
   let synapse_guard =
       plasticity_guard_bit(0u, !finite_plasticity(staging_eligibility))

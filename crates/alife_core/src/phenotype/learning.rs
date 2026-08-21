@@ -110,6 +110,7 @@ impl PlasticityReceptorPlan {
             || !(0.0..=1.0).contains(&self.learning_rate)
             || !(0.0..=1.0).contains(&self.sleep_replay_rate)
             || !(0.0..=1.0).contains(&self.normalization_rate)
+            || self.normalization_rate > self.learning_rate
             || !matches!(self.modulator_sign, -1.0 | 1.0)
             || !(-8.0..=8.0).contains(&self.fast_weight_min)
             || !(-8.0..=8.0).contains(&self.fast_weight_max)

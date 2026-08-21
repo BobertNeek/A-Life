@@ -160,8 +160,10 @@ struct GpuOutcomeCreditRecord {
   phenotype_hash:array<u32,8>, sequence_id:vec2<u32>, originating_tick:vec2<u32>, outcome_tick:vec2<u32>,
   selected_action:u32, active_activation_side:u32, candidate_feature_digest:vec4<u32>,
   frame_digest:array<u32,8>, dispatch_generation:vec2<u32>,
-  reward_prediction_error:f32, pain:f32, homeostatic_improvement:f32, frustration:f32,
-  novelty:f32, modulator_value:f32,
+  raw_reward:f32, expected_value:f32, reward_prediction_error:f32, pain:f32,
+  injury:f32, homeostatic_improvement:f32, frustration:f32, novelty:f32,
+  sensory_prediction_residual:f32, social:f32, modulator_value:f32,
+  reserved:vec3<u32>,
 }
 struct GpuFastPlasticityCommitRecord {
   schema_version:u32, slot:u32, slot_generation:u32, status:u32,

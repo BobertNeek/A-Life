@@ -144,12 +144,12 @@ pub use evolutionary_genetics::{
     MAX_CROSSOVER_SEGMENTS, MAX_MUTATION_DELTA, MAX_MUTATION_RECORDS,
 };
 pub use experience::{
-    ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,
+    BodyDelta, ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,
     ExperiencePatchBuilder, ExperiencePatchHeader, ExperiencePatchPhase, ExperiencePatchView,
     HeuristicDecisionEvidence, HeuristicPreActionEvidence, JointPhysicalOutcome,
-    MemoryExpectancySnapshot, MemoryHint, NeuralDecisionEvidence, PhysicalActionOutcome,
-    PhysicalContactKind, PostActionOutcome, PreActionBrainEvidence, PreActionSnapshot,
-    TeacherFeedbackObservation, V11_EXPERIENCE_ABI_VERSION,
+    MeasuredBiologyOutcome, MemoryExpectancySnapshot, MemoryHint, NeuralDecisionEvidence,
+    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, PreActionBrainEvidence,
+    PreActionSnapshot, TeacherFeedbackObservation, V11_EXPERIENCE_ABI_VERSION,
 };
 pub use foundation::{
     FoundationAbiBinding, FoundationCompatibilityFamilyId, FoundationId, FoundationLayoutId,

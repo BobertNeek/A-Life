@@ -6,18 +6,19 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::{
     ensure_current_version, validate_finite, validate_optional_target, ActionArbitrationTrace,
     ActionArbitrationTraceRef, ActionCandidate, ActionCommand, ActionDecision,
-    ActionDecisionStatus, ActionProposal, ActionWtaResult, BodySnapshot, BrainClassId,
-    BrainClassSpec, BrainGenome, BrainScaleTier, CandidateActionFamily, CandidateFeatureDigest,
-    CandidateFeatureVector, CandidateObservationRef, CanonicalDigestBuilder, CognitiveContextFrame,
-    CognitiveWorkReceipt, ConceptCellId, Confidence, DevelopmentState, DriveDelta,
-    EpisodicDecisionKeyV2, ExperienceSequenceId, FinalizedMemoryRecall, GenomeId, HomeostaticDelta,
-    HomeostaticSnapshot, JointMotorCondition, LobeLayout, MeasuredChannelObservation, MemoryId,
-    MotorChannel, MotorCommandBundle, NeuralActionSelection, NormalizedScalar, OrganismId,
-    PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest, PhenotypeHash, PolicyBackend,
-    Pose, PredictionTargetReceipt, RankedActionProposal, RoutingMatrix, ScaffoldContractError,
-    SchemaKind, SchemaVersions, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
-    SensorySnapshot, SignedValence, TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity,
-    WeightSplitContract, WorldEntityId, MAX_ACTION_CANDIDATES,
+    ActionDecisionStatus, ActionProposal, ActionWtaResult, BiochemistryState, BodySnapshot,
+    BrainClassId, BrainClassSpec, BrainGenome, BrainScaleTier, CandidateActionFamily,
+    CandidateFeatureDigest, CandidateFeatureVector, CandidateObservationRef,
+    CanonicalDigestBuilder, CognitiveContextFrame, CognitiveWorkReceipt, ConceptCellId, Confidence,
+    DevelopmentState, DriveDelta, EndocrineDelta, EpisodicDecisionKeyV2, ExperienceSequenceId,
+    FinalizedMemoryRecall, GenomeId, HomeostaticDelta, HomeostaticSnapshot, JointMotorCondition,
+    LobeLayout, MeasuredChannelObservation, MemoryId, MotorChannel, MotorCommandBundle,
+    NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionBaseDigest, PerceptionFrame,
+    PerceptionFrameDigest, PhenotypeHash, PolicyBackend, Pose, PredictionTargetReceipt,
+    RankedActionProposal, RoutingMatrix, ScaffoldContractError, SchemaKind, SchemaVersions,
+    SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensorySnapshot, SignedValence,
+    TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity, WeightSplitContract, WorldEntityId,
+    MAX_ACTION_CANDIDATES,
 };
 
 /// The v1.1 semantic spine is a deliberate ABI after the legacy/current
@@ -1123,6 +1124,171 @@ impl Validate for TeacherFeedbackObservation {
     }
 }
 
+/// Exact measured body changes sealed by one world/body transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct BodyDelta {
+    pub energy: SignedValence,
+    pub health: SignedValence,
+    pub injury: SignedValence,
+    pub temperature_stress: SignedValence,
+}
+
+impl BodyDelta {
+    pub const fn zero() -> Self {
+        Self {
+            energy: SignedValence(0.0),
+            health: SignedValence(0.0),
+            injury: SignedValence(0.0),
+            temperature_stress: SignedValence(0.0),
+        }
+    }
+}
+
+impl Default for BodyDelta {
+    fn default() -> Self {
+        Self::zero()
+    }
+}
+
+impl Validate for BodyDelta {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        SignedValence::new(self.energy.raw())?;
+        SignedValence::new(self.health.raw())?;
+        SignedValence::new(self.injury.raw())?;
+        SignedValence::new(self.temperature_stress.raw())?;
+        Ok(())
+    }
+}
+
+/// Before/after canonical biochemistry for the one joint motor transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct MeasuredBiologyOutcome {
+    pub before: BiochemistryState,
+    pub after: BiochemistryState,
+}
+
+impl MeasuredBiologyOutcome {
+    pub fn new(
+        before: BiochemistryState,
+        after: BiochemistryState,
+    ) -> Result<Self, ScaffoldContractError> {
+        let value = Self { before, after };
+        value.validate_contract()?;
+        Ok(value)
+    }
+
+    pub fn body_delta(&self) -> Result<BodyDelta, ScaffoldContractError> {
+        Ok(BodyDelta {
+            energy: SignedValence::new(signed_difference(
+                self.after.body.energy,
+                self.before.body.energy,
+            )?)?,
+            health: SignedValence::new(signed_difference(
+                self.after.body.health,
+                self.before.body.health,
+            )?)?,
+            injury: SignedValence::new(signed_difference(
+                self.after.body.injury,
+                self.before.body.injury,
+            )?)?,
+            temperature_stress: SignedValence::new(signed_difference(
+                self.after.body.temperature_stress,
+                self.before.body.temperature_stress,
+            )?)?,
+        })
+    }
+
+    pub fn homeostatic_delta(&self) -> Result<HomeostaticDelta, ScaffoldContractError> {
+        let before = self.before.homeostasis;
+        let after = self.after.homeostasis;
+        Ok(HomeostaticDelta {
+            drives: DriveDelta {
+                hunger: signed_difference(after.drives.hunger, before.drives.hunger)?,
+                fatigue: signed_difference(after.drives.fatigue, before.drives.fatigue)?,
+                fear: signed_difference(after.drives.fear, before.drives.fear)?,
+                pain: signed_difference(after.drives.pain, before.drives.pain)?,
+                loneliness: signed_difference(after.drives.loneliness, before.drives.loneliness)?,
+                curiosity: signed_difference(after.drives.curiosity, before.drives.curiosity)?,
+                brain_atp: signed_difference(after.drives.brain_atp, before.drives.brain_atp)?,
+                temperature_stress: signed_difference(
+                    after.drives.temperature_stress,
+                    before.drives.temperature_stress,
+                )?,
+                reproductive_drive: signed_difference(
+                    after.drives.reproductive_drive,
+                    before.drives.reproductive_drive,
+                )?,
+                extension: [
+                    signed_difference(after.drives.extension[0], before.drives.extension[0])?,
+                    signed_difference(after.drives.extension[1], before.drives.extension[1])?,
+                ],
+            },
+            hormones: EndocrineDelta {
+                adrenaline: signed_difference(
+                    after.hormones.adrenaline,
+                    before.hormones.adrenaline,
+                )?,
+                cortisol: signed_difference(after.hormones.cortisol, before.hormones.cortisol)?,
+                dopamine: signed_difference(after.hormones.dopamine, before.hormones.dopamine)?,
+                oxytocin: signed_difference(after.hormones.oxytocin, before.hormones.oxytocin)?,
+                serotonin: signed_difference(after.hormones.serotonin, before.hormones.serotonin)?,
+                acetylcholine: signed_difference(
+                    after.hormones.acetylcholine,
+                    before.hormones.acetylcholine,
+                )?,
+                learning_modulator: signed_difference(
+                    after.hormones.learning_modulator,
+                    before.hormones.learning_modulator,
+                )?,
+                developmental_hormone: signed_difference(
+                    after.hormones.developmental_hormone,
+                    before.hormones.developmental_hormone,
+                )?,
+                sleep_pressure: signed_difference(
+                    after.hormones.sleep_pressure,
+                    before.hormones.sleep_pressure,
+                )?,
+                extension: [
+                    signed_difference(after.hormones.extension[0], before.hormones.extension[0])?,
+                    signed_difference(after.hormones.extension[1], before.hormones.extension[1])?,
+                ],
+            },
+        })
+    }
+}
+
+impl Validate for MeasuredBiologyOutcome {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.before.validate_contract()?;
+        self.after.validate_contract()?;
+        if self.before.source_genome_id != self.after.source_genome_id
+            || self.after.tick.raw() <= self.before.tick.raw()
+        {
+            return Err(ScaffoldContractError::NonMonotonicTick);
+        }
+        self.body_delta()?.validate_contract()?;
+        self.homeostatic_delta()?.validate_contract()?;
+        Ok(())
+    }
+}
+
+fn signed_difference(after: f32, before: f32) -> Result<f32, ScaffoldContractError> {
+    let difference = after - before;
+    validate_finite(difference)?;
+    if !(-1.0..=1.0).contains(&difference) {
+        return Err(ScaffoldContractError::ScalarOutOfRange);
+    }
+    Ok(difference)
+}
+
+fn default_signed_valence() -> SignedValence {
+    SignedValence(0.0)
+}
+
+fn default_normalized_scalar() -> NormalizedScalar {
+    NormalizedScalar(0.0)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PostActionOutcome {
     pub abi_version: u16,
@@ -1141,6 +1307,23 @@ pub struct PostActionOutcome {
     pub concept_hints: Vec<ConceptHint>,
     pub memory_hints: Vec<MemoryHint>,
     pub teacher_feedback: Option<TeacherFeedbackObservation>,
+    /// Exact body deltas from the sealed canonical before/after biology.
+    #[serde(default)]
+    pub body_delta: BodyDelta,
+    #[serde(default = "default_normalized_scalar")]
+    pub injury_delta: NormalizedScalar,
+    #[serde(default = "default_signed_valence")]
+    pub temperature_delta: SignedValence,
+    #[serde(default = "default_signed_valence")]
+    pub expected_value: SignedValence,
+    #[serde(default)]
+    pub reward_prediction_error: f32,
+    #[serde(default = "default_normalized_scalar")]
+    pub novelty: NormalizedScalar,
+    #[serde(default = "default_signed_valence")]
+    pub social_outcome: SignedValence,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub measured_biology: Option<MeasuredBiologyOutcome>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub joint: Option<JointPhysicalOutcome>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1182,6 +1365,14 @@ impl PostActionOutcome {
             concept_hints: Vec::new(),
             memory_hints: Vec::new(),
             teacher_feedback: None,
+            body_delta: BodyDelta::zero(),
+            injury_delta: NormalizedScalar(0.0),
+            temperature_delta: SignedValence(0.0),
+            expected_value: SignedValence(0.0),
+            reward_prediction_error: reward_valence.raw(),
+            novelty: NormalizedScalar(0.0),
+            social_outcome: SignedValence(0.0),
+            measured_biology: None,
             joint: None,
             cognitive_work: None,
         };
@@ -1203,6 +1394,45 @@ impl PostActionOutcome {
         self.validate_contract()?;
         Ok(self)
     }
+
+    /// Seal measured biology and derive all body/homeostatic factors from it.
+    pub fn with_measured_biology(
+        mut self,
+        measured_biology: MeasuredBiologyOutcome,
+        expected_value: SignedValence,
+        novelty: NormalizedScalar,
+        social_outcome: SignedValence,
+    ) -> Result<Self, ScaffoldContractError> {
+        measured_biology.validate_contract()?;
+        let body_delta = measured_biology.body_delta()?;
+        let homeostatic_delta = measured_biology.homeostatic_delta()?;
+        let reward_prediction_error = self.reward_valence.raw() - expected_value.raw();
+        if !reward_prediction_error.is_finite() || !(-2.0..=2.0).contains(&reward_prediction_error)
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        self.homeostatic_delta = homeostatic_delta;
+        self.energy_delta = body_delta.energy;
+        self.pain_delta = NormalizedScalar::new(homeostatic_delta.drives.pain.max(0.0))?;
+        self.body_delta = body_delta;
+        self.injury_delta = NormalizedScalar::new(body_delta.injury.raw().max(0.0))?;
+        self.temperature_delta = body_delta.temperature_stress;
+        self.expected_value = expected_value;
+        self.reward_prediction_error = reward_prediction_error;
+        self.novelty = novelty;
+        self.social_outcome = social_outcome;
+        self.measured_biology = Some(measured_biology);
+        self.validate_contract()?;
+        Ok(self)
+    }
+
+    pub const fn raw_reward(&self) -> SignedValence {
+        self.reward_valence
+    }
+
+    pub const fn sensory_prediction_residual(&self) -> NormalizedScalar {
+        self.prediction_error
+    }
 }
 
 impl Validate for PostActionOutcome {
@@ -1217,6 +1447,36 @@ impl Validate for PostActionOutcome {
         NormalizedScalar::new(self.pain_delta.raw())?;
         SignedValence::new(self.energy_delta.raw())?;
         NormalizedScalar::new(self.prediction_error.raw())?;
+        self.body_delta.validate_contract()?;
+        NormalizedScalar::new(self.injury_delta.raw())?;
+        SignedValence::new(self.temperature_delta.raw())?;
+        SignedValence::new(self.expected_value.raw())?;
+        if !self.reward_prediction_error.is_finite()
+            || !(-2.0..=2.0).contains(&self.reward_prediction_error)
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        NormalizedScalar::new(self.novelty.raw())?;
+        SignedValence::new(self.social_outcome.raw())?;
+        if let Some(measured_biology) = self.measured_biology {
+            measured_biology.validate_contract()?;
+            if measured_biology.after.tick != self.outcome_tick
+                || self.body_delta != measured_biology.body_delta()?
+                || self.homeostatic_delta != measured_biology.homeostatic_delta()?
+                || self.energy_delta != self.body_delta.energy
+                || self.temperature_delta != self.body_delta.temperature_stress
+                || self.injury_delta
+                    != NormalizedScalar::new(self.body_delta.injury.raw().max(0.0))?
+                || self.pain_delta
+                    != NormalizedScalar::new(self.homeostatic_delta.drives.pain.max(0.0))?
+                || self.reward_prediction_error.to_bits()
+                    != (self.raw_reward().raw() - self.expected_value.raw()).to_bits()
+            {
+                return Err(ScaffoldContractError::LearningEvidenceMismatch);
+            }
+        } else if self.abi_version == V11_EXPERIENCE_ABI_VERSION {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
         for hint in &self.concept_hints {
             hint.validate_contract()?;
         }

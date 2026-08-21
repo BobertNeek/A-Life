@@ -16,11 +16,16 @@ use crate::{
 /// Bounded, auditable components of the third factor applied after an outcome.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct NeuromodulatorSample {
+    raw_reward: f32,
+    expected_value: f32,
     reward_prediction_error: f32,
     pain: f32,
+    injury: f32,
     homeostatic_improvement: f32,
     frustration: f32,
     novelty: f32,
+    sensory_prediction_residual: f32,
+    social: f32,
     value: f32,
 }
 
@@ -33,17 +38,22 @@ impl NeuromodulatorSample {
         frustration: f32,
         novelty: f32,
     ) -> Result<Self, ScaffoldContractError> {
-        let components = [
+        let values = [
             reward_prediction_error,
             pain,
             homeostatic_improvement,
             frustration,
             novelty,
         ];
-        if components.iter().any(|value| !value.is_finite()) {
+        if values.iter().any(|value| !value.is_finite()) {
             return Err(ScaffoldContractError::NonFiniteFloat);
         }
-        if components.iter().any(|value| !(-1.0..=1.0).contains(value)) {
+        if !(-2.0..=2.0).contains(&reward_prediction_error)
+            || !(-1.0..=1.0).contains(&homeostatic_improvement)
+            || [pain, frustration, novelty]
+                .iter()
+                .any(|value| !(0.0..=1.0).contains(value))
+        {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
         let value = (reward_prediction_error - pain + 0.75 * homeostatic_improvement
@@ -51,13 +61,92 @@ impl NeuromodulatorSample {
             + 0.2 * novelty)
             .clamp(-1.0, 1.0);
         Ok(Self {
+            raw_reward: reward_prediction_error,
+            expected_value: 0.0,
             reward_prediction_error,
             pain,
+            injury: 0.0,
             homeostatic_improvement,
             frustration,
             novelty,
+            sensory_prediction_residual: 0.0,
+            social: 0.0,
             value,
         })
+    }
+
+    /// Construct credit from measured reward and a bounded learned expectation.
+    pub fn from_measured_components(
+        raw_reward: f32,
+        expected_value: f32,
+        pain: f32,
+        injury: f32,
+        homeostatic_improvement: f32,
+        frustration: f32,
+        novelty: f32,
+        sensory_prediction_residual: f32,
+        social: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let values = [
+            raw_reward,
+            expected_value,
+            pain,
+            injury,
+            homeostatic_improvement,
+            frustration,
+            novelty,
+            sensory_prediction_residual,
+            social,
+        ];
+        if values.iter().any(|value| !value.is_finite()) {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        if !(-1.0..=1.0).contains(&raw_reward)
+            || !(-1.0..=1.0).contains(&expected_value)
+            || !(-1.0..=1.0).contains(&homeostatic_improvement)
+            || !(-1.0..=1.0).contains(&social)
+            || [
+                pain,
+                injury,
+                frustration,
+                novelty,
+                sensory_prediction_residual,
+            ]
+            .iter()
+            .any(|value| !(0.0..=1.0).contains(value))
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        let reward_prediction_error = raw_reward - expected_value;
+        if !(-2.0..=2.0).contains(&reward_prediction_error) {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        let value = (reward_prediction_error - pain - injury + 0.75 * homeostatic_improvement
+            - 0.5 * frustration
+            + 0.2 * novelty
+            + 0.2 * social)
+            .clamp(-1.0, 1.0);
+        Ok(Self {
+            raw_reward,
+            expected_value,
+            reward_prediction_error,
+            pain,
+            injury,
+            homeostatic_improvement,
+            frustration,
+            novelty,
+            sensory_prediction_residual,
+            social,
+            value,
+        })
+    }
+
+    pub const fn raw_reward(self) -> f32 {
+        self.raw_reward
+    }
+
+    pub const fn expected_value(self) -> f32 {
+        self.expected_value
     }
 
     pub const fn reward_prediction_error(self) -> f32 {
@@ -66,6 +155,10 @@ impl NeuromodulatorSample {
 
     pub const fn pain(self) -> f32 {
         self.pain
+    }
+
+    pub const fn injury(self) -> f32 {
+        self.injury
     }
 
     pub const fn homeostatic_improvement(self) -> f32 {
@@ -80,6 +173,14 @@ impl NeuromodulatorSample {
         self.novelty
     }
 
+    pub const fn sensory_prediction_residual(self) -> f32 {
+        self.sensory_prediction_residual
+    }
+
+    pub const fn social(self) -> f32 {
+        self.social
+    }
+
     pub const fn value(self) -> f32 {
         self.value
     }
@@ -87,11 +188,21 @@ impl NeuromodulatorSample {
 
 #[derive(Deserialize)]
 struct NeuromodulatorSampleWire {
+    #[serde(default)]
+    raw_reward: f32,
+    #[serde(default)]
+    expected_value: f32,
     reward_prediction_error: f32,
     pain: f32,
+    #[serde(default)]
+    injury: f32,
     homeostatic_improvement: f32,
     frustration: f32,
     novelty: f32,
+    #[serde(default)]
+    sensory_prediction_residual: f32,
+    #[serde(default)]
+    social: f32,
     value: f32,
 }
 
@@ -104,13 +215,32 @@ impl<'de> Deserialize<'de> for NeuromodulatorSample {
         if !wire.value.is_finite() || !(-1.0..=1.0).contains(&wire.value) {
             return Err(D::Error::custom("invalid serialized neuromodulator value"));
         }
-        let recomputed = Self::from_components(
-            wire.reward_prediction_error,
-            wire.pain,
-            wire.homeostatic_improvement,
-            wire.frustration,
-            wire.novelty,
-        )
+        let legacy = wire.raw_reward == 0.0
+            && wire.expected_value == 0.0
+            && wire.injury == 0.0
+            && wire.sensory_prediction_residual == 0.0
+            && wire.social == 0.0;
+        let recomputed = if legacy {
+            Self::from_components(
+                wire.reward_prediction_error,
+                wire.pain,
+                wire.homeostatic_improvement,
+                wire.frustration,
+                wire.novelty,
+            )
+        } else {
+            Self::from_measured_components(
+                wire.raw_reward,
+                wire.expected_value,
+                wire.pain,
+                wire.injury,
+                wire.homeostatic_improvement,
+                wire.frustration,
+                wire.novelty,
+                wire.sensory_prediction_residual,
+                wire.social,
+            )
+        }
         .map_err(D::Error::custom)?;
         if recomputed.value.to_bits() != wire.value.to_bits() {
             return Err(D::Error::custom(
@@ -174,12 +304,19 @@ impl OutcomeCreditPacket {
         }
 
         let outcome = patch.outcome();
-        let modulator = NeuromodulatorSample::from_components(
-            outcome.reward_valence.raw(),
+        if outcome.measured_biology.is_none() {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
+        let modulator = NeuromodulatorSample::from_measured_components(
+            outcome.raw_reward().raw(),
+            outcome.expected_value.raw(),
             outcome.pain_delta.raw(),
+            outcome.injury_delta.raw(),
             homeostatic_improvement(outcome),
             outcome.frustration_delta.raw(),
-            outcome.prediction_error.raw(),
+            outcome.novelty.raw(),
+            outcome.sensory_prediction_residual().raw(),
+            outcome.social_outcome.raw(),
         )?;
         Ok(Self {
             schema_version: SchemaVersions::CURRENT.learning.raw(),
@@ -368,15 +505,16 @@ pub enum FastWeightSemantics {
 
 fn homeostatic_improvement(outcome: &crate::PostActionOutcome) -> f32 {
     let drives = outcome.homeostatic_delta.drives;
-    // Lower aversive drives and higher ATP/energy are improvements. Curiosity,
-    // reproductive drive, pain, and extension channels are excluded here:
-    // curiosity is represented by novelty, pain has its own negative factor,
-    // and the remaining channels have no universal good direction.
-    let oriented_sum = -drives.hunger - drives.fatigue - drives.fear - drives.loneliness
-        + drives.brain_atp
-        - drives.temperature_stress
-        + outcome.energy_delta.raw();
-    (oriented_sum / 7.0).clamp(-1.0, 1.0)
+    let body = outcome.body_delta;
+    // Lower aversive drives and improved canonical body state are improvements.
+    // Pain and injury remain separate negative factors in the joint modulator.
+    let drive_signal =
+        -drives.hunger - drives.fatigue - drives.fear - drives.pain - drives.loneliness
+            + drives.brain_atp
+            - drives.temperature_stress;
+    let body_signal =
+        body.energy.raw() + body.health.raw() - body.injury.raw() - body.temperature_stress.raw();
+    ((drive_signal + body_signal) / 11.0).clamp(-1.0, 1.0)
 }
 
 /// Validate a packet's learning ABI before backend upload.

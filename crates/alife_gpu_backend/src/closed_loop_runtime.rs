@@ -3807,15 +3807,26 @@ impl GpuClosedLoopBackend {
                 modulator.value(),
             ),
         ] {
-            if !(-1.0..=1.0).contains(&value) {
+            let valid_range = if matches!(
+                field,
+                GpuLearningEvidenceMismatchField::RewardPredictionErrorRange
+            ) {
+                (-2.0..=2.0).contains(&value)
+            } else {
+                (-1.0..=1.0).contains(&value)
+            };
+            if !valid_range {
+                let (lower, upper) = if matches!(
+                    field,
+                    GpuLearningEvidenceMismatchField::RewardPredictionErrorRange
+                ) {
+                    (-2.0_f32, 2.0_f32)
+                } else {
+                    (-1.0_f32, 1.0_f32)
+                };
                 return Ok(Some(words(
                     field,
-                    [
-                        u64::from((-1.0_f32).to_bits()),
-                        u64::from(1.0_f32.to_bits()),
-                        0,
-                        0,
-                    ],
+                    [u64::from(lower.to_bits()), u64::from(upper.to_bits()), 0, 0],
                     [u64::from(value.to_bits()), 0, 0, 0],
                 )));
             }
