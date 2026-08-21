@@ -11,7 +11,7 @@ use alife_core::predictive::GroundedSuccessorPredictor;
 use alife_core::sleep::{SleepReplayEvidence, SleepWorkReceipt};
 use alife_core::{
     ActionKind, ActionTarget, BiochemistryState, BoundedCoordinationSummary, BoundedMotorPayload,
-    ChannelCommand, CognitiveWorkReceipt, CoordinationGroup,
+    ChannelCommand, CognitiveWorkReceipt, CoordinationGroup, JointMotorCondition,
     HomeostaticDelta, MotorChannel, MotorCommandBundle,
     PhysicalContactKind, PredictionTargetReceipt,
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
@@ -31,7 +31,7 @@ use alife_core::{
     PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft, PhenotypeCompiler,
     PhenotypeCompilerInputs,
     PostActionOutcome, PreActionSnapshot, PreparedMemoryRecall, ScaffoldContractError,
-    CandidateObservationRef,
+    CandidateObservationRef, SemanticStateVector,
     SensorProfile, SignedValence, SleepConsolidator, SleepTransition,
     SensorProfileIdentity, SensoryAbiVersion, SleepConsolidationConfig, SleepPhase, SleepState,
     Tick, TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind,
@@ -1985,15 +1985,6 @@ fn cognitive_context_for_recall(
 ) -> Result<CognitiveContextFrame, ScaffoldContractError> {
     let mut context =
         CognitiveContextFrame::empty(organism_id, sequence_id, recall.context().tick)?;
-    context.prediction.successor_feature_abi = 1;
-    context.prediction.source_digest = recall.receipt().bank_digest;
-    if let Some(candidate) = recall.context().candidates.first() {
-        context.prediction.prediction_error.push(NormalizedScalar::new(
-            candidate.family_value.first().copied().unwrap_or(0.0).abs(),
-        )?);
-        context.prediction.action_sensitivity =
-            NormalizedScalar::new(candidate.family_confidence.raw())?;
-    }
     for candidate in recall
         .context()
         .candidates
@@ -2196,14 +2187,36 @@ fn unit_successor_scalar(value: f32) -> Result<f32, ScaffoldContractError> {
     Ok(value.clamp(0.0, 1.0))
 }
 
-fn grounded_successor_features(
+fn grounded_semantic_state_from_frame(
+    frame: &PerceptionFrame,
+) -> Result<SemanticStateVector, ScaffoldContractError> {
+    let body = frame.body();
+    let drives = frame.homeostasis().drives.to_array();
+    SemanticStateVector::new(vec![
+        bounded_successor_scalar(body.pose.translation.x)?,
+        bounded_successor_scalar(body.pose.translation.y)?,
+        bounded_successor_scalar(body.pose.translation.z)?,
+        bounded_successor_scalar(body.velocity.linear.x)?,
+        bounded_successor_scalar(body.velocity.linear.y)?,
+        bounded_successor_scalar(body.velocity.linear.z)?,
+        unit_successor_scalar(drives[0])?,
+        unit_successor_scalar(drives[1])?,
+        unit_successor_scalar(drives[2])?,
+        unit_successor_scalar(drives[3])?,
+        unit_successor_scalar(drives[4])?,
+        unit_successor_scalar(drives[5])?,
+        unit_successor_scalar(drives[6])?,
+    ])
+}
+
+fn grounded_successor_state(
     world: &HeadlessWorld,
     world_entity_id: WorldEntityId,
     biology_after: &BiochemistryState,
     physical: alife_core::PhysicalActionOutcome,
     succeeded: bool,
     pain_delta: f32,
-) -> Result<Vec<f32>, ScaffoldContractError> {
+) -> Result<SemanticStateVector, ScaffoldContractError> {
     let object = world
         .entity(world_entity_id)
         .ok_or(ScaffoldContractError::InvalidId)?;
@@ -2234,9 +2247,9 @@ fn grounded_successor_features(
         } else {
             0.0
         },
-        pain_delta,
+        unit_successor_scalar(pain_delta)?,
     ];
-    Ok(features.to_vec())
+    SemanticStateVector::new(features.to_vec())
 }
 
 const SINGLE_ACTION_COMPATIBILITY_ADAPTER_VERSION: u16 = 1;
@@ -2389,7 +2402,8 @@ fn apply_prediction_evidence(
         bounded_errors.iter().copied().sum::<f32>() / bounded_errors.len() as f32
     };
     context.prediction.source_digest = target.source_digest;
-    context.prediction.successor_feature_abi = target.successor_feature_abi;
+    context.prediction.semantic_state_abi = target.source_state.abi_version;
+    context.prediction.source_state = Some(target.source_state.clone());
     context.prediction.prediction_error = bounded_errors
         .iter()
         .copied()
@@ -2610,6 +2624,8 @@ fn seal_prepared_selection_core(
     if resident.next_sequence != sequence_id.raw() {
         return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
     }
+    let source_state = grounded_semantic_state_from_frame(frame)?;
+    let motor_condition = JointMotorCondition::from_bundle(&motor_bundle)?;
     let motor_receipt = world
         .apply_registered_motor_bundle(&motor_bundle, world_entity_id)
         .map_err(|error| match error {
@@ -2622,7 +2638,7 @@ fn seal_prepared_selection_core(
         })?;
     let physical = motor_receipt.joint.execution;
     let succeeded = motor_receipt.succeeded;
-    let successor_features = grounded_successor_features(
+    let target_state = grounded_successor_state(
         world,
         world_entity_id,
         &motor_receipt.biology_after,
@@ -2636,8 +2652,9 @@ fn seal_prepared_selection_core(
         decision.selected_action.action_id,
         frame.tick(),
         frame.frame_digest().0,
-        alife_core::SUCCESSOR_FEATURE_ABI_V1,
-        successor_features,
+        source_state,
+        motor_condition,
+        target_state,
     )?;
     let prediction_update = resident.predictor.observe(&prediction_target)?;
     let grounded_prediction_error =

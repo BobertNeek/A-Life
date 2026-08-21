@@ -5,10 +5,12 @@ use alife_core::{
     BrainScaleTier, CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef,
     ChannelCommand, CognitiveContextFrame, CognitiveWorkReceipt, Confidence, DecisionSnapshot,
     DevelopmentState, DurationTicks, ExperiencePatch, ExperienceSequenceId, HomeostaticDelta,
-    HomeostaticSnapshot, Intensity, JointPhysicalOutcome, MeasuredChannelObservation,
+    HomeostaticSnapshot, Intensity, JointMotorCondition, JointPhysicalOutcome,
+    MeasuredChannelObservation,
     MemoryExpectancySnapshot, MotorChannel, MotorCommandBundle, NormalizedScalar, OrganismId,
     PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome,
-    PredictionTargetReceipt, ScaffoldContractError, SensorProfile, SensorProfileProvenance,
+    PredictionTargetReceipt, ScaffoldContractError, SemanticStateVector, SensorProfile,
+    SensorProfileProvenance,
     SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence, Tick, Validate, Vec3f,
     Velocity, WeightSplitContract,
 };
@@ -106,8 +108,9 @@ fn prediction() -> PredictionTargetReceipt {
         ActionId(300),
         Tick::new(10),
         [1, 2, 3, 4],
-        1,
-        vec![0.2, 0.8],
+        SemanticStateVector::new(vec![0.5, 0.25]).unwrap(),
+        JointMotorCondition::from_bundle(&bundle()).unwrap(),
+        SemanticStateVector::new(vec![0.2, 0.8]).unwrap(),
     )
     .unwrap()
 }
@@ -416,8 +419,13 @@ fn bounded_contracts_reject_overflow_and_mismatched_identity() {
         ActionId(300),
         Tick::new(10),
         [1, 2, 3, 4],
-        2,
-        vec![0.2, 0.8],
+        SemanticStateVector {
+            schema_version: 1,
+            abi_version: 2,
+            values: vec![0.5, 0.25],
+        },
+        JointMotorCondition::from_bundle(&bundle()).unwrap(),
+        SemanticStateVector::new(vec![0.2, 0.8]).unwrap(),
     )
     .is_err());
     assert!(PredictionTargetReceipt::for_successor(
@@ -426,8 +434,13 @@ fn bounded_contracts_reject_overflow_and_mismatched_identity() {
         ActionId(300),
         Tick::new(10),
         [1, 2, 3, 4],
-        1,
-        vec![1.2, 0.8],
+        SemanticStateVector {
+            schema_version: 1,
+            abi_version: 1,
+            values: vec![1.2, 0.8],
+        },
+        JointMotorCondition::from_bundle(&bundle()).unwrap(),
+        SemanticStateVector::new(vec![0.2, 0.8]).unwrap(),
     )
     .is_err());
 }
@@ -474,8 +487,9 @@ fn v11_patch_binds_exact_prediction_and_work_receipts_and_reads_legacy_explicitl
             ActionId(300),
             Tick::new(10),
             [9, 2, 3, 4],
-            1,
-            vec![0.2, 0.8],
+            SemanticStateVector::new(vec![0.5, 0.25]).unwrap(),
+            JointMotorCondition::from_bundle(&bundle()).unwrap(),
+            SemanticStateVector::new(vec![0.2, 0.8]).unwrap(),
         )
         .unwrap(),
         work(),

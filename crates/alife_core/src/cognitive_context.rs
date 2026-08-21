@@ -5,15 +5,15 @@ use serde::{Deserialize, Serialize};
 use crate::{
     AttentionFrame, CanonicalDigestBuilder, ConceptCellId, ExperienceSequenceId, HysteresisState,
     MemoryId, NormalizedScalar, OrganismId, SalienceComponents, ScaffoldContractError,
-    SignedValence, StableFocusIdentity, Tick, UnresolvedGapId, Validate, MAX_FOCAL_TARGETS,
-    MAX_PERIPHERAL_SUMMARIES,
+    SemanticStateVector, SignedValence, StableFocusIdentity, Tick, UnresolvedGapId, Validate,
+    MAX_FOCAL_TARGETS, MAX_PERIPHERAL_SUMMARIES, MAX_SEMANTIC_STATE_VALUES,
 };
 
 pub const COGNITIVE_CONTEXT_SCHEMA_VERSION: u16 = 1;
 pub const MAX_CONTEXT_MEMORY_EXPECTANCIES: usize = 32;
 pub const MAX_ACTIVE_CONCEPTS: usize = 32;
 pub const MAX_ACTIVE_GAPS: usize = 32;
-pub const MAX_PREDICTION_ERROR_FEATURES: usize = 64;
+pub const MAX_PREDICTION_ERROR_FEATURES: usize = MAX_SEMANTIC_STATE_VALUES;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct CognitivePeripheralView {
@@ -211,7 +211,9 @@ impl Validate for CognitiveGapView {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CognitivePredictionView {
     pub source_digest: [u64; 4],
-    pub successor_feature_abi: u16,
+    pub semantic_state_abi: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_state: Option<SemanticStateVector>,
     pub prediction_error: Vec<NormalizedScalar>,
     pub action_sensitivity: NormalizedScalar,
 }
@@ -220,7 +222,8 @@ impl Default for CognitivePredictionView {
     fn default() -> Self {
         Self {
             source_digest: [0; 4],
-            successor_feature_abi: 0,
+            semantic_state_abi: 0,
+            source_state: None,
             prediction_error: Vec::new(),
             action_sensitivity: NormalizedScalar(0.0),
         }
@@ -232,10 +235,15 @@ impl Validate for CognitivePredictionView {
         if self.prediction_error.len() > MAX_PREDICTION_ERROR_FEATURES {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
-        if self.successor_feature_abi == 0
-            && (!self.prediction_error.is_empty() || self.source_digest != [0; 4])
-        {
-            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        match (&self.source_state, self.semantic_state_abi) {
+            (None, 0) if self.prediction_error.is_empty() && self.source_digest == [0; 4] => {}
+            (Some(state), abi) => {
+                state.validate_contract()?;
+                if abi != state.abi_version || self.source_digest == [0; 4] {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+            }
+            _ => return Err(ScaffoldContractError::InvalidDecisionEvidence),
         }
         NormalizedScalar::new(self.action_sensitivity.raw())?;
         for value in &self.prediction_error {
@@ -407,9 +415,18 @@ impl CognitiveContextFrame {
         for value in &self.prediction.prediction_error {
             builder.write_f32(value.raw())?;
         }
-        builder.write_u16(self.prediction.successor_feature_abi);
+        builder.write_u16(self.prediction.semantic_state_abi);
         for word in self.prediction.source_digest {
             builder.write_u64(word);
+        }
+        match &self.prediction.source_state {
+            Some(state) => {
+                builder.write_some();
+                for word in state.canonical_digest()? {
+                    builder.write_u64(word);
+                }
+            }
+            None => builder.write_none(),
         }
         builder.write_f32(self.prediction.action_sensitivity.raw())?;
         builder.write_u16(self.budget.peripheral_capacity);

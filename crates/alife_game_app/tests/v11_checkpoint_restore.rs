@@ -11,10 +11,10 @@ use alife_core::{
     select_focal_targets, ActionId, AttentionSelectionPolicy, ChannelCommand,
     CognitiveContextFrame, CognitiveWorkReceipt, DendriticBranch, DendriticBranchSet,
     DendriticInputRef, DurationTicks, ExperienceSequenceId, HysteresisState, Intensity,
-    MotorChannel, MotorCommandBundle, NormalizedScalar, OrganismId, PredictionTargetReceipt,
+    JointMotorCondition, MotorChannel, MotorChannelFactor, MotorCommandBundle, NormalizedScalar,
+    OrganismId, PredictionTargetReceipt, SemanticStateVector,
     SleepState, SleepTrigger, StructuralPlasticityConfig, StructuralPlasticityState,
     StableFocusIdentity, Validate, Vec3f, SLEEP_CONSOLIDATION_SCHEMA_VERSION,
-    SUCCESSOR_FEATURE_ABI_V1,
 };
 use alife_game_app::{
     merge_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite, GpuCheckpointAssetStore,
@@ -71,8 +71,20 @@ fn exact_checkpoint_manifest_restore_preserves_control_path() {
         action,
         checkpoint_tick,
         source_digest,
-        SUCCESSOR_FEATURE_ABI_V1,
-        vec![0.25, 0.75],
+        SemanticStateVector::new(vec![0.5, 0.25]).expect("source semantic state"),
+        JointMotorCondition::new(vec![MotorChannelFactor {
+            channel: MotorChannel::Locomotion,
+            primitive: action,
+            intensity: 0.8,
+            duration_ticks: 2,
+            direction: Vec3f::new(1.0, 0.0, 0.0),
+            stand_off_distance: 0.5,
+            confidence: 0.9,
+            payload_len: 0,
+            coordination_group: 0,
+        }])
+        .expect("joint motor condition"),
+        SemanticStateVector::new(vec![0.25, 0.75]).expect("target semantic state"),
     )
     .expect("grounded prediction target");
     predictor.observe(&target).expect("non-default predictor update");
@@ -220,11 +232,11 @@ fn exact_checkpoint_manifest_restore_preserves_control_path() {
 
     let control_prediction = checkpoint
         .predictor
-        .predict(source_digest, action, 2)
+        .predict(target.source_state(), target.motor_condition())
         .expect("unsaved control prediction");
     let restored_prediction = restored
         .predictor
-        .predict(source_digest, action, 2)
+        .predict(target.source_state(), target.motor_condition())
         .expect("restored prediction");
     assert_eq!(restored_prediction, control_prediction);
     assert_eq!(

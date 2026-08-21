@@ -11,8 +11,9 @@ use crate::{
     CandidateFeatureVector, CandidateObservationRef, CanonicalDigestBuilder, CognitiveContextFrame,
     CognitiveWorkReceipt, ConceptCellId, Confidence, DevelopmentState, DriveDelta,
     EpisodicDecisionKeyV2, ExperienceSequenceId, FinalizedMemoryRecall, GenomeId, HomeostaticDelta,
-    HomeostaticSnapshot, LobeLayout, MeasuredChannelObservation, MemoryId, MotorChannel,
-    MotorCommandBundle, NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionBaseDigest,
+    HomeostaticSnapshot, JointMotorCondition, LobeLayout, MeasuredChannelObservation, MemoryId,
+    MotorChannel, MotorCommandBundle, NeuralActionSelection, NormalizedScalar, OrganismId,
+    PerceptionBaseDigest,
     PerceptionFrame, PerceptionFrameDigest, PhenotypeHash, PolicyBackend, Pose,
     PredictionTargetReceipt, RankedActionProposal, RoutingMatrix, ScaffoldContractError,
     SchemaKind, SchemaVersions, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
@@ -929,6 +930,11 @@ impl Validate for DecisionSnapshot {
                     || prediction.experience_sequence != self.sequence_id
                     || prediction.world_tick != self.decision_tick
                     || prediction.decision != self.selected_action.action_id
+                    || !bundle
+                        .channels
+                        .iter()
+                        .any(|command| command.primitive == prediction.decision)
+                    || prediction.motor_condition != JointMotorCondition::from_bundle(bundle)?
                 {
                     return Err(ScaffoldContractError::InvalidDecisionEvidence);
                 }

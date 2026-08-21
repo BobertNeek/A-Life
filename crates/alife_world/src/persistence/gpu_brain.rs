@@ -191,8 +191,10 @@ impl DurableFounderCognitiveState {
 }
 
 fn validate_predictor(predictor: &GroundedSuccessorPredictor) -> Result<(), PersistenceError> {
+    predictor.validate_contract()?;
     let encoded = serde_json::to_vec(predictor)?;
     let decoded: GroundedSuccessorPredictor = serde_json::from_slice(&encoded)?;
+    decoded.validate_contract()?;
     if decoded != *predictor {
         return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
     }

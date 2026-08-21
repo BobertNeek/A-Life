@@ -274,8 +274,11 @@ pub use phenotype::{
     REQUIRED_GPU_FEATURE_MASK,
 };
 pub use predictive::{
-    PredictionTargetFamily, PredictionTargetReceipt, MAX_SUCCESSOR_FEATURES,
-    PREDICTION_TARGET_SCHEMA_VERSION, SUCCESSOR_FEATURE_ABI_V1,
+    GroundedSuccessorPredictor, JointMotorCondition, MotorChannelFactor, PredictionTargetFamily,
+    PredictionTargetReceipt, SemanticStateVector, MAX_SEMANTIC_STATE_VALUES,
+    MAX_SUCCESSOR_FEATURES, JOINT_MOTOR_CONDITION_ABI_V1, JOINT_MOTOR_CONDITION_SCHEMA_VERSION,
+    PREDICTION_TARGET_SCHEMA_VERSION, SEMANTIC_STATE_VECTOR_ABI_V1,
+    SEMANTIC_STATE_VECTOR_SCHEMA_VERSION, SUCCESSOR_FEATURE_ABI_V1,
 };
 pub use reference_brain::{
     BrainTickDiagnostics, BrainTickInput, BrainTickOutput, BrainTickStatus, CreatureActionState,
