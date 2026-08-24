@@ -51,7 +51,7 @@ pub enum VerifierCheck {
         token_id: u32,
         channel: TeacherPerceptionChannel,
     },
-    RewardAtLeast(f32),
+    BiologicalImprovementAtLeast(f32),
     NoHiddenSemanticContext,
     NoDirectTeacherActionSelection,
     SelectedByArbitration,
@@ -123,7 +123,7 @@ fn validate_check(check: VerifierCheck) -> Result<(), ScaffoldContractError> {
                 Ok(())
             }
         }
-        VerifierCheck::RewardAtLeast(threshold) => {
+        VerifierCheck::BiologicalImprovementAtLeast(threshold) => {
             validate_finite(threshold)?;
             if (-1.0..=1.0).contains(&threshold) {
                 Ok(())
@@ -145,10 +145,11 @@ fn check_passes(check: VerifierCheck, evidence: &SchoolEvidence<'_>) -> bool {
             .patches
             .iter()
             .any(|patch| heard_token_matches(patch, token_id, channel)),
-        VerifierCheck::RewardAtLeast(threshold) => evidence
+        VerifierCheck::BiologicalImprovementAtLeast(threshold) => evidence
             .patches
             .iter()
-            .any(|patch| patch.outcome().reward_valence.raw() >= threshold),
+            .filter_map(|patch| patch.outcome().measured_physiology.as_ref())
+            .any(|transition| biological_improvement(transition) >= threshold),
         VerifierCheck::NoHiddenSemanticContext => evidence.patches.iter().all(|patch| {
             patch.pre_action().sensory().semantic_context.is_none()
                 && patch.pre_action().sensory().gaussian_context.is_none()
@@ -166,6 +167,15 @@ fn check_passes(check: VerifierCheck, evidence: &SchoolEvidence<'_>) -> bool {
             evidence.topology_summary.concept_count >= min
         }
     }
+}
+
+fn biological_improvement(transition: &alife_core::MeasuredPhysiologyTransition) -> f32 {
+    let drives = transition.homeostatic_delta.drives;
+    (-drives.hunger - drives.fatigue - drives.fear - drives.pain - drives.loneliness
+        + drives.brain_atp
+        - drives.temperature_stress
+        + transition.energy_delta.raw())
+        / 8.0
 }
 
 fn heard_token_matches(

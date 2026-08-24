@@ -802,7 +802,7 @@ fn validate_physical_replay(
     }
     for event in &parts.replay_events {
         validate_float_values(&[
-            event.reward_prediction_error,
+            event.prediction_residual,
             event.pain,
             event.homeostatic_improvement,
             event.frustration,
@@ -854,7 +854,7 @@ fn validate_replay_event(event: &GpuReplayEventRecord) -> Result<u64, ScaffoldCo
         .ok()
         .and_then(|raw| CandidateActionFamily::try_from_raw(raw).ok());
     validate_float_values(&[
-        event.reward_prediction_error,
+        event.prediction_residual,
         event.pain,
         event.homeostatic_improvement,
         event.frustration,
@@ -866,7 +866,7 @@ fn validate_replay_event(event: &GpuReplayEventRecord) -> Result<u64, ScaffoldCo
         || feature_digest == [0; 2]
         || family.is_none()
         || [
-            event.reward_prediction_error,
+            event.prediction_residual,
             event.pain,
             event.homeostatic_improvement,
             event.frustration,

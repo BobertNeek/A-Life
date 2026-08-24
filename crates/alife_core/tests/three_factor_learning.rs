@@ -296,7 +296,7 @@ fn credit_packet_is_derived_exactly_from_matching_sealed_gpu_evidence() {
         evidence.candidate_feature_digest
     );
     assert_eq!(packet.dispatch_generation(), evidence.dispatch_generation);
-    assert_eq!(packet.modulator().reward_prediction_error(), 0.25);
+    assert_eq!(packet.modulator().prediction_residual(), 0.25);
     assert_eq!(packet.modulator().pain(), 0.1);
     assert_eq!(packet.modulator().frustration(), 0.2);
     assert_eq!(packet.modulator().novelty(), 0.3);

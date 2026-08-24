@@ -3,9 +3,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    validate_finite, ChemistryModulation, CreaturePhenotype, DriveDelta, DriveSnapshot,
-    EndocrineDelta, GenomeId, HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot,
-    ScaffoldContractError, Tick, Validate,
+    validate_finite, BiochemicalGraphState, BiochemicalWorkReceipt, CreaturePhenotype, GenomeId,
+    HomeostaticSnapshot, NeuralEmissionFrame, NeuralReceptorFrame, ScaffoldContractError, Tick,
+    Validate,
 };
 
 pub const MAX_BIOCHEMISTRY_CATCH_UP_STEPS: u32 = 64;
@@ -112,7 +112,6 @@ pub struct BodyEventDelta {
     pub temperature_stress: f32,
     pub nutrition: f32,
     pub social_contact: f32,
-    pub reward_outcome: f32,
     pub sleep_recovery: f32,
     pub mating_opportunity: f32,
 }
@@ -125,7 +124,6 @@ impl BodyEventDelta {
             temperature_stress: 0.0,
             nutrition: 0.0,
             social_contact: 0.0,
-            reward_outcome: 0.0,
             sleep_recovery: 0.0,
             mating_opportunity: 0.0,
         }
@@ -134,7 +132,7 @@ impl BodyEventDelta {
 
 impl Validate for BodyEventDelta {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        validate_signed_unit_values(&[self.energy, self.reward_outcome])?;
+        validate_signed_unit_values(&[self.energy])?;
         validate_unit_values(&[
             self.damage,
             self.temperature_stress,
@@ -161,9 +159,7 @@ impl PassiveBodyUpkeepPolicy {
     pub fn maximum_lifespan_ticks(phenotype: &CreaturePhenotype) -> u64 {
         rounded_ticks(
             f64::from(phenotype.development.maturation_duration_ticks)
-                * f64::from(
-                    Self::ADULT_LIFETIME_BASE_MULTIPLIER + phenotype.body.lifespan_scale,
-                ),
+                * f64::from(Self::ADULT_LIFETIME_BASE_MULTIPLIER + phenotype.body.lifespan_scale),
         )
     }
 
@@ -200,72 +196,12 @@ impl PassiveBodyUpkeepPolicy {
         }
         let reserve_horizon_ticks = Self::reserve_horizon_ticks(phenotype).max(1) as f32;
         let baseline_energy = 0.50 + 0.50 * phenotype.body.metabolic_efficiency;
-        let cost = baseline_energy * cadence.metabolism_ticks as f32
-            / reserve_horizon_ticks
+        let cost = baseline_energy * cadence.metabolism_ticks as f32 / reserve_horizon_ticks
             * crossed_metabolism_steps as f32;
         BodyEventDelta {
             energy: -cost.clamp(0.0, 1.0),
             ..BodyEventDelta::zero()
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct NeuralModulation {
-    pub threshold_scale: f32,
-    pub learning_rate_scale: f32,
-    pub salience_weight: f32,
-    pub attention_gain: f32,
-    pub plasticity_scale: f32,
-    pub sleep_gate: f32,
-    pub development_gate: f32,
-}
-
-impl NeuralModulation {
-    fn derive(
-        homeostasis: &HomeostaticSnapshot,
-        parameters: HomeostaticParameters,
-        development: DevelopmentReadiness,
-    ) -> Result<Self, ScaffoldContractError> {
-        let learning_rate_scale =
-            ChemistryModulation::learning_rate_scale(homeostasis, parameters)?;
-        let critical_multiplier = if development.critical_period_active {
-            1.0 + development.critical_period_plasticity_bias
-        } else {
-            1.0
-        };
-        let value = Self {
-            threshold_scale: ChemistryModulation::threshold_scale(homeostasis, parameters)?,
-            learning_rate_scale,
-            salience_weight: ChemistryModulation::salience_weight(homeostasis, parameters)?,
-            attention_gain: clamp01(
-                0.35 + 0.45 * homeostasis.hormones.acetylcholine
-                    + 0.20 * homeostasis.hormones.dopamine
-                    - 0.30 * homeostasis.drives.fatigue,
-            ),
-            plasticity_scale: clamp01(learning_rate_scale * critical_multiplier),
-            sleep_gate: clamp01(
-                1.0 - 0.50 * homeostasis.drives.fatigue
-                    - 0.50 * homeostasis.hormones.sleep_pressure,
-            ),
-            development_gate: development.maturation,
-        };
-        value.validate_contract()?;
-        Ok(value)
-    }
-}
-
-impl Validate for NeuralModulation {
-    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        validate_unit_values(&[
-            self.threshold_scale,
-            self.learning_rate_scale,
-            self.salience_weight,
-            self.attention_gain,
-            self.plasticity_scale,
-            self.sleep_gate,
-            self.development_gate,
-        ])
     }
 }
 
@@ -378,7 +314,8 @@ pub struct BiochemistryState {
     pub tick: Tick,
     pub body: BodyState,
     pub homeostasis: HomeostaticSnapshot,
-    pub neural: NeuralModulation,
+    graph_state: BiochemicalGraphState,
+    biochemical_work: BiochemicalWorkReceipt,
     pub development: DevelopmentReadiness,
     pub reproduction: ReproductionReadiness,
     pub cadence: BiochemistryCadence,
@@ -399,10 +336,8 @@ impl BiochemistryState {
         let cadence = BiochemistryCadence::early_mammal();
         cadence.validate_contract()?;
         let body = BodyState::baseline(phenotype);
-        let mut drives = DriveSnapshot::baseline();
-        drives.brain_atp = phenotype.chemistry.brain_atp_efficiency;
-        let homeostasis =
-            HomeostaticSnapshot::new(tick, drives, phenotype.chemistry.endocrine.baseline)?;
+        let graph_state = BiochemicalGraphState::new(&phenotype.chemistry.biochemical, tick)?;
+        let homeostasis = graph_state.derive_homeostasis(&phenotype.chemistry.biochemical)?;
         let development_tick = cadence_boundary(age, cadence.development_ticks);
         let development = DevelopmentReadiness::derive(phenotype, age, development_tick)?;
         let reproduction_tick = cadence_boundary(age, cadence.reproduction_ticks);
@@ -414,17 +349,13 @@ impl BiochemistryState {
             0.0,
             phenotype,
         )?;
-        let neural = NeuralModulation::derive(
-            &homeostasis,
-            phenotype.chemistry.endocrine.parameters,
-            development,
-        )?;
         let value = Self {
             source_genome_id: phenotype.source_genome_id,
             tick,
             body,
             homeostasis,
-            neural,
+            graph_state,
+            biochemical_work: BiochemicalWorkReceipt::default(),
             development,
             reproduction,
             cadence,
@@ -449,6 +380,17 @@ impl BiochemistryState {
         event: BodyEventDelta,
         phenotype: &CreaturePhenotype,
     ) -> Result<Self, ScaffoldContractError> {
+        self.advance_with_neural_emission(next_tick, next_age, event, None, phenotype)
+    }
+
+    pub fn advance_with_neural_emission(
+        &self,
+        next_tick: Tick,
+        next_age: Tick,
+        event: BodyEventDelta,
+        neural: Option<&NeuralEmissionFrame>,
+        phenotype: &CreaturePhenotype,
+    ) -> Result<Self, ScaffoldContractError> {
         self.validate_contract()?;
         event.validate_contract()?;
         phenotype.brain_genome.validate_contract()?;
@@ -459,12 +401,6 @@ impl BiochemistryState {
         Tick::validate_monotonic(self.development.age_ticks, next_age)?;
         Tick::validate_monotonic(next_age, next_tick)?;
 
-        let fast_steps = crossed_boundaries(
-            self.tick,
-            next_tick,
-            self.cadence.fast_hormone_ticks,
-            self.cadence.max_catch_up_steps,
-        );
         let metabolic_steps = crossed_boundaries(
             self.tick,
             next_tick,
@@ -483,33 +419,22 @@ impl BiochemistryState {
             self.cadence.reproduction_ticks,
             self.cadence.max_catch_up_steps,
         );
-        let upkeep = PassiveBodyUpkeepPolicy::upkeep_event(
-            phenotype,
-            self.cadence,
-            metabolic_steps,
-        );
+        let upkeep =
+            PassiveBodyUpkeepPolicy::upkeep_event(phenotype, self.cadence, metabolic_steps);
         let event = BodyEventDelta {
             energy: signed_clamp(event.energy + upkeep.energy),
             ..event
         };
         let body = self.body.apply_event(event, phenotype);
         body.validate_contract()?;
-        let parameters = scaled_parameters(
-            phenotype.chemistry.endocrine.parameters,
-            next_tick.raw().saturating_sub(self.tick.raw()),
-            fast_steps,
-            metabolic_steps,
-        );
-        let delta = homeostatic_delta(
-            event,
+        let (graph_state, biochemical_work) = self.graph_state.advance(
+            next_tick,
             body,
-            phenotype,
-            fast_steps,
-            metabolic_steps,
-            development_steps,
-            reproduction_steps,
-        );
-        let homeostasis = self.homeostasis.advance(next_tick, delta, parameters)?;
+            event,
+            neural,
+            &phenotype.chemistry.biochemical,
+        )?;
+        let homeostasis = graph_state.derive_homeostasis(&phenotype.chemistry.biochemical)?;
         let development = if development_steps > 0 {
             DevelopmentReadiness::derive(
                 phenotype,
@@ -534,23 +459,35 @@ impl BiochemistryState {
         } else {
             self.reproduction
         };
-        let neural = NeuralModulation::derive(
-            &homeostasis,
-            phenotype.chemistry.endocrine.parameters,
-            development,
-        )?;
         let value = Self {
             source_genome_id: self.source_genome_id,
             tick: next_tick,
             body,
             homeostasis,
-            neural,
+            graph_state,
+            biochemical_work,
             development,
             reproduction,
             cadence: self.cadence,
         };
         value.validate_contract()?;
         Ok(value)
+    }
+
+    pub const fn graph_state(&self) -> &BiochemicalGraphState {
+        &self.graph_state
+    }
+
+    pub const fn biochemical_work(&self) -> BiochemicalWorkReceipt {
+        self.biochemical_work
+    }
+
+    pub fn neural_receptor_frame(
+        &self,
+        phenotype: &CreaturePhenotype,
+    ) -> Result<NeuralReceptorFrame, ScaffoldContractError> {
+        self.graph_state
+            .neural_receptor_frame(&phenotype.chemistry.biochemical)
     }
 }
 
@@ -559,7 +496,7 @@ impl Validate for BiochemistryState {
         self.source_genome_id.validate()?;
         self.body.validate_contract()?;
         self.homeostasis.validate_contract()?;
-        self.neural.validate_contract()?;
+        self.graph_state.validate_contract()?;
         self.development.validate_contract()?;
         self.reproduction.validate_contract()?;
         self.cadence.validate_contract()?;
@@ -572,90 +509,6 @@ impl Validate for BiochemistryState {
             return Err(ScaffoldContractError::NonMonotonicTick);
         }
         Ok(())
-    }
-}
-
-fn homeostatic_delta(
-    event: BodyEventDelta,
-    body: BodyState,
-    phenotype: &CreaturePhenotype,
-    fast_steps: u32,
-    metabolic_steps: u32,
-    development_steps: u32,
-    reproduction_steps: u32,
-) -> HomeostaticDelta {
-    let fast = (fast_steps > 0) as u8 as f32;
-    let metabolic = (metabolic_steps > 0) as u8 as f32;
-    let developing = (development_steps > 0) as u8 as f32;
-    let reproducing = (reproduction_steps > 0) as u8 as f32;
-    let energy_deficit = 1.0 - body.energy;
-    let damage_signal = event.damage * (1.0 - phenotype.body.injury_resistance);
-    HomeostaticDelta {
-        drives: DriveDelta {
-            hunger: signed_clamp(metabolic * (0.18 * energy_deficit - 0.30 * event.nutrition)),
-            fatigue: signed_clamp(
-                metabolic * 0.32 * energy_deficit - fast * 0.70 * event.sleep_recovery,
-            ),
-            fear: signed_clamp(fast * (0.35 * damage_signal + 0.20 * body.temperature_stress)),
-            pain: signed_clamp(fast * 0.80 * damage_signal - fast * 0.45 * event.sleep_recovery),
-            loneliness: signed_clamp(-fast * 0.60 * event.social_contact),
-            curiosity: signed_clamp(fast * 0.12 * event.reward_outcome),
-            brain_atp: signed_clamp(
-                -metabolic * 0.25 * energy_deficit
-                    + fast * 0.30 * event.sleep_recovery
-                    + metabolic * 0.20 * event.nutrition,
-            ),
-            temperature_stress: signed_clamp(metabolic * 0.30 * body.temperature_stress),
-            reproductive_drive: signed_clamp(reproducing * 0.85 * event.mating_opportunity),
-            extension: [0.0; crate::DRIVE_EXTENSION_SLOTS],
-        },
-        hormones: EndocrineDelta {
-            adrenaline: signed_clamp(fast * 0.55 * damage_signal),
-            cortisol: signed_clamp(
-                fast * (0.65 * damage_signal + 0.20 * body.temperature_stress)
-                    - fast * 0.45 * event.sleep_recovery,
-            ),
-            dopamine: signed_clamp(fast * (0.40 * event.reward_outcome + 0.20 * event.nutrition)),
-            oxytocin: signed_clamp(fast * 0.45 * event.social_contact),
-            serotonin: signed_clamp(
-                fast * (0.20 * event.social_contact + 0.20 * event.sleep_recovery),
-            ),
-            acetylcholine: signed_clamp(fast * 0.12 * event.reward_outcome),
-            learning_modulator: signed_clamp(
-                fast * (0.25 * event.reward_outcome - 0.85 * damage_signal
-                    + 0.20 * event.sleep_recovery),
-            ),
-            developmental_hormone: signed_clamp(
-                developing * 0.02 * phenotype.chemistry.hormone_production,
-            ),
-            sleep_pressure: signed_clamp(
-                metabolic * 0.25 * energy_deficit - fast * 0.75 * event.sleep_recovery,
-            ),
-            extension: [0.0; crate::ENDOCRINE_EXTENSION_SLOTS],
-        },
-    }
-}
-
-fn scaled_parameters(
-    base: HomeostaticParameters,
-    elapsed_ticks: u64,
-    fast_steps: u32,
-    metabolic_steps: u32,
-) -> HomeostaticParameters {
-    let elapsed = elapsed_ticks.max(1) as f32;
-    let fast_scale = fast_steps as f32 / elapsed;
-    let metabolic_scale = metabolic_steps as f32 / elapsed;
-    HomeostaticParameters {
-        hunger_drift_per_update: base.hunger_drift_per_update * metabolic_scale,
-        fatigue_drift_per_update: base.fatigue_drift_per_update * metabolic_scale,
-        loneliness_drift_per_update: base.loneliness_drift_per_update * metabolic_scale,
-        curiosity_drift_per_update: base.curiosity_drift_per_update * metabolic_scale,
-        reproductive_drift_per_update: base.reproductive_drift_per_update * metabolic_scale,
-        brain_atp_drain_per_update: base.brain_atp_drain_per_update * metabolic_scale,
-        drive_decay_per_update: base.drive_decay_per_update * metabolic_scale,
-        hormone_decay_per_update: base.hormone_decay_per_update * fast_scale,
-        sleep_pressure_drift_per_update: base.sleep_pressure_drift_per_update * metabolic_scale,
-        ..base
     }
 }
 

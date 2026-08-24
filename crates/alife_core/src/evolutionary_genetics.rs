@@ -3,17 +3,16 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    validate_finite, BrainCapacityClass, BrainClassId, BrainGenome, CriticalPeriod,
-    CrossoverPolicy, DevelopmentStage, DevelopmentState, DevelopmentalMilestone,
-    DevelopmentalSchedule, DriveThresholdGene, DriveThresholdKind, EndocrineConstantGene,
-    EndocrineConstantKind, EndocrineProfile, EndocrineSnapshot, GenomeId, HomeostaticParameters,
+    validate_finite, BiochemicalPhenotype, BrainCapacityClass, BrainClassId, BrainGenome,
+    CriticalPeriod, CrossoverPolicy, DevelopmentStage, DevelopmentState, DevelopmentalMilestone,
+    DevelopmentalSchedule, EndocrineProfile, EndocrineSnapshot, GenomeId, HomeostaticParameters,
     InheritancePolicy, LanguageTokenId, LineageId, LobeKind, LobeRatioOverride, LobeRatioPlan,
     MotorAffordanceGene, MotorAffordanceKind, MutationRates, NormalizedScalar,
     ProjectionPlasticityMask, ScaffoldContractError, SchemaKind, SensorChannelGene,
     SensorChannelKind, SensorLayoutGene, Tick, Validate,
 };
 
-pub const CREATURE_GENOME_SCHEMA_VERSION: u16 = 1;
+pub const CREATURE_GENOME_SCHEMA_VERSION: u16 = 2;
 pub const MAX_CROSSOVER_SEGMENTS: u8 = 8;
 pub const MAX_MUTATION_DELTA: f32 = 0.25;
 pub const MAX_MUTATION_RECORDS: usize = 128;
@@ -544,6 +543,7 @@ pub struct BodyPhenotype {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChemistryPhenotype {
+    pub biochemical: BiochemicalPhenotype,
     pub endocrine: EndocrineProfile,
     pub stress_baseline: f32,
     pub reward_sensitivity: f32,
@@ -936,7 +936,10 @@ fn express_chemistry(
         },
     };
     endocrine.validate_contract()?;
+    let biochemical =
+        BiochemicalPhenotype::early_mammal_reference(endocrine, brain_atp_efficiency)?;
     Ok(ChemistryPhenotype {
+        biochemical,
         endocrine,
         stress_baseline,
         reward_sensitivity,
@@ -1164,72 +1167,6 @@ fn express_brain_genome(
             enabled: true,
             motor_lobe_units: 2,
             enabled_at_maturation: puberty_gate,
-        },
-    ];
-
-    let baseline = chemistry.endocrine.baseline;
-    genome.endocrine_constants = vec![
-        EndocrineConstantGene {
-            kind: EndocrineConstantKind::DopamineBaseline,
-            value: baseline.dopamine,
-        },
-        EndocrineConstantGene {
-            kind: EndocrineConstantKind::SerotoninBaseline,
-            value: baseline.serotonin,
-        },
-        EndocrineConstantGene {
-            kind: EndocrineConstantKind::CortisolBaseline,
-            value: baseline.cortisol,
-        },
-        EndocrineConstantGene {
-            kind: EndocrineConstantKind::OxytocinBaseline,
-            value: baseline.oxytocin,
-        },
-        EndocrineConstantGene {
-            kind: EndocrineConstantKind::AdrenalineBaseline,
-            value: baseline.adrenaline,
-        },
-        EndocrineConstantGene {
-            kind: EndocrineConstantKind::AcetylcholineBaseline,
-            value: baseline.acetylcholine,
-        },
-        EndocrineConstantGene {
-            kind: EndocrineConstantKind::BrainAtpBaseline,
-            value: chemistry.brain_atp_efficiency,
-        },
-        EndocrineConstantGene {
-            kind: EndocrineConstantKind::DevelopmentHormoneBaseline,
-            value: baseline.developmental_hormone,
-        },
-    ];
-    genome.drive_thresholds = vec![
-        DriveThresholdGene {
-            kind: DriveThresholdKind::Hunger,
-            threshold: normalized(chemistry.hunger_threshold)?,
-        },
-        DriveThresholdGene {
-            kind: DriveThresholdKind::Fatigue,
-            threshold: normalized(chemistry.fatigue_threshold)?,
-        },
-        DriveThresholdGene {
-            kind: DriveThresholdKind::Fear,
-            threshold: normalized((0.45 + 0.35 * chemistry.stress_baseline).clamp(0.0, 1.0))?,
-        },
-        DriveThresholdGene {
-            kind: DriveThresholdKind::Pain,
-            threshold: normalized(chemistry.endocrine.parameters.pain_frustration_threshold)?,
-        },
-        DriveThresholdGene {
-            kind: DriveThresholdKind::Loneliness,
-            threshold: normalized((1.0 - 0.5 * chemistry.bonding_sensitivity).clamp(0.0, 1.0))?,
-        },
-        DriveThresholdGene {
-            kind: DriveThresholdKind::Curiosity,
-            threshold: normalized((0.75 - 0.5 * chemistry.reward_sensitivity).clamp(0.0, 1.0))?,
-        },
-        DriveThresholdGene {
-            kind: DriveThresholdKind::Reproduction,
-            threshold: normalized(chemistry.reproductive_threshold)?,
         },
     ];
 

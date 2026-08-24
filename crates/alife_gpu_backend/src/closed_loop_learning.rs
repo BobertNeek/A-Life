@@ -49,7 +49,7 @@ pub struct GpuOutcomeCreditRecord {
     pub candidate_feature_digest: [u32; 4],
     pub frame_digest: [u32; 8],
     pub dispatch_generation: [u32; 2],
-    pub reward_prediction_error: f32,
+    pub prediction_residual: f32,
     pub pain: f32,
     pub homeostatic_improvement: f32,
     pub frustration: f32,
@@ -68,7 +68,7 @@ impl TryFrom<&OutcomeCreditPacket> for GpuOutcomeCreditRecord {
         let family = CandidateActionFamily::try_from_raw(packet.selected_family().raw())?;
         let modulator = packet.modulator();
         let components = [
-            modulator.reward_prediction_error(),
+            modulator.prediction_residual(),
             modulator.pain(),
             modulator.homeostatic_improvement(),
             modulator.frustration(),
@@ -104,7 +104,7 @@ impl TryFrom<&OutcomeCreditPacket> for GpuOutcomeCreditRecord {
             candidate_feature_digest: split_u64x2(packet.candidate_feature_digest().0),
             frame_digest: split_u64x4(packet.frame_digest().0),
             dispatch_generation: split_u64(packet.dispatch_generation()),
-            reward_prediction_error: components[0],
+            prediction_residual: components[0],
             pain: components[1],
             homeostatic_improvement: components[2],
             frustration: components[3],

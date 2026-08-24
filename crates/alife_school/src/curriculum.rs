@@ -24,7 +24,7 @@ pub enum CurriculumStepKind {
 pub enum ExpectedObservation {
     HeardToken(u32),
     ObjectHighlighted(WorldEntityId),
-    PositiveReward,
+    BiologicalImprovement,
     NegativeFeedback,
     ApproachRequested,
     GrabRequested,
@@ -105,9 +105,9 @@ impl Curriculum {
                             NormalizedScalar(0.9),
                         ),
                     ],
-                    vec![ExpectedObservation::PositiveReward],
-                    vec![VerifierCheck::RewardAtLeast(0.1)],
-                    vec![TeacherPerceptualEvent::visible_reward(
+                    vec![ExpectedObservation::BiologicalImprovement],
+                    vec![VerifierCheck::BiologicalImprovementAtLeast(0.01)],
+                    vec![TeacherPerceptualEvent::social_approval(
                         ids[1],
                         NormalizedScalar(0.75),
                     )],
@@ -126,7 +126,7 @@ impl Curriculum {
                     ],
                     vec![ExpectedObservation::NegativeFeedback],
                     vec![VerifierCheck::NoDirectTeacherActionSelection],
-                    vec![TeacherPerceptualEvent::visible_punishment(
+                    vec![TeacherPerceptualEvent::social_disapproval(
                         ids[2],
                         NormalizedScalar(0.7),
                     )],

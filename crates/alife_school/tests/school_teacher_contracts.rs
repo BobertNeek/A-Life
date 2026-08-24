@@ -216,11 +216,11 @@ fn teacher_channel_contract_only_allows_perception_inputs() {
             FeedbackPolarity::Praise,
             Confidence::new(0.9).unwrap(),
         ),
-        TeacherPerceptualEvent::visible_reward(
+        TeacherPerceptualEvent::social_approval(
             LessonId::new(2301).unwrap(),
             NormalizedScalar::new(0.6).unwrap(),
         ),
-        TeacherPerceptualEvent::visible_punishment(
+        TeacherPerceptualEvent::social_disapproval(
             LessonId::new(2301).unwrap(),
             NormalizedScalar::new(0.4).unwrap(),
         ),
@@ -266,7 +266,7 @@ fn grounded_curriculum_defines_required_p23_steps_and_response_channels() {
     }));
     assert!(curriculum.steps.iter().any(|step| step
         .expected_observations
-        .contains(&ExpectedObservation::PositiveReward)));
+        .contains(&ExpectedObservation::BiologicalImprovement)));
     assert!(curriculum.steps.iter().any(|step| step
         .expected_observations
         .contains(&ExpectedObservation::NegativeFeedback)));
@@ -347,7 +347,7 @@ fn patch_log_verifier_passes_and_fails_using_sealed_patch_memory_and_topology_ev
                     token_id: 77,
                     channel: TeacherPerceptionChannel::Hearing,
                 },
-                VerifierCheck::RewardAtLeast(0.01),
+                VerifierCheck::BiologicalImprovementAtLeast(0.01),
                 VerifierCheck::NoDirectTeacherActionSelection,
                 VerifierCheck::MinimumMemoryRecords(1),
                 VerifierCheck::MinimumTopologyConcepts(1),

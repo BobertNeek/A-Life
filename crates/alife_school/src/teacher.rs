@@ -24,8 +24,8 @@ pub enum TeacherInputKind {
     Gesture,
     ObjectHighlight,
     SocialFeedback,
-    VisibleReward,
-    VisiblePunishment,
+    SocialApproval,
+    SocialDisapproval,
 }
 
 impl TeacherInputKind {
@@ -34,8 +34,8 @@ impl TeacherInputKind {
         Self::Gesture,
         Self::ObjectHighlight,
         Self::SocialFeedback,
-        Self::VisibleReward,
-        Self::VisiblePunishment,
+        Self::SocialApproval,
+        Self::SocialDisapproval,
     ];
 
     pub const fn is_perceptual(&self) -> bool {
@@ -45,8 +45,8 @@ impl TeacherInputKind {
                 | Self::Gesture
                 | Self::ObjectHighlight
                 | Self::SocialFeedback
-                | Self::VisibleReward
-                | Self::VisiblePunishment
+                | Self::SocialApproval
+                | Self::SocialDisapproval
         )
     }
 
@@ -55,7 +55,7 @@ impl TeacherInputKind {
             Self::SpokenToken => TeacherPerceptionChannel::Hearing,
             Self::Gesture => TeacherPerceptionChannel::Gesture,
             Self::ObjectHighlight => TeacherPerceptionChannel::Object,
-            Self::SocialFeedback | Self::VisibleReward | Self::VisiblePunishment => {
+            Self::SocialFeedback | Self::SocialApproval | Self::SocialDisapproval => {
                 TeacherPerceptionChannel::Vision
             }
         }
@@ -116,14 +116,14 @@ impl TeacherPerceptualEvent {
             .with_confidence(confidence)
     }
 
-    pub fn visible_reward(lesson_id: LessonId, salience: NormalizedScalar) -> Self {
-        Self::new(lesson_id, TeacherInputKind::VisibleReward)
+    pub fn social_approval(lesson_id: LessonId, salience: NormalizedScalar) -> Self {
+        Self::new(lesson_id, TeacherInputKind::SocialApproval)
             .with_feedback(FeedbackPolarity::Praise)
             .with_salience(salience)
     }
 
-    pub fn visible_punishment(lesson_id: LessonId, salience: NormalizedScalar) -> Self {
-        Self::new(lesson_id, TeacherInputKind::VisiblePunishment)
+    pub fn social_disapproval(lesson_id: LessonId, salience: NormalizedScalar) -> Self {
+        Self::new(lesson_id, TeacherInputKind::SocialDisapproval)
             .with_feedback(FeedbackPolarity::Warning)
             .with_salience(salience)
     }

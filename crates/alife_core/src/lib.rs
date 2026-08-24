@@ -6,6 +6,7 @@ pub mod activity;
 pub mod adapter;
 pub mod archive;
 pub mod attention;
+pub mod biochemical_graph;
 pub mod biochemistry;
 mod blake3_digest;
 pub mod brain_class;
@@ -79,10 +80,20 @@ pub use attention::{
     StableFocusIdentity, ATTENTION_SCHEMA_VERSION, MAX_ATTENTION_SALIENCE_COMPONENTS,
     MAX_FOCAL_TARGETS, MAX_PERIPHERAL_SUMMARIES,
 };
+pub use biochemical_graph::{
+    BiochemicalEmitter, BiochemicalGraphState, BiochemicalPhenotype, BiochemicalReceptor,
+    BiochemicalSourceLocus, BiochemicalTargetLocus, BiochemicalWorkReceipt, ChemicalCompartment,
+    ChemicalSpecies, ChemicalSpeciesId, ChemicalSpeciesKind,
+    DriveChannel as BiochemicalDriveChannel, EmitterResponse, EndocrineChannel, NeuralEmission,
+    NeuralEmissionClass, NeuralEmissionFrame, NeuralReceptorActivation, NeuralReceptorClass,
+    NeuralReceptorFrame, Neuroemitter, SparseReaction, StoichiometricTerm,
+    BIOCHEMICAL_GRAPH_SCHEMA_VERSION, MAX_ACTIVE_CHEMICAL_SPECIES, MAX_ACTIVE_EMITTERS,
+    MAX_ACTIVE_NEUROEMITTERS, MAX_ACTIVE_REACTIONS, MAX_ACTIVE_RECEPTORS, MAX_NEURAL_EMISSIONS,
+    MAX_NEURAL_RECEPTOR_ACTIVATIONS,
+};
 pub use biochemistry::{
     BiochemistryCadence, BiochemistryState, BodyEventDelta, BodyState, DevelopmentReadiness,
-    NeuralModulation, PassiveBodyUpkeepPolicy, ReproductionReadiness,
-    MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
+    PassiveBodyUpkeepPolicy, ReproductionReadiness, MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
 };
 pub use blake3_digest::Blake3Digest;
 pub use brain_class::{
@@ -106,6 +117,11 @@ pub use cognitive_context::{
 pub use cognitive_work::{
     CognitiveWorkReceipt, COGNITIVE_WORK_POLICY_VERSION, COGNITIVE_WORK_SCHEMA_VERSION,
     MAX_COGNITIVE_WORK_COUNTER,
+};
+pub use dendritic::{
+    apply_dendritic_conjunctions, DendriticBranch, DendriticBranchSet, DendriticInputRef,
+    DendriticWorkReceipt, MAX_DENDRITIC_BRANCHES, MAX_DENDRITIC_BRANCHES_PER_NEURON,
+    MAX_DENDRITIC_INPUTS,
 };
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use era1_evaluation::{
@@ -141,9 +157,9 @@ pub use experience::{
     ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,
     ExperiencePatchBuilder, ExperiencePatchHeader, ExperiencePatchPhase, ExperiencePatchView,
     HeuristicDecisionEvidence, HeuristicPreActionEvidence, JointPhysicalOutcome,
-    MemoryExpectancySnapshot, MemoryHint, NeuralDecisionEvidence, PhysicalActionOutcome,
-    PhysicalContactKind, PostActionOutcome, PreActionBrainEvidence, PreActionSnapshot,
-    TeacherFeedbackObservation, V11_EXPERIENCE_ABI_VERSION,
+    MeasuredPhysiologyTransition, MemoryExpectancySnapshot, MemoryHint, NeuralDecisionEvidence,
+    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, PreActionBrainEvidence,
+    PreActionSnapshot, TeacherFeedbackObservation, V11_EXPERIENCE_ABI_VERSION,
 };
 pub use foundation::{
     FoundationAbiBinding, FoundationCompatibilityFamilyId, FoundationId, FoundationLayoutId,
@@ -205,24 +221,19 @@ pub use memory::{
 };
 pub use memory_query::{
     finalized_memory_attention_evidence, CandidateMemoryContextV1, CandidateMemoryQueryV2,
-    EpisodicDecisionKeyV2, FinalizedMemoryAttentionEvidence,
-    EpisodicRetrievalContextV1, MemoryQueryEncoderV2, MemoryQueryVersion,
-    EPISODIC_RETRIEVAL_CONTEXT_SCHEMA_VERSION, MEMORY_ACTION_FAMILY_RANGE,
-    MEMORY_ACTION_KIND_RANGE, MEMORY_BODY_RANGE, MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE,
-    MEMORY_CONTEXT_V1_MAX_SOURCES, MEMORY_DRIVE_RANGE, MEMORY_HORMONE_RANGE,
-    MEMORY_LATENT_V1_COUNT, MEMORY_PROFILE_RANGE, MEMORY_QUERY_V2_FEATURE_COUNT,
-    MEMORY_RESERVED_RANGE, MEMORY_STATE_SENSORY_RANGE, MEMORY_TARGET_RANGE, MEMORY_VALUE_V1_COUNT,
+    EpisodicDecisionKeyV2, EpisodicRetrievalContextV1, FinalizedMemoryAttentionEvidence,
+    MemoryQueryEncoderV2, MemoryQueryVersion, EPISODIC_RETRIEVAL_CONTEXT_SCHEMA_VERSION,
+    MEMORY_ACTION_FAMILY_RANGE, MEMORY_ACTION_KIND_RANGE, MEMORY_BODY_RANGE,
+    MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE, MEMORY_CONTEXT_V1_MAX_SOURCES, MEMORY_DRIVE_RANGE,
+    MEMORY_HORMONE_RANGE, MEMORY_LATENT_V1_COUNT, MEMORY_PROFILE_RANGE,
+    MEMORY_QUERY_V2_FEATURE_COUNT, MEMORY_RESERVED_RANGE, MEMORY_STATE_SENSORY_RANGE,
+    MEMORY_TARGET_RANGE, MEMORY_VALUE_V1_COUNT,
 };
 pub use motor::{
     BoundedCoordinationSummary, BoundedMotorPayload, ChannelCommand, CoordinationGroup,
     EgocentricDirection, MeasuredChannelObservation, MotorChannel, MotorCommandBundle,
     TargetBinding, MAX_COORDINATION_GROUPS, MAX_MOTOR_CHANNELS, MAX_MOTOR_PAYLOAD_VALUES,
     MOTOR_COMMAND_SCHEMA_VERSION,
-};
-pub use dendritic::{
-    apply_dendritic_conjunctions, DendriticBranch, DendriticBranchSet, DendriticInputRef,
-    DendriticWorkReceipt, MAX_DENDRITIC_BRANCHES, MAX_DENDRITIC_BRANCHES_PER_NEURON,
-    MAX_DENDRITIC_INPUTS,
 };
 pub use neural::{
     cpu_spmv_projection, finalize_cpu_activations, update_oja_shadow_traces, ActivationFunction,
@@ -232,12 +243,6 @@ pub use neural::{
     ProjectionTile, SparseProjection, SparseTileCoord, SparseTilePayload, SparseTileType,
     SupertileMask, SynapseWeightSplit, TileMetadata, MICROTILE_CELLS, MICROTILE_EDGE,
     SUPERTILE_EDGE, SUPERTILE_MICROTILES,
-};
-pub use structural_plasticity::{
-    CoactivationEvidence, StructuralDiscoveryReceipt, StructuralPlasticityConfig,
-    StructuralPlasticityError, StructuralPlasticityState, StructuralWorkReceipt,
-    MAX_ACCEPTED_PER_PHASE, MAX_CANDIDATES_PER_REGION, MAX_EVIDENCE_PER_PHASE,
-    MAX_REGIONS_PER_STATE, MAX_STRUCTURAL_EDGES,
 };
 pub use packed_log::{
     ExperiencePacker, InMemoryPackedExperienceLog, PackedExperienceFrame, PackedExperienceRecord,
@@ -275,8 +280,8 @@ pub use phenotype::{
 };
 pub use predictive::{
     GroundedSuccessorPredictor, JointMotorCondition, MotorChannelFactor, PredictionTargetFamily,
-    PredictionTargetReceipt, SemanticStateVector, MAX_SEMANTIC_STATE_VALUES,
-    MAX_SUCCESSOR_FEATURES, JOINT_MOTOR_CONDITION_ABI_V1, JOINT_MOTOR_CONDITION_SCHEMA_VERSION,
+    PredictionTargetReceipt, SemanticStateVector, JOINT_MOTOR_CONDITION_ABI_V1,
+    JOINT_MOTOR_CONDITION_SCHEMA_VERSION, MAX_SEMANTIC_STATE_VALUES, MAX_SUCCESSOR_FEATURES,
     PREDICTION_TARGET_SCHEMA_VERSION, SEMANTIC_STATE_VECTOR_ABI_V1,
     SEMANTIC_STATE_VECTOR_SCHEMA_VERSION, SUCCESSOR_FEATURE_ABI_V1,
 };
@@ -314,6 +319,12 @@ pub use sleep::{
     StructuralEditBatch, StructuralEditCandidate, StructuralEditKind, StructuralEditReason,
     TraitPromotionReport, BOUNDED_REPLAY_BATCH_SCHEMA_VERSION,
     GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION, SLEEP_CONSOLIDATION_SCHEMA_VERSION,
+};
+pub use structural_plasticity::{
+    CoactivationEvidence, StructuralDiscoveryReceipt, StructuralPlasticityConfig,
+    StructuralPlasticityError, StructuralPlasticityState, StructuralWorkReceipt,
+    MAX_ACCEPTED_PER_PHASE, MAX_CANDIDATES_PER_REGION, MAX_EVIDENCE_PER_PHASE,
+    MAX_REGIONS_PER_STATE, MAX_STRUCTURAL_EDGES,
 };
 pub use topology::{
     ActionObservationFact, CognitiveEdge, CognitiveEdgeId, CognitiveSimplex, CognitiveSimplexId,

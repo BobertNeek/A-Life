@@ -36,7 +36,15 @@ fn body_damage_and_energy_loss_change_drives_hormones_and_neural_modulation() {
     assert!(next.homeostasis.drives.fatigue > state.homeostasis.drives.fatigue);
     assert!(next.homeostasis.drives.pain > state.homeostasis.drives.pain);
     assert!(next.homeostasis.hormones.cortisol > state.homeostasis.hormones.cortisol);
-    assert!(next.neural.learning_rate_scale < state.neural.learning_rate_scale);
+    assert!(
+        next.neural_receptor_frame(&phenotype)
+            .unwrap()
+            .activation_for(alife_core::NeuralReceptorClass::PlasticityAversive)
+            > state
+                .neural_receptor_frame(&phenotype)
+                .unwrap()
+                .activation_for(alife_core::NeuralReceptorClass::PlasticityAversive)
+    );
 }
 
 #[test]
@@ -193,10 +201,10 @@ fn critical_period_raises_plasticity_then_closes() {
     assert!(!before.development.critical_period_active);
     assert!(active.development.critical_period_active);
     assert!(!closed.development.critical_period_active);
-    assert!(active.neural.plasticity_scale > before.neural.plasticity_scale);
+    assert!(active.development.critical_period_plasticity_bias > 0.0);
     assert_eq!(
-        closed.neural.plasticity_scale,
-        before.neural.plasticity_scale
+        closed.development.critical_period_plasticity_bias,
+        before.development.critical_period_plasticity_bias
     );
 }
 
@@ -214,7 +222,6 @@ fn long_multi_rate_run_stays_bounded() {
                     damage: if tick % 17 == 0 { 0.03 } else { 0.0 },
                     nutrition: if tick % 11 == 0 { 0.05 } else { 0.0 },
                     social_contact: if tick % 13 == 0 { 0.08 } else { 0.0 },
-                    reward_outcome: if tick % 19 == 0 { 0.1 } else { -0.02 },
                     sleep_recovery: if tick % 23 == 0 { 0.1 } else { 0.0 },
                     ..BodyEventDelta::zero()
                 },
@@ -253,10 +260,10 @@ fn invalid_body_bounds_are_rejected() {
 }
 
 #[test]
-fn neural_modulation_has_no_hidden_action_authority() {
+fn neural_receptor_frame_has_no_hidden_action_authority() {
     let phenotype = phenotype();
     let state = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
-    let value = serde_json::to_value(state.neural).unwrap();
+    let value = serde_json::to_value(state.neural_receptor_frame(&phenotype).unwrap()).unwrap();
     let keys = value
         .as_object()
         .unwrap()
@@ -266,13 +273,10 @@ fn neural_modulation_has_no_hidden_action_authority() {
     assert_eq!(
         keys,
         BTreeSet::from([
-            "attention_gain",
-            "development_gate",
-            "learning_rate_scale",
-            "plasticity_scale",
-            "salience_weight",
-            "sleep_gate",
-            "threshold_scale",
+            "activations",
+            "schema_version",
+            "source_chemistry_version",
+            "source_tick",
         ])
     );
     for forbidden in ["action", "candidate", "target", "reward", "command"] {

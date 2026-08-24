@@ -316,7 +316,7 @@ pub struct GpuReplayEventRecord {
     pub candidate_feature_digest: [u32; 4],
     pub action_id: u32,
     pub family: u32,
-    pub reward_prediction_error: f32,
+    pub prediction_residual: f32,
     pub pain: f32,
     pub homeostatic_improvement: f32,
     pub frustration: f32,

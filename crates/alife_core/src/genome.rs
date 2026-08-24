@@ -27,8 +27,6 @@ pub struct BrainGenome {
     plasticity_parameters: PlasticityGenomeParameters,
     #[serde(default = "CognitiveArchitectureGenomeParameters::canonical_default")]
     cognitive_architecture: CognitiveArchitectureGenomeParameters,
-    pub endocrine_constants: Vec<EndocrineConstantGene>,
-    pub drive_thresholds: Vec<DriveThresholdGene>,
     pub sensor_layout: SensorLayoutGene,
     pub motor_affordances: Vec<MotorAffordanceGene>,
     pub mutation_rates: MutationRates,
@@ -272,7 +270,8 @@ impl CognitiveArchitectureGenomeParameters {
             || self.motor_head_width == 0
             || self.motor_head_width > 256
             || self.dendritic_branch_capacity == 0
-            || usize::from(self.dendritic_branch_capacity) > crate::dendritic::MAX_DENDRITIC_BRANCHES
+            || usize::from(self.dendritic_branch_capacity)
+                > crate::dendritic::MAX_DENDRITIC_BRANCHES
             || self.structural_candidate_budget == 0
             || usize::from(self.structural_candidate_budget)
                 > crate::structural_plasticity::MAX_EVIDENCE_PER_PHASE
@@ -391,8 +390,6 @@ impl BrainGenome {
             plasticity_mask: PlasticityMask::scaffold_default(),
             plasticity_parameters: PlasticityGenomeParameters::canonical_default(),
             cognitive_architecture,
-            endocrine_constants: EndocrineConstantGene::baseline_defaults(),
-            drive_thresholds: DriveThresholdGene::baseline_defaults(),
             sensor_layout: SensorLayoutGene::minimal_grounded(),
             motor_affordances: MotorAffordanceGene::minimal_grounded(),
             mutation_rates: MutationRates::conservative_defaults(),
@@ -478,8 +475,6 @@ impl Validate for BrainGenome {
         self.plasticity_parameters.validate_contract()?;
         self.cognitive_architecture
             .validate_for_brain_class(self.brain_class_id)?;
-        validate_all(&self.endocrine_constants)?;
-        validate_all(&self.drive_thresholds)?;
         self.sensor_layout.validate_contract()?;
         validate_all(&self.motor_affordances)?;
         self.mutation_rates.validate_contract()?;

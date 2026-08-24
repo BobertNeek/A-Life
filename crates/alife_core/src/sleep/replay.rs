@@ -77,7 +77,7 @@ impl BoundedReplayBatch {
             digest.write_u64(event.candidate_feature_digest.0[1]);
             digest.write_u32(event.action_id.0);
             digest.write_u8(event.family.raw());
-            digest.write_f32(event.modulator.reward_prediction_error())?;
+            digest.write_f32(event.modulator.prediction_residual())?;
             digest.write_f32(event.modulator.pain())?;
             digest.write_f32(event.modulator.homeostatic_improvement())?;
             digest.write_f32(event.modulator.frustration())?;

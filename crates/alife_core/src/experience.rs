@@ -6,19 +6,19 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::{
     ensure_current_version, validate_finite, validate_optional_target, ActionArbitrationTrace,
     ActionArbitrationTraceRef, ActionCandidate, ActionCommand, ActionDecision,
-    ActionDecisionStatus, ActionProposal, ActionWtaResult, BodySnapshot, BrainClassId,
-    BrainClassSpec, BrainGenome, BrainScaleTier, CandidateActionFamily, CandidateFeatureDigest,
-    CandidateFeatureVector, CandidateObservationRef, CanonicalDigestBuilder, CognitiveContextFrame,
-    CognitiveWorkReceipt, ConceptCellId, Confidence, DevelopmentState, DriveDelta,
-    EpisodicDecisionKeyV2, ExperienceSequenceId, FinalizedMemoryRecall, GenomeId, HomeostaticDelta,
-    HomeostaticSnapshot, JointMotorCondition, LobeLayout, MeasuredChannelObservation, MemoryId,
-    MotorChannel, MotorCommandBundle, NeuralActionSelection, NormalizedScalar, OrganismId,
-    PerceptionBaseDigest,
-    PerceptionFrame, PerceptionFrameDigest, PhenotypeHash, PolicyBackend, Pose,
-    PredictionTargetReceipt, RankedActionProposal, RoutingMatrix, ScaffoldContractError,
-    SchemaKind, SchemaVersions, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
-    SensorySnapshot, SignedValence, TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity,
-    WeightSplitContract, WorldEntityId, MAX_ACTION_CANDIDATES,
+    ActionDecisionStatus, ActionProposal, ActionWtaResult, BiochemistryState, BodySnapshot,
+    BrainClassId, BrainClassSpec, BrainGenome, BrainScaleTier, CandidateActionFamily,
+    CandidateFeatureDigest, CandidateFeatureVector, CandidateObservationRef,
+    CanonicalDigestBuilder, CognitiveContextFrame, CognitiveWorkReceipt, ConceptCellId, Confidence,
+    DevelopmentState, DriveDelta, EndocrineDelta, EpisodicDecisionKeyV2, ExperienceSequenceId,
+    FinalizedMemoryRecall, GenomeId, HomeostaticDelta, HomeostaticSnapshot, JointMotorCondition,
+    LobeLayout, MeasuredChannelObservation, MemoryId, MotorChannel, MotorCommandBundle,
+    NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionBaseDigest, PerceptionFrame,
+    PerceptionFrameDigest, PhenotypeHash, PolicyBackend, Pose, PredictionTargetReceipt,
+    RankedActionProposal, RoutingMatrix, ScaffoldContractError, SchemaKind, SchemaVersions,
+    SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensorySnapshot, SignedValence,
+    TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity, WeightSplitContract, WorldEntityId,
+    MAX_ACTION_CANDIDATES,
 };
 
 /// The v1.1 semantic spine is a deliberate ABI after the legacy/current
@@ -1123,6 +1123,123 @@ impl Validate for TeacherFeedbackObservation {
     }
 }
 
+/// A measured transition of the organism-owned physiology across one action.
+/// The world reports physical facts; biological value is derived here from the
+/// authoritative organism state, never supplied as a host-authored reward.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct MeasuredPhysiologyTransition {
+    pub before: BiochemistryState,
+    pub after: BiochemistryState,
+    pub homeostatic_delta: HomeostaticDelta,
+    pub energy_delta: SignedValence,
+    pub pain_delta: SignedValence,
+}
+
+impl MeasuredPhysiologyTransition {
+    pub fn new(
+        before: BiochemistryState,
+        after: BiochemistryState,
+    ) -> Result<Self, ScaffoldContractError> {
+        before.validate_contract()?;
+        after.validate_contract()?;
+        if before.source_genome_id != after.source_genome_id {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        Tick::validate_monotonic(before.tick, after.tick)?;
+        let value = Self {
+            homeostatic_delta: measured_homeostatic_delta(before.homeostasis, after.homeostasis)?,
+            energy_delta: SignedValence::new(after.body.energy - before.body.energy)?,
+            pain_delta: SignedValence::new(
+                after.homeostasis.drives.pain - before.homeostasis.drives.pain,
+            )?,
+            before,
+            after,
+        };
+        value.validate_contract()?;
+        Ok(value)
+    }
+}
+
+impl Validate for MeasuredPhysiologyTransition {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.before.validate_contract()?;
+        self.after.validate_contract()?;
+        if self.before.source_genome_id != self.after.source_genome_id {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        Tick::validate_monotonic(self.before.tick, self.after.tick)?;
+        let expected = measured_homeostatic_delta(self.before.homeostasis, self.after.homeostasis)?;
+        if expected != self.homeostatic_delta
+            || self.energy_delta.raw().to_bits()
+                != (self.after.body.energy - self.before.body.energy).to_bits()
+            || self.pain_delta.raw().to_bits()
+                != (self.after.homeostasis.drives.pain - self.before.homeostasis.drives.pain)
+                    .to_bits()
+        {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
+        Ok(())
+    }
+}
+
+fn measured_homeostatic_delta(
+    before: HomeostaticSnapshot,
+    after: HomeostaticSnapshot,
+) -> Result<HomeostaticDelta, ScaffoldContractError> {
+    let before_drives = before.drives;
+    let after_drives = after.drives;
+    let before_hormones = before.hormones;
+    let after_hormones = after.hormones;
+    let mut drive_extension = [0.0; crate::DRIVE_EXTENSION_SLOTS];
+    for (value, (old, new)) in drive_extension.iter_mut().zip(
+        before_drives
+            .extension
+            .into_iter()
+            .zip(after_drives.extension),
+    ) {
+        *value = new - old;
+    }
+    let mut endocrine_extension = [0.0; crate::ENDOCRINE_EXTENSION_SLOTS];
+    for (value, (old, new)) in endocrine_extension.iter_mut().zip(
+        before_hormones
+            .extension
+            .into_iter()
+            .zip(after_hormones.extension),
+    ) {
+        *value = new - old;
+    }
+    let delta = HomeostaticDelta {
+        drives: DriveDelta {
+            hunger: after_drives.hunger - before_drives.hunger,
+            fatigue: after_drives.fatigue - before_drives.fatigue,
+            fear: after_drives.fear - before_drives.fear,
+            pain: after_drives.pain - before_drives.pain,
+            loneliness: after_drives.loneliness - before_drives.loneliness,
+            curiosity: after_drives.curiosity - before_drives.curiosity,
+            brain_atp: after_drives.brain_atp - before_drives.brain_atp,
+            temperature_stress: after_drives.temperature_stress - before_drives.temperature_stress,
+            reproductive_drive: after_drives.reproductive_drive - before_drives.reproductive_drive,
+            extension: drive_extension,
+        },
+        hormones: EndocrineDelta {
+            adrenaline: after_hormones.adrenaline - before_hormones.adrenaline,
+            cortisol: after_hormones.cortisol - before_hormones.cortisol,
+            dopamine: after_hormones.dopamine - before_hormones.dopamine,
+            oxytocin: after_hormones.oxytocin - before_hormones.oxytocin,
+            serotonin: after_hormones.serotonin - before_hormones.serotonin,
+            acetylcholine: after_hormones.acetylcholine - before_hormones.acetylcholine,
+            learning_modulator: after_hormones.learning_modulator
+                - before_hormones.learning_modulator,
+            developmental_hormone: after_hormones.developmental_hormone
+                - before_hormones.developmental_hormone,
+            sleep_pressure: after_hormones.sleep_pressure - before_hormones.sleep_pressure,
+            extension: endocrine_extension,
+        },
+    };
+    delta.validate_contract()?;
+    Ok(delta)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PostActionOutcome {
     pub abi_version: u16,
@@ -1145,6 +1262,8 @@ pub struct PostActionOutcome {
     pub joint: Option<JointPhysicalOutcome>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cognitive_work: Option<CognitiveWorkReceipt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub measured_physiology: Option<MeasuredPhysiologyTransition>,
 }
 
 impl PostActionOutcome {
@@ -1184,6 +1303,7 @@ impl PostActionOutcome {
             teacher_feedback: None,
             joint: None,
             cognitive_work: None,
+            measured_physiology: None,
         };
         outcome.validate_contract()?;
         Ok(outcome)
@@ -1200,6 +1320,20 @@ impl PostActionOutcome {
         self.physical = joint.execution;
         self.joint = Some(joint);
         self.cognitive_work = Some(cognitive_work);
+        self.validate_contract()?;
+        Ok(self)
+    }
+
+    pub fn with_measured_physiology(
+        mut self,
+        transition: MeasuredPhysiologyTransition,
+    ) -> Result<Self, ScaffoldContractError> {
+        transition.validate_contract()?;
+        self.homeostatic_delta = transition.homeostatic_delta;
+        self.energy_delta = transition.energy_delta;
+        self.pain_delta = NormalizedScalar::new(transition.pain_delta.raw().max(0.0))?;
+        self.reward_valence = SignedValence::ZERO;
+        self.measured_physiology = Some(transition);
         self.validate_contract()?;
         Ok(self)
     }
@@ -1226,6 +1360,16 @@ impl Validate for PostActionOutcome {
         if let Some(feedback) = self.teacher_feedback {
             feedback.validate_contract()?;
         }
+        if let Some(transition) = self.measured_physiology {
+            transition.validate_contract()?;
+            if transition.after.tick != self.outcome_tick
+                || transition.homeostatic_delta != self.homeostatic_delta
+                || transition.energy_delta != self.energy_delta
+                || self.reward_valence != SignedValence::ZERO
+            {
+                return Err(ScaffoldContractError::LearningEvidenceMismatch);
+            }
+        }
         match (&self.joint, &self.cognitive_work) {
             (Some(joint), Some(work)) => {
                 if self.abi_version != V11_EXPERIENCE_ABI_VERSION {
@@ -1235,6 +1379,9 @@ impl Validate for PostActionOutcome {
                 work.validate_contract()?;
                 if joint.execution != self.physical {
                     return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+                if self.measured_physiology.is_none() {
+                    return Err(ScaffoldContractError::LearningEvidenceMismatch);
                 }
             }
             (None, None) if self.abi_version == ExperiencePatchHeader::ABI_VERSION => {}

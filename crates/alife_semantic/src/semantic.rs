@@ -8,7 +8,7 @@ use alife_core::{
 /// Maximum number of semantic code slots kept for a packed context.
 pub const MAX_SEMANTIC_CODE_COUNT: usize = 12;
 
-/// Maximum number of semantic concept binding slots kept for a packed context.
+/// Maximum number of opaque semantic hypothesis slots kept for a packed context.
 pub const MAX_SEMANTIC_CONTEXT_BINDINGS: usize = 12;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -25,10 +25,11 @@ pub struct SemanticCodeDescriptor {
 }
 
 impl SemanticConceptBinding {
-    fn to_entry(self) -> Result<SemanticSalienceEntry, ScaffoldContractError> {
+    fn to_code(self) -> Result<CompressedSemanticCode, ScaffoldContractError> {
         self.concept_id.validate()?;
-        Ok(SemanticSalienceEntry {
-            concept_id: self.concept_id,
+        Ok(CompressedSemanticCode {
+            codebook_id: u16::MAX,
+            code: stable_hypothesis_code(self.concept_id.raw()),
             salience: NormalizedScalar::new(self.salience)?,
         })
     }
@@ -54,14 +55,11 @@ pub fn build_semantic_context(
     descriptors: &[SemanticCodeDescriptor],
     confidence: f32,
 ) -> Result<Option<SemanticContextRef>, ScaffoldContractError> {
-    let mut salience_entries: Vec<SemanticSalienceEntry> = bindings
-        .iter()
-        .copied()
-        .filter(|binding| binding.salience > 0.0)
-        .map(SemanticConceptBinding::to_entry)
-        .collect::<Result<_, _>>()?;
+    // External bindings are opaque hypotheses. They never select a learner-
+    // owned concept cell or enter the authoritative concept salience lane.
+    let salience_entries: Vec<SemanticSalienceEntry> = Vec::new();
 
-    if salience_entries.is_empty() && descriptors.is_empty() {
+    if bindings.is_empty() && descriptors.is_empty() {
         return Ok(None);
     }
 
@@ -70,19 +68,18 @@ pub fn build_semantic_context(
         return Ok(None);
     }
 
-    salience_entries.sort_by(|lhs, rhs| {
-        rhs.salience
-            .raw()
-            .total_cmp(&lhs.salience.raw())
-            .then(rhs.concept_id.raw().cmp(&lhs.concept_id.raw()))
-    });
-    salience_entries.truncate(MAX_SEMANTIC_CONTEXT_BINDINGS);
-
-    let mut code_entries: Vec<CompressedSemanticCode> = descriptors
+    let mut code_entries: Vec<CompressedSemanticCode> = bindings
         .iter()
         .copied()
-        .filter(|descriptor| descriptor.salience > 0.0)
-        .map(SemanticCodeDescriptor::to_entry)
+        .filter(|binding| binding.salience > 0.0)
+        .map(SemanticConceptBinding::to_code)
+        .chain(
+            descriptors
+                .iter()
+                .copied()
+                .filter(|descriptor| descriptor.salience > 0.0)
+                .map(SemanticCodeDescriptor::to_entry),
+        )
         .collect::<Result<_, _>>()?;
     code_entries.sort_by(|lhs, rhs| {
         rhs.salience
@@ -114,6 +111,15 @@ fn stable_descriptor_code(descriptor: [i8; 32]) -> u32 {
     for value in descriptor {
         hash ^= u32::from(value.to_le_bytes()[0]);
         hash = hash.wrapping_mul(0x0100_0193);
+    }
+    hash
+}
+
+fn stable_hypothesis_code(value: u64) -> u32 {
+    let mut hash = 0x811c9dc5u32;
+    for byte in value.to_le_bytes() {
+        hash ^= u32::from(byte);
+        hash = hash.wrapping_mul(0x01000193);
     }
     hash
 }

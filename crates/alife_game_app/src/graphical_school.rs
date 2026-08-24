@@ -64,8 +64,8 @@ impl Ca24TeacherWorldCue {
             TeacherInputKind::Gesture => Ca24TeacherWorldCueKind::GestureMarker,
             TeacherInputKind::ObjectHighlight => Ca24TeacherWorldCueKind::ObjectHighlight,
             TeacherInputKind::SocialFeedback
-            | TeacherInputKind::VisibleReward
-            | TeacherInputKind::VisiblePunishment => Ca24TeacherWorldCueKind::FeedbackCue,
+            | TeacherInputKind::SocialApproval
+            | TeacherInputKind::SocialDisapproval => Ca24TeacherWorldCueKind::FeedbackCue,
         };
         let event = Self {
             stable_id,

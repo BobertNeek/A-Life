@@ -188,7 +188,7 @@ pub(crate) fn decode_physical_replay(
 
 fn decode_event(row: GpuReplayEventRecord) -> Result<SleepReplayEvent, ScaffoldContractError> {
     let modulator = NeuromodulatorSample::from_components(
-        row.reward_prediction_error,
+        row.prediction_residual,
         row.pain,
         row.homeostatic_improvement,
         row.frustration,
@@ -223,7 +223,7 @@ fn encode_event(event: SleepReplayEvent) -> Result<GpuReplayEventRecord, Scaffol
         candidate_feature_digest: split_digest2(event.candidate_feature_digest.0),
         action_id: event.action_id.raw(),
         family: u32::from(event.family.raw()),
-        reward_prediction_error: event.modulator.reward_prediction_error(),
+        prediction_residual: event.modulator.prediction_residual(),
         pain: event.modulator.pain(),
         homeostatic_improvement: event.modulator.homeostatic_improvement(),
         frustration: event.modulator.frustration(),
@@ -240,7 +240,7 @@ const fn zero_event() -> GpuReplayEventRecord {
         candidate_feature_digest: [0; 4],
         action_id: 0,
         family: 0,
-        reward_prediction_error: 0.0,
+        prediction_residual: 0.0,
         pain: 0.0,
         homeostatic_improvement: 0.0,
         frustration: 0.0,

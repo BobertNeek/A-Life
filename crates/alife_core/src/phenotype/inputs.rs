@@ -301,16 +301,6 @@ fn encode_genome(
     d.write_f32(plasticity.sleep_weight_limit())?;
     d.write_f32(plasticity.sleep_fast_decay_rate())?;
     g.cognitive_architecture().write_canonical(d)?;
-    d.write_sequence_len(g.endocrine_constants.len());
-    for row in &g.endocrine_constants {
-        d.write_u8(row.kind.raw());
-        d.write_f32(row.value)?;
-    }
-    d.write_sequence_len(g.drive_thresholds.len());
-    for row in &g.drive_thresholds {
-        d.write_u8(row.kind.raw());
-        d.write_f32(row.threshold.raw())?;
-    }
     d.write_sequence_len(g.sensor_layout.channels.len());
     for row in &g.sensor_layout.channels {
         d.write_u8(row.kind.raw());

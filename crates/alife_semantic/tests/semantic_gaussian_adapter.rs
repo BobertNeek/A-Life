@@ -159,7 +159,8 @@ fn gaussian_context_absent_with_empty_or_zero_salience() -> Result<(), ScaffoldC
 
 #[cfg(feature = "gaussian-adapter")]
 #[test]
-fn semantic_context_sorts_and_caps() -> Result<(), ScaffoldContractError> {
+fn semantic_context_keeps_external_bindings_opaque_and_caps_codes(
+) -> Result<(), ScaffoldContractError> {
     let mut bindings = vec![];
     let mut descriptors = vec![];
 
@@ -182,18 +183,12 @@ fn semantic_context_sorts_and_caps() -> Result<(), ScaffoldContractError> {
     let context = build_semantic_context(&bindings, &descriptors, 0.88)?
         .expect("semantic context should be generated from provided bindings");
 
-    assert_eq!(context.salience.len(), MAX_SEMANTIC_CONTEXT_BINDINGS);
+    assert!(context.salience.is_empty());
     assert_eq!(context.compressed_codes.len(), MAX_SEMANTIC_CODE_COUNT);
     assert!(context
-        .salience
-        .first()
-        .map(|entry| entry.concept_id == ConceptCellId(10))
-        .unwrap_or(false));
-    assert!(context
         .compressed_codes
-        .first()
-        .map(|entry| entry.codebook_id == 2)
-        .unwrap_or(false));
+        .iter()
+        .any(|entry| entry.codebook_id == u16::MAX));
     Ok(())
 }
 

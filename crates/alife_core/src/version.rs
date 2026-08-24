@@ -32,6 +32,7 @@ impl ContractVersion {
     pub const V1: Self = Self(1);
     pub const V2: Self = Self(2);
     pub const V3: Self = Self(3);
+    pub const V4: Self = Self(4);
 
     pub const fn raw(self) -> u16 {
         self.0
@@ -58,19 +59,19 @@ pub struct SchemaVersions {
 
 impl SchemaVersions {
     pub const CURRENT: Self = Self {
-        chemistry: ContractVersion::V1,
+        chemistry: ContractVersion::V2,
         sensory_abi: ContractVersion::V1,
         action_abi: ContractVersion::V2,
-        experience: ContractVersion::V3,
+        experience: ContractVersion::V4,
         perception: ContractVersion::V1,
-        phenotype: ContractVersion::V1,
+        phenotype: ContractVersion::V2,
         packed_log: ContractVersion::V2,
-        genome: ContractVersion::V1,
+        genome: ContractVersion::V2,
         neural_projection: ContractVersion::V1,
-        learning: ContractVersion::V1,
+        learning: ContractVersion::V2,
         sleep_consolidation: ContractVersion::V1,
-        save: ContractVersion::V1,
-        teacher_school: ContractVersion::V1,
+        save: ContractVersion::V2,
+        teacher_school: ContractVersion::V2,
         lineage_export: ContractVersion::V1,
     };
 

@@ -1398,7 +1398,7 @@ fn validate_replay_event(event: &SleepReplayEvent) -> Result<(), ScaffoldContrac
     event.sequence_id.validate()?;
     event.action_id.validate()?;
     let values = [
-        event.modulator.reward_prediction_error(),
+        event.modulator.prediction_residual(),
         event.modulator.pain(),
         event.modulator.homeostatic_improvement(),
         event.modulator.frustration(),
@@ -1429,7 +1429,7 @@ fn write_replay_event(
     }
     digest.write_u32(event.action_id.raw());
     digest.write_u8(event.family.raw());
-    digest.write_f32(event.modulator.reward_prediction_error())?;
+    digest.write_f32(event.modulator.prediction_residual())?;
     digest.write_f32(event.modulator.pain())?;
     digest.write_f32(event.modulator.homeostatic_improvement())?;
     digest.write_f32(event.modulator.frustration())?;

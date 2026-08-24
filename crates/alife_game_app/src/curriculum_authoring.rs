@@ -113,7 +113,7 @@ impl LessonManifestLesson {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LessonVerifierCondition {
     HeardToken { token_id: u32, channel: String },
-    RewardAtLeast { threshold: f32 },
+    BiologicalImprovementAtLeast { threshold: f32 },
     NoHiddenSemanticContext,
     NoDirectTeacherActionSelection,
     SelectedByArbitration,
@@ -129,7 +129,9 @@ impl LessonVerifierCondition {
                     channel,
                 }
             }
-            Self::RewardAtLeast { threshold } => VerifierCheck::RewardAtLeast(*threshold),
+            Self::BiologicalImprovementAtLeast { threshold } => {
+                VerifierCheck::BiologicalImprovementAtLeast(*threshold)
+            }
             Self::NoHiddenSemanticContext => VerifierCheck::NoHiddenSemanticContext,
             Self::NoDirectTeacherActionSelection => VerifierCheck::NoDirectTeacherActionSelection,
             Self::SelectedByArbitration => VerifierCheck::SelectedByArbitration,
@@ -143,7 +145,9 @@ impl LessonVerifierCondition {
             Self::HeardToken { token_id, channel } => {
                 format!("heard_token:{} via {}", token_id, channel)
             }
-            Self::RewardAtLeast { threshold } => format!("reward_at_least:{threshold:.2}"),
+            Self::BiologicalImprovementAtLeast { threshold } => {
+                format!("biological_improvement_at_least:{threshold:.2}")
+            }
             Self::NoHiddenSemanticContext => "no_hidden_semantic_context".to_string(),
             Self::NoDirectTeacherActionSelection => {
                 "no_direct_teacher_action_selection".to_string()
@@ -409,7 +413,7 @@ fn validate_manifest_verifier_check(check: VerifierCheck) -> Result<(), GameAppS
         VerifierCheck::HeardToken { token_id: 0, .. } => {
             Err(GameAppShellError::Core(ScaffoldContractError::InvalidId))
         }
-        VerifierCheck::RewardAtLeast(threshold)
+        VerifierCheck::BiologicalImprovementAtLeast(threshold)
             if !threshold.is_finite() || !(-1.0..=1.0).contains(&threshold) =>
         {
             Err(GameAppShellError::Core(

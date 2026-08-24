@@ -12,15 +12,13 @@ use std::{
 
 use alife_core::{
     ActionCommand, ActionId, ActionKind, AffordanceBits, BiochemistryState, BodyEventDelta,
-    BodySnapshot, BrainTickInput, BrainTickOutput, CanonicalDigestBuilder, Confidence,
-    ContextStreams, DriveDelta, EndocrineDelta, ExperiencePatch, HeardToken, HomeostaticDelta,
-    HomeostaticSnapshot, Intensity, LanguageContextSnapshot, LanguageTokenId, NormalizedScalar,
-    OrganismId,
-    PerceptionContextBlock, PerceptionFrame, PerceptionFrameDraft, PassiveBodyUpkeepPolicy,
-    PhysicalActionOutcome, PhysicalContactKind, PlayerUtterance, Pose, Quatf,
-    ReferenceActionExecution,
-    ChannelCommand, JointPhysicalOutcome, MeasuredChannelObservation, MotorChannel,
-    MotorCommandBundle,
+    BodySnapshot, BrainTickInput, BrainTickOutput, CanonicalDigestBuilder, ChannelCommand,
+    Confidence, ContextStreams, DriveDelta, EndocrineDelta, ExperiencePatch, HeardToken,
+    HomeostaticDelta, HomeostaticSnapshot, Intensity, JointPhysicalOutcome,
+    LanguageContextSnapshot, LanguageTokenId, MeasuredChannelObservation, MotorChannel,
+    MotorCommandBundle, NeuralEmissionFrame, NormalizedScalar, OrganismId, PassiveBodyUpkeepPolicy,
+    PerceptionContextBlock, PerceptionFrame, PerceptionFrameDraft, PhysicalActionOutcome,
+    PhysicalContactKind, PlayerUtterance, Pose, Quatf, ReferenceActionExecution,
     ReferenceActionExecutor, ReferenceActionFailure, ReferenceOutcomeObservation,
     ReferenceOutcomeObserver, ReferenceOutcomeRequest, ReferenceSensoryAdapter,
     ReferenceSensoryRequest, ScaffoldContractError, SensorProfile, SensorProfileProvenance,
@@ -472,10 +470,8 @@ impl HeadlessWorld {
                 {
                     continue;
                 }
-                let maternal_expressed_brain_class =
-                    maternal.genome().expressed_brain_class()?;
-                let paternal_expressed_brain_class =
-                    paternal.genome().expressed_brain_class()?;
+                let maternal_expressed_brain_class = maternal.genome().expressed_brain_class()?;
+                let paternal_expressed_brain_class = paternal.genome().expressed_brain_class()?;
                 if maternal.genome().id == paternal.genome().id
                     || maternal.genome().foundation.compatibility_family_id
                         != paternal.genome().foundation.compatibility_family_id
@@ -498,6 +494,7 @@ impl HeadlessWorld {
             }
         }
 
+        #[cfg(test)]
         let mut advanced_organism = false;
         for organism_id in organism_ids {
             let biology_tick = candidate
@@ -520,7 +517,10 @@ impl HeadlessWorld {
                         .organism_registry
                         .advance_biology(organism_id, next_tick, body_event)
                         .map_err(map_organism_registry_error)?;
-                    advanced_organism = true;
+                    #[cfg(test)]
+                    {
+                        advanced_organism = true;
+                    }
                 }
                 tick if tick == next_tick => {}
                 _ => return Err(ScaffoldContractError::NonMonotonicTick),
@@ -596,10 +596,10 @@ impl HeadlessWorld {
                 ^ maternal_id.raw().rotate_left(31)
                 ^ paternal_id.raw().rotate_right(11)
                 ^ 0xC0A1_CE71_4A2D_0001;
-            conception_seed = (conception_seed ^ (conception_seed >> 30))
-                .wrapping_mul(0xBF58_476D_1CE4_E5B9);
-            conception_seed = (conception_seed ^ (conception_seed >> 27))
-                .wrapping_mul(0x94D0_49BB_1331_11EB);
+            conception_seed =
+                (conception_seed ^ (conception_seed >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            conception_seed =
+                (conception_seed ^ (conception_seed >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
             conception_seed ^= conception_seed >> 31;
             if conception_seed == 0 {
                 conception_seed = 1;
@@ -634,7 +634,8 @@ impl HeadlessWorld {
             );
             midpoint.validate()?;
             let child_label = format!("organism-{}", child_id.raw());
-            let child_entity_id = candidate.spawn_social_agent(&child_label, child_id, midpoint, 0.0)?;
+            let child_entity_id =
+                candidate.spawn_social_agent(&child_label, child_id, midpoint, 0.0)?;
             let child_record = WorldOrganismRecord::newborn(
                 child_id,
                 child_entity_id,
@@ -1098,7 +1099,9 @@ impl HeadlessWorld {
         }) {
             candidate.last_action_result = None;
         }
-        candidate.last_creature_utterance_ticks.remove(&organism_id.raw());
+        candidate
+            .last_creature_utterance_ticks
+            .remove(&organism_id.raw());
         candidate.validate_organism_bindings()?;
         *self = candidate;
         Ok((final_record, final_object))
@@ -1942,7 +1945,23 @@ impl HeadlessWorld {
         world_entity_id: WorldEntityId,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
         let before = self.clone();
-        let result = self.apply_registered_motor_bundle_inner(bundle, world_entity_id);
+        let result = self.apply_registered_motor_bundle_inner(bundle, world_entity_id, None);
+        if let Err(error) = result {
+            *self = before;
+            return Err(error);
+        }
+        result
+    }
+
+    pub fn apply_registered_motor_bundle_with_neural_emission(
+        &mut self,
+        bundle: &MotorCommandBundle,
+        world_entity_id: WorldEntityId,
+        neural: &NeuralEmissionFrame,
+    ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
+        let before = self.clone();
+        let result =
+            self.apply_registered_motor_bundle_inner(bundle, world_entity_id, Some(neural));
         if let Err(error) = result {
             *self = before;
             return Err(error);
@@ -1954,6 +1973,7 @@ impl HeadlessWorld {
         &mut self,
         bundle: &MotorCommandBundle,
         world_entity_id: WorldEntityId,
+        neural: Option<&NeuralEmissionFrame>,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
         let outcome_tick = self.validate_registered_motor_bundle(bundle, world_entity_id)?;
         let biology_before = *self
@@ -1986,9 +2006,20 @@ impl HeadlessWorld {
                 combine_body_event(total, result.body_event)
             });
         body_event.validate_contract()?;
-        self.organism_registry
-            .advance_biology(bundle.organism_id, outcome_tick, body_event)
-            .map_err(map_organism_registry_error)?;
+        if let Some(neural) = neural {
+            self.organism_registry
+                .advance_biology_with_neural_emission(
+                    bundle.organism_id,
+                    outcome_tick,
+                    body_event,
+                    neural,
+                )
+                .map_err(map_organism_registry_error)?;
+        } else {
+            self.organism_registry
+                .advance_biology(bundle.organism_id, outcome_tick, body_event)
+                .map_err(map_organism_registry_error)?;
+        }
         self.validate_organism_bindings()?;
         let biology_after = *self
             .organism_registry
@@ -2705,7 +2736,7 @@ impl HeadlessWorld {
         let mut observation = ReferenceOutcomeObservation::new(
             succeeded,
             profile.homeostatic_delta,
-            SignedValence::new(profile.reward)?,
+            SignedValence::ZERO,
             NormalizedScalar::new(profile.frustration)?,
             NormalizedScalar::new(profile.pain)?,
             SignedValence::new(profile.energy)?,
@@ -3811,8 +3842,7 @@ fn decode_vocal_channel_payload(
         .iter()
         .map(|raw| {
             LanguageTokenId::new(
-                u16::try_from(*raw)
-                    .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
+                u16::try_from(*raw).map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -3893,7 +3923,6 @@ fn combine_body_event(total: BodyEventDelta, event: BodyEventDelta) -> BodyEvent
         temperature_stress: (total.temperature_stress + event.temperature_stress).clamp(0.0, 1.0),
         nutrition: (total.nutrition + event.nutrition).clamp(0.0, 1.0),
         social_contact: (total.social_contact + event.social_contact).clamp(0.0, 1.0),
-        reward_outcome: (total.reward_outcome + event.reward_outcome).clamp(-1.0, 1.0),
         sleep_recovery: (total.sleep_recovery + event.sleep_recovery).clamp(0.0, 1.0),
         mating_opportunity: (total.mating_opportunity + event.mating_opportunity).clamp(0.0, 1.0),
     }
@@ -4002,7 +4031,6 @@ fn validate_persisted_object(object: &WorldObject) -> Result<(), ScaffoldContrac
 #[derive(Debug, Clone, Copy)]
 struct OutcomeProfile {
     homeostatic_delta: HomeostaticDelta,
-    reward: f32,
     frustration: f32,
     pain: f32,
     energy: f32,
@@ -4016,7 +4044,6 @@ impl OutcomeProfile {
         Self::new(
             DriveDelta::zero(),
             EndocrineDelta::zero(),
-            0.0,
             0.0,
             0.0,
             -0.01,
@@ -4037,7 +4064,6 @@ impl OutcomeProfile {
                 serotonin: 0.05,
                 ..EndocrineDelta::zero()
             },
-            0.1,
             0.0,
             0.0,
             0.08,
@@ -4058,7 +4084,6 @@ impl OutcomeProfile {
                 ..DriveDelta::zero()
             },
             EndocrineDelta::zero(),
-            0.05,
             0.0,
             0.0,
             -0.01,
@@ -4070,7 +4095,6 @@ impl OutcomeProfile {
     fn food(nutrition: f32, pain: f32) -> Self {
         let nutrition = nutrition.clamp(0.0, 1.0);
         let pain = pain.clamp(0.0, 1.0);
-        let reward = (0.55 + nutrition * 0.4 - pain * 1.2).clamp(-1.0, 1.0);
         let energy = (nutrition * 0.5 - pain * 0.25).clamp(-1.0, 1.0);
         Self::new(
             DriveDelta {
@@ -4086,7 +4110,6 @@ impl OutcomeProfile {
                 serotonin: 0.05,
                 ..EndocrineDelta::zero()
             },
-            reward,
             0.0,
             pain,
             energy,
@@ -4097,7 +4120,6 @@ impl OutcomeProfile {
             energy,
             nutrition,
             damage: pain,
-            reward_outcome: reward,
             ..BodyEventDelta::zero()
         })
     }
@@ -4110,7 +4132,6 @@ impl OutcomeProfile {
                 ..DriveDelta::zero()
             },
             EndocrineDelta::zero(),
-            0.0,
             0.0,
             0.0,
             -0.04,
@@ -4134,7 +4155,6 @@ impl OutcomeProfile {
                 dopamine: -0.1,
                 ..EndocrineDelta::zero()
             },
-            -0.35 - pain * 0.45,
             0.25,
             pain,
             -0.08,
@@ -4158,7 +4178,6 @@ impl OutcomeProfile {
                 cortisol: 0.08,
                 ..EndocrineDelta::zero()
             },
-            -0.2,
             0.45,
             0.05,
             -0.03,
@@ -4179,7 +4198,6 @@ impl OutcomeProfile {
                 dopamine: -0.05,
                 ..EndocrineDelta::zero()
             },
-            -0.35,
             0.65,
             0.0,
             -0.02,
@@ -4199,7 +4217,6 @@ impl OutcomeProfile {
                 cortisol: 0.08,
                 ..EndocrineDelta::zero()
             },
-            -0.4,
             0.7,
             0.0,
             -0.01,
@@ -4215,7 +4232,6 @@ impl OutcomeProfile {
                 ..DriveDelta::zero()
             },
             EndocrineDelta::zero(),
-            0.08,
             0.0,
             0.0,
             -0.03,
@@ -4235,7 +4251,6 @@ impl OutcomeProfile {
                 oxytocin: 0.03,
                 ..EndocrineDelta::zero()
             },
-            0.04,
             0.0,
             0.0,
             -0.01,
@@ -4258,7 +4273,6 @@ impl OutcomeProfile {
                     serotonin: 0.03 * affinity,
                     ..EndocrineDelta::zero()
                 },
-                0.08 * affinity,
                 0.02,
                 0.0,
                 -0.02,
@@ -4284,7 +4298,6 @@ impl OutcomeProfile {
                     oxytocin: -0.04 * fear,
                     ..EndocrineDelta::zero()
                 },
-                -0.12 * fear,
                 0.20 * fear,
                 0.02 * fear,
                 -0.04,
@@ -4302,7 +4315,6 @@ impl OutcomeProfile {
     fn new(
         drives: DriveDelta,
         hormones: EndocrineDelta,
-        reward: f32,
         frustration: f32,
         pain: f32,
         energy: f32,
@@ -4311,7 +4323,6 @@ impl OutcomeProfile {
     ) -> Self {
         Self {
             homeostatic_delta: HomeostaticDelta { drives, hormones },
-            reward,
             frustration,
             pain,
             energy,
@@ -4319,7 +4330,6 @@ impl OutcomeProfile {
             contradiction,
             body_event: BodyEventDelta {
                 energy,
-                reward_outcome: reward,
                 ..BodyEventDelta::zero()
             },
         }
@@ -4328,7 +4338,6 @@ impl OutcomeProfile {
     fn with_body_event(mut self, body_event: BodyEventDelta) -> Self {
         self.body_event = BodyEventDelta {
             energy: self.body_event.energy,
-            reward_outcome: self.body_event.reward_outcome,
             ..body_event
         };
         self
@@ -4472,7 +4481,12 @@ mod task_6_factorized_motor_tests {
         .unwrap()
     }
 
-    fn prepared_world() -> (HeadlessWorld, WorldEntityId, WorldEntityId, MotorCommandBundle) {
+    fn prepared_world() -> (
+        HeadlessWorld,
+        WorldEntityId,
+        WorldEntityId,
+        MotorCommandBundle,
+    ) {
         let mut world = HeadlessScenarioBuilder::new(36_001)
             .agent("agent", ORGANISM_ID, Vec3f::ZERO)
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.6)
@@ -4525,9 +4539,7 @@ mod task_6_factorized_motor_tests {
             .unwrap()
             .biochemistry();
 
-        let receipt = world
-            .apply_registered_motor_bundle(&bundle, agent)
-            .unwrap();
+        let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
 
         assert_eq!(receipt.bundle, bundle);
         assert_eq!(receipt.outcome_tick, Tick::new(1));
@@ -4669,6 +4681,41 @@ mod task_6_factorized_motor_tests {
             Some(&before_record)
         );
         assert_eq!(failing_world.tick(), Tick::ZERO);
+    }
+
+    #[test]
+    fn factorized_bundle_causally_couples_neural_emission_into_organism_chemistry() {
+        let (mut world, agent, _, bundle) = prepared_world();
+        let before = *world
+            .organism_registry()
+            .get(ORGANISM_ID)
+            .unwrap()
+            .biochemistry();
+        let neural = alife_core::NeuralEmissionFrame::new(
+            Tick::ZERO,
+            1,
+            vec![alife_core::NeuralEmission::new(
+                alife_core::NeuralEmissionClass::ExecutiveSustain,
+                0.9,
+                0.9,
+            )
+            .unwrap()],
+        )
+        .unwrap();
+
+        let receipt = world
+            .apply_registered_motor_bundle_with_neural_emission(&bundle, agent, &neural)
+            .unwrap();
+
+        assert_ne!(receipt.biology_after.graph_state(), before.graph_state());
+        assert_eq!(
+            receipt.biology_after.biochemical_work().neural_emitter_evaluations,
+            1
+        );
+        assert!(
+            receipt.biology_after.homeostasis.hormones.acetylcholine
+                > before.homeostasis.hormones.acetylcholine
+        );
     }
 }
 
@@ -4968,11 +5015,7 @@ mod task_3_2a_tests {
 
     fn task_4_1_world_with_registration_order(order: &[OrganismId]) -> HeadlessWorld {
         let mut world = HeadlessScenarioBuilder::new(41_001)
-            .agent(
-                "agent-low",
-                TASK_4_1_LOW_ORGANISM,
-                Vec3f::ZERO,
-            )
+            .agent("agent-low", TASK_4_1_LOW_ORGANISM, Vec3f::ZERO)
             .agent(
                 "agent-high",
                 TASK_4_1_HIGH_ORGANISM,
@@ -5010,9 +5053,7 @@ mod task_3_2a_tests {
     fn task_4_1_consume_and_prepare_resource(world: &mut HeadlessWorld) -> WorldEntityId {
         let food = world.entity_id("food").unwrap();
         let result = world
-            .apply_command(
-                &HeadlessWorldCommand::eat(TASK_4_1_LOW_ORGANISM, food).unwrap(),
-            )
+            .apply_command(&HeadlessWorldCommand::eat(TASK_4_1_LOW_ORGANISM, food).unwrap())
             .unwrap();
         assert!(result.execution.succeeded);
         assert_eq!(result.body_event.nutrition, 0.6);
@@ -5032,26 +5073,20 @@ mod task_3_2a_tests {
         world: &HeadlessWorld,
         organism_id: OrganismId,
     ) -> WorldOrganismRecord {
-        world
-            .organism_registry()
-            .get(organism_id)
-            .unwrap()
-            .clone()
+        world.organism_registry().get(organism_id).unwrap().clone()
     }
 
     #[test]
     fn try_advance_tick_updates_all_registered_biology_and_resource_lifecycle_in_stable_order_and_rolls_back_late_failure(
     ) {
-        let mut forward =
-            task_4_1_world_with_registration_order(&[
-                TASK_4_1_LOW_ORGANISM,
-                TASK_4_1_HIGH_ORGANISM,
-            ]);
-        let mut reverse =
-            task_4_1_world_with_registration_order(&[
-                TASK_4_1_HIGH_ORGANISM,
-                TASK_4_1_LOW_ORGANISM,
-            ]);
+        let mut forward = task_4_1_world_with_registration_order(&[
+            TASK_4_1_LOW_ORGANISM,
+            TASK_4_1_HIGH_ORGANISM,
+        ]);
+        let mut reverse = task_4_1_world_with_registration_order(&[
+            TASK_4_1_HIGH_ORGANISM,
+            TASK_4_1_LOW_ORGANISM,
+        ]);
         let forward_food = task_4_1_consume_and_prepare_resource(&mut forward);
         let reverse_food = task_4_1_consume_and_prepare_resource(&mut reverse);
 
@@ -5129,7 +5164,10 @@ mod task_3_2a_tests {
                 .biochemistry(),
             &expected_high
         );
-        assert_ne!(expected_low.homeostasis, before_low.biochemistry().homeostasis);
+        assert_ne!(
+            expected_low.homeostasis,
+            before_low.biochemistry().homeostasis
+        );
         assert_ne!(
             expected_high.homeostasis,
             before_high.biochemistry().homeostasis
@@ -5213,16 +5251,14 @@ mod task_3_2a_tests {
         let reverse_low_entity = reverse.entity_id("agent-low").unwrap();
         let forward_action = forward
             .apply_registered_command(
-                &HeadlessWorldCommand::approach(TASK_4_1_LOW_ORGANISM, forward_hazard)
-                    .unwrap(),
+                &HeadlessWorldCommand::approach(TASK_4_1_LOW_ORGANISM, forward_hazard).unwrap(),
                 forward_low_entity,
                 next_tick,
             )
             .unwrap();
         let reverse_action = reverse
             .apply_registered_command(
-                &HeadlessWorldCommand::approach(TASK_4_1_LOW_ORGANISM, reverse_hazard)
-                    .unwrap(),
+                &HeadlessWorldCommand::approach(TASK_4_1_LOW_ORGANISM, reverse_hazard).unwrap(),
                 reverse_low_entity,
                 next_tick,
             )
@@ -5277,10 +5313,7 @@ mod task_3_2a_tests {
         let forward_high = task_4_1_record_state(&forward, TASK_4_1_HIGH_ORGANISM);
         assert_eq!(forward_low.age_at(next_tick).unwrap(), next_tick);
         assert_eq!(forward_high.age_at(next_tick).unwrap(), next_tick);
-        assert_eq!(
-            forward_low.biochemistry().development.age_ticks,
-            next_tick
-        );
+        assert_eq!(forward_low.biochemistry().development.age_ticks, next_tick);
         assert_eq!(
             forward_low.biochemistry().development.maturation,
             expected_low_development.maturation.raw()
@@ -5294,16 +5327,10 @@ mod task_3_2a_tests {
             forward_low.biochemistry().body.energy,
             forward_action.biology_after.body.energy
         );
-        assert_eq!(
-            forward_low.lifecycle().death_tick(),
-            Some(next_tick)
-        );
+        assert_eq!(forward_low.lifecycle().death_tick(), Some(next_tick));
         assert!(!forward_low.lifecycle().is_alive());
         assert!(forward_high.lifecycle().is_alive());
-        assert_eq!(
-            forward_high.biochemistry().development.age_ticks,
-            next_tick
-        );
+        assert_eq!(forward_high.biochemistry().development.age_ticks, next_tick);
         assert_eq!(
             forward_high.biochemistry().body.health,
             before_high.biochemistry().body.health
@@ -5343,12 +5370,10 @@ mod task_3_2a_tests {
 
         let before_low = task_4_1_record_state(&forward, TASK_4_1_LOW_ORGANISM);
         let before_high = task_4_1_record_state(&forward, TASK_4_1_HIGH_ORGANISM);
-        let low_maximum = alife_core::PassiveBodyUpkeepPolicy::maximum_lifespan_ticks(
-            before_low.phenotype(),
-        );
-        let high_maximum = alife_core::PassiveBodyUpkeepPolicy::maximum_lifespan_ticks(
-            before_high.phenotype(),
-        );
+        let low_maximum =
+            alife_core::PassiveBodyUpkeepPolicy::maximum_lifespan_ticks(before_low.phenotype());
+        let high_maximum =
+            alife_core::PassiveBodyUpkeepPolicy::maximum_lifespan_ticks(before_high.phenotype());
         assert_ne!(low_maximum, high_maximum);
         let minimum_maximum = low_maximum.min(high_maximum);
         assert!(minimum_maximum > 0);
@@ -5374,8 +5399,7 @@ mod task_3_2a_tests {
                     .unwrap()
                     .phenotype()
                     .clone();
-                let biology = alife_core::BiochemistryState::new(&phenotype, current_tick)
-                    .unwrap();
+                let biology = alife_core::BiochemistryState::new(&phenotype, current_tick).unwrap();
                 world
                     .organism_registry
                     .with_biology_mut(organism_id, |current| {
@@ -5391,8 +5415,7 @@ mod task_3_2a_tests {
                     .unwrap()
                     .phenotype()
                     .clone();
-                let biology = alife_core::BiochemistryState::new(&phenotype, next_tick)
-                    .unwrap();
+                let biology = alife_core::BiochemistryState::new(&phenotype, next_tick).unwrap();
                 world
                     .organism_registry
                     .with_biology_mut(TASK_4_1_LOW_ORGANISM, |current| {
@@ -5600,10 +5623,12 @@ mod task_3_2a_tests {
         assert_eq!(reverse.try_advance_tick().unwrap(), next_tick);
         let forward_low = task_4_1_record_state(&forward, TASK_4_1_LOW_ORGANISM);
         let forward_high = task_4_1_record_state(&forward, TASK_4_1_HIGH_ORGANISM);
-        assert!((forward_high.biochemistry().body.energy
-            - (before_high.biochemistry().body.energy - expected_upkeep_cost))
-            .abs()
-            <= 1.0e-6);
+        assert!(
+            (forward_high.biochemistry().body.energy
+                - (before_high.biochemistry().body.energy - expected_upkeep_cost))
+                .abs()
+                <= 1.0e-6
+        );
         assert!(forward_high.biochemistry().body.energy > 0.0);
         assert_eq!(forward_low.biochemistry().body.energy, 0.0);
         assert_eq!(forward_low.lifecycle().death_tick(), Some(next_tick));
@@ -5667,13 +5692,9 @@ mod task_4_3a2_tests {
         let paternal_phenotype = paternal_genome.express().unwrap();
         let reproduction_period =
             u64::from(alife_core::BiochemistryCadence::early_mammal().reproduction_ticks);
-        let first_post_puberty_boundary = ((maternal_phenotype
-            .development
-            .puberty_tick
-            .raw()
-            / reproduction_period)
-            + 1)
-            * reproduction_period;
+        let first_post_puberty_boundary =
+            ((maternal_phenotype.development.puberty_tick.raw() / reproduction_period) + 1)
+                * reproduction_period;
         let current_tick = Tick(first_post_puberty_boundary - 1);
         let next_tick = Tick(first_post_puberty_boundary);
         let maternal_biology = alife_core::BiochemistryState::new_with_age(
@@ -5697,26 +5718,30 @@ mod task_4_3a2_tests {
         let paternal_entity = world.entity_id("parent-paternal").unwrap();
         world.tick = current_tick;
         world
-            .register_organism_record(WorldOrganismRecord::new(
-                MATERNAL_ID,
-                maternal_entity,
-                maternal_genome,
-                maternal_phenotype,
-                maternal_biology,
-                Tick::ZERO,
+            .register_organism_record(
+                WorldOrganismRecord::new(
+                    MATERNAL_ID,
+                    maternal_entity,
+                    maternal_genome,
+                    maternal_phenotype,
+                    maternal_biology,
+                    Tick::ZERO,
+                )
+                .unwrap(),
             )
-            .unwrap())
             .unwrap();
         world
-            .register_organism_record(WorldOrganismRecord::new(
-                PATERNAL_ID,
-                paternal_entity,
-                paternal_genome,
-                paternal_phenotype,
-                paternal_biology,
-                Tick::ZERO,
+            .register_organism_record(
+                WorldOrganismRecord::new(
+                    PATERNAL_ID,
+                    paternal_entity,
+                    paternal_genome,
+                    paternal_phenotype,
+                    paternal_biology,
+                    Tick::ZERO,
+                )
+                .unwrap(),
             )
-            .unwrap())
             .unwrap();
         for organism_id in [MATERNAL_ID, PATERNAL_ID] {
             world
@@ -5743,7 +5768,8 @@ mod task_4_3a2_tests {
 
     #[test]
     fn nearby_ready_compatible_parents_create_one_deterministic_newborn() {
-        let (mut forward, next_tick) = prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID);
+        let (mut forward, next_tick) =
+            prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID);
         let (mut replay, replay_next_tick) =
             prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID);
         let expected_child_id = OrganismId(forward.next_organism_id);
@@ -5764,16 +5790,19 @@ mod task_4_3a2_tests {
         assert_eq!(replay.try_advance_tick().unwrap(), replay_next_tick);
         assert_eq!(forward.object_count(), 3);
         assert_eq!(forward.organism_registry().iter().count(), 3);
-        let child = forward
-            .organism_registry()
-            .get(expected_child_id)
-            .unwrap();
+        let child = forward.organism_registry().get(expected_child_id).unwrap();
         let child_object = forward.entity(child.world_entity_id()).unwrap();
         assert_eq!(child_object.kind, WorldObjectKind::Agent);
         assert_eq!(child_object.organism_id, Some(expected_child_id));
-        assert_eq!(child_object.label, format!("organism-{}", expected_child_id.raw()));
+        assert_eq!(
+            child_object.label,
+            format!("organism-{}", expected_child_id.raw())
+        );
         assert_eq!(child_object.position, Vec3f::new(0.25, 0.0, 0.0));
-        assert_eq!(child.genome().parent_genome_ids, vec![maternal_genome_id, paternal_genome_id]);
+        assert_eq!(
+            child.genome().parent_genome_ids,
+            vec![maternal_genome_id, paternal_genome_id]
+        );
         assert_eq!(child.phenotype(), &child.genome().express().unwrap());
         assert_eq!(child.biochemistry().development.age_ticks, Tick::ZERO);
         assert_eq!(child.birth_tick(), next_tick);
@@ -5782,7 +5811,10 @@ mod task_4_3a2_tests {
         assert_ne!(child.genome().conception_seed, 0);
         assert_eq!(child.phenotype().lineage_id, child.genome().lineage_id);
         assert_eq!(records(&forward), records(&replay));
-        assert_eq!(forward.canonical_signature_digest().unwrap(), replay.canonical_signature_digest().unwrap());
+        assert_eq!(
+            forward.canonical_signature_digest().unwrap(),
+            replay.canonical_signature_digest().unwrap()
+        );
     }
 
     #[test]
@@ -5824,12 +5856,9 @@ mod task_4_3a2_tests {
         let terminal_id = OrganismId(31);
         let terminal_genome = founder(0xE10_43C5, COMPATIBILITY_FAMILY_ID);
         let terminal_phenotype = terminal_genome.express().unwrap();
-        let terminal_biology = BiochemistryState::new_with_age(
-            &terminal_phenotype,
-            world.tick(),
-            world.tick(),
-        )
-        .unwrap();
+        let terminal_biology =
+            BiochemistryState::new_with_age(&terminal_phenotype, world.tick(), world.tick())
+                .unwrap();
         let terminal_entity = world
             .editor_spawn_object(WorldEditorSpawnSpec {
                 label: "terminal-organism".to_string(),
@@ -5947,7 +5976,8 @@ mod task_4_3a2_tests {
 
     #[test]
     fn late_child_spawn_failure_preserves_tick_objects_registry_and_allocators() {
-        let (mut world, next_tick) = prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID);
+        let (mut world, next_tick) =
+            prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID);
         let expected_child_id = OrganismId(world.next_organism_id);
         world
             .editor_spawn_object(WorldEditorSpawnSpec {
@@ -5969,14 +5999,20 @@ mod task_4_3a2_tests {
         let before_next_organism_id = world.next_organism_id;
         let before_next_spawn_sequence = world.next_spawn_sequence;
 
-        assert_eq!(world.try_advance_tick(), Err(ScaffoldContractError::InvalidId));
+        assert_eq!(
+            world.try_advance_tick(),
+            Err(ScaffoldContractError::InvalidId)
+        );
         assert_eq!(world.tick(), before_tick);
         assert_eq!(world.object_snapshots(), before_objects);
         assert_eq!(records(&world), before_records);
         assert_eq!(world.next_entity_id, before_next_entity_id);
         assert_eq!(world.next_organism_id, before_next_organism_id);
         assert_eq!(world.next_spawn_sequence, before_next_spawn_sequence);
-        assert_eq!(world.canonical_signature_digest().unwrap(), before_signature);
+        assert_eq!(
+            world.canonical_signature_digest().unwrap(),
+            before_signature
+        );
         assert_eq!(next_tick, Tick(before_tick.raw() + 1));
     }
 }

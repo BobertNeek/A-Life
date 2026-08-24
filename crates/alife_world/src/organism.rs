@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkReceipt};
 use alife_core::{
     BiochemistryState, Blake3Digest, BodyEventDelta, CanonicalDigestBuilder, CreatureGenome,
-    CreaturePhenotype, HomeostaticSnapshot, OrganismId, ScaffoldContractError, SleepPhase, Tick,
-    Validate, WorldEntityId,
+    CreaturePhenotype, HomeostaticSnapshot, NeuralEmissionFrame, OrganismId, ScaffoldContractError,
+    SleepPhase, Tick, Validate, WorldEntityId,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -136,12 +136,34 @@ pub enum OrganismRegistryError {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OrganismAuthorityBinding {
+    pub organism_id: OrganismId,
+    pub brain_owner: OrganismId,
+    pub memory_owner: OrganismId,
+    pub embodiment_entity: WorldEntityId,
+}
+
+impl Validate for OrganismAuthorityBinding {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.organism_id.validate()?;
+        self.brain_owner.validate()?;
+        self.memory_owner.validate()?;
+        self.embodiment_entity.validate()?;
+        if self.brain_owner != self.organism_id || self.memory_owner != self.organism_id {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorldOrganismRecord {
     organism_id: OrganismId,
     world_entity_id: WorldEntityId,
     genome: CreatureGenome,
     phenotype: CreaturePhenotype,
     biochemistry: BiochemistryState,
+    authority: OrganismAuthorityBinding,
     birth_tick: Tick,
     lifecycle: OrganismLifecycle,
     #[serde(default = "default_sleep_phase")]
@@ -188,6 +210,10 @@ impl WorldOrganismRecord {
 
     pub fn biochemistry(&self) -> &BiochemistryState {
         &self.biochemistry
+    }
+
+    pub const fn authority(&self) -> &OrganismAuthorityBinding {
+        &self.authority
     }
 
     pub const fn birth_tick(&self) -> Tick {
@@ -280,6 +306,12 @@ impl WorldOrganismRecord {
             genome,
             phenotype,
             biochemistry,
+            authority: OrganismAuthorityBinding {
+                organism_id,
+                brain_owner: organism_id,
+                memory_owner: organism_id,
+                embodiment_entity: world_entity_id,
+            },
             birth_tick,
             lifecycle: OrganismLifecycle::Alive,
             sleep_phase: SleepPhase::Awake,
@@ -315,6 +347,12 @@ impl WorldOrganismRecord {
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         self.organism_id.validate()?;
         self.world_entity_id.validate()?;
+        self.authority.validate_contract()?;
+        if self.authority.organism_id != self.organism_id
+            || self.authority.embodiment_entity != self.world_entity_id
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
         self.genome.validate_contract()?;
         if self.phenotype.source_genome_id != self.genome.id
             || self.phenotype.lineage_id != self.genome.lineage_id
@@ -410,6 +448,29 @@ impl WorldOrganismRecord {
             .advance_with_age(next_tick, next_age, event, &self.phenotype)
             .map_err(OrganismRegistryError::InvalidRecord)?;
         self.biochemistry = next;
+        if let Err(error) = self.validate_contract() {
+            self.biochemistry = original_biochemistry;
+            return Err(error.into());
+        }
+        Ok(())
+    }
+
+    pub fn advance_biology_with_neural_emission(
+        &mut self,
+        next_tick: Tick,
+        event: BodyEventDelta,
+        neural: &NeuralEmissionFrame,
+    ) -> Result<(), OrganismRegistryError> {
+        if !self.lifecycle.is_alive() {
+            return Err(OrganismRegistryError::DeadOrganism(self.organism_id));
+        }
+        let original_biochemistry = self.biochemistry;
+        self.validate_contract()?;
+        let next_age = self.age_at(next_tick)?;
+        self.biochemistry = self
+            .biochemistry
+            .advance_with_neural_emission(next_tick, next_age, event, Some(neural), &self.phenotype)
+            .map_err(OrganismRegistryError::InvalidRecord)?;
         if let Err(error) = self.validate_contract() {
             self.biochemistry = original_biochemistry;
             return Err(error.into());
@@ -697,6 +758,19 @@ impl WorldOrganismRegistry {
             .get_mut(&organism_id.raw())
             .ok_or(OrganismRegistryError::UnknownOrganism(organism_id))?
             .advance_biology(next_tick, event)
+    }
+
+    pub fn advance_biology_with_neural_emission(
+        &mut self,
+        organism_id: OrganismId,
+        next_tick: Tick,
+        event: BodyEventDelta,
+        neural: &NeuralEmissionFrame,
+    ) -> Result<(), OrganismRegistryError> {
+        self.records_by_organism
+            .get_mut(&organism_id.raw())
+            .ok_or(OrganismRegistryError::UnknownOrganism(organism_id))?
+            .advance_biology_with_neural_emission(next_tick, event, neural)
     }
 
     pub fn account_cognitive_work(

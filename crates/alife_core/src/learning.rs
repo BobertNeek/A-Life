@@ -16,7 +16,7 @@ use crate::{
 /// Bounded, auditable components of the third factor applied after an outcome.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct NeuromodulatorSample {
-    reward_prediction_error: f32,
+    prediction_residual: f32,
     pain: f32,
     homeostatic_improvement: f32,
     frustration: f32,
@@ -27,14 +27,14 @@ pub struct NeuromodulatorSample {
 impl NeuromodulatorSample {
     /// Construct a sample with the canonical bounded three-factor formula.
     pub fn from_components(
-        reward_prediction_error: f32,
+        prediction_residual: f32,
         pain: f32,
         homeostatic_improvement: f32,
         frustration: f32,
         novelty: f32,
     ) -> Result<Self, ScaffoldContractError> {
         let components = [
-            reward_prediction_error,
+            prediction_residual,
             pain,
             homeostatic_improvement,
             frustration,
@@ -46,12 +46,11 @@ impl NeuromodulatorSample {
         if components.iter().any(|value| !(-1.0..=1.0).contains(value)) {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
-        let value = (reward_prediction_error - pain + 0.75 * homeostatic_improvement
-            - 0.5 * frustration
-            + 0.2 * novelty)
+        let value = (0.75 * homeostatic_improvement - pain - 0.5 * frustration
+            + 0.2 * novelty * prediction_residual)
             .clamp(-1.0, 1.0);
         Ok(Self {
-            reward_prediction_error,
+            prediction_residual,
             pain,
             homeostatic_improvement,
             frustration,
@@ -60,8 +59,8 @@ impl NeuromodulatorSample {
         })
     }
 
-    pub const fn reward_prediction_error(self) -> f32 {
-        self.reward_prediction_error
+    pub const fn prediction_residual(self) -> f32 {
+        self.prediction_residual
     }
 
     pub const fn pain(self) -> f32 {
@@ -87,7 +86,8 @@ impl NeuromodulatorSample {
 
 #[derive(Deserialize)]
 struct NeuromodulatorSampleWire {
-    reward_prediction_error: f32,
+    #[serde(alias = "reward_prediction_error")]
+    prediction_residual: f32,
     pain: f32,
     homeostatic_improvement: f32,
     frustration: f32,
@@ -105,7 +105,7 @@ impl<'de> Deserialize<'de> for NeuromodulatorSample {
             return Err(D::Error::custom("invalid serialized neuromodulator value"));
         }
         let recomputed = Self::from_components(
-            wire.reward_prediction_error,
+            wire.prediction_residual,
             wire.pain,
             wire.homeostatic_improvement,
             wire.frustration,
@@ -174,12 +174,16 @@ impl OutcomeCreditPacket {
         }
 
         let outcome = patch.outcome();
+        let physiology = outcome
+            .measured_physiology
+            .as_ref()
+            .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
         let modulator = NeuromodulatorSample::from_components(
-            outcome.reward_valence.raw(),
-            outcome.pain_delta.raw(),
-            homeostatic_improvement(outcome),
-            outcome.frustration_delta.raw(),
             outcome.prediction_error.raw(),
+            physiology.pain_delta.raw().max(0.0),
+            homeostatic_improvement(physiology),
+            outcome.frustration_delta.raw(),
+            0.0,
         )?;
         Ok(Self {
             schema_version: SchemaVersions::CURRENT.learning.raw(),
@@ -366,8 +370,8 @@ pub enum FastWeightSemantics {
     ImmediateThreeFactor,
 }
 
-fn homeostatic_improvement(outcome: &crate::PostActionOutcome) -> f32 {
-    let drives = outcome.homeostatic_delta.drives;
+fn homeostatic_improvement(physiology: &crate::MeasuredPhysiologyTransition) -> f32 {
+    let drives = physiology.homeostatic_delta.drives;
     // Lower aversive drives and higher ATP/energy are improvements. Curiosity,
     // reproductive drive, pain, and extension channels are excluded here:
     // curiosity is represented by novelty, pain has its own negative factor,
@@ -375,7 +379,7 @@ fn homeostatic_improvement(outcome: &crate::PostActionOutcome) -> f32 {
     let oriented_sum = -drives.hunger - drives.fatigue - drives.fear - drives.loneliness
         + drives.brain_atp
         - drives.temperature_stress
-        + outcome.energy_delta.raw();
+        + physiology.energy_delta.raw();
     (oriented_sum / 7.0).clamp(-1.0, 1.0)
 }
 

@@ -73,6 +73,8 @@ macro_rules! bounded_scalar {
         pub struct $name(pub f32);
 
         impl $name {
+            pub const ZERO: Self = Self(0.0);
+
             pub fn new(value: f32) -> Result<Self, ScaffoldContractError> {
                 validate_finite(value)?;
                 if ($min..=$max).contains(&value) {

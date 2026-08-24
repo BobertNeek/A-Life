@@ -3626,7 +3626,7 @@ impl GpuClosedLoopBackend {
         for (field, value) in [
             (
                 GpuLearningEvidenceMismatchField::RewardPredictionErrorRange,
-                modulator.reward_prediction_error(),
+                modulator.prediction_residual(),
             ),
             (
                 GpuLearningEvidenceMismatchField::PainRange,

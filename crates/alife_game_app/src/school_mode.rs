@@ -470,7 +470,7 @@ pub fn run_school_mode_smoke_with_config(
                 VerifierCheck::NoDirectTeacherActionSelection,
                 VerifierCheck::SelectedByArbitration,
             ],
-            feedback_events: vec![TeacherPerceptualEvent::visible_reward(
+            feedback_events: vec![TeacherPerceptualEvent::social_approval(
                 lesson_id,
                 NormalizedScalar::new(0.65)?,
             )],

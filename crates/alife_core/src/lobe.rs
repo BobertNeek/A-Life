@@ -157,16 +157,16 @@ impl LobeKind {
 
     pub const fn default_activation_policy(self) -> ActivationPolicy {
         match self {
-            LobeKind::SensoryGrounding | LobeKind::AuditorySpeech | LobeKind::GlyphVision => {
-                ActivationPolicy::SensoryInput
-            }
-            LobeKind::MetabolicDrive => ActivationPolicy::DriveState,
-            LobeKind::LexiconConcept => ActivationPolicy::SparseAssociative,
-            LobeKind::CoreAssociation => ActivationPolicy::SparseAssociative,
-            LobeKind::EpisodicMemory => ActivationPolicy::EpisodicRecall,
-            LobeKind::WorkingMemory => ActivationPolicy::WorkingAttention,
-            LobeKind::MotorArbitration => ActivationPolicy::MotorCompetition,
-            LobeKind::HomeostaticRegulation => ActivationPolicy::HomeostaticControl,
+            LobeKind::SensoryGrounding
+            | LobeKind::MetabolicDrive
+            | LobeKind::AuditorySpeech
+            | LobeKind::GlyphVision
+            | LobeKind::HomeostaticRegulation => ActivationPolicy::InputCoupled,
+            LobeKind::LexiconConcept
+            | LobeKind::CoreAssociation
+            | LobeKind::EpisodicMemory
+            | LobeKind::WorkingMemory => ActivationPolicy::Recurrent,
+            LobeKind::MotorArbitration => ActivationPolicy::OutputCoupled,
             LobeKind::LanguageExpansion
             | LobeKind::MathQuantity
             | LobeKind::NarrativeHistory
@@ -252,13 +252,9 @@ pub enum PlasticityPolicy {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ActivationPolicy {
-    SensoryInput,
-    DriveState,
-    SparseAssociative,
-    EpisodicRecall,
-    WorkingAttention,
-    MotorCompetition,
-    HomeostaticControl,
+    InputCoupled,
+    Recurrent,
+    OutputCoupled,
     Disabled,
 }
 
