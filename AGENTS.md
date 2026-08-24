@@ -1,13 +1,40 @@
 # AGENTS.md - A-Life Root Instructions
 
-Read `docs/master_spec.md` and `docs/architecture_decisions.md` before edits.
+Before code or architecture edits, read the relevant sections of
+`docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md`.
+Use `docs/architecture/requirement_registry.csv` when grading or tracing
+requirements.
 
 This file controls repository-wide agent behavior. Child `AGENTS.md` files in
 `docs/` and each crate add local rules for that subtree. When rules conflict,
 prefer the more specific local file unless it violates the project-wide
-architecture decisions below.
+v2.0 controlling architecture.
 
-Non-negotiable rules:
+## Architecture authority
+
+- A-Life v2.0 is the single normative architecture and controls every conflict.
+- All earlier architecture specifications, recovery designs, plans, and
+  compliance matrices are superseded historical material. They may explain
+  lineage but cannot amend, narrow, or override v2.0.
+- Preserve the v2.0 categories exactly: LOCKED GOAL, LOCKED CAPABILITY, LOCKED
+  INVARIANT, LOCKED INTERFACE, REFERENCE MECHANISM, TUNABLE DEFAULT, DEFERRED
+  CAPABILITY, and RESEARCH. Apply the conflict precedence stated in v2.0.
+- Current Rust types, engines, processor placement, GPU layouts, brain-size
+  classes, N2048 assumptions, constants, adapters, tests, fixtures, and other
+  implementation choices are not architecture unless v2.0 explicitly locks
+  their semantics.
+- Record codebase pass/fail status only in dated compliance reports that cite
+  stable `AOA-*` requirement IDs. Never write current compliance into the
+  permanent architecture.
+- When implementation and v2.0 differ, report the implementation gap. Do not
+  reinterpret the implementation as architecture or start an unrequested
+  repair pass.
+
+## Current implementation guardrails
+
+These rules protect the present codebase during ordinary work. They are
+non-normative implementation constraints, do not amend v2.0, and may change
+only through separately authorized migration work.
 
 - Rust + Bevy + wgpu/WebGPU + WGSL only.
 - No Unity.

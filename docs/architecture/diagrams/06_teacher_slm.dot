@@ -1,0 +1,16 @@
+digraph G {
+  graph [rankdir=TB, bgcolor="white", fontname="Lato", nodesep=0.5, ranksep=0.55, pad=0.25];
+  node [shape=box, style="rounded,filled", fontname="Lato", fontsize=10, color="#355070", fillcolor="#F7F9FC"];
+  edge [fontname="Lato", fontsize=9, color="#556270", arrowsize=0.7];
+  slm [label="Semantic-Prior Service\ngeneral relationships only", fillcolor="#F4F4F4"];
+  planner [label="Pedagogical Planner\nread-only bounded diagnostics", fillcolor="#FFF7E2"];
+  actor [label="Embodied Teacher Actor\nspeech, gesture, demonstration, setup", fillcolor="#FCEFE8"];
+  world [label="Shared World\nordinary causal channels", fillcolor="#E9F5F5"];
+  learner [label="Learner Organism\nperception -> cognition -> action -> learning", fillcolor="#F2ECFA"];
+  slm -> learner [label="bounded semantic hints"];
+  planner -> actor [label="lesson plan"];
+  actor -> world [label="grounded teaching acts"];
+  world -> learner [label="perceived evidence"];
+  learner -> world [label="response"];
+  world -> planner [style=dashed, label="bounded progress diagnostics"];
+}

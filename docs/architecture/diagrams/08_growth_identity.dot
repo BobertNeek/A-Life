@@ -1,0 +1,13 @@
+digraph G {
+  graph [rankdir=LR, bgcolor="white", fontname="Lato", nodesep=0.4, ranksep=0.5, pad=0.25];
+  node [shape=box, style="rounded,filled", fontname="Lato", fontsize=9, color="#355070", fillcolor="#F7F9FC"];
+  edge [fontname="Lato", fontsize=8, color="#556270", arrowsize=0.65];
+  q [label="Quiescent transaction boundary\ncredit resolved, checkpoint sealed", fillcolor="#FFF7E2"];
+  old [label="Graph epoch E\nlogical neuron lineage + physical layout", fillcolor="#F2ECFA"];
+  morph [label="Function-preserving morphism\nsilent addition, split contribution, residual routes", fillcolor="#E8F1FB"];
+  new [label="Graph epoch E+1\nnew indices, preserved old manifold", fillcolor="#F2ECFA"];
+  accl [label="Acclimation\nself-distillation, gradual plasticity release", fillcolor="#EEF7E8"];
+  commit [label="Continuity check and commit\nor rollback", fillcolor="#E9F5F5"];
+  q -> old -> morph -> new -> accl -> commit;
+  commit -> old [style=dashed, label="rollback"];
+}

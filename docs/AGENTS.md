@@ -1,21 +1,41 @@
 # Documentation instructions
 
-This subtree describes the current A-Life project. Keep it concise, source-backed, and explicit about evidence limits.
+This subtree contains the controlling v2.0 architecture, current implementation
+documentation, dated evidence, and historical design lineage. Keep each role
+explicit.
 
-## Authorities
+## Controlling authority
+
+- `architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md`
+  is the single normative A-Life architecture.
+- `architecture/requirement_registry.csv` is the stable `AOA-*` registry used
+  by dated compliance reports.
+- Preserve the v2.0 categories exactly: LOCKED GOAL, LOCKED CAPABILITY, LOCKED
+  INVARIANT, LOCKED INTERFACE, REFERENCE MECHANISM, TUNABLE DEFAULT, DEFERRED
+  CAPABILITY, and RESEARCH. Apply the conflict precedence in the controlling
+  document.
+- Earlier architecture specifications are superseded historical material.
+  They may explain lineage but cannot override v2.0.
+
+## Derived and historical documents
 
 - `../README.md` is the project entry point.
-- `VISION.md` defines the aspiration and non-goals.
-- `STATUS.md` records implemented, integrated, player-visible, and proven state.
-- `ARCHITECTURE.md` owns the current component and authority map.
-- `ROADMAP.md` orders the remaining work and acceptance gates.
-- `DEVELOPMENT.md` owns supported developer workflows.
-- `EVIDENCE.md` owns receipt rules and durable result interpretation.
-- `REFERENCE.md` owns stable ABI, tier, inheritance, teacher, SLM, persistence, and archive invariants.
+- `VISION.md`, `STATUS.md`, `ROADMAP.md`, `DEVELOPMENT.md`, and `EVIDENCE.md`
+  are non-normative project and evidence documents.
+- `ARCHITECTURE.md` and `REFERENCE.md` describe the current implementation.
+  They are non-normative and cannot define the target.
+- The v1.1 brain specification, compliance matrix, and recovery documents are
+  retained only as clearly marked history.
+- Current codebase compliance belongs in dated reports using `AOA-*` IDs. Do
+  not embed pass/fail status in the controlling architecture.
+- Do not create a second active architecture authority set.
 
-The Git history is the archive for superseded plans and specifications. Do not recreate a second active authority set.
+## Current implementation guardrails
 
-## Rules
+The rules below protect the current code during ordinary changes. Rust types,
+Bevy entities, processor placement, GPU layouts, constants, adapters, brain
+classes, N2048 assumptions, tests, and fixtures remain implementation choices
+unless v2.0 explicitly locks their semantics.
 
 - Keep production neural execution GPU-authoritative WGSL. Do not introduce a live CPU neural shadow, parity gate, or automatic CPU neural fallback.
 - Keep world enumeration score-free. The world remains authoritative for legality, targets, action execution, and outcomes.
@@ -26,4 +46,6 @@ The Git history is the archive for superseded plans and specifications. Do not r
 - Require archive-before-GPU-insertion and archive-before-retirement ordering.
 - Label missing or incomplete evidence `Unknown` or `Blocked`.
 - Do not infer causal gameplay from UI registration, screenshots, synthetic clicks, tables, or green unit tests alone.
-- When architecture changes, update `ARCHITECTURE.md`, `REFERENCE.md`, and the affected status or evidence statement in the same change.
+- Change the controlling architecture only through an explicitly authorized,
+  versioned architecture revision. Update derived implementation, status, or
+  evidence documents when their described state changes.

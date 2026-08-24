@@ -1,0 +1,14 @@
+digraph G {
+  graph [rankdir=LR, bgcolor="white", fontname="Lato", nodesep=0.45, ranksep=0.55, pad=0.25];
+  node [shape=box, style="rounded,filled", fontname="Lato", fontsize=9, color="#355070", fillcolor="#F7F9FC"];
+  edge [fontname="Lato", fontsize=8, color="#556270", arrowsize=0.65];
+  core [label="Portable Cognitive Core\nneural graph, memories, concepts, predictor, language grounding", fillcolor="#F2ECFA"];
+  old [label="Original embodiment\nsensors, body schema, motor adapter", fillcolor="#FCEFE8"];
+  new [label="New game, software, or robot\nnew sensors and effectors", fillcolor="#E9F5F5"];
+  adapter [label="Fresh peripheral adapters\ncalibration and body-schema learning", fillcolor="#FFF7E2"];
+  phys [label="Viability / virtual physiology\nbattery, heat, damage, resources", fillcolor="#EEF7E8"];
+  old -> core [dir=both, label="ordinary life"];
+  core -> adapter [dir=both, label="stable ports"];
+  adapter -> new [dir=both];
+  phys -> core [dir=both, label="interoception / autonomic intent"];
+}

@@ -43,18 +43,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_prod
 - This is a research alpha, not a release-ready autonomous simulation.
 
 Read [current status](docs/STATUS.md) before treating a feature as integrated or proven.
+Read the [v2.0 controlling architecture](docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md)
+before treating any current implementation choice as a permanent requirement.
 
 ## Project map
 
 - [Vision](docs/VISION.md) — what the project is trying to become
+- [Controlling architecture](docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md) — the single normative source and `AOA-*` compliance standard
 - [Status](docs/STATUS.md) — implemented, integrated, visible, and proven state
-- [Architecture](docs/ARCHITECTURE.md) — ownership and production data flow
+- [Current implementation map](docs/ARCHITECTURE.md) — non-normative ownership and production data flow
 - [Roadmap](docs/ROADMAP.md) — the shortest path from here to the aspiration
 - [Development](docs/DEVELOPMENT.md) — supported Windows workflows and gates
 - [Evidence](docs/EVIDENCE.md) — receipts, source binding, EI0, and EI1
-- [Reference](docs/REFERENCE.md) — stable technical and research invariants
+- [Current implementation reference](docs/REFERENCE.md) — non-normative technical conventions and evidence terms
 
-## Non-negotiable boundaries
+## Current implementation boundaries
+
+These boundaries describe the current codebase. They do not amend or narrow
+the v2.0 architecture.
 
 - Production neural execution is GPU-authoritative WGSL. There is no automatic CPU neural fallback or live CPU parity shadow.
 - The world owns legality, targets, action execution, and outcomes.

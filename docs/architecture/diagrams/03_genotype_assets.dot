@@ -1,0 +1,21 @@
+digraph G {
+  graph [rankdir=TB, bgcolor="white", fontname="Lato", nodesep=0.5, ranksep=0.55, pad=0.25];
+  node [shape=box, style="rounded,filled", fontname="Lato", fontsize=10, color="#355070", fillcolor="#F7F9FC"];
+  edge [fontname="Lato", fontsize=9, color="#556270", arrowsize=0.7];
+  genome [label="Compact Recombining Genome\nbody, chemistry, neural development, receptors, plasticity", fillcolor="#E8F1FB"];
+  prior [label="Content-Addressed Germline Neural Priors\nregional blocks and bridge blocks", fillcolor="#F2ECFA"];
+  culture [label="Optional Cultural Package\ncurricula, language, demonstrations", fillcolor="#FFF7E2"];
+  develop [label="Developmental Compiler\nconstructs newborn phenotype", fillcolor="#EEF7E8"];
+  newborn [label="Newborn Organism\nnew neuron identities, no personal memory", fillcolor="#FCEFE8"];
+  learn [label="Lifetime Experience and Teaching\npersonal memory, skills, culture", fillcolor="#E9F5F5"];
+  adult [label="Adult Somatic State\nnonheritable acquired cognition", fillcolor="#F4F4F4"];
+  assimilate [label="Sanitizing Assimilation\ncohort distillation, compression, leakage checks", fillcolor="#FFF4D9"];
+  genome -> develop;
+  prior -> develop;
+  develop -> newborn;
+  culture -> learn [style=dashed, label="must be learned"];
+  newborn -> learn -> adult;
+  adult -> assimilate [label="selected cohort"];
+  assimilate -> prior [label="new immutable breed revision"];
+  assimilate -> genome [label="compact germline deltas"];
+}

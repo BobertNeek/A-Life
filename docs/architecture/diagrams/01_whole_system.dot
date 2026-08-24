@@ -1,0 +1,29 @@
+digraph G {
+  graph [rankdir=TB, bgcolor="white", fontname="Lato", nodesep=0.45, ranksep=0.65, pad=0.25];
+  node [shape=box, style="rounded,filled", fontname="Lato", fontsize=10, color="#355070", fillcolor="#F7F9FC", margin="0.16,0.10"];
+  edge [fontname="Lato", fontsize=9, color="#556270", arrowsize=0.7];
+  gen [label="Genetics and Development\nheritable construction program", fillcolor="#E8F1FB"];
+  body [label="Body and Physiology\nmorphology, organs, tissues, mechanics", fillcolor="#FCEFE8"];
+  bio [label="Biochemistry\nchemicals, reactions, receptors, emitters", fillcolor="#EEF7E8"];
+  brain [label="Brain and Cognitive Memory\nadaptive information processing", fillcolor="#F2ECFA"];
+  emb [label="Embodiment Adapters\nsensor transduction and motor synergies", fillcolor="#FFF7E2"];
+  world [label="World and Ecology\nphysics, resources, agents, environments", fillcolor="#E9F5F5"];
+  slm [label="Shared Semantic-Prior Service\nbounded semantic hints", fillcolor="#F4F4F4"];
+  teacher [label="Teacher System\nplanner plus embodied teacher actor", fillcolor="#F4F4F4"];
+  game [label="Player, Breeding, Culture, Community\ngame and research interfaces", fillcolor="#FFF4D9"];
+
+  gen -> body [label="constructs"];
+  gen -> bio [label="constructs"];
+  gen -> brain [label="constructs"];
+  gen -> emb [label="constructs"];
+  body -> bio [dir=both, label="loci / physiology"];
+  bio -> brain [dir=both, label="receptors / neuroemitters"];
+  brain -> emb [dir=both, label="sensory and motor ports"];
+  emb -> world [dir=both, label="grounded perception / action"];
+  world -> body [dir=both, label="physical consequences"];
+  slm -> brain [label="semantic prior only"];
+  teacher -> world [label="speech, demonstration, setup"];
+  game -> teacher [label="curricula / player teaching"];
+  game -> gen [label="breeding / assimilation"];
+  game -> world [label="environment design"];
+}

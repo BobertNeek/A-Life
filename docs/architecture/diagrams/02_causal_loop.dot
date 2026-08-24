@@ -1,0 +1,18 @@
+digraph G {
+  graph [rankdir=LR, bgcolor="white", fontname="Lato", nodesep=0.35, ranksep=0.45, pad=0.2];
+  node [shape=box, style="rounded,filled", fontname="Lato", fontsize=9, color="#355070", fillcolor="#F7F9FC", margin="0.12,0.08"];
+  edge [fontname="Lato", fontsize=8, color="#556270", arrowsize=0.65];
+  w [label="Due world and\nphysiology"];
+  c [label="Due chemistry,\norgans, decay"];
+  d [label="Due developmental\nexpression"];
+  s [label="Peripheral sensing\nand interoception"];
+  a [label="Memory, concepts,\nprediction, attention"];
+  n [label="Sparse recurrent\nneural cognition"];
+  m [label="Factorized motor\nintent bundle"];
+  e [label="Embodiment controller\nand physical execution"];
+  o [label="Measured body and\nworld outcome"];
+  b [label="Immediate biochemical\nand autonomic response"];
+  l [label="Learning, memory,\nconcept update"];
+  sl [label="Sleep and\nconsolidation when due"];
+  w -> c -> d -> s -> a -> n -> m -> e -> o -> b -> l -> sl -> w;
+}

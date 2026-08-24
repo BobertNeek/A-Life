@@ -1,0 +1,17 @@
+digraph G {
+  graph [rankdir=LR, bgcolor="white", fontname="Lato", nodesep=0.45, ranksep=0.55, pad=0.25];
+  node [shape=box, style="rounded,filled", fontname="Lato", fontsize=9, color="#355070", fillcolor="#F7F9FC"];
+  edge [fontname="Lato", fontsize=8, color="#556270", arrowsize=0.65];
+  loci [label="Typed body and organ loci\ninjury, energy, temperature, fertility", fillcolor="#FCEFE8"];
+  emit [label="Emitters\nlocus -> chemical", fillcolor="#EEF7E8"];
+  chem [label="Active chemical pool\nmaterial and signalling species", fillcolor="#E8F1FB"];
+  react [label="Sparse reactions\nreactants -> products", fillcolor="#EEF7E8"];
+  rec [label="Receptors\nchemical -> typed locus", fillcolor="#FFF7E2"];
+  drive [label="Derived drive and\nneural receptor outputs", fillcolor="#F2ECFA"];
+  brain [label="Brain\nneural summaries and cognition", fillcolor="#F2ECFA"];
+  neuro [label="Neuroemitters\nneural summary -> chemical", fillcolor="#E9F5F5"];
+  loci -> emit -> chem -> react -> chem;
+  chem -> rec -> loci;
+  rec -> drive -> brain;
+  brain -> neuro -> chem;
+}

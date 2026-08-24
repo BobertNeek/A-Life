@@ -1,8 +1,12 @@
 # A-Life Brain Architecture v1.1 Compliance Matrix
 
+> **SUPERSEDED / HISTORICAL:** This is a frozen v1.1 compliance artifact. It
+> does not report v2.0 compliance and cannot modify the controlling v2.0
+> architecture. New compliance reports must be dated and cite `AOA-*` IDs.
+
 **Assessment date:** 2026-08-15
-**Controlling source:** `docs/brain/ALife_Adaptive_Brain_Architecture_Spec_v1.1.md`
-**Controlling source SHA-256:** `60EDD478AE460C56F06F5FFA52373B069F6FC0029F40DF0659D29A99866EF302`
+**Former controlling source:** `docs/brain/ALife_Adaptive_Brain_Architecture_Spec_v1.1.md`, superseded by v2.0
+**Former source SHA-256:** `60EDD478AE460C56F06F5FFA52373B069F6FC0029F40DF0659D29A99866EF302`
 **Source baseline:** committed production source at `0fcc0183c53fbd912995c8fd78987f07b9777057`
 **Excluded evidence:** uncommitted `AGENTS.md` user work; Pass 2 scale, ablation, long-run, EI corpus, and release evidence
 
@@ -12,7 +16,7 @@
 - `PARTIAL`: useful implementation exists, but a required semantic route, bound, or production integration is missing.
 - `NOT_STARTED`: no real implementation of the named capability or interface participates in production.
 - `BLOCKED`: implementation cannot proceed without an external decision or unavailable dependency.
-- `DEFERRED`: the controlling specification itself classifies the capability as deferred.
+- `DEFERRED`: the former controlling specification classified the capability as deferred.
 
 Source presence, serialization, fixtures, diagnostic output, or a passing plumbing test do not by themselves qualify a requirement as implemented.
 
@@ -64,6 +68,6 @@ These production breaks span several requirement rows and must be repaired in Pa
 
 Every active locked requirement now has a simple real production mechanism. The batched GPU-feature app compiler gate is green at `0fcc0183`. The final short integrated player-loop gate remains the only Pass 1 proof still being assembled; until it passes, this matrix records architecture recovery rather than alpha or behavioral certification.
 
-`BRN-PLAN-001` remains `DEFERRED` because the controlling specification classifies it that way. Research-only `BRN-CORE-015` remains optional.
+`BRN-PLAN-001` was `DEFERRED` because the former controlling specification classified it that way. Research-only `BRN-CORE-015` was optional.
 
 Pass 2 supplies broad regression, long-run validation, ablations, profiling, tuning, population scaling, EI ability evidence, and release certification.

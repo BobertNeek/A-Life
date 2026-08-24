@@ -1,17 +1,22 @@
 # A-Life Adaptive Brain Architecture Specification
 
-## Version 1.1 - Controlling Architecture
+> **SUPERSEDED / HISTORICAL:** A-Life v2.0 replaced this specification as
+> normative authority. Consult it only for design lineage. It cannot amend,
+> narrow, or override
+> `../architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md`.
+
+## Version 1.1 - Superseded historical architecture
 
 **A-Life Project**  
 **Effective date:** 2026-08-12  
 **Document ID:** ALIFE-BRAIN-ARCH-001  
-**Status:** CONTROLLING / NORMATIVE  
+**Status:** SUPERSEDED / HISTORICAL
 
 **SMART / COMPUTE-EFFICIENT / EVOLVABLE / BIOLOGY-INSPIRED**
 
-Normative production architecture for scalable, adaptive creature cognition.
+Former normative production architecture for scalable, adaptive creature cognition.
 
-This document is the controlling brain-architecture specification. Implementation gaps remain gaps; they do not silently redefine the design. Goals, capabilities, invariants, and subsystem interfaces are controlled. Reference mechanisms and numeric defaults remain replaceable when evidence supports a better implementation.
+This document was the controlling brain-architecture specification before v2.0 adoption. Its implementation findings and design choices are retained as history only.
 
 ---
 
@@ -21,7 +26,7 @@ This document is the controlling brain-architecture specification. Implementatio
 |---|---|
 | Document ID | ALIFE-BRAIN-ARCH-001 |
 | Version | 1.1 |
-| Status | CONTROLLING / NORMATIVE |
+| Status | SUPERSEDED / HISTORICAL |
 | Effective date | 2026-08-12 |
 | Canonical format | Repository Markdown |
 | Publication formats | Markdown, DOCX, PDF |
@@ -31,7 +36,7 @@ This document is the controlling brain-architecture specification. Implementatio
 | Retained contracts | Engine-independent IDs, three-phase ExperiencePatch, MemoryExpectancy, concept topology, separated inherited/lifetime/fast weights, sparse tiled execution, multirate lobes, bounded logging |
 | Change rule | A normative change requires a user-approved Architecture Decision Record and a versioned revision. Reference mechanisms may be replaced through the evidence process in Section 24. |
 
-### Controlling principle
+### Former controlling principle
 
 The goal is not CPU authority, GPU authority, architectural purity, or biological literalism. The goal is the smartest, fastest, most compute-efficient creature brain that remains evolvable, developmentally adaptable, physically grounded, causally correct, bounded, and inspectable.
 
@@ -166,7 +171,7 @@ A reference mechanism may be replaced without changing a locked capability when 
 5. records the change and evidence in an implementation ADR or mechanism-substitution record;
 6. does not silently reclassify deferred or missing work as complete.
 
-# 2. Controlling Design Decisions
+# 2. Historical design decisions
 
 The following decisions define the architecture.
 
@@ -2548,4 +2553,3 @@ Where a mechanism is not directly present in an earlier source, it is a new proj
 | Concept/neural relationship | not explicit | distinct representations with bounded evidence exchange and separate commits |
 | Planning | deferred counterfactual replay | retains deferred status and adds rollout semantics, uncertainty, and evaluation path |
 | Dendrites | exact bounded branch reference | capability locked; exact mechanism more clearly replaceable by ablation evidence |
-

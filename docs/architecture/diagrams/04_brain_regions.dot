@@ -1,0 +1,17 @@
+digraph G {
+  graph [layout=neato, overlap=false, splines=true, bgcolor="white", fontname="Lato", pad=0.25];
+  node [shape=ellipse, style="filled", fontname="Lato", fontsize=9, color="#355070", fillcolor="#F7F9FC", width=1.65, height=0.65];
+  edge [color="#7A869A", arrowsize=0.55, penwidth=1.0];
+  p [label="Perceptual\nIntegration", pos="0,2!"];
+  i [label="Interoceptive-\nMotivational", pos="-2,1!"];
+  a [label="Multimodal\nAssociation", pos="0,0.8!", fillcolor="#F2ECFA"];
+  t [label="Temporal-\nPredictive", pos="2,1!"];
+  w [label="Working Context\n/ Executive", pos="1.6,-0.6!"];
+  m [label="Memory\nInterface", pos="-1.6,-0.6!"];
+  act [label="Action and\nPlanning", pos="1,-2!"];
+  soc [label="Social and\nCommunication", pos="-1,-2!"];
+  flex [label="Flexible\nReserve", pos="0,-3.2!", fillcolor="#FFF7E2"];
+  p -> a [dir=both]; i -> a [dir=both]; t -> a [dir=both]; w -> a [dir=both]; m -> a [dir=both]; act -> a [dir=both]; soc -> a [dir=both];
+  t -> w [dir=both]; m -> w [dir=both]; act -> w [dir=both]; soc -> w [dir=both];
+  flex -> a [style=dashed]; flex -> t [style=dashed]; flex -> w [style=dashed]; flex -> act [style=dashed]; flex -> soc [style=dashed];
+}
