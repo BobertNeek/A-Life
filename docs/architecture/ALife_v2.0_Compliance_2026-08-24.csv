@@ -1,0 +1,13 @@
+requirement_ids,grade,status,evidence,remaining_debt
+"AOA-BIO-001;AOA-BIO-003;AOA-BIO-005;AOA-BIO-006;AOA-BIO-007;AOA-BIO-008;AOA-BIO-009;AOA-BIO-011;AOA-BIO-012;AOA-BIO-015",CAUSAL,PARTIAL,"crates/alife_core/src/biochemical_graph.rs:390; crates/alife_core/src/biochemical_graph.rs:636; crates/alife_core/src/biochemistry.rs:386","Reference graph is not yet a genetically encoded topology"
+"AOA-BIO-019;AOA-BIO-020;AOA-BIO-022;AOA-BIO-023",CAUSAL,PARTIAL,"crates/alife_game_app/src/gpu_live_runtime.rs:2608; crates/alife_world/src/headless.rs:1956","Targeted receptor frame is not consumed by GPU neural phenotype"
+"AOA-INV-002;AOA-BODY-002;AOA-BODY-005;AOA-BODY-006",CAUSAL,PARTIAL,"crates/alife_core/src/biochemistry.rs:109; crates/alife_world/src/headless.rs:2739","Legacy outcome ABI retains zeroed reward_valence"
+"AOA-AUTH-004;AOA-BIO-025;AOA-BIO-026;AOA-LEARN-002",CAUSAL,PARTIAL,"crates/alife_core/src/experience.rs:1130; crates/alife_game_app/src/gpu_live_runtime.rs:2658","Reduced evaluators do not all use the same measured path"
+"AOA-GEN-001;AOA-GEN-003;AOA-GEN-004",CAUSAL,PARTIAL,"crates/alife_core/src/genome.rs:13; crates/alife_core/src/evolutionary_genetics.rs:546","Old-genome migration missing"
+"AOA-BRAIN-001;AOA-BRAIN-003;AOA-REG-002",STRUCTURAL,PARTIAL,"crates/alife_core/src/lobe.rs:254","Nine founder homologues and derived-region model missing"
+"AOA-AUTH-001;AOA-AUTH-002;AOA-AUTH-003",STRUCTURAL,PARTIAL,"crates/alife_world/src/organism.rs:139","Complete live brain memory adapter dependency graph not record-owned"
+"AOA-SLM-002;AOA-SLM-003;AOA-SLM-004",STRUCTURAL,PARTIAL,"crates/alife_semantic/src/semantic.rs:58","Provenance learner acceptance and service-off evidence missing"
+"AOA-TEACH-003;AOA-TEACH-004;AOA-TEACH-005",STRUCTURAL,PARTIAL,"crates/alife_school/src/teacher.rs:22; crates/alife_school/src/verifier.rs:54","Planner actor separation and teacher-off evidence missing"
+"AOA-BIO-024;AOA-LEARN-007",STRUCTURAL,VIOLATION,"crates/alife_core/src/learning.rs:18","GPU still projects distinct lanes into one scalar third factor"
+"AOA-PERSIST-001;AOA-PERSIST-002;AOA-PERSIST-003;AOA-PERSIST-004",STRUCTURAL,VIOLATION,"crates/alife_core/src/version.rs:61","Deterministic migrations receipts and round-trip tests missing"
+"AOA-GRADE-001;AOA-GRADE-002;AOA-GRADE-003",STRUCTURAL,COMPLIANT,"docs/architecture/ALife_v2.0_Compliance_2026-08-24.md","No capability or scale claims made"
