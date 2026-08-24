@@ -90,9 +90,8 @@ fn register(world: &mut HeadlessWorld, agent: WorldEntityId) {
     world.register_organism_record(record(agent)).unwrap();
 }
 
-fn zero_only_event(event: BodyEventDelta, energy: f32, reward: f32) {
+fn zero_only_event(event: BodyEventDelta, energy: f32) {
     assert_eq!(event.energy, energy);
-    assert_eq!(event.reward_outcome, reward);
     assert_eq!(event.damage, 0.0);
     assert_eq!(event.temperature_stress, 0.0);
     assert_eq!(event.nutrition, 0.0);
@@ -148,8 +147,7 @@ fn registered_move_transaction_advances_authoritative_biology_once() {
     assert_eq!(receipt.action_result.body_event.nutrition, 0.0);
     assert_eq!(receipt.action_result.body_event.damage, 0.0);
     assert_eq!(receipt.action_result.body_event.energy, -0.04);
-    assert_eq!(receipt.action_result.body_event.reward_outcome, 0.0);
-    zero_only_event(receipt.action_result.body_event, -0.04, 0.0);
+    zero_only_event(receipt.action_result.body_event, -0.04);
 }
 
 #[test]
@@ -175,10 +173,7 @@ fn registered_food_transaction_reports_actual_nutrition() {
     assert_eq!(receipt.action_result.body_event.nutrition, 0.6);
     assert_eq!(receipt.action_result.body_event.damage, 0.0);
     assert_eq!(receipt.action_result.body_event.energy, 0.6_f32 * 0.5);
-    assert_eq!(
-        receipt.action_result.body_event.reward_outcome,
-        0.55_f32 + 0.6 * 0.4
-    );
+    assert_eq!(receipt.action_result.observation.reward_valence.raw(), 0.0);
     assert_eq!(receipt.action_result.body_event.temperature_stress, 0.0);
     assert_eq!(receipt.action_result.body_event.social_contact, 0.0);
     assert_eq!(receipt.action_result.body_event.sleep_recovery, 0.0);
@@ -209,10 +204,7 @@ fn registered_hazard_contact_reports_measured_damage() {
     assert!(receipt.action_result.execution.succeeded);
     assert_eq!(receipt.action_result.body_event.damage, 0.7);
     assert_eq!(receipt.action_result.body_event.energy, -0.08);
-    assert_eq!(
-        receipt.action_result.body_event.reward_outcome,
-        -0.35_f32 - 0.7 * 0.45
-    );
+    assert_eq!(receipt.action_result.observation.reward_valence.raw(), 0.0);
     assert_eq!(receipt.action_result.body_event.nutrition, 0.0);
     assert_eq!(receipt.action_result.body_event.temperature_stress, 0.0);
     assert_eq!(receipt.action_result.body_event.social_contact, 0.0);
@@ -246,16 +238,9 @@ fn registered_hazard_and_agent_contact_preserves_hazard_observation_and_social_e
         receipt.action_result.execution.physical.target_entity,
         Some(hazard)
     );
-    assert_eq!(
-        receipt.action_result.observation.reward_valence.raw(),
-        -0.35_f32 - 0.7 * 0.45
-    );
+    assert_eq!(receipt.action_result.observation.reward_valence.raw(), 0.0);
     assert_eq!(receipt.action_result.observation.pain_delta.raw(), 0.7);
     assert_eq!(receipt.action_result.body_event.energy, -0.08);
-    assert_eq!(
-        receipt.action_result.body_event.reward_outcome,
-        -0.35_f32 - 0.7 * 0.45
-    );
     assert_eq!(receipt.action_result.body_event.damage, 0.7);
     assert_eq!(receipt.action_result.body_event.social_contact, 1.0);
     assert_eq!(receipt.action_result.body_event.temperature_stress, 0.0);
@@ -285,7 +270,7 @@ fn registered_approach_contact_reports_social_affinity_magnitude() {
 
     assert_eq!(receipt.action_result.body_event.social_contact, 0.6);
     assert_eq!(receipt.action_result.body_event.energy, -0.04);
-    assert_eq!(receipt.action_result.body_event.reward_outcome, 0.0);
+    assert_eq!(receipt.action_result.observation.reward_valence.raw(), 0.0);
     assert_eq!(receipt.action_result.body_event.damage, 0.0);
     assert_eq!(receipt.action_result.body_event.temperature_stress, 0.0);
     assert_eq!(receipt.action_result.body_event.nutrition, 0.0);
@@ -294,7 +279,7 @@ fn registered_approach_contact_reports_social_affinity_magnitude() {
 }
 
 #[test]
-fn registered_specialized_events_preserve_profile_energy_reward_and_event_fields() {
+fn registered_specialized_events_preserve_physical_and_physiological_fields() {
     let (mut rest_world, rest_agent) = world_with_agent();
     register(&mut rest_world, rest_agent);
     let rest = rest_world
@@ -305,7 +290,7 @@ fn registered_specialized_events_preserve_profile_energy_reward_and_event_fields
         )
         .unwrap();
     assert_eq!(rest.action_result.body_event.energy, 0.08);
-    assert_eq!(rest.action_result.body_event.reward_outcome, 0.1);
+    assert_eq!(rest.action_result.observation.reward_valence.raw(), 0.0);
     assert_eq!(rest.action_result.body_event.damage, 0.0);
     assert_eq!(rest.action_result.body_event.temperature_stress, 0.0);
     assert_eq!(rest.action_result.body_event.nutrition, 0.0);
@@ -330,8 +315,12 @@ fn registered_specialized_events_preserve_profile_energy_reward_and_event_fields
         .unwrap();
     assert_eq!(hazard_receipt.action_result.body_event.energy, -0.08);
     assert_eq!(
-        hazard_receipt.action_result.body_event.reward_outcome,
-        -0.35_f32 - 0.7 * 0.45
+        hazard_receipt
+            .action_result
+            .observation
+            .reward_valence
+            .raw(),
+        0.0
     );
     assert_eq!(hazard_receipt.action_result.body_event.damage, 0.7);
     assert_eq!(
@@ -346,10 +335,9 @@ fn registered_specialized_events_preserve_profile_energy_reward_and_event_fields
         0.0
     );
 
-    for (seed, affinity, expected_energy, expected_reward) in [
-        (32_008, 0.6_f32, -0.02_f32, 0.08_f32 * 0.6),
-        (32_009, -0.6_f32, -0.04_f32, -0.12_f32 * 0.6),
-    ] {
+    for (seed, affinity, expected_energy) in
+        [(32_008, 0.6_f32, -0.02_f32), (32_009, -0.6_f32, -0.04_f32)]
+    {
         let mut social_world = HeadlessScenarioBuilder::new(seed)
             .agent("agent", ORGANISM_ID, Vec3f::ZERO)
             .social_agent("other", OrganismId(8), Vec3f::new(0.5, 0.0, 0.0), affinity)
@@ -365,10 +353,7 @@ fn registered_specialized_events_preserve_profile_energy_reward_and_event_fields
             )
             .unwrap();
         assert_eq!(social.action_result.body_event.energy, expected_energy);
-        assert_eq!(
-            social.action_result.body_event.reward_outcome,
-            expected_reward
-        );
+        assert_eq!(social.action_result.observation.reward_valence.raw(), 0.0);
         assert_eq!(
             social.action_result.body_event.social_contact,
             affinity.abs()
@@ -399,7 +384,8 @@ fn registered_zero_only_event_profiles_keep_unmodeled_fields_zero() {
         )
         .unwrap();
     assert!(!failed.action_result.execution.succeeded);
-    zero_only_event(failed.action_result.body_event, -0.02, -0.35);
+    zero_only_event(failed.action_result.body_event, -0.02);
+    assert_eq!(failed.action_result.observation.reward_valence.raw(), 0.0);
 
     let mut blocked_world = HeadlessScenarioBuilder::new(32_011)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
@@ -416,7 +402,8 @@ fn registered_zero_only_event_profiles_keep_unmodeled_fields_zero() {
         )
         .unwrap();
     assert!(!blocked.action_result.execution.succeeded);
-    zero_only_event(blocked.action_result.body_event, -0.03, -0.2);
+    zero_only_event(blocked.action_result.body_event, -0.03);
+    assert_eq!(blocked.action_result.observation.reward_valence.raw(), 0.0);
 
     let (mut invalid_world, invalid_agent) = world_with_agent();
     register(&mut invalid_world, invalid_agent);
@@ -428,7 +415,8 @@ fn registered_zero_only_event_profiles_keep_unmodeled_fields_zero() {
         )
         .unwrap();
     assert!(!invalid.action_result.execution.succeeded);
-    zero_only_event(invalid.action_result.body_event, -0.01, -0.4);
+    zero_only_event(invalid.action_result.body_event, -0.01);
+    assert_eq!(invalid.action_result.observation.reward_valence.raw(), 0.0);
 
     let (mut idle_world, idle_agent) = world_with_agent();
     register(&mut idle_world, idle_agent);
@@ -439,7 +427,7 @@ fn registered_zero_only_event_profiles_keep_unmodeled_fields_zero() {
             Tick(1),
         )
         .unwrap();
-    zero_only_event(idle.action_result.body_event, -0.01, 0.0);
+    zero_only_event(idle.action_result.body_event, -0.01);
 
     let mut inspect_world = HeadlessScenarioBuilder::new(32_012)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
@@ -452,7 +440,7 @@ fn registered_zero_only_event_profiles_keep_unmodeled_fields_zero() {
     let inspect = inspect_world
         .apply_registered_command(&inspect_command(inspect_target), inspect_agent, Tick(1))
         .unwrap();
-    zero_only_event(inspect.action_result.body_event, -0.01, 0.05);
+    zero_only_event(inspect.action_result.body_event, -0.01);
 
     let mut grab_world = HeadlessScenarioBuilder::new(32_013)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
@@ -465,7 +453,7 @@ fn registered_zero_only_event_profiles_keep_unmodeled_fields_zero() {
     let grab = grab_world
         .apply_registered_command(&grab_command(grab_target), grab_agent, Tick(1))
         .unwrap();
-    zero_only_event(grab.action_result.body_event, -0.03, 0.08);
+    zero_only_event(grab.action_result.body_event, -0.03);
 }
 
 #[test]
@@ -496,7 +484,7 @@ fn registered_neural_command_seals_gpu_speech_with_biology() {
         1
     );
     assert_eq!(receipt.biology_after.tick, Tick(1));
-    zero_only_event(receipt.action_result.body_event, -0.01, 0.04);
+    zero_only_event(receipt.action_result.body_event, -0.01);
 }
 
 #[test]

@@ -140,15 +140,15 @@ pub(super) fn compile_decoders(
         return compile_n2048_decoders(genome, layout, route_index, start);
     }
     let motor = layout
-        .region(LobeKind::MotorArbitration)
+        .region(LobeKind::ActionPlanning)
         .filter(|region| region.enabled)
         .ok_or_else(compile_error)?;
     let episodic = layout
-        .region(LobeKind::EpisodicMemory)
+        .region(LobeKind::MemoryInterface)
         .filter(|region| region.enabled && region.len >= 12)
         .ok_or_else(compile_error)?;
     let core = layout
-        .region(LobeKind::CoreAssociation)
+        .region(LobeKind::TemporalPredictive)
         .filter(|region| region.enabled && region.len >= 8)
         .ok_or_else(compile_error)?;
     let motor_width = u16::try_from(motor.len).map_err(|_| compile_error())?;
@@ -254,8 +254,8 @@ pub(super) fn compile_decoders(
     )?;
     let projection = CompiledProjection::new(
         route_index,
-        LobeKind::MotorArbitration,
-        LobeKind::MotorArbitration,
+        LobeKind::ActionPlanning,
+        LobeKind::ActionPlanning,
         ProjectionType::MotorProposal,
         ActiveTilePolicy::EssentialReservation,
         UpdateCadence::Hot60Hz,
@@ -318,8 +318,8 @@ pub(super) fn compile_decoders(
     )?;
     let memory_projection = CompiledProjection::new(
         memory_route_index,
-        LobeKind::EpisodicMemory,
-        LobeKind::CoreAssociation,
+        LobeKind::MemoryInterface,
+        LobeKind::TemporalPredictive,
         ProjectionType::Feedback,
         ActiveTilePolicy::EssentialReservation,
         UpdateCadence::Hot5To15Hz,
@@ -357,15 +357,15 @@ fn compile_n2048_decoders(
     start: u32,
 ) -> Result<CompiledDecoderSet, ScaffoldContractError> {
     let motor = layout
-        .region(LobeKind::MotorArbitration)
+        .region(LobeKind::ActionPlanning)
         .filter(|region| region.enabled && region.len == 224)
         .ok_or_else(compile_error)?;
     let episodic = layout
-        .region(LobeKind::EpisodicMemory)
+        .region(LobeKind::MemoryInterface)
         .filter(|region| region.enabled && region.len >= 64)
         .ok_or_else(compile_error)?;
     let core = layout
-        .region(LobeKind::CoreAssociation)
+        .region(LobeKind::TemporalPredictive)
         .filter(|region| region.enabled && region.len >= 64)
         .ok_or_else(compile_error)?;
 
@@ -472,8 +472,8 @@ fn compile_n2048_decoders(
     let action_len = candidate_count + speech_count;
     let action_projection = CompiledProjection::new(
         action_route_index,
-        LobeKind::MotorArbitration,
-        LobeKind::MotorArbitration,
+        LobeKind::ActionPlanning,
+        LobeKind::ActionPlanning,
         ProjectionType::MotorProposal,
         ActiveTilePolicy::EssentialReservation,
         UpdateCadence::Hot60Hz,
@@ -551,8 +551,8 @@ fn compile_n2048_decoders(
     )?;
     let memory_projection = CompiledProjection::new(
         memory_route_index,
-        LobeKind::EpisodicMemory,
-        LobeKind::CoreAssociation,
+        LobeKind::MemoryInterface,
+        LobeKind::TemporalPredictive,
         ProjectionType::Feedback,
         ActiveTilePolicy::EssentialReservation,
         UpdateCadence::Hot5To15Hz,

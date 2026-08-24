@@ -444,12 +444,12 @@ impl CreatureMind {
         let development_state =
             DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.35)?)
                 .with_enabled_lobes([
-                    LobeKind::SensoryGrounding,
-                    LobeKind::MetabolicDrive,
-                    LobeKind::CoreAssociation,
-                    LobeKind::EpisodicMemory,
-                    LobeKind::MotorArbitration,
-                    LobeKind::HomeostaticRegulation,
+                    LobeKind::PerceptualIntegration,
+                    LobeKind::InteroceptiveMotivational,
+                    LobeKind::TemporalPredictive,
+                    LobeKind::MemoryInterface,
+                    LobeKind::ActionPlanning,
+                    LobeKind::FlexibleReserve,
                 ]);
         let mut neural_state = CpuNeuralState::for_brain_class(&brain_class)?;
         let neural_schema = NeuralProjectionSchema::empty_for_brain_class(&brain_class)?;

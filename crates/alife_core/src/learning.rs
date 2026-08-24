@@ -8,12 +8,105 @@ use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 
 use crate::{
     require_current_version, ActionId, CandidateActionFamily, CandidateFeatureDigest,
-    ExperiencePatch, ExperiencePatchPhase, ExperienceSequenceId, OrganismId, PerceptionFrameDigest,
-    PhenotypeHash, PreActionBrainEvidence, ScaffoldContractError, SchemaKind, SchemaVersions, Tick,
-    Validate,
+    ExperiencePatch, ExperiencePatchPhase, ExperienceSequenceId, NeuralReceptorClass,
+    NeuralReceptorFrame, OrganismId, PerceptionFrameDigest, PhenotypeHash, PreActionBrainEvidence,
+    ScaffoldContractError, SchemaKind, SchemaVersions, Tick, Validate,
 };
 
-/// Bounded, auditable components of the third factor applied after an outcome.
+pub const NEUROMODULATORY_LANE_COUNT: usize = 8;
+
+/// Bounded biological and predictive evidence. No lane is a finished reward.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct NeuromodulatoryFrame {
+    lanes: [f32; NEUROMODULATORY_LANE_COUNT],
+}
+
+impl NeuromodulatoryFrame {
+    pub fn try_new(
+        lanes: [f32; NEUROMODULATORY_LANE_COUNT],
+    ) -> Result<Self, ScaffoldContractError> {
+        if lanes.iter().any(|value| !value.is_finite()) {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        if lanes.iter().any(|value| !(-1.0..=1.0).contains(value)) {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        Ok(Self { lanes })
+    }
+
+    pub const fn lanes(&self) -> &[f32; NEUROMODULATORY_LANE_COUNT] {
+        &self.lanes
+    }
+}
+
+impl<'de> Deserialize<'de> for NeuromodulatoryFrame {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let lanes = <[f32; NEUROMODULATORY_LANE_COUNT]>::deserialize(deserializer)?;
+        Self::try_new(lanes).map_err(D::Error::custom)
+    }
+}
+
+/// Heritable local projection from the shared lane frame into one third factor.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct PlasticityReceptorProfile {
+    weights: [f32; NEUROMODULATORY_LANE_COUNT],
+}
+
+impl PlasticityReceptorProfile {
+    pub fn try_new(
+        weights: [f32; NEUROMODULATORY_LANE_COUNT],
+    ) -> Result<Self, ScaffoldContractError> {
+        if weights.iter().any(|value| !value.is_finite()) {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        if weights.iter().any(|value| !(-2.0..=2.0).contains(value)) {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        Ok(Self { weights })
+    }
+
+    pub const fn weights(&self) -> &[f32; NEUROMODULATORY_LANE_COUNT] {
+        &self.weights
+    }
+
+    pub fn project(&self, frame: &NeuromodulatoryFrame) -> Result<f32, ScaffoldContractError> {
+        let scale = self.weights.iter().map(|weight| weight.abs()).sum::<f32>();
+        if !scale.is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        if scale == 0.0 {
+            return Ok(0.0);
+        }
+        let value = self
+            .weights
+            .iter()
+            .zip(frame.lanes)
+            .map(|(weight, lane)| weight * lane)
+            .sum::<f32>()
+            / scale;
+        if !value.is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        Ok(value.clamp(-1.0, 1.0))
+    }
+}
+
+impl<'de> Deserialize<'de> for PlasticityReceptorProfile {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let weights = <[f32; NEUROMODULATORY_LANE_COUNT]>::deserialize(deserializer)?;
+        Self::try_new(weights).map_err(D::Error::custom)
+    }
+}
+
+/// Compatibility name for the bounded outcome lane frame.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct NeuromodulatorSample {
     prediction_residual: f32,
@@ -21,10 +114,22 @@ pub struct NeuromodulatorSample {
     homeostatic_improvement: f32,
     frustration: f32,
     novelty: f32,
-    value: f32,
+    frame: NeuromodulatoryFrame,
 }
 
 impl NeuromodulatorSample {
+    pub fn from_frame(frame: NeuromodulatoryFrame) -> Self {
+        let lanes = frame.lanes();
+        Self {
+            prediction_residual: lanes[0],
+            pain: lanes[1],
+            homeostatic_improvement: lanes[2],
+            frustration: lanes[3],
+            novelty: lanes[4],
+            frame,
+        }
+    }
+
     /// Construct a sample with the canonical bounded three-factor formula.
     pub fn from_components(
         prediction_residual: f32,
@@ -46,17 +151,17 @@ impl NeuromodulatorSample {
         if components.iter().any(|value| !(-1.0..=1.0).contains(value)) {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
-        let value = (0.75 * homeostatic_improvement - pain - 0.5 * frustration
-            + 0.2 * novelty * prediction_residual)
-            .clamp(-1.0, 1.0);
-        Ok(Self {
+        let frame = NeuromodulatoryFrame::try_new([
             prediction_residual,
             pain,
             homeostatic_improvement,
             frustration,
             novelty,
-            value,
-        })
+            0.0,
+            0.0,
+            0.0,
+        ])?;
+        Ok(Self::from_frame(frame))
     }
 
     pub const fn prediction_residual(self) -> f32 {
@@ -79,8 +184,20 @@ impl NeuromodulatorSample {
         self.novelty
     }
 
-    pub const fn value(self) -> f32 {
-        self.value
+    pub const fn frame(self) -> NeuromodulatoryFrame {
+        self.frame
+    }
+
+    pub fn with_biochemical_receptors(
+        mut self,
+        receptors: &NeuralReceptorFrame,
+    ) -> Result<Self, ScaffoldContractError> {
+        receptors.validate_contract()?;
+        let mut lanes = *self.frame.lanes();
+        lanes[6] = receptors.activation_for(NeuralReceptorClass::PlasticityAppetitive);
+        lanes[7] = receptors.activation_for(NeuralReceptorClass::PlasticityAversive);
+        self.frame = NeuromodulatoryFrame::try_new(lanes)?;
+        Ok(self)
     }
 }
 
@@ -92,7 +209,7 @@ struct NeuromodulatorSampleWire {
     homeostatic_improvement: f32,
     frustration: f32,
     novelty: f32,
-    value: f32,
+    frame: NeuromodulatoryFrame,
 }
 
 impl<'de> Deserialize<'de> for NeuromodulatorSample {
@@ -101,23 +218,23 @@ impl<'de> Deserialize<'de> for NeuromodulatorSample {
         D: Deserializer<'de>,
     {
         let wire = NeuromodulatorSampleWire::deserialize(deserializer)?;
-        if !wire.value.is_finite() || !(-1.0..=1.0).contains(&wire.value) {
-            return Err(D::Error::custom("invalid serialized neuromodulator value"));
+        let sample = Self::from_frame(wire.frame);
+        if [
+            sample.prediction_residual.to_bits() == wire.prediction_residual.to_bits(),
+            sample.pain.to_bits() == wire.pain.to_bits(),
+            sample.homeostatic_improvement.to_bits() == wire.homeostatic_improvement.to_bits(),
+            sample.frustration.to_bits() == wire.frustration.to_bits(),
+            sample.novelty.to_bits() == wire.novelty.to_bits(),
+        ]
+        .into_iter()
+        .all(|matches| matches)
+        {
+            Ok(sample)
+        } else {
+            Err(D::Error::custom(
+                "neuromodulatory component projections do not match the authoritative frame",
+            ))
         }
-        let recomputed = Self::from_components(
-            wire.prediction_residual,
-            wire.pain,
-            wire.homeostatic_improvement,
-            wire.frustration,
-            wire.novelty,
-        )
-        .map_err(D::Error::custom)?;
-        if recomputed.value.to_bits() != wire.value.to_bits() {
-            return Err(D::Error::custom(
-                "serialized neuromodulator value does not match its components",
-            ));
-        }
-        Ok(recomputed)
     }
 }
 
@@ -257,6 +374,19 @@ impl OutcomeCreditPacket {
 
     pub const fn modulator(&self) -> NeuromodulatorSample {
         self.modulator
+    }
+
+    pub fn with_biochemical_receptors(
+        mut self,
+        receptors: &NeuralReceptorFrame,
+    ) -> Result<Self, ScaffoldContractError> {
+        if receptors.source_tick.raw() < self.originating_tick.raw()
+            || receptors.source_tick.raw() > self.outcome_tick.raw()
+        {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
+        self.modulator = self.modulator.with_biochemical_receptors(receptors)?;
+        Ok(self)
     }
 
     pub const fn replay_key(&self) -> OutcomeCreditReplayKey {

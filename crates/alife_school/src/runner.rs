@@ -2,7 +2,10 @@
 
 use alife_core::ScaffoldContractError;
 
-use crate::{Curriculum, CurriculumStep, LessonId, LessonVerification, TeacherPerceptualEvent};
+use crate::{
+    Curriculum, CurriculumStep, CurriculumTeacherPlanner, EmbodiedTeacherActor, LessonId,
+    LessonVerification, PlannerVisibleState, TeacherPerceptualEvent, TeacherPlanner,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LessonDispatch {
@@ -15,14 +18,18 @@ pub struct HeadlessCurriculumRunner {
     curriculum: Curriculum,
     current_index: usize,
     completed_step_count: usize,
+    planner: CurriculumTeacherPlanner,
+    actor: EmbodiedTeacherActor,
 }
 
 impl HeadlessCurriculumRunner {
-    pub const fn new(curriculum: Curriculum) -> Self {
+    pub const fn new(curriculum: Curriculum, actor: EmbodiedTeacherActor) -> Self {
         Self {
             curriculum,
             current_index: 0,
             completed_step_count: 0,
+            planner: CurriculumTeacherPlanner::bounded_default(),
+            actor,
         }
     }
 
@@ -38,9 +45,19 @@ impl HeadlessCurriculumRunner {
         let step = self
             .current_step()
             .ok_or(ScaffoldContractError::InvalidId)?;
+        let plan = self.planner.plan(
+            step,
+            PlannerVisibleState {
+                developmental_stage_raw: 0,
+                observable_success: false,
+                coarse_homeostatic_stress: alife_core::NormalizedScalar::new(0.0)?,
+                uncertainty: alife_core::NormalizedScalar::new(0.5)?,
+            },
+        )?;
+        let perception_events = self.actor.enact_plan(&plan)?;
         Ok(LessonDispatch {
             lesson_id: step.lesson_id,
-            perception_events: step.prompt_cues.clone(),
+            perception_events,
         })
     }
 

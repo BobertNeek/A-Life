@@ -94,11 +94,11 @@ pub(super) fn validate_decoder_synapse(
                 .ok_or(ScaffoldContractError::PhenotypeCompile)?;
             let episodic = phenotype
                 .lobe_layout()
-                .region(crate::LobeKind::EpisodicMemory)
+                .region(crate::LobeKind::MemoryInterface)
                 .ok_or(ScaffoldContractError::PhenotypeCompile)?;
             let core = phenotype
                 .lobe_layout()
-                .region(crate::LobeKind::CoreAssociation)
+                .region(crate::LobeKind::TemporalPredictive)
                 .ok_or(ScaffoldContractError::PhenotypeCompile)?;
             let channel = phenotype
                 .candidate_decoder()
@@ -185,16 +185,16 @@ pub(super) fn canonical_recurrent_projection(projection: &CompiledProjection) ->
             && projection.priority() == spec.priority();
     }
     let expected = match (projection.source_lobe(), projection.target_lobe()) {
-        (LobeKind::SensoryGrounding, LobeKind::CoreAssociation) => {
+        (LobeKind::PerceptualIntegration, LobeKind::TemporalPredictive) => {
             (ProjectionType::FeedForward, UpdateCadence::Hot60Hz)
         }
-        (LobeKind::CoreAssociation, LobeKind::MotorArbitration) => {
+        (LobeKind::TemporalPredictive, LobeKind::ActionPlanning) => {
             (ProjectionType::MotorProposal, UpdateCadence::Hot60Hz)
         }
-        (LobeKind::MetabolicDrive, LobeKind::HomeostaticRegulation) => {
+        (LobeKind::InteroceptiveMotivational, LobeKind::FlexibleReserve) => {
             (ProjectionType::Homeostatic, UpdateCadence::Hot10To30Hz)
         }
-        (LobeKind::MotorArbitration, LobeKind::MotorArbitration) => {
+        (LobeKind::ActionPlanning, LobeKind::ActionPlanning) => {
             (ProjectionType::LateralInhibition, UpdateCadence::Hot60Hz)
         }
         _ => return false,

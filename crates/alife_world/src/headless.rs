@@ -13,21 +13,21 @@ use std::{
 use alife_core::{
     ActionCommand, ActionId, ActionKind, AffordanceBits, BiochemistryState, BodyEventDelta,
     BodySnapshot, BrainTickInput, BrainTickOutput, CanonicalDigestBuilder, ChannelCommand,
-    Confidence, ContextStreams, DriveDelta, EndocrineDelta, ExperiencePatch, HeardToken,
-    HomeostaticDelta, HomeostaticSnapshot, Intensity, JointPhysicalOutcome,
-    LanguageContextSnapshot, LanguageTokenId, MeasuredChannelObservation, MotorChannel,
-    MotorCommandBundle, NeuralEmissionFrame, NormalizedScalar, OrganismId, PassiveBodyUpkeepPolicy,
-    PerceptionContextBlock, PerceptionFrame, PerceptionFrameDraft, PhysicalActionOutcome,
-    PhysicalContactKind, PlayerUtterance, Pose, Quatf, ReferenceActionExecution,
-    ReferenceActionExecutor, ReferenceActionFailure, ReferenceOutcomeObservation,
-    ReferenceOutcomeObserver, ReferenceOutcomeRequest, ReferenceSensoryAdapter,
-    ReferenceSensoryRequest, ScaffoldContractError, SensorProfile, SensorProfileProvenance,
-    SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence, SleepConsolidationReport,
-    SleepTransition, SocialAgentSnapshot, SocialProximityEntry, SpeechActKind, SpeechMotorPayload,
-    TeacherPerceptionChannel, Tick, UtteranceId, UtteranceSourceKind, Validate, Vec3f, Velocity,
-    WorldEntityId, MAX_HEARD_TOKENS, MAX_SOCIAL_AGENTS, SENSORY_AUDITORY_CHANNEL_COUNT,
-    SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
-    SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
+    Confidence, ContextStreams, DriveDelta, EffectorCapability, EmbodimentState, EndocrineDelta,
+    ExperiencePatch, HeardToken, HomeostaticDelta, HomeostaticSnapshot, Intensity,
+    JointPhysicalOutcome, LanguageContextSnapshot, LanguageTokenId, MeasuredChannelObservation,
+    MotorChannel, MotorCommandBundle, NeuralEmissionFrame, NormalizedScalar, OrganismId,
+    PassiveBodyUpkeepPolicy, PerceptionContextBlock, PerceptionFrame, PerceptionFrameDraft,
+    PhysicalActionOutcome, PhysicalContactKind, PlayerUtterance, Pose, Quatf,
+    ReferenceActionExecution, ReferenceActionExecutor, ReferenceActionFailure,
+    ReferenceOutcomeObservation, ReferenceOutcomeObserver, ReferenceOutcomeRequest,
+    ReferenceSensoryAdapter, ReferenceSensoryRequest, ScaffoldContractError, SensorCapability,
+    SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot,
+    SignedValence, SleepConsolidationReport, SleepTransition, SocialAgentSnapshot,
+    SocialProximityEntry, SpeechActKind, SpeechMotorPayload, TeacherPerceptionChannel, Tick,
+    UtteranceId, UtteranceSourceKind, Validate, Vec3f, Velocity, WorldEntityId, MAX_HEARD_TOKENS,
+    MAX_SOCIAL_AGENTS, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_SMELL_CHANNEL_COUNT,
+    SENSORY_TACTILE_CHANNEL_COUNT, SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
 
 use crate::candidate_enumerator::{
@@ -281,6 +281,64 @@ pub struct HeadlessWorld {
     injected_tick_late_failure_after_first_organism: bool,
 }
 
+/// A world-validated embodied endpoint for learner-visible teacher signals.
+/// The raw teacher speech/cue mutators are private so production callers must
+/// bind every emission to an extant physical teacher entity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GroundedTeacherActor {
+    teacher_entity: WorldEntityId,
+}
+
+impl GroundedTeacherActor {
+    pub const fn teacher_entity(self) -> WorldEntityId {
+        self.teacher_entity
+    }
+
+    pub fn speak(
+        self,
+        world: &mut HeadlessWorld,
+        addressee: Option<OrganismId>,
+        tokens: Vec<LanguageTokenId>,
+        teacher_channel: TeacherPerceptionChannel,
+    ) -> Result<AudibleUtterance, ScaffoldContractError> {
+        let source_position = world
+            .validate_grounded_teacher(self.teacher_entity)?
+            .position;
+        world.emit_teacher_tokens_from_actor(addressee, source_position, tokens, teacher_channel)
+    }
+
+    pub fn emit_perceptual_cue(
+        self,
+        world: &mut HeadlessWorld,
+        label: &str,
+        signal_id: u32,
+        channel: TeacherPerceptionChannel,
+        grounded_target: Option<WorldEntityId>,
+    ) -> Result<WorldEntityId, ScaffoldContractError> {
+        if signal_id == 0 {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        world.validate_grounded_teacher(self.teacher_entity)?;
+        let anchor = grounded_target.unwrap_or(self.teacher_entity);
+        let position = world
+            .objects
+            .get(&anchor.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .position;
+        world.insert_object(SpawnSpec {
+            label,
+            kind: WorldObjectKind::Token,
+            organism_id: None,
+            position,
+            nutrition: 0.0,
+            hazard_pain: 0.0,
+            token_id: Some(signal_id),
+            social_affinity: 0.0,
+            teacher_channel: Some(channel),
+        })
+    }
+}
+
 /// Opaque, immutable lookup built once for one same-snapshot perception batch.
 /// It contains world IDs only; semantic observations are still assembled by
 /// the canonical world sensing paths.
@@ -340,6 +398,29 @@ impl HeadlessWorld {
             #[cfg(test)]
             injected_tick_late_failure_after_first_organism: false,
         }
+    }
+
+    pub fn grounded_teacher_actor(
+        &self,
+        teacher_entity: WorldEntityId,
+    ) -> Result<GroundedTeacherActor, ScaffoldContractError> {
+        self.validate_grounded_teacher(teacher_entity)?;
+        Ok(GroundedTeacherActor { teacher_entity })
+    }
+
+    fn validate_grounded_teacher(
+        &self,
+        teacher_entity: WorldEntityId,
+    ) -> Result<&WorldObject, ScaffoldContractError> {
+        teacher_entity.validate()?;
+        let object = self
+            .objects
+            .get(&teacher_entity.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if object.kind != WorldObjectKind::Agent || object.organism_id.is_none() {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        Ok(object)
     }
 
     pub const fn seed(&self) -> u64 {
@@ -722,7 +803,7 @@ impl HeadlessWorld {
         Ok(utterance)
     }
 
-    pub fn emit_teacher_tokens(
+    fn emit_teacher_tokens_from_actor(
         &mut self,
         addressee: Option<OrganismId>,
         source_position: Vec3f,
@@ -1755,6 +1836,21 @@ impl HeadlessWorld {
         agent: &WorldObject,
         visible_entities: Vec<VisibleWorldEntity>,
     ) -> Result<HeadlessSensoryReport, ScaffoldContractError> {
+        let embodiment = self
+            .organism_registry
+            .get(organism_id)
+            .map(WorldOrganismRecord::embodiment);
+        if embodiment.is_some_and(|state| state.source_tick() > tick) {
+            return Err(ScaffoldContractError::NonMonotonicTick);
+        }
+        let sensor_gain =
+            |capability| embodiment.map_or(1.0, |state| state.sensor_gain(capability));
+        let vision_gain = sensor_gain(SensorCapability::Vision);
+        let hearing_gain = sensor_gain(SensorCapability::Hearing);
+        let chemical_gain = sensor_gain(SensorCapability::Chemical);
+        let touch_gain = sensor_gain(SensorCapability::Touch);
+        let interoceptive_gain = sensor_gain(SensorCapability::Interoception);
+        let proprioceptive_gain = embodiment.map_or(1.0, EmbodimentState::proprioceptive_gain);
         let contact_entities = visible_entities
             .iter()
             .filter(|visible| visible.distance <= HEADLESS_CONTACT_RADIUS)
@@ -1817,7 +1913,9 @@ impl HeadlessWorld {
                 WorldObjectKind::Token => {
                     visual[7] = visual[7].max(salience);
                     auditory[0] = auditory[0].max(salience);
-                    if heard_index < MAX_HEARD_TOKENS && visible.distance <= DEFAULT_HEARING_RADIUS
+                    if hearing_gain > 0.0
+                        && heard_index < MAX_HEARD_TOKENS
+                        && visible.distance <= DEFAULT_HEARING_RADIUS
                     {
                         let object = self
                             .objects
@@ -1833,7 +1931,9 @@ impl HeadlessWorld {
                                 source_entity: Some(visible.id),
                                 token_id,
                                 source_position: object.position,
-                                confidence: Confidence::new(salience.max(0.1))?,
+                                confidence: Confidence::new(
+                                    (salience.max(0.1) * hearing_gain).clamp(0.0, 1.0),
+                                )?,
                                 teacher_channel: object.teacher_channel,
                             });
                             teacher_channel_marker =
@@ -1845,31 +1945,44 @@ impl HeadlessWorld {
             }
         }
 
-        for heard in self
-            .speech
-            .heard_tokens(organism_id, agent.position, tick)?
-        {
-            if heard_index >= MAX_HEARD_TOKENS {
-                break;
+        if hearing_gain > 0.0 {
+            for mut heard in self
+                .speech
+                .heard_tokens(organism_id, agent.position, tick)?
+            {
+                if heard_index >= MAX_HEARD_TOKENS {
+                    break;
+                }
+                let confidence = (heard.confidence.raw() * hearing_gain).clamp(0.0, 1.0);
+                heard.confidence = Confidence::new(confidence)?;
+                auditory[0] = auditory[0].max(confidence);
+                teacher_channel_marker = teacher_channel_marker.or(heard.teacher_channel);
+                vocal_tokens[heard_index] = Some(heard);
+                heard_index += 1;
             }
-            auditory[0] = auditory[0].max(heard.confidence.raw());
-            teacher_channel_marker = teacher_channel_marker.or(heard.teacher_channel);
-            vocal_tokens[heard_index] = Some(heard);
-            heard_index += 1;
         }
 
         if !contact_entities.is_empty() {
             tactile[1] = 1.0;
         }
 
+        scale_sensory_group(&mut visual, vision_gain);
+        scale_sensory_group(&mut auditory, hearing_gain);
+        scale_sensory_group(&mut smell, chemical_gain);
+        scale_sensory_group(&mut tactile, touch_gain);
+        if vision_gain == 0.0 && chemical_gain == 0.0 && touch_gain == 0.0 {
+            affordances = AffordanceBits::NONE;
+        }
         let channels = SensoryChannels::try_from_groups(
             visual,
             auditory,
             smell,
             tactile,
-            NormalizedScalar::new(pain.clamp(0.0, 1.0))?,
+            NormalizedScalar::new((pain * touch_gain.max(interoceptive_gain)).clamp(0.0, 1.0))?,
             NormalizedScalar::new(
-                (visible_entities.len() as f32 / MAX_VISIBLE_ENTITIES as f32).clamp(0.0, 1.0),
+                ((visible_entities.len() as f32 / MAX_VISIBLE_ENTITIES as f32)
+                    * proprioceptive_gain)
+                    .clamp(0.0, 1.0),
             )?,
             affordances,
         )?;
@@ -1885,7 +1998,11 @@ impl HeadlessWorld {
             SensorySnapshot::new(organism_id, tick, agent.position, channels, context_streams)?;
         core_snapshot.language_context = LanguageContextSnapshot {
             heard_tokens: vocal_tokens,
-            word_confidence: Confidence::new(if heard_index > 0 { 0.8 } else { 0.0 })?,
+            word_confidence: Confidence::new(if heard_index > 0 {
+                (0.8 * hearing_gain).clamp(0.0, 1.0)
+            } else {
+                0.0
+            })?,
             teacher_channel_marker,
             ..LanguageContextSnapshot::default()
         };
@@ -1976,16 +2093,26 @@ impl HeadlessWorld {
         neural: Option<&NeuralEmissionFrame>,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
         let outcome_tick = self.validate_registered_motor_bundle(bundle, world_entity_id)?;
+        let embodiment = self
+            .organism_registry
+            .get(bundle.organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .embodiment()
+            .clone();
         let biology_before = *self
             .organism_registry
             .get(bundle.organism_id)
             .ok_or(ScaffoldContractError::InvalidId)?
             .biochemistry();
 
-        let mut channels = bundle.channels.iter().collect::<Vec<_>>();
+        let mut channels = bundle
+            .channels
+            .iter()
+            .map(|command| adapt_motor_channel_to_embodiment(command, &embodiment))
+            .collect::<Result<Vec<_>, _>>()?;
         channels.sort_by_key(|command| motor_channel_order(command.channel));
         let mut executed = Vec::with_capacity(channels.len());
-        for channel in channels {
+        for channel in &channels {
             let command = legacy_action_for_motor_channel(bundle.organism_id, channel)?;
             let result = if channel.channel == MotorChannel::Vocal {
                 match decode_vocal_channel_payload(channel)? {
@@ -2109,6 +2236,17 @@ impl HeadlessWorld {
                     ScaffoldContractError::InvalidId
                 },
             ));
+        }
+        for command in &bundle.channels {
+            if record
+                .embodiment()
+                .effector_gain(effector_capability_for_motor_channel(command))
+                == 0.0
+            {
+                return Err(HeadlessMotorTransactionError::UnsupportedChannel(
+                    command.channel,
+                ));
+            }
         }
         let object = self
             .objects
@@ -2596,20 +2734,24 @@ impl HeadlessWorld {
             .get(&agent_id.raw())
             .expect("agent exists")
             .position;
+        let max_step = MOVE_STEP * command.intensity.raw();
         let destination = match intent {
-            MoveIntent::Absolute => command.target_position.or_else(|| {
-                command
-                    .target_entity
-                    .and_then(|id| self.objects.get(&id.raw()).map(|object| object.position))
-            }),
+            MoveIntent::Absolute => command
+                .target_position
+                .or_else(|| {
+                    command
+                        .target_entity
+                        .and_then(|id| self.objects.get(&id.raw()).map(|object| object.position))
+                })
+                .map(|target| step_toward(start, target, max_step)),
             MoveIntent::Approach => command
                 .target_entity
                 .and_then(|id| self.objects.get(&id.raw()).map(|object| object.position))
-                .map(|target| step_toward(start, target, MOVE_STEP)),
+                .map(|target| step_toward(start, target, max_step)),
             MoveIntent::Flee => command
                 .target_entity
                 .and_then(|id| self.objects.get(&id.raw()).map(|object| object.position))
-                .map(|target| step_away(start, target, MOVE_STEP)),
+                .map(|target| step_away(start, target, max_step)),
         };
         let Some(destination) = destination else {
             return self.invalid_target(command, command.target_entity);
@@ -3322,27 +3464,6 @@ impl HeadlessScenarioBuilder {
         self
     }
 
-    pub fn teacher_token(
-        mut self,
-        label: &str,
-        position: Vec3f,
-        token_id: u32,
-        teacher_channel: TeacherPerceptionChannel,
-    ) -> Self {
-        self.insert(SpawnSpec {
-            label,
-            kind: WorldObjectKind::Token,
-            organism_id: None,
-            position,
-            nutrition: 0.0,
-            hazard_pain: 0.0,
-            token_id: Some(token_id),
-            social_affinity: 0.0,
-            teacher_channel: Some(teacher_channel),
-        });
-        self
-    }
-
     pub fn grounded_physical(
         mut self,
         label: &str,
@@ -3815,6 +3936,44 @@ fn motor_channel_order(channel: MotorChannel) -> u16 {
         MotorChannel::Posture => 4,
         MotorChannel::SpeciesSpecific(id) => 0x100 + u16::from(id),
     }
+}
+
+fn effector_capability_for_motor_channel(command: &ChannelCommand) -> EffectorCapability {
+    match command.channel {
+        MotorChannel::Locomotion => EffectorCapability::Translation,
+        MotorChannel::Orientation => EffectorCapability::Rotation,
+        MotorChannel::Manipulation if command.primitive == HeadlessActionIds::EAT => {
+            EffectorCapability::Ingestion
+        }
+        MotorChannel::Manipulation | MotorChannel::SpeciesSpecific(_) => {
+            EffectorCapability::Manipulation
+        }
+        MotorChannel::Vocal => EffectorCapability::Vocalization,
+        MotorChannel::Posture => EffectorCapability::Rest,
+    }
+}
+
+fn adapt_motor_channel_to_embodiment(
+    command: &ChannelCommand,
+    embodiment: &EmbodimentState,
+) -> Result<ChannelCommand, HeadlessMotorTransactionError> {
+    let capability = effector_capability_for_motor_channel(command);
+    let mut gain = embodiment.effector_gain(capability);
+    if gain == 0.0 {
+        return Err(HeadlessMotorTransactionError::UnsupportedChannel(
+            command.channel,
+        ));
+    }
+    if matches!(
+        capability,
+        EffectorCapability::Translation | EffectorCapability::Rotation
+    ) {
+        gain *= embodiment.proprioceptive_gain();
+    }
+    let mut adapted = command.clone();
+    adapted.intensity = Intensity::new((adapted.intensity.raw() * gain).clamp(0.0, 1.0))?;
+    adapted.validate_contract()?;
+    Ok(adapted)
 }
 
 const VOCAL_CHANNEL_PAYLOAD_MAGIC_V1: u32 = 0x5348_5031;
@@ -4422,6 +4581,12 @@ fn proximity_salience(distance: f32, radius: f32) -> f32 {
     (1.0 - distance / radius).clamp(0.0, 1.0)
 }
 
+fn scale_sensory_group<const N: usize>(values: &mut [f32; N], gain: f32) {
+    for value in values {
+        *value = (*value * gain).clamp(0.0, 1.0);
+    }
+}
+
 fn step_toward(start: Vec3f, target: Vec3f, step: f32) -> Vec3f {
     let delta = subtract(target, start);
     let length = distance(start, target);
@@ -4709,7 +4874,10 @@ mod task_6_factorized_motor_tests {
 
         assert_ne!(receipt.biology_after.graph_state(), before.graph_state());
         assert_eq!(
-            receipt.biology_after.biochemical_work().neural_emitter_evaluations,
+            receipt
+                .biology_after
+                .biochemical_work()
+                .neural_emitter_evaluations,
             1
         );
         assert!(
@@ -5232,7 +5400,7 @@ mod task_3_2a_tests {
                         biology.cadence.metabolism_ticks = 1;
                         biology.cadence.development_ticks = 1;
                         if organism_id == TASK_4_1_LOW_ORGANISM {
-                            biology.body.health = 0.1;
+                            biology.body.set_health(0.1)?;
                         }
                         Ok(())
                     })
@@ -5565,7 +5733,7 @@ mod task_3_2a_tests {
                     .with_biology_mut(organism_id, |biology| {
                         biology.cadence = one_tick_cadence;
                         if organism_id == TASK_4_1_LOW_ORGANISM {
-                            biology.body.energy = low_energy;
+                            biology.body.set_energy(low_energy)?;
                         }
                         Ok(())
                     })
@@ -5887,7 +6055,7 @@ mod task_4_3a2_tests {
         world
             .organism_registry
             .with_biology_mut(terminal_id, |biology| {
-                biology.body.energy = 0.0;
+                biology.body.set_energy(0.0)?;
                 Ok(())
             })
             .unwrap();

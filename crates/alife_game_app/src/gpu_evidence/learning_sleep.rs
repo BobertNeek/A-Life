@@ -60,6 +60,12 @@ const SLICE_B_ARTIFACT_DOMAIN: &[u8] = b"alife.gpu.evidence.slice-b-artifact.v1"
 const SAVE_ASSET_DOMAIN: &[u8] = b"alife.gpu.evidence.slice-b-save-assets.v1";
 const EVIDENCE_SENSOR_PROFILE: SensorProfile = SensorProfile::PrivilegedAffordanceV1;
 
+fn require_canonical_evidence_chemistry<T>() -> Result<T, GpuEvidenceError> {
+    Err(GpuEvidenceError::Contract(
+        "learning evidence requires a canonical organism biochemical receptor frame",
+    ))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GpuLearningSleepAcceptanceOptions {
     pub capacity: BrainCapacityClass,
@@ -671,7 +677,7 @@ fn run_paired_waking_exposures(
             require_matching_initial_logits(&ticks)?;
             initial_logit = Some(ticks[0].selection.logit);
         }
-        let experimental_patch = sealed_credit_patch(
+        let _experimental_patch = sealed_credit_patch(
             handles[0],
             genome,
             development,
@@ -681,7 +687,7 @@ fn run_paired_waking_exposures(
             experimental_reward,
             experimental_pain,
         )?;
-        let control_patch = sealed_credit_patch(
+        let _control_patch = sealed_credit_patch(
             handles[1],
             genome,
             development,
@@ -691,10 +697,17 @@ fn run_paired_waking_exposures(
             0.0,
             0.0,
         )?;
-        let receipts = backend.apply_sealed_outcome_batch(&[
-            (handles[0], &experimental_patch),
-            (handles[1], &control_patch),
-        ])?;
+        for handle in handles {
+            let pending =
+                backend
+                    .pending_eligibility(handle)?
+                    .ok_or(GpuEvidenceError::Contract(
+                        "GPU evidence is missing pending eligibility",
+                    ))?;
+            backend.discard_pending_eligibility(handle, pending.identity())?;
+        }
+        let receipts: Vec<alife_gpu_backend::GpuLearningReceipt> =
+            require_canonical_evidence_chemistry()?;
         if receipts.len() != 2 {
             return Err(GpuEvidenceError::Contract(
                 "paired waking exposure did not return two learning receipts",
@@ -744,7 +757,7 @@ fn run_replay_restore_probe(
             "dispatch replay learning exposure",
             source_backend.tick_batch(&[(source_handle, frame.clone())]),
         )?;
-        let patch = sealed_credit_patch(
+        let _patch = sealed_credit_patch(
             source_handle,
             genome,
             development,
@@ -754,10 +767,12 @@ fn run_replay_restore_probe(
             0.8,
             0.0,
         )?;
-        let receipts = evidence_stage(
-            "apply replay learning exposure",
-            source_backend.apply_sealed_outcome_batch(&[(source_handle, &patch)]),
+        let pending = source_backend.pending_eligibility(source_handle)?.ok_or(
+            GpuEvidenceError::Contract("GPU replay evidence is missing pending eligibility"),
         )?;
+        source_backend.discard_pending_eligibility(source_handle, pending.identity())?;
+        let receipts: Vec<alife_gpu_backend::GpuLearningReceipt> =
+            require_canonical_evidence_chemistry()?;
         learning_dispatches = learning_dispatches.saturating_add(receipts.len() as u64);
     }
 

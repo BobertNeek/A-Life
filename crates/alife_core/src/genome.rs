@@ -597,10 +597,16 @@ pub struct MacroConnectomeMask {
 impl MacroConnectomeMask {
     pub fn scaffold_defaults() -> Vec<Self> {
         [
-            ProjectionKey::new(LobeKind::SensoryGrounding, LobeKind::CoreAssociation),
-            ProjectionKey::new(LobeKind::MetabolicDrive, LobeKind::HomeostaticRegulation),
-            ProjectionKey::new(LobeKind::CoreAssociation, LobeKind::MotorArbitration),
-            ProjectionKey::new(LobeKind::MotorArbitration, LobeKind::MotorArbitration),
+            ProjectionKey::new(
+                LobeKind::PerceptualIntegration,
+                LobeKind::TemporalPredictive,
+            ),
+            ProjectionKey::new(
+                LobeKind::InteroceptiveMotivational,
+                LobeKind::FlexibleReserve,
+            ),
+            ProjectionKey::new(LobeKind::TemporalPredictive, LobeKind::ActionPlanning),
+            ProjectionKey::new(LobeKind::ActionPlanning, LobeKind::ActionPlanning),
         ]
         .into_iter()
         .map(|projection| Self {
@@ -644,33 +650,30 @@ impl SparseDensityPrior {
         vec![
             Self {
                 projection: ProjectionKey::new(
-                    LobeKind::SensoryGrounding,
-                    LobeKind::CoreAssociation,
+                    LobeKind::PerceptualIntegration,
+                    LobeKind::TemporalPredictive,
                 ),
                 density: NormalizedScalar(0.04),
                 max_active_synapse_share: NormalizedScalar(0.35),
             },
             Self {
                 projection: ProjectionKey::new(
-                    LobeKind::CoreAssociation,
-                    LobeKind::MotorArbitration,
+                    LobeKind::TemporalPredictive,
+                    LobeKind::ActionPlanning,
                 ),
                 density: NormalizedScalar(0.03),
                 max_active_synapse_share: NormalizedScalar(0.25),
             },
             Self {
                 projection: ProjectionKey::new(
-                    LobeKind::MetabolicDrive,
-                    LobeKind::HomeostaticRegulation,
+                    LobeKind::InteroceptiveMotivational,
+                    LobeKind::FlexibleReserve,
                 ),
                 density: NormalizedScalar(0.02),
                 max_active_synapse_share: NormalizedScalar(0.15),
             },
             Self {
-                projection: ProjectionKey::new(
-                    LobeKind::MotorArbitration,
-                    LobeKind::MotorArbitration,
-                ),
+                projection: ProjectionKey::new(LobeKind::ActionPlanning, LobeKind::ActionPlanning),
                 density: NormalizedScalar(0.05),
                 max_active_synapse_share: NormalizedScalar(0.10),
             },
@@ -745,22 +748,44 @@ fn validate_connectome_density_contract(
 const fn is_canonical_slice_a_projection(key: ProjectionKey) -> bool {
     matches!(
         (key.source_lobe, key.target_lobe),
-        (LobeKind::SensoryGrounding, LobeKind::CoreAssociation)
-            | (LobeKind::CoreAssociation, LobeKind::MotorArbitration)
-            | (LobeKind::MetabolicDrive, LobeKind::HomeostaticRegulation)
-            | (LobeKind::MotorArbitration, LobeKind::MotorArbitration)
-            | (LobeKind::AuditorySpeech, LobeKind::CoreAssociation)
-            | (LobeKind::GlyphVision, LobeKind::CoreAssociation)
-            | (LobeKind::HomeostaticRegulation, LobeKind::CoreAssociation)
-            | (LobeKind::HomeostaticRegulation, LobeKind::MotorArbitration)
-            | (LobeKind::CoreAssociation, LobeKind::WorkingMemory)
-            | (LobeKind::WorkingMemory, LobeKind::CoreAssociation)
-            | (LobeKind::CoreAssociation, LobeKind::EpisodicMemory)
-            | (LobeKind::EpisodicMemory, LobeKind::CoreAssociation)
-            | (LobeKind::CoreAssociation, LobeKind::LexiconConcept)
-            | (LobeKind::LexiconConcept, LobeKind::CoreAssociation)
-            | (LobeKind::LexiconConcept, LobeKind::WorkingMemory)
-            | (LobeKind::WorkingMemory, LobeKind::LexiconConcept)
+        (
+            LobeKind::PerceptualIntegration,
+            LobeKind::TemporalPredictive
+        ) | (LobeKind::TemporalPredictive, LobeKind::ActionPlanning)
+            | (
+                LobeKind::InteroceptiveMotivational,
+                LobeKind::FlexibleReserve
+            )
+            | (LobeKind::ActionPlanning, LobeKind::ActionPlanning)
+            | (LobeKind::SocialCommunication, LobeKind::TemporalPredictive)
+            | (LobeKind::FlexibleReserve, LobeKind::TemporalPredictive)
+            | (LobeKind::FlexibleReserve, LobeKind::ActionPlanning)
+            | (
+                LobeKind::TemporalPredictive,
+                LobeKind::WorkingContextExecutive
+            )
+            | (
+                LobeKind::WorkingContextExecutive,
+                LobeKind::TemporalPredictive
+            )
+            | (LobeKind::TemporalPredictive, LobeKind::MemoryInterface)
+            | (LobeKind::MemoryInterface, LobeKind::TemporalPredictive)
+            | (
+                LobeKind::TemporalPredictive,
+                LobeKind::MultimodalAssociation
+            )
+            | (
+                LobeKind::MultimodalAssociation,
+                LobeKind::TemporalPredictive
+            )
+            | (
+                LobeKind::MultimodalAssociation,
+                LobeKind::WorkingContextExecutive
+            )
+            | (
+                LobeKind::WorkingContextExecutive,
+                LobeKind::MultimodalAssociation
+            )
     )
 }
 
@@ -908,7 +933,7 @@ pub struct PlasticityGenomeParameters {
     base_learning_rate: f32,
     normalization_rate: f32,
     sleep_replay_rate: f32,
-    modulator_sign: f32,
+    receptor_profile: crate::PlasticityReceptorProfile,
     fast_min: f32,
     fast_max: f32,
     sleep_staging_rate: f32,
@@ -917,6 +942,38 @@ pub struct PlasticityGenomeParameters {
 }
 
 impl PlasticityGenomeParameters {
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_new(
+        eligibility_decay: f32,
+        base_learning_rate: f32,
+        normalization_rate: f32,
+        sleep_replay_rate: f32,
+        receptor_profile: crate::PlasticityReceptorProfile,
+        fast_min: f32,
+        fast_max: f32,
+        sleep_staging_rate: f32,
+        sleep_weight_limit: f32,
+        sleep_fast_decay_rate: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let value = Self {
+            schema_version: SchemaVersions::CURRENT.learning.raw(),
+            eligibility_decay,
+            base_learning_rate,
+            normalization_rate,
+            sleep_replay_rate,
+            receptor_profile,
+            fast_min,
+            fast_max,
+            sleep_staging_rate,
+            sleep_weight_limit,
+            sleep_fast_decay_rate,
+        };
+        value.validate_contract()?;
+        Ok(value)
+    }
+
+    /// Deterministic schema-v1 compatibility constructor. New production code
+    /// must supply an explicit multi-lane receptor profile through `try_new`.
     #[allow(clippy::too_many_arguments)]
     pub fn try_new_v1(
         eligibility_decay: f32,
@@ -936,7 +993,16 @@ impl PlasticityGenomeParameters {
             base_learning_rate,
             normalization_rate,
             sleep_replay_rate,
-            modulator_sign,
+            receptor_profile: crate::PlasticityReceptorProfile::try_new([
+                0.2 * modulator_sign,
+                -1.0 * modulator_sign,
+                1.0 * modulator_sign,
+                -0.5 * modulator_sign,
+                0.2 * modulator_sign,
+                0.0,
+                0.5 * modulator_sign,
+                -0.5 * modulator_sign,
+            ])?,
             fast_min,
             fast_max,
             sleep_staging_rate,
@@ -947,14 +1013,17 @@ impl PlasticityGenomeParameters {
         Ok(value)
     }
 
-    const fn canonical_default() -> Self {
+    fn canonical_default() -> Self {
         Self {
             schema_version: SchemaVersions::CURRENT.learning.raw(),
             eligibility_decay: 0.95,
             base_learning_rate: 0.01,
             normalization_rate: 0.001,
             sleep_replay_rate: 0.25,
-            modulator_sign: 1.0,
+            receptor_profile: crate::PlasticityReceptorProfile::try_new([
+                0.2, -1.0, 1.0, -0.5, 0.2, 0.0, 0.5, -0.5,
+            ])
+            .expect("canonical receptor profile is bounded"),
             fast_min: -2.0,
             fast_max: 2.0,
             sleep_staging_rate: 0.5,
@@ -978,8 +1047,8 @@ impl PlasticityGenomeParameters {
     pub const fn sleep_replay_rate(&self) -> f32 {
         self.sleep_replay_rate
     }
-    pub const fn modulator_sign(&self) -> f32 {
-        self.modulator_sign
+    pub const fn receptor_profile(&self) -> crate::PlasticityReceptorProfile {
+        self.receptor_profile
     }
     pub const fn fast_bounds(&self) -> (f32, f32) {
         (self.fast_min, self.fast_max)
@@ -1003,7 +1072,6 @@ impl Validate for PlasticityGenomeParameters {
             self.base_learning_rate,
             self.normalization_rate,
             self.sleep_replay_rate,
-            self.modulator_sign,
             self.fast_min,
             self.fast_max,
             self.sleep_staging_rate,
@@ -1018,7 +1086,6 @@ impl Validate for PlasticityGenomeParameters {
             || self.base_learning_rate == 0.0
             || !(0.0..=1.0).contains(&self.normalization_rate)
             || !(0.0..=1.0).contains(&self.sleep_replay_rate)
-            || !matches!(self.modulator_sign, -1.0 | 1.0)
             || !(-8.0..=8.0).contains(&self.fast_min)
             || !(-8.0..=8.0).contains(&self.fast_max)
             || self.fast_min >= self.fast_max
@@ -1046,7 +1113,7 @@ impl<'de> Deserialize<'de> for PlasticityGenomeParameters {
             base_learning_rate: f32,
             normalization_rate: f32,
             sleep_replay_rate: f32,
-            modulator_sign: f32,
+            receptor_profile: crate::PlasticityReceptorProfile,
             fast_min: f32,
             fast_max: f32,
             sleep_staging_rate: f32,
@@ -1060,7 +1127,7 @@ impl<'de> Deserialize<'de> for PlasticityGenomeParameters {
             base_learning_rate: wire.base_learning_rate,
             normalization_rate: wire.normalization_rate,
             sleep_replay_rate: wire.sleep_replay_rate,
-            modulator_sign: wire.modulator_sign,
+            receptor_profile: wire.receptor_profile,
             fast_min: wire.fast_min,
             fast_max: wire.fast_max,
             sleep_staging_rate: wire.sleep_staging_rate,
@@ -1079,8 +1146,8 @@ impl PlasticityMask {
             hebbian_enabled: true,
             projection_masks: vec![ProjectionPlasticityMask {
                 projection: ProjectionKey::new(
-                    LobeKind::CoreAssociation,
-                    LobeKind::MotorArbitration,
+                    LobeKind::TemporalPredictive,
+                    LobeKind::ActionPlanning,
                 ),
                 learning_rate_scale: NormalizedScalar(0.5),
                 plasticity_enabled: true,
@@ -1307,19 +1374,19 @@ impl SensorLayoutGene {
                 SensorChannelGene {
                     kind: SensorChannelKind::Interoception,
                     receptor_count: 16,
-                    target_lobe: LobeKind::MetabolicDrive,
+                    target_lobe: LobeKind::InteroceptiveMotivational,
                     enabled_at_maturation: 0,
                 },
                 SensorChannelGene {
                     kind: SensorChannelKind::Vision,
                     receptor_count: 64,
-                    target_lobe: LobeKind::SensoryGrounding,
+                    target_lobe: LobeKind::PerceptualIntegration,
                     enabled_at_maturation: 0,
                 },
                 SensorChannelGene {
                     kind: SensorChannelKind::Touch,
                     receptor_count: 24,
-                    target_lobe: LobeKind::SensoryGrounding,
+                    target_lobe: LobeKind::PerceptualIntegration,
                     enabled_at_maturation: 0,
                 },
             ],
@@ -1579,7 +1646,7 @@ impl DevelopmentalSchedule {
                 },
             ],
             critical_periods: vec![CriticalPeriod {
-                lobe: LobeKind::CoreAssociation,
+                lobe: LobeKind::TemporalPredictive,
                 opens_at: Tick(100),
                 closes_at: Tick(1_200),
                 plasticity_bias: NormalizedScalar(0.8),

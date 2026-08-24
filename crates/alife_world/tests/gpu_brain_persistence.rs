@@ -282,6 +282,7 @@ fn retained_learning_attempt_counts_zero_through_three_roundtrip_without_sidecar
             organism_id_raw: save.organism_id.raw(),
             pending,
             sealed_patch_asset: asset("retained-learning-sealed-patch"),
+            neural_receptor_frame_asset: asset("retained-learning-receptors"),
             attempts,
             last_error_code: "neural-backend-unavailable".to_owned(),
         });

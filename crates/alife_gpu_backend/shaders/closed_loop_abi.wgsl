@@ -73,7 +73,13 @@ struct GpuMemoryContextHeader {
   @align(16) schema_version:u32, class_id:u32, slot:u32, slot_generation:u32,
   tick_lo:u32, tick_hi:u32, candidate_count:u32, memory_context_offset:u32,
   candidate_offset:u32, profile_id:u32, profile_schema_version:u32, sensory_abi_version:u32,
-  brain_slot_index:u32, decoder_learning_input_offset:u32, perception_header_index:u32, reserved:u32,
+  brain_slot_index:u32, decoder_learning_input_offset:u32, perception_header_index:u32, neural_receptor_effects_offset:u32,
+}
+struct GpuNeuralReceptorEffectsRecord {
+  @align(16) schema_version:u32, source_chemistry_version:u32, tick_lo:u32, tick_hi:u32,
+  interoceptive_gain:f32, regional_excitability:f32, projection_gain:f32, local_threshold_shift:f32,
+  attention_gain:f32, plasticity_appetitive:f32, plasticity_aversive:f32, structural_growth_gate:f32,
+  sleep_gate:f32, consolidation_gate:f32, reserved:vec2<u32>,
 }
 struct GpuMemoryChannelPlan {
   @align(16) schema_version:u32, target_latent_lane_start:u32, family_value_lane_start:u32, decoder_input_stride:u32,
@@ -118,7 +124,7 @@ struct GpuDecoderEligibilityMetadata {
 }
 struct GpuPlasticityReceptorRecord {
   eligibility_decay:f32, learning_rate:f32, sleep_replay_rate:f32, normalization_rate:f32,
-  modulator_sign:f32, fast_min:f32, fast_max:f32, reserved:f32,
+  receptor_weights:array<f32,8>, fast_min:f32, fast_max:f32, reserved:vec2<f32>,
 }
 struct GpuSleepParameterRecord {
   schema_version:u32, staging_rate:f32, weight_limit:f32, fast_decay_rate:f32,
@@ -127,8 +133,9 @@ struct GpuSleepParameterRecord {
 struct GpuReplayEventRecord {
   sequence_id:vec2<u32>, originating_tick:vec2<u32>, frame_digest:array<u32,8>,
   candidate_feature_digest:vec4<u32>, action_id:u32, family:u32,
-  reward_prediction_error:f32, pain:f32, homeostatic_improvement:f32, frustration:f32,
-  novelty:f32, modulator_value:f32,
+  prediction_residual:f32, pain:f32, homeostatic_improvement:f32, frustration:f32,
+  novelty:f32, social_consequence:f32, biochemical_appetitive:f32, biochemical_aversive:f32,
+  reserved:vec2<u32>,
 }
 struct GpuSleepHeader {
   schema_version:u32, class_id:u32, slot:u32, slot_generation:u32,
@@ -156,8 +163,9 @@ struct GpuOutcomeCreditRecord {
   phenotype_hash:array<u32,8>, sequence_id:vec2<u32>, originating_tick:vec2<u32>, outcome_tick:vec2<u32>,
   selected_action:u32, active_activation_side:u32, candidate_feature_digest:vec4<u32>,
   frame_digest:array<u32,8>, dispatch_generation:vec2<u32>,
-  reward_prediction_error:f32, pain:f32, homeostatic_improvement:f32, frustration:f32,
-  novelty:f32, modulator_value:f32,
+  prediction_residual:f32, pain:f32, homeostatic_improvement:f32, frustration:f32,
+  novelty:f32, social_consequence:f32, biochemical_appetitive:f32, biochemical_aversive:f32,
+  reserved:vec2<u32>,
 }
 struct GpuFastPlasticityCommitRecord {
   schema_version:u32, slot:u32, slot_generation:u32, status:u32,
@@ -277,8 +285,25 @@ fn load_plasticity_receptor(base:u32) -> GpuPlasticityReceptorRecord {
   return GpuPlasticityReceptorRecord(
     bitcast<f32>(immutable_plan_words[base]),bitcast<f32>(immutable_plan_words[base+1u]),
     bitcast<f32>(immutable_plan_words[base+2u]),bitcast<f32>(immutable_plan_words[base+3u]),
-    bitcast<f32>(immutable_plan_words[base+4u]),bitcast<f32>(immutable_plan_words[base+5u]),
-    bitcast<f32>(immutable_plan_words[base+6u]),bitcast<f32>(immutable_plan_words[base+7u])
+    array<f32,8>(
+      bitcast<f32>(immutable_plan_words[base+4u]),bitcast<f32>(immutable_plan_words[base+5u]),
+      bitcast<f32>(immutable_plan_words[base+6u]),bitcast<f32>(immutable_plan_words[base+7u]),
+      bitcast<f32>(immutable_plan_words[base+8u]),bitcast<f32>(immutable_plan_words[base+9u]),
+      bitcast<f32>(immutable_plan_words[base+10u]),bitcast<f32>(immutable_plan_words[base+11u])
+    ),
+    bitcast<f32>(immutable_plan_words[base+12u]),bitcast<f32>(immutable_plan_words[base+13u]),
+    vec2<f32>(bitcast<f32>(immutable_plan_words[base+14u]),bitcast<f32>(immutable_plan_words[base+15u]))
+  );
+}
+fn load_neural_receptor_effects(base:u32) -> GpuNeuralReceptorEffectsRecord {
+  return GpuNeuralReceptorEffectsRecord(
+    frame_payload_words[base],frame_payload_words[base+1u],frame_payload_words[base+2u],frame_payload_words[base+3u],
+    bitcast<f32>(frame_payload_words[base+4u]),bitcast<f32>(frame_payload_words[base+5u]),
+    bitcast<f32>(frame_payload_words[base+6u]),bitcast<f32>(frame_payload_words[base+7u]),
+    bitcast<f32>(frame_payload_words[base+8u]),bitcast<f32>(frame_payload_words[base+9u]),
+    bitcast<f32>(frame_payload_words[base+10u]),bitcast<f32>(frame_payload_words[base+11u]),
+    bitcast<f32>(frame_payload_words[base+12u]),bitcast<f32>(frame_payload_words[base+13u]),
+    vec2<u32>(frame_payload_words[base+14u],frame_payload_words[base+15u])
   );
 }
 fn load_sleep_parameter(base:u32) -> GpuSleepParameterRecord {

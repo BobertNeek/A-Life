@@ -291,8 +291,8 @@ fn compile_n2048_foundation(
 
 pub(super) fn decoder_alpha(genome: &BrainGenome, motor_start: u32, neuron: u32) -> f32 {
     let route = RoutingMask::new(
-        LobeKind::MotorArbitration,
-        LobeKind::MotorArbitration,
+        LobeKind::ActionPlanning,
+        LobeKind::ActionPlanning,
         ProjectionType::MotorProposal,
         ActiveTilePolicy::EssentialReservation,
         UpdateCadence::Hot60Hz,
@@ -325,16 +325,16 @@ fn canonical_route(key: ProjectionKey) -> Option<RoutingMask> {
         ));
     }
     let (projection_type, cadence) = match (key.source_lobe, key.target_lobe) {
-        (LobeKind::SensoryGrounding, LobeKind::CoreAssociation) => {
+        (LobeKind::PerceptualIntegration, LobeKind::TemporalPredictive) => {
             (ProjectionType::FeedForward, UpdateCadence::Hot60Hz)
         }
-        (LobeKind::CoreAssociation, LobeKind::MotorArbitration) => {
+        (LobeKind::TemporalPredictive, LobeKind::ActionPlanning) => {
             (ProjectionType::MotorProposal, UpdateCadence::Hot60Hz)
         }
-        (LobeKind::MetabolicDrive, LobeKind::HomeostaticRegulation) => {
+        (LobeKind::InteroceptiveMotivational, LobeKind::FlexibleReserve) => {
             (ProjectionType::Homeostatic, UpdateCadence::Hot10To30Hz)
         }
-        (LobeKind::MotorArbitration, LobeKind::MotorArbitration) => {
+        (LobeKind::ActionPlanning, LobeKind::ActionPlanning) => {
             (ProjectionType::LateralInhibition, UpdateCadence::Hot60Hz)
         }
         _ => return None,

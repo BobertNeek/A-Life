@@ -121,7 +121,10 @@ fn learned_backend(
         .unwrap()
         .remove(0);
     let patch = sealed_reward(handle, &frame, &tick, 1, 0.8);
-    let receipt = backend.apply_sealed_outcome(handle, &patch).unwrap();
+    let receptors = support::test_receptor_frame(&patch);
+    let receipt = backend
+        .apply_sealed_outcome(handle, &patch, &receptors)
+        .unwrap();
     assert!(receipt.fast_weights_changed > 0);
     (backend, handle, phenotype)
 }
@@ -172,11 +175,11 @@ fn sleep_header_layout_matches_wgsl() {
         std::mem::offset_of!(GpuConsolidationRequestRecord, request_digest),
         136
     );
-    assert_eq!(std::mem::size_of::<GpuReplayEventRecord>(), 96);
+    assert_eq!(std::mem::size_of::<GpuReplayEventRecord>(), 112);
     assert_eq!(std::mem::align_of::<GpuReplayEventRecord>(), 16);
     assert_eq!(
-        std::mem::offset_of!(GpuReplayEventRecord, modulator_value),
-        92
+        std::mem::offset_of!(GpuReplayEventRecord, biochemical_aversive),
+        100
     );
     assert_eq!(std::mem::size_of::<GpuReplaySynapseSpanRecord>(), 16);
     assert_eq!(std::mem::align_of::<GpuReplaySynapseSpanRecord>(), 16);
@@ -421,8 +424,13 @@ fn two_same_class_sleep_jobs_do_not_cross_write_slots() {
         .unwrap();
     let patch_a = sealed_reward(handle_a, &frame_a, &ticks[0], 1, 0.8);
     let patch_b = sealed_reward(handle_b, &frame_b, &ticks[1], 1, 0.8);
+    let receptors_a = support::test_receptor_frame(&patch_a);
+    let receptors_b = support::test_receptor_frame(&patch_b);
     backend
-        .apply_sealed_outcome_batch(&[(handle_a, &patch_a), (handle_b, &patch_b)])
+        .apply_sealed_outcome_batch(&[
+            (handle_a, &patch_a, &receptors_a),
+            (handle_b, &patch_b, &receptors_b),
+        ])
         .unwrap();
 
     let slot_b_before = backend.slot_full_digest_for_test(handle_b).unwrap();
@@ -480,8 +488,12 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
             sealed_reward(handles[0], &frames[0], &ticks[0], exposure + 1, 0.8),
             sealed_reward(handles[1], &frames[1], &ticks[1], exposure + 1, 0.8),
         ];
+        let receptors = patches.map(|patch| support::test_receptor_frame(&patch));
         backend
-            .apply_sealed_outcome_batch(&[(handles[0], &patches[0]), (handles[1], &patches[1])])
+            .apply_sealed_outcome_batch(&[
+                (handles[0], &patches[0], &receptors[0]),
+                (handles[1], &patches[1], &receptors[1]),
+            ])
             .unwrap();
     }
 

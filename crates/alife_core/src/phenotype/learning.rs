@@ -7,8 +7,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
     BrainGenome, CanonicalDigestBuilder, DevelopmentState, FoundationSectionPolicy,
-    LifetimePlasticityBand, N2048FoundationLayoutV1, ScaffoldContractError, SchemaKind,
-    SchemaVersions, Validate,
+    LifetimePlasticityBand, N2048FoundationLayoutV1, PlasticityReceptorProfile,
+    ScaffoldContractError, SchemaKind, SchemaVersions, Validate,
 };
 
 use super::{
@@ -42,7 +42,7 @@ pub struct PlasticityReceptorPlan {
     learning_rate: f32,
     sleep_replay_rate: f32,
     normalization_rate: f32,
-    modulator_sign: f32,
+    receptor_profile: PlasticityReceptorProfile,
     fast_weight_min: f32,
     fast_weight_max: f32,
 }
@@ -54,7 +54,7 @@ impl PlasticityReceptorPlan {
         learning_rate: f32,
         sleep_replay_rate: f32,
         normalization_rate: f32,
-        modulator_sign: f32,
+        receptor_profile: PlasticityReceptorProfile,
         fast_weight_min: f32,
         fast_weight_max: f32,
     ) -> Result<Self, ScaffoldContractError> {
@@ -63,7 +63,7 @@ impl PlasticityReceptorPlan {
             learning_rate,
             sleep_replay_rate,
             normalization_rate,
-            modulator_sign,
+            receptor_profile,
             fast_weight_min,
             fast_weight_max,
         };
@@ -83,8 +83,8 @@ impl PlasticityReceptorPlan {
     pub const fn normalization_rate(&self) -> f32 {
         self.normalization_rate
     }
-    pub const fn modulator_sign(&self) -> f32 {
-        self.modulator_sign
+    pub const fn receptor_profile(&self) -> PlasticityReceptorProfile {
+        self.receptor_profile
     }
     pub const fn fast_weight_bounds(&self) -> (f32, f32) {
         (self.fast_weight_min, self.fast_weight_max)
@@ -99,7 +99,6 @@ impl PlasticityReceptorPlan {
             self.learning_rate,
             self.sleep_replay_rate,
             self.normalization_rate,
-            self.modulator_sign,
             self.fast_weight_min,
             self.fast_weight_max,
         ];
@@ -110,7 +109,6 @@ impl PlasticityReceptorPlan {
             || !(0.0..=1.0).contains(&self.learning_rate)
             || !(0.0..=1.0).contains(&self.sleep_replay_rate)
             || !(0.0..=1.0).contains(&self.normalization_rate)
-            || !matches!(self.modulator_sign, -1.0 | 1.0)
             || !(-8.0..=8.0).contains(&self.fast_weight_min)
             || !(-8.0..=8.0).contains(&self.fast_weight_max)
             || self.fast_weight_min >= self.fast_weight_max
@@ -128,7 +126,9 @@ impl PlasticityReceptorPlan {
         digest.write_f32(self.learning_rate)?;
         digest.write_f32(self.sleep_replay_rate)?;
         digest.write_f32(self.normalization_rate)?;
-        digest.write_f32(self.modulator_sign)?;
+        for weight in self.receptor_profile.weights() {
+            digest.write_f32(*weight)?;
+        }
         digest.write_f32(self.fast_weight_min)?;
         digest.write_f32(self.fast_weight_max)
     }
@@ -145,7 +145,7 @@ impl<'de> Deserialize<'de> for PlasticityReceptorPlan {
             learning_rate: f32,
             sleep_replay_rate: f32,
             normalization_rate: f32,
-            modulator_sign: f32,
+            receptor_profile: PlasticityReceptorProfile,
             fast_weight_min: f32,
             fast_weight_max: f32,
         }
@@ -155,7 +155,7 @@ impl<'de> Deserialize<'de> for PlasticityReceptorPlan {
             wire.learning_rate,
             wire.sleep_replay_rate,
             wire.normalization_rate,
-            wire.modulator_sign,
+            wire.receptor_profile,
             wire.fast_weight_min,
             wire.fast_weight_max,
         )
@@ -458,7 +458,7 @@ pub(super) fn compile_learning_plans(
         0.0,
         0.0,
         0.0,
-        parameters.modulator_sign(),
+        parameters.receptor_profile(),
         fast_min,
         fast_max,
     )?;
@@ -492,7 +492,7 @@ pub(super) fn compile_learning_plans(
                     (parameters.base_learning_rate() * effective_scale).clamp(0.0, 1.0),
                     (parameters.sleep_replay_rate() * effective_scale).clamp(0.0, 1.0),
                     (parameters.normalization_rate() * effective_scale).clamp(0.0, 1.0),
-                    parameters.modulator_sign(),
+                    parameters.receptor_profile(),
                     fast_min,
                     fast_max,
                 )?
@@ -714,8 +714,17 @@ mod tests {
 
     #[test]
     fn disabled_receptor_has_exactly_zero_delta_rates() {
-        let receptor =
-            PlasticityReceptorPlan::try_new(0.95, 0.0, 0.0, 0.0, 1.0, -2.0, 2.0).unwrap();
+        let receptor = PlasticityReceptorPlan::try_new(
+            0.95,
+            0.0,
+            0.0,
+            0.0,
+            PlasticityReceptorProfile::try_new([1.0, -1.0, 1.0, -0.5, 0.2, 0.0, 0.5, -0.5])
+                .unwrap(),
+            -2.0,
+            2.0,
+        )
+        .unwrap();
         assert!(!receptor.is_delta_enabled());
     }
 

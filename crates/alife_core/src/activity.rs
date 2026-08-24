@@ -533,11 +533,11 @@ impl NeuralThrottleDecision {
     pub const fn route_is_mandatory(route: &CompiledProjection) -> bool {
         matches!(
             route.source_lobe(),
-            LobeKind::SensoryGrounding | LobeKind::AuditorySpeech | LobeKind::GlyphVision
-        ) || matches!(route.source_lobe(), LobeKind::HomeostaticRegulation)
+            LobeKind::PerceptualIntegration | LobeKind::SocialCommunication
+        ) || matches!(route.source_lobe(), LobeKind::FlexibleReserve)
             || matches!(
                 route.target_lobe(),
-                LobeKind::HomeostaticRegulation | LobeKind::MotorArbitration
+                LobeKind::FlexibleReserve | LobeKind::ActionPlanning
             )
             || matches!(
                 route.projection_type(),

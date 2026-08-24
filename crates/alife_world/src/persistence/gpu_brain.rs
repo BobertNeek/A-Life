@@ -3,20 +3,20 @@
 //! This module owns serialization contracts only. It contains no neural math,
 //! GPU handles, packed arena offsets, or fallback execution path.
 
+use alife_core::predictive::GroundedSuccessorPredictor;
+use alife_core::sleep::SleepWorkReceipt;
 use alife_core::{
     ActionId, AttentionFrame, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId,
     CandidateActionFamily, CandidateFeatureDigest, CanonicalDigestBuilder, CognitiveContextFrame,
-    CognitiveWorkReceipt, ConsolidationState, DendriticBranchSet,
-    LanguageGroundingLedger, MemoryCompactionCheckpoint, MemoryCompactionPhase, MemorySidecarState,
-    MotorCommandBundle, OrganismId, OutcomeCreditReplayKey, PassiveLifeStatistics,
-    PerceptionFrameDigest, PhenotypeHash, PortableTopologySidecarAssetV1, ReplayEligibilitySample,
-    ReplaySynapseSpan, ScaffoldContractError, SensorProfileIdentity, SleepConsolidationReport,
-    SleepReplayEvent, SleepState, StructuralEditBatch, StructuralPlasticityState,
-    Tick, TopologyCounts, TopologySidecar, Validate, MAX_CANDIDATES_PER_REGION,
-    MAX_REGIONS_PER_STATE, MAX_REPLAY_CAPTURE_SYNAPSES, MAX_STRUCTURAL_EDGES,
+    CognitiveWorkReceipt, ConsolidationState, DendriticBranchSet, LanguageGroundingLedger,
+    MemoryCompactionCheckpoint, MemoryCompactionPhase, MemorySidecarState, MotorCommandBundle,
+    OrganismId, OutcomeCreditReplayKey, PassiveLifeStatistics, PerceptionFrameDigest,
+    PhenotypeHash, PortableTopologySidecarAssetV1, ReplayEligibilitySample, ReplaySynapseSpan,
+    ScaffoldContractError, SensorProfileIdentity, SleepConsolidationReport, SleepReplayEvent,
+    SleepState, StructuralEditBatch, StructuralPlasticityState, Tick, TopologyCounts,
+    TopologySidecar, Validate, MAX_CANDIDATES_PER_REGION, MAX_REGIONS_PER_STATE,
+    MAX_REPLAY_CAPTURE_SYNAPSES, MAX_STRUCTURAL_EDGES,
 };
-use alife_core::predictive::GroundedSuccessorPredictor;
-use alife_core::sleep::SleepWorkReceipt;
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 
 use crate::TrackedObjectRegistrySaveState;
@@ -26,11 +26,11 @@ use super::{
     AssetManifest, PersistenceError, PortableAssetDigest,
 };
 
-pub const GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION: u16 = 3;
-pub const GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION: u16 = 1;
+pub const GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION: u16 = 4;
+pub const GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION: u16 = 2;
 pub const MEMORY_SIDECAR_SAVE_SCHEMA_VERSION: u16 = 1;
 pub const TOPOLOGY_SIDECAR_SAVE_SCHEMA_VERSION: u16 = 1;
-pub const RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION: u16 = 1;
+pub const RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION: u16 = 2;
 pub const GPU_BRAIN_WEIGHT_LAYER_LIFETIME: u16 = 1;
 pub const GPU_BRAIN_WEIGHT_LAYER_FAST: u16 = 2;
 pub const GPU_BRAIN_HOMEOSTASIS_LANES_PER_NEURON: u16 = 2;
@@ -339,6 +339,7 @@ pub struct RetainedLearningRecoverySaveState {
     pub organism_id_raw: u64,
     pub pending: PendingEligibilityCheckpoint,
     pub sealed_patch_asset: GpuBrainAssetRef,
+    pub neural_receptor_frame_asset: GpuBrainAssetRef,
     pub attempts: u8,
     pub last_error_code: String,
 }
@@ -347,6 +348,7 @@ impl RetainedLearningRecoverySaveState {
     fn validate_for(&self, organism_id: OrganismId) -> Result<(), PersistenceError> {
         self.pending.validate_contract()?;
         self.sealed_patch_asset.validate()?;
+        self.neural_receptor_frame_asset.validate()?;
         if self.schema_version != RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION
             || self.organism_id_raw != organism_id.raw()
             || !(1..=3).contains(&self.attempts)
@@ -977,7 +979,7 @@ impl GpuBrainSaveState {
     pub fn validate(&self) -> Result<(), PersistenceError> {
         if self.schema_version != GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION {
             return Err(PersistenceError::SchemaVersion {
-                schema: "alife.gpu_brain_save_state.v3",
+                schema: "alife.gpu_brain_save_state.v4",
                 expected: GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
                 actual: self.schema_version,
             });
@@ -1176,6 +1178,12 @@ impl GpuBrainSaveState {
                 .retained_learning
                 .iter()
                 .map(|recovery| &recovery.sealed_patch_asset),
+        );
+        refs.extend(
+            self.memory
+                .retained_learning
+                .iter()
+                .map(|recovery| &recovery.neural_receptor_frame_asset),
         );
         refs.extend(self.sleep_assets.replay_batch.iter());
         refs.extend(self.sleep_assets.lifetime_staging.iter());
@@ -1397,14 +1405,7 @@ fn write_float_bits(
 fn validate_replay_event(event: &SleepReplayEvent) -> Result<(), ScaffoldContractError> {
     event.sequence_id.validate()?;
     event.action_id.validate()?;
-    let values = [
-        event.modulator.prediction_residual(),
-        event.modulator.pain(),
-        event.modulator.homeostatic_improvement(),
-        event.modulator.frustration(),
-        event.modulator.novelty(),
-        event.modulator.value(),
-    ];
+    let values = *event.modulator.frame().lanes();
     if event.frame_digest == PerceptionFrameDigest([0; 4])
         || event.candidate_feature_digest == CandidateFeatureDigest([0; 2])
         || values
@@ -1429,12 +1430,9 @@ fn write_replay_event(
     }
     digest.write_u32(event.action_id.raw());
     digest.write_u8(event.family.raw());
-    digest.write_f32(event.modulator.prediction_residual())?;
-    digest.write_f32(event.modulator.pain())?;
-    digest.write_f32(event.modulator.homeostatic_improvement())?;
-    digest.write_f32(event.modulator.frustration())?;
-    digest.write_f32(event.modulator.novelty())?;
-    digest.write_f32(event.modulator.value())?;
+    for lane in event.modulator.frame().lanes() {
+        digest.write_f32(*lane)?;
+    }
     Ok(())
 }
 

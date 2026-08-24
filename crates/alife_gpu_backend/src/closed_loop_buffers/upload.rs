@@ -331,25 +331,25 @@ impl GpuPhenotypeUpload {
                     learning_rate: receptor.learning_rate(),
                     sleep_replay_rate: receptor.sleep_replay_rate(),
                     normalization_rate: receptor.normalization_rate(),
-                    modulator_sign: receptor.modulator_sign(),
+                    receptor_weights: *receptor.receptor_profile().weights(),
                     fast_min,
                     fast_max,
-                    reserved: 0.0,
+                    reserved: [0.0; 2],
                 }
             })
             .collect::<Vec<_>>();
         if plasticity_receptors.iter().any(|row| {
-            row.reserved.to_bits() != 0
+            row.reserved != [0.0; 2]
                 || [
                     row.eligibility_decay,
                     row.learning_rate,
                     row.sleep_replay_rate,
                     row.normalization_rate,
-                    row.modulator_sign,
                     row.fast_min,
                     row.fast_max,
                 ]
                 .into_iter()
+                .chain(row.receptor_weights)
                 .any(|value| !value.is_finite())
         }) {
             return Err(GpuClosedLoopError::NonFinitePayload);

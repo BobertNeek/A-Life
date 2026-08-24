@@ -20,19 +20,20 @@ use alife_core::{
     ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState, CoordinationGroup,
     DecisionSnapshot, DevelopmentState, EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId,
     FinalizedMemoryAttentionEvidence, FinalizedMemoryRecall, FoundationGeneticIdentity,
-    FoundationWeightAsset, HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot,
-    JointMotorCondition, LanguageGroundingLedger, LineageId, MemoryBankConfig,
-    MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState,
-    MemoryUpdateReceipt, MotorChannel, MotorCommandBundle, N512FounderFoundationProjection,
-    NeuralActionSelection, NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame,
-    NormalizedScalar, OrganismId, PassiveLifeEvent, PassiveLifeStatistics, PerceptionFrame,
-    PerceptionFrameDraft, PhenotypeCompiler, PhenotypeCompilerInputs, PhysicalContactKind,
-    PostActionOutcome, PreActionSnapshot, PredictionTargetReceipt, PreparedMemoryRecall,
-    ScaffoldContractError, SemanticStateVector, SensorProfile, SensorProfileIdentity,
-    SensoryAbiVersion, SignedValence, SleepConsolidationConfig, SleepConsolidator, SleepPhase,
-    SleepState, SleepTransition, Tick, TopologicalMapConfig, TopologyObservationReceipt,
-    TopologySidecar, UtteranceSourceKind, Validate, Vec3f, WorldEntityId, MAX_ACTIVE_CONCEPTS,
-    MAX_ACTIVE_GAPS, MAX_CONTEXT_MEMORY_EXPECTANCIES,
+    FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition,
+    LanguageGroundingLedger, LineageId, MemoryBankConfig, MemoryCompactionCheckpoint,
+    MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState, MemoryUpdateReceipt,
+    MotorChannel, MotorCommandBundle, N512FounderFoundationProjection, NeuralActionSelection,
+    NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame, NeuralReceptorEffects,
+    NeuralReceptorFrame, NeuralReceptorPhenotype, NormalizedScalar, OrganismId, PassiveLifeEvent,
+    PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft, PhenotypeCompiler,
+    PhenotypeCompilerInputs, PhysicalContactKind, PostActionOutcome, PreActionSnapshot,
+    PredictionTargetReceipt, PreparedMemoryRecall, ScaffoldContractError, SemanticStateVector,
+    SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SignedValence,
+    SleepConsolidationConfig, SleepConsolidator, SleepPhase, SleepState, SleepTransition, Tick,
+    TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind,
+    Validate, Vec3f, WorldEntityId, MAX_ACTIVE_CONCEPTS, MAX_ACTIVE_GAPS,
+    MAX_CONTEXT_MEMORY_EXPECTANCIES,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
@@ -79,7 +80,7 @@ use crate::{
     CURATED_FOUNDER_RESET_POLICY, G03_LIVE_BRAIN_LOOP_SCHEMA, G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 struct ResidentCognition {
     phenotype: alife_core::BrainPhenotype,
     compiler_inputs: PhenotypeCompilerInputs,
@@ -870,6 +871,7 @@ struct PreparedLiveSelection {
     motor_bundle: MotorCommandBundle,
     speech_payload: Option<alife_core::SpeechMotorPayload>,
     speech_prompted: bool,
+    neural_receptors: NeuralReceptorFrame,
 }
 
 struct PreparedSealInput {
@@ -900,6 +902,7 @@ struct SealedLiveSelection {
     cognitive_context_digest: [u64; 4],
     summary: LiveBrainTickSummary,
     patch: ExperiencePatch,
+    neural_receptors: NeuralReceptorFrame,
 }
 
 struct PreparedGpuBrainFrame {
@@ -908,6 +911,8 @@ struct PreparedGpuBrainFrame {
     frame: PerceptionFrame,
     memory_recall: FinalizedMemoryRecall,
     memory_upload: GpuMemoryContextUpload,
+    neural_receptors: NeuralReceptorFrame,
+    receptor_effects: NeuralReceptorEffects,
 }
 
 // The bank must exceed each 64-record target/family shortlist so production
@@ -1002,6 +1007,7 @@ struct RetainedLearningRecovery {
     handle: GpuBrainHandle,
     pending: PendingEligibilityReceipt,
     sealed_patch: ExperiencePatch,
+    neural_receptors: NeuralReceptorFrame,
     attempts: u8,
     last_error: RetainedLearningErrorCode,
 }
@@ -2040,7 +2046,9 @@ fn apply_predecision_attention_evidence(
     body_need: f32,
     memory_evidence: &[FinalizedMemoryAttentionEvidence],
     context: &CognitiveContextFrame,
+    receptors: NeuralReceptorEffects,
 ) -> Result<(), ScaffoldContractError> {
+    receptors.validate_contract()?;
     let concept_evidence = context
         .concept
         .active_concepts
@@ -2056,16 +2064,44 @@ fn apply_predecision_attention_evidence(
             .fold(0.0, f32::max),
     );
     for summary in summaries {
-        summary.salience.drive = NormalizedScalar::new(body_need.clamp(0.0, 1.0))?;
-        summary.salience.concept = NormalizedScalar::new(concept_evidence.clamp(0.0, 1.0))?;
-        summary.salience.gap_voltage = NormalizedScalar::new(gap_evidence.clamp(0.0, 1.0))?;
+        summary.salience.drive =
+            NormalizedScalar::new((body_need * receptors.interoceptive_gain).clamp(0.0, 1.0))?;
+        summary.salience.peripheral_intensity = NormalizedScalar::new(
+            (summary.salience.peripheral_intensity.raw()
+                * receptors.regional_excitability
+                * receptors.attention_gain)
+                .clamp(0.0, 1.0),
+        )?;
+        summary.salience.concept =
+            NormalizedScalar::new((concept_evidence * receptors.projection_gain).clamp(0.0, 1.0))?;
+        summary.salience.gap_voltage = NormalizedScalar::new(
+            (gap_evidence - receptors.local_threshold_shift).clamp(0.0, 1.0),
+        )?;
+        summary.salience.novelty = NormalizedScalar::new(
+            summary
+                .salience
+                .novelty
+                .raw()
+                .max(receptors.structural_growth_gate * 0.25),
+        )?;
+        summary.salience.uncertainty = NormalizedScalar::new(
+            summary
+                .salience
+                .uncertainty
+                .raw()
+                .max(receptors.sleep_gate * 0.25),
+        )?;
         if let alife_core::StableFocusIdentity::TrackedObject(tracked_object_id) = summary.identity
         {
             if let Some(memory) = memory_evidence
                 .iter()
                 .find(|memory| memory.tracked_object_id == Some(tracked_object_id))
             {
-                summary.salience.memory_expectancy = memory.salience;
+                summary.salience.memory_expectancy = NormalizedScalar::new(
+                    (memory.salience.raw()
+                        * (0.5 * receptors.projection_gain + 0.5 * receptors.consolidation_gate))
+                        .clamp(0.0, 1.0),
+                )?;
             }
         }
         summary.validate_contract()?;
@@ -2548,6 +2584,49 @@ fn replace_canonical_organism_record(
         .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
     *record = replacement;
     world.replace_organism_registry_exact(records)
+}
+
+fn live_brain_state_reference_digest(
+    selection: &SealedLiveSelection,
+    learning: Option<&GpuLearningReceipt>,
+    resident: &ResidentCognition,
+    topology: &TopologySidecar,
+    gpu_state_digest: [u64; 4],
+) -> Result<[u64; 4], ScaffoldContractError> {
+    let mut digest = CanonicalDigestBuilder::new(b"alife.live-brain-state-ref.v3");
+    let resident_bytes =
+        serde_json::to_vec(resident).map_err(|_| ScaffoldContractError::InvalidId)?;
+    let topology_bytes =
+        serde_json::to_vec(topology).map_err(|_| ScaffoldContractError::InvalidId)?;
+    digest.write_bytes(&resident_bytes);
+    digest.write_bytes(&topology_bytes);
+    for word in gpu_state_digest {
+        digest.write_u64(word);
+    }
+    digest.write_u64(selection.handle.organism_id().raw());
+    digest.write_u16(selection.handle.class_id().raw());
+    digest.write_u32(selection.handle.slot());
+    digest.write_u32(selection.handle.generation());
+    for word in selection.handle.phenotype_hash().0 {
+        digest.write_u64(word);
+    }
+    for word in selection.pending_eligibility.receipt_digest() {
+        digest.write_u64(word);
+    }
+    if let Some(receipt) = learning {
+        digest.write_bool(true);
+        digest.write_u64(receipt.dispatch_generation);
+        digest.write_u64(receipt.input_fast_generation);
+        digest.write_u64(receipt.output_fast_generation);
+        digest.write_u64(receipt.output_eligibility_generation);
+        digest.write_u64(receipt.replay_journal_generation);
+        digest.write_u32(receipt.fast_weights_changed);
+        digest.write_f32(receipt.max_abs_delta)?;
+        digest.write_u64(receipt.hardware_receipt_generation);
+    } else {
+        digest.write_bool(false);
+    }
+    Ok(digest.finish256())
 }
 
 fn seal_prepared_selection_core(
@@ -3879,6 +3958,7 @@ impl GpuLiveBrainRuntime {
                             handle,
                             pending,
                             sealed_patch: recovery.sealed_patch,
+                            neural_receptors: recovery.neural_receptors,
                             attempts: recovery.attempts,
                             last_error: RetainedLearningErrorCode::from_slug(
                                 &recovery.last_error_code,
@@ -4056,6 +4136,7 @@ impl GpuLiveBrainRuntime {
             .get(&organism_id.raw())
             .map(|recovery| RetainedLearningCapture {
                 sealed_patch: &recovery.sealed_patch,
+                neural_receptors: &recovery.neural_receptors,
                 attempts: recovery.attempts,
                 last_error_code: recovery.last_error.slug(),
             });
@@ -4311,6 +4392,7 @@ impl GpuLiveBrainRuntime {
                     retained_learning: self.retained_learning.get(&raw).map(|recovery| {
                         RetainedLearningCapture {
                             sealed_patch: &recovery.sealed_patch,
+                            neural_receptors: &recovery.neural_receptors,
                             attempts: recovery.attempts,
                             last_error_code: recovery.last_error.slug(),
                         }
@@ -5054,6 +5136,7 @@ impl GpuLiveBrainRuntime {
         let recovery_handle = recovery.handle;
         let recovery_pending = recovery.pending;
         let recovery_patch = recovery.sealed_patch.clone();
+        let recovery_receptors = recovery.neural_receptors.clone();
         let current_handle = self
             .handles
             .get(&raw)
@@ -5071,7 +5154,16 @@ impl GpuLiveBrainRuntime {
         };
         let result = if pending_matches {
             self.backend
-                .apply_sealed_outcome(current_handle, &recovery_patch)
+                .apply_sealed_outcome_batch(&[(
+                    current_handle,
+                    &recovery_patch,
+                    &recovery_receptors,
+                )])
+                .and_then(|mut receipts| {
+                    receipts
+                        .pop()
+                        .ok_or(ScaffoldContractError::LearningEvidenceMismatch)
+                })
         } else {
             Err(ScaffoldContractError::LearningEvidenceMismatch)
         };
@@ -5551,6 +5643,20 @@ impl GpuLiveBrainRuntime {
                 if force_preparation_failure {
                     return Err(ScaffoldContractError::InvalidMemoryQuery);
                 }
+                let organism = self
+                    .world
+                    .organism_registry()
+                    .get(OrganismId(raw))
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                let neural_receptors = organism
+                    .biochemistry()
+                    .neural_receptor_frame(organism.phenotype())?;
+                if neural_receptors.source_tick != tick_before {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+                let receptor_phenotype = NeuralReceptorPhenotype::compile(&resident.phenotype)?;
+                let receptor_effects =
+                    NeuralReceptorEffects::from_frame(&neural_receptors, &receptor_phenotype)?;
                 let draft = self.world.perception_frame_draft_indexed(
                     OrganismId(raw),
                     tick_before,
@@ -5596,6 +5702,7 @@ impl GpuLiveBrainRuntime {
                     body_need,
                     &memory_evidence,
                     &baseline_context,
+                    receptor_effects,
                 )?;
                 let attention = select_focal_targets(
                     OrganismId(raw),
@@ -5619,15 +5726,19 @@ impl GpuLiveBrainRuntime {
                 let prepared_recall = routed_recall.with_cognitive_context(cognitive_context)?;
                 let (frame, memory_recall) = prepared_recall.finalize(routed_draft)?;
                 memory_recall.validate_for_frame(&frame)?;
-                let memory_upload =
-                    self.backend
-                        .prepare_memory_context_upload(handle, &frame, &memory_recall)?;
+                let memory_upload = self
+                    .backend
+                    .prepare_memory_context_upload(handle, &frame, &memory_recall)?
+                    .bind_neural_receptor_effects(receptor_effects)
+                    .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
                 Ok(PreparedGpuBrainFrame {
                     handle,
                     world_entity_id,
                     frame,
                     memory_recall,
                     memory_upload,
+                    neural_receptors,
+                    receptor_effects,
                 })
             })();
             match preparation {
@@ -5797,7 +5908,7 @@ impl GpuLiveBrainRuntime {
     ) -> Result<HabitatPermissionReceipt, HabitatAuthorityError> {
         let world = self.world_snapshot();
         let tick = world.tick();
-        let mut authority = world.habitat_authority().clone();
+        let authority = world.habitat_authority().clone();
         let receipt = authority.authorize_operation(HabitatOperationRequest {
             habitat_id,
             organism_id,
@@ -6389,6 +6500,8 @@ impl GpuLiveBrainRuntime {
             frame,
             memory_recall,
             memory_upload: _,
+            neural_receptors,
+            receptor_effects,
         } = prepared;
         let memory_binding = gpu_tick
             .memory_context_binding
@@ -6403,6 +6516,8 @@ impl GpuLiveBrainRuntime {
             || memory_binding.context_digest != memory_recall.context_digest()
             || memory_binding.final_frame_digest != memory_recall.final_frame_digest()
             || usize::from(memory_binding.candidate_count) != frame.candidates().len()
+            || neural_receptors.source_tick != frame.tick()
+            || receptor_effects.source_tick != frame.tick()
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
@@ -6506,6 +6621,7 @@ impl GpuLiveBrainRuntime {
             motor_bundle,
             speech_payload: gpu_tick.speech_payload,
             speech_prompted,
+            neural_receptors,
         })
     }
 
@@ -6529,6 +6645,7 @@ impl GpuLiveBrainRuntime {
             motor_bundle,
             speech_payload,
             speech_prompted,
+            neural_receptors,
         } = prepared;
         let organism_id = handle.organism_id();
         let cognitive_context = memory_recall
@@ -6564,6 +6681,7 @@ impl GpuLiveBrainRuntime {
             cognitive_context_digest,
             summary: sealed.summary,
             patch: sealed.patch,
+            neural_receptors,
         })
     }
 
@@ -6579,7 +6697,13 @@ impl GpuLiveBrainRuntime {
             && sealed[0].patch.outcome().success;
         let learning_batch = sealed
             .iter()
-            .map(|selection| (selection.handle, &selection.patch))
+            .map(|selection| {
+                (
+                    selection.handle,
+                    &selection.patch,
+                    &selection.neural_receptors,
+                )
+            })
             .collect::<Vec<_>>();
         let learning = match self.backend.apply_sealed_outcome_batch(&learning_batch) {
             Ok(receipts) if receipts.len() == sealed.len() => Some(receipts),
@@ -6601,6 +6725,7 @@ impl GpuLiveBrainRuntime {
                                 handle: selection.handle,
                                 pending: selection.pending_eligibility,
                                 sealed_patch: selection.patch.clone(),
+                                neural_receptors: selection.neural_receptors.clone(),
                                 attempts: 0,
                                 last_error: RetainedLearningErrorCode::NeuralBackendUnavailable,
                             },
@@ -6630,6 +6755,7 @@ impl GpuLiveBrainRuntime {
                                 handle: selection.handle,
                                 pending: selection.pending_eligibility,
                                 sealed_patch: selection.patch.clone(),
+                                neural_receptors: selection.neural_receptors.clone(),
                                 attempts: 0,
                                 last_error: error_code,
                             },
@@ -6669,6 +6795,47 @@ impl GpuLiveBrainRuntime {
         } else {
             (vec![false; sealed.len()], vec![false; sealed.len()])
         };
+
+        for (index, selection) in sealed.iter().enumerate() {
+            let organism_id = selection.handle.organism_id();
+            let gpu_state_digest = self
+                .backend
+                .snapshot_brain(selection.handle, selection.patch.outcome().outcome_tick)?
+                .canonical_digest();
+            let resident = self
+                .residents
+                .get(&organism_id.raw())
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let topology = self
+                .topologies
+                .get(&organism_id.raw())
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let brain_digest = live_brain_state_reference_digest(
+                selection,
+                learning.as_ref().and_then(|receipts| receipts.get(index)),
+                resident,
+                topology,
+                gpu_state_digest,
+            )?;
+            let memory_digest = self
+                .memories
+                .get(&organism_id.raw())
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .compaction_checkpoint()
+                .active_digest;
+            let mut record = self
+                .world
+                .organism_registry()
+                .get(organism_id)
+                .cloned()
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            record.seal_cognitive_subsystems(
+                selection.patch.outcome().outcome_tick,
+                brain_digest,
+                memory_digest,
+            )?;
+            replace_canonical_organism_record(&mut self.world, record)?;
+        }
 
         let first_patch_count = self.sealed_patch_count;
         let mut summaries = Vec::with_capacity(sealed.len());
@@ -7394,11 +7561,22 @@ mod tests {
         base_summaries[1].salience.peripheral_intensity = NormalizedScalar::new(0.1).unwrap();
         let first_identity = base_summaries[0].identity;
         let second_identity = base_summaries[1].identity;
+        let canonical = runtime.world.organism_registry().get(organism_id).unwrap();
+        let receptors = canonical
+            .biochemistry()
+            .neural_receptor_frame(canonical.phenotype())
+            .unwrap();
         apply_predecision_attention_evidence(
             &mut base_summaries,
             body_need,
             &memory_evidence,
             &baseline_context,
+            NeuralReceptorEffects::from_frame(
+                &receptors,
+                &NeuralReceptorPhenotype::compile(&runtime.residents[&organism_id.raw()].phenotype)
+                    .unwrap(),
+            )
+            .unwrap(),
         )
         .unwrap();
         let single_target_policy = AttentionSelectionPolicy {
@@ -10050,16 +10228,28 @@ mod tests {
             .unwrap();
         let recall = runtime.memories[&1].recall_frame(&draft).unwrap();
         let (frame, memory_recall) = recall.finalize(draft).unwrap();
+        let canonical = runtime.world.organism_registry().get(organism_id).unwrap();
+        let neural_receptors = canonical
+            .biochemistry()
+            .neural_receptor_frame(canonical.phenotype())
+            .unwrap();
+        let receptor_effects = NeuralReceptorEffects::from_frame(
+            &neural_receptors,
+            &NeuralReceptorPhenotype::compile(&runtime.residents[&organism_id.raw()].phenotype)
+                .unwrap(),
+        )
+        .unwrap();
         let memory_upload = runtime
             .backend
             .prepare_memory_context_upload(handle, &frame, &memory_recall)
+            .unwrap()
+            .bind_neural_receptor_effects(receptor_effects)
             .unwrap();
         let input = GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &memory_upload).unwrap();
         let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![input]).unwrap();
         let mut gpu_tick = runtime.backend.tick_memory_batch(&batch).unwrap().remove(0);
         gpu_tick.selection.candidate_index =
             (gpu_tick.selection.candidate_index + 1) % frame.candidates().len() as u16;
-
         let result = runtime.process_selection_batch(vec![(
             PreparedGpuBrainFrame {
                 handle,
@@ -10067,6 +10257,8 @@ mod tests {
                 frame,
                 memory_recall,
                 memory_upload,
+                neural_receptors,
+                receptor_effects,
             },
             gpu_tick,
         )]);
@@ -10161,14 +10353,29 @@ mod tests {
         .unwrap();
         let prepared_recall = runtime.memories[&1].recall_frame(&draft).unwrap();
         let (frame, memory_recall) = prepared_recall.finalize(draft).unwrap();
+        let canonical = runtime
+            .world
+            .organism_registry()
+            .get(OrganismId(1))
+            .unwrap();
+        let neural_receptors = canonical
+            .biochemistry()
+            .neural_receptor_frame(canonical.phenotype())
+            .unwrap();
+        let receptor_effects = NeuralReceptorEffects::from_frame(
+            &neural_receptors,
+            &NeuralReceptorPhenotype::compile(&runtime.residents[&1].phenotype).unwrap(),
+        )
+        .unwrap();
         let memory_upload = runtime
             .backend
             .prepare_memory_context_upload(handle, &frame, &memory_recall)
+            .unwrap()
+            .bind_neural_receptor_effects(receptor_effects)
             .unwrap();
         let input = GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &memory_upload).unwrap();
         let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![input]).unwrap();
         let gpu_tick = runtime.backend.tick_memory_batch(&batch).unwrap().remove(0);
-
         let summary = runtime
             .process_selection_batch(vec![(
                 PreparedGpuBrainFrame {
@@ -10177,6 +10384,8 @@ mod tests {
                     frame,
                     memory_recall,
                     memory_upload,
+                    neural_receptors,
+                    receptor_effects,
                 },
                 gpu_tick,
             )])

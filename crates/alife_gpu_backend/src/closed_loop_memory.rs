@@ -1,8 +1,8 @@
 //! Candidate-local episodic-context ABI and production WGSL entry point.
 
 use alife_core::{
-    FinalizedMemoryRecall, MemoryChannelPlan, PerceptionBaseDigest, PerceptionContextDigest,
-    PerceptionFrame, PerceptionFrameDigest, Tick,
+    FinalizedMemoryRecall, MemoryChannelPlan, NeuralReceptorEffects, PerceptionBaseDigest,
+    PerceptionContextDigest, PerceptionFrame, PerceptionFrameDigest, Tick, Validate,
 };
 use bytemuck::{Pod, Zeroable};
 
@@ -11,6 +11,7 @@ use crate::{GpuBrainSlot, GpuClosedLoopError};
 pub const GPU_MEMORY_CONTEXT_HEADER_WORDS: usize = 16;
 pub const GPU_CANDIDATE_MEMORY_RECORD_WORDS: usize = 16;
 pub const GPU_MEMORY_CHANNEL_PLAN_WORDS: usize = 8;
+pub const GPU_NEURAL_RECEPTOR_EFFECTS_WORDS: usize = 16;
 
 pub const CLOSED_LOOP_MEMORY_CONTEXT_WGSL: &str = concat!(
     include_str!("../shaders/closed_loop_abi.wgsl"),
@@ -58,10 +59,25 @@ pub struct GpuMemoryContextUpload {
     pub context_digest: PerceptionContextDigest,
     pub final_frame_digest: PerceptionFrameDigest,
     pub perception_binding: GpuPerceptionFrameBinding,
+    pub neural_receptor_effects: Option<NeuralReceptorEffects>,
     offset_domain: GpuMemoryOffsetDomain,
 }
 
 impl GpuMemoryContextUpload {
+    pub fn bind_neural_receptor_effects(
+        mut self,
+        effects: NeuralReceptorEffects,
+    ) -> Result<Self, GpuClosedLoopError> {
+        effects
+            .validate_contract()
+            .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
+        if effects.source_tick != self.perception_binding.tick {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        self.neural_receptor_effects = Some(effects);
+        Ok(self)
+    }
+
     pub fn try_from_finalized(
         frame: &PerceptionFrame,
         recall: &FinalizedMemoryRecall,
@@ -85,7 +101,8 @@ impl GpuMemoryContextUpload {
         recall
             .validate_for_frame(frame)
             .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
-        let expected = Self::build_local(frame, recall, self.perception_binding, slot)?;
+        let mut expected = Self::build_local(frame, recall, self.perception_binding, slot)?;
+        expected.neural_receptor_effects = self.neural_receptor_effects;
         if self == &expected {
             Ok(())
         } else {
@@ -120,7 +137,7 @@ impl GpuMemoryContextUpload {
             || self.header.decoder_learning_input_offset != 77
             || self.header.perception_header_index
                 != self.perception_binding.perception_header_index
-            || self.header.reserved != 0
+            || self.header.neural_receptor_effects_offset != 0
             || self.perception_binding.slot != record.slot
             || self.perception_binding.slot_generation != record.slot_generation
             || self.perception_binding.tick != frame.tick()
@@ -132,6 +149,10 @@ impl GpuMemoryContextUpload {
             || self.perception_binding.context_digest != self.context_digest
             || self.perception_binding.final_frame_digest != self.final_frame_digest
             || self.records.len() != frame.candidates().len()
+            || self.neural_receptor_effects.is_none()
+            || self.neural_receptor_effects.is_some_and(|effects| {
+                effects.source_tick != frame.tick() || effects.validate_contract().is_err()
+            })
         {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
@@ -169,6 +190,7 @@ impl GpuMemoryContextUpload {
         memory_context_offset: u32,
         candidate_offset: u32,
         decoder_learning_input_offset: u32,
+        neural_receptor_effects_offset: u32,
     ) -> Result<GpuMemoryContextDispatchReceipt, GpuClosedLoopError> {
         self.validate_for_frame_and_slot(frame, slot)?;
         if perception_binding.slot != self.perception_binding.slot
@@ -181,12 +203,15 @@ impl GpuMemoryContextUpload {
             || memory_context_offset == 0
             || candidate_offset == 0
             || decoder_learning_input_offset == 0
+            || neural_receptor_effects_offset == 0
+            || self.neural_receptor_effects.is_none()
         {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
         self.header.memory_context_offset = memory_context_offset;
         self.header.candidate_offset = candidate_offset;
         self.header.decoder_learning_input_offset = decoder_learning_input_offset;
+        self.header.neural_receptor_effects_offset = neural_receptor_effects_offset;
         self.header.perception_header_index = perception_binding.perception_header_index;
         self.perception_binding = perception_binding;
         self.offset_domain = GpuMemoryOffsetDomain::Rebased;
@@ -273,13 +298,14 @@ impl GpuMemoryContextUpload {
                 brain_slot_index: slot.brain_slot_index(),
                 decoder_learning_input_offset: 77,
                 perception_header_index: perception_binding.perception_header_index,
-                reserved: 0,
+                neural_receptor_effects_offset: 0,
             },
             records,
             base_frame_digest: frame.base_digest(),
             context_digest: frame.context().canonical_digest(),
             final_frame_digest: frame.frame_digest(),
             perception_binding,
+            neural_receptor_effects: None,
             offset_domain: GpuMemoryOffsetDomain::Local,
         })
     }
@@ -329,7 +355,7 @@ pub struct GpuMemoryContextHeader {
     pub brain_slot_index: u32,
     pub decoder_learning_input_offset: u32,
     pub perception_header_index: u32,
-    pub reserved: u32,
+    pub neural_receptor_effects_offset: u32,
 }
 
 impl GpuMemoryContextHeader {
@@ -343,6 +369,63 @@ impl GpuMemoryContextHeader {
 
     pub fn from_words(words: &[u32]) -> Result<Self, GpuClosedLoopError> {
         if words.len() != GPU_MEMORY_CONTEXT_HEADER_WORDS {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        Ok(bytemuck::pod_read_unaligned(bytemuck::cast_slice(words)))
+    }
+}
+
+#[repr(C, align(16))]
+#[derive(Debug, Clone, Copy, PartialEq, Pod, Zeroable)]
+pub struct GpuNeuralReceptorEffectsRecord {
+    pub schema_version: u32,
+    pub source_chemistry_version: u32,
+    pub tick_lo: u32,
+    pub tick_hi: u32,
+    pub interoceptive_gain: f32,
+    pub regional_excitability: f32,
+    pub projection_gain: f32,
+    pub local_threshold_shift: f32,
+    pub attention_gain: f32,
+    pub plasticity_appetitive: f32,
+    pub plasticity_aversive: f32,
+    pub structural_growth_gate: f32,
+    pub sleep_gate: f32,
+    pub consolidation_gate: f32,
+    pub reserved: [u32; 2],
+}
+
+impl GpuNeuralReceptorEffectsRecord {
+    pub fn try_from_effects(effects: NeuralReceptorEffects) -> Result<Self, GpuClosedLoopError> {
+        effects
+            .validate_contract()
+            .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
+        let tick = effects.source_tick.raw();
+        Ok(Self {
+            schema_version: 1,
+            source_chemistry_version: u32::from(effects.source_chemistry_version),
+            tick_lo: tick as u32,
+            tick_hi: (tick >> 32) as u32,
+            interoceptive_gain: effects.interoceptive_gain,
+            regional_excitability: effects.regional_excitability,
+            projection_gain: effects.projection_gain,
+            local_threshold_shift: effects.local_threshold_shift,
+            attention_gain: effects.attention_gain,
+            plasticity_appetitive: effects.plasticity_appetitive,
+            plasticity_aversive: effects.plasticity_aversive,
+            structural_growth_gate: effects.structural_growth_gate,
+            sleep_gate: effects.sleep_gate,
+            consolidation_gate: effects.consolidation_gate,
+            reserved: [0; 2],
+        })
+    }
+
+    pub fn words(&self) -> &[u32; GPU_NEURAL_RECEPTOR_EFFECTS_WORDS] {
+        bytemuck::cast_ref(self)
+    }
+
+    pub fn from_words(words: &[u32]) -> Result<Self, GpuClosedLoopError> {
+        if words.len() != GPU_NEURAL_RECEPTOR_EFFECTS_WORDS {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
         Ok(bytemuck::pod_read_unaligned(bytemuck::cast_slice(words)))

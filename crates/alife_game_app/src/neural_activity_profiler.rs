@@ -489,58 +489,59 @@ fn activity_for_lobe(
         },
         |gpu| gpu.learning_updates as f32,
     );
-    let value = match lobe {
-        alife_core::LobeKind::SensoryGrounding => {
-            let target_signal = if latest.and_then(|summary| summary.target_entity).is_some() {
-                1.0
-            } else {
-                0.0
-            };
-            (contacts + target_signal).min(4.0) / 4.0
-        }
-        alife_core::LobeKind::MetabolicDrive | alife_core::LobeKind::HomeostaticRegulation => {
-            (sealed / 5.0).min(1.0)
-        }
-        alife_core::LobeKind::MotorArbitration => {
-            f32::from(latest.and_then(|s| s.selected_action_kind).is_some()).max(gpu_score)
-        }
-        alife_core::LobeKind::EpisodicMemory => (memory_records as f32 / 8.0).min(1.0),
-        alife_core::LobeKind::CoreAssociation | alife_core::LobeKind::LexiconConcept => {
-            (concept_count as f32 / 6.0).min(1.0)
-        }
-        alife_core::LobeKind::WorkingMemory => (recent_summaries.len() as f32 / 5.0).min(1.0),
-        _ => (learning / 4.0).min(1.0),
-    };
+    let value =
+        match lobe {
+            alife_core::LobeKind::PerceptualIntegration => {
+                let target_signal = if latest.and_then(|summary| summary.target_entity).is_some() {
+                    1.0
+                } else {
+                    0.0
+                };
+                (contacts + target_signal).min(4.0) / 4.0
+            }
+            alife_core::LobeKind::InteroceptiveMotivational
+            | alife_core::LobeKind::FlexibleReserve => (sealed / 5.0).min(1.0),
+            alife_core::LobeKind::ActionPlanning => {
+                f32::from(latest.and_then(|s| s.selected_action_kind).is_some()).max(gpu_score)
+            }
+            alife_core::LobeKind::MemoryInterface => (memory_records as f32 / 8.0).min(1.0),
+            alife_core::LobeKind::TemporalPredictive
+            | alife_core::LobeKind::MultimodalAssociation => (concept_count as f32 / 6.0).min(1.0),
+            alife_core::LobeKind::WorkingContextExecutive => {
+                (recent_summaries.len() as f32 / 5.0).min(1.0)
+            }
+            _ => (learning / 4.0).min(1.0),
+        };
     value.clamp(0.0, 1.0)
 }
 
 fn activity_source_for_lobe(lobe: alife_core::LobeKind) -> &'static str {
     match lobe {
-        alife_core::LobeKind::SensoryGrounding => "sensory",
-        alife_core::LobeKind::MetabolicDrive | alife_core::LobeKind::HomeostaticRegulation => {
+        alife_core::LobeKind::PerceptualIntegration => "sensory",
+        alife_core::LobeKind::InteroceptiveMotivational | alife_core::LobeKind::FlexibleReserve => {
             "drive"
         }
-        alife_core::LobeKind::MotorArbitration => "motor",
-        alife_core::LobeKind::EpisodicMemory => "memory",
-        alife_core::LobeKind::CoreAssociation | alife_core::LobeKind::LexiconConcept => "concept",
-        alife_core::LobeKind::WorkingMemory => "recent",
+        alife_core::LobeKind::ActionPlanning => "motor",
+        alife_core::LobeKind::MemoryInterface => "memory",
+        alife_core::LobeKind::TemporalPredictive | alife_core::LobeKind::MultimodalAssociation => {
+            "concept"
+        }
+        alife_core::LobeKind::WorkingContextExecutive => "recent",
         _ => "learning",
     }
 }
 
 fn lobe_short_label(lobe: alife_core::LobeKind) -> &'static str {
     match lobe {
-        alife_core::LobeKind::SensoryGrounding => "Sense",
-        alife_core::LobeKind::MetabolicDrive => "Drive",
-        alife_core::LobeKind::AuditorySpeech => "Audio",
-        alife_core::LobeKind::GlyphVision => "Glyph",
-        alife_core::LobeKind::LexiconConcept => "Lex",
-        alife_core::LobeKind::CoreAssociation => "Assoc",
-        alife_core::LobeKind::EpisodicMemory => "Memory",
-        alife_core::LobeKind::WorkingMemory => "Work",
-        alife_core::LobeKind::MotorArbitration => "Motor",
-        alife_core::LobeKind::HomeostaticRegulation => "Homeo",
-        _ => "Future",
+        alife_core::LobeKind::PerceptualIntegration => "Sense",
+        alife_core::LobeKind::InteroceptiveMotivational => "Drive",
+        alife_core::LobeKind::MultimodalAssociation => "Multi",
+        alife_core::LobeKind::TemporalPredictive => "Temporal",
+        alife_core::LobeKind::WorkingContextExecutive => "Context",
+        alife_core::LobeKind::MemoryInterface => "Memory",
+        alife_core::LobeKind::ActionPlanning => "Action",
+        alife_core::LobeKind::SocialCommunication => "Social",
+        alife_core::LobeKind::FlexibleReserve => "Reserve",
     }
 }
 

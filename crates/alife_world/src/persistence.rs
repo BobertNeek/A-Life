@@ -10,8 +10,9 @@ use std::{
 };
 
 use alife_core::{
-    require_version, BrainCapacityClass, BrainScaleTier, CreatureGenome, FoundationWeightAsset,
-    GenomeId, HomeostaticSnapshot, MemoryId, OrganismId, PackedExperienceFrame, PhenotypeCompiler,
+    require_complete_v3_organism_state, require_version, ArchitectureMigrationError,
+    BrainCapacityClass, BrainScaleTier, CreatureGenome, FoundationWeightAsset, GenomeId,
+    HomeostaticSnapshot, MemoryId, OrganismId, PackedExperienceFrame, PhenotypeCompiler,
     PhenotypeHash, PolicyBackend, ScaffoldContractError, SchemaKind, SchemaVersions, SensorProfile,
     TeacherPerceptionChannel, Tick, Validate, Vec3f, WorldEntityId,
 };
@@ -104,6 +105,8 @@ pub enum PersistenceError {
         from_schema_version: u16,
         to_schema_version: u16,
     },
+    #[error("architecture migration failed: {0}")]
+    ArchitectureMigration(#[from] ArchitectureMigrationError),
     #[error("inline save payload is too large: {bytes} bytes")]
     HugeInlinePayload { bytes: u64 },
 }
@@ -1404,8 +1407,35 @@ impl PortableSaveFile {
     }
 
     pub fn from_json_str(text: &str) -> Result<Self, PersistenceError> {
-        peek_schema(text, P34_SAVE_FILE_SCHEMA, P34_SAVE_FILE_SCHEMA_VERSION)?;
-        let mut save: Self = serde_json::from_str(text)?;
+        let value: serde_json::Value = serde_json::from_str(text)?;
+        let actual_schema = value
+            .get("schema")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default();
+        if actual_schema != P34_SAVE_FILE_SCHEMA {
+            return Err(PersistenceError::Schema {
+                expected: P34_SAVE_FILE_SCHEMA,
+                actual: actual_schema.to_string(),
+            });
+        }
+        let actual_version = value
+            .get("schema_version")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|value| u16::try_from(value).ok())
+            .unwrap_or_default();
+        let migrated;
+        let source = if actual_version == P34_SAVE_FILE_SCHEMA_VERSION {
+            text
+        } else if actual_version == 2 && P34_SAVE_FILE_SCHEMA_VERSION == 3 {
+            migrated = migrate_portable_save_v2_to_v3(value)?;
+            &migrated
+        } else {
+            return Err(PersistenceError::MigrationUnsupported {
+                from_schema_version: actual_version,
+                to_schema_version: P34_SAVE_FILE_SCHEMA_VERSION,
+            });
+        };
+        let mut save: Self = serde_json::from_str(source)?;
         save.world.migrate_legacy_habitats(&save.creatures)?;
         Ok(save)
     }
@@ -1494,9 +1524,7 @@ impl PortableSaveFile {
         Ok(())
     }
 
-    fn validate_creature_summaries_against_organism_records(
-        &self,
-    ) -> Result<(), PersistenceError> {
+    fn validate_creature_summaries_against_organism_records(&self) -> Result<(), PersistenceError> {
         let Some(records) = &self.world.organism_records else {
             return Ok(());
         };
@@ -2403,6 +2431,72 @@ fn peek_schema(
         actual_version,
         expected_version,
     )
+}
+
+fn migrate_portable_save_v2_to_v3(
+    mut value: serde_json::Value,
+) -> Result<String, PersistenceError> {
+    fn contains_legacy_lobe_name(value: &serde_json::Value) -> bool {
+        const LEGACY_NAMES: [&str; 17] = [
+            "SensoryGrounding",
+            "MetabolicDrive",
+            "AuditorySpeech",
+            "GlyphVision",
+            "LexiconConcept",
+            "CoreAssociation",
+            "EpisodicMemory",
+            "WorkingMemory",
+            "MotorArbitration",
+            "HomeostaticRegulation",
+            "LanguageExpansion",
+            "MathQuantity",
+            "NarrativeHistory",
+            "SocialReasoning",
+            "SelfCriticUncertainty",
+            "PlanningDream",
+            "SpeechWritingMotor",
+        ];
+        match value {
+            serde_json::Value::String(value) => LEGACY_NAMES.contains(&value.as_str()),
+            serde_json::Value::Array(values) => values.iter().any(contains_legacy_lobe_name),
+            serde_json::Value::Object(values) => values.values().any(contains_legacy_lobe_name),
+            _ => false,
+        }
+    }
+
+    if contains_legacy_lobe_name(&value) {
+        return Err(ArchitectureMigrationError::LearnedTopologyRemapRequired.into());
+    }
+    let creature_count = value
+        .get("creatures")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
+    let records = value
+        .pointer("/world/organism_records")
+        .and_then(serde_json::Value::as_array);
+    if creature_count != 0 && records.is_none_or(Vec::is_empty) {
+        require_complete_v3_organism_state(2, 3, false, false, false)?;
+    }
+    for record in records.into_iter().flatten() {
+        require_complete_v3_organism_state(
+            2,
+            3,
+            record.pointer("/genome/chemistry/graph").is_some(),
+            record.get("embodiment").is_some(),
+            record.get("state_graph").is_some(),
+        )?;
+    }
+    value
+        .as_object_mut()
+        .ok_or(PersistenceError::InvalidConfig {
+            field: "save",
+            message: "portable save root must be an object",
+        })?
+        .insert(
+            "schema_version".to_string(),
+            serde_json::Value::from(P34_SAVE_FILE_SCHEMA_VERSION),
+        );
+    Ok(serde_json::to_string(&value)?)
 }
 
 fn validate_relative_path(asset_id: &str, path: &Path) -> Result<(), PersistenceError> {

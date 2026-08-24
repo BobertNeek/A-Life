@@ -185,9 +185,9 @@ impl PopulationPerformancePolicy {
         let spec = BrainClassSpec::try_for_tier(brain_tier)?;
         let mut protected_lobes = spec.compute_budget.essential_lobes.clone();
         for lobe in [
-            LobeKind::SensoryGrounding,
-            LobeKind::MotorArbitration,
-            LobeKind::HomeostaticRegulation,
+            LobeKind::PerceptualIntegration,
+            LobeKind::ActionPlanning,
+            LobeKind::FlexibleReserve,
         ] {
             if !protected_lobes.contains(&lobe) {
                 protected_lobes.push(lobe);
@@ -247,11 +247,11 @@ impl PopulationPerformancePolicy {
         if populations != [1, 10, 50, 100, 250, 500] {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
-        if !self.protected_lobes.contains(&LobeKind::SensoryGrounding)
-            || !self.protected_lobes.contains(&LobeKind::MotorArbitration)
-            || !self
-                .protected_lobes
-                .contains(&LobeKind::HomeostaticRegulation)
+        if !self
+            .protected_lobes
+            .contains(&LobeKind::PerceptualIntegration)
+            || !self.protected_lobes.contains(&LobeKind::ActionPlanning)
+            || !self.protected_lobes.contains(&LobeKind::FlexibleReserve)
             || self.nonessential_lobes.is_empty()
         {
             return Err(ScaffoldContractError::MissingPhaseData);

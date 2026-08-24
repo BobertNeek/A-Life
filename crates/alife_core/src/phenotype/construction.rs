@@ -118,7 +118,7 @@ fn compile_inner(
     };
     budgets.validate_against(capacity)?;
     let motor = layout
-        .region(crate::LobeKind::MotorArbitration)
+        .region(crate::LobeKind::ActionPlanning)
         .filter(|region| region.enabled)
         .ok_or_else(compile_error)?;
     let dynamics: Vec<NeuronDynamics> = (0..execution.max_neurons())

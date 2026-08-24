@@ -293,7 +293,9 @@ fn encode_genome(
     d.write_f32(plasticity.base_learning_rate())?;
     d.write_f32(plasticity.normalization_rate())?;
     d.write_f32(plasticity.sleep_replay_rate())?;
-    d.write_f32(plasticity.modulator_sign())?;
+    for weight in plasticity.receptor_profile().weights() {
+        d.write_f32(*weight)?;
+    }
     let (fast_min, fast_max) = plasticity.fast_bounds();
     d.write_f32(fast_min)?;
     d.write_f32(fast_max)?;

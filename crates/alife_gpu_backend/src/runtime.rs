@@ -739,21 +739,20 @@ impl GpuTierPerformanceReport {
 
 fn protected_lobes() -> Vec<LobeKind> {
     vec![
-        LobeKind::SensoryGrounding,
-        LobeKind::MetabolicDrive,
-        LobeKind::MotorArbitration,
-        LobeKind::HomeostaticRegulation,
+        LobeKind::PerceptualIntegration,
+        LobeKind::InteroceptiveMotivational,
+        LobeKind::ActionPlanning,
+        LobeKind::FlexibleReserve,
     ]
 }
 
 fn nonessential_lobes() -> Vec<LobeKind> {
     vec![
-        LobeKind::AuditorySpeech,
-        LobeKind::GlyphVision,
-        LobeKind::LexiconConcept,
-        LobeKind::CoreAssociation,
-        LobeKind::EpisodicMemory,
-        LobeKind::WorkingMemory,
+        LobeKind::SocialCommunication,
+        LobeKind::MultimodalAssociation,
+        LobeKind::TemporalPredictive,
+        LobeKind::MemoryInterface,
+        LobeKind::WorkingContextExecutive,
     ]
 }
 

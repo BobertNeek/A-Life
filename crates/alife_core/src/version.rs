@@ -59,19 +59,19 @@ pub struct SchemaVersions {
 
 impl SchemaVersions {
     pub const CURRENT: Self = Self {
-        chemistry: ContractVersion::V2,
+        chemistry: ContractVersion::V3,
         sensory_abi: ContractVersion::V1,
         action_abi: ContractVersion::V2,
         experience: ContractVersion::V4,
         perception: ContractVersion::V1,
-        phenotype: ContractVersion::V2,
+        phenotype: ContractVersion::V3,
         packed_log: ContractVersion::V2,
-        genome: ContractVersion::V2,
-        neural_projection: ContractVersion::V1,
-        learning: ContractVersion::V2,
-        sleep_consolidation: ContractVersion::V1,
-        save: ContractVersion::V2,
-        teacher_school: ContractVersion::V2,
+        genome: ContractVersion::V3,
+        neural_projection: ContractVersion::V2,
+        learning: ContractVersion::V3,
+        sleep_consolidation: ContractVersion::V2,
+        save: ContractVersion::V3,
+        teacher_school: ContractVersion::V3,
         lineage_export: ContractVersion::V1,
     };
 

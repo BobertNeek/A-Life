@@ -467,13 +467,26 @@ fn semantic_relabelling_changes_features_not_candidate_transport() {
 fn teacher_token_adds_teacher_affordance_without_changing_candidate_transport() {
     let mut ordinary = HeadlessScenarioBuilder::new(101)
         .agent("agent", ORGANISM, pos(0.0, 0.0))
+        .social_agent("source", OrganismId(2), pos(3.0, 4.0), 0.0)
         .token("token", pos(3.0, 4.0), 77)
         .build()
         .unwrap();
     let mut teacher = HeadlessScenarioBuilder::new(101)
         .agent("agent", ORGANISM, pos(0.0, 0.0))
-        .teacher_token("token", pos(3.0, 4.0), 77, TeacherPerceptionChannel::Object)
+        .social_agent("source", OrganismId(2), pos(3.0, 4.0), 0.0)
         .build()
+        .unwrap();
+    let source = teacher.entity_id("source").unwrap();
+    teacher
+        .grounded_teacher_actor(source)
+        .unwrap()
+        .emit_perceptual_cue(
+            &mut teacher,
+            "token",
+            77,
+            TeacherPerceptionChannel::Object,
+            None,
+        )
         .unwrap();
     let tick = Tick::new(18);
     let ordinary_report = ordinary.sensory_report(ORGANISM, tick).unwrap();

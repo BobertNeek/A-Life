@@ -2,10 +2,10 @@
 
 use alife_core::{
     BoundedReplayBatch, BrainCapacityClass, BrainPhenotype, ConsolidationState, ExperiencePatch,
-    ExperiencePatchBuilder, LanguageGroundingLedger, MemorySidecarState, OrganismId,
-    PassiveLifeStatistics, PhenotypeCompiler, PhenotypeCompilerInputs, PortableMemoryBankAssetV2,
-    PortableTopologySidecarAssetV1, ScaffoldContractError, SensorProfileIdentity,
-    SensoryAbiVersion, SleepState, Tick, TopologySidecar, Validate,
+    ExperiencePatchBuilder, LanguageGroundingLedger, MemorySidecarState, NeuralReceptorFrame,
+    OrganismId, PassiveLifeStatistics, PhenotypeCompiler, PhenotypeCompilerInputs,
+    PortableMemoryBankAssetV2, PortableTopologySidecarAssetV1, ScaffoldContractError,
+    SensorProfileIdentity, SensoryAbiVersion, SleepState, Tick, TopologySidecar, Validate,
 };
 use alife_gpu_backend::{
     GpuActivityRestoreInput, GpuActivityRuntimeSnapshot, GpuBrainCheckpointParts,
@@ -225,6 +225,7 @@ pub struct GpuBrainSidecarCapture<'a> {
 
 pub struct RetainedLearningCapture<'a> {
     pub sealed_patch: &'a ExperiencePatch,
+    pub neural_receptors: &'a NeuralReceptorFrame,
     pub attempts: u8,
     pub last_error_code: &'static str,
 }
@@ -232,6 +233,7 @@ pub struct RetainedLearningCapture<'a> {
 #[derive(Debug)]
 pub struct RestoredRetainedLearning {
     pub sealed_patch: ExperiencePatch,
+    pub neural_receptors: NeuralReceptorFrame,
     pub attempts: u8,
     pub last_error_code: String,
 }
@@ -659,12 +661,16 @@ impl GpuCheckpointAssetStore {
                 let (sealed_patch_asset, entry) =
                     self.write_json("retained-learning-patch", recovery.sealed_patch)?;
                 entries.push(entry);
+                let (neural_receptor_frame_asset, entry) =
+                    self.write_json("retained-learning-receptors", recovery.neural_receptors)?;
+                entries.push(entry);
                 Some(RetainedLearningRecoverySaveState {
                     schema_version:
                         alife_world::persistence::RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION,
                     organism_id_raw: handle.organism_id().raw(),
                     pending,
                     sealed_patch_asset,
+                    neural_receptor_frame_asset,
                     attempts: recovery.attempts,
                     last_error_code: recovery.last_error_code.to_string(),
                 })
@@ -865,18 +871,23 @@ impl GpuCheckpointAssetStore {
             Some(recovery) => {
                 let (sealed_patch, _): (ExperiencePatch, Vec<u8>) =
                     self.read_json(manifest, &recovery.sealed_patch_asset)?;
+                let (neural_receptors, _): (NeuralReceptorFrame, Vec<u8>) =
+                    self.read_json(manifest, &recovery.neural_receptor_frame_asset)?;
                 sealed_patch.validate_contract()?;
+                neural_receptors.validate_contract()?;
                 if sealed_patch.pre_action().organism_id != state.organism_id
                     || sealed_patch.header().sensor_profile.identity() != state.sensor_profile
                     || state.pending_eligibility != Some(recovery.pending)
                     || recovery.pending.originating_tick != sealed_patch.pre_action().tick
                     || recovery.pending.frame_digest
                         != sealed_patch.decision().neural_evidence()?.frame_digest
+                    || neural_receptors.source_tick != sealed_patch.pre_action().tick
                 {
                     return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
                 }
                 Some(RestoredRetainedLearning {
                     sealed_patch,
+                    neural_receptors,
                     attempts: recovery.attempts,
                     last_error_code: recovery.last_error_code.clone(),
                 })
@@ -1570,12 +1581,7 @@ fn validate_runtime_replay_state(
     {
         return Err(ScaffoldContractError::MissingPhaseData);
     }
-    for (event, patch) in state
-        .journal
-        .events
-        .iter()
-        .zip(&state.replay_patches)
-    {
+    for (event, patch) in state.journal.events.iter().zip(&state.replay_patches) {
         patch.validate_contract()?;
         let target = patch
             .prediction_target()

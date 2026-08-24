@@ -18,8 +18,9 @@ pub use language_nursery::{
 pub use lesson_api::{LessonId, LessonResponse, LessonResponseKind};
 pub use runner::{HeadlessCurriculumRunner, LessonDispatch};
 pub use teacher::{
-    FeedbackPolarity, TeacherChannelContract, TeacherInputKind, TeacherPerceptualEvent,
-    TeacherRole, TEACHER_SCHOOL_SCHEMA_VERSION,
+    CurriculumTeacherPlanner, EmbodiedTeacherActor, FeedbackPolarity, LessonPlan,
+    PlannerVisibleState, TeacherAct, TeacherChannelContract, TeacherInputKind,
+    TeacherPerceptualEvent, TeacherPlanner, TeacherRole, TEACHER_SCHOOL_SCHEMA_VERSION,
 };
 pub use verifier::{
     LessonVerification, LessonVerifier, PatchLogLessonVerifier, SchoolEvidence, TopologySummary,

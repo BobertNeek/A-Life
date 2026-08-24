@@ -28,9 +28,7 @@ use alife_world::{
     HabitatOperation, HeadlessScenarioBuilder, WorldOrganismRecord,
 };
 
-fn player_loop_base_save(
-    runtime: &GpuLiveBrainRuntime,
-) -> PortableSaveFile {
+fn player_loop_base_save(runtime: &GpuLiveBrainRuntime) -> PortableSaveFile {
     let world = runtime.world_snapshot();
     let creatures = world
         .organism_registry()
@@ -104,15 +102,22 @@ fn focused_player_action_runtime() -> (
     let mut world = HeadlessScenarioBuilder::new(13_001)
         .agent("learner", organism_id, Vec3f::ZERO)
         .agent("parent-b", OrganismId(2), Vec3f::new(-1.0, 0.0, 0.0))
+        .social_agent("teacher", OrganismId(3), Vec3f::new(0.5, 0.0, 0.0), 0.75)
         .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
-        .teacher_token(
-            "teacher-word",
-            Vec3f::new(0.5, 0.0, 0.0),
-            77,
-            TeacherPerceptionChannel::Hearing,
-        )
         .build()
         .expect("bounded focused player-action world");
+    let teacher_entity = world.entity_id("teacher").expect("grounded teacher entity");
+    world
+        .grounded_teacher_actor(teacher_entity)
+        .expect("grounded teacher actor")
+        .emit_perceptual_cue(
+            &mut world,
+            "teacher-word",
+            77,
+            TeacherPerceptionChannel::Hearing,
+            None,
+        )
+        .expect("grounded teacher cue");
     let world_entity_id = world
         .organism_entity_ids()
         .into_iter()
@@ -153,7 +158,9 @@ fn focused_player_action_runtime() -> (
         .expect("second parent world entity");
     let second_genome = alife_core::CreatureGenome::early_mammal_founder(13_002, foundation)
         .expect("valid second-parent genome");
-    let second_phenotype = second_genome.express().expect("valid second-parent phenotype");
+    let second_phenotype = second_genome
+        .express()
+        .expect("valid second-parent phenotype");
     let second_biochemistry = alife_core::BiochemistryState::new(&second_phenotype, Tick::ZERO)
         .expect("valid second-parent biochemistry");
     world
@@ -186,10 +193,8 @@ fn focused_player_action_runtime() -> (
         .replace_habitat_authority(authority)
         .expect("world-owned focused action authority");
 
-    let archive_root = std::env::temp_dir().join(format!(
-        "alife-v11-player-actions-{}",
-        std::process::id()
-    ));
+    let archive_root =
+        std::env::temp_dir().join(format!("alife-v11-player-actions-{}", std::process::id()));
     let _ = fs::remove_dir_all(&archive_root);
     let runtime = GpuLiveBrainRuntime::new_profiled_archived(
         backend,
@@ -214,15 +219,22 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
     let mut world = HeadlessScenarioBuilder::new(13_001)
         .agent("learner", organism_id, Vec3f::ZERO)
         .agent("parent-b", OrganismId(2), Vec3f::new(-1.0, 0.0, 0.0))
+        .social_agent("teacher", OrganismId(3), Vec3f::new(0.5, 0.0, 0.0), 0.75)
         .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
-        .teacher_token(
-            "teacher-word",
-            Vec3f::new(0.5, 0.0, 0.0),
-            77,
-            TeacherPerceptionChannel::Hearing,
-        )
         .build()
         .expect("bounded grounded player-loop world");
+    let teacher_entity = world.entity_id("teacher").expect("grounded teacher entity");
+    world
+        .grounded_teacher_actor(teacher_entity)
+        .expect("grounded teacher actor")
+        .emit_perceptual_cue(
+            &mut world,
+            "teacher-word",
+            77,
+            TeacherPerceptionChannel::Hearing,
+            None,
+        )
+        .expect("grounded teacher cue");
     let world_entity_id = world
         .organism_entity_ids()
         .into_iter()
@@ -263,7 +275,9 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         .expect("second parent world entity");
     let second_genome = alife_core::CreatureGenome::early_mammal_founder(13_002, foundation)
         .expect("valid second-parent genome");
-    let second_phenotype = second_genome.express().expect("valid second-parent phenotype");
+    let second_phenotype = second_genome
+        .express()
+        .expect("valid second-parent phenotype");
     let second_biochemistry = alife_core::BiochemistryState::new(&second_phenotype, Tick::ZERO)
         .expect("valid second-parent biochemistry");
     world
@@ -364,10 +378,7 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         .world_snapshot()
         .object_snapshots()
         .into_iter()
-        .find(|object| {
-            object.id == world_entity_id
-                && object.organism_id == Some(organism_id)
-        })
+        .find(|object| object.id == world_entity_id && object.organism_id == Some(organism_id))
         .map(|object| object.position)
         .expect("learner canonical position before first GPU tick");
     let summaries = runtime
@@ -377,15 +388,11 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         .world_snapshot()
         .object_snapshots()
         .into_iter()
-        .find(|object| {
-            object.id == world_entity_id
-                && object.organism_id == Some(organism_id)
-        })
+        .find(|object| object.id == world_entity_id && object.organism_id == Some(organism_id))
         .map(|object| object.position)
         .expect("learner canonical position after first GPU tick");
     assert_ne!(
-        causally_changed_position,
-        pre_tick_position,
+        causally_changed_position, pre_tick_position,
         "the first real GPU tick must change the learner canonical position"
     );
     assert_eq!(summaries.len(), 2);
@@ -500,10 +507,16 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         }
     }
     assert!(saw_consolidating, "recovery sleep must reach consolidation");
-    assert!(saw_submitted, "sleep must submit the real GPU consolidation job");
-    assert!(saw_completed, "sleep must observe completed GPU consolidation output");
-    let (committed_cycle_id, output_generation, output_digest) = committed_state
-        .expect("sleep must commit the real GPU consolidation output");
+    assert!(
+        saw_submitted,
+        "sleep must submit the real GPU consolidation job"
+    );
+    assert!(
+        saw_completed,
+        "sleep must observe completed GPU consolidation output"
+    );
+    let (committed_cycle_id, output_generation, output_digest) =
+        committed_state.expect("sleep must commit the real GPU consolidation output");
     assert!(committed_cycle_id != 0);
     assert!(output_generation != 0);
     assert_ne!(output_digest, [0; 4]);
@@ -771,10 +784,7 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
     let pre_update_position = pre_update_world
         .object_snapshots()
         .into_iter()
-        .find(|object| {
-            object.id == world_entity_id
-                && object.organism_id == Some(organism_id)
-        })
+        .find(|object| object.id == world_entity_id && object.organism_id == Some(organism_id))
         .map(|object| object.position)
         .expect("durable replace must retain the learner world object");
 
@@ -854,8 +864,7 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         assert_eq!(organism.organism_id, organism_id);
         assert_eq!(organism.world_entity_id, world_entity_id);
         assert_eq!(
-            organism.object.position,
-            object.position,
+            organism.object.position, object.position,
             "post-load live frame learner object must match the canonical object"
         );
         let summary = frame
@@ -881,13 +890,11 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
     };
     assert_eq!(frame_tick, live_tick_after);
     assert_eq!(
-        pre_update_position,
-        causally_changed_position,
+        pre_update_position, causally_changed_position,
         "durable restore must preserve the position changed by the first GPU tick"
     );
     assert_eq!(
-        live_position,
-        causally_changed_position,
+        live_position, causally_changed_position,
         "post-load action must retain the earlier causally changed position"
     );
 
@@ -947,7 +954,11 @@ fn v11_player_actions_execute_live_school_and_managed_breeding() {
     let save_path = durable_root.join("player-actions.json");
     fs::create_dir_all(&asset_root).expect("create focused durable asset root");
     runtime
-        .attach_durable_checkpoint_boundary(&save_path, &asset_root, player_loop_base_save(&runtime))
+        .attach_durable_checkpoint_boundary(
+            &save_path,
+            &asset_root,
+            player_loop_base_save(&runtime),
+        )
         .expect("attach focused durable checkpoint boundary");
 
     let breeding = produce_habitat_lab_explicit_breed_receipt(

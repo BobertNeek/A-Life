@@ -474,16 +474,16 @@ fn task_shape(
     match stage {
         FoundationCurriculumStage::GroundedPerception => (
             if tick.is_multiple_of(3) {
-                LobeKind::GlyphVision
+                LobeKind::SocialCommunication
             } else {
-                LobeKind::SensoryGrounding
+                LobeKind::PerceptualIntegration
             },
-            LobeKind::CoreAssociation,
+            LobeKind::TemporalPredictive,
             CandidateActionFamily::Inspect,
         ),
         FoundationCurriculumStage::MovementAndEating => (
-            LobeKind::CoreAssociation,
-            LobeKind::MotorArbitration,
+            LobeKind::TemporalPredictive,
+            LobeKind::ActionPlanning,
             [
                 CandidateActionFamily::Approach,
                 CandidateActionFamily::Contact,
@@ -492,8 +492,8 @@ fn task_shape(
             ][tick % 4],
         ),
         FoundationCurriculumStage::SurvivalRegulation => (
-            LobeKind::MetabolicDrive,
-            LobeKind::HomeostaticRegulation,
+            LobeKind::InteroceptiveMotivational,
+            LobeKind::FlexibleReserve,
             [
                 CandidateActionFamily::Avoid,
                 CandidateActionFamily::Ingest,
@@ -502,16 +502,16 @@ fn task_shape(
         ),
         FoundationCurriculumStage::ContentNeutralMemory => (
             if tick.is_multiple_of(4) {
-                LobeKind::CoreAssociation
+                LobeKind::TemporalPredictive
             } else {
-                LobeKind::WorkingMemory
+                LobeKind::WorkingContextExecutive
             },
-            LobeKind::EpisodicMemory,
+            LobeKind::MemoryInterface,
             CandidateActionFamily::Inspect,
         ),
         FoundationCurriculumStage::IntegratedSurvival => (
-            LobeKind::SensoryGrounding,
-            LobeKind::MotorArbitration,
+            LobeKind::PerceptualIntegration,
+            LobeKind::ActionPlanning,
             [
                 CandidateActionFamily::Approach,
                 CandidateActionFamily::Avoid,
@@ -520,40 +520,40 @@ fn task_shape(
             ][tick % 4],
         ),
         FoundationCurriculumStage::SpeechMechanics => (
-            LobeKind::AuditorySpeech,
-            LobeKind::LexiconConcept,
+            LobeKind::SocialCommunication,
+            LobeKind::MultimodalAssociation,
             CandidateActionFamily::Other,
         ),
         FoundationCurriculumStage::LiveVocabularyGrounding => (
             if tick.is_multiple_of(2) {
-                LobeKind::AuditorySpeech
+                LobeKind::SocialCommunication
             } else {
-                LobeKind::SensoryGrounding
+                LobeKind::PerceptualIntegration
             },
-            LobeKind::LexiconConcept,
+            LobeKind::MultimodalAssociation,
             CandidateActionFamily::Inspect,
         ),
         FoundationCurriculumStage::SelfReporting => (
             if tick.is_multiple_of(2) {
-                LobeKind::MetabolicDrive
+                LobeKind::InteroceptiveMotivational
             } else {
-                LobeKind::CoreAssociation
+                LobeKind::TemporalPredictive
             },
-            LobeKind::LexiconConcept,
+            LobeKind::MultimodalAssociation,
             CandidateActionFamily::Other,
         ),
         FoundationCurriculumStage::HeldOutGeneralization => (
             [
-                LobeKind::SensoryGrounding,
-                LobeKind::AuditorySpeech,
-                LobeKind::GlyphVision,
-                LobeKind::MetabolicDrive,
+                LobeKind::PerceptualIntegration,
+                LobeKind::SocialCommunication,
+                LobeKind::MultimodalAssociation,
+                LobeKind::InteroceptiveMotivational,
             ][tick % 4],
             [
-                LobeKind::CoreAssociation,
-                LobeKind::WorkingMemory,
-                LobeKind::LexiconConcept,
-                LobeKind::MotorArbitration,
+                LobeKind::TemporalPredictive,
+                LobeKind::WorkingContextExecutive,
+                LobeKind::MultimodalAssociation,
+                LobeKind::ActionPlanning,
             ][tick % 4],
             [
                 CandidateActionFamily::Approach,
@@ -577,7 +577,7 @@ fn stimulate_lobe(
         .region(lobe)
         .ok_or(ScaffoldContractError::PhenotypeCompile)?;
     for lane in 0..8_u32 {
-        let surface_offset = if matches!(lobe, LobeKind::AuditorySpeech | LobeKind::GlyphVision) {
+        let surface_offset = if lobe == LobeKind::SocialCommunication {
             (rng.next_u64() as u32 % 16) * 8
         } else {
             0

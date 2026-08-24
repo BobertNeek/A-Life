@@ -177,11 +177,11 @@ impl PhenotypeGrowthMigration {
         let action_route = action_projection.route_index();
         let action_start = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
         let target_motor = target_layout
-            .region(LobeKind::MotorArbitration)
+            .region(LobeKind::ActionPlanning)
             .ok_or_else(compile_error)?;
         let old_motor_len = source
             .lobe_layout()
-            .region(LobeKind::MotorArbitration)
+            .region(LobeKind::ActionPlanning)
             .ok_or_else(compile_error)?
             .len;
         let mut families = Vec::with_capacity(8);
@@ -304,7 +304,7 @@ impl PhenotypeGrowthMigration {
         let memory_start = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
         let source_episodic_len = source
             .lobe_layout()
-            .region(LobeKind::EpisodicMemory)
+            .region(LobeKind::MemoryInterface)
             .ok_or_else(compile_error)?
             .len;
         let mut memory_rows = Vec::with_capacity(8_192);

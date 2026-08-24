@@ -766,6 +766,8 @@ fn required_runtime_dispatches_finalized_memory_and_returns_its_exact_binding() 
         .unwrap();
     let upload = backend
         .prepare_memory_context_upload(handle, &frame, &recall)
+        .unwrap()
+        .bind_neural_receptor_effects(support::test_receptor_effects(frame.tick()))
         .unwrap();
     let input = GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &upload).unwrap();
     let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![input]).unwrap();
@@ -809,6 +811,8 @@ fn evidence_logit_snapshot_is_bound_to_the_pending_frame() {
         .unwrap();
     let upload = backend
         .prepare_memory_context_upload(handle, &frame, &recall)
+        .unwrap()
+        .bind_neural_receptor_effects(support::test_receptor_effects(frame.tick()))
         .unwrap();
     let input = GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &upload).unwrap();
     let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![input]).unwrap();
@@ -939,6 +943,8 @@ fn sealed_outcome_changes_the_selected_memory_decoder_fast_weights_immediately()
         .into_parts();
     let memory_upload = backend
         .prepare_memory_context_upload(handle, &frame, &recall)
+        .unwrap()
+        .bind_neural_receptor_effects(support::test_receptor_effects(frame.tick()))
         .unwrap();
     let input = GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &memory_upload).unwrap();
     let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![input]).unwrap();
@@ -984,7 +990,10 @@ fn sealed_outcome_changes_the_selected_memory_decoder_fast_weights_immediately()
     assert!(staged_memory_rows > 0);
     let patch =
         painful_patch_for_gpu_tick(handle, &frame, &recall, &tick, ExperienceSequenceId(9_002));
-    let learning = backend.apply_sealed_outcome(handle, &patch).unwrap();
+    let receptors = support::test_receptor_frame(&patch);
+    let learning = backend
+        .apply_sealed_outcome(handle, &patch, &receptors)
+        .unwrap();
     assert!(learning.fast_weights_changed > 0);
     assert!(backend.pending_eligibility(handle).unwrap().is_none());
     let after = backend

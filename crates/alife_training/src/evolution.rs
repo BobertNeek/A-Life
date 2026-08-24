@@ -35,7 +35,7 @@ pub enum HardeningMutationKind {
     PlasticityReceptor,
     AlphaPlasticity,
     BiasLeakResearch,
-    EndocrineTrait,
+    BiochemicalSensitivity,
     DevelopmentalGate,
 }
 
@@ -46,7 +46,7 @@ impl HardeningMutationKind {
         Self::PlasticityReceptor,
         Self::AlphaPlasticity,
         Self::BiasLeakResearch,
-        Self::EndocrineTrait,
+        Self::BiochemicalSensitivity,
         Self::DevelopmentalGate,
     ];
 }
@@ -181,13 +181,15 @@ pub fn mutate_hardening_genome(
         }
         HardeningMutationKind::PlasticityReceptor => {
             let source = *child.plasticity_parameters();
+            let mut receptor_weights = *source.receptor_profile().weights();
+            receptor_weights[6] = (receptor_weights[6] + 0.05).min(2.0);
             child = child.with_plasticity_parameters(
-                alife_core::PlasticityGenomeParameters::try_new_v1(
+                alife_core::PlasticityGenomeParameters::try_new(
                     source.eligibility_decay(),
                     (source.base_learning_rate() * 1.1).min(1.0),
                     source.normalization_rate(),
                     source.sleep_replay_rate(),
-                    source.modulator_sign(),
+                    alife_core::PlasticityReceptorProfile::try_new(receptor_weights)?,
                     source.fast_bounds().0,
                     source.fast_bounds().1,
                     source.sleep_staging_rate(),
@@ -201,12 +203,26 @@ pub fn mutate_hardening_genome(
                 NormalizedScalar::new((child.alpha_mask.default_alpha.raw() + 0.025).min(1.0))?;
         }
         HardeningMutationKind::BiasLeakResearch => {}
-        HardeningMutationKind::EndocrineTrait => {
-            let row = child
-                .endocrine_constants
-                .first_mut()
-                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-            row.value = (row.value * 1.05).min(2.0);
+        HardeningMutationKind::BiochemicalSensitivity => {
+            // The brain genome may evolve neural receptor expression, but it
+            // does not own endocrine production or biochemical state.
+            let source = *child.plasticity_parameters();
+            let mut receptor_weights = *source.receptor_profile().weights();
+            receptor_weights[7] = (receptor_weights[7] - 0.05).max(-2.0);
+            child = child.with_plasticity_parameters(
+                alife_core::PlasticityGenomeParameters::try_new(
+                    source.eligibility_decay(),
+                    source.base_learning_rate(),
+                    source.normalization_rate(),
+                    source.sleep_replay_rate(),
+                    alife_core::PlasticityReceptorProfile::try_new(receptor_weights)?,
+                    source.fast_bounds().0,
+                    source.fast_bounds().1,
+                    source.sleep_staging_rate(),
+                    source.sleep_weight_limit(),
+                    source.sleep_fast_decay_rate(),
+                )?,
+            )?;
         }
         HardeningMutationKind::DevelopmentalGate => {
             child.developmental_schedule.sleep_pressure_maturation_gate =
@@ -361,12 +377,15 @@ impl N2048EvolutionHardener {
                 )?);
                 self.next_sequence_id = self.next_sequence_id.saturating_add(1);
             }
-            let patch_refs = handles
-                .iter()
-                .copied()
-                .zip(patches.iter())
-                .collect::<Vec<_>>();
-            self.session.apply_sealed_outcome_batch(&patch_refs)?;
+            for handle in &handles {
+                let pending = self
+                    .session
+                    .pending_eligibility(*handle)?
+                    .ok_or(ScaffoldContractError::MissingPhaseData)?;
+                self.session
+                    .discard_pending_eligibility(*handle, pending.identity())?;
+            }
+            require_canonical_chemistry_for_hardening()?;
         }
         for handle in handles {
             self.session.remove_brain(handle)?;
@@ -554,6 +573,10 @@ impl N2048EvolutionHardener {
             },
         })
     }
+}
+
+fn require_canonical_chemistry_for_hardening() -> Result<(), TrainingError> {
+    Err(ScaffoldContractError::MissingPhaseData.into())
 }
 
 fn compare_fitness(left: &HardeningEvaluation, right: &HardeningEvaluation) -> Ordering {

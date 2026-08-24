@@ -17,6 +17,7 @@ pub mod cognitive_context;
 pub mod cognitive_work;
 pub mod dendritic;
 pub mod diagnostics;
+pub mod embodiment;
 pub mod era1_evaluation;
 pub mod error;
 pub mod evaluation;
@@ -34,8 +35,10 @@ pub mod lobe;
 pub mod math;
 pub mod memory;
 pub mod memory_query;
+pub mod migration_v2;
 pub mod motor;
 pub mod neural;
+pub mod neural_receptors;
 pub mod packed_log;
 pub mod perception;
 pub mod phenotype;
@@ -93,7 +96,8 @@ pub use biochemical_graph::{
 };
 pub use biochemistry::{
     BiochemistryCadence, BiochemistryState, BodyEventDelta, BodyState, DevelopmentReadiness,
-    PassiveBodyUpkeepPolicy, ReproductionReadiness, MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
+    OrganKind, OrganPhysiology, PassiveBodyUpkeepPolicy, ReproductionReadiness,
+    MAX_BIOCHEMISTRY_CATCH_UP_STEPS, ORGAN_KIND_COUNT,
 };
 pub use blake3_digest::Blake3Digest;
 pub use brain_class::{
@@ -124,6 +128,11 @@ pub use dendritic::{
     MAX_DENDRITIC_INPUTS,
 };
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
+pub use embodiment::{
+    EffectorCapability, EffectorPortDescriptor, EmbodimentState, SensorCapability,
+    SensorPortDescriptor, EMBODIMENT_STATE_SCHEMA_VERSION, MAX_BODY_SCHEMA_VALUES,
+    MAX_EMBODIMENT_PORTS,
+};
 pub use era1_evaluation::{
     Era1Ability, Era1AssistanceKind, Era1Control, Era1EvidencePartition, Era1MatchedComparison,
     Era1PlateauWindow, Era1TrialIdentity, Era1TrialReceipt, ERA1_ABILITY_COUNT, ERA1_CONTROL_COUNT,
@@ -144,10 +153,10 @@ pub use evidence_digest::{
     GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA,
 };
 pub use evolutionary_genetics::{
-    AlleleDominance, AlleleSide, BodyChromosome, BodyFrame, BodyPhenotype, BrainChromosome,
-    ChemistryChromosome, ChemistryPhenotype, ChromosomeKind, ChromosomeRecombinationRecord,
-    ContinuousLocus, CreatureGenome, CreaturePhenotype, DevelopmentChromosome,
-    DevelopmentPhenotype, DiscreteAllele, DiscreteExpression, DiscreteLocus,
+    AlleleDominance, AlleleSide, BiochemicalGraphChromosome, BodyChromosome, BodyFrame,
+    BodyPhenotype, BrainChromosome, ChemistryChromosome, ChemistryPhenotype, ChromosomeKind,
+    ChromosomeRecombinationRecord, ContinuousLocus, CreatureGenome, CreaturePhenotype,
+    DevelopmentChromosome, DevelopmentPhenotype, DiscreteAllele, DiscreteExpression, DiscreteLocus,
     FoundationGeneticIdentity, GeneticLineageProvenance, MatePreference, MutationRecord,
     PredispositionChromosome, PredispositionPhenotype, ReproductionChromosome,
     ReproductionPhenotype, StarterVocabularyProfile, CREATURE_GENOME_SCHEMA_VERSION,
@@ -199,12 +208,13 @@ pub use language::{
 };
 pub use learning::{
     validate_outcome_credit_schema, FastWeightSemantics, LearningCommitToken,
-    LearningSequenceGuard, NeuromodulatorSample, OutcomeCreditPacket, OutcomeCreditReplayKey,
+    LearningSequenceGuard, NeuromodulatorSample, NeuromodulatoryFrame, OutcomeCreditPacket,
+    OutcomeCreditReplayKey, PlasticityReceptorProfile, NEUROMODULATORY_LANE_COUNT,
 };
 pub use lineage::LineageExportManifest;
 pub use lobe::{
-    ActivationPolicy, LobeEssentiality, LobeKind, LobeLayout, LobeRegion, LobeThrottlePriority,
-    PlasticityPolicy, UpdateCadence,
+    ActivationPolicy, LegacyLobeKindV1, LobeEssentiality, LobeKind, LobeLayout, LobeRegion,
+    LobeThrottlePriority, PlasticityPolicy, UpdateCadence,
 };
 pub use math::{validate_finite, validate_finite_slice, Aabb, Pose, Quatf, Vec2f, Vec3f, Velocity};
 pub use memory::{
@@ -229,6 +239,12 @@ pub use memory_query::{
     MEMORY_QUERY_V2_FEATURE_COUNT, MEMORY_RESERVED_RANGE, MEMORY_STATE_SENSORY_RANGE,
     MEMORY_TARGET_RANGE, MEMORY_VALUE_V1_COUNT,
 };
+pub use migration_v2::{
+    migrate_body_v2_to_v3, migrate_founder_region_ranges_v1_to_v2, migrate_neuromodulator_v2_to_v3,
+    require_complete_v3_organism_state, ArchitectureMigrationError, ArchitectureMigrationKind,
+    ArchitectureMigrationReceipt, LegacyBodyStateV2, LegacyLobeRangeV1, LegacyNeuromodulatorV2,
+    MigratedFounderRangeV2,
+};
 pub use motor::{
     BoundedCoordinationSummary, BoundedMotorPayload, ChannelCommand, CoordinationGroup,
     EgocentricDirection, MeasuredChannelObservation, MotorChannel, MotorCommandBundle,
@@ -244,6 +260,7 @@ pub use neural::{
     SupertileMask, SynapseWeightSplit, TileMetadata, MICROTILE_CELLS, MICROTILE_EDGE,
     SUPERTILE_EDGE, SUPERTILE_MICROTILES,
 };
+pub use neural_receptors::{NeuralReceptorEffects, NeuralReceptorPhenotype};
 pub use packed_log::{
     ExperiencePacker, InMemoryPackedExperienceLog, PackedExperienceFrame, PackedExperienceRecord,
     PackedExperienceSink, PackedExperienceSummary, PackedLogEntryRef, PackedSideBufferKind,

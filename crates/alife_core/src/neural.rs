@@ -4,9 +4,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::dendritic::{
-    apply_dendritic_conjunctions, DendriticBranchSet, DendriticWorkReceipt,
-};
+use crate::dendritic::{apply_dendritic_conjunctions, DendriticBranchSet, DendriticWorkReceipt};
 use crate::{
     require_current_version, validate_finite, ActiveTilePolicy, BrainClassId, BrainClassSpec,
     LobeKind, NormalizedScalar, ProjectionType, ScaffoldContractError, SchemaKind, SchemaVersions,
@@ -356,8 +354,8 @@ impl SparseProjection {
             schema_version: SchemaVersions::CURRENT.neural_projection.raw(),
             projection_index: 0,
             routing_ref: ProjectionRoutingRef {
-                source_lobe: LobeKind::SensoryGrounding,
-                target_lobe: LobeKind::SensoryGrounding,
+                source_lobe: LobeKind::PerceptualIntegration,
+                target_lobe: LobeKind::PerceptualIntegration,
                 projection_type: ProjectionType::Recurrent,
             },
             source_range: NeuronRange::full(spec.neuron_count),

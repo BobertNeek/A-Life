@@ -1,11 +1,11 @@
-//! v0 scaffold: teacher roles and perception-only event contracts.
+//! Read-only lesson planning and grounded embodied teaching contracts.
 
 use alife_core::{
     Confidence, NormalizedScalar, ScaffoldContractError, SchemaVersions, TeacherPerceptionChannel,
     WorldEntityId,
 };
 
-use crate::LessonId;
+use crate::{CurriculumStep, LessonId};
 
 pub const TEACHER_SCHOOL_SCHEMA_VERSION: u16 = SchemaVersions::CURRENT.teacher_school.0;
 
@@ -81,9 +81,23 @@ pub struct TeacherPerceptualEvent {
     pub feedback: Option<FeedbackPolarity>,
     pub salience: NormalizedScalar,
     pub confidence: Confidence,
+    pub teacher_entity: WorldEntityId,
+    actor_seal: u64,
 }
 
-impl TeacherPerceptualEvent {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TeacherAct {
+    pub lesson_id: LessonId,
+    pub input_kind: TeacherInputKind,
+    pub token_id: Option<u32>,
+    pub gesture_id: Option<u32>,
+    pub object_entity: Option<WorldEntityId>,
+    pub feedback: Option<FeedbackPolarity>,
+    pub salience: NormalizedScalar,
+    pub confidence: Confidence,
+}
+
+impl TeacherAct {
     pub fn spoken_token(lesson_id: LessonId, token_id: u32) -> Self {
         Self::new(lesson_id, TeacherInputKind::SpokenToken)
             .with_token_id(token_id)
@@ -128,24 +142,10 @@ impl TeacherPerceptualEvent {
             .with_salience(salience)
     }
 
-    pub const fn channel(&self) -> TeacherPerceptionChannel {
-        self.channel
-    }
-
-    pub const fn hidden_vector_injection_allowed(&self) -> bool {
-        false
-    }
-
-    pub const fn direct_motor_bypass(&self) -> bool {
-        false
-    }
-
     fn new(lesson_id: LessonId, input_kind: TeacherInputKind) -> Self {
         Self {
-            schema_version: TEACHER_SCHOOL_SCHEMA_VERSION,
             lesson_id,
             input_kind,
-            channel: input_kind.channel(),
             token_id: None,
             gesture_id: None,
             object_entity: None,
@@ -183,6 +183,128 @@ impl TeacherPerceptualEvent {
     const fn with_confidence(mut self, confidence: Confidence) -> Self {
         self.confidence = confidence;
         self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LessonPlan {
+    pub lesson_id: LessonId,
+    pub acts: Vec<TeacherAct>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PlannerVisibleState {
+    pub developmental_stage_raw: u8,
+    pub observable_success: bool,
+    pub coarse_homeostatic_stress: NormalizedScalar,
+    pub uncertainty: NormalizedScalar,
+}
+
+pub trait TeacherPlanner {
+    fn plan(
+        &self,
+        step: &CurriculumStep,
+        visible: PlannerVisibleState,
+    ) -> Result<LessonPlan, ScaffoldContractError>;
+}
+
+/// Production planner for authored curricula. It can select bounded acts but
+/// cannot mint learner-visible events; only the embodied actor can do that.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CurriculumTeacherPlanner {
+    max_acts_per_lesson: usize,
+}
+
+impl CurriculumTeacherPlanner {
+    pub const fn bounded_default() -> Self {
+        Self {
+            max_acts_per_lesson: 16,
+        }
+    }
+}
+
+impl TeacherPlanner for CurriculumTeacherPlanner {
+    fn plan(
+        &self,
+        step: &CurriculumStep,
+        visible: PlannerVisibleState,
+    ) -> Result<LessonPlan, ScaffoldContractError> {
+        for value in [
+            visible.coarse_homeostatic_stress.raw(),
+            visible.uncertainty.raw(),
+        ] {
+            NormalizedScalar::new(value)?;
+        }
+        if step.prompt_cues.is_empty() || step.prompt_cues.len() > self.max_acts_per_lesson {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        Ok(LessonPlan {
+            lesson_id: step.lesson_id,
+            acts: step.prompt_cues.clone(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EmbodiedTeacherActor {
+    teacher_entity: WorldEntityId,
+}
+
+impl EmbodiedTeacherActor {
+    pub fn new(teacher_entity: WorldEntityId) -> Result<Self, ScaffoldContractError> {
+        teacher_entity.validate()?;
+        Ok(Self { teacher_entity })
+    }
+
+    pub const fn teacher_entity(&self) -> WorldEntityId {
+        self.teacher_entity
+    }
+
+    pub fn enact(&self, act: TeacherAct) -> Result<TeacherPerceptualEvent, ScaffoldContractError> {
+        let event = TeacherPerceptualEvent {
+            schema_version: TEACHER_SCHOOL_SCHEMA_VERSION,
+            lesson_id: act.lesson_id,
+            input_kind: act.input_kind,
+            channel: act.input_kind.channel(),
+            token_id: act.token_id,
+            gesture_id: act.gesture_id,
+            object_entity: act.object_entity,
+            feedback: act.feedback,
+            salience: act.salience,
+            confidence: act.confidence,
+            teacher_entity: self.teacher_entity,
+            actor_seal: self.teacher_entity.raw() ^ act.lesson_id.raw().rotate_left(17),
+        };
+        validate_event(&event)?;
+        Ok(event)
+    }
+
+    pub fn enact_plan(
+        &self,
+        plan: &LessonPlan,
+    ) -> Result<Vec<TeacherPerceptualEvent>, ScaffoldContractError> {
+        if plan.acts.is_empty() || plan.acts.iter().any(|act| act.lesson_id != plan.lesson_id) {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        plan.acts
+            .iter()
+            .copied()
+            .map(|act| self.enact(act))
+            .collect()
+    }
+}
+
+impl TeacherPerceptualEvent {
+    pub const fn channel(&self) -> TeacherPerceptionChannel {
+        self.channel
+    }
+
+    pub const fn hidden_vector_injection_allowed(&self) -> bool {
+        false
+    }
+
+    pub const fn direct_motor_bypass(&self) -> bool {
+        false
     }
 }
 
@@ -233,6 +355,10 @@ fn validate_event(event: &TeacherPerceptualEvent) -> Result<(), ScaffoldContract
     }
     if let Some(entity) = event.object_entity {
         entity.validate()?;
+    }
+    event.teacher_entity.validate()?;
+    if event.actor_seal != event.teacher_entity.raw() ^ event.lesson_id.raw().rotate_left(17) {
+        return Err(ScaffoldContractError::InvalidId);
     }
     Ok(())
 }

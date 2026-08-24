@@ -8,7 +8,7 @@ use alife_archive::{
     PreparedCompositeBirthBatch,
 };
 use alife_core::{
-    BiochemistryState, Blake3Digest, BrainCapacityClass, BrainPhenotype, FoundationGeneticIdentity,
+    Blake3Digest, BrainCapacityClass, BrainPhenotype, FoundationGeneticIdentity,
     FoundationWeightAsset, GenomeId, LineageId, N512FounderProjectionReceipt, OrganismId,
     PhenotypeHash, ScaffoldContractError, SensorProfile, Tick, Validate, WorldEntityId,
 };

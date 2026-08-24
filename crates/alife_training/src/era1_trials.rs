@@ -206,16 +206,10 @@ fn map_selector_diagnostic_error(error: GpuRuntimeSelectorDiagnosticError) -> Er
     }
 }
 
-fn map_learning_apply_failure(
-    error: ScaffoldContractError,
-    receipt: Option<GpuLearningEvidenceMismatchReceipt>,
-) -> Era1TrialRunError {
-    if matches!(&error, ScaffoldContractError::LearningEvidenceMismatch) {
-        if let Some(receipt) = receipt {
-            return Era1TrialRunError::LearningEvidenceMismatch(receipt);
-        }
-    }
-    Era1TrialRunError::Contract(error)
+fn require_canonical_chemistry_for_era1_cognition() -> Result<(), Era1TrialRunError> {
+    Err(Era1TrialRunError::Contract(
+        ScaffoldContractError::MissingPhaseData,
+    ))
 }
 
 impl Era1SelectorDiagnosticReceipt {
@@ -699,7 +693,7 @@ impl Era1TrialRunner {
         let mature_age = development.age_ticks.raw();
         let mut homeostasis = HomeostaticSnapshot::baseline(world.tick());
         let mut steps = Vec::with_capacity(ERA1_TRIAL_END_TICK as usize);
-        let mut learning_commits = 0_u64;
+        let learning_commits = 0_u64;
         let mut eligibility_discards = 0_u64;
         let mut memory_updates = 0_u64;
         let mut sleep_commits = 0_u32;
@@ -783,6 +777,7 @@ impl Era1TrialRunner {
             let memory_upload =
                 self.session
                     .prepare_memory_context_upload(handle, &frame, &finalized_recall)?;
+            require_canonical_chemistry_for_era1_cognition()?;
             let member = GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &memory_upload)?;
             let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![member])?;
             let mut gpu_ticks = if !request.selector_diagnostic_candidate_indices.is_empty() {
@@ -979,24 +974,11 @@ impl Era1TrialRunner {
                 {
                     return Err(Era1TrialRunError::LearningEvidenceMismatch(receipt));
                 }
-                if let Err(error) = self.session.apply_sealed_outcome(handle, &patch) {
-                    if let Some(receipt) = self.session.take_apply_fast_plasticity_failure_receipt()
-                    {
-                        return Err(Era1TrialRunError::ApplyFastPlasticity(receipt));
-                    }
-                    let receipt =
-                        if matches!(&error, ScaffoldContractError::LearningEvidenceMismatch) {
-                            self.session
-                                .sealed_outcome_credit_mismatch_receipt(handle, &patch)
-                                .ok()
-                                .flatten()
-                        } else {
-                            None
-                        };
-                    return Err(map_learning_apply_failure(error, receipt));
-                }
-                learning_commits = learning_commits.saturating_add(1);
-                Era1LearningDisposition::Applied
+                self.session
+                    .discard_pending_eligibility(handle, pending_identity)?;
+                return Err(Era1TrialRunError::Contract(
+                    ScaffoldContractError::MissingPhaseData,
+                ));
             };
             let memory_observed = request.control != Era1Control::MemoryDisabled;
             if memory_observed {

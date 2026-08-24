@@ -90,6 +90,28 @@ fn fixture_manifest() -> AssetManifest {
     }
 }
 
+#[test]
+fn v2_portable_restore_invokes_architecture_migration_and_fails_without_authority() {
+    let save = PortableSaveFile::from_headless_world(
+        "v2-migration-boundary",
+        &fixture_world(),
+        RuntimeConfig::deterministic_default(4242, BrainScaleTier::Nano512),
+        fixture_manifest(),
+        vec![fixture_creature()],
+    )
+    .unwrap();
+    let mut value = serde_json::to_value(save).unwrap();
+    value["schema_version"] = serde_json::Value::from(2);
+    let error =
+        PortableSaveFile::from_json_str(&serde_json::to_string(&value).unwrap()).unwrap_err();
+    assert!(matches!(
+        error,
+        PersistenceError::ArchitectureMigration(
+            alife_core::ArchitectureMigrationError::MissingAuthoritativeState { .. }
+        )
+    ));
+}
+
 fn temp_root(test_name: &str) -> PathBuf {
     let root = std::env::temp_dir().join("alife_p34_tests").join(format!(
         "{}_{}",

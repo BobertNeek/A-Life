@@ -40,7 +40,9 @@ fn load_sleep_replay_event(base:u32) -> GpuReplayEventRecord {
     frame_payload_words[base+16u],frame_payload_words[base+17u],
     bitcast<f32>(frame_payload_words[base+18u]),bitcast<f32>(frame_payload_words[base+19u]),
     bitcast<f32>(frame_payload_words[base+20u]),bitcast<f32>(frame_payload_words[base+21u]),
-    bitcast<f32>(frame_payload_words[base+22u]),bitcast<f32>(frame_payload_words[base+23u])
+    bitcast<f32>(frame_payload_words[base+22u]),bitcast<f32>(frame_payload_words[base+23u]),
+    bitcast<f32>(frame_payload_words[base+24u]),bitcast<f32>(frame_payload_words[base+25u]),
+    vec2<u32>(frame_payload_words[base+26u],frame_payload_words[base+27u])
   );
 }
 
@@ -74,19 +76,17 @@ fn replay_sleep_learning(@builtin(global_invocation_id) gid:vec3<u32>) {
   let metadata_base = extension.synapse_metadata_offset + span.local_synapse_id*8u;
   if (!sleep_immutable_plan_span_within(metadata_base,8u)) { sleep_reject(completion); return; }
   let metadata = load_synapse_learning_metadata(metadata_base);
-  let receptor_base = extension.receptor_offset + metadata.receptor_index*8u;
+  let receptor_base = extension.receptor_offset + metadata.receptor_index*16u;
   if (metadata.global_synapse_id != span.local_synapse_id
-      || !sleep_immutable_plan_span_within(receptor_base,8u)) {
+      || !sleep_immutable_plan_span_within(receptor_base,16u)) {
     sleep_reject(completion); return;
   }
   let receptor = load_plasticity_receptor(receptor_base);
   let alpha = bitcast<f32>(immutable_weight_words[brain.alpha_offset+span.local_synapse_id]);
   if (!sleep_finite(receptor.sleep_replay_rate)
-      || !sleep_finite(receptor.modulator_sign)
       || !sleep_finite(receptor.fast_min)
       || !sleep_finite(receptor.fast_max)
       || receptor.sleep_replay_rate < 0.0 || receptor.sleep_replay_rate > 1.0
-      || (receptor.modulator_sign != -1.0 && receptor.modulator_sign != 1.0)
       || receptor.fast_min >= receptor.fast_max || !sleep_finite(alpha)) {
     sleep_reject(completion); return;
   }
@@ -97,12 +97,19 @@ fn replay_sleep_learning(@builtin(global_invocation_id) gid:vec3<u32>) {
     let unpacked = unpack_sleep_eligibility(frame_payload_words[sample_word_index]);
     let event_index = u32(unpacked.x);
     if (event_index >= header.replay_event_count) { sleep_reject(completion); return; }
-    let event_base = header.replay_event_offset + event_index*24u;
-    if (!sleep_frame_span_within(event_base,24u)) { sleep_reject(completion); return; }
+    let event_base = header.replay_event_offset + event_index*28u;
+    if (!sleep_frame_span_within(event_base,28u)) { sleep_reject(completion); return; }
     let event = load_sleep_replay_event(event_base);
-    if (!sleep_finite(unpacked.y) || !sleep_finite(event.modulator_value)
-        || abs(event.modulator_value) > 1.0) { sleep_reject(completion); return; }
-    replay_credit += unpacked.y*event.modulator_value*receptor.modulator_sign;
+    let lanes = array<f32,8>(event.prediction_residual,event.pain,event.homeostatic_improvement,event.frustration,
+      event.novelty,event.social_consequence,event.biochemical_appetitive,event.biochemical_aversive);
+    var local = 0.0;
+    var scale = 0.0;
+    for (var lane=0u; lane<8u; lane+=1u) {
+      local += lanes[lane]*receptor.receptor_weights[lane];
+      scale += abs(receptor.receptor_weights[lane]);
+    }
+    if (!sleep_finite(unpacked.y) || !sleep_finite(local)) { sleep_reject(completion); return; }
+    replay_credit += unpacked.y*select(clamp(local/scale,-1.0,1.0),0.0,scale==0.0);
   }
   let inactive = inactive_weight_bases(brain,extension,learning);
   let fast_index = inactive.fast+span.local_synapse_id;

@@ -12,7 +12,7 @@ use crate::{
     SensorChannelKind, SensorLayoutGene, Tick, Validate,
 };
 
-pub const CREATURE_GENOME_SCHEMA_VERSION: u16 = 2;
+pub const CREATURE_GENOME_SCHEMA_VERSION: u16 = 3;
 pub const MAX_CROSSOVER_SEGMENTS: u8 = 8;
 pub const MAX_MUTATION_DELTA: f32 = 0.25;
 pub const MAX_MUTATION_RECORDS: usize = 128;
@@ -365,6 +365,7 @@ impl Validate for BrainChromosome {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChemistryChromosome {
+    pub graph: BiochemicalGraphChromosome,
     pub stress_baseline: ContinuousLocus,
     pub reward_sensitivity: ContinuousLocus,
     pub bonding_sensitivity: ContinuousLocus,
@@ -379,6 +380,7 @@ pub struct ChemistryChromosome {
 
 impl Validate for ChemistryChromosome {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.graph.validate_contract()?;
         validate_loci(&[
             &self.stress_baseline,
             &self.reward_sensitivity,
@@ -394,12 +396,67 @@ impl Validate for ChemistryChromosome {
     }
 }
 
+/// Diploid biochemical construction genes. These contain no live concentration state.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BiochemicalGraphChromosome {
+    maternal: BiochemicalPhenotype,
+    paternal: BiochemicalPhenotype,
+    expressed_homolog: AlleleSide,
+}
+
+impl BiochemicalGraphChromosome {
+    pub fn new(
+        maternal: BiochemicalPhenotype,
+        paternal: BiochemicalPhenotype,
+        expressed_homolog: AlleleSide,
+    ) -> Result<Self, ScaffoldContractError> {
+        let value = Self {
+            maternal,
+            paternal,
+            expressed_homolog,
+        };
+        value.validate_contract()?;
+        Ok(value)
+    }
+
+    pub fn expressed(&self) -> &BiochemicalPhenotype {
+        match self.expressed_homolog {
+            AlleleSide::Maternal => &self.maternal,
+            AlleleSide::Paternal => &self.paternal,
+        }
+    }
+
+    pub fn with_reaction_rate(
+        mut self,
+        side: AlleleSide,
+        reaction_index: usize,
+        rate: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let homolog = match side {
+            AlleleSide::Maternal => &mut self.maternal,
+            AlleleSide::Paternal => &mut self.paternal,
+        };
+        *homolog = homolog.with_reaction_rate(reaction_index, rate)?;
+        self.validate_contract()?;
+        Ok(self)
+    }
+}
+
+impl Validate for BiochemicalGraphChromosome {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.maternal.validate_contract()?;
+        self.paternal.validate_contract()?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DevelopmentChromosome {
     pub maturation_rate: ContinuousLocus,
     pub puberty_onset: ContinuousLocus,
     pub sensor_activation: ContinuousLocus,
     pub lobe_activation: ContinuousLocus,
+    pub biochemical_activation: ContinuousLocus,
     pub critical_period_open: ContinuousLocus,
     pub critical_period_close: ContinuousLocus,
     pub migration_checkpoint: ContinuousLocus,
@@ -412,6 +469,7 @@ impl Validate for DevelopmentChromosome {
             &self.puberty_onset,
             &self.sensor_activation,
             &self.lobe_activation,
+            &self.biochemical_activation,
             &self.critical_period_open,
             &self.critical_period_close,
             &self.migration_checkpoint,
@@ -563,6 +621,7 @@ pub struct DevelopmentPhenotype {
     pub puberty_tick: Tick,
     pub sensor_activation_maturation: NormalizedScalar,
     pub lobe_activation_maturation: NormalizedScalar,
+    pub biochemical_activation_maturation: NormalizedScalar,
     pub critical_period: CriticalPeriod,
     pub migration_checkpoint: NormalizedScalar,
 }
@@ -653,6 +712,17 @@ impl CreatureGenome {
                 genetic_weight_bias: ContinuousLocus::mean(0.47, 0.53)?,
             },
             chemistry: ChemistryChromosome {
+                graph: {
+                    let reference = BiochemicalPhenotype::early_mammal_reference(
+                        EndocrineProfile::baseline(),
+                        0.75,
+                    )?;
+                    BiochemicalGraphChromosome::new(
+                        reference.clone(),
+                        reference,
+                        AlleleSide::Maternal,
+                    )?
+                },
                 stress_baseline: ContinuousLocus::mean(0.18, 0.24)?,
                 reward_sensitivity: ContinuousLocus::mean(0.50, 0.58)?,
                 bonding_sensitivity: ContinuousLocus::mean(0.46, 0.54)?,
@@ -669,6 +739,7 @@ impl CreatureGenome {
                 puberty_onset: ContinuousLocus::mean(0.58, 0.64)?,
                 sensor_activation: ContinuousLocus::mean(0.12, 0.18)?,
                 lobe_activation: ContinuousLocus::mean(0.22, 0.28)?,
+                biochemical_activation: ContinuousLocus::mean(0.08, 0.14)?,
                 critical_period_open: ContinuousLocus::mean(0.08, 0.12)?,
                 critical_period_close: ContinuousLocus::mean(0.66, 0.74)?,
                 migration_checkpoint: ContinuousLocus::mean(0.82, 0.90)?,
@@ -825,11 +896,11 @@ impl CreaturePhenotype {
         let duration = u64::from(self.development.maturation_duration_ticks);
         let maturation = (age.raw() as f64 / duration as f64).clamp(0.0, 1.0) as f32;
         let mut enabled_lobes = vec![
-            LobeKind::SensoryGrounding,
-            LobeKind::MetabolicDrive,
-            LobeKind::CoreAssociation,
-            LobeKind::MotorArbitration,
-            LobeKind::HomeostaticRegulation,
+            LobeKind::PerceptualIntegration,
+            LobeKind::InteroceptiveMotivational,
+            LobeKind::TemporalPredictive,
+            LobeKind::ActionPlanning,
+            LobeKind::FlexibleReserve,
         ];
         if maturation >= self.development.lobe_activation_maturation.raw() {
             enabled_lobes = LobeKind::CORE.to_vec();
@@ -936,8 +1007,7 @@ fn express_chemistry(
         },
     };
     endocrine.validate_contract()?;
-    let biochemical =
-        BiochemicalPhenotype::early_mammal_reference(endocrine, brain_atp_efficiency)?;
+    let biochemical = chemistry.graph.expressed().clone();
     Ok(ChemistryPhenotype {
         biochemical,
         endocrine,
@@ -964,7 +1034,7 @@ fn express_development(
     let puberty_tick = ((maturation_duration_ticks as f32 * puberty_fraction).round() as u32)
         .clamp(juvenile_tick + 1, maturation_duration_ticks - 1);
     let critical_period = CriticalPeriod {
-        lobe: LobeKind::CoreAssociation,
+        lobe: LobeKind::TemporalPredictive,
         opens_at: Tick(
             (maturation_duration_ticks as f32 * development.critical_period_open.expressed()?)
                 .round() as u64,
@@ -981,6 +1051,9 @@ fn express_development(
         puberty_tick: Tick(u64::from(puberty_tick)),
         sensor_activation_maturation: normalized(development.sensor_activation.expressed()?)?,
         lobe_activation_maturation: normalized(development.lobe_activation.expressed()?)?,
+        biochemical_activation_maturation: normalized(
+            development.biochemical_activation.expressed()?,
+        )?,
         critical_period,
         migration_checkpoint: normalized(development.migration_checkpoint.expressed()?)?,
     })
@@ -1048,15 +1121,15 @@ fn express_brain_genome(
     if brain_class_id != BrainCapacityClass::N2048_ID {
         genome.lobe_ratios = LobeRatioPlan::InlineOverrides(vec![
             LobeRatioOverride {
-                lobe: LobeKind::SensoryGrounding,
+                lobe: LobeKind::PerceptualIntegration,
                 ratio: normalized(sensory_ratio)?,
             },
             LobeRatioOverride {
-                lobe: LobeKind::CoreAssociation,
+                lobe: LobeKind::TemporalPredictive,
                 ratio: normalized(association_ratio)?,
             },
             LobeRatioOverride {
-                lobe: LobeKind::WorkingMemory,
+                lobe: LobeKind::WorkingContextExecutive,
                 ratio: normalized(working_memory_ratio)?,
             },
         ]);
@@ -1096,7 +1169,7 @@ fn express_brain_genome(
                     body.sensory_acuity,
                     receptor_sensitivity,
                 ),
-                target_lobe: LobeKind::MetabolicDrive,
+                target_lobe: LobeKind::InteroceptiveMotivational,
                 enabled_at_maturation: 0,
             },
             SensorChannelGene {
@@ -1106,7 +1179,7 @@ fn express_brain_genome(
                     body.sensory_acuity,
                     receptor_sensitivity,
                 ),
-                target_lobe: LobeKind::SensoryGrounding,
+                target_lobe: LobeKind::PerceptualIntegration,
                 enabled_at_maturation: sensor_gate,
             },
             SensorChannelGene {
@@ -1116,7 +1189,7 @@ fn express_brain_genome(
                     body.sensory_acuity,
                     receptor_sensitivity,
                 ),
-                target_lobe: LobeKind::SensoryGrounding,
+                target_lobe: LobeKind::PerceptualIntegration,
                 enabled_at_maturation: sensor_gate,
             },
             SensorChannelGene {
@@ -1126,7 +1199,7 @@ fn express_brain_genome(
                     body.sensory_acuity,
                     receptor_sensitivity,
                 ),
-                target_lobe: LobeKind::SensoryGrounding,
+                target_lobe: LobeKind::PerceptualIntegration,
                 enabled_at_maturation: sensor_gate,
             },
         ],
@@ -1890,6 +1963,23 @@ fn recombine_chemistry(
         };
     }
     let result = ChemistryChromosome {
+        graph: BiochemicalGraphChromosome::new(
+            if context.rng.next_bool() {
+                maternal.graph.maternal.clone()
+            } else {
+                maternal.graph.paternal.clone()
+            },
+            if context.rng.next_bool() {
+                paternal.graph.maternal.clone()
+            } else {
+                paternal.graph.paternal.clone()
+            },
+            if context.rng.next_bool() {
+                AlleleSide::Maternal
+            } else {
+                AlleleSide::Paternal
+            },
+        )?,
         stress_baseline: locus!(stress_baseline, 0),
         reward_sensitivity: locus!(reward_sensitivity, 1),
         bonding_sensitivity: locus!(bonding_sensitivity, 2),
@@ -1931,9 +2021,10 @@ fn recombine_development(
         puberty_onset: locus!(puberty_onset, 1),
         sensor_activation: locus!(sensor_activation, 2),
         lobe_activation: locus!(lobe_activation, 3),
-        critical_period_open: locus!(critical_period_open, 4),
-        critical_period_close: locus!(critical_period_close, 5),
-        migration_checkpoint: locus!(migration_checkpoint, 6),
+        biochemical_activation: locus!(biochemical_activation, 4),
+        critical_period_open: locus!(critical_period_open, 5),
+        critical_period_close: locus!(critical_period_close, 6),
+        migration_checkpoint: locus!(migration_checkpoint, 7),
     };
     context.finish_chromosome(chromosome, maternal_selector, paternal_selector);
     Ok(result)

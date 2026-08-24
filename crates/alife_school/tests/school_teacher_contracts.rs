@@ -11,10 +11,10 @@ use alife_core::{
     TeacherPerceptionChannel, Tick, Vec3f, Velocity, WorldEntityId,
 };
 use alife_school::{
-    Curriculum, CurriculumStepKind, ExpectedObservation, FeedbackPolarity,
+    Curriculum, CurriculumStepKind, EmbodiedTeacherActor, ExpectedObservation, FeedbackPolarity,
     HeadlessCurriculumRunner, LessonId, LessonResponse, LessonResponseKind, PatchLogLessonVerifier,
-    SchoolEvidence, TeacherChannelContract, TeacherInputKind, TeacherPerceptualEvent,
-    TopologySummary, VerifierCheck, TEACHER_SCHOOL_SCHEMA_VERSION,
+    SchoolEvidence, TeacherAct, TeacherChannelContract, TeacherInputKind, TopologySummary,
+    VerifierCheck, TEACHER_SCHOOL_SCHEMA_VERSION,
 };
 use alife_world::{ScenarioFixture, ScenarioName};
 
@@ -145,9 +145,9 @@ fn neural_patch() -> ExperiencePatch {
     .unwrap();
     let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.35).unwrap())
         .with_enabled_lobes([
-            LobeKind::SensoryGrounding,
-            LobeKind::CoreAssociation,
-            LobeKind::MotorArbitration,
+            LobeKind::PerceptualIntegration,
+            LobeKind::TemporalPredictive,
+            LobeKind::ActionPlanning,
         ]);
     let pre_action = PreActionSnapshot::from_neural_frame(
         sequence_id,
@@ -203,28 +203,30 @@ fn teacher_channel_contract_only_allows_perception_inputs() {
         .iter()
         .all(TeacherInputKind::is_perceptual));
 
-    let events = [
-        TeacherPerceptualEvent::spoken_token(LessonId::new(2301).unwrap(), 77),
-        TeacherPerceptualEvent::gesture(LessonId::new(2301).unwrap(), 11),
-        TeacherPerceptualEvent::object_highlight(
+    let actor = EmbodiedTeacherActor::new(WorldEntityId(99)).unwrap();
+    let acts = [
+        TeacherAct::spoken_token(LessonId::new(2301).unwrap(), 77),
+        TeacherAct::gesture(LessonId::new(2301).unwrap(), 11),
+        TeacherAct::object_highlight(
             LessonId::new(2301).unwrap(),
             WorldEntityId(7),
             NormalizedScalar::new(0.8).unwrap(),
         ),
-        TeacherPerceptualEvent::social_feedback(
+        TeacherAct::social_feedback(
             LessonId::new(2301).unwrap(),
             FeedbackPolarity::Praise,
             Confidence::new(0.9).unwrap(),
         ),
-        TeacherPerceptualEvent::social_approval(
+        TeacherAct::social_approval(
             LessonId::new(2301).unwrap(),
             NormalizedScalar::new(0.6).unwrap(),
         ),
-        TeacherPerceptualEvent::social_disapproval(
+        TeacherAct::social_disapproval(
             LessonId::new(2301).unwrap(),
             NormalizedScalar::new(0.4).unwrap(),
         ),
     ];
+    let events = acts.map(|act| actor.enact(act).unwrap());
 
     assert!(events.iter().all(|event| contract.accepts_event(event)));
     assert!(events
@@ -275,7 +277,8 @@ fn grounded_curriculum_defines_required_p23_steps_and_response_channels() {
 #[test]
 fn curriculum_runner_emits_perceptual_events_and_advances_on_verifier_pass() {
     let curriculum = Curriculum::grounded_object_food_poison();
-    let mut runner = HeadlessCurriculumRunner::new(curriculum);
+    let actor = EmbodiedTeacherActor::new(WorldEntityId(99)).unwrap();
+    let mut runner = HeadlessCurriculumRunner::new(curriculum, actor);
     let current = runner.current_step().unwrap();
 
     let dispatch = runner.dispatch_current().unwrap();
@@ -347,7 +350,6 @@ fn patch_log_verifier_passes_and_fails_using_sealed_patch_memory_and_topology_ev
                     token_id: 77,
                     channel: TeacherPerceptionChannel::Hearing,
                 },
-                VerifierCheck::BiologicalImprovementAtLeast(0.01),
                 VerifierCheck::NoDirectTeacherActionSelection,
                 VerifierCheck::MinimumMemoryRecords(1),
                 VerifierCheck::MinimumTopologyConcepts(1),

@@ -7,7 +7,7 @@ use crate::{
     HomeostaticSnapshot, ScaffoldContractError, Tick, Validate,
 };
 
-pub const BIOCHEMICAL_GRAPH_SCHEMA_VERSION: u16 = 2;
+pub const BIOCHEMICAL_GRAPH_SCHEMA_VERSION: u16 = 3;
 pub const MAX_ACTIVE_CHEMICAL_SPECIES: usize = 32;
 pub const MAX_ACTIVE_REACTIONS: usize = 128;
 pub const MAX_ACTIVE_EMITTERS: usize = 64;
@@ -427,6 +427,21 @@ impl BiochemicalPhenotype {
         self.reaction_budget
     }
 
+    pub(crate) fn with_reaction_rate(
+        &self,
+        reaction_index: usize,
+        rate: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut value = self.clone();
+        let reaction = value
+            .reactions
+            .get_mut(reaction_index)
+            .ok_or(ScaffoldContractError::InvalidGeneticBounds)?;
+        reaction.rate = rate;
+        value.validate_contract()?;
+        Ok(value)
+    }
+
     pub(crate) fn early_mammal_reference(
         endocrine: EndocrineProfile,
         brain_atp_baseline: f32,
@@ -644,11 +659,14 @@ impl BiochemicalGraphState {
     pub fn new(
         phenotype: &BiochemicalPhenotype,
         tick: Tick,
+        developmental_expression: f32,
     ) -> Result<Self, ScaffoldContractError> {
         phenotype.validate_contract()?;
+        validate_developmental_expression(developmental_expression)?;
         let mut concentrations = [0.0; MAX_ACTIVE_CHEMICAL_SPECIES];
         for (index, species) in phenotype.species.iter().enumerate() {
-            concentrations[index] = species.baseline;
+            concentrations[index] =
+                species.minimum + (species.baseline - species.minimum) * developmental_expression;
         }
         Ok(Self {
             schema_version: BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
@@ -680,8 +698,10 @@ impl BiochemicalGraphState {
         event: BodyEventDelta,
         neural: Option<&NeuralEmissionFrame>,
         phenotype: &BiochemicalPhenotype,
+        developmental_expression: f32,
     ) -> Result<(Self, BiochemicalWorkReceipt), ScaffoldContractError> {
         self.validate_against(phenotype)?;
+        validate_developmental_expression(developmental_expression)?;
         Tick::validate_monotonic(self.tick, next_tick)?;
         if let Some(frame) = neural {
             frame.validate_contract()?;
@@ -693,8 +713,10 @@ impl BiochemicalGraphState {
         let mut next = *self;
         next.tick = next_tick;
         for (index, species) in phenotype.species.iter().enumerate() {
-            next.concentrations[index] = (species.baseline
-                + (self.concentrations[index] - species.baseline)
+            let expressed_baseline =
+                species.minimum + (species.baseline - species.minimum) * developmental_expression;
+            next.concentrations[index] = (expressed_baseline
+                + (self.concentrations[index] - expressed_baseline)
                     * species.decay_retention.powf(elapsed))
             .clamp(species.minimum, species.maximum);
         }
@@ -720,7 +742,7 @@ impl BiochemicalGraphState {
                     phenotype,
                     &mut next,
                     emitter.target,
-                    response * emitter.gain,
+                    response * emitter.gain * developmental_expression,
                 )?;
             }
         }
@@ -737,7 +759,7 @@ impl BiochemicalGraphState {
                     phenotype,
                     &mut next,
                     neuroemitter.target,
-                    response * neuroemitter.gain,
+                    response * neuroemitter.gain * developmental_expression,
                 )?;
             }
             frame.emissions.len() as u32
@@ -745,7 +767,12 @@ impl BiochemicalGraphState {
             0
         };
         for reaction in &phenotype.reactions {
-            apply_reaction(phenotype, &mut next, reaction, elapsed.max(1.0))?;
+            apply_reaction(
+                phenotype,
+                &mut next,
+                reaction,
+                elapsed.max(1.0) * developmental_expression,
+            )?;
         }
         next.validate_against(phenotype)?;
         Ok((
@@ -848,6 +875,13 @@ impl BiochemicalGraphState {
         }
         Ok(())
     }
+}
+
+fn validate_developmental_expression(value: f32) -> Result<(), ScaffoldContractError> {
+    if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+        return Err(ScaffoldContractError::ScalarOutOfRange);
+    }
+    Ok(())
 }
 
 impl Validate for BiochemicalGraphState {

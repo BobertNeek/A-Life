@@ -242,9 +242,9 @@ gpu_record!(GpuBrainSlotExtensionRecord {
     reserved0: u32,
     reserved1: u32
 });
-/// Slot-local bounded dendritic descriptor. The descriptor and its inputs live
-/// in the immutable target-major plan heap so a normal recurrent dispatch can
-/// evaluate them without a CPU neural shadow.
+// Slot-local bounded dendritic descriptor. The descriptor and its inputs live
+// in the immutable target-major plan heap so a normal recurrent dispatch can
+// evaluate them without a CPU neural shadow.
 gpu_record!(GpuDendriticBranchRecord {
     target: u32,
     threshold_bits: u32,
@@ -289,10 +289,10 @@ pub struct GpuPlasticityReceptorRecord {
     pub learning_rate: f32,
     pub sleep_replay_rate: f32,
     pub normalization_rate: f32,
-    pub modulator_sign: f32,
+    pub receptor_weights: [f32; 8],
     pub fast_min: f32,
     pub fast_max: f32,
-    pub reserved: f32,
+    pub reserved: [f32; 2],
 }
 
 #[repr(C, align(16))]
@@ -321,7 +321,10 @@ pub struct GpuReplayEventRecord {
     pub homeostatic_improvement: f32,
     pub frustration: f32,
     pub novelty: f32,
-    pub modulator_value: f32,
+    pub social_consequence: f32,
+    pub biochemical_appetitive: f32,
+    pub biochemical_aversive: f32,
+    pub reserved: [u32; 2],
 }
 
 impl GpuReplayEventRecord {

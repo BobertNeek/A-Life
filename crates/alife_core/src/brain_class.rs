@@ -145,7 +145,7 @@ impl BrainClassSpec {
 
         let motor_region = self
             .lobe_layout
-            .region(LobeKind::MotorArbitration)
+            .region(LobeKind::ActionPlanning)
             .ok_or(ScaffoldContractError::LobeRangeCoverage)?;
         if !motor_region.enabled
             || self.motor_logical_nodes != motor_region.len
@@ -181,7 +181,7 @@ impl BrainClassSpec {
         lobe_layout: LobeLayout,
     ) -> Result<Self, ScaffoldContractError> {
         let motor_logical_nodes = lobe_layout
-            .region(LobeKind::MotorArbitration)
+            .region(LobeKind::ActionPlanning)
             .ok_or(ScaffoldContractError::LobeRangeCoverage)?
             .len;
         let routing_matrix = RoutingMatrix::canonical_for_layout(&lobe_layout);
@@ -213,42 +213,42 @@ impl BrainComputeBudget {
                 8_192,
                 64,
                 vec![
-                    LobeKind::MetabolicDrive,
-                    LobeKind::SensoryGrounding,
-                    LobeKind::MotorArbitration,
+                    LobeKind::InteroceptiveMotivational,
+                    LobeKind::PerceptualIntegration,
+                    LobeKind::ActionPlanning,
                 ],
             ),
             BrainScaleTier::Small1024 => (
                 16_384,
                 128,
                 vec![
-                    LobeKind::MetabolicDrive,
-                    LobeKind::SensoryGrounding,
-                    LobeKind::MotorArbitration,
-                    LobeKind::CoreAssociation,
+                    LobeKind::InteroceptiveMotivational,
+                    LobeKind::PerceptualIntegration,
+                    LobeKind::ActionPlanning,
+                    LobeKind::TemporalPredictive,
                 ],
             ),
             BrainScaleTier::Standard2048 => (
                 32_768,
                 192,
                 vec![
-                    LobeKind::MetabolicDrive,
-                    LobeKind::SensoryGrounding,
-                    LobeKind::MotorArbitration,
-                    LobeKind::CoreAssociation,
-                    LobeKind::EpisodicMemory,
+                    LobeKind::InteroceptiveMotivational,
+                    LobeKind::PerceptualIntegration,
+                    LobeKind::ActionPlanning,
+                    LobeKind::TemporalPredictive,
+                    LobeKind::MemoryInterface,
                 ],
             ),
             BrainScaleTier::Large4096 => (
                 65_536,
                 384,
                 vec![
-                    LobeKind::MetabolicDrive,
-                    LobeKind::SensoryGrounding,
-                    LobeKind::MotorArbitration,
-                    LobeKind::CoreAssociation,
-                    LobeKind::EpisodicMemory,
-                    LobeKind::WorkingMemory,
+                    LobeKind::InteroceptiveMotivational,
+                    LobeKind::PerceptualIntegration,
+                    LobeKind::ActionPlanning,
+                    LobeKind::TemporalPredictive,
+                    LobeKind::MemoryInterface,
+                    LobeKind::WorkingContextExecutive,
                 ],
             ),
             BrainScaleTier::Cognitive32768
@@ -258,12 +258,12 @@ impl BrainComputeBudget {
                 neuron_count.saturating_mul(16),
                 (neuron_count / 32).saturating_mul(3).max(384),
                 vec![
-                    LobeKind::MetabolicDrive,
-                    LobeKind::SensoryGrounding,
-                    LobeKind::MotorArbitration,
-                    LobeKind::CoreAssociation,
-                    LobeKind::EpisodicMemory,
-                    LobeKind::WorkingMemory,
+                    LobeKind::InteroceptiveMotivational,
+                    LobeKind::PerceptualIntegration,
+                    LobeKind::ActionPlanning,
+                    LobeKind::TemporalPredictive,
+                    LobeKind::MemoryInterface,
+                    LobeKind::WorkingContextExecutive,
                 ],
             ),
             BrainScaleTier::ResearchCustom => {
@@ -284,10 +284,10 @@ impl BrainComputeBudget {
             max_active_synapses: neuron_count.saturating_mul(16),
             max_active_tiles: (neuron_count / 16).max(1),
             essential_lobes: vec![
-                LobeKind::MetabolicDrive,
-                LobeKind::SensoryGrounding,
-                LobeKind::MotorArbitration,
-                LobeKind::HomeostaticRegulation,
+                LobeKind::InteroceptiveMotivational,
+                LobeKind::PerceptualIntegration,
+                LobeKind::ActionPlanning,
+                LobeKind::FlexibleReserve,
             ],
             max_replay_events: replay_events_for_neuron_count(neuron_count),
         }

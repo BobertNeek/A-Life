@@ -207,7 +207,11 @@ fn closed_loop_wgsl_parses_validates_and_exposes_only_the_required_entries() {
         ),
     ] {
         let module = validated_module(source);
-        assert_eq!(module.entry_points.len(), 1);
+        assert_eq!(
+            module.entry_points.len(),
+            1,
+            "unexpected entries for {entry}"
+        );
         let point = &module.entry_points[0];
         assert_eq!(point.name, entry);
         assert_eq!(point.stage, ShaderStage::Compute);

@@ -113,11 +113,15 @@ fn slot_extension_has_stable_offsets_for_learning_sleep_and_memory() {
     assert_eq!(std::mem::align_of::<GpuSynapseLearningMetadata>(), 16);
     assert_eq!(std::mem::size_of::<GpuDecoderEligibilityMetadata>(), 32);
     assert_eq!(std::mem::align_of::<GpuDecoderEligibilityMetadata>(), 16);
-    assert_eq!(std::mem::size_of::<GpuPlasticityReceptorRecord>(), 32);
+    assert_eq!(std::mem::size_of::<GpuPlasticityReceptorRecord>(), 64);
     assert_eq!(std::mem::align_of::<GpuPlasticityReceptorRecord>(), 16);
     assert_eq!(
         std::mem::offset_of!(GpuPlasticityReceptorRecord, fast_min),
-        20
+        48
+    );
+    assert_eq!(
+        std::mem::offset_of!(GpuPlasticityReceptorRecord, receptor_weights),
+        16
     );
     assert_eq!(std::mem::size_of::<GpuSleepParameterRecord>(), 32);
     assert_eq!(std::mem::align_of::<GpuSleepParameterRecord>(), 16);
@@ -125,7 +129,7 @@ fn slot_extension_has_stable_offsets_for_learning_sleep_and_memory() {
         std::mem::offset_of!(GpuSleepParameterRecord, eligibility_reset_policy),
         16
     );
-    assert_eq!(std::mem::size_of::<GpuReplayEventRecord>(), 96);
+    assert_eq!(std::mem::size_of::<GpuReplayEventRecord>(), 112);
     assert_eq!(std::mem::align_of::<GpuReplayEventRecord>(), 16);
     assert_eq!(std::mem::size_of::<GpuSlotLearningStateRecord>(), 96);
     assert_eq!(std::mem::align_of::<GpuSlotLearningStateRecord>(), 16);

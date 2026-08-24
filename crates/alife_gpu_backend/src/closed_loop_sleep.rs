@@ -17,19 +17,19 @@ use alife_core::{
 };
 use bytemuck::{Pod, Zeroable};
 
+use crate::closed_loop_buffers::GpuFixedSlotUpload;
 use crate::{
     map_gpu_contract_error, pack_replay_eligibility_sample, unpack_replay_eligibility_sample,
     GpuBrainHandle, GpuBrainSlot, GpuClosedLoopBackend, GpuConsolidationRequestRecord,
     GpuFixedSlotRanges, GpuReplayEventRecord, GpuReplaySynapseSpanRecord, GpuSleepHeader,
     GpuSlotLearningStateRecord,
 };
-use crate::closed_loop_buffers::GpuFixedSlotUpload;
 
 pub type GpuSleepJobId = ConsolidationJobId;
 
 const SLEEP_HEADER_WORDS: usize = 20;
 const CONSOLIDATION_REQUEST_WORDS: usize = 44;
-const REPLAY_EVENT_WORDS: usize = 24;
+const REPLAY_EVENT_WORDS: usize = 28;
 const REPLAY_SPAN_WORDS: usize = 4;
 const SLEEP_COMPLETION_WORDS: usize = 16;
 const SLEEP_STATUS_STAGED: u32 = 1;
@@ -1614,6 +1614,8 @@ fn finite_f32_words(words: &[u32]) -> Result<Vec<f32>, ScaffoldContractError> {
 }
 
 fn encode_replay_event(event: SleepReplayEvent) -> GpuReplayEventRecord {
+    let frame = event.modulator.frame();
+    let lanes = frame.lanes();
     GpuReplayEventRecord {
         sequence_id: split_pair(event.sequence_id.raw()),
         originating_tick: split_pair(event.originating_tick.raw()),
@@ -1626,23 +1628,29 @@ fn encode_replay_event(event: SleepReplayEvent) -> GpuReplayEventRecord {
         homeostatic_improvement: event.modulator.homeostatic_improvement(),
         frustration: event.modulator.frustration(),
         novelty: event.modulator.novelty(),
-        modulator_value: event.modulator.value(),
+        social_consequence: lanes[5],
+        biochemical_appetitive: lanes[6],
+        biochemical_aversive: lanes[7],
+        reserved: [0; 2],
     }
 }
 
 fn decode_replay_event(
     row: GpuReplayEventRecord,
 ) -> Result<SleepReplayEvent, ScaffoldContractError> {
-    let modulator = NeuromodulatorSample::from_components(
+    if row.reserved != [0; 2] {
+        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+    }
+    let modulator = NeuromodulatorSample::from_frame(alife_core::NeuromodulatoryFrame::try_new([
         row.prediction_residual,
         row.pain,
         row.homeostatic_improvement,
         row.frustration,
         row.novelty,
-    )?;
-    if modulator.value().to_bits() != row.modulator_value.to_bits() {
-        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
-    }
+        row.social_consequence,
+        row.biochemical_appetitive,
+        row.biochemical_aversive,
+    ])?);
     Ok(SleepReplayEvent {
         sequence_id: ExperienceSequenceId(join_pair(row.sequence_id)),
         originating_tick: Tick::new(join_pair(row.originating_tick)),

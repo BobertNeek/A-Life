@@ -1,5 +1,6 @@
 
 const ACTIVE_DISPATCH_ROW_WORDS:u32 = 332u;
+const MEMORY_HEADER_ROW_OFFSET:u32 = 292u;
 override microstep_index:u32 = 0u;
 
 fn is_finite(value:f32) -> bool {
@@ -103,8 +104,17 @@ fn recurrent_microstep(@builtin(global_invocation_id) gid:vec3<u32>) {
   // brain.neuron_homeostasis_offset+target*2u, and
   // brain.encoded_input_offset+target. WGSL reserves `target`, so executable
   // code below names the same target-major index `target_index`.
-  let header = load_perception_header(gid.y * ACTIVE_DISPATCH_ROW_WORDS);
+  let row_base = gid.y * ACTIVE_DISPATCH_ROW_WORDS;
+  let header = load_perception_header(row_base);
   if (!activity_contract_prevalidated(header)) { return; }
+  let memory = load_memory_context_header(row_base + MEMORY_HEADER_ROW_OFFSET);
+  if (memory.neural_receptor_effects_offset == 0u) { return; }
+  let receptors = load_neural_receptor_effects(memory.neural_receptor_effects_offset);
+  if (receptors.schema_version != 1u
+      || receptors.tick_lo != header.tick_lo
+      || receptors.tick_hi != header.tick_hi
+      || !is_finite(receptors.projection_gain)
+      || !is_finite(receptors.local_threshold_shift)) { return; }
   let route_mask_base = gid.y * ACTIVE_DISPATCH_ROW_WORDS + ACTIVITY_HEADER_OFFSET + 8u;
   let brain = brain_slots[header.brain_slot_index];
   let extension = load_slot_extension(brain);
@@ -151,7 +161,10 @@ fn recurrent_microstep(@builtin(global_invocation_id) gid:vec3<u32>) {
   let leak = bitcast<f32>(dynamics.leak_bits);
   let homeostatic_gain = bitcast<f32>(dynamics.homeostatic_gain_bits);
   let dendritic_sum = apply_dendritic_branches(brain, extension, source_base, target_index);
-  let pre_activation = bias + encoded + recurrent_sum + dendritic_sum - homeostatic_gain * metabolic_load;
+  let pre_activation = bias + encoded
+    + receptors.projection_gain * (recurrent_sum + dendritic_sum)
+    - homeostatic_gain * metabolic_load
+    - receptors.local_threshold_shift;
   let prior = load_state_f32(source_base + target_index);
   var output = (1.0 - leak) * prior + leak * apply_activation(pre_activation, dynamics.activation_raw);
   var activity_ema = bitcast<f32>(dynamics.activity_ema_decay_bits) * old_activity_ema

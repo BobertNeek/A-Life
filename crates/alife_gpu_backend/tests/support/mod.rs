@@ -288,6 +288,34 @@ pub struct GpuTestBrain {
 }
 
 #[cfg(feature = "gpu-tests")]
+pub fn test_receptor_frame(patch: &alife_core::ExperiencePatch) -> alife_core::NeuralReceptorFrame {
+    alife_core::NeuralReceptorFrame {
+        schema_version: alife_core::BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
+        source_chemistry_version: alife_core::BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
+        source_tick: patch.pre_action().tick,
+        activations: Vec::new(),
+    }
+}
+
+#[cfg(feature = "gpu-tests")]
+pub fn test_receptor_effects(tick: alife_core::Tick) -> alife_core::NeuralReceptorEffects {
+    alife_core::NeuralReceptorEffects {
+        source_tick: tick,
+        source_chemistry_version: alife_core::BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
+        interoceptive_gain: 1.0,
+        regional_excitability: 1.0,
+        projection_gain: 1.0,
+        local_threshold_shift: 0.0,
+        attention_gain: 1.0,
+        plasticity_appetitive: 0.0,
+        plasticity_aversive: 0.0,
+        structural_growth_gate: 0.5,
+        sleep_gate: 0.5,
+        consolidation_gate: 0.5,
+    }
+}
+
+#[cfg(feature = "gpu-tests")]
 impl GpuTestBrain {
     pub fn from_phenotype(
         organism_id: OrganismId,
@@ -315,7 +343,9 @@ impl GpuTestBrain {
         &mut self,
         patch: &alife_core::ExperiencePatch,
     ) -> Result<alife_gpu_backend::GpuLearningReceipt, alife_core::ScaffoldContractError> {
-        self.backend.apply_sealed_outcome(self.handle, patch)
+        let receptors = test_receptor_frame(patch);
+        self.backend
+            .apply_sealed_outcome(self.handle, patch, &receptors)
     }
 
     pub fn submit_and_complete_sleep_consolidation(
@@ -1043,6 +1073,8 @@ mod hardware {
                 perception.frame_binding,
                 &self.slots[0],
             )
+            .unwrap()
+            .bind_neural_receptor_effects(super::test_receptor_effects(frame.tick()))
             .unwrap();
             let decision = activity_decision_for(
                 &self.phenotypes[0],

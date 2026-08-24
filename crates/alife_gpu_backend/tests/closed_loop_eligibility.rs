@@ -149,16 +149,16 @@ fn eligibility_shader_parses_and_exposes_the_transaction_entries() {
         ),
         (
             "GpuPlasticityReceptorRecord",
-            32,
+            64,
             vec![
                 ("eligibility_decay", 0),
                 ("learning_rate", 4),
                 ("sleep_replay_rate", 8),
                 ("normalization_rate", 12),
-                ("modulator_sign", 16),
-                ("fast_min", 20),
-                ("fast_max", 24),
-                ("reserved", 28),
+                ("receptor_weights", 16),
+                ("fast_min", 48),
+                ("fast_max", 52),
+                ("reserved", 56),
             ],
         ),
         (

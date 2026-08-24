@@ -89,12 +89,12 @@ fn sleep_transaction_valid(
     && state_span_within(extension.recurrent_eligibility_bank_1_offset,brain.recurrent_synapse_count)
     && state_span_within(brain.decoder_eligibility_offset,brain.synapse_count-brain.recurrent_synapse_count)
     && state_span_within(extension.decoder_eligibility_bank_1_offset,brain.synapse_count-brain.recurrent_synapse_count)
-    && state_span_within(learning.replay_event_rows_offset,learning.replay_event_capacity*24u)
+    && state_span_within(learning.replay_event_rows_offset,learning.replay_event_capacity*28u)
     && state_span_within(learning.replay_sample_offset,learning.replay_sample_capacity)
     && state_span_within(learning.replay_span_offset,learning.replay_span_count*4u)
     && state_span_within(extension.pending_eligibility_offset,SLEEP_PENDING_ELIGIBILITY_WORDS)
     && consolidate_frame_span_within(header.request_offset,44u)
-    && consolidate_frame_span_within(header.replay_event_offset,header.replay_event_count*24u)
+    && consolidate_frame_span_within(header.replay_event_offset,header.replay_event_count*28u)
     && consolidate_frame_span_within(header.replay_span_offset,header.replay_span_count*4u)
     && consolidate_frame_span_within(header.replay_sample_offset,header.replay_sample_count);
 }
@@ -241,7 +241,7 @@ fn reset_sleep_mutable_state(@builtin(global_invocation_id) gid:vec3<u32>) {
     store_state_u32(brain.decoder_eligibility_offset+index,0u);
     store_state_u32(extension.decoder_eligibility_bank_1_offset+index,0u);
   }
-  if (index < learning.replay_event_capacity*24u) {
+  if (index < learning.replay_event_capacity*28u) {
     store_state_u32(learning.replay_event_rows_offset+index,0u);
   }
   if (index < learning.replay_sample_capacity) {

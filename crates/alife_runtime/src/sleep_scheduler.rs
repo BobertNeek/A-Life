@@ -8,8 +8,9 @@ use alife_core::{
     SleepTrigger, Tick, Validate,
 };
 use alife_world::{OrganismSleepInput, WorldOrganismRecord};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SleepWorkDue(u8);
 
 impl SleepWorkDue {
@@ -40,7 +41,7 @@ impl SleepWorkDue {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SleepSubsystemCadence {
     pub replay_ticks: u64,
     pub fast_to_lifetime_ticks: u64,
@@ -122,7 +123,7 @@ pub struct GpuSleepScheduleEvent {
     pub phase_receipt: SleepPhaseReceipt,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GpuSleepScheduler {
     controller: SleepController,
     cadence: SleepSubsystemCadence,
@@ -275,10 +276,8 @@ impl GpuSleepScheduler {
         let work_units = if due_work.is_empty() {
             0
         } else {
-            let work_homeostasis = Self::homeostasis_for_due_work(
-                &input.homeostasis,
-                self.controller.config(),
-            );
+            let work_homeostasis =
+                Self::homeostasis_for_due_work(&input.homeostasis, self.controller.config());
             let receipt = driver
                 .run_bounded_sleep_transaction(
                     input.organism_id,
@@ -318,10 +317,7 @@ impl GpuSleepScheduler {
         config: SleepConsolidationConfig,
     ) -> HomeostaticSnapshot {
         let mut effective = *homeostasis;
-        effective.drives.fatigue = effective
-            .drives
-            .fatigue
-            .max(config.fatigue_threshold.raw());
+        effective.drives.fatigue = effective.drives.fatigue.max(config.fatigue_threshold.raw());
         effective.hormones.sleep_pressure = effective
             .hormones
             .sleep_pressure

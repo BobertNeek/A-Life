@@ -31,7 +31,7 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
       || brain.slot != header.slot
       || brain.slot_generation != header.slot_generation
       || header.candidate_count == 0u
-      || header.reserved != 0u
+      || header.neural_receptor_effects_offset == 0u
       || gid.x >= header.candidate_count) { return; }
   let extension = load_slot_extension(brain);
   if (extension.memory_plan_offset == 0xffffffffu || extension.memory_weight_map_offset == 0xffffffffu) { return; }

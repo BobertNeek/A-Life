@@ -13,10 +13,10 @@ pub(super) fn compile_layout(
     neurons: u32,
 ) -> Result<LobeLayout, ScaffoldContractError> {
     const ESSENTIAL: [LobeKind; 4] = [
-        LobeKind::SensoryGrounding,
-        LobeKind::MetabolicDrive,
-        LobeKind::MotorArbitration,
-        LobeKind::HomeostaticRegulation,
+        LobeKind::PerceptualIntegration,
+        LobeKind::InteroceptiveMotivational,
+        LobeKind::ActionPlanning,
+        LobeKind::FlexibleReserve,
     ];
     if matches!(genome.lobe_ratios, LobeRatioPlan::ClassDefault)
         && development.enabled_lobes.is_empty()

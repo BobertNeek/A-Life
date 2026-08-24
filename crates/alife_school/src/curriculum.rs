@@ -6,7 +6,7 @@ use alife_core::{
 };
 
 use crate::{
-    FeedbackPolarity, LessonId, TeacherPerceptualEvent, TeacherRole, VerifierCheck,
+    FeedbackPolarity, LessonId, TeacherAct, TeacherRole, VerifierCheck,
     TEACHER_SCHOOL_SCHEMA_VERSION,
 };
 
@@ -36,10 +36,10 @@ pub struct CurriculumStep {
     pub lesson_id: LessonId,
     pub role: TeacherRole,
     pub kind: CurriculumStepKind,
-    pub prompt_cues: Vec<TeacherPerceptualEvent>,
+    pub prompt_cues: Vec<TeacherAct>,
     pub expected_observations: Vec<ExpectedObservation>,
     pub verifier_checks: Vec<VerifierCheck>,
-    pub feedback_events: Vec<TeacherPerceptualEvent>,
+    pub feedback_events: Vec<TeacherAct>,
     pub response_channels: Vec<TeacherLessonResponseChannel>,
 }
 
@@ -69,12 +69,8 @@ impl Curriculum {
                     ids[0],
                     CurriculumStepKind::NameObject,
                     vec![
-                        TeacherPerceptualEvent::spoken_token(ids[0], 77),
-                        TeacherPerceptualEvent::object_highlight(
-                            ids[0],
-                            object,
-                            NormalizedScalar(0.85),
-                        ),
+                        TeacherAct::spoken_token(ids[0], 77),
+                        TeacherAct::object_highlight(ids[0], object, NormalizedScalar(0.85)),
                     ],
                     vec![
                         ExpectedObservation::HeardToken(77),
@@ -87,7 +83,7 @@ impl Curriculum {
                         },
                         VerifierCheck::NoHiddenSemanticContext,
                     ],
-                    vec![TeacherPerceptualEvent::social_feedback(
+                    vec![TeacherAct::social_feedback(
                         ids[0],
                         FeedbackPolarity::Praise,
                         Confidence(0.8),
@@ -98,35 +94,24 @@ impl Curriculum {
                     ids[1],
                     CurriculumStepKind::OfferFood,
                     vec![
-                        TeacherPerceptualEvent::spoken_token(ids[1], 41),
-                        TeacherPerceptualEvent::object_highlight(
-                            ids[1],
-                            food,
-                            NormalizedScalar(0.9),
-                        ),
+                        TeacherAct::spoken_token(ids[1], 41),
+                        TeacherAct::object_highlight(ids[1], food, NormalizedScalar(0.9)),
                     ],
                     vec![ExpectedObservation::BiologicalImprovement],
                     vec![VerifierCheck::BiologicalImprovementAtLeast(0.01)],
-                    vec![TeacherPerceptualEvent::social_approval(
-                        ids[1],
-                        NormalizedScalar(0.75),
-                    )],
+                    vec![TeacherAct::social_approval(ids[1], NormalizedScalar(0.75))],
                     vec![TeacherLessonResponseChannel::Demonstration],
                 ),
                 step(
                     ids[2],
                     CurriculumStepKind::DiscouragePoison,
                     vec![
-                        TeacherPerceptualEvent::spoken_token(ids[2], 66),
-                        TeacherPerceptualEvent::object_highlight(
-                            ids[2],
-                            poison,
-                            NormalizedScalar(0.9),
-                        ),
+                        TeacherAct::spoken_token(ids[2], 66),
+                        TeacherAct::object_highlight(ids[2], poison, NormalizedScalar(0.9)),
                     ],
                     vec![ExpectedObservation::NegativeFeedback],
                     vec![VerifierCheck::NoDirectTeacherActionSelection],
-                    vec![TeacherPerceptualEvent::social_disapproval(
+                    vec![TeacherAct::social_disapproval(
                         ids[2],
                         NormalizedScalar(0.7),
                     )],
@@ -136,12 +121,12 @@ impl Curriculum {
                     ids[3],
                     CurriculumStepKind::RequestApproach,
                     vec![
-                        TeacherPerceptualEvent::spoken_token(ids[3], 101),
-                        TeacherPerceptualEvent::gesture(ids[3], 1),
+                        TeacherAct::spoken_token(ids[3], 101),
+                        TeacherAct::gesture(ids[3], 1),
                     ],
                     vec![ExpectedObservation::ApproachRequested],
                     vec![VerifierCheck::SelectedByArbitration],
-                    vec![TeacherPerceptualEvent::social_feedback(
+                    vec![TeacherAct::social_feedback(
                         ids[3],
                         FeedbackPolarity::Praise,
                         Confidence(0.7),
@@ -152,12 +137,12 @@ impl Curriculum {
                     ids[4],
                     CurriculumStepKind::RequestGrab,
                     vec![
-                        TeacherPerceptualEvent::spoken_token(ids[4], 211),
-                        TeacherPerceptualEvent::gesture(ids[4], 2),
+                        TeacherAct::spoken_token(ids[4], 211),
+                        TeacherAct::gesture(ids[4], 2),
                     ],
                     vec![ExpectedObservation::GrabRequested],
                     vec![VerifierCheck::SelectedByArbitration],
-                    vec![TeacherPerceptualEvent::social_feedback(
+                    vec![TeacherAct::social_feedback(
                         ids[4],
                         FeedbackPolarity::Praise,
                         Confidence(0.7),
@@ -168,12 +153,12 @@ impl Curriculum {
                     ids[5],
                     CurriculumStepKind::RequestVocalize,
                     vec![
-                        TeacherPerceptualEvent::spoken_token(ids[5], 400),
-                        TeacherPerceptualEvent::gesture(ids[5], 3),
+                        TeacherAct::spoken_token(ids[5], 400),
+                        TeacherAct::gesture(ids[5], 3),
                     ],
                     vec![ExpectedObservation::VocalizationRequested],
                     vec![VerifierCheck::SelectedByArbitration],
-                    vec![TeacherPerceptualEvent::social_feedback(
+                    vec![TeacherAct::social_feedback(
                         ids[5],
                         FeedbackPolarity::Praise,
                         Confidence(0.7),
@@ -199,10 +184,10 @@ impl Curriculum {
 fn step(
     lesson_id: LessonId,
     kind: CurriculumStepKind,
-    prompt_cues: Vec<TeacherPerceptualEvent>,
+    prompt_cues: Vec<TeacherAct>,
     expected_observations: Vec<ExpectedObservation>,
     verifier_checks: Vec<VerifierCheck>,
-    feedback_events: Vec<TeacherPerceptualEvent>,
+    feedback_events: Vec<TeacherAct>,
     response_channels: Vec<TeacherLessonResponseChannel>,
 ) -> CurriculumStep {
     CurriculumStep {

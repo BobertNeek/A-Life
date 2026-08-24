@@ -10,7 +10,7 @@ use bytemuck::{Pod, Zeroable};
 pub const GPU_LEARNING_HEADER_WORDS: usize = 20;
 pub const GPU_PENDING_ELIGIBILITY_WORDS: usize = 36;
 pub const GPU_PENDING_ELIGIBILITY_BYTES: usize = GPU_PENDING_ELIGIBILITY_WORDS * 4;
-pub const GPU_OUTCOME_CREDIT_WORDS: usize = 40;
+pub const GPU_OUTCOME_CREDIT_WORDS: usize = 44;
 pub const GPU_OUTCOME_CREDIT_BYTES: usize = GPU_OUTCOME_CREDIT_WORDS * 4;
 pub const GPU_FAST_PLASTICITY_COMMIT_WORDS: usize = 16;
 pub const GPU_FAST_PLASTICITY_COMMIT_BYTES: usize = GPU_FAST_PLASTICITY_COMMIT_WORDS * 4;
@@ -54,7 +54,10 @@ pub struct GpuOutcomeCreditRecord {
     pub homeostatic_improvement: f32,
     pub frustration: f32,
     pub novelty: f32,
-    pub modulator_value: f32,
+    pub social_consequence: f32,
+    pub biochemical_appetitive: f32,
+    pub biochemical_aversive: f32,
+    pub reserved: [u32; 2],
 }
 
 impl TryFrom<&OutcomeCreditPacket> for GpuOutcomeCreditRecord {
@@ -67,14 +70,7 @@ impl TryFrom<&OutcomeCreditPacket> for GpuOutcomeCreditRecord {
         packet.selected_action().validate()?;
         let family = CandidateActionFamily::try_from_raw(packet.selected_family().raw())?;
         let modulator = packet.modulator();
-        let components = [
-            modulator.prediction_residual(),
-            modulator.pain(),
-            modulator.homeostatic_improvement(),
-            modulator.frustration(),
-            modulator.novelty(),
-            modulator.value(),
-        ];
+        let components = *modulator.frame().lanes();
         if components.iter().any(|value| !value.is_finite()) {
             return Err(ScaffoldContractError::NonFiniteFloat);
         }
@@ -109,7 +105,10 @@ impl TryFrom<&OutcomeCreditPacket> for GpuOutcomeCreditRecord {
             homeostatic_improvement: components[2],
             frustration: components[3],
             novelty: components[4],
-            modulator_value: components[5],
+            social_consequence: components[5],
+            biochemical_appetitive: components[6],
+            biochemical_aversive: components[7],
+            reserved: [0; 2],
         })
     }
 }

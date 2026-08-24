@@ -41,6 +41,12 @@ const MEMORY_MAX_FEATURE_LEN: usize = 64;
 const MEMORY_MAX_MATCH_COUNT: usize = 4;
 const MEMORY_MIN_MATCH_SCORE: f32 = 0.72;
 const ACCEPTANCE_TOLERANCE: f32 = 1.0e-5;
+
+fn require_canonical_evidence_chemistry<T>() -> Result<T, GpuEvidenceError> {
+    Err(GpuEvidenceError::Contract(
+        "memory-grounding learning evidence requires canonical organism chemistry",
+    ))
+}
 const CYAN_POSITION: Vec3f = Vec3f {
     x: 0.0,
     y: -0.35,
@@ -451,6 +457,7 @@ fn run_behavior_probe(
     let handle = backend.insert_brain(EVIDENCE_ORGANISM, phenotype.clone())?;
     let training_upload =
         backend.prepare_memory_context_upload(handle, &training_frame, &training_recall)?;
+    require_canonical_evidence_chemistry::<()>()?;
     let training_input =
         GpuClosedLoopMemoryTickInput::try_new(handle, &training_frame, &training_upload)?;
     let training_batch = GpuClosedLoopMemoryBatchInput::try_new(vec![training_input])?;
@@ -478,7 +485,13 @@ fn run_behavior_probe(
             "controlled cyan ingest did not produce a measured painful consumption",
         ));
     }
-    let learning = backend.apply_sealed_outcome(handle, &training_patch)?;
+    let pending = backend
+        .pending_eligibility(handle)?
+        .ok_or(GpuEvidenceError::Contract(
+            "memory-grounding evidence is missing pending eligibility",
+        ))?;
+    backend.discard_pending_eligibility(handle, pending.identity())?;
+    let learning: alife_gpu_backend::GpuLearningReceipt = require_canonical_evidence_chemistry()?;
     require_hardware_generation(learning.hardware_receipt_generation, &hardware)?;
     if learning.fast_weights_changed == 0 {
         return Err(GpuEvidenceError::Contract(
@@ -617,6 +630,7 @@ fn run_probe_branch(
     )?;
     let handle = restored.handle;
     let upload = backend.prepare_memory_context_upload(handle, frame, recall)?;
+    require_canonical_evidence_chemistry::<()>()?;
     let input = GpuClosedLoopMemoryTickInput::try_new(handle, frame, &upload)?;
     let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![input])?;
     let tick = backend.tick_memory_batch(&batch)?.remove(0);

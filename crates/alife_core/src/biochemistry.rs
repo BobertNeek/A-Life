@@ -48,6 +48,7 @@ impl Validate for BiochemistryCadence {
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct BodyState {
+    organs: [OrganPhysiology; ORGAN_KIND_COUNT],
     pub energy: f32,
     pub health: f32,
     pub injury: f32,
@@ -55,10 +56,86 @@ pub struct BodyState {
     pub sleeping: bool,
 }
 
+pub const ORGAN_KIND_COUNT: usize = 6;
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum OrganKind {
+    MetabolicReserve,
+    Circulatory,
+    NeuralSupport,
+    Thermoregulatory,
+    Locomotor,
+    Digestive,
+}
+
+impl OrganKind {
+    pub const ALL: [Self; ORGAN_KIND_COUNT] = [
+        Self::MetabolicReserve,
+        Self::Circulatory,
+        Self::NeuralSupport,
+        Self::Thermoregulatory,
+        Self::Locomotor,
+        Self::Digestive,
+    ];
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct OrganPhysiology {
+    pub kind: OrganKind,
+    pub energy: f32,
+    pub integrity: f32,
+    pub damage: f32,
+    pub temperature_stress: f32,
+    pub repair_capacity: f32,
+    pub cadence_ticks: u32,
+    pub energetic_cost: f32,
+    pub exposed_locus: u16,
+}
+
+impl Validate for OrganPhysiology {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        validate_unit_values(&[
+            self.energy,
+            self.integrity,
+            self.damage,
+            self.temperature_stress,
+            self.repair_capacity,
+            self.energetic_cost,
+        ])?;
+        if self.cadence_ticks == 0 || self.exposed_locus == 0 {
+            return Err(ScaffoldContractError::InvalidGeneticBounds);
+        }
+        Ok(())
+    }
+}
+
 impl BodyState {
     fn baseline(phenotype: &CreaturePhenotype) -> Self {
+        let energy = clamp01(0.50 + 0.50 * phenotype.body.metabolic_efficiency);
+        let organs = OrganKind::ALL.map(|kind| OrganPhysiology {
+            kind,
+            energy,
+            integrity: 1.0,
+            damage: 0.0,
+            temperature_stress: 0.0,
+            repair_capacity: clamp01(0.35 + 0.55 * phenotype.body.injury_resistance),
+            cadence_ticks: match kind {
+                OrganKind::NeuralSupport | OrganKind::Circulatory => 1,
+                OrganKind::Locomotor | OrganKind::Thermoregulatory => 6,
+                OrganKind::MetabolicReserve | OrganKind::Digestive => 12,
+            },
+            energetic_cost: match kind {
+                OrganKind::NeuralSupport => 0.18,
+                OrganKind::Circulatory => 0.14,
+                OrganKind::Locomotor => 0.12,
+                _ => 0.08,
+            },
+            exposed_locus: kind as u16 + 1,
+        });
         Self {
-            energy: clamp01(0.50 + 0.50 * phenotype.body.metabolic_efficiency),
+            organs,
+            energy,
             health: 1.0,
             injury: 0.0,
             temperature_stress: 0.0,
@@ -66,31 +143,158 @@ impl BodyState {
         }
     }
 
-    fn apply_event(self, event: BodyEventDelta, phenotype: &CreaturePhenotype) -> Self {
+    fn apply_event(
+        self,
+        next_tick: Tick,
+        event: BodyEventDelta,
+        phenotype: &CreaturePhenotype,
+    ) -> Self {
         let injury_gain = event.damage * (1.0 - phenotype.body.injury_resistance);
         let recovery = event.sleep_recovery;
         let injury = clamp01(
             self.injury + injury_gain - recovery * (0.10 + 0.20 * phenotype.body.injury_resistance),
-        );
-        let health = clamp01(self.health - injury_gain + recovery * 0.15);
-        let energy = clamp01(
-            self.energy
-                + event.energy
-                + event.nutrition * phenotype.body.metabolic_efficiency
-                + recovery * (0.10 + 0.15 * phenotype.body.metabolic_efficiency),
         );
         let temperature_stress = clamp01(
             self.temperature_stress
                 + event.temperature_stress * (1.0 - phenotype.body.temperature_tolerance)
                 - recovery * 0.20,
         );
-        Self {
+        let mut organs = self.organs;
+        for organ in &mut organs {
+            let cadence_due = next_tick
+                .raw()
+                .is_multiple_of(u64::from(organ.cadence_ticks));
+            let local_damage = match organ.kind {
+                OrganKind::Circulatory | OrganKind::Locomotor => injury_gain,
+                OrganKind::NeuralSupport => injury_gain * 0.35,
+                _ => injury_gain * 0.15,
+            };
+            organ.damage = clamp01(organ.damage + local_damage - recovery * organ.repair_capacity);
+            organ.integrity = clamp01(organ.integrity - local_damage + recovery * 0.15);
+            let event_share = match organ.kind {
+                OrganKind::Locomotor => event.energy * 0.35,
+                OrganKind::NeuralSupport => event.energy * 0.25,
+                OrganKind::Circulatory => event.energy * 0.20,
+                _ => event.energy * 0.10,
+            };
+            let nutrition_gain = match organ.kind {
+                OrganKind::Digestive => event.nutrition * phenotype.body.metabolic_efficiency,
+                OrganKind::MetabolicReserve => {
+                    event.nutrition * phenotype.body.metabolic_efficiency * 0.75
+                }
+                _ => event.nutrition * phenotype.body.metabolic_efficiency * 0.15,
+            };
+            let cadence_cost = if cadence_due {
+                organ.energetic_cost * 0.01
+            } else {
+                0.0
+            };
+            organ.energy = clamp01(
+                organ.energy
+                    + event_share
+                    + nutrition_gain
+                    + recovery * organ.repair_capacity * 0.2
+                    - cadence_cost,
+            );
+            organ.temperature_stress = if organ.kind == OrganKind::Thermoregulatory {
+                temperature_stress
+            } else {
+                clamp01(temperature_stress * 0.25)
+            };
+        }
+        let mut value = Self {
+            organs,
+            energy: self.energy,
+            health: self.health,
+            injury,
+            temperature_stress,
+            sleeping: recovery > 0.0,
+        };
+        value.refresh_compatibility_projections();
+        value
+    }
+
+    pub const fn organs(&self) -> &[OrganPhysiology; ORGAN_KIND_COUNT] {
+        &self.organs
+    }
+
+    pub fn organ(&self, kind: OrganKind) -> &OrganPhysiology {
+        &self.organs[kind as usize]
+    }
+
+    pub fn set_energy(&mut self, energy: f32) -> Result<(), ScaffoldContractError> {
+        if !energy.is_finite() || !(0.0..=1.0).contains(&energy) {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        for organ in &mut self.organs {
+            organ.energy = energy;
+        }
+        self.energy = energy;
+        Ok(())
+    }
+
+    pub fn set_health(&mut self, health: f32) -> Result<(), ScaffoldContractError> {
+        if !health.is_finite() || !(0.0..=1.0).contains(&health) {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        for organ in &mut self.organs {
+            organ.integrity = health;
+            organ.damage = 1.0 - health;
+        }
+        self.refresh_compatibility_projections();
+        Ok(())
+    }
+
+    fn projected_values(&self) -> (f32, f32, f32, f32) {
+        let divisor = ORGAN_KIND_COUNT as f32;
+        let energy = self.organs.iter().map(|organ| organ.energy).sum::<f32>() / divisor;
+        let health = self.organs.iter().map(|organ| organ.integrity).sum::<f32>() / divisor;
+        let injury = self.organs.iter().map(|organ| organ.damage).sum::<f32>() / divisor;
+        let temperature_stress = self
+            .organs
+            .iter()
+            .map(|organ| organ.temperature_stress)
+            .fold(0.0, f32::max);
+        (energy, health, injury, temperature_stress)
+    }
+
+    fn refresh_compatibility_projections(&mut self) {
+        let (energy, health, injury, temperature_stress) = self.projected_values();
+        self.energy = energy;
+        self.health = health;
+        self.injury = injury;
+        self.temperature_stress = temperature_stress;
+    }
+
+    pub fn migrate_legacy_v1(
+        energy: f32,
+        health: f32,
+        injury: f32,
+        temperature_stress: f32,
+        sleeping: bool,
+    ) -> Result<Self, ScaffoldContractError> {
+        validate_unit_values(&[energy, health, injury, temperature_stress])?;
+        let organs = OrganKind::ALL.map(|kind| OrganPhysiology {
+            kind,
+            energy,
+            integrity: health,
+            damage: injury,
+            temperature_stress,
+            repair_capacity: 0.5,
+            cadence_ticks: 1,
+            energetic_cost: 0.1,
+            exposed_locus: kind as u16 + 1,
+        });
+        let value = Self {
+            organs,
             energy,
             health,
             injury,
             temperature_stress,
-            sleeping: recovery > 0.0,
-        }
+            sleeping,
+        };
+        value.validate_contract()?;
+        Ok(value)
     }
 }
 
@@ -101,7 +305,22 @@ impl Validate for BodyState {
             self.health,
             self.injury,
             self.temperature_stress,
-        ])
+        ])?;
+        for (index, organ) in self.organs.iter().enumerate() {
+            organ.validate_contract()?;
+            if organ.kind != OrganKind::ALL[index] {
+                return Err(ScaffoldContractError::InvalidGeneticBounds);
+            }
+        }
+        let projected = self.projected_values();
+        if self.energy.to_bits() != projected.0.to_bits()
+            || self.health.to_bits() != projected.1.to_bits()
+            || self.injury.to_bits() != projected.2.to_bits()
+            || self.temperature_stress.to_bits() != projected.3.to_bits()
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        Ok(())
     }
 }
 
@@ -213,6 +432,7 @@ pub struct DevelopmentReadiness {
     pub puberty_reached: bool,
     pub critical_period_active: bool,
     pub critical_period_plasticity_bias: f32,
+    pub biochemical_expression: f32,
     pub sleep_maturation_ready: bool,
     pub migration_ready: bool,
 }
@@ -230,6 +450,15 @@ impl DevelopmentReadiness {
             .first()
             .map_or(0.0, |period| period.plasticity_bias.raw());
         let maturation = state.maturation.raw();
+        let biochemical_gate = phenotype
+            .development
+            .biochemical_activation_maturation
+            .raw();
+        let biochemical_expression = if biochemical_gate == 0.0 {
+            1.0
+        } else {
+            (maturation / biochemical_gate).clamp(0.0, 1.0)
+        };
         let value = Self {
             last_update_tick,
             age_ticks: age,
@@ -237,6 +466,7 @@ impl DevelopmentReadiness {
             puberty_reached: age >= phenotype.development.puberty_tick,
             critical_period_active,
             critical_period_plasticity_bias,
+            biochemical_expression,
             sleep_maturation_ready: maturation
                 >= phenotype
                     .brain_genome
@@ -253,7 +483,11 @@ impl DevelopmentReadiness {
 impl Validate for DevelopmentReadiness {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         Tick::validate_monotonic(self.last_update_tick, self.age_ticks)?;
-        validate_unit_values(&[self.maturation, self.critical_period_plasticity_bias])
+        validate_unit_values(&[
+            self.maturation,
+            self.critical_period_plasticity_bias,
+            self.biochemical_expression,
+        ])
     }
 }
 
@@ -336,10 +570,15 @@ impl BiochemistryState {
         let cadence = BiochemistryCadence::early_mammal();
         cadence.validate_contract()?;
         let body = BodyState::baseline(phenotype);
-        let graph_state = BiochemicalGraphState::new(&phenotype.chemistry.biochemical, tick)?;
-        let homeostasis = graph_state.derive_homeostasis(&phenotype.chemistry.biochemical)?;
         let development_tick = cadence_boundary(age, cadence.development_ticks);
         let development = DevelopmentReadiness::derive(phenotype, age, development_tick)?;
+        let biochemical_expression = development.biochemical_expression;
+        let graph_state = BiochemicalGraphState::new(
+            &phenotype.chemistry.biochemical,
+            tick,
+            biochemical_expression,
+        )?;
+        let homeostasis = graph_state.derive_homeostasis(&phenotype.chemistry.biochemical)?;
         let reproduction_tick = cadence_boundary(age, cadence.reproduction_ticks);
         let reproduction = ReproductionReadiness::derive(
             reproduction_tick,
@@ -425,16 +664,8 @@ impl BiochemistryState {
             energy: signed_clamp(event.energy + upkeep.energy),
             ..event
         };
-        let body = self.body.apply_event(event, phenotype);
+        let body = self.body.apply_event(next_tick, event, phenotype);
         body.validate_contract()?;
-        let (graph_state, biochemical_work) = self.graph_state.advance(
-            next_tick,
-            body,
-            event,
-            neural,
-            &phenotype.chemistry.biochemical,
-        )?;
-        let homeostasis = graph_state.derive_homeostasis(&phenotype.chemistry.biochemical)?;
         let development = if development_steps > 0 {
             DevelopmentReadiness::derive(
                 phenotype,
@@ -447,6 +678,16 @@ impl BiochemistryState {
                 ..self.development
             }
         };
+        let biochemical_expression = development.biochemical_expression;
+        let (graph_state, biochemical_work) = self.graph_state.advance(
+            next_tick,
+            body,
+            event,
+            neural,
+            &phenotype.chemistry.biochemical,
+            biochemical_expression,
+        )?;
+        let homeostasis = graph_state.derive_homeostasis(&phenotype.chemistry.biochemical)?;
         let reproduction = if reproduction_steps > 0 {
             ReproductionReadiness::derive(
                 cadence_boundary(next_age, self.cadence.reproduction_ticks),

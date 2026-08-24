@@ -807,7 +807,9 @@ fn validate_physical_replay(
             event.homeostatic_improvement,
             event.frustration,
             event.novelty,
-            event.modulator_value,
+            event.social_consequence,
+            event.biochemical_appetitive,
+            event.biochemical_aversive,
         ])?;
     }
     let mut previous_synapse = None;
@@ -859,7 +861,9 @@ fn validate_replay_event(event: &GpuReplayEventRecord) -> Result<u64, ScaffoldCo
         event.homeostatic_improvement,
         event.frustration,
         event.novelty,
-        event.modulator_value,
+        event.social_consequence,
+        event.biochemical_appetitive,
+        event.biochemical_aversive,
     ])?;
     if sequence == 0
         || frame_digest == [0; 4]
@@ -871,7 +875,9 @@ fn validate_replay_event(event: &GpuReplayEventRecord) -> Result<u64, ScaffoldCo
             event.homeostatic_improvement,
             event.frustration,
             event.novelty,
-            event.modulator_value,
+            event.social_consequence,
+            event.biochemical_appetitive,
+            event.biochemical_aversive,
         ]
         .iter()
         .any(|value| !(-1.0..=1.0).contains(value))
@@ -2283,4 +2289,4 @@ fn write_words_at_offset(
 }
 
 const _: () = assert!(LEARNING_STATE_WORDS == 24);
-const _: () = assert!(REPLAY_EVENT_WORDS == 24);
+const _: () = assert!(REPLAY_EVENT_WORDS == 28);

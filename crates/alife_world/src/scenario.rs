@@ -87,6 +87,7 @@ pub struct ScenarioObjectSpec {
     pub token_id: Option<u32>,
     pub social_affinity: f32,
     pub teacher_channel: Option<TeacherPerceptionChannel>,
+    pub teacher_source_label: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1337,11 +1338,13 @@ fn teacher_perception_event(seed: u64) -> Result<ScenarioFixture, ScaffoldContra
     let organism = OrganismId(1808);
     let layout = vec![
         agent("agent", organism, pos(0.0, 0.0)),
+        social_agent("teacher", OrganismId(2808), pos(0.7, 0.0), 0.75),
         teacher_token(
             "teacher_word",
             pos(0.7, 0.0),
             77,
             TeacherPerceptionChannel::Hearing,
+            "teacher",
         ),
     ];
     let world = world_from_layout(seed, &layout)?;
@@ -1368,10 +1371,10 @@ fn teacher_perception_event(seed: u64) -> Result<ScenarioFixture, ScaffoldContra
         layout,
         world,
         sensory(
-            vec!["teacher_word"],
+            vec!["teacher", "teacher_word"],
             vec![77],
             Some(TeacherPerceptionChannel::Hearing),
-            0,
+            1,
         ),
         steps,
         expectations(
@@ -1397,7 +1400,7 @@ fn teacher_perception_event(seed: u64) -> Result<ScenarioFixture, ScaffoldContra
                 requires_food_salience_bias: false,
                 requires_word_token: Some(77),
                 requires_teacher_channel: Some(TeacherPerceptionChannel::Hearing),
-                requires_social_context: false,
+                requires_social_context: true,
                 requires_no_hidden_vectors: true,
             },
             ExpectedMemoryChange {
@@ -1500,15 +1503,38 @@ fn world_from_layout(
             }
             WorldObjectKind::Token => {
                 let token_id = object.token_id.ok_or(ScaffoldContractError::InvalidId)?;
-                if let Some(channel) = object.teacher_channel {
-                    builder.teacher_token(object.label, object.position, token_id, channel)
+                if object.teacher_channel.is_some() {
+                    builder
                 } else {
                     builder.token(object.label, object.position, token_id)
                 }
             }
         };
     }
-    builder.build()
+    let mut world = builder.build()?;
+    for object in layout
+        .iter()
+        .filter(|object| object.teacher_channel.is_some())
+    {
+        let teacher_label = object
+            .teacher_source_label
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let teacher_entity = world
+            .entity_id(teacher_label)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        world
+            .grounded_teacher_actor(teacher_entity)?
+            .emit_perceptual_cue(
+                &mut world,
+                object.label,
+                object.token_id.ok_or(ScaffoldContractError::InvalidId)?,
+                object
+                    .teacher_channel
+                    .ok_or(ScaffoldContractError::InvalidId)?,
+                None,
+            )?;
+    }
+    Ok(world)
 }
 
 fn proposal(
@@ -1605,8 +1631,11 @@ fn teacher_token(
     position: Vec3f,
     token_id: u32,
     channel: TeacherPerceptionChannel,
+    teacher_source_label: &'static str,
 ) -> ScenarioObjectSpec {
-    object(label, WorldObjectKind::Token, position).with_token(token_id, Some(channel))
+    object(label, WorldObjectKind::Token, position)
+        .with_token(token_id, Some(channel))
+        .with_teacher_source(teacher_source_label)
 }
 
 fn object(label: &'static str, kind: WorldObjectKind, position: Vec3f) -> ScenarioObjectSpec {
@@ -1621,6 +1650,7 @@ fn object(label: &'static str, kind: WorldObjectKind, position: Vec3f) -> Scenar
         token_id: None,
         social_affinity: 0.0,
         teacher_channel: None,
+        teacher_source_label: None,
     }
 }
 
@@ -1657,6 +1687,11 @@ impl ScenarioObjectSpec {
 
     fn with_social_affinity(mut self, affinity: f32) -> Self {
         self.social_affinity = affinity.clamp(-1.0, 1.0);
+        self
+    }
+
+    const fn with_teacher_source(mut self, label: &'static str) -> Self {
+        self.teacher_source_label = Some(label);
         self
     }
 }

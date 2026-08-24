@@ -182,11 +182,10 @@ fn learned_checkpoint_roundtrip_preserves_logits_and_replay_guard() {
         .tick_batch(&[(source_handle, learning_frame.clone())])
         .unwrap()
         .remove(0);
+    let learning_patch = sealed_reward(source_handle, &learning_frame, &learning_tick, 1, 0.8);
+    let learning_receptors = support::test_receptor_frame(&learning_patch);
     source
-        .apply_sealed_outcome(
-            source_handle,
-            &sealed_reward(source_handle, &learning_frame, &learning_tick, 1, 0.8),
-        )
+        .apply_sealed_outcome(source_handle, &learning_patch, &learning_receptors)
         .unwrap();
 
     let snapshot = source
@@ -231,8 +230,9 @@ fn learned_checkpoint_roundtrip_preserves_logits_and_replay_guard() {
     );
 
     let duplicate = sealed_reward(restore.handle, &probe, &restored_tick, 1, 0.8);
+    let duplicate_receptors = support::test_receptor_frame(&duplicate);
     assert!(restored
-        .apply_sealed_outcome(restore.handle, &duplicate)
+        .apply_sealed_outcome(restore.handle, &duplicate, &duplicate_receptors)
         .is_err());
 }
 
@@ -255,8 +255,10 @@ fn completed_sleep_staging_restores_and_commits_one_physical_swap() {
         .tick_batch(&[(handle, frame.clone())])
         .unwrap()
         .remove(0);
+    let patch = sealed_reward(handle, &frame, &tick, 1, 0.8);
+    let receptors = support::test_receptor_frame(&patch);
     source
-        .apply_sealed_outcome(handle, &sealed_reward(handle, &frame, &tick, 1, 0.8))
+        .apply_sealed_outcome(handle, &patch, &receptors)
         .unwrap();
     let replay = source.build_sleep_replay_batch(handle).unwrap();
     let request = source

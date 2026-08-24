@@ -7,6 +7,192 @@ use crate::{LobeIndex, ScaffoldContractError};
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum LobeKind {
+    PerceptualIntegration = 1,
+    InteroceptiveMotivational = 2,
+    MultimodalAssociation = 3,
+    TemporalPredictive = 4,
+    WorkingContextExecutive = 5,
+    MemoryInterface = 6,
+    ActionPlanning = 7,
+    SocialCommunication = 8,
+    FlexibleReserve = 9,
+}
+
+impl LobeKind {
+    pub const CORE: [LobeKind; 9] = Self::ALL;
+
+    pub const ALL: [LobeKind; 9] = [
+        LobeKind::PerceptualIntegration,
+        LobeKind::InteroceptiveMotivational,
+        LobeKind::MultimodalAssociation,
+        LobeKind::TemporalPredictive,
+        LobeKind::WorkingContextExecutive,
+        LobeKind::MemoryInterface,
+        LobeKind::ActionPlanning,
+        LobeKind::SocialCommunication,
+        LobeKind::FlexibleReserve,
+    ];
+
+    // Temporary source compatibility for pre-v2 callers. Durable v1 IDs use
+    // `LegacyLobeKindV1`; these aliases never create additional regions.
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const SensoryGrounding: Self = Self::PerceptualIntegration;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const MetabolicDrive: Self = Self::InteroceptiveMotivational;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const AuditorySpeech: Self = Self::SocialCommunication;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const GlyphVision: Self = Self::SocialCommunication;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const LexiconConcept: Self = Self::MultimodalAssociation;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const CoreAssociation: Self = Self::TemporalPredictive;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const EpisodicMemory: Self = Self::MemoryInterface;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const WorkingMemory: Self = Self::WorkingContextExecutive;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const MotorArbitration: Self = Self::ActionPlanning;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const HomeostaticRegulation: Self = Self::FlexibleReserve;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const LanguageExpansion: Self = Self::SocialCommunication;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const MathQuantity: Self = Self::MultimodalAssociation;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const NarrativeHistory: Self = Self::TemporalPredictive;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const SocialReasoning: Self = Self::SocialCommunication;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const SelfCriticUncertainty: Self = Self::WorkingContextExecutive;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const PlanningDream: Self = Self::TemporalPredictive;
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use the v2 founder homologue")]
+    pub const SpeechWritingMotor: Self = Self::ActionPlanning;
+
+    pub const fn stable_id(self) -> LobeIndex {
+        LobeIndex(self.raw())
+    }
+
+    pub const fn raw(self) -> u16 {
+        self as u16
+    }
+
+    pub fn try_from_raw(raw: u16) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            1 => Ok(Self::PerceptualIntegration),
+            2 => Ok(Self::InteroceptiveMotivational),
+            3 => Ok(Self::MultimodalAssociation),
+            4 => Ok(Self::TemporalPredictive),
+            5 => Ok(Self::WorkingContextExecutive),
+            6 => Ok(Self::MemoryInterface),
+            7 => Ok(Self::ActionPlanning),
+            8 => Ok(Self::SocialCommunication),
+            9 => Ok(Self::FlexibleReserve),
+            _ => Err(ScaffoldContractError::PhenotypeCompile),
+        }
+    }
+
+    pub const fn purpose(self) -> &'static str {
+        match self {
+            LobeKind::PerceptualIntegration => "typed sensory and spatial integration",
+            LobeKind::InteroceptiveMotivational => "interoceptive and motivational integration",
+            LobeKind::MultimodalAssociation => "cross-modal association",
+            LobeKind::TemporalPredictive => "temporal context and prediction",
+            LobeKind::WorkingContextExecutive => "working context and executive control",
+            LobeKind::MemoryInterface => "memory indexing and retrieval interface",
+            LobeKind::ActionPlanning => "action planning and motor interface",
+            LobeKind::SocialCommunication => "social and communication interface",
+            LobeKind::FlexibleReserve => "developmentally recruitable flexible capacity",
+        }
+    }
+
+    pub const fn default_update_cadence(self) -> UpdateCadence {
+        match self {
+            LobeKind::PerceptualIntegration | LobeKind::ActionPlanning => UpdateCadence::Hot60Hz,
+            LobeKind::InteroceptiveMotivational => UpdateCadence::Hot10To30Hz,
+            LobeKind::MultimodalAssociation
+            | LobeKind::TemporalPredictive
+            | LobeKind::WorkingContextExecutive
+            | LobeKind::SocialCommunication => UpdateCadence::Hot15To60Hz,
+            LobeKind::MemoryInterface | LobeKind::FlexibleReserve => UpdateCadence::Hot5To15Hz,
+        }
+    }
+
+    pub const fn default_plasticity_policy(self) -> PlasticityPolicy {
+        match self {
+            LobeKind::PerceptualIntegration
+            | LobeKind::InteroceptiveMotivational
+            | LobeKind::ActionPlanning
+            | LobeKind::SocialCommunication => PlasticityPolicy::Modulated,
+            LobeKind::MultimodalAssociation
+            | LobeKind::TemporalPredictive
+            | LobeKind::WorkingContextExecutive => PlasticityPolicy::FastOjaHebbian,
+            LobeKind::MemoryInterface | LobeKind::FlexibleReserve => {
+                PlasticityPolicy::DecimatedOjaHebbian
+            }
+        }
+    }
+
+    pub const fn default_activation_policy(self) -> ActivationPolicy {
+        match self {
+            LobeKind::PerceptualIntegration
+            | LobeKind::InteroceptiveMotivational
+            | LobeKind::SocialCommunication => ActivationPolicy::InputCoupled,
+            LobeKind::MultimodalAssociation
+            | LobeKind::TemporalPredictive
+            | LobeKind::WorkingContextExecutive
+            | LobeKind::MemoryInterface
+            | LobeKind::FlexibleReserve => ActivationPolicy::Recurrent,
+            LobeKind::ActionPlanning => ActivationPolicy::OutputCoupled,
+        }
+    }
+
+    pub const fn default_essentiality(self) -> LobeEssentiality {
+        match self {
+            LobeKind::PerceptualIntegration
+            | LobeKind::InteroceptiveMotivational
+            | LobeKind::ActionPlanning => LobeEssentiality::Essential,
+            _ => LobeEssentiality::NonEssential,
+        }
+    }
+
+    pub const fn default_throttle_priority(self) -> LobeThrottlePriority {
+        match self {
+            LobeKind::PerceptualIntegration
+            | LobeKind::InteroceptiveMotivational
+            | LobeKind::ActionPlanning => LobeThrottlePriority::Critical,
+            LobeKind::MultimodalAssociation
+            | LobeKind::TemporalPredictive
+            | LobeKind::WorkingContextExecutive => LobeThrottlePriority::High,
+            LobeKind::SocialCommunication => LobeThrottlePriority::Medium,
+            LobeKind::MemoryInterface => LobeThrottlePriority::Low,
+            LobeKind::FlexibleReserve => LobeThrottlePriority::SleepOnly,
+        }
+    }
+}
+
+/// The retired v1 region IDs. These exist only at explicit migration boundaries.
+#[repr(u16)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LegacyLobeKindV1 {
     SensoryGrounding = 1,
     MetabolicDrive = 2,
     AuditorySpeech = 3,
@@ -26,48 +212,7 @@ pub enum LobeKind {
     SpeechWritingMotor = 17,
 }
 
-impl LobeKind {
-    pub const CORE: [LobeKind; 10] = [
-        LobeKind::SensoryGrounding,
-        LobeKind::MetabolicDrive,
-        LobeKind::AuditorySpeech,
-        LobeKind::GlyphVision,
-        LobeKind::LexiconConcept,
-        LobeKind::CoreAssociation,
-        LobeKind::EpisodicMemory,
-        LobeKind::WorkingMemory,
-        LobeKind::MotorArbitration,
-        LobeKind::HomeostaticRegulation,
-    ];
-
-    pub const ALL: [LobeKind; 17] = [
-        LobeKind::SensoryGrounding,
-        LobeKind::MetabolicDrive,
-        LobeKind::AuditorySpeech,
-        LobeKind::GlyphVision,
-        LobeKind::LexiconConcept,
-        LobeKind::CoreAssociation,
-        LobeKind::EpisodicMemory,
-        LobeKind::WorkingMemory,
-        LobeKind::MotorArbitration,
-        LobeKind::HomeostaticRegulation,
-        LobeKind::LanguageExpansion,
-        LobeKind::MathQuantity,
-        LobeKind::NarrativeHistory,
-        LobeKind::SocialReasoning,
-        LobeKind::SelfCriticUncertainty,
-        LobeKind::PlanningDream,
-        LobeKind::SpeechWritingMotor,
-    ];
-
-    pub const fn stable_id(self) -> LobeIndex {
-        LobeIndex(self.raw())
-    }
-
-    pub const fn raw(self) -> u16 {
-        self as u16
-    }
-
+impl LegacyLobeKindV1 {
     pub fn try_from_raw(raw: u16) -> Result<Self, ScaffoldContractError> {
         match raw {
             1 => Ok(Self::SensoryGrounding),
@@ -91,120 +236,24 @@ impl LobeKind {
         }
     }
 
-    pub const fn purpose(self) -> &'static str {
-        match self {
-            LobeKind::SensoryGrounding => "grounded sensory affordance integration",
-            LobeKind::MetabolicDrive => "drive and survival pressure encoding",
-            LobeKind::AuditorySpeech => "hearing and speech perception",
-            LobeKind::GlyphVision => "visible glyph and reading perception",
-            LobeKind::LexiconConcept => "lexicon and concept binding",
-            LobeKind::CoreAssociation => "cross-modal association and salience binding",
-            LobeKind::EpisodicMemory => "episodic memory indexing and expectancy recall",
-            LobeKind::WorkingMemory => "attention and short-horizon working state",
-            LobeKind::MotorArbitration => "motor proposal competition and action staging",
-            LobeKind::HomeostaticRegulation => "homeostatic regulation and safety feedback",
-            LobeKind::LanguageExpansion => "future expanded language capacity",
-            LobeKind::MathQuantity => "future quantity and math concepts",
-            LobeKind::NarrativeHistory => "future narrative and history concepts",
-            LobeKind::SocialReasoning => "future social reasoning capacity",
-            LobeKind::SelfCriticUncertainty => "future self-critic and uncertainty monitoring",
-            LobeKind::PlanningDream => "future planning and dream simulation",
-            LobeKind::SpeechWritingMotor => "future speech and writing motor control",
-        }
+    pub const fn raw(self) -> u16 {
+        self as u16
     }
 
-    pub const fn default_update_cadence(self) -> UpdateCadence {
+    pub const fn migrate_to_founder(self) -> LobeKind {
         match self {
-            LobeKind::SensoryGrounding | LobeKind::MotorArbitration => UpdateCadence::Hot60Hz,
-            LobeKind::MetabolicDrive | LobeKind::HomeostaticRegulation => {
-                UpdateCadence::Hot10To30Hz
+            Self::SensoryGrounding => LobeKind::PerceptualIntegration,
+            Self::MetabolicDrive => LobeKind::InteroceptiveMotivational,
+            Self::AuditorySpeech | Self::GlyphVision => LobeKind::SocialCommunication,
+            Self::LexiconConcept | Self::MathQuantity => LobeKind::MultimodalAssociation,
+            Self::CoreAssociation | Self::NarrativeHistory | Self::PlanningDream => {
+                LobeKind::TemporalPredictive
             }
-            LobeKind::AuditorySpeech
-            | LobeKind::GlyphVision
-            | LobeKind::CoreAssociation
-            | LobeKind::WorkingMemory => UpdateCadence::Hot15To60Hz,
-            LobeKind::LexiconConcept | LobeKind::EpisodicMemory => UpdateCadence::Hot5To15Hz,
-            LobeKind::LanguageExpansion
-            | LobeKind::MathQuantity
-            | LobeKind::NarrativeHistory
-            | LobeKind::SocialReasoning
-            | LobeKind::SelfCriticUncertainty
-            | LobeKind::PlanningDream
-            | LobeKind::SpeechWritingMotor => UpdateCadence::Disabled,
-        }
-    }
-
-    pub const fn default_plasticity_policy(self) -> PlasticityPolicy {
-        match self {
-            LobeKind::SensoryGrounding
-            | LobeKind::MetabolicDrive
-            | LobeKind::MotorArbitration
-            | LobeKind::HomeostaticRegulation => PlasticityPolicy::Modulated,
-            LobeKind::CoreAssociation | LobeKind::WorkingMemory => PlasticityPolicy::FastOjaHebbian,
-            LobeKind::LexiconConcept | LobeKind::EpisodicMemory => {
-                PlasticityPolicy::DecimatedOjaHebbian
-            }
-            LobeKind::AuditorySpeech | LobeKind::GlyphVision => PlasticityPolicy::Modulated,
-            LobeKind::LanguageExpansion
-            | LobeKind::MathQuantity
-            | LobeKind::NarrativeHistory
-            | LobeKind::SocialReasoning
-            | LobeKind::SelfCriticUncertainty
-            | LobeKind::PlanningDream
-            | LobeKind::SpeechWritingMotor => PlasticityPolicy::Disabled,
-        }
-    }
-
-    pub const fn default_activation_policy(self) -> ActivationPolicy {
-        match self {
-            LobeKind::SensoryGrounding
-            | LobeKind::MetabolicDrive
-            | LobeKind::AuditorySpeech
-            | LobeKind::GlyphVision
-            | LobeKind::HomeostaticRegulation => ActivationPolicy::InputCoupled,
-            LobeKind::LexiconConcept
-            | LobeKind::CoreAssociation
-            | LobeKind::EpisodicMemory
-            | LobeKind::WorkingMemory => ActivationPolicy::Recurrent,
-            LobeKind::MotorArbitration => ActivationPolicy::OutputCoupled,
-            LobeKind::LanguageExpansion
-            | LobeKind::MathQuantity
-            | LobeKind::NarrativeHistory
-            | LobeKind::SocialReasoning
-            | LobeKind::SelfCriticUncertainty
-            | LobeKind::PlanningDream
-            | LobeKind::SpeechWritingMotor => ActivationPolicy::Disabled,
-        }
-    }
-
-    pub const fn default_essentiality(self) -> LobeEssentiality {
-        match self {
-            LobeKind::SensoryGrounding
-            | LobeKind::MetabolicDrive
-            | LobeKind::MotorArbitration
-            | LobeKind::HomeostaticRegulation => LobeEssentiality::Essential,
-            _ => LobeEssentiality::NonEssential,
-        }
-    }
-
-    pub const fn default_throttle_priority(self) -> LobeThrottlePriority {
-        match self {
-            LobeKind::MetabolicDrive
-            | LobeKind::SensoryGrounding
-            | LobeKind::MotorArbitration
-            | LobeKind::HomeostaticRegulation => LobeThrottlePriority::Critical,
-            LobeKind::CoreAssociation | LobeKind::WorkingMemory => LobeThrottlePriority::High,
-            LobeKind::AuditorySpeech | LobeKind::GlyphVision | LobeKind::LexiconConcept => {
-                LobeThrottlePriority::Medium
-            }
-            LobeKind::EpisodicMemory => LobeThrottlePriority::Low,
-            LobeKind::LanguageExpansion
-            | LobeKind::MathQuantity
-            | LobeKind::NarrativeHistory
-            | LobeKind::SocialReasoning
-            | LobeKind::SelfCriticUncertainty
-            | LobeKind::PlanningDream
-            | LobeKind::SpeechWritingMotor => LobeThrottlePriority::SleepOnly,
+            Self::EpisodicMemory => LobeKind::MemoryInterface,
+            Self::WorkingMemory | Self::SelfCriticUncertainty => LobeKind::WorkingContextExecutive,
+            Self::MotorArbitration | Self::SpeechWritingMotor => LobeKind::ActionPlanning,
+            Self::HomeostaticRegulation => LobeKind::FlexibleReserve,
+            Self::LanguageExpansion | Self::SocialReasoning => LobeKind::SocialCommunication,
         }
     }
 }
@@ -342,14 +391,10 @@ impl LobeLayout {
     }
 
     pub fn with_disabled_lobe(
-        neuron_count: u32,
-        disabled: LobeKind,
+        _neuron_count: u32,
+        _disabled: LobeKind,
     ) -> Result<Self, ScaffoldContractError> {
-        Self::build(
-            neuron_count,
-            Some(disabled),
-            LayoutMode::EqualSplitCompatibility,
-        )
+        Err(ScaffoldContractError::PhenotypeCompile)
     }
 
     pub fn total_neurons(&self) -> u32 {
@@ -438,66 +483,17 @@ impl LobeLayout {
             return Err(ScaffoldContractError::LobeAlignment);
         }
 
-        let layout = match mode {
-            LayoutMode::Reference => Self::reference_layout(neuron_count)?,
-            LayoutMode::EqualSplitCompatibility => {
-                Self::equal_split_layout(neuron_count, disabled)?
-            }
-        };
-
-        if mode == LayoutMode::Reference {
-            if let Some(disabled_kind) = disabled {
-                let compact = Self::equal_split_layout(neuron_count, Some(disabled_kind))?;
-                compact.validate_for_neuron_count(neuron_count)?;
-                return Ok(compact);
-            }
+        if disabled.is_some() || mode != LayoutMode::Reference {
+            return Err(ScaffoldContractError::PhenotypeCompile);
         }
-
+        let layout = Self::reference_layout(neuron_count)?;
         layout.validate_for_neuron_count(neuron_count)?;
         Ok(layout)
     }
 
     fn reference_layout(neuron_count: u32) -> Result<Self, ScaffoldContractError> {
-        let lengths = reference_core_lengths(neuron_count)?;
+        let lengths = founder_floor_share_lengths(neuron_count)?;
         let regions = build_regions_from_lengths(neuron_count, &lengths);
-        let layout = Self { regions };
-        layout.validate_for_neuron_count(neuron_count)?;
-        Ok(layout)
-    }
-
-    fn equal_split_layout(
-        neuron_count: u32,
-        disabled: Option<LobeKind>,
-    ) -> Result<Self, ScaffoldContractError> {
-        let enabled_count = LobeKind::CORE
-            .iter()
-            .filter(|kind| Some(**kind) != disabled)
-            .count() as u32;
-        let mut regions = Vec::with_capacity(LobeKind::ALL.len());
-        let mut start = 0;
-        let mut remaining = neuron_count;
-        let mut remaining_enabled = enabled_count;
-
-        for kind in LobeKind::CORE {
-            if Some(kind) == disabled {
-                regions.push(LobeRegion::disabled(kind, start));
-                continue;
-            }
-
-            let len = if remaining_enabled == 1 {
-                remaining
-            } else {
-                ((remaining / remaining_enabled) / 16) * 16
-            };
-            regions.push(LobeRegion::enabled(kind, start, len));
-            start += len;
-            remaining -= len;
-            remaining_enabled -= 1;
-        }
-        for kind in future_lobes() {
-            regions.push(LobeRegion::disabled(kind, neuron_count));
-        }
-
         let layout = Self { regions };
         layout.validate_for_neuron_count(neuron_count)?;
         Ok(layout)
@@ -507,61 +503,19 @@ impl LobeLayout {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LayoutMode {
     Reference,
-    EqualSplitCompatibility,
 }
 
-fn build_regions_from_lengths(neuron_count: u32, lengths: &[u32; 10]) -> Vec<LobeRegion> {
+fn build_regions_from_lengths(_neuron_count: u32, lengths: &[u32; 9]) -> Vec<LobeRegion> {
     let mut regions = Vec::with_capacity(LobeKind::ALL.len());
     let mut start = 0;
     for (kind, len) in LobeKind::CORE.into_iter().zip(lengths.iter().copied()) {
         regions.push(LobeRegion::enabled(kind, start, len));
         start += len;
     }
-    for kind in future_lobes() {
-        regions.push(LobeRegion::disabled(kind, neuron_count));
-    }
     regions
 }
 
-fn future_lobes() -> [LobeKind; 7] {
-    [
-        LobeKind::LanguageExpansion,
-        LobeKind::MathQuantity,
-        LobeKind::NarrativeHistory,
-        LobeKind::SocialReasoning,
-        LobeKind::SelfCriticUncertainty,
-        LobeKind::PlanningDream,
-        LobeKind::SpeechWritingMotor,
-    ]
-}
-
-fn reference_core_lengths(neuron_count: u32) -> Result<[u32; 10], ScaffoldContractError> {
-    let lengths = match neuron_count {
-        512 => [64, 32, 32, 32, 64, 112, 64, 32, 64, 16],
-        1024 => [128, 64, 64, 64, 128, 224, 128, 64, 112, 48],
-        n if n >= 2048 && n.is_multiple_of(2048) => {
-            let scale = n / 2048;
-            [
-                256 * scale,
-                128 * scale,
-                128 * scale,
-                128 * scale,
-                256 * scale,
-                448 * scale,
-                256 * scale,
-                128 * scale,
-                224 * scale,
-                96 * scale,
-            ]
-        }
-        other => proportional_core_lengths(other)?,
-    };
-
-    debug_assert_eq!(lengths.iter().sum::<u32>(), neuron_count);
-    Ok(lengths)
-}
-
-fn proportional_core_lengths(neuron_count: u32) -> Result<[u32; 10], ScaffoldContractError> {
+fn founder_floor_share_lengths(neuron_count: u32) -> Result<[u32; 9], ScaffoldContractError> {
     if neuron_count < 512 {
         return Err(ScaffoldContractError::BrainClassTooSmall);
     }
@@ -569,18 +523,27 @@ fn proportional_core_lengths(neuron_count: u32) -> Result<[u32; 10], ScaffoldCon
         return Err(ScaffoldContractError::LobeAlignment);
     }
 
-    let weights = [4_u64, 2, 2, 2, 4, 7, 4, 2, 4, 1];
-    let weight_sum: u64 = weights.iter().sum();
-    let mut lengths = [0; 10];
-    let mut used = 0;
-    for index in 0..weights.len() - 1 {
-        let len = (((u64::from(neuron_count) * weights[index] / weight_sum) / 16) * 16) as u32;
-        lengths[index] = len.max(16);
-        used += lengths[index];
+    const FLOORS: [u32; 9] = [64, 32, 64, 48, 48, 32, 48, 32, 32];
+    const SHARES: [u32; 9] = [16, 6, 23, 13, 10, 7, 10, 8, 7];
+    let floor_total = FLOORS.iter().sum::<u32>();
+    let remainder_blocks = (neuron_count - floor_total) / 16;
+    let mut lengths = FLOORS;
+    let mut assigned_blocks = 0_u32;
+    let mut remainders = [(0_u32, 0_usize); 9];
+    for index in 0..9 {
+        let weighted = remainder_blocks * SHARES[index];
+        let blocks = weighted / 100;
+        lengths[index] += blocks * 16;
+        assigned_blocks += blocks;
+        remainders[index] = (weighted % 100, index);
     }
-    lengths[weights.len() - 1] = neuron_count.saturating_sub(used);
-    if !lengths[weights.len() - 1].is_multiple_of(16) || lengths[weights.len() - 1] == 0 {
-        return Err(ScaffoldContractError::LobeAlignment);
+    remainders.sort_by(|left, right| right.cmp(left));
+    for (_, index) in remainders
+        .into_iter()
+        .take((remainder_blocks - assigned_blocks) as usize)
+    {
+        lengths[index] += 16;
     }
+    debug_assert_eq!(lengths.iter().sum::<u32>(), neuron_count);
     Ok(lengths)
 }

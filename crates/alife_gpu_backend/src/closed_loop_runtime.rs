@@ -15,10 +15,11 @@ use alife_core::{
     CandidateActionFamily, CanonicalDigestBuilder, CoactivationEvidence, Confidence,
     DendriticBranchSet, ExperiencePatch, FinalizedMemoryRecall, GpuPressureSample,
     GpuPressureSampleInput, LearningCommitToken, LearningSequenceGuard, NeuralActionSelection,
-    NeuralThrottleDecision, NeuralThrottleLevel, OrganismId, OutcomeCreditPacket,
-    PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest, PhenotypeHash,
-    ScaffoldContractError, SensorProfile, SpeechMotorPayload, BRAIN_ATP_BASAL_DEBIT_Q16,
-    BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16, REQUIRED_GPU_FEATURE_MASK,
+    NeuralReceptorFrame, NeuralThrottleDecision, NeuralThrottleLevel, OrganismId,
+    OutcomeCreditPacket, PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest,
+    PhenotypeHash, ScaffoldContractError, SensorProfile, SpeechMotorPayload,
+    BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16,
+    REQUIRED_GPU_FEATURE_MASK,
 };
 use serde::{Deserialize, Serialize};
 
@@ -335,12 +336,12 @@ pub enum GpuLearningEvidenceMismatchField {
     PhenotypeHashNonZero,
     FrameDigestNonZero,
     CandidateFeatureDigestNonZero,
-    RewardPredictionErrorRange,
+    PredictionResidualRange,
     PainRange,
     HomeostaticImprovementRange,
     FrustrationRange,
     NoveltyRange,
-    ModulatorValueRange,
+    NeuromodulatoryLaneRange,
     PendingEligibilityPresent,
     PendingEligibilityRecordPresent,
     OrganismId,
@@ -1298,6 +1299,7 @@ impl<'a> GpuClosedLoopMemoryTickInput<'a> {
             || memory_upload.base_frame_digest != frame.base_digest()
             || memory_upload.context_digest != frame.context().canonical_digest()
             || memory_upload.final_frame_digest != frame.frame_digest()
+            || memory_upload.neural_receptor_effects.is_none()
         {
             return Err(ScaffoldContractError::InvalidPerceptionFrame);
         }
@@ -3549,8 +3551,9 @@ impl GpuClosedLoopBackend {
         &mut self,
         handle: GpuBrainHandle,
         patch: &ExperiencePatch,
+        receptors: &NeuralReceptorFrame,
     ) -> Result<GpuLearningReceipt, ScaffoldContractError> {
-        let mut receipts = self.apply_sealed_outcome_batch(&[(handle, patch)])?;
+        let mut receipts = self.apply_sealed_outcome_batch(&[(handle, patch, receptors)])?;
         receipts
             .pop()
             .ok_or(ScaffoldContractError::LearningEvidenceMismatch)
@@ -3625,7 +3628,7 @@ impl GpuClosedLoopBackend {
         let modulator = packet.modulator();
         for (field, value) in [
             (
-                GpuLearningEvidenceMismatchField::RewardPredictionErrorRange,
+                GpuLearningEvidenceMismatchField::PredictionResidualRange,
                 modulator.prediction_residual(),
             ),
             (
@@ -3645,8 +3648,16 @@ impl GpuClosedLoopBackend {
                 modulator.novelty(),
             ),
             (
-                GpuLearningEvidenceMismatchField::ModulatorValueRange,
-                modulator.value(),
+                GpuLearningEvidenceMismatchField::NeuromodulatoryLaneRange,
+                modulator.frame().lanes()[5],
+            ),
+            (
+                GpuLearningEvidenceMismatchField::NeuromodulatoryLaneRange,
+                modulator.frame().lanes()[6],
+            ),
+            (
+                GpuLearningEvidenceMismatchField::NeuromodulatoryLaneRange,
+                modulator.frame().lanes()[7],
             ),
         ] {
             if !(-1.0..=1.0).contains(&value) {
@@ -3819,7 +3830,14 @@ impl GpuClosedLoopBackend {
     /// core-owned sequence token before any command is submitted.
     pub fn apply_sealed_outcome_batch(
         &mut self,
-        batch: &[(GpuBrainHandle, &ExperiencePatch)],
+        batch: &[(GpuBrainHandle, &ExperiencePatch, &NeuralReceptorFrame)],
+    ) -> Result<Vec<GpuLearningReceipt>, ScaffoldContractError> {
+        self.apply_sealed_outcome_batch_internal(batch)
+    }
+
+    fn apply_sealed_outcome_batch_internal(
+        &mut self,
+        batch: &[(GpuBrainHandle, &ExperiencePatch, &NeuralReceptorFrame)],
     ) -> Result<Vec<GpuLearningReceipt>, ScaffoldContractError> {
         self.last_apply_fast_plasticity_failure = None;
         self.ensure_ready()?;
@@ -3834,14 +3852,15 @@ impl GpuClosedLoopBackend {
         let class_id = batch[0].0.class_id.raw();
         let mut seen = BTreeSet::new();
         let mut prepared = Vec::with_capacity(batch.len());
-        for (handle, patch) in batch {
+        for (handle, patch, receptors) in batch {
             self.validate_handle_backend(*handle)?;
             if handle.class_id.raw() != class_id
                 || !seen.insert((handle.slot, handle.generation, handle.organism_id.raw()))
             {
                 return Err(ScaffoldContractError::LearningEvidenceMismatch);
             }
-            let packet = OutcomeCreditPacket::from_sealed_patch(patch)?;
+            let packet = OutcomeCreditPacket::from_sealed_patch(patch)?
+                .with_biochemical_receptors(receptors)?;
             let outcome = GpuOutcomeCreditRecord::try_from(&packet)?;
             let pool = self
                 .class_buckets

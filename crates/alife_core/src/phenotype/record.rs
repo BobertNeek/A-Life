@@ -4,9 +4,9 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
-    genome::CognitiveArchitectureGenomeParameters, Blake3Digest, BrainCapacityClass,
-    BrainClassId, CanonicalDigestBuilder, FoundationAbiBinding, LanguageCodebookV1, LobeLayout,
-    PhenotypeHash, ScaffoldContractError, SensorProfile,
+    genome::CognitiveArchitectureGenomeParameters, Blake3Digest, BrainCapacityClass, BrainClassId,
+    CanonicalDigestBuilder, FoundationAbiBinding, LanguageCodebookV1, LobeLayout, PhenotypeHash,
+    ScaffoldContractError, SensorProfile,
 };
 
 use super::abi_validation::{
@@ -249,10 +249,8 @@ impl BrainPhenotype {
             compute_abi_digests(capacity, &projections, &synapses);
         let foundation_abi = inputs.foundation_abi().clone();
         let language_codebook = foundation_abi.language_codebook().clone();
-        let cognitive_architecture = CognitiveArchitecturePlan::compile(
-            inputs.genome().cognitive_architecture(),
-            capacity,
-        )?;
+        let cognitive_architecture =
+            CognitiveArchitecturePlan::compile(inputs.genome().cognitive_architecture(), capacity)?;
         let mut value = Self {
             schema_version: PHENOTYPE_SCHEMA_VERSION,
             compiler_inputs_digest: inputs.canonical_digest(),
@@ -486,15 +484,15 @@ impl BrainPhenotype {
                     return Err(ScaffoldContractError::PhenotypeCompile)
                 }
                 ProjectionKind::ActionAndSpeechDecoder
-                    if projection.source_lobe() != crate::LobeKind::MotorArbitration
-                        || projection.target_lobe() != crate::LobeKind::MotorArbitration
+                    if projection.source_lobe() != crate::LobeKind::ActionPlanning
+                        || projection.target_lobe() != crate::LobeKind::ActionPlanning
                         || projection.projection_type() != crate::ProjectionType::MotorProposal =>
                 {
                     return Err(ScaffoldContractError::PhenotypeCompile)
                 }
                 ProjectionKind::MemoryDecoder
-                    if projection.source_lobe() != crate::LobeKind::EpisodicMemory
-                        || projection.target_lobe() != crate::LobeKind::CoreAssociation
+                    if projection.source_lobe() != crate::LobeKind::MemoryInterface
+                        || projection.target_lobe() != crate::LobeKind::TemporalPredictive
                         || projection.projection_type() != crate::ProjectionType::Feedback =>
                 {
                     return Err(ScaffoldContractError::PhenotypeCompile)

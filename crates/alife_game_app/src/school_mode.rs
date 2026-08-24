@@ -395,7 +395,7 @@ pub fn run_school_mode_smoke_with_config(
     config: SchoolModeConfig,
 ) -> Result<SchoolModeSummary, GameAppShellError> {
     config.validate()?;
-    let world = HeadlessScenarioBuilder::new(config.seed)
+    let mut world = HeadlessScenarioBuilder::new(config.seed)
         .agent("school-learner", config.learner_id, Vec3f::ZERO)
         .social_agent(
             "teacher-avatar",
@@ -404,12 +404,6 @@ pub fn run_school_mode_smoke_with_config(
             0.75,
         )
         .food("teaching-berry", Vec3f::new(1.0, 0.0, 0.0), 0.75)
-        .teacher_token(
-            "teacher-word-food",
-            Vec3f::new(0.45, 0.0, 0.0),
-            77,
-            TeacherPerceptionChannel::Hearing,
-        )
         .build()?;
     let learner_stable_id =
         world
@@ -429,13 +423,6 @@ pub fn run_school_mode_smoke_with_config(
             .ok_or(GameAppShellError::VisibleWorldMismatch {
                 message: "G10 highlighted object stable ID must exist",
             })?;
-    let cue_token_id =
-        world
-            .entity_id("teacher-word-food")
-            .ok_or(GameAppShellError::VisibleWorldMismatch {
-                message: "G10 teacher token stable ID must exist",
-            })?;
-
     let lesson_id = LessonId::new(10_100)?;
     let curriculum = Curriculum {
         schema_version: TEACHER_SCHOOL_SCHEMA_VERSION,
@@ -444,14 +431,10 @@ pub fn run_school_mode_smoke_with_config(
             role: TeacherRole::Tutor,
             kind: CurriculumStepKind::NameObject,
             prompt_cues: vec![
-                TeacherPerceptualEvent::spoken_token(lesson_id, 77),
-                TeacherPerceptualEvent::gesture(lesson_id, 24),
-                TeacherPerceptualEvent::object_highlight(
-                    lesson_id,
-                    object_id,
-                    NormalizedScalar::new(0.85)?,
-                ),
-                TeacherPerceptualEvent::social_feedback(
+                TeacherAct::spoken_token(lesson_id, 77),
+                TeacherAct::gesture(lesson_id, 24),
+                TeacherAct::object_highlight(lesson_id, object_id, NormalizedScalar::new(0.85)?),
+                TeacherAct::social_feedback(
                     lesson_id,
                     FeedbackPolarity::Praise,
                     Confidence::new(0.8)?,
@@ -470,7 +453,7 @@ pub fn run_school_mode_smoke_with_config(
                 VerifierCheck::NoDirectTeacherActionSelection,
                 VerifierCheck::SelectedByArbitration,
             ],
-            feedback_events: vec![TeacherPerceptualEvent::social_approval(
+            feedback_events: vec![TeacherAct::social_approval(
                 lesson_id,
                 NormalizedScalar::new(0.65)?,
             )],
@@ -482,7 +465,8 @@ pub fn run_school_mode_smoke_with_config(
     {
         return Err(GameAppShellError::Core(ScaffoldContractError::InvalidId));
     }
-    let mut runner = HeadlessCurriculumRunner::new(curriculum.clone());
+    let actor = EmbodiedTeacherActor::new(teacher_avatar_stable_id)?;
+    let mut runner = HeadlessCurriculumRunner::new(curriculum.clone(), actor);
     let dispatch = runner.dispatch_current()?;
     let current_step = runner
         .current_step()
@@ -495,6 +479,61 @@ pub fn run_school_mode_smoke_with_config(
         .all(|event| contract.accepts_event(event))
     {
         return Err(GameAppShellError::Core(ScaffoldContractError::InvalidId));
+    }
+
+    let world_teacher = world.grounded_teacher_actor(teacher_avatar_stable_id)?;
+    let mut cue_entities = Vec::with_capacity(dispatch.perception_events.len());
+    for (index, event) in dispatch.perception_events.iter().enumerate() {
+        let cue_entity = match event.input_kind {
+            TeacherInputKind::SpokenToken => {
+                let token_id =
+                    u16::try_from(event.token_id.ok_or(ScaffoldContractError::InvalidId)?)
+                        .map_err(|_| ScaffoldContractError::InvalidId)?;
+                world_teacher.speak(
+                    &mut world,
+                    Some(config.learner_id),
+                    vec![alife_core::LanguageTokenId::new(token_id)?],
+                    event.channel,
+                )?;
+                Some(teacher_avatar_stable_id)
+            }
+            TeacherInputKind::Gesture => Some(world_teacher.emit_perceptual_cue(
+                &mut world,
+                &format!("teacher-gesture-{}", index + 1),
+                event.gesture_id.ok_or(ScaffoldContractError::InvalidId)?,
+                event.channel,
+                None,
+            )?),
+            TeacherInputKind::ObjectHighlight => Some(
+                world_teacher.emit_perceptual_cue(
+                    &mut world,
+                    &format!("teacher-object-highlight-{}", index + 1),
+                    u32::try_from(
+                        event
+                            .object_entity
+                            .ok_or(ScaffoldContractError::InvalidId)?
+                            .raw(),
+                    )
+                    .map_err(|_| ScaffoldContractError::InvalidId)?,
+                    event.channel,
+                    event.object_entity,
+                )?,
+            ),
+            TeacherInputKind::SocialFeedback
+            | TeacherInputKind::SocialApproval
+            | TeacherInputKind::SocialDisapproval => Some(
+                world_teacher.emit_perceptual_cue(
+                    &mut world,
+                    &format!("teacher-social-cue-{}", index + 1),
+                    900_000_u32
+                        .checked_add(u32::try_from(index).unwrap_or(u32::MAX))
+                        .ok_or(ScaffoldContractError::InvalidId)?,
+                    event.channel,
+                    None,
+                )?,
+            ),
+        };
+        cue_entities.push(cue_entity);
     }
 
     let sensory = world.sensory_report(config.learner_id, Tick::ZERO)?;
@@ -534,7 +573,7 @@ pub fn run_school_mode_smoke_with_config(
             vec![proposal(
                 ActionKind::Inspect.canonical_id(),
                 ActionKind::Inspect,
-                Some(cue_token_id),
+                Some(teacher_avatar_stable_id),
                 None,
                 0.82,
                 0.90,
@@ -605,42 +644,20 @@ pub fn run_school_mode_smoke_with_config(
     let teacher_metadata_bypass_blocked = arbitration.selected.action_id == ActionId(10_702)
         && arbitration.selected.teacher_lesson.is_none();
 
-    let cue_lookup = [
-        (
-            TeacherInputKind::SpokenToken,
-            Some(cue_token_id),
-            "heard teacher word",
-        ),
-        (
-            TeacherInputKind::Gesture,
-            Some(teacher_avatar_stable_id),
-            "teacher points",
-        ),
-        (
-            TeacherInputKind::ObjectHighlight,
-            Some(object_id),
-            "highlighted teaching object",
-        ),
-        (
-            TeacherInputKind::SocialFeedback,
-            Some(teacher_avatar_stable_id),
-            "visible teacher praise",
-        ),
-    ];
     let cues = dispatch
         .perception_events
         .iter()
         .enumerate()
         .map(|(index, event)| {
-            let cue_entity = cue_lookup
-                .iter()
-                .find(|(kind, _, _)| *kind == event.input_kind)
-                .and_then(|(_, entity, _)| *entity);
-            let label = cue_lookup
-                .iter()
-                .find(|(kind, _, _)| *kind == event.input_kind)
-                .map(|(_, _, label)| *label)
-                .unwrap_or("teacher perception cue");
+            let cue_entity = cue_entities.get(index).copied().flatten();
+            let label = match event.input_kind {
+                TeacherInputKind::SpokenToken => "heard teacher word",
+                TeacherInputKind::Gesture => "teacher gesture",
+                TeacherInputKind::ObjectHighlight => "highlighted teaching object",
+                TeacherInputKind::SocialFeedback
+                | TeacherInputKind::SocialApproval
+                | TeacherInputKind::SocialDisapproval => "visible teacher social cue",
+            };
             SchoolCuePresentation::from_event(
                 *event,
                 cue_entity,
@@ -724,4 +741,23 @@ pub fn run_school_mode_smoke_with_config(
     };
     summary.validate()?;
     Ok(summary)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn planner_actor_events_reach_the_learner_through_grounded_world_channels() {
+        let summary = run_school_mode_smoke().unwrap();
+
+        assert!(summary.verifier_panel.passed);
+        assert!(summary.sensory_heard_tokens.contains(&77));
+        assert!(summary
+            .sensory_teacher_channels
+            .contains(&TeacherPerceptionChannel::Hearing));
+        assert!(summary.cues.iter().all(|cue| cue.perception_only));
+        assert!(summary.cues.iter().all(|cue| !cue.direct_motor_bypass));
+        assert!(summary.cues.iter().all(|cue| cue.cue_entity.is_some()));
+    }
 }

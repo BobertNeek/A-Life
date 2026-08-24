@@ -311,7 +311,7 @@ impl GpuClassBucketPlan {
             span(memory_channel_plan_words.end, counts.memory_weight_indices)?;
         let receptor_words = span(
             memory_weight_index_words.end,
-            counts.plasticity_receptors * 8,
+            counts.plasticity_receptors * 16,
         )?;
         let synapse_learning_metadata_words =
             span(receptor_words.end, counts.synapse_learning_metadata * 8)?;
@@ -364,7 +364,7 @@ impl GpuClassBucketPlan {
         )?;
         let replay_event_words = span(
             pending_eligibility_words.end,
-            phenotype.replay_capture_plan().event_capacity() as usize * 24,
+            phenotype.replay_capture_plan().event_capacity() as usize * 28,
         )?;
         let replay_sample_words = span(
             replay_event_words.end,
@@ -1176,7 +1176,7 @@ fn validate_learning_slot_layout(
             &ranges.memory_weight_index_words,
             counts.memory_weight_indices,
         ),
-        (&ranges.receptor_words, counts.plasticity_receptors * 8),
+        (&ranges.receptor_words, counts.plasticity_receptors * 16),
         (
             &ranges.synapse_learning_metadata_words,
             counts.synapse_learning_metadata * 8,
@@ -1359,22 +1359,21 @@ fn validate_learning_slot_layout(
             receptor.learning_rate,
             receptor.sleep_replay_rate,
             receptor.normalization_rate,
-            receptor.modulator_sign,
             receptor.fast_min,
             receptor.fast_max,
         ]
         .into_iter()
+        .chain(receptor.receptor_weights)
         .all(f32::is_finite);
         if !finite
             || !(0.0..=1.0).contains(&receptor.eligibility_decay)
             || !(0.0..=1.0).contains(&receptor.learning_rate)
             || !(0.0..=1.0).contains(&receptor.sleep_replay_rate)
             || !(0.0..=1.0).contains(&receptor.normalization_rate)
-            || !matches!(receptor.modulator_sign, -1.0 | 1.0)
             || !(-8.0..=8.0).contains(&receptor.fast_min)
             || !(-8.0..=8.0).contains(&receptor.fast_max)
             || receptor.fast_min >= receptor.fast_max
-            || receptor.reserved.to_bits() != 0
+            || receptor.reserved != [0.0; 2]
         {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
@@ -2048,7 +2047,7 @@ impl GpuFixedClassArenaPlan {
             &mut cursor,
             tiles
                 .checked_add(4)
-                .and_then(|count| count.checked_mul(8))
+                .and_then(|count| count.checked_mul(16))
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
         )?;
         let synapse_learning_metadata_words = span_u32(

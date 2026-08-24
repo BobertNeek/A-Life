@@ -169,7 +169,7 @@ impl CandidateDecoderPlan {
         }
         let motor = phenotype
             .lobe_layout()
-            .region(LobeKind::MotorArbitration)
+            .region(LobeKind::ActionPlanning)
             .ok_or(ScaffoldContractError::PhenotypeCompile)?;
         let motor_end = self
             .motor_start

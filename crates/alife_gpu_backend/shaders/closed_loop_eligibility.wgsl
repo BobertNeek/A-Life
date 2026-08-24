@@ -53,17 +53,15 @@ fn receptor_is_valid(receptor:GpuPlasticityReceptorRecord) -> bool {
     && finite_eligibility(receptor.learning_rate)
     && finite_eligibility(receptor.sleep_replay_rate)
     && finite_eligibility(receptor.normalization_rate)
-    && finite_eligibility(receptor.modulator_sign)
     && finite_eligibility(receptor.fast_min)
     && finite_eligibility(receptor.fast_max)
     && receptor.eligibility_decay >= 0.0 && receptor.eligibility_decay <= 1.0
     && receptor.learning_rate >= 0.0 && receptor.learning_rate <= 1.0
     && receptor.sleep_replay_rate >= 0.0 && receptor.sleep_replay_rate <= 1.0
     && receptor.normalization_rate >= 0.0 && receptor.normalization_rate <= 1.0
-    && (receptor.modulator_sign == -1.0 || receptor.modulator_sign == 1.0)
     && receptor.fast_min >= -8.0 && receptor.fast_max <= 8.0
     && receptor.fast_min < receptor.fast_max
-    && bitcast<u32>(receptor.reserved) == 0u;
+    && all(receptor.reserved == vec2<f32>(0.0));
 }
 
 fn learning_contract_is_valid(
@@ -150,7 +148,7 @@ fn accumulate_recurrent_eligibility(@builtin(global_invocation_id) gid:vec3<u32>
   }
   let metadata_base = extension.synapse_metadata_offset + local_synapse * 8u;
   let metadata = load_synapse_learning_metadata(metadata_base);
-  let receptor_base = extension.receptor_offset + metadata.receptor_index * 8u;
+  let receptor_base = extension.receptor_offset + metadata.receptor_index * 16u;
   let eligibility_decay = bitcast<f32>(immutable_plan_words[receptor_base]);
   let post_activation_offset = select(
     brain.activation_a_offset,
@@ -186,7 +184,7 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
   if (local_synapse >= header.decoder_synapse_count) { return; }
   let metadata_base = extension.decoder_metadata_offset + local_synapse * 8u;
   let metadata = load_decoder_eligibility_metadata(metadata_base);
-  let receptor_base = extension.receptor_offset + metadata.receptor_index * 8u;
+  let receptor_base = extension.receptor_offset + metadata.receptor_index * 16u;
   let eligibility_decay = bitcast<f32>(immutable_plan_words[receptor_base]);
   if (selection.status != 2u || selection.candidate_index >= header.candidate_count
       || selection.active_activation_side != header.active_activation_side) { return; }

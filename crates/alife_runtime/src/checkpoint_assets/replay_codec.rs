@@ -2,8 +2,8 @@
 
 use alife_core::{
     ActionId, CandidateActionFamily, CandidateFeatureDigest, ExperienceSequenceId,
-    NeuromodulatorSample, PerceptionFrameDigest, ReplayEligibilitySample, ReplaySynapseSpan,
-    ScaffoldContractError, SleepReplayEvent, Tick,
+    NeuromodulatorSample, NeuromodulatoryFrame, PerceptionFrameDigest, ReplayEligibilitySample,
+    ReplaySynapseSpan, ScaffoldContractError, SleepReplayEvent, Tick,
 };
 use alife_gpu_backend::{
     pack_replay_eligibility_sample, unpack_replay_eligibility_sample, GpuReplayEventRecord,
@@ -187,14 +187,17 @@ pub(crate) fn decode_physical_replay(
 }
 
 fn decode_event(row: GpuReplayEventRecord) -> Result<SleepReplayEvent, ScaffoldContractError> {
-    let modulator = NeuromodulatorSample::from_components(
+    let modulator = NeuromodulatorSample::from_frame(NeuromodulatoryFrame::try_new([
         row.prediction_residual,
         row.pain,
         row.homeostatic_improvement,
         row.frustration,
         row.novelty,
-    )?;
-    if modulator.value().to_bits() != row.modulator_value.to_bits() {
+        row.social_consequence,
+        row.biochemical_appetitive,
+        row.biochemical_aversive,
+    ])?);
+    if row.reserved != [0; 2] {
         return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
     }
     Ok(SleepReplayEvent {
@@ -228,7 +231,10 @@ fn encode_event(event: SleepReplayEvent) -> Result<GpuReplayEventRecord, Scaffol
         homeostatic_improvement: event.modulator.homeostatic_improvement(),
         frustration: event.modulator.frustration(),
         novelty: event.modulator.novelty(),
-        modulator_value: event.modulator.value(),
+        social_consequence: event.modulator.frame().lanes()[5],
+        biochemical_appetitive: event.modulator.frame().lanes()[6],
+        biochemical_aversive: event.modulator.frame().lanes()[7],
+        reserved: [0; 2],
     })
 }
 
@@ -245,7 +251,10 @@ const fn zero_event() -> GpuReplayEventRecord {
         homeostatic_improvement: 0.0,
         frustration: 0.0,
         novelty: 0.0,
-        modulator_value: 0.0,
+        social_consequence: 0.0,
+        biochemical_appetitive: 0.0,
+        biochemical_aversive: 0.0,
+        reserved: [0; 2],
     }
 }
 

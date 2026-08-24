@@ -257,3 +257,94 @@
 - [ ] **Step 5: Review, stage, and commit only intended files**
 
   Inspect `git diff --check`, `git status --short`, and the staged file list before committing. Do not merge or start gameplay work.
+
+### Task 7: Close the v2 founder-region and neuromodulatory ABI debt
+
+**Requirements:** AOA-REG-001..010, AOA-BIO-019..023, AOA-BIO-027..028, AOA-LEARN-002..010, AOA-MIG-002..005.
+
+**Files:**
+
+- Modify: `crates/alife_core/src/lobe.rs`
+- Modify: `crates/alife_core/src/learning.rs`
+- Modify: `crates/alife_core/src/genome.rs`
+- Modify: `crates/alife_core/src/phenotype/learning.rs`
+- Modify: `crates/alife_gpu_backend/src/closed_loop_learning.rs`
+- Modify: `crates/alife_gpu_backend/src/closed_loop_buffers/abi.rs`
+- Modify: `crates/alife_gpu_backend/src/closed_loop_buffers/upload.rs`
+- Modify: `crates/alife_gpu_backend/shaders/closed_loop_abi.wgsl`
+- Modify: `crates/alife_gpu_backend/shaders/closed_loop_plasticity.wgsl`
+- Modify: `crates/alife_gpu_backend/shaders/closed_loop_replay_learning.wgsl`
+- Test: `crates/alife_core/tests/v2_architecture_completion.rs`
+- Test: focused GPU ABI tests in `crates/alife_gpu_backend/src`
+
+**Interfaces:**
+
+- `LobeKind` contains exactly the nine permanent founder homologues. `LegacyLobeKindV1` and a deterministic range migration preserve old neuron and weight indices without retaining the 17-region model as production authority.
+- `NeuromodulatoryFrame` keeps bounded, inspectable lanes. `PlasticityReceptorProfile` projects those lanes locally. The GPU upload and WGSL consume the lane vector and receptor vector directly and contain no universal modulator value or sign.
+- Production derives `NeuralReceptorEffects` from the complete tick-bound biochemical receptor frame. Those effects alter the GPU-bound cognitive frame and the plasticity lanes.
+
+- [x] Write the focused contract tests and run them RED.
+- [x] Implement the nine-homologue ABI and deterministic v1 range migration.
+- [x] Implement the lane/receptor CPU and GPU ABI, then update waking and replay WGSL.
+- [x] Route the authoritative biochemical receptor frame through production cognition and learning.
+- [x] Run the focused tests GREEN.
+
+### Task 8: Heritable chemistry, organ, embodiment, and organism state graph
+
+**Requirements:** AOA-GEN-001..010, AOA-BIO-003..016, AOA-BODY-001..010, AOA-EMB-001..006, AOA-AUTH-001..005, AOA-INV-003, AOA-INV-009, AOA-INV-011.
+
+**Files:**
+
+- Modify: `crates/alife_core/src/biochemical_graph.rs`
+- Modify: `crates/alife_core/src/evolutionary_genetics.rs`
+- Modify: `crates/alife_core/src/biochemistry.rs`
+- Create: `crates/alife_core/src/embodiment.rs`
+- Modify: `crates/alife_world/src/organism.rs`
+- Modify: `crates/alife_game_app/src/gpu_live_runtime.rs`
+- Test: `crates/alife_core/tests/v2_architecture_completion.rs`
+- Test: `crates/alife_world/tests/v2_organism_state_graph.rs`
+
+**Interfaces:**
+
+- `BiochemicalGraphChromosome` owns bounded heritable species, reaction, emitter, receptor, and neuroemitter genes. Expression compiles only those genes. Recombination and validation operate on genes, never live concentrations.
+- `BodyState` owns typed organ physiology. Compatibility scalars become checked projections of organs, not a second authority.
+- `EmbodimentState` persists typed sensor/effector calibration and body-schema state independently of cognitive memory.
+- `OrganismSubsystemStateGraph` binds concrete body/chemistry, brain, memory, and embodiment revisions to one organism and causal sequence. Runtime caches must validate and advance those revisions through the world record.
+
+- [x] Write the focused contract tests and run them RED.
+- [x] Move graph topology into the chromosome and integrate founder expression/recombination.
+- [x] Add typed organs and independent embodiment state.
+- [x] Replace owner-only authority with the validated subsystem state graph and production revision commits.
+- [x] Run the focused tests GREEN.
+
+### Task 9: Deterministic migrations and grounded teacher authority
+
+**Requirements:** AOA-MIG-001..007, AOA-PERSIST-001..004, AOA-TEACH-001..008, AOA-LEARN-010.
+
+**Files:**
+
+- Create: `crates/alife_core/src/migration_v2.rs`
+- Modify: `crates/alife_core/src/version.rs`
+- Modify: `crates/alife_world/src/persistence.rs`
+- Modify: `crates/alife_school/src/teacher.rs`
+- Modify: `crates/alife_school/src/runner.rs`
+- Modify: `crates/alife_school/src/curriculum.rs`
+- Test: `crates/alife_core/tests/v2_schema_migrations.rs`
+- Test: `crates/alife_school/tests/school_teacher_contracts.rs`
+
+**Interfaces:**
+
+- Every changed durable contract has an explicit source-version decoder, deterministic transformer, migration receipt, and unsupported-version error. Deserialization never resets or fills missing authoritative state silently.
+- `TeacherPlanner` returns only a bounded `LessonPlan`. `EmbodiedTeacherActor` is the sole converter from approved teacher acts to ordinary world/perception events. The runner accepts actor output, never planner output.
+
+- [x] Write deterministic migration and teacher-bypass tests and run them RED.
+- [x] Implement version transitions and fail-closed loaders.
+- [x] Split planner diagnostics from embodied acts and route every school runner path through the actor.
+- [x] Run focused tests GREEN.
+
+### Task 10: Repeat the consolidated review and publish Phase 2
+
+- [x] Run one economical static/compile/focused-test pass.
+- [x] Trace the repaired production paths against every affected AOA requirement.
+- [x] Update `docs/architecture/ALife_v2.0_Compliance_2026-08-24.md` and its CSV matrix with exact grades and remaining violations.
+- [x] Commit only intended files, compare against `origin/main`, push `aoa-v2-architecture-repair-20260824`, and stop before Phase 3.

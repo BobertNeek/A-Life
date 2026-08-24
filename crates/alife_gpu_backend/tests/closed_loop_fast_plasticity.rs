@@ -159,7 +159,7 @@ fn assert_pending_matches_patch(
 #[test]
 fn outcome_credit_record_matches_the_frozen_abi() {
     assert_eq!(std::mem::align_of::<GpuOutcomeCreditRecord>(), 16);
-    assert_eq!(std::mem::size_of::<GpuOutcomeCreditRecord>(), 160);
+    assert_eq!(std::mem::size_of::<GpuOutcomeCreditRecord>(), 176);
     assert_eq!(
         std::mem::offset_of!(GpuOutcomeCreditRecord, active_activation_side),
         76
@@ -177,8 +177,8 @@ fn outcome_credit_record_matches_the_frozen_abi() {
         128
     );
     assert_eq!(
-        std::mem::offset_of!(GpuOutcomeCreditRecord, modulator_value),
-        156
+        std::mem::offset_of!(GpuOutcomeCreditRecord, biochemical_aversive),
+        160
     );
 }
 
@@ -264,7 +264,10 @@ fn rewarding_outcome_changes_next_encounter_before_sleep() {
         .unwrap()
         .remove(0);
     let patch = sealed_outcome(handle, &first_frame, &first_tick, 1, 0.8, 0.0);
-    let receipt = backend.apply_sealed_outcome(handle, &patch).unwrap();
+    let receptors = support::test_receptor_frame(&patch);
+    let receipt = backend
+        .apply_sealed_outcome(handle, &patch, &receptors)
+        .unwrap();
 
     assert_eq!(receipt.handle, handle);
     assert_eq!(receipt.sequence_id, ExperienceSequenceId(1));
@@ -469,10 +472,16 @@ fn same_class_learning_batch_spans_fixed_arenas_without_aliasing_slots() {
             sealed_outcome(*handle, frame, tick, 1, 0.5 + index as f32 * 0.05, 0.0)
         })
         .collect::<Vec<_>>();
+    let receptors = patches
+        .iter()
+        .map(support::test_receptor_frame)
+        .collect::<Vec<_>>();
     let learning_batch = handles
         .iter()
         .copied()
         .zip(patches.iter())
+        .zip(receptors.iter())
+        .map(|((handle, patch), receptors)| (handle, patch, receptors))
         .collect::<Vec<_>>();
     let receipts = backend.apply_sealed_outcome_batch(&learning_batch).unwrap();
     assert_eq!(receipts.len(), handles.len());
@@ -529,8 +538,13 @@ fn modulator_credit_changes_the_next_encounter_relative_to_a_sealed_neutral_outc
             backend.pending_eligibility(handle_b).unwrap(),
             Some(ticks[1].pending_eligibility)
         );
+        let receptors_a = support::test_receptor_frame(&neutral_a);
+        let receptors_b = support::test_receptor_frame(&neutral_b);
         let receipts = backend
-            .apply_sealed_outcome_batch(&[(handle_a, &neutral_a), (handle_b, &neutral_b)])
+            .apply_sealed_outcome_batch(&[
+                (handle_a, &neutral_a, &receptors_a),
+                (handle_b, &neutral_b, &receptors_b),
+            ])
             .unwrap_or_else(|error| panic!("neutral warmup exposure {exposure} failed: {error:?}"));
         assert_eq!(receipts[0].fast_weights_changed, 0);
         assert_eq!(receipts[1].fast_weights_changed, 0);
@@ -555,8 +569,13 @@ fn modulator_credit_changes_the_next_encounter_relative_to_a_sealed_neutral_outc
     assert!((first[0].selection.logit - first[1].selection.logit).abs() <= f32::EPSILON);
     let rewarded = sealed_outcome(handle_a, &frame_a, &first[0], 9, 0.8, 0.0);
     let neutral = sealed_outcome(handle_b, &frame_b, &first[1], 9, 0.0, 0.0);
+    let rewarded_receptors = support::test_receptor_frame(&rewarded);
+    let neutral_receptors = support::test_receptor_frame(&neutral);
     let receipts = backend
-        .apply_sealed_outcome_batch(&[(handle_a, &rewarded), (handle_b, &neutral)])
+        .apply_sealed_outcome_batch(&[
+            (handle_a, &rewarded, &rewarded_receptors),
+            (handle_b, &neutral, &neutral_receptors),
+        ])
         .unwrap();
     assert_eq!(receipts.len(), 2);
     assert!(receipts[0].fast_weights_changed > 0);
@@ -641,11 +660,12 @@ fn reward_and_pain_change_the_next_decision_in_opposite_directions() {
                 0.0,
             )
         });
+        let receptors = patches.each_ref().map(support::test_receptor_frame);
         backend
             .apply_sealed_outcome_batch(&[
-                (handles[0], &patches[0]),
-                (handles[1], &patches[1]),
-                (handles[2], &patches[2]),
+                (handles[0], &patches[0], &receptors[0]),
+                (handles[1], &patches[1], &receptors[1]),
+                (handles[2], &patches[2], &receptors[2]),
             ])
             .unwrap_or_else(|error| {
                 panic!("opposed-credit warmup exposure {exposure} failed: {error:?}")
@@ -672,11 +692,12 @@ fn reward_and_pain_change_the_next_decision_in_opposite_directions() {
         sealed_outcome(handles[1], &frames[1], &before[1], 9, 0.0, 0.8),
         sealed_outcome(handles[2], &frames[2], &before[2], 9, 0.0, 0.0),
     ];
+    let receptors = patches.each_ref().map(support::test_receptor_frame);
     let receipts = backend
         .apply_sealed_outcome_batch(&[
-            (handles[0], &patches[0]),
-            (handles[1], &patches[1]),
-            (handles[2], &patches[2]),
+            (handles[0], &patches[0], &receptors[0]),
+            (handles[1], &patches[1], &receptors[1]),
+            (handles[2], &patches[2], &receptors[2]),
         ])
         .unwrap();
     assert!(receipts[0].fast_weights_changed > 0);
@@ -735,7 +756,10 @@ fn decoder_credit_is_selected_family_and_selected_feature_specific() {
             .unwrap()
             .remove(0);
         let neutral = sealed_outcome(handle, &frame, &tick, exposure + 1, 0.0, 0.0);
-        backend.apply_sealed_outcome(handle, &neutral).unwrap();
+        let receptors = support::test_receptor_frame(&neutral);
+        backend
+            .apply_sealed_outcome(handle, &neutral, &receptors)
+            .unwrap();
     }
     let frame = support::perception_frame_for_profile_at_tick(
         organism.raw(),
@@ -750,7 +774,10 @@ fn decoder_credit_is_selected_family_and_selected_feature_specific() {
         .remove(0);
     let selected = frame.candidates()[usize::from(tick.selection.candidate_index)];
     let reward = sealed_outcome(handle, &frame, &tick, 9, 0.8, 0.0);
-    backend.apply_sealed_outcome(handle, &reward).unwrap();
+    let receptors = support::test_receptor_frame(&reward);
+    backend
+        .apply_sealed_outcome(handle, &reward, &receptors)
+        .unwrap();
     let fast = backend.read_active_fast_weights_for_test(handle).unwrap();
     assert_eq!(fast.len(), phenotype.synapses().len());
 
@@ -807,9 +834,12 @@ fn replayed_sealed_credit_is_rejected_without_blocking_a_later_tick() {
         .unwrap()
         .remove(0);
     let patch = sealed_outcome(handle, &frame, &tick, 1, 0.8, 0.0);
-    let committed = backend.apply_sealed_outcome(handle, &patch).unwrap();
+    let receptors = support::test_receptor_frame(&patch);
+    let committed = backend
+        .apply_sealed_outcome(handle, &patch, &receptors)
+        .unwrap();
     assert_eq!(
-        backend.apply_sealed_outcome(handle, &patch),
+        backend.apply_sealed_outcome(handle, &patch, &receptors),
         Err(alife_core::ScaffoldContractError::LearningReplayRejected)
     );
 
@@ -859,8 +889,9 @@ fn foreign_outcome_is_rejected_before_gpu_mutation_and_preserves_both_pending_ro
         backend.pending_eligibility(handles[1]).unwrap().unwrap(),
     ];
     let patch_a = sealed_outcome(handles[0], &frames[0], &ticks[0], 1, 0.8, 0.0);
+    let receptors = support::test_receptor_frame(&patch_a);
     assert_eq!(
-        backend.apply_sealed_outcome(handles[1], &patch_a),
+        backend.apply_sealed_outcome(handles[1], &patch_a, &receptors),
         Err(alife_core::ScaffoldContractError::LearningEvidenceMismatch)
     );
     assert_eq!(
@@ -923,7 +954,14 @@ fn abi_conversion_uses_only_validated_sealed_credit() {
         record.dispatch_generation[0] as u64,
         tick.dispatch_generation & 0xffff_ffff
     );
-    assert_eq!(record.modulator_value, packet.modulator().value());
+    assert_eq!(
+        record.biochemical_appetitive,
+        packet.modulator().frame().lanes()[6]
+    );
+    assert_eq!(
+        record.biochemical_aversive,
+        packet.modulator().frame().lanes()[7]
+    );
 
     backend
         .discard_pending_eligibility(handle, tick.pending_eligibility.identity())

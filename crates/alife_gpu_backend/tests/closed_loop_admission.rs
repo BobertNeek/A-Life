@@ -74,10 +74,14 @@ fn admission_is_runtime_budgeted_and_release_reclaims_exact_bytes() {
     let (stale_frame, stale_recall) = finalized_memory_frame(1, 101);
     let stale_upload = backend
         .prepare_memory_context_upload(a, &stale_frame, &stale_recall)
+        .unwrap()
+        .bind_neural_receptor_effects(support::test_receptor_effects(stale_frame.tick()))
         .unwrap();
     let (live_frame, live_recall) = finalized_memory_frame(2, 101);
     let live_upload = backend
         .prepare_memory_context_upload(b, &live_frame, &live_recall)
+        .unwrap()
+        .bind_neural_receptor_effects(support::test_receptor_effects(live_frame.tick()))
         .unwrap();
 
     let before_release = backend.admission_receipt().clone();
@@ -288,9 +292,13 @@ fn heterogeneous_same_class_memory_batch_keeps_slot_state_disjoint() {
     let (frame_b, recall_b) = finalized_memory_frame(12, 401);
     let upload_a = backend
         .prepare_memory_context_upload(handles[0], &frame_a, &recall_a)
+        .unwrap()
+        .bind_neural_receptor_effects(support::test_receptor_effects(frame_a.tick()))
         .unwrap();
     let upload_b = backend
         .prepare_memory_context_upload(handles[1], &frame_b, &recall_b)
+        .unwrap()
+        .bind_neural_receptor_effects(support::test_receptor_effects(frame_b.tick()))
         .unwrap();
     let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![
         GpuClosedLoopMemoryTickInput::try_new(handles[0], &frame_a, &upload_a).unwrap(),
@@ -322,6 +330,8 @@ fn heterogeneous_same_class_memory_batch_keeps_slot_state_disjoint() {
     let (frame_a_only, recall_a_only) = finalized_memory_frame(11, 402);
     let upload_a_only = backend
         .prepare_memory_context_upload(handles[0], &frame_a_only, &recall_a_only)
+        .unwrap()
+        .bind_neural_receptor_effects(support::test_receptor_effects(frame_a_only.tick()))
         .unwrap();
     let only_a =
         GpuClosedLoopMemoryBatchInput::try_new(vec![GpuClosedLoopMemoryTickInput::try_new(
@@ -378,12 +388,18 @@ fn mixed_class_memory_batch_preserves_input_identity_on_one_backend() {
     let (frame_2048, recall_2048) = finalized_memory_frame(handles[2].organism_id().raw(), 501);
     let upload_512 = backend
         .prepare_memory_context_upload(handles[0], &frame_512, &recall_512)
+        .unwrap()
+        .bind_neural_receptor_effects(support::test_receptor_effects(frame_512.tick()))
         .unwrap();
     let upload_1024 = backend
         .prepare_memory_context_upload(handles[1], &frame_1024, &recall_1024)
+        .unwrap()
+        .bind_neural_receptor_effects(support::test_receptor_effects(frame_1024.tick()))
         .unwrap();
     let upload_2048 = backend
         .prepare_memory_context_upload(handles[2], &frame_2048, &recall_2048)
+        .unwrap()
+        .bind_neural_receptor_effects(support::test_receptor_effects(frame_2048.tick()))
         .unwrap();
     let expected_order = [handles[2], handles[0], handles[1]];
     let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![

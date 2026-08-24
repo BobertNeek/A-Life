@@ -354,8 +354,13 @@ impl N2048ActiveBatteryRunner {
                     .record_decision(decision)?
                     .record_outcome(outcome)?
                     .seal()?;
+                let pending = self
+                    .session
+                    .pending_eligibility(handle)?
+                    .ok_or(ScaffoldContractError::MissingPhaseData)?;
                 self.session
-                    .apply_sealed_outcome_batch(&[(handle, &patch)])?;
+                    .discard_pending_eligibility(handle, pending.identity())?;
+                require_canonical_chemistry_for_learning()?;
 
                 let selected_mate =
                     patch
@@ -649,7 +654,11 @@ fn run_challenge(
             .record_decision(decision)?
             .record_outcome(outcome)?
             .seal()?;
-        session.apply_sealed_outcome_batch(&[(handle, &patch)])?;
+        let pending = session
+            .pending_eligibility(handle)?
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        session.discard_pending_eligibility(handle, pending.identity())?;
+        require_canonical_chemistry_for_learning()?;
         *sealed_outcomes = sealed_outcomes.saturating_add(1);
 
         score.observations = score.observations.saturating_add(1);
@@ -706,6 +715,12 @@ fn build_challenge_world(
     organism_id: OrganismId,
 ) -> Result<HeadlessWorld, ScaffoldContractError> {
     let base = HeadlessScenarioBuilder::new(seed).agent("candidate", organism_id, Vec3f::ZERO);
+    let teacher_id = OrganismId(
+        organism_id
+            .raw()
+            .checked_add(2)
+            .ok_or(ScaffoldContractError::InvalidId)?,
+    );
     let builder = match kind {
         ActiveChallengeKind::VisibleRewardNavigation => base
             .food("reward", Vec3f::new(2.0, 0.0, 0.0), 1.0)
@@ -739,6 +754,12 @@ fn build_challenge_world(
         | ActiveChallengeKind::WordObjectGrounding
         | ActiveChallengeKind::ActionWordGrounding
         | ActiveChallengeKind::WhatWhyNarration => base
+            .social_agent(
+                "challenge-teacher",
+                teacher_id,
+                Vec3f::new(0.25, 0.0, 0.0),
+                0.75,
+            )
             .food("language-object", Vec3f::new(2.0, 0.0, 0.0), 0.8)
             .token("language-marker", Vec3f::new(-1.0, 0.0, 0.0), 103),
         ActiveChallengeKind::PeerTaughtAlias | ActiveChallengeKind::SlmDisabledDialectTransfer => {
@@ -770,9 +791,12 @@ fn prime_challenge_language(
         ActiveChallengeKind::WordObjectGrounding
         | ActiveChallengeKind::ActionWordGrounding
         | ActiveChallengeKind::WhatWhyNarration => {
-            world.emit_teacher_tokens(
+            let teacher_entity = world
+                .entity_id("challenge-teacher")
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            world.grounded_teacher_actor(teacher_entity)?.speak(
+                world,
                 Some(organism_id),
-                Vec3f::new(0.25, 0.0, 0.0),
                 vec![LanguageTokenId::new(41)?, LanguageTokenId::new(113)?],
                 TeacherPerceptionChannel::Hearing,
             )?;
@@ -891,6 +915,10 @@ const fn minimum_world_object_count(kind: ActiveChallengeKind) -> u16 {
         | ActiveChallengeKind::SlmDisabledDialectTransfer => 4,
         _ => 3,
     }
+}
+
+fn require_canonical_chemistry_for_learning() -> Result<(), ScaffoldContractError> {
+    Err(ScaffoldContractError::MissingPhaseData)
 }
 
 fn ratio_q16(numerator: u32, denominator: u32) -> u32 {

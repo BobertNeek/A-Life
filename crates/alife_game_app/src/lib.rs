@@ -19,10 +19,10 @@ mod prelude {
         Tick, UnresolvedGapId, Validate, Vec3f, WorldEntityId,
     };
     pub(crate) use alife_school::{
-        Curriculum, CurriculumStep, CurriculumStepKind, ExpectedObservation, FeedbackPolarity,
-        HeadlessCurriculumRunner, LessonId, LessonResponse, LessonResponseKind,
-        PatchLogLessonVerifier, SchoolEvidence, TeacherChannelContract, TeacherInputKind,
-        TeacherPerceptualEvent, TeacherRole, TopologySummary, VerifierCheck,
+        Curriculum, CurriculumStep, CurriculumStepKind, EmbodiedTeacherActor, ExpectedObservation,
+        FeedbackPolarity, HeadlessCurriculumRunner, LessonId, LessonResponse, LessonResponseKind,
+        PatchLogLessonVerifier, SchoolEvidence, TeacherAct, TeacherChannelContract,
+        TeacherInputKind, TeacherPerceptualEvent, TeacherRole, TopologySummary, VerifierCheck,
         TEACHER_SCHOOL_SCHEMA_VERSION,
     };
     pub(crate) use alife_semantic::{

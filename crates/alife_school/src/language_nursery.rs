@@ -136,12 +136,39 @@ impl LanguageNursery {
                 self.world
                     .emit_player_tokens(Some(self.subject), source_position, tokens)?
             }
-            NurserySpeaker::Teacher { source_position } => self.world.emit_teacher_tokens(
-                Some(self.subject),
-                source_position,
-                tokens,
-                TeacherPerceptionChannel::Hearing,
-            )?,
+            NurserySpeaker::Teacher { source_position } => {
+                let teacher_entity = if let Some(existing) = self.world.entity_id("nursery-teacher")
+                {
+                    self.world.editor_move_object(existing, source_position)?;
+                    existing
+                } else {
+                    let mut raw = self
+                        .subject
+                        .raw()
+                        .checked_add(1)
+                        .ok_or(ScaffoldContractError::InvalidId)?;
+                    while self
+                        .world
+                        .organism_entity_ids()
+                        .iter()
+                        .any(|(candidate, _)| candidate.raw() == raw)
+                    {
+                        raw = raw.checked_add(1).ok_or(ScaffoldContractError::InvalidId)?;
+                    }
+                    self.world.spawn_social_agent(
+                        "nursery-teacher",
+                        OrganismId(raw),
+                        source_position,
+                        0.75,
+                    )?
+                };
+                self.world.grounded_teacher_actor(teacher_entity)?.speak(
+                    &mut self.world,
+                    Some(self.subject),
+                    tokens,
+                    TeacherPerceptionChannel::Hearing,
+                )?
+            }
             NurserySpeaker::Peer {
                 organism_id,
                 source_position,

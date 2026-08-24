@@ -31,8 +31,12 @@ impl SleepReplayEvent {
         self.action_id.validate()?;
         if self.frame_digest == PerceptionFrameDigest([0; 4])
             || self.candidate_feature_digest == CandidateFeatureDigest([0; 2])
-            || !self.modulator.value().is_finite()
-            || !(-1.0..=1.0).contains(&self.modulator.value())
+            || self
+                .modulator
+                .frame()
+                .lanes()
+                .iter()
+                .any(|value| !value.is_finite() || !(-1.0..=1.0).contains(value))
         {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
         }
@@ -82,7 +86,9 @@ impl BoundedReplayBatch {
             digest.write_f32(event.modulator.homeostatic_improvement())?;
             digest.write_f32(event.modulator.frustration())?;
             digest.write_f32(event.modulator.novelty())?;
-            digest.write_f32(event.modulator.value())?;
+            for lane in event.modulator.frame().lanes() {
+                digest.write_f32(*lane)?;
+            }
         }
         digest.write_sequence_len(self.synapse_spans.len());
         for span in &self.synapse_spans {
