@@ -26,6 +26,8 @@ use super::{
 };
 
 const GPU_PENDING_ELIGIBILITY_RECORD_WORDS: u32 = 36;
+const GPU_REPLAY_EVENT_RECORD_WORDS: u32 =
+    (std::mem::size_of::<super::GpuReplayEventRecord>() / 4) as u32;
 
 fn dendritic_branch_capacity(neuron_count: u32) -> Result<u32, GpuClosedLoopError> {
     neuron_count
@@ -2108,7 +2110,7 @@ impl GpuFixedClassArenaPlan {
             &mut cursor,
             execution
                 .max_replay_events()
-                .checked_mul(24)
+                .checked_mul(GPU_REPLAY_EVENT_RECORD_WORDS)
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
         )?;
         let replay_sample_words =
@@ -2213,7 +2215,7 @@ impl GpuFixedClassArenaPlan {
         let sleep_frame_words = 44_u64
             .checked_add(
                 u64::from(execution.max_replay_events())
-                    .checked_mul(24)
+                    .checked_mul(u64::from(GPU_REPLAY_EVENT_RECORD_WORDS))
                     .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
             )
             .and_then(|value| value.checked_add(u64::from(MAX_REPLAY_CAPTURE_SYNAPSES) * 4))
