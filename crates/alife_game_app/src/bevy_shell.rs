@@ -5387,9 +5387,54 @@ pub fn run_graphical_playground_window_with_controls(
 pub fn build_production_voxel_frontend_app_shell(
     launch: &crate::ProductionVoxelLaunchConfig,
 ) -> Result<(App, crate::ProductionVoxelLaunchSummary), GameAppShellError> {
-    let summary = crate::run_production_voxel_frontend_preflight(launch)?;
     #[cfg(feature = "gpu-runtime")]
     {
+        if let crate::ProductionWorldSource::NewGame { seed } = launch.world_source {
+            let save_path = launch.canonical_new_game_save_path()?;
+            let save_directory = save_path.parent().ok_or_else(|| {
+                GameAppShellError::InvalidProductionFrontend {
+                    message: "canonical New Game save path requires a parent directory".to_string(),
+                }
+            })?;
+            std::fs::create_dir_all(save_directory)?;
+            let assets = alife_world::AssetManifest::from_json_file(
+                &launch.app_launch.asset_manifest_path,
+            )?;
+            assets.validate_with_root(&launch.app_launch.asset_root)?;
+            let mut config = alife_world::RuntimeConfig::deterministic_default(
+                seed,
+                alife_core::BrainScaleTier::Nano512,
+            );
+            config.features.gpu_backend_enabled = true;
+            let created = crate::create_canonical_new_game_runtime(
+                crate::CanonicalNewGameLaunchRequest {
+                    world_seed: seed,
+                    population: launch.effective_population(),
+                    save_path,
+                    asset_root: launch.app_launch.asset_root.clone(),
+                    config,
+                    assets,
+                },
+            )?;
+            let exact_save = created.exact_save.clone();
+            let mut admitted_launch = launch.clone();
+            admitted_launch.app_launch.save_path = created.save_path;
+            let summary = crate::run_production_voxel_frontend_preflight(&admitted_launch)?;
+            let persisted = PortableSaveFile::from_json_file(&summary.save_path)?;
+            if persisted != exact_save {
+                return Err(GameAppShellError::InvalidProductionFrontend {
+                    message: "production New Game preflight changed the exact canonical save"
+                        .to_string(),
+                });
+            }
+            return build_production_voxel_frontend_app_shell_inner(
+                &admitted_launch,
+                summary,
+                created.runtime,
+            );
+        }
+
+        let summary = crate::run_production_voxel_frontend_preflight(launch)?;
         let runtime_launch = prepare_production_gpu_runtime_launch(launch, &summary)?;
         let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required(
             alife_gpu_backend::GpuRuntimeProfile::production_v1(),
@@ -5408,6 +5453,7 @@ pub fn build_production_voxel_frontend_app_shell(
     }
     #[cfg(not(feature = "gpu-runtime"))]
     {
+        let summary = crate::run_production_voxel_frontend_preflight(launch)?;
         build_production_voxel_frontend_app_shell_inner(launch, summary)
     }
 }

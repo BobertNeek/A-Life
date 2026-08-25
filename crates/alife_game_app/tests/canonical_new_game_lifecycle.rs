@@ -1,4 +1,6 @@
-use std::{collections::BTreeSet, path::PathBuf};
+#[cfg(feature = "gpu-tests")]
+use std::collections::BTreeSet;
+use std::path::PathBuf;
 
 use alife_core::BrainScaleTier;
 #[cfg(feature = "gpu-tests")]
@@ -6,6 +8,12 @@ use alife_core::{
     BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity, LegacyFoundationAbiId,
     OrganismId, PolicyBackend, ProductionRuntimeAbiId, ProductionRuntimePath,
     ScaffoldContractError, SensorProfile, Tick, WorldEntityId,
+};
+#[cfg(feature = "production-voxel-frontend")]
+use alife_game_app::{
+    bevy_shell::build_production_voxel_frontend_app_shell, default_environment_manifest_path,
+    run_production_voxel_frontend_preflight, ProductionFrontendProfileId,
+    ProductionVoxelLaunchConfig, ProductionWorldSource,
 };
 #[cfg(feature = "gpu-tests")]
 use alife_game_app::{
@@ -17,9 +25,11 @@ use alife_game_app::{
 use alife_game_app::{stage_phase3_new_game, CanonicalNewGameLaunchRequest};
 #[cfg(feature = "gpu-tests")]
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile};
-use alife_world::{AssetManifest, RuntimeConfig};
+#[cfg(any(feature = "gpu-tests", feature = "production-voxel-frontend"))]
+use alife_world::PortableSaveFile;
 #[cfg(feature = "gpu-tests")]
-use alife_world::{PortableSaveFile, WorldOrganismRecord};
+use alife_world::WorldOrganismRecord;
+use alife_world::{AssetManifest, RuntimeConfig};
 
 fn phase3_request(population: u16) -> CanonicalNewGameLaunchRequest {
     let root = std::env::temp_dir().join(format!(
@@ -58,6 +68,53 @@ fn new_game_base_save_matches_every_canonical_founder() {
         .save
         .validate_with_asset_root(&staged.asset_root)
         .unwrap();
+}
+
+#[cfg(feature = "production-voxel-frontend")]
+#[test]
+fn production_new_game_source_builds_exact_runtime_before_scene_construction() {
+    let root = std::env::temp_dir().join(format!(
+        "alife-phase3-production-new-game-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let mut launch = ProductionVoxelLaunchConfig::from_manifest(
+        default_environment_manifest_path(),
+        None,
+        ProductionFrontendProfileId::MinimumSettings30x30,
+    )
+    .unwrap();
+    let fixture_save_path = launch.app_launch.save_path.clone();
+    launch.world_source = ProductionWorldSource::NewGame { seed: 240_825 };
+    launch.population = Some(4);
+    launch.require_gpu = true;
+    launch.dry_run = true;
+    launch.ui_settings_path = Some(root.join("player-ui.json"));
+
+    let (app, summary) = build_production_voxel_frontend_app_shell(&launch).unwrap();
+
+    assert_ne!(summary.save_path, fixture_save_path);
+    assert_eq!(summary.effective_population, 4);
+    assert!(summary.save_path.starts_with(&root));
+    let exact_before_preflight = PortableSaveFile::from_json_file(&summary.save_path).unwrap();
+    let bytes_before_preflight = std::fs::read(&summary.save_path).unwrap();
+    assert_eq!(exact_before_preflight.creatures.len(), 4);
+    assert!(exact_before_preflight
+        .creatures
+        .iter()
+        .all(|creature| creature.gpu_brain.as_ref().is_some_and(|brain| {
+            brain.exact_cognitive_state.is_some()
+                && brain.legacy_nano512_compatibility_receipt.is_some()
+        })));
+    launch.app_launch.save_path = summary.save_path.clone();
+    let repeated_preflight = run_production_voxel_frontend_preflight(&launch).unwrap();
+    let exact_after_preflight = PortableSaveFile::from_json_file(&summary.save_path).unwrap();
+    assert_eq!(repeated_preflight.save_path, summary.save_path);
+    assert_eq!(exact_after_preflight, exact_before_preflight);
+    assert_eq!(std::fs::read(&summary.save_path).unwrap(), bytes_before_preflight);
+    drop(app);
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[cfg(feature = "gpu-tests")]

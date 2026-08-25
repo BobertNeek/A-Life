@@ -651,11 +651,18 @@ pub struct ProductionFrontendProfileBudget {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProductionWorldSource {
+    LoadExisting,
+    NewGame { seed: u64 },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProductionVoxelLaunchConfig {
     pub manifest_path: PathBuf,
     pub scenario_id: Option<String>,
     pub app_launch: AppShellLaunchConfig,
     pub profile_id: ProductionFrontendProfileId,
+    pub world_source: ProductionWorldSource,
     pub population: Option<u16>,
     pub resolution: (u32, u32),
     pub gpu_mode: GraphicalGpuRuntimeMode,
@@ -689,6 +696,7 @@ impl ProductionVoxelLaunchConfig {
             scenario_id: Some(selection.entry.id),
             app_launch,
             profile_id,
+            world_source: ProductionWorldSource::LoadExisting,
             population: None,
             resolution: budget.output_resolution,
             gpu_mode: GraphicalBrainPolicyMode::GpuRequired,
@@ -704,8 +712,33 @@ impl ProductionVoxelLaunchConfig {
     }
 
     pub fn effective_population(&self) -> u16 {
-        self.population
-            .unwrap_or_else(|| self.profile_id.budget().default_population)
+        self.population.unwrap_or_else(|| match self.world_source {
+            ProductionWorldSource::LoadExisting => self.profile_id.budget().default_population,
+            ProductionWorldSource::NewGame { .. } => alife_world::PHASE3_DEFAULT_POPULATION,
+        })
+    }
+
+    pub(crate) fn canonical_new_game_save_path(&self) -> Result<PathBuf, GameAppShellError> {
+        let ProductionWorldSource::NewGame { seed } = self.world_source else {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "canonical New Game save path requires the NewGame world source"
+                    .to_string(),
+            });
+        };
+        if seed == 0 {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "canonical New Game seed must be nonzero".to_string(),
+            });
+        }
+        let directory = match self.ui_settings_path.as_ref() {
+            Some(path) => path.parent().map(Path::to_path_buf).ok_or_else(|| {
+                GameAppShellError::InvalidProductionFrontend {
+                    message: "production UI settings path requires a parent directory".to_string(),
+                }
+            })?,
+            None => fvr08_launch_artifact_dir(self, FVR05_PRODUCTION_UX_SETTINGS_DIR),
+        };
+        Ok(directory.join(format!("phase3-new-game-{seed}.json")))
     }
 
     pub fn effective_graphics_backend(&self) -> Result<String, GameAppShellError> {
@@ -1175,8 +1208,8 @@ pub fn run_production_voxel_frontend_preflight(
         });
     }
 
-    let config = RuntimeConfig::from_json_file(&launch.app_launch.config_path)?;
-    config.validate()?;
+    let launch_config = RuntimeConfig::from_json_file(&launch.app_launch.config_path)?;
+    launch_config.validate()?;
     let manifest = AssetManifest::from_json_file(&launch.app_launch.asset_manifest_path)?;
     manifest.validate_with_root(&launch.app_launch.asset_root)?;
     let production_asset_manifest_path =
@@ -1185,15 +1218,28 @@ pub fn run_production_voxel_frontend_preflight(
     trace.transition(ProductionAppState::LoadAssets)?;
 
     let save = PortableSaveFile::from_json_file(&launch.app_launch.save_path)?;
-    let production_save = production_voxel_save_with_population(
-        &save,
-        &launch.app_launch.asset_root,
-        launch.profile_id,
-        population,
-    )?;
-    let gpu_runtime_state =
-        fvr06_gpu_runtime_save_state(launch, &runtime, &config, &production_save)?;
-    let production_save = production_save.with_gpu_runtime_state(gpu_runtime_state.clone())?;
+    let (config, production_save, gpu_runtime_state) = match launch.world_source {
+        ProductionWorldSource::LoadExisting => {
+            let production_save = production_voxel_save_with_population(
+                &save,
+                &launch.app_launch.asset_root,
+                launch.profile_id,
+                population,
+            )?;
+            let gpu_runtime_state =
+                fvr06_gpu_runtime_save_state(launch, &runtime, &launch_config, &production_save)?;
+            let production_save =
+                production_save.with_gpu_runtime_state(gpu_runtime_state.clone())?;
+            (launch_config, production_save, gpu_runtime_state)
+        }
+        ProductionWorldSource::NewGame { seed } => {
+            validate_exact_canonical_new_game_save(&save, seed, population)?;
+            let config = save.config.clone();
+            let gpu_runtime_state =
+                fvr06_gpu_runtime_save_state(launch, &runtime, &config, &save)?;
+            (config, save, gpu_runtime_state)
+        }
+    };
     production_save.validate_with_asset_root(&launch.app_launch.asset_root)?;
     let gpu_gameplay_receipt = fvr06_production_gpu_gameplay_receipt(launch, &production_save)?;
     let voxel_evidence = production_voxel_backend_evidence(&production_save)?;
@@ -1322,6 +1368,49 @@ pub fn validate_production_voxel_save(
     launch: &ProductionVoxelLaunchConfig,
 ) -> Result<ProductionVoxelLaunchSummary, GameAppShellError> {
     run_production_voxel_frontend_dry_run(launch)
+}
+
+fn validate_exact_canonical_new_game_save(
+    save: &PortableSaveFile,
+    requested_seed: u64,
+    requested_population: u16,
+) -> Result<(), GameAppShellError> {
+    let population = usize::from(requested_population);
+    let organism_count = save
+        .world
+        .organism_records
+        .as_ref()
+        .map(Vec::len)
+        .unwrap_or_default();
+    let agent_count = save
+        .world
+        .objects
+        .iter()
+        .filter(|object| object.kind == WorldObjectKind::Agent)
+        .count();
+    let resident_checkpoints_complete = save.creatures.iter().all(|creature| {
+        creature.gpu_brain.as_ref().is_some_and(|brain| {
+            brain.exact_cognitive_state.is_some()
+                && brain.legacy_nano512_compatibility_receipt.is_some()
+        })
+    });
+    if requested_seed == 0
+        || save.deterministic_seed != requested_seed
+        || save.config.deterministic_seed != requested_seed
+        || save.config.brain_class != alife_core::BrainScaleTier::Nano512
+        || !save.config.features.gpu_backend_enabled
+        || population == 0
+        || organism_count != population
+        || agent_count != population
+        || save.creatures.len() != population
+        || !resident_checkpoints_complete
+    {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: "canonical New Game exact save failed seed, population, or GPU admission validation"
+                .to_string(),
+        });
+    }
+    Ok(())
 }
 
 pub(crate) fn production_voxel_save_with_population(
@@ -1581,6 +1670,7 @@ mod tests {
             scenario_id: Some(PRODUCTION_VOXEL_SCENARIO_ID.to_string()),
             app_launch,
             profile_id: ProductionFrontendProfileId::MinSpecComfort1080p,
+            world_source: ProductionWorldSource::LoadExisting,
             population: Some(30),
             resolution: (1920, 1080),
             gpu_mode: GraphicalBrainPolicyMode::GpuRequired,

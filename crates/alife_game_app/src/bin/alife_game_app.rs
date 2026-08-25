@@ -433,6 +433,8 @@ fn parse_launch(
     let mut require_gpu = false;
     let mut developer_overlay = false;
     let mut ui_settings_path = None;
+    let mut new_game = false;
+    let mut seed = None;
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -454,6 +456,18 @@ fn parse_launch(
                     value(args, index, "--population")?
                         .parse()
                         .map_err(|_| "--population must be an unsigned integer".to_string())?,
+                );
+                index += 2;
+            }
+            "--new-game" => {
+                new_game = true;
+                index += 1;
+            }
+            "--seed" => {
+                seed = Some(
+                    value(args, index, "--seed")?
+                        .parse::<u64>()
+                        .map_err(|_| "--seed must be an unsigned integer".to_string())?,
                 );
                 index += 2;
             }
@@ -511,6 +525,13 @@ fn parse_launch(
     let mut launch =
         ProductionVoxelLaunchConfig::from_manifest(&manifest, scenario.as_deref(), profile)
             .map_err(|error| error.to_string())?;
+    launch.world_source = match (new_game, seed) {
+        (true, Some(seed)) if seed != 0 => alife_game_app::ProductionWorldSource::NewGame { seed },
+        (true, Some(_)) => return Err("--seed must be nonzero".to_string()),
+        (true, None) => return Err("--new-game requires --seed".to_string()),
+        (false, Some(_)) => return Err("--seed requires --new-game".to_string()),
+        (false, None) => alife_game_app::ProductionWorldSource::LoadExisting,
+    };
     launch.population = population;
     if let Some(resolution) = resolution {
         launch.resolution = resolution;
@@ -975,13 +996,26 @@ fn run_graphical(
 
 fn help() -> String {
     format!(
-        "{PRODUCTION_VOXEL_COMMAND} [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --seed N --output PATH\n{GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks 64|10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1\n{GPU_CLOSED_LOOP_SOAK_COMMAND} --class n512|n1024|n2048 --ticks 10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|b|c|d --input PATH\n{GPU_CLOSED_LOOP_PROMOTION_COMMAND} --slice-a PATH (x3) --slice-b PATH (x3) --slice-c PATH (x6) --slice-d PATH (x6) --benchmark PATH --gates PATH --output PATH\n{GPU_CLOSED_LOOP_GATE_SEAL_COMMAND} --capture PATH --gate-script PATH --adapter-evidence PATH --output PATH\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
+        "{PRODUCTION_VOXEL_COMMAND} [--new-game --seed N] [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --seed N --output PATH\n{GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks 64|10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1\n{GPU_CLOSED_LOOP_SOAK_COMMAND} --class n512|n1024|n2048 --ticks 10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|b|c|d --input PATH\n{GPU_CLOSED_LOOP_PROMOTION_COMMAND} --slice-a PATH (x3) --slice-b PATH (x3) --slice-c PATH (x6) --slice-d PATH (x6) --benchmark PATH --gates PATH --output PATH\n{GPU_CLOSED_LOOP_GATE_SEAL_COMMAND} --capture PATH --gate-script PATH --adapter-evidence PATH --output PATH\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn production_cli_parses_canonical_new_game() {
+        let args = ["--new-game", "--population", "6", "--seed", "240824"].map(str::to_string);
+
+        let launch = parse_launch(&args, false).unwrap();
+
+        assert!(matches!(
+            launch.world_source,
+            alife_game_app::ProductionWorldSource::NewGame { seed: 240_824 }
+        ));
+        assert_eq!(launch.effective_population(), 6);
+    }
 
     #[test]
     fn production_asset_validation_command_remains_available() {
@@ -1184,7 +1218,7 @@ mod tests {
         assert!(parse_gpu_memory_grounding(&output_override).is_err());
     }
 
-    #[cfg(feature = "gpu-runtime")]
+    #[cfg(feature = "gpu-tests")]
     #[test]
     fn parse_gpu_closed_loop_soak_cli_requires_exact_slice_d_contract() {
         let args = [
