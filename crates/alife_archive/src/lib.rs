@@ -17,6 +17,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod legacy_lineage_display;
+
 use alife_core::{
     ArchiveAssetKind, ArchiveAssetRef, ArchiveCheckpointDisposition, ArchiveCheckpointRef,
     ArchiveCheckpointRetention, ArchivePageRef, ArchiveRetirementReceipt, Blake3Digest,
@@ -53,6 +55,25 @@ pub enum ArchiveError {
     Contract(#[from] ScaffoldContractError),
     #[error("archive integrity error: {0}")]
     Integrity(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineageGenomeDisplayAbi {
+    CanonicalV2,
+    LegacyNano512FounderV1,
+}
+
+impl LineageGenomeDisplayAbi {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::CanonicalV2 => "Canonical v2",
+            Self::LegacyNano512FounderV1 => "Legacy Nano512 founder v1 (display only)",
+        }
+    }
+
+    pub const fn runtime_admissible(self) -> bool {
+        matches!(self, Self::CanonicalV2)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1142,7 +1163,7 @@ impl LineageLibrary {
         &self,
         manifest: &CreatureArchiveManifest,
     ) -> Result<(), ArchiveError> {
-        let _ = self.load_brain_genome(manifest)?;
+        let _ = self.lineage_genome_display_abi(manifest)?;
         if manifest.genetic.composite_genome_asset.is_some() {
             let _ = self.load_creature_genome(manifest)?;
         }
@@ -1419,6 +1440,13 @@ impl LineageLibrary {
             ));
         }
         let bytes = self.read_archive_asset(reference)?;
+        let schema_version = lineage_genome_schema_version(&bytes)?;
+        if schema_version != BrainGenome::SCHEMA_VERSION {
+            return Err(ArchiveError::Integrity(format!(
+                "lineage genome schema {schema_version} is display-only and cannot be admitted as canonical v2 schema {}",
+                BrainGenome::SCHEMA_VERSION
+            )));
+        }
         let genome = serde_json::from_slice::<BrainGenome>(&bytes)?;
         genome.validate_contract()?;
         if genome.id != manifest.genetic.genome_id
@@ -1429,6 +1457,82 @@ impl LineageLibrary {
             ));
         }
         Ok(genome)
+    }
+
+    pub fn lineage_genome_display_abi(
+        &self,
+        manifest: &CreatureArchiveManifest,
+    ) -> Result<LineageGenomeDisplayAbi, ArchiveError> {
+        manifest.validate_contract()?;
+        let reference = &manifest.genetic.genome_asset;
+        if reference.kind != ArchiveAssetKind::Genome {
+            return Err(ArchiveError::Integrity(
+                "genetic manifest references the wrong asset kind".to_string(),
+            ));
+        }
+        let bytes = self.read_archive_asset(reference)?;
+        match lineage_genome_schema_version(&bytes)? {
+            version if version == BrainGenome::SCHEMA_VERSION => {
+                let _ = self.load_brain_genome(manifest)?;
+                Ok(LineageGenomeDisplayAbi::CanonicalV2)
+            }
+            1 => {
+                self.validate_legacy_nano512_founder_display(manifest, &bytes)?;
+                Ok(LineageGenomeDisplayAbi::LegacyNano512FounderV1)
+            }
+            version => Err(ArchiveError::Integrity(format!(
+                "unsupported lineage genome display schema {version}"
+            ))),
+        }
+    }
+
+    fn validate_legacy_nano512_founder_display(
+        &self,
+        manifest: &CreatureArchiveManifest,
+        genome_bytes: &[u8],
+    ) -> Result<(), ArchiveError> {
+        let genetic = &manifest.genetic;
+        if genetic.brain_class_id != BrainCapacityClass::N512_ID
+            || genetic.composite_genome_asset.is_some()
+        {
+            return Err(ArchiveError::Integrity(
+                "legacy lineage display requires a genetic-only Nano512 founder".to_string(),
+            ));
+        }
+        let foundation_reference = genetic.foundation_asset.as_ref().ok_or_else(|| {
+            ArchiveError::Integrity(
+                "legacy Nano512 lineage display requires an exact foundation asset".to_string(),
+            )
+        })?;
+        if foundation_reference.kind != ArchiveAssetKind::Foundation {
+            return Err(ArchiveError::Integrity(
+                "legacy Nano512 lineage display foundation has the wrong asset kind".to_string(),
+            ));
+        }
+        let foundation_bytes = self.read_archive_asset(foundation_reference)?;
+        let expected_foundation =
+            FoundationWeightAsset::builtin_nano512_v1(genetic.sensor_profile)?;
+        let expected_foundation_bytes = expected_foundation.encode_canonical()?;
+        let expected_manifest = expected_foundation.manifest();
+        if foundation_bytes != expected_foundation_bytes
+            || genetic.foundation_id != Some(expected_manifest.foundation_id())
+            || genetic.foundation_version != Some(expected_manifest.foundation_version())
+            || genetic.compatibility_family_id != Some(expected_manifest.compatibility_family_id())
+            || genetic.foundation_payload_digest != Some(expected_foundation.digest())
+        {
+            return Err(ArchiveError::Integrity(
+                "legacy Nano512 lineage display provenance does not match the exact builtin asset"
+                    .to_string(),
+            ));
+        }
+
+        legacy_lineage_display::validate_legacy_nano512_genome_v1(
+            genome_bytes,
+            manifest.genetic.genome_id.raw(),
+            manifest.genetic.brain_class_id.raw(),
+            manifest.genetic.lineage_id.map(LineageId::raw),
+        )
+        .map_err(ArchiveError::Integrity)
     }
 
     pub fn load_creature_genome(
@@ -2909,6 +3013,20 @@ fn validate_foundation_identity(
 fn checked_byte_len(length: usize) -> Result<u64, ArchiveError> {
     u64::try_from(length)
         .map_err(|_| ArchiveError::Integrity("archive byte count does not fit u64".to_string()))
+}
+
+fn lineage_genome_schema_version(bytes: &[u8]) -> Result<u16, ArchiveError> {
+    let value: serde_json::Value = serde_json::from_slice(bytes)?;
+    value
+        .get("schema_version")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|version| u16::try_from(version).ok())
+        .filter(|version| *version != 0)
+        .ok_or_else(|| {
+            ArchiveError::Integrity(
+                "lineage genome display record has no supported schema version".to_string(),
+            )
+        })
 }
 
 fn ensure_prepared_byte_capacity(current: u64, length: usize) -> Result<u64, ArchiveError> {

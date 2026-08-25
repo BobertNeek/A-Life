@@ -5,7 +5,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use alife_archive::{LineageLibrary, LineageLibraryConfig, ResolvedFounder};
+use alife_archive::{
+    LineageGenomeDisplayAbi, LineageLibrary, LineageLibraryConfig, ResolvedFounder,
+};
 use alife_core::{
     ArchiveCheckpointDisposition, ArchiveCheckpointRetention, Blake3Digest, BrainCapacityClass,
     BrainClassId, DevelopmentState, FoundationWeightAsset, FounderMode, FounderSelection, GenomeId,
@@ -158,6 +160,7 @@ impl LineageSort {
 #[derive(Debug, Clone)]
 struct LineageUiRow {
     digest: Blake3Digest,
+    genome_display_abi: LineageGenomeDisplayAbi,
     source_run_id: String,
     organism_id: OrganismId,
     deceased: bool,
@@ -2025,27 +2028,36 @@ fn handle_lineage_input(
         };
     }
     if keyboard.just_pressed(KeyCode::KeyA) {
-        if let Some(row) = state.current_row() {
-            let digest = row.digest;
-            let mode = state.pending_founder_mode;
-            match add_founder_selection(
-                &mut state.cohort,
-                FounderSelection {
-                    source_manifest_digest: digest,
-                    mode,
-                },
-            ) {
-                Ok(()) => {
-                    state.status = format!(
-                        "Added creature to founder cohort ({}/{MAX_COHORT_SIZE})",
-                        state.cohort.len()
-                    )
-                }
-                Err(CohortEditError::Duplicate) => {
-                    state.status = "Founder cohort rejected duplicate creature".to_string()
-                }
-                Err(CohortEditError::Full) => {
-                    state.status = "Founder cohort is already at 16 creatures".to_string()
+        if let Some((digest, display_abi)) = state
+            .current_row()
+            .map(|row| (row.digest, row.genome_display_abi))
+        {
+            if !display_abi.runtime_admissible() {
+                state.status = format!(
+                    "{} cannot be added to a live founder cohort",
+                    display_abi.label()
+                );
+            } else {
+                let mode = state.pending_founder_mode;
+                match add_founder_selection(
+                    &mut state.cohort,
+                    FounderSelection {
+                        source_manifest_digest: digest,
+                        mode,
+                    },
+                ) {
+                    Ok(()) => {
+                        state.status = format!(
+                            "Added creature to founder cohort ({}/{MAX_COHORT_SIZE})",
+                            state.cohort.len()
+                        )
+                    }
+                    Err(CohortEditError::Duplicate) => {
+                        state.status = "Founder cohort rejected duplicate creature".to_string()
+                    }
+                    Err(CohortEditError::Full) => {
+                        state.status = "Founder cohort is already at 16 creatures".to_string()
+                    }
                 }
             }
         }
@@ -2528,10 +2540,11 @@ fn sync_production_lineage_laboratory_ui(
                 },
             ),
             LineageLabTextRole::DetailProvenance => selected.map_or_else(
-                || "Manifest: Unknown\nGenome: Unknown\nLineage: Unknown".to_string(),
+                || "Genome ABI: Unknown\nManifest: Unknown\nGenome: Unknown\nLineage: Unknown".to_string(),
                 |row| {
                     format!(
-                        "Manifest {}\nGenome {}  /  Lineage {}\nBrain {}  /  Born {}  /  Died {}",
+                        "Genome ABI: {}\nManifest {}\nGenome {}  /  Lineage {}\nBrain {}  /  Born {}  /  Died {}",
+                        row.genome_display_abi.label(),
                         short_digest(row.digest),
                         debug_option(row.genome_id),
                         debug_option(row.lineage_id),
@@ -2833,6 +2846,7 @@ fn load_lineage_rows(root: &Path) -> Result<Vec<LineageUiRow>, alife_archive::Ar
     let mut rows = Vec::new();
     for digest in library.latest_manifest_digests()? {
         let manifest = library.load_manifest(digest)?;
+        let genome_display_abi = library.lineage_genome_display_abi(&manifest)?;
         let statistics = manifest
             .life
             .as_ref()
@@ -2863,6 +2877,7 @@ fn load_lineage_rows(root: &Path) -> Result<Vec<LineageUiRow>, alife_archive::Ar
         );
         rows.push(LineageUiRow {
             digest,
+            genome_display_abi,
             source_run_id: manifest.genetic.source_run_id.clone(),
             organism_id: manifest.genetic.organism_id,
             deceased: manifest.life.is_some(),
@@ -3012,6 +3027,7 @@ mod tests {
     ) -> LineageUiRow {
         LineageUiRow {
             digest: Blake3Digest::from_bytes([organism as u8; 32]),
+            genome_display_abi: LineageGenomeDisplayAbi::CanonicalV2,
             source_run_id: run.to_string(),
             organism_id: OrganismId::new(organism).unwrap(),
             deceased: false,

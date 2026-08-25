@@ -7,14 +7,14 @@ use std::{
 
 use alife_archive::{
     CompositeGeneticArchiveBatchInput, CompositeGeneticArchiveInput, GeneticArchiveInput,
-    LifeArchiveInput, LineageLibrary, LineageLibraryConfig, ARCHIVE_PAGE_BYTES,
-    MAX_COMPOSITE_BIRTH_BATCH_BYTES,
+    LifeArchiveInput, LineageGenomeDisplayAbi, LineageLibrary, LineageLibraryConfig,
+    ARCHIVE_PAGE_BYTES, MAX_COMPOSITE_BIRTH_BATCH_BYTES,
 };
 use alife_core::{
     ArchiveCheckpointDisposition, ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy,
-    Blake3Digest, BrainCapacityClass, BrainGenome, BrainPhenotype, CreatureGenome,
-    DevelopmentState, FoundationGeneticIdentity, FoundationWeightAsset, FounderMode,
-    FounderSelection, GenomeId, LineageId, N512FounderFoundationProjection,
+    Blake3Digest, BrainCapacityClass, BrainGenome, BrainPhenotype, CreatureArchiveManifest,
+    CreatureGenome, DevelopmentState, FoundationGeneticIdentity, FoundationWeightAsset,
+    FounderMode, FounderSelection, GenomeId, LineageId, N512FounderFoundationProjection,
     N512FounderProjectionReceipt, NormalizedScalar, OrganismId, PassiveLifeEvent,
     PassiveLifeStatistics, PhenotypeCompiler, SensorProfile, Tick,
 };
@@ -257,6 +257,184 @@ fn genome_asset_digest_for_test(fixture: &CompositeFixture) -> Blake3Digest {
     Blake3Digest::from_bytes(*blake3::hash(&genome_bytes).as_bytes())
 }
 
+fn create_legacy_nano512_display_archive(
+    root: &Path,
+    genome_schema_version: u16,
+    legacy_lobe_name: &str,
+    minimal_known_lobe_shape: bool,
+) -> Blake3Digest {
+    fn rewrite_lobe_names_as_v1(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    rewrite_lobe_names_as_v1(value);
+                }
+            }
+            serde_json::Value::Object(values) => {
+                for (key, value) in values {
+                    if matches!(key.as_str(), "lobe" | "source_lobe" | "target_lobe") {
+                        let legacy = match value.as_str() {
+                            Some("PerceptualIntegration") => Some("SensoryGrounding"),
+                            Some("InteroceptiveMotivational") => Some("MetabolicDrive"),
+                            Some("MultimodalAssociation") => Some("LexiconConcept"),
+                            Some("TemporalPredictive") => Some("CoreAssociation"),
+                            Some("WorkingContextExecutive") => Some("WorkingMemory"),
+                            Some("MemoryInterface") => Some("EpisodicMemory"),
+                            Some("ActionPlanning") => Some("MotorArbitration"),
+                            Some("SocialCommunication") => Some("AuditorySpeech"),
+                            Some("FlexibleReserve") => Some("HomeostaticRegulation"),
+                            _ => None,
+                        };
+                        if let Some(legacy) = legacy {
+                            *value = serde_json::Value::String(legacy.to_string());
+                        }
+                    }
+                    rewrite_lobe_names_as_v1(value);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let foundation =
+        FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
+    let foundation_bytes = foundation.encode_canonical().unwrap();
+    let admission = PhenotypeCompiler::compile_fixed_legacy_nano512_compatibility_asset(
+        SensorProfile::GroundedObjectSlotsV1,
+        &foundation,
+    )
+    .unwrap();
+    let (phenotype, compiler_inputs, _) = admission.into_runtime_parts();
+    let genome = compiler_inputs.genome().clone();
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(root)).unwrap();
+    let original_manifest_digest = library
+        .archive_birth(GeneticArchiveInput {
+            source_run_id: "legacy-nano512-display-v1",
+            organism_id: OrganismId(71),
+            birth_tick: Tick::ZERO,
+            genome: &genome,
+            phenotype: &phenotype,
+            foundation_asset_bytes: Some(&foundation_bytes),
+        })
+        .unwrap();
+    let mut manifest = library.load_manifest(original_manifest_digest).unwrap();
+    drop(library);
+
+    let original_genome_path = root
+        .join("assets")
+        .join(digest_hex_for_test(manifest.genetic.genome_asset.digest))
+        .join("payload.bin");
+    let mut legacy_genome: serde_json::Value =
+        serde_json::from_slice(&fs::read(original_genome_path).unwrap()).unwrap();
+    rewrite_lobe_names_as_v1(&mut legacy_genome);
+    legacy_genome["schema_version"] = serde_json::json!(genome_schema_version);
+    legacy_genome["lobe_ratios"] = serde_json::json!({
+        "InlineOverrides": [{"lobe": legacy_lobe_name, "ratio": 0.215}]
+    });
+    if minimal_known_lobe_shape {
+        legacy_genome = serde_json::json!({
+            "schema_version": 1,
+            "id": genome.id.raw(),
+            "lineage_id": genome.lineage_id.map(LineageId::raw),
+            "brain_class_id": genome.brain_class_id.raw(),
+            "lobe_ratios": {
+                "InlineOverrides": [{"lobe": "SensoryGrounding", "ratio": 0.215}]
+            }
+        });
+    }
+    let legacy_genome_bytes = serde_json::to_vec(&legacy_genome).unwrap();
+    let legacy_genome_digest =
+        Blake3Digest::from_bytes(*blake3::hash(&legacy_genome_bytes).as_bytes());
+    let legacy_genome_root = root
+        .join("assets")
+        .join(digest_hex_for_test(legacy_genome_digest));
+    fs::create_dir_all(&legacy_genome_root).unwrap();
+    fs::write(legacy_genome_root.join("payload.bin"), &legacy_genome_bytes).unwrap();
+    manifest.genetic.genome_asset.digest = legacy_genome_digest;
+    manifest.genetic.genome_asset.size_bytes = u64::try_from(legacy_genome_bytes.len()).unwrap();
+
+    let migrated_manifest_bytes = serde_json::to_vec(&manifest).unwrap();
+    let migrated_manifest_digest =
+        Blake3Digest::from_bytes(*blake3::hash(&migrated_manifest_bytes).as_bytes());
+    fs::write(
+        root.join("manifests").join(format!(
+            "{}.json",
+            digest_hex_for_test(migrated_manifest_digest)
+        )),
+        migrated_manifest_bytes,
+    )
+    .unwrap();
+    fs::remove_file(root.join("manifests").join(format!(
+        "{}.json",
+        digest_hex_for_test(original_manifest_digest)
+    )))
+    .unwrap();
+    fs::remove_file(root.join("lineage.db")).unwrap();
+    migrated_manifest_digest
+}
+
+fn install_checked_player_legacy_nano512_v1_archive(root: &Path) -> Blake3Digest {
+    fn exact_fixture_bytes(bytes: &'static [u8]) -> &'static [u8] {
+        bytes
+            .strip_suffix(b"\r\n")
+            .or_else(|| bytes.strip_suffix(b"\n"))
+            .unwrap_or(bytes)
+    }
+
+    let genome_bytes = exact_fixture_bytes(include_bytes!(
+        "fixtures/legacy_nano512_v1/genome-d2ece060feea0150ed2889631ccd826d3115c852024e93f054dc91910c15fb28.json"
+    ));
+    let manifest_bytes = exact_fixture_bytes(include_bytes!(
+        "fixtures/legacy_nano512_v1/manifest-8a77a441ac89ad94c621a33f595c36deb25109d2cc4d04282491209ce7de51dd.json"
+    ));
+    let genome_digest = Blake3Digest::from_bytes(*blake3::hash(genome_bytes).as_bytes());
+    let manifest_digest = Blake3Digest::from_bytes(*blake3::hash(manifest_bytes).as_bytes());
+    assert_eq!(
+        digest_hex_for_test(genome_digest),
+        "d2ece060feea0150ed2889631ccd826d3115c852024e93f054dc91910c15fb28"
+    );
+    assert_eq!(
+        digest_hex_for_test(manifest_digest),
+        "8a77a441ac89ad94c621a33f595c36deb25109d2cc4d04282491209ce7de51dd"
+    );
+    let manifest: CreatureArchiveManifest = serde_json::from_slice(manifest_bytes).unwrap();
+    assert_eq!(manifest.genetic.genome_asset.digest, genome_digest);
+
+    let foundation =
+        FoundationWeightAsset::builtin_nano512_v1(SensorProfile::PrivilegedAffordanceV1).unwrap();
+    let foundation_bytes = foundation.encode_canonical().unwrap();
+    let foundation_reference = manifest.genetic.foundation_asset.as_ref().unwrap();
+    assert_eq!(
+        foundation_reference.digest,
+        Blake3Digest::from_bytes(*blake3::hash(&foundation_bytes).as_bytes())
+    );
+    assert_eq!(
+        manifest.genetic.foundation_payload_digest,
+        Some(foundation.digest())
+    );
+    assert_eq!(
+        foundation_reference.size_bytes,
+        u64::try_from(foundation_bytes.len()).unwrap()
+    );
+
+    let genome_root = root.join("assets").join(digest_hex_for_test(genome_digest));
+    let foundation_root = root
+        .join("assets")
+        .join(digest_hex_for_test(foundation_reference.digest));
+    fs::create_dir_all(&genome_root).unwrap();
+    fs::create_dir_all(&foundation_root).unwrap();
+    fs::create_dir_all(root.join("manifests")).unwrap();
+    fs::write(genome_root.join("payload.bin"), genome_bytes).unwrap();
+    fs::write(foundation_root.join("payload.bin"), foundation_bytes).unwrap();
+    fs::write(
+        root.join("manifests")
+            .join(format!("{}.json", digest_hex_for_test(manifest_digest))),
+        manifest_bytes,
+    )
+    .unwrap();
+    manifest_digest
+}
+
 const TEST_COMPOSITE_BIRTH_STAGE_LEASE_FILE: &str = ".composite-birth-stage-lease";
 const TEST_COMPOSITE_BIRTH_PUBLICATION_LEASE_FILE: &str = ".composite-birth-publication-lease";
 
@@ -409,6 +587,69 @@ fn fixture(seed: u64, organism_raw: u64) -> (BrainGenome, alife_core::BrainPheno
     .unwrap();
     assert_ne!(organism_raw, 0);
     (genome, phenotype)
+}
+
+#[test]
+fn legacy_nano512_v1_founder_archive_opens_for_display_but_not_runtime_admission() {
+    let root = temp_root("legacy-nano512-display");
+    let digest = install_checked_player_legacy_nano512_v1_archive(&root);
+
+    let library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root))
+        .expect("explicit Nano512 v1 founder provenance is valid display-only archive data");
+    let manifest = library.load_manifest(digest).unwrap();
+    assert_eq!(
+        manifest.genetic.source_run_id,
+        "runtime-save-v1-d09bc57e32aae724758430065de89a3a702073132557768d13923ad429ec6250"
+    );
+    let display_abi = library.lineage_genome_display_abi(&manifest).unwrap();
+    assert_eq!(display_abi, LineageGenomeDisplayAbi::LegacyNano512FounderV1);
+    assert_eq!(
+        display_abi.label(),
+        "Legacy Nano512 founder v1 (display only)"
+    );
+    assert!(!display_abi.runtime_admissible());
+    assert!(
+        library.load_brain_genome(&manifest).is_err(),
+        "legacy display compatibility must not become canonical runtime admission"
+    );
+
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn legacy_lineage_display_rejects_unknown_or_malformed_assets() {
+    let unknown_schema_root = temp_root("legacy-display-unknown-schema");
+    let unknown_schema =
+        create_legacy_nano512_display_archive(&unknown_schema_root, 99, "SensoryGrounding", false);
+    let unknown_schema_library =
+        LineageLibrary::open(LineageLibraryConfig::profile_default(&unknown_schema_root)).unwrap();
+    assert!(unknown_schema_library
+        .load_manifest(unknown_schema)
+        .is_err());
+    drop(unknown_schema_library);
+    fs::remove_dir_all(unknown_schema_root).unwrap();
+
+    let unknown_lobe_root = temp_root("legacy-display-unknown-lobe");
+    let unknown_lobe =
+        create_legacy_nano512_display_archive(&unknown_lobe_root, 1, "UnknownLegacyLobe", false);
+    let unknown_lobe_library =
+        LineageLibrary::open(LineageLibraryConfig::profile_default(&unknown_lobe_root)).unwrap();
+    assert!(unknown_lobe_library.load_manifest(unknown_lobe).is_err());
+    drop(unknown_lobe_library);
+    fs::remove_dir_all(unknown_lobe_root).unwrap();
+
+    let malformed_root = temp_root("legacy-display-minimal-known-lobe");
+    let malformed =
+        create_legacy_nano512_display_archive(&malformed_root, 1, "SensoryGrounding", true);
+    let malformed_library =
+        LineageLibrary::open(LineageLibraryConfig::profile_default(&malformed_root)).unwrap();
+    assert!(
+        malformed_library.load_manifest(malformed).is_err(),
+        "a known legacy lobe must not make a structurally incomplete genome valid"
+    );
+    drop(malformed_library);
+    fs::remove_dir_all(malformed_root).unwrap();
 }
 
 #[test]
