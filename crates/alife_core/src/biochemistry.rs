@@ -229,7 +229,7 @@ impl BodyState {
         for organ in &mut self.organs {
             organ.energy = energy;
         }
-        self.energy = energy;
+        self.refresh_compatibility_projections();
         Ok(())
     }
 

@@ -10,18 +10,18 @@ use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkCounters}
 use alife_core::predictive::GroundedSuccessorPredictor;
 use alife_core::sleep::{SleepReplayEvidence, SleepWorkReceipt};
 use alife_core::{
-    finalized_memory_attention_evidence, select_focal_targets, ActionKind, ActionTarget,
+    finalized_memory_attention_evidence, select_focal_targets, ActionKind,
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
     AttentionFrame, AttentionSelectionPolicy, BiochemistryState, Blake3Digest, BodyEventDelta,
-    BoundedCoordinationSummary, BoundedMotorPayload, BrainCapacityClass, BrainGenome,
-    BrainScaleTier, BrainTickStatus, BrainWorkCounters, BrainWorkReceipt, CandidateObservationRef,
-    CanonicalDigestBuilder, ChannelCommand, CognitiveConceptActivation, CognitiveContextFrame,
-    CognitiveGapActivation, CognitiveMemoryExpectancy, CognitiveWorkReceipt, Confidence,
-    ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState, CoordinationGroup,
-    DecisionSnapshot, DevelopmentState, EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId,
-    FinalizedMemoryAttentionEvidence, FinalizedMemoryRecall, FoundationCompatibilityFamilyId,
-    FoundationGeneticIdentity, FoundationId, FoundationVersion, FoundationWeightAsset,
-    HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition, LanguageGroundingLedger,
+    BoundedMotorPayload, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
+    BrainWorkCounters, BrainWorkReceipt, CandidateObservationRef, CanonicalDigestBuilder,
+    CognitiveConceptActivation, CognitiveContextFrame, CognitiveGapActivation,
+    CognitiveMemoryExpectancy, CognitiveWorkReceipt, Confidence, ConsolidationDriverEvent,
+    ConsolidationIntent, ConsolidationState, DecisionSnapshot, DevelopmentState,
+    EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId, FinalizedMemoryAttentionEvidence,
+    FinalizedMemoryRecall, FoundationCompatibilityFamilyId, FoundationGeneticIdentity,
+    FoundationId, FoundationVersion, FoundationWeightAsset, HomeostaticParameters,
+    HomeostaticSnapshot, JointMotorCondition, LanguageGroundingLedger,
     LegacyNano512CompatibilityReceipt, LineageId, MemoryBankConfig, MemoryCompactionCheckpoint,
     MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState, MemoryUpdateReceipt,
     MotorChannel, MotorCommandBundle, N512FounderFoundationProjection, NeuralActionSelection,
@@ -63,6 +63,10 @@ use alife_world::{
 };
 use thiserror::Error;
 
+use crate::factorized_arbitration::{
+    arbitrate_gpu_selected_command_into_factorized_bundle, channel_command_for_action,
+    VOCAL_CHANNEL_PAYLOAD_MAGIC_V1,
+};
 use crate::{
     curated_founder_materializer::{
         materialize_curated_founder_bundle, CuratedFounderMaterializationError,
@@ -2343,26 +2347,6 @@ fn grounded_successor_state(
 }
 
 const SINGLE_ACTION_COMPATIBILITY_ADAPTER_VERSION: u16 = 1;
-const VOCAL_CHANNEL_PAYLOAD_MAGIC_V1: u32 = 0x5348_5031;
-
-fn channel_command_for_action(
-    channel: MotorChannel,
-    command: &alife_core::ActionCommand,
-) -> Result<ChannelCommand, ScaffoldContractError> {
-    let target = (command.target_entity.is_some() || command.target_position.is_some())
-        .then(|| ActionTarget::new(command.target_entity, command.target_position));
-    ChannelCommand::new(
-        channel,
-        command.action_id,
-        target,
-        command.target_position.unwrap_or(Vec3f::ZERO),
-        command.intensity,
-        command.duration_ticks,
-        0.0,
-        command.confidence,
-        0,
-    )
-}
 
 fn factorized_motor_channel_for_action(kind: ActionKind) -> Option<MotorChannel> {
     match kind {
@@ -2451,30 +2435,15 @@ fn factorized_motor_bundle_for_candidates(
         channel_commands.push(channel_command);
     }
 
-    if channel_commands.is_empty() {
-        return compatibility_bundle_for_selected_action_v1(
-            organism_id,
-            sequence_id,
-            tick,
-            compatibility_command,
-        );
-    }
-
-    let coordination = (channel_commands.len() > 1).then(|| BoundedCoordinationSummary {
-        groups: vec![CoordinationGroup {
-            group_id: 0,
-            channels: channel_commands
-                .iter()
-                .map(|command| command.channel)
-                .collect(),
-        }],
-    });
-    let bundle = MotorCommandBundle::new(organism_id, sequence_id, tick, channel_commands)?;
-    if let Some(coordination) = coordination {
-        bundle.with_coordination(coordination)
-    } else {
-        Ok(bundle)
-    }
+    arbitrate_gpu_selected_command_into_factorized_bundle(
+        organism_id,
+        sequence_id,
+        tick,
+        channel_commands,
+        compatibility_command,
+        speech_payload,
+        speech_prompted,
+    )
 }
 
 fn apply_prediction_evidence(

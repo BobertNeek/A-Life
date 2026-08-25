@@ -1803,7 +1803,7 @@ impl HeadlessWorld {
                             tracking_key: object.tracking_key,
                             position: object.position,
                             properties: object.grounded_physical,
-                            contact: measured_distance <= HEADLESS_CONTACT_RADIUS,
+                            contact: measured_distance <= object.radius,
                             confidence: Confidence::new(
                                 proximity_salience(measured_distance, HEADLESS_VISION_RADIUS)
                                     .max(0.1),
@@ -2139,6 +2139,12 @@ impl HeadlessWorld {
             .get(bundle.organism_id)
             .ok_or(ScaffoldContractError::InvalidId)?
             .biochemistry();
+        let initial_position = self
+            .objects
+            .get(&world_entity_id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .position;
+        let initial_hazard_contact = self.hazard_contact_at(initial_position);
 
         let mut channels = bundle
             .channels
@@ -2162,11 +2168,21 @@ impl HeadlessWorld {
             executed.push((Some(channel.clone()), result));
         }
 
-        let body_event = executed
+        let action_body_event = executed
             .iter()
             .fold(BodyEventDelta::zero(), |total, (_, result)| {
                 combine_body_event(total, result.body_event)
             });
+        let final_position = self
+            .objects
+            .get(&world_entity_id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .position;
+        let hazard_contact =
+            initial_hazard_contact.or_else(|| self.hazard_contact_at(final_position));
+        let body_event = hazard_contact.map_or(action_body_event, |(_, pain)| {
+            merge_hazard_contact_body_event(action_body_event, pain)
+        });
         body_event.validate_contract()?;
         if let Some(neural) = neural {
             self.organism_registry
@@ -2207,13 +2223,14 @@ impl HeadlessWorld {
                 });
             }
         }
+        if let Some((hazard_id, _)) = hazard_contact {
+            touched.insert(hazard_id.raw());
+        }
         self.last_touched_entities = touched.into_iter().map(WorldEntityId).collect();
         self.last_action_result = executed.last().map(|(_, result)| result.clone());
 
-        let joint = JointPhysicalOutcome::new(
-            aggregate_motor_physical_outcome(&executed)?,
-            channel_observations,
-        )?;
+        let physical = aggregate_motor_physical_outcome(&executed)?;
+        let joint = JointPhysicalOutcome::new(physical, channel_observations)?;
         let succeeded = executed
             .iter()
             .all(|(_, result)| result.execution.succeeded);
@@ -2814,7 +2831,7 @@ impl HeadlessWorld {
             .filter(|(id, object)| {
                 **id != agent_id.raw()
                     && !object.consumed
-                    && distance(object.position, destination) <= HEADLESS_CONTACT_RADIUS
+                    && distance(object.position, destination) <= object.radius
             })
             .map(|(id, _)| WorldEntityId(*id))
             .collect::<Vec<_>>();
@@ -3079,6 +3096,22 @@ impl HeadlessWorld {
                 .blocks_position(position)
                 .then_some(WorldEntityId(*id))
         })
+    }
+
+    fn hazard_contact_at(&self, position: Vec3f) -> Option<(WorldEntityId, f32)> {
+        self.objects
+            .values()
+            .filter(|object| {
+                object.kind == WorldObjectKind::Hazard
+                    && !object.consumed
+                    && distance(object.position, position) <= object.radius
+            })
+            .min_by(|left, right| {
+                distance(left.position, position)
+                    .total_cmp(&distance(right.position, position))
+                    .then_with(|| left.id.raw().cmp(&right.id.raw()))
+            })
+            .map(|object| (object.id, object.hazard_pain))
     }
 
     fn advance_ecology_at_current_tick(&mut self) -> EcologyStepReport {
@@ -4119,6 +4152,13 @@ fn combine_body_event(total: BodyEventDelta, event: BodyEventDelta) -> BodyEvent
         social_contact: (total.social_contact + event.social_contact).clamp(0.0, 1.0),
         sleep_recovery: (total.sleep_recovery + event.sleep_recovery).clamp(0.0, 1.0),
         mating_opportunity: (total.mating_opportunity + event.mating_opportunity).clamp(0.0, 1.0),
+    }
+}
+
+fn merge_hazard_contact_body_event(total: BodyEventDelta, hazard_pain: f32) -> BodyEventDelta {
+    BodyEventDelta {
+        damage: total.damage.max(hazard_pain.clamp(0.0, 1.0)),
+        ..total
     }
 }
 

@@ -6,8 +6,8 @@ use alife_core::{
 use crate::{
     CreatureAppearanceGenome, CreatureMindSaveSummary, CreatureSaveState, EcologyZoneId,
     HabitatAuthority, HabitatId, HeadlessWorld, LearningTraceSaveSummary, PortableAssetDigest,
-    ResourceSpawnPolicy, TerrainZone, TerrainZoneKind, WeightLayerSaveSummary,
-    WorldEditorSpawnSpec, WorldObjectKind, WorldOrganismRecord,
+    TerrainZone, TerrainZoneKind, WeightLayerSaveSummary, WorldEditorSpawnSpec, WorldObjectKind,
+    WorldOrganismRecord,
 };
 
 pub const PHASE3_NEW_GAME_SCHEMA_VERSION: u16 = 1;
@@ -151,48 +151,28 @@ fn spawn_phase3_ecology(world: &mut HeadlessWorld) -> Result<(), ScaffoldContrac
         0.2,
     )?)?;
 
-    let food_positions = [
-        Vec3f::new(-5.0, -4.0, 0.0),
-        Vec3f::new(-2.0, -5.0, 0.0),
-        Vec3f::new(2.0, -5.0, 0.0),
-        Vec3f::new(5.0, -4.0, 0.0),
-        Vec3f::new(5.0, 4.0, 0.0),
-        Vec3f::new(2.0, 5.0, 0.0),
-        Vec3f::new(-2.0, 5.0, 0.0),
-        Vec3f::new(-5.0, 4.0, 0.0),
-    ];
-    let mut food_ids = Vec::with_capacity(food_positions.len());
-    for (index, position) in food_positions.into_iter().enumerate() {
-        food_ids.push(world.editor_spawn_object(WorldEditorSpawnSpec {
-            label: format!("food-{:02}", index + 1),
-            kind: WorldObjectKind::Food,
-            organism_id: None,
-            position,
-            nutrition: 0.65,
-            hazard_pain: 0.0,
-            radius: 0.45,
-            token_id: None,
-        })?);
-    }
-    for food_id in food_ids.into_iter().take(2) {
-        world.track_resource_lifecycle(food_id, meadow, 48, 240)?;
-    }
+    let food_id = world.editor_spawn_object(WorldEditorSpawnSpec {
+        label: "food-01".to_string(),
+        kind: WorldObjectKind::Food,
+        organism_id: None,
+        position: founder_position(0),
+        nutrition: 0.65,
+        hazard_pain: 0.0,
+        radius: 0.45,
+        token_id: None,
+    })?;
+    world.track_resource_lifecycle(food_id, meadow, 48, 240)?;
 
-    for (label, position) in [
-        ("hazard-01", Vec3f::new(-7.0, 0.0, 0.0)),
-        ("hazard-02", Vec3f::new(7.0, 0.0, 0.0)),
-    ] {
-        world.editor_spawn_object(WorldEditorSpawnSpec {
-            label: label.to_string(),
-            kind: WorldObjectKind::Hazard,
-            organism_id: None,
-            position,
-            nutrition: 0.0,
-            hazard_pain: 0.7,
-            radius: 0.8,
-            token_id: None,
-        })?;
-    }
+    world.editor_spawn_object(WorldEditorSpawnSpec {
+        label: "hazard-01".to_string(),
+        kind: WorldObjectKind::Hazard,
+        organism_id: None,
+        position: founder_position(1),
+        nutrition: 0.0,
+        hazard_pain: 0.12,
+        radius: 0.8,
+        token_id: None,
+    })?;
     for (label, position) in [
         ("obstacle-01", Vec3f::new(0.0, -7.0, 0.0)),
         ("obstacle-02", Vec3f::new(0.0, 7.0, 0.0)),
@@ -208,15 +188,6 @@ fn spawn_phase3_ecology(world: &mut HeadlessWorld) -> Result<(), ScaffoldContrac
             token_id: None,
         })?;
     }
-    world.add_resource_spawn_policy(ResourceSpawnPolicy {
-        label_prefix: "meadow-regrowth".to_string(),
-        zone_id: meadow,
-        interval_ticks: 96,
-        max_active: 8,
-        nutrition: 0.65,
-        next_spawn_tick: Tick::new(96),
-        spawned_count: 0,
-    })?;
     Ok(())
 }
 

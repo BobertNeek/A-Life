@@ -330,6 +330,9 @@ mod graphical_gpu_runtime_controller;
 pub use graphical_gpu_runtime_controller::*;
 
 #[cfg(feature = "gpu-runtime")]
+mod factorized_arbitration;
+
+#[cfg(feature = "gpu-runtime")]
 mod gpu_live_runtime;
 #[cfg(feature = "gpu-runtime")]
 pub use gpu_live_runtime::*;
