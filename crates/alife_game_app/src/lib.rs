@@ -173,6 +173,9 @@ pub use environment_launcher::*;
 mod production_voxel_frontend;
 pub use production_voxel_frontend::*;
 
+mod new_game_lifecycle;
+pub use new_game_lifecycle::*;
+
 mod curated_founder_reset;
 pub use curated_founder_reset::*;
 
