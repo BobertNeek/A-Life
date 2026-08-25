@@ -1,4 +1,7 @@
-use alife_core::{FoundationWeightAsset, SensorProfile};
+use alife_core::{
+    BrainCapacityClass, FoundationGeneticIdentity, FoundationWeightAsset,
+    N512FounderFoundationProjection, SensorProfile, Validate,
+};
 use alife_world::{create_canonical_new_game, CanonicalNewGameConfig, WorldObjectKind};
 
 fn phase3_game(population: u16) -> alife_world::CanonicalNewGame {
@@ -109,4 +112,50 @@ fn canonical_new_game_is_deterministic_and_rejects_the_wrong_foundation() {
         FoundationWeightAsset::builtin_nano512_v1(SensorProfile::PrivilegedAffordanceV1).unwrap();
     let config = CanonicalNewGameConfig::phase3(240_824, 6).unwrap();
     assert!(create_canonical_new_game(&config, &privileged).is_err());
+}
+
+#[test]
+fn canonical_new_game_founders_compile_against_the_checked_nano512_foundation() {
+    let game = phase3_game(6);
+    let foundation =
+        FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
+
+    for founder in &game.receipt.founders {
+        let record = game
+            .world
+            .organism_registry()
+            .get(founder.organism_id)
+            .unwrap();
+        assert_eq!(
+            record.phenotype().foundation,
+            FoundationGeneticIdentity::new(
+                0x004E_3531_325F_5631,
+                1,
+                0x4E35_3132_5F00_FA11,
+                BrainCapacityClass::N512_ID,
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            record.phenotype().source_genome_id,
+            record.phenotype().brain_genome.id
+        );
+        assert_eq!(
+            record.phenotype().brain_genome.lineage_id,
+            Some(record.phenotype().lineage_id)
+        );
+        record.phenotype().brain_genome.validate_contract().unwrap();
+        record
+            .phenotype()
+            .development_state_at(alife_core::Tick::ZERO)
+            .unwrap();
+        let projection = N512FounderFoundationProjection::compile(
+            record.phenotype(),
+            SensorProfile::GroundedObjectSlotsV1,
+            &foundation,
+        )
+        .unwrap();
+        assert_eq!(projection.source_genome_id(), founder.genome_id);
+        assert_eq!(projection.lineage_id(), founder.lineage_id);
+    }
 }

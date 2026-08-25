@@ -17,6 +17,8 @@ const RECEIPT_DOMAIN: &[u8] = b"alife.foundation.compatibility.receipt.nano512.v
 const ENDPOINT_AUDIT_DOMAIN: &[u8] = b"alife.audit.nano512.endpoints.v1";
 const GRAPH_WEIGHT_AUDIT_DOMAIN: &[u8] = b"alife.audit.nano512.graph-and-weights.v1";
 
+pub const LEGACY_NANO512_V1_COORDINATE_SEED: u64 = 0x4E35_3132_5F00_0001;
+
 const EXPECTED_ENDPOINT_DIGEST: Blake3Digest = Blake3Digest::from_bytes([
     0xd5, 0x65, 0xd5, 0xb4, 0xb4, 0x1f, 0x6f, 0xbc, 0x90, 0x6f, 0x58, 0xdd, 0xab, 0x6e, 0xd6, 0xe3,
     0xe6, 0x3d, 0x48, 0xdb, 0x9f, 0x26, 0xb8, 0x2c, 0x3e, 0xae, 0xa8, 0xca, 0xdf, 0xef, 0xc0, 0xe9,
@@ -524,19 +526,35 @@ impl<'de> Deserialize<'de> for LegacyNano512CompatibilityReceipt {
 
 pub struct LegacyNano512CompatibilityAdmission {
     phenotype: BrainPhenotype,
+    compiler_inputs: crate::PhenotypeCompilerInputs,
     receipt: LegacyNano512CompatibilityReceipt,
 }
 
 impl LegacyNano512CompatibilityAdmission {
     pub(crate) fn new(
         phenotype: BrainPhenotype,
+        compiler_inputs: crate::PhenotypeCompilerInputs,
         receipt: LegacyNano512CompatibilityReceipt,
     ) -> Self {
-        Self { phenotype, receipt }
+        Self {
+            phenotype,
+            compiler_inputs,
+            receipt,
+        }
     }
 
     pub fn into_parts(self) -> (BrainPhenotype, LegacyNano512CompatibilityReceipt) {
         (self.phenotype, self.receipt)
+    }
+
+    pub fn into_runtime_parts(
+        self,
+    ) -> (
+        BrainPhenotype,
+        crate::PhenotypeCompilerInputs,
+        LegacyNano512CompatibilityReceipt,
+    ) {
+        (self.phenotype, self.compiler_inputs, self.receipt)
     }
 }
 

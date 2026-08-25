@@ -19,9 +19,10 @@ use alife_core::{
     CognitiveGapActivation, CognitiveMemoryExpectancy, CognitiveWorkReceipt, Confidence,
     ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState, CoordinationGroup,
     DecisionSnapshot, DevelopmentState, EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId,
-    FinalizedMemoryAttentionEvidence, FinalizedMemoryRecall, FoundationGeneticIdentity,
-    FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition,
-    LanguageGroundingLedger, LineageId, MemoryBankConfig, MemoryCompactionCheckpoint,
+    FinalizedMemoryAttentionEvidence, FinalizedMemoryRecall, FoundationCompatibilityFamilyId,
+    FoundationGeneticIdentity, FoundationId, FoundationVersion, FoundationWeightAsset,
+    HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition, LanguageGroundingLedger,
+    LegacyNano512CompatibilityReceipt, LineageId, MemoryBankConfig, MemoryCompactionCheckpoint,
     MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState, MemoryUpdateReceipt,
     MotorChannel, MotorCommandBundle, N512FounderFoundationProjection, NeuralActionSelection,
     NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame, NeuralReceptorEffects,
@@ -58,7 +59,7 @@ use alife_world::{
     CreatureAppearanceGenome, HabitatActor, HabitatAuthorityError, HabitatBreedingKind,
     HabitatBreedingReceipt, HabitatBreedingRequest, HabitatId, HabitatMode, HabitatOperation,
     HabitatOperationRequest, HabitatPermissionReceipt, HeadlessWorld, HeadlessWorldSignatureDigest,
-    WorldEditorSpawnSpec, WorldObjectKind, WorldOrganismRecord,
+    WorldEditorSpawnSpec, WorldObjectKind, WorldOrganismAdmissionSnapshot, WorldOrganismRecord,
 };
 use thiserror::Error;
 
@@ -84,6 +85,7 @@ use crate::{
 struct ResidentCognition {
     phenotype: alife_core::BrainPhenotype,
     compiler_inputs: PhenotypeCompilerInputs,
+    legacy_nano512_compatibility_receipt: Option<LegacyNano512CompatibilityReceipt>,
     genome: BrainGenome,
     development: DevelopmentState,
     homeostasis: HomeostaticSnapshot,
@@ -172,6 +174,7 @@ struct ResidentAuthorityPlan {
     world_tick: Tick,
     phenotype: alife_core::BrainPhenotype,
     compiler_inputs: PhenotypeCompilerInputs,
+    legacy_nano512_compatibility_receipt: Option<LegacyNano512CompatibilityReceipt>,
     genome: BrainGenome,
     development: DevelopmentState,
     biochemistry: BiochemistryState,
@@ -185,6 +188,7 @@ struct ResidentCheckpointMetadata<'a> {
     checkpoint_tick: Tick,
     phenotype: &'a alife_core::BrainPhenotype,
     compiler_inputs: &'a PhenotypeCompilerInputs,
+    legacy_nano512_compatibility_receipt: Option<&'a LegacyNano512CompatibilityReceipt>,
 }
 
 fn resident_authority_plan_from_record(
@@ -201,24 +205,25 @@ fn resident_authority_plan_from_record(
     }
     let development = admission.phenotype.development_state_at(admission.age)?;
     let genome = admission.phenotype.brain_genome.clone();
-    let (phenotype, compiler_inputs) = if genome.brain_class_id == BrainCapacityClass::N512_ID {
-        let foundation = FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?;
-        let projection = N512FounderFoundationProjection::compile(
-            &admission.phenotype,
-            sensor_profile,
-            &foundation,
-        )?;
-        compile_gpu_components_from_genome(
-            projection.frozen_abi().coordinate_genome().clone(),
-            projection
-                .frozen_abi()
-                .coordinate_development_state()
-                .clone(),
-            sensor_profile,
-        )?
-    } else {
-        compile_gpu_components_from_genome(genome.clone(), development.clone(), sensor_profile)?
-    };
+    let selects_legacy_nano512 = selects_legacy_nano512_compatibility_from_record(&admission)?;
+    let (phenotype, compiler_inputs, legacy_nano512_compatibility_receipt) =
+        if selects_legacy_nano512 {
+            let foundation = FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?;
+            let (phenotype, compiler_inputs, receipt) =
+                PhenotypeCompiler::compile_fixed_legacy_nano512_compatibility_asset(
+                    sensor_profile,
+                    &foundation,
+                )?
+                .into_runtime_parts();
+            (phenotype, compiler_inputs, Some(receipt))
+        } else {
+            let (phenotype, compiler_inputs) = compile_gpu_components_from_genome(
+                genome.clone(),
+                development.clone(),
+                sensor_profile,
+            )?;
+            (phenotype, compiler_inputs, None)
+        };
     if phenotype.brain_class_id() != brain_class.default_class_id() {
         return Err(ScaffoldContractError::PhenotypeCompile);
     }
@@ -228,10 +233,59 @@ fn resident_authority_plan_from_record(
         world_tick,
         phenotype,
         compiler_inputs,
+        legacy_nano512_compatibility_receipt,
         genome,
         development,
         biochemistry: admission.biochemistry,
     })
+}
+
+fn selects_legacy_nano512_compatibility_from_record(
+    admission: &WorldOrganismAdmissionSnapshot,
+) -> Result<bool, ScaffoldContractError> {
+    let expected_foundation = FoundationGeneticIdentity::new(
+        FoundationId::N512_V1.raw(),
+        FoundationVersion::V1.raw() as u16,
+        FoundationCompatibilityFamilyId::N512_FOUNDATION.raw(),
+        BrainCapacityClass::N512_ID,
+    )?;
+    let genome = &admission.genome;
+    let phenotype = &admission.phenotype;
+    let is_nano512_record = genome.foundation.brain_class_id == BrainCapacityClass::N512_ID
+        || phenotype.foundation.brain_class_id == BrainCapacityClass::N512_ID
+        || phenotype.brain_genome.brain_class_id == BrainCapacityClass::N512_ID;
+    if !is_nano512_record {
+        return Ok(false);
+    }
+    if genome.foundation != expected_foundation
+        || phenotype.foundation != expected_foundation
+        || phenotype.source_genome_id != genome.id
+        || phenotype.lineage_id != genome.lineage_id
+        || phenotype.genetic_provenance != genome.provenance
+        || phenotype.brain_genome.id != genome.id
+        || phenotype.brain_genome.lineage_id != Some(genome.lineage_id)
+    {
+        return Err(ScaffoldContractError::PhenotypeCompile);
+    }
+    Ok(true)
+}
+
+#[cfg(feature = "gpu-tests")]
+pub fn legacy_nano512_compatibility_receipt_for_record_for_test(
+    record: &WorldOrganismRecord,
+    world_tick: Tick,
+    sensor_profile: SensorProfile,
+) -> Result<LegacyNano512CompatibilityReceipt, ScaffoldContractError> {
+    let plan = resident_authority_plan_from_record(
+        record,
+        record.organism_id(),
+        record.world_entity_id(),
+        world_tick,
+        BrainScaleTier::Nano512,
+        sensor_profile,
+    )?;
+    plan.legacy_nano512_compatibility_receipt
+        .ok_or(ScaffoldContractError::PhenotypeCompile)
 }
 
 fn synchronize_resident_from_record(
@@ -299,6 +353,8 @@ fn compare_resident_checkpoint_metadata(
         || checkpoint.compiler_inputs.genome() != plan.compiler_inputs.genome()
         || checkpoint.compiler_inputs.development() != plan.compiler_inputs.development()
         || checkpoint.compiler_inputs.sensor_profile() != plan.compiler_inputs.sensor_profile()
+        || checkpoint.legacy_nano512_compatibility_receipt
+            != plan.legacy_nano512_compatibility_receipt.as_ref()
     {
         return Err(ScaffoldContractError::PhenotypeCompile);
     }
@@ -356,6 +412,7 @@ impl ResidentAuthorityPlan {
         Ok(ResidentCognition {
             phenotype: self.phenotype,
             compiler_inputs: self.compiler_inputs,
+            legacy_nano512_compatibility_receipt: self.legacy_nano512_compatibility_receipt,
             genome: self.genome,
             development: self.development,
             homeostasis: self.biochemistry.homeostasis,
@@ -1533,6 +1590,14 @@ pub struct GpuLiveBrainRuntime {
     retirement_backend_removal_count: usize,
     #[cfg(test)]
     forced_late_advance_failure: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuLiveResidencySummary {
+    pub handle_count: usize,
+    pub resident_count: usize,
+    pub memory_sidecar_count: usize,
+    pub topology_sidecar_count: usize,
 }
 
 impl LiveAuthorityOwner for GpuLiveBrainRuntime {
@@ -3126,7 +3191,14 @@ impl GpuLiveBrainRuntime {
                 &capacity,
                 entry.projection.runtime_development_state().clone(),
                 entry.projection.sensor_profile(),
-                phenotype.foundation_abi().clone(),
+                phenotype
+                    .foundation_abi()
+                    .canonical_v2()
+                    .cloned()
+                    .ok_or(ScaffoldContractError::PhenotypeCompile)
+                    .map_err(
+                        |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
+                    )?,
             )
             .map_err(|error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })?;
             let verified = PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)
@@ -3147,6 +3219,7 @@ impl GpuLiveBrainRuntime {
                 genome: compiler_inputs.genome().clone(),
                 development: compiler_inputs.development().clone(),
                 compiler_inputs,
+                legacy_nano512_compatibility_receipt: None,
                 homeostasis: HomeostaticSnapshot::baseline(plan.world_tick),
                 sleep_scheduler: GpuSleepScheduler::new(
                     sleep_consolidation_config_for(&phenotype).map_err(|error| {
@@ -3873,6 +3946,9 @@ impl GpuLiveBrainRuntime {
                             checkpoint_tick: state.checkpoint_tick,
                             phenotype: &restored.phenotype,
                             compiler_inputs: &restored.compiler_inputs,
+                            legacy_nano512_compatibility_receipt: restored
+                                .legacy_nano512_compatibility_receipt
+                                .as_ref(),
                         }),
                     )?;
                     let retained_sequence = restored
@@ -3972,6 +4048,9 @@ impl GpuLiveBrainRuntime {
                         genome: authority.genome.clone(),
                         development: authority.development.clone(),
                         compiler_inputs: authority.compiler_inputs.clone(),
+                        legacy_nano512_compatibility_receipt: authority
+                            .legacy_nano512_compatibility_receipt
+                            .clone(),
                         homeostasis: authority.biochemistry.homeostasis,
                         sleep_scheduler,
                         next_sequence,
@@ -4164,6 +4243,9 @@ impl GpuLiveBrainRuntime {
                 tracked_objects: self.world.tracked_objects().save_state(organism_id)?,
                 language_grounding: &resident.language_grounding,
                 life_statistics: &resident.life_statistics,
+                legacy_nano512_compatibility_receipt: resident
+                    .legacy_nano512_compatibility_receipt
+                    .as_ref(),
                 retained_learning,
             },
         )?;
@@ -4328,6 +4410,32 @@ impl GpuLiveBrainRuntime {
         result
     }
 
+    pub(crate) fn rebind_durable_checkpoint_boundary(
+        &mut self,
+        save_path: impl AsRef<Path>,
+        asset_root: impl AsRef<Path>,
+        expected: &PortableSaveFile,
+    ) -> Result<(), GameAppShellError> {
+        let durable_manifest =
+            GpuDurableSaveManifest::open(save_path.as_ref(), asset_root.as_ref())?;
+        let published = durable_manifest.load()?;
+        if published.save != *expected {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "rebound GPU checkpoint boundary differs from the exact save".to_string(),
+            });
+        }
+        let store = GpuCheckpointAssetStore::new(durable_manifest.asset_root().to_path_buf())?;
+        let candidate = GpuLiveCheckpointDurability {
+            store,
+            durable_manifest,
+            published,
+        };
+        let durable_reference = candidate.durable_reference()?;
+        self.backend.note_durable_checkpoint(durable_reference)?;
+        self.checkpoint_durability = Some(candidate);
+        Ok(())
+    }
+
     fn capture_checkpointed_save(
         &mut self,
         mut replacement: PortableSaveFile,
@@ -4389,6 +4497,9 @@ impl GpuLiveBrainRuntime {
                     tracked_objects: self.world.tracked_objects().save_state(OrganismId(raw))?,
                     language_grounding: &resident.language_grounding,
                     life_statistics: &resident.life_statistics,
+                    legacy_nano512_compatibility_receipt: resident
+                        .legacy_nano512_compatibility_receipt
+                        .as_ref(),
                     retained_learning: self.retained_learning.get(&raw).map(|recovery| {
                         RetainedLearningCapture {
                             sealed_patch: &recovery.sealed_patch,
@@ -5899,6 +6010,15 @@ impl GpuLiveBrainRuntime {
         self.world.clone()
     }
 
+    pub fn residency_summary(&self) -> GpuLiveResidencySummary {
+        GpuLiveResidencySummary {
+            handle_count: self.handles.len(),
+            resident_count: self.residents.len(),
+            memory_sidecar_count: self.memories.len(),
+            topology_sidecar_count: self.topologies.len(),
+        }
+    }
+
     /// Authorizes structured education against the live world's habitat authority.
     pub fn authorize_structured_education(
         &mut self,
@@ -7371,7 +7491,11 @@ pub(crate) fn compile_gpu_components_from_genome(
         &capacity,
         construction_development,
         sensor_profile,
-        phenotype.foundation_abi().clone(),
+        phenotype
+            .foundation_abi()
+            .canonical_v2()
+            .cloned()
+            .ok_or(ScaffoldContractError::PhenotypeCompile)?,
     )?;
     let verified_phenotype = PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)?;
     if verified_phenotype != phenotype {
@@ -8317,7 +8441,7 @@ mod tests {
                     &capacity,
                     development.clone(),
                     sensor_profile,
-                    phenotype.foundation_abi().clone(),
+                    phenotype.foundation_abi().canonical_v2().cloned().unwrap(),
                 )
                 .unwrap();
                 (
@@ -8325,6 +8449,7 @@ mod tests {
                     ResidentCognition {
                         phenotype,
                         compiler_inputs,
+                        legacy_nano512_compatibility_receipt: None,
                         genome,
                         development,
                         homeostasis: HomeostaticSnapshot::baseline(world_tick),
@@ -9346,35 +9471,28 @@ mod tests {
             record.phenotype().brain_genome.id
         );
         assert_eq!(plan.development, authoritative_development);
-        let projection = N512FounderFoundationProjection::compile(
-            record.phenotype(),
-            sensor_profile,
-            &foundation_asset,
-        )
-        .unwrap();
-        let (expected_phenotype, expected_inputs) = compile_gpu_components_from_genome(
-            projection.frozen_abi().coordinate_genome().clone(),
-            projection
-                .frozen_abi()
-                .coordinate_development_state()
-                .clone(),
-            sensor_profile,
-        )
-        .unwrap();
+        let (expected_phenotype, expected_inputs, expected_receipt) =
+            PhenotypeCompiler::compile_fixed_legacy_nano512_compatibility_asset(
+                sensor_profile,
+                &foundation_asset,
+            )
+            .unwrap()
+            .into_runtime_parts();
         assert_eq!(plan.phenotype, expected_phenotype);
-        assert_eq!(
-            plan.compiler_inputs.genome(),
-            projection.frozen_abi().coordinate_genome()
-        );
-        assert_eq!(
-            plan.compiler_inputs.development(),
-            projection.frozen_abi().coordinate_development_state()
-        );
+        assert_ne!(plan.compiler_inputs.genome(), &plan.genome);
+        assert_ne!(plan.compiler_inputs.development(), &plan.development);
         assert_eq!(plan.compiler_inputs.genome(), expected_inputs.genome());
         assert_eq!(
             plan.compiler_inputs.development(),
             expected_inputs.development()
         );
+        assert_eq!(
+            plan.legacy_nano512_compatibility_receipt.as_ref(),
+            Some(&expected_receipt)
+        );
+        expected_receipt
+            .validate_against(&plan.phenotype, &foundation_asset)
+            .unwrap();
         assert_eq!(
             plan.biochemistry.homeostasis,
             record.biochemistry().homeostasis
@@ -9403,6 +9521,7 @@ mod tests {
                 checkpoint_tick: world.tick(),
                 phenotype: &checkpoint_phenotype,
                 compiler_inputs: &checkpoint_inputs,
+                legacy_nano512_compatibility_receipt: None,
             },
         );
         assert_eq!(comparison, Err(ScaffoldContractError::PhenotypeCompile));
@@ -9431,7 +9550,7 @@ mod tests {
             &capacity,
             development,
             SensorProfile::PrivilegedAffordanceV1,
-            phenotype.foundation_abi().clone(),
+            phenotype.foundation_abi().canonical_v2().cloned().unwrap(),
         )
         .unwrap();
         assert_eq!(inputs.foundation_abi(), phenotype.foundation_abi());
@@ -9931,7 +10050,7 @@ mod tests {
             &capacity,
             development.clone(),
             SensorProfile::PrivilegedAffordanceV1,
-            phenotype.foundation_abi().clone(),
+            phenotype.foundation_abi().canonical_v2().cloned().unwrap(),
         )
         .unwrap();
         let mut residents = BTreeMap::from([(
@@ -9939,6 +10058,7 @@ mod tests {
             ResidentCognition {
                 phenotype: phenotype.clone(),
                 compiler_inputs,
+                legacy_nano512_compatibility_receipt: None,
                 genome: genome.clone(),
                 development: development.clone(),
                 homeostasis: biology_before.homeostasis,

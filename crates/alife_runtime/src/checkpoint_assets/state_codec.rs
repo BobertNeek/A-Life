@@ -2,10 +2,11 @@
 
 use alife_core::{
     BoundedReplayBatch, BrainCapacityClass, BrainPhenotype, ConsolidationState, ExperiencePatch,
-    ExperiencePatchBuilder, LanguageGroundingLedger, MemorySidecarState, NeuralReceptorFrame,
-    OrganismId, PassiveLifeStatistics, PhenotypeCompiler, PhenotypeCompilerInputs,
-    PortableMemoryBankAssetV2, PortableTopologySidecarAssetV1, ScaffoldContractError,
-    SensorProfileIdentity, SensoryAbiVersion, SleepState, Tick, TopologySidecar, Validate,
+    ExperiencePatchBuilder, FoundationWeightAsset, LanguageGroundingLedger,
+    LegacyNano512CompatibilityReceipt, MemorySidecarState, NeuralReceptorFrame, OrganismId,
+    PassiveLifeStatistics, PhenotypeCompiler, PhenotypeCompilerInputs, PortableMemoryBankAssetV2,
+    PortableTopologySidecarAssetV1, ScaffoldContractError, SensorProfileIdentity,
+    SensoryAbiVersion, SleepState, Tick, TopologySidecar, Validate,
 };
 use alife_gpu_backend::{
     GpuActivityRestoreInput, GpuActivityRuntimeSnapshot, GpuBrainCheckpointParts,
@@ -201,6 +202,7 @@ pub struct RestoredGpuBrainCheckpoint {
     pub receipt: GpuBrainRestoreReceipt,
     pub phenotype: BrainPhenotype,
     pub compiler_inputs: PhenotypeCompilerInputs,
+    pub legacy_nano512_compatibility_receipt: Option<LegacyNano512CompatibilityReceipt>,
     pub sleep: SleepState,
     pub pending_transaction: Option<ExperiencePatchBuilder>,
     pub memory: MemorySidecarState,
@@ -220,6 +222,7 @@ pub struct GpuBrainSidecarCapture<'a> {
     pub tracked_objects: TrackedObjectRegistrySaveState,
     pub language_grounding: &'a LanguageGroundingLedger,
     pub life_statistics: &'a PassiveLifeStatistics,
+    pub legacy_nano512_compatibility_receipt: Option<&'a LegacyNano512CompatibilityReceipt>,
     pub retained_learning: Option<RetainedLearningCapture<'a>>,
 }
 
@@ -435,6 +438,9 @@ impl GpuCheckpointAssetStore {
                 tracked_objects,
                 language_grounding: &restored.language_grounding,
                 life_statistics: &statistics,
+                legacy_nano512_compatibility_receipt: restored
+                    .legacy_nano512_compatibility_receipt
+                    .as_ref(),
                 retained_learning: None,
             },
         );
@@ -499,6 +505,17 @@ impl GpuCheckpointAssetStore {
         let phenotype_bytes = serde_json::to_vec(phenotype)?;
         if recompiled != *phenotype || serde_json::to_vec(&recompiled)? != phenotype_bytes {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
+        }
+        match (
+            phenotype.legacy_foundation_compatibility_abi(),
+            sidecars.legacy_nano512_compatibility_receipt,
+        ) {
+            (Some(_), Some(receipt)) => {
+                let asset = FoundationWeightAsset::builtin_nano512_v1(phenotype.sensor_profile())?;
+                receipt.validate_against(phenotype, &asset)?;
+            }
+            (None, None) => {}
+            _ => return Err(ScaffoldContractError::PhenotypeCompile.into()),
         }
         if phenotype.phenotype_hash() != handle.phenotype_hash()
             || handle.class_id() != phenotype.brain_class_id()
@@ -725,6 +742,9 @@ impl GpuCheckpointAssetStore {
             sensor_profile: sidecars.sensor_profile,
             immutable_phenotype,
             phenotype_compiler_inputs,
+            legacy_nano512_compatibility_receipt: sidecars
+                .legacy_nano512_compatibility_receipt
+                .cloned(),
             active_weight_generation: parts.active_weight_generation,
             active_weight_bank: parts.active_weight_bank,
             active_eligibility_bank: parts.active_eligibility_bank,
@@ -828,6 +848,17 @@ impl GpuCheckpointAssetStore {
             || serde_json::to_vec(&recompiled)? != phenotype_bytes
         {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
+        }
+        match (
+            phenotype.legacy_foundation_compatibility_abi(),
+            state.legacy_nano512_compatibility_receipt.as_ref(),
+        ) {
+            (Some(_), Some(receipt)) => {
+                let asset = FoundationWeightAsset::builtin_nano512_v1(phenotype.sensor_profile())?;
+                receipt.validate_against(&phenotype, &asset)?;
+            }
+            (None, None) => {}
+            _ => return Err(ScaffoldContractError::PhenotypeCompile.into()),
         }
         let phenotype_profile = SensorProfileIdentity {
             profile_id: phenotype.sensor_profile().into(),
@@ -1020,6 +1051,9 @@ impl GpuCheckpointAssetStore {
             receipt,
             phenotype,
             compiler_inputs,
+            legacy_nano512_compatibility_receipt: state
+                .legacy_nano512_compatibility_receipt
+                .clone(),
             sleep: state.sleep,
             pending_transaction,
             memory,

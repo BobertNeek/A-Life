@@ -120,6 +120,7 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
                 tracked_objects,
                 language_grounding: &language_grounding,
                 life_statistics: &life_statistics,
+                legacy_nano512_compatibility_receipt: None,
                 retained_learning: None,
             },
         )

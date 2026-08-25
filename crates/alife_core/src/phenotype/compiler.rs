@@ -11,6 +11,26 @@ use super::{BrainCapacityClass, BrainPhenotype, PhenotypeCompilerInputs};
 pub struct PhenotypeCompiler;
 
 impl PhenotypeCompiler {
+    pub fn compile_fixed_legacy_nano512_compatibility_asset(
+        sensor_profile: SensorProfile,
+        foundation: &FoundationWeightAsset,
+    ) -> Result<LegacyNano512CompatibilityAdmission, ScaffoldContractError> {
+        let capacity = BrainCapacityClass::n512();
+        let genome = BrainGenome::scaffold(crate::LEGACY_NANO512_V1_COORDINATE_SEED, capacity.id());
+        let development = DevelopmentState::new(
+            genome.id,
+            crate::Tick::ZERO,
+            crate::NormalizedScalar::new(1.0)?,
+        );
+        Self::compile_from_legacy_nano512_compatibility_asset(
+            &genome,
+            &capacity,
+            &development,
+            sensor_profile,
+            foundation,
+        )
+    }
+
     pub fn compile_validated(
         inputs: &PhenotypeCompilerInputs,
         capacity: &BrainCapacityClass,
@@ -120,7 +140,9 @@ impl PhenotypeCompiler {
             .legacy_foundation_compatibility_abi()
             .ok_or(ScaffoldContractError::PhenotypeCompile)?;
         let receipt = LegacyNano512CompatibilityReceipt::new(descriptor, &phenotype)?;
-        Ok(LegacyNano512CompatibilityAdmission::new(phenotype, receipt))
+        Ok(LegacyNano512CompatibilityAdmission::new(
+            phenotype, inputs, receipt,
+        ))
     }
 
     pub(super) fn compile_from_foundation_asset_with_overlay_seed(
