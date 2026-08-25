@@ -12,7 +12,7 @@ use std::{
 };
 
 use alife_bevy_adapter::BevyEntityMap;
-use alife_core::{OrganismId, Vec3f, WorldEntityId};
+use alife_core::{OrganismId, Tick, Vec3f, WorldEntityId};
 use alife_world::{
     persistence::{CreatureSaveState, GpuRuntimeSaveState, PortableSaveFile},
     CreatureAppearanceGenome, CreatureWorldAnchor, PersistentVoxelWorldBackend,
@@ -6849,6 +6849,7 @@ fn sync_fvr05_panel_visibility(
         bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionRightInspectorPanel>>,
         bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionBottomOverlayToolbar>>,
         bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionFooterStatusBar>>,
+        bevy::prelude::Query<&mut Visibility, With<V0PlayerCreaturePanel>>,
     )>,
 ) {
     if !ux.is_changed() {
@@ -6885,6 +6886,13 @@ fn sync_fvr05_panel_visibility(
     }
     for mut visibility in &mut panels.p4() {
         *visibility = footer_visibility;
+    }
+    for mut visibility in &mut panels.p5() {
+        *visibility = if menu_chrome {
+            Visibility::Hidden
+        } else {
+            Visibility::Visible
+        };
     }
 }
 
@@ -7381,6 +7389,8 @@ fn request_fvr03_recorded_screenshot(
     mut commands: Commands,
     mut capture: ResMut<Fvr03ProductionVoxelScreenshotResource>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
+    selection: Res<Fvr03ProductionVoxelSelectionResource>,
+    presentation: Option<Res<LiveBrainPresentationFrameResource>>,
     mut ux: Option<ResMut<Fvr05ProductionUxStateResource>>,
     #[cfg(feature = "gpu-runtime")] mut conversation: Option<
         ResMut<ProductionConversationLineageUiState>,
@@ -7414,7 +7424,12 @@ fn request_fvr03_recorded_screenshot(
         }
         capture.measurement_written = true;
     }
-    if !fvr03_visual_capture_ready(capture.frame, capture.capture_after_frame) {
+    if !fvr03_visual_capture_ready(
+        capture.frame,
+        capture.capture_after_frame,
+        selection.selected,
+        presentation.as_deref(),
+    ) {
         return;
     }
     if !capture.product_screenshot_captured {
@@ -7429,7 +7444,9 @@ fn request_fvr03_recorded_screenshot(
             ux.settings.show_menu = false;
             ux.settings.show_settings = false;
             ux.settings.show_overlays = false;
-            ux.last_action = "Recorded FVR10 clean product screenshot".to_string();
+            ux.last_action =
+                "Capture-mode selection (non-input evidence); recorded clean product screenshot"
+                    .to_string();
         }
         for mut visibility in &mut overlay_batches {
             *visibility = Visibility::Hidden;
@@ -7473,7 +7490,10 @@ fn request_fvr03_recorded_screenshot(
         ux.settings.show_settings = show_developer_surfaces;
         ux.settings.show_overlays = show_developer_surfaces;
         ux.settings.active_inspector_tab = tab;
-        ux.last_action = format!("Recorded FVR05 screenshot state: {}", tab.label());
+        ux.last_action = format!(
+            "Capture-mode selection (non-input evidence); recorded {} tab",
+            tab.label()
+        );
     }
     #[cfg(feature = "gpu-runtime")]
     if let Some(conversation) = conversation.as_mut() {
@@ -7501,8 +7521,38 @@ fn fvr03_screenshot_capture_frame(_settings: &Fvr03ProductionVoxelRendererSettin
     FVR03_VISUAL_CAPTURE_AFTER_FRAMES
 }
 
-const fn fvr03_visual_capture_ready(frame: u32, capture_after_frame: u32) -> bool {
-    frame >= capture_after_frame
+fn fvr03_visual_capture_ready(
+    frame: u32,
+    capture_after_frame: u32,
+    selected: Option<StableVoxelObjectRef>,
+    presentation: Option<&LiveBrainPresentationFrameResource>,
+) -> bool {
+    if frame < capture_after_frame {
+        return false;
+    }
+    let Some(selected) = selected.filter(|selected| selected.kind == StableVoxelRefKind::Creature)
+    else {
+        return false;
+    };
+    let Some(stable_id) = selected.stable_id else {
+        return false;
+    };
+    let Some(current) = presentation.map(|presentation| &presentation.current) else {
+        return false;
+    };
+    if current.authoritative_world_tick == Tick::ZERO {
+        return false;
+    }
+    let Some(organism) = current.organism(stable_id) else {
+        return false;
+    };
+    current
+        .cognitive_for_organism(organism.organism_id)
+        .is_some()
+        && current
+            .tick_summaries
+            .iter()
+            .any(|summary| summary.organism_id == organism.organism_id)
 }
 
 fn fvr05_screenshot_step(index: usize) -> Option<(&'static str, Fvr05ProductionInspectorTab)> {
@@ -8155,12 +8205,11 @@ mod tests {
     }
 
     #[test]
-    fn visual_capture_readiness_does_not_wait_for_performance_sampling() {
-        assert!(!fvr03_visual_capture_ready(7, 8));
-        assert!(fvr03_visual_capture_ready(8, 8));
-        assert!(fvr03_visual_capture_ready(u32::MAX, 8));
+    fn visual_capture_readiness_rejects_missing_canonical_presentation() {
+        assert!(!fvr03_visual_capture_ready(7, 8, None, None));
+        assert!(!fvr03_visual_capture_ready(8, 8, None, None));
+        assert!(!fvr03_visual_capture_ready(u32::MAX, 8, None, None));
     }
-
     #[test]
     fn developer_capture_prioritizes_gpu_runtime_evidence() {
         assert_eq!(
