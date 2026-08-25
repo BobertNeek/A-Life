@@ -8,6 +8,7 @@ mod support;
 
 use std::collections::BTreeMap;
 
+use alife_core::SchemaVersions;
 use alife_gpu_backend::{
     validate_dispatch_dimensions, GpuBufferAccess, GpuClassBucketBufferRole, GpuClassBucketBuffers,
     GpuClosedLoopError, GpuClosedLoopPipelines, CLOSED_LOOP_ABI_WGSL,
@@ -315,6 +316,18 @@ fn slot_extension_and_learning_state_helpers_load_every_exact_word_once() {
     ] {
         assert!(CLOSED_LOOP_ABI_WGSL.contains(&format!("fn {helper}")));
     }
+}
+
+#[test]
+fn learning_state_schema_matches_the_wgsl_validation_contract() {
+    let expected = format!(
+        "constGPU_LEARNING_SCHEMA_VERSION:u32={}u;",
+        SchemaVersions::CURRENT.learning.raw()
+    );
+    assert!(
+        compact(CLOSED_LOOP_ABI_WGSL).contains(&expected),
+        "WGSL must validate the exact learning-state schema uploaded by Rust"
+    );
 }
 
 #[test]

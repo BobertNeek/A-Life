@@ -5,8 +5,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
     genome::CognitiveArchitectureGenomeParameters, Blake3Digest, BrainCapacityClass, BrainClassId,
-    CanonicalDigestBuilder, FoundationAbiBinding, LanguageCodebookV1, LobeLayout, PhenotypeHash,
-    ScaffoldContractError, SensorProfile,
+    CanonicalDigestBuilder, FoundationAbiSelection, LanguageCodebookV1,
+    LegacyNano512CompatibilityAbiDescriptor, LobeLayout, PhenotypeHash, ScaffoldContractError,
+    SensorProfile,
 };
 
 use super::abi_validation::{
@@ -20,8 +21,8 @@ use super::{
     SleepConsolidationPlan,
 };
 
-const PHENOTYPE_SCHEMA_VERSION: u16 = 4;
-const PHENOTYPE_DOMAIN: &[u8] = b"alife.brain.phenotype.v4";
+const PHENOTYPE_SCHEMA_VERSION: u16 = 5;
+const PHENOTYPE_DOMAIN: &[u8] = b"alife.brain.phenotype.v5";
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct CognitiveArchitecturePlan {
@@ -117,7 +118,7 @@ pub struct BrainPhenotype {
     neuron_count: u32,
     microstep_count: u8,
     sensor_profile: SensorProfile,
-    foundation_abi: FoundationAbiBinding,
+    foundation_abi_selection: FoundationAbiSelection,
     language_codebook: LanguageCodebookV1,
     cognitive_architecture: CognitiveArchitecturePlan,
     lobe_layout: LobeLayout,
@@ -164,8 +165,17 @@ impl BrainPhenotype {
     pub const fn lobe_layout(&self) -> &LobeLayout {
         &self.lobe_layout
     }
-    pub const fn foundation_abi(&self) -> &FoundationAbiBinding {
-        &self.foundation_abi
+    pub const fn foundation_abi_selection(&self) -> &FoundationAbiSelection {
+        &self.foundation_abi_selection
+    }
+    pub const fn foundation_abi(&self) -> &FoundationAbiSelection {
+        &self.foundation_abi_selection
+    }
+    pub const fn legacy_foundation_compatibility_abi(
+        &self,
+    ) -> Option<&LegacyNano512CompatibilityAbiDescriptor> {
+        self.foundation_abi_selection
+            .legacy_nano512_compatibility_v1()
     }
     pub const fn language_codebook(&self) -> &LanguageCodebookV1 {
         &self.language_codebook
@@ -247,8 +257,8 @@ impl BrainPhenotype {
             PersistentAddressMap::compile(&lobe_layout, &projections, &synapses)?;
         let (route_abi_digest, plasticity_abi_digest) =
             compute_abi_digests(capacity, &projections, &synapses);
-        let foundation_abi = inputs.foundation_abi().clone();
-        let language_codebook = foundation_abi.language_codebook().clone();
+        let foundation_abi_selection = inputs.foundation_abi_selection().clone();
+        let language_codebook = foundation_abi_selection.language_codebook();
         let cognitive_architecture =
             CognitiveArchitecturePlan::compile(inputs.genome().cognitive_architecture(), capacity)?;
         let mut value = Self {
@@ -258,7 +268,7 @@ impl BrainPhenotype {
             neuron_count,
             microstep_count,
             sensor_profile: inputs.sensor_profile(),
-            foundation_abi,
+            foundation_abi_selection,
             language_codebook,
             cognitive_architecture,
             lobe_layout,
@@ -298,9 +308,7 @@ impl BrainPhenotype {
         d.write_u32(self.neuron_count);
         d.write_u8(self.microstep_count);
         d.write_u16(self.sensor_profile.raw());
-        d.write_u16(self.foundation_abi.capacity_class_id().raw());
-        d.write_u64(self.foundation_abi.layout_id().0);
-        write_blake3(&mut d, self.foundation_abi.layout_digest());
+        self.foundation_abi_selection.write_canonical(&mut d);
         d.write_u32(self.language_codebook.id().0);
         write_blake3(&mut d, self.language_codebook.canonical_digest());
         d.write_sequence_len(self.lobe_layout.regions.len());
@@ -398,7 +406,8 @@ impl BrainPhenotype {
         capacity: &BrainCapacityClass,
     ) -> Result<(), ScaffoldContractError> {
         capacity.validate_contract()?;
-        self.foundation_abi.validate_against(capacity)?;
+        self.foundation_abi_selection
+            .validate_against(capacity, self.sensor_profile)?;
         self.language_codebook.validate_contract()?;
         let execution = capacity.execution();
         if self.schema_version != PHENOTYPE_SCHEMA_VERSION
@@ -416,7 +425,7 @@ impl BrainPhenotype {
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
-        if self.language_codebook != *self.foundation_abi.language_codebook() {
+        if self.language_codebook != self.foundation_abi_selection.language_codebook() {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
         self.cognitive_architecture.validate_against(capacity)?;
@@ -676,6 +685,12 @@ impl BrainPhenotype {
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
+        if let Some(descriptor) = self
+            .foundation_abi_selection
+            .legacy_nano512_compatibility_v1()
+        {
+            descriptor.validate_for_phenotype(self)?;
+        }
         Ok(())
     }
 }
@@ -699,7 +714,7 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             neuron_count: u32,
             microstep_count: u8,
             sensor_profile: SensorProfile,
-            foundation_abi: FoundationAbiBinding,
+            foundation_abi_selection: FoundationAbiSelection,
             language_codebook: LanguageCodebookV1,
             cognitive_architecture: CognitiveArchitecturePlan,
             lobe_layout: LobeLayout,
@@ -728,7 +743,7 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             neuron_count: w.neuron_count,
             microstep_count: w.microstep_count,
             sensor_profile: w.sensor_profile,
-            foundation_abi: w.foundation_abi,
+            foundation_abi_selection: w.foundation_abi_selection,
             language_codebook: w.language_codebook,
             cognitive_architecture: w.cognitive_architecture,
             lobe_layout: w.lobe_layout,

@@ -30,6 +30,7 @@ pub mod grounding;
 pub mod ids;
 pub mod language;
 pub mod learning;
+mod legacy_nano512_compatibility;
 pub mod lineage;
 pub mod lobe;
 pub mod math;
@@ -210,6 +211,11 @@ pub use learning::{
     validate_outcome_credit_schema, FastWeightSemantics, LearningCommitToken,
     LearningSequenceGuard, NeuromodulatorSample, NeuromodulatoryFrame, OutcomeCreditPacket,
     OutcomeCreditReplayKey, PlasticityReceptorProfile, NEUROMODULATORY_LANE_COUNT,
+};
+pub use legacy_nano512_compatibility::{
+    FoundationAbiSelection, LegacyFoundationAbiId, LegacyNano512CompatibilityAbiDescriptor,
+    LegacyNano512CompatibilityAdmission, LegacyNano512CompatibilityReceipt, ProductionRuntimeAbiId,
+    ProductionRuntimePath,
 };
 pub use lineage::LineageExportManifest;
 pub use lobe::{

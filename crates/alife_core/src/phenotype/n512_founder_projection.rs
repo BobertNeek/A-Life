@@ -38,12 +38,16 @@ impl N512FrozenAbiRecipe {
         coordinate_development_state: DevelopmentState,
         compiled: &BrainPhenotype,
     ) -> Self {
+        let foundation_abi = compiled
+            .foundation_abi()
+            .canonical_v2()
+            .expect("frozen founder projection requires canonical foundation ABI");
         Self {
             schema_version: N512_PROJECTION_SCHEMA_VERSION,
             coordinate_genome,
             coordinate_development_state,
-            foundation_abi: compiled.foundation_abi().clone(),
-            layout_digest: compiled.foundation_abi().layout_digest(),
+            foundation_abi: foundation_abi.clone(),
+            layout_digest: foundation_abi.layout_digest(),
             address_map_digest: compiled.persistent_address_map().digest(),
             decoder_digest: compiled.candidate_decoder().canonical_digest(),
             route_abi_digest: compiled.route_abi_digest(),
@@ -434,7 +438,8 @@ impl N512FounderFoundationProjection {
             || self.compiled_phenotype.sensor_profile() != self.receipt.sensor_profile()
             || self.overlay_seed != self.receipt.overlay_seed()
             || self.compiled_phenotype.phenotype_hash() != self.receipt.phenotype_hash()
-            || self.compiled_phenotype.foundation_abi() != self.frozen_abi.foundation_abi()
+            || self.compiled_phenotype.foundation_abi().canonical_v2()
+                != Some(self.frozen_abi.foundation_abi())
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
@@ -535,12 +540,16 @@ impl N512FrozenAbiRecipe {
         capacity: &BrainCapacityClass,
         compiled: &BrainPhenotype,
     ) -> Result<(), ScaffoldContractError> {
+        let compiled_foundation_abi = compiled
+            .foundation_abi()
+            .canonical_v2()
+            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
         if self.schema_version != N512_PROJECTION_SCHEMA_VERSION
             || self.coordinate_genome.brain_class_id != capacity.id()
             || self.coordinate_development_state.genome_id != self.coordinate_genome.id
             || self.coordinate_development_state.maturation.raw() != 1.0
-            || self.foundation_abi != *compiled.foundation_abi()
-            || self.layout_digest != compiled.foundation_abi().layout_digest()
+            || self.foundation_abi != *compiled_foundation_abi
+            || self.layout_digest != compiled_foundation_abi.layout_digest()
             || self.address_map_digest != compiled.persistent_address_map().digest()
             || self.decoder_digest != compiled.candidate_decoder().canonical_digest()
             || self.route_abi_digest != compiled.route_abi_digest()

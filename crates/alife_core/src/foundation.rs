@@ -557,6 +557,10 @@ impl FoundationManifest {
         phenotype: &BrainPhenotype,
         weight_asset: FoundationWeightAssetRef,
     ) -> Result<Self, ScaffoldContractError> {
+        let foundation_abi = phenotype
+            .foundation_abi()
+            .canonical_v2()
+            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
         let training_stage = TrainingStageManifest::bootstrap();
         let (foundation_id, compatibility_family_id) =
             foundation_identity_for_class(phenotype.brain_class_id())?;
@@ -567,7 +571,7 @@ impl FoundationManifest {
             compatibility_family_id,
             capacity_class_id: phenotype.brain_class_id(),
             sensor_profile: phenotype.sensor_profile(),
-            layout_digest: phenotype.foundation_abi().layout_digest(),
+            layout_digest: foundation_abi.layout_digest(),
             language_codebook_digest: phenotype.language_codebook().canonical_digest(),
             action_decoder_digest: phenotype.candidate_decoder().canonical_digest(),
             speech_decoder_digest: phenotype
@@ -597,6 +601,22 @@ impl FoundationManifest {
         self.compatibility_family_id
     }
 
+    pub const fn sensor_profile(&self) -> SensorProfile {
+        self.sensor_profile
+    }
+
+    pub const fn layout_digest(&self) -> Blake3Digest {
+        self.layout_digest
+    }
+
+    pub const fn route_abi_digest(&self) -> Blake3Digest {
+        self.route_abi_digest
+    }
+
+    pub const fn address_map_digest(&self) -> Blake3Digest {
+        self.address_map_digest
+    }
+
     pub const fn weight_asset(&self) -> FoundationWeightAssetRef {
         self.weight_asset
     }
@@ -613,6 +633,10 @@ impl FoundationManifest {
         &self,
         phenotype: &BrainPhenotype,
     ) -> Result<(), ScaffoldContractError> {
+        let foundation_abi = phenotype
+            .foundation_abi()
+            .canonical_v2()
+            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
         self.training_stage.validate()?;
         self.promotion_receipt.validate(self.training_stage)?;
         let (foundation_id, compatibility_family_id) =
@@ -623,12 +647,11 @@ impl FoundationManifest {
             || self.compatibility_family_id != compatibility_family_id
             || self.capacity_class_id != phenotype.brain_class_id()
             || self.sensor_profile != phenotype.sensor_profile()
-            || self.layout_digest != phenotype.foundation_abi().layout_digest()
-            || phenotype.foundation_abi().foundation_id() != Some(self.foundation_id)
-            || phenotype.foundation_abi().foundation_version() != Some(self.foundation_version)
-            || phenotype.foundation_abi().compatibility_family_id()
-                != Some(self.compatibility_family_id)
-            || phenotype.foundation_abi().foundation_weight_asset() != Some(self.weight_asset)
+            || self.layout_digest != foundation_abi.layout_digest()
+            || foundation_abi.foundation_id() != Some(self.foundation_id)
+            || foundation_abi.foundation_version() != Some(self.foundation_version)
+            || foundation_abi.compatibility_family_id() != Some(self.compatibility_family_id)
+            || foundation_abi.foundation_weight_asset() != Some(self.weight_asset)
             || self.language_codebook_digest != phenotype.language_codebook().canonical_digest()
             || self.action_decoder_digest != phenotype.candidate_decoder().canonical_digest()
             || self.speech_decoder_digest
@@ -873,7 +896,7 @@ impl FoundationWeightAsset {
         Ok(asset)
     }
 
-    fn validate_self_contained(&self) -> Result<(), ScaffoldContractError> {
+    pub(crate) fn validate_self_contained(&self) -> Result<(), ScaffoldContractError> {
         self.manifest.training_stage.validate()?;
         self.manifest
             .promotion_receipt
