@@ -3015,7 +3015,7 @@ impl GpuLiveBrainRuntime {
             deterministic_seed,
             brain_class,
         )
-        .map(|mut candidate| {
+        .and_then(|mut candidate| {
             candidate.homeostatic_parameters = homeostatic_parameters;
             candidate.cognitive_work_cost_policy = cognitive_work_cost_policy;
             candidate.schedule_sleep = schedule_sleep;
@@ -3030,8 +3030,28 @@ impl GpuLiveBrainRuntime {
             } else {
                 None
             };
-            candidate.archive_birth_manifests.clear();
-            candidate
+            candidate.archive_birth_manifests = if preserve_lineage_archive {
+                candidate
+                    .world
+                    .organism_registry()
+                    .iter()
+                    .map(|record| {
+                        let organism_id = record.organism_id();
+                        let digest = record.archive().birth_manifest_digest().ok_or_else(|| {
+                            GameAppShellError::InvalidProductionFrontend {
+                                message: format!(
+                                    "loaded organism {} is missing persisted birth-manifest identity",
+                                    organism_id.raw()
+                                ),
+                            }
+                        })?;
+                        Ok((organism_id.raw(), digest))
+                    })
+                    .collect::<Result<BTreeMap<_, _>, GameAppShellError>>()?
+            } else {
+                BTreeMap::new()
+            };
+            Ok(candidate)
         });
 
         commit_staged_runtime(self, staged, |live, candidate| {

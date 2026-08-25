@@ -1568,6 +1568,16 @@ impl Fvr05ProductionUxStateResource {
     }
 }
 
+#[cfg(all(feature = "gpu-runtime", feature = "gpu-tests"))]
+pub fn production_archive_birth_manifest_for_test(
+    app: &mut App,
+    organism_id: OrganismId,
+) -> Option<alife_core::Blake3Digest> {
+    app.world_mut()
+        .get_non_send_resource_mut::<ProductionGpuBrainRuntimeResource>()
+        .and_then(|runtime| runtime.runtime.archive_birth_manifest(organism_id))
+}
+
 fn configure_production_voxel_presentation_schedule(app: &mut App) {
     app.configure_sets(
         Update,

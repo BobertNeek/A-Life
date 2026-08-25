@@ -3350,11 +3350,17 @@ impl GpuFixedSlotUpload {
             base,
             self.ranges.layout.extension_words.start,
         )?;
-        let fresh_replay_spans = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
+        let mut fresh_replay_spans = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
             &self.mutable_state_words,
             base,
             &self.ranges.layout.replay_span_words,
             self.brain_slot.counts.replay_capture_synapses,
+        )?;
+        let live_replay_spans = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
+            &live_words,
+            base,
+            &previous.ranges.layout.replay_span_words,
+            previous.brain_slot.counts.replay_capture_synapses,
         )?;
         let old_edges = recurrent_edge_identities(previous)?;
         let new_edges = recurrent_edge_identities(&self)?;
@@ -3381,6 +3387,18 @@ impl GpuFixedSlotUpload {
         }
         for local in 0..decoder_count {
             old_global_for_new[new_recurrent + local] = Some(old_recurrent + local);
+        }
+        let live_replay_sample_counts = live_replay_spans
+            .into_iter()
+            .map(|span| (span.local_synapse_id, span.sample_count))
+            .collect::<BTreeMap<_, _>>();
+        for span in &mut fresh_replay_spans {
+            span.sample_count = usize::try_from(span.local_synapse_id)
+                .ok()
+                .and_then(|new_index| old_global_for_new.get(new_index).copied().flatten())
+                .and_then(|old_index| u32::try_from(old_index).ok())
+                .and_then(|old_index| live_replay_sample_counts.get(&old_index).copied())
+                .unwrap_or(0);
         }
 
         let live_source = live_words.clone();
