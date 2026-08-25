@@ -434,7 +434,7 @@ impl GpuPhenotypeUpload {
             .validate_contract()
             .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
         let sleep_parameter = GpuSleepParameterRecord {
-            schema_version: u32::from(sleep.schema_version()),
+            schema_version: crate::GPU_SLEEP_PARAMETER_SCHEMA_VERSION,
             staging_rate: sleep.staging_rate(),
             weight_limit: sleep.weight_limit(),
             fast_decay_rate: sleep.fast_decay_rate(),

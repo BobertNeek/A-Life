@@ -12,7 +12,7 @@ use alife_core::sleep::{SleepReplayEvidence, SleepWorkReceipt};
 use alife_core::{
     finalized_memory_attention_evidence, select_focal_targets, ActionKind, ActionTarget,
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
-    AttentionFrame, AttentionSelectionPolicy, BiochemistryState, Blake3Digest,
+    AttentionFrame, AttentionSelectionPolicy, BiochemistryState, Blake3Digest, BodyEventDelta,
     BoundedCoordinationSummary, BoundedMotorPayload, BrainCapacityClass, BrainGenome,
     BrainScaleTier, BrainTickStatus, BrainWorkCounters, BrainWorkReceipt, CandidateObservationRef,
     CanonicalDigestBuilder, ChannelCommand, CognitiveConceptActivation, CognitiveContextFrame,
@@ -329,8 +329,9 @@ fn advance_and_synchronize_authority(
     world: &mut HeadlessWorld,
     residents: &mut BTreeMap<u64, ResidentCognition>,
     tick_after: Tick,
+    body_events: &BTreeMap<u64, BodyEventDelta>,
 ) -> Result<(), ScaffoldContractError> {
-    let advanced_tick = world.try_advance_tick()?;
+    let advanced_tick = world.try_advance_tick_with_body_events(body_events)?;
     if advanced_tick != tick_after {
         return Err(ScaffoldContractError::NonMonotonicTick);
     }
@@ -844,6 +845,21 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
         }
         Ok(Some(receipt))
     }
+
+    fn has_bounded_sleep_phase_data(
+        &mut self,
+        organism_id: OrganismId,
+        _state: SleepState,
+    ) -> Result<bool, ScaffoldContractError> {
+        if organism_id != self.handle.organism_id() {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        Ok(!self
+            .backend
+            .build_sleep_replay_batch(self.handle)?
+            .events
+            .is_empty())
+    }
 }
 
 type SleepProgressResult = Result<Option<ConsolidationDriverEvent>, ScaffoldContractError>;
@@ -869,7 +885,11 @@ where
         state: SleepState,
         intent: Option<ConsolidationIntent>,
     ) -> SleepProgressResult {
-        if matches!(state.consolidation, ConsolidationState::Completed { .. }) {
+        if matches!(state.consolidation, ConsolidationState::Completed { .. })
+            && self
+                .authoritative
+                .has_bounded_sleep_phase_data(organism_id, state)?
+        {
             let context = self
                 .authoritative
                 .context
@@ -909,6 +929,15 @@ where
             tick,
             due_work,
         )
+    }
+
+    fn has_bounded_sleep_phase_data(
+        &mut self,
+        organism_id: OrganismId,
+        state: SleepState,
+    ) -> Result<bool, ScaffoldContractError> {
+        self.authoritative
+            .has_bounded_sleep_phase_data(organism_id, state)
     }
 }
 
@@ -2699,7 +2728,7 @@ fn seal_prepared_selection_core(
     residents: &mut BTreeMap<u64, ResidentCognition>,
     sealed_patch_count: usize,
     cognitive_work_cost_policy: CognitiveWorkCostPolicy,
-    _schedule_sleep: bool,
+    schedule_sleep: bool,
     prepared: PreparedSealInput,
 ) -> Result<SealedWorldSelection, GameAppShellError> {
     let PreparedSealInput {
@@ -2842,6 +2871,21 @@ fn seal_prepared_selection_core(
         .next_sequence
         .checked_add(1)
         .ok_or(ScaffoldContractError::InvalidId)?;
+    let mut causal_stages = Vec::with_capacity(8);
+    if schedule_sleep {
+        causal_stages.extend([
+            LiveBrainCausalStage::EvaluateSleep,
+            LiveBrainCausalStage::AdvanceSleep,
+        ]);
+    }
+    causal_stages.extend([
+        LiveBrainCausalStage::GatherSensory,
+        LiveBrainCausalStage::RecallMemory,
+        LiveBrainCausalStage::GpuBrainTick,
+        LiveBrainCausalStage::ExecuteAction,
+        LiveBrainCausalStage::MeasureOutcome,
+        LiveBrainCausalStage::SealPatch,
+    ]);
     let summary = LiveBrainTickSummary {
         schema: G03_LIVE_BRAIN_LOOP_SCHEMA,
         schema_version: G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
@@ -2866,14 +2910,7 @@ fn seal_prepared_selection_core(
         learning_updates: 0,
         invalid_or_rejected_action_count: u32::from(!succeeded),
         last_diagnostic: None,
-        causal_stages: vec![
-            LiveBrainCausalStage::GatherSensory,
-            LiveBrainCausalStage::RecallMemory,
-            LiveBrainCausalStage::GpuBrainTick,
-            LiveBrainCausalStage::ExecuteAction,
-            LiveBrainCausalStage::MeasureOutcome,
-            LiveBrainCausalStage::SealPatch,
-        ],
+        causal_stages,
     };
     Ok(SealedWorldSelection { summary, patch })
 }
@@ -5582,6 +5619,7 @@ impl GpuLiveBrainRuntime {
         let homeostatic_parameters = self.homeostatic_parameters;
         let mut batch = Vec::with_capacity(self.handles.len());
         let mut summaries_by_organism = BTreeMap::new();
+        let mut scheduled_body_events = BTreeMap::new();
         let mut persist_sleep_boundary = false;
         let mut completed_promotions = Vec::new();
         let scheduled_handles = if let Some(first) = curated_first_tick_resident {
@@ -5709,6 +5747,15 @@ impl GpuLiveBrainRuntime {
                 }
             };
             let sleep_after = resident.sleep_scheduler.state();
+            if phase_before != SleepPhase::Awake {
+                scheduled_body_events.insert(
+                    raw,
+                    BodyEventDelta {
+                        sleep_recovery: 1.0,
+                        ..BodyEventDelta::zero()
+                    },
+                );
+            }
             if sleep_after != sleep_before {
                 if matches!(
                     (sleep_before.consolidation, sleep_after.consolidation),
@@ -5919,7 +5966,12 @@ impl GpuLiveBrainRuntime {
         if std::mem::take(&mut self.forced_late_advance_failure) {
             return Err(ScaffoldContractError::NonMonotonicTick.into());
         }
-        advance_and_synchronize_authority(&mut self.world, &mut self.residents, tick_after)?;
+        advance_and_synchronize_authority(
+            &mut self.world,
+            &mut self.residents,
+            tick_after,
+            &scheduled_body_events,
+        )?;
         self.observe_passive_tick(tick_before, tick_after)?;
         self.reconcile_population()?;
         if persist_sleep_boundary {
@@ -9934,6 +9986,16 @@ mod tests {
 
         assert!(woke);
         assert_eq!(driver.intents.len(), 1);
+        assert!(
+            runtime
+                .world
+                .organism_registry()
+                .get(OrganismId(1))
+                .unwrap()
+                .biochemistry()
+                .body
+                .sleeping
+        );
 
         let summaries = runtime.tick_with_sleep_driver(&mut driver).unwrap();
 
@@ -9941,6 +10003,16 @@ mod tests {
         assert!(summaries[0].patch_sealed);
         assert_eq!(runtime.backend.completed_dispatch_count(), 1);
         assert_eq!(driver.intents.len(), 1);
+        assert!(!
+            runtime
+                .world
+                .organism_registry()
+                .get(OrganismId(1))
+                .unwrap()
+                .biochemistry()
+                .body
+                .sleeping
+        );
     }
 
     #[test]

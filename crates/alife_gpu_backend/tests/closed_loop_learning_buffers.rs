@@ -7,7 +7,7 @@ use alife_gpu_backend::{
     GpuClassBucketPlan, GpuDecoderEligibilityMetadata, GpuPlasticityReceptorRecord,
     GpuReplayCaptureIdentityRecord, GpuReplayEventRecord, GpuSleepParameterRecord,
     GpuSlotLearningStateRecord, GpuSynapseLearningMetadata, CLOSED_LOOP_DECODE_WGSL,
-    CLOSED_LOOP_RECURRENT_WGSL, GPU_NO_EXTENSION_SENTINEL,
+    CLOSED_LOOP_RECURRENT_WGSL, GPU_NO_EXTENSION_SENTINEL, GPU_SLEEP_PARAMETER_SCHEMA_VERSION,
 };
 
 fn phenotype() -> alife_core::BrainPhenotype {
@@ -192,6 +192,15 @@ fn installed_extension_binds_learning_memory_plans_and_zeroed_selectors() {
     assert_eq!(
         extension.sleep_parameter_offset,
         slot.word_ranges().sleep_parameter_words.start
+    );
+    let sleep_parameter_start = slot.word_ranges().sleep_parameter_words.start as usize;
+    assert_eq!(
+        plan.immutable_plan_words()[sleep_parameter_start],
+        GPU_SLEEP_PARAMETER_SCHEMA_VERSION
+    );
+    assert_ne!(
+        GPU_SLEEP_PARAMETER_SCHEMA_VERSION,
+        u32::from(phenotype.sleep_consolidation_plan().schema_version())
     );
 }
 

@@ -1523,12 +1523,7 @@ fn validate_learning_slot_layout(
         immutable_plan_base,
         ranges.sleep_parameter_words.start,
     )?;
-    if sleep.schema_version
-        != u32::from(
-            alife_core::SchemaVersions::CURRENT
-                .sleep_consolidation
-                .raw(),
-        )
+    if sleep.schema_version != crate::GPU_SLEEP_PARAMETER_SCHEMA_VERSION
         || ![
             sleep.staging_rate,
             sleep.weight_limit,

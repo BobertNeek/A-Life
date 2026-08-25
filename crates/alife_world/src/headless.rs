@@ -509,9 +509,30 @@ impl HeadlessWorld {
     }
 
     pub fn try_advance_tick(&mut self) -> Result<Tick, ScaffoldContractError> {
+        self.try_advance_tick_with_body_events(&BTreeMap::new())
+    }
+
+    /// Advances the world clock while composing one authoritative body event
+    /// for each organism that has not already advanced through an action.
+    pub fn try_advance_tick_with_body_events(
+        &mut self,
+        body_events: &BTreeMap<u64, BodyEventDelta>,
+    ) -> Result<Tick, ScaffoldContractError> {
         let mut candidate = self.clone();
         let next_tick = Tick::new(self.tick.raw().saturating_add(1));
         candidate.validate_organism_bindings()?;
+        for (organism_raw, event) in body_events {
+            let organism_id = OrganismId(*organism_raw);
+            organism_id.validate()?;
+            event.validate_contract()?;
+            let record = candidate
+                .organism_registry
+                .get(organism_id)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            if !record.lifecycle().is_alive() {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
         let mut organism_ids = candidate
             .organism_registry
             .iter()
@@ -586,7 +607,7 @@ impl HeadlessWorld {
                 .tick;
             match biology_tick {
                 tick if tick == self.tick => {
-                    let body_event = if mating_organism_ids.contains(&organism_id.raw()) {
+                    let ambient_event = if mating_organism_ids.contains(&organism_id.raw()) {
                         BodyEventDelta {
                             mating_opportunity: 1.0,
                             ..BodyEventDelta::zero()
@@ -594,6 +615,13 @@ impl HeadlessWorld {
                     } else {
                         BodyEventDelta::zero()
                     };
+                    let body_event = combine_body_event(
+                        ambient_event,
+                        body_events
+                            .get(&organism_id.raw())
+                            .copied()
+                            .unwrap_or_else(BodyEventDelta::zero),
+                    );
                     candidate
                         .organism_registry
                         .advance_biology(organism_id, next_tick, body_event)
@@ -603,7 +631,14 @@ impl HeadlessWorld {
                         advanced_organism = true;
                     }
                 }
-                tick if tick == next_tick => {}
+                tick if tick == next_tick => {
+                    if body_events
+                        .get(&organism_id.raw())
+                        .is_some_and(|event| *event != BodyEventDelta::zero())
+                    {
+                        return Err(ScaffoldContractError::NonMonotonicTick);
+                    }
+                }
                 _ => return Err(ScaffoldContractError::NonMonotonicTick),
             }
 
@@ -4733,6 +4768,48 @@ mod task_6_factorized_motor_tests {
         );
         assert!(world.entity(food).unwrap().is_consumed());
 
+        let mut conflicting = world.clone();
+        let conflicting_biology = *conflicting
+            .organism_registry()
+            .get(ORGANISM_ID)
+            .unwrap()
+            .biochemistry();
+        let conflicting_events = BTreeMap::from([(
+            ORGANISM_ID.raw(),
+            BodyEventDelta {
+                sleep_recovery: 1.0,
+                ..BodyEventDelta::zero()
+            },
+        )]);
+        assert_eq!(
+            conflicting.try_advance_tick_with_body_events(&conflicting_events),
+            Err(ScaffoldContractError::NonMonotonicTick)
+        );
+        assert_eq!(conflicting.tick(), Tick::ZERO);
+        assert_eq!(
+            *conflicting
+                .organism_registry()
+                .get(ORGANISM_ID)
+                .unwrap()
+                .biochemistry(),
+            conflicting_biology
+        );
+
+        assert_eq!(
+            world
+                .try_advance_tick_with_body_events(&BTreeMap::new())
+                .unwrap(),
+            Tick::new(1)
+        );
+        assert_eq!(
+            *world
+                .organism_registry()
+                .get(ORGANISM_ID)
+                .unwrap()
+                .biochemistry(),
+            receipt.biology_after
+        );
+
         let (mut unsupported_world, unsupported_agent, _, _) = prepared_world();
         let unsupported_command = |channel| {
             ChannelCommand::new(
@@ -4846,6 +4923,33 @@ mod task_6_factorized_motor_tests {
             Some(&before_record)
         );
         assert_eq!(failing_world.tick(), Tick::ZERO);
+    }
+
+    #[test]
+    fn world_tick_composes_sleep_recovery_into_the_single_biology_advance() {
+        let (mut world, _, _, _) = prepared_world();
+        let before = world.organism_registry().get(ORGANISM_ID).unwrap().clone();
+        let event = BodyEventDelta {
+            sleep_recovery: 1.0,
+            ..BodyEventDelta::zero()
+        };
+        let expected = before
+            .biochemistry()
+            .advance(Tick::new(1), event, before.phenotype())
+            .unwrap();
+
+        let advanced = world
+            .try_advance_tick_with_body_events(&BTreeMap::from([(ORGANISM_ID.raw(), event)]))
+            .unwrap();
+
+        let after = world
+            .organism_registry()
+            .get(ORGANISM_ID)
+            .unwrap()
+            .biochemistry();
+        assert_eq!(advanced, Tick::new(1));
+        assert_eq!(*after, expected);
+        assert!(after.body.sleeping);
     }
 
     #[test]

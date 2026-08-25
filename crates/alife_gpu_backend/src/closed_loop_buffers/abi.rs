@@ -15,6 +15,7 @@ pub const GPU_MOTOR_CHANNEL_SLOT_COUNT: usize = 6;
 pub const GPU_CLOSED_LOOP_STORAGE_BINDINGS: u32 = 7;
 /// Exact executable ordering/layout ABI understood by the current closed-loop shaders.
 pub const GPU_CLOSED_LOOP_LAYOUT_VERSION: u32 = 4;
+pub const GPU_SLEEP_PARAMETER_SCHEMA_VERSION: u32 = 1;
 pub const GPU_NO_EXTENSION_SENTINEL: u32 = u32::MAX;
 pub const GPU_DENDRITIC_BRANCH_RECORD_WORDS: u32 = 8;
 pub const GPU_DENDRITIC_INPUT_RECORD_WORDS: u32 = 4;

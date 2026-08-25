@@ -108,6 +108,19 @@ pub trait GpuSleepConsolidationDriver {
     ) -> Result<Option<SleepWorkReceipt>, ScaffoldContractError> {
         Ok(None)
     }
+
+    /// Reports whether this cycle has replay-backed phase data for bounded
+    /// memory, predictor, concept, and structural sleep work.
+    ///
+    /// Empty newborn replay is an explicit no-work state. Nonempty replay
+    /// remains subject to the complete fail-closed transaction contract.
+    fn has_bounded_sleep_phase_data(
+        &mut self,
+        _organism_id: OrganismId,
+        _state: SleepState,
+    ) -> Result<bool, ScaffoldContractError> {
+        Ok(true)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -272,7 +285,11 @@ impl GpuSleepScheduler {
         self.progress_driver(input.organism_id, driver)?;
 
         let state = self.controller.state();
-        let due_work = self.sleep_work_due(state, tick);
+        let due_work = if driver.has_bounded_sleep_phase_data(input.organism_id, state)? {
+            self.sleep_work_due(state, tick)
+        } else {
+            SleepWorkDue::empty()
+        };
         let work_units = if due_work.is_empty() {
             0
         } else {

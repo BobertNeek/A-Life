@@ -1,6 +1,8 @@
 #[cfg(feature = "gpu-tests")]
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+#[cfg(feature = "production-voxel-frontend")]
+use std::time::Duration;
 
 use alife_core::BrainScaleTier;
 #[cfg(feature = "gpu-tests")]
@@ -11,10 +13,15 @@ use alife_core::{
 };
 #[cfg(feature = "production-voxel-frontend")]
 use alife_game_app::{
-    bevy_shell::build_production_voxel_frontend_app_shell, default_environment_manifest_path,
-    run_production_voxel_frontend_preflight, ProductionFrontendProfileId,
-    ProductionVoxelLaunchConfig, ProductionWorldSource,
+    bevy_shell::{
+        build_production_voxel_frontend_app_shell, LiveBrainPresentationFrameResource,
+    },
+    default_environment_manifest_path, run_production_voxel_frontend_preflight,
+    LiveBrainCausalStage, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
+    ProductionWorldSource,
 };
+#[cfg(feature = "production-voxel-frontend")]
+use bevy::time::TimeUpdateStrategy;
 #[cfg(feature = "gpu-tests")]
 use alife_game_app::{
     create_canonical_new_game_runtime,
@@ -92,7 +99,7 @@ fn production_new_game_source_builds_exact_runtime_before_scene_construction() {
     launch.dry_run = true;
     launch.ui_settings_path = Some(root.join("player-ui.json"));
 
-    let (app, summary) = build_production_voxel_frontend_app_shell(&launch).unwrap();
+    let (mut app, summary) = build_production_voxel_frontend_app_shell(&launch).unwrap();
 
     assert_ne!(summary.save_path, fixture_save_path);
     assert_eq!(summary.effective_population, 4);
@@ -113,6 +120,119 @@ fn production_new_game_source_builds_exact_runtime_before_scene_construction() {
     assert_eq!(repeated_preflight.save_path, summary.save_path);
     assert_eq!(exact_after_preflight, exact_before_preflight);
     assert_eq!(std::fs::read(&summary.save_path).unwrap(), bytes_before_preflight);
+
+    let initial_tick = app
+        .world()
+        .resource::<LiveBrainPresentationFrameResource>()
+        .current
+        .authoritative_world_tick;
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(34)));
+    let expected_causal_stages = vec![
+        LiveBrainCausalStage::EvaluateSleep,
+        LiveBrainCausalStage::AdvanceSleep,
+        LiveBrainCausalStage::GatherSensory,
+        LiveBrainCausalStage::RecallMemory,
+        LiveBrainCausalStage::GpuBrainTick,
+        LiveBrainCausalStage::ExecuteAction,
+        LiveBrainCausalStage::MeasureOutcome,
+        LiveBrainCausalStage::SealPatch,
+        LiveBrainCausalStage::ApplyLearning,
+        LiveBrainCausalStage::ObserveMemory,
+        LiveBrainCausalStage::ObserveTopology,
+        LiveBrainCausalStage::UpdateLogs,
+    ];
+    let mut saw_automatic_sleep = false;
+    let mut saw_committed_waking = false;
+    let mut saw_awake_after_sleep = false;
+    let mut resumed_ordinary_frame = None;
+    let mut last_frame = None;
+    for _ in 0..384 {
+        app.update();
+        let frame = app
+            .world()
+            .resource::<LiveBrainPresentationFrameResource>()
+            .current
+            .clone();
+        last_frame = Some(frame.clone());
+        saw_automatic_sleep |= frame.tick_summaries.iter().any(|tick| {
+            !tick.patch_sealed
+                && tick.causal_stages
+                    == [
+                        LiveBrainCausalStage::EvaluateSleep,
+                        LiveBrainCausalStage::AdvanceSleep,
+                    ]
+        });
+        let all_sleep_phase = |phase_raw| {
+            frame.organism_snapshots().iter().all(|row| {
+                frame
+                    .cognitive_for_organism(row.organism_id)
+                    .is_some_and(|cognitive| cognitive.sleep_phase_raw == Some(phase_raw))
+            })
+        };
+        saw_committed_waking |= all_sleep_phase(alife_core::SleepPhase::Waking.raw())
+            && frame.organism_snapshots().iter().all(|row| {
+                frame
+                    .cognitive_for_organism(row.organism_id)
+                    .is_some_and(|cognitive| cognitive.consolidation_state_raw == Some(5))
+            });
+        saw_awake_after_sleep |= saw_committed_waking
+            && all_sleep_phase(alife_core::SleepPhase::Awake.raw());
+        if !frame.tick_summaries.is_empty()
+            && frame
+                .tick_summaries
+                .iter()
+                .all(|tick| tick.patch_sealed && tick.causal_stages == expected_causal_stages)
+        {
+            resumed_ordinary_frame = Some(frame);
+            break;
+        }
+    }
+    assert!(saw_automatic_sleep, "production runtime skipped automatic sleep");
+    assert!(
+        saw_committed_waking,
+        "production sleep never durably committed before waking"
+    );
+    assert!(
+        saw_awake_after_sleep,
+        "production residents never woke after durable sleep"
+    );
+    let frame = resumed_ordinary_frame.unwrap_or_else(|| {
+        panic!(
+            "production runtime did not resume an ordinary tick; last frame: {:#?}",
+            last_frame
+                .as_ref()
+                .map(|frame| (frame.authoritative_world_tick, &frame.tick_summaries)),
+        )
+    });
+    assert!(frame.authoritative_world_tick > initial_tick);
+    assert_eq!(frame.tick_summaries.len(), 4);
+    assert_eq!(frame.organism_count(), 4);
+    for tick in &frame.tick_summaries {
+        assert!(
+            tick.world_tick_after > tick.world_tick_before,
+            "production tick did not advance world authority: {tick:#?}"
+        );
+        assert!(
+            tick.patch_sealed,
+            "production tick did not seal measured experience: {tick:#?}"
+        );
+        assert_eq!(
+            tick.causal_stages, expected_causal_stages,
+            "production tick causal order differed: {tick:#?}"
+        );
+    }
+    assert!(frame.organism_snapshots().iter().all(|row| {
+        row.biochemistry.tick == frame.authoritative_world_tick
+            && !row.biochemistry.body.sleeping
+            && row.biochemistry.homeostasis.drives.brain_atp > 0.0
+            && frame
+                .cognitive_for_organism(row.organism_id)
+                .is_some_and(|cognitive| {
+                    cognitive.brain_neuron_count == Some(512)
+                        && cognitive.learning_active == Some(true)
+                        && cognitive.sleep_phase_raw.is_some()
+                })
+    }));
     drop(app);
     std::fs::remove_dir_all(root).unwrap();
 }
