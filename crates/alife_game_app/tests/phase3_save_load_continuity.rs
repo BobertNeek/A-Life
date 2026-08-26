@@ -15,9 +15,13 @@ use alife_game_app::{
     },
     create_canonical_new_game_runtime, default_environment_manifest_path,
     production_archive_birth_manifest_for_test, CanonicalNewGameLaunchRequest,
-    Fvr05ProductionUxStateResource, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
+    Fvr03ProductionVoxelSelectionResource, Fvr05ProductionUxStateResource,
+    ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
 };
-use alife_world::{AssetManifest, PortableSaveFile, RuntimeConfig};
+use alife_world::{
+    AssetManifest, PortableSaveFile, RuntimeConfig, StableVoxelObjectRef, StableVoxelRefKind,
+    VoxelChunkCoord, VoxelTileCoord, WorldObjectKind,
+};
 use bevy::{
     input::{keyboard::KeyCode, ButtonInput},
     prelude::{App, Update},
@@ -183,8 +187,100 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
         "manual save starts from a bounded paused state"
     );
 
+    let before_action_path = root.join("player-before-resource-action.json");
+    let before_action = save_runtime(&mut app, &before_action_path, &asset_root);
+    let selected_tile = VoxelTileCoord::new(2, 2);
+    let existing_food_id = before_action
+        .world
+        .objects
+        .iter()
+        .find(|object| object.kind == WorldObjectKind::Food)
+        .expect("canonical New Game contains one world-owned food resource")
+        .id;
+    app.world_mut()
+        .resource_mut::<Fvr03ProductionVoxelSelectionResource>()
+        .selected = Some(StableVoxelObjectRef {
+            kind: StableVoxelRefKind::Resource,
+            stable_id: Some(existing_food_id),
+            chunk: VoxelChunkCoord::for_tile(16, selected_tile),
+            tile: Some(selected_tile),
+        });
+    press_key(&mut app, KeyCode::KeyE);
+    {
+        let ux = app.world().resource::<Fvr05ProductionUxStateResource>();
+        assert_eq!(
+            ux.last_action,
+            "Food placement rejected; world left unchanged"
+        );
+        assert!(ux.last_error.is_some());
+    }
+    let after_non_tile_path = root.join("player-after-non-tile-selection.json");
+    let after_non_tile = save_runtime(&mut app, &after_non_tile_path, &asset_root);
+    assert_eq!(
+        after_non_tile, before_action,
+        "a non-tile selection must not mutate canonical world authority"
+    );
+
+    app.world_mut()
+        .resource_mut::<Fvr03ProductionVoxelSelectionResource>()
+        .selected = Some(StableVoxelObjectRef {
+            kind: StableVoxelRefKind::Tile,
+            stable_id: None,
+            chunk: VoxelChunkCoord::for_tile(16, selected_tile),
+            tile: Some(selected_tile),
+        });
+    press_key(&mut app, KeyCode::KeyE);
+    {
+        let ux = app.world().resource::<Fvr05ProductionUxStateResource>();
+        assert!(ux.last_error.is_none());
+        assert!(ux.last_action.starts_with("Placed canonical food "));
+    }
+
     let baseline_path = root.join("player-baseline.json");
     let baseline = save_runtime(&mut app, &baseline_path, &asset_root);
+    assert_eq!(
+        baseline.world.objects.len(),
+        before_action.world.objects.len() + 1,
+        "the real production E handler must add one canonical world object"
+    );
+    let placed_food = baseline
+        .world
+        .objects
+        .iter()
+        .find(|object| object.label.starts_with("player-food-"))
+        .expect("the player action persists a canonical food object");
+    assert_eq!(
+        placed_food.label,
+        format!(
+            "player-food-t{}-x{:08x}-z{:08x}",
+            before_action.world.tick.raw(),
+            2.5_f32.to_bits(),
+            2.5_f32.to_bits()
+        ),
+        "the same canonical tick and terrain position derive the same stable label"
+    );
+    assert_eq!(placed_food.kind, WorldObjectKind::Food);
+    assert_eq!(placed_food.position, alife_core::Vec3f::new(2.5, 0.0, 2.5));
+    assert_eq!(placed_food.radius, 0.5);
+    assert!(placed_food.nutrition > 0.0);
+    assert_eq!(placed_food.hazard_pain, 0.0);
+
+    press_key(&mut app, KeyCode::KeyE);
+    {
+        let ux = app.world().resource::<Fvr05ProductionUxStateResource>();
+        assert_eq!(
+            ux.last_action,
+            "Food placement rejected; world left unchanged"
+        );
+        assert!(ux.last_error.is_some());
+    }
+    let after_rejected_duplicate_path = root.join("player-after-rejected-duplicate.json");
+    let after_rejected_duplicate =
+        save_runtime(&mut app, &after_rejected_duplicate_path, &asset_root);
+    assert_eq!(
+        after_rejected_duplicate, baseline,
+        "a repeated same-tick placement must fail atomically"
+    );
     assert!(baseline.world.tick > Tick::ZERO);
     assert!(baseline.creatures.iter().all(|creature| {
         creature.gpu_brain.as_ref().is_some_and(|brain| {

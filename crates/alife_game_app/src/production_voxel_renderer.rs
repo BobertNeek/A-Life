@@ -6487,7 +6487,7 @@ fn sync_v0_player_control_strip(
         "Free camera"
     };
     let text = format!(
-        "{}  {:.1}x  |  {}  |  LMB Select  O Orbit  I Isometric  F Follow  R Recover  Space/P Pause  N Step  [ ] or 1/2/3 Speed",
+        "{}  {:.1}x  |  {}  |  LMB Select  E Place Food (Tile)  O Orbit  I Isometric  F Follow  R Recover  Space/P Pause  N Step  [ ] or 1/2/3 Speed",
         playback, ux.settings.simulation_speed, follow_state
     );
     for mut strip in &mut strips {
@@ -6740,6 +6740,49 @@ fn handle_fvr05_production_ux_input(
                 ux.settings.simulation_speed = schedule.speed_ticks() as f32;
                 ux.last_action = format!("Simulation speed {:.0}x", ux.settings.simulation_speed);
             }
+        }
+    }
+    if keyboard.just_pressed(KeyCode::KeyE) {
+        #[cfg(feature = "gpu-runtime")]
+        let selected_tile = selection.selected.and_then(|selected| {
+            (selected.kind == StableVoxelRefKind::Tile && selected.is_stable())
+                .then_some(selected.tile)
+                .flatten()
+        });
+        #[cfg(feature = "gpu-runtime")]
+        match (gpu_runtime.as_mut(), selected_tile) {
+            (Some(runtime), Some(tile)) => {
+                let position = Vec3f::new(tile.x as f32 + 0.5, 0.0, tile.z as f32 + 0.5);
+                match runtime.runtime.place_player_food(position) {
+                    Ok(receipt) => {
+                        ux.last_error = None;
+                        ux.last_action = format!(
+                            "Placed canonical food {} at tile x={} z={}",
+                            receipt.world_entity_id.raw(),
+                            tile.x,
+                            tile.z
+                        );
+                    }
+                    Err(error) => {
+                        ux.last_error = Some(error.to_string());
+                        ux.last_action =
+                            "Food placement rejected; world left unchanged".to_string();
+                    }
+                }
+            }
+            (Some(_), None) => {
+                ux.last_error = Some("select a visible terrain tile first".to_string());
+                ux.last_action = "Food placement rejected; world left unchanged".to_string();
+            }
+            (None, _) => {
+                ux.last_error = Some("GPU runtime unavailable".to_string());
+                ux.last_action = "Food placement unavailable".to_string();
+            }
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
+        {
+            ux.last_error = Some("GPU runtime unavailable".to_string());
+            ux.last_action = "Food placement unavailable".to_string();
         }
     }
     if keyboard.just_pressed(KeyCode::KeyS) {

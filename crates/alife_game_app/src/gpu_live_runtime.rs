@@ -82,7 +82,8 @@ use crate::{
     GpuCheckpointAssetStore, GpuDurableSaveManifest, GpuLoadedSaveManifest,
     GpuSleepConsolidationDriver, GpuSleepScheduleEvent, GpuSleepScheduler, LiveBrainCausalStage,
     LiveBrainTickSummary, LiveCognitivePresentationSnapshot, RetainedLearningCapture,
-    CURATED_FOUNDER_RESET_POLICY, G03_LIVE_BRAIN_LOOP_SCHEMA, G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
+    WorldEditCommand, WorldEditorConfig, CURATED_FOUNDER_RESET_POLICY, G03_LIVE_BRAIN_LOOP_SCHEMA,
+    G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
 };
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1623,6 +1624,49 @@ pub struct GpuLiveBrainRuntime {
     retirement_backend_removal_count: usize,
     #[cfg(test)]
     forced_late_advance_failure: bool,
+}
+
+pub const PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION: u16 = 1;
+const PLAYER_FOOD_NUTRITION: f32 = 0.25;
+const PLAYER_FOOD_RADIUS: f32 = 0.5;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PlayerResourcePlacementRequest {
+    pub schema_version: u16,
+    pub position: Vec3f,
+}
+
+impl PlayerResourcePlacementRequest {
+    pub const fn new(position: Vec3f) -> Self {
+        Self {
+            schema_version: PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION,
+            position,
+        }
+    }
+
+    fn validate(self) -> Result<(), ScaffoldContractError> {
+        if self.schema_version != PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION || self.position.y != 0.0
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        WorldEditCommand::place_food(
+            "player-food-validation",
+            self.position,
+            PLAYER_FOOD_NUTRITION,
+        )
+        .validate(WorldEditorConfig::default())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlayerResourcePlacementReceipt {
+    pub schema_version: u16,
+    pub world_entity_id: WorldEntityId,
+    pub label: String,
+    pub position: Vec3f,
+    pub nutrition: f32,
+    pub radius: f32,
+    pub world_signature: HeadlessWorldSignatureDigest,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -6049,6 +6093,54 @@ impl GpuLiveBrainRuntime {
     /// It contains no GPU handles or neural payloads.
     pub fn world_snapshot(&self) -> HeadlessWorld {
         self.world.clone()
+    }
+
+    /// Places one bounded food resource through canonical world authority.
+    /// The candidate world is fully validated before it replaces live state.
+    pub fn place_player_food(
+        &mut self,
+        position: Vec3f,
+    ) -> Result<PlayerResourcePlacementReceipt, GameAppShellError> {
+        let request = PlayerResourcePlacementRequest::new(position);
+        request.validate()?;
+
+        let config = WorldEditorConfig::default();
+        if self.world.object_count() >= config.max_objects {
+            return Err(ScaffoldContractError::ScalarOutOfRange.into());
+        }
+        let label = format!(
+            "player-food-t{}-x{:08x}-z{:08x}",
+            self.world.tick().raw(),
+            position.x.to_bits(),
+            position.z.to_bits()
+        );
+        let command = WorldEditCommand::place_food(&label, position, PLAYER_FOOD_NUTRITION);
+        command.validate(config)?;
+
+        let mut candidate = self.world.clone();
+        let world_entity_id = candidate.editor_spawn_object(WorldEditorSpawnSpec {
+            label: label.clone(),
+            kind: WorldObjectKind::Food,
+            organism_id: None,
+            position,
+            nutrition: PLAYER_FOOD_NUTRITION,
+            hazard_pain: 0.0,
+            radius: PLAYER_FOOD_RADIUS,
+            token_id: None,
+        })?;
+        candidate.validate_organism_bindings()?;
+        let world_signature = candidate.canonical_signature_digest()?;
+        self.world = candidate;
+
+        Ok(PlayerResourcePlacementReceipt {
+            schema_version: PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION,
+            world_entity_id,
+            label,
+            position,
+            nutrition: PLAYER_FOOD_NUTRITION,
+            radius: PLAYER_FOOD_RADIUS,
+            world_signature,
+        })
     }
 
     pub fn residency_summary(&self) -> GpuLiveResidencySummary {
