@@ -1,0 +1,105 @@
+{
+  "adapter": "NVIDIA GeForce RTX 3050",
+  "backend": "GpuAuthoritative",
+  "blocking_transactions": {
+    "count": 302,
+    "inference_batch_wall_ns": 134974100,
+    "learning_batch_wall_ns": 72359400,
+    "ordinary_snapshot_map_receive_wait_ns": 144700,
+    "ordinary_snapshot_poll_wait_ns": 120609500
+  },
+  "build": {
+    "debug_assertions": false,
+    "executable_blake3": "708694180b496b589052ccf035638ca50087c25da0541083418c7e7e042a85a7",
+    "executable_path": "D:\\A life\\.worktrees\\phase3-performance-stabilization-20260826\\target\\release\\alife_game_app.exe",
+    "mode": "release",
+    "optimized_release": true
+  },
+  "checkpoint_activity": {
+    "capture_calls": 0,
+    "capture_wall_ns": 0,
+    "full_snapshot_bytes": 0,
+    "full_snapshot_calls": 0,
+    "map_receive_wait_ns": 0,
+    "poll_wait_ns": 0
+  },
+  "cpu_stages": {
+    "authoritative_projection_ns": 2796431800,
+    "input_ns": 1101344100,
+    "live_gpu_tick_ns": 24511872100,
+    "procedural_animation_ns": 275390500,
+    "renderer_present_and_uninstrumented_residual_ns": 30485305700,
+    "ui_root_readers_ns": 829559100
+  },
+  "dispatch_batching": {
+    "inference_batches": 41,
+    "inference_rows": 220,
+    "learning_batches": 41,
+    "learning_rows": 220,
+    "mean_inference_rows_per_batch": 5.365853658536586,
+    "mean_learning_rows_per_batch": 5.365853658536586
+  },
+  "frame": {
+    "count": 4045,
+    "hitches_over_100ms": 23,
+    "max_ms": 2408.8952,
+    "p50_ms": 8.2704,
+    "p95_ms": 11.7897,
+    "p99_ms": 36.164,
+    "total_ns": 59999903300
+  },
+  "gpu_stages": {
+    "inference_ns": 52986880,
+    "plasticity_ns": 7032832,
+    "timestamp_samples": 41
+  },
+  "measurement_seconds": 60.001667,
+  "ordinary_full_snapshot": {
+    "bytes": 48942080,
+    "calls": 220,
+    "calls_per_runtime_tick": 2.4175824175824174,
+    "map_receive_wait_ns": 144700,
+    "poll_wait_ns": 120609500,
+    "wall_ns": 219905300
+  },
+  "population": 6,
+  "profile": "MinSpecComfort1080p",
+  "readback": {
+    "learning_bytes": 14080,
+    "learning_calls": 41,
+    "ordinary_full_snapshot_bytes": 48942080,
+    "ordinary_full_snapshot_calls": 220,
+    "selection_bytes": 17600,
+    "selection_calls": 41
+  },
+  "resolution": [
+    1920,
+    1080
+  ],
+  "schema": "alife.phase31.performance-baseline.v1",
+  "schema_version": 1,
+  "simulation": {
+    "achieved_tps": 1.4999583261578384,
+    "catch_up_ticks_dropped": 21,
+    "configured_tps": 20,
+    "runtime_tick_calls": 91,
+    "runtime_tick_wall_ns": 23918460100,
+    "scheduler_frames_observed": 23,
+    "ticks_executed": 90
+  },
+  "source_head": "99b4c2bbf763b9000fcf7da1e96534c2e7729adf",
+  "state_reference_hash": {
+    "calls": 220,
+    "resident_json_bytes": 351349023,
+    "topology_json_bytes": 2178441,
+    "wall_ns": 1746860800
+  },
+  "ui": {
+    "cadence_hz": 67.43145986260681,
+    "updates": 4046
+  },
+  "world_tick": {
+    "end": 109,
+    "start": 19
+  }
+}

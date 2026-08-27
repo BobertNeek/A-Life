@@ -331,17 +331,30 @@ fn synchronize_residents_from_world(
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct AuthorityAdvanceTiming {
+    world_advance_ns: u64,
+    resident_synchronize_ns: u64,
+}
+
 fn advance_and_synchronize_authority(
     world: &mut HeadlessWorld,
     residents: &mut BTreeMap<u64, ResidentCognition>,
     tick_after: Tick,
     body_events: &BTreeMap<u64, BodyEventDelta>,
-) -> Result<(), ScaffoldContractError> {
+) -> Result<AuthorityAdvanceTiming, ScaffoldContractError> {
+    let world_advance_started = Instant::now();
     let advanced_tick = world.try_advance_tick_with_body_events(body_events)?;
+    let world_advance_ns = elapsed_ns(world_advance_started);
     if advanced_tick != tick_after {
         return Err(ScaffoldContractError::NonMonotonicTick);
     }
-    synchronize_residents_from_world(world, residents, tick_after)
+    let resident_synchronize_started = Instant::now();
+    synchronize_residents_from_world(world, residents, tick_after)?;
+    Ok(AuthorityAdvanceTiming {
+        world_advance_ns,
+        resident_synchronize_ns: elapsed_ns(resident_synchronize_started),
+    })
 }
 
 fn compare_resident_checkpoint_metadata(
@@ -1120,6 +1133,9 @@ pub(crate) struct GpuLiveBrainEvidenceMetrics {
 pub(crate) struct GpuLivePerformanceMetrics {
     pub tick_calls: u64,
     pub tick_wall_ns: u64,
+    pub tick_preamble_wall_ns: u64,
+    pub perception_sleep_preparation_wall_ns: u64,
+    pub sleep_promotion_wall_ns: u64,
     pub inference_batches: u64,
     pub inference_rows: u64,
     pub inference_transaction_wall_ns: u64,
@@ -1130,6 +1146,12 @@ pub(crate) struct GpuLivePerformanceMetrics {
     pub learning_transaction_wall_ns: u64,
     pub learning_readback_calls: u64,
     pub learning_readback_bytes: u64,
+    pub selection_prepare_wall_ns: u64,
+    pub seal_world_body_biochemistry_wall_ns: u64,
+    pub sealed_commit_total_wall_ns: u64,
+    pub sidecar_memory_wall_ns: u64,
+    pub sidecar_topology_wall_ns: u64,
+    pub cognitive_authority_seal_wall_ns: u64,
     pub ordinary_snapshot_calls: u64,
     pub ordinary_snapshot_bytes: u64,
     pub ordinary_snapshot_poll_wait_ns: u64,
@@ -1139,6 +1161,11 @@ pub(crate) struct GpuLivePerformanceMetrics {
     pub resident_json_bytes: u64,
     pub topology_json_bytes: u64,
     pub state_reference_hash_wall_ns: u64,
+    pub world_authority_advance_wall_ns: u64,
+    pub resident_synchronize_wall_ns: u64,
+    pub passive_observation_wall_ns: u64,
+    pub population_reconcile_wall_ns: u64,
+    pub sleep_persistence_wall_ns: u64,
     pub checkpoint_capture_calls: u64,
     pub checkpoint_capture_wall_ns: u64,
     pub checkpoint_snapshot_calls: u64,
@@ -1157,6 +1184,9 @@ impl GpuLivePerformanceMetrics {
         Self {
             tick_calls: delta!(tick_calls),
             tick_wall_ns: delta!(tick_wall_ns),
+            tick_preamble_wall_ns: delta!(tick_preamble_wall_ns),
+            perception_sleep_preparation_wall_ns: delta!(perception_sleep_preparation_wall_ns),
+            sleep_promotion_wall_ns: delta!(sleep_promotion_wall_ns),
             inference_batches: delta!(inference_batches),
             inference_rows: delta!(inference_rows),
             inference_transaction_wall_ns: delta!(inference_transaction_wall_ns),
@@ -1167,6 +1197,12 @@ impl GpuLivePerformanceMetrics {
             learning_transaction_wall_ns: delta!(learning_transaction_wall_ns),
             learning_readback_calls: delta!(learning_readback_calls),
             learning_readback_bytes: delta!(learning_readback_bytes),
+            selection_prepare_wall_ns: delta!(selection_prepare_wall_ns),
+            seal_world_body_biochemistry_wall_ns: delta!(seal_world_body_biochemistry_wall_ns),
+            sealed_commit_total_wall_ns: delta!(sealed_commit_total_wall_ns),
+            sidecar_memory_wall_ns: delta!(sidecar_memory_wall_ns),
+            sidecar_topology_wall_ns: delta!(sidecar_topology_wall_ns),
+            cognitive_authority_seal_wall_ns: delta!(cognitive_authority_seal_wall_ns),
             ordinary_snapshot_calls: delta!(ordinary_snapshot_calls),
             ordinary_snapshot_bytes: delta!(ordinary_snapshot_bytes),
             ordinary_snapshot_poll_wait_ns: delta!(ordinary_snapshot_poll_wait_ns),
@@ -1176,6 +1212,11 @@ impl GpuLivePerformanceMetrics {
             resident_json_bytes: delta!(resident_json_bytes),
             topology_json_bytes: delta!(topology_json_bytes),
             state_reference_hash_wall_ns: delta!(state_reference_hash_wall_ns),
+            world_authority_advance_wall_ns: delta!(world_authority_advance_wall_ns),
+            resident_synchronize_wall_ns: delta!(resident_synchronize_wall_ns),
+            passive_observation_wall_ns: delta!(passive_observation_wall_ns),
+            population_reconcile_wall_ns: delta!(population_reconcile_wall_ns),
+            sleep_persistence_wall_ns: delta!(sleep_persistence_wall_ns),
             checkpoint_capture_calls: delta!(checkpoint_capture_calls),
             checkpoint_capture_wall_ns: delta!(checkpoint_capture_wall_ns),
             checkpoint_snapshot_calls: delta!(checkpoint_snapshot_calls),
@@ -1186,6 +1227,10 @@ impl GpuLivePerformanceMetrics {
             ),
         }
     }
+}
+
+fn elapsed_ns(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -5734,6 +5779,7 @@ impl GpuLiveBrainRuntime {
             Option<ConsolidationIntent>,
         ) -> SleepProgressResult,
     {
+        let preamble_started = Instant::now();
         let curated_first_tick_resident = match self.curated_first_tick_residency_gate() {
             Ok(receipt) => receipt.and_then(|receipt| receipt.ordered_residents.first().cloned()),
             Err(error) => {
@@ -5800,6 +5846,11 @@ impl GpuLiveBrainRuntime {
                 .collect::<Result<Vec<_>, _>>()?
         };
         let perception_index = self.world.build_perception_batch_index()?;
+        self.performance_metrics.tick_preamble_wall_ns = self
+            .performance_metrics
+            .tick_preamble_wall_ns
+            .saturating_add(elapsed_ns(preamble_started));
+        let preparation_started = Instant::now();
         for (raw, handle, world_entity_id) in scheduled_handles {
             let retained_learning_pending =
                 self.retry_retained_learning(OrganismId(raw), tick_before)?;
@@ -6070,17 +6121,27 @@ impl GpuLiveBrainRuntime {
                 }
             }
         }
+        self.performance_metrics
+            .perception_sleep_preparation_wall_ns = self
+            .performance_metrics
+            .perception_sleep_preparation_wall_ns
+            .saturating_add(elapsed_ns(preparation_started));
 
         // The GPU selector has already committed, while the world is still at
         // the exact tick named by the durable Completed checkpoint. Publish
         // the manifest-side selector/ref promotion before any world action or
         // subsequent poll can occur.
+        let sleep_promotion_started = Instant::now();
         for (organism_id, committed_sleep) in completed_promotions {
             self.compact_memory_at_sleep_commit(organism_id, committed_sleep)?;
             self.promote_durable_completed_sleep(organism_id, committed_sleep)?;
             self.restored_replay_patches
                 .retain(|patch| patch.header().organism_id != organism_id);
         }
+        self.performance_metrics.sleep_promotion_wall_ns = self
+            .performance_metrics
+            .sleep_promotion_wall_ns
+            .saturating_add(elapsed_ns(sleep_promotion_started));
 
         let awake_summaries = if batch.is_empty() {
             self.record_gpu_tick_metrics(&[])?;
@@ -6136,16 +6197,39 @@ impl GpuLiveBrainRuntime {
         if std::mem::take(&mut self.forced_late_advance_failure) {
             return Err(ScaffoldContractError::NonMonotonicTick.into());
         }
-        advance_and_synchronize_authority(
+        let authority_timing = advance_and_synchronize_authority(
             &mut self.world,
             &mut self.residents,
             tick_after,
             &scheduled_body_events,
         )?;
+        self.performance_metrics.world_authority_advance_wall_ns = self
+            .performance_metrics
+            .world_authority_advance_wall_ns
+            .saturating_add(authority_timing.world_advance_ns);
+        self.performance_metrics.resident_synchronize_wall_ns = self
+            .performance_metrics
+            .resident_synchronize_wall_ns
+            .saturating_add(authority_timing.resident_synchronize_ns);
+        let passive_observation_started = Instant::now();
         self.observe_passive_tick(tick_before, tick_after)?;
+        self.performance_metrics.passive_observation_wall_ns = self
+            .performance_metrics
+            .passive_observation_wall_ns
+            .saturating_add(elapsed_ns(passive_observation_started));
+        let population_reconcile_started = Instant::now();
         self.reconcile_population()?;
+        self.performance_metrics.population_reconcile_wall_ns = self
+            .performance_metrics
+            .population_reconcile_wall_ns
+            .saturating_add(elapsed_ns(population_reconcile_started));
         if persist_sleep_boundary {
+            let sleep_persistence_started = Instant::now();
             self.persist_sleep_checkpoint_boundary()?;
+            self.performance_metrics.sleep_persistence_wall_ns = self
+                .performance_metrics
+                .sleep_persistence_wall_ns
+                .saturating_add(elapsed_ns(sleep_persistence_started));
         }
         Ok(summaries_by_organism.into_values().collect())
     }
@@ -6860,6 +6944,7 @@ impl GpuLiveBrainRuntime {
             .iter()
             .map(|(prepared, gpu_tick)| (prepared.handle, *gpu_tick.pending_eligibility.identity()))
             .collect::<Vec<_>>();
+        let selection_prepare_started = Instant::now();
         let mut prepared = Vec::with_capacity(rows.len());
         for (frame, gpu_tick) in rows {
             match self.prepare_selection(frame, gpu_tick) {
@@ -6870,6 +6955,10 @@ impl GpuLiveBrainRuntime {
                 }
             }
         }
+        self.performance_metrics.selection_prepare_wall_ns = self
+            .performance_metrics
+            .selection_prepare_wall_ns
+            .saturating_add(elapsed_ns(selection_prepare_started));
 
         self.last_memory_recall_receipts.extend(
             prepared
@@ -6877,6 +6966,7 @@ impl GpuLiveBrainRuntime {
                 .map(|selection| selection.memory_recall.receipt().clone()),
         );
 
+        let seal_started = Instant::now();
         let mut sealed = Vec::with_capacity(prepared.len());
         for (index, selection) in prepared.into_iter().enumerate() {
             match self.seal_prepared_selection(selection) {
@@ -6890,7 +6980,18 @@ impl GpuLiveBrainRuntime {
                 }
             }
         }
-        self.commit_sealed_batch(sealed)
+        self.performance_metrics
+            .seal_world_body_biochemistry_wall_ns = self
+            .performance_metrics
+            .seal_world_body_biochemistry_wall_ns
+            .saturating_add(elapsed_ns(seal_started));
+        let commit_started = Instant::now();
+        let result = self.commit_sealed_batch(sealed);
+        self.performance_metrics.sealed_commit_total_wall_ns = self
+            .performance_metrics
+            .sealed_commit_total_wall_ns
+            .saturating_add(elapsed_ns(commit_started));
+        result
     }
 
     fn prepare_selection(
@@ -7216,14 +7317,24 @@ impl GpuLiveBrainRuntime {
         }
 
         let (memory_updates, topology_updates) = if self.observe_sidecars {
-            (
-                self.observe_sealed_memory(&sealed),
-                self.observe_sealed_topology(&sealed),
-            )
+            let memory_started = Instant::now();
+            let memory_updates = self.observe_sealed_memory(&sealed);
+            self.performance_metrics.sidecar_memory_wall_ns = self
+                .performance_metrics
+                .sidecar_memory_wall_ns
+                .saturating_add(elapsed_ns(memory_started));
+            let topology_started = Instant::now();
+            let topology_updates = self.observe_sealed_topology(&sealed);
+            self.performance_metrics.sidecar_topology_wall_ns = self
+                .performance_metrics
+                .sidecar_topology_wall_ns
+                .saturating_add(elapsed_ns(topology_started));
+            (memory_updates, topology_updates)
         } else {
             (vec![false; sealed.len()], vec![false; sealed.len()])
         };
 
+        let cognitive_authority_seal_started = Instant::now();
         for (index, selection) in sealed.iter().enumerate() {
             let organism_id = selection.handle.organism_id();
             let readback_before = self.backend.mutable_slot_readback_metrics();
@@ -7317,6 +7428,10 @@ impl GpuLiveBrainRuntime {
             )?;
             replace_canonical_organism_record(&mut self.world, record)?;
         }
+        self.performance_metrics.cognitive_authority_seal_wall_ns = self
+            .performance_metrics
+            .cognitive_authority_seal_wall_ns
+            .saturating_add(elapsed_ns(cognitive_authority_seal_started));
 
         let first_patch_count = self.sealed_patch_count;
         let mut summaries = Vec::with_capacity(sealed.len());

@@ -7809,6 +7809,24 @@ fn write_phase31_performance_receipt(
             "runtime_tick_calls": runtime_delta.tick_calls,
             "runtime_tick_wall_ns": runtime_delta.tick_wall_ns
         },
+        "internal_tick_stages": {
+            "tick_preamble_ns": runtime_delta.tick_preamble_wall_ns,
+            "perception_sleep_preparation_ns": runtime_delta.perception_sleep_preparation_wall_ns,
+            "sleep_promotion_ns": runtime_delta.sleep_promotion_wall_ns,
+            "inference_transaction_ns": runtime_delta.inference_transaction_wall_ns,
+            "selection_prepare_ns": runtime_delta.selection_prepare_wall_ns,
+            "seal_world_body_biochemistry_ns": runtime_delta.seal_world_body_biochemistry_wall_ns,
+            "sealed_commit_total_ns": runtime_delta.sealed_commit_total_wall_ns,
+            "learning_transaction_ns": runtime_delta.learning_transaction_wall_ns,
+            "sidecar_memory_ns": runtime_delta.sidecar_memory_wall_ns,
+            "sidecar_topology_ns": runtime_delta.sidecar_topology_wall_ns,
+            "cognitive_authority_seal_ns": runtime_delta.cognitive_authority_seal_wall_ns,
+            "world_authority_advance_ns": runtime_delta.world_authority_advance_wall_ns,
+            "resident_synchronize_ns": runtime_delta.resident_synchronize_wall_ns,
+            "passive_observation_ns": runtime_delta.passive_observation_wall_ns,
+            "population_reconcile_ns": runtime_delta.population_reconcile_wall_ns,
+            "sleep_persistence_ns": runtime_delta.sleep_persistence_wall_ns
+        },
         "cpu_stages": {
             "input_ns": metrics.input_cpu_ns,
             "live_gpu_tick_ns": metrics.live_gpu_tick_cpu_ns,
