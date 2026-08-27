@@ -1166,6 +1166,18 @@ pub(crate) struct GpuLivePerformanceMetrics {
     pub passive_observation_wall_ns: u64,
     pub population_reconcile_wall_ns: u64,
     pub sleep_persistence_wall_ns: u64,
+    pub sleep_persistence_calls: u64,
+    pub sleep_checkpoint_capture_calls: u64,
+    pub sleep_checkpoint_capture_wall_ns: u64,
+    pub sleep_checkpoint_readback_calls: u64,
+    pub sleep_checkpoint_readback_bytes: u64,
+    pub sleep_checkpoint_readback_poll_wait_ns: u64,
+    pub sleep_checkpoint_readback_map_receive_wait_ns: u64,
+    pub sleep_checkpoint_publish_calls: u64,
+    pub sleep_checkpoint_publish_wall_ns: u64,
+    pub sleep_promotion_calls: u64,
+    pub sleep_promotion_publish_calls: u64,
+    pub sleep_promotion_publish_wall_ns: u64,
     pub checkpoint_capture_calls: u64,
     pub checkpoint_capture_wall_ns: u64,
     pub checkpoint_snapshot_calls: u64,
@@ -1217,6 +1229,22 @@ impl GpuLivePerformanceMetrics {
             passive_observation_wall_ns: delta!(passive_observation_wall_ns),
             population_reconcile_wall_ns: delta!(population_reconcile_wall_ns),
             sleep_persistence_wall_ns: delta!(sleep_persistence_wall_ns),
+            sleep_persistence_calls: delta!(sleep_persistence_calls),
+            sleep_checkpoint_capture_calls: delta!(sleep_checkpoint_capture_calls),
+            sleep_checkpoint_capture_wall_ns: delta!(sleep_checkpoint_capture_wall_ns),
+            sleep_checkpoint_readback_calls: delta!(sleep_checkpoint_readback_calls),
+            sleep_checkpoint_readback_bytes: delta!(sleep_checkpoint_readback_bytes),
+            sleep_checkpoint_readback_poll_wait_ns: delta!(
+                sleep_checkpoint_readback_poll_wait_ns
+            ),
+            sleep_checkpoint_readback_map_receive_wait_ns: delta!(
+                sleep_checkpoint_readback_map_receive_wait_ns
+            ),
+            sleep_checkpoint_publish_calls: delta!(sleep_checkpoint_publish_calls),
+            sleep_checkpoint_publish_wall_ns: delta!(sleep_checkpoint_publish_wall_ns),
+            sleep_promotion_calls: delta!(sleep_promotion_calls),
+            sleep_promotion_publish_calls: delta!(sleep_promotion_publish_calls),
+            sleep_promotion_publish_wall_ns: delta!(sleep_promotion_publish_wall_ns),
             checkpoint_capture_calls: delta!(checkpoint_capture_calls),
             checkpoint_capture_wall_ns: delta!(checkpoint_capture_wall_ns),
             checkpoint_snapshot_calls: delta!(checkpoint_snapshot_calls),
@@ -4815,12 +4843,66 @@ impl GpuLiveBrainRuntime {
         let Some(mut durability) = self.checkpoint_durability.take() else {
             return Ok(());
         };
-        let result = (|| {
-            let store = durability.store.clone();
-            let replacement =
-                self.capture_checkpointed_save(durability.published.save.clone(), &store)?;
-            durability.publish(replacement)
-        })();
+        self.performance_metrics.sleep_persistence_calls = self
+            .performance_metrics
+            .sleep_persistence_calls
+            .saturating_add(1);
+        let store = durability.store.clone();
+        let readback_before = self.backend.mutable_slot_readback_metrics();
+        let capture_started = Instant::now();
+        let replacement =
+            self.capture_checkpointed_save(durability.published.save.clone(), &store);
+        let readback_after = self.backend.mutable_slot_readback_metrics();
+        self.performance_metrics.sleep_checkpoint_capture_calls = self
+            .performance_metrics
+            .sleep_checkpoint_capture_calls
+            .saturating_add(1);
+        self.performance_metrics.sleep_checkpoint_capture_wall_ns = self
+            .performance_metrics
+            .sleep_checkpoint_capture_wall_ns
+            .saturating_add(elapsed_ns(capture_started));
+        self.performance_metrics.sleep_checkpoint_readback_calls = self
+            .performance_metrics
+            .sleep_checkpoint_readback_calls
+            .saturating_add(readback_after.calls.saturating_sub(readback_before.calls));
+        self.performance_metrics.sleep_checkpoint_readback_bytes = self
+            .performance_metrics
+            .sleep_checkpoint_readback_bytes
+            .saturating_add(readback_after.bytes.saturating_sub(readback_before.bytes));
+        self.performance_metrics
+            .sleep_checkpoint_readback_poll_wait_ns = self
+            .performance_metrics
+            .sleep_checkpoint_readback_poll_wait_ns
+            .saturating_add(
+                readback_after
+                    .poll_wait_ns
+                    .saturating_sub(readback_before.poll_wait_ns),
+            );
+        self.performance_metrics
+            .sleep_checkpoint_readback_map_receive_wait_ns = self
+            .performance_metrics
+            .sleep_checkpoint_readback_map_receive_wait_ns
+            .saturating_add(
+                readback_after
+                    .map_receive_wait_ns
+                    .saturating_sub(readback_before.map_receive_wait_ns),
+            );
+        let result = match replacement {
+            Ok(replacement) => {
+                let publish_started = Instant::now();
+                let result = durability.publish(replacement);
+                self.performance_metrics.sleep_checkpoint_publish_calls = self
+                    .performance_metrics
+                    .sleep_checkpoint_publish_calls
+                    .saturating_add(1);
+                self.performance_metrics.sleep_checkpoint_publish_wall_ns = self
+                    .performance_metrics
+                    .sleep_checkpoint_publish_wall_ns
+                    .saturating_add(elapsed_ns(publish_started));
+                result
+            }
+            Err(error) => Err(error),
+        };
         self.checkpoint_durability = Some(durability);
         let durable_reference = result?;
         self.backend.note_durable_checkpoint(durable_reference)?;
@@ -4835,7 +4917,11 @@ impl GpuLiveBrainRuntime {
         let Some(mut durability) = self.checkpoint_durability.take() else {
             return Ok(());
         };
-        let result = (|| {
+        self.performance_metrics.sleep_promotion_calls = self
+            .performance_metrics
+            .sleep_promotion_calls
+            .saturating_add(1);
+        let replacement = (|| {
             let mut replacement = durability.published.save.clone();
             let creature = replacement
                 .creatures
@@ -4854,8 +4940,24 @@ impl GpuLiveBrainRuntime {
             }
             creature.mind.sleep_state_label = gpu_sleep_state_label(committed_sleep);
             creature.gpu_brain = Some(promoted);
-            durability.publish(replacement)
+            Ok::<_, GameAppShellError>(replacement)
         })();
+        let result = match replacement {
+            Ok(replacement) => {
+                let publish_started = Instant::now();
+                let result = durability.publish(replacement);
+                self.performance_metrics.sleep_promotion_publish_calls = self
+                    .performance_metrics
+                    .sleep_promotion_publish_calls
+                    .saturating_add(1);
+                self.performance_metrics.sleep_promotion_publish_wall_ns = self
+                    .performance_metrics
+                    .sleep_promotion_publish_wall_ns
+                    .saturating_add(elapsed_ns(publish_started));
+                result
+            }
+            Err(error) => Err(error),
+        };
         self.checkpoint_durability = Some(durability);
         let durable_reference = result?;
         self.backend.note_durable_checkpoint(durable_reference)?;

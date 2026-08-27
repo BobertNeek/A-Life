@@ -7902,6 +7902,20 @@ fn write_phase31_performance_receipt(
             "full_snapshot_bytes": runtime_delta.checkpoint_snapshot_bytes,
             "poll_wait_ns": runtime_delta.checkpoint_snapshot_poll_wait_ns,
             "map_receive_wait_ns": runtime_delta.checkpoint_snapshot_map_receive_wait_ns
+        },
+        "sleep_durable_activity": {
+            "boundary_calls": runtime_delta.sleep_persistence_calls,
+            "capture_calls": runtime_delta.sleep_checkpoint_capture_calls,
+            "capture_wall_ns": runtime_delta.sleep_checkpoint_capture_wall_ns,
+            "capture_readback_calls": runtime_delta.sleep_checkpoint_readback_calls,
+            "capture_readback_bytes": runtime_delta.sleep_checkpoint_readback_bytes,
+            "capture_readback_poll_wait_ns": runtime_delta.sleep_checkpoint_readback_poll_wait_ns,
+            "capture_readback_map_receive_wait_ns": runtime_delta.sleep_checkpoint_readback_map_receive_wait_ns,
+            "checkpoint_publish_calls": runtime_delta.sleep_checkpoint_publish_calls,
+            "checkpoint_publish_wall_ns": runtime_delta.sleep_checkpoint_publish_wall_ns,
+            "promotion_calls": runtime_delta.sleep_promotion_calls,
+            "promotion_publish_calls": runtime_delta.sleep_promotion_publish_calls,
+            "promotion_publish_wall_ns": runtime_delta.sleep_promotion_publish_wall_ns
         }
     });
     let root = PathBuf::from(PHASE31_PERFORMANCE_ARTIFACT_DIR);
