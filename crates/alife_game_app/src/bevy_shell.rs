@@ -888,6 +888,15 @@ impl ProductionGpuBrainTickScheduleResource {
     pub(crate) fn speed_ticks(&self) -> u32 {
         self.run_speed_ticks
     }
+
+    pub(crate) fn performance_counters(&self) -> (u32, u64, u64, u64) {
+        (
+            self.scheduler.config.fixed_tick_hz,
+            self.scheduler.frames_observed,
+            self.scheduler.ticks_executed,
+            self.scheduler.catch_up_ticks_dropped,
+        )
+    }
 }
 
 #[cfg(feature = "gpu-runtime")]
@@ -1092,6 +1101,9 @@ fn tick_production_gpu_brain(
     mut authority: ResMut<ProductionGpuBrainAuthorityResource>,
     mut schedule: ResMut<ProductionGpuBrainTickScheduleResource>,
     mut presentation: ResMut<LiveBrainPresentationFrameResource>,
+    mut performance: Option<
+        ResMut<crate::production_voxel_renderer::Phase31PerformanceMetricsResource>,
+    >,
     mut commands: Commands,
     mut map: ResMut<BevyEntityMap>,
     mut selection: Option<ResMut<SelectionResource>>,
@@ -1140,6 +1152,13 @@ fn tick_production_gpu_brain(
                 return;
             }
         };
+        if performance.as_deref().is_some_and(|metrics| metrics.measuring()) {
+            if let Some(sample) = runtime.runtime.take_completed_neural_timing_sample() {
+                if let Some(metrics) = performance.as_deref_mut() {
+                    metrics.record_gpu_sample(sample);
+                }
+            }
+        }
         let cognitive_snapshots = runtime
             .runtime
             .live_cognitive_presentation_snapshots(&tick_summaries);

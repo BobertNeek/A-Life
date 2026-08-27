@@ -2710,10 +2710,47 @@ pub struct GpuClosedLoopBackend {
     last_compact_readback_bytes: usize,
     pending_inference_timing: Option<PendingInferenceTiming>,
     completed_neural_timing: Option<GpuNeuralTimingSample>,
+    pub(crate) mutable_slot_readback_counters: GpuMutableSlotReadbackCounters,
     last_apply_fast_plasticity_failure: Option<GpuRuntimeApplyFastPlasticityFailureReceipt>,
     pub(crate) next_sleep_job_id: u64,
     pub(crate) sleep_jobs: BTreeMap<u64, crate::GpuSleepJobState>,
     pub(crate) committed_sleep: BTreeMap<(u16, u32, u32, u64), crate::GpuSleepConsolidationReceipt>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuMutableSlotReadbackMetrics {
+    pub calls: u64,
+    pub bytes: u64,
+    pub poll_wait_ns: u64,
+    pub map_receive_wait_ns: u64,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct GpuMutableSlotReadbackCounters {
+    calls: AtomicU64,
+    bytes: AtomicU64,
+    poll_wait_ns: AtomicU64,
+    map_receive_wait_ns: AtomicU64,
+}
+
+impl GpuMutableSlotReadbackCounters {
+    pub(crate) fn record(&self, bytes: u64, poll_wait_ns: u64, map_receive_wait_ns: u64) {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        self.bytes.fetch_add(bytes, Ordering::Relaxed);
+        self.poll_wait_ns
+            .fetch_add(poll_wait_ns, Ordering::Relaxed);
+        self.map_receive_wait_ns
+            .fetch_add(map_receive_wait_ns, Ordering::Relaxed);
+    }
+
+    fn snapshot(&self) -> GpuMutableSlotReadbackMetrics {
+        GpuMutableSlotReadbackMetrics {
+            calls: self.calls.load(Ordering::Relaxed),
+            bytes: self.bytes.load(Ordering::Relaxed),
+            poll_wait_ns: self.poll_wait_ns.load(Ordering::Relaxed),
+            map_receive_wait_ns: self.map_receive_wait_ns.load(Ordering::Relaxed),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2806,6 +2843,7 @@ impl GpuClosedLoopBackend {
             last_compact_readback_bytes: 0,
             pending_inference_timing: None,
             completed_neural_timing: None,
+            mutable_slot_readback_counters: GpuMutableSlotReadbackCounters::default(),
             last_apply_fast_plasticity_failure: None,
             next_sleep_job_id: 1,
             sleep_jobs: BTreeMap::new(),
@@ -2860,6 +2898,7 @@ impl GpuClosedLoopBackend {
             last_compact_readback_bytes: 0,
             pending_inference_timing: None,
             completed_neural_timing: None,
+            mutable_slot_readback_counters: GpuMutableSlotReadbackCounters::default(),
             last_apply_fast_plasticity_failure: None,
             next_sleep_job_id: plan.next_sleep_job_id,
             sleep_jobs: BTreeMap::new(),
@@ -2941,6 +2980,10 @@ impl GpuClosedLoopBackend {
 
     pub fn take_completed_neural_timing_sample(&mut self) -> Option<GpuNeuralTimingSample> {
         self.completed_neural_timing.take()
+    }
+
+    pub fn mutable_slot_readback_metrics(&self) -> GpuMutableSlotReadbackMetrics {
+        self.mutable_slot_readback_counters.snapshot()
     }
 
     pub fn brain_atp_q16(&self, handle: GpuBrainHandle) -> Result<u32, ScaffoldContractError> {

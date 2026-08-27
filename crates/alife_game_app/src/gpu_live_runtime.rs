@@ -3,6 +3,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
+    time::Instant,
 };
 
 use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, LineageLibraryConfig};
@@ -1115,6 +1116,78 @@ pub(crate) struct GpuLiveBrainEvidenceMetrics {
     pub active_synapses: u32,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct GpuLivePerformanceMetrics {
+    pub tick_calls: u64,
+    pub tick_wall_ns: u64,
+    pub inference_batches: u64,
+    pub inference_rows: u64,
+    pub inference_transaction_wall_ns: u64,
+    pub selection_readback_calls: u64,
+    pub selection_readback_bytes: u64,
+    pub learning_batches: u64,
+    pub learning_rows: u64,
+    pub learning_transaction_wall_ns: u64,
+    pub learning_readback_calls: u64,
+    pub learning_readback_bytes: u64,
+    pub ordinary_snapshot_calls: u64,
+    pub ordinary_snapshot_bytes: u64,
+    pub ordinary_snapshot_poll_wait_ns: u64,
+    pub ordinary_snapshot_map_receive_wait_ns: u64,
+    pub ordinary_snapshot_wall_ns: u64,
+    pub state_reference_hash_calls: u64,
+    pub resident_json_bytes: u64,
+    pub topology_json_bytes: u64,
+    pub state_reference_hash_wall_ns: u64,
+    pub checkpoint_capture_calls: u64,
+    pub checkpoint_capture_wall_ns: u64,
+    pub checkpoint_snapshot_calls: u64,
+    pub checkpoint_snapshot_bytes: u64,
+    pub checkpoint_snapshot_poll_wait_ns: u64,
+    pub checkpoint_snapshot_map_receive_wait_ns: u64,
+}
+
+impl GpuLivePerformanceMetrics {
+    pub(crate) fn delta_from(self, before: Self) -> Self {
+        macro_rules! delta {
+            ($field:ident) => {
+                self.$field.saturating_sub(before.$field)
+            };
+        }
+        Self {
+            tick_calls: delta!(tick_calls),
+            tick_wall_ns: delta!(tick_wall_ns),
+            inference_batches: delta!(inference_batches),
+            inference_rows: delta!(inference_rows),
+            inference_transaction_wall_ns: delta!(inference_transaction_wall_ns),
+            selection_readback_calls: delta!(selection_readback_calls),
+            selection_readback_bytes: delta!(selection_readback_bytes),
+            learning_batches: delta!(learning_batches),
+            learning_rows: delta!(learning_rows),
+            learning_transaction_wall_ns: delta!(learning_transaction_wall_ns),
+            learning_readback_calls: delta!(learning_readback_calls),
+            learning_readback_bytes: delta!(learning_readback_bytes),
+            ordinary_snapshot_calls: delta!(ordinary_snapshot_calls),
+            ordinary_snapshot_bytes: delta!(ordinary_snapshot_bytes),
+            ordinary_snapshot_poll_wait_ns: delta!(ordinary_snapshot_poll_wait_ns),
+            ordinary_snapshot_map_receive_wait_ns: delta!(ordinary_snapshot_map_receive_wait_ns),
+            ordinary_snapshot_wall_ns: delta!(ordinary_snapshot_wall_ns),
+            state_reference_hash_calls: delta!(state_reference_hash_calls),
+            resident_json_bytes: delta!(resident_json_bytes),
+            topology_json_bytes: delta!(topology_json_bytes),
+            state_reference_hash_wall_ns: delta!(state_reference_hash_wall_ns),
+            checkpoint_capture_calls: delta!(checkpoint_capture_calls),
+            checkpoint_capture_wall_ns: delta!(checkpoint_capture_wall_ns),
+            checkpoint_snapshot_calls: delta!(checkpoint_snapshot_calls),
+            checkpoint_snapshot_bytes: delta!(checkpoint_snapshot_bytes),
+            checkpoint_snapshot_poll_wait_ns: delta!(checkpoint_snapshot_poll_wait_ns),
+            checkpoint_snapshot_map_receive_wait_ns: delta!(
+                checkpoint_snapshot_map_receive_wait_ns
+            ),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CuratedFounderGpuResidencyState {
     NotStarted,
@@ -1607,6 +1680,7 @@ pub struct GpuLiveBrainRuntime {
     last_pre_seal_discard_failures: Vec<PreSealDiscardFailure>,
     last_post_seal_learning_failures: Vec<PostSealLearningFailure>,
     last_gpu_metrics: GpuLiveBrainEvidenceMetrics,
+    performance_metrics: GpuLivePerformanceMetrics,
     checkpoint_durability: Option<GpuLiveCheckpointDurability>,
     lineage_library: Option<LineageLibrary>,
     lineage_run_id: Option<String>,
@@ -2699,7 +2773,7 @@ fn live_brain_state_reference_digest(
     resident: &ResidentCognition,
     topology: &TopologySidecar,
     gpu_state_digest: [u64; 4],
-) -> Result<[u64; 4], ScaffoldContractError> {
+) -> Result<([u64; 4], usize, usize), ScaffoldContractError> {
     let mut digest = CanonicalDigestBuilder::new(b"alife.live-brain-state-ref.v3");
     let resident_bytes =
         serde_json::to_vec(resident).map_err(|_| ScaffoldContractError::InvalidId)?;
@@ -2733,7 +2807,11 @@ fn live_brain_state_reference_digest(
     } else {
         digest.write_bool(false);
     }
-    Ok(digest.finish256())
+    Ok((
+        digest.finish256(),
+        resident_bytes.len(),
+        topology_bytes.len(),
+    ))
 }
 
 fn seal_prepared_selection_core(
@@ -3843,6 +3921,7 @@ impl GpuLiveBrainRuntime {
             last_pre_seal_discard_failures: Vec::new(),
             last_post_seal_learning_failures: Vec::new(),
             last_gpu_metrics: GpuLiveBrainEvidenceMetrics::default(),
+            performance_metrics: GpuLivePerformanceMetrics::default(),
             checkpoint_durability: None,
             lineage_library,
             lineage_run_id,
@@ -3957,6 +4036,7 @@ impl GpuLiveBrainRuntime {
             last_pre_seal_discard_failures: Vec::new(),
             last_post_seal_learning_failures: Vec::new(),
             last_gpu_metrics: GpuLiveBrainEvidenceMetrics::default(),
+            performance_metrics: GpuLivePerformanceMetrics::default(),
             checkpoint_durability: None,
             lineage_library: None,
             lineage_run_id: None,
@@ -4468,6 +4548,8 @@ impl GpuLiveBrainRuntime {
     /// The caller may atomically publish the returned manifest as a manual save;
     /// all bulk neural state remains behind content-addressed asset references.
     pub fn capture_portable_checkpoint(&mut self) -> Result<PortableSaveFile, GameAppShellError> {
+        let started = Instant::now();
+        let readback_before = self.backend.mutable_slot_readback_metrics();
         let Some(durability) = self.checkpoint_durability.take() else {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "GPU runtime has no durable save boundary".to_string(),
@@ -4477,6 +4559,39 @@ impl GpuLiveBrainRuntime {
         let store = durability.store.clone();
         let result = self.capture_checkpointed_save(base, &store);
         self.checkpoint_durability = Some(durability);
+        let readback_after = self.backend.mutable_slot_readback_metrics();
+        self.performance_metrics.checkpoint_capture_calls = self
+            .performance_metrics
+            .checkpoint_capture_calls
+            .saturating_add(1);
+        self.performance_metrics.checkpoint_capture_wall_ns = self
+            .performance_metrics
+            .checkpoint_capture_wall_ns
+            .saturating_add(u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX));
+        self.performance_metrics.checkpoint_snapshot_calls = self
+            .performance_metrics
+            .checkpoint_snapshot_calls
+            .saturating_add(readback_after.calls.saturating_sub(readback_before.calls));
+        self.performance_metrics.checkpoint_snapshot_bytes = self
+            .performance_metrics
+            .checkpoint_snapshot_bytes
+            .saturating_add(readback_after.bytes.saturating_sub(readback_before.bytes));
+        self.performance_metrics.checkpoint_snapshot_poll_wait_ns = self
+            .performance_metrics
+            .checkpoint_snapshot_poll_wait_ns
+            .saturating_add(
+                readback_after
+                    .poll_wait_ns
+                    .saturating_sub(readback_before.poll_wait_ns),
+            );
+        self.performance_metrics.checkpoint_snapshot_map_receive_wait_ns = self
+            .performance_metrics
+            .checkpoint_snapshot_map_receive_wait_ns
+            .saturating_add(
+                readback_after
+                    .map_receive_wait_ns
+                    .saturating_sub(readback_before.map_receive_wait_ns),
+            );
         result
     }
 
@@ -5465,7 +5580,8 @@ impl GpuLiveBrainRuntime {
     }
 
     pub fn tick(&mut self) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
-        self.tick_with_sleep_progress(|backend, handle, organism_id, state, intent| {
+        let started = Instant::now();
+        let result = self.tick_with_sleep_progress(|backend, handle, organism_id, state, intent| {
             let mut driver = AuthoritativeGpuSleepDriver {
                 backend,
                 handle,
@@ -5475,7 +5591,12 @@ impl GpuLiveBrainRuntime {
                 last_sleep_work: None,
             };
             driver.progress(organism_id, state, intent)
-        })
+        });
+        self.performance_metrics.tick_calls = self.performance_metrics.tick_calls.saturating_add(1);
+        self.performance_metrics.tick_wall_ns = self.performance_metrics.tick_wall_ns.saturating_add(
+            u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX),
+        );
+        result
     }
 
     pub(crate) fn live_cognitive_presentation_snapshots(
@@ -5976,7 +6097,23 @@ impl GpuLiveBrainRuntime {
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             let memory_batch = GpuClosedLoopMemoryBatchInput::try_new(memory_inputs)?;
+            let inference_rows = u64::try_from(batch.len()).unwrap_or(u64::MAX);
+            let inference_started = Instant::now();
             let gpu_ticks = self.backend.tick_memory_batch(&memory_batch)?;
+            self.performance_metrics.inference_batches = self
+                .performance_metrics
+                .inference_batches
+                .saturating_add(1);
+            self.performance_metrics.inference_rows = self
+                .performance_metrics
+                .inference_rows
+                .saturating_add(inference_rows);
+            self.performance_metrics.inference_transaction_wall_ns = self
+                .performance_metrics
+                .inference_transaction_wall_ns
+                .saturating_add(
+                    u64::try_from(inference_started.elapsed().as_nanos()).unwrap_or(u64::MAX),
+                );
             if gpu_ticks.len() != batch.len() {
                 return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
             }
@@ -6374,6 +6511,10 @@ impl GpuLiveBrainRuntime {
         self.last_gpu_metrics
     }
 
+    pub(crate) const fn performance_metrics(&self) -> GpuLivePerformanceMetrics {
+        self.performance_metrics
+    }
+
     pub(crate) const fn hardware_receipt(&self) -> &alife_gpu_backend::GpuHardwareReceipt {
         self.backend.backend().hardware_receipt()
     }
@@ -6641,6 +6782,16 @@ impl GpuLiveBrainRuntime {
                 .max()
                 .unwrap_or(0),
         };
+        if !gpu_ticks.is_empty() {
+            self.performance_metrics.selection_readback_calls = self
+                .performance_metrics
+                .selection_readback_calls
+                .saturating_add(1);
+            self.performance_metrics.selection_readback_bytes = self
+                .performance_metrics
+                .selection_readback_bytes
+                .saturating_add(u64::try_from(selection_readback_bytes).unwrap_or(u64::MAX));
+        }
         Ok(())
     }
 
@@ -6958,7 +7109,23 @@ impl GpuLiveBrainRuntime {
                 )
             })
             .collect::<Vec<_>>();
-        let learning = match self.backend.apply_sealed_outcome_batch(&learning_batch) {
+        let learning_started = Instant::now();
+        let learning_result = self.backend.apply_sealed_outcome_batch(&learning_batch);
+        self.performance_metrics.learning_batches = self
+            .performance_metrics
+            .learning_batches
+            .saturating_add(1);
+        self.performance_metrics.learning_rows = self
+            .performance_metrics
+            .learning_rows
+            .saturating_add(u64::try_from(learning_batch.len()).unwrap_or(u64::MAX));
+        self.performance_metrics.learning_transaction_wall_ns = self
+            .performance_metrics
+            .learning_transaction_wall_ns
+            .saturating_add(
+                u64::try_from(learning_started.elapsed().as_nanos()).unwrap_or(u64::MAX),
+            );
+        let learning = match learning_result {
             Ok(receipts) if receipts.len() == sealed.len() => Some(receipts),
             Ok(_) => {
                 for selection in &sealed {
@@ -7038,6 +7205,14 @@ impl GpuLiveBrainRuntime {
                 .last_gpu_metrics
                 .learning_readback_bytes
                 .saturating_add(learning_readback);
+            self.performance_metrics.learning_readback_calls = self
+                .performance_metrics
+                .learning_readback_calls
+                .saturating_add(1);
+            self.performance_metrics.learning_readback_bytes = self
+                .performance_metrics
+                .learning_readback_bytes
+                .saturating_add(u64::try_from(learning_readback).unwrap_or(u64::MAX));
         }
 
         let (memory_updates, topology_updates) = if self.observe_sidecars {
@@ -7051,10 +7226,43 @@ impl GpuLiveBrainRuntime {
 
         for (index, selection) in sealed.iter().enumerate() {
             let organism_id = selection.handle.organism_id();
+            let readback_before = self.backend.mutable_slot_readback_metrics();
+            let snapshot_started = Instant::now();
             let gpu_state_digest = self
                 .backend
                 .snapshot_brain(selection.handle, selection.patch.outcome().outcome_tick)?
                 .canonical_digest();
+            let snapshot_wall_ns =
+                u64::try_from(snapshot_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+            let readback_after = self.backend.mutable_slot_readback_metrics();
+            self.performance_metrics.ordinary_snapshot_calls = self
+                .performance_metrics
+                .ordinary_snapshot_calls
+                .saturating_add(readback_after.calls.saturating_sub(readback_before.calls));
+            self.performance_metrics.ordinary_snapshot_bytes = self
+                .performance_metrics
+                .ordinary_snapshot_bytes
+                .saturating_add(readback_after.bytes.saturating_sub(readback_before.bytes));
+            self.performance_metrics.ordinary_snapshot_poll_wait_ns = self
+                .performance_metrics
+                .ordinary_snapshot_poll_wait_ns
+                .saturating_add(
+                    readback_after
+                        .poll_wait_ns
+                        .saturating_sub(readback_before.poll_wait_ns),
+                );
+            self.performance_metrics.ordinary_snapshot_map_receive_wait_ns = self
+                .performance_metrics
+                .ordinary_snapshot_map_receive_wait_ns
+                .saturating_add(
+                    readback_after
+                        .map_receive_wait_ns
+                        .saturating_sub(readback_before.map_receive_wait_ns),
+                );
+            self.performance_metrics.ordinary_snapshot_wall_ns = self
+                .performance_metrics
+                .ordinary_snapshot_wall_ns
+                .saturating_add(snapshot_wall_ns);
             let resident = self
                 .residents
                 .get(&organism_id.raw())
@@ -7063,13 +7271,33 @@ impl GpuLiveBrainRuntime {
                 .topologies
                 .get(&organism_id.raw())
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            let brain_digest = live_brain_state_reference_digest(
+            let hash_started = Instant::now();
+            let (brain_digest, resident_json_bytes, topology_json_bytes) =
+                live_brain_state_reference_digest(
                 selection,
                 learning.as_ref().and_then(|receipts| receipts.get(index)),
                 resident,
                 topology,
                 gpu_state_digest,
             )?;
+            self.performance_metrics.state_reference_hash_calls = self
+                .performance_metrics
+                .state_reference_hash_calls
+                .saturating_add(1);
+            self.performance_metrics.resident_json_bytes = self
+                .performance_metrics
+                .resident_json_bytes
+                .saturating_add(u64::try_from(resident_json_bytes).unwrap_or(u64::MAX));
+            self.performance_metrics.topology_json_bytes = self
+                .performance_metrics
+                .topology_json_bytes
+                .saturating_add(u64::try_from(topology_json_bytes).unwrap_or(u64::MAX));
+            self.performance_metrics.state_reference_hash_wall_ns = self
+                .performance_metrics
+                .state_reference_hash_wall_ns
+                .saturating_add(
+                    u64::try_from(hash_started.elapsed().as_nanos()).unwrap_or(u64::MAX),
+                );
             let memory_digest = self
                 .memories
                 .get(&organism_id.raw())

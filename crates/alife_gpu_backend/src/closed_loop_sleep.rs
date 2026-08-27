@@ -4,7 +4,7 @@
 //! banks, and persists compact receipts. All replay-credit and weight-update
 //! mathematics execute in WGSL.
 
-use std::ops::Range;
+use std::{ops::Range, time::Instant};
 
 use alife_core::{
     compute_gpu_sleep_commit_digest, compute_gpu_sleep_input_weight_digest,
@@ -509,6 +509,7 @@ impl GpuClosedLoopBackend {
                 bucket.buffers.neural_buffers()[2],
                 snapshot.ranges.immutable_plan_words.clone(),
                 "closed-loop-sleep-synaptogenesis-plan-readback",
+                None,
             )?;
             let immutable_weight_words = read_gpu_words(
                 &self.device,
@@ -516,6 +517,7 @@ impl GpuClosedLoopBackend {
                 bucket.buffers.neural_buffers()[3],
                 snapshot.ranges.immutable_weight_words.clone(),
                 "closed-loop-sleep-synaptogenesis-weight-readback",
+                None,
             )?;
             Some(
                 GpuFixedSlotUpload::from_existing_slot(
@@ -807,6 +809,7 @@ impl GpuClosedLoopBackend {
             bucket.buffers.neural_buffers()[6],
             ranges.mutable_state_words.clone(),
             "closed-loop-sleep-mutable-readback",
+            Some(&self.mutable_slot_readback_counters),
         )
     }
 
@@ -828,6 +831,7 @@ impl GpuClosedLoopBackend {
             bucket.buffers.neural_buffers()[3],
             snapshot.ranges.layout.genetic_weight_words.clone(),
             "closed-loop-test-genetic-readback",
+            None,
         )?;
         let active_words = words
             .get(..snapshot.brain_slot.record().synapse_count as usize)
@@ -1023,6 +1027,7 @@ impl GpuClosedLoopBackend {
             bucket.buffers.neural_buffers()[2],
             snapshot.ranges.immutable_plan_words.clone(),
             "closed-loop-test-slot-plan-digest",
+            None,
         )?;
         let weight_words = read_gpu_words(
             &self.device,
@@ -1030,6 +1035,7 @@ impl GpuClosedLoopBackend {
             bucket.buffers.neural_buffers()[3],
             snapshot.ranges.immutable_weight_words.clone(),
             "closed-loop-test-slot-weight-digest",
+            None,
         )?;
         let mutable_words = self.read_slot_mutable_words(handle, &snapshot.ranges)?;
         let mut digest = CanonicalDigestBuilder::new(b"ALIFE-GPU-SLEEP-SLOT-FULL-TEST-V1");
@@ -1560,6 +1566,7 @@ fn read_gpu_words(
     source: &wgpu::Buffer,
     words: Range<u32>,
     label: &'static str,
+    metrics: Option<&crate::closed_loop_runtime::GpuMutableSlotReadbackCounters>,
 ) -> Result<Vec<u32>, ScaffoldContractError> {
     let count = words
         .end
@@ -1584,14 +1591,22 @@ fn read_gpu_words(
         let _ = sender.send(result);
     });
     let submission = queue.submit(Some(command));
-    if device
+    let poll_started = Instant::now();
+    let poll_failed = device
         .poll(wgpu::PollType::Wait {
             submission_index: Some(submission),
             timeout: None,
         })
-        .is_err()
-        || receiver.recv().ok().and_then(Result::ok).is_none()
-    {
+        .is_err();
+    let poll_wait_ns = u64::try_from(poll_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    let receive_started = Instant::now();
+    let receive_failed = receiver.recv().ok().and_then(Result::ok).is_none();
+    let map_receive_wait_ns =
+        u64::try_from(receive_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    if let Some(metrics) = metrics {
+        metrics.record(size, poll_wait_ns, map_receive_wait_ns);
+    }
+    if poll_failed || receive_failed {
         readback.unmap();
         return Err(ScaffoldContractError::NeuralBackendUnavailable);
     }

@@ -7,8 +7,9 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    path::PathBuf,
-    time::Instant,
+    io::Read,
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 
 use alife_bevy_adapter::BevyEntityMap;
@@ -33,7 +34,8 @@ use bevy::{
         default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, Capsule3d, ChildOf,
         Children, Color, Commands, Component, Cuboid, DetectChanges, DirectionalLight, Entity,
         EulerRot, GlobalTransform, Handle, Image, KeyCode, Mat4, Mesh, Mesh3d, MeshMaterial3d,
-        Meshable, MessageReader, MessageWriter, MouseButton, Name, Node, NonSendMut, ParamSet,
+        Meshable, MessageReader, MessageWriter, MouseButton, Name, Node, NonSend, NonSendMut,
+        ParamSet,
         PositionType, Projection, Quat, Res, ResMut, Resource, Sphere, StandardMaterial, Text,
         Text2d, TextColor, TextFont, Time, Torus, Transform, Update, Val, Vec3, Visibility, Window,
         With, Without, World,
@@ -852,6 +854,91 @@ pub struct Fvr03ProductionVoxelScreenshotResource {
     pub fvr05_next_capture_frame: u32,
     pub fvr05_sequence_complete: bool,
     pub developer_overlay: bool,
+}
+
+const PHASE31_PERFORMANCE_SCHEMA: &str = "alife.phase31.performance-baseline.v1";
+const PHASE31_PERFORMANCE_SCHEMA_VERSION: u16 = 1;
+const PHASE31_WARMUP_DURATION: Duration = Duration::from_secs(5);
+const PHASE31_MEASUREMENT_DURATION: Duration = Duration::from_secs(60);
+const PHASE31_PERFORMANCE_ARTIFACT_DIR: &str = "target/artifacts/phase31-performance";
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Debug, Resource)]
+pub(crate) struct Phase31PerformanceMetricsResource {
+    profile: String,
+    population: u16,
+    resolution: [u32; 2],
+    backend: String,
+    adapter: String,
+    launched_at: Instant,
+    last_frame_at: Instant,
+    measurement_started_at: Option<Instant>,
+    measurement_start_world_tick: Option<u64>,
+    runtime_baseline: Option<crate::gpu_live_runtime::GpuLivePerformanceMetrics>,
+    scheduler_baseline: Option<(u32, u64, u64, u64)>,
+    stage_mark: Option<Instant>,
+    frame_ns: Vec<u64>,
+    input_cpu_ns: u64,
+    live_gpu_tick_cpu_ns: u64,
+    authoritative_projection_cpu_ns: u64,
+    procedural_animation_cpu_ns: u64,
+    ui_root_readers_cpu_ns: u64,
+    ui_updates: u64,
+    gpu_samples: Vec<alife_gpu_backend::GpuNeuralTimingSample>,
+    artifact_path: Option<PathBuf>,
+    write_error: Option<String>,
+}
+
+#[cfg(feature = "gpu-runtime")]
+impl Phase31PerformanceMetricsResource {
+    fn new(summary: &ProductionVoxelLaunchSummary) -> Self {
+        let now = Instant::now();
+        Self {
+            profile: summary.profile_id.label().to_string(),
+            population: summary.effective_population,
+            resolution: [summary.resolution.0, summary.resolution.1],
+            backend: summary.diagnostics.selected_backend.clone(),
+            adapter: summary
+                .diagnostics
+                .adapter_name
+                .clone()
+                .unwrap_or_else(|| "unavailable".to_string()),
+            launched_at: now,
+            last_frame_at: now,
+            measurement_started_at: None,
+            measurement_start_world_tick: None,
+            runtime_baseline: None,
+            scheduler_baseline: None,
+            stage_mark: None,
+            frame_ns: Vec::new(),
+            input_cpu_ns: 0,
+            live_gpu_tick_cpu_ns: 0,
+            authoritative_projection_cpu_ns: 0,
+            procedural_animation_cpu_ns: 0,
+            ui_root_readers_cpu_ns: 0,
+            ui_updates: 0,
+            gpu_samples: Vec::new(),
+            artifact_path: None,
+            write_error: None,
+        }
+    }
+
+    pub(crate) fn measuring(&self) -> bool {
+        self.measurement_started_at.is_some() && self.artifact_path.is_none()
+    }
+
+    fn take_stage_elapsed_ns(&mut self) -> u64 {
+        let now = Instant::now();
+        self.stage_mark.replace(now).map_or(0, |started| {
+            u64::try_from(now.duration_since(started).as_nanos()).unwrap_or(u64::MAX)
+        })
+    }
+
+    pub(crate) fn record_gpu_sample(&mut self, sample: alife_gpu_backend::GpuNeuralTimingSample) {
+        if self.measuring() {
+            self.gpu_samples.push(sample);
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Component)]
@@ -2146,6 +2233,45 @@ pub fn spawn_fvr03_production_voxel_scene(
             .before(ProductionVoxelPresentationSet::LiveGpuTick),
     );
     if summary.record_performance && !summary.dry_run {
+        #[cfg(feature = "gpu-runtime")]
+        {
+            app.insert_resource(Phase31PerformanceMetricsResource::new(summary))
+                .add_systems(
+                    Update,
+                    phase31_performance_frame_begin
+                        .before(ProductionVoxelPresentationSet::Input),
+                )
+                .add_systems(
+                    Update,
+                    phase31_performance_after_input
+                        .after(ProductionVoxelPresentationSet::Input)
+                        .before(ProductionVoxelPresentationSet::LiveGpuTick),
+                )
+                .add_systems(
+                    Update,
+                    phase31_performance_after_live_gpu_tick
+                        .after(ProductionVoxelPresentationSet::LiveGpuTick)
+                        .before(ProductionVoxelPresentationSet::AuthoritativeProjection),
+                )
+                .add_systems(
+                    Update,
+                    phase31_performance_after_authoritative_projection
+                        .after(ProductionVoxelPresentationSet::AuthoritativeProjection)
+                        .before(ProductionVoxelPresentationSet::ProceduralAnimation),
+                )
+                .add_systems(
+                    Update,
+                    phase31_performance_after_procedural_animation
+                        .after(ProductionVoxelPresentationSet::ProceduralAnimation)
+                        .before(ProductionVoxelPresentationSet::RootReaders),
+                )
+                .add_systems(
+                    Update,
+                    phase31_performance_after_ui
+                        .after(ProductionVoxelPresentationSet::RootReaders)
+                        .before(request_fvr03_recorded_screenshot),
+                );
+        }
         let screenshot_path = PathBuf::from(FVR03_PERFORMANCE_ARTIFACT_DIR).join(format!(
             "{}_runtime_screenshot.png",
             summary.profile_id.label()
@@ -7438,6 +7564,338 @@ fn fvr04_follow_camera_transform(
     Transform::from_translation(target + offset).looking_at(target, Vec3::Y)
 }
 
+#[cfg(feature = "gpu-runtime")]
+fn phase31_performance_frame_begin(
+    mut metrics: ResMut<Phase31PerformanceMetricsResource>,
+    runtime: NonSend<ProductionGpuBrainRuntimeResource>,
+    schedule: Res<ProductionGpuBrainTickScheduleResource>,
+    presentation: Res<LiveBrainPresentationFrameResource>,
+) {
+    let now = Instant::now();
+    if metrics.measurement_started_at.is_none()
+        && metrics.launched_at.elapsed() >= PHASE31_WARMUP_DURATION
+        && presentation.current.authoritative_world_tick > Tick::ZERO
+    {
+        metrics.measurement_started_at = Some(now);
+        metrics.measurement_start_world_tick =
+            Some(presentation.current.authoritative_world_tick.raw());
+        metrics.runtime_baseline = Some(runtime.runtime.performance_metrics());
+        metrics.scheduler_baseline = Some(schedule.performance_counters());
+        metrics.last_frame_at = now;
+    } else if metrics.measuring() {
+        let frame_ns =
+            u64::try_from(now.duration_since(metrics.last_frame_at).as_nanos()).unwrap_or(u64::MAX);
+        metrics.frame_ns.push(frame_ns);
+        metrics.last_frame_at = now;
+    }
+    metrics.stage_mark = metrics.measuring().then_some(now);
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn phase31_performance_after_input(mut metrics: ResMut<Phase31PerformanceMetricsResource>) {
+    if metrics.measuring() {
+        let elapsed = metrics.take_stage_elapsed_ns();
+        metrics.input_cpu_ns = metrics.input_cpu_ns.saturating_add(elapsed);
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn phase31_performance_after_live_gpu_tick(
+    mut metrics: ResMut<Phase31PerformanceMetricsResource>,
+) {
+    if metrics.measuring() {
+        let elapsed = metrics.take_stage_elapsed_ns();
+        metrics.live_gpu_tick_cpu_ns = metrics.live_gpu_tick_cpu_ns.saturating_add(elapsed);
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn phase31_performance_after_authoritative_projection(
+    mut metrics: ResMut<Phase31PerformanceMetricsResource>,
+) {
+    if metrics.measuring() {
+        let elapsed = metrics.take_stage_elapsed_ns();
+        metrics.authoritative_projection_cpu_ns = metrics
+            .authoritative_projection_cpu_ns
+            .saturating_add(elapsed);
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn phase31_performance_after_procedural_animation(
+    mut metrics: ResMut<Phase31PerformanceMetricsResource>,
+) {
+    if metrics.measuring() {
+        let elapsed = metrics.take_stage_elapsed_ns();
+        metrics.procedural_animation_cpu_ns = metrics
+            .procedural_animation_cpu_ns
+            .saturating_add(elapsed);
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn phase31_performance_after_ui(
+    mut metrics: ResMut<Phase31PerformanceMetricsResource>,
+    runtime: NonSend<ProductionGpuBrainRuntimeResource>,
+    schedule: Res<ProductionGpuBrainTickScheduleResource>,
+    presentation: Res<LiveBrainPresentationFrameResource>,
+    mut exits: MessageWriter<AppExit>,
+) {
+    if !metrics.measuring() {
+        return;
+    }
+    let elapsed = metrics.take_stage_elapsed_ns();
+    metrics.ui_root_readers_cpu_ns = metrics.ui_root_readers_cpu_ns.saturating_add(elapsed);
+    metrics.ui_updates = metrics.ui_updates.saturating_add(1);
+    let Some(started) = metrics.measurement_started_at else {
+        return;
+    };
+    if started.elapsed() < PHASE31_MEASUREMENT_DURATION {
+        return;
+    }
+    match write_phase31_performance_receipt(
+        &metrics,
+        &runtime.runtime,
+        schedule.performance_counters(),
+        presentation.current.authoritative_world_tick.raw(),
+        started.elapsed(),
+    ) {
+        Ok(path) => metrics.artifact_path = Some(path),
+        Err(error) => metrics.write_error = Some(error.to_string()),
+    }
+    exits.write(AppExit::Success);
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn duration_summary(samples: &[u64]) -> serde_json::Value {
+    if samples.is_empty() {
+        return serde_json::json!({
+            "count": 0,
+            "total_ns": 0,
+            "p50_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "max_ms": null,
+            "hitches_over_100ms": 0
+        });
+    }
+    let mut sorted = samples.to_vec();
+    sorted.sort_unstable();
+    let percentile = |numerator: usize| {
+        let rank = sorted
+            .len()
+            .saturating_mul(numerator)
+            .div_ceil(100)
+            .saturating_sub(1)
+            .min(sorted.len() - 1);
+        sorted[rank] as f64 / 1_000_000.0
+    };
+    serde_json::json!({
+        "count": sorted.len(),
+        "total_ns": sorted.iter().fold(0_u64, |total, value| total.saturating_add(*value)),
+        "p50_ms": percentile(50),
+        "p95_ms": percentile(95),
+        "p99_ms": percentile(99),
+        "max_ms": *sorted.last().unwrap_or(&0) as f64 / 1_000_000.0,
+        "hitches_over_100ms": sorted.iter().filter(|value| **value > 100_000_000).count()
+    })
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn gpu_timestamp_ns(ticks: u64, period_ns_q24: u64) -> u64 {
+    let scaled = u128::from(ticks).saturating_mul(u128::from(period_ns_q24));
+    u64::try_from(scaled >> 24).unwrap_or(u64::MAX)
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn file_blake3_hex(path: &Path) -> Result<String, GameAppShellError> {
+    let mut file = fs::File::open(path)?;
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = vec![0_u8; 1024 * 1024];
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hasher.finalize().to_hex().to_string())
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn write_phase31_performance_receipt(
+    metrics: &Phase31PerformanceMetricsResource,
+    runtime: &crate::GpuLiveBrainRuntime,
+    scheduler_final: (u32, u64, u64, u64),
+    final_world_tick: u64,
+    elapsed: Duration,
+) -> Result<PathBuf, GameAppShellError> {
+    if cfg!(debug_assertions) {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: "Phase 3.1 baseline requires an optimized release executable".to_string(),
+        });
+    }
+    let source_head = std::env::var("ALIFE_PHASE31_SOURCE_HEAD").map_err(|_| {
+        GameAppShellError::InvalidProductionFrontend {
+            message: "Phase 3.1 baseline requires ALIFE_PHASE31_SOURCE_HEAD".to_string(),
+        }
+    })?;
+    if source_head.len() != 40 || !source_head.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: "Phase 3.1 source SHA must be a full hexadecimal Git object ID".to_string(),
+        });
+    }
+    let executable_path = std::env::current_exe()?;
+    let executable_blake3 = file_blake3_hex(&executable_path)?;
+    let runtime_delta = runtime
+        .performance_metrics()
+        .delta_from(metrics.runtime_baseline.unwrap_or_default());
+    let scheduler_before = metrics.scheduler_baseline.unwrap_or(scheduler_final);
+    let frames_observed = scheduler_final.1.saturating_sub(scheduler_before.1);
+    let ticks_executed = scheduler_final.2.saturating_sub(scheduler_before.2);
+    let dropped_ticks = scheduler_final.3.saturating_sub(scheduler_before.3);
+    let elapsed_seconds = elapsed.as_secs_f64().max(0.001);
+    let gpu_inference_ns = metrics.gpu_samples.iter().fold(0_u64, |total, sample| {
+        total.saturating_add(gpu_timestamp_ns(
+            sample.inference_timestamp_ticks,
+            sample.timestamp_period_ns_q24,
+        ))
+    });
+    let gpu_plasticity_ns = metrics.gpu_samples.iter().fold(0_u64, |total, sample| {
+        total.saturating_add(gpu_timestamp_ns(
+            sample.plasticity_timestamp_ticks,
+            sample.timestamp_period_ns_q24,
+        ))
+    });
+    let frame_total_ns = metrics
+        .frame_ns
+        .iter()
+        .fold(0_u64, |total, value| total.saturating_add(*value));
+    let measured_update_ns = metrics
+        .input_cpu_ns
+        .saturating_add(metrics.live_gpu_tick_cpu_ns)
+        .saturating_add(metrics.authoritative_projection_cpu_ns)
+        .saturating_add(metrics.procedural_animation_cpu_ns)
+        .saturating_add(metrics.ui_root_readers_cpu_ns);
+    let renderer_present_residual_ns = frame_total_ns.saturating_sub(measured_update_ns);
+    let receipt = serde_json::json!({
+        "schema": PHASE31_PERFORMANCE_SCHEMA,
+        "schema_version": PHASE31_PERFORMANCE_SCHEMA_VERSION,
+        "source_head": source_head,
+        "build": {
+            "mode": if cfg!(debug_assertions) { "debug" } else { "release" },
+            "debug_assertions": cfg!(debug_assertions),
+            "optimized_release": !cfg!(debug_assertions),
+            "executable_path": executable_path,
+            "executable_blake3": executable_blake3
+        },
+        "profile": metrics.profile,
+        "population": metrics.population,
+        "resolution": metrics.resolution,
+        "backend": metrics.backend,
+        "adapter": metrics.adapter,
+        "measurement_seconds": elapsed_seconds,
+        "world_tick": {
+            "start": metrics.measurement_start_world_tick,
+            "end": final_world_tick
+        },
+        "frame": duration_summary(&metrics.frame_ns),
+        "simulation": {
+            "configured_tps": scheduler_final.0,
+            "achieved_tps": ticks_executed as f64 / elapsed_seconds,
+            "ticks_executed": ticks_executed,
+            "catch_up_ticks_dropped": dropped_ticks,
+            "scheduler_frames_observed": frames_observed,
+            "runtime_tick_calls": runtime_delta.tick_calls,
+            "runtime_tick_wall_ns": runtime_delta.tick_wall_ns
+        },
+        "cpu_stages": {
+            "input_ns": metrics.input_cpu_ns,
+            "live_gpu_tick_ns": metrics.live_gpu_tick_cpu_ns,
+            "authoritative_projection_ns": metrics.authoritative_projection_cpu_ns,
+            "procedural_animation_ns": metrics.procedural_animation_cpu_ns,
+            "ui_root_readers_ns": metrics.ui_root_readers_cpu_ns,
+            "renderer_present_and_uninstrumented_residual_ns": renderer_present_residual_ns
+        },
+        "gpu_stages": {
+            "timestamp_samples": metrics.gpu_samples.len(),
+            "inference_ns": gpu_inference_ns,
+            "plasticity_ns": gpu_plasticity_ns
+        },
+        "blocking_transactions": {
+            "count": runtime_delta.inference_batches
+                .saturating_add(runtime_delta.learning_batches)
+                .saturating_add(runtime_delta.ordinary_snapshot_calls),
+            "inference_batch_wall_ns": runtime_delta.inference_transaction_wall_ns,
+            "learning_batch_wall_ns": runtime_delta.learning_transaction_wall_ns,
+            "ordinary_snapshot_poll_wait_ns": runtime_delta.ordinary_snapshot_poll_wait_ns,
+            "ordinary_snapshot_map_receive_wait_ns": runtime_delta.ordinary_snapshot_map_receive_wait_ns
+        },
+        "readback": {
+            "selection_calls": runtime_delta.selection_readback_calls,
+            "selection_bytes": runtime_delta.selection_readback_bytes,
+            "learning_calls": runtime_delta.learning_readback_calls,
+            "learning_bytes": runtime_delta.learning_readback_bytes,
+            "ordinary_full_snapshot_calls": runtime_delta.ordinary_snapshot_calls,
+            "ordinary_full_snapshot_bytes": runtime_delta.ordinary_snapshot_bytes
+        },
+        "ordinary_full_snapshot": {
+            "calls": runtime_delta.ordinary_snapshot_calls,
+            "bytes": runtime_delta.ordinary_snapshot_bytes,
+            "wall_ns": runtime_delta.ordinary_snapshot_wall_ns,
+            "poll_wait_ns": runtime_delta.ordinary_snapshot_poll_wait_ns,
+            "map_receive_wait_ns": runtime_delta.ordinary_snapshot_map_receive_wait_ns,
+            "calls_per_runtime_tick": if runtime_delta.tick_calls == 0 {
+                0.0
+            } else {
+                runtime_delta.ordinary_snapshot_calls as f64 / runtime_delta.tick_calls as f64
+            }
+        },
+        "state_reference_hash": {
+            "calls": runtime_delta.state_reference_hash_calls,
+            "resident_json_bytes": runtime_delta.resident_json_bytes,
+            "topology_json_bytes": runtime_delta.topology_json_bytes,
+            "wall_ns": runtime_delta.state_reference_hash_wall_ns
+        },
+        "dispatch_batching": {
+            "inference_batches": runtime_delta.inference_batches,
+            "inference_rows": runtime_delta.inference_rows,
+            "mean_inference_rows_per_batch": if runtime_delta.inference_batches == 0 {
+                0.0
+            } else {
+                runtime_delta.inference_rows as f64 / runtime_delta.inference_batches as f64
+            },
+            "learning_batches": runtime_delta.learning_batches,
+            "learning_rows": runtime_delta.learning_rows,
+            "mean_learning_rows_per_batch": if runtime_delta.learning_batches == 0 {
+                0.0
+            } else {
+                runtime_delta.learning_rows as f64 / runtime_delta.learning_batches as f64
+            }
+        },
+        "ui": {
+            "updates": metrics.ui_updates,
+            "cadence_hz": metrics.ui_updates as f64 / elapsed_seconds
+        },
+        "checkpoint_activity": {
+            "capture_calls": runtime_delta.checkpoint_capture_calls,
+            "capture_wall_ns": runtime_delta.checkpoint_capture_wall_ns,
+            "full_snapshot_calls": runtime_delta.checkpoint_snapshot_calls,
+            "full_snapshot_bytes": runtime_delta.checkpoint_snapshot_bytes,
+            "poll_wait_ns": runtime_delta.checkpoint_snapshot_poll_wait_ns,
+            "map_receive_wait_ns": runtime_delta.checkpoint_snapshot_map_receive_wait_ns
+        }
+    });
+    let root = PathBuf::from(PHASE31_PERFORMANCE_ARTIFACT_DIR);
+    fs::create_dir_all(&root)?;
+    let path = root.join(format!(
+        "phase31-before-release-population-{}.json",
+        metrics.population
+    ));
+    fs::write(&path, serde_json::to_string_pretty(&receipt)?)?;
+    Ok(path)
+}
+
 fn request_fvr03_recorded_screenshot(
     mut commands: Commands,
     mut capture: ResMut<Fvr03ProductionVoxelScreenshotResource>,
@@ -7448,9 +7906,15 @@ fn request_fvr03_recorded_screenshot(
     #[cfg(feature = "gpu-runtime")] mut conversation: Option<
         ResMut<ProductionConversationLineageUiState>,
     >,
+    #[cfg(feature = "gpu-runtime")] phase31: Option<Res<Phase31PerformanceMetricsResource>>,
     mut overlay_batches: bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionOverlayBatch>>,
     mut exits: MessageWriter<AppExit>,
 ) {
+    #[cfg(feature = "gpu-runtime")]
+    let legacy_capture_controls_lifetime =
+        fvr03_legacy_capture_controls_lifetime(phase31.is_some());
+    #[cfg(not(feature = "gpu-runtime"))]
+    let legacy_capture_controls_lifetime = true;
     capture.frame = capture.frame.saturating_add(1);
     if capture.measurement_started_at.is_none() && capture.frame >= capture.capture_after_frame {
         capture.measurement_start_frame = capture.frame;
@@ -7489,7 +7953,9 @@ fn request_fvr03_recorded_screenshot(
         if let Some(parent) = capture.path.parent() {
             if fs::create_dir_all(parent).is_err() {
                 capture.requested = true;
-                exits.write(AppExit::Success);
+                if legacy_capture_controls_lifetime {
+                    exits.write(AppExit::Success);
+                }
                 return;
             }
         }
@@ -7516,7 +7982,10 @@ fn request_fvr03_recorded_screenshot(
         return;
     }
     if capture.fvr05_sequence_complete {
-        if capture.measurement_written && capture.frame >= capture.fvr05_next_capture_frame {
+        if legacy_capture_controls_lifetime
+            && capture.measurement_written
+            && capture.frame >= capture.fvr05_next_capture_frame
+        {
             capture.requested = true;
             exits.write(AppExit::Success);
         }
@@ -7533,7 +8002,9 @@ fn request_fvr03_recorded_screenshot(
     if let Some(parent) = capture.path.parent() {
         if fs::create_dir_all(parent).is_err() {
             capture.requested = true;
-            exits.write(AppExit::Success);
+            if legacy_capture_controls_lifetime {
+                exits.write(AppExit::Success);
+            }
             return;
         }
     }
@@ -7565,6 +8036,10 @@ fn request_fvr03_recorded_screenshot(
     if fvr05_screenshot_step(capture.fvr05_capture_index).is_none() {
         capture.fvr05_sequence_complete = true;
     }
+}
+
+fn fvr03_legacy_capture_controls_lifetime(phase31_measurement_mode: bool) -> bool {
+    !phase31_measurement_mode
 }
 
 const FVR03_VISUAL_CAPTURE_AFTER_FRAMES: u32 = 8;
@@ -7926,6 +8401,30 @@ mod tests {
     };
     #[cfg(feature = "gpu-runtime")]
     use crate::CuratedFounderAgentInput;
+
+    #[test]
+    #[cfg(feature = "gpu-runtime")]
+    fn phase31_duration_summary_reports_nearest_rank_percentiles_and_hitches() {
+        let samples = [
+            10_000_000_u64,
+            20_000_000,
+            30_000_000,
+            40_000_000,
+            120_000_000,
+        ];
+        let summary = duration_summary(&samples);
+        assert_eq!(summary["count"], 5);
+        assert_eq!(summary["p50_ms"], 30.0);
+        assert_eq!(summary["p95_ms"], 120.0);
+        assert_eq!(summary["p99_ms"], 120.0);
+        assert_eq!(summary["hitches_over_100ms"], 1);
+    }
+
+    #[test]
+    fn phase31_measurement_exclusively_owns_process_lifetime() {
+        assert!(fvr03_legacy_capture_controls_lifetime(false));
+        assert!(!fvr03_legacy_capture_controls_lifetime(true));
+    }
 
     #[derive(Resource, Default)]
     struct ProjectionScheduleOrder(Vec<&'static str>);
