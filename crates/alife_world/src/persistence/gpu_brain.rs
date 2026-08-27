@@ -27,7 +27,8 @@ use super::{
     AssetManifest, PersistenceError, PortableAssetDigest,
 };
 
-pub const GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION: u16 = 5;
+pub const GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION: u16 = 6;
+pub const GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION: u16 = 5;
 pub const GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION: u16 = 2;
 pub const MEMORY_SIDECAR_SAVE_SCHEMA_VERSION: u16 = 1;
 pub const TOPOLOGY_SIDECAR_SAVE_SCHEMA_VERSION: u16 = 1;
@@ -942,6 +943,10 @@ pub struct GpuBrainSaveState {
     pub sensor_profile: SensorProfileIdentity,
     pub immutable_phenotype: GpuBrainAssetRef,
     pub phenotype_compiler_inputs: GpuBrainAssetRef,
+    /// Required by schema v6. Schema v5 is accepted only through the strict
+    /// canonical-topology compatibility check in the restore boundary.
+    #[serde(default)]
+    pub live_structural_topology: Option<GpuBrainAssetRef>,
     pub legacy_nano512_compatibility_receipt: Option<LegacyNano512CompatibilityReceipt>,
     pub active_weight_generation: u64,
     pub active_weight_bank: u8,
@@ -979,12 +984,22 @@ pub struct GpuBrainSaveState {
 
 impl GpuBrainSaveState {
     pub fn validate(&self) -> Result<(), PersistenceError> {
-        if self.schema_version != GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION {
+        if !matches!(
+            self.schema_version,
+            GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION | GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION
+        ) {
             return Err(PersistenceError::SchemaVersion {
-                schema: "alife.gpu_brain_save_state.v5",
+                schema: "alife.gpu_brain_save_state.v6",
                 expected: GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
                 actual: self.schema_version,
             });
+        }
+        if (self.schema_version == GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION)
+            != self.live_structural_topology.is_some()
+        {
+            return Err(PersistenceError::Contract(
+                ScaffoldContractError::InvalidSparseProjectionSchema,
+            ));
         }
         self.organism_id.validate()?;
         BrainCapacityClass::production_for_id(self.capacity_class_id)?;
@@ -1036,6 +1051,9 @@ impl GpuBrainSaveState {
             asset.validate()?;
         }
         if let Some(asset) = &self.exact_cognitive_state {
+            asset.validate()?;
+        }
+        if let Some(asset) = &self.live_structural_topology {
             asset.validate()?;
         }
         self.sleep_assets.validate_refs()?;
@@ -1172,6 +1190,7 @@ impl GpuBrainSaveState {
         ];
         refs.extend(self.pending_experience_transaction.iter());
         refs.extend(self.exact_cognitive_state.iter());
+        refs.extend(self.live_structural_topology.iter());
         refs.push(&self.memory.compaction.active_bank_asset);
         refs.extend(self.memory.compaction.staged_bank_asset.iter());
         refs.push(&self.topology.summary_asset);
@@ -1279,6 +1298,8 @@ struct GpuBrainSaveStateWire {
     sensor_profile: SensorProfileIdentity,
     immutable_phenotype: GpuBrainAssetRef,
     phenotype_compiler_inputs: GpuBrainAssetRef,
+    #[serde(default)]
+    live_structural_topology: Option<GpuBrainAssetRef>,
     legacy_nano512_compatibility_receipt: Option<LegacyNano512CompatibilityReceipt>,
     active_weight_generation: u64,
     active_weight_bank: u8,
@@ -1326,6 +1347,7 @@ impl From<GpuBrainSaveStateWire> for GpuBrainSaveState {
             sensor_profile: wire.sensor_profile,
             immutable_phenotype: wire.immutable_phenotype,
             phenotype_compiler_inputs: wire.phenotype_compiler_inputs,
+            live_structural_topology: wire.live_structural_topology,
             legacy_nano512_compatibility_receipt: wire.legacy_nano512_compatibility_receipt,
             active_weight_generation: wire.active_weight_generation,
             active_weight_bank: wire.active_weight_bank,

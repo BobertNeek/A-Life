@@ -32,6 +32,13 @@ pub struct DurableGpuCheckpointRef {
     pub neural_state_digest: [u64; 4],
 }
 
+/// Proof that one exact durable reference passed monotonicity validation
+/// against the session's previously published checkpoint authority.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DurableGpuCheckpointMonotonicityPermit {
+    checkpoint: DurableGpuCheckpointRef,
+}
+
 impl DurableGpuCheckpointRef {
     pub fn try_new(
         checkpoint_tick: Tick,
@@ -94,15 +101,28 @@ impl GpuSessionAuthority {
         &mut self,
         checkpoint: DurableGpuCheckpointRef,
     ) -> Result<(), ScaffoldContractError> {
-        if self
-            .latest_durable_checkpoint
-            .as_ref()
-            .is_some_and(|current| checkpoint.checkpoint_tick.raw() < current.checkpoint_tick.raw())
-        {
+        let permit = self.prevalidate_durable_checkpoint(checkpoint)?;
+        self.install_prevalidated_durable_checkpoint(permit);
+        Ok(())
+    }
+
+    pub fn prevalidate_durable_checkpoint(
+        &self,
+        checkpoint: DurableGpuCheckpointRef,
+    ) -> Result<DurableGpuCheckpointMonotonicityPermit, ScaffoldContractError> {
+        if self.latest_durable_checkpoint.as_ref().is_some_and(|current| {
+            checkpoint.checkpoint_tick.raw() < current.checkpoint_tick.raw()
+        }) {
             return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
         }
-        self.latest_durable_checkpoint = Some(checkpoint);
-        Ok(())
+        Ok(DurableGpuCheckpointMonotonicityPermit { checkpoint })
+    }
+
+    pub fn install_prevalidated_durable_checkpoint(
+        &mut self,
+        permit: DurableGpuCheckpointMonotonicityPermit,
+    ) {
+        self.latest_durable_checkpoint = Some(permit.checkpoint);
     }
 
     pub fn fail_stop(&mut self, cause: GpuSessionFailStopCause) {
@@ -154,6 +174,22 @@ impl GpuAuthoritativeSession {
         checkpoint: DurableGpuCheckpointRef,
     ) -> Result<(), ScaffoldContractError> {
         self.authority.note_durable_checkpoint(checkpoint)
+    }
+
+    pub fn prevalidate_durable_checkpoint(
+        &self,
+        checkpoint: DurableGpuCheckpointRef,
+    ) -> Result<DurableGpuCheckpointMonotonicityPermit, ScaffoldContractError> {
+        self.authority
+            .prevalidate_durable_checkpoint(checkpoint)
+    }
+
+    pub fn install_prevalidated_durable_checkpoint(
+        &mut self,
+        permit: DurableGpuCheckpointMonotonicityPermit,
+    ) {
+        self.authority
+            .install_prevalidated_durable_checkpoint(permit);
     }
 
     pub fn fail_stop(&mut self, cause: GpuSessionFailStopCause) {

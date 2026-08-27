@@ -17,7 +17,7 @@ use alife_core::{
     GpuPressureSampleInput, LearningCommitToken, LearningSequenceGuard, NeuralActionSelection,
     NeuralReceptorFrame, NeuralThrottleDecision, NeuralThrottleLevel, OrganismId,
     OutcomeCreditPacket, PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest,
-    PhenotypeHash, ScaffoldContractError, SensorProfile, SpeechMotorPayload,
+    PhenotypeHash, ScaffoldContractError, SensorProfile, SpeechMotorPayload, Validate,
     BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16,
     REQUIRED_GPU_FEATURE_MASK,
 };
@@ -40,11 +40,12 @@ use crate::{
     GpuAllocationEventKind, GpuAllocationEventReceipt, GpuBrainSlot, GpuClosedLoopError,
     GpuClosedLoopKernelSet, GpuClosedLoopPipelines, GpuCompactMapTicket,
     GpuFastPlasticityBatchEntry, GpuFixedActiveBatchEntry, GpuFixedClassArenaBuffers,
-    GpuFixedClassArenaPlan, GpuFixedSlotRanges, GpuLearningReceipt,
+    GpuFixedClassArenaPlan, GpuFixedSlotRanges, GpuAuthorityReceiptV1, GpuLearningReceipt,
     GpuMemoryContextDispatchReceipt, GpuMemoryContextUpload, GpuOutcomeCreditRecord,
     GpuPendingEligibilityRecord, GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget,
-    GpuRuntimeProfile, GpuSelectorLogitCapture, GpuTimestampQueryResources, GpuV11CausalState,
-    GpuV11Checkpoint, GpuV11WorkReceipt, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
+    GpuRuntimeProfile, GpuSelectorLogitCapture, GpuTimestampQueryResources,
+    GpuLiveTopologyCheckpointV1, GpuV11CausalState, GpuV11Checkpoint, GpuV11WorkReceipt,
+    GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
     PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
 };
 
@@ -323,6 +324,24 @@ impl GpuBrainHandle {
 
     pub const fn phenotype_hash(self) -> PhenotypeHash {
         self.phenotype_hash
+    }
+
+    #[cfg(test)]
+    pub(crate) fn authority_receipt_test_fixture(
+        class_id: BrainClassId,
+        slot: u32,
+        generation: u32,
+        organism_id: OrganismId,
+        phenotype_hash: PhenotypeHash,
+    ) -> Self {
+        Self {
+            backend_instance_id: NonZeroU64::new(1).expect("non-zero test backend id"),
+            class_id,
+            slot,
+            generation,
+            organism_id,
+            phenotype_hash,
+        }
     }
 }
 
@@ -2735,7 +2754,17 @@ pub(crate) struct GpuMutableSlotReadbackCounters {
 
 impl GpuMutableSlotReadbackCounters {
     pub(crate) fn record(&self, bytes: u64, poll_wait_ns: u64, map_receive_wait_ns: u64) {
-        self.calls.fetch_add(1, Ordering::Relaxed);
+        self.record_many(1, bytes, poll_wait_ns, map_receive_wait_ns);
+    }
+
+    pub(crate) fn record_many(
+        &self,
+        calls: u64,
+        bytes: u64,
+        poll_wait_ns: u64,
+        map_receive_wait_ns: u64,
+    ) {
+        self.calls.fetch_add(calls, Ordering::Relaxed);
         self.bytes.fetch_add(bytes, Ordering::Relaxed);
         self.poll_wait_ns
             .fetch_add(poll_wait_ns, Ordering::Relaxed);
@@ -3071,8 +3100,16 @@ impl GpuClosedLoopBackend {
     pub fn apply_v11_sleep_structural_phase(
         &mut self,
         handle: GpuBrainHandle,
+        evidence: &alife_core::sleep::SleepReplayEvidence,
     ) -> Result<(), ScaffoldContractError> {
-        let replay = self.build_sleep_replay_batch(handle)?;
+        evidence.validate_contract()?;
+        if evidence
+            .prediction_targets
+            .iter()
+            .any(|target| target.organism_id != handle.organism_id())
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
         let phenotype = self
             .class_buckets
             .get(&handle.class_id.raw())
@@ -3080,6 +3117,12 @@ impl GpuClosedLoopBackend {
             .resident(handle)?
             .phenotype
             .clone();
+        let replay = &evidence.batch;
+        replay.validate_contract(
+            phenotype.replay_capture_plan().event_capacity(),
+            phenotype.replay_capture_plan().sample_capacity(),
+            phenotype.budgets().global.total_synapses,
+        )?;
         let base_pairs = phenotype
             .synapses()
             .iter()
@@ -3114,7 +3157,7 @@ impl GpuClosedLoopBackend {
             })
             .take(32)
             .collect::<Vec<_>>();
-        let mut evidence = Vec::new();
+        let mut structural_evidence = Vec::new();
         for pair in active.windows(2).take(32) {
             let (source, target, route, eligibility) = (pair[0].0, pair[1].1, pair[0].2, pair[0].3);
             if source == target || base_pairs.contains(&(source, target)) {
@@ -3123,7 +3166,7 @@ impl GpuClosedLoopBackend {
             let Some(region) = u16::try_from(route).ok() else {
                 continue;
             };
-            evidence.push(CoactivationEvidence {
+            structural_evidence.push(CoactivationEvidence {
                 region,
                 source,
                 target,
@@ -3132,7 +3175,7 @@ impl GpuClosedLoopBackend {
                 concept_gap_support: 0,
             });
         }
-        if evidence.is_empty() {
+        if structural_evidence.is_empty() {
             if let Some((source, target, route, eligibility)) = active.first().copied() {
                 for offset in 1..=8_u32 {
                     let candidate_target = (target % phenotype.neuron_count()).wrapping_add(offset)
@@ -3145,7 +3188,7 @@ impl GpuClosedLoopBackend {
                     let Some(region) = u16::try_from(route).ok() else {
                         break;
                     };
-                    evidence.push(CoactivationEvidence {
+                    structural_evidence.push(CoactivationEvidence {
                         region,
                         source,
                         target: candidate_target,
@@ -3157,7 +3200,11 @@ impl GpuClosedLoopBackend {
                 }
             }
         }
-        self.apply_v11_structural_phase(handle, &evidence)?;
+        const CANONICAL_SLEEP_STRUCTURAL_REGION: u16 = 0;
+        for item in &mut structural_evidence {
+            item.region = CANONICAL_SLEEP_STRUCTURAL_REGION;
+        }
+        self.apply_v11_structural_phase(handle, &structural_evidence)?;
         Ok(())
     }
 
@@ -3280,6 +3327,63 @@ impl GpuClosedLoopBackend {
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
     }
 
+    /// Captures the exact semantic fixed-slot topology plan. The V11 host
+    /// record is accepted only when recompilation reproduces the resident
+    /// slot's full active plan and metadata.
+    pub fn checkpoint_live_topology(
+        &self,
+        handle: GpuBrainHandle,
+    ) -> Result<GpuLiveTopologyCheckpointV1, ScaffoldContractError> {
+        self.validate_handle_backend(handle)?;
+        let pool = self
+            .class_buckets
+            .get(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let resident = pool.resident(handle)?;
+        let bucket = pool.bucket_for_handle(handle)?;
+        let expected_upload = compile_v11_slot_upload(
+            &bucket.plan,
+            &resident.brain_slot,
+            &resident.phenotype,
+            &resident.v11,
+        )
+        .map_err(map_gpu_contract_error)?;
+        if expected_upload.brain_slot() != &resident.brain_slot {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        let (actual_upload, readback_bytes, poll_wait_ns, map_receive_wait_ns) = bucket
+            .buffers
+            .snapshot_fixed_slot_upload(
+                &self.device,
+                &self.queue,
+                resident.brain_slot.clone(),
+                resident.ranges.clone(),
+            )
+            .map_err(map_gpu_contract_error)?;
+        self.mutable_slot_readback_counters.record_many(
+            2,
+            readback_bytes,
+            poll_wait_ns,
+            map_receive_wait_ns,
+        );
+        let v11_checkpoint = resident.v11.checkpoint();
+        let expected = expected_upload
+            .live_topology_checkpoint(
+                resident.phenotype.phenotype_hash(),
+                v11_checkpoint.clone(),
+            )
+            .map_err(map_gpu_contract_error)?;
+        let checkpoint = actual_upload
+            .live_topology_checkpoint(resident.phenotype.phenotype_hash(), v11_checkpoint)
+            .map_err(map_gpu_contract_error)?;
+        if checkpoint != expected {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        let capacity = capacity_for_gpu_class(handle.class_id)?;
+        checkpoint.validate_for_capacity(&capacity)?;
+        Ok(checkpoint)
+    }
+
     pub fn restore_v11(
         &mut self,
         handle: GpuBrainHandle,
@@ -3329,6 +3433,74 @@ impl GpuClosedLoopBackend {
                 .map_err(map_gpu_contract_error)?;
             upload
                 .with_remapped_live_mutable_state(&previous_upload, live)
+                .map_err(map_gpu_contract_error)?
+        };
+        {
+            let bucket = pool.bucket_for_handle_mut(handle)?;
+            bucket
+                .buffers
+                .write_v11_topology_upload(&self.queue, &upload)
+                .map_err(map_gpu_contract_error)?;
+        }
+        let resident = pool.resident_mut(handle)?;
+        resident.brain_slot = upload.brain_slot().clone();
+        resident.ranges = upload.ranges().clone();
+        resident.v11 = next;
+        Ok(())
+    }
+
+    pub fn restore_live_topology_checkpoint(
+        &mut self,
+        handle: GpuBrainHandle,
+        checkpoint: &GpuLiveTopologyCheckpointV1,
+    ) -> Result<(), ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let capacity = capacity_for_gpu_class(handle.class_id)?;
+        checkpoint.validate_for_capacity(&capacity)?;
+        let pool = self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let (phenotype, brain_slot, previous) = {
+            let resident = pool.resident(handle)?;
+            (
+                resident.phenotype.clone(),
+                resident.brain_slot.clone(),
+                resident.v11.clone(),
+            )
+        };
+        if checkpoint.phenotype_hash != phenotype.phenotype_hash()
+            || checkpoint.neuron_count != phenotype.neuron_count()
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        let next = GpuV11CausalState::restore(checkpoint.v11_checkpoint.clone())?;
+        let (previous_upload, compiled_upload) = {
+            let bucket = pool.bucket_for_handle_mut(handle)?;
+            let previous_upload =
+                compile_v11_slot_upload(&bucket.plan, &brain_slot, &phenotype, &previous)
+                    .map_err(map_gpu_contract_error)?;
+            let compiled_upload =
+                compile_v11_slot_upload(&bucket.plan, &brain_slot, &phenotype, &next)
+                    .map_err(map_gpu_contract_error)?;
+            (previous_upload, compiled_upload)
+        };
+        let compiled_projection = compiled_upload
+            .live_topology_checkpoint(phenotype.phenotype_hash(), next.checkpoint())
+            .map_err(map_gpu_contract_error)?;
+        if &compiled_projection != checkpoint {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        let upload = {
+            let bucket = pool.bucket_for_handle_mut(handle)?;
+            let live = bucket
+                .buffers
+                .read_live_mutable_slot(&self.device, &self.queue, compiled_upload.ranges())
+                .map_err(map_gpu_contract_error)?;
+            compiled_upload
+                .with_remapped_live_mutable_state(&previous_upload, live)
+                .and_then(|upload| upload.with_live_topology_checkpoint(checkpoint))
                 .map_err(map_gpu_contract_error)?
         };
         {
@@ -3587,6 +3759,65 @@ impl GpuClosedLoopBackend {
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
         let resident = pool.resident(handle)?;
         Ok(resident.pending_eligibility)
+    }
+
+    /// Emits compact authority for one sealed outcome from backend-owned live
+    /// residency metadata. This performs no neural-state snapshot or readback.
+    pub fn authority_receipt_for_sealed_outcome(
+        &self,
+        handle: GpuBrainHandle,
+        pending: &PendingEligibilityReceipt,
+        learning: Option<&GpuLearningReceipt>,
+        patch: &ExperiencePatch,
+    ) -> Result<GpuAuthorityReceiptV1, ScaffoldContractError> {
+        if self.device_lost.load(Ordering::Acquire) || !matches!(self.state, GpuBackendState::Ready)
+        {
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        self.validate_handle_backend(handle)?;
+        patch.validate_contract()?;
+        let identity = pending.identity();
+        if handle.generation() != identity.handle_generation()
+            || handle.phenotype_hash() != identity.phenotype_hash()
+            || handle.organism_id() != patch.header().organism_id
+            || patch.header().sequence_id.raw() == 0
+            || patch.header().world_tick != identity.originating_tick()
+        {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
+        let pool = self
+            .class_buckets
+            .get(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let resident = pool.resident(handle)?;
+        match learning {
+            Some(receipt)
+                if resident.pending_eligibility.is_none()
+                    && resident.pending_eligibility_record.is_none()
+                    && receipt.handle == handle
+                    && receipt.sequence_id == patch.header().sequence_id
+                    && receipt.dispatch_generation == identity.dispatch_generation()
+                    && receipt.active_activation_side == identity.active_activation_side()
+                    && resident.active_weight_generation == receipt.output_fast_generation
+                    && resident.active_eligibility_generation
+                        == receipt.output_eligibility_generation
+                    && resident.replay_journal_generation == receipt.replay_journal_generation
+                    && resident.transaction_generation == receipt.transaction_generation
+                    && receipt.hardware_receipt_generation == self.hardware.generation => {}
+            None if resident.pending_eligibility == Some(*pending)
+                && resident.pending_eligibility_record.is_some() => {}
+            _ => return Err(ScaffoldContractError::LearningEvidenceMismatch),
+        }
+        GpuAuthorityReceiptV1::from_backend_validated(
+            handle,
+            pending,
+            learning,
+            resident.transaction_generation,
+            self.hardware.generation,
+            patch.header().sequence_id,
+            patch.outcome().outcome_tick,
+            patch.causal_digest()?,
+        )
     }
 
     /// Apply one sealed measured outcome to the pending waking eligibility.
@@ -4130,6 +4361,7 @@ impl GpuClosedLoopBackend {
                 output_fast_generation: record.output_fast_generation(),
                 output_eligibility_generation: record.output_eligibility_generation(),
                 replay_journal_generation: record.replay_generation(),
+                transaction_generation: record.transaction_generation(),
                 fast_weights_changed: record.fast_weights_changed,
                 max_abs_delta: record.max_abs_delta(),
                 hardware_receipt_generation,

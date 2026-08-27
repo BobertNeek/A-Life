@@ -91,6 +91,16 @@ impl GpuDurableSaveManifest {
         })
     }
 
+    pub fn replacement_digest(
+        &self,
+        replacement: &PortableSaveFile,
+    ) -> Result<GpuSaveManifestDigest, GameAppShellError> {
+        replacement.validate_with_asset_root(&self.asset_root)?;
+        Ok(GpuSaveManifestDigest::for_bytes(
+            &serde_json::to_vec_pretty(replacement)?,
+        ))
+    }
+
     /// Atomically publishes a complete manual/autosave checkpoint, including
     /// first creation of the target manifest. The save may live in a selected
     /// save directory while neural assets remain validated against the

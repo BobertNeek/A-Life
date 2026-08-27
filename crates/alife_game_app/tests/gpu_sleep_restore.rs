@@ -8,14 +8,16 @@ use std::{
 
 use alife_archive::{GeneticArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::{
-    BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus, Confidence,
-    ConsolidationState, DevelopmentState, DriveSnapshot, EndocrineSnapshot, FounderMode,
-    FounderSelection, HomeostaticSnapshot, MemoryBankConfig, MemorySidecarState, NormalizedScalar,
-    OrganismId, PhenotypeCompiler, PhenotypeCompilerInputs, PolicyBackend, ScaffoldContractError,
-    SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SleepPhase, SleepState, SleepTrigger,
-    Tick, TopologicalMapConfig, TopologySidecar, Validate, Vec3f,
+    BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus, CoactivationEvidence,
+    CognitiveContextFrame, CognitiveWorkReceipt, Confidence, ConsolidationState, DevelopmentState,
+    DriveSnapshot, EndocrineSnapshot, ExperienceSequenceId, FounderMode, FounderSelection,
+    HomeostaticSnapshot, MemoryBankConfig, MemorySidecarState, NormalizedScalar, OrganismId,
+    PhenotypeCompiler, PhenotypeCompilerInputs, PolicyBackend, ScaffoldContractError, SensorProfile,
+    SensorProfileIdentity, SensoryAbiVersion, SleepPhase, SleepState, SleepTrigger, Tick,
+    TopologicalMapConfig, TopologySidecar, Validate, Vec3f,
     SLEEP_CONSOLIDATION_SCHEMA_VERSION,
 };
+use alife_core::predictive::GroundedSuccessorPredictor;
 use alife_game_app::{
     materialize_founder_gpu_states, merge_gpu_checkpoint_manifest_entries, AppShellLaunchConfig,
     GameAppShellError, GpuBrainSidecarCapture, GpuCheckpointAssetStore, GpuDurableSaveManifest,
@@ -23,7 +25,10 @@ use alife_game_app::{
 };
 use alife_gpu_backend::GpuClosedLoopBackend;
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
-use alife_world::persistence::{AssetManifest, GpuBrainSaveState, PortableSaveFile};
+use alife_world::persistence::{
+    AssetManifest, ExactCognitiveCheckpointState, GpuBrainSaveState, PortableSaveFile,
+    GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION, V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
+};
 use alife_world::{HeadlessScenarioBuilder, TrackedObjectRegistry};
 
 fn unique_asset_root(label: &str) -> PathBuf {
@@ -104,6 +109,120 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
         GpuSessionConsumerKind::Challenge,
     );
     let handle = source.insert_brain(organism_id, phenotype.clone()).unwrap();
+    let canonical_v11 = source.checkpoint_v11(handle).unwrap();
+    assert_eq!(canonical_v11.structural.connection_count(), 0);
+    assert!(canonical_v11.sparse_spans.is_empty());
+    let mut canonical_write = store
+        .capture_brain(
+            &mut source,
+            handle,
+            &phenotype,
+            &inputs,
+            SleepState::awake_at(Tick::ZERO),
+            Tick::ZERO,
+            None,
+            GpuBrainSidecarCapture {
+                sensor_profile,
+                memory: &memory,
+                topology: &topology,
+                tracked_objects: tracked_objects.clone(),
+                language_grounding: &language_grounding,
+                life_statistics: &life_statistics,
+                legacy_nano512_compatibility_receipt: None,
+                retained_learning: None,
+            },
+        )
+        .unwrap();
+    let canonical_exact = ExactCognitiveCheckpointState {
+        schema_version: V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
+        organism_id,
+        checkpoint_tick: Tick::ZERO,
+        cognitive_context: CognitiveContextFrame::empty(
+            organism_id,
+            ExperienceSequenceId(1),
+            Tick::ZERO,
+        )
+        .unwrap(),
+        predictor: GroundedSuccessorPredictor::default(),
+        selected_motor_bundle: None,
+        cognitive_work: CognitiveWorkReceipt::zero(),
+        sleep_state: SleepState::awake_at(Tick::ZERO),
+        last_sleep_work: None,
+        dendritic_branches: canonical_v11.dendritic_branches,
+        structural_plasticity: canonical_v11.structural,
+        structural_edit_receipts: Vec::new(),
+        last_sleep_report: None,
+    };
+    canonical_write
+        .attach_exact_cognitive_state(&store, &canonical_exact)
+        .unwrap();
+    let mut canonical_manifest = AssetManifest::empty();
+    merge_gpu_checkpoint_manifest_entries(
+        &mut canonical_manifest,
+        canonical_write.manifest_entries.clone(),
+    )
+    .unwrap();
+    canonical_manifest.validate_with_root(&asset_root).unwrap();
+
+    let mut missing_exact_v5 = canonical_write.save_state.clone();
+    missing_exact_v5.schema_version = GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION;
+    missing_exact_v5.live_structural_topology = None;
+    missing_exact_v5.exact_cognitive_state = None;
+    let mut missing_exact_target = GpuAuthoritativeSession::new(
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
+        GpuSessionConsumerKind::Challenge,
+    );
+    assert!(
+        store
+            .restore_brain(
+                &mut missing_exact_target,
+                &canonical_manifest,
+                &missing_exact_v5,
+            )
+            .is_err(),
+        "shape-valid v5 without exact cognitive topology authority must fail closed"
+    );
+
+    let mut explicit_canonical_v5 = canonical_write.save_state.clone();
+    explicit_canonical_v5.schema_version = GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION;
+    explicit_canonical_v5.live_structural_topology = None;
+    let mut canonical_v5_target = GpuAuthoritativeSession::new(
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
+        GpuSessionConsumerKind::Challenge,
+    );
+    store
+        .restore_brain(
+            &mut canonical_v5_target,
+            &canonical_manifest,
+            &explicit_canonical_v5,
+        )
+        .expect("explicitly canonical v5 exact cognitive state remains readable");
+
+    let structural_target = phenotype.candidate_decoder().motor_start();
+    let structural_source = (structural_target + 1) % phenotype.neuron_count();
+    let structural_work = source
+        .apply_v11_structural_phase(
+            handle,
+            &[CoactivationEvidence {
+                region: 0,
+                source: structural_source,
+                target: structural_target,
+                coactivation: 100,
+                eligibility: 0,
+                concept_gap_support: 0,
+            }],
+        )
+        .unwrap();
+    assert_eq!(structural_work.structural.accepted_edges, 1);
+    let source_topology = source.checkpoint_v11(handle).unwrap();
+    assert_eq!(source_topology.sparse_spans.len(), 1);
+    let source_snapshot = source.snapshot_brain(handle, Tick::ZERO).unwrap();
+    assert_eq!(
+        source_snapshot.clone().into_parts().lifetime_bank_0_bits.len(),
+        phenotype.budgets().global.total_synapses as usize + 1
+    );
     let write = store
         .capture_brain(
             &mut source,
@@ -134,6 +253,15 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
             .expect("required Vulkan adapter"),
         GpuSessionConsumerKind::Challenge,
     );
+    let mut forged_legacy = write.save_state.clone();
+    forged_legacy.schema_version = GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION;
+    forged_legacy.live_structural_topology = None;
+    assert!(
+        store
+            .restore_brain(&mut target, &manifest, &forged_legacy)
+            .is_err(),
+        "a structurally divergent v6 checkpoint must not become implicit v5 state"
+    );
     let restored = store
         .restore_brain(&mut target, &manifest, &write.save_state)
         .unwrap();
@@ -147,6 +275,11 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
     assert_eq!(
         restored_snapshot.canonical_digest(),
         write.checkpoint_digest
+    );
+    assert_eq!(restored_snapshot.canonical_digest(), source_snapshot.canonical_digest());
+    assert_eq!(
+        target.checkpoint_v11(restored.receipt.handle).unwrap(),
+        source_topology
     );
 
     fs::remove_dir_all(asset_root).unwrap();

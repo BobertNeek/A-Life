@@ -832,8 +832,12 @@ impl Validate for SleepWorkReceipt {
         require_current_version(SchemaKind::SleepConsolidation, self.schema_version)?;
         NormalizedScalar::new(self.fatigue.raw())?;
         NormalizedScalar::new(self.sleep_pressure.raw())?;
+        let mut unique_promoted_memory_ids = BTreeSet::new();
         for memory_id in &self.promoted_memory_ids {
             memory_id.validate()?;
+            if !unique_promoted_memory_ids.insert(memory_id.raw()) {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+            }
         }
         match self.status {
             SleepWorkStatus::SkippedLowPressure => {
@@ -852,7 +856,8 @@ impl Validate for SleepWorkReceipt {
                 if self.replay_digest == [0; 4]
                     || self.replay_event_count == 0
                     || self.replay_eligibility_sample_count == 0
-                    || self.promoted_memory_ids.len() != self.replay_event_count as usize
+                    || self.promoted_memory_ids.is_empty()
+                    || self.promoted_memory_ids.len() > self.replay_event_count as usize
                     || self.predictor_update_count != self.replay_event_count
                     || self.concept.is_none()
                     || self.work_units == 0

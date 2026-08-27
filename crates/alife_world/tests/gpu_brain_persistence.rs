@@ -18,7 +18,8 @@ use alife_world::persistence::{
     PortableNeuronHomeostasisV1, PortableReplayJournalV1, RetainedLearningRecoverySaveState,
     ThrottleReplaySaveState, TopologySidecarSaveSummary,
     GPU_BACKEND_PROVENANCE_SAVE_SCHEMA_VERSION, GPU_BRAIN_HOMEOSTASIS_LANES_PER_NEURON,
-    GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION, GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
+    GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION, GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION,
+    GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
     GPU_BRAIN_WEIGHT_LAYER_FAST, GPU_BRAIN_WEIGHT_LAYER_LIFETIME,
     RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION,
 };
@@ -29,6 +30,22 @@ fn asset(label: &str) -> GpuBrainAssetRef {
         asset_id: label.to_string(),
         digest: PortableAssetDigest::for_bytes(label.as_bytes()),
     }
+}
+
+#[test]
+fn live_topology_selector_is_fail_closed_across_v5_and_v6() {
+    let mut save = save_for_sleep(sleep_state(SleepPhase::Awake, ConsolidationState::None));
+    save.validate().unwrap();
+
+    save.schema_version = GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION;
+    assert!(save.validate().is_err(), "v6 must carry an explicit topology");
+
+    save.schema_version = GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION;
+    save.live_structural_topology = Some(asset("forged-live-topology"));
+    assert!(
+        save.validate().is_err(),
+        "v5 must not silently accept a topology field it cannot interpret"
+    );
 }
 
 fn backend_provenance() -> GpuBackendProvenanceSave {
@@ -148,13 +165,14 @@ fn save_for_sleep(sleep: SleepState) -> GpuBrainSaveState {
             | ConsolidationState::Completed { .. }
     );
     GpuBrainSaveState {
-        schema_version: GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
+        schema_version: GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION,
         organism_id,
         phenotype_hash: PhenotypeHash([1, 2, 3, 4]),
         capacity_class_id: BrainCapacityClass::n512().id(),
         sensor_profile,
         immutable_phenotype: asset("immutable-phenotype"),
         phenotype_compiler_inputs: asset("compiler-inputs"),
+        live_structural_topology: None,
         legacy_nano512_compatibility_receipt: None,
         active_weight_generation: if committed { 10 } else { 9 },
         active_weight_bank: if committed { 1 } else { 0 },

@@ -6,7 +6,8 @@
 use std::mem::size_of;
 
 use alife_core::{
-    compute_gpu_sleep_output_weight_digest, ActionId, BoundedReplayBatch, BrainPhenotype,
+    compute_gpu_sleep_output_weight_digest, ActionId, BoundedReplayBatch, BrainCapacityClass,
+    BrainPhenotype,
     CandidateActionFamily, CandidateFeatureDigest, CanonicalDigestBuilder, ConsolidationIntent,
     ConsolidationStagedOutput, GpuConsolidationRequest, LearningSequenceGuard, OrganismId,
     OutcomeCreditReplayKey, PerceptionFrameDigest, PhenotypeGrowthMigration, PhenotypeHash,
@@ -19,7 +20,8 @@ use crate::{
     pack_candidate_index_and_family, replay_reset_digest, reset_word_count, sleep_commit_key,
     GpuBrainHandle, GpuClosedLoopBackend, GpuPendingEligibilityRecord, GpuReplayEventRecord,
     GpuReplaySynapseSpanRecord, GpuSleepCompletionRecord, GpuSleepJobState, GpuSleepStagingReceipt,
-    GpuSlotLearningStateRecord, PendingEligibilityIdentity, PendingEligibilityReceipt,
+    GpuLiveTopologyCheckpointV1, GpuSlotLearningStateRecord, PendingEligibilityIdentity,
+    PendingEligibilityReceipt,
 };
 
 pub const GPU_BRAIN_CHECKPOINT_SCHEMA_VERSION: u16 = 1;
@@ -1468,6 +1470,40 @@ impl GpuClosedLoopBackend {
         }
         let handle = self.insert_brain(organism_id, phenotype)?;
         let restore = self.restore_brain_inner(handle, parts, checkpoint_digest);
+        if restore.is_err() {
+            let _ = self.remove_brain(handle);
+        }
+        restore
+    }
+
+    /// Restores lifetime structural topology before applying the matching
+    /// mutable neural banks. Any failure removes the partially admitted slot.
+    pub fn restore_brain_with_live_topology(
+        &mut self,
+        organism_id: OrganismId,
+        phenotype: BrainPhenotype,
+        topology: GpuLiveTopologyCheckpointV1,
+        request: GpuBrainRestoreRequest,
+    ) -> Result<GpuBrainRestoreReceipt, ScaffoldContractError> {
+        self.ensure_ready()?;
+        let snapshot = request.into_snapshot();
+        snapshot.validate()?;
+        let checkpoint_digest = snapshot.canonical_digest();
+        let parts = snapshot.into_parts();
+        if organism_id != parts.organism_id
+            || phenotype.phenotype_hash() != parts.phenotype_hash
+            || phenotype.neuron_count() as usize != parts.activation_a_bits.len()
+            || topology.neuron_count != phenotype.neuron_count()
+            || topology.phenotype_hash != phenotype.phenotype_hash()
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())?;
+        topology.validate_for_capacity(&capacity)?;
+        let handle = self.insert_brain(organism_id, phenotype)?;
+        let restore = self
+            .restore_live_topology_checkpoint(handle, &topology)
+            .and_then(|()| self.restore_brain_inner(handle, parts, checkpoint_digest));
         if restore.is_err() {
             let _ = self.remove_brain(handle);
         }

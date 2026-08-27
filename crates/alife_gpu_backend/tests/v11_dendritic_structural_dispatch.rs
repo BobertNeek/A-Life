@@ -2,10 +2,11 @@
 
 mod support;
 
+use alife_core::sleep::SleepReplayEvidence;
 use alife_core::{
-    CandidateActionFamily, CoactivationEvidence, CompiledSynapseKind, DendriticBranch,
-    DendriticBranchSet, DendriticInputRef, OrganismId, SensorProfile, StructuralPlasticityConfig,
-    StructuralPlasticityState,
+    BrainCapacityClass, CandidateActionFamily, CoactivationEvidence, CompiledSynapseKind,
+    DendriticBranch, DendriticBranchSet, DendriticInputRef, OrganismId, SensorProfile,
+    StructuralPlasticityConfig, StructuralPlasticityState,
 };
 use alife_gpu_backend::{
     GpuClosedLoopBackend, GpuClosedLoopTick, GpuRuntimeProfile, GpuV11MutableStateProbe,
@@ -235,6 +236,28 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
         growth_checkpoint.sparse_spans[0].edges[0].route,
         u32::from(structural_route)
     );
+    let topology_readback_before = backend.mutable_slot_readback_metrics();
+    let growth_live_topology = backend.checkpoint_live_topology(growth_subject)?;
+    let topology_readback_after = backend.mutable_slot_readback_metrics();
+    assert_eq!(
+        topology_readback_after.calls - topology_readback_before.calls,
+        2,
+        "live topology capture must read only immutable plan and weight ranges"
+    );
+    assert!(topology_readback_after.bytes > topology_readback_before.bytes);
+    let mut tampered_topology = growth_live_topology.clone();
+    tampered_topology.canonical_digest[0] ^= 1;
+    assert!(tampered_topology
+        .validate_for_capacity(&BrainCapacityClass::n512())
+        .is_err());
+    assert_eq!(
+        growth_live_topology.total_synapse_count,
+        phenotype.budgets().global.total_synapses + 1
+    );
+    assert_eq!(
+        growth_live_topology.recurrent_synapse_count,
+        phenotype.budgets().global.recurrent_synapses + 1
+    );
     assert_eq!(
         backend.read_v11_mutable_state_for_test(
             growth_subject,
@@ -254,6 +277,15 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
     let prune_work = backend.apply_v11_structural_phase(prune_subject, &[])?;
     assert_eq!(prune_work.structural.pruned_edges, 1);
     assert_eq!(prune_work.structural.active_edges, 0);
+    let pruned_live_topology = backend.checkpoint_live_topology(prune_subject)?;
+    assert_eq!(
+        pruned_live_topology.total_synapse_count,
+        phenotype.budgets().global.total_synapses
+    );
+    assert_eq!(
+        pruned_live_topology.recurrent_synapse_count,
+        phenotype.budgets().global.recurrent_synapses
+    );
     assert_eq!(
         backend.read_v11_mutable_state_for_test(
             prune_subject,
@@ -262,7 +294,9 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
         )?,
         learned_state
     );
-    backend.apply_v11_sleep_structural_phase(prune_subject)?;
+    let replay = backend.build_sleep_replay_batch(prune_subject)?;
+    let evidence = SleepReplayEvidence::new(replay, Vec::new())?;
+    backend.apply_v11_sleep_structural_phase(prune_subject, &evidence)?;
 
     let structural_ticks = backend.tick_batch(&[
         (control, frame(1, 79)),

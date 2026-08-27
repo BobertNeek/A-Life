@@ -13,7 +13,8 @@ use alife_gpu_backend::{
     GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuBrainRestoreReceipt, GpuBrainRestoreRequest,
     GpuClosedLoopBackend, GpuCompletedSleepStagingInputParts, GpuCompletedSleepStagingParts,
     GpuPortableActivityRestoreRecord, GpuReplayEventRecord, GpuReplaySynapseSpanRecord,
-    PendingEligibilityRestoreParts, GPU_BRAIN_CHECKPOINT_SCHEMA_VERSION,
+    GpuLiveTopologyCheckpointV1, GpuV11Checkpoint, PendingEligibilityRestoreParts,
+    GPU_BRAIN_CHECKPOINT_SCHEMA_VERSION,
 };
 use alife_world::persistence::{
     AssetManifest, AssetManifestEntry, DurableFounderCognitiveState, ExactCognitiveCheckpointState,
@@ -24,8 +25,9 @@ use alife_world::persistence::{
     RetainedLearningRecoverySaveState, ThrottleReplaySaveInput, ThrottleReplaySaveState,
     TopologySidecarSaveSummary, GPU_BACKEND_PROVENANCE_SAVE_SCHEMA_VERSION,
     GPU_BRAIN_HOMEOSTASIS_LANES_PER_NEURON, GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION,
-    GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION, GPU_BRAIN_WEIGHT_LAYER_FAST,
-    GPU_BRAIN_WEIGHT_LAYER_LIFETIME, THROTTLE_REPLAY_SAVE_SCHEMA_VERSION,
+    GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION, GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
+    GPU_BRAIN_WEIGHT_LAYER_FAST, GPU_BRAIN_WEIGHT_LAYER_LIFETIME,
+    THROTTLE_REPLAY_SAVE_SCHEMA_VERSION,
 };
 use alife_world::{
     initial_tracked_object_id, TrackedObjectRegistrySaveState,
@@ -530,6 +532,8 @@ impl GpuCheckpointAssetStore {
             return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
         }
 
+        let live_topology = backend.checkpoint_live_topology(handle)?;
+        live_topology.validate_for_capacity(&capacity)?;
         let snapshot = backend.snapshot_brain(handle, checkpoint_tick)?;
         let checkpoint_digest = snapshot.canonical_digest();
         let parts = snapshot.into_parts();
@@ -585,13 +589,14 @@ impl GpuCheckpointAssetStore {
         let (phenotype_compiler_inputs, entry) =
             self.write_json("compiler-inputs", compiler_inputs)?;
         entries.push(entry);
+        let (live_structural_topology, entry) =
+            self.write_json("live-structural-topology", &live_topology)?;
+        entries.push(entry);
 
-        let neuron_count = phenotype.neuron_count();
-        let synapse_count = phenotype.budgets().global.total_synapses;
-        let recurrent_count = phenotype.budgets().global.recurrent_synapses;
-        let decoder_count = synapse_count
-            .checked_sub(recurrent_count)
-            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+        let neuron_count = live_topology.neuron_count;
+        let synapse_count = live_topology.total_synapse_count;
+        let recurrent_count = live_topology.recurrent_synapse_count;
+        let decoder_count = live_topology.decoder_synapse_count;
         let activation = activation_asset(&parts, neuron_count)?;
         let homeostasis = homeostasis_asset(&parts, neuron_count)?;
         let lifetime = weight_asset(
@@ -708,8 +713,14 @@ impl GpuCheckpointAssetStore {
         let topology =
             TopologySidecarSaveSummary::from_asset(&portable_topology, topology_asset_ref)?;
 
-        let sleep_assets =
-            self.capture_sleep_assets(backend, handle, phenotype, sleep, &mut entries)?;
+        let sleep_assets = self.capture_sleep_assets(
+            backend,
+            handle,
+            phenotype,
+            &live_topology,
+            sleep,
+            &mut entries,
+        )?;
         let backend_provenance = current_backend_provenance(backend, &capacity)?;
         let runtime_profile = *backend.runtime_profile();
         let activity_policy = *backend.activity_policy();
@@ -742,6 +753,7 @@ impl GpuCheckpointAssetStore {
             sensor_profile: sidecars.sensor_profile,
             immutable_phenotype,
             phenotype_compiler_inputs,
+            live_structural_topology: Some(live_structural_topology),
             legacy_nano512_compatibility_receipt: sidecars
                 .legacy_nano512_compatibility_receipt
                 .cloned(),
@@ -868,6 +880,62 @@ impl GpuCheckpointAssetStore {
         if state.sensor_profile != phenotype_profile {
             return Err(ScaffoldContractError::SensorProfileMismatch.into());
         }
+        let live_topology = match &state.live_structural_topology {
+            Some(asset_ref) => {
+                let (topology, _): (GpuLiveTopologyCheckpointV1, Vec<u8>) =
+                    self.read_json(manifest, asset_ref)?;
+                topology.validate_for_capacity(&capacity)?;
+                if topology.phenotype_hash != phenotype.phenotype_hash()
+                    || topology.neuron_count != phenotype.neuron_count()
+                {
+                    return Err(ScaffoldContractError::InvalidSparseProjectionSchema.into());
+                }
+                Some(topology)
+            }
+            None if state.schema_version == GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION => {
+                let canonical = GpuV11Checkpoint::canonical_for_phenotype(&phenotype)?;
+                let exact = exact_cognitive_state
+                    .as_ref()
+                    .ok_or(ScaffoldContractError::MissingPhaseData)?;
+                if exact.structural_plasticity.connection_count() != 0
+                    || !exact.structural_edit_receipts.is_empty()
+                    || exact.dendritic_branches != canonical.dendritic_branches
+                    || exact.structural_plasticity != canonical.structural
+                {
+                    return Err(ScaffoldContractError::InvalidSparseProjectionSchema.into());
+                }
+                None
+            }
+            None => {
+                return Err(ScaffoldContractError::InvalidSparseProjectionSchema.into());
+            }
+        };
+        if let (Some(exact), Some(live_topology)) = (&exact_cognitive_state, &live_topology) {
+            if exact.dendritic_branches != live_topology.v11_checkpoint.dendritic_branches
+                || exact.structural_plasticity != live_topology.v11_checkpoint.structural
+            {
+                return Err(ScaffoldContractError::InvalidSparseProjectionSchema.into());
+            }
+        }
+        let live_total_synapse_count = live_topology
+            .as_ref()
+            .map_or(phenotype.budgets().global.total_synapses, |topology| {
+                topology.total_synapse_count
+            });
+        let live_recurrent_synapse_count = live_topology.as_ref().map_or(
+            phenotype.budgets().global.recurrent_synapses,
+            |topology| topology.recurrent_synapse_count,
+        );
+        let live_decoder_synapse_count = live_topology.as_ref().map_or_else(
+            || {
+                phenotype
+                    .budgets()
+                    .global
+                    .total_synapses
+                    .saturating_sub(phenotype.budgets().global.recurrent_synapses)
+            },
+            |topology| topology.decoder_synapse_count,
+        );
 
         let (active_memory, _): (PortableMemoryBankAssetV2, Vec<u8>) =
             self.read_json(manifest, &state.memory.compaction.active_bank_asset)?;
@@ -953,6 +1021,9 @@ impl GpuCheckpointAssetStore {
         validate_main_assets(
             state,
             &phenotype,
+            live_total_synapse_count,
+            live_recurrent_synapse_count,
+            live_decoder_synapse_count,
             &activation,
             &homeostasis,
             &lifetime,
@@ -999,7 +1070,15 @@ impl GpuCheckpointAssetStore {
             pending_eligibility: pending,
         })?;
         let request = GpuBrainRestoreRequest::try_new(checkpoint)?;
-        let receipt = backend.restore_brain(state.organism_id, phenotype.clone(), request)?;
+        let receipt = match live_topology.clone() {
+            Some(topology) => backend.restore_brain_with_live_topology(
+                state.organism_id,
+                phenotype.clone(),
+                topology,
+                request,
+            )?,
+            None => backend.restore_brain(state.organism_id, phenotype.clone(), request)?,
+        };
         if let Err(error) = backend.restore_activity_state(
             receipt.handle,
             GpuActivityRestoreInput {
@@ -1046,7 +1125,16 @@ impl GpuCheckpointAssetStore {
             return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
         }
 
-        self.restore_sleep_assets(backend, manifest, state, receipt.handle, &phenotype)?;
+        self.restore_sleep_assets(
+            backend,
+            manifest,
+            state,
+            receipt.handle,
+            &phenotype,
+            live_total_synapse_count,
+            live_recurrent_synapse_count,
+            live_decoder_synapse_count,
+        )?;
         Ok(RestoredGpuBrainCheckpoint {
             receipt,
             phenotype,
@@ -1072,6 +1160,7 @@ impl GpuCheckpointAssetStore {
         backend: &mut GpuClosedLoopBackend,
         handle: GpuBrainHandle,
         phenotype: &BrainPhenotype,
+        live_topology: &GpuLiveTopologyCheckpointV1,
         sleep: SleepState,
         entries: &mut Vec<AssetManifestEntry>,
     ) -> Result<GpuSleepAssetState, GameAppShellError> {
@@ -1100,11 +1189,9 @@ impl GpuCheckpointAssetStore {
             }
             let staging = backend.snapshot_completed_sleep_staging(handle, &request, &staged)?;
             let staging = staging.into_parts();
-            let synapse_count = phenotype.budgets().global.total_synapses;
-            let recurrent_count = phenotype.budgets().global.recurrent_synapses;
-            let decoder_count = synapse_count
-                .checked_sub(recurrent_count)
-                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            let synapse_count = live_topology.total_synapse_count;
+            let recurrent_count = live_topology.recurrent_synapse_count;
+            let decoder_count = live_topology.decoder_synapse_count;
             let lifetime = staged_weight_asset(
                 &staging,
                 phenotype.phenotype_hash(),
@@ -1158,6 +1245,9 @@ impl GpuCheckpointAssetStore {
         state: &GpuBrainSaveState,
         handle: GpuBrainHandle,
         phenotype: &BrainPhenotype,
+        live_total_synapse_count: u32,
+        live_recurrent_synapse_count: u32,
+        live_decoder_synapse_count: u32,
     ) -> Result<(), GameAppShellError> {
         let replay = match &state.sleep_assets.replay_batch {
             Some(asset_ref) => {
@@ -1169,7 +1259,7 @@ impl GpuCheckpointAssetStore {
                         .budgets()
                         .global
                         .replay_eligibility_sample_capacity,
-                    phenotype.budgets().global.total_synapses,
+                    live_total_synapse_count,
                 )?;
                 validate_sleep_replay_state(state.sleep.consolidation, &replay)?;
                 Some(replay)
@@ -1215,6 +1305,9 @@ impl GpuCheckpointAssetStore {
             validate_staging_assets(
                 state,
                 phenotype,
+                live_total_synapse_count,
+                live_recurrent_synapse_count,
+                live_decoder_synapse_count,
                 &lifetime,
                 &fast,
                 &eligibility,
@@ -1546,6 +1639,9 @@ fn validate_pending_transaction(
 fn validate_main_assets(
     state: &GpuBrainSaveState,
     phenotype: &BrainPhenotype,
+    live_total_synapse_count: u32,
+    live_recurrent_synapse_count: u32,
+    live_decoder_synapse_count: u32,
     activation: &PortableActivationBanksV1,
     homeostasis: &PortableNeuronHomeostasisV1,
     lifetime: &PortableDualWeightBankV1,
@@ -1568,18 +1664,15 @@ fn validate_main_assets(
         || fast.layer_raw != GPU_BRAIN_WEIGHT_LAYER_FAST
         || lifetime.phenotype_hash != state.phenotype_hash
         || fast.phenotype_hash != state.phenotype_hash
-        || lifetime.synapse_count != budget.total_synapses
-        || fast.synapse_count != budget.total_synapses
+        || lifetime.synapse_count != live_total_synapse_count
+        || fast.synapse_count != live_total_synapse_count
         || lifetime.active_generation != state.active_weight_generation
         || fast.active_generation != state.active_weight_generation
         || lifetime.active_bank != state.active_weight_bank
         || fast.active_bank != state.active_weight_bank
         || eligibility.phenotype_hash != state.phenotype_hash
-        || eligibility.recurrent_count != budget.recurrent_synapses
-        || eligibility.decoder_count
-            != budget
-                .total_synapses
-                .saturating_sub(budget.recurrent_synapses)
+        || eligibility.recurrent_count != live_recurrent_synapse_count
+        || eligibility.decoder_count != live_decoder_synapse_count
         || eligibility.active_bank != state.active_eligibility_bank
         || replay.phenotype_hash != state.phenotype_hash
         || replay.replay_capture_plan_digest != phenotype.replay_capture_plan().canonical_digest()
@@ -1668,6 +1761,9 @@ fn validate_sleep_replay_state(
 fn validate_staging_assets(
     state: &GpuBrainSaveState,
     phenotype: &BrainPhenotype,
+    live_total_synapse_count: u32,
+    live_recurrent_synapse_count: u32,
+    live_decoder_synapse_count: u32,
     lifetime: &PortableDualWeightBankV1,
     fast: &PortableDualWeightBankV1,
     eligibility: &PortableEligibilityBanksV1,
@@ -1679,19 +1775,20 @@ fn validate_staging_assets(
     fast.validate()?;
     eligibility.validate()?;
     journal.validate()?;
-    let budget = &phenotype.budgets().global;
     let zero = |words: &[u32]| words.iter().all(|word| *word == 0);
     if lifetime.layer_raw != GPU_BRAIN_WEIGHT_LAYER_LIFETIME
         || fast.layer_raw != GPU_BRAIN_WEIGHT_LAYER_FAST
         || lifetime.phenotype_hash != state.phenotype_hash
         || fast.phenotype_hash != state.phenotype_hash
-        || lifetime.synapse_count != budget.total_synapses
-        || fast.synapse_count != budget.total_synapses
+        || lifetime.synapse_count != live_total_synapse_count
+        || fast.synapse_count != live_total_synapse_count
         || lifetime.active_generation != staged.output_generation
         || fast.active_generation != staged.output_generation
         || lifetime.active_bank != staged.output_weight_bank
         || fast.active_bank != staged.output_weight_bank
         || eligibility.phenotype_hash != state.phenotype_hash
+        || eligibility.recurrent_count != live_recurrent_synapse_count
+        || eligibility.decoder_count != live_decoder_synapse_count
         || eligibility.active_generation != staged.eligibility_reset_generation
         || eligibility.inactive_generation != 0
         || eligibility.active_bank != staged.output_eligibility_bank

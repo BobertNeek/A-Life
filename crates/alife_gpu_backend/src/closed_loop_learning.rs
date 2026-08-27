@@ -32,6 +32,8 @@ pub const CLOSED_LOOP_ELIGIBILITY_WGSL: &str = concat!(
 
 const PENDING_RECEIPT_DOMAIN: &[u8] = b"alife.gpu.pending-eligibility-receipt.v1";
 const DISCARD_RECEIPT_DOMAIN: &[u8] = b"alife.gpu.pending-eligibility-discard.v1";
+const AUTHORITY_RECEIPT_DOMAIN: &[u8] = b"alife.gpu.authority-receipt.v1";
+pub const GPU_AUTHORITY_RECEIPT_SCHEMA_VERSION: u16 = 1;
 
 /// Exact post-outcome credit row consumed by the production plasticity WGSL.
 #[repr(C, align(16))]
@@ -204,9 +206,215 @@ pub struct GpuLearningReceipt {
     pub output_fast_generation: u64,
     pub output_eligibility_generation: u64,
     pub replay_journal_generation: u64,
+    pub transaction_generation: u64,
     pub fast_weights_changed: u32,
     pub max_abs_delta: f32,
     pub hardware_receipt_generation: u64,
+}
+
+/// Compact proof of the GPU authority retained after one sealed outcome.
+///
+/// This receipt binds validated transaction metadata only. Exact mutable
+/// neural state remains available through explicit checkpoint snapshots.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuAuthorityCommitEvidenceV1 {
+    LearningCommitted {
+        input_fast_generation: u64,
+        output_fast_generation: u64,
+        output_eligibility_generation: u64,
+        replay_journal_generation: u64,
+        transaction_generation: u64,
+        hardware_receipt_generation: u64,
+    },
+    LearningRetained {
+        active_eligibility_generation: u64,
+        staging_eligibility_generation: u64,
+        transaction_generation: u64,
+        hardware_receipt_generation: u64,
+        pending_receipt_digest: [u64; 4],
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuAuthorityReceiptV1 {
+    schema_version: u16,
+    class_id_raw: u32,
+    slot: u32,
+    slot_generation: u32,
+    organism_id: OrganismId,
+    phenotype_hash: PhenotypeHash,
+    sequence_id: ExperienceSequenceId,
+    originating_tick: Tick,
+    outcome_tick: Tick,
+    dispatch_generation: u64,
+    active_activation_side: u8,
+    patch_digest: [u64; 4],
+    evidence: GpuAuthorityCommitEvidenceV1,
+    receipt_digest: [u64; 4],
+}
+
+impl GpuAuthorityReceiptV1 {
+    pub(crate) fn from_backend_validated(
+        handle: crate::GpuBrainHandle,
+        pending: &PendingEligibilityReceipt,
+        learning: Option<&GpuLearningReceipt>,
+        current_transaction_generation: u64,
+        hardware_receipt_generation: u64,
+        sequence_id: ExperienceSequenceId,
+        outcome_tick: Tick,
+        patch_digest: [u64; 4],
+    ) -> Result<Self, ScaffoldContractError> {
+        let identity = pending.identity();
+        let evidence = match learning {
+            Some(learning) => GpuAuthorityCommitEvidenceV1::LearningCommitted {
+                input_fast_generation: learning.input_fast_generation,
+                output_fast_generation: learning.output_fast_generation,
+                output_eligibility_generation: learning.output_eligibility_generation,
+                replay_journal_generation: learning.replay_journal_generation,
+                transaction_generation: learning.transaction_generation,
+                hardware_receipt_generation: learning.hardware_receipt_generation,
+            },
+            None => GpuAuthorityCommitEvidenceV1::LearningRetained {
+                active_eligibility_generation: identity.active_eligibility_generation(),
+                staging_eligibility_generation: identity.staging_eligibility_generation(),
+                transaction_generation: current_transaction_generation,
+                hardware_receipt_generation,
+                pending_receipt_digest: pending.receipt_digest(),
+            },
+        };
+        let mut receipt = Self {
+            schema_version: GPU_AUTHORITY_RECEIPT_SCHEMA_VERSION,
+            class_id_raw: u32::from(handle.class_id().raw()),
+            slot: handle.slot(),
+            slot_generation: handle.generation(),
+            organism_id: handle.organism_id(),
+            phenotype_hash: handle.phenotype_hash(),
+            sequence_id,
+            originating_tick: identity.originating_tick(),
+            outcome_tick,
+            dispatch_generation: identity.dispatch_generation(),
+            active_activation_side: identity.active_activation_side(),
+            patch_digest,
+            evidence,
+            receipt_digest: [0; 4],
+        };
+        receipt.receipt_digest = receipt.recompute_digest();
+        receipt.validate()?;
+        Ok(receipt)
+    }
+
+    pub const fn schema_version(&self) -> u16 {
+        self.schema_version
+    }
+
+    pub const fn receipt_digest(&self) -> [u64; 4] {
+        self.receipt_digest
+    }
+
+    pub const fn evidence(&self) -> GpuAuthorityCommitEvidenceV1 {
+        self.evidence
+    }
+
+    pub fn validate(&self) -> Result<(), ScaffoldContractError> {
+        if self.schema_version != GPU_AUTHORITY_RECEIPT_SCHEMA_VERSION
+            || self.class_id_raw == 0
+            || self.slot_generation == 0
+            || self.organism_id.raw() == 0
+            || self.phenotype_hash == PhenotypeHash([0; 4])
+            || self.sequence_id.raw() == 0
+            || self.outcome_tick.raw() <= self.originating_tick.raw()
+            || self.dispatch_generation == 0
+            || self.active_activation_side > 1
+            || self.patch_digest == [0; 4]
+            || self.receipt_digest == [0; 4]
+            || self.receipt_digest != self.recompute_digest()
+        {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
+        match self.evidence {
+            GpuAuthorityCommitEvidenceV1::LearningCommitted {
+                input_fast_generation,
+                output_fast_generation,
+                output_eligibility_generation,
+                replay_journal_generation,
+                transaction_generation,
+                hardware_receipt_generation,
+            } if input_fast_generation > 0
+                && output_fast_generation == input_fast_generation.saturating_add(1)
+                && output_eligibility_generation > 0
+                && replay_journal_generation > 0
+                && transaction_generation > 0
+                && hardware_receipt_generation > 0 => Ok(()),
+            GpuAuthorityCommitEvidenceV1::LearningRetained {
+                active_eligibility_generation,
+                staging_eligibility_generation,
+                transaction_generation,
+                hardware_receipt_generation,
+                pending_receipt_digest,
+            } if active_eligibility_generation > 0
+                && staging_eligibility_generation
+                    == active_eligibility_generation.saturating_add(1)
+                && transaction_generation > 0
+                && hardware_receipt_generation > 0
+                && pending_receipt_digest != [0; 4] => Ok(()),
+            _ => Err(ScaffoldContractError::LearningEvidenceMismatch),
+        }
+    }
+
+    fn recompute_digest(&self) -> [u64; 4] {
+        let mut digest = CanonicalDigestBuilder::new(AUTHORITY_RECEIPT_DOMAIN);
+        digest.write_u16(self.schema_version);
+        digest.write_u32(self.class_id_raw);
+        digest.write_u32(self.slot);
+        digest.write_u32(self.slot_generation);
+        digest.write_u64(self.organism_id.raw());
+        for word in self.phenotype_hash.0 {
+            digest.write_u64(word);
+        }
+        digest.write_u64(self.sequence_id.raw());
+        digest.write_u64(self.originating_tick.raw());
+        digest.write_u64(self.outcome_tick.raw());
+        digest.write_u64(self.dispatch_generation);
+        digest.write_u8(self.active_activation_side);
+        for word in self.patch_digest {
+            digest.write_u64(word);
+        }
+        match self.evidence {
+            GpuAuthorityCommitEvidenceV1::LearningCommitted {
+                input_fast_generation,
+                output_fast_generation,
+                output_eligibility_generation,
+                replay_journal_generation,
+                transaction_generation,
+                hardware_receipt_generation,
+            } => {
+                digest.write_u8(1);
+                digest.write_u64(input_fast_generation);
+                digest.write_u64(output_fast_generation);
+                digest.write_u64(output_eligibility_generation);
+                digest.write_u64(replay_journal_generation);
+                digest.write_u64(transaction_generation);
+                digest.write_u64(hardware_receipt_generation);
+            }
+            GpuAuthorityCommitEvidenceV1::LearningRetained {
+                active_eligibility_generation,
+                staging_eligibility_generation,
+                transaction_generation,
+                hardware_receipt_generation,
+                pending_receipt_digest,
+            } => {
+                digest.write_u8(2);
+                digest.write_u64(active_eligibility_generation);
+                digest.write_u64(staging_eligibility_generation);
+                digest.write_u64(transaction_generation);
+                digest.write_u64(hardware_receipt_generation);
+                for word in pending_receipt_digest {
+                    digest.write_u64(word);
+                }
+            }
+        }
+        digest.finish256()
+    }
 }
 
 #[repr(C, align(16))]
@@ -615,7 +823,117 @@ fn join_u32x4(values: [u32; 4]) -> [u64; 2] {
 
 #[cfg(test)]
 mod tests {
-    use super::GpuFastPlasticityCommitRecord;
+    use alife_core::{
+        ActionId, BrainClassId, CandidateActionFamily, CandidateFeatureDigest,
+        ExperienceSequenceId, OrganismId, PerceptionFrameDigest, PhenotypeHash, Tick,
+    };
+
+    use super::{
+        GpuAuthorityReceiptV1, GpuFastPlasticityCommitRecord, GpuLearningReceipt,
+        PendingEligibilityIdentity, PendingEligibilityReceipt, PENDING_RECEIPT_DOMAIN,
+    };
+    use crate::GpuBrainHandle;
+
+    fn authority_fixture() -> (
+        GpuBrainHandle,
+        PendingEligibilityReceipt,
+        GpuLearningReceipt,
+        GpuAuthorityReceiptV1,
+    ) {
+        let phenotype_hash = PhenotypeHash([31, 32, 33, 34]);
+        let organism_id = OrganismId(9);
+        let handle = GpuBrainHandle::authority_receipt_test_fixture(
+            BrainClassId(1),
+            2,
+            3,
+            organism_id,
+            phenotype_hash,
+        );
+        let identity = PendingEligibilityIdentity {
+            handle_generation: 3,
+            phenotype_hash,
+            dispatch_generation: 7,
+            originating_tick: Tick::new(11),
+            frame_digest: PerceptionFrameDigest([41, 42, 43, 44]),
+            active_activation_side: 1,
+            candidate_index: 0,
+            action_id: ActionId(1),
+            action_family: CandidateActionFamily::Approach,
+            candidate_feature_digest: CandidateFeatureDigest([51, 52]),
+            active_eligibility_generation: 5,
+            staging_eligibility_generation: 6,
+        };
+        let mut pending_digest = alife_core::CanonicalDigestBuilder::new(PENDING_RECEIPT_DOMAIN);
+        identity.write_canonical(&mut pending_digest);
+        let pending = PendingEligibilityReceipt {
+            identity,
+            receipt_digest: pending_digest.finish256(),
+        };
+        let learning = GpuLearningReceipt {
+            handle,
+            sequence_id: ExperienceSequenceId(13),
+            dispatch_generation: 7,
+            active_activation_side: 1,
+            input_fast_generation: 8,
+            output_fast_generation: 9,
+            output_eligibility_generation: 6,
+            replay_journal_generation: 10,
+            transaction_generation: 12,
+            fast_weights_changed: 4,
+            max_abs_delta: 0.25,
+            hardware_receipt_generation: 14,
+        };
+        let receipt = GpuAuthorityReceiptV1::from_backend_validated(
+            handle,
+            &pending,
+            Some(&learning),
+            12,
+            14,
+            ExperienceSequenceId(13),
+            Tick::new(12),
+            [61, 62, 63, 64],
+        )
+        .unwrap();
+        (handle, pending, learning, receipt)
+    }
+
+    #[test]
+    fn compact_authority_receipt_validates_and_tampering_fails_closed() {
+        let (_, _, _, receipt) = authority_fixture();
+        receipt.validate().unwrap();
+
+        for tamper in [
+            |value: &mut GpuAuthorityReceiptV1| value.schema_version += 1,
+            |value: &mut GpuAuthorityReceiptV1| value.slot_generation += 1,
+            |value: &mut GpuAuthorityReceiptV1| value.phenotype_hash.0[0] ^= 1,
+            |value: &mut GpuAuthorityReceiptV1| value.outcome_tick = Tick::new(11),
+            |value: &mut GpuAuthorityReceiptV1| value.sequence_id = ExperienceSequenceId(99),
+            |value: &mut GpuAuthorityReceiptV1| value.patch_digest[0] ^= 1,
+        ] {
+            let mut tampered = receipt;
+            tamper(&mut tampered);
+            assert!(tampered.validate().is_err());
+        }
+    }
+
+    #[test]
+    fn compact_authority_receipt_explicitly_binds_retained_learning() {
+        let (handle, pending, _, _) = authority_fixture();
+        let receipt = GpuAuthorityReceiptV1::from_backend_validated(
+            handle,
+            &pending,
+            None,
+            12,
+            14,
+            ExperienceSequenceId(13),
+            Tick::new(12),
+            [61, 62, 63, 64],
+        )
+        .unwrap();
+
+        receipt.validate().unwrap();
+        assert_ne!(receipt.evidence(), authority_fixture().3.evidence());
+    }
 
     #[test]
     fn guard_rejected_commit_decodes_failure_payload_without_widening_record() {

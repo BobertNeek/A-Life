@@ -6,11 +6,15 @@
 
 mod support;
 
+use alife_core::sleep::SleepReplayEvidence;
 use alife_core::{
-    BrainGenome, Confidence, DecisionSnapshot, DevelopmentState, EndocrineDelta, ExperiencePatch,
-    ExperiencePatchBuilder, ExperienceSequenceId, HomeostaticDelta, NeuralActionSelection,
-    NormalizedScalar, OutcomeCreditPacket, PhysicalActionOutcome, PhysicalContactKind,
-    PostActionOutcome, PreActionSnapshot, SignedValence, Tick, Vec3f,
+    BiochemistryState, BodyEventDelta, BrainCapacityClass, BrainGenome, Confidence, CreatureGenome,
+    DecisionSnapshot, DevelopmentState, EndocrineDelta, ExperiencePatch, ExperiencePatchBuilder,
+    ExperienceSequenceId, FoundationGeneticIdentity, HomeostaticDelta,
+    JointMotorCondition, MeasuredPhysiologyTransition, MotorChannel, MotorChannelFactor,
+    NeuralActionSelection, NormalizedScalar, OutcomeCreditPacket, PhenotypeCompiler,
+    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, PreActionSnapshot, SensorProfile,
+    SemanticStateVector, SignedValence, Tick, Vec3f,
 };
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuOutcomeCreditRecord};
 
@@ -116,6 +120,103 @@ fn sealed_outcome(
         SignedValence::new(0.0).unwrap(),
         NormalizedScalar::new(0.0).unwrap(),
     )
+    .unwrap();
+    ExperiencePatchBuilder::new(sequence_id)
+        .record_pre_action(pre_action)
+        .unwrap()
+        .record_decision(decision)
+        .unwrap()
+        .record_outcome(outcome)
+        .unwrap()
+        .seal()
+        .unwrap()
+}
+
+fn sealed_measured_outcome(
+    handle: alife_gpu_backend::GpuBrainHandle,
+    frame: &alife_core::PerceptionFrame,
+    tick: &alife_gpu_backend::GpuClosedLoopTick,
+) -> ExperiencePatch {
+    let sequence_id = ExperienceSequenceId(1);
+    let genome = BrainGenome::scaffold(42, handle.class_id());
+    let development = DevelopmentState::new(
+        genome.id,
+        frame.tick(),
+        NormalizedScalar::new(0.35).unwrap(),
+    );
+    let selection = NeuralActionSelection {
+        candidate_index: tick.selection.candidate_index,
+        logit: tick.selection.logit,
+        confidence: tick.selection.confidence,
+        active_tiles: tick.selection.active_tiles,
+        active_synapses: tick.selection.active_synapses,
+    };
+    let command = frame.candidates()[usize::from(selection.candidate_index)]
+        .to_command(
+            handle.organism_id(),
+            Confidence::new(selection.confidence.raw()).unwrap(),
+        )
+        .unwrap();
+    let pre_action = PreActionSnapshot::from_neural_frame(
+        sequence_id,
+        handle.class_id(),
+        handle.phenotype_hash(),
+        genome.id,
+        genome.schema_version,
+        development,
+        frame.clone(),
+    )
+    .unwrap();
+    let decision = DecisionSnapshot::from_neural_selection(
+        sequence_id,
+        handle.phenotype_hash(),
+        tick.dispatch_generation,
+        tick.active_activation_side,
+        frame,
+        selection,
+        command,
+    )
+    .unwrap();
+    let physiology = CreatureGenome::early_mammal_founder(
+        42,
+        FoundationGeneticIdentity::new(42, 1, 1, handle.class_id()).unwrap(),
+    )
+    .unwrap()
+    .express()
+    .unwrap();
+    let before = BiochemistryState::new(&physiology, frame.tick()).unwrap();
+    let after = before
+        .advance(
+            Tick::new(frame.tick().raw() + 1),
+            BodyEventDelta::zero(),
+            &physiology,
+        )
+        .unwrap();
+    let measured = MeasuredPhysiologyTransition::new(before, after).unwrap();
+    let outcome = PostActionOutcome::new(
+        handle.organism_id(),
+        sequence_id,
+        Tick::new(frame.tick().raw() + 1),
+        true,
+        PhysicalActionOutcome {
+            contact: PhysicalContactKind::None,
+            target_entity: None,
+            displacement: Vec3f::ZERO,
+            collision_normal: None,
+            energy_cost: NormalizedScalar::new(0.0).unwrap(),
+        },
+        HomeostaticDelta {
+            drives: alife_core::DriveDelta::zero(),
+            hormones: EndocrineDelta::zero(),
+        },
+        SignedValence::ZERO,
+        NormalizedScalar::new(0.0).unwrap(),
+        NormalizedScalar::new(0.0).unwrap(),
+        SignedValence::ZERO,
+        NormalizedScalar::new(0.0).unwrap(),
+    )
+    .unwrap()
+    .with_measured_physiology(measured)
     .unwrap();
     ExperiencePatchBuilder::new(sequence_id)
         .record_pre_action(pre_action)
@@ -303,6 +404,261 @@ fn rewarding_outcome_changes_next_encounter_before_sleep() {
         1,
         "learning must unblock the next waking tick"
     );
+}
+
+#[test]
+fn compact_authority_receipt_is_backend_owned_and_rejects_foreign_or_stale_state() {
+    let profile = SensorProfile::GroundedObjectSlotsV1;
+    let capacity = BrainCapacityClass::n512();
+    let genome = BrainGenome::scaffold(0x4E35_3132_5F00_0001, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+    let phenotype =
+        PhenotypeCompiler::compile(&genome, &capacity, &development, profile).unwrap();
+    let organism = alife_core::OrganismId(4_111);
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
+    let handle = backend.insert_brain(organism, phenotype.clone()).unwrap();
+    let frame = support::perception_frame_for_profile_at_tick(
+        organism.raw(),
+        900,
+        profile,
+        true,
+        2,
+    );
+    let tick = backend
+        .tick_batch(&[(handle, frame.clone())])
+        .unwrap()
+        .remove(0);
+    let patch = sealed_measured_outcome(handle, &frame, &tick);
+
+    let retained = backend
+        .authority_receipt_for_sealed_outcome(
+            handle,
+            &tick.pending_eligibility,
+            None,
+            &patch,
+        )
+        .unwrap();
+    retained.validate().unwrap();
+    assert!(matches!(
+        retained.evidence(),
+        alife_gpu_backend::GpuAuthorityCommitEvidenceV1::LearningRetained {
+            transaction_generation: 2,
+            hardware_receipt_generation,
+            ..
+        } if hardware_receipt_generation > 0
+    ));
+
+    let foreign = GpuClosedLoopBackend::new_required(
+        alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+    )
+    .unwrap();
+    assert_eq!(
+        foreign.authority_receipt_for_sealed_outcome(
+            handle,
+            &tick.pending_eligibility,
+            None,
+            &patch,
+        ),
+        Err(alife_core::ScaffoldContractError::BrainOwnershipMismatch)
+    );
+
+    let receptors = support::test_receptor_frame(&patch);
+    let learning = backend
+        .apply_sealed_outcome(handle, &patch, &receptors)
+        .unwrap();
+    let replay = backend.build_sleep_replay_batch(handle).unwrap();
+    assert_eq!(replay.events.len(), 1);
+    let base_pairs = phenotype
+        .synapses()
+        .iter()
+        .map(|synapse| (synapse.source(), synapse.target()))
+        .collect::<std::collections::BTreeSet<_>>();
+    let route_synapses = phenotype
+        .synapses()
+        .iter()
+        .enumerate()
+        .filter(|(_, synapse)| {
+            (1..=8_u32).any(|offset| {
+                let target = (synapse.target() % phenotype.neuron_count()).wrapping_add(offset)
+                    % phenotype.neuron_count();
+                target != synapse.source() && !base_pairs.contains(&(synapse.source(), target))
+            })
+        })
+        .fold(std::collections::BTreeMap::new(), |mut by_route, (index, synapse)| {
+            by_route.entry(synapse.route_index()).or_insert(index as u32);
+            by_route
+        })
+        .into_values()
+        .take(2)
+        .collect::<Vec<_>>();
+    assert_eq!(route_synapses.len(), 2);
+    let targets = replay
+        .events
+        .iter()
+        .map(|event| {
+            alife_core::PredictionTargetReceipt::for_successor(
+                organism,
+                event.sequence_id,
+                event.action_id,
+                Tick::new(event.originating_tick.raw() + 1),
+                event.frame_digest.0,
+                SemanticStateVector::new(vec![0.5, 0.25]).unwrap(),
+                JointMotorCondition::new(vec![MotorChannelFactor {
+                    channel: MotorChannel::Locomotion,
+                    primitive: event.action_id,
+                    intensity: 0.8,
+                    duration_ticks: 1,
+                    direction: Vec3f::new(1.0, 0.0, 0.0),
+                    stand_off_distance: 0.0,
+                    confidence: 0.9,
+                    payload_len: 0,
+                    coordination_group: 0,
+                }])
+                .unwrap(),
+                SemanticStateVector::new(vec![0.9, 0.1]).unwrap(),
+            )
+            .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let evidence_for_route = |local_synapse_id: u32| {
+        let mut route_replay = replay.clone();
+        route_replay.synapse_spans = vec![alife_core::sleep::ReplaySynapseSpan {
+            local_synapse_id,
+            sample_start: 0,
+            sample_count: 1,
+            reserved: 0,
+        }];
+        route_replay.eligibility_samples = vec![alife_core::sleep::ReplayEligibilitySample {
+            event_index: 0,
+            eligibility_q15: 1,
+        }];
+        route_replay.canonical_digest = route_replay.recompute_canonical_digest().unwrap();
+        SleepReplayEvidence::new(route_replay, targets.clone()).unwrap()
+    };
+    let first_evidence = evidence_for_route(route_synapses[0]);
+    let second_evidence = evidence_for_route(route_synapses[1]);
+    backend
+        .apply_v11_sleep_structural_phase(handle, &first_evidence)
+        .expect("first identity-bound replay stays within the structural region budget");
+    backend
+        .apply_v11_sleep_structural_phase(handle, &second_evidence)
+        .expect("a later disjoint replay retains the resident's canonical structural region");
+    assert_eq!(
+        backend
+            .checkpoint_v11(handle)
+            .unwrap()
+            .sparse_spans
+            .iter()
+            .flat_map(|span| span.edges.iter().map(|edge| edge.route))
+            .collect::<std::collections::BTreeSet<_>>(),
+        std::collections::BTreeSet::from([0]),
+        "all replay-derived candidates use the resident's canonical structural region",
+    );
+    let mut full_replay = replay.clone();
+    full_replay.synapse_spans = (0..64_u32)
+        .map(|local_synapse_id| alife_core::sleep::ReplaySynapseSpan {
+            local_synapse_id,
+            sample_start: local_synapse_id,
+            sample_count: 1,
+            reserved: 0,
+        })
+        .collect();
+    full_replay.eligibility_samples = (0..64)
+        .map(|_| alife_core::sleep::ReplayEligibilitySample {
+            event_index: 0,
+            eligibility_q15: 1,
+        })
+        .collect();
+    full_replay.canonical_digest = full_replay.recompute_canonical_digest().unwrap();
+    let full_evidence = SleepReplayEvidence::new(full_replay, targets.clone()).unwrap();
+    for _ in 0..3 {
+        backend
+            .apply_v11_sleep_structural_phase(handle, &full_evidence)
+            .expect("five bounded structural cycles retain valid resident authority");
+    }
+    let foreign_handle = backend
+        .insert_brain(alife_core::OrganismId(4_112), phenotype)
+        .unwrap();
+    assert_eq!(
+        backend.apply_v11_sleep_structural_phase(foreign_handle, &second_evidence),
+        Err(alife_core::ScaffoldContractError::BrainOwnershipMismatch)
+    );
+    let replay_before_foreign_tick = backend.build_sleep_replay_batch(handle).unwrap();
+    let foreign_frame = support::perception_frame_for_profile_at_tick(
+        foreign_handle.organism_id().raw(),
+        901,
+        profile,
+        true,
+        2,
+    );
+    let foreign_tick = backend
+        .tick_batch(&[(foreign_handle, foreign_frame.clone())])
+        .unwrap()
+        .remove(0);
+    let foreign_patch = sealed_measured_outcome(foreign_handle, &foreign_frame, &foreign_tick);
+    let foreign_receptors = support::test_receptor_frame(&foreign_patch);
+    backend
+        .apply_sealed_outcome(foreign_handle, &foreign_patch, &foreign_receptors)
+        .unwrap();
+    assert_eq!(
+        backend.build_sleep_replay_batch(handle).unwrap(),
+        replay_before_foreign_tick,
+        "a same-class foreign tick cannot alter this resident's replay authority",
+    );
+    let committed = backend
+        .authority_receipt_for_sealed_outcome(
+            handle,
+            &tick.pending_eligibility,
+            Some(&learning),
+            &patch,
+        )
+        .unwrap();
+    committed.validate().unwrap();
+    assert!(matches!(
+        committed.evidence(),
+        alife_gpu_backend::GpuAuthorityCommitEvidenceV1::LearningCommitted {
+            transaction_generation,
+            hardware_receipt_generation,
+            ..
+        } if transaction_generation == learning.transaction_generation
+            && hardware_receipt_generation == learning.hardware_receipt_generation
+    ));
+    let mut tampered_learning = learning;
+    tampered_learning.transaction_generation += 1;
+    assert!(backend
+        .authority_receipt_for_sealed_outcome(
+            handle,
+            &tick.pending_eligibility,
+            Some(&tampered_learning),
+            &patch,
+        )
+        .is_err());
+
+    let next_frame = support::perception_frame_for_profile_at_tick(
+        organism.raw(),
+        902,
+        profile,
+        true,
+        2,
+    );
+    let next_tick = backend
+        .tick_batch(&[(handle, next_frame)])
+        .unwrap()
+        .remove(0);
+    assert!(backend
+        .authority_receipt_for_sealed_outcome(
+            handle,
+            &tick.pending_eligibility,
+            Some(&learning),
+            &patch,
+        )
+        .is_err());
+    backend
+        .discard_pending_eligibility(handle, next_tick.pending_eligibility.identity())
+        .unwrap();
 }
 
 #[test]

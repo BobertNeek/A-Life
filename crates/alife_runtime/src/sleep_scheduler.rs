@@ -39,6 +39,10 @@ impl SleepWorkDue {
     const fn insert(&mut self, other: Self) {
         self.0 |= other.0;
     }
+
+    const fn remove(&mut self, other: Self) {
+        self.0 &= !other.0;
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -248,9 +252,10 @@ impl GpuSleepScheduler {
     /// Schedules sleep from the world-owned biological record.
     ///
     /// The world record advances biology once for the requested tick. The
-    /// existing GPU progress path still runs first, then the due bounded core
-    /// transaction is consumed as one work receipt and sealed back into the
-    /// organism for persistence and presentation.
+    /// first due bounded transaction runs before the consolidation driver binds
+    /// its replay identity. Later in-flight work cannot mutate structural replay
+    /// inputs. Each completed bounded transaction is consumed as one work
+    /// receipt and sealed back into the organism for persistence and presentation.
     pub fn scheduled_tick_with_organism<D: GpuSleepConsolidationDriver>(
         &mut self,
         organism: &mut WorldOrganismRecord,
@@ -282,32 +287,41 @@ impl GpuSleepScheduler {
         }
 
         let transition = self.advance_authoritative(&input, parameters, tick)?;
+
+        let state_before_progress = self.controller.state();
+        let mut due_work = SleepWorkDue::empty();
+        let mut work_units = 0;
+        if state_before_progress.phase == SleepPhase::Consolidating
+            && state_before_progress.consolidation == ConsolidationState::None
+            && driver.has_bounded_sleep_phase_data(input.organism_id, state_before_progress)?
+        {
+            due_work = self.sleep_work_due_before_pending(state_before_progress, tick);
+            work_units = self.run_due_sleep_work(
+                driver,
+                input.organism_id,
+                state_before_progress,
+                &input.homeostasis,
+                tick,
+                due_work,
+            )?;
+        }
+
         self.progress_driver(input.organism_id, driver)?;
 
         let state = self.controller.state();
-        let due_work = if driver.has_bounded_sleep_phase_data(input.organism_id, state)? {
-            self.sleep_work_due(state, tick)
-        } else {
-            SleepWorkDue::empty()
-        };
-        let work_units = if due_work.is_empty() {
-            0
-        } else {
-            let work_homeostasis =
-                Self::homeostasis_for_due_work(&input.homeostasis, self.controller.config());
-            let receipt = driver
-                .run_bounded_sleep_transaction(
-                    input.organism_id,
-                    state,
-                    &work_homeostasis,
-                    tick,
-                    due_work,
-                )?
-                .ok_or(ScaffoldContractError::MissingPhaseData)?;
-            receipt.validate_contract()?;
-            self.commit_sleep_work(state.active_cycle_id, tick, due_work);
-            receipt.work_units
-        };
+        if due_work.is_empty()
+            && driver.has_bounded_sleep_phase_data(input.organism_id, state)?
+        {
+            due_work = self.sleep_work_due(state, tick);
+            work_units = self.run_due_sleep_work(
+                driver,
+                input.organism_id,
+                state,
+                &input.homeostasis,
+                tick,
+                due_work,
+            )?;
+        }
 
         if state.phase == SleepPhase::Awake {
             self.last_emitted_intent_cycle = None;
@@ -340,6 +354,34 @@ impl GpuSleepScheduler {
             .sleep_pressure
             .max(config.sleep_pressure_threshold.raw());
         effective
+    }
+
+    fn run_due_sleep_work<D: GpuSleepConsolidationDriver>(
+        &mut self,
+        driver: &mut D,
+        organism_id: OrganismId,
+        state: SleepState,
+        homeostasis: &HomeostaticSnapshot,
+        tick: Tick,
+        due_work: SleepWorkDue,
+    ) -> Result<u64, ScaffoldContractError> {
+        if due_work.is_empty() {
+            return Ok(0);
+        }
+        let work_homeostasis =
+            Self::homeostasis_for_due_work(homeostasis, self.controller.config());
+        let receipt = driver
+            .run_bounded_sleep_transaction(
+                organism_id,
+                state,
+                &work_homeostasis,
+                tick,
+                due_work,
+            )?
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        receipt.validate_contract()?;
+        self.commit_sleep_work(state.active_cycle_id, tick, due_work);
+        Ok(receipt.work_units)
     }
 
     fn advance_authoritative(
@@ -413,7 +455,25 @@ impl GpuSleepScheduler {
             return SleepWorkDue::empty();
         }
 
-        let previous = if self.last_sleep_work_cycle == Some(state.active_cycle_id) {
+        let mut due = self.sleep_work_due_for_cycle(state.active_cycle_id, tick);
+        // Pending and later states bind the exact replay identity. Defer any
+        // subsequent structural cadence until the next cycle's pre-Pending
+        // boundary rather than mutating that in-flight identity.
+        due.remove(SleepWorkDue::STRUCTURAL_GROWTH_PRUNING);
+        due
+    }
+
+    fn sleep_work_due_before_pending(&self, state: SleepState, tick: Tick) -> SleepWorkDue {
+        if state.phase != SleepPhase::Consolidating
+            || state.consolidation != ConsolidationState::None
+        {
+            return SleepWorkDue::empty();
+        }
+        self.sleep_work_due_for_cycle(state.active_cycle_id, tick)
+    }
+
+    fn sleep_work_due_for_cycle(&self, cycle_id: u64, tick: Tick) -> SleepWorkDue {
+        let previous = if self.last_sleep_work_cycle == Some(cycle_id) {
             self.last_sleep_work_ticks
         } else {
             [None; 5]

@@ -6,7 +6,7 @@ use alife_core::{
     Confidence, CreatureMind, DenseTile, DriveDelta, DurationTicks, EndocrineDelta,
     HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition, LobeKind,
     MemoryBank, MemoryBankConfig, MemoryExpectancy, MemoryOutcomeSummary, MemoryRecord,
-    MotorChannel, MotorChannelFactor, NeuralActionSelection, NeuralProjectionSchema,
+    MemoryUpdateKind, MotorChannel, MotorChannelFactor, NeuralActionSelection, NeuralProjectionSchema,
     NeuromodulatorSample, NormalizedScalar, OrganismId, PerceptionFrameDigest,
     PerceptionFrameDraft, PhenotypeHash, PhysicalActionOutcome, PhysicalContactKind,
     PostActionOutcome, PredictionTargetReceipt, ProjectionRoutingRef, ProjectionTile,
@@ -16,7 +16,7 @@ use alife_core::{
     SleepReplayJournal, SleepTrigger, SparseTileCoord, SparseTilePayload, StableLifetimeTraitKind,
     StructuralEditBatch, StructuralEditCandidate, StructuralEditKind, StructuralEditReason,
     SynapseWeightSplit, Tick, TopologicalMapConfig, TopologySidecar, TrackedObjectId, Vec3f,
-    Velocity, WorldEntityId, MICROTILE_CELLS,
+    Validate, Velocity, WorldEntityId, MICROTILE_CELLS,
 };
 
 fn organism() -> OrganismId {
@@ -783,4 +783,144 @@ fn biologically_due_sleep_commits_replayed_memory_prediction_and_concept_state()
     assert_eq!(low_memory, low_memory_before);
     assert_eq!(low_predictor, low_predictor_before);
     assert_eq!(low_topology, low_topology_before);
+}
+
+#[test]
+fn sleep_receipt_accepts_multiple_replay_events_merged_into_one_memory() {
+    let mut memory = MemoryBank::new(
+        MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap(),
+    )
+    .unwrap();
+    let target_entity = WorldEntityId(2);
+    let first_patch = sealed_patch(1, 10, target_entity, false);
+    let second_patch = sealed_patch(2, 11, target_entity, false);
+    memory.observe_sealed_patch(&first_patch).unwrap();
+    let second_update = memory.observe_sealed_patch(&second_patch).unwrap();
+    assert!(matches!(second_update.kind, MemoryUpdateKind::Merged { .. }));
+
+    let plan = ReplayCapturePlan::try_new(vec![3], 1, 2, 2).unwrap();
+    let mut journal = SleepReplayJournal::new(plan).unwrap();
+    let mut targets = Vec::new();
+    for (sequence, originating_tick) in [(1, 10), (2, 11)] {
+        let event = SleepReplayEvent {
+            sequence_id: alife_core::ExperienceSequenceId(sequence),
+            originating_tick: Tick::new(originating_tick),
+            frame_digest: PerceptionFrameDigest([sequence, 2, 3, 4]),
+            candidate_feature_digest: CandidateFeatureDigest([sequence, 9]),
+            action_id: ActionId(400),
+            family: CandidateActionFamily::Contact,
+            modulator: NeuromodulatorSample::from_components(0.4, 0.1, 0.2, 0.0, 0.3)
+                .unwrap(),
+        };
+        journal.push(event, &[0.75]).unwrap();
+        targets.push(
+            PredictionTargetReceipt::for_successor(
+                organism(),
+                alife_core::ExperienceSequenceId(sequence),
+                ActionId(400),
+                Tick::new(originating_tick + 1),
+                [sequence, 2, 3, 4],
+                SemanticStateVector::new(vec![0.5, 0.25]).unwrap(),
+                JointMotorCondition::new(vec![MotorChannelFactor {
+                    channel: MotorChannel::Locomotion,
+                    primitive: ActionId(400),
+                    intensity: 0.8,
+                    duration_ticks: 1,
+                    direction: Vec3f::new(1.0, 0.0, 0.0),
+                    stand_off_distance: 0.0,
+                    confidence: 0.9,
+                    payload_len: 0,
+                    coordination_group: 0,
+                }])
+                .unwrap(),
+                SemanticStateVector::new(vec![0.9, 0.1]).unwrap(),
+            )
+            .unwrap(),
+        );
+    }
+    let evidence = SleepReplayEvidence::new(
+        journal.build_bounded_batch(2, 2, u32::MAX).unwrap(),
+        targets,
+    )
+    .unwrap();
+    let first_memory_id = memory
+        .memory_id_for_sleep_sequence(
+            alife_core::ExperienceSequenceId(1),
+            organism(),
+            ActionId(400),
+            CandidateActionFamily::Contact,
+            Tick::new(10),
+        )
+        .unwrap()
+        .unwrap();
+    let second_memory_id = memory
+        .memory_id_for_sleep_sequence(
+            alife_core::ExperienceSequenceId(2),
+            organism(),
+            ActionId(400),
+            CandidateActionFamily::Contact,
+            Tick::new(11),
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(first_memory_id, second_memory_id);
+    let promoted = memory
+        .clone()
+        .memory_ids_for_sleep(
+            &[
+                alife_core::ExperienceSequenceId(1),
+                alife_core::ExperienceSequenceId(2),
+            ],
+            &[first_memory_id, second_memory_id],
+            2,
+        )
+        .unwrap();
+    assert_eq!(promoted, vec![first_memory_id]);
+    let mut predictor = GroundedSuccessorPredictor::default();
+    let mut topology = topology_with_gap();
+
+    let receipt = SleepConsolidator::new(config())
+        .unwrap()
+        .run_bounded_transaction(
+            &high_fatigue_homeostasis(Tick::new(100)),
+            Tick::new(100),
+            &evidence,
+            &mut memory,
+            &mut predictor,
+            &mut topology,
+        )
+        .unwrap();
+
+    assert_eq!(receipt.replay_event_count, 2);
+    assert_eq!(receipt.promoted_memory_ids.len(), 1);
+
+    let mut duplicate = receipt.clone();
+    duplicate
+        .promoted_memory_ids
+        .push(duplicate.promoted_memory_ids[0]);
+    duplicate.canonical_digest = duplicate.recompute_canonical_digest().unwrap();
+    assert_eq!(
+        duplicate.validate_contract(),
+        Err(ScaffoldContractError::ConsolidationGenerationMismatch)
+    );
+
+    let mut empty = receipt.clone();
+    empty.promoted_memory_ids.clear();
+    empty.canonical_digest = empty.recompute_canonical_digest().unwrap();
+    assert_eq!(
+        empty.validate_contract(),
+        Err(ScaffoldContractError::ConsolidationGenerationMismatch)
+    );
+
+    let mut over_count = receipt;
+    over_count.promoted_memory_ids = vec![
+        alife_core::MemoryId(1),
+        alife_core::MemoryId(2),
+        alife_core::MemoryId(3),
+    ];
+    over_count.canonical_digest = over_count.recompute_canonical_digest().unwrap();
+    assert_eq!(
+        over_count.validate_contract(),
+        Err(ScaffoldContractError::ConsolidationGenerationMismatch)
+    );
 }

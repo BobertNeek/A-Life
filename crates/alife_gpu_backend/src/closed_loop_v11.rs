@@ -6,7 +6,8 @@
 
 use alife_core::cognitive_work::CognitiveWorkCounters;
 use alife_core::{
-    apply_dendritic_conjunctions, BrainPhenotype, CoactivationEvidence, CognitiveWorkReceipt,
+    apply_dendritic_conjunctions, BrainCapacityClass, BrainPhenotype, CanonicalDigestBuilder,
+    CoactivationEvidence, CognitiveWorkReceipt, PhenotypeHash,
     DendriticBranch, DendriticBranchSet, DendriticInputRef, DendriticWorkReceipt,
     ScaffoldContractError, StructuralPlasticityConfig, StructuralPlasticityState,
     StructuralWorkReceipt, MAX_ACCEPTED_PER_PHASE, MAX_CANDIDATES_PER_REGION,
@@ -15,6 +16,110 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub const GPU_V11_CAUSAL_STATE_SCHEMA_VERSION: u16 = 1;
+pub const GPU_LIVE_TOPOLOGY_CHECKPOINT_SCHEMA_VERSION: u16 = 1;
+
+const GPU_LIVE_TOPOLOGY_DIGEST_DOMAIN: &[u8] = b"alife.gpu.live-topology.v1";
+
+/// Backend-owned semantic projection of the exact fixed-slot execution plan.
+/// Absolute arena offsets are excluded so the checkpoint remains portable.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GpuLiveTopologyCheckpointV1 {
+    pub schema_version: u16,
+    pub phenotype_hash: PhenotypeHash,
+    pub neuron_count: u32,
+    pub total_synapse_count: u32,
+    pub recurrent_synapse_count: u32,
+    pub decoder_synapse_count: u32,
+    pub target_offsets: Vec<u32>,
+    pub source_indices: Vec<u32>,
+    pub route_indices: Vec<u32>,
+    pub genetic_weight_bits: Vec<u32>,
+    pub alpha_bits: Vec<u32>,
+    pub synapse_learning_metadata_words: Vec<u32>,
+    pub decoder_eligibility_metadata_words: Vec<u32>,
+    pub decoder_synapse_starts: Vec<u32>,
+    pub decoder_weight_global_synapse_ids: Vec<u32>,
+    pub memory_weight_indices: Vec<u32>,
+    pub v11_checkpoint: GpuV11Checkpoint,
+    pub canonical_digest: [u64; 4],
+}
+
+impl GpuLiveTopologyCheckpointV1 {
+    pub fn recompute_canonical_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
+        let mut digest = CanonicalDigestBuilder::new(GPU_LIVE_TOPOLOGY_DIGEST_DOMAIN);
+        digest.write_u16(self.schema_version);
+        for word in self.phenotype_hash.0 {
+            digest.write_u64(word);
+        }
+        digest.write_u32(self.neuron_count);
+        digest.write_u32(self.total_synapse_count);
+        digest.write_u32(self.recurrent_synapse_count);
+        digest.write_u32(self.decoder_synapse_count);
+        for values in [
+            &self.target_offsets,
+            &self.source_indices,
+            &self.route_indices,
+            &self.genetic_weight_bits,
+            &self.alpha_bits,
+            &self.synapse_learning_metadata_words,
+            &self.decoder_eligibility_metadata_words,
+            &self.decoder_synapse_starts,
+            &self.decoder_weight_global_synapse_ids,
+            &self.memory_weight_indices,
+        ] {
+            digest.write_sequence_len(values.len());
+            for value in values {
+                digest.write_u32(*value);
+            }
+        }
+        Ok(digest.finish256())
+    }
+
+    pub fn validate_for_capacity(
+        &self,
+        capacity: &BrainCapacityClass,
+    ) -> Result<(), ScaffoldContractError> {
+        let recurrent = usize::try_from(self.recurrent_synapse_count)
+            .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
+        let total = usize::try_from(self.total_synapse_count)
+            .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
+        let decoder = usize::try_from(self.decoder_synapse_count)
+            .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
+        let neuron_count = usize::try_from(self.neuron_count)
+            .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
+        GpuV11CausalState::restore(self.v11_checkpoint.clone())?;
+        if self.schema_version != GPU_LIVE_TOPOLOGY_CHECKPOINT_SCHEMA_VERSION
+            || self.phenotype_hash == PhenotypeHash([0; 4])
+            || self.neuron_count == 0
+            || self.neuron_count > capacity.execution().max_neurons()
+            || self.total_synapse_count > capacity.execution().max_total_synapses()
+            || self.recurrent_synapse_count > capacity.execution().max_recurrent_synapses()
+            || self.recurrent_synapse_count.checked_add(self.decoder_synapse_count)
+                != Some(self.total_synapse_count)
+            || self.target_offsets.len() != neuron_count.saturating_add(1)
+            || self.target_offsets.first().copied() != Some(0)
+            || self.target_offsets.last().copied() != Some(self.recurrent_synapse_count)
+            || self.target_offsets.windows(2).any(|pair| pair[0] > pair[1])
+            || self.source_indices.len() != recurrent
+            || self.route_indices.len() != recurrent
+            || self.source_indices.iter().any(|source| *source >= self.neuron_count)
+            || self.genetic_weight_bits.len() != total
+            || self.alpha_bits.len() != total
+            || self
+                .genetic_weight_bits
+                .iter()
+                .chain(&self.alpha_bits)
+                .any(|bits| !f32::from_bits(*bits).is_finite())
+            || self.decoder_eligibility_metadata_words.is_empty() != (decoder == 0)
+            || self.v11_checkpoint.neuron_count != self.neuron_count
+            || self.v11_checkpoint.pending_lifetime_synapse.is_some()
+            || self.canonical_digest != self.recompute_canonical_digest()?
+        {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GpuV11SparseEdge {
@@ -83,6 +188,14 @@ pub struct GpuV11Checkpoint {
     #[serde(default)]
     pub pending_lifetime_synapse: Option<AddLifetimeSynapse>,
     pub work: GpuV11WorkReceipt,
+}
+
+impl GpuV11Checkpoint {
+    pub fn canonical_for_phenotype(
+        phenotype: &BrainPhenotype,
+    ) -> Result<Self, ScaffoldContractError> {
+        Ok(GpuV11CausalState::for_phenotype(phenotype)?.checkpoint())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
