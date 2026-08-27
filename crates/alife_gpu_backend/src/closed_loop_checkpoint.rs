@@ -20,11 +20,12 @@ use crate::{
     pack_candidate_index_and_family, replay_reset_digest, reset_word_count, sleep_commit_key,
     GpuBrainHandle, GpuClosedLoopBackend, GpuPendingEligibilityRecord, GpuReplayEventRecord,
     GpuReplaySynapseSpanRecord, GpuSleepCompletionRecord, GpuSleepJobState, GpuSleepStagingReceipt,
-    GpuLiveTopologyCheckpointV1, GpuSlotLearningStateRecord, PendingEligibilityIdentity,
-    PendingEligibilityReceipt,
+    GpuLiveTopologyCheckpointV1, GpuSlotLearningStateRecord, GpuV11Checkpoint,
+    PendingEligibilityIdentity, PendingEligibilityReceipt,
 };
 
 pub const GPU_BRAIN_CHECKPOINT_SCHEMA_VERSION: u16 = 1;
+pub const GPU_COMPACT_CHECKPOINT_AUTHORITY_SCHEMA_VERSION: u16 = 1;
 
 const CHECKPOINT_DIGEST_DOMAIN: &[u8] = b"alife.gpu.brain-checkpoint.v1";
 const COMPLETED_STAGING_DIGEST_DOMAIN: &[u8] = b"alife.gpu.completed-sleep-staging.v1";
@@ -59,6 +60,80 @@ pub struct PendingEligibilityRestoreParts {
     candidate_feature_digest: CandidateFeatureDigest,
     active_eligibility_generation: u64,
     staging_eligibility_generation: u64,
+}
+
+/// Versioned scalar identity for reusing an already-published exact neural
+/// checkpoint. It binds every mutable GPU bank/generation/side plus the exact
+/// pending-learning and V11 topology authority, without reading neural buffers.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GpuCompactCheckpointAuthorityV1 {
+    schema_version: u16,
+    active_activation_side: u8,
+    logical_dispatch_generation: u64,
+    active_weight_generation: u64,
+    active_weight_bank: u8,
+    active_eligibility_generation: u64,
+    inactive_eligibility_generation: u64,
+    active_eligibility_bank: u8,
+    replay_journal_generation: u64,
+    replay_journal_cursor: u32,
+    replay_journal_event_count: u32,
+    transaction_generation: u64,
+    last_learning_replay_key: Option<OutcomeCreditReplayKey>,
+    pending_eligibility: Option<PendingEligibilityRestoreParts>,
+    v11: GpuV11Checkpoint,
+}
+
+impl GpuCompactCheckpointAuthorityV1 {
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_new(
+        active_activation_side: u8,
+        logical_dispatch_generation: u64,
+        active_weight_generation: u64,
+        active_weight_bank: u8,
+        active_eligibility_generation: u64,
+        inactive_eligibility_generation: u64,
+        active_eligibility_bank: u8,
+        replay_journal_generation: u64,
+        replay_journal_cursor: u32,
+        replay_journal_event_count: u32,
+        transaction_generation: u64,
+        last_learning_replay_key: Option<OutcomeCreditReplayKey>,
+        pending_eligibility: Option<PendingEligibilityRestoreParts>,
+        v11: GpuV11Checkpoint,
+    ) -> Result<Self, ScaffoldContractError> {
+        if active_activation_side > 1
+            || logical_dispatch_generation == 0
+            || active_weight_generation == 0
+            || active_weight_bank > 1
+            || active_eligibility_generation == 0
+            || (inactive_eligibility_generation != 0
+                && active_eligibility_generation.checked_add(1)
+                    != Some(inactive_eligibility_generation))
+            || active_eligibility_bank > 1
+            || replay_journal_generation == 0
+            || transaction_generation == 0
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        Ok(Self {
+            schema_version: GPU_COMPACT_CHECKPOINT_AUTHORITY_SCHEMA_VERSION,
+            active_activation_side,
+            logical_dispatch_generation,
+            active_weight_generation,
+            active_weight_bank,
+            active_eligibility_generation,
+            inactive_eligibility_generation,
+            active_eligibility_bank,
+            replay_journal_generation,
+            replay_journal_cursor,
+            replay_journal_event_count,
+            transaction_generation,
+            last_learning_replay_key,
+            pending_eligibility,
+            v11,
+        })
+    }
 }
 
 impl PendingEligibilityRestoreParts {
@@ -1154,6 +1229,57 @@ fn restored_pending_record(
 }
 
 impl GpuClosedLoopBackend {
+    /// Validates that compact persistence still names the exact backend-owned
+    /// neural authority captured by the last bulk checkpoint. This reads only
+    /// resident host metadata and never maps a GPU buffer.
+    pub fn validate_compact_checkpoint_authority(
+        &mut self,
+        handle: GpuBrainHandle,
+        expected: &GpuCompactCheckpointAuthorityV1,
+    ) -> Result<(), ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let bucket = self
+            .class_buckets
+            .get(&handle.class_id().raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .bucket_for_handle(handle)?;
+        let resident = bucket.slots[handle.slot() as usize]
+            .as_ref()
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let active_activation_side = bucket
+            .pipelines
+            .slot_active_side(handle.slot(), handle.generation())
+            .map_err(map_gpu_contract_error)?;
+        let pending_eligibility = resident
+            .pending_eligibility
+            .map(pending_parts_from_receipt)
+            .transpose()?;
+        let current = GpuCompactCheckpointAuthorityV1::try_new(
+            active_activation_side,
+            resident.logical_dispatch_generation,
+            resident.active_weight_generation,
+            resident.active_weight_bank,
+            resident.active_eligibility_generation,
+            resident.inactive_eligibility_generation,
+            resident.active_eligibility_bank,
+            resident.replay_journal_generation,
+            resident.replay_journal_cursor,
+            resident.replay_journal_event_count,
+            resident.transaction_generation,
+            resident.learning_sequence_guard.last_committed(),
+            pending_eligibility,
+            resident.v11.checkpoint(),
+        )?;
+        if current != *expected
+            || resident.pending_eligibility.is_some()
+                != resident.pending_eligibility_record.is_some()
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        Ok(())
+    }
+
     /// Reads the bounded candidate-logit row for an exact pending GPU
     /// transaction. This is an offline evidence/checkpoint boundary, never a
     /// gameplay arbitration path.
@@ -1779,8 +1905,11 @@ impl GpuClosedLoopBackend {
             resident.active_weight_generation = parts.active_weight_generation;
             resident.active_weight_bank = parts.active_weight_bank;
             resident.active_eligibility_generation = parts.active_eligibility_generation;
+            resident.inactive_eligibility_generation = parts.inactive_eligibility_generation;
             resident.active_eligibility_bank = parts.active_eligibility_bank;
             resident.replay_journal_generation = parts.replay_journal_generation;
+            resident.replay_journal_cursor = parts.replay_journal_cursor;
+            resident.replay_journal_event_count = parts.replay_journal_event_count;
             resident.transaction_generation = parts.learning_transaction_generation;
             resident.logical_dispatch_generation = parts.logical_dispatch_generation;
             resident.learning_sequence_guard = LearningSequenceGuard::restore_validated(

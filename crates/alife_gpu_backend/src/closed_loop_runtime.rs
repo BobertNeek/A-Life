@@ -1688,9 +1688,12 @@ pub(crate) struct ResidentBrainSlot {
     pub(crate) ranges: GpuFixedSlotRanges,
     pub(crate) active_eligibility_bank: u8,
     pub(crate) active_eligibility_generation: u64,
+    pub(crate) inactive_eligibility_generation: u64,
     pub(crate) active_weight_bank: u8,
     pub(crate) active_weight_generation: u64,
     pub(crate) replay_journal_generation: u64,
+    pub(crate) replay_journal_cursor: u32,
+    pub(crate) replay_journal_event_count: u32,
     pub(crate) transaction_generation: u64,
     pub(crate) logical_dispatch_generation: u64,
     pub(crate) activity_sequence_cursor: u64,
@@ -4348,7 +4351,18 @@ impl GpuClosedLoopBackend {
             resident.active_eligibility_bank ^= 1;
             resident.active_weight_generation = record.output_fast_generation();
             resident.active_eligibility_generation = record.output_eligibility_generation();
+            resident.inactive_eligibility_generation = 0;
             resident.replay_journal_generation = record.replay_generation();
+            let replay_capacity = resident.phenotype.replay_capture_plan().event_capacity();
+            resident.replay_journal_cursor = resident
+                .replay_journal_cursor
+                .checked_add(1)
+                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?
+                % replay_capacity;
+            resident.replay_journal_event_count = resident
+                .replay_journal_event_count
+                .saturating_add(1)
+                .min(replay_capacity);
             resident.transaction_generation = record.transaction_generation();
             resident.pending_eligibility = None;
             resident.pending_eligibility_record = None;
@@ -4472,6 +4486,7 @@ impl GpuClosedLoopBackend {
             .and_then(|pool| pool.resident_mut(handle).ok())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
         resident.transaction_generation = next_transaction_generation;
+        resident.inactive_eligibility_generation = 0;
         resident.pending_eligibility = None;
         resident.pending_eligibility_record = None;
         if self
@@ -5713,6 +5728,10 @@ impl GpuClosedLoopBackend {
                 .expect("host pending commit was prevalidated");
             resident.transaction_generation = ordered_next_transaction_generations[index]
                 .expect("host transaction generation was prevalidated");
+            resident.inactive_eligibility_generation = resident
+                .active_eligibility_generation
+                .checked_add(1)
+                .expect("eligibility generation was prevalidated");
             resident.logical_dispatch_generation = dispatch_generation.get();
             resident.activity_sequence_cursor = resident
                 .activity_sequence_cursor
@@ -6139,10 +6158,13 @@ impl GpuClosedLoopBackend {
             brain_slot: upload.brain_slot().clone(),
             ranges: upload.ranges().clone(),
             active_eligibility_generation: 1,
+            inactive_eligibility_generation: 0,
             active_eligibility_bank: 0,
             active_weight_bank: 0,
             active_weight_generation: 1,
             replay_journal_generation: 1,
+            replay_journal_cursor: 0,
+            replay_journal_event_count: 0,
             transaction_generation: 1,
             logical_dispatch_generation: self.next_dispatch_generation,
             activity_sequence_cursor: 1,
@@ -6719,10 +6741,13 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
             brain_slot: upload.brain_slot().clone(),
             ranges: upload.ranges().clone(),
             active_eligibility_generation: 1,
+            inactive_eligibility_generation: 0,
             active_eligibility_bank: 0,
             active_weight_bank: 0,
             active_weight_generation: 1,
             replay_journal_generation: 1,
+            replay_journal_cursor: 0,
+            replay_journal_event_count: 0,
             transaction_generation: 1,
             logical_dispatch_generation: self.backend.next_dispatch_generation,
             activity_sequence_cursor: 1,

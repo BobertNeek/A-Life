@@ -7906,6 +7906,8 @@ fn write_phase31_performance_receipt(
         "sleep_durable_activity": {
             "boundary_calls": runtime_delta.sleep_persistence_calls,
             "capture_calls": runtime_delta.sleep_checkpoint_capture_calls,
+            "exact_neural_capture_organisms": runtime_delta.sleep_exact_neural_capture_organisms,
+            "compact_journal_organisms": runtime_delta.sleep_compact_journal_organisms,
             "capture_wall_ns": runtime_delta.sleep_checkpoint_capture_wall_ns,
             "capture_readback_calls": runtime_delta.sleep_checkpoint_readback_calls,
             "capture_readback_bytes": runtime_delta.sleep_checkpoint_readback_bytes,

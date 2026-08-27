@@ -587,7 +587,10 @@ impl GpuClosedLoopBackend {
         resident.active_weight_generation = staged.output_generation;
         resident.active_eligibility_bank = staged.output_eligibility_bank;
         resident.active_eligibility_generation = staged.eligibility_reset_generation;
+        resident.inactive_eligibility_generation = 0;
         resident.replay_journal_generation = staged.replay_journal_generation;
+        resident.replay_journal_cursor = staged.replay_journal_cursor;
+        resident.replay_journal_event_count = staged.replay_journal_event_count;
         resident.transaction_generation = join_pair([
             state.transaction_generation_lo,
             state.transaction_generation_hi,

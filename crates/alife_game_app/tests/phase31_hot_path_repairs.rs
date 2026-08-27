@@ -28,6 +28,11 @@ fn isolated_root() -> PathBuf {
     ))
 }
 
+fn sleep_journal_path(save_path: &Path) -> PathBuf {
+    let file_name = save_path.file_name().unwrap().to_string_lossy();
+    save_path.with_file_name(format!(".{file_name}.sleep-journal-v1.json"))
+}
+
 struct CanonicalRuntimeFixture {
     root: PathBuf,
     asset_root: PathBuf,
@@ -216,6 +221,140 @@ fn assert_pending_replay_checkpoint_roundtrip(
     };
     assert_eq!(restored_digest, replay_digest);
     assert_eq!(restored_replay, saved_replay);
+
+    let mut control_runtime = runtime.restored_clone_from_durability_for_test().unwrap();
+    let control_before = control_runtime.performance_metrics();
+    let control_result = control_runtime.tick();
+    let control_after = control_runtime.performance_metrics();
+    let compact_transition_reached = control_result.is_ok()
+        && matches!(
+            control_runtime
+                .sleep_state_for_test(organism_id)
+                .unwrap()
+                .consolidation,
+            ConsolidationState::Prepared { .. }
+        )
+        && control_after.sleep_compact_journal_organisms
+            > control_before.sleep_compact_journal_organisms
+        && control_after.sleep_checkpoint_capture_calls
+            == control_before.sleep_checkpoint_capture_calls
+        && control_after.sleep_checkpoint_readback_calls
+            == control_before.sleep_checkpoint_readback_calls
+        && control_after.sleep_checkpoint_readback_bytes
+            == control_before.sleep_checkpoint_readback_bytes;
+    drop(control_runtime);
+
+    GpuDurableSaveManifest::publish_snapshot(save_path, asset_root, &checkpoint).unwrap();
+    let durable = GpuDurableSaveManifest::open(save_path, asset_root).unwrap();
+    let staging = runtime.new_staging_like_live().unwrap();
+    runtime.replace_from_durable_save(staging, durable).unwrap();
+    if !compact_transition_reached {
+        return false;
+    }
+
+    let mut drift_runtime = runtime.restored_clone_from_durability_for_test().unwrap();
+    let exact_save_before_drift = fs::read(save_path).unwrap();
+    let journal_path = sleep_journal_path(save_path);
+    let journal_before_drift = fs::read(&journal_path).unwrap();
+    let metrics_before_drift = drift_runtime.performance_metrics();
+    drift_runtime
+        .force_compact_checkpoint_identity_drift_for_test(organism_id)
+        .unwrap();
+    assert!(matches!(
+        drift_runtime.tick(),
+        Err(GameAppShellError::GpuRuntime(
+            alife_runtime::GpuRuntimeError::Core(
+                ScaffoldContractError::BrainActivitySequenceMismatch
+            )
+        ))
+    ));
+    assert_eq!(fs::read(save_path).unwrap(), exact_save_before_drift);
+    assert_eq!(fs::read(&journal_path).unwrap(), journal_before_drift);
+    let metrics_after_drift = drift_runtime.performance_metrics();
+    assert_eq!(
+        metrics_after_drift.sleep_persistence_calls,
+        metrics_before_drift.sleep_persistence_calls
+    );
+    assert_eq!(
+        metrics_after_drift.sleep_checkpoint_capture_calls,
+        metrics_before_drift.sleep_checkpoint_capture_calls
+    );
+    assert_eq!(
+        metrics_after_drift.sleep_checkpoint_readback_calls,
+        metrics_before_drift.sleep_checkpoint_readback_calls
+    );
+    assert_eq!(
+        metrics_after_drift.sleep_checkpoint_readback_bytes,
+        metrics_before_drift.sleep_checkpoint_readback_bytes
+    );
+    drop(drift_runtime);
+    true
+}
+
+fn assert_anchored_journal_rolls_back_to_exact_base_if_present(
+    runtime: &mut GpuLiveBrainRuntime,
+    organisms: &[OrganismId],
+    save_path: &Path,
+    asset_root: &Path,
+) -> bool {
+    let durable = GpuDurableSaveManifest::open(save_path, asset_root).unwrap();
+    let exact_base = durable.load().unwrap();
+    let journal = durable
+        .load_sleep_transaction_journal(&exact_base)
+        .unwrap();
+    if journal.entries.is_empty() {
+        return false;
+    }
+    let exact_save_bytes = fs::read(save_path).unwrap();
+    let exact_sleep_states = organisms
+        .iter()
+        .map(|organism_id| {
+            let sleep = exact_base
+                .save
+                .creatures
+                .iter()
+                .find(|creature| creature.organism_id == *organism_id)
+                .and_then(|creature| creature.gpu_brain.as_ref())
+                .map(|brain| brain.sleep)
+                .expect("anchored exact base contains every resident brain");
+            (*organism_id, sleep)
+        })
+        .collect::<Vec<_>>();
+    for organism_id in organisms {
+        if let Some(first) = journal
+            .entries
+            .iter()
+            .find(|entry| entry.organism_id == *organism_id)
+        {
+            assert_eq!(
+                first.source,
+                exact_sleep_states
+                    .iter()
+                    .find(|(candidate, _)| candidate == organism_id)
+                    .map(|(_, sleep)| *sleep)
+                    .unwrap()
+            );
+        }
+    }
+
+    let staging = runtime.new_staging_like_live().unwrap();
+    runtime.replace_from_durable_save(staging, durable).unwrap();
+    assert_eq!(
+        organisms
+            .iter()
+            .map(|organism_id| (*organism_id, runtime.sleep_state_for_test(*organism_id).unwrap()))
+            .collect::<Vec<_>>(),
+        exact_sleep_states,
+        "restore must discard journal-only future phases and install the exact base"
+    );
+    assert_eq!(fs::read(save_path).unwrap(), exact_save_bytes);
+    let reopened = GpuDurableSaveManifest::open(save_path, asset_root).unwrap();
+    let reopened_base = reopened.load().unwrap();
+    assert!(reopened
+        .load_sleep_transaction_journal(&reopened_base)
+        .unwrap()
+        .entries
+        .is_empty());
     true
 }
 
@@ -252,18 +391,19 @@ fn observe_checkpoint_continuity(
 fn drive_to_first_compact_authority_seal(
     runtime: &mut GpuLiveBrainRuntime,
     organisms: &[OrganismId],
-    pending_roundtrip_paths: Option<(&Path, &Path)>,
+    journal_paths: Option<(&Path, &Path)>,
 ) {
-    let mut pending_roundtrip_proven = false;
+    let mut anchored_journal_rollback_proven = false;
     for _ in 0..96 {
-        if !pending_roundtrip_proven {
-            if let Some((save_path, asset_root)) = pending_roundtrip_paths {
-                pending_roundtrip_proven = assert_pending_replay_checkpoint_roundtrip(
-                    runtime,
-                    organisms,
-                    save_path,
-                    asset_root,
-                );
+        if !anchored_journal_rollback_proven {
+            if let Some((save_path, asset_root)) = journal_paths {
+                anchored_journal_rollback_proven =
+                    assert_anchored_journal_rolls_back_to_exact_base_if_present(
+                        runtime,
+                        organisms,
+                        save_path,
+                        asset_root,
+                    );
             }
         }
         let brain_digests_before = organisms
@@ -282,7 +422,39 @@ fn drive_to_first_compact_authority_seal(
                 )
             })
             .collect::<Vec<_>>();
+        let metrics_before_tick = runtime.performance_metrics();
         let summaries = runtime.tick().unwrap();
+        let metrics_after_tick = runtime.performance_metrics();
+        if metrics_after_tick.sleep_checkpoint_capture_calls
+            == metrics_before_tick.sleep_checkpoint_capture_calls
+        {
+            assert_eq!(
+                metrics_after_tick.sleep_checkpoint_readback_calls,
+                metrics_before_tick.sleep_checkpoint_readback_calls,
+                "a non-exact sleep tick must not perform a hidden mutable readback"
+            );
+            assert_eq!(
+                metrics_after_tick.sleep_checkpoint_readback_bytes,
+                metrics_before_tick.sleep_checkpoint_readback_bytes,
+                "a non-exact sleep tick must not move hidden mutable bytes"
+            );
+        }
+        if metrics_after_tick.sleep_compact_journal_organisms
+            > metrics_before_tick.sleep_compact_journal_organisms
+        {
+            assert_eq!(
+                metrics_after_tick.sleep_checkpoint_capture_calls,
+                metrics_before_tick.sleep_checkpoint_capture_calls
+            );
+            assert_eq!(
+                metrics_after_tick.sleep_checkpoint_readback_calls,
+                metrics_before_tick.sleep_checkpoint_readback_calls
+            );
+            assert_eq!(
+                metrics_after_tick.sleep_checkpoint_readback_bytes,
+                metrics_before_tick.sleep_checkpoint_readback_bytes
+            );
+        }
         let authority_receipts = runtime.last_gpu_authority_receipts();
         if authority_receipts.is_empty() {
             continue;
@@ -335,8 +507,8 @@ fn drive_to_first_compact_authority_seal(
         assert_eq!(runtime.performance_metrics().resident_json_bytes, 0);
         assert_eq!(runtime.performance_metrics().topology_json_bytes, 0);
         assert!(
-            pending_roundtrip_paths.is_none() || pending_roundtrip_proven,
-            "the canonical seal lifecycle never reached a Pending replay checkpoint"
+            journal_paths.is_none() || anchored_journal_rollback_proven,
+            "the canonical lifecycle never published and rolled back a compact sleep journal"
         );
         return;
     }
@@ -365,6 +537,31 @@ fn drive_to_first_compact_authority_seal(
         world.tick(),
         runtime.performance_metrics().inference_rows
     );
+}
+
+#[test]
+fn phase31_pending_compact_transition_is_reachable_and_drift_fails_closed() {
+    let CanonicalRuntimeFixture {
+        root,
+        asset_root,
+        save_path,
+        mut runtime,
+        organisms,
+    } = canonical_runtime(31_082_707, 4);
+    for _ in 0..64 {
+        if assert_pending_replay_checkpoint_roundtrip(
+            &mut runtime,
+            &organisms,
+            &save_path,
+            &asset_root,
+        ) {
+            drop(runtime);
+            fs::remove_dir_all(root).unwrap();
+            return;
+        }
+        runtime.tick().unwrap();
+    }
+    panic!("no single-organism Pending to compact Prepared transition was reachable");
 }
 
 #[test]
@@ -422,6 +619,22 @@ fn phase31_hot_path_completed_sleep_batch_is_atomic_and_keeps_exact_snapshot_bou
     let sleep_checkpoint_metrics = runtime.performance_metrics();
     assert!(sleep_checkpoint_metrics.sleep_checkpoint_readback_calls > 0);
     assert!(sleep_checkpoint_metrics.sleep_checkpoint_readback_bytes > 0);
+    assert!(
+        sleep_checkpoint_metrics.sleep_persistence_calls
+            > sleep_checkpoint_metrics.sleep_checkpoint_capture_calls,
+        "non-neural journal boundaries must outnumber exact whole-save captures in the canonical lifecycle: {sleep_checkpoint_metrics:#?}"
+    );
+    assert!(
+        sleep_checkpoint_metrics.sleep_compact_journal_organisms > 0,
+        "non-neural sleep transitions must use compact journal publication"
+    );
+    assert_eq!(
+        sleep_checkpoint_metrics.sleep_exact_neural_capture_organisms,
+        sleep_checkpoint_metrics
+            .sleep_checkpoint_capture_calls
+            .saturating_mul(u64::try_from(organisms.len()).unwrap()),
+        "every exact sleep boundary captures the current population once; journals capture no neural slots"
+    );
 
     drop(runtime);
     fs::remove_dir_all(continuity_root).unwrap();

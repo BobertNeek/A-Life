@@ -11,7 +11,8 @@ use alife_core::{
 use alife_gpu_backend::{
     GpuActivityRestoreInput, GpuActivityRuntimeSnapshot, GpuBrainCheckpointParts,
     GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuBrainRestoreReceipt, GpuBrainRestoreRequest,
-    GpuClosedLoopBackend, GpuCompletedSleepStagingInputParts, GpuCompletedSleepStagingParts,
+    GpuClosedLoopBackend, GpuCompactCheckpointAuthorityV1,
+    GpuCompletedSleepStagingInputParts, GpuCompletedSleepStagingParts,
     GpuPortableActivityRestoreRecord, GpuReplayEventRecord, GpuReplaySynapseSpanRecord,
     GpuLiveTopologyCheckpointV1, GpuV11Checkpoint, PendingEligibilityRestoreParts,
     GPU_BRAIN_CHECKPOINT_SCHEMA_VERSION,
@@ -289,6 +290,90 @@ impl GpuBrainCheckpointWrite {
 }
 
 impl GpuCheckpointAssetStore {
+    /// Proves that an exact published neural checkpoint is still the live GPU
+    /// authority. This performs content-addressed metadata reads only and no
+    /// mutable GPU-buffer readback.
+    pub fn validate_compact_neural_reuse(
+        &self,
+        backend: &mut GpuAuthoritativeSession,
+        manifest: &AssetManifest,
+        source: &GpuBrainSaveState,
+        handle: GpuBrainHandle,
+        phenotype: &BrainPhenotype,
+    ) -> Result<(), GameAppShellError> {
+        manifest.validate_with_root(self.root())?;
+        source.validate_asset_manifest(manifest)?;
+        if source.schema_version != GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION
+            || source.organism_id != handle.organism_id()
+            || source.phenotype_hash != phenotype.phenotype_hash()
+            || source.capacity_class_id != phenotype.brain_class_id()
+            || handle.phenotype_hash() != phenotype.phenotype_hash()
+            || handle.class_id() != phenotype.brain_class_id()
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+        }
+        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())?;
+        let topology_ref = source
+            .live_structural_topology
+            .as_ref()
+            .ok_or(ScaffoldContractError::InvalidSparseProjectionSchema)?;
+        let (live_topology, _): (GpuLiveTopologyCheckpointV1, Vec<u8>) =
+            self.read_json(manifest, topology_ref)?;
+        live_topology.validate_for_capacity(&capacity)?;
+        let (eligibility, _): (PortableEligibilityBanksV1, Vec<u8>) =
+            self.read_json(manifest, &source.eligibility)?;
+        eligibility.validate()?;
+        let (activation, _): (PortableActivationBanksV1, Vec<u8>) =
+            self.read_json(manifest, &source.activation_state)?;
+        activation.validate()?;
+        let (replay_state, _): (PortableRuntimeReplayStateWire, Vec<u8>) =
+            self.read_json(manifest, &source.replay_journal)?;
+        let replay = match replay_state {
+            PortableRuntimeReplayStateWire::Runtime(replay_state) => {
+                validate_runtime_replay_state(source.organism_id, &replay_state)?;
+                replay_state.journal
+            }
+            PortableRuntimeReplayStateWire::Legacy(replay) if replay.event_count == 0 => replay,
+            PortableRuntimeReplayStateWire::Legacy(_) => {
+                return Err(ScaffoldContractError::MissingPhaseData.into())
+            }
+        };
+        replay.validate()?;
+        let expected = GpuCompactCheckpointAuthorityV1::try_new(
+            activation.active_side,
+            activation.logical_dispatch_generation,
+            source.active_weight_generation,
+            source.active_weight_bank,
+            eligibility.active_generation,
+            eligibility.inactive_generation,
+            source.active_eligibility_bank,
+            replay.generation,
+            replay.cursor,
+            replay.event_count,
+            source.learning_transaction_generation,
+            source.last_learning_replay_key,
+            source
+                .pending_eligibility
+                .map(pending_restore_parts)
+                .transpose()?,
+            live_topology.v11_checkpoint,
+        )?;
+        backend.validate_compact_checkpoint_authority(handle, &expected)?;
+
+        let (activity, throttle_sequence) = portable_activity_checkpoint(backend, handle)?;
+        let (saved_throttle_sequence, _): (Vec<PortableThrottleCheckpoint>, Vec<u8>) =
+            self.read_json(manifest, &source.throttle_replay.sequence_asset)?;
+        if saved_throttle_sequence != throttle_sequence
+            || source.throttle_replay.next_sequence_cursor != activity.next_sequence_cursor
+            || source.throttle_replay.next_completed_gpu_time_ns
+                != activity.next_completed_gpu_time_ns
+            || source.throttle_replay.last_checkpoint != throttle_sequence.last().cloned()
+        {
+            return Err(ScaffoldContractError::BrainActivitySequenceMismatch.into());
+        }
+        Ok(())
+    }
+
     pub fn restore_brain_checkpoint(
         &self,
         backend: &mut GpuAuthoritativeSession,
