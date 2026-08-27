@@ -54,7 +54,8 @@ use crate::LiveBrainTickSummary;
 #[cfg(feature = "gpu-runtime")]
 use crate::bevy_shell::{
     ProductionCuratedFounderResetCommand, ProductionCuratedFounderResetResultResource,
-    ProductionGpuBrainRuntimeResource, ProductionGpuBrainTickScheduleResource,
+    ProductionGpuBrainAuthorityResource, ProductionGpuBrainRuntimeResource,
+    ProductionGpuBrainTickScheduleResource,
 };
 #[cfg(feature = "gpu-runtime")]
 use crate::gpu_live_runtime::CuratedFounderResetRuntimePort;
@@ -76,6 +77,11 @@ use crate::{
     CreaturePartLodId, CreaturePartSlot, CreatureSurfaceDetailSpec, CreatureVisualBounds,
     GeneForgeAssemblyPreparationIndex, GeneForgeCreaturePartCatalog, JoinCoverPrimitive,
 };
+
+#[cfg(feature = "gpu-runtime")]
+mod phase31_performance_health;
+#[cfg(feature = "gpu-runtime")]
+use phase31_performance_health::validate_phase31_performance_authority;
 use crate::{
     creature_visual_snapshot_from_parts_with_appearance,
     production_terrain::{ProductionTerrainSample, ProductionTerrainSampleMap},
@@ -7638,6 +7644,7 @@ fn phase31_performance_after_ui(
     mut metrics: ResMut<Phase31PerformanceMetricsResource>,
     runtime: NonSend<ProductionGpuBrainRuntimeResource>,
     schedule: Res<ProductionGpuBrainTickScheduleResource>,
+    authority: Res<ProductionGpuBrainAuthorityResource>,
     presentation: Res<LiveBrainPresentationFrameResource>,
     mut exits: MessageWriter<AppExit>,
 ) {
@@ -7659,9 +7666,15 @@ fn phase31_performance_after_ui(
         schedule.performance_counters(),
         presentation.current.authoritative_world_tick.raw(),
         started.elapsed(),
+        schedule.performance_failed(),
+        authority.telemetry.authoritative,
     ) {
         Ok(path) => metrics.artifact_path = Some(path),
-        Err(error) => metrics.write_error = Some(error.to_string()),
+        Err(error) => {
+            metrics.write_error = Some(error.to_string());
+            exits.write(AppExit::Error(std::num::NonZeroU8::new(1).unwrap()));
+            return;
+        }
     }
     exits.write(AppExit::Success);
 }
@@ -7729,6 +7742,8 @@ fn write_phase31_performance_receipt(
     scheduler_final: (u32, u64, u64, u64),
     final_world_tick: u64,
     elapsed: Duration,
+    schedule_failed: bool,
+    gpu_authoritative: bool,
 ) -> Result<PathBuf, GameAppShellError> {
     if cfg!(debug_assertions) {
         return Err(GameAppShellError::InvalidProductionFrontend {
@@ -7755,6 +7770,13 @@ fn write_phase31_performance_receipt(
     let ticks_executed = scheduler_final.2.saturating_sub(scheduler_before.2);
     let dropped_ticks = scheduler_final.3.saturating_sub(scheduler_before.3);
     let elapsed_seconds = elapsed.as_secs_f64().max(0.001);
+    validate_phase31_performance_authority(
+        schedule_failed,
+        gpu_authoritative,
+        runtime_delta.tick_calls,
+        ticks_executed,
+    )
+    .map_err(|message| GameAppShellError::InvalidProductionFrontend { message })?;
     let gpu_inference_ns = metrics.gpu_samples.iter().fold(0_u64, |total, sample| {
         total.saturating_add(gpu_timestamp_ns(
             sample.inference_timestamp_ticks,

@@ -17,6 +17,9 @@ use alife_game_app::{
 use alife_world::persistence::PortableAssetDigest;
 use alife_world::{AssetManifest, PortableSaveFile, RuntimeConfig};
 
+#[path = "../src/production_voxel_renderer/phase31_performance_health.rs"]
+mod phase31_performance_health;
+
 fn isolated_root() -> PathBuf {
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1038,4 +1041,101 @@ fn phase31_hot_path_completed_sleep_batch_is_atomic_and_keeps_exact_snapshot_bou
     drop(runtime);
     drop(durable);
     fs::remove_dir_all(conflict_root).unwrap();
+}
+
+#[test]
+fn phase31_six_founder_runtime_survives_seventy_ticks_after_player_measurement_baseline() {
+    let CanonicalRuntimeFixture {
+        root,
+        mut runtime,
+        organisms,
+        ..
+    } = canonical_runtime(31_082_706, 6);
+    while runtime.world_tick_for_test().raw() < 47 {
+        runtime.tick().unwrap();
+    }
+
+    let mut mixed_promotion_and_journal_tick_observed = false;
+    for measured_call in 1..=70 {
+        let world_tick = runtime.world_tick_for_test();
+        let before = sleep_generation_rows(&mut runtime, &organisms);
+        if world_tick.raw() == 113 {
+            assert_eq!(
+                before
+                    .iter()
+                    .filter(|row| matches!(row.consolidation, ConsolidationState::Completed { .. }))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                before
+                    .iter()
+                    .filter(|row| matches!(row.consolidation, ConsolidationState::Prepared { .. }))
+                    .count(),
+                2
+            );
+        }
+        if let Err(error) = runtime.tick() {
+            panic!(
+                "six-founder production runtime failed during measured call {measured_call} at world tick {}: {error:?}\nbefore={before:#?}\nafter={:#?}",
+                world_tick.raw(),
+                sleep_generation_rows(&mut runtime, &organisms),
+            );
+        }
+        if world_tick.raw() == 113 {
+            let after = sleep_generation_rows(&mut runtime, &organisms);
+            assert_eq!(
+                after
+                    .iter()
+                    .filter(|row| matches!(row.consolidation, ConsolidationState::Committed { .. }))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                after
+                    .iter()
+                    .filter(|row| matches!(row.consolidation, ConsolidationState::Submitted { .. }))
+                    .count(),
+                2
+            );
+            mixed_promotion_and_journal_tick_observed = true;
+        }
+    }
+    assert!(mixed_promotion_and_journal_tick_observed);
+
+    drop(runtime);
+    fs::remove_dir_all(root).unwrap();
+
+    let CanonicalRuntimeFixture {
+        root,
+        mut runtime,
+        organisms,
+        ..
+    } = canonical_runtime(31_082_707, 4);
+    drive_to_completed(&mut runtime, &organisms);
+    runtime.force_late_advance_failure_for_test();
+    assert!(matches!(
+        runtime.tick(),
+        Err(GameAppShellError::Core(
+            ScaffoldContractError::NonMonotonicTick
+        ))
+    ));
+    assert!(matches!(
+        runtime.tick(),
+        Err(GameAppShellError::Core(
+            ScaffoldContractError::NeuralBackendUnavailable
+        ))
+    ));
+    drop(runtime);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn phase31_receipt_rejects_dead_or_unaccounted_simulation() {
+    use phase31_performance_health::validate_phase31_performance_authority;
+
+    assert!(validate_phase31_performance_authority(false, true, 67, 67).is_ok());
+    assert!(validate_phase31_performance_authority(true, true, 67, 67).is_err());
+    assert!(validate_phase31_performance_authority(false, false, 67, 67).is_err());
+    assert!(validate_phase31_performance_authority(false, true, 68, 67).is_err());
 }

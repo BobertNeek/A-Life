@@ -1780,6 +1780,7 @@ pub struct GpuLiveBrainRuntime {
     memories: BTreeMap<u64, MemorySidecarState>,
     topologies: BTreeMap<u64, TopologySidecar>,
     sleep_journal_neural_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
+    post_promotion_fail_stop_armed: bool,
     retained_learning: BTreeMap<u64, RetainedLearningRecovery>,
     world: HeadlessWorld,
     deterministic_seed: u64,
@@ -1829,7 +1830,7 @@ pub struct GpuLiveBrainRuntime {
     forced_retirement_post_receipt_failure: bool,
     #[cfg(test)]
     retirement_backend_removal_count: usize,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "gpu-tests"))]
     forced_late_advance_failure: bool,
 }
 
@@ -3989,6 +3990,7 @@ impl GpuLiveBrainRuntime {
             memories: BTreeMap::new(),
             topologies: BTreeMap::new(),
             sleep_journal_neural_authorities: BTreeMap::new(),
+            post_promotion_fail_stop_armed: false,
             retained_learning: BTreeMap::new(),
             world,
             deterministic_seed,
@@ -4038,7 +4040,7 @@ impl GpuLiveBrainRuntime {
             forced_retirement_post_receipt_failure: false,
             #[cfg(test)]
             retirement_backend_removal_count: 0,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "gpu-tests"))]
             forced_late_advance_failure: false,
         };
         runtime.reconcile_population()?;
@@ -4107,6 +4109,7 @@ impl GpuLiveBrainRuntime {
             memories: BTreeMap::new(),
             topologies: BTreeMap::new(),
             sleep_journal_neural_authorities: BTreeMap::new(),
+            post_promotion_fail_stop_armed: false,
             retained_learning: BTreeMap::new(),
             world,
             deterministic_seed,
@@ -4157,7 +4160,7 @@ impl GpuLiveBrainRuntime {
             forced_retirement_post_receipt_failure: false,
             #[cfg(test)]
             retirement_backend_removal_count: 0,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "gpu-tests"))]
             forced_late_advance_failure: false,
         };
         let mut tracked_object_states = Vec::new();
@@ -5952,10 +5955,16 @@ impl GpuLiveBrainRuntime {
             Option<ConsolidationIntent>,
         ) -> SleepProgressResult,
     {
+        self.post_promotion_fail_stop_armed = false;
         self.backend.ensure_neural_actions_available()?;
         let result = tick_with_sleep_progress_inner(self, |runtime| {
             runtime.tick_with_sleep_progress_staged(&mut progress)
         });
+        if result.is_err() && self.post_promotion_fail_stop_armed {
+            self.backend
+                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+        }
+        self.post_promotion_fail_stop_armed = false;
         if let Err(error) = &result {
             let contract_error = match error {
                 GameAppShellError::Core(error)
@@ -6058,7 +6067,7 @@ impl GpuLiveBrainRuntime {
         let mut scheduled_body_events = BTreeMap::new();
         let mut persist_exact_sleep_boundary = false;
         let mut sleep_journal_entries = Vec::new();
-        let mut sleep_journal_neural_authorities = self.sleep_journal_neural_authorities.clone();
+        let mut sleep_journal_neural_authority_updates = BTreeMap::new();
         let mut completed_promotions = Vec::new();
         let scheduled_handles = if let Some(first) = curated_first_tick_resident {
             vec![(
@@ -6222,11 +6231,14 @@ impl GpuLiveBrainRuntime {
                             (ConsolidationState::None, ConsolidationState::Pending { .. })
                         );
                         if refresh_authority {
-                            sleep_journal_neural_authorities.insert(
+                            sleep_journal_neural_authority_updates.insert(
                                 raw,
                                 capture_sleep_journal_neural_authority(&mut self.backend, handle)?,
                             );
-                        } else if let Some(expected) = sleep_journal_neural_authorities.get(&raw) {
+                        } else if let Some(expected) = sleep_journal_neural_authority_updates
+                            .get(&raw)
+                            .or_else(|| self.sleep_journal_neural_authorities.get(&raw))
+                        {
                             validate_sleep_journal_neural_authority(
                                 &mut self.backend,
                                 handle,
@@ -6272,11 +6284,14 @@ impl GpuLiveBrainRuntime {
                     }
                     (ConsolidationState::None, ConsolidationState::None) => {
                         if sleep_before.phase == SleepPhase::Awake {
-                            sleep_journal_neural_authorities.insert(
+                            sleep_journal_neural_authority_updates.insert(
                                 raw,
                                 capture_sleep_journal_neural_authority(&mut self.backend, handle)?,
                             );
-                        } else if let Some(expected) = sleep_journal_neural_authorities.get(&raw) {
+                        } else if let Some(expected) = sleep_journal_neural_authority_updates
+                            .get(&raw)
+                            .or_else(|| self.sleep_journal_neural_authorities.get(&raw))
+                        {
                             validate_sleep_journal_neural_authority(
                                 &mut self.backend,
                                 handle,
@@ -6476,6 +6491,7 @@ impl GpuLiveBrainRuntime {
                 .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
             return Err(error);
         }
+        self.post_promotion_fail_stop_armed = !completed_promotions.is_empty();
         for (organism_id, memory, receipt) in memory_commits {
             let previous = self.memories.insert(organism_id.raw(), memory);
             debug_assert!(previous.is_some());
@@ -6536,7 +6552,7 @@ impl GpuLiveBrainRuntime {
         if summaries_by_organism.len() != expected_summary_count {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
-        #[cfg(test)]
+        #[cfg(any(test, feature = "gpu-tests"))]
         if std::mem::take(&mut self.forced_late_advance_failure) {
             return Err(ScaffoldContractError::NonMonotonicTick.into());
         }
@@ -6569,6 +6585,7 @@ impl GpuLiveBrainRuntime {
         if persist_exact_sleep_boundary {
             let sleep_persistence_started = Instant::now();
             self.persist_sleep_checkpoint_boundary()?;
+            self.sleep_journal_neural_authorities.clear();
             self.performance_metrics.sleep_persistence_wall_ns = self
                 .performance_metrics
                 .sleep_persistence_wall_ns
@@ -6583,7 +6600,9 @@ impl GpuLiveBrainRuntime {
             let validation_result = (|| -> Result<(), GameAppShellError> {
                 for entry in &sleep_journal_entries {
                     let raw = entry.organism_id.raw();
-                    if sleep_journal_neural_authorities.contains_key(&raw) {
+                    if sleep_journal_neural_authority_updates.contains_key(&raw)
+                        || self.sleep_journal_neural_authorities.contains_key(&raw)
+                    {
                         continue;
                     }
                     let handle = *self
@@ -6609,7 +6628,7 @@ impl GpuLiveBrainRuntime {
                         handle,
                         &resident.phenotype,
                     )?;
-                    sleep_journal_neural_authorities.insert(
+                    sleep_journal_neural_authority_updates.insert(
                         raw,
                         capture_sleep_journal_neural_authority(&mut self.backend, handle)?,
                     );
@@ -6627,7 +6646,8 @@ impl GpuLiveBrainRuntime {
             let journal_result = durability.publish_sleep_journal_entries(sleep_journal_entries);
             self.checkpoint_durability = Some(durability);
             journal_result?;
-            self.sleep_journal_neural_authorities = sleep_journal_neural_authorities;
+            self.sleep_journal_neural_authorities
+                .extend(sleep_journal_neural_authority_updates);
             self.performance_metrics.sleep_compact_journal_organisms = self
                 .performance_metrics
                 .sleep_compact_journal_organisms
@@ -8160,8 +8180,8 @@ impl GpuLiveBrainRuntime {
         self.backend.tick_batch(&[(handle, frame)])
     }
 
-    #[cfg(test)]
-    fn force_late_advance_failure_for_test(&mut self) {
+    #[cfg(any(test, feature = "gpu-tests"))]
+    pub fn force_late_advance_failure_for_test(&mut self) {
         self.forced_late_advance_failure = true;
     }
 }

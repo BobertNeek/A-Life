@@ -897,6 +897,10 @@ impl ProductionGpuBrainTickScheduleResource {
             self.scheduler.catch_up_ticks_dropped,
         )
     }
+
+    pub(crate) const fn performance_failed(&self) -> bool {
+        self.failed
+    }
 }
 
 #[cfg(feature = "gpu-runtime")]
