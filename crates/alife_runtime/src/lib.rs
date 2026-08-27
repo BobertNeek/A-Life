@@ -8,9 +8,8 @@ pub use checkpoint_assets::{
     current_backend_provenance, merge_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite,
     GpuBrainSidecarCapture, GpuCheckpointAssetStore, GpuDurableFounderWrite,
     GpuDurableSaveManifest, GpuLoadedSaveManifest, GpuSaveManifestCasOutcome,
-    GpuSaveManifestDigest, GpuSleepTransactionJournalEntryV1,
-    GpuSleepTransactionJournalV1, RestoredGpuBrainCheckpoint, RestoredRetainedLearning,
-    RetainedLearningCapture,
+    GpuSaveManifestDigest, GpuSleepTransactionJournalEntryV2, GpuSleepTransactionJournalV2,
+    RestoredGpuBrainCheckpoint, RestoredRetainedLearning, RetainedLearningCapture,
 };
 pub use session::*;
 pub use sleep_scheduler::*;

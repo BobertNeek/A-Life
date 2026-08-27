@@ -22,8 +22,8 @@ use crate::GameAppShellError;
 
 static SAVE_CAS_GUARD: Mutex<()> = Mutex::new(());
 static SAVE_CAS_NONCE: AtomicU64 = AtomicU64::new(1);
-pub const GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION: u16 = 1;
-const SLEEP_JOURNAL_DIGEST_DOMAIN: &[u8] = b"alife.gpu.sleep-transaction-journal.v1";
+pub const GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION: u16 = 2;
+const SLEEP_JOURNAL_DIGEST_DOMAIN: &[u8] = b"alife.gpu.sleep-transaction-journal.v2";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SleepJournalAnchorDisposition {
@@ -32,25 +32,37 @@ enum SleepJournalAnchorDisposition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GpuSleepTransactionJournalEntryV1 {
+pub struct GpuSleepTransactionJournalEntryV2 {
     pub organism_id: OrganismId,
     pub transition_tick: Tick,
+    pub transition_ordinal: u8,
     pub source: SleepState,
     pub target: SleepState,
     pub rollback_to_exact_base: bool,
     pub entry_digest: [u64; 4],
 }
 
-impl GpuSleepTransactionJournalEntryV1 {
+impl GpuSleepTransactionJournalEntryV2 {
     pub fn try_new(
         organism_id: OrganismId,
         transition_tick: Tick,
         source: SleepState,
         target: SleepState,
     ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_ordinal(organism_id, transition_tick, 0, source, target)
+    }
+
+    pub fn try_new_with_ordinal(
+        organism_id: OrganismId,
+        transition_tick: Tick,
+        transition_ordinal: u8,
+        source: SleepState,
+        target: SleepState,
+    ) -> Result<Self, ScaffoldContractError> {
         let mut entry = Self {
             organism_id,
             transition_tick,
+            transition_ordinal,
             source,
             target,
             rollback_to_exact_base: true,
@@ -67,19 +79,46 @@ impl GpuSleepTransactionJournalEntryV1 {
         self.target.validate_contract()?;
         let permitted = matches!(
             (self.source.consolidation, self.target.consolidation),
-            (ConsolidationState::Pending { .. }, ConsolidationState::Prepared { .. })
-                | (ConsolidationState::Prepared { .. }, ConsolidationState::Submitted { .. })
-                | (ConsolidationState::Committed { .. }, ConsolidationState::Committed { .. })
-                | (ConsolidationState::Committed { .. }, ConsolidationState::None)
+            (ConsolidationState::None, ConsolidationState::None)
+                | (ConsolidationState::None, ConsolidationState::Pending { .. })
+                | (
+                    ConsolidationState::Pending { .. },
+                    ConsolidationState::Prepared { .. }
+                )
+                | (
+                    ConsolidationState::Prepared { .. },
+                    ConsolidationState::Submitted { .. }
+                )
+                | (
+                    ConsolidationState::Completed { .. },
+                    ConsolidationState::Committed { .. }
+                )
+                | (
+                    ConsolidationState::Committed { .. },
+                    ConsolidationState::Committed { .. }
+                )
+                | (
+                    ConsolidationState::Committed { .. },
+                    ConsolidationState::None
+                )
         );
         if !permitted
             || !self.rollback_to_exact_base
+            || self.transition_ordinal > 1
             || self.transition_tick.raw() == 0
+            || self.source.phase_started_tick.raw() > self.transition_tick.raw()
+            || self.target.phase_started_tick.raw() > self.transition_tick.raw()
             || self.entry_digest != self.recompute_digest()?
         {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
         }
         match (self.source.consolidation, self.target.consolidation) {
+            (ConsolidationState::None, ConsolidationState::None)
+                if canonical_pre_pending_phase_edge(self.source, self.target) => {}
+            (ConsolidationState::None, ConsolidationState::Pending { intent, .. })
+                if self.source.phase == alife_core::SleepPhase::Consolidating
+                    && intent.cycle_id == self.source.active_cycle_id
+                    && sleep_identity_unchanged_except_consolidation(self.source, self.target) => {}
             (
                 ConsolidationState::Pending {
                     replay_digest,
@@ -94,8 +133,21 @@ impl GpuSleepTransactionJournalEntryV1 {
                 && request.max_replay_eligibility_samples >= replay_eligibility_sample_count => {}
             (
                 ConsolidationState::Prepared { request: source },
-                ConsolidationState::Submitted { request: target, .. },
+                ConsolidationState::Submitted {
+                    request: target, ..
+                },
             ) if source == target => {}
+            (
+                ConsolidationState::Completed { request, staged },
+                ConsolidationState::Committed {
+                    cycle_id,
+                    output_generation,
+                    output_digest,
+                },
+            ) if cycle_id == request.cycle_id
+                && output_generation == staged.output_generation
+                && output_digest == staged.output_digest
+                && sleep_identity_unchanged_except_consolidation(self.source, self.target) => {}
             (ConsolidationState::Committed { .. }, ConsolidationState::Committed { .. })
                 if self.source.consolidation == self.target.consolidation => {}
             (ConsolidationState::Committed { .. }, ConsolidationState::None)
@@ -110,6 +162,7 @@ impl GpuSleepTransactionJournalEntryV1 {
         digest.write_u16(GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION);
         digest.write_u64(self.organism_id.raw());
         digest.write_u64(self.transition_tick.raw());
+        digest.write_u8(self.transition_ordinal);
         write_sleep_identity(&mut digest, self.source)?;
         write_sleep_identity(&mut digest, self.target)?;
         digest.write_bool(self.rollback_to_exact_base);
@@ -117,24 +170,86 @@ impl GpuSleepTransactionJournalEntryV1 {
     }
 }
 
+fn canonical_pre_pending_phase_edge(source: SleepState, target: SleepState) -> bool {
+    use alife_core::SleepPhase::{Awake, Consolidating, EnteringSleep, ForcedRecoverySleep};
+
+    match (source.phase, target.phase) {
+        (Awake, EnteringSleep) => {
+            source.active_cycle_id == 0
+                && source.entered_sleep_tick.is_none()
+                && target.entered_sleep_tick == Some(target.phase_started_tick)
+                && target.last_trigger == Some(SleepTrigger::FatigueThreshold)
+                && target.active_cycle_id == source.last_consolidated_cycle_id.saturating_add(1)
+                && sleep_cycle_fields_match(source, target)
+        }
+        (Awake, ForcedRecoverySleep) => {
+            source.active_cycle_id == 0
+                && source.entered_sleep_tick.is_none()
+                && target.entered_sleep_tick == Some(target.phase_started_tick)
+                && matches!(
+                    target.last_trigger,
+                    Some(
+                        SleepTrigger::ForcedRequest
+                            | SleepTrigger::RecoveryProtocol
+                            | SleepTrigger::SeizureHyperactivity
+                            | SleepTrigger::CatatoniaEnergyHypoplasia
+                            | SleepTrigger::ExtremeFatigue
+                            | SleepTrigger::UnsafeActiveState
+                    )
+                )
+                && target.active_cycle_id == source.last_consolidated_cycle_id.saturating_add(1)
+                && sleep_cycle_fields_match(source, target)
+        }
+        (EnteringSleep | ForcedRecoverySleep, Consolidating) => {
+            source.entered_sleep_tick == target.entered_sleep_tick
+                && source.last_trigger == target.last_trigger
+                && source.active_cycle_id == target.active_cycle_id
+                && sleep_cycle_fields_match(source, target)
+        }
+        _ => false,
+    }
+}
+
+fn sleep_cycle_fields_match(source: SleepState, target: SleepState) -> bool {
+    source.schema_version == target.schema_version
+        && source.cycles_completed == target.cycles_completed
+        && source.last_consolidated_cycle_id == target.last_consolidated_cycle_id
+        && source.consolidation == target.consolidation
+}
+
+fn sleep_identity_unchanged_except_consolidation(source: SleepState, target: SleepState) -> bool {
+    source.schema_version == target.schema_version
+        && source.phase == target.phase
+        && source.phase_started_tick == target.phase_started_tick
+        && source.entered_sleep_tick == target.entered_sleep_tick
+        && source.cycles_completed == target.cycles_completed
+        && source.last_trigger == target.last_trigger
+        && source.active_cycle_id == target.active_cycle_id
+        && source.last_consolidated_cycle_id == target.last_consolidated_cycle_id
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GpuSleepTransactionJournalV1 {
+pub struct GpuSleepTransactionJournalV2 {
     pub schema_version: u16,
     pub exact_base_manifest_digest: String,
     pub exact_base_checkpoint_tick: Tick,
-    pub entries: Vec<GpuSleepTransactionJournalEntryV1>,
+    pub entries: Vec<GpuSleepTransactionJournalEntryV2>,
     pub journal_digest: [u64; 4],
 }
 
-impl GpuSleepTransactionJournalV1 {
+impl GpuSleepTransactionJournalV2 {
     pub fn empty(base: &GpuLoadedSaveManifest) -> Result<Self, ScaffoldContractError> {
-        Self::try_new(base.digest.as_str().to_string(), base.save.world.tick, Vec::new())
+        Self::try_new(
+            base.digest.as_str().to_string(),
+            base.save.world.tick,
+            Vec::new(),
+        )
     }
 
     pub fn try_new(
         exact_base_manifest_digest: String,
         exact_base_checkpoint_tick: Tick,
-        entries: Vec<GpuSleepTransactionJournalEntryV1>,
+        entries: Vec<GpuSleepTransactionJournalEntryV2>,
     ) -> Result<Self, ScaffoldContractError> {
         let mut journal = Self {
             schema_version: GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION,
@@ -150,12 +265,47 @@ impl GpuSleepTransactionJournalV1 {
 
     pub fn validate(&self) -> Result<(), ScaffoldContractError> {
         let mut last_by_organism = BTreeMap::new();
+        let mut previous_key = None;
+        let mut previous_entry: Option<&GpuSleepTransactionJournalEntryV2> = None;
         for entry in &self.entries {
+            let key = (
+                entry.organism_id.raw(),
+                entry.transition_tick.raw(),
+                entry.transition_ordinal,
+            );
+            if previous_key.is_some_and(|previous| previous >= key) {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+            }
+            match previous_key {
+                Some((organism, tick, ordinal)) if organism == key.0 && tick == key.1 => {
+                    if ordinal.checked_add(1) != Some(key.2) {
+                        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+                    }
+                    let Some(previous) = previous_entry else {
+                        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+                    };
+                    if !matches!(
+                        (previous.source.consolidation, previous.target.consolidation),
+                        (ConsolidationState::None, ConsolidationState::None)
+                    ) || !matches!(
+                        (entry.source.consolidation, entry.target.consolidation),
+                        (ConsolidationState::None, ConsolidationState::Pending { .. })
+                    ) {
+                        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+                    }
+                }
+                _ if key.2 != 0 => {
+                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch)
+                }
+                _ => {}
+            }
             if let Some(previous) = last_by_organism.insert(entry.organism_id.raw(), entry.target) {
                 if previous != entry.source {
                     return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
                 }
             }
+            previous_key = Some(key);
+            previous_entry = Some(entry);
         }
         if self.schema_version != GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION
             || PortableAssetDigest(self.exact_base_manifest_digest.clone())
@@ -163,10 +313,6 @@ impl GpuSleepTransactionJournalV1 {
                 .is_err()
             || self.entries.len() > 256
             || self.entries.iter().any(|entry| entry.validate().is_err())
-            || self.entries.windows(2).any(|pair| {
-                (pair[0].transition_tick.raw(), pair[0].organism_id.raw())
-                    >= (pair[1].transition_tick.raw(), pair[1].organism_id.raw())
-            })
             || self.journal_digest != self.recompute_digest()?
         {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
@@ -190,7 +336,7 @@ impl GpuSleepTransactionJournalV1 {
 }
 
 fn validate_journal_against_exact_base(
-    journal: &GpuSleepTransactionJournalV1,
+    journal: &GpuSleepTransactionJournalV2,
     exact_base_manifest_digest: &str,
     exact_base_checkpoint_tick: Tick,
     exact_base_sleep_states: &BTreeMap<u64, SleepState>,
@@ -258,25 +404,37 @@ fn write_sleep_identity(
             replay_eligibility_sample_count,
         } => {
             digest.write_u64(intent.cycle_id);
-            for word in replay_digest { digest.write_u64(word); }
+            for word in replay_digest {
+                digest.write_u64(word);
+            }
             digest.write_u32(replay_event_count);
             digest.write_u32(replay_eligibility_sample_count);
         }
         ConsolidationState::Prepared { request }
         | ConsolidationState::Submitted { request, .. }
         | ConsolidationState::Completed { request, .. } => {
-            for word in request.request_digest { digest.write_u64(word); }
+            for word in request.request_digest {
+                digest.write_u64(word);
+            }
             if let ConsolidationState::Submitted { job_id, .. } = state.consolidation {
                 digest.write_u64(job_id.raw());
             }
             if let ConsolidationState::Completed { staged, .. } = state.consolidation {
-                for word in staged.staging_digest { digest.write_u64(word); }
+                for word in staged.staging_digest {
+                    digest.write_u64(word);
+                }
             }
         }
-        ConsolidationState::Committed { cycle_id, output_generation, output_digest } => {
+        ConsolidationState::Committed {
+            cycle_id,
+            output_generation,
+            output_digest,
+        } => {
             digest.write_u64(cycle_id);
             digest.write_u64(output_generation);
-            for word in output_digest { digest.write_u64(word); }
+            for word in output_digest {
+                digest.write_u64(word);
+            }
         }
     }
     Ok(())
@@ -339,9 +497,9 @@ impl GpuDurableSaveManifest {
             .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
                 message: "GPU checkpoint save manifest requires a UTF-8 file name".to_string(),
             })?;
-        Ok(self.save_path.with_file_name(format!(
-            ".{file_name}.sleep-journal-v1.json"
-        )))
+        Ok(self
+            .save_path
+            .with_file_name(format!(".{file_name}.sleep-journal-v2.json")))
     }
 
     pub fn open(
@@ -388,12 +546,12 @@ impl GpuDurableSaveManifest {
     pub fn load_sleep_transaction_journal(
         &self,
         base: &GpuLoadedSaveManifest,
-    ) -> Result<GpuSleepTransactionJournalV1, GameAppShellError> {
+    ) -> Result<GpuSleepTransactionJournalV2, GameAppShellError> {
         let path = self.sleep_journal_path()?;
         if !path.exists() {
-            return Ok(GpuSleepTransactionJournalV1::empty(base)?);
+            return Ok(GpuSleepTransactionJournalV2::empty(base)?);
         }
-        let journal: GpuSleepTransactionJournalV1 = serde_json::from_slice(&fs::read(path)?)?;
+        let journal: GpuSleepTransactionJournalV2 = serde_json::from_slice(&fs::read(path)?)?;
         journal.validate()?;
         let base_sleep_states = exact_base_sleep_states(base)?;
         match validate_journal_against_exact_base(
@@ -404,7 +562,7 @@ impl GpuDurableSaveManifest {
         )? {
             SleepJournalAnchorDisposition::Current => Ok(journal),
             SleepJournalAnchorDisposition::Superseded => {
-                Ok(GpuSleepTransactionJournalV1::empty(base)?)
+                Ok(GpuSleepTransactionJournalV2::empty(base)?)
             }
         }
     }
@@ -412,7 +570,7 @@ impl GpuDurableSaveManifest {
     pub fn publish_sleep_transaction_journal(
         &self,
         base: &GpuLoadedSaveManifest,
-        journal: &GpuSleepTransactionJournalV1,
+        journal: &GpuSleepTransactionJournalV2,
     ) -> Result<(), GameAppShellError> {
         journal.validate()?;
         let base_sleep_states = exact_base_sleep_states(base)?;
@@ -426,11 +584,12 @@ impl GpuDurableSaveManifest {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
         }
         let bytes = serde_json::to_vec_pretty(journal)?;
-        let _guard = SAVE_CAS_GUARD.lock().map_err(|_| {
-            GameAppShellError::InvalidProductionFrontend {
-                message: "GPU checkpoint save CAS lock was poisoned".to_string(),
-            }
-        })?;
+        let _guard =
+            SAVE_CAS_GUARD
+                .lock()
+                .map_err(|_| GameAppShellError::InvalidProductionFrontend {
+                    message: "GPU checkpoint save CAS lock was poisoned".to_string(),
+                })?;
         let actual = GpuSaveManifestDigest::for_bytes(&fs::read(&self.save_path)?);
         if actual != base.digest {
             return Err(GameAppShellError::GpuCheckpointManifestConflict {
@@ -492,15 +651,13 @@ impl GpuDurableSaveManifest {
             save: replacement.clone(),
             digest: replacement_digest,
         };
-        let journal = GpuSleepTransactionJournalV1::empty(&replacement_base)?;
+        let journal = GpuSleepTransactionJournalV2::empty(&replacement_base)?;
         let journal_path = parent.join(format!(
-            ".{}.sleep-journal-v1.json",
+            ".{}.sleep-journal-v2.json",
             file_name.to_string_lossy()
         ));
-        let prepared_journal = prepare_atomic_manifest(
-            &journal_path,
-            &serde_json::to_vec_pretty(&journal)?,
-        )?;
+        let prepared_journal =
+            prepare_atomic_manifest(&journal_path, &serde_json::to_vec_pretty(&journal)?)?;
         let _guard =
             SAVE_CAS_GUARD
                 .lock()
@@ -568,12 +725,10 @@ impl GpuDurableSaveManifest {
             save: replacement.clone(),
             digest: replacement_digest.clone(),
         };
-        let reset_journal = GpuSleepTransactionJournalV1::empty(&replacement_base)?;
+        let reset_journal = GpuSleepTransactionJournalV2::empty(&replacement_base)?;
         let journal_path = self.sleep_journal_path()?;
-        let prepared_journal = prepare_atomic_manifest(
-            &journal_path,
-            &serde_json::to_vec_pretty(&reset_journal)?,
-        )?;
+        let prepared_journal =
+            prepare_atomic_manifest(&journal_path, &serde_json::to_vec_pretty(&reset_journal)?)?;
         if let Err(error) = write_atomic_manifest(&self.save_path, &replacement_bytes) {
             let _ = fs::remove_file(&prepared_journal);
             return Err(error);
@@ -700,7 +855,23 @@ fn sync_parent_directory(_parent: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alife_core::{ConsolidationState, SleepPhase, SLEEP_CONSOLIDATION_SCHEMA_VERSION};
+    use alife_core::{
+        ConsolidationIntent, ConsolidationState, SleepPhase, SLEEP_CONSOLIDATION_SCHEMA_VERSION,
+    };
+
+    fn forced_recovery_state(phase: SleepPhase, tick: u64) -> SleepState {
+        SleepState {
+            schema_version: SLEEP_CONSOLIDATION_SCHEMA_VERSION,
+            phase,
+            phase_started_tick: Tick::new(tick),
+            entered_sleep_tick: Some(Tick::new(2)),
+            cycles_completed: 0,
+            last_trigger: Some(SleepTrigger::RecoveryProtocol),
+            active_cycle_id: 1,
+            last_consolidated_cycle_id: 0,
+            consolidation: ConsolidationState::None,
+        }
+    }
 
     fn committed_sleep(phase: SleepPhase, tick: u64) -> SleepState {
         SleepState {
@@ -722,7 +893,7 @@ mod tests {
 
     #[test]
     fn journal_rejects_malformed_base_digest() {
-        assert!(GpuSleepTransactionJournalV1::try_new(
+        assert!(GpuSleepTransactionJournalV2::try_new(
             "not-a-portable-digest".to_string(),
             Tick::new(1),
             Vec::new(),
@@ -737,21 +908,21 @@ mod tests {
         let b_source = committed_sleep(SleepPhase::Consolidating, 1);
         let b_target = committed_sleep(SleepPhase::Waking, 1);
         let entries = vec![
-            GpuSleepTransactionJournalEntryV1::try_new(
+            GpuSleepTransactionJournalEntryV2::try_new(
                 OrganismId(1),
                 Tick::new(2),
                 a_source,
                 a_target,
             )
             .unwrap(),
-            GpuSleepTransactionJournalEntryV1::try_new(
+            GpuSleepTransactionJournalEntryV2::try_new(
                 OrganismId(2),
                 Tick::new(3),
                 b_source,
                 b_target,
             )
             .unwrap(),
-            GpuSleepTransactionJournalEntryV1::try_new(
+            GpuSleepTransactionJournalEntryV2::try_new(
                 OrganismId(1),
                 Tick::new(4),
                 a_source,
@@ -759,7 +930,7 @@ mod tests {
             )
             .unwrap(),
         ];
-        assert!(GpuSleepTransactionJournalV1::try_new(
+        assert!(GpuSleepTransactionJournalV2::try_new(
             "fnv1a64:0123456789abcdef".to_string(),
             Tick::new(1),
             entries,
@@ -768,13 +939,241 @@ mod tests {
     }
 
     #[test]
+    fn journal_pre_pending_phase_edges_are_exact_and_fail_closed() {
+        let awake = SleepState::awake_at(Tick::new(1));
+        let forced = forced_recovery_state(SleepPhase::ForcedRecoverySleep, 2);
+        let consolidating = forced_recovery_state(SleepPhase::Consolidating, 3);
+        GpuSleepTransactionJournalEntryV2::try_new(OrganismId(1), Tick::new(2), awake, forced)
+            .unwrap();
+        GpuSleepTransactionJournalEntryV2::try_new(
+            OrganismId(1),
+            Tick::new(3),
+            forced,
+            consolidating,
+        )
+        .unwrap();
+
+        let mut skipped_phase = consolidating;
+        skipped_phase.entered_sleep_tick = Some(Tick::new(2));
+        assert!(GpuSleepTransactionJournalEntryV2::try_new(
+            OrganismId(1),
+            Tick::new(3),
+            awake,
+            skipped_phase,
+        )
+        .is_err());
+        assert!(GpuSleepTransactionJournalEntryV2::try_new(
+            OrganismId(1),
+            Tick::new(4),
+            consolidating,
+            forced,
+        )
+        .is_err());
+
+        let mut changed_trigger = consolidating;
+        changed_trigger.last_trigger = Some(SleepTrigger::UnsafeActiveState);
+        assert!(GpuSleepTransactionJournalEntryV2::try_new(
+            OrganismId(1),
+            Tick::new(4),
+            forced,
+            changed_trigger,
+        )
+        .is_err());
+        let mut changed_counter = consolidating;
+        changed_counter.cycles_completed = 1;
+        assert!(GpuSleepTransactionJournalEntryV2::try_new(
+            OrganismId(1),
+            Tick::new(4),
+            forced,
+            changed_counter,
+        )
+        .is_err());
+        let mut changed_cycle = consolidating;
+        changed_cycle.active_cycle_id = 2;
+        assert!(GpuSleepTransactionJournalEntryV2::try_new(
+            OrganismId(1),
+            Tick::new(4),
+            forced,
+            changed_cycle,
+        )
+        .is_err());
+        let entering = SleepState {
+            phase: SleepPhase::EnteringSleep,
+            ..forced
+        };
+        assert!(GpuSleepTransactionJournalEntryV2::try_new(
+            OrganismId(1),
+            Tick::new(4),
+            entering,
+            forced,
+        )
+        .is_err());
+        assert!(GpuSleepTransactionJournalEntryV2::try_new(
+            OrganismId(1),
+            Tick::new(1),
+            awake,
+            forced,
+        )
+        .is_err());
+        let mut future_phase = consolidating;
+        future_phase.phase_started_tick = Tick::new(5);
+        assert!(GpuSleepTransactionJournalEntryV2::try_new(
+            OrganismId(1),
+            Tick::new(4),
+            forced,
+            future_phase,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn journal_none_to_pending_requires_canonical_consolidating_identity() {
+        let source = forced_recovery_state(SleepPhase::Consolidating, 3);
+        let target = SleepState {
+            consolidation: ConsolidationState::Pending {
+                intent: ConsolidationIntent { cycle_id: 1 },
+                replay_digest: [9; 4],
+                replay_event_count: 1,
+                replay_eligibility_sample_count: 0,
+            },
+            ..source
+        };
+        GpuSleepTransactionJournalEntryV2::try_new(OrganismId(1), Tick::new(4), source, target)
+            .unwrap();
+
+        let mut changed_trigger = target;
+        changed_trigger.last_trigger = Some(SleepTrigger::UnsafeActiveState);
+        assert!(GpuSleepTransactionJournalEntryV2::try_new(
+            OrganismId(1),
+            Tick::new(4),
+            source,
+            changed_trigger,
+        )
+        .is_err());
+        let mut changed_cycle = target;
+        changed_cycle.active_cycle_id = 2;
+        assert!(GpuSleepTransactionJournalEntryV2::try_new(
+            OrganismId(1),
+            Tick::new(4),
+            source,
+            changed_cycle,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn journal_compound_tick_ordinals_are_bounded_and_contiguous() {
+        let forced = forced_recovery_state(SleepPhase::ForcedRecoverySleep, 2);
+        let consolidating = forced_recovery_state(SleepPhase::Consolidating, 3);
+        let pending = SleepState {
+            consolidation: ConsolidationState::Pending {
+                intent: ConsolidationIntent { cycle_id: 1 },
+                replay_digest: [9; 4],
+                replay_event_count: 1,
+                replay_eligibility_sample_count: 0,
+            },
+            ..consolidating
+        };
+        let first = GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
+            OrganismId(1),
+            Tick::new(4),
+            0,
+            forced,
+            consolidating,
+        )
+        .unwrap();
+        let second = GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
+            OrganismId(1),
+            Tick::new(4),
+            1,
+            consolidating,
+            pending,
+        )
+        .unwrap();
+        GpuSleepTransactionJournalV2::try_new(
+            "fnv1a64:0123456789abcdef".to_string(),
+            Tick::new(1),
+            vec![first.clone(), second.clone()],
+        )
+        .unwrap();
+
+        for malformed in [
+            vec![first.clone(), first.clone()],
+            vec![second.clone()],
+            vec![second.clone(), first.clone()],
+        ] {
+            assert!(GpuSleepTransactionJournalV2::try_new(
+                "fnv1a64:0123456789abcdef".to_string(),
+                Tick::new(1),
+                malformed,
+            )
+            .is_err());
+        }
+        assert!(GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
+            OrganismId(1),
+            Tick::new(4),
+            2,
+            forced,
+            consolidating,
+        )
+        .is_err());
+
+        let mismatched_source = SleepState {
+            last_trigger: Some(SleepTrigger::UnsafeActiveState),
+            ..consolidating
+        };
+        let mismatched_target = SleepState {
+            last_trigger: Some(SleepTrigger::UnsafeActiveState),
+            ..pending
+        };
+        let mismatched_second = GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
+            OrganismId(1),
+            Tick::new(4),
+            1,
+            mismatched_source,
+            mismatched_target,
+        )
+        .unwrap();
+        assert!(GpuSleepTransactionJournalV2::try_new(
+            "fnv1a64:0123456789abcdef".to_string(),
+            Tick::new(1),
+            vec![first, mismatched_second],
+        )
+        .is_err());
+
+        let awake = SleepState::awake_at(Tick::new(1));
+        let phase_only_first = GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
+            OrganismId(1),
+            Tick::new(4),
+            0,
+            awake,
+            forced,
+        )
+        .unwrap();
+        let phase_only_second = GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
+            OrganismId(1),
+            Tick::new(4),
+            1,
+            forced,
+            consolidating,
+        )
+        .unwrap();
+        assert!(GpuSleepTransactionJournalV2::try_new(
+            "fnv1a64:0123456789abcdef".to_string(),
+            Tick::new(1),
+            vec![phase_only_first, phase_only_second],
+        )
+        .is_err());
+    }
+
+    #[test]
     fn journal_vs_base_rejects_first_source_mismatch() {
         let source = committed_sleep(SleepPhase::Consolidating, 2);
         let target = committed_sleep(SleepPhase::Waking, 3);
-        let journal = GpuSleepTransactionJournalV1::try_new(
+        let journal = GpuSleepTransactionJournalV2::try_new(
             "fnv1a64:0123456789abcdef".to_string(),
             Tick::new(1),
-            vec![GpuSleepTransactionJournalEntryV1::try_new(
+            vec![GpuSleepTransactionJournalEntryV2::try_new(
                 OrganismId(1),
                 Tick::new(3),
                 source,
@@ -799,10 +1198,10 @@ mod tests {
     fn journal_vs_base_accepts_matching_first_source() {
         let source = committed_sleep(SleepPhase::Consolidating, 2);
         let target = committed_sleep(SleepPhase::Waking, 3);
-        let journal = GpuSleepTransactionJournalV1::try_new(
+        let journal = GpuSleepTransactionJournalV2::try_new(
             "fnv1a64:0123456789abcdef".to_string(),
             Tick::new(1),
-            vec![GpuSleepTransactionJournalEntryV1::try_new(
+            vec![GpuSleepTransactionJournalEntryV2::try_new(
                 OrganismId(1),
                 Tick::new(3),
                 source,
@@ -830,10 +1229,10 @@ mod tests {
     fn journal_vs_base_discards_superseded_ahead_journal() {
         let source = committed_sleep(SleepPhase::Consolidating, 2);
         let target = committed_sleep(SleepPhase::Waking, 30);
-        let journal = GpuSleepTransactionJournalV1::try_new(
+        let journal = GpuSleepTransactionJournalV2::try_new(
             "fnv1a64:0123456789abcdef".to_string(),
             Tick::new(1),
-            vec![GpuSleepTransactionJournalEntryV1::try_new(
+            vec![GpuSleepTransactionJournalEntryV2::try_new(
                 OrganismId(1),
                 Tick::new(30),
                 source,

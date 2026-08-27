@@ -38,19 +38,19 @@ use alife_core::{
     MAX_CONTEXT_MEMORY_EXPECTANCIES,
 };
 use alife_gpu_backend::{
-    GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
-    GpuClosedLoopMemoryTickInput, GpuClosedLoopTick, GpuCuratedResidencyCohort,
-    GpuCuratedResidencyEntry, GpuCuratedResidencyOutcome, GpuCuratedResidencyReceipt,
-    GpuAuthorityReceiptV1, GpuCuratedResidencyTargetIdentity, GpuLearningReceipt,
-    GpuMemoryContextUpload,
-    GpuV11WorkReceipt, PendingEligibilityDiscardReceipt, PendingEligibilityIdentity,
-    PendingEligibilityReceipt, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
-    GPU_FAST_PLASTICITY_COMMIT_BYTES, GPU_MOTOR_CHANNEL_SLOT_COUNT,
+    GpuActivityRuntimeSnapshot, GpuAuthorityReceiptV1, GpuBrainHandle, GpuClosedLoopBackend,
+    GpuClosedLoopMemoryBatchInput, GpuClosedLoopMemoryTickInput, GpuClosedLoopTick,
+    GpuCompactCheckpointAuthorityV1, GpuCuratedResidencyCohort, GpuCuratedResidencyEntry,
+    GpuCuratedResidencyOutcome, GpuCuratedResidencyReceipt, GpuCuratedResidencyTargetIdentity,
+    GpuLearningReceipt, GpuMemoryContextUpload, GpuV11WorkReceipt,
+    PendingEligibilityDiscardReceipt, PendingEligibilityIdentity, PendingEligibilityReceipt,
+    GPU_CLOSED_LOOP_TICK_READBACK_BYTES, GPU_FAST_PLASTICITY_COMMIT_BYTES,
+    GPU_MOTOR_CHANNEL_SLOT_COUNT,
 };
 use alife_runtime::{
     DurableGpuCheckpointRef, GpuAuthoritativeSession, GpuSessionAuthority, GpuSessionConsumerKind,
-    GpuSessionFailStopCause, GpuSleepTransactionJournalEntryV1,
-    GpuSleepTransactionJournalV1, SleepPhaseReceipt, SleepWorkDue,
+    GpuSessionFailStopCause, GpuSleepTransactionJournalEntryV2, GpuSleepTransactionJournalV2,
+    SleepPhaseReceipt, SleepWorkDue,
 };
 use alife_world::{
     grounded_peripheral_summaries,
@@ -197,6 +197,40 @@ struct ResidentCheckpointMetadata<'a> {
     phenotype: &'a alife_core::BrainPhenotype,
     compiler_inputs: &'a PhenotypeCompilerInputs,
     legacy_nano512_compatibility_receipt: Option<&'a LegacyNano512CompatibilityReceipt>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct SleepJournalNeuralAuthority {
+    compact: GpuCompactCheckpointAuthorityV1,
+    activity: GpuActivityRuntimeSnapshot,
+}
+
+fn capture_sleep_journal_neural_authority(
+    backend: &mut GpuAuthoritativeSession,
+    handle: GpuBrainHandle,
+) -> Result<SleepJournalNeuralAuthority, ScaffoldContractError> {
+    Ok(SleepJournalNeuralAuthority {
+        compact: backend.compact_checkpoint_authority(handle)?,
+        activity: backend.snapshot_activity_state(handle)?,
+    })
+}
+
+fn validate_sleep_journal_neural_authority(
+    backend: &mut GpuAuthoritativeSession,
+    handle: GpuBrainHandle,
+    expected: &SleepJournalNeuralAuthority,
+) -> Result<(), ScaffoldContractError> {
+    backend.validate_compact_checkpoint_authority(handle, &expected.compact)?;
+    let current = backend.snapshot_activity_state(handle)?;
+    if current.next_sequence_cursor != expected.activity.next_sequence_cursor
+        || current.next_completed_gpu_time_ns != expected.activity.next_completed_gpu_time_ns
+        || current.pressure != expected.activity.pressure
+        || current.throttle != expected.activity.throttle
+        || current.work != expected.activity.work
+    {
+        return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+    }
+    Ok(())
 }
 
 fn resident_authority_plan_from_record(
@@ -527,7 +561,7 @@ impl GpuLiveRuntimeConstructionOptions {
 impl GpuLiveCheckpointDurability {
     fn publish_sleep_journal_entries(
         &mut self,
-        entries: Vec<GpuSleepTransactionJournalEntryV1>,
+        entries: Vec<GpuSleepTransactionJournalEntryV2>,
     ) -> Result<(), GameAppShellError> {
         if entries.is_empty() {
             return Ok(());
@@ -538,9 +572,13 @@ impl GpuLiveCheckpointDurability {
         let mut combined = current.entries;
         combined.extend(entries);
         combined.sort_unstable_by_key(|entry| {
-            (entry.transition_tick.raw(), entry.organism_id.raw())
+            (
+                entry.organism_id.raw(),
+                entry.transition_tick.raw(),
+                entry.transition_ordinal,
+            )
         });
-        let journal = GpuSleepTransactionJournalV1::try_new(
+        let journal = GpuSleepTransactionJournalV2::try_new(
             self.published.digest.as_str().to_string(),
             self.published.save.world.tick,
             combined,
@@ -1254,9 +1292,7 @@ impl GpuLivePerformanceMetrics {
             sleep_checkpoint_capture_wall_ns: delta!(sleep_checkpoint_capture_wall_ns),
             sleep_checkpoint_readback_calls: delta!(sleep_checkpoint_readback_calls),
             sleep_checkpoint_readback_bytes: delta!(sleep_checkpoint_readback_bytes),
-            sleep_checkpoint_readback_poll_wait_ns: delta!(
-                sleep_checkpoint_readback_poll_wait_ns
-            ),
+            sleep_checkpoint_readback_poll_wait_ns: delta!(sleep_checkpoint_readback_poll_wait_ns),
             sleep_checkpoint_readback_map_receive_wait_ns: delta!(
                 sleep_checkpoint_readback_map_receive_wait_ns
             ),
@@ -1743,6 +1779,7 @@ pub struct GpuLiveBrainRuntime {
     residents: BTreeMap<u64, ResidentCognition>,
     memories: BTreeMap<u64, MemorySidecarState>,
     topologies: BTreeMap<u64, TopologySidecar>,
+    sleep_journal_neural_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
     retained_learning: BTreeMap<u64, RetainedLearningRecovery>,
     world: HeadlessWorld,
     deterministic_seed: u64,
@@ -3160,7 +3197,7 @@ impl GpuLiveBrainRuntime {
                 .checkpoint_durability
                 .as_ref()
                 .expect("durability was just installed");
-            let cleared = GpuSleepTransactionJournalV1::empty(&exact_base.published)?;
+            let cleared = GpuSleepTransactionJournalV2::empty(&exact_base.published)?;
             exact_base
                 .durable_manifest
                 .publish_sleep_transaction_journal(&exact_base.published, &cleared)?;
@@ -3951,6 +3988,7 @@ impl GpuLiveBrainRuntime {
             residents: BTreeMap::new(),
             memories: BTreeMap::new(),
             topologies: BTreeMap::new(),
+            sleep_journal_neural_authorities: BTreeMap::new(),
             retained_learning: BTreeMap::new(),
             world,
             deterministic_seed,
@@ -4068,6 +4106,7 @@ impl GpuLiveBrainRuntime {
             residents: BTreeMap::new(),
             memories: BTreeMap::new(),
             topologies: BTreeMap::new(),
+            sleep_journal_neural_authorities: BTreeMap::new(),
             retained_learning: BTreeMap::new(),
             world,
             deterministic_seed,
@@ -4215,14 +4254,10 @@ impl GpuLiveBrainRuntime {
                         return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
                     }
                     let v11_checkpoint = runtime.backend.checkpoint_v11(handle)?;
-                    if v11_checkpoint.dendritic_branches
-                        != exact_cognitive_state.dendritic_branches
-                        || v11_checkpoint.structural
-                            != exact_cognitive_state.structural_plasticity
+                    if v11_checkpoint.dendritic_branches != exact_cognitive_state.dendritic_branches
+                        || v11_checkpoint.structural != exact_cognitive_state.structural_plasticity
                     {
-                        return Err(
-                            ScaffoldContractError::InvalidSparseProjectionSchema.into(),
-                        );
+                        return Err(ScaffoldContractError::InvalidSparseProjectionSchema.into());
                     }
                     let sleep_scheduler = GpuSleepScheduler::restore(
                         sleep_consolidation_config_for(&restored.phenotype)?,
@@ -4657,7 +4692,8 @@ impl GpuLiveBrainRuntime {
                     .poll_wait_ns
                     .saturating_sub(readback_before.poll_wait_ns),
             );
-        self.performance_metrics.checkpoint_snapshot_map_receive_wait_ns = self
+        self.performance_metrics
+            .checkpoint_snapshot_map_receive_wait_ns = self
             .performance_metrics
             .checkpoint_snapshot_map_receive_wait_ns
             .saturating_add(
@@ -4737,46 +4773,43 @@ impl GpuLiveBrainRuntime {
                 &self.last_sealed_patches,
             )?;
             let mut write = store.capture_brain_with_runtime_replay_state(
-                        &mut self.backend,
-                        handle,
-                        &resident.phenotype,
-                        &resident.compiler_inputs,
-                        resident.sleep_scheduler.state(),
-                        checkpoint_tick,
-                        None,
-                        &replay_patches,
-                        GpuBrainSidecarCapture {
-                            sensor_profile: self
-                                .memories
-                                .get(&raw)
-                                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-                                .profile(),
-                            memory: self
-                                .memories
-                                .get(&raw)
-                                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?,
-                            topology: self
-                                .topologies
-                                .get(&raw)
-                                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?,
-                            tracked_objects: self
-                                .world
-                                .tracked_objects()
-                                .save_state(organism_id)?,
-                            language_grounding: &resident.language_grounding,
-                            life_statistics: &resident.life_statistics,
-                            legacy_nano512_compatibility_receipt: resident
-                                .legacy_nano512_compatibility_receipt
-                                .as_ref(),
-                            retained_learning: self.retained_learning.get(&raw).map(|recovery| {
-                                RetainedLearningCapture {
-                                    sealed_patch: &recovery.sealed_patch,
-                                    neural_receptors: &recovery.neural_receptors,
-                                    attempts: recovery.attempts,
-                                    last_error_code: recovery.last_error.slug(),
-                                }
-                            }),
-                        },
+                &mut self.backend,
+                handle,
+                &resident.phenotype,
+                &resident.compiler_inputs,
+                resident.sleep_scheduler.state(),
+                checkpoint_tick,
+                None,
+                &replay_patches,
+                GpuBrainSidecarCapture {
+                    sensor_profile: self
+                        .memories
+                        .get(&raw)
+                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                        .profile(),
+                    memory: self
+                        .memories
+                        .get(&raw)
+                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?,
+                    topology: self
+                        .topologies
+                        .get(&raw)
+                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?,
+                    tracked_objects: self.world.tracked_objects().save_state(organism_id)?,
+                    language_grounding: &resident.language_grounding,
+                    life_statistics: &resident.life_statistics,
+                    legacy_nano512_compatibility_receipt: resident
+                        .legacy_nano512_compatibility_receipt
+                        .as_ref(),
+                    retained_learning: self.retained_learning.get(&raw).map(|recovery| {
+                        RetainedLearningCapture {
+                            sealed_patch: &recovery.sealed_patch,
+                            neural_receptors: &recovery.neural_receptors,
+                            attempts: recovery.attempts,
+                            last_error_code: recovery.last_error.slug(),
+                        }
+                    }),
+                },
             )?;
             write.attach_exact_cognitive_state(store, &exact)?;
             exact_neural_captures = exact_neural_captures.saturating_add(1);
@@ -4855,8 +4888,7 @@ impl GpuLiveBrainRuntime {
         let store = durability.store.clone();
         let readback_before = self.backend.mutable_slot_readback_metrics();
         let capture_started = Instant::now();
-        let replacement =
-            self.capture_checkpointed_save(durability.published.save.clone(), &store);
+        let replacement = self.capture_checkpointed_save(durability.published.save.clone(), &store);
         let readback_after = self.backend.mutable_slot_readback_metrics();
         self.performance_metrics.sleep_checkpoint_capture_calls = self
             .performance_metrics
@@ -4894,7 +4926,8 @@ impl GpuLiveBrainRuntime {
             );
         let result = match replacement {
             Ok((replacement, exact_neural_captures)) => {
-                self.performance_metrics.sleep_exact_neural_capture_organisms = self
+                self.performance_metrics
+                    .sleep_exact_neural_capture_organisms = self
                     .performance_metrics
                     .sleep_exact_neural_capture_organisms
                     .saturating_add(exact_neural_captures);
@@ -4924,8 +4957,7 @@ impl GpuLiveBrainRuntime {
         };
         self.checkpoint_durability = Some(durability);
         let permit = result?;
-        self.backend
-            .install_prevalidated_durable_checkpoint(permit);
+        self.backend.install_prevalidated_durable_checkpoint(permit);
         Ok(())
     }
 
@@ -4939,22 +4971,18 @@ impl GpuLiveBrainRuntime {
         let Some(mut durability) = self.checkpoint_durability.take() else {
             return Ok(());
         };
-        let original_durability = durability.clone();
         self.performance_metrics.sleep_promotion_calls = self
             .performance_metrics
             .sleep_promotion_calls
             .saturating_add(1);
-        let replacement = (|| {
+        let entries = (|| {
             let mut ordered = promotions.to_vec();
             ordered.sort_unstable_by_key(|(organism_id, _)| organism_id.raw());
-            if ordered
-                .windows(2)
-                .any(|pair| pair[0].0 == pair[1].0)
-            {
+            if ordered.windows(2).any(|pair| pair[0].0 == pair[1].0) {
                 return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
             }
             let base = &durability.published.save;
-            let mut validated = Vec::with_capacity(ordered.len());
+            let mut entries = Vec::with_capacity(ordered.len());
             for (organism_id, committed_sleep) in ordered {
                 let creature = base
                     .creatures
@@ -4966,62 +4994,65 @@ impl GpuLiveBrainRuntime {
                     .as_ref()
                     .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
                 let promoted = completed.promoted_completed_sleep_state()?;
-                if promoted.sleep != committed_sleep || promoted.checkpoint_tick != base.world.tick {
+                if promoted.sleep != committed_sleep || promoted.checkpoint_tick != base.world.tick
+                {
                     return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
                 }
-                validated.push((organism_id, committed_sleep, promoted));
-            }
-            let mut replacement = durability.published.save.clone();
-            for (organism_id, committed_sleep, promoted) in validated {
-                let creature = replacement
-                    .creatures
-                    .iter_mut()
-                    .find(|creature| creature.organism_id == organism_id)
+                let handle = *self
+                    .handles
+                    .get(&organism_id.raw())
                     .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-                creature.mind.sleep_state_label = gpu_sleep_state_label(committed_sleep);
-                creature.gpu_brain = Some(promoted);
+                let resident = self
+                    .residents
+                    .get(&organism_id.raw())
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                durability.store.validate_compact_neural_reuse(
+                    &mut self.backend,
+                    &base.assets,
+                    &promoted,
+                    handle,
+                    &resident.phenotype,
+                )?;
+                entries.push((
+                    GpuSleepTransactionJournalEntryV2::try_new(
+                        organism_id,
+                        Tick::new(self.world.tick().raw().saturating_add(1)),
+                        completed.sleep,
+                        committed_sleep,
+                    )?,
+                    capture_sleep_journal_neural_authority(&mut self.backend, handle)?,
+                ));
             }
-            replacement.validate_with_asset_root(durability.store.root())?;
-            Ok::<_, GameAppShellError>(replacement)
+            Ok::<_, GameAppShellError>(entries)
         })();
-        let result = match replacement {
-            Ok(replacement) => {
-                let prospective = durability.prospective_durable_reference(&replacement);
-                match prospective.and_then(|reference| {
-                    self.backend
-                        .prevalidate_durable_checkpoint(reference)
-                        .map_err(Into::into)
-                }) {
-                    Ok(monotonicity) => {
-                        let publish_started = Instant::now();
-                        let result = durability.publish(replacement).map(|_| monotonicity);
-                        if result.is_ok() {
-                            self.performance_metrics.sleep_promotion_publish_calls = self
-                                .performance_metrics
-                                .sleep_promotion_publish_calls
-                                .saturating_add(1);
-                        }
-                        self.performance_metrics.sleep_promotion_publish_wall_ns = self
-                            .performance_metrics
-                            .sleep_promotion_publish_wall_ns
-                            .saturating_add(elapsed_ns(publish_started));
-                        result
-                    }
-                    Err(error) => Err(error.into()),
-                }
-            }
-            Err(error) => Err(error),
-        };
-        let monotonicity = match result {
-            Ok(monotonicity) => monotonicity,
+        let entries = match entries {
+            Ok(entries) => entries,
             Err(error) => {
-                self.checkpoint_durability = Some(original_durability);
+                self.checkpoint_durability = Some(durability);
                 return Err(error);
             }
         };
+        let entry_count = u64::try_from(entries.len()).unwrap_or(u64::MAX);
+        let journal_entries = entries
+            .iter()
+            .map(|(entry, _)| entry.clone())
+            .collect::<Vec<_>>();
+        let publish_started = Instant::now();
+        let result = durability.publish_sleep_journal_entries(journal_entries);
+        self.performance_metrics.sleep_promotion_publish_wall_ns = self
+            .performance_metrics
+            .sleep_promotion_publish_wall_ns
+            .saturating_add(elapsed_ns(publish_started));
         self.checkpoint_durability = Some(durability);
-        self.backend
-            .install_prevalidated_durable_checkpoint(monotonicity);
+        result?;
+        for (entry, authority) in entries {
+            self.sleep_journal_neural_authorities
+                .insert(entry.organism_id.raw(), authority);
+        }
+        self.performance_metrics.sleep_compact_journal_organisms = self
+            .performance_metrics
+            .sleep_compact_journal_organisms
+            .saturating_add(entry_count);
         Ok(())
     }
 
@@ -5798,21 +5829,23 @@ impl GpuLiveBrainRuntime {
 
     pub fn tick(&mut self) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
         let started = Instant::now();
-        let result = self.tick_with_sleep_progress(|backend, handle, organism_id, state, intent| {
-            let mut driver = AuthoritativeGpuSleepDriver {
-                backend,
-                handle,
-                sleep_config: None,
-                context: None,
-                replay_evidence_before_commit: None,
-                last_sleep_work: None,
-            };
-            driver.progress(organism_id, state, intent)
-        });
+        let result =
+            self.tick_with_sleep_progress(|backend, handle, organism_id, state, intent| {
+                let mut driver = AuthoritativeGpuSleepDriver {
+                    backend,
+                    handle,
+                    sleep_config: None,
+                    context: None,
+                    replay_evidence_before_commit: None,
+                    last_sleep_work: None,
+                };
+                driver.progress(organism_id, state, intent)
+            });
         self.performance_metrics.tick_calls = self.performance_metrics.tick_calls.saturating_add(1);
-        self.performance_metrics.tick_wall_ns = self.performance_metrics.tick_wall_ns.saturating_add(
-            u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX),
-        );
+        self.performance_metrics.tick_wall_ns = self
+            .performance_metrics
+            .tick_wall_ns
+            .saturating_add(u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX));
         result
     }
 
@@ -6025,6 +6058,7 @@ impl GpuLiveBrainRuntime {
         let mut scheduled_body_events = BTreeMap::new();
         let mut persist_exact_sleep_boundary = false;
         let mut sleep_journal_entries = Vec::new();
+        let mut sleep_journal_neural_authorities = self.sleep_journal_neural_authorities.clone();
         let mut completed_promotions = Vec::new();
         let scheduled_handles = if let Some(first) = curated_first_tick_resident {
             vec![(
@@ -6171,34 +6205,92 @@ impl GpuLiveBrainRuntime {
                         ConsolidationState::Completed { .. },
                         ConsolidationState::Committed { .. },
                     ) => completed_promotions.push((OrganismId(raw), sleep_after)),
-                    (ConsolidationState::None, ConsolidationState::Pending { .. })
-                    | (
+                    (
                         ConsolidationState::Submitted { .. },
                         ConsolidationState::Completed { .. },
                     ) => persist_exact_sleep_boundary = true,
-                    (ConsolidationState::Pending { .. }, ConsolidationState::Prepared { .. })
-                    | (
-                        ConsolidationState::Prepared { .. },
-                        ConsolidationState::Submitted { .. },
-                    )
+                    (ConsolidationState::None, ConsolidationState::Pending { .. })
+                    | (ConsolidationState::Pending { .. }, ConsolidationState::Prepared { .. })
+                    | (ConsolidationState::Prepared { .. }, ConsolidationState::Submitted { .. })
                     | (
                         ConsolidationState::Committed { .. },
                         ConsolidationState::Committed { .. },
                     )
                     | (ConsolidationState::Committed { .. }, ConsolidationState::None) => {
-                        sleep_journal_entries.push(GpuSleepTransactionJournalEntryV1::try_new(
+                        let refresh_authority = matches!(
+                            (sleep_before.consolidation, sleep_after.consolidation),
+                            (ConsolidationState::None, ConsolidationState::Pending { .. })
+                        );
+                        if refresh_authority {
+                            sleep_journal_neural_authorities.insert(
+                                raw,
+                                capture_sleep_journal_neural_authority(&mut self.backend, handle)?,
+                            );
+                        } else if let Some(expected) = sleep_journal_neural_authorities.get(&raw) {
+                            validate_sleep_journal_neural_authority(
+                                &mut self.backend,
+                                handle,
+                                expected,
+                            )?;
+                        }
+                        if matches!(
+                            (sleep_before.consolidation, sleep_after.consolidation),
+                            (ConsolidationState::None, ConsolidationState::Pending { .. })
+                        ) && sleep_before.phase != SleepPhase::Consolidating
+                            && sleep_after.phase == SleepPhase::Consolidating
+                        {
+                            let intermediate = SleepState {
+                                consolidation: ConsolidationState::None,
+                                ..sleep_after
+                            };
+                            sleep_journal_entries.push(
+                                GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
+                                    OrganismId(raw),
+                                    tick_after,
+                                    0,
+                                    sleep_before,
+                                    intermediate,
+                                )?,
+                            );
+                            sleep_journal_entries.push(
+                                GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
+                                    OrganismId(raw),
+                                    tick_after,
+                                    1,
+                                    intermediate,
+                                    sleep_after,
+                                )?,
+                            );
+                        } else {
+                            sleep_journal_entries.push(GpuSleepTransactionJournalEntryV2::try_new(
+                                OrganismId(raw),
+                                tick_after,
+                                sleep_before,
+                                sleep_after,
+                            )?);
+                        }
+                    }
+                    (ConsolidationState::None, ConsolidationState::None) => {
+                        if sleep_before.phase == SleepPhase::Awake {
+                            sleep_journal_neural_authorities.insert(
+                                raw,
+                                capture_sleep_journal_neural_authority(&mut self.backend, handle)?,
+                            );
+                        } else if let Some(expected) = sleep_journal_neural_authorities.get(&raw) {
+                            validate_sleep_journal_neural_authority(
+                                &mut self.backend,
+                                handle,
+                                expected,
+                            )?;
+                        }
+                        sleep_journal_entries.push(GpuSleepTransactionJournalEntryV2::try_new(
                             OrganismId(raw),
                             tick_after,
                             sleep_before,
                             sleep_after,
                         )?);
                     }
-                    (ConsolidationState::None, ConsolidationState::None) => {}
-                    _ => {
-                        return Err(
-                            ScaffoldContractError::ConsolidationGenerationMismatch.into()
-                        )
-                    }
+                    _ => return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into()),
                 }
             }
             let remains_dispatchable = phase_before == SleepPhase::Awake
@@ -6363,11 +6455,7 @@ impl GpuLiveBrainRuntime {
         for (organism_id, committed_sleep) in &completed_promotions {
             let committed_cycle_id = match committed_sleep.consolidation {
                 ConsolidationState::Committed { cycle_id, .. } if cycle_id != 0 => cycle_id,
-                _ => {
-                    return Err(
-                        ScaffoldContractError::ConsolidationGenerationMismatch.into(),
-                    )
-                }
+                _ => return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into()),
             };
             let (memory, receipt) = prepared_memory_commits
                 .remove(&organism_id.raw())
@@ -6418,10 +6506,8 @@ impl GpuLiveBrainRuntime {
             let inference_rows = u64::try_from(batch.len()).unwrap_or(u64::MAX);
             let inference_started = Instant::now();
             let gpu_ticks = self.backend.tick_memory_batch(&memory_batch)?;
-            self.performance_metrics.inference_batches = self
-                .performance_metrics
-                .inference_batches
-                .saturating_add(1);
+            self.performance_metrics.inference_batches =
+                self.performance_metrics.inference_batches.saturating_add(1);
             self.performance_metrics.inference_rows = self
                 .performance_metrics
                 .inference_rows
@@ -6497,6 +6583,9 @@ impl GpuLiveBrainRuntime {
             let validation_result = (|| -> Result<(), GameAppShellError> {
                 for entry in &sleep_journal_entries {
                     let raw = entry.organism_id.raw();
+                    if sleep_journal_neural_authorities.contains_key(&raw) {
+                        continue;
+                    }
                     let handle = *self
                         .handles
                         .get(&raw)
@@ -6520,6 +6609,10 @@ impl GpuLiveBrainRuntime {
                         handle,
                         &resident.phenotype,
                     )?;
+                    sleep_journal_neural_authorities.insert(
+                        raw,
+                        capture_sleep_journal_neural_authority(&mut self.backend, handle)?,
+                    );
                 }
                 Ok(())
             })();
@@ -6534,6 +6627,7 @@ impl GpuLiveBrainRuntime {
             let journal_result = durability.publish_sleep_journal_entries(sleep_journal_entries);
             self.checkpoint_durability = Some(durability);
             journal_result?;
+            self.sleep_journal_neural_authorities = sleep_journal_neural_authorities;
             self.performance_metrics.sleep_compact_journal_organisms = self
                 .performance_metrics
                 .sleep_compact_journal_organisms
@@ -7529,10 +7623,8 @@ impl GpuLiveBrainRuntime {
             .collect::<Vec<_>>();
         let learning_started = Instant::now();
         let learning_result = self.backend.apply_sealed_outcome_batch(&learning_batch);
-        self.performance_metrics.learning_batches = self
-            .performance_metrics
-            .learning_batches
-            .saturating_add(1);
+        self.performance_metrics.learning_batches =
+            self.performance_metrics.learning_batches.saturating_add(1);
         self.performance_metrics.learning_rows = self
             .performance_metrics
             .learning_rows
@@ -7656,14 +7748,12 @@ impl GpuLiveBrainRuntime {
         for (index, selection) in sealed.iter().enumerate() {
             let organism_id = selection.handle.organism_id();
             let hash_started = Instant::now();
-            let authority_receipt = self
-                .backend
-                .authority_receipt_for_sealed_outcome(
-                    selection.handle,
-                    &selection.pending_eligibility,
-                    learning.as_ref().and_then(|receipts| receipts.get(index)),
-                    &selection.patch,
-                )?;
+            let authority_receipt = self.backend.authority_receipt_for_sealed_outcome(
+                selection.handle,
+                &selection.pending_eligibility,
+                learning.as_ref().and_then(|receipts| receipts.get(index)),
+                &selection.patch,
+            )?;
             authority_receipt.validate()?;
             let topology_digest = self
                 .topologies
@@ -7671,8 +7761,7 @@ impl GpuLiveBrainRuntime {
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
                 .diagnostics()
                 .canonical_digest;
-            let mut brain_authority =
-                CanonicalDigestBuilder::new(b"alife.live-brain-authority.v4");
+            let mut brain_authority = CanonicalDigestBuilder::new(b"alife.live-brain-authority.v4");
             for word in authority_receipt.receipt_digest() {
                 brain_authority.write_u64(word);
             }
@@ -10743,8 +10832,8 @@ mod tests {
         assert!(summaries[0].patch_sealed);
         assert_eq!(runtime.backend.completed_dispatch_count(), 1);
         assert_eq!(driver.intents.len(), 1);
-        assert!(!
-            runtime
+        assert!(
+            !runtime
                 .world
                 .organism_registry()
                 .get(OrganismId(1))

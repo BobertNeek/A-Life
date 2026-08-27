@@ -7,20 +7,19 @@ use std::mem::size_of;
 
 use alife_core::{
     compute_gpu_sleep_output_weight_digest, ActionId, BoundedReplayBatch, BrainCapacityClass,
-    BrainPhenotype,
-    CandidateActionFamily, CandidateFeatureDigest, CanonicalDigestBuilder, ConsolidationIntent,
-    ConsolidationStagedOutput, GpuConsolidationRequest, LearningSequenceGuard, OrganismId,
-    OutcomeCreditReplayKey, PerceptionFrameDigest, PhenotypeGrowthMigration, PhenotypeHash,
-    ScaffoldContractError, SchemaVersions, Tick, Validate,
+    BrainPhenotype, CandidateActionFamily, CandidateFeatureDigest, CanonicalDigestBuilder,
+    ConsolidationIntent, ConsolidationStagedOutput, GpuConsolidationRequest, LearningSequenceGuard,
+    OrganismId, OutcomeCreditReplayKey, PerceptionFrameDigest, PhenotypeGrowthMigration,
+    PhenotypeHash, ScaffoldContractError, SchemaVersions, Tick, Validate,
 };
 use bytemuck::Zeroable;
 
 use crate::{
     build_sleep_upload, eligibility_reset_digest, map_gpu_contract_error,
     pack_candidate_index_and_family, replay_reset_digest, reset_word_count, sleep_commit_key,
-    GpuBrainHandle, GpuClosedLoopBackend, GpuPendingEligibilityRecord, GpuReplayEventRecord,
-    GpuReplaySynapseSpanRecord, GpuSleepCompletionRecord, GpuSleepJobState, GpuSleepStagingReceipt,
-    GpuLiveTopologyCheckpointV1, GpuSlotLearningStateRecord, GpuV11Checkpoint,
+    GpuBrainHandle, GpuClosedLoopBackend, GpuLiveTopologyCheckpointV1, GpuPendingEligibilityRecord,
+    GpuReplayEventRecord, GpuReplaySynapseSpanRecord, GpuSleepCompletionRecord, GpuSleepJobState,
+    GpuSleepStagingReceipt, GpuSlotLearningStateRecord, GpuV11Checkpoint,
     PendingEligibilityIdentity, PendingEligibilityReceipt,
 };
 
@@ -1229,14 +1228,12 @@ fn restored_pending_record(
 }
 
 impl GpuClosedLoopBackend {
-    /// Validates that compact persistence still names the exact backend-owned
-    /// neural authority captured by the last bulk checkpoint. This reads only
-    /// resident host metadata and never maps a GPU buffer.
-    pub fn validate_compact_checkpoint_authority(
+    /// Captures the exact backend-owned scalar authority used to validate a
+    /// journal-only sleep transition. This reads host metadata only.
+    pub fn compact_checkpoint_authority(
         &mut self,
         handle: GpuBrainHandle,
-        expected: &GpuCompactCheckpointAuthorityV1,
-    ) -> Result<(), ScaffoldContractError> {
+    ) -> Result<GpuCompactCheckpointAuthorityV1, ScaffoldContractError> {
         self.ensure_ready()?;
         self.validate_handle_backend(handle)?;
         let bucket = self
@@ -1255,7 +1252,7 @@ impl GpuClosedLoopBackend {
             .pending_eligibility
             .map(pending_parts_from_receipt)
             .transpose()?;
-        let current = GpuCompactCheckpointAuthorityV1::try_new(
+        GpuCompactCheckpointAuthorityV1::try_new(
             active_activation_side,
             resident.logical_dispatch_generation,
             resident.active_weight_generation,
@@ -1270,7 +1267,26 @@ impl GpuClosedLoopBackend {
             resident.learning_sequence_guard.last_committed(),
             pending_eligibility,
             resident.v11.checkpoint(),
-        )?;
+        )
+    }
+
+    /// Validates that compact persistence still names the exact backend-owned
+    /// neural authority captured by the last bulk checkpoint. This reads only
+    /// resident host metadata and never maps a GPU buffer.
+    pub fn validate_compact_checkpoint_authority(
+        &mut self,
+        handle: GpuBrainHandle,
+        expected: &GpuCompactCheckpointAuthorityV1,
+    ) -> Result<(), ScaffoldContractError> {
+        let current = self.compact_checkpoint_authority(handle)?;
+        let bucket = self
+            .class_buckets
+            .get(&handle.class_id().raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .bucket_for_handle(handle)?;
+        let resident = bucket.slots[handle.slot() as usize]
+            .as_ref()
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
         if current != *expected
             || resident.pending_eligibility.is_some()
                 != resident.pending_eligibility_record.is_some()

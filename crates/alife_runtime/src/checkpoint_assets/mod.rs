@@ -10,8 +10,8 @@ mod state_codec;
 
 pub use content_store::{merge_gpu_checkpoint_manifest_entries, GpuCheckpointAssetStore};
 pub use durable_manifest::{
-    GpuDurableSaveManifest, GpuLoadedSaveManifest, GpuSaveManifestCasOutcome, GpuSaveManifestDigest,
-    GpuSleepTransactionJournalEntryV1, GpuSleepTransactionJournalV1,
+    GpuDurableSaveManifest, GpuLoadedSaveManifest, GpuSaveManifestCasOutcome,
+    GpuSaveManifestDigest, GpuSleepTransactionJournalEntryV2, GpuSleepTransactionJournalV2,
 };
 pub use state_codec::current_backend_provenance;
 pub use state_codec::{
