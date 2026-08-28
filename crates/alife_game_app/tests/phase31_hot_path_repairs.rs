@@ -8,7 +8,7 @@ use std::{
 
 use alife_core::{
     BoundedReplayBatch, BrainScaleTier, CanonicalDigestBuilder, ConsolidationState, OrganismId,
-    ScaffoldContractError, SleepPhase, Tick,
+    ScaffoldContractError, SleepPhase, SleepTrigger, Tick,
 };
 use alife_game_app::{
     create_canonical_new_game_runtime, CanonicalNewGameLaunchRequest, GameAppShellError,
@@ -105,6 +105,7 @@ fn drive_to_completed(runtime: &mut GpuLiveBrainRuntime, organisms: &[OrganismId
 struct SleepGenerationRow {
     organism_id: u64,
     phase: SleepPhase,
+    last_trigger: Option<SleepTrigger>,
     active_cycle_id: u64,
     consolidation: ConsolidationState,
     backend_active_weight_generation: Option<u64>,
@@ -142,6 +143,7 @@ fn sleep_generation_rows(
             SleepGenerationRow {
                 organism_id: organism_id.raw(),
                 phase: sleep.phase,
+                last_trigger: sleep.last_trigger,
                 active_cycle_id: sleep.active_cycle_id,
                 consolidation: sleep.consolidation,
                 backend_active_weight_generation: learning
@@ -1059,22 +1061,25 @@ fn phase31_six_founder_runtime_survives_seventy_ticks_after_player_measurement_b
     for measured_call in 1..=70 {
         let world_tick = runtime.world_tick_for_test();
         let before = sleep_generation_rows(&mut runtime, &organisms);
-        if world_tick.raw() == 113 {
-            assert_eq!(
-                before
-                    .iter()
-                    .filter(|row| matches!(row.consolidation, ConsolidationState::Completed { .. }))
-                    .count(),
-                1
-            );
-            assert_eq!(
-                before
-                    .iter()
-                    .filter(|row| matches!(row.consolidation, ConsolidationState::Prepared { .. }))
-                    .count(),
-                2
-            );
-        }
+        let mixed_transition_ids = (world_tick.raw() == 113).then(|| {
+            let completed_ids = before
+                .iter()
+                .filter_map(|row| {
+                    matches!(row.consolidation, ConsolidationState::Completed { .. })
+                        .then_some(row.organism_id)
+                })
+                .collect::<Vec<_>>();
+            let prepared_ids = before
+                .iter()
+                .filter_map(|row| {
+                    matches!(row.consolidation, ConsolidationState::Prepared { .. })
+                        .then_some(row.organism_id)
+                })
+                .collect::<Vec<_>>();
+            assert!(!completed_ids.is_empty());
+            assert!(!prepared_ids.is_empty());
+            (completed_ids, prepared_ids)
+        });
         if let Err(error) = runtime.tick() {
             panic!(
                 "six-founder production runtime failed during measured call {measured_call} at world tick {}: {error:?}\nbefore={before:#?}\nafter={:#?}",
@@ -1084,20 +1089,27 @@ fn phase31_six_founder_runtime_survives_seventy_ticks_after_player_measurement_b
         }
         if world_tick.raw() == 113 {
             let after = sleep_generation_rows(&mut runtime, &organisms);
-            assert_eq!(
-                after
+            let (completed_ids, prepared_ids) = mixed_transition_ids.unwrap();
+            for organism_id in completed_ids {
+                let row = after
                     .iter()
-                    .filter(|row| matches!(row.consolidation, ConsolidationState::Committed { .. }))
-                    .count(),
-                1
-            );
-            assert_eq!(
-                after
+                    .find(|row| row.organism_id == organism_id)
+                    .unwrap();
+                assert!(matches!(
+                    row.consolidation,
+                    ConsolidationState::Committed { .. }
+                ));
+            }
+            for organism_id in prepared_ids {
+                let row = after
                     .iter()
-                    .filter(|row| matches!(row.consolidation, ConsolidationState::Submitted { .. }))
-                    .count(),
-                2
-            );
+                    .find(|row| row.organism_id == organism_id)
+                    .unwrap();
+                assert!(matches!(
+                    row.consolidation,
+                    ConsolidationState::Submitted { .. }
+                ));
+            }
             mixed_promotion_and_journal_tick_observed = true;
         }
     }
@@ -1126,6 +1138,84 @@ fn phase31_six_founder_runtime_survives_seventy_ticks_after_player_measurement_b
             ScaffoldContractError::NeuralBackendUnavailable
         ))
     ));
+    drop(runtime);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn phase31_six_founder_atp_safety_enters_recovery_before_dispatch_and_survives_old_boundary() {
+    let CanonicalRuntimeFixture {
+        root,
+        mut runtime,
+        organisms,
+        ..
+    } = canonical_runtime(31_082_706, 6);
+    let mut atp_recovery_organism = None;
+    let mut atp_recovery_journal_count = None;
+    let mut later_consolidation_observed = false;
+
+    for runtime_call in 1..=270 {
+        let world_tick = runtime.world_tick_for_test();
+        let before = sleep_generation_rows(&mut runtime, &organisms);
+        if let Err(error) = runtime.tick() {
+            panic!(
+                "six-founder ATP-safety runtime failed during call {runtime_call} at world tick {}: {error:?}\nbefore={before:#?}\nafter={:#?}",
+                world_tick.raw(),
+                sleep_generation_rows(&mut runtime, &organisms),
+            );
+        }
+        assert!(runtime.authority_telemetry().authoritative);
+        let after = sleep_generation_rows(&mut runtime, &organisms);
+        if atp_recovery_organism.is_none() {
+            let transitioned = before.iter().find_map(|before_row| {
+                let after_row = after
+                    .iter()
+                    .find(|after_row| after_row.organism_id == before_row.organism_id)?;
+                (before_row.phase == SleepPhase::Awake
+                    && after_row.phase == SleepPhase::ForcedRecoverySleep
+                    && after_row.last_trigger == Some(SleepTrigger::RecoveryProtocol))
+                .then_some(OrganismId(before_row.organism_id))
+            });
+            if let Some(organism_id) = transitioned {
+                let work = runtime.last_activity_work_receipts();
+                if work
+                    .iter()
+                    .any(|receipt| receipt.organism_id_raw != organism_id.raw())
+                {
+                    assert!(
+                        work.iter()
+                            .all(|receipt| receipt.organism_id_raw != organism_id.raw()),
+                        "the ATP-exhausted founder must be withheld before neural work submission"
+                    );
+                    atp_recovery_organism = Some(organism_id);
+                    atp_recovery_journal_count = Some(
+                        runtime
+                            .performance_metrics()
+                            .sleep_compact_journal_organisms,
+                    );
+                }
+            }
+        } else if let Some(organism_id) = atp_recovery_organism {
+            let sleep = runtime.sleep_state_for_test(organism_id).unwrap();
+            later_consolidation_observed |= sleep.phase == SleepPhase::Consolidating
+                || !matches!(sleep.consolidation, ConsolidationState::None);
+        }
+    }
+
+    let atp_recovery_organism = atp_recovery_organism
+        .expect("an exhausted founder must enter canonical forced-recovery sleep");
+    assert!(later_consolidation_observed);
+    assert!(runtime.world_tick_for_test().raw() > 246);
+    assert!(runtime.authority_telemetry().authoritative);
+    assert!(
+        runtime
+            .performance_metrics()
+            .sleep_compact_journal_organisms
+            > atp_recovery_journal_count.unwrap(),
+        "forced recovery must advance through the ordinary durable sleep journal"
+    );
+    assert!(organisms.contains(&atp_recovery_organism));
+
     drop(runtime);
     fs::remove_dir_all(root).unwrap();
 }

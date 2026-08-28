@@ -6124,6 +6124,13 @@ impl GpuLiveBrainRuntime {
                 tick_before.raw(),
                 recover_brain_atp,
             )?;
+            if self.schedule_sleep
+                && phase_before == SleepPhase::Awake
+                && !retained_learning_pending
+                && !self.backend.next_bounded_activity_is_affordable(handle)?
+            {
+                resident.sleep_scheduler.force_recovery_sleep(tick_before)?;
+            }
             let sleep_event = if self.schedule_sleep {
                 let sleep_config = sleep_consolidation_config_for(&resident.phenotype)?;
                 let mut routed_driver = RoutedGpuSleepDriver {

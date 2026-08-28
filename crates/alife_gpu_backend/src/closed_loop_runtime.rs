@@ -3027,6 +3027,76 @@ impl GpuClosedLoopBackend {
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
     }
 
+    /// Checks whether the resident ATP ledger can fund the next bounded
+    /// production-v1 neural opportunity without submitting or mutating device
+    /// work. Candidate and memory terms use the admitted execution maxima, so
+    /// an accepted result covers every valid frame admitted by this phenotype.
+    pub fn next_bounded_activity_is_affordable(
+        &mut self,
+        handle: GpuBrainHandle,
+    ) -> Result<bool, ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let dispatch_generation = NonZeroU64::new(self.next_dispatch_generation)
+            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+        let pool = self
+            .class_buckets
+            .get(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let resident = pool.resident(handle)?;
+        let frame_digest = resident.phenotype.phenotype_hash().0;
+        if frame_digest == [0; 4] {
+            return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+        }
+        let identity = BrainDispatchIdentity {
+            organism_id_raw: handle.organism_id.raw(),
+            tick: resident
+                .last_world_atp_tick
+                .ok_or(ScaffoldContractError::BrainActivitySequenceMismatch)?,
+            class_id_raw: handle.class_id.raw(),
+            handle_slot: handle.slot,
+            handle_generation: handle.generation,
+            sequence_cursor: resident.activity_sequence_cursor,
+            dispatch_generation: dispatch_generation.get(),
+            frame_digest,
+        };
+        let pressure = GpuPressureSample::try_new(
+            &self.activity_policy,
+            GpuPressureSampleInput {
+                identity,
+                source_dispatch_generation: resident.last_activity_dispatch_generation,
+                source_frame_digest: resident.last_activity_frame_digest,
+                completed_gpu_time_ns: 0,
+                queue_depth: 0,
+                logical_heap_used: 0,
+                logical_heap_capacity: 1,
+                brain_atp_remaining_q16: resident.brain_atp_q16,
+                brain_atp_capacity_q16: BRAIN_ATP_Q16_MAX,
+            },
+        )?;
+        let capacity = capacity_for_gpu_class(handle.class_id)?;
+        let decision = NeuralThrottleDecision::derive(
+            &self.activity_policy,
+            &resident.phenotype,
+            capacity.execution(),
+            identity,
+            pressure,
+        )?;
+        let work = derive_executed_work(
+            &resident.phenotype,
+            decision.microsteps,
+            &decision.enabled_route_ids,
+            u32::from(capacity.execution().max_candidates()),
+            u32::from(capacity.execution().max_memory_context_records()),
+        )?;
+        let cost_q24 = self.activity_policy.cost.neural_cost_q24(&work)?;
+        let debit_q16 = self
+            .activity_policy
+            .cost
+            .q24_to_atp_q16_round_half_up(cost_q24)?;
+        Ok(resident.brain_atp_q16 >= debit_q16)
+    }
+
     /// Returns the bounded v1.1 work receipt attached to a resident brain.
     pub fn v11_work(
         &self,
