@@ -13,7 +13,7 @@ use alife_core::{
 };
 use alife_gpu_backend::{
     verify_research_growth_equivalence, GpuBrainRestoreRequest, GpuClosedLoopBackend,
-    GpuResearchGrowthHandoffOutcome,
+    GpuExactPopulationCapturePollV1, GpuResearchGrowthHandoffOutcome,
 };
 
 fn sealed_reward(
@@ -520,5 +520,197 @@ fn n2048_to_n4096_growth_is_same_adapter_equivalent_and_atomic() {
             .unwrap()
             .canonical_digest(),
         rollback.canonical_digest(),
+    );
+}
+
+#[test]
+fn exact_population_capture_is_one_nonblocking_identity_bound_gpu_transaction() {
+    let phenotype = support::controlled_learning_n512_phenotype(1.0);
+    let organisms = [alife_core::OrganismId(5_105), alife_core::OrganismId(5_106)];
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
+    println!(
+        "PHASE31_GPU_ADAPTER={} BACKEND={:?}",
+        backend.hardware_receipt().adapter_name,
+        backend.hardware_receipt().backend_api
+    );
+    let handles =
+        organisms.map(|organism| backend.insert_brain(organism, phenotype.clone()).unwrap());
+    let submissions_before_rejection = backend
+        .exact_population_capture_metrics()
+        .gpu_copy_submissions;
+    let mut foreign_backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
+    let foreign = foreign_backend
+        .insert_brain(alife_core::OrganismId(71_103), phenotype.clone())
+        .unwrap();
+    assert!(backend
+        .submit_exact_population_capture(Tick::new(100), 1, &[foreign])
+        .is_err());
+    let stale = backend
+        .insert_brain(alife_core::OrganismId(71_104), phenotype)
+        .unwrap();
+    backend.remove_brain(stale).unwrap();
+    assert!(backend
+        .submit_exact_population_capture(Tick::new(100), 1, &[stale])
+        .is_err());
+    assert!(backend
+        .submit_exact_population_capture(Tick::new(100), 1, &handles[..1])
+        .is_err());
+    assert_eq!(
+        backend
+            .exact_population_capture_metrics()
+            .gpu_copy_submissions,
+        submissions_before_rejection,
+        "foreign and stale identity must fail before GPU submission"
+    );
+
+    let mut tick_t = backend
+        .submit_exact_population_capture(Tick::new(100), 1, &handles)
+        .unwrap();
+    assert_eq!(tick_t.capture_transaction_generation(), 1);
+    assert_ne!(tick_t.population_set_digest(), [0; 4]);
+    assert_eq!(tick_t.gpu_copy_submissions(), 1);
+    assert_eq!(tick_t.map_operations(), 1);
+    assert!(tick_t.staging_bytes() > 0);
+
+    // The later topology upload is queued after the capture copy. It may
+    // advance the live resident before mapping completes, but cannot change
+    // the already ordered tick-T bytes.
+    backend
+        .set_v11_dendritic_branches(handles[0], alife_core::DendriticBranchSet::default())
+        .unwrap();
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let captured_t = loop {
+        match backend.poll_exact_population_capture(&mut tick_t).unwrap() {
+            GpuExactPopulationCapturePollV1::Pending if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            GpuExactPopulationCapturePollV1::Pending => {
+                panic!("tick-T exact population capture exceeded the bounded poll deadline")
+            }
+            GpuExactPopulationCapturePollV1::Ready(capture) => break capture,
+            GpuExactPopulationCapturePollV1::Failed(failure) => {
+                panic!("tick-T exact population capture failed: {failure:?}")
+            }
+        }
+    };
+    assert_eq!(captured_t.checkpoint_tick(), Tick::new(100));
+    assert_eq!(captured_t.capture_transaction_generation(), 1);
+    assert_eq!(
+        captured_t.population_set_digest(),
+        tick_t.population_set_digest()
+    );
+    assert_eq!(captured_t.rows().len(), handles.len());
+    for (row, handle) in captured_t.rows().iter().zip(handles) {
+        assert_eq!(row.identity().organism_id, handle.organism_id());
+        assert_eq!(row.identity().class_id, handle.class_id());
+        assert_eq!(row.identity().slot, handle.slot());
+        assert_eq!(row.identity().slot_generation, handle.generation());
+        assert_eq!(row.identity().phenotype_hash, handle.phenotype_hash());
+        assert!(row.identity().graph_epoch > 0);
+        assert!(row.identity().logical_dispatch_generation > 0);
+        assert!(row.identity().active_activation_side <= 1);
+        assert!(row.identity().active_weight_generation > 0);
+        assert!(row.identity().active_weight_bank <= 1);
+        assert!(row.identity().active_eligibility_generation > 0);
+        assert!(row.identity().active_eligibility_bank <= 1);
+        assert!(row.identity().replay_journal_generation > 0);
+        assert!(row.identity().transaction_generation > 0);
+        assert_eq!(row.identity().activity_sequence_cursor, 1);
+        assert!(row.identity().last_throttle.is_none());
+        assert!(row.identity().last_work.is_none());
+        assert!(!row.immutable_plan_bytes().is_empty());
+        assert!(!row.immutable_weight_bytes().is_empty());
+        assert!(!row.mutable_state_bytes().is_empty());
+    }
+
+    let mut after_advance = backend
+        .submit_exact_population_capture(Tick::new(101), 2, &handles)
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let captured_after = loop {
+        match backend
+            .poll_exact_population_capture(&mut after_advance)
+            .unwrap()
+        {
+            GpuExactPopulationCapturePollV1::Pending if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            GpuExactPopulationCapturePollV1::Pending => {
+                panic!("post-advance exact population capture exceeded the bounded poll deadline")
+            }
+            GpuExactPopulationCapturePollV1::Ready(capture) => break capture,
+            GpuExactPopulationCapturePollV1::Failed(failure) => {
+                panic!("post-advance exact population capture failed: {failure:?}")
+            }
+        }
+    };
+    assert_ne!(
+        captured_t.rows()[0].immutable_plan_bytes(),
+        captured_after.rows()[0].immutable_plan_bytes(),
+        "the first capture must retain immutable tick-T bytes after live advance"
+    );
+    assert_ne!(
+        captured_t.rows()[0].identity().v11,
+        captured_after.rows()[0].identity().v11,
+        "the capture identity must bind the graph state paired with the copied plan"
+    );
+    assert_eq!(captured_t.rows()[1], captured_after.rows()[1]);
+    assert_eq!(tick_t.retained_staging_bytes(), 0);
+    assert_eq!(after_advance.retained_staging_bytes(), 0);
+
+    let released_before_failure = backend
+        .exact_population_capture_metrics()
+        .released_staging_bytes;
+    let mut forced_failure = backend
+        .submit_exact_population_capture(Tick::new(101), 3, &handles)
+        .unwrap();
+    let forced_bytes = forced_failure.staging_bytes();
+    forced_failure.force_decode_identity_failure_for_test();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let failure = loop {
+        match backend
+            .poll_exact_population_capture(&mut forced_failure)
+            .unwrap()
+        {
+            GpuExactPopulationCapturePollV1::Pending if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            GpuExactPopulationCapturePollV1::Pending => {
+                panic!("forced-failure capture exceeded the bounded poll deadline")
+            }
+            GpuExactPopulationCapturePollV1::Ready(_) => {
+                panic!("forced identity mismatch unexpectedly completed")
+            }
+            GpuExactPopulationCapturePollV1::Failed(failure) => break failure,
+        }
+    };
+    assert_eq!(
+        failure.stage,
+        alife_gpu_backend::GpuExactPopulationCaptureFailureStageV1::DecodeIdentity
+    );
+    assert_eq!(forced_failure.retained_staging_bytes(), 0);
+    assert_eq!(
+        backend
+            .exact_population_capture_metrics()
+            .released_staging_bytes,
+        released_before_failure + forced_bytes
+    );
+    assert!(matches!(
+        backend
+            .poll_exact_population_capture(&mut forced_failure)
+            .unwrap(),
+        GpuExactPopulationCapturePollV1::Failed(repeated) if repeated == failure
+    ));
+    assert_eq!(
+        backend
+            .exact_population_capture_metrics()
+            .released_staging_bytes,
+        released_before_failure + forced_bytes,
+        "terminal failure polling must not release or account staging twice"
     );
 }

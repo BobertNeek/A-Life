@@ -1,8 +1,21 @@
 //! GPU-authoritative live cognition for the explicit neural policy.
 
+mod durability_hold;
+mod exact_population_checkpoint;
+
+use durability_hold::{
+    brain_atp_world_tick_mode, motor_eligible, sleep_recovery_body_event_due, BrainAtpWorldTickMode,
+};
+use exact_population_checkpoint::{
+    ExactCheckpointRequestDispositionV1, ExactPopulationCheckpointCoordinatorV1,
+    ExactPopulationCheckpointStageV1, ManualCheckpointRequestV1,
+};
+
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::Path,
+    path::{Path, PathBuf},
+    sync::mpsc::{self, Receiver, SyncSender, TryRecvError, TrySendError},
+    thread::{self, JoinHandle},
     time::Instant,
 };
 
@@ -14,15 +27,15 @@ use alife_core::{
     finalized_memory_attention_evidence, select_focal_targets, ActionKind,
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
     AttentionFrame, AttentionSelectionPolicy, BiochemistryState, Blake3Digest, BodyEventDelta,
-    BoundedMotorPayload, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
-    BrainWorkCounters, BrainWorkReceipt, CandidateObservationRef, CanonicalDigestBuilder,
-    CognitiveConceptActivation, CognitiveContextFrame, CognitiveGapActivation,
-    CognitiveMemoryExpectancy, CognitiveWorkReceipt, Confidence, ConsolidationDriverEvent,
-    ConsolidationIntent, ConsolidationState, DecisionSnapshot, DevelopmentState,
-    EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId, FinalizedMemoryAttentionEvidence,
-    FinalizedMemoryRecall, FoundationCompatibilityFamilyId, FoundationGeneticIdentity,
-    FoundationId, FoundationVersion, FoundationWeightAsset, HomeostaticParameters,
-    HomeostaticSnapshot, JointMotorCondition, LanguageGroundingLedger,
+    BoundedMotorPayload, BoundedReplayBatch, BrainCapacityClass, BrainGenome, BrainScaleTier,
+    BrainTickStatus, BrainWorkCounters, BrainWorkReceipt, CandidateObservationRef,
+    CanonicalDigestBuilder, CognitiveConceptActivation, CognitiveContextFrame,
+    CognitiveGapActivation, CognitiveMemoryExpectancy, CognitiveWorkReceipt, Confidence,
+    ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState, DecisionSnapshot,
+    DevelopmentState, EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId,
+    FinalizedMemoryAttentionEvidence, FinalizedMemoryRecall, FoundationCompatibilityFamilyId,
+    FoundationGeneticIdentity, FoundationId, FoundationVersion, FoundationWeightAsset,
+    HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition, LanguageGroundingLedger,
     LegacyNano512CompatibilityReceipt, LineageId, MemoryBankConfig, MemoryCompactionCheckpoint,
     MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState, MemoryUpdateReceipt,
     MotorChannel, MotorCommandBundle, N512FounderFoundationProjection, NeuralActionSelection,
@@ -38,17 +51,20 @@ use alife_core::{
     MAX_CONTEXT_MEMORY_EXPECTANCIES,
 };
 use alife_gpu_backend::{
-    GpuActivityRuntimeSnapshot, GpuAuthorityReceiptV1, GpuBrainHandle, GpuClosedLoopBackend,
-    GpuClosedLoopMemoryBatchInput, GpuClosedLoopMemoryTickInput, GpuClosedLoopTick,
-    GpuCompactCheckpointAuthorityV1, GpuCuratedResidencyCohort, GpuCuratedResidencyEntry,
-    GpuCuratedResidencyOutcome, GpuCuratedResidencyReceipt, GpuCuratedResidencyTargetIdentity,
-    GpuLearningReceipt, GpuMemoryContextUpload, GpuV11WorkReceipt,
-    PendingEligibilityDiscardReceipt, PendingEligibilityIdentity, PendingEligibilityReceipt,
-    GPU_CLOSED_LOOP_TICK_READBACK_BYTES, GPU_FAST_PLASTICITY_COMMIT_BYTES,
-    GPU_MOTOR_CHANNEL_SLOT_COUNT,
+    decode_exact_population_sleep_replay, GpuActivityRuntimeSnapshot, GpuAuthorityReceiptV1,
+    GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
+    GpuClosedLoopMemoryTickInput, GpuClosedLoopTick, GpuCompactCheckpointAuthorityV1,
+    GpuCuratedResidencyCohort, GpuCuratedResidencyEntry, GpuCuratedResidencyOutcome,
+    GpuCuratedResidencyReceipt, GpuCuratedResidencyTargetIdentity,
+    GpuExactPopulationCaptureMetricsV1, GpuExactPopulationCapturePollV1,
+    GpuExactPopulationCaptureTicketV1, GpuExactPopulationCaptureV1, GpuLearningReceipt,
+    GpuMemoryContextUpload, GpuV11WorkReceipt, PendingEligibilityDiscardReceipt,
+    PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
+    GPU_FAST_PLASTICITY_COMMIT_BYTES, GPU_MOTOR_CHANNEL_SLOT_COUNT,
 };
 use alife_runtime::{
-    DurableGpuCheckpointRef, GpuAuthoritativeSession, GpuSessionAuthority, GpuSessionConsumerKind,
+    DurableGpuCheckpointMonotonicityPermit, DurableGpuCheckpointRef, GpuAuthoritativeSession,
+    GpuExactCheckpointTransactionContextV1, GpuSessionAuthority, GpuSessionConsumerKind,
     GpuSessionFailStopCause, GpuSleepTransactionJournalEntryV2, GpuSleepTransactionJournalV2,
     SleepPhaseReceipt, SleepWorkDue,
 };
@@ -209,8 +225,10 @@ fn capture_sleep_journal_neural_authority(
     backend: &mut GpuAuthoritativeSession,
     handle: GpuBrainHandle,
 ) -> Result<SleepJournalNeuralAuthority, ScaffoldContractError> {
+    let compact = backend.compact_checkpoint_authority(handle)?;
+    backend.validate_compact_checkpoint_authority(handle, &compact)?;
     Ok(SleepJournalNeuralAuthority {
-        compact: backend.compact_checkpoint_authority(handle)?,
+        compact,
         activity: backend.snapshot_activity_state(handle)?,
     })
 }
@@ -489,12 +507,716 @@ impl ResidentAuthorityPlan {
 }
 
 const LIVE_COGNITIVE_ENERGY_PER_WORK_UNIT: f32 = 0.000_001;
+const MAX_EXACT_CHECKPOINT_PENDING_JOURNAL_ENTRIES: usize = 64;
 
 #[derive(Debug, Clone)]
 struct GpuLiveCheckpointDurability {
     store: GpuCheckpointAssetStore,
     durable_manifest: GpuDurableSaveManifest,
     published: GpuLoadedSaveManifest,
+}
+
+#[derive(Debug, Clone)]
+struct ExactPopulationHostSnapshotV1 {
+    checkpoint_tick: Tick,
+    replacement: PortableSaveFile,
+    brains: Vec<ExactBrainHostSnapshotV1>,
+    restored_replay_patches: Vec<ExperiencePatch>,
+    sealed_patches: Vec<ExperiencePatch>,
+    last_sealed_patches: Vec<ExperiencePatch>,
+}
+
+#[derive(Debug, Clone)]
+struct ExactBrainHostSnapshotV1 {
+    handle: GpuBrainHandle,
+    phenotype: alife_core::BrainPhenotype,
+    compiler_inputs: PhenotypeCompilerInputs,
+    sleep: SleepState,
+    memory: MemorySidecarState,
+    topology: TopologySidecar,
+    tracked_objects: alife_world::TrackedObjectRegistrySaveState,
+    language_grounding: LanguageGroundingLedger,
+    life_statistics: PassiveLifeStatistics,
+    legacy_nano512_compatibility_receipt: Option<LegacyNano512CompatibilityReceipt>,
+    retained_learning: Option<ExactRetainedLearningHostSnapshotV1>,
+    exact_cognitive_state: ExactCognitiveHostSnapshotV1,
+}
+
+#[derive(Debug, Clone)]
+struct ExactRetainedLearningHostSnapshotV1 {
+    sealed_patch: ExperiencePatch,
+    neural_receptors: NeuralReceptorFrame,
+    attempts: u8,
+    last_error_code: &'static str,
+}
+
+#[derive(Debug, Clone)]
+struct ExactCognitiveHostSnapshotV1 {
+    organism_id: OrganismId,
+    checkpoint_tick: Tick,
+    cognitive_context: CognitiveContextFrame,
+    predictor: GroundedSuccessorPredictor,
+    selected_motor_bundle: Option<MotorCommandBundle>,
+    cognitive_work: CognitiveWorkReceipt,
+    sleep_state: SleepState,
+    last_sleep_work: Option<SleepWorkReceipt>,
+    structural_edit_receipts: Vec<alife_core::StructuralEditBatch>,
+    last_sleep_report: Option<alife_core::SleepConsolidationReport>,
+}
+
+enum ExactPopulationCheckpointRuntimeWorkV1 {
+    Idle,
+    Capture {
+        transaction_id: u64,
+        expected_base_digest: String,
+        host: ExactPopulationHostSnapshotV1,
+        context: GpuExactCheckpointTransactionContextV1,
+        ticket: GpuExactPopulationCaptureTicketV1,
+    },
+    CaptureFailed {
+        transaction_id: u64,
+        ticket: GpuExactPopulationCaptureTicketV1,
+        error: Option<GameAppShellError>,
+    },
+    Worker {
+        transaction_id: u64,
+        checkpoint_tick: Tick,
+        expected_base_digest: String,
+        capture_transaction_generation: u64,
+        population_set_digest: [u64; 4],
+        worker: ExactPopulationCheckpointWorkerOwnerV1,
+    },
+    CommitWorker {
+        prepared: ExactPopulationCheckpointWorkerPreparedV1,
+        permit: DurableGpuCheckpointMonotonicityPermit,
+        worker: ExactPopulationCheckpointWorkerOwnerV1,
+    },
+    AwaitingJournal {
+        permit: DurableCompletedCheckpointPermitV1,
+        worker: ExactPopulationCheckpointWorkerOwnerV1,
+    },
+    JournalWorker {
+        transaction_id: u64,
+        worker: ExactPopulationCheckpointWorkerOwnerV1,
+        journal_commit: Option<ExactPopulationCheckpointJournalCommitV1>,
+    },
+    Finalizing {
+        transaction_id: u64,
+        report: ExactPopulationCheckpointWorkerFinalV1,
+        join_handle: JoinHandle<()>,
+        journal_commit: Option<ExactPopulationCheckpointJournalCommitV1>,
+    },
+    FailedJoining {
+        transaction_id: u64,
+        failed: FailedExactPopulationCheckpointWorkerJoinV1,
+    },
+    Failed,
+}
+
+impl Default for ExactPopulationCheckpointRuntimeWorkV1 {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
+struct ExactPopulationCheckpointWorkerSuccessV1 {
+    transaction_id: u64,
+    checkpoint_tick: Tick,
+    expected_base_digest: String,
+    capture_transaction_generation: u64,
+    population_set_digest: [u64; 4],
+    durable_reference: DurableGpuCheckpointRef,
+    published: GpuLoadedSaveManifest,
+    exact_neural_captures: u64,
+    captured_journal_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
+}
+
+struct RestoredDurableCompletedPermitV1 {
+    transaction_id: u64,
+    checkpoint_tick: Tick,
+    published: GpuLoadedSaveManifest,
+    rollback_journal: GpuSleepTransactionJournalV2,
+    captured_journal_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
+}
+
+enum DurableCompletedCheckpointPermitV1 {
+    Captured(ExactPopulationCheckpointWorkerSuccessV1),
+    Restored(RestoredDurableCompletedPermitV1),
+}
+
+impl DurableCompletedCheckpointPermitV1 {
+    fn transaction_id(&self) -> u64 {
+        match self {
+            Self::Captured(success) => success.transaction_id,
+            Self::Restored(permit) => permit.transaction_id,
+        }
+    }
+
+    fn checkpoint_tick(&self) -> Tick {
+        match self {
+            Self::Captured(success) => success.checkpoint_tick,
+            Self::Restored(permit) => permit.checkpoint_tick,
+        }
+    }
+
+    fn published(&self) -> &GpuLoadedSaveManifest {
+        match self {
+            Self::Captured(success) => &success.published,
+            Self::Restored(permit) => &permit.published,
+        }
+    }
+
+    fn captured_journal_authorities(&self) -> &BTreeMap<u64, SleepJournalNeuralAuthority> {
+        match self {
+            Self::Captured(success) => &success.captured_journal_authorities,
+            Self::Restored(permit) => &permit.captured_journal_authorities,
+        }
+    }
+
+    fn validate_restored_provenance(&self) -> Result<(), ScaffoldContractError> {
+        let Self::Restored(permit) = self else {
+            return Ok(());
+        };
+        permit.rollback_journal.validate()?;
+        if permit.rollback_journal.exact_base_checkpoint_tick != permit.checkpoint_tick
+            || permit.rollback_journal.exact_base_manifest_digest
+                != permit.published.exact_save_anchor_digest()?.0
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ExactPopulationCheckpointWorkerPreparedV1 {
+    transaction_id: u64,
+    checkpoint_tick: Tick,
+    expected_base_digest: String,
+    capture_transaction_generation: u64,
+    population_set_digest: [u64; 4],
+    prospective_durable_reference: DurableGpuCheckpointRef,
+    exact_neural_captures: u64,
+    captured_journal_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
+}
+
+enum ExactPopulationCheckpointWorkerCommandV1 {
+    CommitExact,
+    Finalize {
+        promotions: Vec<ExactPopulationCheckpointJournalPromotionV1>,
+        manual: Option<ManualCheckpointRequestV1>,
+    },
+    Abort,
+}
+
+struct ExactPopulationCheckpointJournalPromotionV1 {
+    entry: GpuSleepTransactionJournalEntryV2,
+    authority: SleepJournalNeuralAuthority,
+    phenotype: alife_core::BrainPhenotype,
+}
+
+struct ExactPopulationCheckpointJournalCommitV1 {
+    authorities: Vec<(u64, SleepJournalNeuralAuthority)>,
+    entry_count: u64,
+    contains_completed_promotion: bool,
+}
+
+enum ExactPopulationCheckpointWorkerEventV1 {
+    ManifestPrepared(ExactPopulationCheckpointWorkerPreparedV1),
+    ExactPublished(ExactPopulationCheckpointWorkerSuccessV1),
+    Final(ExactPopulationCheckpointWorkerFinalV1),
+}
+
+struct ExactPopulationCheckpointWorkerOwnerV1 {
+    command_sender: SyncSender<ExactPopulationCheckpointWorkerCommandV1>,
+    event_receiver: Receiver<ExactPopulationCheckpointWorkerEventV1>,
+    join_handle: JoinHandle<()>,
+}
+
+enum FailedExactPopulationCheckpointWorkerJoinPollV1 {
+    Pending,
+    Ready {
+        error: GameAppShellError,
+        worker_panicked: bool,
+    },
+}
+
+struct FailedExactPopulationCheckpointWorkerJoinV1 {
+    error: Option<GameAppShellError>,
+    join_handle: Option<JoinHandle<()>>,
+    abort_delivery: ExactPopulationCheckpointAbortDeliveryV1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExactPopulationCheckpointAbortDeliveryV1 {
+    Enqueued,
+    CommandAlreadyQueued,
+    WorkerDisconnected,
+}
+
+impl ExactPopulationCheckpointWorkerOwnerV1 {
+    fn try_recv_event(
+        &self,
+    ) -> Result<Option<ExactPopulationCheckpointWorkerEventV1>, TryRecvError> {
+        match self.event_receiver.try_recv() {
+            Ok(event) => Ok(Some(event)),
+            Err(TryRecvError::Empty) => Ok(None),
+            Err(error @ TryRecvError::Disconnected) => Err(error),
+        }
+    }
+
+    fn try_send_command(
+        &self,
+        command: ExactPopulationCheckpointWorkerCommandV1,
+    ) -> Result<(), TrySendError<ExactPopulationCheckpointWorkerCommandV1>> {
+        self.command_sender.try_send(command)
+    }
+
+    fn abort_and_retain(
+        self,
+        error: GameAppShellError,
+    ) -> FailedExactPopulationCheckpointWorkerJoinV1 {
+        let abort_delivery =
+            match self.try_send_command(ExactPopulationCheckpointWorkerCommandV1::Abort) {
+                Ok(()) => ExactPopulationCheckpointAbortDeliveryV1::Enqueued,
+                Err(TrySendError::Full(_)) => {
+                    ExactPopulationCheckpointAbortDeliveryV1::CommandAlreadyQueued
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    ExactPopulationCheckpointAbortDeliveryV1::WorkerDisconnected
+                }
+            };
+        FailedExactPopulationCheckpointWorkerJoinV1 {
+            error: Some(error),
+            join_handle: Some(self.join_handle),
+            abort_delivery,
+        }
+    }
+
+    fn into_join_handle(self) -> JoinHandle<()> {
+        self.join_handle
+    }
+}
+
+impl FailedExactPopulationCheckpointWorkerJoinV1 {
+    #[cfg(test)]
+    fn abort_delivery(&self) -> ExactPopulationCheckpointAbortDeliveryV1 {
+        self.abort_delivery
+    }
+
+    fn poll(&mut self) -> FailedExactPopulationCheckpointWorkerJoinPollV1 {
+        let join_handle = self
+            .join_handle
+            .as_ref()
+            .expect("failed checkpoint worker join is terminal after one Ready result");
+        if !join_handle.is_finished() {
+            return FailedExactPopulationCheckpointWorkerJoinPollV1::Pending;
+        }
+        let join_handle = self
+            .join_handle
+            .take()
+            .expect("finished checkpoint worker join handle");
+        let worker_panicked = join_handle.join().is_err();
+        FailedExactPopulationCheckpointWorkerJoinPollV1::Ready {
+            error: self
+                .error
+                .take()
+                .expect("failed checkpoint worker error is consumed once"),
+            worker_panicked,
+        }
+    }
+}
+
+struct ExactPopulationCheckpointWorkerFinalV1 {
+    durability: GpuLiveCheckpointDurability,
+    result: Result<(), GameAppShellError>,
+    manual_completion: Option<ManualCheckpointCompletionV1>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ManualCheckpointCompletionV1 {
+    destination: PathBuf,
+    checkpoint_tick: Tick,
+}
+
+impl ExactCognitiveHostSnapshotV1 {
+    fn with_captured_v11(
+        &self,
+        v11: &alife_gpu_backend::GpuV11Checkpoint,
+    ) -> Result<ExactCognitiveCheckpointState, GameAppShellError> {
+        let state = ExactCognitiveCheckpointState {
+            schema_version: V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
+            organism_id: self.organism_id,
+            checkpoint_tick: self.checkpoint_tick,
+            cognitive_context: self.cognitive_context.clone(),
+            predictor: self.predictor.clone(),
+            selected_motor_bundle: self.selected_motor_bundle.clone(),
+            cognitive_work: self.cognitive_work,
+            sleep_state: self.sleep_state,
+            last_sleep_work: self.last_sleep_work.clone(),
+            dendritic_branches: v11.dendritic_branches.clone(),
+            structural_plasticity: v11.structural.clone(),
+            structural_edit_receipts: self.structural_edit_receipts.clone(),
+            last_sleep_report: self.last_sleep_report.clone(),
+        };
+        state.validate()?;
+        Ok(state)
+    }
+}
+
+fn assemble_checkpointed_save_from_immutable_capture(
+    mut host: ExactPopulationHostSnapshotV1,
+    store: &GpuCheckpointAssetStore,
+    capture: &GpuExactPopulationCaptureV1,
+    context: &GpuExactCheckpointTransactionContextV1,
+) -> Result<(PortableSaveFile, u64), GameAppShellError> {
+    if capture.checkpoint_tick() != host.checkpoint_tick
+        || capture.rows().len() != host.brains.len()
+    {
+        return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+    }
+    let mut manifest_entries = Vec::new();
+    let mut exact_neural_captures = 0_u64;
+    for brain in &host.brains {
+        let organism_id = brain.handle.organism_id();
+        let row = capture
+            .rows()
+            .iter()
+            .find(|row| row.identity().organism_id == organism_id)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let exact_cognitive_state = brain
+            .exact_cognitive_state
+            .with_captured_v11(&row.identity().v11)?;
+        let capacity = BrainCapacityClass::production_for_id(brain.phenotype.brain_class_id())?;
+        let replay = decode_exact_population_sleep_replay(row, host.checkpoint_tick, &capacity)?;
+        let replay_patches = replay_patches_for_batch(
+            &replay,
+            organism_id,
+            &host.restored_replay_patches,
+            &host.sealed_patches,
+            &host.last_sealed_patches,
+        )?;
+        let retained_learning =
+            brain
+                .retained_learning
+                .as_ref()
+                .map(|recovery| RetainedLearningCapture {
+                    sealed_patch: &recovery.sealed_patch,
+                    neural_receptors: &recovery.neural_receptors,
+                    attempts: recovery.attempts,
+                    last_error_code: recovery.last_error_code,
+                });
+        let mut write = store.capture_brain_from_exact_population_capture(
+            brain.handle,
+            &brain.phenotype,
+            &brain.compiler_inputs,
+            brain.sleep,
+            host.checkpoint_tick,
+            None,
+            &replay_patches,
+            GpuBrainSidecarCapture {
+                sensor_profile: brain.memory.profile(),
+                memory: &brain.memory,
+                topology: &brain.topology,
+                tracked_objects: brain.tracked_objects.clone(),
+                language_grounding: &brain.language_grounding,
+                life_statistics: &brain.life_statistics,
+                legacy_nano512_compatibility_receipt: brain
+                    .legacy_nano512_compatibility_receipt
+                    .as_ref(),
+                retained_learning,
+            },
+            row,
+            context,
+        )?;
+        write.attach_exact_cognitive_state(store, &exact_cognitive_state)?;
+        exact_neural_captures = exact_neural_captures.saturating_add(1);
+        manifest_entries.extend(write.manifest_entries);
+        let creature = host
+            .replacement
+            .creatures
+            .iter_mut()
+            .find(|creature| creature.organism_id == organism_id)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        creature.gpu_brain = Some(write.save_state);
+    }
+    if host.replacement.creatures.len() != host.brains.len() {
+        return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+    }
+    merge_gpu_checkpoint_manifest_entries(&mut host.replacement.assets, manifest_entries)?;
+    host.replacement.validate_with_asset_root(store.root())?;
+    Ok((host.replacement, exact_neural_captures))
+}
+
+fn spawn_exact_population_checkpoint_worker(
+    transaction_id: u64,
+    expected_base_digest: String,
+    host: ExactPopulationHostSnapshotV1,
+    capture: GpuExactPopulationCaptureV1,
+    context: GpuExactCheckpointTransactionContextV1,
+    mut durability: GpuLiveCheckpointDurability,
+) -> ExactPopulationCheckpointWorkerOwnerV1 {
+    let (event_sender, event_receiver) = mpsc::sync_channel(1);
+    let (command_sender, command_receiver) = mpsc::sync_channel(1);
+    let join_handle = thread::spawn(move || {
+        let checkpoint_tick = host.checkpoint_tick;
+        let capture_transaction_generation = capture.capture_transaction_generation();
+        let population_set_digest = capture.population_set_digest();
+        let prepared = (|| {
+            if durability.published.digest.as_str() != expected_base_digest {
+                return Err(GameAppShellError::InvalidProductionFrontend {
+                    message: "exact checkpoint worker base digest changed before assembly"
+                        .to_string(),
+                });
+            }
+            let store = durability.store.clone();
+            let (replacement, exact_neural_captures) =
+                assemble_checkpointed_save_from_immutable_capture(
+                    host, &store, &capture, &context,
+                )?;
+            let captured_journal_authorities = capture
+                .rows()
+                .iter()
+                .map(|row| {
+                    Ok((
+                        row.identity().organism_id.raw(),
+                        SleepJournalNeuralAuthority {
+                            compact: row.compact_checkpoint_authority()?,
+                            activity: row.activity_snapshot().clone(),
+                        },
+                    ))
+                })
+                .collect::<Result<BTreeMap<_, _>, ScaffoldContractError>>()?;
+            let prospective_durable_reference =
+                durability.prospective_durable_reference(&replacement)?;
+            let prepared = ExactPopulationCheckpointWorkerPreparedV1 {
+                transaction_id,
+                checkpoint_tick,
+                expected_base_digest: expected_base_digest.clone(),
+                capture_transaction_generation,
+                population_set_digest,
+                prospective_durable_reference,
+                exact_neural_captures,
+                captured_journal_authorities,
+            };
+            Ok((replacement, prepared))
+        })();
+        let (replacement, prepared) = match prepared {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                let _ = event_sender.send(ExactPopulationCheckpointWorkerEventV1::Final(
+                    ExactPopulationCheckpointWorkerFinalV1 {
+                        durability,
+                        result: Err(error),
+                        manual_completion: None,
+                    },
+                ));
+                return;
+            }
+        };
+        if event_sender
+            .send(ExactPopulationCheckpointWorkerEventV1::ManifestPrepared(
+                prepared.clone(),
+            ))
+            .is_err()
+        {
+            return;
+        }
+        match command_receiver.recv() {
+            Ok(ExactPopulationCheckpointWorkerCommandV1::CommitExact) => {}
+            Ok(ExactPopulationCheckpointWorkerCommandV1::Abort) | Err(_) => {
+                let _ = event_sender.send(ExactPopulationCheckpointWorkerEventV1::Final(
+                    ExactPopulationCheckpointWorkerFinalV1 {
+                        durability,
+                        result: Err(ScaffoldContractError::NeuralBackendUnavailable.into()),
+                        manual_completion: None,
+                    },
+                ));
+                return;
+            }
+            Ok(ExactPopulationCheckpointWorkerCommandV1::Finalize { .. }) => {
+                let _ = event_sender.send(ExactPopulationCheckpointWorkerEventV1::Final(
+                    ExactPopulationCheckpointWorkerFinalV1 {
+                        durability,
+                        result: Err(ScaffoldContractError::ConsolidationGenerationMismatch.into()),
+                        manual_completion: None,
+                    },
+                ));
+                return;
+            }
+        }
+        let published = (|| {
+            let durable_reference = durability.publish(replacement)?;
+            if durable_reference != prepared.prospective_durable_reference {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+            }
+            Ok(ExactPopulationCheckpointWorkerSuccessV1 {
+                transaction_id: prepared.transaction_id,
+                checkpoint_tick: prepared.checkpoint_tick,
+                expected_base_digest: prepared.expected_base_digest.clone(),
+                capture_transaction_generation: prepared.capture_transaction_generation,
+                population_set_digest: prepared.population_set_digest,
+                durable_reference,
+                published: durability.published.clone(),
+                exact_neural_captures: prepared.exact_neural_captures,
+                captured_journal_authorities: prepared.captured_journal_authorities.clone(),
+            })
+        })();
+        let success = match published {
+            Ok(success) => success,
+            Err(error) => {
+                let _ = event_sender.send(ExactPopulationCheckpointWorkerEventV1::Final(
+                    ExactPopulationCheckpointWorkerFinalV1 {
+                        durability,
+                        result: Err(error),
+                        manual_completion: None,
+                    },
+                ));
+                return;
+            }
+        };
+        if event_sender
+            .send(ExactPopulationCheckpointWorkerEventV1::ExactPublished(
+                success,
+            ))
+            .is_err()
+        {
+            return;
+        }
+        run_exact_population_checkpoint_finalize_worker(durability, command_receiver, event_sender);
+    });
+    ExactPopulationCheckpointWorkerOwnerV1 {
+        command_sender,
+        event_receiver,
+        join_handle,
+    }
+}
+
+fn spawn_exact_population_checkpoint_recommit_worker(
+    durability: GpuLiveCheckpointDurability,
+) -> ExactPopulationCheckpointWorkerOwnerV1 {
+    let (event_sender, event_receiver) = mpsc::sync_channel(1);
+    let (command_sender, command_receiver) = mpsc::sync_channel(1);
+    let join_handle = thread::spawn(move || {
+        run_exact_population_checkpoint_finalize_worker(durability, command_receiver, event_sender);
+    });
+    ExactPopulationCheckpointWorkerOwnerV1 {
+        command_sender,
+        event_receiver,
+        join_handle,
+    }
+}
+
+fn run_exact_population_checkpoint_finalize_worker(
+    mut durability: GpuLiveCheckpointDurability,
+    command_receiver: Receiver<ExactPopulationCheckpointWorkerCommandV1>,
+    event_sender: SyncSender<ExactPopulationCheckpointWorkerEventV1>,
+) {
+    let (result, manual_completion) = match command_receiver.recv() {
+        Ok(ExactPopulationCheckpointWorkerCommandV1::Finalize { promotions, manual }) => {
+            let validated_entries = (|| {
+                let mut entries = Vec::with_capacity(promotions.len());
+                let mut current_sleep_by_organism = BTreeMap::new();
+                for promotion in promotions {
+                    let creature = durability
+                        .published
+                        .save
+                        .creatures
+                        .iter()
+                        .find(|creature| creature.organism_id == promotion.entry.organism_id)
+                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                    let exact_base = creature
+                        .gpu_brain
+                        .as_ref()
+                        .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+                    promotion.entry.validate()?;
+                    let current_sleep = current_sleep_by_organism
+                        .entry(promotion.entry.organism_id.raw())
+                        .or_insert(exact_base.sleep);
+                    if promotion.entry.target == *current_sleep {
+                        // The exact tick-T capture already includes this same-tick edge.
+                        continue;
+                    }
+                    if promotion.entry.source != *current_sleep
+                        || promotion.entry.transition_tick < exact_base.checkpoint_tick
+                    {
+                        return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+                    }
+                    durability.store.validate_compact_neural_reuse_evidence(
+                        &durability.published.save.assets,
+                        exact_base,
+                        promotion.entry.organism_id,
+                        &promotion.phenotype,
+                        &promotion.authority.compact,
+                        &promotion.authority.activity,
+                    )?;
+                    *current_sleep = promotion.entry.target;
+                    entries.push(promotion.entry);
+                }
+                Ok::<_, GameAppShellError>(entries)
+            })();
+            let result = validated_entries
+                .and_then(|entries| durability.publish_sleep_journal_entries(entries))
+                .and_then(|_| {
+                    let published = durability.durable_manifest.load()?;
+                    let _ = durability
+                        .durable_manifest
+                        .load_sleep_transaction_journal(&published)?;
+                    durability.published = published;
+                    Ok(())
+                });
+            match result {
+                Err(error) => (Err(error), None),
+                Ok(()) => match manual {
+                    Some(request) => {
+                        let completion = ManualCheckpointCompletionV1 {
+                            destination: request.destination.clone(),
+                            checkpoint_tick: durability.published.save.world.tick,
+                        };
+                        let manual_result = (|| {
+                            GpuDurableSaveManifest::publish_snapshot(
+                                &request.destination,
+                                durability.store.root(),
+                                &durability.published.save,
+                            )?;
+                            let manual_manifest = GpuDurableSaveManifest::open(
+                                &request.destination,
+                                durability.store.root(),
+                            )?;
+                            let manual_published = manual_manifest.load()?;
+                            if manual_published.save != durability.published.save {
+                                return Err(GameAppShellError::InvalidProductionFrontend {
+                                        message: "manual checkpoint reload differs from the exact worker generation"
+                                            .to_string(),
+                                    });
+                            }
+                            Ok(())
+                        })();
+                        match manual_result {
+                            Ok(()) => (Ok(()), Some(completion)),
+                            Err(error) => (Err(error), None),
+                        }
+                    }
+                    None => (Ok(()), None),
+                },
+            }
+        }
+        Ok(ExactPopulationCheckpointWorkerCommandV1::Abort) | Err(_) => (
+            Err(ScaffoldContractError::NeuralBackendUnavailable.into()),
+            None,
+        ),
+        Ok(ExactPopulationCheckpointWorkerCommandV1::CommitExact) => (
+            Err(ScaffoldContractError::ConsolidationGenerationMismatch.into()),
+            None,
+        ),
+    };
+    let _ = event_sender.send(ExactPopulationCheckpointWorkerEventV1::Final(
+        ExactPopulationCheckpointWorkerFinalV1 {
+            durability,
+            result,
+            manual_completion,
+        },
+    ));
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -579,12 +1301,21 @@ impl GpuLiveCheckpointDurability {
             )
         });
         let journal = GpuSleepTransactionJournalV2::try_new(
-            self.published.digest.as_str().to_string(),
+            self.published.exact_save_anchor_digest()?.0,
             self.published.save.world.tick,
             combined,
         )?;
         self.durable_manifest
             .publish_sleep_transaction_journal(&self.published, &journal)?;
+        let published = self.durable_manifest.load()?;
+        if self
+            .durable_manifest
+            .load_sleep_transaction_journal(&published)?
+            != journal
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+        }
+        self.published = published;
         Ok(())
     }
 
@@ -730,6 +1461,22 @@ fn replay_patches_for_checkpoint(
     last_sealed_patches: &[ExperiencePatch],
 ) -> Result<Vec<ExperiencePatch>, ScaffoldContractError> {
     let batch = backend.build_sleep_replay_batch(handle)?;
+    replay_patches_for_batch(
+        &batch,
+        organism_id,
+        restored_replay_patches,
+        sealed_patches,
+        last_sealed_patches,
+    )
+}
+
+fn replay_patches_for_batch(
+    batch: &BoundedReplayBatch,
+    organism_id: OrganismId,
+    restored_replay_patches: &[ExperiencePatch],
+    sealed_patches: &[ExperiencePatch],
+    last_sealed_patches: &[ExperiencePatch],
+) -> Result<Vec<ExperiencePatch>, ScaffoldContractError> {
     if batch.events.is_empty() {
         return Ok(Vec::new());
     }
@@ -758,7 +1505,7 @@ fn replay_patches_for_checkpoint(
                 .ok_or(ScaffoldContractError::MissingPhaseData)
         })
         .collect::<Result<Vec<_>, _>>()?;
-    SleepReplayEvidence::new(batch, prediction_targets)?;
+    SleepReplayEvidence::new(batch.clone(), prediction_targets)?;
     Ok(patches)
 }
 
@@ -1780,6 +2527,7 @@ pub struct GpuLiveBrainRuntime {
     memories: BTreeMap<u64, MemorySidecarState>,
     topologies: BTreeMap<u64, TopologySidecar>,
     sleep_journal_neural_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
+    pending_exact_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
     post_promotion_fail_stop_armed: bool,
     retained_learning: BTreeMap<u64, RetainedLearningRecovery>,
     world: HeadlessWorld,
@@ -1816,6 +2564,10 @@ pub struct GpuLiveBrainRuntime {
     last_gpu_metrics: GpuLiveBrainEvidenceMetrics,
     performance_metrics: GpuLivePerformanceMetrics,
     checkpoint_durability: Option<GpuLiveCheckpointDurability>,
+    canonical_save_id: Option<String>,
+    manual_checkpoint_status: GpuManualCheckpointStatus,
+    exact_checkpoint_coordinator: ExactPopulationCheckpointCoordinatorV1,
+    exact_checkpoint_work: ExactPopulationCheckpointRuntimeWorkV1,
     lineage_library: Option<LineageLibrary>,
     lineage_run_id: Option<String>,
     retained_curated_founder_operation: Option<CuratedFounderDurableOperation>,
@@ -1883,6 +2635,37 @@ pub struct GpuLiveResidencySummary {
     pub resident_count: usize,
     pub memory_sidecar_count: usize,
     pub topology_sidecar_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GpuManualCheckpointStatus {
+    Idle,
+    Queued {
+        destination: PathBuf,
+        checkpoint_tick: Tick,
+    },
+    Complete {
+        destination: PathBuf,
+        checkpoint_tick: Tick,
+    },
+    Failed {
+        destination: PathBuf,
+        message: String,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuManualCheckpointRequestDisposition {
+    Queued,
+    Coalesced,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LiveRuntimeSaveAuthorityView {
+    pub save_id: String,
+    pub deterministic_seed: u64,
+    pub sensor_profile: SensorProfile,
+    pub organism_ids: Vec<OrganismId>,
 }
 
 impl LiveAuthorityOwner for GpuLiveBrainRuntime {
@@ -3182,6 +3965,7 @@ impl GpuLiveBrainRuntime {
                 return Err(ScaffoldContractError::PhenotypeCompile.into());
             }
         }
+        runtime.canonical_save_id = Some(save.save_id.clone());
         runtime.checkpoint_durability = Some(GpuLiveCheckpointDurability {
             store,
             durable_manifest,
@@ -3202,11 +3986,140 @@ impl GpuLiveBrainRuntime {
             exact_base
                 .durable_manifest
                 .publish_sleep_transaction_journal(&exact_base.published, &cleared)?;
+            let refreshed = exact_base.durable_manifest.load()?;
+            runtime
+                .checkpoint_durability
+                .as_mut()
+                .expect("durability remains installed during startup reconciliation")
+                .published = refreshed;
         }
+        runtime.admit_restored_durable_completed_recommit(rollback_journal)?;
         if requires_checkpoint_reconciliation {
             runtime.persist_sleep_checkpoint_boundary()?;
         }
         Ok(runtime)
+    }
+
+    fn admit_restored_durable_completed_recommit(
+        &mut self,
+        rollback_journal: GpuSleepTransactionJournalV2,
+    ) -> Result<(), GameAppShellError> {
+        rollback_journal.validate()?;
+        let promotion_entries = rollback_journal
+            .entries
+            .iter()
+            .filter(|entry| {
+                matches!(
+                    (entry.source.consolidation, entry.target.consolidation),
+                    (
+                        ConsolidationState::Completed { .. },
+                        ConsolidationState::Committed { .. }
+                    )
+                )
+            })
+            .collect::<Vec<_>>();
+        let durability = self
+            .checkpoint_durability
+            .as_ref()
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        if rollback_journal.exact_base_manifest_digest
+            != durability.published.exact_save_anchor_digest()?.0
+            || rollback_journal.exact_base_checkpoint_tick != durability.published.save.world.tick
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+        }
+        let completed = durability
+            .published
+            .save
+            .creatures
+            .iter()
+            .filter_map(|creature| {
+                let exact_brain = creature.gpu_brain.as_ref()?;
+                matches!(
+                    exact_brain.sleep.consolidation,
+                    ConsolidationState::Completed { .. }
+                )
+                .then_some((creature.organism_id, exact_brain))
+            })
+            .map(|(organism_id, exact_brain)| {
+                Ok::<_, GameAppShellError>((
+                    organism_id,
+                    exact_brain.sleep,
+                    exact_brain.promoted_completed_sleep_state()?.sleep,
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if completed.is_empty() {
+            return Ok(());
+        }
+        if promotion_entries
+            .iter()
+            .any(|entry| !completed.iter().any(|(id, _, _)| *id == entry.organism_id))
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+        }
+        let mut captured_journal_authorities = BTreeMap::new();
+        for (organism_id, exact_sleep, promoted_sleep) in completed {
+            // load_sleep_transaction_journal already proves that the first
+            // entry for each organism starts at the exact base and that every
+            // later entry chains byte-for-byte. Select that base-adjacent edge
+            // by its complete source state; never overwrite it with a later
+            // cycle's Completed -> Committed edge.
+            let mut base_adjacent = promotion_entries
+                .iter()
+                .filter(|entry| entry.organism_id == organism_id && entry.source == exact_sleep);
+            if let Some(entry) = base_adjacent.next() {
+                if exact_sleep != entry.source || promoted_sleep != entry.target {
+                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+                }
+            }
+            if base_adjacent.next().is_some() {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+            }
+            let resident = self
+                .residents
+                .get(&organism_id.raw())
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            if resident.sleep_scheduler.state() != exact_sleep {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+            }
+            let handle = self
+                .handles
+                .get(&organism_id.raw())
+                .copied()
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let authority = capture_sleep_journal_neural_authority(&mut self.backend, handle)?;
+            if captured_journal_authorities
+                .insert(organism_id.raw(), authority)
+                .is_some()
+            {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+            }
+        }
+        let checkpoint_tick = durability.published.save.world.tick;
+        let expected_base_digest = durability.published.digest.as_str().to_string();
+        let transaction_id = self
+            .exact_checkpoint_coordinator
+            .admit_durable_recommit(checkpoint_tick, expected_base_digest)?;
+        let durability = self
+            .checkpoint_durability
+            .take()
+            .expect("durability was validated before recommit admission");
+        let published = durability.published.clone();
+        let worker = spawn_exact_population_checkpoint_recommit_worker(durability);
+        self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal {
+            permit: DurableCompletedCheckpointPermitV1::Restored(
+                RestoredDurableCompletedPermitV1 {
+                    transaction_id,
+                    checkpoint_tick,
+                    published,
+                    rollback_journal,
+                    captured_journal_authorities,
+                },
+            ),
+            worker,
+        };
+        Ok(())
     }
 
     /// Stages a complete durable save in a separate GPU backend, then commits
@@ -3990,6 +4903,7 @@ impl GpuLiveBrainRuntime {
             memories: BTreeMap::new(),
             topologies: BTreeMap::new(),
             sleep_journal_neural_authorities: BTreeMap::new(),
+            pending_exact_sleep_journal_entries: Vec::new(),
             post_promotion_fail_stop_armed: false,
             retained_learning: BTreeMap::new(),
             world,
@@ -4026,6 +4940,10 @@ impl GpuLiveBrainRuntime {
             last_gpu_metrics: GpuLiveBrainEvidenceMetrics::default(),
             performance_metrics: GpuLivePerformanceMetrics::default(),
             checkpoint_durability: None,
+            canonical_save_id: None,
+            manual_checkpoint_status: GpuManualCheckpointStatus::Idle,
+            exact_checkpoint_coordinator: ExactPopulationCheckpointCoordinatorV1::default(),
+            exact_checkpoint_work: ExactPopulationCheckpointRuntimeWorkV1::Idle,
             lineage_library,
             lineage_run_id,
             retained_curated_founder_operation: None,
@@ -4109,6 +5027,7 @@ impl GpuLiveBrainRuntime {
             memories: BTreeMap::new(),
             topologies: BTreeMap::new(),
             sleep_journal_neural_authorities: BTreeMap::new(),
+            pending_exact_sleep_journal_entries: Vec::new(),
             post_promotion_fail_stop_armed: false,
             retained_learning: BTreeMap::new(),
             world,
@@ -4146,6 +5065,10 @@ impl GpuLiveBrainRuntime {
             last_gpu_metrics: GpuLiveBrainEvidenceMetrics::default(),
             performance_metrics: GpuLivePerformanceMetrics::default(),
             checkpoint_durability: None,
+            canonical_save_id: None,
+            manual_checkpoint_status: GpuManualCheckpointStatus::Idle,
+            exact_checkpoint_coordinator: ExactPopulationCheckpointCoordinatorV1::default(),
+            exact_checkpoint_work: ExactPopulationCheckpointRuntimeWorkV1::Idle,
             lineage_library: None,
             lineage_run_id: None,
             retained_curated_founder_operation: None,
@@ -4525,6 +5448,30 @@ impl GpuLiveBrainRuntime {
         resident: &ResidentCognition,
         checkpoint_tick: Tick,
     ) -> Result<ExactCognitiveCheckpointState, GameAppShellError> {
+        let v11_checkpoint = self.backend.backend().checkpoint_v11(handle)?;
+        Self::exact_cognitive_state_for_checkpoint_with_v11(
+            organism_id,
+            resident,
+            checkpoint_tick,
+            v11_checkpoint,
+        )
+    }
+
+    fn exact_cognitive_state_for_checkpoint_with_v11(
+        organism_id: OrganismId,
+        resident: &ResidentCognition,
+        checkpoint_tick: Tick,
+        v11_checkpoint: alife_gpu_backend::GpuV11Checkpoint,
+    ) -> Result<ExactCognitiveCheckpointState, GameAppShellError> {
+        Self::exact_cognitive_host_snapshot(organism_id, resident, checkpoint_tick)?
+            .with_captured_v11(&v11_checkpoint)
+    }
+
+    fn exact_cognitive_host_snapshot(
+        organism_id: OrganismId,
+        resident: &ResidentCognition,
+        checkpoint_tick: Tick,
+    ) -> Result<ExactCognitiveHostSnapshotV1, GameAppShellError> {
         let mut cognitive_context =
             resident
                 .last_cognitive_context
@@ -4544,9 +5491,7 @@ impl GpuLiveBrainRuntime {
             bundle.validate_contract()?;
         }
 
-        let v11_checkpoint = self.backend.backend().checkpoint_v11(handle)?;
-        let state = ExactCognitiveCheckpointState {
-            schema_version: V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
+        Ok(ExactCognitiveHostSnapshotV1 {
             organism_id,
             checkpoint_tick,
             cognitive_context,
@@ -4555,13 +5500,9 @@ impl GpuLiveBrainRuntime {
             cognitive_work: resident.last_cognitive_work,
             sleep_state: resident.sleep_scheduler.state(),
             last_sleep_work: resident.last_sleep_work.clone(),
-            dendritic_branches: v11_checkpoint.dendritic_branches,
-            structural_plasticity: v11_checkpoint.structural,
             structural_edit_receipts: resident.last_structural_edit_receipts.clone(),
             last_sleep_report: resident.last_sleep_report.clone(),
-        };
-        state.validate()?;
-        Ok(state)
+        })
     }
 
     /// Attaches the runtime-owned durable save boundary to an already
@@ -4642,6 +5583,7 @@ impl GpuLiveBrainRuntime {
         let durable_manifest = GpuDurableSaveManifest::open(save_path, asset_root)?;
         let published = durable_manifest.load()?;
         let store = GpuCheckpointAssetStore::new(durable_manifest.asset_root().to_path_buf())?;
+        let canonical_save_id = published.save.save_id.clone();
         let durability = GpuLiveCheckpointDurability {
             store,
             durable_manifest,
@@ -4649,6 +5591,7 @@ impl GpuLiveBrainRuntime {
         };
         let durable_reference = durability.durable_reference()?;
         self.backend.note_durable_checkpoint(durable_reference)?;
+        self.canonical_save_id = Some(canonical_save_id);
         self.checkpoint_durability = Some(durability);
         Ok(())
     }
@@ -4729,6 +5672,7 @@ impl GpuLiveBrainRuntime {
         };
         let durable_reference = candidate.durable_reference()?;
         self.backend.note_durable_checkpoint(durable_reference)?;
+        self.canonical_save_id = Some(candidate.published.save.save_id.clone());
         self.checkpoint_durability = Some(candidate);
         Ok(())
     }
@@ -4847,6 +5791,94 @@ impl GpuLiveBrainRuntime {
         Ok((replacement, exact_neural_captures))
     }
 
+    fn freeze_exact_population_host_snapshot(
+        &self,
+        mut replacement: PortableSaveFile,
+    ) -> Result<ExactPopulationHostSnapshotV1, GameAppShellError> {
+        let checkpoint_tick = self.world.tick();
+        self.add_missing_checkpoint_creature_summaries(&mut replacement)?;
+        replacement.replace_headless_world_snapshot(&self.world)?;
+        let mut brains = Vec::with_capacity(self.handles.len());
+        for (&raw, &handle) in &self.handles {
+            let organism_id = OrganismId(raw);
+            let record = self
+                .world
+                .organism_registry()
+                .get(organism_id)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let resident = self
+                .residents
+                .get(&raw)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            if resident.homeostasis != record.biochemistry().homeostasis
+                || resident.homeostasis.tick != checkpoint_tick
+                || resident.development.age_ticks != record.age_at(checkpoint_tick)?
+            {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+            }
+            let canonical_biochemistry = record.biochemistry().clone();
+            let creature = replacement
+                .creatures
+                .iter_mut()
+                .find(|creature| creature.organism_id == organism_id)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            if creature.brain_class != self.brain_class {
+                return Err(ScaffoldContractError::PhenotypeCompile.into());
+            }
+            creature.development_tick = canonical_biochemistry.development.last_update_tick;
+            creature.mind.tick = canonical_biochemistry.tick;
+            creature.mind.homeostasis = canonical_biochemistry.homeostasis;
+            creature.mind.sleep_state_label =
+                gpu_sleep_state_label(resident.sleep_scheduler.state());
+            brains.push(ExactBrainHostSnapshotV1 {
+                handle,
+                phenotype: resident.phenotype.clone(),
+                compiler_inputs: resident.compiler_inputs.clone(),
+                sleep: resident.sleep_scheduler.state(),
+                memory: self
+                    .memories
+                    .get(&raw)
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                    .clone(),
+                topology: self
+                    .topologies
+                    .get(&raw)
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                    .clone(),
+                tracked_objects: self.world.tracked_objects().save_state(organism_id)?,
+                language_grounding: resident.language_grounding.clone(),
+                life_statistics: resident.life_statistics.clone(),
+                legacy_nano512_compatibility_receipt: resident
+                    .legacy_nano512_compatibility_receipt
+                    .clone(),
+                retained_learning: self.retained_learning.get(&raw).map(|recovery| {
+                    ExactRetainedLearningHostSnapshotV1 {
+                        sealed_patch: recovery.sealed_patch.clone(),
+                        neural_receptors: recovery.neural_receptors.clone(),
+                        attempts: recovery.attempts,
+                        last_error_code: recovery.last_error.slug(),
+                    }
+                }),
+                exact_cognitive_state: Self::exact_cognitive_host_snapshot(
+                    organism_id,
+                    resident,
+                    checkpoint_tick,
+                )?,
+            });
+        }
+        if replacement.creatures.len() != brains.len() {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+        }
+        Ok(ExactPopulationHostSnapshotV1 {
+            checkpoint_tick,
+            replacement,
+            brains,
+            restored_replay_patches: self.restored_replay_patches.clone(),
+            sealed_patches: self.sealed_patches.clone(),
+            last_sealed_patches: self.last_sealed_patches.clone(),
+        })
+    }
+
     fn add_missing_checkpoint_creature_summaries(
         &self,
         replacement: &mut PortableSaveFile,
@@ -4878,6 +5910,846 @@ impl GpuLiveBrainRuntime {
             .creatures
             .sort_by_key(|creature| creature.organism_id.raw());
         Ok(())
+    }
+
+    fn request_exact_population_checkpoint(&mut self) -> Result<(), GameAppShellError> {
+        let Some(durability) = self.checkpoint_durability.as_ref() else {
+            return Ok(());
+        };
+        let checkpoint_tick = self.world.tick();
+        let expected_base_digest = durability.published.digest.as_str().to_string();
+        let disposition = self
+            .exact_checkpoint_coordinator
+            .request_exact(checkpoint_tick, expected_base_digest.clone())?;
+        let ExactCheckpointRequestDispositionV1::Started { transaction_id } = disposition else {
+            return Ok(());
+        };
+        if !self.pending_exact_sleep_journal_entries.is_empty() {
+            self.exact_checkpoint_coordinator.fail_stop();
+            self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+        }
+        let result = (|| {
+            let base = self
+                .checkpoint_durability
+                .as_ref()
+                .ok_or(ScaffoldContractError::MissingPhaseData)?
+                .published
+                .save
+                .clone();
+            let host = self.freeze_exact_population_host_snapshot(base)?;
+            let capacity =
+                BrainCapacityClass::production_for_id(self.brain_class.default_class_id())?;
+            let context =
+                GpuExactCheckpointTransactionContextV1::capture(self.backend.backend(), &capacity)?;
+            let handles = self.handles.values().copied().collect::<Vec<_>>();
+            let ticket = self.backend.submit_exact_population_capture(
+                checkpoint_tick,
+                transaction_id,
+                &handles,
+            )?;
+            self.performance_metrics.sleep_checkpoint_capture_calls = self
+                .performance_metrics
+                .sleep_checkpoint_capture_calls
+                .saturating_add(1);
+            // The submitted exact capture starts a new neural-authority epoch.
+            // Ordinary journal transitions remain queued until that epoch is
+            // durably installed, so the prior compact cache is no longer a
+            // valid source for later edges.
+            self.sleep_journal_neural_authorities.clear();
+            self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Capture {
+                transaction_id,
+                expected_base_digest,
+                host,
+                context,
+                ticket,
+            };
+            Ok::<_, GameAppShellError>(())
+        })();
+        if result.is_err() {
+            self.exact_checkpoint_coordinator.fail_stop();
+            self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
+        }
+        result
+    }
+
+    fn queue_exact_checkpoint_journal_entries(
+        &mut self,
+        entries: Vec<GpuSleepTransactionJournalEntryV2>,
+    ) -> Result<(), GameAppShellError> {
+        if !self.exact_checkpoint_coordinator.is_active() {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+        }
+        let next_len = self
+            .pending_exact_sleep_journal_entries
+            .len()
+            .checked_add(entries.len())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if next_len > MAX_EXACT_CHECKPOINT_PENDING_JOURNAL_ENTRIES {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+        }
+        for entry in &entries {
+            entry.validate()?;
+        }
+        let mut candidate = self.pending_exact_sleep_journal_entries.clone();
+        candidate.extend(entries);
+        candidate.sort_unstable_by_key(|entry| {
+            (
+                entry.organism_id.raw(),
+                entry.transition_tick.raw(),
+                entry.transition_ordinal,
+            )
+        });
+        for pair in candidate.windows(2) {
+            if pair[0].organism_id != pair[1].organism_id {
+                continue;
+            }
+            if (pair[0].transition_tick, pair[0].transition_ordinal)
+                >= (pair[1].transition_tick, pair[1].transition_ordinal)
+                || pair[0].target != pair[1].source
+            {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+            }
+        }
+        self.pending_exact_sleep_journal_entries = candidate;
+        Ok(())
+    }
+
+    fn take_exact_checkpoint_journal_writes(
+        &mut self,
+        permit: &DurableCompletedCheckpointPermitV1,
+    ) -> Result<
+        (
+            Vec<ExactPopulationCheckpointJournalPromotionV1>,
+            Vec<(u64, SleepJournalNeuralAuthority)>,
+        ),
+        GameAppShellError,
+    > {
+        let entries = self.pending_exact_sleep_journal_entries.clone();
+        let mut captured_targets = BTreeMap::new();
+        let mut follow_up_required = false;
+        for entry in &entries {
+            if entry.transition_tick <= permit.checkpoint_tick() {
+                captured_targets.insert(entry.organism_id.raw(), entry.target);
+            } else {
+                follow_up_required = true;
+            }
+        }
+        for (raw, expected_sleep) in captured_targets {
+            let captured_sleep = permit
+                .published()
+                .save
+                .creatures
+                .iter()
+                .find(|creature| creature.organism_id.raw() == raw)
+                .and_then(|creature| creature.gpu_brain.as_ref())
+                .map(|brain| brain.sleep)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            if captured_sleep != expected_sleep {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+            }
+        }
+        if follow_up_required {
+            let _ = self.exact_checkpoint_coordinator.request_exact(
+                self.world.tick(),
+                permit.published().digest.as_str().to_string(),
+            )?;
+        }
+        self.pending_exact_sleep_journal_entries.clear();
+        Ok((Vec::new(), Vec::new()))
+    }
+
+    fn retain_failed_exact_checkpoint_worker(
+        &mut self,
+        transaction_id: u64,
+        worker: ExactPopulationCheckpointWorkerOwnerV1,
+        error: GameAppShellError,
+    ) {
+        self.exact_checkpoint_coordinator.fail_stop();
+        self.backend
+            .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+        self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::FailedJoining {
+            transaction_id,
+            failed: worker.abort_and_retain(error),
+        };
+    }
+
+    fn retain_failed_exact_checkpoint_capture(
+        &mut self,
+        transaction_id: u64,
+        ticket: GpuExactPopulationCaptureTicketV1,
+        error: GameAppShellError,
+    ) {
+        self.exact_checkpoint_coordinator.fail_stop();
+        self.backend
+            .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+        self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::CaptureFailed {
+            transaction_id,
+            ticket,
+            error: Some(error),
+        };
+    }
+
+    fn poll_exact_population_checkpoint(&mut self) -> Result<(), GameAppShellError> {
+        let work = std::mem::take(&mut self.exact_checkpoint_work);
+        match work {
+            ExactPopulationCheckpointRuntimeWorkV1::Idle => Ok(()),
+            ExactPopulationCheckpointRuntimeWorkV1::Failed => {
+                self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                Err(ScaffoldContractError::NeuralBackendUnavailable.into())
+            }
+            ExactPopulationCheckpointRuntimeWorkV1::Capture {
+                transaction_id,
+                expected_base_digest,
+                host,
+                context,
+                mut ticket,
+            } => {
+                if self.exact_checkpoint_coordinator.stage()
+                    == ExactPopulationCheckpointStageV1::CaptureSubmitted
+                {
+                    if let Err(error) = self
+                        .exact_checkpoint_coordinator
+                        .transition(ExactPopulationCheckpointStageV1::MappingPending)
+                    {
+                        self.retain_failed_exact_checkpoint_capture(
+                            transaction_id,
+                            ticket,
+                            error.into(),
+                        );
+                        return Ok(());
+                    }
+                }
+                let poll = match self.backend.poll_exact_population_capture(&mut ticket) {
+                    Ok(poll) => poll,
+                    Err(error) => {
+                        self.retain_failed_exact_checkpoint_capture(
+                            transaction_id,
+                            ticket,
+                            error.into(),
+                        );
+                        return Ok(());
+                    }
+                };
+                match poll {
+                    GpuExactPopulationCapturePollV1::Pending => {
+                        self.exact_checkpoint_work =
+                            ExactPopulationCheckpointRuntimeWorkV1::Capture {
+                                transaction_id,
+                                expected_base_digest,
+                                host,
+                                context,
+                                ticket,
+                            };
+                        Ok(())
+                    }
+                    GpuExactPopulationCapturePollV1::Failed(_) => {
+                        self.exact_checkpoint_coordinator.fail_stop();
+                        self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                        self.backend
+                            .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                        Err(ScaffoldContractError::NeuralBackendUnavailable.into())
+                    }
+                    GpuExactPopulationCapturePollV1::Ready(capture) => {
+                        if let Err(error) = self
+                            .exact_checkpoint_coordinator
+                            .transition(ExactPopulationCheckpointStageV1::CpuBytesReady)
+                        {
+                            self.exact_checkpoint_coordinator.fail_stop();
+                            self.exact_checkpoint_work =
+                                ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                            self.backend
+                                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                            return Err(error.into());
+                        }
+                        let Some(active) =
+                            self.exact_checkpoint_coordinator.active_identity().cloned()
+                        else {
+                            self.exact_checkpoint_coordinator.fail_stop();
+                            self.exact_checkpoint_work =
+                                ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                            self.backend
+                                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                            return Err(
+                                ScaffoldContractError::ConsolidationGenerationMismatch.into()
+                            );
+                        };
+                        if active.transaction_id != transaction_id
+                            || active.checkpoint_tick != host.checkpoint_tick
+                            || active.expected_base_digest != expected_base_digest
+                            || capture.capture_transaction_generation() != transaction_id
+                        {
+                            self.exact_checkpoint_coordinator.fail_stop();
+                            self.exact_checkpoint_work =
+                                ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                            self.backend
+                                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                            return Err(
+                                ScaffoldContractError::ConsolidationGenerationMismatch.into()
+                            );
+                        }
+                        let Some(durability) = self.checkpoint_durability.take() else {
+                            self.exact_checkpoint_coordinator.fail_stop();
+                            self.exact_checkpoint_work =
+                                ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                            self.backend
+                                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                            return Err(ScaffoldContractError::MissingPhaseData.into());
+                        };
+                        if let Err(error) = self
+                            .exact_checkpoint_coordinator
+                            .transition(ExactPopulationCheckpointStageV1::Encoding)
+                        {
+                            self.checkpoint_durability = Some(durability);
+                            self.exact_checkpoint_coordinator.fail_stop();
+                            self.exact_checkpoint_work =
+                                ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                            self.backend
+                                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                            return Err(error.into());
+                        }
+                        let capture_transaction_generation =
+                            capture.capture_transaction_generation();
+                        let population_set_digest = capture.population_set_digest();
+                        let worker = spawn_exact_population_checkpoint_worker(
+                            transaction_id,
+                            expected_base_digest.clone(),
+                            host,
+                            capture,
+                            context,
+                            durability,
+                        );
+                        self.exact_checkpoint_work =
+                            ExactPopulationCheckpointRuntimeWorkV1::Worker {
+                                transaction_id,
+                                checkpoint_tick: active.checkpoint_tick,
+                                expected_base_digest,
+                                capture_transaction_generation,
+                                population_set_digest,
+                                worker,
+                            };
+                        Ok(())
+                    }
+                }
+            }
+            ExactPopulationCheckpointRuntimeWorkV1::CaptureFailed {
+                transaction_id,
+                mut ticket,
+                mut error,
+            } => match self.backend.poll_exact_population_capture(&mut ticket) {
+                Ok(GpuExactPopulationCapturePollV1::Pending) => {
+                    self.exact_checkpoint_work =
+                        ExactPopulationCheckpointRuntimeWorkV1::CaptureFailed {
+                            transaction_id,
+                            ticket,
+                            error,
+                        };
+                    Ok(())
+                }
+                Ok(GpuExactPopulationCapturePollV1::Ready(_))
+                | Ok(GpuExactPopulationCapturePollV1::Failed(_)) => {
+                    self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                    Err(error
+                        .take()
+                        .unwrap_or_else(|| ScaffoldContractError::NeuralBackendUnavailable.into()))
+                }
+                Err(poll_error) => {
+                    self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                    Err(error.take().unwrap_or_else(|| poll_error.into()))
+                }
+            },
+            ExactPopulationCheckpointRuntimeWorkV1::Worker {
+                transaction_id,
+                checkpoint_tick,
+                expected_base_digest,
+                capture_transaction_generation,
+                population_set_digest,
+                worker,
+            } => match worker.try_recv_event() {
+                Ok(None) => {
+                    self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Worker {
+                        transaction_id,
+                        checkpoint_tick,
+                        expected_base_digest,
+                        capture_transaction_generation,
+                        population_set_digest,
+                        worker,
+                    };
+                    Ok(())
+                }
+                Err(_) => {
+                    self.retain_failed_exact_checkpoint_worker(
+                        transaction_id,
+                        worker,
+                        ScaffoldContractError::NeuralBackendUnavailable.into(),
+                    );
+                    Ok(())
+                }
+                Ok(Some(ExactPopulationCheckpointWorkerEventV1::Final(report))) => {
+                    self.exact_checkpoint_work =
+                        ExactPopulationCheckpointRuntimeWorkV1::Finalizing {
+                            transaction_id,
+                            report,
+                            join_handle: worker.into_join_handle(),
+                            journal_commit: None,
+                        };
+                    Ok(())
+                }
+                Ok(Some(ExactPopulationCheckpointWorkerEventV1::ExactPublished(_))) => {
+                    self.retain_failed_exact_checkpoint_worker(
+                        transaction_id,
+                        worker,
+                        ScaffoldContractError::ConsolidationGenerationMismatch.into(),
+                    );
+                    Ok(())
+                }
+                Ok(Some(ExactPopulationCheckpointWorkerEventV1::ManifestPrepared(prepared))) => {
+                    if prepared.transaction_id != transaction_id
+                        || prepared.checkpoint_tick != checkpoint_tick
+                        || prepared.expected_base_digest != expected_base_digest
+                        || prepared.capture_transaction_generation != capture_transaction_generation
+                        || prepared.population_set_digest != population_set_digest
+                        || prepared.prospective_durable_reference.checkpoint_tick != checkpoint_tick
+                    {
+                        self.retain_failed_exact_checkpoint_worker(
+                            transaction_id,
+                            worker,
+                            ScaffoldContractError::ConsolidationGenerationMismatch.into(),
+                        );
+                        return Ok(());
+                    }
+                    if let Err(error) = self
+                        .exact_checkpoint_coordinator
+                        .transition(ExactPopulationCheckpointStageV1::ManifestPrepared)
+                    {
+                        self.retain_failed_exact_checkpoint_worker(
+                            transaction_id,
+                            worker,
+                            error.into(),
+                        );
+                        return Ok(());
+                    }
+                    let permit = match self.backend.prevalidate_durable_checkpoint(
+                        prepared.prospective_durable_reference.clone(),
+                    ) {
+                        Ok(permit) => permit,
+                        Err(error) => {
+                            let surfaced_error = GameAppShellError::from(error);
+                            self.retain_failed_exact_checkpoint_worker(
+                                transaction_id,
+                                worker,
+                                ScaffoldContractError::NeuralBackendUnavailable.into(),
+                            );
+                            return Err(surfaced_error);
+                        }
+                    };
+                    if worker
+                        .try_send_command(ExactPopulationCheckpointWorkerCommandV1::CommitExact)
+                        .is_err()
+                    {
+                        self.retain_failed_exact_checkpoint_worker(
+                            transaction_id,
+                            worker,
+                            ScaffoldContractError::NeuralBackendUnavailable.into(),
+                        );
+                        return Ok(());
+                    }
+                    self.exact_checkpoint_work =
+                        ExactPopulationCheckpointRuntimeWorkV1::CommitWorker {
+                            prepared,
+                            permit,
+                            worker,
+                        };
+                    Ok(())
+                }
+            },
+            ExactPopulationCheckpointRuntimeWorkV1::CommitWorker {
+                prepared,
+                permit,
+                worker,
+            } => match worker.try_recv_event() {
+                Ok(None) => {
+                    self.exact_checkpoint_work =
+                        ExactPopulationCheckpointRuntimeWorkV1::CommitWorker {
+                            prepared,
+                            permit,
+                            worker,
+                        };
+                    Ok(())
+                }
+                Err(_) => {
+                    self.retain_failed_exact_checkpoint_worker(
+                        prepared.transaction_id,
+                        worker,
+                        ScaffoldContractError::NeuralBackendUnavailable.into(),
+                    );
+                    Ok(())
+                }
+                Ok(Some(ExactPopulationCheckpointWorkerEventV1::ManifestPrepared(_))) => {
+                    self.retain_failed_exact_checkpoint_worker(
+                        prepared.transaction_id,
+                        worker,
+                        ScaffoldContractError::ConsolidationGenerationMismatch.into(),
+                    );
+                    Ok(())
+                }
+                Ok(Some(ExactPopulationCheckpointWorkerEventV1::Final(report))) => {
+                    self.exact_checkpoint_work =
+                        ExactPopulationCheckpointRuntimeWorkV1::Finalizing {
+                            transaction_id: prepared.transaction_id,
+                            report,
+                            join_handle: worker.into_join_handle(),
+                            journal_commit: None,
+                        };
+                    Ok(())
+                }
+                Ok(Some(ExactPopulationCheckpointWorkerEventV1::ExactPublished(success))) => {
+                    let transaction_id = prepared.transaction_id;
+                    if success.transaction_id != transaction_id
+                        || success.checkpoint_tick != prepared.checkpoint_tick
+                        || success.expected_base_digest != prepared.expected_base_digest
+                        || success.capture_transaction_generation
+                            != prepared.capture_transaction_generation
+                        || success.population_set_digest != prepared.population_set_digest
+                        || success.durable_reference != prepared.prospective_durable_reference
+                        || success.exact_neural_captures != prepared.exact_neural_captures
+                        || success.captured_journal_authorities
+                            != prepared.captured_journal_authorities
+                    {
+                        self.retain_failed_exact_checkpoint_worker(
+                            transaction_id,
+                            worker,
+                            ScaffoldContractError::ConsolidationGenerationMismatch.into(),
+                        );
+                        return Ok(());
+                    }
+                    if let Err(error) = self
+                        .exact_checkpoint_coordinator
+                        .transition(ExactPopulationCheckpointStageV1::CasCommitted)
+                    {
+                        self.retain_failed_exact_checkpoint_worker(
+                            transaction_id,
+                            worker,
+                            error.into(),
+                        );
+                        return Ok(());
+                    }
+                    if let Err(error) = self
+                        .exact_checkpoint_coordinator
+                        .transition(ExactPopulationCheckpointStageV1::ReloadValidated)
+                    {
+                        self.retain_failed_exact_checkpoint_worker(
+                            transaction_id,
+                            worker,
+                            error.into(),
+                        );
+                        return Ok(());
+                    }
+                    self.backend.install_prevalidated_durable_checkpoint(permit);
+                    self.performance_metrics
+                        .sleep_exact_neural_capture_organisms = self
+                        .performance_metrics
+                        .sleep_exact_neural_capture_organisms
+                        .saturating_add(success.exact_neural_captures);
+                    if let Err(error) = self
+                        .exact_checkpoint_coordinator
+                        .transition(ExactPopulationCheckpointStageV1::DurablePermitInstalled)
+                    {
+                        self.retain_failed_exact_checkpoint_worker(
+                            transaction_id,
+                            worker,
+                            error.into(),
+                        );
+                        return Ok(());
+                    }
+                    let permit = DurableCompletedCheckpointPermitV1::Captured(success);
+                    let has_completed = permit.published().save.creatures.iter().any(|creature| {
+                        creature.gpu_brain.as_ref().is_some_and(|brain| {
+                            matches!(
+                                brain.sleep.consolidation,
+                                ConsolidationState::Completed { .. }
+                            )
+                        })
+                    });
+                    if has_completed {
+                        self.exact_checkpoint_work =
+                            ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal {
+                                permit,
+                                worker,
+                            };
+                    } else {
+                        let (journal_writes, authorities) =
+                            match self.take_exact_checkpoint_journal_writes(&permit) {
+                                Ok(writes) => writes,
+                                Err(error) => {
+                                    self.retain_failed_exact_checkpoint_worker(
+                                        transaction_id,
+                                        worker,
+                                        error,
+                                    );
+                                    return Ok(());
+                                }
+                            };
+                        let journal_entry_count =
+                            u64::try_from(journal_writes.len()).unwrap_or(u64::MAX);
+                        let manual = match self
+                            .exact_checkpoint_coordinator
+                            .take_pending_manual_after_durable_permit()
+                        {
+                            Ok(manual) => manual,
+                            Err(error) => {
+                                self.retain_failed_exact_checkpoint_worker(
+                                    transaction_id,
+                                    worker,
+                                    error.into(),
+                                );
+                                return Ok(());
+                            }
+                        };
+                        if let Err(error) = self
+                            .exact_checkpoint_coordinator
+                            .transition(ExactPopulationCheckpointStageV1::DeferredJournalPublishing)
+                        {
+                            self.retain_failed_exact_checkpoint_worker(
+                                transaction_id,
+                                worker,
+                                error.into(),
+                            );
+                            return Ok(());
+                        }
+                        if worker
+                            .try_send_command(ExactPopulationCheckpointWorkerCommandV1::Finalize {
+                                promotions: journal_writes,
+                                manual,
+                            })
+                            .is_err()
+                        {
+                            self.retain_failed_exact_checkpoint_worker(
+                                transaction_id,
+                                worker,
+                                ScaffoldContractError::NeuralBackendUnavailable.into(),
+                            );
+                            return Ok(());
+                        }
+                        self.exact_checkpoint_work =
+                            ExactPopulationCheckpointRuntimeWorkV1::JournalWorker {
+                                transaction_id,
+                                worker,
+                                journal_commit: Some(ExactPopulationCheckpointJournalCommitV1 {
+                                    entry_count: journal_entry_count,
+                                    authorities,
+                                    contains_completed_promotion: false,
+                                }),
+                            };
+                    }
+                    Ok(())
+                }
+            },
+            ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { permit, worker } => {
+                self.exact_checkpoint_work =
+                    ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { permit, worker };
+                Ok(())
+            }
+            ExactPopulationCheckpointRuntimeWorkV1::JournalWorker {
+                transaction_id,
+                worker,
+                journal_commit,
+            } => match worker.try_recv_event() {
+                Ok(None) => {
+                    self.exact_checkpoint_work =
+                        ExactPopulationCheckpointRuntimeWorkV1::JournalWorker {
+                            transaction_id,
+                            worker,
+                            journal_commit,
+                        };
+                    Ok(())
+                }
+                Err(_) => {
+                    self.retain_failed_exact_checkpoint_worker(
+                        transaction_id,
+                        worker,
+                        ScaffoldContractError::NeuralBackendUnavailable.into(),
+                    );
+                    Ok(())
+                }
+                Ok(Some(
+                    ExactPopulationCheckpointWorkerEventV1::ManifestPrepared(_)
+                    | ExactPopulationCheckpointWorkerEventV1::ExactPublished(_),
+                )) => {
+                    self.retain_failed_exact_checkpoint_worker(
+                        transaction_id,
+                        worker,
+                        ScaffoldContractError::ConsolidationGenerationMismatch.into(),
+                    );
+                    Ok(())
+                }
+                Ok(Some(ExactPopulationCheckpointWorkerEventV1::Final(report))) => {
+                    self.exact_checkpoint_work =
+                        ExactPopulationCheckpointRuntimeWorkV1::Finalizing {
+                            transaction_id,
+                            report,
+                            join_handle: worker.into_join_handle(),
+                            journal_commit,
+                        };
+                    Ok(())
+                }
+            },
+            ExactPopulationCheckpointRuntimeWorkV1::FailedJoining {
+                transaction_id,
+                mut failed,
+            } => match failed.poll() {
+                FailedExactPopulationCheckpointWorkerJoinPollV1::Pending => {
+                    self.exact_checkpoint_work =
+                        ExactPopulationCheckpointRuntimeWorkV1::FailedJoining {
+                            transaction_id,
+                            failed,
+                        };
+                    Ok(())
+                }
+                FailedExactPopulationCheckpointWorkerJoinPollV1::Ready {
+                    error,
+                    worker_panicked,
+                } => {
+                    self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                    if worker_panicked {
+                        Err(ScaffoldContractError::NeuralBackendUnavailable.into())
+                    } else {
+                        Err(error)
+                    }
+                }
+            },
+            ExactPopulationCheckpointRuntimeWorkV1::Finalizing {
+                transaction_id,
+                report,
+                join_handle,
+                journal_commit,
+            } => {
+                if !join_handle.is_finished() {
+                    self.exact_checkpoint_work =
+                        ExactPopulationCheckpointRuntimeWorkV1::Finalizing {
+                            transaction_id,
+                            report,
+                            join_handle,
+                            journal_commit,
+                        };
+                    return Ok(());
+                }
+                if join_handle.join().is_err() {
+                    self.exact_checkpoint_coordinator.fail_stop();
+                    self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                    self.backend
+                        .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                    return Err(ScaffoldContractError::NeuralBackendUnavailable.into());
+                }
+                self.checkpoint_durability = Some(report.durability);
+                if let Err(error) = report.result {
+                    if let GpuManualCheckpointStatus::Queued { destination, .. } =
+                        &self.manual_checkpoint_status
+                    {
+                        self.manual_checkpoint_status = GpuManualCheckpointStatus::Failed {
+                            destination: destination.clone(),
+                            message: error.to_string(),
+                        };
+                    }
+                    self.exact_checkpoint_coordinator.fail_stop();
+                    self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                    self.backend
+                        .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                    return Err(error);
+                }
+                if let Some(manual) = report.manual_completion {
+                    self.manual_checkpoint_status = GpuManualCheckpointStatus::Complete {
+                        destination: manual.destination,
+                        checkpoint_tick: manual.checkpoint_tick,
+                    };
+                }
+                if let Some(journal_commit) = journal_commit {
+                    if journal_commit.contains_completed_promotion {
+                        self.performance_metrics.sleep_promotion_publish_calls = self
+                            .performance_metrics
+                            .sleep_promotion_publish_calls
+                            .saturating_add(1);
+                    }
+                    let mut current_authorities =
+                        Vec::with_capacity(journal_commit.authorities.len());
+                    for (organism_id_raw, _) in &journal_commit.authorities {
+                        let Some(handle) = self.handles.get(organism_id_raw).copied() else {
+                            self.exact_checkpoint_coordinator.fail_stop();
+                            self.exact_checkpoint_work =
+                                ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                            self.backend
+                                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+                        };
+                        let authority =
+                            match capture_sleep_journal_neural_authority(&mut self.backend, handle)
+                            {
+                                Ok(authority) => authority,
+                                Err(error) => {
+                                    self.exact_checkpoint_coordinator.fail_stop();
+                                    self.exact_checkpoint_work =
+                                        ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                                    self.backend.fail_stop(
+                                        GpuSessionFailStopCause::CheckpointRestoreFailed,
+                                    );
+                                    return Err(error.into());
+                                }
+                            };
+                        current_authorities.push((*organism_id_raw, authority));
+                    }
+                    // Worker validation and publication use the immutable
+                    // tick-T authority. Only after that durable success may
+                    // later compact edges bind the now-promoted resident host
+                    // metadata. This performs no mutable-buffer readback.
+                    for (organism_id_raw, authority) in current_authorities {
+                        self.sleep_journal_neural_authorities
+                            .insert(organism_id_raw, authority);
+                    }
+                    self.performance_metrics.sleep_compact_journal_organisms = self
+                        .performance_metrics
+                        .sleep_compact_journal_organisms
+                        .saturating_add(journal_commit.entry_count);
+                }
+                if !self.pending_exact_sleep_journal_entries.is_empty() {
+                    self.exact_checkpoint_coordinator.fail_stop();
+                    self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                    self.backend
+                        .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+                }
+                if let Err(error) = self
+                    .exact_checkpoint_coordinator
+                    .transition(ExactPopulationCheckpointStageV1::Complete)
+                {
+                    self.exact_checkpoint_coordinator.fail_stop();
+                    self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                    self.backend
+                        .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                    return Err(error.into());
+                }
+                let follow_up = match self.exact_checkpoint_coordinator.finish() {
+                    Ok(follow_up) => follow_up,
+                    Err(error) => {
+                        self.exact_checkpoint_coordinator.fail_stop();
+                        self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                        self.backend
+                            .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                        return Err(error.into());
+                    }
+                };
+                self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Idle;
+                if follow_up {
+                    if let Err(error) = self.request_exact_population_checkpoint() {
+                        self.exact_checkpoint_coordinator.fail_stop();
+                        self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
+                        self.backend
+                            .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                        return Err(error);
+                    }
+                }
+                Ok(())
+            }
+        }
     }
 
     fn persist_sleep_checkpoint_boundary(&mut self) -> Result<(), GameAppShellError> {
@@ -4971,21 +6843,37 @@ impl GpuLiveBrainRuntime {
         if promotions.is_empty() {
             return Ok(());
         }
-        let Some(mut durability) = self.checkpoint_durability.take() else {
-            return Ok(());
+        let work = std::mem::take(&mut self.exact_checkpoint_work);
+        let ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { permit, worker } = work
+        else {
+            self.exact_checkpoint_work = work;
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
         };
+        permit.validate_restored_provenance()?;
+        let transaction_id = permit.transaction_id();
+        let (mut worker_promotions, queued_authorities) =
+            match self.take_exact_checkpoint_journal_writes(&permit) {
+                Ok(writes) => writes,
+                Err(error) => {
+                    self.retain_failed_exact_checkpoint_worker(transaction_id, worker, error);
+                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+                }
+            };
         self.performance_metrics.sleep_promotion_calls = self
             .performance_metrics
             .sleep_promotion_calls
             .saturating_add(1);
-        let entries = (|| {
+        let prepared = (|| {
             let mut ordered = promotions.to_vec();
             ordered.sort_unstable_by_key(|(organism_id, _)| organism_id.raw());
             if ordered.windows(2).any(|pair| pair[0].0 == pair[1].0) {
                 return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
             }
-            let base = &durability.published.save;
-            let mut entries = Vec::with_capacity(ordered.len());
+            let base = &permit.published().save;
+            let mut authorities = queued_authorities
+                .iter()
+                .cloned()
+                .collect::<BTreeMap<_, _>>();
             for (organism_id, committed_sleep) in ordered {
                 let creature = base
                     .creatures
@@ -5001,61 +6889,97 @@ impl GpuLiveBrainRuntime {
                 {
                     return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
                 }
-                let handle = *self
-                    .handles
-                    .get(&organism_id.raw())
-                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
                 let resident = self
                     .residents
                     .get(&organism_id.raw())
                     .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-                durability.store.validate_compact_neural_reuse(
-                    &mut self.backend,
-                    &base.assets,
-                    &promoted,
-                    handle,
-                    &resident.phenotype,
+                let authority = permit
+                    .captured_journal_authorities()
+                    .get(&organism_id.raw())
+                    .cloned()
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                let entry = GpuSleepTransactionJournalEntryV2::try_new(
+                    organism_id,
+                    Tick::new(completed.checkpoint_tick.raw().saturating_add(1)),
+                    completed.sleep,
+                    committed_sleep,
                 )?;
-                entries.push((
-                    GpuSleepTransactionJournalEntryV2::try_new(
-                        organism_id,
-                        Tick::new(self.world.tick().raw().saturating_add(1)),
-                        completed.sleep,
-                        committed_sleep,
-                    )?,
-                    capture_sleep_journal_neural_authority(&mut self.backend, handle)?,
-                ));
+                worker_promotions.push(ExactPopulationCheckpointJournalPromotionV1 {
+                    entry,
+                    authority: authority.clone(),
+                    phenotype: resident.phenotype.clone(),
+                });
+                authorities.insert(organism_id.raw(), authority);
             }
-            Ok::<_, GameAppShellError>(entries)
+            worker_promotions.sort_unstable_by_key(|write| {
+                (
+                    write.entry.organism_id.raw(),
+                    write.entry.transition_tick.raw(),
+                    write.entry.transition_ordinal,
+                )
+            });
+            Ok::<_, GameAppShellError>((
+                worker_promotions,
+                authorities.into_iter().collect::<Vec<_>>(),
+            ))
         })();
-        let entries = match entries {
-            Ok(entries) => entries,
+        let (worker_promotions, authorities) = match prepared {
+            Ok(prepared) => prepared,
             Err(error) => {
-                self.checkpoint_durability = Some(durability);
+                self.retain_failed_exact_checkpoint_worker(
+                    transaction_id,
+                    worker,
+                    ScaffoldContractError::NeuralBackendUnavailable.into(),
+                );
                 return Err(error);
             }
         };
-        let entry_count = u64::try_from(entries.len()).unwrap_or(u64::MAX);
-        let journal_entries = entries
-            .iter()
-            .map(|(entry, _)| entry.clone())
-            .collect::<Vec<_>>();
-        let publish_started = Instant::now();
-        let result = durability.publish_sleep_journal_entries(journal_entries);
-        self.performance_metrics.sleep_promotion_publish_wall_ns = self
-            .performance_metrics
-            .sleep_promotion_publish_wall_ns
-            .saturating_add(elapsed_ns(publish_started));
-        self.checkpoint_durability = Some(durability);
-        result?;
-        for (entry, authority) in entries {
-            self.sleep_journal_neural_authorities
-                .insert(entry.organism_id.raw(), authority);
+        let entry_count = u64::try_from(worker_promotions.len()).unwrap_or(u64::MAX);
+        let manual = match self
+            .exact_checkpoint_coordinator
+            .take_pending_manual_after_durable_permit()
+        {
+            Ok(manual) => manual,
+            Err(error) => {
+                self.retain_failed_exact_checkpoint_worker(
+                    transaction_id,
+                    worker,
+                    ScaffoldContractError::NeuralBackendUnavailable.into(),
+                );
+                return Err(error.into());
+            }
+        };
+        if let Err(error) = self
+            .exact_checkpoint_coordinator
+            .transition(ExactPopulationCheckpointStageV1::DeferredJournalPublishing)
+        {
+            self.retain_failed_exact_checkpoint_worker(
+                transaction_id,
+                worker,
+                ScaffoldContractError::NeuralBackendUnavailable.into(),
+            );
+            return Err(error.into());
         }
-        self.performance_metrics.sleep_compact_journal_organisms = self
-            .performance_metrics
-            .sleep_compact_journal_organisms
-            .saturating_add(entry_count);
+        if worker
+            .try_send_command(ExactPopulationCheckpointWorkerCommandV1::Finalize {
+                promotions: worker_promotions,
+                manual,
+            })
+            .is_err()
+        {
+            let error = GameAppShellError::Core(ScaffoldContractError::NeuralBackendUnavailable);
+            self.retain_failed_exact_checkpoint_worker(transaction_id, worker, error);
+            return Err(ScaffoldContractError::NeuralBackendUnavailable.into());
+        }
+        self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::JournalWorker {
+            transaction_id,
+            worker,
+            journal_commit: Some(ExactPopulationCheckpointJournalCommitV1 {
+                authorities,
+                entry_count,
+                contains_completed_promotion: true,
+            }),
+        };
         Ok(())
     }
 
@@ -5291,6 +7215,7 @@ impl GpuLiveBrainRuntime {
     }
 
     pub fn reconcile_population(&mut self) -> Result<(), GameAppShellError> {
+        let resident_set_before = self.handles.keys().copied().collect::<BTreeSet<_>>();
         self.retire_dead_organisms()?;
         let live_ids = self
             .world
@@ -5384,6 +7309,14 @@ impl GpuLiveBrainRuntime {
             self.residents.insert(raw, resident);
             self.memories.insert(raw, memory);
             self.topologies.insert(raw, topology);
+        }
+        let resident_set_after = self.handles.keys().copied().collect::<BTreeSet<_>>();
+        if resident_set_after != resident_set_before {
+            if let Err(error) = self.request_exact_population_checkpoint() {
+                self.backend
+                    .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                return Err(error);
+            }
         }
         Ok(())
     }
@@ -5956,7 +7889,16 @@ impl GpuLiveBrainRuntime {
         ) -> SleepProgressResult,
     {
         self.post_promotion_fail_stop_armed = false;
+        self.poll_exact_population_checkpoint()?;
         self.backend.ensure_neural_actions_available()?;
+        if self.exact_checkpoint_coordinator.stage() == ExactPopulationCheckpointStageV1::Failed {
+            return Ok(Vec::new());
+        }
+        if self.exact_checkpoint_coordinator.stage()
+            == ExactPopulationCheckpointStageV1::DeferredJournalPublishing
+        {
+            return Ok(Vec::new());
+        }
         let result = tick_with_sleep_progress_inner(self, |runtime| {
             runtime.tick_with_sleep_progress_staged(&mut progress)
         });
@@ -6035,12 +7977,40 @@ impl GpuLiveBrainRuntime {
 
         let tick_before = self.world.tick();
         let tick_after = Tick::new(tick_before.raw().saturating_add(1));
+        let checkpoint_active = self.exact_checkpoint_coordinator.is_active();
+        // A durable checkpoint permit is organism-scoped. Only the exact
+        // Completed states captured in the active immutable save may advance
+        // to Committed under this worker. Founders that complete later remain
+        // Completed until the one bounded follow-up capture makes their state
+        // durable; they must never be folded into the first worker's finalize.
+        let durable_completed_sleep_permits = match &self.exact_checkpoint_work {
+            ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { permit, .. } => {
+                permit.validate_restored_provenance()?;
+                permit
+                    .published()
+                    .save
+                    .creatures
+                    .iter()
+                    .filter_map(|creature| {
+                        let brain = creature.gpu_brain.as_ref()?;
+                        matches!(
+                            brain.sleep.consolidation,
+                            ConsolidationState::Completed { .. }
+                        )
+                        .then_some((creature.organism_id.raw(), brain.sleep))
+                    })
+                    .collect::<BTreeMap<_, _>>()
+            }
+            _ => BTreeMap::new(),
+        };
         let completed_sleep_states = self
             .residents
             .iter()
             .filter_map(|(&raw, resident)| {
                 let sleep = resident.sleep_scheduler.state();
-                matches!(sleep.consolidation, ConsolidationState::Completed { .. })
+                durable_completed_sleep_permits
+                    .get(&raw)
+                    .is_some_and(|durable| *durable == sleep)
                     .then_some((OrganismId(raw), sleep))
             })
             .collect::<Vec<_>>();
@@ -6114,16 +8084,31 @@ impl GpuLiveBrainRuntime {
             synchronize_resident_from_record(resident, &record, tick_before)?;
             let sleep_before = resident.sleep_scheduler.state();
             let phase_before = sleep_before.phase;
+            let completed_waiting_for_durable_permit = matches!(
+                sleep_before.consolidation,
+                ConsolidationState::Completed { .. }
+            ) && !durable_completed_sleep_permits
+                .get(&raw)
+                .is_some_and(|durable| *durable == sleep_before);
+            let allow_sleep_progress = !completed_waiting_for_durable_permit;
             // Fixed continuous-wake lab protocols suppress sleep phases but
             // keep the production work-cost ledger. Applying the existing
             // sleep-rate recovery prevents ecology energy exhaustion from
             // truncating their bounded neural measurement windows.
-            let recover_brain_atp = phase_before != SleepPhase::Awake || !self.schedule_sleep;
-            self.backend.charge_world_brain_atp_tick(
-                handle,
-                tick_before.raw(),
-                recover_brain_atp,
-            )?;
+            match brain_atp_world_tick_mode(
+                phase_before,
+                self.schedule_sleep,
+                completed_waiting_for_durable_permit,
+            ) {
+                BrainAtpWorldTickMode::Charge { recover } => {
+                    self.backend
+                        .charge_world_brain_atp_tick(handle, tick_before.raw(), recover)?;
+                }
+                BrainAtpWorldTickMode::DurabilityHold => {
+                    self.backend
+                        .hold_world_brain_atp_tick(handle, tick_before.raw())?;
+                }
+            }
             if self.schedule_sleep
                 && phase_before == SleepPhase::Awake
                 && !retained_learning_pending
@@ -6131,7 +8116,7 @@ impl GpuLiveBrainRuntime {
             {
                 resident.sleep_scheduler.force_recovery_sleep(tick_before)?;
             }
-            let sleep_event = if self.schedule_sleep {
+            let sleep_event = if self.schedule_sleep && allow_sleep_progress {
                 let sleep_config = sleep_consolidation_config_for(&resident.phenotype)?;
                 let mut routed_driver = RoutedGpuSleepDriver {
                     authoritative: AuthoritativeGpuSleepDriver {
@@ -6181,7 +8166,7 @@ impl GpuLiveBrainRuntime {
                     )?;
                 }
                 event
-            } else {
+            } else if !self.schedule_sleep {
                 if phase_before != SleepPhase::Awake {
                     return Err(ScaffoldContractError::MissingPhaseData.into());
                 }
@@ -6192,7 +8177,7 @@ impl GpuLiveBrainRuntime {
                     transition: None,
                     consolidation_kind_raw: sleep_before.consolidation.kind_raw(),
                     selected_action: None,
-                    motor_eligible: true,
+                    motor_eligible: motor_eligible(SleepPhase::Awake),
                     sleep_work_units: 0,
                     phase_receipt: SleepPhaseReceipt {
                         phase: SleepPhase::Awake,
@@ -6204,9 +8189,37 @@ impl GpuLiveBrainRuntime {
                         sealed: false,
                     },
                 }
+            } else {
+                GpuSleepScheduleEvent {
+                    tick: tick_before,
+                    phase: phase_before,
+                    cycle_id: if sleep_before.active_cycle_id != 0 {
+                        sleep_before.active_cycle_id
+                    } else {
+                        sleep_before.last_consolidated_cycle_id
+                    },
+                    transition: None,
+                    consolidation_kind_raw: sleep_before.consolidation.kind_raw(),
+                    selected_action: None,
+                    motor_eligible: motor_eligible(phase_before),
+                    sleep_work_units: 0,
+                    phase_receipt: SleepPhaseReceipt {
+                        phase: phase_before,
+                        cycle_id: if sleep_before.active_cycle_id != 0 {
+                            sleep_before.active_cycle_id
+                        } else {
+                            sleep_before.last_consolidated_cycle_id
+                        },
+                        tick: tick_before,
+                        due_work: SleepWorkDue::empty(),
+                        work_units: 0,
+                        cumulative_work_units: 0,
+                        sealed: false,
+                    },
+                }
             };
             let sleep_after = resident.sleep_scheduler.state();
-            if phase_before != SleepPhase::Awake {
+            if sleep_recovery_body_event_due(phase_before, completed_waiting_for_durable_permit) {
                 scheduled_body_events.insert(
                     raw,
                     BodyEventDelta {
@@ -6237,20 +8250,22 @@ impl GpuLiveBrainRuntime {
                             (sleep_before.consolidation, sleep_after.consolidation),
                             (ConsolidationState::None, ConsolidationState::Pending { .. })
                         );
-                        if refresh_authority {
+                        if refresh_authority && !checkpoint_active {
                             sleep_journal_neural_authority_updates.insert(
                                 raw,
                                 capture_sleep_journal_neural_authority(&mut self.backend, handle)?,
                             );
-                        } else if let Some(expected) = sleep_journal_neural_authority_updates
-                            .get(&raw)
-                            .or_else(|| self.sleep_journal_neural_authorities.get(&raw))
-                        {
-                            validate_sleep_journal_neural_authority(
-                                &mut self.backend,
-                                handle,
-                                expected,
-                            )?;
+                        } else if !checkpoint_active {
+                            if let Some(expected) = sleep_journal_neural_authority_updates
+                                .get(&raw)
+                                .or_else(|| self.sleep_journal_neural_authorities.get(&raw))
+                            {
+                                validate_sleep_journal_neural_authority(
+                                    &mut self.backend,
+                                    handle,
+                                    expected,
+                                )?;
+                            }
                         }
                         if matches!(
                             (sleep_before.consolidation, sleep_after.consolidation),
@@ -6290,20 +8305,22 @@ impl GpuLiveBrainRuntime {
                         }
                     }
                     (ConsolidationState::None, ConsolidationState::None) => {
-                        if sleep_before.phase == SleepPhase::Awake {
+                        if sleep_before.phase == SleepPhase::Awake && !checkpoint_active {
                             sleep_journal_neural_authority_updates.insert(
                                 raw,
                                 capture_sleep_journal_neural_authority(&mut self.backend, handle)?,
                             );
-                        } else if let Some(expected) = sleep_journal_neural_authority_updates
-                            .get(&raw)
-                            .or_else(|| self.sleep_journal_neural_authorities.get(&raw))
-                        {
-                            validate_sleep_journal_neural_authority(
-                                &mut self.backend,
-                                handle,
-                                expected,
-                            )?;
+                        } else if !checkpoint_active {
+                            if let Some(expected) = sleep_journal_neural_authority_updates
+                                .get(&raw)
+                                .or_else(|| self.sleep_journal_neural_authorities.get(&raw))
+                            {
+                                validate_sleep_journal_neural_authority(
+                                    &mut self.backend,
+                                    handle,
+                                    expected,
+                                )?;
+                            }
                         }
                         sleep_journal_entries.push(GpuSleepTransactionJournalEntryV2::try_new(
                             OrganismId(raw),
@@ -6468,6 +8485,18 @@ impl GpuLiveBrainRuntime {
             .perception_sleep_preparation_wall_ns
             .saturating_add(elapsed_ns(preparation_started));
 
+        // The exact worker must receive every journal consequence from this
+        // canonical tick before Completed promotion grants it permission to
+        // finalize. Entries newer than the captured tick are consumed by the
+        // coordinator's single bounded follow-up checkpoint request.
+        if !completed_promotions.is_empty()
+            && self.exact_checkpoint_coordinator.is_active()
+            && !sleep_journal_entries.is_empty()
+        {
+            self.queue_exact_checkpoint_journal_entries(sleep_journal_entries.clone())?;
+            sleep_journal_entries.clear();
+        }
+
         // The GPU selector has already committed, while the world is still at
         // the exact tick named by the durable Completed checkpoint. Publish
         // the manifest-side selector/ref promotion before any world action or
@@ -6591,13 +8620,19 @@ impl GpuLiveBrainRuntime {
             .saturating_add(elapsed_ns(population_reconcile_started));
         if persist_exact_sleep_boundary {
             let sleep_persistence_started = Instant::now();
-            self.persist_sleep_checkpoint_boundary()?;
-            self.sleep_journal_neural_authorities.clear();
+            self.request_exact_population_checkpoint()?;
+            if self.exact_checkpoint_coordinator.is_active() && !sleep_journal_entries.is_empty() {
+                self.queue_exact_checkpoint_journal_entries(sleep_journal_entries)?;
+            }
             self.performance_metrics.sleep_persistence_wall_ns = self
                 .performance_metrics
                 .sleep_persistence_wall_ns
                 .saturating_add(elapsed_ns(sleep_persistence_started));
         } else if !sleep_journal_entries.is_empty() {
+            if self.exact_checkpoint_coordinator.is_active() {
+                self.queue_exact_checkpoint_journal_entries(sleep_journal_entries)?;
+                return Ok(summaries_by_organism.into_values().collect());
+            }
             let sleep_persistence_started = Instant::now();
             let journal_entry_count =
                 u64::try_from(sleep_journal_entries.len()).unwrap_or(u64::MAX);
@@ -6670,6 +8705,89 @@ impl GpuLiveBrainRuntime {
     /// Shared neural-session authority used by gameplay and laboratory hosts.
     pub const fn session_authority(&self) -> &GpuSessionAuthority {
         self.backend.authority()
+    }
+
+    pub fn request_manual_checkpoint(
+        &mut self,
+        destination: PathBuf,
+    ) -> Result<GpuManualCheckpointRequestDisposition, GameAppShellError> {
+        if destination.as_os_str().is_empty() {
+            return Err(ScaffoldContractError::InvalidId.into());
+        }
+        if !self.exact_checkpoint_coordinator.is_active() {
+            self.request_exact_population_checkpoint()?;
+        }
+        let checkpoint_tick = self
+            .exact_checkpoint_coordinator
+            .active_identity()
+            .map(|identity| identity.checkpoint_tick)
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        let disposition =
+            self.exact_checkpoint_coordinator
+                .request_manual(ManualCheckpointRequestV1 {
+                    checkpoint_tick,
+                    destination: destination.clone(),
+                });
+        match disposition {
+            ExactCheckpointRequestDispositionV1::ManualQueued => {
+                self.manual_checkpoint_status = GpuManualCheckpointStatus::Queued {
+                    destination,
+                    checkpoint_tick,
+                };
+                Ok(GpuManualCheckpointRequestDisposition::Queued)
+            }
+            ExactCheckpointRequestDispositionV1::ManualCoalesced => {
+                self.manual_checkpoint_status = GpuManualCheckpointStatus::Queued {
+                    destination,
+                    checkpoint_tick,
+                };
+                Ok(GpuManualCheckpointRequestDisposition::Coalesced)
+            }
+            ExactCheckpointRequestDispositionV1::Busy => {
+                Err(ScaffoldContractError::ConsolidationGenerationMismatch.into())
+            }
+            _ => Err(ScaffoldContractError::ConsolidationGenerationMismatch.into()),
+        }
+    }
+
+    pub const fn manual_checkpoint_status(&self) -> &GpuManualCheckpointStatus {
+        &self.manual_checkpoint_status
+    }
+
+    pub(crate) fn live_save_authority_view(
+        &self,
+    ) -> Result<LiveRuntimeSaveAuthorityView, GameAppShellError> {
+        let save_id = self
+            .canonical_save_id
+            .clone()
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        let mut organism_ids = self
+            .world
+            .organism_registry()
+            .iter()
+            .map(|record| record.organism_id())
+            .collect::<Vec<_>>();
+        organism_ids.sort_unstable_by_key(|organism_id| organism_id.raw());
+        let resident_ids = self
+            .handles
+            .keys()
+            .copied()
+            .map(OrganismId)
+            .collect::<Vec<_>>();
+        if organism_ids != resident_ids {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+        }
+        for memory in self.memories.values() {
+            if memory.profile().profile()? != self.sensor_profile {
+                return Err(ScaffoldContractError::SensorProfileMismatch.into());
+            }
+        }
+        Ok(LiveRuntimeSaveAuthorityView {
+            save_id,
+            deterministic_seed: self.deterministic_seed,
+            sensor_profile: self.sensor_profile,
+            organism_ids,
+        })
     }
 
     pub fn sealed_patches(&self) -> &[ExperiencePatch] {
@@ -8051,6 +10169,26 @@ impl GpuLiveBrainRuntime {
     }
 
     #[cfg(feature = "gpu-tests")]
+    pub fn brain_atp_q16_for_test(
+        &self,
+        organism_id: OrganismId,
+    ) -> Result<u32, ScaffoldContractError> {
+        let handle = self.evidence_handle(organism_id)?;
+        self.backend.brain_atp_q16(handle)
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn set_brain_atp_q16_for_test(
+        &mut self,
+        organism_id: OrganismId,
+        brain_atp_q16: u32,
+    ) -> Result<(), ScaffoldContractError> {
+        let handle = self.evidence_handle(organism_id)?;
+        self.backend
+            .set_brain_atp_q16_for_test(handle, brain_atp_q16)
+    }
+
+    #[cfg(feature = "gpu-tests")]
     pub fn set_homeostasis_for_test(
         &mut self,
         organism_id: OrganismId,
@@ -8082,6 +10220,129 @@ impl GpuLiveBrainRuntime {
     #[cfg(feature = "gpu-tests")]
     pub fn force_device_lost_after_next_submit_for_test(&mut self) {
         self.backend.force_device_lost_after_next_submit_for_test();
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn force_exact_checkpoint_pre_worker_transition_failure_for_test(
+        &mut self,
+    ) -> Result<(), GameAppShellError> {
+        self.request_exact_population_checkpoint()?;
+        self.exact_checkpoint_coordinator
+            .force_pre_worker_transition_failure_for_test();
+        Ok(())
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn force_exact_checkpoint_permit_prevalidation_failure_for_test(
+        &mut self,
+    ) -> Result<(), GameAppShellError> {
+        self.backend
+            .note_durable_checkpoint(DurableGpuCheckpointRef::try_new(
+                Tick::new(u64::MAX),
+                "fnv1a64:ffffffffffffffff".to_string(),
+                [u64::MAX; 4],
+            )?)?;
+        self.request_exact_population_checkpoint()
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn exact_checkpoint_failed_for_test(&self) -> bool {
+        self.exact_checkpoint_coordinator.stage() == ExactPopulationCheckpointStageV1::Failed
+            && !matches!(
+                self.exact_checkpoint_work,
+                ExactPopulationCheckpointRuntimeWorkV1::Idle
+            )
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn request_exact_checkpoint_for_test(&mut self) -> Result<(), GameAppShellError> {
+        self.request_exact_population_checkpoint()
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn poll_exact_checkpoint_for_test(&mut self) -> Result<(), GameAppShellError> {
+        self.poll_exact_population_checkpoint()
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn exact_checkpoint_active_tick_for_test(&self) -> Option<Tick> {
+        self.exact_checkpoint_coordinator
+            .active_identity()
+            .map(|identity| identity.checkpoint_tick)
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn exact_checkpoint_state_for_test(&self) -> (String, &'static str) {
+        let work = match self.exact_checkpoint_work {
+            ExactPopulationCheckpointRuntimeWorkV1::Idle => "Idle",
+            ExactPopulationCheckpointRuntimeWorkV1::Capture { .. } => "Capture",
+            ExactPopulationCheckpointRuntimeWorkV1::CaptureFailed { .. } => "CaptureFailed",
+            ExactPopulationCheckpointRuntimeWorkV1::Worker { .. } => "Worker",
+            ExactPopulationCheckpointRuntimeWorkV1::CommitWorker { .. } => "CommitWorker",
+            ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { .. } => "AwaitingJournal",
+            ExactPopulationCheckpointRuntimeWorkV1::JournalWorker { .. } => "JournalWorker",
+            ExactPopulationCheckpointRuntimeWorkV1::Finalizing { .. } => "Finalizing",
+            ExactPopulationCheckpointRuntimeWorkV1::FailedJoining { .. } => "FailedJoining",
+            ExactPopulationCheckpointRuntimeWorkV1::Failed => "Failed",
+        };
+        (
+            format!("{:?}", self.exact_checkpoint_coordinator.stage()),
+            work,
+        )
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn exact_checkpoint_follow_up_queued_for_test(&self) -> bool {
+        self.exact_checkpoint_coordinator
+            .checkpoint_needed_after_current()
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn durable_completed_sleep_permitted_ids_for_test(&self) -> Vec<OrganismId> {
+        let ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { permit, .. } =
+            &self.exact_checkpoint_work
+        else {
+            return Vec::new();
+        };
+        permit
+            .published()
+            .save
+            .creatures
+            .iter()
+            .filter_map(|creature| {
+                let Some(brain) = creature.gpu_brain.as_ref() else {
+                    return None;
+                };
+                (matches!(
+                    brain.sleep.consolidation,
+                    ConsolidationState::Completed { .. }
+                ) && self
+                    .residents
+                    .get(&creature.organism_id.raw())
+                    .is_some_and(|resident| resident.sleep_scheduler.state() == brain.sleep))
+                .then_some(creature.organism_id)
+            })
+            .collect()
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn exact_population_capture_metrics_for_test(&self) -> GpuExactPopulationCaptureMetricsV1 {
+        self.backend.backend().exact_population_capture_metrics()
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn pending_exact_sleep_journal_entries_for_test(
+        &self,
+    ) -> &[GpuSleepTransactionJournalEntryV2] {
+        &self.pending_exact_sleep_journal_entries
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn queue_exact_sleep_journal_entries_for_test(
+        &mut self,
+        entries: Vec<GpuSleepTransactionJournalEntryV2>,
+    ) -> Result<(), GameAppShellError> {
+        self.queue_exact_checkpoint_journal_entries(entries)
     }
 
     #[cfg(feature = "gpu-tests")]
@@ -8456,6 +10717,7 @@ mod tests {
         collections::BTreeMap,
         fs,
         path::{Path, PathBuf},
+        sync::Arc,
     };
 
     use super::*;
@@ -8472,11 +10734,149 @@ mod tests {
         PeripheralSummary, PreActionBrainEvidence, SalienceComponents, SensorProfile,
         StableFocusIdentity, Tick, TrackedObjectId, Vec3f, WorldEntityId,
     };
-    use alife_runtime::GpuDurableSaveManifest;
+    use alife_runtime::{GpuDurableSaveManifest, GpuSessionAuthority, GpuSessionConsumerKind};
     use alife_world::{
         persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
         HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord,
     };
+
+    fn finish_failed_checkpoint_worker_join(
+        failed: &mut FailedExactPopulationCheckpointWorkerJoinV1,
+    ) -> (GameAppShellError, bool) {
+        for _ in 0..10_000 {
+            match failed.poll() {
+                FailedExactPopulationCheckpointWorkerJoinPollV1::Pending => {
+                    std::thread::yield_now();
+                }
+                FailedExactPopulationCheckpointWorkerJoinPollV1::Ready {
+                    error,
+                    worker_panicked,
+                } => return (error, worker_panicked),
+            }
+        }
+        panic!("checkpoint worker did not terminate within the bounded join poll budget");
+    }
+
+    #[test]
+    fn prevalidate_failure_aborts_and_joins_the_worker_before_releasing_its_lease() {
+        let mut authority = GpuSessionAuthority::new(GpuSessionConsumerKind::Gameplay);
+        authority
+            .note_durable_checkpoint(
+                DurableGpuCheckpointRef::try_new(
+                    Tick::new(9),
+                    "fnv1a64:0000000000000009".to_string(),
+                    [9; 4],
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let prevalidate_error = authority
+            .prevalidate_durable_checkpoint(
+                DurableGpuCheckpointRef::try_new(
+                    Tick::new(8),
+                    "fnv1a64:0000000000000008".to_string(),
+                    [8; 4],
+                )
+                .unwrap(),
+            )
+            .unwrap_err();
+
+        let lease = Arc::new(());
+        let worker_lease = Arc::clone(&lease);
+        let (command_sender, command_receiver) = mpsc::sync_channel(1);
+        let (event_sender, event_receiver) = mpsc::sync_channel(1);
+        let join_handle = std::thread::spawn(move || {
+            let _lease = worker_lease;
+            assert!(matches!(
+                command_receiver.recv(),
+                Ok(ExactPopulationCheckpointWorkerCommandV1::Abort)
+            ));
+            drop(event_sender);
+        });
+        let worker = ExactPopulationCheckpointWorkerOwnerV1 {
+            command_sender,
+            event_receiver,
+            join_handle,
+        };
+        let mut failed = worker.abort_and_retain(prevalidate_error.into());
+        assert_eq!(
+            failed.abort_delivery(),
+            ExactPopulationCheckpointAbortDeliveryV1::Enqueued
+        );
+        assert_eq!(Arc::strong_count(&lease), 2);
+
+        let (_, worker_panicked) = finish_failed_checkpoint_worker_join(&mut failed);
+        assert!(!worker_panicked);
+        assert_eq!(Arc::strong_count(&lease), 1);
+    }
+
+    #[test]
+    fn disconnected_event_channel_sends_abort_and_retains_the_worker_until_join() {
+        let lease = Arc::new(());
+        let worker_lease = Arc::clone(&lease);
+        let (command_sender, command_receiver) = mpsc::sync_channel(1);
+        let (event_sender, event_receiver) = mpsc::sync_channel(1);
+        let (event_dropped_sender, event_dropped_receiver) = mpsc::sync_channel(0);
+        let join_handle = std::thread::spawn(move || {
+            let _lease = worker_lease;
+            drop(event_sender);
+            event_dropped_sender.send(()).unwrap();
+            assert!(matches!(
+                command_receiver.recv(),
+                Ok(ExactPopulationCheckpointWorkerCommandV1::Abort)
+            ));
+        });
+        event_dropped_receiver.recv().unwrap();
+        let worker = ExactPopulationCheckpointWorkerOwnerV1 {
+            command_sender,
+            event_receiver,
+            join_handle,
+        };
+        assert!(matches!(
+            worker.try_recv_event(),
+            Err(TryRecvError::Disconnected)
+        ));
+        let mut failed = worker.abort_and_retain(GameAppShellError::Core(
+            ScaffoldContractError::NeuralBackendUnavailable,
+        ));
+
+        let (_, worker_panicked) = finish_failed_checkpoint_worker_join(&mut failed);
+        assert!(!worker_panicked);
+        assert_eq!(Arc::strong_count(&lease), 1);
+    }
+
+    #[test]
+    fn disconnected_command_channel_and_worker_panic_are_joined_once() {
+        let lease = Arc::new(());
+        let worker_lease = Arc::clone(&lease);
+        let (command_sender, command_receiver) = mpsc::sync_channel(1);
+        let (event_sender, event_receiver) = mpsc::sync_channel(1);
+        let (ready_sender, ready_receiver) = mpsc::sync_channel(0);
+        let join_handle = std::thread::spawn(move || {
+            let _lease = worker_lease;
+            drop(command_receiver);
+            drop(event_sender);
+            ready_sender.send(()).unwrap();
+            panic!("forced checkpoint worker panic");
+        });
+        ready_receiver.recv().unwrap();
+        let worker = ExactPopulationCheckpointWorkerOwnerV1 {
+            command_sender,
+            event_receiver,
+            join_handle,
+        };
+        let mut failed = worker.abort_and_retain(GameAppShellError::Core(
+            ScaffoldContractError::NeuralBackendUnavailable,
+        ));
+        assert_eq!(
+            failed.abort_delivery(),
+            ExactPopulationCheckpointAbortDeliveryV1::WorkerDisconnected
+        );
+
+        let (_, worker_panicked) = finish_failed_checkpoint_worker_join(&mut failed);
+        assert!(worker_panicked);
+        assert_eq!(Arc::strong_count(&lease), 1);
+    }
 
     #[test]
     fn phenotype_policy_and_subsystem_work_join_are_causal() {

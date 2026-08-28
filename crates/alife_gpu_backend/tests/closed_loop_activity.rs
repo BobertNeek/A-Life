@@ -5,7 +5,8 @@ mod support;
 use alife_core::{
     BrainActivityPolicyV1, BrainCapacityClass, BrainDispatchIdentity, BrainWorkCounters,
     BrainWorkReceipt, GpuPressureSample, GpuPressureSampleInput, NeuralThrottleDecision,
-    NeuralThrottleLevel, OrganismId, SensorProfile, BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX,
+    NeuralThrottleLevel, OrganismId, SensorProfile, Tick, BRAIN_ATP_BASAL_DEBIT_Q16,
+    BRAIN_ATP_Q16_MAX,
 };
 use alife_gpu_backend::{
     derive_executed_work, GpuActivityDispatchHeader, GpuActivityRestoreInput, GpuClassBucketPlan,
@@ -723,6 +724,95 @@ fn runtime_uses_prior_gpu_timestamps_and_debits_exact_atp_once() {
         brain.backend.brain_atp_q16(brain.handle).unwrap(),
         second.work.atp_after_q16
     );
+}
+
+#[cfg(feature = "gpu-tests")]
+#[test]
+fn completed_durability_hold_advances_atp_cursor_without_debit_or_recovery() {
+    let phenotype = support::phenotype_for_capacity_at_maturation(
+        BrainCapacityClass::n512(),
+        4_511,
+        0.35,
+        SensorProfile::GroundedObjectSlotsV1,
+    );
+    let mut brain = support::GpuTestBrain::from_phenotype(OrganismId(1), phenotype).unwrap();
+    let awake_atp = brain
+        .backend
+        .charge_world_brain_atp_tick(brain.handle, 700, false)
+        .unwrap();
+    let held_atp = brain
+        .backend
+        .hold_world_brain_atp_tick(brain.handle, 701)
+        .unwrap();
+    assert_eq!(held_atp, awake_atp);
+    assert_eq!(
+        brain
+            .backend
+            .hold_world_brain_atp_tick(brain.handle, 701)
+            .unwrap(),
+        held_atp
+    );
+    assert_eq!(
+        brain
+            .backend
+            .charge_world_brain_atp_tick(brain.handle, 702, false)
+            .unwrap(),
+        held_atp.saturating_sub(BRAIN_ATP_BASAL_DEBIT_Q16)
+    );
+}
+
+#[cfg(feature = "gpu-tests")]
+#[test]
+fn gpu_test_atp_precondition_is_bounded_and_changes_only_the_atp_ledger() {
+    let phenotype = support::phenotype_for_capacity_at_maturation(
+        BrainCapacityClass::n512(),
+        4_512,
+        0.35,
+        SensorProfile::GroundedObjectSlotsV1,
+    );
+    let mut brain = support::GpuTestBrain::from_phenotype(OrganismId(1), phenotype).unwrap();
+    let activity_before = brain.backend.snapshot_activity_state(brain.handle).unwrap();
+    let topology_before = brain.backend.checkpoint_v11(brain.handle).unwrap();
+    let neural_before = brain
+        .backend
+        .snapshot_brain(brain.handle, Tick::ZERO)
+        .unwrap();
+    let counters_before = brain.backend.runtime_counters_for_test();
+
+    assert!(matches!(
+        brain
+            .backend
+            .set_brain_atp_q16_for_test(brain.handle, BRAIN_ATP_Q16_MAX + 1),
+        Err(alife_core::ScaffoldContractError::BrainActivitySequenceMismatch)
+    ));
+    assert_eq!(
+        brain.backend.snapshot_activity_state(brain.handle).unwrap(),
+        activity_before
+    );
+
+    brain
+        .backend
+        .set_brain_atp_q16_for_test(brain.handle, 0)
+        .unwrap();
+    let mut expected_activity = activity_before;
+    expected_activity.brain_atp_q16 = 0;
+    assert_eq!(
+        brain.backend.snapshot_activity_state(brain.handle).unwrap(),
+        expected_activity
+    );
+    assert_eq!(
+        brain.backend.checkpoint_v11(brain.handle).unwrap(),
+        topology_before
+    );
+    assert_eq!(
+        brain
+            .backend
+            .snapshot_brain(brain.handle, Tick::ZERO)
+            .unwrap()
+            .canonical_digest(),
+        neural_before.canonical_digest()
+    );
+    assert_eq!(brain.backend.runtime_counters_for_test(), counters_before);
 }
 
 #[cfg(feature = "gpu-tests")]

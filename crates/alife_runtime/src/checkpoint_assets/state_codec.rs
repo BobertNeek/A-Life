@@ -1,21 +1,23 @@
 //! Exact portable checkpoint construction and validated GPU restore.
 
 use alife_core::{
-    BoundedReplayBatch, BrainCapacityClass, BrainPhenotype, ConsolidationState, ExperiencePatch,
-    ExperiencePatchBuilder, FoundationWeightAsset, LanguageGroundingLedger,
-    LegacyNano512CompatibilityReceipt, MemorySidecarState, NeuralReceptorFrame, OrganismId,
-    PassiveLifeStatistics, PhenotypeCompiler, PhenotypeCompilerInputs, PortableMemoryBankAssetV2,
-    PortableTopologySidecarAssetV1, ScaffoldContractError, SensorProfileIdentity,
-    SensoryAbiVersion, SleepState, Tick, TopologySidecar, Validate,
+    BoundedReplayBatch, BrainActivityPolicyV1, BrainCapacityClass, BrainPhenotype,
+    ConsolidationState, ExperiencePatch, ExperiencePatchBuilder, FoundationWeightAsset,
+    LanguageGroundingLedger, LegacyNano512CompatibilityReceipt, MemorySidecarState,
+    NeuralReceptorFrame, OrganismId, PassiveLifeStatistics, PhenotypeCompiler,
+    PhenotypeCompilerInputs, PortableMemoryBankAssetV2, PortableTopologySidecarAssetV1,
+    ScaffoldContractError, SensorProfileIdentity, SensoryAbiVersion, SleepState, Tick,
+    TopologySidecar, Validate,
 };
 use alife_gpu_backend::{
-    GpuActivityRestoreInput, GpuActivityRuntimeSnapshot, GpuBrainCheckpointParts,
-    GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuBrainRestoreReceipt, GpuBrainRestoreRequest,
-    GpuClosedLoopBackend, GpuCompactCheckpointAuthorityV1,
+    decode_exact_population_capture_row, decode_exact_population_completed_sleep_staging,
+    decode_exact_population_sleep_replay, GpuActivityRestoreInput, GpuActivityRuntimeSnapshot,
+    GpuBrainCheckpointParts, GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuBrainRestoreReceipt,
+    GpuBrainRestoreRequest, GpuClosedLoopBackend, GpuCompactCheckpointAuthorityV1,
     GpuCompletedSleepStagingInputParts, GpuCompletedSleepStagingParts,
-    GpuPortableActivityRestoreRecord, GpuReplayEventRecord, GpuReplaySynapseSpanRecord,
-    GpuLiveTopologyCheckpointV1, GpuV11Checkpoint, PendingEligibilityRestoreParts,
-    GPU_BRAIN_CHECKPOINT_SCHEMA_VERSION,
+    GpuExactPopulationCaptureRowV1, GpuLiveTopologyCheckpointV1, GpuPortableActivityRestoreRecord,
+    GpuReplayEventRecord, GpuReplaySynapseSpanRecord, GpuRuntimeProfile, GpuV11Checkpoint,
+    PendingEligibilityRestoreParts, GPU_BRAIN_CHECKPOINT_SCHEMA_VERSION,
 };
 use alife_world::persistence::{
     AssetManifest, AssetManifestEntry, DurableFounderCognitiveState, ExactCognitiveCheckpointState,
@@ -103,11 +105,9 @@ pub fn current_backend_provenance(
     Ok(provenance)
 }
 
-fn portable_activity_checkpoint(
-    backend: &GpuClosedLoopBackend,
-    handle: GpuBrainHandle,
+fn portable_activity_checkpoint_from_snapshot(
+    snapshot: GpuActivityRuntimeSnapshot,
 ) -> Result<(GpuActivityRuntimeSnapshot, Vec<PortableThrottleCheckpoint>), GameAppShellError> {
-    let snapshot = backend.snapshot_activity_state(handle)?;
     let records = match (
         snapshot.pressure,
         snapshot.throttle.clone(),
@@ -229,6 +229,42 @@ pub struct GpuBrainSidecarCapture<'a> {
     pub retained_learning: Option<RetainedLearningCapture<'a>>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct GpuExactCheckpointTransactionContextV1 {
+    pub capacity_class_id: alife_core::BrainClassId,
+    pub backend_provenance: GpuBackendProvenanceSave,
+    pub runtime_profile: GpuRuntimeProfile,
+    pub activity_policy: BrainActivityPolicyV1,
+}
+
+impl GpuExactCheckpointTransactionContextV1 {
+    pub fn capture(
+        backend: &GpuClosedLoopBackend,
+        capacity: &BrainCapacityClass,
+    ) -> Result<Self, GameAppShellError> {
+        let runtime_profile = *backend.runtime_profile();
+        runtime_profile.validate_contract()?;
+        let activity_policy = *backend.activity_policy();
+        activity_policy.validate_contract()?;
+        Ok(Self {
+            capacity_class_id: capacity.id(),
+            backend_provenance: current_backend_provenance(backend, capacity)?,
+            runtime_profile,
+            activity_policy,
+        })
+    }
+
+    fn validate_for(&self, capacity: &BrainCapacityClass) -> Result<(), GameAppShellError> {
+        if self.capacity_class_id != capacity.id() {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+        }
+        self.runtime_profile.validate_contract()?;
+        self.activity_policy.validate_contract()?;
+        self.backend_provenance.validate()?;
+        Ok(())
+    }
+}
+
 pub struct RetainedLearningCapture<'a> {
     pub sealed_patch: &'a ExperiencePatch,
     pub neural_receptors: &'a NeuralReceptorFrame,
@@ -301,14 +337,37 @@ impl GpuCheckpointAssetStore {
         handle: GpuBrainHandle,
         phenotype: &BrainPhenotype,
     ) -> Result<(), GameAppShellError> {
+        let compact = backend.compact_checkpoint_authority(handle)?;
+        backend.validate_compact_checkpoint_authority(handle, &compact)?;
+        let activity = backend.snapshot_activity_state(handle)?;
+        self.validate_compact_neural_reuse_evidence(
+            manifest,
+            source,
+            handle.organism_id(),
+            phenotype,
+            &compact,
+            &activity,
+        )
+    }
+
+    /// Validates worker-owned immutable compact authority against one exact
+    /// published checkpoint. The caller must capture `compact` and `activity`
+    /// from the backend before handing them to the sole persistence worker.
+    pub fn validate_compact_neural_reuse_evidence(
+        &self,
+        manifest: &AssetManifest,
+        source: &GpuBrainSaveState,
+        organism_id: OrganismId,
+        phenotype: &BrainPhenotype,
+        compact: &GpuCompactCheckpointAuthorityV1,
+        activity: &GpuActivityRuntimeSnapshot,
+    ) -> Result<(), GameAppShellError> {
         manifest.validate_with_root(self.root())?;
         source.validate_asset_manifest(manifest)?;
         if source.schema_version != GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION
-            || source.organism_id != handle.organism_id()
+            || source.organism_id != organism_id
             || source.phenotype_hash != phenotype.phenotype_hash()
             || source.capacity_class_id != phenotype.brain_class_id()
-            || handle.phenotype_hash() != phenotype.phenotype_hash()
-            || handle.class_id() != phenotype.brain_class_id()
         {
             return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
         }
@@ -358,9 +417,12 @@ impl GpuCheckpointAssetStore {
                 .transpose()?,
             live_topology.v11_checkpoint,
         )?;
-        backend.validate_compact_checkpoint_authority(handle, &expected)?;
+        if compact != &expected {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+        }
 
-        let (activity, throttle_sequence) = portable_activity_checkpoint(backend, handle)?;
+        let (activity, throttle_sequence) =
+            portable_activity_checkpoint_from_snapshot(activity.clone())?;
         let (saved_throttle_sequence, _): (Vec<PortableThrottleCheckpoint>, Vec<u8>) =
             self.read_json(manifest, &source.throttle_replay.sequence_asset)?;
         if saved_throttle_sequence != throttle_sequence
@@ -584,6 +646,65 @@ impl GpuCheckpointAssetStore {
         replay_patches: &[ExperiencePatch],
         sidecars: GpuBrainSidecarCapture<'_>,
     ) -> Result<GpuBrainCheckpointWrite, GameAppShellError> {
+        self.capture_brain_with_runtime_replay_state_inner(
+            Some(backend),
+            handle,
+            phenotype,
+            compiler_inputs,
+            sleep,
+            checkpoint_tick,
+            pending_transaction,
+            replay_patches,
+            sidecars,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn capture_brain_from_exact_population_capture(
+        &self,
+        handle: GpuBrainHandle,
+        phenotype: &BrainPhenotype,
+        compiler_inputs: &PhenotypeCompilerInputs,
+        sleep: SleepState,
+        checkpoint_tick: Tick,
+        pending_transaction: Option<&ExperiencePatchBuilder>,
+        replay_patches: &[ExperiencePatch],
+        sidecars: GpuBrainSidecarCapture<'_>,
+        captured: &GpuExactPopulationCaptureRowV1,
+        context: &GpuExactCheckpointTransactionContextV1,
+    ) -> Result<GpuBrainCheckpointWrite, GameAppShellError> {
+        self.capture_brain_with_runtime_replay_state_inner(
+            None,
+            handle,
+            phenotype,
+            compiler_inputs,
+            sleep,
+            checkpoint_tick,
+            pending_transaction,
+            replay_patches,
+            sidecars,
+            Some((captured, context)),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn capture_brain_with_runtime_replay_state_inner(
+        &self,
+        mut backend: Option<&mut GpuAuthoritativeSession>,
+        handle: GpuBrainHandle,
+        phenotype: &BrainPhenotype,
+        compiler_inputs: &PhenotypeCompilerInputs,
+        sleep: SleepState,
+        checkpoint_tick: Tick,
+        pending_transaction: Option<&ExperiencePatchBuilder>,
+        replay_patches: &[ExperiencePatch],
+        sidecars: GpuBrainSidecarCapture<'_>,
+        captured: Option<(
+            &GpuExactPopulationCaptureRowV1,
+            &GpuExactCheckpointTransactionContextV1,
+        )>,
+    ) -> Result<GpuBrainCheckpointWrite, GameAppShellError> {
         sleep.validate_contract()?;
         let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())?;
         compiler_inputs.validate_against(&capacity)?;
@@ -617,9 +738,28 @@ impl GpuCheckpointAssetStore {
             return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
         }
 
-        let live_topology = backend.checkpoint_live_topology(handle)?;
-        live_topology.validate_for_capacity(&capacity)?;
-        let snapshot = backend.snapshot_brain(handle, checkpoint_tick)?;
+        let (live_topology, snapshot) = match captured {
+            Some((row, context)) => {
+                context.validate_for(&capacity)?;
+                if row.identity().organism_id != handle.organism_id()
+                    || row.identity().class_id != handle.class_id()
+                    || row.identity().slot != handle.slot()
+                    || row.identity().slot_generation != handle.generation()
+                    || row.identity().phenotype_hash != handle.phenotype_hash()
+                {
+                    return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+                }
+                decode_exact_population_capture_row(row, checkpoint_tick, &capacity)?
+            }
+            None => {
+                let backend = backend
+                    .as_deref_mut()
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                let topology = backend.checkpoint_live_topology(handle)?;
+                topology.validate_for_capacity(&capacity)?;
+                (topology, backend.snapshot_brain(handle, checkpoint_tick)?)
+            }
+        };
         let checkpoint_digest = snapshot.canonical_digest();
         let parts = snapshot.into_parts();
         let pending_checkpoint = parts
@@ -798,18 +938,45 @@ impl GpuCheckpointAssetStore {
         let topology =
             TopologySidecarSaveSummary::from_asset(&portable_topology, topology_asset_ref)?;
 
-        let sleep_assets = self.capture_sleep_assets(
-            backend,
-            handle,
-            phenotype,
-            &live_topology,
-            sleep,
-            &mut entries,
-        )?;
-        let backend_provenance = current_backend_provenance(backend, &capacity)?;
-        let runtime_profile = *backend.runtime_profile();
-        let activity_policy = *backend.activity_policy();
-        let (activity_snapshot, throttle_sequence) = portable_activity_checkpoint(backend, handle)?;
+        let (sleep_assets, backend_provenance, runtime_profile, activity_policy, activity_snapshot) =
+            match captured {
+                Some((row, context)) => (
+                    self.capture_sleep_assets_from_exact_population_capture(
+                        row,
+                        phenotype,
+                        &live_topology,
+                        sleep,
+                        checkpoint_tick,
+                        &capacity,
+                        &mut entries,
+                    )?,
+                    context.backend_provenance.clone(),
+                    context.runtime_profile,
+                    context.activity_policy,
+                    row.activity_snapshot().clone(),
+                ),
+                None => {
+                    let backend = backend
+                        .as_deref_mut()
+                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                    (
+                        self.capture_sleep_assets(
+                            backend,
+                            handle,
+                            phenotype,
+                            &live_topology,
+                            sleep,
+                            &mut entries,
+                        )?,
+                        current_backend_provenance(backend, &capacity)?,
+                        *backend.runtime_profile(),
+                        *backend.activity_policy(),
+                        backend.snapshot_activity_state(handle)?,
+                    )
+                }
+            };
+        let (activity_snapshot, throttle_sequence) =
+            portable_activity_checkpoint_from_snapshot(activity_snapshot)?;
         let (throttle_sequence_asset, entry) =
             self.write_json("throttle-sequence", &throttle_sequence)?;
         entries.push(entry);
@@ -1007,10 +1174,11 @@ impl GpuCheckpointAssetStore {
             .map_or(phenotype.budgets().global.total_synapses, |topology| {
                 topology.total_synapse_count
             });
-        let live_recurrent_synapse_count = live_topology.as_ref().map_or(
-            phenotype.budgets().global.recurrent_synapses,
-            |topology| topology.recurrent_synapse_count,
-        );
+        let live_recurrent_synapse_count = live_topology
+            .as_ref()
+            .map_or(phenotype.budgets().global.recurrent_synapses, |topology| {
+                topology.recurrent_synapse_count
+            });
         let live_decoder_synapse_count = live_topology.as_ref().map_or_else(
             || {
                 phenotype
@@ -1294,6 +1462,94 @@ impl GpuCheckpointAssetStore {
                 phenotype.phenotype_hash(),
                 recurrent_count,
                 decoder_count,
+            )?;
+            let journal = encode_portable_replay(
+                phenotype.phenotype_hash(),
+                phenotype.replay_capture_plan().canonical_digest(),
+                staging.replay_journal_generation,
+                staging.replay_journal_cursor,
+                staging.replay_journal_event_count,
+                &PhysicalReplayParts {
+                    events: staging.replay_events,
+                    spans: staging.replay_spans,
+                    samples: staging.replay_samples,
+                },
+            )?;
+            let (asset, entry) = self.write_json("lifetime-staging", &lifetime)?;
+            assets.lifetime_staging = Some(asset);
+            entries.push(entry);
+            let (asset, entry) = self.write_json("fast-staging", &fast)?;
+            assets.fast_staging = Some(asset);
+            entries.push(entry);
+            let (asset, entry) = self.write_json("eligibility-staging", &eligibility)?;
+            assets.eligibility_staging = Some(asset);
+            entries.push(entry);
+            let (asset, entry) = self.write_json("replay-staging", &journal)?;
+            assets.replay_journal_staging = Some(asset);
+            entries.push(entry);
+        }
+        Ok(assets)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn capture_sleep_assets_from_exact_population_capture(
+        &self,
+        captured: &GpuExactPopulationCaptureRowV1,
+        phenotype: &BrainPhenotype,
+        live_topology: &GpuLiveTopologyCheckpointV1,
+        sleep: SleepState,
+        checkpoint_tick: Tick,
+        capacity: &BrainCapacityClass,
+        entries: &mut Vec<AssetManifestEntry>,
+    ) -> Result<GpuSleepAssetState, GameAppShellError> {
+        let mut assets = GpuSleepAssetState::default();
+        let needs_replay = !matches!(
+            sleep.consolidation,
+            ConsolidationState::None | ConsolidationState::Committed { .. }
+        );
+        let replay = if needs_replay {
+            let replay = decode_exact_population_sleep_replay(captured, checkpoint_tick, capacity)?;
+            validate_sleep_replay_state(sleep.consolidation, &replay)?;
+            let (asset_ref, entry) = self.write_json("sleep-replay", &replay)?;
+            entries.push(entry);
+            assets.replay_batch = Some(asset_ref);
+            Some(replay)
+        } else {
+            None
+        };
+
+        if let ConsolidationState::Completed { request, staged } = sleep.consolidation {
+            let replay = replay
+                .as_ref()
+                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+            if replay.canonical_digest != request.replay_digest {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+            }
+            let staging = decode_exact_population_completed_sleep_staging(
+                captured,
+                checkpoint_tick,
+                capacity,
+                &request,
+                &staged,
+            )?
+            .into_parts();
+            let lifetime = staged_weight_asset(
+                &staging,
+                phenotype.phenotype_hash(),
+                live_topology.total_synapse_count,
+                GPU_BRAIN_WEIGHT_LAYER_LIFETIME,
+            )?;
+            let fast = staged_weight_asset(
+                &staging,
+                phenotype.phenotype_hash(),
+                live_topology.total_synapse_count,
+                GPU_BRAIN_WEIGHT_LAYER_FAST,
+            )?;
+            let eligibility = staged_eligibility_asset(
+                &staging,
+                phenotype.phenotype_hash(),
+                live_topology.recurrent_synapse_count,
+                live_topology.decoder_synapse_count,
             )?;
             let journal = encode_portable_replay(
                 phenotype.phenotype_hash(),

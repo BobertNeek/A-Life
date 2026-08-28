@@ -1281,12 +1281,12 @@ struct RuntimeSaveAuthority {
 }
 
 fn runtime_save_authority(
-    runtime: &mut crate::GpuLiveBrainRuntime,
+    runtime: &crate::GpuLiveBrainRuntime,
     world: &HeadlessWorld,
 ) -> Result<RuntimeSaveAuthority, LineageResetMappingError> {
-    let save = runtime.capture_portable_checkpoint().map_err(|error| {
+    let authority = runtime.live_save_authority_view().map_err(|error| {
         LineageResetMappingError::RuntimeCompatibility {
-            reason: format!("current GPU runtime checkpoint is unavailable: {error}"),
+            reason: format!("current GPU runtime authority is unavailable: {error}"),
         }
     })?;
     let mut current_agents = BTreeSet::new();
@@ -1309,69 +1309,43 @@ fn runtime_save_authority(
     if current_agents.is_empty() {
         return Err(LineageResetMappingError::NoLiveAgents);
     }
-    if save.creatures.len() != current_agents.len() {
+    if authority.organism_ids.len() != current_agents.len() {
         return Err(LineageResetMappingError::RuntimeCompatibility {
             reason: format!(
-                "current runtime save has {} creatures for {} current Agents",
-                save.creatures.len(),
+                "current runtime authority has {} creatures for {} current Agents",
+                authority.organism_ids.len(),
                 current_agents.len()
             ),
         });
     }
-
-    let mut profile = None;
     let mut save_agents = BTreeSet::new();
-    for creature in &save.creatures {
-        if !current_agents.contains(&creature.organism_id.raw()) {
+    for organism_id in authority.organism_ids {
+        if !current_agents.contains(&organism_id.raw()) {
             return Err(LineageResetMappingError::RuntimeCompatibility {
                 reason: format!(
-                    "runtime save contains organism {} absent from the current Agent world",
-                    creature.organism_id.raw()
+                    "runtime authority contains organism {} absent from the current Agent world",
+                    organism_id.raw()
                 ),
             });
         }
-        if !save_agents.insert(creature.organism_id.raw()) {
+        if !save_agents.insert(organism_id.raw()) {
             return Err(LineageResetMappingError::RuntimeCompatibility {
                 reason: format!(
-                    "current runtime save contains duplicate organism {}",
-                    creature.organism_id.raw()
+                    "current runtime authority contains duplicate organism {}",
+                    organism_id.raw()
                 ),
             });
         }
-        let Some(brain) = &creature.gpu_brain else {
-            return Err(LineageResetMappingError::RuntimeCompatibility {
-                reason: format!(
-                    "current Agent {} has no GPU sensor profile",
-                    creature.organism_id.raw()
-                ),
-            });
-        };
-        let current = SensorProfile::try_from_raw(brain.sensor_profile.profile_id.raw()).map_err(
-            |error| LineageResetMappingError::RuntimeCompatibility {
-                reason: format!("runtime sensor profile is invalid: {error}"),
-            },
-        )?;
-        if let Some(previous) = profile {
-            if previous != current {
-                return Err(LineageResetMappingError::RuntimeCompatibility {
-                    reason: "current runtime save contains mixed sensor profiles".to_string(),
-                });
-            }
-        }
-        profile = Some(current);
     }
     if save_agents != current_agents {
         return Err(LineageResetMappingError::RuntimeCompatibility {
             reason: "current runtime save does not cover every current Agent".to_string(),
         });
     }
-    let sensor_profile = profile.ok_or_else(|| LineageResetMappingError::RuntimeCompatibility {
-        reason: "current runtime save has no GPU sensor profiles".to_string(),
-    })?;
     Ok(RuntimeSaveAuthority {
-        save_id: save.save_id,
-        deterministic_seed: save.deterministic_seed,
-        sensor_profile,
+        save_id: authority.save_id,
+        deterministic_seed: authority.deterministic_seed,
+        sensor_profile: authority.sensor_profile,
     })
 }
 
@@ -2262,7 +2236,9 @@ fn handle_habitat_lab_input(
         }
         Ok(outcome) => {
             state.status = habitat_operation_status(&Ok(outcome));
-            if let Err(error) = runtime.replace_habitat_authority(working.habitat_authority().clone()) {
+            if let Err(error) =
+                runtime.replace_habitat_authority(working.habitat_authority().clone())
+            {
                 state.status = format!("Rejected: {error}");
             }
         }

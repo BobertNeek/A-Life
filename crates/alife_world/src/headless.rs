@@ -39,7 +39,10 @@ use crate::ecology::{
     EcologyState, EcologyStepReport, EcologyZoneId, ResourceLifecycle, ResourceSpawnPolicy,
     TerrainZone, TerrainZoneKind,
 };
-use crate::habitat::{HabitatAuthority, HabitatAuthorityError};
+use crate::habitat::{
+    HabitatActor, HabitatAuthority, HabitatAuthorityError, HabitatBreedingKind,
+    HabitatBreedingRequest,
+};
 use crate::organism::{OrganismRegistryError, WorldOrganismRecord, WorldOrganismRegistry};
 use crate::presentation::{
     HabitatCreaturePresentation, HabitatPresentationProjection, PairwiseRelationshipProjection,
@@ -585,6 +588,25 @@ impl HeadlessWorld {
                 {
                     continue;
                 }
+                let maternal_membership = candidate
+                    .habitats
+                    .membership(*maternal_id)
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                let habitat_id = maternal_membership.habitat_id;
+                if candidate
+                    .habitats
+                    .authorize_breeding(HabitatBreedingRequest {
+                        habitat_id,
+                        first_parent: *maternal_id,
+                        second_parent: *paternal_id,
+                        kind: HabitatBreedingKind::CreatureChosen,
+                        actor: HabitatActor::Organism(*maternal_id),
+                        tick: next_tick,
+                    })
+                    .is_err()
+                {
+                    continue;
+                }
                 mating_organism_ids.insert(maternal_id.raw());
                 mating_organism_ids.insert(paternal_id.raw());
                 eligible_pairs.push((
@@ -592,6 +614,7 @@ impl HeadlessWorld {
                     *paternal_id,
                     maternal_object.position,
                     paternal_object.position,
+                    habitat_id,
                 ));
             }
         }
@@ -704,7 +727,7 @@ impl HeadlessWorld {
             }
         }
 
-        if let Some((maternal_id, paternal_id, maternal_position, paternal_position)) =
+        if let Some((maternal_id, paternal_id, maternal_position, paternal_position, habitat_id)) =
             conception_pair
         {
             let mut conception_seed = candidate.seed
@@ -761,6 +784,13 @@ impl HeadlessWorld {
             )
             .map_err(map_organism_registry_error)?;
             candidate.register_organism_record(child_record)?;
+            let mut child_habitats = candidate.habitats.clone();
+            child_habitats
+                .register_creature(child_id, habitat_id, next_tick)
+                .map_err(|_| ScaffoldContractError::InvalidId)?;
+            candidate
+                .replace_habitat_authority(child_habitats)
+                .map_err(|_| ScaffoldContractError::InvalidId)?;
             candidate.validate_complete_organism_bindings()?;
         }
 
@@ -6065,6 +6095,17 @@ mod task_4_3a2_tests {
                 })
                 .unwrap();
         }
+        let mut habitats = world.habitat_authority().clone();
+        for organism_id in [MATERNAL_ID, PATERNAL_ID] {
+            habitats
+                .register_creature(
+                    organism_id,
+                    crate::habitat::HabitatId::DEFAULT_WILD,
+                    Tick::ZERO,
+                )
+                .unwrap();
+        }
+        world.replace_habitat_authority(habitats).unwrap();
         (world, next_tick)
     }
 
@@ -6119,6 +6160,24 @@ mod task_4_3a2_tests {
         assert_eq!(child.biochemistry().development.age_ticks, Tick::ZERO);
         assert_eq!(child.birth_tick(), next_tick);
         assert!(child.lifecycle().is_alive());
+        let maternal_habitat = forward
+            .habitat_authority()
+            .membership(MATERNAL_ID)
+            .unwrap()
+            .habitat_id;
+        let child_membership = forward
+            .habitat_authority()
+            .membership(expected_child_id)
+            .expect("canonical birth must atomically install habitat membership");
+        assert_eq!(child_membership.habitat_id, maternal_habitat);
+        assert_eq!(child_membership.entered_tick, next_tick);
+        assert_eq!(
+            replay
+                .habitat_authority()
+                .membership(expected_child_id)
+                .unwrap(),
+            child_membership
+        );
         assert_eq!(child.archive(), &Default::default());
         assert_ne!(child.genome().conception_seed, 0);
         assert_eq!(child.phenotype().lineage_id, child.genome().lineage_id);

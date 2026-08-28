@@ -16,5 +16,6 @@ pub use durable_manifest::{
 pub use state_codec::current_backend_provenance;
 pub use state_codec::{
     GpuBrainCheckpointWrite, GpuBrainSidecarCapture, GpuDurableFounderWrite,
-    RestoredGpuBrainCheckpoint, RestoredRetainedLearning, RetainedLearningCapture,
+    GpuExactCheckpointTransactionContextV1, RestoredGpuBrainCheckpoint, RestoredRetainedLearning,
+    RetainedLearningCapture,
 };

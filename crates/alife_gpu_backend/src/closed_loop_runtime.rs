@@ -37,15 +37,14 @@ use crate::closed_loop_pipeline::{
 };
 use crate::{
     derive_executed_work, AddLifetimeSynapse, GpuActiveBatchUpload, GpuAdmissionReceipt,
-    GpuAllocationEventKind, GpuAllocationEventReceipt, GpuBrainSlot, GpuClosedLoopError,
-    GpuClosedLoopKernelSet, GpuClosedLoopPipelines, GpuCompactMapTicket,
+    GpuAllocationEventKind, GpuAllocationEventReceipt, GpuAuthorityReceiptV1, GpuBrainSlot,
+    GpuClosedLoopError, GpuClosedLoopKernelSet, GpuClosedLoopPipelines, GpuCompactMapTicket,
     GpuFastPlasticityBatchEntry, GpuFixedActiveBatchEntry, GpuFixedClassArenaBuffers,
-    GpuFixedClassArenaPlan, GpuFixedSlotRanges, GpuAuthorityReceiptV1, GpuLearningReceipt,
+    GpuFixedClassArenaPlan, GpuFixedSlotRanges, GpuLearningReceipt, GpuLiveTopologyCheckpointV1,
     GpuMemoryContextDispatchReceipt, GpuMemoryContextUpload, GpuOutcomeCreditRecord,
     GpuPendingEligibilityRecord, GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget,
-    GpuRuntimeProfile, GpuSelectorLogitCapture, GpuTimestampQueryResources,
-    GpuLiveTopologyCheckpointV1, GpuV11CausalState, GpuV11Checkpoint, GpuV11WorkReceipt,
-    GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
+    GpuRuntimeProfile, GpuSelectorLogitCapture, GpuTimestampQueryResources, GpuV11CausalState,
+    GpuV11Checkpoint, GpuV11WorkReceipt, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
     PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
 };
 
@@ -2699,7 +2698,7 @@ fn compile_v11_slot_upload(
 }
 
 pub struct GpuClosedLoopBackend {
-    backend_instance_id: NonZeroU64,
+    pub(crate) backend_instance_id: NonZeroU64,
     pub(crate) hardware: GpuHardwareReceipt,
     #[allow(dead_code)]
     adapter: wgpu::Adapter,
@@ -2716,7 +2715,7 @@ pub struct GpuClosedLoopBackend {
     admission: GpuAdmissionReceipt,
     pub(crate) class_buckets: BTreeMap<u16, ClassBucketPool>,
     slot_generation_watermarks: BTreeMap<(u16, u32), u32>,
-    organisms: BTreeMap<u64, GpuBrainHandle>,
+    pub(crate) organisms: BTreeMap<u64, GpuBrainHandle>,
     curated_residency_generation: u64,
     curated_residency_generation_fingerprint: [u64; 4],
     pub(crate) next_dispatch_generation: u64,
@@ -2733,6 +2732,8 @@ pub struct GpuClosedLoopBackend {
     pending_inference_timing: Option<PendingInferenceTiming>,
     completed_neural_timing: Option<GpuNeuralTimingSample>,
     pub(crate) mutable_slot_readback_counters: GpuMutableSlotReadbackCounters,
+    pub(crate) exact_population_capture_metrics: crate::GpuExactPopulationCaptureMetricsV1,
+    pub(crate) next_exact_population_capture_generation: u64,
     last_apply_fast_plasticity_failure: Option<GpuRuntimeApplyFastPlasticityFailureReceipt>,
     pub(crate) next_sleep_job_id: u64,
     pub(crate) sleep_jobs: BTreeMap<u64, crate::GpuSleepJobState>,
@@ -2769,8 +2770,7 @@ impl GpuMutableSlotReadbackCounters {
     ) {
         self.calls.fetch_add(calls, Ordering::Relaxed);
         self.bytes.fetch_add(bytes, Ordering::Relaxed);
-        self.poll_wait_ns
-            .fetch_add(poll_wait_ns, Ordering::Relaxed);
+        self.poll_wait_ns.fetch_add(poll_wait_ns, Ordering::Relaxed);
         self.map_receive_wait_ns
             .fetch_add(map_receive_wait_ns, Ordering::Relaxed);
     }
@@ -2876,6 +2876,8 @@ impl GpuClosedLoopBackend {
             pending_inference_timing: None,
             completed_neural_timing: None,
             mutable_slot_readback_counters: GpuMutableSlotReadbackCounters::default(),
+            exact_population_capture_metrics: crate::GpuExactPopulationCaptureMetricsV1::default(),
+            next_exact_population_capture_generation: 1,
             last_apply_fast_plasticity_failure: None,
             next_sleep_job_id: 1,
             sleep_jobs: BTreeMap::new(),
@@ -2931,6 +2933,8 @@ impl GpuClosedLoopBackend {
             pending_inference_timing: None,
             completed_neural_timing: None,
             mutable_slot_readback_counters: GpuMutableSlotReadbackCounters::default(),
+            exact_population_capture_metrics: crate::GpuExactPopulationCaptureMetricsV1::default(),
+            next_exact_population_capture_generation: 1,
             last_apply_fast_plasticity_failure: None,
             next_sleep_job_id: plan.next_sleep_job_id,
             sleep_jobs: BTreeMap::new(),
@@ -3441,10 +3445,7 @@ impl GpuClosedLoopBackend {
         );
         let v11_checkpoint = resident.v11.checkpoint();
         let expected = expected_upload
-            .live_topology_checkpoint(
-                resident.phenotype.phenotype_hash(),
-                v11_checkpoint.clone(),
-            )
+            .live_topology_checkpoint(resident.phenotype.phenotype_hash(), v11_checkpoint.clone())
             .map_err(map_gpu_contract_error)?;
         let checkpoint = actual_upload
             .live_topology_checkpoint(resident.phenotype.phenotype_hash(), v11_checkpoint)
@@ -3788,6 +3789,26 @@ impl GpuClosedLoopBackend {
         world_tick: u64,
         began_tick_asleep: bool,
     ) -> Result<u32, ScaffoldContractError> {
+        self.advance_world_brain_atp_tick(handle, world_tick, Some(began_tick_asleep))
+    }
+
+    /// Advances the replay-protected world ATP cursor without applying either
+    /// basal debit or sleep credit. This is reserved for a durable Completed
+    /// hold whose duration is controlled by persistence latency, not biology.
+    pub fn hold_world_brain_atp_tick(
+        &mut self,
+        handle: GpuBrainHandle,
+        world_tick: u64,
+    ) -> Result<u32, ScaffoldContractError> {
+        self.advance_world_brain_atp_tick(handle, world_tick, None)
+    }
+
+    fn advance_world_brain_atp_tick(
+        &mut self,
+        handle: GpuBrainHandle,
+        world_tick: u64,
+        began_tick_asleep: Option<bool>,
+    ) -> Result<u32, ScaffoldContractError> {
         self.ensure_ready()?;
         self.validate_handle_backend(handle)?;
         let pool = self
@@ -3803,16 +3824,18 @@ impl GpuClosedLoopBackend {
                 return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
             }
         }
-        let after_basal = resident
-            .brain_atp_q16
-            .saturating_sub(BRAIN_ATP_BASAL_DEBIT_Q16);
-        resident.brain_atp_q16 = if began_tick_asleep {
-            after_basal
-                .saturating_add(BRAIN_ATP_SLEEP_RECOVERY_Q16)
-                .min(BRAIN_ATP_Q16_MAX)
-        } else {
-            after_basal
-        };
+        if let Some(began_tick_asleep) = began_tick_asleep {
+            let after_basal = resident
+                .brain_atp_q16
+                .saturating_sub(BRAIN_ATP_BASAL_DEBIT_Q16);
+            resident.brain_atp_q16 = if began_tick_asleep {
+                after_basal
+                    .saturating_add(BRAIN_ATP_SLEEP_RECOVERY_Q16)
+                    .min(BRAIN_ATP_Q16_MAX)
+            } else {
+                after_basal
+            };
+        }
         resident.last_world_atp_tick = Some(world_tick);
         Ok(resident.brain_atp_q16)
     }
@@ -6610,6 +6633,25 @@ impl GpuClosedLoopBackend {
             .get_mut(&handle.class_id.raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
         pool.resident_mut(handle)?.activity_sequence_cursor = cursor;
+        Ok(())
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn set_brain_atp_q16_for_test(
+        &mut self,
+        handle: GpuBrainHandle,
+        brain_atp_q16: u32,
+    ) -> Result<(), ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        if brain_atp_q16 > BRAIN_ATP_Q16_MAX {
+            return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+        }
+        let pool = self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        pool.resident_mut(handle)?.brain_atp_q16 = brain_atp_q16;
         Ok(())
     }
 

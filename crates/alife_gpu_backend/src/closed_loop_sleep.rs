@@ -20,10 +20,101 @@ use bytemuck::{Pod, Zeroable};
 use crate::closed_loop_buffers::GpuFixedSlotUpload;
 use crate::{
     map_gpu_contract_error, pack_replay_eligibility_sample, unpack_replay_eligibility_sample,
-    GpuBrainHandle, GpuBrainSlot, GpuClosedLoopBackend, GpuConsolidationRequestRecord,
-    GpuFixedSlotRanges, GpuReplayEventRecord, GpuReplaySynapseSpanRecord, GpuSleepHeader,
-    GpuSlotLearningStateRecord,
+    GpuBrainCheckpointParts, GpuBrainHandle, GpuBrainSlot, GpuClosedLoopBackend,
+    GpuConsolidationRequestRecord, GpuFixedSlotRanges, GpuReplayEventRecord,
+    GpuReplaySynapseSpanRecord, GpuSleepHeader, GpuSlotLearningStateRecord,
 };
+
+pub(crate) fn replay_batch_from_checkpoint_parts(
+    parts: &GpuBrainCheckpointParts,
+    synapse_count: u32,
+) -> Result<BoundedReplayBatch, ScaffoldContractError> {
+    let capacity = u32::try_from(parts.replay_events.len())
+        .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+    let event_count = parts.replay_journal_event_count;
+    if capacity == 0 || event_count > capacity || parts.replay_journal_cursor >= capacity {
+        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+    }
+    let oldest = if event_count == capacity {
+        parts.replay_journal_cursor
+    } else {
+        0
+    };
+    let physical_order = (0..event_count)
+        .map(|offset| (oldest + offset) % capacity)
+        .collect::<Vec<_>>();
+    let events = physical_order
+        .iter()
+        .map(|physical| {
+            parts
+                .replay_events
+                .get(*physical as usize)
+                .copied()
+                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)
+                .and_then(decode_replay_event)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut synapse_spans = Vec::with_capacity(parts.replay_spans.len());
+    let mut eligibility_samples = Vec::with_capacity(
+        usize::try_from(event_count)
+            .ok()
+            .and_then(|count| count.checked_mul(parts.replay_spans.len()))
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?,
+    );
+    for (capture_index, physical_span) in parts.replay_spans.iter().enumerate() {
+        let expected_physical_start = u32::try_from(capture_index)
+            .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?
+            .checked_mul(capacity)
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        if physical_span.sample_start != expected_physical_start
+            || physical_span.sample_count != event_count
+            || physical_span.reserved != 0
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        let compact_start = u32::try_from(eligibility_samples.len())
+            .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        for (logical_index, physical_event) in physical_order.iter().copied().enumerate() {
+            let index = physical_span
+                .sample_start
+                .checked_add(physical_event)
+                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+            let packed = *parts
+                .replay_samples
+                .get(index as usize)
+                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+            let (captured_physical, eligibility_q15) = unpack_replay_eligibility_sample(packed);
+            if u32::from(captured_physical) != physical_event || eligibility_q15 == i16::MIN {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+            }
+            eligibility_samples.push(ReplayEligibilitySample {
+                event_index: u16::try_from(logical_index)
+                    .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?,
+                eligibility_q15,
+            });
+        }
+        synapse_spans.push(ReplaySynapseSpan {
+            local_synapse_id: physical_span.local_synapse_id,
+            sample_start: compact_start,
+            sample_count: event_count,
+            reserved: 0,
+        });
+    }
+    let mut batch = BoundedReplayBatch {
+        schema_version: BOUNDED_REPLAY_BATCH_SCHEMA_VERSION,
+        events,
+        synapse_spans,
+        eligibility_samples,
+        canonical_digest: [0; 4],
+    };
+    batch.canonical_digest = batch.recompute_canonical_digest()?;
+    batch.validate_contract(
+        capacity,
+        u32::try_from(parts.replay_samples.len()).unwrap_or(u32::MAX),
+        synapse_count,
+    )?;
+    Ok(batch)
+}
 
 pub type GpuSleepJobId = ConsolidationJobId;
 
