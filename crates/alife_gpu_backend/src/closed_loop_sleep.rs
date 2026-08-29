@@ -213,6 +213,7 @@ pub(crate) struct SleepSlotSnapshot {
     pub(crate) active_eligibility_bank: u8,
     pub(crate) active_eligibility_generation: u64,
     pub(crate) replay_journal_generation: u64,
+    pub(crate) replay_journal_event_count: u32,
     pub(crate) transaction_generation: u64,
     pub(crate) sleep_plan: alife_core::SleepConsolidationPlan,
 }
@@ -240,6 +241,15 @@ impl From<&GpuConsolidationRequest> for GpuConsolidationRequestRecord {
 }
 
 impl GpuClosedLoopBackend {
+    pub fn has_bounded_sleep_phase_data(
+        &self,
+        handle: GpuBrainHandle,
+    ) -> Result<bool, ScaffoldContractError> {
+        Ok(replay_journal_has_events(
+            self.sleep_slot_snapshot(handle)?.replay_journal_event_count,
+        ))
+    }
+
     pub fn build_sleep_replay_batch(
         &mut self,
         handle: GpuBrainHandle,
@@ -882,6 +892,7 @@ impl GpuClosedLoopBackend {
             active_eligibility_bank: resident.active_eligibility_bank,
             active_eligibility_generation: resident.active_eligibility_generation,
             replay_journal_generation: resident.replay_journal_generation,
+            replay_journal_event_count: resident.replay_journal_event_count,
             transaction_generation: resident.transaction_generation,
             sleep_plan: resident.sleep_plan,
         })
@@ -1144,6 +1155,22 @@ impl GpuClosedLoopBackend {
             }
         }
         Ok(digest.finish256())
+    }
+}
+
+const fn replay_journal_has_events(event_count: u32) -> bool {
+    event_count > 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::replay_journal_has_events;
+
+    #[test]
+    fn replay_availability_tracks_the_host_event_count() {
+        assert!(!replay_journal_has_events(0));
+        assert!(replay_journal_has_events(1));
+        assert!(replay_journal_has_events(u32::MAX));
     }
 }
 

@@ -1702,11 +1702,7 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
         if organism_id != self.handle.organism_id() {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
-        Ok(!self
-            .backend
-            .build_sleep_replay_batch(self.handle)?
-            .events
-            .is_empty())
+        self.backend.has_bounded_sleep_phase_data(self.handle)
     }
 }
 
