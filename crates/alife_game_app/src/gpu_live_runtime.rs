@@ -1975,6 +1975,13 @@ pub struct GpuLivePerformanceMetrics {
     pub exact_checkpoint_transactions_completed: u64,
     pub exact_checkpoint_transaction_wall_ns: u64,
     pub perception_sleep_preparation_wall_ns: u64,
+    pub preparation_sleep_eligibility_replay_wall_ns: u64,
+    pub preparation_grounded_perception_wall_ns: u64,
+    pub preparation_episodic_retrieval_wall_ns: u64,
+    pub preparation_attention_context_wall_ns: u64,
+    pub preparation_topology_concept_wall_ns: u64,
+    pub preparation_gpu_upload_wall_ns: u64,
+    pub preparation_checkpoint_publication_wall_ns: u64,
     pub sleep_promotion_wall_ns: u64,
     pub inference_batches: u64,
     pub inference_rows: u64,
@@ -2078,6 +2085,23 @@ impl GpuLivePerformanceMetrics {
             ),
             exact_checkpoint_transaction_wall_ns: delta!(exact_checkpoint_transaction_wall_ns),
             perception_sleep_preparation_wall_ns: delta!(perception_sleep_preparation_wall_ns),
+            preparation_sleep_eligibility_replay_wall_ns: delta!(
+                preparation_sleep_eligibility_replay_wall_ns
+            ),
+            preparation_grounded_perception_wall_ns: delta!(
+                preparation_grounded_perception_wall_ns
+            ),
+            preparation_episodic_retrieval_wall_ns: delta!(
+                preparation_episodic_retrieval_wall_ns
+            ),
+            preparation_attention_context_wall_ns: delta!(
+                preparation_attention_context_wall_ns
+            ),
+            preparation_topology_concept_wall_ns: delta!(preparation_topology_concept_wall_ns),
+            preparation_gpu_upload_wall_ns: delta!(preparation_gpu_upload_wall_ns),
+            preparation_checkpoint_publication_wall_ns: delta!(
+                preparation_checkpoint_publication_wall_ns
+            ),
             sleep_promotion_wall_ns: delta!(sleep_promotion_wall_ns),
             inference_batches: delta!(inference_batches),
             inference_rows: delta!(inference_rows),
@@ -8233,7 +8257,16 @@ impl GpuLiveBrainRuntime {
             .tick_preamble_wall_ns
             .saturating_add(elapsed_ns(preamble_started));
         let preparation_started = Instant::now();
+        let measure_preparation = self.performance_measurement_enabled;
+        let mut sleep_eligibility_replay_wall_ns = 0_u64;
+        let mut grounded_perception_wall_ns = 0_u64;
+        let mut episodic_retrieval_wall_ns = 0_u64;
+        let mut attention_context_wall_ns = 0_u64;
+        let mut topology_concept_wall_ns = 0_u64;
+        let mut gpu_upload_wall_ns = 0_u64;
+        let mut checkpoint_publication_wall_ns = 0_u64;
         for (raw, handle, world_entity_id) in scheduled_handles {
+            let sleep_preparation_started = measure_preparation.then(Instant::now);
             let retained_learning_pending =
                 self.retry_retained_learning(OrganismId(raw), tick_before)?;
             let mut record = self
@@ -8384,6 +8417,9 @@ impl GpuLiveBrainRuntime {
                 }
             };
             let sleep_after = resident.sleep_scheduler.state();
+            sleep_eligibility_replay_wall_ns = sleep_eligibility_replay_wall_ns.saturating_add(
+                sleep_preparation_started.map_or(0, elapsed_ns),
+            );
             if sleep_recovery_body_event_due(phase_before, completed_waiting_for_durable_permit) {
                 scheduled_body_events.insert(
                     raw,
@@ -8393,6 +8429,7 @@ impl GpuLiveBrainRuntime {
                     },
                 );
             }
+            let checkpoint_preparation_started = measure_preparation.then(Instant::now);
             if sleep_after != sleep_before {
                 match (sleep_before.consolidation, sleep_after.consolidation) {
                     (
@@ -8497,6 +8534,9 @@ impl GpuLiveBrainRuntime {
                     _ => return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into()),
                 }
             }
+            checkpoint_publication_wall_ns = checkpoint_publication_wall_ns.saturating_add(
+                checkpoint_preparation_started.map_or(0, elapsed_ns),
+            );
             let remains_dispatchable = phase_before == SleepPhase::Awake
                 && sleep_event.phase == SleepPhase::Awake
                 && sleep_event.transition.is_none();
@@ -8529,6 +8569,7 @@ impl GpuLiveBrainRuntime {
                 if force_preparation_failure {
                     return Err(ScaffoldContractError::InvalidMemoryQuery);
                 }
+                let grounded_perception_started = measure_preparation.then(Instant::now);
                 let organism = self
                     .world
                     .organism_registry()
@@ -8550,6 +8591,10 @@ impl GpuLiveBrainRuntime {
                     resident.homeostasis,
                     &perception_index,
                 )?;
+                grounded_perception_wall_ns = grounded_perception_wall_ns.saturating_add(
+                    grounded_perception_started.map_or(0, elapsed_ns),
+                );
+                let episodic_retrieval_started = measure_preparation.then(Instant::now);
                 let memory = self
                     .memories
                     .get(&raw)
@@ -8574,6 +8619,10 @@ impl GpuLiveBrainRuntime {
                     baseline_prepared.finalize(draft.clone())?;
                 baseline_recall.validate_for_frame(&baseline_frame)?;
                 let memory_evidence = finalized_memory_attention_evidence(&baseline_recall)?;
+                episodic_retrieval_wall_ns = episodic_retrieval_wall_ns.saturating_add(
+                    episodic_retrieval_started.map_or(0, elapsed_ns),
+                );
+                let attention_context_started = measure_preparation.then(Instant::now);
                 let mut peripheral_summaries =
                     grounded_peripheral_summaries(draft.grounded_object_slots())?;
                 let body_need = resident
@@ -8600,6 +8649,10 @@ impl GpuLiveBrainRuntime {
                 )?;
                 resident.attention_hysteresis = attention.hysteresis;
                 let routed_draft = route_focal_candidates(draft, &attention)?;
+                attention_context_wall_ns = attention_context_wall_ns.saturating_add(
+                    attention_context_started.map_or(0, elapsed_ns),
+                );
+                let topology_concept_started = measure_preparation.then(Instant::now);
                 let routed_recall = memory.recall_frame(&routed_draft)?;
                 let cognitive_context = cognitive_context_for_recall(
                     OrganismId(raw),
@@ -8612,11 +8665,17 @@ impl GpuLiveBrainRuntime {
                 let prepared_recall = routed_recall.with_cognitive_context(cognitive_context)?;
                 let (frame, memory_recall) = prepared_recall.finalize(routed_draft)?;
                 memory_recall.validate_for_frame(&frame)?;
+                topology_concept_wall_ns = topology_concept_wall_ns.saturating_add(
+                    topology_concept_started.map_or(0, elapsed_ns),
+                );
+                let gpu_upload_started = measure_preparation.then(Instant::now);
                 let memory_upload = self
                     .backend
                     .prepare_memory_context_upload(handle, &frame, &memory_recall)?
                     .bind_neural_receptor_effects(receptor_effects)
                     .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
+                gpu_upload_wall_ns = gpu_upload_wall_ns
+                    .saturating_add(gpu_upload_started.map_or(0, elapsed_ns));
                 Ok(PreparedGpuBrainFrame {
                     handle,
                     world_entity_id,
@@ -8649,6 +8708,36 @@ impl GpuLiveBrainRuntime {
             .performance_metrics
             .perception_sleep_preparation_wall_ns
             .saturating_add(elapsed_ns(preparation_started));
+        self.performance_metrics
+            .preparation_sleep_eligibility_replay_wall_ns = self
+            .performance_metrics
+            .preparation_sleep_eligibility_replay_wall_ns
+            .saturating_add(sleep_eligibility_replay_wall_ns);
+        self.performance_metrics.preparation_grounded_perception_wall_ns = self
+            .performance_metrics
+            .preparation_grounded_perception_wall_ns
+            .saturating_add(grounded_perception_wall_ns);
+        self.performance_metrics.preparation_episodic_retrieval_wall_ns = self
+            .performance_metrics
+            .preparation_episodic_retrieval_wall_ns
+            .saturating_add(episodic_retrieval_wall_ns);
+        self.performance_metrics.preparation_attention_context_wall_ns = self
+            .performance_metrics
+            .preparation_attention_context_wall_ns
+            .saturating_add(attention_context_wall_ns);
+        self.performance_metrics.preparation_topology_concept_wall_ns = self
+            .performance_metrics
+            .preparation_topology_concept_wall_ns
+            .saturating_add(topology_concept_wall_ns);
+        self.performance_metrics.preparation_gpu_upload_wall_ns = self
+            .performance_metrics
+            .preparation_gpu_upload_wall_ns
+            .saturating_add(gpu_upload_wall_ns);
+        self.performance_metrics
+            .preparation_checkpoint_publication_wall_ns = self
+            .performance_metrics
+            .preparation_checkpoint_publication_wall_ns
+            .saturating_add(checkpoint_publication_wall_ns);
 
         // The exact worker must receive every journal consequence from this
         // canonical tick before Completed promotion grants it permission to

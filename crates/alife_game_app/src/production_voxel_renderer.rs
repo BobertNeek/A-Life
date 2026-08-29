@@ -7822,6 +7822,17 @@ fn write_phase31_performance_receipt(
         .saturating_add(metrics.procedural_animation_cpu_ns)
         .saturating_add(metrics.ui_root_readers_cpu_ns);
     let renderer_present_residual_ns = frame_total_ns.saturating_sub(measured_update_ns);
+    let measured_preparation_ns = runtime_delta
+        .preparation_sleep_eligibility_replay_wall_ns
+        .saturating_add(runtime_delta.preparation_grounded_perception_wall_ns)
+        .saturating_add(runtime_delta.preparation_episodic_retrieval_wall_ns)
+        .saturating_add(runtime_delta.preparation_attention_context_wall_ns)
+        .saturating_add(runtime_delta.preparation_topology_concept_wall_ns)
+        .saturating_add(runtime_delta.preparation_gpu_upload_wall_ns)
+        .saturating_add(runtime_delta.preparation_checkpoint_publication_wall_ns);
+    let preparation_residual_ns = runtime_delta
+        .perception_sleep_preparation_wall_ns
+        .saturating_sub(measured_preparation_ns);
     let receipt = serde_json::json!({
         "schema": PHASE31_PERFORMANCE_SCHEMA,
         "schema_version": PHASE31_PERFORMANCE_SCHEMA_VERSION,
@@ -7880,6 +7891,16 @@ fn write_phase31_performance_receipt(
             "passive_observation_ns": runtime_delta.passive_observation_wall_ns,
             "population_reconcile_ns": runtime_delta.population_reconcile_wall_ns,
             "sleep_persistence_ns": runtime_delta.sleep_persistence_wall_ns
+        },
+        "preparation_substages": {
+            "sleep_eligibility_replay_ns": runtime_delta.preparation_sleep_eligibility_replay_wall_ns,
+            "grounded_perception_ns": runtime_delta.preparation_grounded_perception_wall_ns,
+            "episodic_retrieval_ns": runtime_delta.preparation_episodic_retrieval_wall_ns,
+            "attention_context_ns": runtime_delta.preparation_attention_context_wall_ns,
+            "topology_concept_ns": runtime_delta.preparation_topology_concept_wall_ns,
+            "gpu_upload_preparation_ns": runtime_delta.preparation_gpu_upload_wall_ns,
+            "checkpoint_publication_preparation_ns": runtime_delta.preparation_checkpoint_publication_wall_ns,
+            "other_and_instrumentation_residual_ns": preparation_residual_ns
         },
         "transactional_rollback_clone": {
             "calls": runtime_delta.rollback_clone_calls,
