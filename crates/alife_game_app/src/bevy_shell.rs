@@ -1168,33 +1168,11 @@ fn tick_production_gpu_brain(
     if !schedule.take_dispatch_permit() {
         return;
     }
-    let (planned_ticks, consume_step) =
+    let (ticks_to_run, consume_step) =
         production_tick_decision(playback, schedule.step_pending, plan.ticks_to_run);
     if consume_step {
         schedule.step_pending = false;
     }
-    let (ticks_to_run, paced_deferred_ticks) = if consume_step {
-        (planned_ticks, 0)
-    } else {
-        let max_ticks_this_frame = schedule.run_speed_ticks;
-        match schedule
-            .scheduler
-            .pace_planned_ticks(planned_ticks, max_ticks_this_frame)
-        {
-            Ok(paced) => paced,
-            Err(error) => {
-                schedule.failed = true;
-                mark_production_gpu_authority_unavailable(
-                    &mut authority,
-                    format!("production scheduler pacing failed: {error}"),
-                );
-                return;
-            }
-        }
-    };
-    schedule.deferred_catch_up_ticks = schedule
-        .deferred_catch_up_ticks
-        .saturating_add(u64::from(paced_deferred_ticks));
 
     for attempt_index in 0..ticks_to_run {
         schedule.scheduler_attempts = schedule.scheduler_attempts.saturating_add(1);

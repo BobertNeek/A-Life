@@ -212,22 +212,6 @@ impl DoubleBufferedGraphicalScheduler {
         self.validate()
     }
 
-    pub fn pace_planned_ticks(
-        &mut self,
-        planned_ticks: u32,
-        max_ticks_this_frame: u32,
-    ) -> Result<(u32, u32), GameAppShellError> {
-        if max_ticks_this_frame == 0 {
-            return Err(GameAppShellError::VisibleWorldMismatch {
-                message: "CA13 paced tick allowance must be nonzero",
-            });
-        }
-        let ticks_to_run = planned_ticks.min(max_ticks_this_frame);
-        let deferred = planned_ticks.saturating_sub(ticks_to_run);
-        self.preserve_unspent_planned_ticks(deferred)?;
-        Ok((ticks_to_run, deferred))
-    }
-
     pub fn render_alpha(&self) -> f32 {
         self.render_alpha_milli as f32 / 1000.0
     }
