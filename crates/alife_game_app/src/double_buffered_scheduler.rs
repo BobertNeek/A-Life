@@ -201,6 +201,17 @@ impl DoubleBufferedGraphicalScheduler {
         self.validate()
     }
 
+    pub fn preserve_unspent_planned_ticks(&mut self, count: u32) -> Result<(), GameAppShellError> {
+        let tick_micros = self.config.fixed_tick_micros().max(1);
+        self.accumulator_micros = self
+            .accumulator_micros
+            .saturating_add(tick_micros.saturating_mul(u64::from(count)))
+            .min(self.config.max_accumulator_micros);
+        self.render_alpha_milli =
+            ((self.accumulator_micros.saturating_mul(1000)) / tick_micros).min(999) as u16;
+        self.validate()
+    }
+
     pub fn render_alpha(&self) -> f32 {
         self.render_alpha_milli as f32 / 1000.0
     }

@@ -132,13 +132,40 @@ struct StagedLiveAuthority {
     residents: BTreeMap<u64, ResidentCognition>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct RollbackCloneSample {
+    world_wall_ns: u64,
+    residents_wall_ns: u64,
+    resident_rows: u64,
+    world_object_rows: u64,
+}
+
 impl StagedLiveAuthority {
-    fn begin(world: &mut HeadlessWorld, residents: &mut BTreeMap<u64, ResidentCognition>) -> Self {
-        Self {
-            world: world.clone(),
-            residents: residents.clone(),
-        }
-        .install(world, residents)
+    fn begin(
+        world: &mut HeadlessWorld,
+        residents: &mut BTreeMap<u64, ResidentCognition>,
+        measure_wall_time: bool,
+    ) -> (Self, RollbackCloneSample) {
+        let world_started = measure_wall_time.then(Instant::now);
+        let staged_world = world.clone();
+        let world_wall_ns = world_started.map_or(0, elapsed_ns);
+        let residents_started = measure_wall_time.then(Instant::now);
+        let staged_residents = residents.clone();
+        let residents_wall_ns = residents_started.map_or(0, elapsed_ns);
+        let sample = RollbackCloneSample {
+            world_wall_ns,
+            residents_wall_ns,
+            resident_rows: u64::try_from(residents.len()).unwrap_or(u64::MAX),
+            world_object_rows: u64::try_from(world.object_count()).unwrap_or(u64::MAX),
+        };
+        (
+            Self {
+                world: staged_world,
+                residents: staged_residents,
+            }
+            .install(world, residents),
+            sample,
+        )
     }
 
     fn install(
@@ -177,18 +204,19 @@ trait LiveAuthorityOwner {
 
 fn tick_with_sleep_progress_inner<O, T, E>(
     owner: &mut O,
+    measure_clone_wall_time: bool,
     staged_tick: impl FnOnce(&mut O) -> Result<T, E>,
-) -> Result<T, E>
+) -> (Result<T, E>, RollbackCloneSample)
 where
     O: LiveAuthorityOwner,
 {
-    let staged = {
+    let (staged, clone_sample) = {
         let (world, residents) = owner.world_and_residents();
-        StagedLiveAuthority::begin(world, residents)
+        StagedLiveAuthority::begin(world, residents, measure_clone_wall_time)
     };
     let result = staged_tick(owner);
     let (world, residents) = owner.world_and_residents();
-    staged.finish(world, residents, result)
+    (staged.finish(world, residents, result), clone_sample)
 }
 
 #[derive(Debug, Clone)]
@@ -1935,6 +1963,17 @@ pub struct GpuLivePerformanceMetrics {
     pub tick_calls: u64,
     pub tick_wall_ns: u64,
     pub tick_preamble_wall_ns: u64,
+    pub rollback_clone_calls: u64,
+    pub rollback_world_clone_wall_ns: u64,
+    pub rollback_residents_clone_wall_ns: u64,
+    pub rollback_resident_rows: u64,
+    pub rollback_world_object_rows: u64,
+    pub rollback_clone_progress_calls: u64,
+    pub rollback_clone_zero_progress_calls: u64,
+    pub exact_checkpoint_poll_calls: u64,
+    pub exact_checkpoint_poll_wall_ns: u64,
+    pub exact_checkpoint_transactions_completed: u64,
+    pub exact_checkpoint_transaction_wall_ns: u64,
     pub perception_sleep_preparation_wall_ns: u64,
     pub sleep_promotion_wall_ns: u64,
     pub inference_batches: u64,
@@ -1989,6 +2028,31 @@ pub struct GpuLivePerformanceMetrics {
     pub checkpoint_snapshot_map_receive_wait_ns: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GpuLiveNoProgressReason {
+    CheckpointPublicationPending,
+    CheckpointFailed,
+}
+
+#[derive(Debug)]
+pub enum GpuLiveTickOutcome {
+    Progressed(Vec<LiveBrainTickSummary>),
+    NoProgress(GpuLiveNoProgressReason),
+}
+
+const fn no_progress_reason_for_checkpoint_stage(
+    stage: ExactPopulationCheckpointStageV1,
+) -> Option<GpuLiveNoProgressReason> {
+    match stage {
+        ExactPopulationCheckpointStageV1::DeferredJournalPublishing => {
+            Some(GpuLiveNoProgressReason::CheckpointPublicationPending)
+        }
+        ExactPopulationCheckpointStageV1::Failed => Some(GpuLiveNoProgressReason::CheckpointFailed),
+        _ => None,
+    }
+}
+
 impl GpuLivePerformanceMetrics {
     pub(crate) fn delta_from(self, before: Self) -> Self {
         macro_rules! delta {
@@ -2000,6 +2064,19 @@ impl GpuLivePerformanceMetrics {
             tick_calls: delta!(tick_calls),
             tick_wall_ns: delta!(tick_wall_ns),
             tick_preamble_wall_ns: delta!(tick_preamble_wall_ns),
+            rollback_clone_calls: delta!(rollback_clone_calls),
+            rollback_world_clone_wall_ns: delta!(rollback_world_clone_wall_ns),
+            rollback_residents_clone_wall_ns: delta!(rollback_residents_clone_wall_ns),
+            rollback_resident_rows: delta!(rollback_resident_rows),
+            rollback_world_object_rows: delta!(rollback_world_object_rows),
+            rollback_clone_progress_calls: delta!(rollback_clone_progress_calls),
+            rollback_clone_zero_progress_calls: delta!(rollback_clone_zero_progress_calls),
+            exact_checkpoint_poll_calls: delta!(exact_checkpoint_poll_calls),
+            exact_checkpoint_poll_wall_ns: delta!(exact_checkpoint_poll_wall_ns),
+            exact_checkpoint_transactions_completed: delta!(
+                exact_checkpoint_transactions_completed
+            ),
+            exact_checkpoint_transaction_wall_ns: delta!(exact_checkpoint_transaction_wall_ns),
             perception_sleep_preparation_wall_ns: delta!(perception_sleep_preparation_wall_ns),
             sleep_promotion_wall_ns: delta!(sleep_promotion_wall_ns),
             inference_batches: delta!(inference_batches),
@@ -2563,6 +2640,8 @@ pub struct GpuLiveBrainRuntime {
     last_post_seal_learning_failures: Vec<PostSealLearningFailure>,
     last_gpu_metrics: GpuLiveBrainEvidenceMetrics,
     performance_metrics: GpuLivePerformanceMetrics,
+    performance_measurement_enabled: bool,
+    exact_checkpoint_transaction_started_at: Option<Instant>,
     checkpoint_durability: Option<GpuLiveCheckpointDurability>,
     canonical_save_id: Option<String>,
     manual_checkpoint_status: GpuManualCheckpointStatus,
@@ -4101,6 +4180,8 @@ impl GpuLiveBrainRuntime {
         let transaction_id = self
             .exact_checkpoint_coordinator
             .admit_durable_recommit(checkpoint_tick, expected_base_digest)?;
+        self.exact_checkpoint_transaction_started_at =
+            self.performance_measurement_enabled.then(Instant::now);
         let durability = self
             .checkpoint_durability
             .take()
@@ -4939,6 +5020,8 @@ impl GpuLiveBrainRuntime {
             last_post_seal_learning_failures: Vec::new(),
             last_gpu_metrics: GpuLiveBrainEvidenceMetrics::default(),
             performance_metrics: GpuLivePerformanceMetrics::default(),
+            performance_measurement_enabled: false,
+            exact_checkpoint_transaction_started_at: None,
             checkpoint_durability: None,
             canonical_save_id: None,
             manual_checkpoint_status: GpuManualCheckpointStatus::Idle,
@@ -5064,6 +5147,8 @@ impl GpuLiveBrainRuntime {
             last_post_seal_learning_failures: Vec::new(),
             last_gpu_metrics: GpuLiveBrainEvidenceMetrics::default(),
             performance_metrics: GpuLivePerformanceMetrics::default(),
+            performance_measurement_enabled: false,
+            exact_checkpoint_transaction_started_at: None,
             checkpoint_durability: None,
             canonical_save_id: None,
             manual_checkpoint_status: GpuManualCheckpointStatus::Idle,
@@ -5924,6 +6009,8 @@ impl GpuLiveBrainRuntime {
         let ExactCheckpointRequestDispositionV1::Started { transaction_id } = disposition else {
             return Ok(());
         };
+        self.exact_checkpoint_transaction_started_at =
+            self.performance_measurement_enabled.then(Instant::now);
         if !self.pending_exact_sleep_journal_entries.is_empty() {
             self.exact_checkpoint_coordinator.fail_stop();
             self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
@@ -6737,6 +6824,18 @@ impl GpuLiveBrainRuntime {
                         return Err(error.into());
                     }
                 };
+                self.performance_metrics.exact_checkpoint_transactions_completed = self
+                    .performance_metrics
+                    .exact_checkpoint_transactions_completed
+                    .saturating_add(1);
+                self.performance_metrics.exact_checkpoint_transaction_wall_ns = self
+                    .performance_metrics
+                    .exact_checkpoint_transaction_wall_ns
+                    .saturating_add(
+                        self.exact_checkpoint_transaction_started_at
+                            .take()
+                            .map_or(0, elapsed_ns),
+                    );
                 self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Idle;
                 if follow_up {
                     if let Err(error) = self.request_exact_population_checkpoint() {
@@ -7764,9 +7863,16 @@ impl GpuLiveBrainRuntime {
     }
 
     pub fn tick(&mut self) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
+        Ok(match self.tick_outcome()? {
+            GpuLiveTickOutcome::Progressed(summaries) => summaries,
+            GpuLiveTickOutcome::NoProgress(_) => Vec::new(),
+        })
+    }
+
+    pub fn tick_outcome(&mut self) -> Result<GpuLiveTickOutcome, GameAppShellError> {
         let started = Instant::now();
         let result =
-            self.tick_with_sleep_progress(|backend, handle, organism_id, state, intent| {
+            self.tick_with_sleep_progress_outcome(|backend, handle, organism_id, state, intent| {
                 let mut driver = AuthoritativeGpuSleepDriver {
                     backend,
                     handle,
@@ -7877,7 +7983,7 @@ impl GpuLiveBrainRuntime {
 
     fn tick_with_sleep_progress<F>(
         &mut self,
-        mut progress: F,
+        progress: F,
     ) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError>
     where
         F: FnMut(
@@ -7888,20 +7994,79 @@ impl GpuLiveBrainRuntime {
             Option<ConsolidationIntent>,
         ) -> SleepProgressResult,
     {
+        Ok(match self.tick_with_sleep_progress_outcome(progress)? {
+            GpuLiveTickOutcome::Progressed(summaries) => summaries,
+            GpuLiveTickOutcome::NoProgress(_) => Vec::new(),
+        })
+    }
+
+    fn tick_with_sleep_progress_outcome<F>(
+        &mut self,
+        mut progress: F,
+    ) -> Result<GpuLiveTickOutcome, GameAppShellError>
+    where
+        F: FnMut(
+            &mut GpuClosedLoopBackend,
+            GpuBrainHandle,
+            OrganismId,
+            SleepState,
+            Option<ConsolidationIntent>,
+        ) -> SleepProgressResult,
+    {
         self.post_promotion_fail_stop_armed = false;
+        let checkpoint_poll_started = self.performance_measurement_enabled.then(Instant::now);
         self.poll_exact_population_checkpoint()?;
+        self.performance_metrics.exact_checkpoint_poll_calls = self
+            .performance_metrics
+            .exact_checkpoint_poll_calls
+            .saturating_add(1);
+        self.performance_metrics.exact_checkpoint_poll_wall_ns = self
+            .performance_metrics
+            .exact_checkpoint_poll_wall_ns
+            .saturating_add(checkpoint_poll_started.map_or(0, elapsed_ns));
         self.backend.ensure_neural_actions_available()?;
-        if self.exact_checkpoint_coordinator.stage() == ExactPopulationCheckpointStageV1::Failed {
-            return Ok(Vec::new());
-        }
-        if self.exact_checkpoint_coordinator.stage()
-            == ExactPopulationCheckpointStageV1::DeferredJournalPublishing
+        if let Some(reason) =
+            no_progress_reason_for_checkpoint_stage(self.exact_checkpoint_coordinator.stage())
         {
-            return Ok(Vec::new());
+            return Ok(GpuLiveTickOutcome::NoProgress(reason));
         }
-        let result = tick_with_sleep_progress_inner(self, |runtime| {
-            runtime.tick_with_sleep_progress_staged(&mut progress)
-        });
+        let world_tick_before = self.world.tick().raw();
+        let measure_clone_wall_time = self.performance_measurement_enabled;
+        let (result, clone_sample) =
+            tick_with_sleep_progress_inner(self, measure_clone_wall_time, |runtime| {
+                runtime.tick_with_sleep_progress_staged(&mut progress)
+            });
+        self.performance_metrics.rollback_clone_calls = self
+            .performance_metrics
+            .rollback_clone_calls
+            .saturating_add(1);
+        self.performance_metrics.rollback_world_clone_wall_ns = self
+            .performance_metrics
+            .rollback_world_clone_wall_ns
+            .saturating_add(clone_sample.world_wall_ns);
+        self.performance_metrics.rollback_residents_clone_wall_ns = self
+            .performance_metrics
+            .rollback_residents_clone_wall_ns
+            .saturating_add(clone_sample.residents_wall_ns);
+        self.performance_metrics.rollback_resident_rows = self
+            .performance_metrics
+            .rollback_resident_rows
+            .saturating_add(clone_sample.resident_rows);
+        self.performance_metrics.rollback_world_object_rows = self
+            .performance_metrics
+            .rollback_world_object_rows
+            .saturating_add(clone_sample.world_object_rows);
+        if result.is_ok() && self.world.tick().raw() > world_tick_before {
+            self.performance_metrics.rollback_clone_progress_calls = self
+                .performance_metrics
+                .rollback_clone_progress_calls
+                .saturating_add(1);
+        } else {
+            self.performance_metrics.rollback_clone_zero_progress_calls = self
+                .performance_metrics
+                .rollback_clone_zero_progress_calls
+                .saturating_add(1);
+        }
         if result.is_err() && self.post_promotion_fail_stop_armed {
             self.backend
                 .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
@@ -7919,7 +8084,7 @@ impl GpuLiveBrainRuntime {
                 self.backend.record_contract_failure(error);
             }
         }
-        result
+        result.map(GpuLiveTickOutcome::Progressed)
     }
 
     fn tick_with_sleep_progress_staged<F>(
@@ -9153,6 +9318,17 @@ impl GpuLiveBrainRuntime {
 
     pub const fn performance_metrics(&self) -> GpuLivePerformanceMetrics {
         self.performance_metrics
+    }
+
+    pub fn set_performance_measurement_enabled(&mut self, enabled: bool) {
+        self.performance_measurement_enabled = enabled;
+        self.exact_checkpoint_transaction_started_at = if enabled
+            && self.exact_checkpoint_coordinator.is_active()
+        {
+            Some(Instant::now())
+        } else {
+            None
+        };
     }
 
     pub(crate) const fn hardware_receipt(&self) -> &alife_gpu_backend::GpuHardwareReceipt {
@@ -10739,6 +10915,24 @@ mod tests {
         persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
         HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord,
     };
+
+    #[test]
+    fn only_deferred_checkpoint_publication_is_a_typed_checkpoint_wait() {
+        assert_eq!(
+            no_progress_reason_for_checkpoint_stage(
+                ExactPopulationCheckpointStageV1::DeferredJournalPublishing
+            ),
+            Some(GpuLiveNoProgressReason::CheckpointPublicationPending)
+        );
+        assert_eq!(
+            no_progress_reason_for_checkpoint_stage(ExactPopulationCheckpointStageV1::Failed),
+            Some(GpuLiveNoProgressReason::CheckpointFailed)
+        );
+        assert_eq!(
+            no_progress_reason_for_checkpoint_stage(ExactPopulationCheckpointStageV1::Idle),
+            None
+        );
+    }
 
     fn finish_failed_checkpoint_worker_join(
         failed: &mut FailedExactPopulationCheckpointWorkerJoinV1,

@@ -858,8 +858,8 @@ pub struct Fvr03ProductionVoxelScreenshotResource {
     pub developer_overlay: bool,
 }
 
-const PHASE31_PERFORMANCE_SCHEMA: &str = "alife.phase31.performance-baseline.v1";
-const PHASE31_PERFORMANCE_SCHEMA_VERSION: u16 = 1;
+const PHASE31_PERFORMANCE_SCHEMA: &str = "alife.phase31.performance-baseline.v2";
+const PHASE31_PERFORMANCE_SCHEMA_VERSION: u16 = 2;
 const PHASE31_WARMUP_DURATION: Duration = Duration::from_secs(5);
 const PHASE31_MEASUREMENT_DURATION: Duration = Duration::from_secs(60);
 const PHASE31_PERFORMANCE_ARTIFACT_DIR: &str = "target/artifacts/phase31-performance";
@@ -877,7 +877,7 @@ pub(crate) struct Phase31PerformanceMetricsResource {
     measurement_started_at: Option<Instant>,
     measurement_start_world_tick: Option<u64>,
     runtime_baseline: Option<crate::gpu_live_runtime::GpuLivePerformanceMetrics>,
-    scheduler_baseline: Option<(u32, u64, u64, u64)>,
+    scheduler_baseline: Option<crate::bevy_shell::ProductionGpuTickPerformanceCounters>,
     stage_mark: Option<Instant>,
     frame_ns: Vec<u64>,
     input_cpu_ns: u64,
@@ -7735,7 +7735,7 @@ fn file_blake3_hex(path: &Path) -> Result<String, GameAppShellError> {
 fn write_phase31_performance_receipt(
     metrics: &Phase31PerformanceMetricsResource,
     runtime: &crate::GpuLiveBrainRuntime,
-    scheduler_final: (u32, u64, u64, u64),
+    scheduler_final: crate::bevy_shell::ProductionGpuTickPerformanceCounters,
     final_world_tick: u64,
     elapsed: Duration,
     schedule_failed: bool,
@@ -7762,15 +7762,41 @@ fn write_phase31_performance_receipt(
         .performance_metrics()
         .delta_from(metrics.runtime_baseline.unwrap_or_default());
     let scheduler_before = metrics.scheduler_baseline.unwrap_or(scheduler_final);
-    let frames_observed = scheduler_final.1.saturating_sub(scheduler_before.1);
-    let ticks_executed = scheduler_final.2.saturating_sub(scheduler_before.2);
-    let dropped_ticks = scheduler_final.3.saturating_sub(scheduler_before.3);
+    let frames_observed = scheduler_final
+        .frames_observed
+        .saturating_sub(scheduler_before.frames_observed);
+    let scheduler_completed_ticks = scheduler_final
+        .completed_ticks
+        .saturating_sub(scheduler_before.completed_ticks);
+    let scheduler_attempts = scheduler_final
+        .scheduler_attempts
+        .saturating_sub(scheduler_before.scheduler_attempts);
+    let checkpoint_publication_waits = scheduler_final
+        .checkpoint_publication_waits
+        .saturating_sub(scheduler_before.checkpoint_publication_waits);
+    let checkpoint_failed_waits = scheduler_final
+        .checkpoint_failed_waits
+        .saturating_sub(scheduler_before.checkpoint_failed_waits);
+    let deferred_catch_up_ticks = scheduler_final
+        .deferred_catch_up_ticks
+        .saturating_sub(scheduler_before.deferred_catch_up_ticks);
+    let dropped_ticks = scheduler_final
+        .catch_up_ticks_dropped
+        .saturating_sub(scheduler_before.catch_up_ticks_dropped);
+    let completed_world_ticks = final_world_tick.saturating_sub(
+        metrics
+            .measurement_start_world_tick
+            .unwrap_or(final_world_tick),
+    );
     let elapsed_seconds = elapsed.as_secs_f64().max(0.001);
     validate_phase31_performance_authority(
         schedule_failed,
         gpu_authoritative,
         runtime_delta.tick_calls,
-        ticks_executed,
+        scheduler_attempts,
+        scheduler_completed_ticks,
+        completed_world_ticks,
+        checkpoint_publication_waits.saturating_add(checkpoint_failed_waits),
     )
     .map_err(|message| GameAppShellError::InvalidProductionFrontend { message })?;
     let gpu_inference_ns = metrics.gpu_samples.iter().fold(0_u64, |total, sample| {
@@ -7819,9 +7845,19 @@ fn write_phase31_performance_receipt(
         },
         "frame": duration_summary(&metrics.frame_ns),
         "simulation": {
-            "configured_tps": scheduler_final.0,
-            "achieved_tps": ticks_executed as f64 / elapsed_seconds,
-            "ticks_executed": ticks_executed,
+            "configured_tps": scheduler_final.fixed_tick_hz,
+            "achieved_tps": completed_world_ticks as f64 / elapsed_seconds,
+            "completed_world_ticks": completed_world_ticks,
+            "scheduler_completed_ticks": scheduler_completed_ticks,
+            "scheduler_attempts": scheduler_attempts,
+            "scheduler_attempts_per_second": scheduler_attempts as f64 / elapsed_seconds,
+            "zero_progress_calls_by_reason": {
+                "checkpoint_publication_pending": checkpoint_publication_waits,
+                "checkpoint_failed": checkpoint_failed_waits
+            },
+            "checkpoint_polls": runtime_delta.exact_checkpoint_poll_calls,
+            "deferred_catch_up_ticks": deferred_catch_up_ticks,
+            "deferred_debt_micros_at_end": scheduler_final.deferred_debt_micros,
             "catch_up_ticks_dropped": dropped_ticks,
             "scheduler_frames_observed": frames_observed,
             "runtime_tick_calls": runtime_delta.tick_calls,
@@ -7844,6 +7880,15 @@ fn write_phase31_performance_receipt(
             "passive_observation_ns": runtime_delta.passive_observation_wall_ns,
             "population_reconcile_ns": runtime_delta.population_reconcile_wall_ns,
             "sleep_persistence_ns": runtime_delta.sleep_persistence_wall_ns
+        },
+        "transactional_rollback_clone": {
+            "calls": runtime_delta.rollback_clone_calls,
+            "world_clone_ns": runtime_delta.rollback_world_clone_wall_ns,
+            "residents_clone_ns": runtime_delta.rollback_residents_clone_wall_ns,
+            "resident_rows": runtime_delta.rollback_resident_rows,
+            "world_object_rows": runtime_delta.rollback_world_object_rows,
+            "successful_progress_calls": runtime_delta.rollback_clone_progress_calls,
+            "zero_progress_calls": runtime_delta.rollback_clone_zero_progress_calls
         },
         "cpu_stages": {
             "input_ns": metrics.input_cpu_ns,
@@ -7919,7 +7964,11 @@ fn write_phase31_performance_receipt(
             "full_snapshot_calls": runtime_delta.checkpoint_snapshot_calls,
             "full_snapshot_bytes": runtime_delta.checkpoint_snapshot_bytes,
             "poll_wait_ns": runtime_delta.checkpoint_snapshot_poll_wait_ns,
-            "map_receive_wait_ns": runtime_delta.checkpoint_snapshot_map_receive_wait_ns
+            "map_receive_wait_ns": runtime_delta.checkpoint_snapshot_map_receive_wait_ns,
+            "asynchronous_poll_calls": runtime_delta.exact_checkpoint_poll_calls,
+            "asynchronous_poll_cpu_ns": runtime_delta.exact_checkpoint_poll_wall_ns,
+            "asynchronous_transactions_completed": runtime_delta.exact_checkpoint_transactions_completed,
+            "asynchronous_transaction_wall_ns": runtime_delta.exact_checkpoint_transaction_wall_ns
         },
         "sleep_durable_activity": {
             "boundary_calls": runtime_delta.sleep_persistence_calls,

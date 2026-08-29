@@ -4,9 +4,35 @@ use alife_core::PolicyBackend;
 use alife_game_app::{
     load_geneforge_creature_part_catalog, resolve_creature_part_display_sources,
     run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, AppShellLaunchConfig,
-    GpuBrainAuthorityTelemetry, GraphicalBrainPolicyMode, GraphicalPlaygroundLaunchConfig,
-    LifecycleSaveState, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
+    DoubleBufferedGraphicalScheduler, GpuBrainAuthorityTelemetry, GraphicalBrainPolicyMode,
+    GraphicalPlaygroundLaunchConfig, LifecycleSaveState, ProductionFrontendProfileId,
+    ProductionVoxelLaunchConfig, RuntimePlaybackState,
 };
+
+#[test]
+fn checkpoint_wait_preserves_only_unspent_planned_scheduler_debt() {
+    let mut scheduler = DoubleBufferedGraphicalScheduler::default();
+    let plan = scheduler
+        .observe_render_frame(1.0, RuntimePlaybackState::Running, 1)
+        .unwrap();
+    let after_plan = scheduler.accumulator_micros;
+    let completed_before = scheduler.ticks_executed;
+    let unspent = plan.ticks_to_run - 1;
+
+    scheduler.preserve_unspent_planned_ticks(unspent).unwrap();
+
+    let restored = scheduler
+        .config
+        .fixed_tick_micros()
+        .saturating_mul(u64::from(unspent));
+    assert_eq!(
+        scheduler.accumulator_micros,
+        after_plan
+            .saturating_add(restored)
+            .min(scheduler.config.max_accumulator_micros)
+    );
+    assert_eq!(scheduler.ticks_executed, completed_before);
+}
 
 fn p34_fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../alife_world/tests/fixtures/p34")

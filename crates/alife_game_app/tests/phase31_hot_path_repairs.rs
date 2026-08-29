@@ -2018,8 +2018,10 @@ fn phase31_six_founder_atp_safety_enters_recovery_before_dispatch_and_survives_o
 fn phase31_receipt_rejects_dead_or_unaccounted_simulation() {
     use phase31_performance_health::validate_phase31_performance_authority;
 
-    assert!(validate_phase31_performance_authority(false, true, 67, 67).is_ok());
-    assert!(validate_phase31_performance_authority(true, true, 67, 67).is_err());
-    assert!(validate_phase31_performance_authority(false, false, 67, 67).is_err());
-    assert!(validate_phase31_performance_authority(false, true, 68, 67).is_err());
+    assert!(validate_phase31_performance_authority(false, true, 68, 68, 67, 67, 1).is_ok());
+    assert!(validate_phase31_performance_authority(true, true, 68, 68, 67, 67, 1).is_err());
+    assert!(validate_phase31_performance_authority(false, false, 68, 68, 67, 67, 1).is_err());
+    assert!(validate_phase31_performance_authority(false, true, 69, 68, 67, 67, 1).is_err());
+    assert!(validate_phase31_performance_authority(false, true, 68, 68, 66, 67, 1).is_err());
+    assert!(validate_phase31_performance_authority(false, true, 68, 68, 67, 67, 0).is_err());
 }

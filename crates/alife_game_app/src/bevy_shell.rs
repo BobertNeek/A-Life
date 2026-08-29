@@ -832,7 +832,25 @@ pub(crate) struct ProductionGpuBrainTickScheduleResource {
     run_speed_ticks: u32,
     step_pending: bool,
     scheduler: crate::DoubleBufferedGraphicalScheduler,
+    scheduler_attempts: u64,
+    checkpoint_publication_waits: u64,
+    checkpoint_failed_waits: u64,
+    deferred_catch_up_ticks: u64,
     failed: bool,
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct ProductionGpuTickPerformanceCounters {
+    pub fixed_tick_hz: u32,
+    pub frames_observed: u64,
+    pub completed_ticks: u64,
+    pub catch_up_ticks_dropped: u64,
+    pub scheduler_attempts: u64,
+    pub checkpoint_publication_waits: u64,
+    pub checkpoint_failed_waits: u64,
+    pub deferred_catch_up_ticks: u64,
+    pub deferred_debt_micros: u64,
 }
 
 #[cfg(feature = "gpu-runtime")]
@@ -844,6 +862,10 @@ impl ProductionGpuBrainTickScheduleResource {
             run_speed_ticks: 1,
             step_pending: false,
             scheduler: crate::DoubleBufferedGraphicalScheduler::default(),
+            scheduler_attempts: 0,
+            checkpoint_publication_waits: 0,
+            checkpoint_failed_waits: 0,
+            deferred_catch_up_ticks: 0,
             failed: false,
         }
     }
@@ -889,13 +911,18 @@ impl ProductionGpuBrainTickScheduleResource {
         self.run_speed_ticks
     }
 
-    pub(crate) fn performance_counters(&self) -> (u32, u64, u64, u64) {
-        (
-            self.scheduler.config.fixed_tick_hz,
-            self.scheduler.frames_observed,
-            self.scheduler.ticks_executed,
-            self.scheduler.catch_up_ticks_dropped,
-        )
+    pub(crate) fn performance_counters(&self) -> ProductionGpuTickPerformanceCounters {
+        ProductionGpuTickPerformanceCounters {
+            fixed_tick_hz: self.scheduler.config.fixed_tick_hz,
+            frames_observed: self.scheduler.frames_observed,
+            completed_ticks: self.scheduler.ticks_executed,
+            catch_up_ticks_dropped: self.scheduler.catch_up_ticks_dropped,
+            scheduler_attempts: self.scheduler_attempts,
+            checkpoint_publication_waits: self.checkpoint_publication_waits,
+            checkpoint_failed_waits: self.checkpoint_failed_waits,
+            deferred_catch_up_ticks: self.deferred_catch_up_ticks,
+            deferred_debt_micros: self.scheduler.accumulator_micros,
+        }
     }
 
     pub(crate) const fn performance_failed(&self) -> bool {
@@ -1147,9 +1174,45 @@ fn tick_production_gpu_brain(
         schedule.step_pending = false;
     }
 
-    for _ in 0..ticks_to_run {
-        let tick_summaries = match runtime.runtime.tick() {
-            Ok(tick_summaries) => tick_summaries,
+    for attempt_index in 0..ticks_to_run {
+        schedule.scheduler_attempts = schedule.scheduler_attempts.saturating_add(1);
+        let tick_summaries = match runtime.runtime.tick_outcome() {
+            Ok(crate::GpuLiveTickOutcome::Progressed(tick_summaries)) => tick_summaries,
+            Ok(crate::GpuLiveTickOutcome::NoProgress(
+                crate::GpuLiveNoProgressReason::CheckpointPublicationPending,
+            )) => {
+                schedule.checkpoint_publication_waits =
+                    schedule.checkpoint_publication_waits.saturating_add(1);
+                if consume_step {
+                    schedule.step_pending = true;
+                } else {
+                    let unspent = ticks_to_run.saturating_sub(attempt_index);
+                    if let Err(error) = schedule.scheduler.preserve_unspent_planned_ticks(unspent) {
+                        schedule.failed = true;
+                        mark_production_gpu_authority_unavailable(
+                            &mut authority,
+                            format!("production scheduler debt preservation failed: {error}"),
+                        );
+                        return;
+                    }
+                    schedule.deferred_catch_up_ticks = schedule
+                        .deferred_catch_up_ticks
+                        .saturating_add(u64::from(unspent));
+                }
+                return;
+            }
+            Ok(crate::GpuLiveTickOutcome::NoProgress(
+                crate::GpuLiveNoProgressReason::CheckpointFailed,
+            )) => {
+                schedule.checkpoint_failed_waits =
+                    schedule.checkpoint_failed_waits.saturating_add(1);
+                schedule.failed = true;
+                mark_production_gpu_authority_unavailable(
+                    &mut authority,
+                    "exact checkpoint transaction entered the failed state".to_string(),
+                );
+                return;
+            }
             Err(error) => {
                 schedule.failed = true;
                 mark_production_gpu_authority_unavailable(&mut authority, error.to_string());
@@ -5493,7 +5556,7 @@ pub fn build_production_voxel_frontend_app_shell_with_runtime(
 fn build_production_voxel_frontend_app_shell_inner(
     launch: &crate::ProductionVoxelLaunchConfig,
     summary: crate::ProductionVoxelLaunchSummary,
-    #[cfg(feature = "gpu-runtime")] runtime: crate::GpuLiveBrainRuntime,
+    #[cfg(feature = "gpu-runtime")] mut runtime: crate::GpuLiveBrainRuntime,
 ) -> Result<(App, crate::ProductionVoxelLaunchSummary), GameAppShellError> {
     let mut app = App::new();
     if launch.dry_run {
@@ -5556,6 +5619,7 @@ fn build_production_voxel_frontend_app_shell_inner(
         .insert_resource(ProductionCuratedFounderResetResultResource::default());
     #[cfg(feature = "gpu-runtime")]
     {
+        runtime.set_performance_measurement_enabled(launch.record_performance);
         let telemetry = runtime.authority_telemetry();
         let initial_world = runtime.world_snapshot();
         let presentation = LiveBrainPresentationFrameResource::from_authoritative_world(
