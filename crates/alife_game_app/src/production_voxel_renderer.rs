@@ -76,6 +76,8 @@ use crate::{
 
 #[cfg(feature = "gpu-runtime")]
 mod phase31_performance_health;
+#[cfg(feature = "gpu-runtime")]
+mod phase31_slow_frame_ranking;
 use crate::{
     creature_visual_snapshot_from_parts_with_appearance,
     production_terrain::{ProductionTerrainSample, ProductionTerrainSampleMap},
@@ -100,6 +102,10 @@ use crate::{
 };
 #[cfg(feature = "gpu-runtime")]
 use phase31_performance_health::validate_phase31_performance_authority;
+#[cfg(feature = "gpu-runtime")]
+use phase31_slow_frame_ranking::{
+    retain_ranked_slow_frame, RankedSlowFrame, PHASE31_SLOW_FRAME_THRESHOLD_NS,
+};
 
 pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA: &str = "alife.fvr03.production_voxel_renderer.v1";
 pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA_VERSION: u16 = 1;
@@ -858,11 +864,81 @@ pub struct Fvr03ProductionVoxelScreenshotResource {
     pub developer_overlay: bool,
 }
 
-const PHASE31_PERFORMANCE_SCHEMA: &str = "alife.phase31.performance-baseline.v2";
-const PHASE31_PERFORMANCE_SCHEMA_VERSION: u16 = 2;
+const PHASE31_PERFORMANCE_SCHEMA: &str = "alife.phase31.performance-baseline.v3";
+const PHASE31_PERFORMANCE_SCHEMA_VERSION: u16 = 3;
 const PHASE31_WARMUP_DURATION: Duration = Duration::from_secs(5);
 const PHASE31_MEASUREMENT_DURATION: Duration = Duration::from_secs(60);
 const PHASE31_PERFORMANCE_ARTIFACT_DIR: &str = "target/artifacts/phase31-performance";
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Debug, Clone, Copy, Default, serde::Serialize)]
+struct Phase31FrameUpdateCpu {
+    input_ns: u64,
+    live_gpu_tick_ns: u64,
+    authoritative_projection_ns: u64,
+    procedural_animation_ns: u64,
+    ui_root_readers_ns: u64,
+}
+
+#[cfg(feature = "gpu-runtime")]
+impl Phase31FrameUpdateCpu {
+    fn total_ns(self) -> u64 {
+        self.input_ns
+            .saturating_add(self.live_gpu_tick_ns)
+            .saturating_add(self.authoritative_projection_ns)
+            .saturating_add(self.procedural_animation_ns)
+            .saturating_add(self.ui_root_readers_ns)
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Debug, Clone, Copy, Default)]
+struct Phase31FrameSnapshot {
+    runtime: crate::gpu_live_runtime::GpuLivePerformanceMetrics,
+    scheduler: crate::bevy_shell::ProductionGpuTickPerformanceCounters,
+    checkpoint: crate::gpu_live_runtime::ExactCheckpointPerformanceState,
+    world_tick: u64,
+    world_objects: u64,
+    organisms: u64,
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Debug, Clone, Default, serde::Serialize)]
+struct Phase31SlowFrameSample {
+    frame_index: u64,
+    frame_duration_ns: u64,
+    world_tick_before: u64,
+    world_tick_after: u64,
+    world_ticks_completed: u64,
+    world_objects_before: u64,
+    world_objects_after: u64,
+    organisms_before: u64,
+    organisms_after: u64,
+    checkpoint_before: crate::gpu_live_runtime::ExactCheckpointPerformanceState,
+    checkpoint_after: crate::gpu_live_runtime::ExactCheckpointPerformanceState,
+    scheduler_attempts: u64,
+    scheduler_completed_ticks: u64,
+    checkpoint_publication_waits: u64,
+    checkpoint_failed_waits: u64,
+    deferred_catch_up_ticks: u64,
+    catch_up_ticks_dropped: u64,
+    scheduler_debt_micros_before: u64,
+    scheduler_debt_micros_after: u64,
+    update_cpu: Phase31FrameUpdateCpu,
+    renderer_present_and_uninstrumented_residual_ns: u64,
+    runtime: crate::gpu_live_runtime::GpuLivePerformanceMetrics,
+}
+
+#[cfg(feature = "gpu-runtime")]
+impl RankedSlowFrame for Phase31SlowFrameSample {
+    fn frame_duration_ns(&self) -> u64 {
+        self.frame_duration_ns
+    }
+
+    fn frame_index(&self) -> u64 {
+        self.frame_index
+    }
+}
 
 #[cfg(feature = "gpu-runtime")]
 #[derive(Debug, Resource)]
@@ -879,7 +955,11 @@ pub(crate) struct Phase31PerformanceMetricsResource {
     runtime_baseline: Option<crate::gpu_live_runtime::GpuLivePerformanceMetrics>,
     scheduler_baseline: Option<crate::bevy_shell::ProductionGpuTickPerformanceCounters>,
     stage_mark: Option<Instant>,
+    frame_snapshot: Option<Phase31FrameSnapshot>,
+    current_frame_update_cpu: Phase31FrameUpdateCpu,
     frame_ns: Vec<u64>,
+    slow_frame_count: u64,
+    slow_frames: Vec<Phase31SlowFrameSample>,
     input_cpu_ns: u64,
     live_gpu_tick_cpu_ns: u64,
     authoritative_projection_cpu_ns: u64,
@@ -912,7 +992,11 @@ impl Phase31PerformanceMetricsResource {
             runtime_baseline: None,
             scheduler_baseline: None,
             stage_mark: None,
+            frame_snapshot: None,
+            current_frame_update_cpu: Phase31FrameUpdateCpu::default(),
             frame_ns: Vec::new(),
+            slow_frame_count: 0,
+            slow_frames: Vec::new(),
             input_cpu_ns: 0,
             live_gpu_tick_cpu_ns: 0,
             authoritative_projection_cpu_ns: 0,
@@ -7570,6 +7654,22 @@ fn fvr04_follow_camera_transform(
 }
 
 #[cfg(feature = "gpu-runtime")]
+fn phase31_frame_snapshot(
+    runtime: &ProductionGpuBrainRuntimeResource,
+    schedule: &ProductionGpuBrainTickScheduleResource,
+    presentation: &LiveBrainPresentationFrameResource,
+) -> Phase31FrameSnapshot {
+    Phase31FrameSnapshot {
+        runtime: runtime.runtime.performance_metrics(),
+        scheduler: schedule.performance_counters(),
+        checkpoint: runtime.runtime.exact_checkpoint_performance_state(),
+        world_tick: presentation.current.authoritative_world_tick.raw(),
+        world_objects: u64::try_from(presentation.current.object_count()).unwrap_or(u64::MAX),
+        organisms: u64::try_from(presentation.current.organism_count()).unwrap_or(u64::MAX),
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
 fn phase31_performance_frame_begin(
     mut metrics: ResMut<Phase31PerformanceMetricsResource>,
     runtime: NonSend<ProductionGpuBrainRuntimeResource>,
@@ -7577,6 +7677,7 @@ fn phase31_performance_frame_begin(
     presentation: Res<LiveBrainPresentationFrameResource>,
 ) {
     let now = Instant::now();
+    let end_snapshot = phase31_frame_snapshot(&runtime, &schedule, &presentation);
     if metrics.measurement_started_at.is_none()
         && metrics.launched_at.elapsed() >= PHASE31_WARMUP_DURATION
         && presentation.current.authoritative_world_tick > Tick::ZERO
@@ -7587,10 +7688,64 @@ fn phase31_performance_frame_begin(
         metrics.runtime_baseline = Some(runtime.runtime.performance_metrics());
         metrics.scheduler_baseline = Some(schedule.performance_counters());
         metrics.last_frame_at = now;
+        metrics.frame_snapshot = Some(end_snapshot);
     } else if metrics.measuring() {
         let frame_ns =
             u64::try_from(now.duration_since(metrics.last_frame_at).as_nanos()).unwrap_or(u64::MAX);
         metrics.frame_ns.push(frame_ns);
+        if let Some(start_snapshot) = metrics.frame_snapshot.replace(end_snapshot) {
+            let runtime_delta = end_snapshot.runtime.delta_from(start_snapshot.runtime);
+            let update_cpu = std::mem::take(&mut metrics.current_frame_update_cpu);
+            if frame_ns > PHASE31_SLOW_FRAME_THRESHOLD_NS {
+                metrics.slow_frame_count = metrics.slow_frame_count.saturating_add(1);
+            }
+            let sample = Phase31SlowFrameSample {
+                frame_index: u64::try_from(metrics.frame_ns.len()).unwrap_or(u64::MAX),
+                frame_duration_ns: frame_ns,
+                world_tick_before: start_snapshot.world_tick,
+                world_tick_after: end_snapshot.world_tick,
+                world_ticks_completed: end_snapshot
+                    .world_tick
+                    .saturating_sub(start_snapshot.world_tick),
+                world_objects_before: start_snapshot.world_objects,
+                world_objects_after: end_snapshot.world_objects,
+                organisms_before: start_snapshot.organisms,
+                organisms_after: end_snapshot.organisms,
+                checkpoint_before: start_snapshot.checkpoint,
+                checkpoint_after: end_snapshot.checkpoint,
+                scheduler_attempts: end_snapshot
+                    .scheduler
+                    .scheduler_attempts
+                    .saturating_sub(start_snapshot.scheduler.scheduler_attempts),
+                scheduler_completed_ticks: end_snapshot
+                    .scheduler
+                    .completed_ticks
+                    .saturating_sub(start_snapshot.scheduler.completed_ticks),
+                checkpoint_publication_waits: end_snapshot
+                    .scheduler
+                    .checkpoint_publication_waits
+                    .saturating_sub(start_snapshot.scheduler.checkpoint_publication_waits),
+                checkpoint_failed_waits: end_snapshot
+                    .scheduler
+                    .checkpoint_failed_waits
+                    .saturating_sub(start_snapshot.scheduler.checkpoint_failed_waits),
+                deferred_catch_up_ticks: end_snapshot
+                    .scheduler
+                    .deferred_catch_up_ticks
+                    .saturating_sub(start_snapshot.scheduler.deferred_catch_up_ticks),
+                catch_up_ticks_dropped: end_snapshot
+                    .scheduler
+                    .catch_up_ticks_dropped
+                    .saturating_sub(start_snapshot.scheduler.catch_up_ticks_dropped),
+                scheduler_debt_micros_before: start_snapshot.scheduler.deferred_debt_micros,
+                scheduler_debt_micros_after: end_snapshot.scheduler.deferred_debt_micros,
+                update_cpu,
+                renderer_present_and_uninstrumented_residual_ns: frame_ns
+                    .saturating_sub(update_cpu.total_ns()),
+                runtime: runtime_delta,
+            };
+            retain_ranked_slow_frame(&mut metrics.slow_frames, sample);
+        }
         metrics.last_frame_at = now;
     }
     metrics.stage_mark = metrics.measuring().then_some(now);
@@ -7601,6 +7756,7 @@ fn phase31_performance_after_input(mut metrics: ResMut<Phase31PerformanceMetrics
     if metrics.measuring() {
         let elapsed = metrics.take_stage_elapsed_ns();
         metrics.input_cpu_ns = metrics.input_cpu_ns.saturating_add(elapsed);
+        metrics.current_frame_update_cpu.input_ns = elapsed;
     }
 }
 
@@ -7609,6 +7765,7 @@ fn phase31_performance_after_live_gpu_tick(mut metrics: ResMut<Phase31Performanc
     if metrics.measuring() {
         let elapsed = metrics.take_stage_elapsed_ns();
         metrics.live_gpu_tick_cpu_ns = metrics.live_gpu_tick_cpu_ns.saturating_add(elapsed);
+        metrics.current_frame_update_cpu.live_gpu_tick_ns = elapsed;
     }
 }
 
@@ -7621,6 +7778,7 @@ fn phase31_performance_after_authoritative_projection(
         metrics.authoritative_projection_cpu_ns = metrics
             .authoritative_projection_cpu_ns
             .saturating_add(elapsed);
+        metrics.current_frame_update_cpu.authoritative_projection_ns = elapsed;
     }
 }
 
@@ -7632,6 +7790,7 @@ fn phase31_performance_after_procedural_animation(
         let elapsed = metrics.take_stage_elapsed_ns();
         metrics.procedural_animation_cpu_ns =
             metrics.procedural_animation_cpu_ns.saturating_add(elapsed);
+        metrics.current_frame_update_cpu.procedural_animation_ns = elapsed;
     }
 }
 
@@ -7649,6 +7808,7 @@ fn phase31_performance_after_ui(
     }
     let elapsed = metrics.take_stage_elapsed_ns();
     metrics.ui_root_readers_cpu_ns = metrics.ui_root_readers_cpu_ns.saturating_add(elapsed);
+    metrics.current_frame_update_cpu.ui_root_readers_ns = elapsed;
     metrics.ui_updates = metrics.ui_updates.saturating_add(1);
     let Some(started) = metrics.measurement_started_at else {
         return;
@@ -7855,6 +8015,12 @@ fn write_phase31_performance_receipt(
             "end": final_world_tick
         },
         "frame": duration_summary(&metrics.frame_ns),
+        "slow_frames": {
+            "threshold_ms": PHASE31_SLOW_FRAME_THRESHOLD_NS as f64 / 1_000_000.0,
+            "total_count": metrics.slow_frame_count,
+            "retained_worst_count": metrics.slow_frames.len(),
+            "ranked_worst_first": metrics.slow_frames
+        },
         "simulation": {
             "configured_tps": scheduler_final.fixed_tick_hz,
             "achieved_tps": completed_world_ticks as f64 / elapsed_seconds,
@@ -7894,6 +8060,17 @@ fn write_phase31_performance_receipt(
         },
         "preparation_substages": {
             "sleep_eligibility_replay_ns": runtime_delta.preparation_sleep_eligibility_replay_wall_ns,
+            "sleep_phase_data_ns": runtime_delta.preparation_sleep_phase_data_wall_ns,
+            "sleep_replay_progress_ns": runtime_delta.preparation_sleep_replay_progress_wall_ns,
+            "sleep_consolidation_ns": runtime_delta.preparation_sleep_consolidation_wall_ns,
+            "sleep_scheduler_other_ns": runtime_delta
+                .preparation_sleep_eligibility_replay_wall_ns
+                .saturating_sub(
+                    runtime_delta
+                        .preparation_sleep_phase_data_wall_ns
+                        .saturating_add(runtime_delta.preparation_sleep_replay_progress_wall_ns)
+                        .saturating_add(runtime_delta.preparation_sleep_consolidation_wall_ns)
+                ),
             "grounded_perception_ns": runtime_delta.preparation_grounded_perception_wall_ns,
             "episodic_retrieval_ns": runtime_delta.preparation_episodic_retrieval_wall_ns,
             "attention_context_ns": runtime_delta.preparation_attention_context_wall_ns,
@@ -7988,6 +8165,7 @@ fn write_phase31_performance_receipt(
             "map_receive_wait_ns": runtime_delta.checkpoint_snapshot_map_receive_wait_ns,
             "asynchronous_poll_calls": runtime_delta.exact_checkpoint_poll_calls,
             "asynchronous_poll_cpu_ns": runtime_delta.exact_checkpoint_poll_wall_ns,
+            "asynchronous_transactions_started": runtime_delta.exact_checkpoint_transactions_started,
             "asynchronous_transactions_completed": runtime_delta.exact_checkpoint_transactions_completed,
             "asynchronous_transaction_wall_ns": runtime_delta.exact_checkpoint_transaction_wall_ns
         },

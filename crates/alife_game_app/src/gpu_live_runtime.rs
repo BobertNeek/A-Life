@@ -1447,6 +1447,13 @@ struct AuthoritativeSleepContext<'a> {
     last_sealed_patches: &'a [ExperiencePatch],
 }
 
+#[derive(Debug, Default)]
+struct SleepPreparationTiming {
+    phase_data_wall_ns: u64,
+    replay_progress_wall_ns: u64,
+    consolidation_wall_ns: u64,
+}
+
 fn build_authoritative_sleep_evidence(
     backend: &mut GpuClosedLoopBackend,
     handle: GpuBrainHandle,
@@ -1711,6 +1718,8 @@ type SleepProgressResult = Result<Option<ConsolidationDriverEvent>, ScaffoldCont
 struct RoutedGpuSleepDriver<'a, F> {
     authoritative: AuthoritativeGpuSleepDriver<'a>,
     progress: &'a mut F,
+    timing: &'a mut SleepPreparationTiming,
+    measure: bool,
 }
 
 impl<F> GpuSleepConsolidationDriver for RoutedGpuSleepDriver<'_, F>
@@ -1729,6 +1738,7 @@ where
         state: SleepState,
         intent: Option<ConsolidationIntent>,
     ) -> SleepProgressResult {
+        let started = self.measure.then(Instant::now);
         if matches!(state.consolidation, ConsolidationState::Completed { .. })
             && self
                 .authoritative
@@ -1749,13 +1759,18 @@ where
                     context.last_sealed_patches,
                 )?);
         }
-        (self.progress)(
+        let result = (self.progress)(
             self.authoritative.backend,
             self.authoritative.handle,
             organism_id,
             state,
             intent,
-        )
+        );
+        self.timing.replay_progress_wall_ns = self
+            .timing
+            .replay_progress_wall_ns
+            .saturating_add(started.map_or(0, elapsed_ns));
+        result
     }
 
     fn run_bounded_sleep_transaction(
@@ -1766,13 +1781,19 @@ where
         tick: Tick,
         due_work: SleepWorkDue,
     ) -> Result<Option<SleepWorkReceipt>, ScaffoldContractError> {
-        self.authoritative.run_bounded_sleep_transaction(
+        let started = self.measure.then(Instant::now);
+        let result = self.authoritative.run_bounded_sleep_transaction(
             organism_id,
             _state,
             homeostasis,
             tick,
             due_work,
-        )
+        );
+        self.timing.consolidation_wall_ns = self
+            .timing
+            .consolidation_wall_ns
+            .saturating_add(started.map_or(0, elapsed_ns));
+        result
     }
 
     fn has_bounded_sleep_phase_data(
@@ -1780,8 +1801,15 @@ where
         organism_id: OrganismId,
         state: SleepState,
     ) -> Result<bool, ScaffoldContractError> {
-        self.authoritative
-            .has_bounded_sleep_phase_data(organism_id, state)
+        let started = self.measure.then(Instant::now);
+        let result = self
+            .authoritative
+            .has_bounded_sleep_phase_data(organism_id, state);
+        self.timing.phase_data_wall_ns = self
+            .timing
+            .phase_data_wall_ns
+            .saturating_add(started.map_or(0, elapsed_ns));
+        result
     }
 }
 
@@ -1968,10 +1996,14 @@ pub struct GpuLivePerformanceMetrics {
     pub rollback_clone_zero_progress_calls: u64,
     pub exact_checkpoint_poll_calls: u64,
     pub exact_checkpoint_poll_wall_ns: u64,
+    pub exact_checkpoint_transactions_started: u64,
     pub exact_checkpoint_transactions_completed: u64,
     pub exact_checkpoint_transaction_wall_ns: u64,
     pub perception_sleep_preparation_wall_ns: u64,
     pub preparation_sleep_eligibility_replay_wall_ns: u64,
+    pub preparation_sleep_phase_data_wall_ns: u64,
+    pub preparation_sleep_replay_progress_wall_ns: u64,
+    pub preparation_sleep_consolidation_wall_ns: u64,
     pub preparation_grounded_perception_wall_ns: u64,
     pub preparation_episodic_retrieval_wall_ns: u64,
     pub preparation_attention_context_wall_ns: u64,
@@ -2032,6 +2064,25 @@ pub struct GpuLivePerformanceMetrics {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct ExactCheckpointPerformanceState {
+    pub transaction_id: Option<u64>,
+    pub checkpoint_tick: Option<u64>,
+    pub stage: &'static str,
+    pub worker_status: &'static str,
+}
+
+impl Default for ExactCheckpointPerformanceState {
+    fn default() -> Self {
+        Self {
+            transaction_id: None,
+            checkpoint_tick: None,
+            stage: "idle",
+            worker_status: "idle",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GpuLiveNoProgressReason {
     CheckpointPublicationPending,
@@ -2076,6 +2127,7 @@ impl GpuLivePerformanceMetrics {
             rollback_clone_zero_progress_calls: delta!(rollback_clone_zero_progress_calls),
             exact_checkpoint_poll_calls: delta!(exact_checkpoint_poll_calls),
             exact_checkpoint_poll_wall_ns: delta!(exact_checkpoint_poll_wall_ns),
+            exact_checkpoint_transactions_started: delta!(exact_checkpoint_transactions_started),
             exact_checkpoint_transactions_completed: delta!(
                 exact_checkpoint_transactions_completed
             ),
@@ -2084,15 +2136,18 @@ impl GpuLivePerformanceMetrics {
             preparation_sleep_eligibility_replay_wall_ns: delta!(
                 preparation_sleep_eligibility_replay_wall_ns
             ),
+            preparation_sleep_phase_data_wall_ns: delta!(preparation_sleep_phase_data_wall_ns),
+            preparation_sleep_replay_progress_wall_ns: delta!(
+                preparation_sleep_replay_progress_wall_ns
+            ),
+            preparation_sleep_consolidation_wall_ns: delta!(
+                preparation_sleep_consolidation_wall_ns
+            ),
             preparation_grounded_perception_wall_ns: delta!(
                 preparation_grounded_perception_wall_ns
             ),
-            preparation_episodic_retrieval_wall_ns: delta!(
-                preparation_episodic_retrieval_wall_ns
-            ),
-            preparation_attention_context_wall_ns: delta!(
-                preparation_attention_context_wall_ns
-            ),
+            preparation_episodic_retrieval_wall_ns: delta!(preparation_episodic_retrieval_wall_ns),
+            preparation_attention_context_wall_ns: delta!(preparation_attention_context_wall_ns),
             preparation_topology_concept_wall_ns: delta!(preparation_topology_concept_wall_ns),
             preparation_gpu_upload_wall_ns: delta!(preparation_gpu_upload_wall_ns),
             preparation_checkpoint_publication_wall_ns: delta!(
@@ -4202,6 +4257,11 @@ impl GpuLiveBrainRuntime {
             .admit_durable_recommit(checkpoint_tick, expected_base_digest)?;
         self.exact_checkpoint_transaction_started_at =
             self.performance_measurement_enabled.then(Instant::now);
+        self.performance_metrics
+            .exact_checkpoint_transactions_started = self
+            .performance_metrics
+            .exact_checkpoint_transactions_started
+            .saturating_add(1);
         let durability = self
             .checkpoint_durability
             .take()
@@ -6031,6 +6091,11 @@ impl GpuLiveBrainRuntime {
         };
         self.exact_checkpoint_transaction_started_at =
             self.performance_measurement_enabled.then(Instant::now);
+        self.performance_metrics
+            .exact_checkpoint_transactions_started = self
+            .performance_metrics
+            .exact_checkpoint_transactions_started
+            .saturating_add(1);
         if !self.pending_exact_sleep_journal_entries.is_empty() {
             self.exact_checkpoint_coordinator.fail_stop();
             self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
@@ -6844,11 +6909,13 @@ impl GpuLiveBrainRuntime {
                         return Err(error.into());
                     }
                 };
-                self.performance_metrics.exact_checkpoint_transactions_completed = self
+                self.performance_metrics
+                    .exact_checkpoint_transactions_completed = self
                     .performance_metrics
                     .exact_checkpoint_transactions_completed
                     .saturating_add(1);
-                self.performance_metrics.exact_checkpoint_transaction_wall_ns = self
+                self.performance_metrics
+                    .exact_checkpoint_transaction_wall_ns = self
                     .performance_metrics
                     .exact_checkpoint_transaction_wall_ns
                     .saturating_add(
@@ -8255,6 +8322,7 @@ impl GpuLiveBrainRuntime {
         let preparation_started = Instant::now();
         let measure_preparation = self.performance_measurement_enabled;
         let mut sleep_eligibility_replay_wall_ns = 0_u64;
+        let mut sleep_timing = SleepPreparationTiming::default();
         let mut grounded_perception_wall_ns = 0_u64;
         let mut episodic_retrieval_wall_ns = 0_u64;
         let mut attention_context_wall_ns = 0_u64;
@@ -8335,6 +8403,8 @@ impl GpuLiveBrainRuntime {
                         last_sleep_work: Some(&mut resident.last_sleep_work),
                     },
                     progress,
+                    timing: &mut sleep_timing,
+                    measure: measure_preparation,
                 };
                 let event = resident.sleep_scheduler.scheduled_tick_with_organism(
                     &mut record,
@@ -8413,9 +8483,8 @@ impl GpuLiveBrainRuntime {
                 }
             };
             let sleep_after = resident.sleep_scheduler.state();
-            sleep_eligibility_replay_wall_ns = sleep_eligibility_replay_wall_ns.saturating_add(
-                sleep_preparation_started.map_or(0, elapsed_ns),
-            );
+            sleep_eligibility_replay_wall_ns = sleep_eligibility_replay_wall_ns
+                .saturating_add(sleep_preparation_started.map_or(0, elapsed_ns));
             if sleep_recovery_body_event_due(phase_before, completed_waiting_for_durable_permit) {
                 scheduled_body_events.insert(
                     raw,
@@ -8530,9 +8599,8 @@ impl GpuLiveBrainRuntime {
                     _ => return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into()),
                 }
             }
-            checkpoint_publication_wall_ns = checkpoint_publication_wall_ns.saturating_add(
-                checkpoint_preparation_started.map_or(0, elapsed_ns),
-            );
+            checkpoint_publication_wall_ns = checkpoint_publication_wall_ns
+                .saturating_add(checkpoint_preparation_started.map_or(0, elapsed_ns));
             let remains_dispatchable = phase_before == SleepPhase::Awake
                 && sleep_event.phase == SleepPhase::Awake
                 && sleep_event.transition.is_none();
@@ -8587,9 +8655,8 @@ impl GpuLiveBrainRuntime {
                     resident.homeostasis,
                     &perception_index,
                 )?;
-                grounded_perception_wall_ns = grounded_perception_wall_ns.saturating_add(
-                    grounded_perception_started.map_or(0, elapsed_ns),
-                );
+                grounded_perception_wall_ns = grounded_perception_wall_ns
+                    .saturating_add(grounded_perception_started.map_or(0, elapsed_ns));
                 let episodic_retrieval_started = measure_preparation.then(Instant::now);
                 let memory = self
                     .memories
@@ -8615,9 +8682,8 @@ impl GpuLiveBrainRuntime {
                     baseline_prepared.finalize(draft.clone())?;
                 baseline_recall.validate_for_frame(&baseline_frame)?;
                 let memory_evidence = finalized_memory_attention_evidence(&baseline_recall)?;
-                episodic_retrieval_wall_ns = episodic_retrieval_wall_ns.saturating_add(
-                    episodic_retrieval_started.map_or(0, elapsed_ns),
-                );
+                episodic_retrieval_wall_ns = episodic_retrieval_wall_ns
+                    .saturating_add(episodic_retrieval_started.map_or(0, elapsed_ns));
                 let attention_context_started = measure_preparation.then(Instant::now);
                 let mut peripheral_summaries =
                     grounded_peripheral_summaries(draft.grounded_object_slots())?;
@@ -8645,9 +8711,8 @@ impl GpuLiveBrainRuntime {
                 )?;
                 resident.attention_hysteresis = attention.hysteresis;
                 let routed_draft = route_focal_candidates(draft, &attention)?;
-                attention_context_wall_ns = attention_context_wall_ns.saturating_add(
-                    attention_context_started.map_or(0, elapsed_ns),
-                );
+                attention_context_wall_ns = attention_context_wall_ns
+                    .saturating_add(attention_context_started.map_or(0, elapsed_ns));
                 let topology_concept_started = measure_preparation.then(Instant::now);
                 let routed_recall = memory.recall_frame(&routed_draft)?;
                 let cognitive_context = cognitive_context_for_recall(
@@ -8661,17 +8726,16 @@ impl GpuLiveBrainRuntime {
                 let prepared_recall = routed_recall.with_cognitive_context(cognitive_context)?;
                 let (frame, memory_recall) = prepared_recall.finalize(routed_draft)?;
                 memory_recall.validate_for_frame(&frame)?;
-                topology_concept_wall_ns = topology_concept_wall_ns.saturating_add(
-                    topology_concept_started.map_or(0, elapsed_ns),
-                );
+                topology_concept_wall_ns = topology_concept_wall_ns
+                    .saturating_add(topology_concept_started.map_or(0, elapsed_ns));
                 let gpu_upload_started = measure_preparation.then(Instant::now);
                 let memory_upload = self
                     .backend
                     .prepare_memory_context_upload(handle, &frame, &memory_recall)?
                     .bind_neural_receptor_effects(receptor_effects)
                     .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
-                gpu_upload_wall_ns = gpu_upload_wall_ns
-                    .saturating_add(gpu_upload_started.map_or(0, elapsed_ns));
+                gpu_upload_wall_ns =
+                    gpu_upload_wall_ns.saturating_add(gpu_upload_started.map_or(0, elapsed_ns));
                 Ok(PreparedGpuBrainFrame {
                     handle,
                     world_entity_id,
@@ -8709,19 +8773,38 @@ impl GpuLiveBrainRuntime {
             .performance_metrics
             .preparation_sleep_eligibility_replay_wall_ns
             .saturating_add(sleep_eligibility_replay_wall_ns);
-        self.performance_metrics.preparation_grounded_perception_wall_ns = self
+        self.performance_metrics
+            .preparation_sleep_phase_data_wall_ns = self
+            .performance_metrics
+            .preparation_sleep_phase_data_wall_ns
+            .saturating_add(sleep_timing.phase_data_wall_ns);
+        self.performance_metrics
+            .preparation_sleep_replay_progress_wall_ns = self
+            .performance_metrics
+            .preparation_sleep_replay_progress_wall_ns
+            .saturating_add(sleep_timing.replay_progress_wall_ns);
+        self.performance_metrics
+            .preparation_sleep_consolidation_wall_ns = self
+            .performance_metrics
+            .preparation_sleep_consolidation_wall_ns
+            .saturating_add(sleep_timing.consolidation_wall_ns);
+        self.performance_metrics
+            .preparation_grounded_perception_wall_ns = self
             .performance_metrics
             .preparation_grounded_perception_wall_ns
             .saturating_add(grounded_perception_wall_ns);
-        self.performance_metrics.preparation_episodic_retrieval_wall_ns = self
+        self.performance_metrics
+            .preparation_episodic_retrieval_wall_ns = self
             .performance_metrics
             .preparation_episodic_retrieval_wall_ns
             .saturating_add(episodic_retrieval_wall_ns);
-        self.performance_metrics.preparation_attention_context_wall_ns = self
+        self.performance_metrics
+            .preparation_attention_context_wall_ns = self
             .performance_metrics
             .preparation_attention_context_wall_ns
             .saturating_add(attention_context_wall_ns);
-        self.performance_metrics.preparation_topology_concept_wall_ns = self
+        self.performance_metrics
+            .preparation_topology_concept_wall_ns = self
             .performance_metrics
             .preparation_topology_concept_wall_ns
             .saturating_add(topology_concept_wall_ns);
@@ -9405,15 +9488,52 @@ impl GpuLiveBrainRuntime {
         self.performance_metrics
     }
 
+    pub(crate) fn exact_checkpoint_performance_state(&self) -> ExactCheckpointPerformanceState {
+        let identity = self.exact_checkpoint_coordinator.active_identity();
+        let stage = match self.exact_checkpoint_coordinator.stage() {
+            ExactPopulationCheckpointStageV1::Idle => "idle",
+            ExactPopulationCheckpointStageV1::CaptureSubmitted => "capture_submitted",
+            ExactPopulationCheckpointStageV1::MappingPending => "mapping_pending",
+            ExactPopulationCheckpointStageV1::CpuBytesReady => "cpu_bytes_ready",
+            ExactPopulationCheckpointStageV1::Encoding => "encoding",
+            ExactPopulationCheckpointStageV1::ManifestPrepared => "manifest_prepared",
+            ExactPopulationCheckpointStageV1::CasCommitted => "cas_committed",
+            ExactPopulationCheckpointStageV1::ReloadValidated => "reload_validated",
+            ExactPopulationCheckpointStageV1::DurablePermitInstalled => "durable_permit_installed",
+            ExactPopulationCheckpointStageV1::DeferredJournalPublishing => {
+                "deferred_journal_publishing"
+            }
+            ExactPopulationCheckpointStageV1::Complete => "complete",
+            ExactPopulationCheckpointStageV1::Failed => "failed",
+        };
+        let worker_status = match &self.exact_checkpoint_work {
+            ExactPopulationCheckpointRuntimeWorkV1::Idle => "idle",
+            ExactPopulationCheckpointRuntimeWorkV1::Capture { .. } => "capture",
+            ExactPopulationCheckpointRuntimeWorkV1::CaptureFailed { .. } => "capture_failed",
+            ExactPopulationCheckpointRuntimeWorkV1::Worker { .. } => "worker",
+            ExactPopulationCheckpointRuntimeWorkV1::CommitWorker { .. } => "commit_worker",
+            ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { .. } => "awaiting_journal",
+            ExactPopulationCheckpointRuntimeWorkV1::JournalWorker { .. } => "journal_worker",
+            ExactPopulationCheckpointRuntimeWorkV1::Finalizing { .. } => "finalizing",
+            ExactPopulationCheckpointRuntimeWorkV1::FailedJoining { .. } => "failed_joining",
+            ExactPopulationCheckpointRuntimeWorkV1::Failed => "failed",
+        };
+        ExactCheckpointPerformanceState {
+            transaction_id: identity.map(|identity| identity.transaction_id),
+            checkpoint_tick: identity.map(|identity| identity.checkpoint_tick.raw()),
+            stage,
+            worker_status,
+        }
+    }
+
     pub fn set_performance_measurement_enabled(&mut self, enabled: bool) {
         self.performance_measurement_enabled = enabled;
-        self.exact_checkpoint_transaction_started_at = if enabled
-            && self.exact_checkpoint_coordinator.is_active()
-        {
-            Some(Instant::now())
-        } else {
-            None
-        };
+        self.exact_checkpoint_transaction_started_at =
+            if enabled && self.exact_checkpoint_coordinator.is_active() {
+                Some(Instant::now())
+            } else {
+                None
+            };
     }
 
     pub(crate) const fn hardware_receipt(&self) -> &alife_gpu_backend::GpuHardwareReceipt {
