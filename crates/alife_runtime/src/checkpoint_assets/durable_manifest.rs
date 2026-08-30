@@ -1184,6 +1184,7 @@ impl GpuDurableSaveManifest {
             pointer,
             measure,
             timing,
+            true,
         )
     }
 
@@ -1227,6 +1228,7 @@ impl GpuDurableSaveManifest {
             pointer,
             measure,
             timing,
+            false,
         )
     }
 
@@ -1236,6 +1238,7 @@ impl GpuDurableSaveManifest {
         pointer: &GpuCheckpointAuthorityPointerV1,
         measure: bool,
         timing: &mut GpuSleepJournalPublicationTiming,
+        reload_after_commit: bool,
     ) -> Result<GpuLoadedSaveManifest, GameAppShellError> {
         let prior_public_pointer = match fs::read(&self.save_path) {
             Ok(bytes) => Some(bytes),
@@ -1250,7 +1253,20 @@ impl GpuDurableSaveManifest {
         write_atomic_manifest(&self.save_path, &encoded)?;
         record_elapsed_ns(&mut timing.manifest_write_wall_ns, started);
         let started = measure.then(Instant::now);
-        match maybe_fail_authority_stage(AUTHORITY_STAGE_REOPEN).and_then(|_| self.load()) {
+        match maybe_fail_authority_stage(AUTHORITY_STAGE_REOPEN).and_then(|_| {
+            if reload_after_commit {
+                self.load()
+            } else {
+                Ok(GpuLoadedSaveManifest {
+                    save: compatibility_save.clone(),
+                    digest: GpuSaveManifestDigest::for_authority(
+                        pointer.save.digest.clone(),
+                        pointer.authority_digest,
+                    ),
+                    authority: GpuCheckpointAuthoritySource::GenerationV1(pointer.clone()),
+                })
+            }
+        }) {
             Ok(reopened) => {
                 record_elapsed_ns(&mut timing.manifest_reload_validation_wall_ns, started);
                 Ok(reopened)
