@@ -274,6 +274,63 @@ fn phase31_post_journal_authority_survives_finish_for_the_next_ordinary_edge() {
 }
 
 #[test]
+fn phase31_shutdown_drain_finalizes_a_durable_completed_checkpoint_without_another_tick() {
+    let mut fixture = canonical_runtime(31_082_706, 6);
+    let permitted = drive_to_durable_completed(&mut fixture.runtime, &fixture.organisms);
+    assert!(!permitted.is_empty());
+    let quiesced_tick = fixture.runtime.world_tick_for_test();
+    let durable_tick = GpuDurableSaveManifest::open(&fixture.save_path, &fixture.asset_root)
+        .unwrap()
+        .load()
+        .unwrap()
+        .save
+        .world
+        .tick;
+
+    let started = Instant::now();
+    let deadline = started + Duration::from_secs(30);
+    while Instant::now() < deadline
+        && !fixture
+            .runtime
+            .persistence_idle_for_shutdown_for_test()
+    {
+        fixture
+            .runtime
+            .poll_persistence_for_shutdown_for_test()
+            .unwrap();
+        std::thread::park_timeout(Duration::from_millis(1));
+    }
+
+    assert!(
+        fixture
+            .runtime
+            .persistence_idle_for_shutdown_for_test(),
+        "shutdown polling must drain AwaitingJournal without admitting another simulation tick; {}",
+        checkpoint_wait_diagnostics(&mut fixture.runtime, &fixture.organisms, started)
+    );
+    assert_eq!(fixture.runtime.world_tick_for_test(), quiesced_tick);
+    let durable = GpuDurableSaveManifest::open(&fixture.save_path, &fixture.asset_root)
+        .unwrap()
+        .load()
+        .unwrap();
+    assert_eq!(durable.save.world.tick, durable_tick);
+    assert!(permitted.iter().all(|organism_id| {
+        durable
+            .save
+            .creatures
+            .iter()
+            .find(|creature| creature.organism_id == *organism_id)
+            .and_then(|creature| creature.gpu_brain.as_ref())
+            .is_some_and(|brain| {
+                matches!(brain.sleep.consolidation, ConsolidationState::Completed { .. })
+            })
+    }));
+
+    drop(fixture.runtime);
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
 fn phase31_natural_later_journal_edge_forces_exactly_one_follow_up_capture() {
     let mut fixture = canonical_runtime(31_082_706, 6);
     let started = Instant::now();

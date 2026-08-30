@@ -6469,7 +6469,18 @@ impl GpuLiveBrainRuntime {
 
     pub(crate) fn poll_persistence_for_shutdown(&mut self) -> Result<(), GameAppShellError> {
         self.poll_sleep_journal_publication()?;
-        self.poll_exact_population_checkpoint()
+        self.poll_exact_population_checkpoint()?;
+        if matches!(
+            self.exact_checkpoint_work,
+            ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { .. }
+        ) {
+            // A normal tick promotes durable Completed sleep states before it
+            // tells the exact worker to finalize. Shutdown has quiesced ticks,
+            // so finalize the already-durable boundary without inventing that
+            // later Completed -> Committed transition.
+            self.finalize_awaiting_exact_checkpoint(&[])?;
+        }
+        Ok(())
     }
 
     fn flush_sleep_journal_publication_blocking(&mut self) -> Result<(), GameAppShellError> {
@@ -7419,6 +7430,13 @@ impl GpuLiveBrainRuntime {
         if promotions.is_empty() {
             return Ok(());
         }
+        self.finalize_awaiting_exact_checkpoint(promotions)
+    }
+
+    fn finalize_awaiting_exact_checkpoint(
+        &mut self,
+        promotions: &[(OrganismId, SleepState)],
+    ) -> Result<(), GameAppShellError> {
         let work = std::mem::take(&mut self.exact_checkpoint_work);
         let ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { permit, worker } = work
         else {
@@ -7435,10 +7453,12 @@ impl GpuLiveBrainRuntime {
                     return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
                 }
             };
-        self.performance_metrics.sleep_promotion_calls = self
-            .performance_metrics
-            .sleep_promotion_calls
-            .saturating_add(1);
+        if !promotions.is_empty() {
+            self.performance_metrics.sleep_promotion_calls = self
+                .performance_metrics
+                .sleep_promotion_calls
+                .saturating_add(1);
+        }
         let prepared = (|| {
             let mut ordered = promotions.to_vec();
             ordered.sort_unstable_by_key(|(organism_id, _)| organism_id.raw());
@@ -7553,7 +7573,7 @@ impl GpuLiveBrainRuntime {
             journal_commit: Some(ExactPopulationCheckpointJournalCommitV1 {
                 authorities,
                 entry_count,
-                contains_completed_promotion: true,
+                contains_completed_promotion: !promotions.is_empty(),
             }),
         };
         Ok(())
@@ -11151,6 +11171,16 @@ impl GpuLiveBrainRuntime {
     #[cfg(feature = "gpu-tests")]
     pub fn poll_exact_checkpoint_for_test(&mut self) -> Result<(), GameAppShellError> {
         self.poll_exact_population_checkpoint()
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn poll_persistence_for_shutdown_for_test(&mut self) -> Result<(), GameAppShellError> {
+        self.poll_persistence_for_shutdown()
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn persistence_idle_for_shutdown_for_test(&self) -> bool {
+        self.persistence_idle_for_shutdown()
     }
 
     #[cfg(feature = "gpu-tests")]
