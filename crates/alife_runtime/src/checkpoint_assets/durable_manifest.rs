@@ -804,6 +804,34 @@ impl GpuDurableSaveManifest {
         })
     }
 
+    fn load_current_manifest_identity(
+        &self,
+    ) -> Result<(GpuSaveManifestDigest, GpuCheckpointAuthoritySource), GameAppShellError> {
+        let bytes = fs::read(&self.save_path)?;
+        let value: serde_json::Value = serde_json::from_slice(&bytes)?;
+        let pointer = value
+            .get(GPU_CHECKPOINT_AUTHORITY_FIELD)
+            .cloned()
+            .map(serde_json::from_value::<GpuCheckpointAuthorityPointerV1>)
+            .transpose()?;
+        match pointer {
+            Some(pointer) => {
+                pointer.validate()?;
+                Ok((
+                    GpuSaveManifestDigest::for_authority(
+                        pointer.save.digest.clone(),
+                        pointer.authority_digest,
+                    ),
+                    GpuCheckpointAuthoritySource::GenerationV1(pointer),
+                ))
+            }
+            None => Ok((
+                GpuSaveManifestDigest::for_bytes(&bytes),
+                GpuCheckpointAuthoritySource::LegacyDirectV1,
+            )),
+        }
+    }
+
     fn read_authority_save(
         &self,
         pointer: &GpuCheckpointAuthorityPointerV1,
@@ -959,27 +987,27 @@ impl GpuDurableSaveManifest {
         record_elapsed_ns(&mut timing.cas_lock_wait_wall_ns, started);
 
         let started = measure.then(Instant::now);
-        let actual = self.load()?;
+        let (actual_digest, actual_authority) = self.load_current_manifest_identity()?;
         record_elapsed_ns(&mut timing.cas_base_reload_wall_ns, started);
-        if actual.digest != base.digest || actual.save != base.save {
+        if actual_digest != base.digest || actual_authority != base.authority {
             return Err(GameAppShellError::GpuCheckpointManifestConflict {
                 expected: base.digest.as_str().to_string(),
-                actual: actual.digest.as_str().to_string(),
+                actual: actual_digest.as_str().to_string(),
             });
         }
         let pointer = self.prepare_journal_authority_generation_profiled(
-            &actual,
+            base,
             journal,
             measure,
             &mut timing,
         )?;
-        let reopened =
-            self.commit_authority_pointer_profiled(&actual.save, &pointer, measure, &mut timing)?;
-
-        let started = measure.then(Instant::now);
-        let journal_reopened = self.load_sleep_transaction_journal(&reopened)?;
-        record_elapsed_ns(&mut timing.final_journal_reload_validation_wall_ns, started);
-        if reopened.authority.generation() != Some(&pointer) || journal_reopened != *journal {
+        let reopened = self.commit_reused_save_authority_pointer_profiled(
+            base,
+            &pointer,
+            measure,
+            &mut timing,
+        )?;
+        if reopened.authority.generation() != Some(&pointer) {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "GPU checkpoint journal authority generation failed reopen validation"
                     .to_string(),
@@ -1151,6 +1179,64 @@ impl GpuDurableSaveManifest {
             started,
         );
 
+        self.commit_prevalidated_authority_pointer_profiled(
+            compatibility_save,
+            pointer,
+            measure,
+            timing,
+        )
+    }
+
+    fn commit_reused_save_authority_pointer_profiled(
+        &self,
+        base: &GpuLoadedSaveManifest,
+        pointer: &GpuCheckpointAuthorityPointerV1,
+        measure: bool,
+        timing: &mut GpuSleepJournalPublicationTiming,
+    ) -> Result<GpuLoadedSaveManifest, GameAppShellError> {
+        let started = measure.then(Instant::now);
+        pointer.validate()?;
+        let Some(prior) = base.authority.generation() else {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+        };
+        if pointer.prior_generation != Some(prior.generation)
+            || pointer.asset_manifest_identity != prior.asset_manifest_identity
+            || pointer.save != prior.save
+            || pointer.asset_manifest_identity != asset_manifest_identity(&base.save)?
+        {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "GPU checkpoint reused authority save differs from its validated base"
+                    .to_string(),
+            });
+        }
+        let save_bytes = fs::read(self.authority_artifact_path(&pointer.save.file_name)?)?;
+        if u64::try_from(save_bytes.len()).unwrap_or(u64::MAX) != pointer.save.size_bytes
+            || PortableAssetDigest::for_bytes(&save_bytes) != pointer.save.digest
+        {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "GPU checkpoint reused authority save artifact mismatch".to_string(),
+            });
+        }
+        record_elapsed_ns(
+            &mut timing.prepared_artifact_reload_validation_wall_ns,
+            started,
+        );
+
+        self.commit_prevalidated_authority_pointer_profiled(
+            &base.save,
+            pointer,
+            measure,
+            timing,
+        )
+    }
+
+    fn commit_prevalidated_authority_pointer_profiled(
+        &self,
+        compatibility_save: &PortableSaveFile,
+        pointer: &GpuCheckpointAuthorityPointerV1,
+        measure: bool,
+        timing: &mut GpuSleepJournalPublicationTiming,
+    ) -> Result<GpuLoadedSaveManifest, GameAppShellError> {
         let prior_public_pointer = match fs::read(&self.save_path) {
             Ok(bytes) => Some(bytes),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
