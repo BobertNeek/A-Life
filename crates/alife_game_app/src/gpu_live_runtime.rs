@@ -6467,6 +6467,11 @@ impl GpuLiveBrainRuntime {
             )
     }
 
+    pub(crate) fn poll_persistence_for_shutdown(&mut self) -> Result<(), GameAppShellError> {
+        self.poll_sleep_journal_publication()?;
+        self.poll_exact_population_checkpoint()
+    }
+
     fn flush_sleep_journal_publication_blocking(&mut self) -> Result<(), GameAppShellError> {
         loop {
             if let Some(worker) = self.sleep_journal_publication_worker.take() {
@@ -14747,7 +14752,7 @@ mod tests {
         assert!(summary.action_failure.is_some());
         assert_eq!(summary.learning_updates, 1);
         assert!(!patch.outcome().success);
-        assert!(credit.modulator().value() < 0.0);
+        assert!(credit.modulator().homeostatic_improvement() < 0.0);
         assert_eq!(runtime.backend.pending_eligibility(handle).unwrap(), None);
         assert_eq!(runtime.last_learning_receipts().len(), 1);
         assert!(runtime.last_eligibility_discard_receipts().is_empty());

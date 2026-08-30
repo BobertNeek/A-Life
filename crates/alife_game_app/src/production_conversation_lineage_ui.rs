@@ -3678,7 +3678,7 @@ mod tests {
         ));
 
         let mut duplicate = selections.clone();
-        duplicate[1] = duplicate[0];
+        duplicate[1] = duplicate[0].clone();
         let rejected_duplicate = map_lineage_enter_command(
             &root,
             &duplicate,

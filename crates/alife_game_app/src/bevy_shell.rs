@@ -1149,6 +1149,17 @@ fn tick_production_gpu_brain(
         return;
     }
 
+    if performance
+        .as_deref()
+        .is_some_and(|metrics| metrics.draining())
+    {
+        if let Err(error) = runtime.runtime.poll_persistence_for_shutdown() {
+            schedule.failed = true;
+            mark_production_gpu_authority_unavailable(&mut authority, error.to_string());
+        }
+        return;
+    }
+
     let playback = schedule.playback;
     let speed = schedule.run_speed_ticks;
     let plan = match schedule
@@ -6090,7 +6101,10 @@ mod production_gpu_tick_schedule_tests {
         schedule.reset_after_load(RuntimePlaybackState::Paused, u32::MAX);
 
         assert_eq!(schedule.playback, RuntimePlaybackState::Paused);
-        assert_eq!(schedule.run_speed_ticks, super::S02_MAX_RUN_TICKS_PER_UPDATE);
+        assert_eq!(
+            schedule.run_speed_ticks,
+            crate::S02_MAX_RUN_TICKS_PER_UPDATE
+        );
         assert_eq!(
             schedule.scheduler,
             crate::DoubleBufferedGraphicalScheduler::default()
@@ -6151,12 +6165,35 @@ mod presentation_retirement_tests {
     }
 
     fn inspector_snapshot(object: &WorldObject) -> CreatureInspectorSnapshot {
-        let mut inspector = CreatureInspectorSnapshot::default();
-        inspector.selection = selection_snapshot(object);
-        inspector.visual.stable_id = object.id;
-        inspector.visual.position = object.position;
-        inspector.visual.target_entity = Some(object.id);
-        inspector
+        let selection = selection_snapshot(object);
+        let visual = crate::creature_visual_snapshot_from_parts(
+            object.organism_id.expect("fixture agent must have an organism"),
+            object.id,
+            object.position,
+            Some(object.id),
+            Some(object.position),
+            &alife_core::HomeostaticSnapshot::baseline(alife_core::Tick::ZERO),
+            alife_core::SleepPhase::Awake,
+            None,
+        )
+        .expect("fixture visual snapshot must be valid");
+        CreatureInspectorSnapshot {
+            schema: crate::G05_CAMERA_INSPECTOR_SCHEMA,
+            schema_version: crate::G05_CAMERA_INSPECTOR_SCHEMA_VERSION,
+            read_only: true,
+            selection,
+            camera: super::CameraNavigationState::top_down_default(),
+            visual,
+            tick_summary: None,
+            drive_lines: Vec::new(),
+            hormone_lines: Vec::new(),
+            memory_topology_summary: String::new(),
+            action_summary: String::new(),
+            patch_summary: String::new(),
+            semantic_context_summary: String::new(),
+            fallback_summary: String::new(),
+            troubleshooting_messages: Vec::new(),
+        }
     }
 
     fn fixture_world_with_seven_agents() -> HeadlessWorld {

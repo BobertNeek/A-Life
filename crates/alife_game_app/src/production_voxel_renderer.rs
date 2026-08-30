@@ -951,6 +951,7 @@ pub(crate) struct Phase31PerformanceMetricsResource {
     launched_at: Instant,
     last_frame_at: Instant,
     measurement_started_at: Option<Instant>,
+    measurement_completed_at: Option<Instant>,
     measurement_start_world_tick: Option<u64>,
     runtime_baseline: Option<crate::gpu_live_runtime::GpuLivePerformanceMetrics>,
     scheduler_baseline: Option<crate::bevy_shell::ProductionGpuTickPerformanceCounters>,
@@ -988,6 +989,7 @@ impl Phase31PerformanceMetricsResource {
             launched_at: now,
             last_frame_at: now,
             measurement_started_at: None,
+            measurement_completed_at: None,
             measurement_start_world_tick: None,
             runtime_baseline: None,
             scheduler_baseline: None,
@@ -1010,7 +1012,19 @@ impl Phase31PerformanceMetricsResource {
     }
 
     pub(crate) fn measuring(&self) -> bool {
-        self.measurement_started_at.is_some() && self.artifact_path.is_none()
+        self.measurement_started_at.is_some_and(|started| {
+            started.elapsed() < PHASE31_MEASUREMENT_DURATION
+                && self.artifact_path.is_none()
+                && self.write_error.is_none()
+        })
+    }
+
+    pub(crate) fn draining(&self) -> bool {
+        self.measurement_started_at.is_some_and(|started| {
+            started.elapsed() >= PHASE31_MEASUREMENT_DURATION
+                && self.artifact_path.is_none()
+                && self.write_error.is_none()
+        })
     }
 
     fn take_stage_elapsed_ns(&mut self) -> u64 {
@@ -7683,6 +7697,7 @@ fn phase31_performance_frame_begin(
         && presentation.current.authoritative_world_tick > Tick::ZERO
     {
         metrics.measurement_started_at = Some(now);
+        metrics.measurement_completed_at = None;
         metrics.measurement_start_world_tick =
             Some(presentation.current.authoritative_world_tick.raw());
         metrics.runtime_baseline = Some(runtime.runtime.performance_metrics());
@@ -7748,6 +7763,13 @@ fn phase31_performance_frame_begin(
         }
         metrics.last_frame_at = now;
     }
+    if metrics.measurement_completed_at.is_none()
+        && metrics
+            .measurement_started_at
+            .is_some_and(|started| now.duration_since(started) >= PHASE31_MEASUREMENT_DURATION)
+    {
+        metrics.measurement_completed_at = Some(now);
+    }
     metrics.stage_mark = metrics.measuring().then_some(now);
 }
 
@@ -7803,17 +7825,21 @@ fn phase31_performance_after_ui(
     presentation: Res<LiveBrainPresentationFrameResource>,
     mut exits: MessageWriter<AppExit>,
 ) {
-    if !metrics.measuring() {
+    let measuring = metrics.measuring();
+    let draining = metrics.draining();
+    if !measuring && !draining {
         return;
     }
-    let elapsed = metrics.take_stage_elapsed_ns();
-    metrics.ui_root_readers_cpu_ns = metrics.ui_root_readers_cpu_ns.saturating_add(elapsed);
-    metrics.current_frame_update_cpu.ui_root_readers_ns = elapsed;
-    metrics.ui_updates = metrics.ui_updates.saturating_add(1);
+    if measuring {
+        let elapsed = metrics.take_stage_elapsed_ns();
+        metrics.ui_root_readers_cpu_ns = metrics.ui_root_readers_cpu_ns.saturating_add(elapsed);
+        metrics.current_frame_update_cpu.ui_root_readers_ns = elapsed;
+        metrics.ui_updates = metrics.ui_updates.saturating_add(1);
+    }
     let Some(started) = metrics.measurement_started_at else {
         return;
     };
-    if started.elapsed() < PHASE31_MEASUREMENT_DURATION {
+    if !draining {
         return;
     }
     if !runtime.runtime.persistence_idle_for_shutdown() {
@@ -7824,7 +7850,10 @@ fn phase31_performance_after_ui(
         &runtime.runtime,
         schedule.performance_counters(),
         presentation.current.authoritative_world_tick.raw(),
-        started.elapsed(),
+        metrics
+            .measurement_completed_at
+            .unwrap_or_else(Instant::now)
+            .duration_since(started),
         schedule.performance_failed(),
         authority.telemetry.authoritative,
     ) {
@@ -8737,6 +8766,50 @@ mod tests {
 
     #[test]
     #[cfg(feature = "gpu-runtime")]
+    fn phase31_measurement_deadline_stops_admitting_simulation_work() {
+        let now = Instant::now();
+        let metrics = Phase31PerformanceMetricsResource {
+            profile: "test".to_string(),
+            population: 6,
+            resolution: [1920, 1080],
+            backend: "GpuAuthoritative".to_string(),
+            adapter: "test-adapter".to_string(),
+            launched_at: now,
+            last_frame_at: now,
+            measurement_started_at: Some(now - PHASE31_MEASUREMENT_DURATION),
+            measurement_completed_at: None,
+            measurement_start_world_tick: Some(1),
+            runtime_baseline: None,
+            scheduler_baseline: None,
+            stage_mark: None,
+            frame_snapshot: None,
+            current_frame_update_cpu: Phase31FrameUpdateCpu::default(),
+            frame_ns: Vec::new(),
+            slow_frame_count: 0,
+            slow_frames: Vec::new(),
+            input_cpu_ns: 0,
+            live_gpu_tick_cpu_ns: 0,
+            authoritative_projection_cpu_ns: 0,
+            procedural_animation_cpu_ns: 0,
+            ui_root_readers_cpu_ns: 0,
+            ui_updates: 0,
+            gpu_samples: Vec::new(),
+            artifact_path: None,
+            write_error: None,
+        };
+
+        assert!(
+            !metrics.measuring(),
+            "an expired measurement must stop admitting simulation work before LiveGpuTick"
+        );
+        assert!(
+            metrics.draining(),
+            "an expired measurement must enter persistence drain mode"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "gpu-runtime")]
     fn phase31_duration_summary_reports_nearest_rank_percentiles_and_hitches() {
         let samples = [
             10_000_000_u64,
@@ -8968,7 +9041,7 @@ mod tests {
         let mut world = World::new();
         world.spawn((
             ProductionCreatureAssemblyRoot {
-                stable_id: Default::default(),
+                stable_id: WorldEntityId(1),
                 organism_id: OrganismId(1),
                 display_only: true,
             },
@@ -9024,7 +9097,7 @@ mod tests {
         });
         world.insert_resource(Fvr04ProductionCreatureFollowResource {
             enabled: true,
-            target_stable_id: Some(Default::default()),
+            target_stable_id: Some(WorldEntityId(1)),
         });
 
         clear_production_load_focus(&mut world);
