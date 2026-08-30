@@ -9,7 +9,6 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Mutex,
     },
-    time::Instant,
 };
 
 use alife_core::{
@@ -35,36 +34,6 @@ const AUTHORITY_STAGE_SAVE_PREPARED: u64 = 1;
 const AUTHORITY_STAGE_JOURNAL_PREPARED: u64 = 2;
 const AUTHORITY_STAGE_POINTER_COMMIT: u64 = 3;
 const AUTHORITY_STAGE_REOPEN: u64 = 4;
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct GpuSleepJournalPublicationTiming {
-    pub input_validation_wall_ns: u64,
-    pub cas_lock_wait_wall_ns: u64,
-    pub cas_base_reload_wall_ns: u64,
-    pub save_encode_wall_ns: u64,
-    pub save_artifact_write_wall_ns: u64,
-    pub journal_encode_wall_ns: u64,
-    pub journal_artifact_write_wall_ns: u64,
-    pub pointer_build_validation_wall_ns: u64,
-    pub prepared_artifact_reload_validation_wall_ns: u64,
-    pub manifest_encode_wall_ns: u64,
-    pub manifest_write_wall_ns: u64,
-    pub manifest_reload_validation_wall_ns: u64,
-    pub final_journal_reload_validation_wall_ns: u64,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct GpuSleepJournalPublicationReceipt {
-    pub published: GpuLoadedSaveManifest,
-    pub timing: GpuSleepJournalPublicationTiming,
-}
-
-fn record_elapsed_ns(field: &mut u64, started: Option<Instant>) {
-    if let Some(started) = started {
-        *field =
-            field.saturating_add(u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX));
-    }
-}
 
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -924,18 +893,6 @@ impl GpuDurableSaveManifest {
         base: &GpuLoadedSaveManifest,
         journal: &GpuSleepTransactionJournalV2,
     ) -> Result<(), GameAppShellError> {
-        self.publish_sleep_transaction_journal_profiled(base, journal, false)
-            .map(|_| ())
-    }
-
-    pub fn publish_sleep_transaction_journal_profiled(
-        &self,
-        base: &GpuLoadedSaveManifest,
-        journal: &GpuSleepTransactionJournalV2,
-        measure: bool,
-    ) -> Result<GpuSleepJournalPublicationReceipt, GameAppShellError> {
-        let mut timing = GpuSleepJournalPublicationTiming::default();
-        let started = measure.then(Instant::now);
         journal.validate()?;
         let base_sleep_states = exact_base_sleep_states(base)?;
         if validate_journal_against_exact_base(
@@ -947,115 +904,36 @@ impl GpuDurableSaveManifest {
         {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
         }
-        record_elapsed_ns(&mut timing.input_validation_wall_ns, started);
-
-        let started = measure.then(Instant::now);
-        let guard =
+        let _guard =
             SAVE_CAS_GUARD
                 .lock()
                 .map_err(|_| GameAppShellError::InvalidProductionFrontend {
                     message: "GPU checkpoint save CAS lock was poisoned".to_string(),
                 })?;
-        record_elapsed_ns(&mut timing.cas_lock_wait_wall_ns, started);
-
-        let started = measure.then(Instant::now);
         let actual = self.load()?;
-        record_elapsed_ns(&mut timing.cas_base_reload_wall_ns, started);
         if actual.digest != base.digest || actual.save != base.save {
             return Err(GameAppShellError::GpuCheckpointManifestConflict {
                 expected: base.digest.as_str().to_string(),
                 actual: actual.digest.as_str().to_string(),
             });
         }
-        let pointer = self.prepare_journal_authority_generation_profiled(
-            &actual,
-            journal,
-            measure,
-            &mut timing,
-        )?;
-        let reopened =
-            self.commit_authority_pointer_profiled(&actual.save, &pointer, measure, &mut timing)?;
-
-        let started = measure.then(Instant::now);
-        let journal_reopened = self.load_sleep_transaction_journal(&reopened)?;
-        record_elapsed_ns(&mut timing.final_journal_reload_validation_wall_ns, started);
-        if reopened.authority.generation() != Some(&pointer) || journal_reopened != *journal {
+        let pointer = self.prepare_authority_generation(&actual, journal)?;
+        let reopened = self.commit_authority_pointer(&actual.save, &pointer)?;
+        if reopened.authority.generation() != Some(&pointer)
+            || self.load_sleep_transaction_journal(&reopened)? != *journal
+        {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "GPU checkpoint journal authority generation failed reopen validation"
                     .to_string(),
             });
         }
-        drop(guard);
-        Ok(GpuSleepJournalPublicationReceipt {
-            published: reopened,
-            timing,
-        })
+        Ok(())
     }
 
     fn prepare_authority_generation(
         &self,
         base: &GpuLoadedSaveManifest,
         journal: &GpuSleepTransactionJournalV2,
-    ) -> Result<GpuCheckpointAuthorityPointerV1, GameAppShellError> {
-        self.prepare_authority_generation_profiled(
-            base,
-            journal,
-            false,
-            &mut GpuSleepJournalPublicationTiming::default(),
-        )
-    }
-
-    fn prepare_journal_authority_generation_profiled(
-        &self,
-        base: &GpuLoadedSaveManifest,
-        journal: &GpuSleepTransactionJournalV2,
-        measure: bool,
-        timing: &mut GpuSleepJournalPublicationTiming,
-    ) -> Result<GpuCheckpointAuthorityPointerV1, GameAppShellError> {
-        let Some(prior) = base.authority.generation() else {
-            return self.prepare_authority_generation_profiled(base, journal, measure, timing);
-        };
-        let generation = prior.generation.checked_add(1).ok_or_else(|| {
-            GameAppShellError::InvalidProductionFrontend {
-                message: "GPU checkpoint authority generation overflow".to_string(),
-            }
-        })?;
-        let started = measure.then(Instant::now);
-        let journal_bytes = serde_json::to_vec_pretty(journal)?;
-        let journal_digest = PortableAssetDigest::for_bytes(&journal_bytes);
-        let journal_file_name =
-            authority_journal_file_name(&self.save_path, generation, &journal_digest)?;
-        record_elapsed_ns(&mut timing.journal_encode_wall_ns, started);
-        let started = measure.then(Instant::now);
-        write_immutable_authority_artifact(
-            &self.authority_artifact_path(&journal_file_name)?,
-            &journal_bytes,
-        )?;
-        record_elapsed_ns(&mut timing.journal_artifact_write_wall_ns, started);
-        maybe_fail_authority_stage(AUTHORITY_STAGE_JOURNAL_PREPARED)?;
-        let started = measure.then(Instant::now);
-        let pointer = GpuCheckpointAuthorityPointerV1::try_new(
-            generation,
-            Some(prior),
-            prior.asset_manifest_identity.clone(),
-            prior.save.clone(),
-            GpuCheckpointAuthorityJournalArtifactV1 {
-                file_name: journal_file_name,
-                digest: journal_digest,
-                size_bytes: u64::try_from(journal_bytes.len()).unwrap_or(u64::MAX),
-                journal_schema_version: GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION,
-            },
-        )?;
-        record_elapsed_ns(&mut timing.pointer_build_validation_wall_ns, started);
-        Ok(pointer)
-    }
-
-    fn prepare_authority_generation_profiled(
-        &self,
-        base: &GpuLoadedSaveManifest,
-        journal: &GpuSleepTransactionJournalV2,
-        measure: bool,
-        timing: &mut GpuSleepJournalPublicationTiming,
     ) -> Result<GpuCheckpointAuthorityPointerV1, GameAppShellError> {
         let prior = base.authority.generation();
         let generation = match prior {
@@ -1066,33 +944,24 @@ impl GpuDurableSaveManifest {
             })?,
             None => 1,
         };
-        let started = measure.then(Instant::now);
         let save_bytes = serde_json::to_vec_pretty(&base.save)?;
         let save_digest = PortableAssetDigest::for_bytes(&save_bytes);
         let save_file_name = authority_save_file_name(&self.save_path, generation, &save_digest)?;
-        record_elapsed_ns(&mut timing.save_encode_wall_ns, started);
-        let started = measure.then(Instant::now);
         write_immutable_authority_artifact(
             &self.authority_artifact_path(&save_file_name)?,
             &save_bytes,
         )?;
-        record_elapsed_ns(&mut timing.save_artifact_write_wall_ns, started);
         maybe_fail_authority_stage(AUTHORITY_STAGE_SAVE_PREPARED)?;
-        let started = measure.then(Instant::now);
         let journal_bytes = serde_json::to_vec_pretty(journal)?;
         let journal_digest = PortableAssetDigest::for_bytes(&journal_bytes);
         let journal_file_name =
             authority_journal_file_name(&self.save_path, generation, &journal_digest)?;
-        record_elapsed_ns(&mut timing.journal_encode_wall_ns, started);
-        let started = measure.then(Instant::now);
         write_immutable_authority_artifact(
             &self.authority_artifact_path(&journal_file_name)?,
             &journal_bytes,
         )?;
-        record_elapsed_ns(&mut timing.journal_artifact_write_wall_ns, started);
         maybe_fail_authority_stage(AUTHORITY_STAGE_JOURNAL_PREPARED)?;
-        let started = measure.then(Instant::now);
-        let pointer = GpuCheckpointAuthorityPointerV1::try_new(
+        GpuCheckpointAuthorityPointerV1::try_new(
             generation,
             prior,
             asset_manifest_identity(&base.save)?,
@@ -1109,9 +978,7 @@ impl GpuDurableSaveManifest {
                 size_bytes: u64::try_from(journal_bytes.len()).unwrap_or(u64::MAX),
                 journal_schema_version: GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION,
             },
-        )?;
-        record_elapsed_ns(&mut timing.pointer_build_validation_wall_ns, started);
-        Ok(pointer)
+        )
     }
 
     fn commit_authority_pointer(
@@ -1119,22 +986,6 @@ impl GpuDurableSaveManifest {
         compatibility_save: &PortableSaveFile,
         pointer: &GpuCheckpointAuthorityPointerV1,
     ) -> Result<GpuLoadedSaveManifest, GameAppShellError> {
-        self.commit_authority_pointer_profiled(
-            compatibility_save,
-            pointer,
-            false,
-            &mut GpuSleepJournalPublicationTiming::default(),
-        )
-    }
-
-    fn commit_authority_pointer_profiled(
-        &self,
-        compatibility_save: &PortableSaveFile,
-        pointer: &GpuCheckpointAuthorityPointerV1,
-        measure: bool,
-        timing: &mut GpuSleepJournalPublicationTiming,
-    ) -> Result<GpuLoadedSaveManifest, GameAppShellError> {
-        let started = measure.then(Instant::now);
         pointer.validate()?;
         let prepared_save = self.read_authority_save(pointer)?;
         if prepared_save != *compatibility_save
@@ -1146,10 +997,6 @@ impl GpuDurableSaveManifest {
             });
         }
         self.read_authority_journal(pointer, &prepared_save)?;
-        record_elapsed_ns(
-            &mut timing.prepared_artifact_reload_validation_wall_ns,
-            started,
-        );
 
         let prior_public_pointer = match fs::read(&self.save_path) {
             Ok(bytes) => Some(bytes),
@@ -1157,20 +1004,13 @@ impl GpuDurableSaveManifest {
             Err(error) => return Err(error.into()),
         };
         maybe_fail_authority_stage(AUTHORITY_STAGE_POINTER_COMMIT)?;
-        let started = measure.then(Instant::now);
-        let encoded = encode_authoritative_save(compatibility_save, pointer)?;
-        record_elapsed_ns(&mut timing.manifest_encode_wall_ns, started);
-        let started = measure.then(Instant::now);
-        write_atomic_manifest(&self.save_path, &encoded)?;
-        record_elapsed_ns(&mut timing.manifest_write_wall_ns, started);
-        let started = measure.then(Instant::now);
+        write_atomic_manifest(
+            &self.save_path,
+            &encode_authoritative_save(compatibility_save, pointer)?,
+        )?;
         match maybe_fail_authority_stage(AUTHORITY_STAGE_REOPEN).and_then(|_| self.load()) {
-            Ok(reopened) => {
-                record_elapsed_ns(&mut timing.manifest_reload_validation_wall_ns, started);
-                Ok(reopened)
-            }
+            Ok(reopened) => Ok(reopened),
             Err(reopen_error) => {
-                record_elapsed_ns(&mut timing.manifest_reload_validation_wall_ns, started);
                 let rollback = self.restore_prior_authority_pointer(
                     prior_public_pointer.as_deref(),
                     pointer.prior_generation,

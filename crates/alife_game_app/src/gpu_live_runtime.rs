@@ -65,8 +65,8 @@ use alife_gpu_backend::{
 use alife_runtime::{
     DurableGpuCheckpointMonotonicityPermit, DurableGpuCheckpointRef, GpuAuthoritativeSession,
     GpuExactCheckpointTransactionContextV1, GpuSessionAuthority, GpuSessionConsumerKind,
-    GpuSessionFailStopCause, GpuSleepJournalPublicationTiming, GpuSleepTransactionJournalEntryV2,
-    GpuSleepTransactionJournalV2, SleepPhaseReceipt, SleepWorkDue,
+    GpuSessionFailStopCause, GpuSleepTransactionJournalEntryV2, GpuSleepTransactionJournalV2,
+    SleepPhaseReceipt, SleepWorkDue,
 };
 use alife_world::{
     grounded_peripheral_summaries,
@@ -537,60 +537,11 @@ impl ResidentAuthorityPlan {
 const LIVE_COGNITIVE_ENERGY_PER_WORK_UNIT: f32 = 0.000_001;
 const MAX_EXACT_CHECKPOINT_PENDING_JOURNAL_ENTRIES: usize = 64;
 
-fn append_bounded_sleep_journal_entries(
-    pending: &mut Vec<GpuSleepTransactionJournalEntryV2>,
-    entries: Vec<GpuSleepTransactionJournalEntryV2>,
-) -> Result<(), ScaffoldContractError> {
-    let next_len = pending
-        .len()
-        .checked_add(entries.len())
-        .ok_or(ScaffoldContractError::InvalidId)?;
-    if next_len > MAX_EXACT_CHECKPOINT_PENDING_JOURNAL_ENTRIES {
-        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
-    }
-    for entry in &entries {
-        entry.validate()?;
-    }
-    let mut candidate = pending.clone();
-    candidate.extend(entries);
-    candidate.sort_unstable_by_key(|entry| {
-        (
-            entry.organism_id.raw(),
-            entry.transition_tick.raw(),
-            entry.transition_ordinal,
-        )
-    });
-    for pair in candidate.windows(2) {
-        if pair[0].organism_id != pair[1].organism_id {
-            continue;
-        }
-        if (pair[0].transition_tick, pair[0].transition_ordinal)
-            >= (pair[1].transition_tick, pair[1].transition_ordinal)
-            || pair[0].target != pair[1].source
-        {
-            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
-        }
-    }
-    *pending = candidate;
-    Ok(())
-}
-
 #[derive(Debug, Clone)]
 struct GpuLiveCheckpointDurability {
     store: GpuCheckpointAssetStore,
     durable_manifest: GpuDurableSaveManifest,
     published: GpuLoadedSaveManifest,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct GpuLiveSleepJournalPublicationTiming {
-    current_journal_load_validation_wall_ns: u64,
-    merge_wall_ns: u64,
-    sort_wall_ns: u64,
-    journal_build_validation_wall_ns: u64,
-    durable: GpuSleepJournalPublicationTiming,
-    outer_manifest_reload_validation_wall_ns: u64,
-    outer_journal_reload_validation_wall_ns: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -808,69 +759,6 @@ struct ExactPopulationCheckpointWorkerOwnerV1 {
     command_sender: SyncSender<ExactPopulationCheckpointWorkerCommandV1>,
     event_receiver: Receiver<ExactPopulationCheckpointWorkerEventV1>,
     join_handle: JoinHandle<()>,
-}
-
-struct SleepJournalPublicationWorkerFinalV1 {
-    result:
-        Result<(GpuLoadedSaveManifest, GpuLiveSleepJournalPublicationTiming), GameAppShellError>,
-    expected_base_digest: String,
-    expected_base_generation: Option<u64>,
-    entry_count: u64,
-    worker_wall_ns: u64,
-}
-
-struct SleepJournalPublicationWorkerOwnerV1 {
-    receiver: Receiver<SleepJournalPublicationWorkerFinalV1>,
-    join_handle: Option<JoinHandle<()>>,
-}
-
-enum SleepJournalPublicationWorkerPollV1 {
-    Pending,
-    Ready(SleepJournalPublicationWorkerFinalV1),
-    Panicked,
-}
-
-impl SleepJournalPublicationWorkerOwnerV1 {
-    fn poll(&mut self) -> SleepJournalPublicationWorkerPollV1 {
-        match self.receiver.try_recv() {
-            Ok(final_result) => {
-                let worker_panicked = self
-                    .join_handle
-                    .take()
-                    .is_some_and(|join_handle| join_handle.join().is_err());
-                if worker_panicked {
-                    SleepJournalPublicationWorkerPollV1::Panicked
-                } else {
-                    SleepJournalPublicationWorkerPollV1::Ready(final_result)
-                }
-            }
-            Err(TryRecvError::Empty) => SleepJournalPublicationWorkerPollV1::Pending,
-            Err(TryRecvError::Disconnected) => {
-                let worker_panicked = self
-                    .join_handle
-                    .take()
-                    .is_some_and(|join_handle| join_handle.join().is_err());
-                let _ = worker_panicked;
-                SleepJournalPublicationWorkerPollV1::Panicked
-            }
-        }
-    }
-
-    fn finish(mut self) -> Result<SleepJournalPublicationWorkerFinalV1, ()> {
-        let join_handle = self.join_handle.take().ok_or(())?;
-        if join_handle.join().is_err() {
-            return Err(());
-        }
-        self.receiver.recv().map_err(|_| ())
-    }
-}
-
-impl Drop for SleepJournalPublicationWorkerOwnerV1 {
-    fn drop(&mut self) {
-        if let Some(join_handle) = self.join_handle.take() {
-            let _ = join_handle.join();
-        }
-    }
 }
 
 enum FailedExactPopulationCheckpointWorkerJoinPollV1 {
@@ -1247,35 +1135,6 @@ fn spawn_exact_population_checkpoint_recommit_worker(
     }
 }
 
-fn spawn_sleep_journal_publication_worker(
-    mut durability: GpuLiveCheckpointDurability,
-    entries: Vec<GpuSleepTransactionJournalEntryV2>,
-    measure: bool,
-) -> SleepJournalPublicationWorkerOwnerV1 {
-    let (sender, receiver) = mpsc::sync_channel(1);
-    let join_handle = thread::spawn(move || {
-        let started = measure.then(Instant::now);
-        let entry_count = u64::try_from(entries.len()).unwrap_or(u64::MAX);
-        let expected_base_digest = durability.published.digest.as_str().to_string();
-        let expected_base_generation = durability.published.authority_generation();
-        let result = durability
-            .publish_sleep_journal_entries(entries, measure)
-            .map(|timing| (durability.published, timing));
-        let worker_wall_ns = started.map_or(0, elapsed_ns);
-        let _ = sender.send(SleepJournalPublicationWorkerFinalV1 {
-            result,
-            expected_base_digest,
-            expected_base_generation,
-            entry_count,
-            worker_wall_ns,
-        });
-    });
-    SleepJournalPublicationWorkerOwnerV1 {
-        receiver,
-        join_handle: Some(join_handle),
-    }
-}
-
 fn run_exact_population_checkpoint_finalize_worker(
     mut durability: GpuLiveCheckpointDurability,
     command_receiver: Receiver<ExactPopulationCheckpointWorkerCommandV1>,
@@ -1325,7 +1184,7 @@ fn run_exact_population_checkpoint_finalize_worker(
                 Ok::<_, GameAppShellError>(entries)
             })();
             let result = validated_entries
-                .and_then(|entries| durability.publish_sleep_journal_entries(entries, false))
+                .and_then(|entries| durability.publish_sleep_journal_entries(entries))
                 .and_then(|_| {
                     let published = durability.durable_manifest.load()?;
                     let _ = durability
@@ -1453,22 +1312,15 @@ impl GpuLiveCheckpointDurability {
     fn publish_sleep_journal_entries(
         &mut self,
         entries: Vec<GpuSleepTransactionJournalEntryV2>,
-        measure: bool,
-    ) -> Result<GpuLiveSleepJournalPublicationTiming, GameAppShellError> {
-        let mut timing = GpuLiveSleepJournalPublicationTiming::default();
+    ) -> Result<(), GameAppShellError> {
         if entries.is_empty() {
-            return Ok(timing);
+            return Ok(());
         }
-        let started = measure.then(Instant::now);
         let current = self
             .durable_manifest
             .load_sleep_transaction_journal(&self.published)?;
-        record_optional_elapsed_ns(&mut timing.current_journal_load_validation_wall_ns, started);
-        let started = measure.then(Instant::now);
         let mut combined = current.entries;
         combined.extend(entries);
-        record_optional_elapsed_ns(&mut timing.merge_wall_ns, started);
-        let started = measure.then(Instant::now);
         combined.sort_unstable_by_key(|entry| {
             (
                 entry.organism_id.raw(),
@@ -1476,20 +1328,23 @@ impl GpuLiveCheckpointDurability {
                 entry.transition_ordinal,
             )
         });
-        record_optional_elapsed_ns(&mut timing.sort_wall_ns, started);
-        let started = measure.then(Instant::now);
         let journal = GpuSleepTransactionJournalV2::try_new(
             self.published.exact_save_anchor_digest()?.0,
             self.published.save.world.tick,
             combined,
         )?;
-        record_optional_elapsed_ns(&mut timing.journal_build_validation_wall_ns, started);
-        let receipt = self
+        self.durable_manifest
+            .publish_sleep_transaction_journal(&self.published, &journal)?;
+        let published = self.durable_manifest.load()?;
+        if self
             .durable_manifest
-            .publish_sleep_transaction_journal_profiled(&self.published, &journal, measure)?;
-        timing.durable = receipt.timing;
-        self.published = receipt.published;
-        Ok(timing)
+            .load_sleep_transaction_journal(&published)?
+            != journal
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+        }
+        self.published = published;
+        Ok(())
     }
 
     fn durable_reference_for(
@@ -2187,33 +2042,6 @@ pub struct GpuLivePerformanceMetrics {
     pub population_reconcile_wall_ns: u64,
     pub sleep_persistence_wall_ns: u64,
     pub sleep_persistence_calls: u64,
-    pub sleep_journal_current_load_validation_wall_ns: u64,
-    pub sleep_journal_merge_wall_ns: u64,
-    pub sleep_journal_sort_wall_ns: u64,
-    pub sleep_journal_build_validation_wall_ns: u64,
-    pub sleep_journal_input_validation_wall_ns: u64,
-    pub sleep_journal_cas_lock_wait_wall_ns: u64,
-    pub sleep_journal_cas_base_reload_wall_ns: u64,
-    pub sleep_journal_save_encode_wall_ns: u64,
-    pub sleep_journal_save_artifact_write_wall_ns: u64,
-    pub sleep_journal_encode_wall_ns: u64,
-    pub sleep_journal_artifact_write_wall_ns: u64,
-    pub sleep_journal_pointer_build_validation_wall_ns: u64,
-    pub sleep_journal_prepared_reload_validation_wall_ns: u64,
-    pub sleep_journal_manifest_encode_wall_ns: u64,
-    pub sleep_journal_manifest_write_wall_ns: u64,
-    pub sleep_journal_manifest_reload_validation_wall_ns: u64,
-    pub sleep_journal_final_reload_validation_wall_ns: u64,
-    pub sleep_journal_outer_manifest_reload_validation_wall_ns: u64,
-    pub sleep_journal_outer_reload_validation_wall_ns: u64,
-    pub sleep_journal_worker_starts: u64,
-    pub sleep_journal_worker_completions: u64,
-    pub sleep_journal_worker_failures: u64,
-    pub sleep_journal_worker_poll_calls: u64,
-    pub sleep_journal_worker_poll_wall_ns: u64,
-    pub sleep_journal_worker_wall_ns: u64,
-    pub sleep_journal_pending_entries_peak: u64,
-    pub sleep_journal_update_thread_enqueue_wall_ns: u64,
     pub sleep_checkpoint_capture_calls: u64,
     pub sleep_exact_neural_capture_organisms: u64,
     pub sleep_compact_journal_organisms: u64,
@@ -2357,51 +2185,6 @@ impl GpuLivePerformanceMetrics {
             population_reconcile_wall_ns: delta!(population_reconcile_wall_ns),
             sleep_persistence_wall_ns: delta!(sleep_persistence_wall_ns),
             sleep_persistence_calls: delta!(sleep_persistence_calls),
-            sleep_journal_current_load_validation_wall_ns: delta!(
-                sleep_journal_current_load_validation_wall_ns
-            ),
-            sleep_journal_merge_wall_ns: delta!(sleep_journal_merge_wall_ns),
-            sleep_journal_sort_wall_ns: delta!(sleep_journal_sort_wall_ns),
-            sleep_journal_build_validation_wall_ns: delta!(sleep_journal_build_validation_wall_ns),
-            sleep_journal_input_validation_wall_ns: delta!(sleep_journal_input_validation_wall_ns),
-            sleep_journal_cas_lock_wait_wall_ns: delta!(sleep_journal_cas_lock_wait_wall_ns),
-            sleep_journal_cas_base_reload_wall_ns: delta!(sleep_journal_cas_base_reload_wall_ns),
-            sleep_journal_save_encode_wall_ns: delta!(sleep_journal_save_encode_wall_ns),
-            sleep_journal_save_artifact_write_wall_ns: delta!(
-                sleep_journal_save_artifact_write_wall_ns
-            ),
-            sleep_journal_encode_wall_ns: delta!(sleep_journal_encode_wall_ns),
-            sleep_journal_artifact_write_wall_ns: delta!(sleep_journal_artifact_write_wall_ns),
-            sleep_journal_pointer_build_validation_wall_ns: delta!(
-                sleep_journal_pointer_build_validation_wall_ns
-            ),
-            sleep_journal_prepared_reload_validation_wall_ns: delta!(
-                sleep_journal_prepared_reload_validation_wall_ns
-            ),
-            sleep_journal_manifest_encode_wall_ns: delta!(sleep_journal_manifest_encode_wall_ns),
-            sleep_journal_manifest_write_wall_ns: delta!(sleep_journal_manifest_write_wall_ns),
-            sleep_journal_manifest_reload_validation_wall_ns: delta!(
-                sleep_journal_manifest_reload_validation_wall_ns
-            ),
-            sleep_journal_final_reload_validation_wall_ns: delta!(
-                sleep_journal_final_reload_validation_wall_ns
-            ),
-            sleep_journal_outer_manifest_reload_validation_wall_ns: delta!(
-                sleep_journal_outer_manifest_reload_validation_wall_ns
-            ),
-            sleep_journal_outer_reload_validation_wall_ns: delta!(
-                sleep_journal_outer_reload_validation_wall_ns
-            ),
-            sleep_journal_worker_starts: delta!(sleep_journal_worker_starts),
-            sleep_journal_worker_completions: delta!(sleep_journal_worker_completions),
-            sleep_journal_worker_failures: delta!(sleep_journal_worker_failures),
-            sleep_journal_worker_poll_calls: delta!(sleep_journal_worker_poll_calls),
-            sleep_journal_worker_poll_wall_ns: delta!(sleep_journal_worker_poll_wall_ns),
-            sleep_journal_worker_wall_ns: delta!(sleep_journal_worker_wall_ns),
-            sleep_journal_pending_entries_peak: self.sleep_journal_pending_entries_peak,
-            sleep_journal_update_thread_enqueue_wall_ns: delta!(
-                sleep_journal_update_thread_enqueue_wall_ns
-            ),
             sleep_checkpoint_capture_calls: delta!(sleep_checkpoint_capture_calls),
             sleep_exact_neural_capture_organisms: delta!(sleep_exact_neural_capture_organisms),
             sleep_compact_journal_organisms: delta!(sleep_compact_journal_organisms),
@@ -2431,12 +2214,6 @@ impl GpuLivePerformanceMetrics {
 
 fn elapsed_ns(started: Instant) -> u64 {
     u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX)
-}
-
-fn record_optional_elapsed_ns(field: &mut u64, started: Option<Instant>) {
-    if let Some(started) = started {
-        *field = field.saturating_add(elapsed_ns(started));
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2903,10 +2680,6 @@ pub struct GpuLiveBrainRuntime {
     topologies: BTreeMap<u64, TopologySidecar>,
     sleep_journal_neural_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
     pending_exact_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
-    sleep_journal_publication_worker: Option<SleepJournalPublicationWorkerOwnerV1>,
-    pending_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
-    exact_checkpoint_waiting_for_sleep_journal: bool,
-    manual_checkpoint_waiting_for_sleep_journal: Option<PathBuf>,
     post_promotion_fail_stop_armed: bool,
     retained_learning: BTreeMap<u64, RetainedLearningRecovery>,
     world: HeadlessWorld,
@@ -4257,15 +4030,6 @@ fn seal_prepared_selection_core(
     Ok(SealedWorldSelection { summary, patch })
 }
 
-impl Drop for GpuLiveBrainRuntime {
-    fn drop(&mut self) {
-        if self.flush_sleep_journal_publication_blocking().is_err() {
-            self.backend
-                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
-        }
-    }
-}
-
 impl GpuLiveBrainRuntime {
     /// Creates an ephemeral restore target on the live session's exact GPU
     /// context without exposing adapter selection to the caller.
@@ -4528,7 +4292,6 @@ impl GpuLiveBrainRuntime {
         backend: GpuClosedLoopBackend,
         durable_manifest: GpuDurableSaveManifest,
     ) -> Result<(), GameAppShellError> {
-        self.flush_sleep_journal_publication_blocking()?;
         let loaded_save = durable_manifest.load()?;
         let deterministic_seed = self.deterministic_seed;
         let brain_class = self.brain_class;
@@ -5302,10 +5065,6 @@ impl GpuLiveBrainRuntime {
             topologies: BTreeMap::new(),
             sleep_journal_neural_authorities: BTreeMap::new(),
             pending_exact_sleep_journal_entries: Vec::new(),
-            sleep_journal_publication_worker: None,
-            pending_sleep_journal_entries: Vec::new(),
-            exact_checkpoint_waiting_for_sleep_journal: false,
-            manual_checkpoint_waiting_for_sleep_journal: None,
             post_promotion_fail_stop_armed: false,
             retained_learning: BTreeMap::new(),
             world,
@@ -5432,10 +5191,6 @@ impl GpuLiveBrainRuntime {
             topologies: BTreeMap::new(),
             sleep_journal_neural_authorities: BTreeMap::new(),
             pending_exact_sleep_journal_entries: Vec::new(),
-            sleep_journal_publication_worker: None,
-            pending_sleep_journal_entries: Vec::new(),
-            exact_checkpoint_waiting_for_sleep_journal: false,
-            manual_checkpoint_waiting_for_sleep_journal: None,
             post_promotion_fail_stop_armed: false,
             retained_learning: BTreeMap::new(),
             world,
@@ -6010,7 +5765,6 @@ impl GpuLiveBrainRuntime {
     /// The caller may atomically publish the returned manifest as a manual save;
     /// all bulk neural state remains behind content-addressed asset references.
     pub fn capture_portable_checkpoint(&mut self) -> Result<PortableSaveFile, GameAppShellError> {
-        self.flush_sleep_journal_publication_blocking()?;
         let started = Instant::now();
         let readback_before = self.backend.mutable_slot_readback_metrics();
         let Some(durability) = self.checkpoint_durability.take() else {
@@ -6323,173 +6077,7 @@ impl GpuLiveBrainRuntime {
         Ok(())
     }
 
-    fn start_sleep_journal_publication(
-        &mut self,
-        entries: Vec<GpuSleepTransactionJournalEntryV2>,
-    ) -> Result<(), GameAppShellError> {
-        if entries.is_empty() {
-            return Ok(());
-        }
-        if self.sleep_journal_publication_worker.is_some() {
-            append_bounded_sleep_journal_entries(&mut self.pending_sleep_journal_entries, entries)?;
-            self.performance_metrics.sleep_journal_pending_entries_peak = self
-                .performance_metrics
-                .sleep_journal_pending_entries_peak
-                .max(u64::try_from(self.pending_sleep_journal_entries.len()).unwrap_or(u64::MAX));
-            return Ok(());
-        }
-        let durability = self
-            .checkpoint_durability
-            .as_ref()
-            .cloned()
-            .ok_or(ScaffoldContractError::MissingPhaseData)?;
-        self.sleep_journal_publication_worker = Some(spawn_sleep_journal_publication_worker(
-            durability,
-            entries,
-            self.performance_measurement_enabled,
-        ));
-        self.performance_metrics.sleep_journal_worker_starts = self
-            .performance_metrics
-            .sleep_journal_worker_starts
-            .saturating_add(1);
-        Ok(())
-    }
-
-    fn poll_sleep_journal_publication(&mut self) -> Result<(), GameAppShellError> {
-        let started = self.performance_measurement_enabled.then(Instant::now);
-        self.performance_metrics.sleep_journal_worker_poll_calls = self
-            .performance_metrics
-            .sleep_journal_worker_poll_calls
-            .saturating_add(1);
-        let Some(mut worker) = self.sleep_journal_publication_worker.take() else {
-            self.performance_metrics.sleep_journal_worker_poll_wall_ns = self
-                .performance_metrics
-                .sleep_journal_worker_poll_wall_ns
-                .saturating_add(started.map_or(0, elapsed_ns));
-            return Ok(());
-        };
-        match worker.poll() {
-            SleepJournalPublicationWorkerPollV1::Pending => {
-                self.sleep_journal_publication_worker = Some(worker);
-            }
-            SleepJournalPublicationWorkerPollV1::Panicked => {
-                self.performance_metrics.sleep_journal_worker_failures = self
-                    .performance_metrics
-                    .sleep_journal_worker_failures
-                    .saturating_add(1);
-                self.backend
-                    .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
-                return Err(ScaffoldContractError::NeuralBackendUnavailable.into());
-            }
-            SleepJournalPublicationWorkerPollV1::Ready(final_result) => {
-                self.admit_sleep_journal_publication(final_result)?;
-                if !self.pending_sleep_journal_entries.is_empty() {
-                    let pending = std::mem::take(&mut self.pending_sleep_journal_entries);
-                    self.start_sleep_journal_publication(pending)?;
-                } else if self.exact_checkpoint_waiting_for_sleep_journal {
-                    self.exact_checkpoint_waiting_for_sleep_journal = false;
-                    self.request_exact_population_checkpoint()?;
-                    if let Some(destination) =
-                        self.manual_checkpoint_waiting_for_sleep_journal.take()
-                    {
-                        let _ = self.request_manual_checkpoint(destination)?;
-                    }
-                }
-            }
-        }
-        self.performance_metrics.sleep_journal_worker_poll_wall_ns = self
-            .performance_metrics
-            .sleep_journal_worker_poll_wall_ns
-            .saturating_add(started.map_or(0, elapsed_ns));
-        Ok(())
-    }
-
-    fn admit_sleep_journal_publication(
-        &mut self,
-        final_result: SleepJournalPublicationWorkerFinalV1,
-    ) -> Result<(), GameAppShellError> {
-        self.performance_metrics.sleep_journal_worker_wall_ns = self
-            .performance_metrics
-            .sleep_journal_worker_wall_ns
-            .saturating_add(final_result.worker_wall_ns);
-        let (published, timing) = match final_result.result {
-            Ok(result) => result,
-            Err(error) => {
-                self.performance_metrics.sleep_journal_worker_failures = self
-                    .performance_metrics
-                    .sleep_journal_worker_failures
-                    .saturating_add(1);
-                self.backend
-                    .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
-                return Err(error);
-            }
-        };
-        let durability = self
-            .checkpoint_durability
-            .as_mut()
-            .ok_or(ScaffoldContractError::MissingPhaseData)?;
-        let expected_published_generation = match final_result.expected_base_generation {
-            Some(generation) => generation.checked_add(1),
-            None => Some(1),
-        };
-        if durability.published.digest.as_str() != final_result.expected_base_digest
-            || durability.published.authority_generation() != final_result.expected_base_generation
-            || published.authority_generation() != expected_published_generation
-            || durability.published.save != published.save
-            || durability.published.exact_save_anchor_digest()?
-                != published.exact_save_anchor_digest()?
-        {
-            self.backend
-                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
-            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
-        }
-        durability.published = published;
-        self.record_sleep_journal_publication_timing(timing);
-        self.performance_metrics.sleep_journal_worker_completions = self
-            .performance_metrics
-            .sleep_journal_worker_completions
-            .saturating_add(1);
-        self.performance_metrics.sleep_compact_journal_organisms = self
-            .performance_metrics
-            .sleep_compact_journal_organisms
-            .saturating_add(final_result.entry_count);
-        Ok(())
-    }
-
-    pub(crate) fn persistence_idle_for_shutdown(&self) -> bool {
-        self.sleep_journal_publication_worker.is_none()
-            && self.pending_sleep_journal_entries.is_empty()
-            && !self.exact_checkpoint_waiting_for_sleep_journal
-            && !self.exact_checkpoint_coordinator.is_active()
-            && matches!(
-                self.exact_checkpoint_work,
-                ExactPopulationCheckpointRuntimeWorkV1::Idle
-            )
-    }
-
-    fn flush_sleep_journal_publication_blocking(&mut self) -> Result<(), GameAppShellError> {
-        loop {
-            if let Some(worker) = self.sleep_journal_publication_worker.take() {
-                let final_result = worker.finish().map_err(|_| {
-                    GameAppShellError::from(ScaffoldContractError::NeuralBackendUnavailable)
-                })?;
-                self.admit_sleep_journal_publication(final_result)?;
-            }
-            if self.pending_sleep_journal_entries.is_empty() {
-                return Ok(());
-            }
-            let pending = std::mem::take(&mut self.pending_sleep_journal_entries);
-            self.start_sleep_journal_publication(pending)?;
-        }
-    }
-
     fn request_exact_population_checkpoint(&mut self) -> Result<(), GameAppShellError> {
-        if self.sleep_journal_publication_worker.is_some()
-            || !self.pending_sleep_journal_entries.is_empty()
-        {
-            self.exact_checkpoint_waiting_for_sleep_journal = true;
-            return Ok(());
-        }
         let Some(durability) = self.checkpoint_durability.as_ref() else {
             return Ok(());
         };
@@ -6564,10 +6152,38 @@ impl GpuLiveBrainRuntime {
         if !self.exact_checkpoint_coordinator.is_active() {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
         }
-        append_bounded_sleep_journal_entries(
-            &mut self.pending_exact_sleep_journal_entries,
-            entries,
-        )?;
+        let next_len = self
+            .pending_exact_sleep_journal_entries
+            .len()
+            .checked_add(entries.len())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if next_len > MAX_EXACT_CHECKPOINT_PENDING_JOURNAL_ENTRIES {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+        }
+        for entry in &entries {
+            entry.validate()?;
+        }
+        let mut candidate = self.pending_exact_sleep_journal_entries.clone();
+        candidate.extend(entries);
+        candidate.sort_unstable_by_key(|entry| {
+            (
+                entry.organism_id.raw(),
+                entry.transition_tick.raw(),
+                entry.transition_ordinal,
+            )
+        });
+        for pair in candidate.windows(2) {
+            if pair[0].organism_id != pair[1].organism_id {
+                continue;
+            }
+            if (pair[0].transition_tick, pair[0].transition_ordinal)
+                >= (pair[1].transition_tick, pair[1].transition_ordinal)
+                || pair[0].target != pair[1].source
+            {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+            }
+        }
+        self.pending_exact_sleep_journal_entries = candidate;
         Ok(())
     }
 
@@ -7323,7 +6939,6 @@ impl GpuLiveBrainRuntime {
     }
 
     fn persist_sleep_checkpoint_boundary(&mut self) -> Result<(), GameAppShellError> {
-        self.flush_sleep_journal_publication_blocking()?;
         let Some(mut durability) = self.checkpoint_durability.take() else {
             return Ok(());
         };
@@ -8486,12 +8101,6 @@ impl GpuLiveBrainRuntime {
         ) -> SleepProgressResult,
     {
         self.post_promotion_fail_stop_armed = false;
-        self.poll_sleep_journal_publication()?;
-        if self.exact_checkpoint_waiting_for_sleep_journal {
-            return Ok(GpuLiveTickOutcome::NoProgress(
-                GpuLiveNoProgressReason::CheckpointPublicationPending,
-            ));
-        }
         let checkpoint_poll_started = self.performance_measurement_enabled.then(Instant::now);
         self.poll_exact_population_checkpoint()?;
         self.performance_metrics.exact_checkpoint_poll_calls = self
@@ -9347,18 +8956,6 @@ impl GpuLiveBrainRuntime {
             self.request_exact_population_checkpoint()?;
             if self.exact_checkpoint_coordinator.is_active() && !sleep_journal_entries.is_empty() {
                 self.queue_exact_checkpoint_journal_entries(sleep_journal_entries)?;
-            } else if self.exact_checkpoint_waiting_for_sleep_journal
-                && !sleep_journal_entries.is_empty()
-            {
-                self.sleep_journal_neural_authorities
-                    .extend(sleep_journal_neural_authority_updates);
-                let enqueue_started = self.performance_measurement_enabled.then(Instant::now);
-                self.start_sleep_journal_publication(sleep_journal_entries)?;
-                self.performance_metrics
-                    .sleep_journal_update_thread_enqueue_wall_ns = self
-                    .performance_metrics
-                    .sleep_journal_update_thread_enqueue_wall_ns
-                    .saturating_add(enqueue_started.map_or(0, elapsed_ns));
             }
             self.performance_metrics.sleep_persistence_wall_ns = self
                 .performance_metrics
@@ -9370,7 +8967,9 @@ impl GpuLiveBrainRuntime {
                 return Ok(summaries_by_organism.into_values().collect());
             }
             let sleep_persistence_started = Instant::now();
-            let Some(durability) = self.checkpoint_durability.take() else {
+            let journal_entry_count =
+                u64::try_from(sleep_journal_entries.len()).unwrap_or(u64::MAX);
+            let Some(mut durability) = self.checkpoint_durability.take() else {
                 return Ok(summaries_by_organism.into_values().collect());
             };
             let validation_result = (|| -> Result<(), GameAppShellError> {
@@ -9419,16 +9018,15 @@ impl GpuLiveBrainRuntime {
                 .performance_metrics
                 .sleep_persistence_calls
                 .saturating_add(1);
+            let journal_result = durability.publish_sleep_journal_entries(sleep_journal_entries);
             self.checkpoint_durability = Some(durability);
+            journal_result?;
             self.sleep_journal_neural_authorities
                 .extend(sleep_journal_neural_authority_updates);
-            let enqueue_started = self.performance_measurement_enabled.then(Instant::now);
-            self.start_sleep_journal_publication(sleep_journal_entries)?;
-            self.performance_metrics
-                .sleep_journal_update_thread_enqueue_wall_ns = self
+            self.performance_metrics.sleep_compact_journal_organisms = self
                 .performance_metrics
-                .sleep_journal_update_thread_enqueue_wall_ns
-                .saturating_add(enqueue_started.map_or(0, elapsed_ns));
+                .sleep_compact_journal_organisms
+                .saturating_add(journal_entry_count);
             self.performance_metrics.sleep_persistence_wall_ns = self
                 .performance_metrics
                 .sleep_persistence_wall_ns
@@ -9448,25 +9046,6 @@ impl GpuLiveBrainRuntime {
     ) -> Result<GpuManualCheckpointRequestDisposition, GameAppShellError> {
         if destination.as_os_str().is_empty() {
             return Err(ScaffoldContractError::InvalidId.into());
-        }
-        if self.sleep_journal_publication_worker.is_some()
-            || !self.pending_sleep_journal_entries.is_empty()
-        {
-            let checkpoint_tick = self.world.tick();
-            if let Some(pending) = &self.manual_checkpoint_waiting_for_sleep_journal {
-                return if pending == &destination {
-                    Ok(GpuManualCheckpointRequestDisposition::Coalesced)
-                } else {
-                    Err(ScaffoldContractError::ConsolidationGenerationMismatch.into())
-                };
-            }
-            self.exact_checkpoint_waiting_for_sleep_journal = true;
-            self.manual_checkpoint_waiting_for_sleep_journal = Some(destination.clone());
-            self.manual_checkpoint_status = GpuManualCheckpointStatus::Queued {
-                destination,
-                checkpoint_tick,
-            };
-            return Ok(GpuManualCheckpointRequestDisposition::Queued);
         }
         if !self.exact_checkpoint_coordinator.is_active() {
             self.request_exact_population_checkpoint()?;
@@ -9903,88 +9482,6 @@ impl GpuLiveBrainRuntime {
 
     pub(crate) const fn evidence_metrics(&self) -> GpuLiveBrainEvidenceMetrics {
         self.last_gpu_metrics
-    }
-
-    fn record_sleep_journal_publication_timing(
-        &mut self,
-        timing: GpuLiveSleepJournalPublicationTiming,
-    ) {
-        macro_rules! add {
-            ($field:ident, $value:expr) => {
-                self.performance_metrics.$field =
-                    self.performance_metrics.$field.saturating_add($value)
-            };
-        }
-        add!(
-            sleep_journal_current_load_validation_wall_ns,
-            timing.current_journal_load_validation_wall_ns
-        );
-        add!(sleep_journal_merge_wall_ns, timing.merge_wall_ns);
-        add!(sleep_journal_sort_wall_ns, timing.sort_wall_ns);
-        add!(
-            sleep_journal_build_validation_wall_ns,
-            timing.journal_build_validation_wall_ns
-        );
-        add!(
-            sleep_journal_input_validation_wall_ns,
-            timing.durable.input_validation_wall_ns
-        );
-        add!(
-            sleep_journal_cas_lock_wait_wall_ns,
-            timing.durable.cas_lock_wait_wall_ns
-        );
-        add!(
-            sleep_journal_cas_base_reload_wall_ns,
-            timing.durable.cas_base_reload_wall_ns
-        );
-        add!(
-            sleep_journal_save_encode_wall_ns,
-            timing.durable.save_encode_wall_ns
-        );
-        add!(
-            sleep_journal_save_artifact_write_wall_ns,
-            timing.durable.save_artifact_write_wall_ns
-        );
-        add!(
-            sleep_journal_encode_wall_ns,
-            timing.durable.journal_encode_wall_ns
-        );
-        add!(
-            sleep_journal_artifact_write_wall_ns,
-            timing.durable.journal_artifact_write_wall_ns
-        );
-        add!(
-            sleep_journal_pointer_build_validation_wall_ns,
-            timing.durable.pointer_build_validation_wall_ns
-        );
-        add!(
-            sleep_journal_prepared_reload_validation_wall_ns,
-            timing.durable.prepared_artifact_reload_validation_wall_ns
-        );
-        add!(
-            sleep_journal_manifest_encode_wall_ns,
-            timing.durable.manifest_encode_wall_ns
-        );
-        add!(
-            sleep_journal_manifest_write_wall_ns,
-            timing.durable.manifest_write_wall_ns
-        );
-        add!(
-            sleep_journal_manifest_reload_validation_wall_ns,
-            timing.durable.manifest_reload_validation_wall_ns
-        );
-        add!(
-            sleep_journal_final_reload_validation_wall_ns,
-            timing.durable.final_journal_reload_validation_wall_ns
-        );
-        add!(
-            sleep_journal_outer_manifest_reload_validation_wall_ns,
-            timing.outer_manifest_reload_validation_wall_ns
-        );
-        add!(
-            sleep_journal_outer_reload_validation_wall_ns,
-            timing.outer_journal_reload_validation_wall_ns
-        );
     }
 
     pub const fn performance_metrics(&self) -> GpuLivePerformanceMetrics {

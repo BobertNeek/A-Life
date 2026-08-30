@@ -864,8 +864,8 @@ pub struct Fvr03ProductionVoxelScreenshotResource {
     pub developer_overlay: bool,
 }
 
-const PHASE31_PERFORMANCE_SCHEMA: &str = "alife.phase31.performance-baseline.v4";
-const PHASE31_PERFORMANCE_SCHEMA_VERSION: u16 = 4;
+const PHASE31_PERFORMANCE_SCHEMA: &str = "alife.phase31.performance-baseline.v3";
+const PHASE31_PERFORMANCE_SCHEMA_VERSION: u16 = 3;
 const PHASE31_WARMUP_DURATION: Duration = Duration::from_secs(5);
 const PHASE31_MEASUREMENT_DURATION: Duration = Duration::from_secs(60);
 const PHASE31_PERFORMANCE_ARTIFACT_DIR: &str = "target/artifacts/phase31-performance";
@@ -7816,9 +7816,6 @@ fn phase31_performance_after_ui(
     if started.elapsed() < PHASE31_MEASUREMENT_DURATION {
         return;
     }
-    if !runtime.runtime.persistence_idle_for_shutdown() {
-        return;
-    }
     match write_phase31_performance_receipt(
         &metrics,
         &runtime.runtime,
@@ -7996,35 +7993,6 @@ fn write_phase31_performance_receipt(
     let preparation_residual_ns = runtime_delta
         .perception_sleep_preparation_wall_ns
         .saturating_sub(measured_preparation_ns);
-    let sleep_journal_publication_stages = serde_json::json!({
-        "current_journal_load_validation_ns": runtime_delta.sleep_journal_current_load_validation_wall_ns,
-        "merge_ns": runtime_delta.sleep_journal_merge_wall_ns,
-        "sort_ns": runtime_delta.sleep_journal_sort_wall_ns,
-        "journal_build_validation_ns": runtime_delta.sleep_journal_build_validation_wall_ns,
-        "input_validation_ns": runtime_delta.sleep_journal_input_validation_wall_ns,
-        "cas_lock_wait_ns": runtime_delta.sleep_journal_cas_lock_wait_wall_ns,
-        "cas_base_reload_ns": runtime_delta.sleep_journal_cas_base_reload_wall_ns,
-        "save_encode_ns": runtime_delta.sleep_journal_save_encode_wall_ns,
-        "save_artifact_write_ns": runtime_delta.sleep_journal_save_artifact_write_wall_ns,
-        "journal_encode_ns": runtime_delta.sleep_journal_encode_wall_ns,
-        "journal_artifact_write_ns": runtime_delta.sleep_journal_artifact_write_wall_ns,
-        "pointer_build_validation_ns": runtime_delta.sleep_journal_pointer_build_validation_wall_ns,
-        "prepared_artifact_reload_validation_ns": runtime_delta.sleep_journal_prepared_reload_validation_wall_ns,
-        "manifest_encode_ns": runtime_delta.sleep_journal_manifest_encode_wall_ns,
-        "manifest_write_ns": runtime_delta.sleep_journal_manifest_write_wall_ns,
-        "manifest_reload_validation_ns": runtime_delta.sleep_journal_manifest_reload_validation_wall_ns,
-        "final_journal_reload_validation_ns": runtime_delta.sleep_journal_final_reload_validation_wall_ns,
-        "outer_manifest_reload_validation_ns": runtime_delta.sleep_journal_outer_manifest_reload_validation_wall_ns,
-        "outer_journal_reload_validation_ns": runtime_delta.sleep_journal_outer_reload_validation_wall_ns,
-        "worker_starts": runtime_delta.sleep_journal_worker_starts,
-        "worker_completions": runtime_delta.sleep_journal_worker_completions,
-        "worker_failures": runtime_delta.sleep_journal_worker_failures,
-        "worker_poll_calls": runtime_delta.sleep_journal_worker_poll_calls,
-        "worker_poll_ns": runtime_delta.sleep_journal_worker_poll_wall_ns,
-        "worker_wall_ns": runtime_delta.sleep_journal_worker_wall_ns,
-        "pending_entries_peak": runtime_delta.sleep_journal_pending_entries_peak,
-        "update_thread_enqueue_ns": runtime_delta.sleep_journal_update_thread_enqueue_wall_ns
-    });
     let receipt = serde_json::json!({
         "schema": PHASE31_PERFORMANCE_SCHEMA,
         "schema_version": PHASE31_PERFORMANCE_SCHEMA_VERSION,
@@ -8216,8 +8184,7 @@ fn write_phase31_performance_receipt(
             "promotion_calls": runtime_delta.sleep_promotion_calls,
             "promotion_publish_calls": runtime_delta.sleep_promotion_publish_calls,
             "promotion_publish_wall_ns": runtime_delta.sleep_promotion_publish_wall_ns
-        },
-        "sleep_journal_publication_stages": sleep_journal_publication_stages
+        }
     });
     let root = PathBuf::from(PHASE31_PERFORMANCE_ARTIFACT_DIR);
     fs::create_dir_all(&root)?;

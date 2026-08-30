@@ -8,8 +8,7 @@ pub use checkpoint_assets::{
     current_backend_provenance, merge_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite,
     GpuBrainSidecarCapture, GpuCheckpointAssetStore, GpuDurableFounderWrite,
     GpuDurableSaveManifest, GpuExactCheckpointTransactionContextV1, GpuLoadedSaveManifest,
-    GpuSaveManifestCasOutcome, GpuSaveManifestDigest, GpuSleepJournalPublicationReceipt,
-    GpuSleepJournalPublicationTiming, GpuSleepTransactionJournalEntryV2,
+    GpuSaveManifestCasOutcome, GpuSaveManifestDigest, GpuSleepTransactionJournalEntryV2,
     GpuSleepTransactionJournalV2, RestoredGpuBrainCheckpoint, RestoredRetainedLearning,
     RetainedLearningCapture,
 };

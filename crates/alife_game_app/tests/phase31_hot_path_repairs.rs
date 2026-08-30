@@ -203,8 +203,7 @@ fn phase31_post_journal_authority_survives_finish_for_the_next_ordinary_edge() {
 
     let mut fixture = canonical_runtime(31_082_706, 6);
     let mut committed_generation = None;
-    let commit_deadline = Instant::now() + Duration::from_secs(30);
-    while Instant::now() < commit_deadline {
+    for _ in 0..128 {
         tick_with_checkpoint_poll_opportunity(&mut fixture.runtime, &fixture.organisms);
         let all_committed = fixture.organisms.iter().all(|organism_id| {
             matches!(
@@ -237,8 +236,7 @@ fn phase31_post_journal_authority_survives_finish_for_the_next_ordinary_edge() {
     let metrics_before_ordinary_edge = fixture.runtime.performance_metrics();
 
     let mut ordinary_generation = None;
-    let ordinary_edge_deadline = Instant::now() + Duration::from_secs(30);
-    while Instant::now() < ordinary_edge_deadline {
+    for _ in 0..64 {
         tick_with_checkpoint_poll_opportunity(&mut fixture.runtime, &fixture.organisms);
         let generation = GpuDurableSaveManifest::open(&fixture.save_path, &fixture.asset_root)
             .unwrap()
