@@ -266,15 +266,7 @@ fn validate_sleep_journal_neural_authority(
     handle: GpuBrainHandle,
     expected: &SleepJournalNeuralAuthority,
 ) -> Result<(), ScaffoldContractError> {
-    if let Err(error) = backend.validate_compact_checkpoint_authority(handle, &expected.compact) {
-        let current = backend.compact_checkpoint_authority(handle).ok();
-        eprintln!(
-            "PHASE31_SLEEP_GENERATION_ERROR stage=compact-authority-validation organism={} expected={:?} current={current:?} error={error}",
-            handle.organism_id().raw(),
-            expected.compact
-        );
-        return Err(error);
-    }
+    backend.validate_compact_checkpoint_authority(handle, &expected.compact)?;
     let current = backend.snapshot_activity_state(handle)?;
     if current.next_sequence_cursor != expected.activity.next_sequence_cursor
         || current.next_completed_gpu_time_ns != expected.activity.next_completed_gpu_time_ns
@@ -285,25 +277,6 @@ fn validate_sleep_journal_neural_authority(
         return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
     }
     Ok(())
-}
-
-fn trace_sleep_progress_result<T>(
-    result: Result<T, ScaffoldContractError>,
-    backend: &mut GpuClosedLoopBackend,
-    handle: GpuBrainHandle,
-    state: SleepState,
-    stage: &'static str,
-) -> Result<T, ScaffoldContractError> {
-    if let Err(error) = &result {
-        if *error == ScaffoldContractError::ConsolidationGenerationMismatch {
-            let current = backend.compact_checkpoint_authority(handle).ok();
-            eprintln!(
-                "PHASE31_SLEEP_GENERATION_ERROR stage={stage} organism={} state={state:?} current={current:?} error={error}",
-                handle.organism_id().raw()
-            );
-        }
-    }
-    result
 }
 
 fn resident_authority_plan_from_record(
@@ -821,7 +794,6 @@ struct ExactPopulationCheckpointJournalPromotionV1 {
 
 struct ExactPopulationCheckpointJournalCommitV1 {
     authorities: Vec<(u64, SleepJournalNeuralAuthority)>,
-    sealed_authorities: Vec<(u64, SleepJournalNeuralAuthority)>,
     entry_count: u64,
     contains_completed_promotion: bool,
 }
@@ -1765,16 +1737,9 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                 {
                     return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
                 }
-                let result = self
+                let request = self
                     .backend
-                    .prepare_sleep_consolidation(self.handle, intent, &replay);
-                let request = trace_sleep_progress_result(
-                    result,
-                    self.backend,
-                    self.handle,
-                    state,
-                    "pending-prepare",
-                )?;
+                    .prepare_sleep_consolidation(self.handle, intent, &replay)?;
                 ConsolidationDriverEvent::Prepared { request }
             }
             (ConsolidationState::Prepared { request }, None) => {
@@ -1782,16 +1747,9 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                 if replay.canonical_digest != request.replay_digest {
                     return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
                 }
-                let result = self
+                let job_id = self
                     .backend
-                    .submit_sleep_consolidation(self.handle, &request, &replay);
-                let job_id = trace_sleep_progress_result(
-                    result,
-                    self.backend,
-                    self.handle,
-                    state,
-                    "prepared-submit",
-                )?;
+                    .submit_sleep_consolidation(self.handle, &request, &replay)?;
                 ConsolidationDriverEvent::Submitted { request, job_id }
             }
             (ConsolidationState::Submitted { request, job_id }, None) => {
@@ -1806,18 +1764,11 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                         if replay.canonical_digest != request.replay_digest {
                             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
                         }
-                        let result = self.backend.recover_submitted_sleep_consolidation(
+                        let recovered_job_id = self.backend.recover_submitted_sleep_consolidation(
                             self.handle,
                             &request,
                             &replay,
                             job_id,
-                        );
-                        let recovered_job_id = trace_sleep_progress_result(
-                            result,
-                            self.backend,
-                            self.handle,
-                            state,
-                            "submitted-recover",
                         )?;
                         ConsolidationDriverEvent::RecoveredSubmitted {
                             request,
@@ -1829,16 +1780,9 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                 }
             }
             (ConsolidationState::Completed { request, staged }, None) => {
-                let result =
+                let receipt =
                     self.backend
-                        .commit_sleep_consolidation(self.handle, &request, &staged);
-                let receipt = trace_sleep_progress_result(
-                    result,
-                    self.backend,
-                    self.handle,
-                    state,
-                    "completed-commit",
-                )?;
+                        .commit_sleep_consolidation(self.handle, &request, &staged)?;
                 ConsolidationDriverEvent::Committed {
                     cycle_id: request.cycle_id,
                     output_generation: receipt.output_generation,
@@ -6411,24 +6355,9 @@ impl GpuLiveBrainRuntime {
                 | ExactPopulationCheckpointRuntimeWorkV1::Worker { .. }
                 | ExactPopulationCheckpointRuntimeWorkV1::CommitWorker { .. }
                 | ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { .. }
+                | ExactPopulationCheckpointRuntimeWorkV1::JournalWorker { .. }
+                | ExactPopulationCheckpointRuntimeWorkV1::Finalizing { .. }
         )
-    }
-
-    fn in_flight_exact_journal_authority(
-        &self,
-        organism_id_raw: u64,
-    ) -> Option<SleepJournalNeuralAuthority> {
-        let journal_commit = match &self.exact_checkpoint_work {
-            ExactPopulationCheckpointRuntimeWorkV1::JournalWorker { journal_commit, .. }
-            | ExactPopulationCheckpointRuntimeWorkV1::Finalizing { journal_commit, .. } => {
-                journal_commit.as_ref()
-            }
-            _ => None,
-        }?;
-        journal_commit
-            .sealed_authorities
-            .iter()
-            .find_map(|(raw, authority)| (*raw == organism_id_raw).then(|| authority.clone()))
     }
 
     fn resume_exact_checkpoint_after_sleep_journal_drain(
@@ -6642,11 +6571,6 @@ impl GpuLiveBrainRuntime {
             .performance_metrics
             .exact_checkpoint_transactions_started
             .saturating_add(1);
-        if !self.pending_exact_sleep_journal_entries.is_empty() {
-            self.exact_checkpoint_coordinator.fail_stop();
-            self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
-            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
-        }
         let result = (|| {
             let base = self
                 .checkpoint_durability
@@ -7168,11 +7092,6 @@ impl GpuLiveBrainRuntime {
                                 worker,
                             };
                     } else {
-                        let sealed_authorities = permit
-                            .captured_journal_authorities()
-                            .iter()
-                            .map(|(&raw, authority)| (raw, authority.clone()))
-                            .collect();
                         let (journal_writes, authorities) =
                             match self.take_exact_checkpoint_journal_writes(&permit) {
                                 Ok(writes) => writes,
@@ -7233,7 +7152,6 @@ impl GpuLiveBrainRuntime {
                                 journal_commit: Some(ExactPopulationCheckpointJournalCommitV1 {
                                     entry_count: journal_entry_count,
                                     authorities,
-                                    sealed_authorities,
                                     contains_completed_promotion: false,
                                 }),
                             };
@@ -7407,11 +7325,14 @@ impl GpuLiveBrainRuntime {
                         .saturating_add(journal_commit.entry_count);
                 }
                 if !self.pending_exact_sleep_journal_entries.is_empty() {
-                    self.exact_checkpoint_coordinator.fail_stop();
-                    self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
-                    self.backend
-                        .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
-                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+                    let durability = self
+                        .checkpoint_durability
+                        .as_ref()
+                        .ok_or(ScaffoldContractError::MissingPhaseData)?;
+                    let _ = self.exact_checkpoint_coordinator.request_exact(
+                        self.world.tick(),
+                        durability.published.digest.as_str().to_string(),
+                    )?;
                 }
                 if let Err(error) = self
                     .exact_checkpoint_coordinator
@@ -7573,11 +7494,6 @@ impl GpuLiveBrainRuntime {
         };
         permit.validate_restored_provenance()?;
         let transaction_id = permit.transaction_id();
-        let sealed_authorities = permit
-            .captured_journal_authorities()
-            .iter()
-            .map(|(&raw, authority)| (raw, authority.clone()))
-            .collect();
         let (mut worker_promotions, queued_authorities) =
             match self.take_exact_checkpoint_journal_writes(&permit) {
                 Ok(writes) => writes,
@@ -7705,7 +7621,6 @@ impl GpuLiveBrainRuntime {
             worker,
             journal_commit: Some(ExactPopulationCheckpointJournalCommitV1 {
                 authorities,
-                sealed_authorities,
                 entry_count,
                 contains_completed_promotion: !promotions.is_empty(),
             }),
@@ -9538,13 +9453,6 @@ impl GpuLiveBrainRuntime {
                     {
                         continue;
                     }
-                    if let Some(authority) = self.in_flight_exact_journal_authority(raw) {
-                        // The exact worker validates this sealed tick-T authority
-                        // before it can publish. Comparing it with later live GPU
-                        // state would reject valid post-capture progress.
-                        sleep_journal_neural_authority_updates.insert(raw, authority);
-                        continue;
-                    }
                     let durability = durability
                         .as_ref()
                         .ok_or(ScaffoldContractError::MissingPhaseData)?;
@@ -11364,6 +11272,11 @@ impl GpuLiveBrainRuntime {
     pub fn exact_checkpoint_follow_up_queued_for_test(&self) -> bool {
         self.exact_checkpoint_coordinator
             .checkpoint_needed_after_current()
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn exact_checkpoint_accepts_journal_entries_for_test(&self) -> bool {
+        self.exact_checkpoint_accepts_journal_entries()
     }
 
     #[cfg(feature = "gpu-tests")]

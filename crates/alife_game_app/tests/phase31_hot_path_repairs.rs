@@ -348,6 +348,7 @@ fn phase31_async_journal_publication_survives_later_cycles_then_drains() {
     fixture.runtime.set_performance_measurement_enabled(true);
     let started = Instant::now();
     let tick_deadline = started + Duration::from_secs(180);
+    let mut saw_late_exact_journal_stage = false;
     while fixture.runtime.world_tick_for_test().raw() < 750 && Instant::now() < tick_deadline {
         if let Err(error) = fixture.runtime.tick() {
             panic!(
@@ -361,8 +362,22 @@ fn phase31_async_journal_publication_survives_later_cycles_then_drains() {
         if fixture.runtime.world_tick_for_test().raw() % 4 == 0 {
             std::thread::park_timeout(Duration::from_millis(16));
         }
+        let (_, work) = fixture.runtime.exact_checkpoint_state_for_test();
+        if matches!(work, "JournalWorker" | "Finalizing") {
+            saw_late_exact_journal_stage = true;
+            assert!(
+                fixture
+                    .runtime
+                    .exact_checkpoint_accepts_journal_entries_for_test(),
+                "late sleep edges must remain in the active exact transaction"
+            );
+        }
     }
     assert!(fixture.runtime.world_tick_for_test().raw() >= 750);
+    assert!(
+        saw_late_exact_journal_stage,
+        "test must exercise the exact journal worker while later ticks advance"
+    );
 
     let quiesced_tick = fixture.runtime.world_tick_for_test();
     let drain_deadline = Instant::now() + Duration::from_secs(30);
