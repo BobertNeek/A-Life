@@ -868,6 +868,7 @@ const PHASE31_PERFORMANCE_SCHEMA: &str = "alife.phase31.performance-baseline.v4"
 const PHASE31_PERFORMANCE_SCHEMA_VERSION: u16 = 4;
 const PHASE31_WARMUP_DURATION: Duration = Duration::from_secs(5);
 const PHASE31_MEASUREMENT_DURATION: Duration = Duration::from_secs(60);
+const PHASE31_PERSISTENCE_DRAIN_TIMEOUT: Duration = Duration::from_secs(20);
 const PHASE31_PERFORMANCE_ARTIFACT_DIR: &str = "target/artifacts/phase31-performance";
 
 #[cfg(feature = "gpu-runtime")]
@@ -7842,11 +7843,22 @@ fn phase31_performance_after_ui(
     if !draining {
         return;
     }
-    if !runtime.runtime.persistence_terminal_for_shutdown() {
+    let drain_timed_out = metrics.measurement_completed_at.is_some_and(|completed| {
+        Instant::now().duration_since(completed) >= PHASE31_PERSISTENCE_DRAIN_TIMEOUT
+    });
+    if !runtime.runtime.persistence_terminal_for_shutdown() && !drain_timed_out {
+        return;
+    }
+    if drain_timed_out {
+        let diagnostics = runtime.runtime.persistence_shutdown_diagnostics();
+        eprintln!("PHASE31_PERSISTENCE_DRAIN_TIMEOUT {diagnostics}");
+        metrics.write_error = Some(diagnostics);
+        exits.write(AppExit::Error(std::num::NonZeroU8::new(1).unwrap()));
         return;
     }
     let persistence_failed = runtime.runtime.persistence_failed_for_shutdown();
-    let performance_failed = schedule.performance_failed() || persistence_failed;
+    let performance_failed =
+        schedule.performance_failed() || persistence_failed || drain_timed_out;
     match write_phase31_performance_receipt(
         &metrics,
         &runtime.runtime,
@@ -8060,7 +8072,13 @@ fn write_phase31_performance_receipt(
         "pending_entries_peak": runtime_delta.sleep_journal_pending_entries_peak,
         "update_thread_enqueue_ns": runtime_delta.sleep_journal_update_thread_enqueue_wall_ns
     });
-    let receipt = serde_json::json!({
+    let persistence_shutdown = serde_json::json!({
+        "idle": runtime.persistence_idle_for_shutdown(),
+        "failed": runtime.persistence_failed_for_shutdown(),
+        "checkpoint": runtime.exact_checkpoint_performance_state(),
+        "outstanding": runtime.persistence_shutdown_diagnostics()
+    });
+    let mut receipt = serde_json::json!({
         "schema": PHASE31_PERFORMANCE_SCHEMA,
         "schema_version": PHASE31_PERFORMANCE_SCHEMA_VERSION,
         "source_head": source_head,
@@ -8254,6 +8272,10 @@ fn write_phase31_performance_receipt(
         },
         "sleep_journal_publication_stages": sleep_journal_publication_stages
     });
+    receipt
+        .as_object_mut()
+        .expect("performance receipt root is an object")
+        .insert("persistence_shutdown".to_string(), persistence_shutdown);
     let root = PathBuf::from(PHASE31_PERFORMANCE_ARTIFACT_DIR);
     fs::create_dir_all(&root)?;
     let path = root.join(format!(

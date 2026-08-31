@@ -6500,6 +6500,17 @@ impl GpuLiveBrainRuntime {
         self.persistence_idle_for_shutdown() || self.persistence_failed_for_shutdown()
     }
 
+    pub(crate) fn persistence_shutdown_diagnostics(&self) -> String {
+        format!(
+            "checkpoint={:?}; sleep_worker_active={}; pending_sleep_entries={}; exact_waiting_for_sleep_journal={}; manual_waiting={}",
+            self.exact_checkpoint_performance_state(),
+            self.sleep_journal_publication_worker.is_some(),
+            self.pending_sleep_journal_entries.len(),
+            self.exact_checkpoint_waiting_for_sleep_journal,
+            self.manual_checkpoint_waiting_for_sleep_journal.is_some()
+        )
+    }
+
     pub(crate) fn poll_persistence_for_shutdown(&mut self) -> Result<(), GameAppShellError> {
         self.poll_sleep_journal_publication()?;
         self.poll_exact_population_checkpoint()?;
