@@ -1116,6 +1116,22 @@ fn assemble_checkpointed_save_from_immutable_capture(
     Ok((host.replacement, exact_neural_captures))
 }
 
+#[cfg(windows)]
+fn configure_persistence_worker_priority() {
+    use windows_sys::Win32::System::Threading::{
+        GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL,
+    };
+
+    // Persistence is durable background work. Prefer the render/update thread
+    // when both are runnable without skipping or delaying any transaction.
+    unsafe {
+        let _ = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+    }
+}
+
+#[cfg(not(windows))]
+fn configure_persistence_worker_priority() {}
+
 fn spawn_exact_population_checkpoint_worker(
     transaction_id: u64,
     expected_base_digest: String,
@@ -1127,6 +1143,7 @@ fn spawn_exact_population_checkpoint_worker(
     let (event_sender, event_receiver) = mpsc::sync_channel(1);
     let (command_sender, command_receiver) = mpsc::sync_channel(1);
     let join_handle = thread::spawn(move || {
+        configure_persistence_worker_priority();
         let checkpoint_tick = host.checkpoint_tick;
         let capture_transaction_generation = capture.capture_transaction_generation();
         let population_set_digest = capture.population_set_digest();
@@ -1266,6 +1283,7 @@ fn spawn_exact_population_checkpoint_recommit_worker(
     let (event_sender, event_receiver) = mpsc::sync_channel(1);
     let (command_sender, command_receiver) = mpsc::sync_channel(1);
     let join_handle = thread::spawn(move || {
+        configure_persistence_worker_priority();
         run_exact_population_checkpoint_finalize_worker(durability, command_receiver, event_sender);
     });
     ExactPopulationCheckpointWorkerOwnerV1 {
@@ -1282,6 +1300,7 @@ fn spawn_sleep_journal_publication_worker(
 ) -> SleepJournalPublicationWorkerOwnerV1 {
     let (sender, receiver) = mpsc::sync_channel(1);
     let join_handle = thread::spawn(move || {
+        configure_persistence_worker_priority();
         let started = measure.then(Instant::now);
         let entry_count = u64::try_from(entries.len()).unwrap_or(u64::MAX);
         let expected_base_digest = durability.published.digest.as_str().to_string();
