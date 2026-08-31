@@ -794,6 +794,7 @@ struct ExactPopulationCheckpointJournalPromotionV1 {
 
 struct ExactPopulationCheckpointJournalCommitV1 {
     authorities: Vec<(u64, SleepJournalNeuralAuthority)>,
+    sealed_authorities: Vec<(u64, SleepJournalNeuralAuthority)>,
     entry_count: u64,
     contains_completed_promotion: bool,
 }
@@ -2265,9 +2266,6 @@ const fn no_progress_reason_for_checkpoint_stage(
     stage: ExactPopulationCheckpointStageV1,
 ) -> Option<GpuLiveNoProgressReason> {
     match stage {
-        ExactPopulationCheckpointStageV1::DeferredJournalPublishing => {
-            Some(GpuLiveNoProgressReason::CheckpointPublicationPending)
-        }
         ExactPopulationCheckpointStageV1::Failed => Some(GpuLiveNoProgressReason::CheckpointFailed),
         _ => None,
     }
@@ -6324,7 +6322,9 @@ impl GpuLiveBrainRuntime {
         if entries.is_empty() {
             return Ok(());
         }
-        if self.sleep_journal_publication_worker.is_some() {
+        if self.sleep_journal_publication_worker.is_some()
+            || self.checkpoint_durability.is_none()
+        {
             append_bounded_sleep_journal_entries(&mut self.pending_sleep_journal_entries, entries)?;
             self.performance_metrics.sleep_journal_pending_entries_peak = self
                 .performance_metrics
@@ -6347,6 +6347,33 @@ impl GpuLiveBrainRuntime {
             .sleep_journal_worker_starts
             .saturating_add(1);
         Ok(())
+    }
+
+    fn exact_checkpoint_accepts_journal_entries(&self) -> bool {
+        matches!(
+            self.exact_checkpoint_work,
+            ExactPopulationCheckpointRuntimeWorkV1::Capture { .. }
+                | ExactPopulationCheckpointRuntimeWorkV1::Worker { .. }
+                | ExactPopulationCheckpointRuntimeWorkV1::CommitWorker { .. }
+                | ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { .. }
+        )
+    }
+
+    fn in_flight_exact_journal_authority(
+        &self,
+        organism_id_raw: u64,
+    ) -> Option<SleepJournalNeuralAuthority> {
+        let journal_commit = match &self.exact_checkpoint_work {
+            ExactPopulationCheckpointRuntimeWorkV1::JournalWorker { journal_commit, .. }
+            | ExactPopulationCheckpointRuntimeWorkV1::Finalizing { journal_commit, .. } => {
+                journal_commit.as_ref()
+            }
+            _ => None,
+        }?;
+        journal_commit
+            .sealed_authorities
+            .iter()
+            .find_map(|(raw, authority)| (*raw == organism_id_raw).then(|| authority.clone()))
     }
 
     fn poll_sleep_journal_publication(&mut self) -> Result<(), GameAppShellError> {
@@ -6494,6 +6521,13 @@ impl GpuLiveBrainRuntime {
     }
 
     fn request_exact_population_checkpoint(&mut self) -> Result<(), GameAppShellError> {
+        if let Some(active) = self.exact_checkpoint_coordinator.active_identity() {
+            let expected_base_digest = active.expected_base_digest.clone();
+            let _ = self
+                .exact_checkpoint_coordinator
+                .request_exact(self.world.tick(), expected_base_digest)?;
+            return Ok(());
+        }
         if self.sleep_journal_publication_worker.is_some()
             || !self.pending_sleep_journal_entries.is_empty()
         {
@@ -7044,6 +7078,11 @@ impl GpuLiveBrainRuntime {
                                 worker,
                             };
                     } else {
+                        let sealed_authorities = permit
+                            .captured_journal_authorities()
+                            .iter()
+                            .map(|(&raw, authority)| (raw, authority.clone()))
+                            .collect();
                         let (journal_writes, authorities) =
                             match self.take_exact_checkpoint_journal_writes(&permit) {
                                 Ok(writes) => writes,
@@ -7104,6 +7143,7 @@ impl GpuLiveBrainRuntime {
                                 journal_commit: Some(ExactPopulationCheckpointJournalCommitV1 {
                                     entry_count: journal_entry_count,
                                     authorities,
+                                    sealed_authorities,
                                     contains_completed_promotion: false,
                                 }),
                             };
@@ -7318,6 +7358,10 @@ impl GpuLiveBrainRuntime {
                             .map_or(0, elapsed_ns),
                     );
                 self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Idle;
+                if !self.pending_sleep_journal_entries.is_empty() {
+                    let pending = std::mem::take(&mut self.pending_sleep_journal_entries);
+                    self.start_sleep_journal_publication(pending)?;
+                }
                 if follow_up {
                     if let Err(error) = self.request_exact_population_checkpoint() {
                         self.exact_checkpoint_coordinator.fail_stop();
@@ -7439,6 +7483,11 @@ impl GpuLiveBrainRuntime {
         };
         permit.validate_restored_provenance()?;
         let transaction_id = permit.transaction_id();
+        let sealed_authorities = permit
+            .captured_journal_authorities()
+            .iter()
+            .map(|(&raw, authority)| (raw, authority.clone()))
+            .collect();
         let (mut worker_promotions, queued_authorities) =
             match self.take_exact_checkpoint_journal_writes(&permit) {
                 Ok(writes) => writes,
@@ -7566,6 +7615,7 @@ impl GpuLiveBrainRuntime {
             worker,
             journal_commit: Some(ExactPopulationCheckpointJournalCommitV1 {
                 authorities,
+                sealed_authorities,
                 entry_count,
                 contains_completed_promotion: !promotions.is_empty(),
             }),
@@ -9233,7 +9283,7 @@ impl GpuLiveBrainRuntime {
         // finalize. Entries newer than the captured tick are consumed by the
         // coordinator's single bounded follow-up checkpoint request.
         if !completed_promotions.is_empty()
-            && self.exact_checkpoint_coordinator.is_active()
+            && self.exact_checkpoint_accepts_journal_entries()
             && !sleep_journal_entries.is_empty()
         {
             self.queue_exact_checkpoint_journal_entries(sleep_journal_entries.clone())?;
@@ -9364,11 +9414,11 @@ impl GpuLiveBrainRuntime {
         if persist_exact_sleep_boundary {
             let sleep_persistence_started = Instant::now();
             self.request_exact_population_checkpoint()?;
-            if self.exact_checkpoint_coordinator.is_active() && !sleep_journal_entries.is_empty() {
-                self.queue_exact_checkpoint_journal_entries(sleep_journal_entries)?;
-            } else if self.exact_checkpoint_waiting_for_sleep_journal
+            if self.exact_checkpoint_accepts_journal_entries()
                 && !sleep_journal_entries.is_empty()
             {
+                self.queue_exact_checkpoint_journal_entries(sleep_journal_entries)?;
+            } else if !sleep_journal_entries.is_empty() {
                 self.sleep_journal_neural_authorities
                     .extend(sleep_journal_neural_authority_updates);
                 let enqueue_started = self.performance_measurement_enabled.then(Instant::now);
@@ -9384,14 +9434,12 @@ impl GpuLiveBrainRuntime {
                 .sleep_persistence_wall_ns
                 .saturating_add(elapsed_ns(sleep_persistence_started));
         } else if !sleep_journal_entries.is_empty() {
-            if self.exact_checkpoint_coordinator.is_active() {
+            if self.exact_checkpoint_accepts_journal_entries() {
                 self.queue_exact_checkpoint_journal_entries(sleep_journal_entries)?;
                 return Ok(summaries_by_organism.into_values().collect());
             }
             let sleep_persistence_started = Instant::now();
-            let Some(durability) = self.checkpoint_durability.take() else {
-                return Ok(summaries_by_organism.into_values().collect());
-            };
+            let durability = self.checkpoint_durability.take();
             let validation_result = (|| -> Result<(), GameAppShellError> {
                 for entry in &sleep_journal_entries {
                     let raw = entry.organism_id.raw();
@@ -9400,6 +9448,16 @@ impl GpuLiveBrainRuntime {
                     {
                         continue;
                     }
+                    if let Some(authority) = self.in_flight_exact_journal_authority(raw) {
+                        // The exact worker validates this sealed tick-T authority
+                        // before it can publish. Comparing it with later live GPU
+                        // state would reject valid post-capture progress.
+                        sleep_journal_neural_authority_updates.insert(raw, authority);
+                        continue;
+                    }
+                    let durability = durability
+                        .as_ref()
+                        .ok_or(ScaffoldContractError::MissingPhaseData)?;
                     let handle = *self
                         .handles
                         .get(&raw)
@@ -9431,14 +9489,14 @@ impl GpuLiveBrainRuntime {
                 Ok(())
             })();
             if let Err(error) = validation_result {
-                self.checkpoint_durability = Some(durability);
+                self.checkpoint_durability = durability;
                 return Err(error);
             }
             self.performance_metrics.sleep_persistence_calls = self
                 .performance_metrics
                 .sleep_persistence_calls
                 .saturating_add(1);
-            self.checkpoint_durability = Some(durability);
+            self.checkpoint_durability = durability;
             self.sleep_journal_neural_authorities
                 .extend(sleep_journal_neural_authority_updates);
             let enqueue_started = self.performance_measurement_enabled.then(Instant::now);
@@ -11654,12 +11712,12 @@ mod tests {
     };
 
     #[test]
-    fn only_deferred_checkpoint_publication_is_a_typed_checkpoint_wait() {
+    fn deferred_checkpoint_publication_does_not_block_ordinary_ticks() {
         assert_eq!(
             no_progress_reason_for_checkpoint_stage(
                 ExactPopulationCheckpointStageV1::DeferredJournalPublishing
             ),
-            Some(GpuLiveNoProgressReason::CheckpointPublicationPending)
+            None
         );
         assert_eq!(
             no_progress_reason_for_checkpoint_stage(ExactPopulationCheckpointStageV1::Failed),

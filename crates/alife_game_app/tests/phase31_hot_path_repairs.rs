@@ -181,12 +181,13 @@ fn phase31_post_journal_authority_survives_finish_for_the_next_ordinary_edge() {
         let sleep_before = sleep_generation_rows(runtime, organisms);
         if let Err(error) = runtime.tick() {
             let active = runtime.exact_checkpoint_active_tick_for_test();
+            let state = runtime.exact_checkpoint_state_for_test();
             let pending = runtime
                 .pending_exact_sleep_journal_entries_for_test()
                 .to_vec();
             let sleep_after = sleep_generation_rows(runtime, organisms);
             panic!(
-                "exact/journal runtime failed at world tick {}: {error:?}; active={:?}; pending={:#?}; sleep_before={sleep_before:#?}; sleep_after={:#?}",
+                "exact/journal runtime failed at world tick {}: {error:?}; state={state:?}; active={:?}; pending={:#?}; sleep_before={sleep_before:#?}; sleep_after={:#?}",
                 tick_before.raw(),
                 active,
                 pending,
@@ -202,11 +203,11 @@ fn phase31_post_journal_authority_survives_finish_for_the_next_ordinary_edge() {
     }
 
     let mut fixture = canonical_runtime(31_082_706, 6);
-    let mut committed_generation = None;
     let commit_deadline = Instant::now() + Duration::from_secs(30);
+    let mut saw_all_committed = false;
     while Instant::now() < commit_deadline {
         tick_with_checkpoint_poll_opportunity(&mut fixture.runtime, &fixture.organisms);
-        let all_committed = fixture.organisms.iter().all(|organism_id| {
+        saw_all_committed = fixture.organisms.iter().all(|organism_id| {
             matches!(
                 fixture
                     .runtime
@@ -216,24 +217,35 @@ fn phase31_post_journal_authority_survives_finish_for_the_next_ordinary_edge() {
                 ConsolidationState::Committed { .. }
             )
         });
-        if all_committed
-            && fixture
-                .runtime
-                .exact_checkpoint_active_tick_for_test()
-                .is_none()
-        {
-            committed_generation = Some(
-                GpuDurableSaveManifest::open(&fixture.save_path, &fixture.asset_root)
-                    .unwrap()
-                    .load()
-                    .unwrap()
-                    .authority_generation(),
-            );
+        if saw_all_committed {
             break;
         }
     }
-    let committed_generation = committed_generation
-        .expect("the canonical cycle must durably publish Completed to Committed once");
+    assert!(
+        saw_all_committed,
+        "the canonical cycle must reach Completed to Committed"
+    );
+    let drain_deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < drain_deadline
+        && !fixture
+            .runtime
+            .persistence_idle_for_shutdown_for_test()
+    {
+        fixture
+            .runtime
+            .poll_persistence_for_shutdown_for_test()
+            .unwrap();
+        std::thread::park_timeout(Duration::from_millis(1));
+    }
+    assert!(fixture
+        .runtime
+        .persistence_idle_for_shutdown_for_test());
+    let committed_generation =
+        GpuDurableSaveManifest::open(&fixture.save_path, &fixture.asset_root)
+            .unwrap()
+            .load()
+            .unwrap()
+            .authority_generation();
     let metrics_before_ordinary_edge = fixture.runtime.performance_metrics();
 
     let mut ordinary_generation = None;
