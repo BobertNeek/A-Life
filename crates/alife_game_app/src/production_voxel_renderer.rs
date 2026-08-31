@@ -7874,7 +7874,12 @@ fn phase31_performance_after_ui(
         Ok(path) => metrics.artifact_path = Some(path),
         Err(error) => {
             let error = error.to_string();
-            eprintln!("PHASE31_PERFORMANCE_RECEIPT_ERROR {error}");
+            eprintln!(
+                "PHASE31_PERFORMANCE_RECEIPT_ERROR error={error}; authority_reason={:?}; scheduler={:?}; persistence={}",
+                authority.telemetry.unavailable_reason,
+                schedule.performance_counters(),
+                runtime.runtime.persistence_shutdown_diagnostics()
+            );
             metrics.write_error = Some(error);
             exits.write(AppExit::Error(std::num::NonZeroU8::new(1).unwrap()));
             return;
