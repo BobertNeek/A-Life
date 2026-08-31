@@ -386,6 +386,48 @@ fn phase31_async_journal_publication_survives_later_cycles_then_drains() {
 }
 
 #[test]
+fn phase31_shutdown_poll_releases_a_stranded_exact_journal_wait() {
+    let mut fixture = canonical_runtime(31_082_706, 6);
+    assert!(fixture
+        .runtime
+        .persistence_idle_for_shutdown_for_test());
+    fixture
+        .runtime
+        .force_stranded_exact_journal_wait_for_test();
+    assert!(!fixture
+        .runtime
+        .persistence_idle_for_shutdown_for_test());
+
+    fixture
+        .runtime
+        .poll_persistence_for_shutdown_for_test()
+        .unwrap();
+    assert!(fixture
+        .runtime
+        .exact_checkpoint_active_tick_for_test()
+        .is_some());
+
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < deadline
+        && !fixture
+            .runtime
+            .persistence_idle_for_shutdown_for_test()
+    {
+        fixture
+            .runtime
+            .poll_persistence_for_shutdown_for_test()
+            .unwrap();
+        std::thread::park_timeout(Duration::from_millis(1));
+    }
+    assert!(fixture
+        .runtime
+        .persistence_idle_for_shutdown_for_test());
+
+    drop(fixture.runtime);
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
 fn phase31_natural_later_journal_edge_forces_exactly_one_follow_up_capture() {
     let mut fixture = canonical_runtime(31_082_706, 6);
     let started = Instant::now();

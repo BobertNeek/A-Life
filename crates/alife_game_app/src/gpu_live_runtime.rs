@@ -6376,6 +6376,23 @@ impl GpuLiveBrainRuntime {
             .find_map(|(raw, authority)| (*raw == organism_id_raw).then(|| authority.clone()))
     }
 
+    fn resume_exact_checkpoint_after_sleep_journal_drain(
+        &mut self,
+    ) -> Result<(), GameAppShellError> {
+        if self.sleep_journal_publication_worker.is_some()
+            || !self.pending_sleep_journal_entries.is_empty()
+            || !self.exact_checkpoint_waiting_for_sleep_journal
+        {
+            return Ok(());
+        }
+        self.exact_checkpoint_waiting_for_sleep_journal = false;
+        self.request_exact_population_checkpoint()?;
+        if let Some(destination) = self.manual_checkpoint_waiting_for_sleep_journal.take() {
+            let _ = self.request_manual_checkpoint(destination)?;
+        }
+        Ok(())
+    }
+
     fn poll_sleep_journal_publication(&mut self) -> Result<(), GameAppShellError> {
         let started = self.performance_measurement_enabled.then(Instant::now);
         self.performance_metrics.sleep_journal_worker_poll_calls = self
@@ -6383,6 +6400,7 @@ impl GpuLiveBrainRuntime {
             .sleep_journal_worker_poll_calls
             .saturating_add(1);
         let Some(mut worker) = self.sleep_journal_publication_worker.take() else {
+            self.resume_exact_checkpoint_after_sleep_journal_drain()?;
             self.performance_metrics.sleep_journal_worker_poll_wall_ns = self
                 .performance_metrics
                 .sleep_journal_worker_poll_wall_ns
@@ -6407,14 +6425,8 @@ impl GpuLiveBrainRuntime {
                 if !self.pending_sleep_journal_entries.is_empty() {
                     let pending = std::mem::take(&mut self.pending_sleep_journal_entries);
                     self.start_sleep_journal_publication(pending)?;
-                } else if self.exact_checkpoint_waiting_for_sleep_journal {
-                    self.exact_checkpoint_waiting_for_sleep_journal = false;
-                    self.request_exact_population_checkpoint()?;
-                    if let Some(destination) =
-                        self.manual_checkpoint_waiting_for_sleep_journal.take()
-                    {
-                        let _ = self.request_manual_checkpoint(destination)?;
-                    }
+                } else {
+                    self.resume_exact_checkpoint_after_sleep_journal_drain()?;
                 }
             }
         }
@@ -11246,6 +11258,14 @@ impl GpuLiveBrainRuntime {
     #[cfg(feature = "gpu-tests")]
     pub fn poll_exact_checkpoint_for_test(&mut self) -> Result<(), GameAppShellError> {
         self.poll_exact_population_checkpoint()
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn force_stranded_exact_journal_wait_for_test(&mut self) {
+        assert!(self.sleep_journal_publication_worker.is_none());
+        assert!(self.pending_sleep_journal_entries.is_empty());
+        assert!(!self.exact_checkpoint_coordinator.is_active());
+        self.exact_checkpoint_waiting_for_sleep_journal = true;
     }
 
     #[cfg(feature = "gpu-tests")]
