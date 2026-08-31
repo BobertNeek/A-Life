@@ -1324,19 +1324,13 @@ fn run_exact_population_checkpoint_finalize_worker(
                 }
                 Ok::<_, GameAppShellError>(entries)
             })();
+            // Journal publication already validates the immutable artifacts and
+            // atomically installs the generation-checked pointer.
             let result = validated_entries
-                .and_then(|entries| durability.publish_sleep_journal_entries(entries, false))
-                .and_then(|_| {
-                    let published = durability.durable_manifest.load()?;
-                    let _ = durability
-                        .durable_manifest
-                        .load_sleep_transaction_journal(&published)?;
-                    durability.published = published;
-                    Ok(())
-                });
+                .and_then(|entries| durability.publish_sleep_journal_entries(entries, false));
             match result {
                 Err(error) => (Err(error), None),
-                Ok(()) => match manual {
+                Ok(_) => match manual {
                     Some(request) => {
                         let completion = ManualCheckpointCompletionV1 {
                             destination: request.destination.clone(),
