@@ -266,7 +266,15 @@ fn validate_sleep_journal_neural_authority(
     handle: GpuBrainHandle,
     expected: &SleepJournalNeuralAuthority,
 ) -> Result<(), ScaffoldContractError> {
-    backend.validate_compact_checkpoint_authority(handle, &expected.compact)?;
+    if let Err(error) = backend.validate_compact_checkpoint_authority(handle, &expected.compact) {
+        let current = backend.compact_checkpoint_authority(handle).ok();
+        eprintln!(
+            "PHASE31_SLEEP_GENERATION_ERROR stage=compact-authority-validation organism={} expected={:?} current={current:?} error={error}",
+            handle.organism_id().raw(),
+            expected.compact
+        );
+        return Err(error);
+    }
     let current = backend.snapshot_activity_state(handle)?;
     if current.next_sequence_cursor != expected.activity.next_sequence_cursor
         || current.next_completed_gpu_time_ns != expected.activity.next_completed_gpu_time_ns
@@ -277,6 +285,25 @@ fn validate_sleep_journal_neural_authority(
         return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
     }
     Ok(())
+}
+
+fn trace_sleep_progress_result<T>(
+    result: Result<T, ScaffoldContractError>,
+    backend: &mut GpuClosedLoopBackend,
+    handle: GpuBrainHandle,
+    state: SleepState,
+    stage: &'static str,
+) -> Result<T, ScaffoldContractError> {
+    if let Err(error) = &result {
+        if *error == ScaffoldContractError::ConsolidationGenerationMismatch {
+            let current = backend.compact_checkpoint_authority(handle).ok();
+            eprintln!(
+                "PHASE31_SLEEP_GENERATION_ERROR stage={stage} organism={} state={state:?} current={current:?} error={error}",
+                handle.organism_id().raw()
+            );
+        }
+    }
+    result
 }
 
 fn resident_authority_plan_from_record(
@@ -1738,9 +1765,16 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                 {
                     return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
                 }
-                let request =
-                    self.backend
-                        .prepare_sleep_consolidation(self.handle, intent, &replay)?;
+                let result = self
+                    .backend
+                    .prepare_sleep_consolidation(self.handle, intent, &replay);
+                let request = trace_sleep_progress_result(
+                    result,
+                    self.backend,
+                    self.handle,
+                    state,
+                    "pending-prepare",
+                )?;
                 ConsolidationDriverEvent::Prepared { request }
             }
             (ConsolidationState::Prepared { request }, None) => {
@@ -1748,9 +1782,16 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                 if replay.canonical_digest != request.replay_digest {
                     return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
                 }
-                let job_id =
-                    self.backend
-                        .submit_sleep_consolidation(self.handle, &request, &replay)?;
+                let result = self
+                    .backend
+                    .submit_sleep_consolidation(self.handle, &request, &replay);
+                let job_id = trace_sleep_progress_result(
+                    result,
+                    self.backend,
+                    self.handle,
+                    state,
+                    "prepared-submit",
+                )?;
                 ConsolidationDriverEvent::Submitted { request, job_id }
             }
             (ConsolidationState::Submitted { request, job_id }, None) => {
@@ -1765,11 +1806,18 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                         if replay.canonical_digest != request.replay_digest {
                             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
                         }
-                        let recovered_job_id = self.backend.recover_submitted_sleep_consolidation(
+                        let result = self.backend.recover_submitted_sleep_consolidation(
                             self.handle,
                             &request,
                             &replay,
                             job_id,
+                        );
+                        let recovered_job_id = trace_sleep_progress_result(
+                            result,
+                            self.backend,
+                            self.handle,
+                            state,
+                            "submitted-recover",
                         )?;
                         ConsolidationDriverEvent::RecoveredSubmitted {
                             request,
@@ -1781,9 +1829,16 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                 }
             }
             (ConsolidationState::Completed { request, staged }, None) => {
-                let receipt =
+                let result =
                     self.backend
-                        .commit_sleep_consolidation(self.handle, &request, &staged)?;
+                        .commit_sleep_consolidation(self.handle, &request, &staged);
+                let receipt = trace_sleep_progress_result(
+                    result,
+                    self.backend,
+                    self.handle,
+                    state,
+                    "completed-commit",
+                )?;
                 ConsolidationDriverEvent::Committed {
                     cycle_id: request.cycle_id,
                     output_generation: receipt.output_generation,

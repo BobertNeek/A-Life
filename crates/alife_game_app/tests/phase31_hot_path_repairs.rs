@@ -345,6 +345,7 @@ fn phase31_shutdown_drain_finalizes_a_durable_completed_checkpoint_without_anoth
 #[test]
 fn phase31_async_journal_publication_survives_later_cycles_then_drains() {
     let mut fixture = canonical_runtime(31_082_706, 6);
+    fixture.runtime.set_performance_measurement_enabled(true);
     let started = Instant::now();
     let tick_deadline = started + Duration::from_secs(180);
     while fixture.runtime.world_tick_for_test().raw() < 750 && Instant::now() < tick_deadline {
@@ -355,7 +356,11 @@ fn phase31_async_journal_publication_survives_later_cycles_then_drains() {
                 checkpoint_wait_diagnostics(&mut fixture.runtime, &fixture.organisms, started)
             );
         }
-        std::thread::park_timeout(Duration::from_millis(1));
+        // Match production's bounded catch-up shape: four immediate tick
+        // attempts followed by one render-frame interval.
+        if fixture.runtime.world_tick_for_test().raw() % 4 == 0 {
+            std::thread::park_timeout(Duration::from_millis(16));
+        }
     }
     assert!(fixture.runtime.world_tick_for_test().raw() >= 750);
 
