@@ -7873,7 +7873,9 @@ fn phase31_performance_after_ui(
     ) {
         Ok(path) => metrics.artifact_path = Some(path),
         Err(error) => {
-            metrics.write_error = Some(error.to_string());
+            let error = error.to_string();
+            eprintln!("PHASE31_PERFORMANCE_RECEIPT_ERROR {error}");
+            metrics.write_error = Some(error);
             exits.write(AppExit::Error(std::num::NonZeroU8::new(1).unwrap()));
             return;
         }

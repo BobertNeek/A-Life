@@ -6444,13 +6444,45 @@ pub fn run_production_voxel_frontend_window(
     launch: &crate::ProductionVoxelLaunchConfig,
 ) -> Result<crate::ProductionVoxelLaunchSummary, GameAppShellError> {
     let (mut app, mut summary) = build_production_voxel_frontend_app_shell(launch)?;
-    app.run();
+    require_successful_production_app_exit(app.run())?;
     if summary.state_trace.last() != Some(&crate::ProductionAppState::Shutdown) {
         summary
             .state_trace
             .push(crate::ProductionAppState::Shutdown);
     }
     Ok(summary)
+}
+
+fn require_successful_production_app_exit(exit: AppExit) -> Result<(), GameAppShellError> {
+    if let AppExit::Error(code) = exit {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: format!("production voxel window exited with error code {code}"),
+        });
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod production_app_exit_tests {
+    use std::num::NonZeroU8;
+
+    use bevy::app::AppExit;
+
+    use super::require_successful_production_app_exit;
+
+    #[test]
+    fn production_window_rejects_bevy_error_exit() {
+        let error = require_successful_production_app_exit(AppExit::Error(
+            NonZeroU8::new(7).unwrap(),
+        ))
+        .unwrap_err();
+        assert!(error.to_string().contains("error code 7"));
+    }
+
+    #[test]
+    fn production_window_accepts_bevy_success_exit() {
+        require_successful_production_app_exit(AppExit::Success).unwrap();
+    }
 }
 
 pub fn spawn_visible_world(
