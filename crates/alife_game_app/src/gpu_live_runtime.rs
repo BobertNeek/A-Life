@@ -279,6 +279,34 @@ fn validate_sleep_journal_neural_authority(
     Ok(())
 }
 
+fn captured_sleep_covers_queued_target(queued: SleepState, captured: SleepState) -> bool {
+    if queued == captured {
+        return true;
+    }
+    let same_sleep_identity = queued.schema_version == captured.schema_version
+        && queued.phase == captured.phase
+        && queued.phase_started_tick == captured.phase_started_tick
+        && queued.entered_sleep_tick == captured.entered_sleep_tick
+        && queued.cycles_completed == captured.cycles_completed
+        && queued.last_trigger == captured.last_trigger
+        && queued.active_cycle_id == captured.active_cycle_id
+        && queued.last_consolidated_cycle_id == captured.last_consolidated_cycle_id;
+    same_sleep_identity
+        && matches!(
+            (queued.consolidation, captured.consolidation),
+            (
+                ConsolidationState::Submitted {
+                    request: queued_request,
+                    job_id: queued_job_id,
+                },
+                ConsolidationState::Completed {
+                    request: captured_request,
+                    staged,
+                },
+            ) if queued_request == captured_request && queued_job_id == staged.job_id
+        )
+}
+
 fn resident_authority_plan_from_record(
     record: &WorldOrganismRecord,
     organism_id: OrganismId,
@@ -6659,7 +6687,7 @@ impl GpuLiveBrainRuntime {
                 .and_then(|creature| creature.gpu_brain.as_ref())
                 .map(|brain| brain.sleep)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            if captured_sleep != expected_sleep {
+            if !captured_sleep_covers_queued_target(expected_sleep, captured_sleep) {
                 return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
             }
         }
