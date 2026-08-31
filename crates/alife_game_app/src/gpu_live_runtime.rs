@@ -1119,13 +1119,13 @@ fn assemble_checkpointed_save_from_immutable_capture(
 #[cfg(windows)]
 fn configure_persistence_worker_priority() {
     use windows_sys::Win32::System::Threading::{
-        GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_IDLE,
+        GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_LOWEST,
     };
 
     // Persistence is durable background work. Prefer the render/update thread
     // when both are runnable without skipping or delaying any transaction.
     unsafe {
-        let _ = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_IDLE);
+        let _ = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
     }
 }
 
