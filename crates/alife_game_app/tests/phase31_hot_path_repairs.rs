@@ -343,6 +343,49 @@ fn phase31_shutdown_drain_finalizes_a_durable_completed_checkpoint_without_anoth
 }
 
 #[test]
+fn phase31_async_journal_publication_survives_later_cycles_then_drains() {
+    let mut fixture = canonical_runtime(31_082_706, 6);
+    let started = Instant::now();
+    let tick_deadline = started + Duration::from_secs(180);
+    while fixture.runtime.world_tick_for_test().raw() < 750 && Instant::now() < tick_deadline {
+        if let Err(error) = fixture.runtime.tick() {
+            panic!(
+                "later-cycle async journal tick failed at {}: {error:?}; {}",
+                fixture.runtime.world_tick_for_test().raw(),
+                checkpoint_wait_diagnostics(&mut fixture.runtime, &fixture.organisms, started)
+            );
+        }
+        std::thread::park_timeout(Duration::from_millis(1));
+    }
+    assert!(fixture.runtime.world_tick_for_test().raw() >= 750);
+
+    let quiesced_tick = fixture.runtime.world_tick_for_test();
+    let drain_deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < drain_deadline
+        && !fixture
+            .runtime
+            .persistence_idle_for_shutdown_for_test()
+    {
+        fixture
+            .runtime
+            .poll_persistence_for_shutdown_for_test()
+            .unwrap();
+        std::thread::park_timeout(Duration::from_millis(1));
+    }
+    assert!(
+        fixture
+            .runtime
+            .persistence_idle_for_shutdown_for_test(),
+        "later-cycle persistence must drain: {}",
+        checkpoint_wait_diagnostics(&mut fixture.runtime, &fixture.organisms, started)
+    );
+    assert_eq!(fixture.runtime.world_tick_for_test(), quiesced_tick);
+
+    drop(fixture.runtime);
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
 fn phase31_natural_later_journal_edge_forces_exactly_one_follow_up_capture() {
     let mut fixture = canonical_runtime(31_082_706, 6);
     let started = Instant::now();

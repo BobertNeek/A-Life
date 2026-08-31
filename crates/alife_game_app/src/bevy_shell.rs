@@ -1145,10 +1145,6 @@ fn tick_production_gpu_brain(
         (Entity, &SelectedVisibleEntity),
     >,
 ) {
-    if schedule.failed {
-        return;
-    }
-
     if performance
         .as_deref()
         .is_some_and(|metrics| metrics.draining())
@@ -1157,6 +1153,10 @@ fn tick_production_gpu_brain(
             schedule.failed = true;
             mark_production_gpu_authority_unavailable(&mut authority, error.to_string());
         }
+        return;
+    }
+
+    if schedule.failed {
         return;
     }
 

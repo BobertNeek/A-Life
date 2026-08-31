@@ -6488,6 +6488,18 @@ impl GpuLiveBrainRuntime {
             )
     }
 
+    pub(crate) fn persistence_failed_for_shutdown(&self) -> bool {
+        self.exact_checkpoint_coordinator.stage() == ExactPopulationCheckpointStageV1::Failed
+            || matches!(
+                self.exact_checkpoint_work,
+                ExactPopulationCheckpointRuntimeWorkV1::Failed
+            )
+    }
+
+    pub(crate) fn persistence_terminal_for_shutdown(&self) -> bool {
+        self.persistence_idle_for_shutdown() || self.persistence_failed_for_shutdown()
+    }
+
     pub(crate) fn poll_persistence_for_shutdown(&mut self) -> Result<(), GameAppShellError> {
         self.poll_sleep_journal_publication()?;
         self.poll_exact_population_checkpoint()?;

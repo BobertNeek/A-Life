@@ -7842,9 +7842,11 @@ fn phase31_performance_after_ui(
     if !draining {
         return;
     }
-    if !runtime.runtime.persistence_idle_for_shutdown() {
+    if !runtime.runtime.persistence_terminal_for_shutdown() {
         return;
     }
+    let persistence_failed = runtime.runtime.persistence_failed_for_shutdown();
+    let performance_failed = schedule.performance_failed() || persistence_failed;
     match write_phase31_performance_receipt(
         &metrics,
         &runtime.runtime,
@@ -7854,7 +7856,7 @@ fn phase31_performance_after_ui(
             .measurement_completed_at
             .unwrap_or_else(Instant::now)
             .duration_since(started),
-        schedule.performance_failed(),
+        performance_failed,
         authority.telemetry.authoritative,
     ) {
         Ok(path) => metrics.artifact_path = Some(path),
@@ -7864,7 +7866,11 @@ fn phase31_performance_after_ui(
             return;
         }
     }
-    exits.write(AppExit::Success);
+    if performance_failed {
+        exits.write(AppExit::Error(std::num::NonZeroU8::new(1).unwrap()));
+    } else {
+        exits.write(AppExit::Success);
+    }
 }
 
 #[cfg(feature = "gpu-runtime")]
