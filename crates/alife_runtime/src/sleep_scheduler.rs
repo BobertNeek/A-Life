@@ -310,6 +310,7 @@ impl GpuSleepScheduler {
 
         let state = self.controller.state();
         if due_work.is_empty()
+            && state.phase != SleepPhase::Awake
             && driver.has_bounded_sleep_phase_data(input.organism_id, state)?
         {
             due_work = self.sleep_work_due(state, tick);

@@ -1,11 +1,11 @@
 //! Canonical no-action scheduler cycle before the GPU consolidation driver is wired.
 use alife_core::sleep::{SleepWorkReceipt, SleepWorkStatus};
 use alife_core::{
-    BrainCapacityClass, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationJobId,
-    ConsolidationStagedOutput, CreatureGenome, FoundationGeneticIdentity, GpuConsolidationRequest,
-    HomeostaticParameters, HomeostaticSnapshot, NormalizedScalar, OrganismId, PhenotypeHash,
-    ScaffoldContractError, SleepConsolidationConfig, SleepPhase, SleepState, Tick, Validate,
-    WorldEntityId, GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
+    BiochemistryState, BrainCapacityClass, ConsolidationDriverEvent, ConsolidationIntent,
+    ConsolidationJobId, ConsolidationStagedOutput, CreatureGenome, FoundationGeneticIdentity,
+    GpuConsolidationRequest, HomeostaticParameters, HomeostaticSnapshot, NormalizedScalar,
+    OrganismId, PhenotypeHash, ScaffoldContractError, SleepConsolidationConfig, SleepPhase,
+    SleepState, Tick, Validate, WorldEntityId, GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
     SLEEP_CONSOLIDATION_SCHEMA_VERSION,
 };
 use alife_runtime::{GpuSleepConsolidationDriver, GpuSleepScheduler, SleepWorkDue};
@@ -15,6 +15,7 @@ struct RecordingConsolidationDriver {
     intents: Vec<ConsolidationIntent>,
     expected_organism_id: OrganismId,
     has_phase_data: bool,
+    phase_data_queries: u32,
     bounded_calls: u32,
     persisted_replay_event_count: Option<u32>,
 }
@@ -128,6 +129,7 @@ impl RecordingConsolidationDriver {
             intents: Vec::new(),
             expected_organism_id,
             has_phase_data,
+            phase_data_queries: 0,
             bounded_calls: 0,
             persisted_replay_event_count: None,
         }
@@ -235,6 +237,7 @@ impl GpuSleepConsolidationDriver for RecordingConsolidationDriver {
         _organism_id: OrganismId,
         _state: SleepState,
     ) -> Result<bool, ScaffoldContractError> {
+        self.phase_data_queries += 1;
         Ok(self.has_phase_data)
     }
 }
@@ -262,6 +265,52 @@ fn newborn_record(organism_id: u64) -> WorldOrganismRecord {
         Tick::ZERO,
     )
     .unwrap()
+}
+
+fn awake_record(organism_id: u64) -> WorldOrganismRecord {
+    let genome = CreatureGenome::early_mammal_founder(
+        0xE12_0000 + organism_id,
+        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+    )
+    .unwrap();
+    let phenotype = genome.express().unwrap();
+    let adult_tick = Tick::new(u64::from(phenotype.development.maturation_duration_ticks));
+    let mut biochemistry =
+        BiochemistryState::new_with_age(&phenotype, adult_tick, adult_tick).unwrap();
+    biochemistry.body.set_energy(1.0).unwrap();
+    WorldOrganismRecord::new(
+        OrganismId(organism_id),
+        WorldEntityId(200 + organism_id),
+        genome,
+        phenotype,
+        biochemistry,
+        Tick::ZERO,
+    )
+    .unwrap()
+}
+
+#[test]
+fn ordinary_awake_tick_skips_sleep_phase_data_query() {
+    let mut scheduler = GpuSleepScheduler::new(SleepConsolidationConfig::reference()).unwrap();
+    let mut organism = awake_record(14);
+    let mut driver = RecordingConsolidationDriver::with_phase_data(OrganismId(14), true);
+    let before = organism.authoritative_sleep_input().unwrap();
+    assert!(before.energy > 0.20);
+    assert!(before.homeostasis.drives.brain_atp > 0.05);
+
+    let event = scheduler
+        .scheduled_tick_with_organism(
+            &mut organism,
+            HomeostaticParameters::reference(),
+            Tick::new(before.biological_tick.raw() + 1),
+            &mut driver,
+            false,
+        )
+        .unwrap();
+
+    assert!(organism.authoritative_sleep_input().unwrap().energy > 0.20);
+    assert_eq!(event.phase, SleepPhase::Awake);
+    assert_eq!(driver.phase_data_queries, 0);
 }
 
 #[test]
