@@ -13,9 +13,9 @@ fn fvr08_production_launcher_uses_finished_feature_stack() {
     assert!(launcher.contains("A-Life Voxel Frontend"));
     assert!(launcher.contains("[string]$Profile = \"MinSpecComfort1080p\""));
     assert!(launcher.contains("[string]$BrainPolicy = \"gpu-required\""));
-    assert!(launcher.contains(
-        "$FeatureList = \"bevy-app gpu-runtime voxel-backend production-assets vfx-hanabi\""
-    ));
+    assert!(
+        launcher.contains("$FeatureList = \"bevy-app gpu-runtime production-assets vfx-hanabi\"")
+    );
     assert!(launcher.contains("MinimumSettings30x30"));
     assert!(launcher.contains("--record-performance"));
     assert!(!launcher.contains("auto-with-cpu-fallback"));
@@ -37,7 +37,7 @@ fn fvr08_windows_production_package_script_is_product_path() {
     assert!(package.contains("target/artifacts/fvr08_windows_production"));
     assert!(package.contains("alife-production-voxel-windows"));
     assert!(package.contains("alife.fvr08.windows_production_package.v1"));
-    assert!(package.contains("bevy-app gpu-runtime voxel-backend production-assets vfx-hanabi"));
+    assert!(package.contains("bevy-app gpu-runtime production-assets vfx-hanabi"));
     assert!(package.contains("scripts/run_production_voxel_frontend.ps1"));
     assert!(package.contains("crates/alife_game_app/assets/production_voxel_v1"));
     assert!(package.contains(

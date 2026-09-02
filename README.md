@@ -2,7 +2,7 @@
 
 A-Life is a Rust, Bevy, wgpu, and WGSL artificial-life research project. It is building persistent embodied organisms whose neural policy runs on the GPU and whose actions remain subject to an authoritative world.
 
-The current product boundary is narrower than the ambition: `production-voxel` starts and ticks a real GPU-authoritative headless cognition loop, while the visible voxel scene is still reconstructed from a save. Live world-to-voxel synchronization, autonomous birth and death, and a causally complete player loop remain open.
+The current product boundary is narrower than the ambition. `production-voxel` starts and ticks a GPU-authoritative cognition loop. The visible scene starts from the selected save, then projects live authoritative creature positions and newborns. Complete lifecycle removal and the full player loop remain open.
 
 ## Run the current voxel frontend
 

@@ -21,7 +21,7 @@ use alife_world::{
     PresentationOutcomeSnapshot, ProceduralTerrainMaterial, ProceduralTileCoord,
     ProceduralWorldConfig, StableVoxelObjectRef, StableVoxelRefKind, VoxelChunkCoord,
     VoxelTileCoord, WorldObjectKind, WorldOrganismPresentationRow,
-    CREATURE_APPEARANCE_SPECIES_COUNT, FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
+    FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
 };
 use bevy::{
     app::AppExit,
@@ -33,11 +33,11 @@ use bevy::{
     prelude::{
         default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, ChildOf, Children,
         Color, Commands, Component, Cuboid, DetectChanges, DirectionalLight, Entity, EulerRot,
-        GlobalTransform, Handle, Image, KeyCode, Mat4, Mesh, Mesh3d, MeshMaterial3d, Meshable,
-        MessageReader, MessageWriter, MouseButton, Name, Node, NonSend, NonSendMut, ParamSet,
-        PositionType, Projection, Quat, Res, ResMut, Resource, StandardMaterial, Text, Text2d,
-        TextColor, TextFont, Time, Torus, Transform, Update, Val, Vec3, ViewVisibility, Visibility,
-        Window, With, Without, World,
+        GlobalTransform, Handle, Image, KeyCode, Mat4, Mesh, Mesh3d, MeshMaterial3d, MessageReader,
+        MessageWriter, MouseButton, Name, Node, NonSend, NonSendMut, ParamSet, PositionType,
+        Projection, Quat, Res, ResMut, Resource, StandardMaterial, Text, Text2d, TextColor,
+        TextFont, Time, Torus, Transform, Update, Val, Vec3, ViewVisibility, Visibility, Window,
+        With, Without, World,
     },
     render::{
         render_resource::PrimitiveTopology,
@@ -108,19 +108,14 @@ use phase31_slow_frame_ranking::{
     retain_ranked_slow_frame, RankedSlowFrame, PHASE31_SLOW_FRAME_THRESHOLD_NS,
 };
 
-pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA: &str = "alife.fvr03.production_voxel_renderer.v1";
-pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA_VERSION: u16 = 1;
-pub const FVR03_RENDERER_BACKEND_ID: &str = "bevy_voxel_world+fvr03_chunk_mesh";
+pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA: &str = "alife.fvr03.production_voxel_renderer.v2";
+pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA_VERSION: u16 = 2;
 pub const FVR03_PERFORMANCE_ARTIFACT_DIR: &str = "target/artifacts/fvr03";
 pub const FVR04_PRODUCTION_CREATURE_RENDERER_SCHEMA: &str =
     "alife.fvr04.production_creature_renderer.v1";
 pub const FVR04_PRODUCTION_CREATURE_RENDERER_SCHEMA_VERSION: u16 = 1;
-pub const FVR04_RENDERER_BACKEND_ID: &str =
-    "bevy_voxel_world+fvr03_chunk_mesh+fvr04_creature_interaction";
-pub const FVR09_RENDERER_BACKEND_ID: &str =
-    "bevy_voxel_world+fvr09_binary_greedy_chunk_mesh+fvr09_cute_biped_creatures";
 pub const FVR10_RENDERER_BACKEND_ID: &str =
-    "bevy_voxel_world+fvr10_vertex_color_chunk_mesh+fvr10_readable_cute_biped_creatures";
+    "fvr10-binary-greedy-terrain+modular-heritable-creatures";
 pub const FVR09_NATURAL_MATERIAL_PALETTE_VERSION: &str = "fvr09-natural-materials-v1";
 pub const FVR09_CUTE_BIPED_VISUAL_PROFILE: &str = "fvr09-cute-biped-v1";
 pub const FVR09_CUTE_BIPED_MATERIAL_VERSION: &str = "fvr09-soft-biped-materials-v1";
@@ -192,7 +187,6 @@ pub enum Fvr03ProductionVoxelMaterialKind {
     Sand,
     Creature,
     Selection,
-    ChunkBoundary,
 }
 
 impl Fvr03ProductionVoxelMaterialKind {
@@ -208,7 +202,6 @@ impl Fvr03ProductionVoxelMaterialKind {
             Self::Sand => "sand",
             Self::Creature => "creature",
             Self::Selection => "selection",
-            Self::ChunkBoundary => "chunk-boundary",
         }
     }
 
@@ -278,7 +271,6 @@ pub struct Fvr03ProductionVoxelRendererSettings {
     pub production_dressing_cap: usize,
     pub production_vfx_marker_cap: usize,
     pub production_vfx_budget_state: &'static str,
-    pub show_chunk_boundaries: bool,
     pub minimum_floor: bool,
     pub min_spec_comfort_default: bool,
     pub research_scale: bool,
@@ -336,12 +328,6 @@ impl Fvr03ProductionVoxelRendererSettings {
             production_dressing_cap,
             production_vfx_marker_cap,
             production_vfx_budget_state: budget.vfx_budget,
-            show_chunk_boundaries: !matches!(
-                profile_id,
-                ProductionFrontendProfileId::MinSpecComfort1080p
-                    | ProductionFrontendProfileId::HighSpecScaleUp
-                    | ProductionFrontendProfileId::ResearchScale
-            ),
             minimum_floor: budget.hard_floor,
             min_spec_comfort_default: budget.comfort_default,
             research_scale: budget.research_mode,
@@ -456,16 +442,6 @@ impl Fvr03ProductionVoxelRendererSettings {
                 side_texture: "selection-hover-edge",
                 natural_variation_seed: "fvr10-selection-hover",
                 debug_primary_color: false,
-            },
-            Fvr03ProductionVoxelMaterialEntry {
-                kind: Fvr03ProductionVoxelMaterialKind::ChunkBoundary,
-                label: "chunk-boundary",
-                rgba: [0.04, 0.05, 0.05, 0.52],
-                roughness: 0.80,
-                top_texture: "debug-chunk-boundary",
-                side_texture: "debug-chunk-boundary",
-                natural_variation_seed: "fvr10-debug-chunk-boundary",
-                debug_primary_color: true,
             },
         ]
     }
@@ -651,8 +627,7 @@ pub struct Fvr03ProductionVoxelSceneResource {
     pub population: u16,
     pub renderer_profile: String,
     pub backend_id: &'static str,
-    pub uses_bevy_voxel_world_backend: bool,
-    pub uses_internal_chunk_mesh_for_fvr02_contract: bool,
+    pub uses_internal_voxel_terrain_mesh: bool,
     pub visible_chunk_count: usize,
     pub resident_chunk_count: usize,
     pub tile_mesh_count: usize,
@@ -1256,6 +1231,7 @@ impl Fvr07ProductionVfxKind {
         }
     }
 
+    #[cfg(not(feature = "vfx-hanabi"))]
     const fn pulse_speed(self) -> f32 {
         match self {
             Self::PheromoneTrail => 1.4,
@@ -1269,6 +1245,7 @@ impl Fvr07ProductionVfxKind {
         }
     }
 
+    #[cfg(not(feature = "vfx-hanabi"))]
     const fn bob_height(self) -> f32 {
         match self {
             Self::DangerHazardParticles => 0.16,
@@ -1402,9 +1379,8 @@ struct Fvr04RuntimeSceneState {
 struct Fvr04RuntimeSceneAssets {
     voxel_materials: BTreeMap<Fvr03ProductionVoxelMaterialKind, Handle<StandardMaterial>>,
     terrain_materials: TerrainMaterialLibrary,
-    boundary_mesh: Handle<Mesh>,
     dressing_library: TerrainDressingLibrary,
-    vfx_unit_mesh: Handle<Mesh>,
+    vfx_unit_mesh: Option<Handle<Mesh>>,
     vfx_materials: BTreeMap<Fvr07ProductionVfxKind, Handle<StandardMaterial>>,
     overlay_materials: BTreeMap<Fvr05ProductionOverlayKind, Handle<StandardMaterial>>,
     selection_mesh: Handle<Mesh>,
@@ -1442,7 +1418,6 @@ struct Fvr04PreparedCreature {
     recipe: CreatureAssemblyRecipe,
     coat: CreatureCoatAssetHandles,
     parts: Vec<Fvr04PreparedCreaturePart>,
-    local_bounds: CreatureVisualBounds,
     root_transform: Transform,
     root_visual: Fvr04ProductionCreatureVisualMarker,
 }
@@ -1923,7 +1898,7 @@ fn apply_production_runtime_load(world: &mut World) {
             }
         }
         let staging_backend = {
-            let mut live_runtime = world
+            let live_runtime = world
                 .get_non_send_resource_mut::<ProductionGpuBrainRuntimeResource>()
                 .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
                     message: "production GPU runtime missing during runtime load".to_string(),
@@ -2037,30 +2012,7 @@ pub fn spawn_fvr03_production_voxel_scene(
         summary.effective_population,
     );
     let runtime_state = load_fvr04_runtime_state(summary)?;
-    let snapshot = runtime_state.snapshot.clone();
-    let visible_chunks = snapshot
-        .visible_chunks
-        .iter()
-        .map(|chunk| chunk.coord)
-        .collect::<BTreeSet<_>>();
-    let procedural_config = procedural_config_from_snapshot(&snapshot);
-
-    #[cfg(feature = "voxel-backend")]
-    {
-        let voxel_config = Fvr03BevyVoxelWorldConfig {
-            seed: snapshot.world_seed,
-            procedural_config,
-            visible_chunks: visible_chunks.clone(),
-            settings: settings.clone(),
-        };
-        app.add_plugins(bevy_voxel_world::prelude::VoxelWorldPlugin::<
-            Fvr03BevyVoxelWorldConfig,
-        >::minimal());
-        app.insert_resource(voxel_config);
-    }
-
-    let scene_assets =
-        create_fvr04_runtime_scene_assets(app, &settings, snapshot.profile_budget.chunk_tile_size);
+    let scene_assets = create_fvr04_runtime_scene_assets(app, &settings);
     let creature_part_catalog = load_geneforge_creature_part_catalog().map_err(|error| {
         GameAppShellError::InvalidProductionFrontend {
             message: error.to_string(),
@@ -2072,7 +2024,7 @@ pub fn spawn_fvr03_production_voxel_scene(
             .map_err(|error| GameAppShellError::InvalidProductionFrontend {
                 message: error.to_string(),
             })?;
-    let mut creature_part_assets = {
+    let creature_part_assets = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
         let active_lod = match creature_settings.lod {
             Fvr04CreatureLod::FullVoxel => CreaturePartLodId::Full,
@@ -2157,11 +2109,7 @@ pub fn spawn_fvr03_production_voxel_scene(
     )
     .add_systems(
         Update,
-        (
-            animate_fvr04_creatures,
-            animate_fvr04_creature_parts,
-            animate_fvr07_production_vfx,
-        )
+        (animate_fvr04_creatures, animate_fvr04_creature_parts)
             .in_set(ProductionVoxelPresentationSet::ProceduralAnimation),
     )
     .add_systems(
@@ -2189,6 +2137,11 @@ pub fn spawn_fvr03_production_voxel_scene(
             sync_v0_player_control_strip,
         )
             .in_set(ProductionVoxelPresentationSet::RootReaders),
+    );
+    #[cfg(not(feature = "vfx-hanabi"))]
+    app.add_systems(
+        Update,
+        animate_fvr07_production_vfx.in_set(ProductionVoxelPresentationSet::ProceduralAnimation),
     );
     #[cfg(feature = "gpu-runtime")]
     app.add_systems(
@@ -2812,7 +2765,6 @@ fn prepare_fvr04_creature_batch(
             recipe,
             coat,
             parts,
-            local_bounds,
             root_transform,
             root_visual: Fvr04ProductionCreatureVisualMarker {
                 stable_id: visual.stable_id,
@@ -3030,25 +2982,23 @@ fn prepare_fvr04_runtime_scene(
 fn create_fvr04_runtime_scene_assets(
     app: &mut App,
     settings: &Fvr03ProductionVoxelRendererSettings,
-    chunk_tile_size: u16,
 ) -> Fvr04RuntimeSceneAssets {
     let voxel_materials = create_fvr03_materials(app, &settings.material_palette());
     let terrain_materials = create_production_terrain_material_library(app);
     install_animated_water_material(app, terrain_materials.water.clone());
     let dressing_library = create_terrain_dressing_library(app);
-    let (boundary_mesh, vfx_unit_mesh, selection_mesh) = {
+    let (vfx_unit_mesh, selection_mesh) = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
         (
-            meshes.add(Cuboid::new(
-                f32::from(chunk_tile_size),
-                0.035,
-                f32::from(chunk_tile_size),
-            )),
-            meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
+            (!cfg!(feature = "vfx-hanabi")).then(|| meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
             meshes.add(Torus::new(0.54, 0.70)),
         )
     };
-    let vfx_materials = fvr07_vfx_materials(app.world_mut());
+    let vfx_materials = if cfg!(feature = "vfx-hanabi") {
+        BTreeMap::new()
+    } else {
+        fvr07_vfx_materials(app.world_mut())
+    };
     let overlay_materials = Fvr05ProductionOverlayKind::all()
         .iter()
         .copied()
@@ -3063,7 +3013,6 @@ fn create_fvr04_runtime_scene_assets(
     Fvr04RuntimeSceneAssets {
         voxel_materials,
         terrain_materials,
-        boundary_mesh,
         dressing_library,
         vfx_unit_mesh,
         vfx_materials,
@@ -3126,15 +3075,6 @@ fn spawn_fvr04_runtime_scene_candidate(
         ));
     }
     for chunk in &snapshot.visible_chunks {
-        if settings.show_chunk_boundaries {
-            spawn_fvr03_chunk_boundary(
-                world,
-                &assets.voxel_materials,
-                assets.boundary_mesh.clone(),
-                chunk.coord,
-                snapshot.profile_budget.chunk_tile_size,
-            );
-        }
         world.spawn((
             Name::new(format!(
                 "A-Life FVR03 resident voxel chunk {}:{}",
@@ -3203,8 +3143,7 @@ fn spawn_fvr04_runtime_scene_candidate(
         population: runtime_state.creatures.len().min(u16::MAX as usize) as u16,
         renderer_profile: PRODUCTION_VOXEL_RENDERER_PROFILE.to_string(),
         backend_id: FVR10_RENDERER_BACKEND_ID,
-        uses_bevy_voxel_world_backend: cfg!(feature = "voxel-backend"),
-        uses_internal_chunk_mesh_for_fvr02_contract: true,
+        uses_internal_voxel_terrain_mesh: true,
         visible_chunk_count: snapshot.visible_chunks.len(),
         resident_chunk_count: snapshot.visible_chunks.len(),
         tile_mesh_count,
@@ -3702,15 +3641,9 @@ fn spawn_fvr07_production_visual_polish(
     dressing_spawns: Vec<ProductionTerrainDressingSpawn>,
     vfx_spawns: Vec<Fvr07VfxSpawn>,
     dressing_library: &TerrainDressingLibrary,
-    unit_mesh: &Handle<Mesh>,
+    unit_mesh: &Option<Handle<Mesh>>,
     vfx_materials: &BTreeMap<Fvr07ProductionVfxKind, Handle<StandardMaterial>>,
 ) -> Fvr07ProductionPolishSummary {
-    let vfx_marker_visibility = if cfg!(feature = "vfx-hanabi") {
-        Visibility::Hidden
-    } else {
-        Visibility::Inherited
-    };
-
     for spawn in &dressing_spawns {
         let material = dressing_library.material(spawn.kind);
         let mesh = dressing_library.mesh(spawn.kind);
@@ -3738,41 +3671,45 @@ fn spawn_fvr07_production_visual_polish(
         ));
     }
 
-    for spawn in &vfx_spawns {
-        let Some(material) = vfx_materials.get(&spawn.kind).cloned() else {
-            continue;
-        };
-        let mut transform = Transform::from_translation(spawn.translation);
-        transform.scale = spawn.scale;
-        world.spawn((
-            Name::new(format!(
-                "A-Life FVR07 display-only VFX {}",
-                spawn.kind.label()
-            )),
-            Mesh3d(unit_mesh.clone()),
-            MeshMaterial3d(material),
-            transform,
-            vfx_marker_visibility,
-            bevy::light::NotShadowCaster,
-            Fvr07ProductionGpuVfxMarker {
-                kind: spawn.kind,
-                tile: spawn.tile,
-                stable_id: spawn.stable_id,
-                display_only: true,
-                no_renderer_authority_over_actions_or_cognition: true,
-                budget_state: settings.production_vfx_budget_state,
-                base_translation: spawn.translation,
-                base_scale: spawn.scale,
-                phase: spawn.phase,
-            },
-            Fvr04ProductionRuntimeSceneRoot,
-        ));
-    }
+    let vfx_marker_count = unit_mesh.as_ref().map_or(0, |unit_mesh| {
+        let mut count = 0;
+        for spawn in &vfx_spawns {
+            let Some(material) = vfx_materials.get(&spawn.kind).cloned() else {
+                continue;
+            };
+            let mut transform = Transform::from_translation(spawn.translation);
+            transform.scale = spawn.scale;
+            world.spawn((
+                Name::new(format!(
+                    "A-Life FVR07 display-only VFX {}",
+                    spawn.kind.label()
+                )),
+                Mesh3d(unit_mesh.clone()),
+                MeshMaterial3d(material),
+                transform,
+                bevy::light::NotShadowCaster,
+                Fvr07ProductionGpuVfxMarker {
+                    kind: spawn.kind,
+                    tile: spawn.tile,
+                    stable_id: spawn.stable_id,
+                    display_only: true,
+                    no_renderer_authority_over_actions_or_cognition: true,
+                    budget_state: settings.production_vfx_budget_state,
+                    base_translation: spawn.translation,
+                    base_scale: spawn.scale,
+                    phase: spawn.phase,
+                },
+                Fvr04ProductionRuntimeSceneRoot,
+            ));
+            count += 1;
+        }
+        count
+    });
 
     let gpu_vfx_emitter_count = spawn_fvr07_hanabi_gpu_vfx_emitters(world, settings, &vfx_spawns);
     Fvr07ProductionPolishSummary {
         dressing_count: dressing_spawns.len(),
-        vfx_marker_count: vfx_spawns.len(),
+        vfx_marker_count,
         gpu_vfx_emitter_count,
         vfx_budget_state: settings.production_vfx_budget_state,
         display_only: true,
@@ -4387,34 +4324,6 @@ fn fvr03_append_cuboid(
     }
 }
 
-fn spawn_fvr03_chunk_boundary(
-    world: &mut World,
-    materials: &BTreeMap<Fvr03ProductionVoxelMaterialKind, Handle<StandardMaterial>>,
-    mesh: Handle<Mesh>,
-    coord: VoxelChunkCoord,
-    chunk_tile_size: u16,
-) {
-    let size = f32::from(chunk_tile_size);
-    let material = materials
-        .get(&Fvr03ProductionVoxelMaterialKind::ChunkBoundary)
-        .expect("FVR03 chunk boundary material exists")
-        .clone();
-    world.spawn((
-        Name::new(format!(
-            "A-Life FVR03 chunk boundary {}:{}",
-            coord.x, coord.z
-        )),
-        Mesh3d(mesh),
-        MeshMaterial3d(material),
-        Transform::from_xyz(
-            coord.x as f32 * size + size * 0.5,
-            -0.02,
-            coord.z as f32 * size + size * 0.5,
-        ),
-        Fvr04ProductionRuntimeSceneRoot,
-    ));
-}
-
 fn fvr04_creature_root_bundle(
     stable_id: WorldEntityId,
     organism_id: OrganismId,
@@ -5027,6 +4936,7 @@ fn fvr04_animation_speed(animation: CreatureAnimationState) -> f32 {
     }
 }
 
+#[cfg(not(feature = "vfx-hanabi"))]
 fn animate_fvr07_production_vfx(
     time: Res<Time>,
     ux: Option<Res<Fvr05ProductionUxStateResource>>,
@@ -7451,23 +7361,6 @@ fn fvr03_material_kind(
     }
 }
 
-#[allow(dead_code)]
-fn fvr03_voxel_material_index(material: ProceduralTerrainMaterial, tile: VoxelTileCoord) -> u8 {
-    match fvr03_material_kind(material, tile) {
-        Fvr03ProductionVoxelMaterialKind::SafeGrass => 1,
-        Fvr03ProductionVoxelMaterialKind::Soil => 2,
-        Fvr03ProductionVoxelMaterialKind::Resource => 3,
-        Fvr03ProductionVoxelMaterialKind::Hazard => 4,
-        Fvr03ProductionVoxelMaterialKind::Decay => 5,
-        Fvr03ProductionVoxelMaterialKind::Stone => 6,
-        Fvr03ProductionVoxelMaterialKind::Water => 7,
-        Fvr03ProductionVoxelMaterialKind::Sand => 8,
-        Fvr03ProductionVoxelMaterialKind::Creature
-        | Fvr03ProductionVoxelMaterialKind::Selection
-        | Fvr03ProductionVoxelMaterialKind::ChunkBoundary => 9,
-    }
-}
-
 fn fvr03_tile_height(
     material: ProceduralTerrainMaterial,
     resource_bias: f32,
@@ -7576,151 +7469,6 @@ fn write_fvr03_performance_artifact(
     );
     fs::write(&path, contents)?;
     Ok(path)
-}
-
-#[cfg(feature = "voxel-backend")]
-#[derive(Debug, Clone, Resource)]
-pub struct Fvr03BevyVoxelWorldConfig {
-    pub seed: u64,
-    pub procedural_config: ProceduralWorldConfig,
-    pub visible_chunks: BTreeSet<VoxelChunkCoord>,
-    pub settings: Fvr03ProductionVoxelRendererSettings,
-}
-
-#[cfg(feature = "voxel-backend")]
-impl Default for Fvr03BevyVoxelWorldConfig {
-    fn default() -> Self {
-        let settings = Fvr03ProductionVoxelRendererSettings::for_profile(
-            ProductionFrontendProfileId::MinimumSettings30x30,
-        );
-        Self {
-            seed: 4_242,
-            procedural_config: ProceduralWorldConfig::with_seed(4_242),
-            visible_chunks: BTreeSet::new(),
-            settings,
-        }
-    }
-}
-
-#[cfg(feature = "voxel-backend")]
-impl bevy_voxel_world::prelude::VoxelWorldConfig for Fvr03BevyVoxelWorldConfig {
-    type MaterialIndex = u8;
-    type ChunkUserBundle = ();
-
-    fn spawning_distance(&self) -> u32 {
-        u32::from(self.settings.draw_radius_chunks.max(1))
-    }
-
-    fn min_despawn_distance(&self) -> u32 {
-        u32::from(self.settings.hot_radius_chunks.max(1))
-    }
-
-    fn chunk_despawn_strategy(&self) -> bevy_voxel_world::prelude::ChunkDespawnStrategy {
-        bevy_voxel_world::prelude::ChunkDespawnStrategy::FarAwayOrOutOfView
-    }
-
-    fn chunk_spawn_strategy(&self) -> bevy_voxel_world::prelude::ChunkSpawnStrategy {
-        bevy_voxel_world::prelude::ChunkSpawnStrategy::CloseAndInView
-    }
-
-    fn max_spawn_per_frame(&self) -> usize {
-        self.settings.remesh_budget_chunks_per_frame.max(1)
-    }
-
-    fn spawning_rays(&self) -> usize {
-        match self.settings.profile_id {
-            ProductionFrontendProfileId::MinimumSettings30x30 => 12,
-            ProductionFrontendProfileId::MinSpecComfort1080p => 20,
-            ProductionFrontendProfileId::Balanced1080p => 28,
-            ProductionFrontendProfileId::HighSpecScaleUp => 36,
-            ProductionFrontendProfileId::ResearchScale => 20,
-        }
-    }
-
-    fn chunk_lod(
-        &self,
-        chunk_position: bevy::prelude::IVec3,
-        previous_lod: Option<bevy_voxel_world::prelude::LodLevel>,
-        camera_position: Vec3,
-    ) -> bevy_voxel_world::prelude::LodLevel {
-        let center = Vec3::new(
-            chunk_position.x as f32 * 32.0 + 16.0,
-            chunk_position.y as f32 * 32.0 + 16.0,
-            chunk_position.z as f32 * 32.0 + 16.0,
-        );
-        let distance = camera_position.distance(center);
-        match previous_lod {
-            Some(0) if distance < 72.0 => 0,
-            Some(0) => 1,
-            Some(1) if distance < 56.0 => 0,
-            Some(1) if distance < 144.0 => 1,
-            Some(1) => 2,
-            Some(2) if distance < 112.0 => 1,
-            Some(2) => 2,
-            _ if distance < 64.0 => 0,
-            _ if distance < 128.0 => 1,
-            _ => 2,
-        }
-    }
-
-    fn voxel_lookup_delegate(
-        &self,
-    ) -> bevy_voxel_world::prelude::VoxelLookupDelegate<Self::MaterialIndex> {
-        let procedural_config = self.procedural_config;
-        let visible_chunks = self.visible_chunks.clone();
-        Box::new(move |chunk_position, _, _| {
-            const PADDED_EDGE: i32 = bevy_voxel_world::custom_meshing::CHUNK_SIZE_I + 2;
-            let origin_x =
-                chunk_position.x * bevy_voxel_world::custom_meshing::CHUNK_SIZE_I - 1;
-            let origin_z =
-                chunk_position.z * bevy_voxel_world::custom_meshing::CHUNK_SIZE_I - 1;
-            let mut columns = vec![None; (PADDED_EDGE * PADDED_EDGE) as usize];
-            for local_z in 0..PADDED_EDGE {
-                for local_x in 0..PADDED_EDGE {
-                    let tile = VoxelTileCoord::new(origin_x + local_x, origin_z + local_z);
-                    let chunk =
-                        VoxelChunkCoord::for_tile(procedural_config.chunk_tile_size as u16, tile);
-                    if !visible_chunks.contains(&chunk) {
-                        continue;
-                    }
-                    let Ok(sample) = alife_world::sample_procedural_terrain_tile(
-                        procedural_config,
-                        ProceduralTileCoord::from(tile),
-                    ) else {
-                        continue;
-                    };
-                    let surface_height = fvr03_tile_height(
-                        sample.material,
-                        sample.resource_bias,
-                        sample.hazard_pressure,
-                        sample.roughness,
-                    )
-                    .ceil() as i32;
-                    let index = (local_z * PADDED_EDGE + local_x) as usize;
-                    columns[index] = Some((
-                        surface_height,
-                        fvr03_voxel_material_index(sample.material, tile),
-                    ));
-                }
-            }
-            Box::new(move |position, _existing| {
-                let local_x = position.x - origin_x;
-                let local_z = position.z - origin_z;
-                if !(0..PADDED_EDGE).contains(&local_x) || !(0..PADDED_EDGE).contains(&local_z) {
-                    return bevy_voxel_world::prelude::WorldVoxel::Air;
-                }
-                let index = (local_z * PADDED_EDGE + local_x) as usize;
-                let Some((surface_height, material)) = columns[index] else {
-                    return bevy_voxel_world::prelude::WorldVoxel::Air;
-                };
-                if position.y < 0 || position.y > surface_height {
-                    bevy_voxel_world::prelude::WorldVoxel::Air
-                } else {
-                    bevy_voxel_world::prelude::WorldVoxel::Solid(material)
-                }
-            })
-        })
-    }
 }
 
 #[cfg(test)]
@@ -7948,8 +7696,7 @@ mod tests {
             population: 30,
             renderer_profile: PRODUCTION_VOXEL_RENDERER_PROFILE.to_string(),
             backend_id: FVR10_RENDERER_BACKEND_ID,
-            uses_bevy_voxel_world_backend: true,
-            uses_internal_chunk_mesh_for_fvr02_contract: true,
+            uses_internal_voxel_terrain_mesh: true,
             visible_chunk_count: 1,
             resident_chunk_count: 1,
             tile_mesh_count: 4,

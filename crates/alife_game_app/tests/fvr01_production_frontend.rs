@@ -53,7 +53,7 @@ fn fvr01_profile_registry_exposes_minimum_default_and_scale_up_profiles() {
     assert_eq!(minimum.cold_brain_slots, 14);
     assert!((minimum.internal_render_scale_floor - 0.67).abs() < f32::EPSILON);
     assert!(minimum.hard_floor);
-    assert_eq!(minimum.renderer_profile, "voxel-backend");
+    assert_eq!(minimum.renderer_profile, "internal-greedy-voxel");
 
     let comfort = ProductionFrontendProfileId::MinSpecComfort1080p.budget();
     assert_eq!(comfort.default_population, 30);
@@ -128,7 +128,7 @@ fn fvr01_dry_run_uses_real_save_and_production_state_pipeline() {
         ]
     );
     assert_eq!(summary.window_title, "A-Life Voxel Frontend");
-    assert_eq!(summary.renderer_profile, "voxel-backend");
+    assert_eq!(summary.renderer_profile, "internal-greedy-voxel");
     assert!(summary.real_save_loaded);
     assert!(!summary.mock_data_source);
     assert_eq!(
@@ -181,44 +181,6 @@ fn fvr01_minimum_profile_is_available_as_hard_fallback_floor() {
 }
 
 #[test]
-fn fvr01_cargo_manifest_pins_bevy_018_voxel_stack() {
-    let cargo =
-        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")).unwrap();
-    for required in [
-        "bevy_voxel_world = { version = \"=0.16.0\"",
-        "block-mesh = { version = \"=0.2.0\"",
-        "bevy_sprite3d = { version = \"=8.0.0\"",
-        "bevy_asset_loader = { version = \"=0.26.0\"",
-        "bevy_hanabi = { version = \"=0.18.0\"",
-        "bevy_egui = { version = \"=0.39.0\"",
-        "bevy-inspector-egui = { version = \"=0.36.0\"",
-        "voxel-backend =",
-        "production-voxel-frontend =",
-        "debug-tools =",
-        "licensed-assets =",
-        "vfx-hanabi =",
-        "presentation-physics =",
-        "creature-sprites =",
-        "bevy/bevy_picking",
-    ] {
-        assert!(cargo.contains(required), "Cargo.toml missing {required}");
-    }
-    for rejected in [
-        "bevy_voxel_world = { version = \"0.17",
-        "bevy_sprite3d = { version = \"9.",
-        "bevy_asset_loader = { version = \"0.27",
-        "bevy_hanabi = { version = \"0.19",
-        "bevy_egui = { version = \"0.40",
-        "bevy-inspector-egui = { version = \"0.37",
-    ] {
-        assert!(
-            !cargo.contains(rejected),
-            "Cargo.toml includes rejected {rejected}"
-        );
-    }
-}
-
-#[test]
 fn fvr01_cli_help_names_production_command_and_profiles() {
     let output = Command::new(env!("CARGO_BIN_EXE_alife_game_app"))
         .args(["production-voxel", "--help"])
@@ -246,7 +208,7 @@ fn fvr01_windows_scripts_default_to_production_voxel_frontend() {
         std::fs::read_to_string(root.join("scripts/run_production_voxel_frontend.ps1")).unwrap();
     assert!(production.contains("production-voxel"));
     assert!(production.contains("MinSpecComfort1080p"));
-    assert!(production.contains("bevy-app gpu-runtime voxel-backend"));
+    assert!(production.contains("bevy-app gpu-runtime production-assets vfx-hanabi"));
     assert!(production.contains("A-Life Voxel Frontend"));
     assert!(production.contains("-DryRun"));
 

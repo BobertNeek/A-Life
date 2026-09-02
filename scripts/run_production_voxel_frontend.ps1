@@ -18,7 +18,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-$FeatureList = "bevy-app gpu-runtime voxel-backend production-assets vfx-hanabi"
+$FeatureList = "bevy-app gpu-runtime production-assets vfx-hanabi"
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
 
 function Format-CommandArgument {

@@ -21,10 +21,12 @@ The production shell requires GPU-authoritative neural execution. A missing or
 failed GPU neural path is reported as unavailable; it does not silently switch
 to CPU neural math.
 
-The shell restores and ticks a real `GpuLiveBrainRuntime`. The active voxel
-renderer still builds creature records from the selected save and animates
-saved base positions. It does not yet project live runtime transforms, births,
-or deaths. See `docs/STATUS.md` and `docs/ROADMAP.md` for the exact boundary.
+The shell restores and ticks a real `GpuLiveBrainRuntime`. The active renderer
+uses its internal greedy terrain meshes as the sole voxel drawing path. It
+starts creature presentation from the selected save, then projects live
+authoritative positions and adds newborn presentation records. Complete death
+removal remains open. See `docs/STATUS.md` and `docs/ROADMAP.md` for the exact
+boundary.
 
 ## Validation and diagnostic commands
 

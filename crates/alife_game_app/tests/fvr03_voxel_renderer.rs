@@ -9,6 +9,8 @@ use std::{
 
 use alife_core::{ActionKind, BrainTickStatus, OrganismId, Tick, Vec3f, WorldEntityId};
 use alife_game_app::bevy_shell::{LiveBrainPresentationFrame, LiveBrainPresentationFrameResource};
+#[cfg(not(feature = "vfx-hanabi"))]
+use alife_game_app::Fvr07ProductionVfxKind;
 use alife_game_app::{
     default_environment_manifest_path, run_production_voxel_frontend_dry_run, CreaturePartSlot,
     Fvr03ProductionVoxelCamera, Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelChunk,
@@ -19,13 +21,13 @@ use alife_game_app::{
     Fvr04ProductionCreatureInspectorPanel, Fvr04ProductionCreatureVisualMarker,
     Fvr04ProductionCreatureWorldLabel, Fvr05ProductionInspectorTab,
     Fvr05ProductionRightInspectorPanel, Fvr05ProductionUxStateResource,
-    Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker, Fvr07ProductionVfxKind,
-    Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker, Fvr09CuteBipedCreatureMarker,
-    Fvr09MesherMode, Fvr10CreatureSpeciesMarker, Fvr10CreatureSurfaceDetailMarker,
-    Fvr11ProductionContactShadow, Fvr11ProductionTerrainLayer,
-    Fvr11ProductionTerrainLightingMarker, Fvr11ProductionTerrainMaterialContract,
-    Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, LiveBrainCausalStage,
-    LiveBrainTickSummary, ProductionCreatureAssemblyRoot, ProductionCreatureJoinCoverMarker,
+    Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker, Fvr07ProductionVisualDressing,
+    Fvr09CreatureFaceFeatureMarker, Fvr09CuteBipedCreatureMarker, Fvr09MesherMode,
+    Fvr10CreatureSpeciesMarker, Fvr10CreatureSurfaceDetailMarker, Fvr11ProductionContactShadow,
+    Fvr11ProductionTerrainLayer, Fvr11ProductionTerrainLightingMarker,
+    Fvr11ProductionTerrainMaterialContract, Fvr11ProductionTerrainSceneResource,
+    Fvr11TerrainSurfaceRole, LiveBrainCausalStage, LiveBrainTickSummary,
+    ProductionCreatureAssemblyRoot, ProductionCreatureJoinCoverMarker,
     ProductionCreaturePartMarker, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
     V0PlayerControlStrip, V0PlayerCreaturePanel, V0PlayerStatusChip,
     FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
@@ -38,9 +40,8 @@ use alife_world::{
 use bevy::{
     mesh::VertexAttributeValues,
     prelude::{
-        AlphaMode, AmbientLight, Assets, ButtonInput, ChildOf, DirectionalLight, Entity, KeyCode,
-        Mesh, Mesh3d, MeshMaterial3d, Projection, StandardMaterial, Text, Transform, Vec3,
-        Visibility,
+        AlphaMode, AmbientLight, Assets, ButtonInput, DirectionalLight, Entity, KeyCode, Mesh,
+        Mesh3d, MeshMaterial3d, Projection, StandardMaterial, Text, Transform, Vec3, Visibility,
     },
 };
 
@@ -398,7 +399,7 @@ fn fvr11_profile_lighting_preserves_minimum_floor_and_comfort_depth() {
 
     assert_eq!(comfort.tonemapping, "tony-mc-mapface");
     assert!(comfort.directional_shadows);
-    assert_eq!(comfort.shadow_cascades, 2);
+    assert_eq!(comfort.shadow_cascades, 1);
     assert!(comfort.distance_fog);
     assert!(comfort.cool_ambient_fill);
     assert!(comfort.contact_grounding);
@@ -428,11 +429,7 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
         ProductionFrontendProfileId::MinimumSettings30x30
     );
     assert_eq!(scene.population, 30);
-    assert_eq!(
-        scene.uses_bevy_voxel_world_backend,
-        cfg!(feature = "voxel-backend")
-    );
-    assert!(scene.uses_internal_chunk_mesh_for_fvr02_contract);
+    assert!(scene.uses_internal_voxel_terrain_mesh);
     assert!(scene.visible_chunk_count > 0);
     assert_eq!(scene.visible_chunk_count, scene.resident_chunk_count);
     assert!(scene.resident_chunk_count <= summary.profile_budget.active_chunk_cap as usize);
@@ -444,8 +441,14 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
     assert!(scene.production_visuals_display_only);
     assert!(scene.production_dressing_count >= 8);
     assert!(scene.production_dressing_count <= 64);
-    assert!(scene.production_vfx_marker_count >= 8);
-    assert!(scene.production_vfx_marker_count <= 32);
+    if cfg!(feature = "vfx-hanabi") {
+        assert_eq!(scene.production_vfx_marker_count, 0);
+        assert!(scene.production_gpu_vfx_emitter_count > 0);
+    } else {
+        assert!(scene.production_vfx_marker_count >= 8);
+        assert!(scene.production_vfx_marker_count <= 32);
+        assert_eq!(scene.production_gpu_vfx_emitter_count, 0);
+    }
 
     let mut chunk_query = app.world_mut().query::<&Fvr03ProductionVoxelChunk>();
     assert_eq!(
@@ -512,33 +515,36 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
     assert!(vfx.iter().all(|entry| entry.display_only
         && entry.no_renderer_authority_over_actions_or_cognition
         && entry.budget_state == "conservative"));
-    let vfx_kinds = vfx.iter().map(|entry| entry.kind).collect::<BTreeSet<_>>();
-    for required in [
-        Fvr07ProductionVfxKind::PheromoneTrail,
-        Fvr07ProductionVfxKind::SporeDrift,
-        Fvr07ProductionVfxKind::SleepGlow,
-        Fvr07ProductionVfxKind::DangerHazardParticles,
-        Fvr07ProductionVfxKind::EatingResourceEffect,
-        Fvr07ProductionVfxKind::BirthDeathEffect,
-        Fvr07ProductionVfxKind::WaterDecayAmbient,
-        Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse,
-    ] {
-        assert!(vfx_kinds.contains(&required), "missing VFX {required:?}");
+    #[cfg(not(feature = "vfx-hanabi"))]
+    {
+        let vfx_kinds = vfx.iter().map(|entry| entry.kind).collect::<BTreeSet<_>>();
+        for required in [
+            Fvr07ProductionVfxKind::PheromoneTrail,
+            Fvr07ProductionVfxKind::SporeDrift,
+            Fvr07ProductionVfxKind::SleepGlow,
+            Fvr07ProductionVfxKind::DangerHazardParticles,
+            Fvr07ProductionVfxKind::EatingResourceEffect,
+            Fvr07ProductionVfxKind::BirthDeathEffect,
+            Fvr07ProductionVfxKind::WaterDecayAmbient,
+            Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse,
+        ] {
+            assert!(vfx_kinds.contains(&required), "missing VFX {required:?}");
+        }
+        assert!(
+            vfx.iter()
+                .filter(|entry| {
+                    entry.stable_id.is_some()
+                        && matches!(
+                            entry.kind,
+                            Fvr07ProductionVfxKind::SleepGlow
+                                | Fvr07ProductionVfxKind::BirthDeathEffect
+                                | Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse
+                        )
+                })
+                .all(|entry| entry.base_scale.x <= 0.32 && entry.base_scale.z <= 0.32),
+            "creature-attached VFX markers must stay small enough to avoid covering body silhouettes"
+        );
     }
-    assert!(
-        vfx.iter()
-            .filter(|entry| {
-                entry.stable_id.is_some()
-                    && matches!(
-                        entry.kind,
-                        Fvr07ProductionVfxKind::SleepGlow
-                            | Fvr07ProductionVfxKind::BirthDeathEffect
-                            | Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse
-                    )
-            })
-            .all(|entry| entry.base_scale.x <= 0.32 && entry.base_scale.z <= 0.32),
-        "creature-attached VFX markers must stay small enough to avoid covering body silhouettes"
-    );
 
     let mut batch_query = app.world_mut().query::<&Fvr03ProductionVoxelTerrainBatch>();
     let batches = batch_query.iter(app.world()).copied().collect::<Vec<_>>();
@@ -2022,14 +2028,6 @@ fn fvr10_terrain_meshes_have_bound_visible_face_variation_not_texture_labels_onl
         .query::<(&Fvr03ProductionVoxelTerrainBatch, &Mesh3d)>();
     let terrain_mesh_handles = query
         .iter(app.world())
-        .filter(|(batch, _)| {
-            !matches!(
-                batch.material,
-                Fvr03ProductionVoxelMaterialKind::ChunkBoundary
-                    | Fvr03ProductionVoxelMaterialKind::Creature
-                    | Fvr03ProductionVoxelMaterialKind::Selection
-            )
-        })
         .map(|(_, mesh)| mesh.0.clone())
         .collect::<Vec<_>>();
     assert!(terrain_mesh_handles.len() >= 6);

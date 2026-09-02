@@ -14,7 +14,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-$ProductionFeatures = "bevy-app gpu-runtime voxel-backend production-assets vfx-hanabi"
+$ProductionFeatures = "bevy-app gpu-runtime production-assets vfx-hanabi"
 
 function Resolve-InWorkspacePath {
     param([string]$Path)
