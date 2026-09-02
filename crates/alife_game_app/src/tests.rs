@@ -117,8 +117,8 @@ fn ca12_app_bundle_manifest_discovers_production_assets_and_shaders() {
     );
     assert_eq!(summary.environment_scenarios, 1);
     assert_eq!(summary.config_entries, 6);
-    assert_eq!(summary.shader_assets, 15);
-    assert_eq!(summary.discovered_shader_assets, 15);
+    assert_eq!(summary.shader_assets, 14);
+    assert_eq!(summary.discovered_shader_assets, 14);
     assert!(summary.production_voxel_asset_entries > 0);
     assert!(summary.production_voxel_generated_assets > 0);
     assert!(summary.production_voxel_asset_manifest_validated);
@@ -129,12 +129,13 @@ fn ca12_app_bundle_manifest_discovers_production_assets_and_shaders() {
 }
 
 #[test]
-fn ca12_active_manifests_exclude_retired_visuals() {
+fn ca12_active_manifests_exclude_retired_visuals_and_gpu_diagnostics() {
     let environment = std::fs::read_to_string(default_environment_manifest_path()).unwrap();
     let bundle = std::fs::read_to_string(default_app_bundle_manifest_path()).unwrap();
 
     assert!(!environment.contains("gpu-alpha"));
     assert!(!bundle.contains("placeholder_art_manifest"));
+    assert!(!bundle.contains("p25_static_forward"));
 }
 
 #[test]
@@ -155,8 +156,8 @@ fn ca12_app_bundle_manifest_rejects_missing_required_entries() {
 fn ca12_app_bundle_manifest_rejects_missing_shader_assets() {
     let source = std::fs::read_to_string(default_app_bundle_manifest_path()).unwrap();
     let broken = source.replace(
-        "crates/alife_gpu_backend/shaders/p25_static_forward.wgsl",
-        "crates/alife_gpu_backend/shaders/missing_static_forward.wgsl",
+        "crates/alife_gpu_backend/shaders/closed_loop_recurrent.wgsl",
+        "crates/alife_gpu_backend/shaders/missing_recurrent.wgsl",
     );
     let path = std::env::temp_dir().join("alife_ca12_broken_shader_manifest.json");
     std::fs::write(&path, broken).unwrap();

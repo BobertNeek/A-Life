@@ -10,13 +10,11 @@ mod prelude {
     pub(crate) use alife_core::{
         heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionDecision, ActionId,
         ActionKind, ActionProposal, ActionTarget, BrainGenome, BrainScaleTier, BrainTickInput,
-        BrainTickStatus, ChemistryModulation, CognitiveEdgeId, ConceptCellId, Confidence,
-        ContractDiagnostic, CreatureMind, DurationTicks, EdgeRelationKind, ExperiencePatch,
-        GapResolutionStatus, GaussianClusterId, GenomeId, HomeostaticParameters,
-        HomeostaticSnapshot, Intensity, LineageId, NeuralProjectionSchema, NormalizedScalar,
-        OrganismId, PhysicalContactKind, PolicyBackend, ReferenceActionFailure,
-        ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel, TeacherPerceptionChannel,
-        Tick, UnresolvedGapId, Validate, Vec3f, WorldEntityId,
+        BrainTickStatus, Confidence, ContractDiagnostic, CreatureMind, DurationTicks,
+        ExperiencePatch, GenomeId, HomeostaticSnapshot, Intensity, LineageId,
+        NeuralProjectionSchema, NormalizedScalar, OrganismId, PhysicalContactKind, PolicyBackend,
+        ReferenceActionFailure, ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel,
+        TeacherPerceptionChannel, Tick, Validate, Vec3f, WorldEntityId,
     };
     pub(crate) use alife_school::{
         Curriculum, CurriculumStep, CurriculumStepKind, EmbodiedTeacherActor, ExpectedObservation,
@@ -24,18 +22,6 @@ mod prelude {
         PatchLogLessonVerifier, SchoolEvidence, TeacherAct, TeacherChannelContract,
         TeacherInputKind, TeacherPerceptualEvent, TeacherRole, TopologySummary, VerifierCheck,
         TEACHER_SCHOOL_SCHEMA_VERSION,
-    };
-    pub(crate) use alife_semantic::{
-        BoundedSemanticEmbedding, FakeSemanticProvider, LlamaCppEmbeddingConfig,
-        LlamaCppEmbeddingProvider, LlamaCppSlmPriorConfig, LlamaCppSlmPriorProvider,
-        LocalSemanticModelManifest, LocalSlmPriorAsyncQueue, LocalSlmPriorOutput,
-        LocalSlmPriorRequest, SemanticCodeDescriptor, SemanticConceptBinding,
-        SemanticContextBundle, SemanticContextProvider, SemanticContextRequest,
-        SemanticProviderCapabilityManifest, SemanticProviderConfig, SemanticProviderKind,
-        CA26_EMBEDDING_PROJECTION_DIMS, CA26_LOCAL_MODEL_MANIFEST_SCHEMA,
-        CA26_LOCAL_MODEL_MANIFEST_SCHEMA_VERSION, CA27_SLM_PRIOR_OUTPUT_SCHEMA,
-        CA27_SLM_PRIOR_OUTPUT_SCHEMA_VERSION, G11_SEMANTIC_PROVIDER_SCHEMA,
-        G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
     };
     pub(crate) use alife_world::persistence::{
         AssetManifest, GpuRuntimeActiveProfileCaps, GpuRuntimeAdapterIdentity,
@@ -197,8 +183,8 @@ mod production_conversation_lineage_ui;
 #[cfg(all(feature = "bevy-app", feature = "gpu-runtime"))]
 pub use production_conversation_lineage_ui::*;
 
-mod interactive_runtime;
-pub use interactive_runtime::*;
+mod runtime_playback;
+pub use runtime_playback::RuntimePlaybackState;
 
 mod double_buffered_scheduler;
 pub use double_buffered_scheduler::*;
@@ -206,23 +192,14 @@ pub use double_buffered_scheduler::*;
 mod motor_ring;
 pub use motor_ring::*;
 
-mod homeostasis_runtime;
-pub use homeostasis_runtime::*;
-
 mod graphical_ecology;
 pub use graphical_ecology::*;
 
 mod production_assets;
 pub use production_assets::*;
 
-mod curriculum_authoring;
-pub use curriculum_authoring::*;
-
 mod behavior_tuning;
 pub use behavior_tuning::*;
-
-mod ecological_soak;
-pub use ecological_soak::*;
 
 mod population_social;
 pub use population_social::*;
@@ -232,24 +209,6 @@ pub use lifecycle_lineage::*;
 
 mod school_mode;
 pub use school_mode::*;
-
-mod semantic_provider_display;
-pub use semantic_provider_display::*;
-
-mod real_semantic_provider;
-pub use real_semantic_provider::*;
-
-mod internal_slm_prior;
-pub use internal_slm_prior::*;
-
-mod topological_concept_overlay;
-pub use topological_concept_overlay::*;
-
-mod memory_history_journal;
-pub use memory_history_journal::*;
-
-mod neural_activity_profiler;
-pub use neural_activity_profiler::*;
 
 mod gpu_product_telemetry;
 pub use gpu_product_telemetry::*;

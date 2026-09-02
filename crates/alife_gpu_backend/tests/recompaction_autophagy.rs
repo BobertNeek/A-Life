@@ -6,7 +6,7 @@ use alife_core::{
 use alife_gpu_backend::{
     GpuAutophagyPolicy, GpuBufferReplacement, GpuFixedPointPolicy, GpuReadbackClass,
     GpuReadbackPolicy, GpuRecompactionPlan, GpuRecompactionRemapTable, GpuRecompactionSwapState,
-    GpuStaticForwardPlan, GpuUploadBuffers, P28_WGSL_RECOMPACTION_AUTOPHAGY,
+    GpuUploadBuffers, P28_WGSL_RECOMPACTION_AUTOPHAGY,
 };
 
 fn weights(
@@ -48,13 +48,6 @@ fn recompaction_schema() -> NeuralProjectionSchema {
     ));
     schema.rebuild_supertile_masks();
     schema
-}
-
-fn activation_vec(first: f32, second: f32) -> Vec<f32> {
-    let mut values = vec![0.0; 512];
-    values[0] = first;
-    values[16] = second;
-    values
 }
 
 fn structural_batch(kind: StructuralEditKind) -> StructuralEditBatch {
@@ -152,7 +145,7 @@ fn structural_edit_import_rejects_invalid_and_unsupported_edits() {
 }
 
 #[test]
-fn no_op_edit_batch_preserves_upload_and_static_forward_output() {
+fn no_op_edit_batch_preserves_upload() {
     let schema = recompaction_schema();
     let upload =
         GpuUploadBuffers::from_cpu_schema(&schema, GpuFixedPointPolicy::reference()).unwrap();
@@ -172,24 +165,10 @@ fn no_op_edit_batch_preserves_upload_and_static_forward_output() {
         upload.encoded_bytes()
     );
     assert_eq!(output.remap.old_to_new, vec![Some(0), Some(1), Some(2)]);
-
-    let old_plan =
-        GpuStaticForwardPlan::from_upload(&upload, GpuFixedPointPolicy::reference()).unwrap();
-    let new_plan = GpuStaticForwardPlan::from_upload(
-        &output.compacted_upload,
-        GpuFixedPointPolicy::reference(),
-    )
-    .unwrap();
-    let activation_q = old_plan
-        .quantize_activations(&activation_vec(0.75, 0.5))
-        .unwrap();
-    let old_result = old_plan.execute_cpu_diagnostic(&activation_q).unwrap();
-    let new_result = new_plan.execute_cpu_diagnostic(&activation_q).unwrap();
-    assert_eq!(old_result.activations_q, new_result.activations_q);
 }
 
 #[test]
-fn pruning_autophagy_remaps_zero_effective_synapse_without_output_drift() {
+fn pruning_autophagy_remaps_zero_effective_synapse() {
     let schema = recompaction_schema();
     let upload =
         GpuUploadBuffers::from_cpu_schema(&schema, GpuFixedPointPolicy::reference()).unwrap();
@@ -210,20 +189,6 @@ fn pruning_autophagy_remaps_zero_effective_synapse_without_output_drift() {
     assert_eq!(output.remap.old_to_new, vec![Some(0), None, Some(1)]);
     assert_eq!(output.compacted_upload.packed_indices.len(), 2);
     assert_eq!(output.autophagy_markers.len(), 1);
-
-    let old_plan =
-        GpuStaticForwardPlan::from_upload(&upload, GpuFixedPointPolicy::reference()).unwrap();
-    let new_plan = GpuStaticForwardPlan::from_upload(
-        &output.compacted_upload,
-        GpuFixedPointPolicy::reference(),
-    )
-    .unwrap();
-    let activation_q = old_plan
-        .quantize_activations(&activation_vec(0.75, 0.5))
-        .unwrap();
-    let old_result = old_plan.execute_cpu_diagnostic(&activation_q).unwrap();
-    let new_result = new_plan.execute_cpu_diagnostic(&activation_q).unwrap();
-    assert_eq!(old_result.activations_q, new_result.activations_q);
 }
 
 #[test]

@@ -224,7 +224,7 @@ pub fn run_behavior_tuning_metrics_with_config(
             .to_string(),
         "hazard-suicide risk is flagged when pain remains present and avoidance is not emergent"
             .to_string(),
-        "population-collapse checks are bounded to current fixture caps until CA22 long-run ecology"
+        "population-collapse checks are bounded to current fixture caps until a production long-run profile"
             .to_string(),
     ]);
     let manual_extended_command = "cargo test -p alife_game_app --test app_shell g19_manual_extended_balance_run -- --ignored --nocapture".to_string();
@@ -333,7 +333,7 @@ fn behavior_tuning_findings(
                 metrics.food_success_rate
             ),
             recommendation:
-                "CA22 should broaden ecology so non-scripted multi-creature ticks continue to produce varied sealed patches"
+                "A production long-run profile should verify varied sealed patches across non-scripted multi-creature ticks"
                     .to_string(),
         },
         BehaviorTuningFinding {
@@ -370,7 +370,7 @@ fn behavior_tuning_findings(
                 metrics.food_success_rate
             ),
             recommendation:
-                "CA22 should include scarcity/regrowth sweeps before treating perfect food success as healthy balance"
+                "Production balance profiling should include scarcity and regrowth sweeps before treating perfect food success as healthy"
                     .to_string(),
         },
         BehaviorTuningFinding {
@@ -388,7 +388,7 @@ fn behavior_tuning_findings(
                 metrics.hazard_avoidance_score
             ),
             recommendation:
-                "CA22 should keep pain visible while checking whether avoidance improves under richer terrain/resource pressure"
+                "Production balance profiling should keep pain visible while checking avoidance under richer terrain and resource pressure"
                     .to_string(),
         },
         BehaviorTuningFinding {
@@ -411,7 +411,7 @@ fn behavior_tuning_findings(
                 metrics.population_bounds_enforced
             ),
             recommendation:
-                "CA22 should run a longer ecological soak to see whether bounded population survives past the deterministic smoke slice"
+                "A production long-run profile should verify bounded population survival beyond the deterministic smoke slice"
                     .to_string(),
         },
     ]
@@ -452,7 +452,7 @@ pub fn behavior_tuning_report_markdown(summary: &BehaviorTuningSummary) -> Strin
     report.push_str("- CA21 reuses deterministic G19/G06-G09/G18 signatures rather than retuning fixture data to pass.\n");
     report.push_str("- Watch statuses are retained in the report instead of hidden or converted into pass claims.\n");
     report.push_str("- Required GPU unavailability is typed and stops learned actions.\n");
-    report.push_str("- CA22 owns broader long-run ecological soak evidence.\n");
+    report.push_str("- Production profiling owns broader long-run ecology evidence.\n");
     report.push_str("\n## Reproduction command\n\n");
     report.push_str(&format!("`{}`\n", summary.manual_extended_command));
     report

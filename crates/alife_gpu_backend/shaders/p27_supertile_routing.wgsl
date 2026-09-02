@@ -1,12 +1,9 @@
 // P27 supertile culling and active-mask routing contract.
 //
-// This WGSL module is a compile-checked helper contract for P27. P25/P26
-// diagnostic passes may inline equivalent logic, but the indexing rules here
-// are the source contract for future shared shader modules.
+// This WGSL module is a compile-checked helper contract for P27. Production
+// shaders may inline equivalent logic, but the indexing rules remain shared.
 //
 // Portability notes:
-// - P25 currently uses nine storage-buffer bindings for diagnostic parity.
-// - P26 currently uses ten storage-buffer bindings for diagnostic parity.
 // - Passing local diagnostic tests does not prove product WebGPU portability.
 // - Diagnostics/export readback is allowed; active gameplay neural readback is
 //   not allowed.

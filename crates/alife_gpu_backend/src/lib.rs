@@ -1,6 +1,4 @@
-//! v0 scaffold: wgpu backend contracts and placeholders only.
-
-use alife_core::NeuralComputeBackend;
+//! wgpu backend for sparse GPU-authoritative neural compute.
 
 pub mod buffers;
 pub mod closed_loop_activity;
@@ -18,8 +16,6 @@ pub mod recompaction;
 pub mod routing_masks;
 pub mod runtime;
 pub mod shader_contract;
-pub mod static_forward;
-pub mod timing;
 
 pub use buffers::{
     GpuAccumulatorLayout, GpuActionSummaryStagingRecord, GpuActivationPingPongViews,
@@ -52,8 +48,8 @@ pub use recompaction::{
 pub use routing_masks::{
     p27_routing_counters, p27_tile_is_active, GpuActiveTileMaskConfig, GpuRoutingCounters,
     GpuRoutingMaskPlan, GpuSupertileIndex, GpuSupertileMaskWords, P27_MICROTILE_EDGE,
-    P27_STATIC_FORWARD_STORAGE_BINDINGS, P27_SUPERTILE_EDGE, P27_SUPERTILE_MASK_WORDS,
-    P27_SUPERTILE_MICROTILES, P27_WGSL_SUPERTILE_ROUTING,
+    P27_SUPERTILE_EDGE, P27_SUPERTILE_MASK_WORDS, P27_SUPERTILE_MICROTILES,
+    P27_WGSL_SUPERTILE_ROUTING,
 };
 pub use runtime::{
     probe_local_wgpu_runtime, probe_local_wgpu_runtime_for_graphics_backend,
@@ -65,53 +61,6 @@ pub use runtime::{
     GpuTierMeasurement, GpuTierPerformanceReport, GpuTierPopulation, P29_RUNTIME_SCHEMA_VERSION,
 };
 pub use shader_contract::{GpuShaderPass, P24_WGSL_CONTRACT_STUB};
-pub use static_forward::{
-    finalize_static_forward_accumulators_for_diagnostics,
-    run_static_forward_gpu_action_summary_timed, run_static_forward_gpu_diagnostic,
-    run_static_forward_gpu_diagnostic_timed, GpuStaticActionSummaryConfig,
-    GpuStaticActionSummaryTimedResult, GpuStaticActionSummaryTiming, GpuStaticForwardDiagnostics,
-    GpuStaticForwardDispatch, GpuStaticForwardPlan, GpuStaticForwardResult,
-    GpuStaticForwardTimedResult, GpuStaticForwardTiming, P25_DIAGNOSTIC_COUNTER_WORDS,
-    P25_STATIC_FORWARD_TOLERANCE_ABS, P25_STATIC_FORWARD_WORKGROUP_SIZE, P25_WGSL_ACTION_SUMMARY,
-    P25_WGSL_STATIC_FORWARD,
-};
-pub use timing::{
-    run_local_gpu_diagnostic_timing, GpuDiagnosticProductRuntimeClaim, GpuDiagnosticTimingKind,
-    GpuDiagnosticTimingReport, GpuDiagnosticWorkloadTiming, GpuTimingTargetStatus,
-    GPU_DIAGNOSTIC_TIMING_SCHEMA_VERSION,
-};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShaderSourceLanguage {
-    Wgsl,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GpuBackendManifest {
-    pub shader_language: ShaderSourceLanguage,
-    pub runtime_neural_kernels_implemented: bool,
-}
-
-impl GpuBackendManifest {
-    pub const SCAFFOLD: Self = Self {
-        shader_language: ShaderSourceLanguage::Wgsl,
-        runtime_neural_kernels_implemented: false,
-    };
-
-    pub const STATIC_FORWARD_PARITY: Self = Self {
-        shader_language: ShaderSourceLanguage::Wgsl,
-        runtime_neural_kernels_implemented: true,
-    };
-}
-
-#[derive(Debug, Default)]
-pub struct WgpuScaffoldBackend;
-
-impl NeuralComputeBackend for WgpuScaffoldBackend {
-    fn backend_name(&self) -> &'static str {
-        "wgpu-scaffold"
-    }
-}
 
 pub type WgpuLimits = wgpu::Limits;
 

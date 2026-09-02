@@ -1068,7 +1068,6 @@ fn fvr06_gpu_runtime_save_state(
         },
         shader_abi_versions: GpuRuntimeShaderAbiVersions {
             shader_manifest: vec![
-                "p25_static_forward:v1".to_string(),
                 "closed_loop_plasticity:v1".to_string(),
                 "p27_supertile_routing:v1".to_string(),
                 "p28_recompaction_autophagy:contract-v1".to_string(),

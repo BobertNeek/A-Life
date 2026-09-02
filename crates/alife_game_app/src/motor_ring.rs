@@ -259,57 +259,6 @@ impl MotorRingPresentation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct MotorRingArbitrationSmokeSummary {
-    pub ring: MotorRingPresentation,
-    pub selected_action_kind: Option<ActionKind>,
-    pub selected_action_id: Option<ActionId>,
-    pub patch_sealed: bool,
-    pub direct_action_bypass: bool,
-}
-
-impl MotorRingArbitrationSmokeSummary {
-    pub fn validate(&self) -> Result<(), GameAppShellError> {
-        self.ring.validate()?;
-        if self.selected_action_id.is_none()
-            || !self.patch_sealed
-            || self.direct_action_bypass
-            || !self.ring.structured_arbitration_preserved
-            || !self.ring.no_direct_action_bypass
-            || !self.ring.panel_text().contains("Motor Ring")
-            || !self.ring.panel_text().contains("normal arbitration")
-            || self.ring.panel_text().contains("Entity(")
-        {
-            return Err(GameAppShellError::VisibleWorldMismatch {
-                message: "CA14 motor ring smoke must preserve normal arbitration boundaries",
-            });
-        }
-        Ok(())
-    }
-}
-
-pub fn run_motor_ring_arbitration_smoke(
-    launch: &AppShellLaunchConfig,
-) -> Result<MotorRingArbitrationSmokeSummary, GameAppShellError> {
-    let mut live = LiveBrainLoop::from_p34_launch(launch)?;
-    let mut panel = RuntimeControlPanel::from_live_loop(&live);
-    let summaries = panel.apply_command(&mut live, RuntimeControlCommand::StepOnce)?;
-    let summary = summaries
-        .first()
-        .ok_or(GameAppShellError::VisibleWorldMismatch {
-            message: "CA14 motor ring smoke must produce one tick",
-        })?;
-    let smoke = MotorRingArbitrationSmokeSummary {
-        ring: panel.motor_ring.clone(),
-        selected_action_kind: summary.selected_action_kind,
-        selected_action_id: summary.selected_action_id,
-        patch_sealed: summary.patch_sealed,
-        direct_action_bypass: false,
-    };
-    smoke.validate()?;
-    Ok(smoke)
-}
-
 fn channel_from_kind(
     kind: MotorRingChannelKind,
     proposals: &[ActionProposal],

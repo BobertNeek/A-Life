@@ -99,11 +99,6 @@
       "required": true
     },
     {
-      "id": "p25-static-forward",
-      "relative_path": "crates/alife_gpu_backend/shaders/p25_static_forward.wgsl",
-      "required": true
-    },
-    {
       "id": "closed-loop-plasticity",
       "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_plasticity.wgsl",
       "required": true
