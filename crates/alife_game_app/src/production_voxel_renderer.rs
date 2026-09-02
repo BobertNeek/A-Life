@@ -14,12 +14,14 @@ use std::{
 
 use alife_bevy_adapter::BevyEntityMap;
 use alife_core::{OrganismId, Tick, Vec3f, WorldEntityId};
+#[cfg(test)]
+use alife_world::CreatureAppearanceGenome;
 use alife_world::{
     persistence::{CreatureSaveState, GpuRuntimeSaveState, PortableSaveFile},
-    CreatureAppearanceGenome, CreatureWorldAnchor, PersistentVoxelWorldBackend,
-    PersistentVoxelWorldSnapshot, PresentationOutcomeSnapshot, ProceduralTerrainMaterial,
-    ProceduralTileCoord, ProceduralWorldConfig, StableVoxelObjectRef, StableVoxelRefKind,
-    VoxelChunkCoord, VoxelTileCoord, WorldObjectKind, WorldOrganismPresentationRow,
+    CreatureWorldAnchor, PersistentVoxelWorldBackend, PersistentVoxelWorldSnapshot,
+    PresentationOutcomeSnapshot, ProceduralTerrainMaterial, ProceduralTileCoord,
+    ProceduralWorldConfig, StableVoxelObjectRef, StableVoxelRefKind, VoxelChunkCoord,
+    VoxelTileCoord, WorldObjectKind, WorldOrganismPresentationRow,
     CREATURE_APPEARANCE_SPECIES_COUNT, FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
 };
 use bevy::{
@@ -30,13 +32,13 @@ use bevy::{
     math::primitives::InfinitePlane3d,
     mesh::Indices,
     prelude::{
-        default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, Capsule3d, ChildOf,
-        Children, Color, Commands, Component, Cuboid, DetectChanges, DirectionalLight, Entity,
-        EulerRot, GlobalTransform, Handle, Image, KeyCode, Mat4, Mesh, Mesh3d, MeshMaterial3d,
-        Meshable, MessageReader, MessageWriter, MouseButton, Name, Node, NonSend, NonSendMut,
-        ParamSet, PositionType, Projection, Quat, Res, ResMut, Resource, Sphere, StandardMaterial,
-        Text, Text2d, TextColor, TextFont, Time, Torus, Transform, Update, Val, Vec3,
-        ViewVisibility, Visibility, Window, With, Without, World,
+        default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, ChildOf, Children,
+        Color, Commands, Component, Cuboid, DetectChanges, DirectionalLight, Entity, EulerRot,
+        GlobalTransform, Handle, Image, KeyCode, Mat4, Mesh, Mesh3d, MeshMaterial3d, Meshable,
+        MessageReader, MessageWriter, MouseButton, Name, Node, NonSend, NonSendMut, ParamSet,
+        PositionType, Projection, Quat, Res, ResMut, Resource, StandardMaterial, Text, Text2d,
+        TextColor, TextFont, Time, Torus, Transform, Update, Val, Vec3, ViewVisibility, Visibility,
+        Window, With, Without, World,
     },
     render::{
         render_resource::PrimitiveTopology,
@@ -64,13 +66,12 @@ use crate::RuntimePlaybackState;
 use crate::SocketFrame;
 use crate::{
     creature_face_style_from_landmarks, creature_part_pose, creature_root_pose,
-    creature_surface_detail_recipe, grounded_root_height,
-    load_geneforge_assembly_preparation_index, load_geneforge_creature_part_catalog,
-    remap_creature_face_landmarks, resolve_geneforge_creature_assembly, CreatureAssemblyPartRecipe,
-    CreatureAssemblyRecipe, CreatureCoatAssetHandles, CreatureCoatKey, CreatureDetailMaterialRole,
-    CreatureDetailMeshKind, CreatureFaceStyle, CreaturePartAssetLibrary, CreaturePartLodId,
-    CreaturePartSlot, CreatureSurfaceDetailSpec, CreatureVisualBounds,
-    GeneForgeAssemblyPreparationIndex, GeneForgeCreaturePartCatalog, JoinCoverPrimitive,
+    grounded_root_height, load_geneforge_assembly_preparation_index,
+    load_geneforge_creature_part_catalog, remap_creature_face_landmarks,
+    resolve_geneforge_creature_assembly, CreatureAssemblyPartRecipe, CreatureAssemblyRecipe,
+    CreatureCoatAssetHandles, CreatureCoatKey, CreaturePartAssetLibrary, CreaturePartLodId,
+    CreaturePartSlot, CreatureVisualBounds, GeneForgeAssemblyPreparationIndex,
+    GeneForgeCreaturePartCatalog,
 };
 
 #[cfg(feature = "gpu-runtime")]
@@ -496,7 +497,6 @@ pub struct Fvr04ProductionCreatureRendererSettings {
     pub lod: Fvr04CreatureLod,
     pub selected_hover_label_only: bool,
     pub max_world_labels: u16,
-    pub spawn_affordance_cues: bool,
     pub shared_mesh_material_buckets: bool,
     pub expression_buffer_channels: u8,
 }
@@ -532,11 +532,6 @@ impl Fvr04ProductionCreatureRendererSettings {
                     | ProductionFrontendProfileId::ResearchScale
             ),
             max_world_labels,
-            spawn_affordance_cues: matches!(
-                profile_id,
-                ProductionFrontendProfileId::MinimumSettings30x30
-                    | ProductionFrontendProfileId::Balanced1080p
-            ) && requested_population <= 100,
             shared_mesh_material_buckets: true,
             expression_buffer_channels: 8,
         }
@@ -1396,15 +1391,6 @@ struct Fvr04CreatureSpawnContext {
     preparations: GeneForgeAssemblyPreparationIndex,
     assets_root: PathBuf,
     creature_part_assets: CreaturePartAssetLibrary,
-    cue_mesh: Handle<Mesh>,
-    eye_sclera_mesh: Handle<Mesh>,
-    eye_iris_mesh: Handle<Mesh>,
-    eye_pupil_mesh: Handle<Mesh>,
-    eye_highlight_mesh: Handle<Mesh>,
-    eye_sclera_material: Handle<StandardMaterial>,
-    eye_pupil_material: Handle<StandardMaterial>,
-    eye_highlight_material: Handle<StandardMaterial>,
-    face_material: Handle<StandardMaterial>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1452,41 +1438,19 @@ struct Fvr04PreparedCreaturePart {
     transform: Transform,
 }
 
-struct Fvr04PreparedJoinCover {
-    parent_slot: CreaturePartSlot,
-    primitive: JoinCoverPrimitive,
-    mesh: Handle<Mesh>,
-    transform: Transform,
-}
-
 struct Fvr04PreparedCreature {
     record: Fvr04CreatureVisualRecord,
     recipe: CreatureAssemblyRecipe,
     coat: CreatureCoatAssetHandles,
     parts: Vec<Fvr04PreparedCreaturePart>,
-    covers: Vec<Fvr04PreparedJoinCover>,
     local_bounds: CreatureVisualBounds,
     root_transform: Transform,
     root_visual: Fvr04ProductionCreatureVisualMarker,
-    face_style: Option<CreatureFaceStyle>,
-    details: Vec<CreatureSurfaceDetailSpec>,
-    detail_materials: Option<Fvr10CreatureDetailMaterials>,
 }
 
 struct Fvr04PreparedCreatureBatch {
     settings: Fvr04ProductionCreatureRendererSettings,
     creatures: Vec<Fvr04PreparedCreature>,
-    cover_mesh_count: usize,
-    detail_meshes: Fvr10CreatureDetailMeshes,
-    cue_mesh: Handle<Mesh>,
-    eye_sclera_mesh: Handle<Mesh>,
-    eye_iris_mesh: Handle<Mesh>,
-    eye_pupil_mesh: Handle<Mesh>,
-    eye_highlight_mesh: Handle<Mesh>,
-    eye_sclera_material: Handle<StandardMaterial>,
-    eye_pupil_material: Handle<StandardMaterial>,
-    eye_highlight_material: Handle<StandardMaterial>,
-    face_material: Handle<StandardMaterial>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -2127,97 +2091,12 @@ pub fn spawn_fvr03_production_voxel_scene(
             message: error.to_string(),
         })?
     };
-    let creature_cue_mesh = {
-        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(Cuboid::new(0.08, 0.08, 0.08))
-    };
-    let creature_eye_sclera_mesh = {
-        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(
-            Sphere::new(0.085)
-                .mesh()
-                .ico(2)
-                .expect("valid creature eye sclera"),
-        )
-    };
-    let creature_eye_iris_mesh = {
-        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(
-            Sphere::new(0.085)
-                .mesh()
-                .ico(2)
-                .expect("valid creature iris"),
-        )
-    };
-    let creature_eye_pupil_mesh = {
-        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(
-            Sphere::new(0.085)
-                .mesh()
-                .ico(1)
-                .expect("valid creature pupil"),
-        )
-    };
-    let creature_eye_highlight_mesh = {
-        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(
-            Sphere::new(0.010)
-                .mesh()
-                .ico(1)
-                .expect("valid creature eye highlight"),
-        )
-    };
-    let (
-        creature_eye_sclera_material,
-        creature_eye_pupil_material,
-        creature_eye_highlight_material,
-        creature_face_material,
-    ) = {
-        let mut materials = app.world_mut().resource_mut::<Assets<StandardMaterial>>();
-        let sclera = materials.add(StandardMaterial {
-            base_color: Color::srgb(0.91, 0.86, 0.74),
-            perceptual_roughness: 0.52,
-            reflectance: 0.34,
-            unlit: false,
-            ..default()
-        });
-        let pupil = materials.add(StandardMaterial {
-            base_color: Color::srgb(0.08, 0.045, 0.03),
-            perceptual_roughness: 0.38,
-            reflectance: 0.42,
-            unlit: false,
-            ..default()
-        });
-        let highlight = materials.add(StandardMaterial {
-            base_color: Color::srgb(1.0, 0.98, 0.90),
-            perceptual_roughness: 0.24,
-            reflectance: 0.50,
-            unlit: false,
-            ..default()
-        });
-        let face = materials.add(StandardMaterial {
-            base_color: Color::srgb(0.70, 0.28, 0.25),
-            perceptual_roughness: 0.68,
-            unlit: false,
-            ..default()
-        });
-        (sclera, pupil, highlight, face)
-    };
     let mut creature_spawn_context = Fvr04CreatureSpawnContext {
         settings: creature_settings,
         catalog: creature_part_catalog,
         preparations: creature_preparations,
         assets_root: creature_assets_root,
         creature_part_assets,
-        cue_mesh: creature_cue_mesh,
-        eye_sclera_mesh: creature_eye_sclera_mesh,
-        eye_iris_mesh: creature_eye_iris_mesh,
-        eye_pupil_mesh: creature_eye_pupil_mesh,
-        eye_highlight_mesh: creature_eye_highlight_mesh,
-        eye_sclera_material: creature_eye_sclera_material,
-        eye_pupil_material: creature_eye_pupil_material,
-        eye_highlight_material: creature_eye_highlight_material,
-        face_material: creature_face_material,
     };
     let candidate = prepare_fvr04_runtime_scene_candidate(
         runtime_state,
@@ -2804,22 +2683,6 @@ fn fvr04_scene_preflight_error(message: impl Into<String>) -> GameAppShellError 
     }
 }
 
-fn validate_fvr04_prepared_child_slot(
-    stable_id: WorldEntityId,
-    role: &str,
-    slot: CreaturePartSlot,
-    available_slots: &BTreeSet<CreaturePartSlot>,
-) -> Result<(), GameAppShellError> {
-    if available_slots.contains(&slot) {
-        Ok(())
-    } else {
-        Err(fvr04_scene_preflight_error(format!(
-            "FVR04 saved creature {} {role} references missing parent slot {slot:?}",
-            stable_id.raw()
-        )))
-    }
-}
-
 fn prepare_fvr04_creature_batch(
     world: &mut World,
     creatures: &[Fvr04CreatureVisualRecord],
@@ -2832,32 +2695,6 @@ fn prepare_fvr04_creature_batch(
         Fvr04CreatureLod::CompactVoxel => CreaturePartLodId::Compact,
         Fvr04CreatureLod::ImpostorVoxel => CreaturePartLodId::Impostor,
     };
-    let cover_meshes = {
-        let mut meshes = world.resource_mut::<Assets<Mesh>>();
-        BTreeMap::from([
-            (
-                JoinCoverPrimitive::Ruff,
-                meshes.add(Cuboid::new(0.30, 0.07, 0.22)),
-            ),
-            (
-                JoinCoverPrimitive::ShoulderTuft,
-                meshes.add(Cuboid::new(0.14, 0.12, 0.16)),
-            ),
-            (
-                JoinCoverPrimitive::HipFur,
-                meshes.add(Cuboid::new(0.16, 0.10, 0.16)),
-            ),
-            (
-                JoinCoverPrimitive::TailRuff,
-                meshes.add(Cuboid::new(0.20, 0.12, 0.14)),
-            ),
-            (
-                JoinCoverPrimitive::Cuff,
-                meshes.add(Cuboid::new(0.14, 0.08, 0.14)),
-            ),
-        ])
-    };
-    let detail_meshes = fvr10_creature_detail_meshes(world);
     let mut prepared = Vec::new();
     for (index, creature) in creatures
         .iter()
@@ -2890,7 +2727,6 @@ fn prepare_fvr04_creature_batch(
                 visual.stable_id.raw()
             )));
         }
-        let available_slots = recipe.parts.keys().copied().collect::<BTreeSet<_>>();
         let mut parts = Vec::with_capacity(recipe.parts.len());
         let mut local_bounds = None::<CreatureVisualBounds>;
         for part in recipe.parts.values() {
@@ -2951,105 +2787,6 @@ fn prepare_fvr04_creature_batch(
                     visual.stable_id.raw()
                 ))
             })?;
-        let mut covers = Vec::with_capacity(recipe.join_covers.len());
-        for cover in &recipe.join_covers {
-            validate_fvr04_prepared_child_slot(
-                visual.stable_id,
-                "join cover",
-                cover.slot,
-                &available_slots,
-            )?;
-            let primitive = geneforge_join_cover_primitive(&cover.cover_kind).ok_or_else(|| {
-                fvr04_scene_preflight_error(format!(
-                    "FVR04 saved creature {} has unknown join cover {}",
-                    visual.stable_id.raw(),
-                    cover.cover_kind
-                ))
-            })?;
-            let mesh = cover_meshes.get(&primitive).cloned().ok_or_else(|| {
-                fvr04_scene_preflight_error(format!(
-                    "FVR04 saved creature {} has no prepared mesh for join cover {primitive:?}",
-                    visual.stable_id.raw()
-                ))
-            })?;
-            covers.push(Fvr04PreparedJoinCover {
-                parent_slot: cover.slot,
-                primitive,
-                mesh,
-                transform: Transform::from_scale(Vec3::splat(0.72 + cover.overlap_depth)),
-            });
-        }
-        let (face_style, details, detail_materials) =
-            if matches!(settings.lod, Fvr04CreatureLod::ImpostorVoxel) {
-                (None, Vec::new(), None)
-            } else {
-                validate_fvr04_prepared_child_slot(
-                    visual.stable_id,
-                    "face",
-                    CreaturePartSlot::Head,
-                    &available_slots,
-                )?;
-                let head = recipe.parts.get(&CreaturePartSlot::Head).ok_or_else(|| {
-                    fvr04_scene_preflight_error(format!(
-                        "FVR04 saved creature {} has no prepared head",
-                        visual.stable_id.raw()
-                    ))
-                })?;
-                let head_asset = context.catalog.asset(&head.asset_id).ok_or_else(|| {
-                    fvr04_scene_preflight_error(format!(
-                        "FVR04 saved creature {} head asset is missing",
-                        visual.stable_id.raw()
-                    ))
-                })?;
-                let emitted_bounds = context
-                    .creature_part_assets
-                    .bounds(head.mesh_key())
-                    .ok_or_else(|| {
-                        fvr04_scene_preflight_error(format!(
-                            "FVR04 saved creature {} head bounds are missing",
-                            visual.stable_id.raw()
-                        ))
-                    })?;
-                let landmarks = remap_creature_face_landmarks(
-                    head_asset.canonical_bounds,
-                    emitted_bounds,
-                    &head.landmarks,
-                )
-                .map_err(|error| {
-                    fvr04_scene_preflight_error(format!(
-                        "FVR04 saved creature {} face landmark preparation failed: {error}",
-                        visual.stable_id.raw()
-                    ))
-                })?;
-                let face_style = creature_face_style_from_landmarks(visual.appearance, &landmarks)
-                    .map_err(|error| {
-                        fvr04_scene_preflight_error(format!(
-                            "FVR04 saved creature {} face preparation failed: {error}",
-                            visual.stable_id.raw()
-                        ))
-                    })?;
-                let details = creature_surface_detail_recipe(
-                    visual.appearance,
-                    match settings.lod {
-                        Fvr04CreatureLod::FullVoxel => 1.0,
-                        Fvr04CreatureLod::CompactVoxel => 0.92,
-                        Fvr04CreatureLod::ImpostorVoxel => 0.72,
-                    },
-                );
-                for detail in &details {
-                    validate_fvr04_prepared_child_slot(
-                        visual.stable_id,
-                        detail.role,
-                        detail.anchor_slot,
-                        &available_slots,
-                    )?;
-                }
-                (
-                    Some(face_style),
-                    details,
-                    Some(fvr10_creature_detail_materials(world, visual)),
-                )
-            };
         let surface_height = tile_summaries
             .get(&creature.tile)
             .map(|tile| tile.height_units)
@@ -3076,7 +2813,6 @@ fn prepare_fvr04_creature_batch(
             recipe,
             coat,
             parts,
-            covers,
             local_bounds,
             root_transform,
             root_visual: Fvr04ProductionCreatureVisualMarker {
@@ -3093,25 +2829,11 @@ fn prepare_fvr04_creature_batch(
                 surface_height,
                 phase,
             },
-            face_style,
-            details,
-            detail_materials,
         });
     }
     Ok(Fvr04PreparedCreatureBatch {
         settings,
         creatures: prepared,
-        cover_mesh_count: cover_meshes.len(),
-        detail_meshes,
-        cue_mesh: context.cue_mesh.clone(),
-        eye_sclera_mesh: context.eye_sclera_mesh.clone(),
-        eye_iris_mesh: context.eye_iris_mesh.clone(),
-        eye_pupil_mesh: context.eye_pupil_mesh.clone(),
-        eye_highlight_mesh: context.eye_highlight_mesh.clone(),
-        eye_sclera_material: context.eye_sclera_material.clone(),
-        eye_pupil_material: context.eye_pupil_material.clone(),
-        eye_highlight_material: context.eye_highlight_material.clone(),
-        face_material: context.face_material.clone(),
     })
 }
 
@@ -4736,17 +4458,6 @@ fn spawn_fvr04_prepared_creature_batch(
     let Fvr04PreparedCreatureBatch {
         settings,
         creatures,
-        cover_mesh_count,
-        detail_meshes,
-        cue_mesh,
-        eye_sclera_mesh,
-        eye_iris_mesh,
-        eye_pupil_mesh,
-        eye_highlight_mesh,
-        eye_sclera_material,
-        eye_pupil_material,
-        eye_highlight_material,
-        face_material,
     } = prepared;
     let mut expression_buffer = Vec::with_capacity(creatures.len());
     let mut stable_lookup_by_raw_id = BTreeMap::new();
@@ -4755,7 +4466,6 @@ fn spawn_fvr04_prepared_creature_batch(
     let mut scene_mesh_handles = BTreeSet::new();
     let mut scene_material_handles = BTreeSet::new();
     let mut part_entity_count = 0_usize;
-    let mut join_cover_count = 0_usize;
     let mut mixed_assembly_count = 0_usize;
 
     for creature in creatures {
@@ -4803,199 +4513,30 @@ fn spawn_fvr04_prepared_creature_batch(
             .expect("validated creature root stable ID must bind");
         let coat_material = creature.coat.material;
         scene_material_handles.insert(coat_material.id());
-        let mut part_entities = BTreeMap::new();
         for part in creature.parts {
             scene_mesh_handles.insert(part.mesh.id());
-            let part_entity = world
-                .spawn((
-                    Name::new(format!(
-                        "A-Life creature part {} {:?}",
-                        visual.stable_id.raw(),
-                        part.recipe.slot
-                    )),
-                    Mesh3d(part.mesh),
-                    MeshMaterial3d(coat_material.clone()),
-                    part.transform,
-                    ChildOf(root),
-                    ProductionCreaturePartMarker {
-                        stable_id: visual.stable_id,
-                        family: part.recipe.source_family,
-                        asset_id: part.recipe.asset_id.clone(),
-                        slot: part.recipe.slot,
-                        runtime_group: part.recipe.runtime_group.clone(),
-                        authored_matrix: part.recipe.authored_transform,
-                        animation: visual.animation,
-                    },
-                    ProductionCreaturePartRestTransform(part.transform),
-                ))
-                .id();
-            part_entities.insert(part.recipe.slot, part_entity);
-            part_entity_count += 1;
-        }
-        for cover in creature.covers {
-            let Some(parent) = part_entities.get(&cover.parent_slot).copied() else {
-                continue;
-            };
             world.spawn((
                 Name::new(format!(
-                    "A-Life creature join cover {} {}",
+                    "A-Life creature part {} {:?}",
                     visual.stable_id.raw(),
-                    cover.primitive.label()
+                    part.recipe.slot
                 )),
-                Mesh3d(cover.mesh),
+                Mesh3d(part.mesh),
                 MeshMaterial3d(coat_material.clone()),
-                cover.transform,
-                ChildOf(parent),
-                ProductionCreatureJoinCoverMarker {
-                    stable_id: visual.stable_id,
-                    cover_kind: cover.primitive.label(),
-                    display_only: true,
-                },
-            ));
-            join_cover_count += 1;
-        }
-        if let (Some(face_style), Some(detail_materials), Some(head)) = (
-            creature.face_style,
-            creature.detail_materials.as_ref(),
-            part_entities.get(&CreaturePartSlot::Head).copied(),
-        ) {
-            let face_origin = Vec3::new(0.0, face_style.eye_height, face_style.eye_forward);
-            for (feature, offset, scale, mesh, material) in [
-                (
-                    "left-eye-sclera",
-                    Vec3::new(-face_style.eye_spacing, 0.0, 0.0),
-                    Vec3::from_array(face_style.sclera_scale),
-                    eye_sclera_mesh.clone(),
-                    eye_sclera_material.clone(),
-                ),
-                (
-                    "right-eye-sclera",
-                    Vec3::new(face_style.eye_spacing, 0.0, 0.0),
-                    Vec3::from_array(face_style.sclera_scale),
-                    eye_sclera_mesh.clone(),
-                    eye_sclera_material.clone(),
-                ),
-                (
-                    "left-eye-iris",
-                    Vec3::new(-face_style.eye_spacing, -0.002, -0.042),
-                    Vec3::from_array(face_style.iris_scale),
-                    eye_iris_mesh.clone(),
-                    detail_materials.accent.clone(),
-                ),
-                (
-                    "right-eye-iris",
-                    Vec3::new(face_style.eye_spacing, -0.002, -0.042),
-                    Vec3::from_array(face_style.iris_scale),
-                    eye_iris_mesh.clone(),
-                    detail_materials.accent.clone(),
-                ),
-                (
-                    "left-eye-pupil",
-                    Vec3::new(-face_style.eye_spacing, -0.004, -0.064),
-                    Vec3::from_array(face_style.pupil_scale),
-                    eye_pupil_mesh.clone(),
-                    eye_pupil_material.clone(),
-                ),
-                (
-                    "right-eye-pupil",
-                    Vec3::new(face_style.eye_spacing, -0.004, -0.064),
-                    Vec3::from_array(face_style.pupil_scale),
-                    eye_pupil_mesh.clone(),
-                    eye_pupil_material.clone(),
-                ),
-                (
-                    "left-eye-glint",
-                    Vec3::new(-face_style.eye_spacing - 0.014, 0.024, -0.078),
-                    Vec3::ONE,
-                    eye_highlight_mesh.clone(),
-                    eye_highlight_material.clone(),
-                ),
-                (
-                    "right-eye-glint",
-                    Vec3::new(face_style.eye_spacing - 0.014, 0.024, -0.078),
-                    Vec3::ONE,
-                    eye_highlight_mesh.clone(),
-                    eye_highlight_material.clone(),
-                ),
-                (
-                    "left-eye-lid",
-                    Vec3::new(-face_style.eye_spacing, 0.035, -0.070),
-                    Vec3::new(0.72, 0.16, 0.24),
-                    eye_iris_mesh.clone(),
-                    coat_material.clone(),
-                ),
-                (
-                    "right-eye-lid",
-                    Vec3::new(face_style.eye_spacing, 0.035, -0.070),
-                    Vec3::new(0.72, 0.16, 0.24),
-                    eye_iris_mesh.clone(),
-                    coat_material.clone(),
-                ),
-            ] {
-                world.spawn((
-                    Name::new(format!(
-                        "A-Life creature {} stable {}",
-                        feature,
-                        visual.stable_id.raw()
-                    )),
-                    Mesh3d(mesh),
-                    MeshMaterial3d(material),
-                    Transform::from_translation(face_origin + offset).with_scale(scale),
-                    ChildOf(head),
-                    bevy::light::NotShadowCaster,
-                    Fvr09CreatureFaceFeatureMarker {
-                        stable_id: visual.stable_id,
-                        feature,
-                    },
-                ));
-            }
-            for detail in creature.details {
-                let Some(parent) = part_entities.get(&detail.anchor_slot).copied() else {
-                    continue;
-                };
-                world.spawn((
-                    Name::new(format!(
-                        "A-Life FVR10 caveman furry creature detail {} stable {}",
-                        detail.role,
-                        visual.stable_id.raw()
-                    )),
-                    Mesh3d(detail_meshes.get(detail.mesh)),
-                    MeshMaterial3d(detail_materials.get(detail.material)),
-                    Transform::from_translation(Vec3::from_array(detail.local_offset))
-                        .with_scale(Vec3::from_array(detail.local_scale)),
-                    Visibility::Inherited,
-                    ChildOf(parent),
-                    bevy::light::NotShadowCaster,
-                    Fvr10CreatureSurfaceDetailMarker {
-                        stable_id: visual.stable_id,
-                        species_archetype: visual.appearance.species_archetype,
-                        detail_role: detail.role,
-                        anchor_slot: detail.anchor_slot,
-                        display_only: true,
-                        no_renderer_authority_over_actions_or_cognition: true,
-                        high_contrast_marking: true,
-                        heritable: true,
-                    },
-                ));
-            }
-        }
-        if settings.spawn_affordance_cues {
-            world.spawn((
-                Name::new(format!(
-                    "A-Life creature cue stable {}",
-                    visual.stable_id.raw()
-                )),
-                Mesh3d(cue_mesh.clone()),
-                MeshMaterial3d(face_material.clone()),
-                Transform::from_xyz(0.0, 1.08, 0.0),
-                Visibility::Hidden,
+                part.transform,
                 ChildOf(root),
-                bevy::light::NotShadowCaster,
-                Fvr04ProductionCreatureAffordanceCue {
+                ProductionCreaturePartMarker {
                     stable_id: visual.stable_id,
-                    expression: visual.expression,
+                    family: part.recipe.source_family,
+                    asset_id: part.recipe.asset_id.clone(),
+                    slot: part.recipe.slot,
+                    runtime_group: part.recipe.runtime_group.clone(),
+                    authored_matrix: part.recipe.authored_transform,
+                    animation: visual.animation,
                 },
+                ProductionCreaturePartRestTransform(part.transform),
             ));
+            part_entity_count += 1;
         }
         stable_lookup_by_raw_id.insert(visual.stable_id.raw(), expression_buffer.len());
         expression_buffer.push(Fvr04CreatureExpressionSample {
@@ -5032,7 +4573,7 @@ fn spawn_fvr04_prepared_creature_batch(
         requested_population: settings.requested_population,
         rendered_creature_count: expression_buffer.len(),
         material_bucket_count: scene_material_handles.len(),
-        mesh_pool_count: scene_mesh_handles.len() + cover_mesh_count,
+        mesh_pool_count: scene_mesh_handles.len(),
         lod: settings.lod,
         stable_lookup_by_raw_id,
         no_renderer_authority_over_actions_or_cognition: true,
@@ -5042,448 +4583,7 @@ fn spawn_fvr04_prepared_creature_batch(
         species_archetype_count: species_archetypes.len(),
         creature_root_count: expression_buffer.len(),
         creature_part_entity_count: part_entity_count,
-        creature_join_cover_count: join_cover_count,
-        creature_part_family_count: part_families.len(),
-        creature_mixed_assembly_count: mixed_assembly_count,
-        creature_shared_mesh_handle_count: scene_mesh_handles.len(),
-        production_visuals_display_only: true,
-        expression_buffer,
-    }
-}
-
-fn spawn_fvr04_creature_batch(
-    world: &mut World,
-    creatures: Vec<Fvr04CreatureVisualRecord>,
-    tile_summaries: &BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
-    context: &mut Fvr04CreatureSpawnContext,
-) -> Fvr04ProductionCreatureSceneResource {
-    let settings = &context.settings;
-    let catalog = &context.catalog;
-    let preparations = &context.preparations;
-    let assets_root = context.assets_root.as_path();
-    let assets = &mut context.creature_part_assets;
-    let cue_mesh = context.cue_mesh.clone();
-    let eye_sclera_mesh = context.eye_sclera_mesh.clone();
-    let eye_iris_mesh = context.eye_iris_mesh.clone();
-    let eye_pupil_mesh = context.eye_pupil_mesh.clone();
-    let eye_highlight_mesh = context.eye_highlight_mesh.clone();
-    let eye_sclera_material = context.eye_sclera_material.clone();
-    let eye_pupil_material = context.eye_pupil_material.clone();
-    let eye_highlight_material = context.eye_highlight_material.clone();
-    let face_material = context.face_material.clone();
-    let lod = match settings.lod {
-        Fvr04CreatureLod::FullVoxel => CreaturePartLodId::Full,
-        Fvr04CreatureLod::CompactVoxel => CreaturePartLodId::Compact,
-        Fvr04CreatureLod::ImpostorVoxel => CreaturePartLodId::Impostor,
-    };
-    let cover_meshes = {
-        let mut meshes = world.resource_mut::<Assets<Mesh>>();
-        BTreeMap::from([
-            (
-                JoinCoverPrimitive::Ruff,
-                meshes.add(Cuboid::new(0.30, 0.07, 0.22)),
-            ),
-            (
-                JoinCoverPrimitive::ShoulderTuft,
-                meshes.add(Cuboid::new(0.14, 0.12, 0.16)),
-            ),
-            (
-                JoinCoverPrimitive::HipFur,
-                meshes.add(Cuboid::new(0.16, 0.10, 0.16)),
-            ),
-            (
-                JoinCoverPrimitive::TailRuff,
-                meshes.add(Cuboid::new(0.20, 0.12, 0.14)),
-            ),
-            (
-                JoinCoverPrimitive::Cuff,
-                meshes.add(Cuboid::new(0.14, 0.08, 0.14)),
-            ),
-        ])
-    };
-    let detail_meshes = fvr10_creature_detail_meshes(world);
-    let mut expression_buffer = Vec::new();
-    let mut stable_lookup_by_raw_id = BTreeMap::new();
-    let mut part_families = BTreeSet::new();
-    let mut species_archetypes = BTreeSet::new();
-    let mut scene_mesh_handles = BTreeSet::new();
-    let mut scene_material_handles = BTreeSet::new();
-    let mut part_entity_count = 0_usize;
-    let mut join_cover_count = 0_usize;
-    let mut mixed_assembly_count = 0_usize;
-    let max_visible = usize::from(settings.max_visible_creatures);
-
-    for (index, creature) in creatures.iter().take(max_visible).enumerate() {
-        let visual = &creature.visual;
-        species_archetypes.insert(visual.appearance.species_archetype);
-        let coat_key = CreatureCoatKey::new(
-            visual.appearance.part_sources,
-            visual.appearance.palette_family,
-            visual.appearance.fur_pattern,
-            visual.appearance.marking_density,
-        );
-        let recipe = resolve_geneforge_creature_assembly(
-            visual.appearance.part_sources,
-            lod,
-            coat_key,
-            catalog,
-            preparations,
-        )
-        .expect("validated GeneForge catalog resolves saved appearance sources");
-        let recipe_families = recipe
-            .parts
-            .values()
-            .map(|part| part.source_family)
-            .collect::<BTreeSet<_>>();
-        mixed_assembly_count += usize::from(recipe_families.len() > 1);
-        part_families.extend(recipe_families);
-
-        let mut local_bounds = None::<CreatureVisualBounds>;
-        for part in recipe.parts.values() {
-            let key = part.mesh_key();
-            let part_bounds = assets
-                .bounds(key)
-                .expect("validated creature part mesh has finite bounds");
-            let part_transform = geneforge_authored_transform_to_bevy(part.authored_transform);
-            let transformed = transform_creature_visual_bounds(part_bounds, part_transform);
-            if let Some(bounds) = &mut local_bounds {
-                bounds.include(transformed);
-            } else {
-                local_bounds = Some(transformed);
-            }
-        }
-        let local_bounds = local_bounds.expect("resolved creature assembly has visible parts");
-        let surface_height = tile_summaries
-            .get(&creature.tile)
-            .map(|tile| tile.height_units)
-            .unwrap_or(0.44);
-
-        let base_scale = fvr04_creature_scale(visual, settings.lod);
-        let base_height = grounded_root_height(
-            surface_height,
-            0.04,
-            local_bounds,
-            base_scale.to_array(),
-            bevy::math::Mat3::IDENTITY.to_cols_array(),
-        );
-        let base_translation = Vec3::new(
-            creature.tile.x as f32 + 0.5,
-            base_height,
-            creature.tile.z as f32 + 0.5,
-        );
-        let mut transform = Transform::from_translation(base_translation);
-        transform.rotation = Quat::from_rotation_y(std::f32::consts::PI);
-        transform.scale = base_scale;
-        let phase = (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11;
-        let root_visual = Fvr04ProductionCreatureVisualMarker {
-            stable_id: visual.stable_id,
-            organism_id: visual.organism_id,
-            tile: creature.tile,
-            expression: visual.expression,
-            animation: visual.animation,
-            lod: settings.lod,
-            base_translation,
-            local_offset: Vec3::ZERO,
-            base_scale,
-            local_bounds,
-            surface_height,
-            phase,
-        };
-        let root = world
-            .spawn(fvr04_creature_root_bundle(
-                visual.stable_id,
-                visual.organism_id,
-                creature.tile,
-                transform,
-                root_visual,
-                Fvr09CuteBipedCreatureMarker {
-                    stable_id: visual.stable_id,
-                    visual_profile: "modular-heritable-part-assembly-v1",
-                    two_legs: true,
-                    visible_face: true,
-                    eye_markers: 2,
-                    front_back_orientation: true,
-                    real_state_driven: true,
-                },
-                Fvr10CreatureSpeciesMarker {
-                    stable_id: visual.stable_id,
-                    species_archetype: visual.appearance.species_archetype,
-                    species_label: visual.appearance.species_label(),
-                    body_plan_signature: visual.appearance.body_plan_signature(),
-                    bipedal: true,
-                    caveman_furry_design: true,
-                    heritable_appearance: true,
-                },
-                recipe.display_only,
-            ))
-            .id();
-        world
-            .resource_mut::<BevyEntityMap>()
-            .bind(root, visual.stable_id)
-            .expect("validated creature root stable ID must bind");
-
-        let coat = world
-            .resource_scope(|world, mut images: bevy::prelude::Mut<Assets<Image>>| {
-                world.resource_scope(
-                    |_world, mut materials: bevy::prelude::Mut<Assets<StandardMaterial>>| {
-                        assets.acquire_geneforge_coat(
-                            assets_root,
-                            catalog,
-                            &recipe,
-                            &mut images,
-                            &mut materials,
-                        )
-                    },
-                )
-            })
-            .expect("validated GeneForge coat inputs bake one resident material");
-        let coat_material = coat.material;
-        scene_material_handles.insert(coat_material.id());
-        let mut part_entities = BTreeMap::new();
-        for part in recipe.parts.values() {
-            let mesh = assets
-                .mesh(part.mesh_key())
-                .expect("validated creature part mesh is loaded");
-            scene_mesh_handles.insert(mesh.id());
-            let part_transform = geneforge_authored_transform_to_bevy(part.authored_transform);
-            let rest_transform = part_transform;
-            let part_entity = world
-                .spawn((
-                    Name::new(format!(
-                        "A-Life creature part {} {:?}",
-                        visual.stable_id.raw(),
-                        part.slot
-                    )),
-                    Mesh3d(mesh),
-                    MeshMaterial3d(coat_material.clone()),
-                    part_transform,
-                    ChildOf(root),
-                    ProductionCreaturePartMarker {
-                        stable_id: visual.stable_id,
-                        family: part.source_family,
-                        asset_id: part.asset_id.clone(),
-                        slot: part.slot,
-                        runtime_group: part.runtime_group.clone(),
-                        authored_matrix: part.authored_transform,
-                        animation: visual.animation,
-                    },
-                    ProductionCreaturePartRestTransform(rest_transform),
-                ))
-                .id();
-            part_entities.insert(part.slot, part_entity);
-            part_entity_count += 1;
-        }
-
-        for cover in &recipe.join_covers {
-            let primitive = geneforge_join_cover_primitive(&cover.cover_kind)
-                .expect("validated GeneForge join-cover kind");
-            let scale = 0.72 + cover.overlap_depth;
-            let transform = Transform::from_scale(Vec3::splat(scale));
-            world.spawn((
-                Name::new(format!(
-                    "A-Life creature join cover {} {}",
-                    visual.stable_id.raw(),
-                    primitive.label()
-                )),
-                Mesh3d(cover_meshes[&primitive].clone()),
-                MeshMaterial3d(coat_material.clone()),
-                transform,
-                ChildOf(part_entities[&cover.slot]),
-                ProductionCreatureJoinCoverMarker {
-                    stable_id: visual.stable_id,
-                    cover_kind: primitive.label(),
-                    display_only: true,
-                },
-            ));
-            join_cover_count += 1;
-        }
-
-        if !matches!(settings.lod, Fvr04CreatureLod::ImpostorVoxel) {
-            let detail_materials = fvr10_creature_detail_materials(world, visual);
-            let head = recipe
-                .parts
-                .get(&CreaturePartSlot::Head)
-                .expect("resolved assembly includes a head");
-            let head_asset = catalog
-                .asset(&head.asset_id)
-                .expect("resolved GeneForge head remains in the catalog");
-            let emitted_head_bounds = assets
-                .bounds(head.mesh_key())
-                .expect("validated GeneForge head has finite emitted bounds");
-            let face_landmarks = remap_creature_face_landmarks(
-                head_asset.canonical_bounds,
-                emitted_head_bounds,
-                &head.landmarks,
-            )
-            .expect("validated GeneForge head landmarks map into emitted geometry");
-            let face_style = creature_face_style_from_landmarks(visual.appearance, &face_landmarks)
-                .expect("validated GeneForge head provides finite eye landmarks");
-            let face_origin = Vec3::new(0.0, face_style.eye_height, face_style.eye_forward);
-            for (feature, offset, scale, mesh, material) in [
-                (
-                    "left-eye-sclera",
-                    Vec3::new(-face_style.eye_spacing, 0.0, 0.0),
-                    Vec3::from_array(face_style.sclera_scale),
-                    eye_sclera_mesh.clone(),
-                    eye_sclera_material.clone(),
-                ),
-                (
-                    "right-eye-sclera",
-                    Vec3::new(face_style.eye_spacing, 0.0, 0.0),
-                    Vec3::from_array(face_style.sclera_scale),
-                    eye_sclera_mesh.clone(),
-                    eye_sclera_material.clone(),
-                ),
-                (
-                    "left-eye-iris",
-                    Vec3::new(-face_style.eye_spacing, -0.002, -0.042),
-                    Vec3::from_array(face_style.iris_scale),
-                    eye_iris_mesh.clone(),
-                    detail_materials.accent.clone(),
-                ),
-                (
-                    "right-eye-iris",
-                    Vec3::new(face_style.eye_spacing, -0.002, -0.042),
-                    Vec3::from_array(face_style.iris_scale),
-                    eye_iris_mesh.clone(),
-                    detail_materials.accent.clone(),
-                ),
-                (
-                    "left-eye-pupil",
-                    Vec3::new(-face_style.eye_spacing, -0.004, -0.064),
-                    Vec3::from_array(face_style.pupil_scale),
-                    eye_pupil_mesh.clone(),
-                    eye_pupil_material.clone(),
-                ),
-                (
-                    "right-eye-pupil",
-                    Vec3::new(face_style.eye_spacing, -0.004, -0.064),
-                    Vec3::from_array(face_style.pupil_scale),
-                    eye_pupil_mesh.clone(),
-                    eye_pupil_material.clone(),
-                ),
-                (
-                    "left-eye-glint",
-                    Vec3::new(-face_style.eye_spacing - 0.014, 0.024, -0.078),
-                    Vec3::ONE,
-                    eye_highlight_mesh.clone(),
-                    eye_highlight_material.clone(),
-                ),
-                (
-                    "right-eye-glint",
-                    Vec3::new(face_style.eye_spacing - 0.014, 0.024, -0.078),
-                    Vec3::ONE,
-                    eye_highlight_mesh.clone(),
-                    eye_highlight_material.clone(),
-                ),
-                (
-                    "left-eye-lid",
-                    Vec3::new(-face_style.eye_spacing, 0.035, -0.070),
-                    Vec3::new(0.72, 0.16, 0.24),
-                    eye_iris_mesh.clone(),
-                    coat_material.clone(),
-                ),
-                (
-                    "right-eye-lid",
-                    Vec3::new(face_style.eye_spacing, 0.035, -0.070),
-                    Vec3::new(0.72, 0.16, 0.24),
-                    eye_iris_mesh.clone(),
-                    coat_material.clone(),
-                ),
-            ] {
-                world.spawn((
-                    Name::new(format!(
-                        "A-Life creature {} stable {}",
-                        feature,
-                        visual.stable_id.raw()
-                    )),
-                    Mesh3d(mesh),
-                    MeshMaterial3d(material),
-                    Transform::from_translation(face_origin + offset).with_scale(scale),
-                    ChildOf(part_entities[&CreaturePartSlot::Head]),
-                    Fvr09CreatureFaceFeatureMarker {
-                        stable_id: visual.stable_id,
-                        feature,
-                    },
-                ));
-            }
-            fvr10_spawn_creature_surface_details(
-                world,
-                &part_entities,
-                visual,
-                settings.lod,
-                &detail_meshes,
-                &detail_materials,
-            );
-        }
-
-        if settings.spawn_affordance_cues {
-            world.spawn((
-                Name::new(format!(
-                    "A-Life creature cue stable {}",
-                    visual.stable_id.raw()
-                )),
-                Mesh3d(cue_mesh.clone()),
-                MeshMaterial3d(face_material.clone()),
-                Transform::from_xyz(0.0, 1.08, 0.0),
-                Visibility::Hidden,
-                ChildOf(root),
-                Fvr04ProductionCreatureAffordanceCue {
-                    stable_id: visual.stable_id,
-                    expression: visual.expression,
-                },
-            ));
-        }
-
-        stable_lookup_by_raw_id.insert(visual.stable_id.raw(), expression_buffer.len());
-        expression_buffer.push(Fvr04CreatureExpressionSample {
-            stable_id: visual.stable_id,
-            organism_id: visual.organism_id,
-            display_label: creature.display_label.clone(),
-            brain_class_id: creature.brain_class_id,
-            brain_neuron_count: creature.brain_neuron_count,
-            hunger: visual.cues.hunger.value,
-            fatigue: visual.cues.fatigue.value,
-            fear: visual.cues.fear.value,
-            cortisol: visual.endocrine.cortisol,
-            dopamine: visual.endocrine.dopamine,
-            reproductive_drive: creature.reproductive_drive,
-            sleep_pressure: visual.cues.sleep_pressure.value,
-            social: ((creature.social_affinity + 1.0) * 0.5).clamp(0.0, 1.0),
-            fast_memory_count: creature.fast_memory_count,
-            lifetime_memory_count: creature.lifetime_memory_count,
-            memory_record_count: creature.memory_record_count,
-            concept_count: creature.concept_count,
-            unresolved_gap_count: creature.unresolved_gap_count,
-            lifetime_learning_enabled: creature.lifetime_learning_enabled,
-            sleep_phase_raw: creature.sleep_phase_raw,
-            consolidation_state_raw: creature.consolidation_state_raw,
-            last_consolidated_tick: creature.last_consolidated_tick,
-            topology_update_count: creature.topology_update_count,
-            expression: visual.expression,
-            animation: visual.animation,
-        });
-    }
-
-    Fvr04ProductionCreatureSceneResource {
-        schema: FVR04_PRODUCTION_CREATURE_RENDERER_SCHEMA,
-        schema_version: FVR04_PRODUCTION_CREATURE_RENDERER_SCHEMA_VERSION,
-        requested_population: settings.requested_population,
-        rendered_creature_count: expression_buffer.len(),
-        material_bucket_count: scene_material_handles.len(),
-        mesh_pool_count: scene_mesh_handles.len() + cover_meshes.len(),
-        lod: settings.lod,
-        stable_lookup_by_raw_id,
-        no_renderer_authority_over_actions_or_cognition: true,
-        expression_buffer_is_read_only_projection: true,
-        visual_profile: "modular-heritable-part-assembly-v1",
-        mesh_material_version: "modular-textured-part-material-v1",
-        species_archetype_count: species_archetypes.len(),
-        creature_root_count: creatures
-            .len()
-            .min(usize::from(settings.max_visible_creatures)),
-        creature_part_entity_count: part_entity_count,
-        creature_join_cover_count: join_cover_count,
+        creature_join_cover_count: 0,
         creature_part_family_count: part_families.len(),
         creature_mixed_assembly_count: mixed_assembly_count,
         creature_shared_mesh_handle_count: scene_mesh_handles.len(),
@@ -5503,17 +4603,6 @@ fn geneforge_authored_transform_to_bevy(matrix: [f64; 16]) -> Transform {
         matrix[0], matrix[4], matrix[8], matrix[12], matrix[1], matrix[5], matrix[9], matrix[13],
         matrix[2], matrix[6], matrix[10], matrix[14], matrix[3], matrix[7], matrix[11], matrix[15],
     ]))
-}
-
-fn geneforge_join_cover_primitive(value: &str) -> Option<JoinCoverPrimitive> {
-    match value {
-        "neck-ruff" | "ruff" => Some(JoinCoverPrimitive::Ruff),
-        "shoulder-tuft" => Some(JoinCoverPrimitive::ShoulderTuft),
-        "hip-fur" => Some(JoinCoverPrimitive::HipFur),
-        "tail-ruff" => Some(JoinCoverPrimitive::TailRuff),
-        "cuff" => Some(JoinCoverPrimitive::Cuff),
-        _ => None,
-    }
 }
 
 #[cfg(test)]
@@ -5564,289 +4653,6 @@ fn socket_transform_to_bevy(
     Transform::from_translation(socket_translation_to_bevy(socket.translation))
         .with_rotation(socket_rotation_to_bevy(socket.rotation_xyzw))
         .with_scale(socket_scale_to_bevy(socket.scale) * socket_scale_to_bevy(local_scale))
-}
-
-#[derive(Clone)]
-struct Fvr10CreatureDetailMeshes {
-    cheek_spot: Handle<Mesh>,
-    forehead_band: Handle<Mesh>,
-    muzzle_patch: Handle<Mesh>,
-    ear: Handle<Mesh>,
-    side_fin: Handle<Mesh>,
-    brow_horn: Handle<Mesh>,
-    limb_band: Handle<Mesh>,
-    hand: Handle<Mesh>,
-    foot: Handle<Mesh>,
-    tail_accent: Handle<Mesh>,
-}
-
-impl Fvr10CreatureDetailMeshes {
-    fn get(&self, kind: CreatureDetailMeshKind) -> Handle<Mesh> {
-        match kind {
-            CreatureDetailMeshKind::CheekPatch => self.cheek_spot.clone(),
-            CreatureDetailMeshKind::BrowBand => self.forehead_band.clone(),
-            CreatureDetailMeshKind::Muzzle => self.muzzle_patch.clone(),
-            CreatureDetailMeshKind::Ear => self.ear.clone(),
-            CreatureDetailMeshKind::Fin => self.side_fin.clone(),
-            CreatureDetailMeshKind::Tuft => self.brow_horn.clone(),
-            CreatureDetailMeshKind::LimbBand => self.limb_band.clone(),
-            CreatureDetailMeshKind::Hand => self.hand.clone(),
-            CreatureDetailMeshKind::Foot => self.foot.clone(),
-            CreatureDetailMeshKind::TailAccent => self.tail_accent.clone(),
-        }
-    }
-}
-
-#[derive(Clone)]
-struct Fvr10CreatureDetailMaterials {
-    belly: Handle<StandardMaterial>,
-    accent: Handle<StandardMaterial>,
-    dark: Handle<StandardMaterial>,
-    horn: Handle<StandardMaterial>,
-}
-
-impl Fvr10CreatureDetailMaterials {
-    fn get(&self, role: CreatureDetailMaterialRole) -> Handle<StandardMaterial> {
-        match role {
-            CreatureDetailMaterialRole::Belly => self.belly.clone(),
-            CreatureDetailMaterialRole::Accent => self.accent.clone(),
-            CreatureDetailMaterialRole::Dark => self.dark.clone(),
-            CreatureDetailMaterialRole::Keratin => self.horn.clone(),
-        }
-    }
-}
-
-fn fvr10_creature_detail_meshes(world: &mut World) -> Fvr10CreatureDetailMeshes {
-    let mut meshes = world.resource_mut::<Assets<Mesh>>();
-    Fvr10CreatureDetailMeshes {
-        cheek_spot: meshes.add(
-            Sphere::new(0.075)
-                .mesh()
-                .ico(1)
-                .expect("valid cheek patch sphere"),
-        ),
-        forehead_band: meshes.add(Cuboid::new(0.30, 0.075, 0.065)),
-        muzzle_patch: meshes.add(
-            Sphere::new(0.13)
-                .mesh()
-                .ico(2)
-                .expect("valid muzzle sphere"),
-        ),
-        ear: meshes.add(Sphere::new(0.105).mesh().ico(1).expect("valid ear sphere")),
-        side_fin: meshes.add(fvr10_side_fin_mesh(1.0)),
-        brow_horn: meshes.add(fvr10_brow_horn_mesh(1.0)),
-        limb_band: meshes.add(Cuboid::new(0.19, 0.060, 0.070)),
-        hand: meshes.add(Sphere::new(0.085).mesh().ico(1).expect("valid hand sphere")),
-        foot: meshes.add(Sphere::new(0.085).mesh().ico(1).expect("valid foot sphere")),
-        tail_accent: meshes.add(Capsule3d::new(0.065, 0.25)),
-    }
-}
-
-fn fvr10_creature_detail_materials(
-    world: &mut World,
-    visual: &CreatureVisualSnapshot,
-) -> Fvr10CreatureDetailMaterials {
-    let colors = fvr10_creature_color_set(visual.appearance);
-    let mut materials = world.resource_mut::<Assets<StandardMaterial>>();
-    let belly = materials.add(fvr10_creature_detail_material(colors.belly));
-    let accent_handle = materials.add(fvr10_creature_detail_material(colors.accent));
-    let dark = materials.add(fvr10_creature_detail_material(colors.dark));
-    let horn = materials.add(fvr10_creature_detail_material(colors.horn));
-    Fvr10CreatureDetailMaterials {
-        belly,
-        accent: accent_handle,
-        dark,
-        horn,
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct Fvr10CreatureColorSet {
-    accent: [f32; 4],
-    belly: [f32; 4],
-    dark: [f32; 4],
-    horn: [f32; 4],
-}
-
-fn fvr10_creature_color_set(appearance: CreatureAppearanceGenome) -> Fvr10CreatureColorSet {
-    let species =
-        (appearance.species_archetype as usize) % usize::from(CREATURE_APPEARANCE_SPECIES_COUNT);
-    let bases = [
-        [0.55, 0.28, 0.12, 1.0],
-        [0.74, 0.43, 0.12, 1.0],
-        [0.19, 0.49, 0.40, 1.0],
-        [0.27, 0.21, 0.44, 1.0],
-        [0.58, 0.50, 0.30, 1.0],
-        [0.16, 0.18, 0.21, 1.0],
-        [0.54, 0.16, 0.27, 1.0],
-        [0.30, 0.47, 0.14, 1.0],
-        [0.70, 0.58, 0.30, 1.0],
-        [0.47, 0.24, 0.15, 1.0],
-        [0.63, 0.55, 0.42, 1.0],
-        [0.33, 0.25, 0.19, 1.0],
-        [0.20, 0.38, 0.52, 1.0],
-        [0.74, 0.66, 0.48, 1.0],
-        [0.39, 0.30, 0.18, 1.0],
-        [0.21, 0.36, 0.32, 1.0],
-    ];
-    let accents = [
-        [0.98, 0.78, 0.24, 1.0],
-        [0.12, 0.82, 0.78, 1.0],
-        [0.95, 0.28, 0.18, 1.0],
-        [0.90, 0.74, 0.34, 1.0],
-        [0.15, 0.16, 0.18, 1.0],
-        [0.86, 0.82, 0.62, 1.0],
-        [0.48, 0.88, 0.26, 1.0],
-        [0.74, 0.38, 0.86, 1.0],
-    ];
-    let mut base = bases[species];
-    let inherited_shift = ((appearance.palette_family as f32 - 7.5) * 0.012)
-        + ((appearance.body_mass_trait as f32 % 5.0) * 0.008);
-    base[0] = (base[0] + inherited_shift).clamp(0.08, 0.82);
-    base[1] = (base[1] + inherited_shift * 0.72).clamp(0.08, 0.76);
-    base[2] = (base[2] + inherited_shift * 0.48).clamp(0.06, 0.68);
-    let accent =
-        accents[(species + appearance.fur_pattern as usize + appearance.palette_family as usize)
-            % accents.len()];
-    Fvr10CreatureColorSet {
-        accent,
-        belly: [
-            (base[0] * 0.55 + 0.24).clamp(0.12, 0.72),
-            (base[1] * 0.48 + 0.22).clamp(0.10, 0.66),
-            (base[2] * 0.38 + 0.16).clamp(0.08, 0.58),
-            1.0,
-        ],
-        dark: [
-            (base[0] * 0.18).clamp(0.03, 0.24),
-            (base[1] * 0.16).clamp(0.03, 0.22),
-            (base[2] * 0.16).clamp(0.03, 0.24),
-            1.0,
-        ],
-        horn: [
-            (accent[0] * 0.72 + 0.18).clamp(0.0, 1.0),
-            (accent[1] * 0.68 + 0.14).clamp(0.0, 1.0),
-            (accent[2] * 0.52 + 0.10).clamp(0.0, 1.0),
-            1.0,
-        ],
-    }
-}
-
-fn fvr10_creature_detail_material(rgba: [f32; 4]) -> StandardMaterial {
-    StandardMaterial {
-        base_color: Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3]),
-        perceptual_roughness: 0.68,
-        reflectance: 0.28,
-        unlit: false,
-        ..default()
-    }
-}
-
-fn fvr10_spawn_creature_surface_details(
-    world: &mut World,
-    part_entities: &BTreeMap<CreaturePartSlot, Entity>,
-    visual: &CreatureVisualSnapshot,
-    lod: Fvr04CreatureLod,
-    meshes: &Fvr10CreatureDetailMeshes,
-    materials: &Fvr10CreatureDetailMaterials,
-) {
-    let lod_scale = match lod {
-        Fvr04CreatureLod::FullVoxel => 1.0,
-        Fvr04CreatureLod::CompactVoxel => 0.92,
-        Fvr04CreatureLod::ImpostorVoxel => 0.72,
-    };
-    for detail in creature_surface_detail_recipe(visual.appearance, lod_scale) {
-        let local_offset = Vec3::from_array(detail.local_offset);
-        world.spawn((
-            Name::new(format!(
-                "A-Life FVR10 caveman furry creature detail {} stable {}",
-                detail.role,
-                visual.stable_id.raw()
-            )),
-            Mesh3d(meshes.get(detail.mesh)),
-            MeshMaterial3d(materials.get(detail.material)),
-            Transform::from_translation(local_offset)
-                .with_scale(Vec3::from_array(detail.local_scale)),
-            Visibility::Inherited,
-            ChildOf(part_entities[&detail.anchor_slot]),
-            Fvr10CreatureSurfaceDetailMarker {
-                stable_id: visual.stable_id,
-                species_archetype: visual.appearance.species_archetype,
-                detail_role: detail.role,
-                anchor_slot: detail.anchor_slot,
-                display_only: true,
-                no_renderer_authority_over_actions_or_cognition: true,
-                high_contrast_marking: true,
-                heritable: true,
-            },
-        ));
-    }
-}
-
-fn fvr10_side_fin_mesh(scale: f32) -> Mesh {
-    let mut mesh = Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    );
-    let sx = 0.22 * scale;
-    let sy = 0.18 * scale;
-    let sz = 0.055 * scale;
-    let positions = vec![
-        [-sx, -sy, -sz],
-        [sx, 0.0, -sz],
-        [-sx, sy, -sz],
-        [-sx, -sy, sz],
-        [sx, 0.0, sz],
-        [-sx, sy, sz],
-    ];
-    let normals = vec![
-        [0.0, 0.0, -1.0],
-        [0.0, 0.0, -1.0],
-        [0.0, 0.0, -1.0],
-        [0.0, 0.0, 1.0],
-        [0.0, 0.0, 1.0],
-        [0.0, 0.0, 1.0],
-    ];
-    let uvs = vec![
-        [0.0, 0.0],
-        [1.0, 0.5],
-        [0.0, 1.0],
-        [0.0, 0.0],
-        [1.0, 0.5],
-        [0.0, 1.0],
-    ];
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.insert_indices(Indices::U32(vec![
-        0, 1, 2, 3, 5, 4, 0, 3, 4, 0, 4, 1, 2, 1, 4, 2, 4, 5,
-    ]));
-    mesh
-}
-
-fn fvr10_brow_horn_mesh(scale: f32) -> Mesh {
-    let mut mesh = Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    );
-    let sx = 0.11 * scale;
-    let sy = 0.12 * scale;
-    let sz = 0.16 * scale;
-    let positions = vec![
-        [-sx, -sy, -sz],
-        [sx, -sy, -sz],
-        [0.0, sy, sz],
-        [-sx, -sy, sz * 0.15],
-        [sx, -sy, sz * 0.15],
-    ];
-    let normals = vec![[0.0, 0.0, 1.0]; 5];
-    let uvs = vec![[0.0, 0.0], [1.0, 0.0], [0.5, 1.0], [0.0, 0.5], [1.0, 0.5]];
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.insert_indices(Indices::U32(vec![
-        0, 1, 2, 3, 2, 4, 0, 2, 3, 1, 4, 2, 0, 3, 4, 0, 4, 1,
-    ]));
-    mesh
 }
 
 fn fvr04_creature_scale(visual: &CreatureVisualSnapshot, lod: Fvr04CreatureLod) -> Vec3 {
@@ -9151,7 +7957,7 @@ mod tests {
             creature_lod: Fvr04CreatureLod::CompactVoxel,
             creature_root_count: 1,
             creature_part_entity_count: CreaturePartSlot::ALL.len(),
-            creature_join_cover_count: 6,
+            creature_join_cover_count: 0,
             creature_part_family_count: 1,
             creature_mixed_assembly_count: 0,
             creature_shared_mesh_handle_count: CreaturePartSlot::ALL.len(),
