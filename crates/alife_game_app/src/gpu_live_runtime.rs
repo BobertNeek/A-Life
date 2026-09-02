@@ -8799,14 +8799,21 @@ impl GpuLiveBrainRuntime {
                 .iter()
                 .map(|(&raw, &handle)| {
                     let organism_id = OrganismId(raw);
-                    let world_entity_id = self
+                    let record = self
                         .world
-                        .organism_entity_ids()
-                        .into_iter()
-                        .find_map(|(bound_organism_id, world_entity_id)| {
-                            (bound_organism_id == organism_id).then_some(world_entity_id)
-                        })
+                        .organism_registry()
+                        .get(organism_id)
                         .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                    let world_entity_id = record.world_entity_id();
+                    let object = self
+                        .world
+                        .entity(world_entity_id)
+                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                    if object.kind != WorldObjectKind::Agent
+                        || object.organism_id != Some(organism_id)
+                    {
+                        return Err(ScaffoldContractError::BrainOwnershipMismatch);
+                    }
                     Ok::<_, ScaffoldContractError>((raw, handle, world_entity_id))
                 })
                 .collect::<Result<Vec<_>, _>>()?
