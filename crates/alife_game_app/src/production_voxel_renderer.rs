@@ -35,8 +35,8 @@ use bevy::{
         EulerRot, GlobalTransform, Handle, Image, KeyCode, Mat4, Mesh, Mesh3d, MeshMaterial3d,
         Meshable, MessageReader, MessageWriter, MouseButton, Name, Node, NonSend, NonSendMut,
         ParamSet, PositionType, Projection, Quat, Res, ResMut, Resource, Sphere, StandardMaterial,
-        Text, Text2d, TextColor, TextFont, Time, Torus, Transform, Update, Val, Vec3, Visibility,
-        Window, With, Without, World,
+        Text, Text2d, TextColor, TextFont, Time, Torus, Transform, Update, Val, Vec3,
+        ViewVisibility, Visibility, Window, With, Without, World,
     },
     render::{
         render_resource::PrimitiveTopology,
@@ -54,7 +54,6 @@ use crate::bevy_shell::{
 };
 #[cfg(feature = "gpu-runtime")]
 use crate::gpu_live_runtime::CuratedFounderResetRuntimePort;
-use crate::terrain_lighting::spawn_production_terrain_lighting;
 use crate::terrain_mesh::{build_production_terrain_meshes, TerrainMeshBuild};
 use crate::LiveBrainTickSummary;
 #[cfg(feature = "gpu-runtime")]
@@ -95,7 +94,9 @@ use crate::{
         ProductionTerrainDressingSpawn, TerrainDressingLibrary, TerrainDressingTile,
     },
     terrain_lighting::{
-        production_camera_extent, production_camera_transform, spawn_production_terrain_camera,
+        production_camera_extent, production_camera_transform, production_shadow_cascade_count,
+        production_shadow_maximum_distance, spawn_production_terrain_camera,
+        spawn_production_terrain_lighting,
     },
     terrain_materials::{create_production_terrain_material_library, TerrainMaterialLibrary},
     terrain_water::install_animated_water_material,
@@ -1498,6 +1499,8 @@ struct Fvr04PreparedContactShadow {
 
 struct Fvr04PreparedLighting {
     directional_shadows: bool,
+    shadow_cascades: usize,
+    shadow_maximum_distance: f32,
     contact_shadow_mesh: Option<Handle<Mesh>>,
     contact_shadow_material: Option<Handle<StandardMaterial>>,
     contact_shadows: Vec<Fvr04PreparedContactShadow>,
@@ -3117,10 +3120,14 @@ fn prepare_fvr04_lighting(
     candidate: &Fvr04RuntimeSceneCandidate,
     creatures: &Fvr04PreparedCreatureBatch,
 ) -> Fvr04PreparedLighting {
-    let directional_shadows = !candidate.settings.minimum_floor;
+    let shadow_cascades = production_shadow_cascade_count(&candidate.settings);
+    let directional_shadows = shadow_cascades > 0;
+    let shadow_maximum_distance = production_shadow_maximum_distance(&candidate.settings);
     if directional_shadows {
         return Fvr04PreparedLighting {
             directional_shadows,
+            shadow_cascades,
+            shadow_maximum_distance,
             contact_shadow_mesh: None,
             contact_shadow_material: None,
             contact_shadows: Vec::new(),
@@ -3180,6 +3187,8 @@ fn prepare_fvr04_lighting(
     );
     Fvr04PreparedLighting {
         directional_shadows,
+        shadow_cascades,
+        shadow_maximum_distance,
         contact_shadow_mesh: Some(contact_shadow_mesh),
         contact_shadow_material: Some(contact_shadow_material),
         contact_shadows,
@@ -3196,12 +3205,15 @@ fn spawn_fvr04_prepared_lighting(world: &mut World, lighting: Fvr04PreparedLight
     let transform = Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -1.05, 0.62, -0.42));
     if lighting.directional_shadows {
         world.spawn((
-            Name::new("A-Life FVR11 warm two-cascade directional sun"),
+            Name::new(format!(
+                "A-Life FVR11 warm {}-cascade directional sun",
+                lighting.shadow_cascades
+            )),
             light,
             bevy::light::CascadeShadowConfigBuilder {
-                num_cascades: 2,
+                num_cascades: lighting.shadow_cascades,
                 minimum_distance: 0.1,
-                maximum_distance: 90.0,
+                maximum_distance: lighting.shadow_maximum_distance,
                 first_cascade_far_bound: 28.0,
                 overlap_proportion: 0.18,
             }
@@ -3232,6 +3244,7 @@ fn spawn_fvr04_prepared_lighting(world: &mut World, lighting: Fvr04PreparedLight
             Mesh3d(mesh.clone()),
             MeshMaterial3d(material.clone()),
             Transform::from_translation(shadow.translation).with_scale(Vec3::splat(shadow.scale)),
+            bevy::light::NotShadowCaster,
             bevy::picking::Pickable::IGNORE,
             crate::Fvr11ProductionContactShadow {
                 source_kind: shadow.source_kind,
@@ -3245,7 +3258,7 @@ fn spawn_fvr04_prepared_lighting(world: &mut World, lighting: Fvr04PreparedLight
 }
 
 fn fvr04_contact_shadow_mesh() -> Mesh {
-    const SEGMENTS: u32 = 20;
+    const SEGMENTS: u32 = 12;
     const RADIUS: f32 = 0.36;
     let mut positions = Vec::with_capacity((SEGMENTS + 1) as usize);
     let mut normals = Vec::with_capacity((SEGMENTS + 1) as usize);
@@ -4019,6 +4032,7 @@ fn spawn_fvr07_production_visual_polish(
             MeshMaterial3d(material),
             transform,
             vfx_marker_visibility,
+            bevy::light::NotShadowCaster,
             Fvr07ProductionGpuVfxMarker {
                 kind: spawn.kind,
                 tile: spawn.tile,
@@ -4928,6 +4942,7 @@ fn spawn_fvr04_prepared_creature_batch(
                     MeshMaterial3d(material),
                     Transform::from_translation(face_origin + offset).with_scale(scale),
                     ChildOf(head),
+                    bevy::light::NotShadowCaster,
                     Fvr09CreatureFaceFeatureMarker {
                         stable_id: visual.stable_id,
                         feature,
@@ -4950,6 +4965,7 @@ fn spawn_fvr04_prepared_creature_batch(
                         .with_scale(Vec3::from_array(detail.local_scale)),
                     Visibility::Inherited,
                     ChildOf(parent),
+                    bevy::light::NotShadowCaster,
                     Fvr10CreatureSurfaceDetailMarker {
                         stable_id: visual.stable_id,
                         species_archetype: visual.appearance.species_archetype,
@@ -4974,6 +4990,7 @@ fn spawn_fvr04_prepared_creature_batch(
                 Transform::from_xyz(0.0, 1.08, 0.0),
                 Visibility::Hidden,
                 ChildOf(root),
+                bevy::light::NotShadowCaster,
                 Fvr04ProductionCreatureAffordanceCue {
                     stable_id: visual.stable_id,
                     expression: visual.expression,
@@ -5862,138 +5879,171 @@ fn project_authoritative_creature_root_transform(
         return false;
     }
 
-    transform.translation.x = object.position.x.round() + 0.5;
-    transform.translation.z = object.position.z.round() + 0.5;
+    let x = object.position.x.round() + 0.5;
+    let z = object.position.z.round() + 0.5;
+    if transform.translation.x != x {
+        transform.translation.x = x;
+    }
+    if transform.translation.z != z {
+        transform.translation.z = z;
+    }
     true
 }
 
 fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
-    let Some(frame) = world
-        .get_resource::<LiveBrainPresentationFrameResource>()
-        .cloned()
-    else {
+    if !world.contains_resource::<LiveBrainPresentationFrameResource>() {
         return;
-    };
-
-    #[cfg(feature = "gpu-runtime")]
-    let mut root_identities = BTreeSet::new();
-    #[cfg(feature = "gpu-runtime")]
-    {
-        let mut roots = world.query::<(
-            &ProductionCreatureAssemblyRoot,
-            &Fvr04ProductionCreatureVisualMarker,
-        )>();
-        for (root, visual) in roots.iter(world) {
-            root_identities.insert((root.stable_id.raw(), visual.organism_id.raw()));
-        }
     }
 
-    let mut roots = world.query::<(
-        &ProductionCreatureAssemblyRoot,
-        &Fvr04ProductionCreatureVisualMarker,
-        &mut Transform,
-    )>();
-    for (root, visual, mut transform) in roots.iter_mut(world) {
-        project_authoritative_creature_root_transform(
-            root.stable_id,
-            visual.organism_id,
-            &mut transform,
-            &frame.current,
-        );
-    }
+    world.resource_scope(
+        |world, frame: bevy::prelude::Mut<LiveBrainPresentationFrameResource>| {
+            let mut roots = world.query::<(
+                &ProductionCreatureAssemblyRoot,
+                &Fvr04ProductionCreatureVisualMarker,
+                &mut Transform,
+            )>();
+            for (root, visual, mut transform) in roots.iter_mut(world) {
+                let mut projected = *transform;
+                if project_authoritative_creature_root_transform(
+                    root.stable_id,
+                    visual.organism_id,
+                    &mut projected,
+                    &frame.current,
+                ) && *transform != projected
+                {
+                    *transform = projected;
+                }
+            }
 
-    #[cfg(feature = "gpu-runtime")]
-    {
-        let Some(authoritative_world) = world
-            .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
-            .map(|runtime| runtime.runtime.world_snapshot())
-        else {
-            return;
-        };
-        let tile_summaries = world
-            .get_resource::<Fvr03ProductionVoxelSceneResource>()
-            .map(|scene| scene.tile_summaries_by_tile.clone())
-            .unwrap_or_default();
-        let mut newborns = Vec::new();
-        for object in frame.current.object_snapshots() {
-            if object.kind != WorldObjectKind::Agent {
-                continue;
-            }
-            let Some(organism_id) = object.organism_id else {
-                continue;
-            };
-            let identity = (object.id.raw(), organism_id.raw());
-            if root_identities.contains(&identity) {
-                continue;
-            }
-            let tile = VoxelTileCoord::new(
-                object.position.x.round() as i32,
-                object.position.z.round() as i32,
-            );
-            let chunk = tile_summaries
-                .get(&tile)
-                .map(|summary| summary.chunk)
-                .unwrap_or_else(|| VoxelChunkCoord::new(0, 0));
-            if let Some(record) = fvr04_live_creature_visual_record(
-                &frame.current,
-                &authoritative_world,
-                &object,
-                tile,
-                chunk,
-            ) {
-                newborns.push(record);
-            }
-        }
-        let max_visible = world
-            .get_resource::<Fvr04CreatureSpawnContext>()
-            .map(|context| usize::from(context.settings.max_visible_creatures))
-            .unwrap_or(0);
-        newborns.truncate(max_visible);
-        if newborns.is_empty() {
-            return;
-        }
+            #[cfg(feature = "gpu-runtime")]
+            {
+                let pending_newborns = {
+                    let Some(entity_map) = world.get_resource::<BevyEntityMap>() else {
+                        return;
+                    };
+                    frame
+                        .current
+                        .objects()
+                        .filter(|object| {
+                            if object.kind != WorldObjectKind::Agent {
+                                return false;
+                            }
+                            let Some(organism_id) = object.organism_id else {
+                                return false;
+                            };
+                            let Some(entity) = entity_map.bevy_entity(object.id) else {
+                                return true;
+                            };
+                            let root = world.get::<ProductionCreatureAssemblyRoot>(entity);
+                            let visual = world.get::<Fvr04ProductionCreatureVisualMarker>(entity);
+                            !matches!(
+                                (root, visual),
+                                (Some(root), Some(visual))
+                                    if root.stable_id == object.id
+                                        && root.organism_id == organism_id
+                                        && visual.stable_id == object.id
+                                        && visual.organism_id == organism_id
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                };
+                if pending_newborns.is_empty() {
+                    return;
+                }
 
-        let prepared = {
-            let Some(mut context) = world.remove_resource::<Fvr04CreatureSpawnContext>() else {
-                return;
-            };
-            let result =
-                prepare_fvr04_creature_batch(world, &newborns, &tile_summaries, &mut context);
-            world.insert_resource(context);
-            let Ok(prepared) = result else {
-                return;
-            };
-            prepared
-        };
-        let added_scene = spawn_fvr04_prepared_creature_batch(world, prepared);
-        let added_count = added_scene.rendered_creature_count;
-        if let Some(mut scene) = world.get_resource_mut::<Fvr04ProductionCreatureSceneResource>() {
-            append_fvr04_creature_scene_resource(&mut scene, added_scene);
-        }
-        if let Some(mut scene) = world.get_resource_mut::<Fvr03ProductionVoxelSceneResource>() {
-            scene.creature_render_count = scene.creature_render_count.saturating_add(added_count);
-            scene.creature_root_count = scene.creature_root_count.saturating_add(added_count);
-            for newborn in newborns.into_iter().take(added_count) {
-                scene
-                    .creature_refs_by_tile
-                    .insert(newborn.tile, newborn.stable_ref);
-                scene.selection_positions_by_raw_id.insert(
-                    newborn.visual.stable_id.raw(),
-                    Vec3::new(
-                        newborn.tile.x as f32 + 0.5,
-                        1.52,
-                        newborn.tile.z as f32 + 0.5,
-                    ),
-                );
+                let Some(world_seed) = world
+                    .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
+                    .map(|runtime| runtime.runtime.world_seed())
+                else {
+                    return;
+                };
+                let tile_summaries = world
+                    .get_resource::<Fvr03ProductionVoxelSceneResource>()
+                    .map(|scene| scene.tile_summaries_by_tile.clone())
+                    .unwrap_or_default();
+                let mut newborns = Vec::with_capacity(pending_newborns.len());
+                for object in pending_newborns {
+                    let tile = VoxelTileCoord::new(
+                        object.position.x.round() as i32,
+                        object.position.z.round() as i32,
+                    );
+                    let chunk = tile_summaries
+                        .get(&tile)
+                        .map(|summary| summary.chunk)
+                        .unwrap_or_else(|| VoxelChunkCoord::new(0, 0));
+                    if let Some(record) = fvr04_live_creature_visual_record(
+                        &frame.current,
+                        world_seed,
+                        object,
+                        tile,
+                        chunk,
+                    ) {
+                        newborns.push(record);
+                    }
+                }
+                let max_visible = world
+                    .get_resource::<Fvr04CreatureSpawnContext>()
+                    .map(|context| usize::from(context.settings.max_visible_creatures))
+                    .unwrap_or(0);
+                newborns.truncate(max_visible);
+                if newborns.is_empty() {
+                    return;
+                }
+
+                let prepared = {
+                    let Some(mut context) = world.remove_resource::<Fvr04CreatureSpawnContext>()
+                    else {
+                        return;
+                    };
+                    let result = prepare_fvr04_creature_batch(
+                        world,
+                        &newborns,
+                        &tile_summaries,
+                        &mut context,
+                    );
+                    world.insert_resource(context);
+                    let Ok(prepared) = result else {
+                        return;
+                    };
+                    prepared
+                };
+                let added_scene = spawn_fvr04_prepared_creature_batch(world, prepared);
+                let added_count = added_scene.rendered_creature_count;
+                if let Some(mut scene) =
+                    world.get_resource_mut::<Fvr04ProductionCreatureSceneResource>()
+                {
+                    append_fvr04_creature_scene_resource(&mut scene, added_scene);
+                }
+                if let Some(mut scene) =
+                    world.get_resource_mut::<Fvr03ProductionVoxelSceneResource>()
+                {
+                    scene.creature_render_count =
+                        scene.creature_render_count.saturating_add(added_count);
+                    scene.creature_root_count =
+                        scene.creature_root_count.saturating_add(added_count);
+                    for newborn in newborns.into_iter().take(added_count) {
+                        scene
+                            .creature_refs_by_tile
+                            .insert(newborn.tile, newborn.stable_ref);
+                        scene.selection_positions_by_raw_id.insert(
+                            newborn.visual.stable_id.raw(),
+                            Vec3::new(
+                                newborn.tile.x as f32 + 0.5,
+                                1.52,
+                                newborn.tile.z as f32 + 0.5,
+                            ),
+                        );
+                    }
+                }
             }
-        }
-    }
+        },
+    );
 }
 
 #[cfg(feature = "gpu-runtime")]
 fn fvr04_live_creature_visual_record(
     frame: &LiveBrainPresentationFrame,
-    world: &alife_world::HeadlessWorld,
+    world_seed: u64,
     object: &alife_world::WorldObject,
     tile: VoxelTileCoord,
     chunk: VoxelChunkCoord,
@@ -6027,7 +6077,7 @@ fn fvr04_live_creature_visual_record(
             presentation.organism_id,
             presentation.genome.id,
             presentation.organism_id.raw() as usize,
-            world.seed(),
+            world_seed,
         ),
     )
     .ok()?;
@@ -6130,6 +6180,7 @@ fn animate_fvr04_creature_parts(
         &mut Transform,
         &ProductionCreaturePartMarker,
         &ProductionCreaturePartRestTransform,
+        &ViewVisibility,
     )>,
 ) {
     if ux.as_ref().is_some_and(|ux| ux.settings.paused) {
@@ -6140,7 +6191,10 @@ fn animate_fvr04_creature_parts(
         .map(|ux| ux.settings.simulation_speed)
         .unwrap_or(1.0);
     let seconds = time.elapsed_secs() * speed;
-    for (mut transform, marker, rest_transform) in &mut parts {
+    for (mut transform, marker, rest_transform, view_visibility) in &mut parts {
+        if !view_visibility.get() {
+            continue;
+        }
         let phase = (marker.stable_id.raw() % 31) as f32 * 0.19;
         let wave = (seconds * 3.8 + phase).sin();
         let pose = creature_part_pose(marker.animation, marker.slot, wave);
@@ -6171,7 +6225,11 @@ fn fvr04_animation_speed(animation: CreatureAnimationState) -> f32 {
 fn animate_fvr07_production_vfx(
     time: Res<Time>,
     ux: Option<Res<Fvr05ProductionUxStateResource>>,
-    mut markers: bevy::prelude::Query<(&mut Transform, &Fvr07ProductionGpuVfxMarker)>,
+    mut markers: bevy::prelude::Query<(
+        &mut Transform,
+        &Fvr07ProductionGpuVfxMarker,
+        &ViewVisibility,
+    )>,
 ) {
     if ux.as_ref().is_some_and(|ux| ux.settings.paused) {
         return;
@@ -6181,7 +6239,10 @@ fn animate_fvr07_production_vfx(
         .map(|ux| ux.settings.simulation_speed)
         .unwrap_or(1.0);
     let seconds = time.elapsed_secs() * speed;
-    for (mut transform, marker) in &mut markers {
+    for (mut transform, marker, view_visibility) in &mut markers {
+        if !view_visibility.get() {
+            continue;
+        }
         let wave = (seconds * marker.kind.pulse_speed() + marker.phase).sin();
         let pulse = 1.0 + wave * 0.10;
         transform.translation =
@@ -7295,6 +7356,7 @@ fn sync_fvr05_right_inspector_panel(
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    entity_map: Res<BevyEntityMap>,
     roots: bevy::prelude::Query<(
         &ProductionCreatureAssemblyRoot,
         &Fvr04ProductionCreatureVisualMarker,
@@ -7302,6 +7364,17 @@ fn sync_fvr05_right_inspector_panel(
     authority: Option<Res<crate::bevy_shell::ProductionGpuBrainAuthorityResource>>,
     mut panels: bevy::prelude::Query<&mut Text, With<Fvr05ProductionRightInspectorPanel>>,
 ) {
+    if !ux.is_changed()
+        && !scene.is_changed()
+        && !selection.is_changed()
+        && !creatures.is_changed()
+        && !frame.as_ref().is_some_and(|frame| frame.is_changed())
+        && !authority
+            .as_ref()
+            .is_some_and(|authority| authority.is_changed())
+    {
+        return;
+    }
     let tabs = Fvr05ProductionInspectorTab::all()
         .iter()
         .map(|tab| {
@@ -7316,9 +7389,10 @@ fn sync_fvr05_right_inspector_panel(
     let selected_live =
         selected_live_creature_object(selection.selected, frame.as_ref().map(|frame| &**frame));
     let live_state = selected_live.and_then(|(stable_id, organism_id, tick, position)| {
-        roots
-            .iter()
-            .any(|(root, visual)| {
+        entity_map
+            .bevy_entity(stable_id)
+            .and_then(|entity| roots.get(entity).ok())
+            .is_some_and(|(root, visual)| {
                 root.stable_id == stable_id
                     && visual.stable_id == stable_id
                     && root.stable_id == visual.stable_id
@@ -7439,6 +7513,7 @@ fn handle_fvr03_camera_mode_input(
 fn sync_fvr04_selection_marker(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
+    entity_map: Res<BevyEntityMap>,
     roots: bevy::prelude::Query<
         (&ProductionCreatureAssemblyRoot, &Transform),
         Without<Fvr03ProductionVoxelSelectionMarker>,
@@ -7450,15 +7525,19 @@ fn sync_fvr04_selection_marker(
 ) {
     let Some(selected) = selection.selected else {
         for (_, mut visibility) in &mut markers {
-            *visibility = Visibility::Hidden;
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
         }
         return;
     };
     let position = if selected.kind == StableVoxelRefKind::Creature {
         selected.stable_id.and_then(|stable_id| {
+            let entity = entity_map.bevy_entity(stable_id)?;
             roots
-                .iter()
-                .find(|(root, _)| root.stable_id == stable_id)
+                .get(entity)
+                .ok()
+                .filter(|(root, _)| root.stable_id == stable_id)
                 .map(|(_, transform)| transform.translation)
         })
     } else {
@@ -7466,13 +7545,20 @@ fn sync_fvr04_selection_marker(
     };
     let Some(position) = position else {
         for (_, mut visibility) in &mut markers {
-            *visibility = Visibility::Hidden;
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
         }
         return;
     };
     for (mut transform, mut visibility) in &mut markers {
-        transform.translation = Vec3::new(position.x, 1.45, position.z);
-        *visibility = Visibility::Visible;
+        let next_translation = Vec3::new(position.x, 1.45, position.z);
+        if transform.translation != next_translation {
+            transform.translation = next_translation;
+        }
+        if *visibility != Visibility::Visible {
+            *visibility = Visibility::Visible;
+        }
     }
 }
 
@@ -7501,12 +7587,13 @@ fn handle_fvr04_camera_follow_input(
 fn sync_fvr04_camera_follow(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     follow: Res<Fvr04ProductionCreatureFollowResource>,
+    entity_map: Res<BevyEntityMap>,
     roots: bevy::prelude::Query<
         (&ProductionCreatureAssemblyRoot, &Transform),
         Without<Fvr03ProductionVoxelCamera>,
     >,
     mut cameras: bevy::prelude::Query<
-        (&mut Transform, &mut Projection, &Fvr03ProductionVoxelCamera),
+        (&mut Transform, &Fvr03ProductionVoxelCamera),
         Without<ProductionCreatureAssemblyRoot>,
     >,
 ) {
@@ -7516,21 +7603,20 @@ fn sync_fvr04_camera_follow(
     let Some(target) = follow.target_stable_id else {
         return;
     };
-    let Some(position) = roots
-        .iter()
-        .find(|(root, _)| root.stable_id == target)
+    let Some(position) = entity_map
+        .bevy_entity(target)
+        .and_then(|entity| roots.get(entity).ok())
+        .filter(|(root, _)| root.stable_id == target)
         .map(|(_, transform)| transform.translation)
     else {
         return;
     };
     let target = Vec3::new(position.x, 0.0, position.z);
     let extent = production_camera_extent(scene.profile_id);
-    for (mut transform, mut projection, camera) in &mut cameras {
-        *transform = fvr04_follow_camera_transform(camera.mode, extent, target);
-        if let Projection::Orthographic(orthographic) = &mut *projection {
-            orthographic.scaling_mode = ScalingMode::FixedVertical {
-                viewport_height: extent,
-            };
+    for (mut transform, camera) in &mut cameras {
+        let next_transform = fvr04_follow_camera_transform(camera.mode, extent, target);
+        if *transform != next_transform {
+            *transform = next_transform;
         }
     }
 }
@@ -7539,6 +7625,7 @@ fn sync_fvr04_creature_label(
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    entity_map: Res<BevyEntityMap>,
     roots: bevy::prelude::Query<
         (
             &ProductionCreatureAssemblyRoot,
@@ -7552,6 +7639,7 @@ fn sync_fvr04_creature_label(
         With<Fvr04ProductionCreatureWorldLabel>,
     >,
 ) {
+    let refresh_text = selection.is_changed() || creatures.is_changed();
     let target = selection
         .hovered
         .filter(|hovered| hovered.kind == StableVoxelRefKind::Creature)
@@ -7562,49 +7650,71 @@ fn sync_fvr04_creature_label(
         });
     let Some(target) = target else {
         for (_, _, mut visibility) in &mut labels {
-            *visibility = Visibility::Hidden;
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
         }
         return;
     };
     let Some(stable_id) = target.stable_id else {
         for (_, _, mut visibility) in &mut labels {
-            *visibility = Visibility::Hidden;
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
         }
         return;
     };
     let Some(sample) = creatures.sample_for_stable_id(stable_id) else {
         for (_, _, mut visibility) in &mut labels {
-            *visibility = Visibility::Hidden;
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
         }
         return;
     };
-    let Some((_, _, position)) = roots.iter().find(|(root, visual, _)| {
-        let Some(frame) = frame.as_ref().map(|frame| &**frame) else {
-            return false;
-        };
-        let Some(object) = frame.current.object(stable_id) else {
-            return false;
-        };
-        object.kind == WorldObjectKind::Agent
-            && object.organism_id == Some(visual.organism_id)
-            && root.stable_id == stable_id
-            && visual.stable_id == stable_id
-            && root.stable_id == visual.stable_id
-    }) else {
+    let Some((_, _, position)) = entity_map
+        .bevy_entity(stable_id)
+        .and_then(|entity| roots.get(entity).ok())
+        .filter(|(root, visual, _)| {
+            let Some(frame) = frame.as_ref().map(|frame| &**frame) else {
+                return false;
+            };
+            let Some(object) = frame.current.object(stable_id) else {
+                return false;
+            };
+            object.kind == WorldObjectKind::Agent
+                && object.organism_id == Some(visual.organism_id)
+                && root.stable_id == stable_id
+                && visual.stable_id == stable_id
+                && root.stable_id == visual.stable_id
+        })
+    else {
         for (_, _, mut visibility) in &mut labels {
-            *visibility = Visibility::Hidden;
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
         }
         return;
     };
-    for (mut text, mut transform, mut visibility) in &mut labels {
-        text.0 = format!(
+    let label_text = refresh_text.then(|| {
+        format!(
             "{}\n{}  |  {}",
             v0_player_creature_name(&sample.display_label, sample.stable_id.raw()),
             sample.animation.label(),
             sample.expression.label()
-        );
-        transform.translation = Vec3::new(position.translation.x, 2.35, position.translation.z);
-        *visibility = Visibility::Visible;
+        )
+    });
+    for (mut text, mut transform, mut visibility) in &mut labels {
+        if let Some(label_text) = &label_text {
+            text.0.clone_from(label_text);
+        }
+        let next_translation = Vec3::new(position.translation.x, 2.35, position.translation.z);
+        if transform.translation != next_translation {
+            transform.translation = next_translation;
+        }
+        if *visibility != Visibility::Visible {
+            *visibility = Visibility::Visible;
+        }
     }
 }
 
@@ -7613,18 +7723,27 @@ fn sync_fvr04_creature_inspector_panel(
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
     follow: Res<Fvr04ProductionCreatureFollowResource>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    entity_map: Res<BevyEntityMap>,
     roots: bevy::prelude::Query<(
         &ProductionCreatureAssemblyRoot,
         &Fvr04ProductionCreatureVisualMarker,
     )>,
     mut panels: bevy::prelude::Query<&mut Text, With<Fvr04ProductionCreatureInspectorPanel>>,
 ) {
+    if !selection.is_changed()
+        && !creatures.is_changed()
+        && !follow.is_changed()
+        && !frame.as_ref().is_some_and(|frame| frame.is_changed())
+    {
+        return;
+    }
     let selected_live =
         selected_live_creature_object(selection.selected, frame.as_ref().map(|frame| &**frame));
     let live_state = selected_live.and_then(|(stable_id, organism_id, tick, position)| {
-        roots
-            .iter()
-            .any(|(root, visual)| {
+        entity_map
+            .bevy_entity(stable_id)
+            .and_then(|entity| roots.get(entity).ok())
+            .is_some_and(|(root, visual)| {
                 root.stable_id == stable_id
                     && visual.stable_id == stable_id
                     && root.stable_id == visual.stable_id
@@ -7857,8 +7976,7 @@ fn phase31_performance_after_ui(
         return;
     }
     let persistence_failed = runtime.runtime.persistence_failed_for_shutdown();
-    let performance_failed =
-        schedule.performance_failed() || persistence_failed || drain_timed_out;
+    let performance_failed = schedule.performance_failed() || persistence_failed || drain_timed_out;
     match write_phase31_performance_receipt(
         &metrics,
         &runtime.runtime,
@@ -8693,15 +8811,15 @@ impl bevy_voxel_world::prelude::VoxelWorldConfig for Fvr03BevyVoxelWorldConfig {
     }
 
     fn chunk_despawn_strategy(&self) -> bevy_voxel_world::prelude::ChunkDespawnStrategy {
-        bevy_voxel_world::prelude::ChunkDespawnStrategy::FarAway
+        bevy_voxel_world::prelude::ChunkDespawnStrategy::FarAwayOrOutOfView
     }
 
     fn chunk_spawn_strategy(&self) -> bevy_voxel_world::prelude::ChunkSpawnStrategy {
-        bevy_voxel_world::prelude::ChunkSpawnStrategy::Close
+        bevy_voxel_world::prelude::ChunkSpawnStrategy::CloseAndInView
     }
 
     fn max_spawn_per_frame(&self) -> usize {
-        usize::from(self.settings.resident_chunk_budget).min(96)
+        self.settings.remesh_budget_chunks_per_frame.max(1)
     }
 
     fn spawning_rays(&self) -> usize {
@@ -8717,7 +8835,7 @@ impl bevy_voxel_world::prelude::VoxelWorldConfig for Fvr03BevyVoxelWorldConfig {
     fn chunk_lod(
         &self,
         chunk_position: bevy::prelude::IVec3,
-        _previous_lod: Option<bevy_voxel_world::prelude::LodLevel>,
+        previous_lod: Option<bevy_voxel_world::prelude::LodLevel>,
         camera_position: Vec3,
     ) -> bevy_voxel_world::prelude::LodLevel {
         let center = Vec3::new(
@@ -8726,12 +8844,17 @@ impl bevy_voxel_world::prelude::VoxelWorldConfig for Fvr03BevyVoxelWorldConfig {
             chunk_position.z as f32 * 32.0 + 16.0,
         );
         let distance = camera_position.distance(center);
-        if distance < 64.0 {
-            0
-        } else if distance < 128.0 {
-            1
-        } else {
-            2
+        match previous_lod {
+            Some(0) if distance < 72.0 => 0,
+            Some(0) => 1,
+            Some(1) if distance < 56.0 => 0,
+            Some(1) if distance < 144.0 => 1,
+            Some(1) => 2,
+            Some(2) if distance < 112.0 => 1,
+            Some(2) => 2,
+            _ if distance < 64.0 => 0,
+            _ if distance < 128.0 => 1,
+            _ => 2,
         }
     }
 
@@ -8740,35 +8863,53 @@ impl bevy_voxel_world::prelude::VoxelWorldConfig for Fvr03BevyVoxelWorldConfig {
     ) -> bevy_voxel_world::prelude::VoxelLookupDelegate<Self::MaterialIndex> {
         let procedural_config = self.procedural_config;
         let visible_chunks = self.visible_chunks.clone();
-        Box::new(move |_, _, _| {
-            let visible_chunks = visible_chunks.clone();
+        Box::new(move |chunk_position, _, _| {
+            const PADDED_EDGE: i32 = bevy_voxel_world::prelude::CHUNK_SIZE_I + 2;
+            let origin_x = chunk_position.x * bevy_voxel_world::prelude::CHUNK_SIZE_I - 1;
+            let origin_z = chunk_position.z * bevy_voxel_world::prelude::CHUNK_SIZE_I - 1;
+            let mut columns = vec![None; (PADDED_EDGE * PADDED_EDGE) as usize];
+            for local_z in 0..PADDED_EDGE {
+                for local_x in 0..PADDED_EDGE {
+                    let tile = VoxelTileCoord::new(origin_x + local_x, origin_z + local_z);
+                    let chunk =
+                        VoxelChunkCoord::for_tile(procedural_config.chunk_tile_size as u16, tile);
+                    if !visible_chunks.contains(&chunk) {
+                        continue;
+                    }
+                    let Ok(sample) = alife_world::sample_procedural_terrain_tile(
+                        procedural_config,
+                        ProceduralTileCoord::from(tile),
+                    ) else {
+                        continue;
+                    };
+                    let surface_height = fvr03_tile_height(
+                        sample.material,
+                        sample.resource_bias,
+                        sample.hazard_pressure,
+                        sample.roughness,
+                    )
+                    .ceil() as i32;
+                    let index = (local_z * PADDED_EDGE + local_x) as usize;
+                    columns[index] = Some((
+                        surface_height,
+                        fvr03_voxel_material_index(sample.material, tile),
+                    ));
+                }
+            }
             Box::new(move |position, _existing| {
-                let tile = VoxelTileCoord::new(position.x, position.z);
-                let chunk =
-                    VoxelChunkCoord::for_tile(procedural_config.chunk_tile_size as u16, tile);
-                if !visible_chunks.contains(&chunk) {
+                let local_x = position.x - origin_x;
+                let local_z = position.z - origin_z;
+                if !(0..PADDED_EDGE).contains(&local_x) || !(0..PADDED_EDGE).contains(&local_z) {
                     return bevy_voxel_world::prelude::WorldVoxel::Air;
                 }
-                let Ok(sample) = alife_world::sample_procedural_terrain_tile(
-                    procedural_config,
-                    ProceduralTileCoord::from(tile),
-                ) else {
+                let index = (local_z * PADDED_EDGE + local_x) as usize;
+                let Some((surface_height, material)) = columns[index] else {
                     return bevy_voxel_world::prelude::WorldVoxel::Air;
                 };
-                let surface_height = fvr03_tile_height(
-                    sample.material,
-                    sample.resource_bias,
-                    sample.hazard_pressure,
-                    sample.roughness,
-                )
-                .ceil() as i32;
                 if position.y < 0 || position.y > surface_height {
                     bevy_voxel_world::prelude::WorldVoxel::Air
                 } else {
-                    bevy_voxel_world::prelude::WorldVoxel::Solid(fvr03_voxel_material_index(
-                        sample.material,
-                        tile,
-                    ))
+                    bevy_voxel_world::prelude::WorldVoxel::Solid(material)
                 }
             })
         })

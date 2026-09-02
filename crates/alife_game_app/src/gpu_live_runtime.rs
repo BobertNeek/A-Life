@@ -9735,6 +9735,10 @@ impl GpuLiveBrainRuntime {
         self.world.clone()
     }
 
+    pub fn world_seed(&self) -> u64 {
+        self.world.seed()
+    }
+
     /// Places one bounded food resource through canonical world authority.
     /// The candidate world is fully validated before it replaces live state.
     pub fn place_player_food(

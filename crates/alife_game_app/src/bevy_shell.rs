@@ -505,6 +505,10 @@ impl LiveBrainPresentationFrame {
         self.world_objects_by_id.values().cloned().collect()
     }
 
+    pub fn objects(&self) -> impl ExactSizeIterator<Item = &WorldObject> {
+        self.world_objects_by_id.values()
+    }
+
     pub fn object_count(&self) -> usize {
         self.world_objects_by_id.len()
     }

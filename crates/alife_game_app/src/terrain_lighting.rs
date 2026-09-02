@@ -44,13 +44,33 @@ pub struct Fvr11ProductionContactShadow {
     pub no_renderer_authority_over_world_actions_or_cognition: bool,
 }
 
+pub(crate) fn production_shadow_cascade_count(
+    settings: &Fvr03ProductionVoxelRendererSettings,
+) -> usize {
+    match settings.shadow_quality {
+        "low" => 0,
+        "high" => 2,
+        _ => 1,
+    }
+}
+
+pub(crate) fn production_shadow_maximum_distance(
+    settings: &Fvr03ProductionVoxelRendererSettings,
+) -> f32 {
+    match settings.shadow_quality {
+        "high" => 90.0,
+        "medium" | "adaptive" => 72.0,
+        _ => 56.0,
+    }
+}
+
 pub(crate) fn spawn_production_terrain_camera(
     app: &mut App,
     settings: &Fvr03ProductionVoxelRendererSettings,
 ) {
     let camera_extent = production_camera_extent(settings.profile_id);
-    let directional_shadows = !settings.minimum_floor;
-    let shadow_cascades = if directional_shadows { 2 } else { 0 };
+    let shadow_cascades = production_shadow_cascade_count(settings);
+    let directional_shadows = shadow_cascades > 0;
     let fog_alpha = if settings.minimum_floor { 0.10 } else { 0.22 };
     let fog_start = if settings.minimum_floor { 44.0 } else { 38.0 };
     let fog_end = if settings.minimum_floor { 98.0 } else { 92.0 };
@@ -97,7 +117,7 @@ pub(crate) fn spawn_production_terrain_camera(
         Fvr11ProductionTerrainLightingMarker {
             tonemapping: "tony-mc-mapface",
             directional_shadows,
-            shadow_cascades,
+            shadow_cascades: shadow_cascades as u8,
             distance_fog: true,
             cool_ambient_fill: true,
             contact_grounding: true,
@@ -112,7 +132,8 @@ pub(crate) fn spawn_production_terrain_lighting(
     settings: &Fvr03ProductionVoxelRendererSettings,
     tile_heights: &BTreeMap<VoxelTileCoord, f32>,
 ) {
-    let directional_shadows = !settings.minimum_floor;
+    let shadow_cascades = production_shadow_cascade_count(settings);
+    let directional_shadows = shadow_cascades > 0;
     let light = DirectionalLight {
         color: Color::srgb(1.0, 0.86, 0.66),
         illuminance: 5800.0,
@@ -127,12 +148,14 @@ pub(crate) fn spawn_production_terrain_lighting(
     ));
     if directional_shadows {
         app.world_mut().spawn((
-            Name::new("A-Life FVR11 warm two-cascade directional sun"),
+            Name::new(format!(
+                "A-Life FVR11 warm {shadow_cascades}-cascade directional sun"
+            )),
             light,
             CascadeShadowConfigBuilder {
-                num_cascades: 2,
+                num_cascades: shadow_cascades,
                 minimum_distance: 0.1,
-                maximum_distance: 90.0,
+                maximum_distance: production_shadow_maximum_distance(settings),
                 first_cascade_far_bound: 28.0,
                 overlap_proportion: 0.18,
             }
@@ -225,6 +248,7 @@ fn spawn_minimum_contact_shadows(app: &mut App, tile_heights: &BTreeMap<VoxelTil
             MeshMaterial3d(material.clone()),
             Transform::from_translation(Vec3::new(translation.x, y, translation.z))
                 .with_scale(Vec3::splat(scale)),
+            bevy::light::NotShadowCaster,
             Pickable::IGNORE,
             Fvr11ProductionContactShadow {
                 source_kind,
@@ -237,7 +261,7 @@ fn spawn_minimum_contact_shadows(app: &mut App, tile_heights: &BTreeMap<VoxelTil
 }
 
 fn contact_shadow_mesh() -> Mesh {
-    const SEGMENTS: u32 = 20;
+    const SEGMENTS: u32 = 12;
     const RADIUS: f32 = 0.36;
     let mut positions = Vec::with_capacity((SEGMENTS + 1) as usize);
     let mut normals = Vec::with_capacity((SEGMENTS + 1) as usize);
