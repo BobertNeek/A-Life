@@ -38,15 +38,12 @@ fn ca10_environment_manifest_validates_and_selects_default_production_voxel() {
         CA10_ENVIRONMENT_MANIFEST_SCHEMA_VERSION
     );
     assert_eq!(manifest.default_scenario_id, "production-voxel");
-    assert_eq!(
-        manifest.scenario_ids(),
-        vec!["production-voxel", "gpu-alpha", "p34"]
-    );
+    assert_eq!(manifest.scenario_ids(), vec!["production-voxel"]);
 
     let summary = run_environment_launcher_smoke(&manifest_path, None).unwrap();
     assert_eq!(summary.schema, CA10_ENVIRONMENT_MANIFEST_SCHEMA);
     assert_eq!(summary.selected_scenario_id, "production-voxel");
-    assert_eq!(summary.scenario_count, 3);
+    assert_eq!(summary.scenario_count, 1);
     assert!(path_ends_with(
         &summary.fixture_root,
         "crates/alife_world/tests/fixtures/production_voxel"
@@ -63,29 +60,13 @@ fn ca10_environment_manifest_validates_and_selects_default_production_voxel() {
 }
 
 #[test]
-fn ca10_environment_manifest_can_select_legacy_p34_fixture() {
-    let manifest_path = default_environment_manifest_path();
-    let summary = run_environment_launcher_smoke(&manifest_path, Some("p34")).unwrap();
-    assert_eq!(summary.selected_scenario_id, "p34");
-    assert!(path_ends_with(
-        &summary.fixture_root,
-        "crates/alife_world/tests/fixtures/p34"
-    ));
-    assert_eq!(summary.object_count, 2);
-    assert_eq!(summary.creature_count, 1);
-    assert_eq!(summary.food_count, 1);
-    assert_eq!(summary.hazard_count, 0);
-    assert_eq!(summary.obstacle_count, 0);
-}
-
-#[test]
 fn ca10_environment_manifest_reports_known_scenarios_for_bad_selection() {
     let manifest_path = default_environment_manifest_path();
     let err = select_environment_scenario(&manifest_path, Some("missing-arena"))
         .unwrap_err()
         .to_string();
     assert!(err.contains("unknown environment scenario 'missing-arena'"));
-    assert!(err.contains("Known scenarios: production-voxel, gpu-alpha, p34"));
+    assert!(err.contains("Known scenarios: production-voxel"));
 }
 
 #[test]
@@ -113,23 +94,11 @@ fn ca11_player_sandbox_editor_edits_default_manifest_scenario() {
 }
 
 #[test]
-fn ca11_player_sandbox_editor_can_select_legacy_p34_scenario() {
-    let manifest_path = default_environment_manifest_path();
-    let summary = run_player_sandbox_editor_smoke(&manifest_path, Some("p34"), None).unwrap();
-    assert_eq!(summary.scenario_id, "p34");
-    assert_eq!(summary.initial_object_count, 2);
-    assert!(summary.final_object_count > summary.initial_object_count);
-    assert!(summary.stable_ids.iter().all(|id| id.raw() > 0));
-    summary.validate().unwrap();
-}
-
-#[test]
 fn ca11_player_sandbox_editor_can_write_optional_save_output() {
     let manifest_path = default_environment_manifest_path();
     let output = std::env::temp_dir().join("alife_ca11_player_sandbox_editor_save.json");
     let _ = std::fs::remove_file(&output);
-    let summary =
-        run_player_sandbox_editor_smoke(&manifest_path, Some("gpu-alpha"), Some(&output)).unwrap();
+    let summary = run_player_sandbox_editor_smoke(&manifest_path, None, Some(&output)).unwrap();
     assert!(summary.output_written);
     assert!(output.exists());
     let saved = PortableSaveFile::from_json_file(&output).unwrap();
@@ -139,26 +108,33 @@ fn ca11_player_sandbox_editor_can_write_optional_save_output() {
 }
 
 #[test]
-fn ca12_app_bundle_manifest_discovers_assets_shaders_and_placeholder_art() {
+fn ca12_app_bundle_manifest_discovers_production_assets_and_shaders() {
     let summary = validate_app_bundle_manifest(default_app_bundle_manifest_path()).unwrap();
     assert_eq!(summary.schema, CA12_APP_BUNDLE_MANIFEST_SCHEMA);
     assert_eq!(
         summary.schema_version,
         CA12_APP_BUNDLE_MANIFEST_SCHEMA_VERSION
     );
-    assert_eq!(summary.environment_scenarios, 3);
+    assert_eq!(summary.environment_scenarios, 1);
     assert_eq!(summary.config_entries, 6);
     assert_eq!(summary.shader_assets, 15);
     assert_eq!(summary.discovered_shader_assets, 15);
-    assert_eq!(summary.placeholder_art_entries, 10);
     assert!(summary.production_voxel_asset_entries > 0);
     assert!(summary.production_voxel_generated_assets > 0);
     assert!(summary.production_voxel_asset_manifest_validated);
     assert!(summary.shader_discovery_complete);
-    assert!(summary.tiny_placeholder_art);
     assert!(!summary.large_binary_assets_committed);
     assert!(summary.missing_required_rejected);
     summary.validate().unwrap();
+}
+
+#[test]
+fn ca12_active_manifests_exclude_retired_visuals() {
+    let environment = std::fs::read_to_string(default_environment_manifest_path()).unwrap();
+    let bundle = std::fs::read_to_string(default_app_bundle_manifest_path()).unwrap();
+
+    assert!(!environment.contains("gpu-alpha"));
+    assert!(!bundle.contains("placeholder_art_manifest"));
 }
 
 #[test]

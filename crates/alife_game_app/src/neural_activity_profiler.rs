@@ -70,7 +70,7 @@ impl NeuralActivityProfilerSnapshot {
     pub fn from_live_loop(
         live: &LiveBrainLoop,
         recent_summaries: &[LiveBrainTickSummary],
-        gpu: Option<&GraphicalGpuRuntimeTelemetry>,
+        gpu: Option<&GpuBrainAuthorityTelemetry>,
     ) -> Result<Self, GameAppShellError> {
         let brain_class = live.mind().brain_class();
         let route_status = route_status_from_gpu(gpu);
@@ -347,7 +347,7 @@ pub fn run_neural_activity_profiler_smoke(
 }
 
 pub(crate) fn route_status_from_gpu(
-    gpu: Option<&GraphicalGpuRuntimeTelemetry>,
+    gpu: Option<&GpuBrainAuthorityTelemetry>,
 ) -> NeuralRouteStatusSummary {
     match gpu {
         Some(gpu) => NeuralRouteStatusSummary {
@@ -380,7 +380,7 @@ pub(crate) fn route_status_from_gpu(
 fn tile_summary_from(
     brain_class: &alife_core::BrainClassSpec,
     recent_summaries: &[LiveBrainTickSummary],
-    gpu: Option<&GraphicalGpuRuntimeTelemetry>,
+    gpu: Option<&GpuBrainAuthorityTelemetry>,
 ) -> NeuralTileActivitySummary {
     let max_active_tiles = brain_class
         .max_active_microtiles
@@ -433,7 +433,7 @@ fn tile_summary_from(
 fn lobe_rows_from(
     brain_class: &alife_core::BrainClassSpec,
     recent_summaries: &[LiveBrainTickSummary],
-    gpu: Option<&GraphicalGpuRuntimeTelemetry>,
+    gpu: Option<&GpuBrainAuthorityTelemetry>,
     memory_records: usize,
     concept_count: usize,
 ) -> Result<Vec<NeuralLobeActivityRow>, ScaffoldContractError> {
@@ -466,7 +466,7 @@ fn lobe_rows_from(
 fn activity_for_lobe(
     lobe: alife_core::LobeKind,
     recent_summaries: &[LiveBrainTickSummary],
-    gpu: Option<&GraphicalGpuRuntimeTelemetry>,
+    gpu: Option<&GpuBrainAuthorityTelemetry>,
     memory_records: usize,
     concept_count: usize,
 ) -> f32 {

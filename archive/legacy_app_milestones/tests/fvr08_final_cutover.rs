@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use alife_game_app::{run_platform_package_smoke, PackageSmokeKind};
+
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
@@ -62,4 +64,30 @@ fn fvr08_windows_production_package_script_is_product_path() {
 
     assert!(!root.join("scripts/package_windows_alpha.ps1").exists());
     assert!(!root.join("scripts/run_windows_alpha_package.ps1").exists());
+}
+
+#[test]
+fn fvr08_platform_package_smoke_exposes_production_package_commands() {
+    let summary = run_platform_package_smoke().unwrap();
+
+    assert!(summary.commands.iter().any(|command| command.id
+        == "fvr08-windows-production-voxel-package-dry-run"
+        && command.kind == PackageSmokeKind::Validation
+        && command
+            .windows_command
+            .contains("scripts/package_windows_production_voxel.ps1 -DryRun")));
+    assert!(summary.commands.iter().any(|command| command.id
+        == "fvr08-windows-production-voxel-launcher-dry-run"
+        && command.kind == PackageSmokeKind::GraphicalManual
+        && command.manual
+        && command.requires_graphics
+        && command
+            .windows_command
+            .contains("scripts/run_production_voxel_frontend.ps1 -DryRun")));
+    assert!(!summary.commands.iter().any(|command| command
+        .windows_command
+        .contains("package_windows_alpha.ps1")));
+    assert!(!summary.commands.iter().any(|command| command
+        .windows_command
+        .contains("run_windows_alpha_package.ps1")));
 }

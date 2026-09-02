@@ -24,7 +24,6 @@ for authority in "${authorities[@]}"; do
 done
 
 test -f crates/alife_tools/tests/fixtures/P04_5_performance_contract.md
-test -f examples/ca43/TESTER_FEEDBACK_TEMPLATE.md
 
 for obsolete in \
   docs/master_spec.md \
@@ -103,6 +102,10 @@ require_text docs/ROADMAP.md 'Live GPU-to-voxel projection' 'first roadmap phase
 require_text docs/ROADMAP.md 'Autonomous production lifecycle' 'lifecycle roadmap phase'
 require_text docs/DEVELOPMENT.md 'scripts/docs_check.ps1' 'Windows docs gate'
 require_text docs/DEVELOPMENT.md 'source-bound physical-adapter evidence' 'hardware evidence rule'
+require_text docs/DEVELOPMENT.md 'archive/legacy_app_milestones' 'legacy app milestone archive'
+require_text crates/alife_game_app/README.md 'validate-production-assets' 'current game-app validator'
+forbid_text crates/alife_game_app/README.md 'headless-smoke' 'removed game-app command'
+forbid_text crates/alife_game_app/README.md 'gpu-product-smoke' 'removed game-app command'
 require_text docs/EVIDENCE.md 'A report bound to an older source remains valid historical evidence for that source.' 'historical evidence scope'
 require_text docs/EVIDENCE.md 'promotion verdict `Blocked`' 'EI1 evidence verdict'
 require_text docs/REFERENCE.md 'CPU neural helpers: reference, test, or developer use only.' 'CPU helper boundary'

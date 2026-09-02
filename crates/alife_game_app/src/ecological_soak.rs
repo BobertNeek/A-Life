@@ -488,6 +488,9 @@ pub fn ecological_soak_report_markdown(summary: &EcologicalSoakSummary) -> Strin
     );
     report.push_str("- Tuning is config-first; no core contracts were changed for this soak.\n");
     report.push_str("\n## Reproduction commands\n\n");
-    report.push_str(&format!("- Fast: `cargo run -p alife_game_app --bin alife_game_app -- ecological-soak-smoke`\n- Manual 10k: `{}`\n- Graphical bounded: `{}`\n", summary.manual_10k_command, summary.graphical_bounded_command));
+    report.push_str(&format!(
+        "- Manual 10k: `{}`\n- Graphical bounded: `{}`\n",
+        summary.manual_10k_command, summary.graphical_bounded_command
+    ));
     report
 }

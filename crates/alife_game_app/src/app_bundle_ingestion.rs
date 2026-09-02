@@ -1,8 +1,7 @@
 //! CA12 app bundle discovery and validation.
 //!
-//! This is metadata validation only. It makes the app's config, shader, and
-//! placeholder art assets discoverable without generating or committing package
-//! artifacts.
+//! This is metadata validation only. It makes the production config, shaders,
+//! and voxel assets discoverable without generating package artifacts.
 
 use std::{
     collections::BTreeSet,
@@ -22,7 +21,6 @@ pub struct AppBundleManifest {
     pub schema_version: u16,
     pub bundle_id: String,
     pub environment_manifest: String,
-    pub placeholder_art_manifest: String,
     pub production_voxel_asset_manifest: String,
     pub entries: Vec<AppBundleEntry>,
     pub shader_assets: Vec<ShaderAssetEntry>,
@@ -43,23 +41,6 @@ pub struct ShaderAssetEntry {
     pub required: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct PlaceholderArtManifest {
-    pub schema: String,
-    pub schema_version: u16,
-    pub manifest_id: String,
-    pub entries: Vec<PlaceholderArtEntry>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct PlaceholderArtEntry {
-    pub id: String,
-    pub kind: String,
-    pub shape: String,
-    pub color: String,
-    pub description: String,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppBundleIngestionSummary {
     pub schema: &'static str,
@@ -70,7 +51,6 @@ pub struct AppBundleIngestionSummary {
     pub config_entries: usize,
     pub shader_assets: usize,
     pub discovered_shader_assets: usize,
-    pub placeholder_art_entries: usize,
     pub production_voxel_asset_entries: usize,
     pub production_voxel_generated_assets: usize,
     pub production_voxel_asset_manifest_validated: bool,
@@ -78,7 +58,6 @@ pub struct AppBundleIngestionSummary {
     pub largest_file_bytes: u64,
     pub missing_required_rejected: bool,
     pub shader_discovery_complete: bool,
-    pub tiny_placeholder_art: bool,
     pub large_binary_assets_committed: bool,
     pub player_visible_status: Vec<String>,
 }
@@ -93,7 +72,6 @@ impl AppBundleIngestionSummary {
             || self.shader_assets == 0
             || self.discovered_shader_assets == 0
             || self.shader_assets != self.discovered_shader_assets
-            || self.placeholder_art_entries < 4
             || self.production_voxel_asset_entries < FVR07_REQUIRED_USAGE_CATEGORIES.len()
             || self.production_voxel_generated_assets == 0
             || !self.production_voxel_asset_manifest_validated
@@ -101,7 +79,6 @@ impl AppBundleIngestionSummary {
             || self.largest_file_bytes > CA12_MAX_BUNDLE_ASSET_BYTES
             || !self.missing_required_rejected
             || !self.shader_discovery_complete
-            || !self.tiny_placeholder_art
             || self.large_binary_assets_committed
             || self.player_visible_status.is_empty()
         {
@@ -187,10 +164,6 @@ fn validate_app_bundle_manifest_inner(
     environment_manifest.validate(&environment_manifest_path)?;
     largest_file_bytes = largest_file_bytes.max(tiny_file_size(&environment_manifest_path)?);
 
-    let placeholder_path = resolve_workspace_path(root, &manifest.placeholder_art_manifest)?;
-    let placeholder_art = validate_placeholder_art_manifest(&placeholder_path)?;
-    largest_file_bytes = largest_file_bytes.max(tiny_file_size(&placeholder_path)?);
-
     let production_voxel_asset_path =
         resolve_workspace_path(root, &manifest.production_voxel_asset_manifest)?;
     let production_voxel_assets = validate_production_assets(&production_voxel_asset_path)?;
@@ -203,7 +176,7 @@ fn validate_app_bundle_manifest_inner(
 
     let mut ids = BTreeSet::new();
     let mut required_entries = 0;
-    let mut large_binary_assets_committed = has_binary_like_extension(&placeholder_path);
+    let mut large_binary_assets_committed = false;
     for entry in &manifest.entries {
         validate_entry(entry, &mut ids)?;
         if entry.required {
@@ -261,7 +234,6 @@ fn validate_app_bundle_manifest_inner(
         config_entries: manifest.entries.len(),
         shader_assets: manifest.shader_assets.len(),
         discovered_shader_assets,
-        placeholder_art_entries: placeholder_art.entries.len(),
         production_voxel_asset_entries: production_voxel_assets.asset_count,
         production_voxel_generated_assets: production_voxel_assets.generated_assets,
         production_voxel_asset_manifest_validated: production_voxel_assets
@@ -275,21 +247,11 @@ fn validate_app_bundle_manifest_inner(
         largest_file_bytes,
         missing_required_rejected: false,
         shader_discovery_complete,
-        tiny_placeholder_art: placeholder_art.entries.iter().all(|entry| {
-            !entry.id.trim().is_empty()
-                && !entry.kind.trim().is_empty()
-                && !entry.shape.trim().is_empty()
-                && !entry.color.trim().is_empty()
-        }),
         large_binary_assets_committed,
         player_visible_status: vec![
             "App bundle manifest is versioned and validated.".to_string(),
             "WGSL shader assets are discovered from the committed shader directory.".to_string(),
             "FVR08 production voxel route is the default environment entry and loads real saved config/assets."
-                .to_string(),
-            "Alpha art v1 PNG sprites/tiles remain manifest-validated as historical regression assets."
-                .to_string(),
-            "True 2.5D glTF assets remain manifest-validated as historical reference assets, not the FVR production default."
                 .to_string(),
             "FVR07 production voxel assets are manifest-validated with license, digest, source, and VFX budget metadata."
                 .to_string(),
@@ -322,41 +284,6 @@ fn validate_bundle_entry_kind(
         _ => return Err(ScaffoldContractError::MissingPhaseData.into()),
     }
     Ok(())
-}
-
-fn validate_placeholder_art_manifest(
-    path: &Path,
-) -> Result<PlaceholderArtManifest, GameAppShellError> {
-    let manifest: PlaceholderArtManifest = read_json(path)?;
-    require_schema(
-        &manifest.schema,
-        manifest.schema_version,
-        CA12_PLACEHOLDER_ART_MANIFEST_SCHEMA,
-        CA12_PLACEHOLDER_ART_MANIFEST_SCHEMA_VERSION,
-    )?;
-    require_id(&manifest.manifest_id)?;
-    if manifest.entries.len() < 4 || manifest.entries.len() > CA12_MAX_BUNDLE_ENTRIES {
-        return Err(ScaffoldContractError::MissingPhaseData.into());
-    }
-    let mut ids = BTreeSet::new();
-    let mut kinds = BTreeSet::new();
-    for entry in &manifest.entries {
-        require_id(&entry.id)?;
-        require_id(&entry.kind)?;
-        require_id(&entry.shape)?;
-        require_id(&entry.color)?;
-        require_id(&entry.description)?;
-        if !ids.insert(entry.id.as_str()) {
-            return Err(ScaffoldContractError::MissingPhaseData.into());
-        }
-        kinds.insert(entry.kind.as_str());
-    }
-    for required in ["creature", "food", "hazard", "obstacle"] {
-        if !kinds.contains(required) {
-            return Err(ScaffoldContractError::MissingPhaseData.into());
-        }
-    }
-    Ok(manifest)
 }
 
 fn validate_entry(

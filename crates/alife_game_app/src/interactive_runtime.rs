@@ -1,4 +1,4 @@
-//! S02 minimal interactive runtime controls for the graphical playground.
+//! S02 minimal interactive runtime controls.
 //!
 //! This module is deliberately Bevy-free. The feature-gated Bevy shell maps
 //! keyboard input into these commands, and this module applies them through the
@@ -30,7 +30,7 @@ pub enum RuntimeControlCommand {
     StepOnce,
     SetRunSpeed(u32),
     RunForTicks(u32),
-    RestartAlphaFixture,
+    RestartFixture,
     RequestExit,
 }
 
@@ -179,8 +179,8 @@ impl RuntimeControlPanel {
                     live.update_with_motor_ring(LiveBrainTickControl::run_fixed(bounded))?;
                 (batch.summaries, batch.motor_ring)
             }
-            RuntimeControlCommand::RestartAlphaFixture => {
-                self.reset_to_alpha_fixture(live);
+            RuntimeControlCommand::RestartFixture => {
+                self.reset_to_fixture(live);
                 (Vec::new(), None)
             }
             RuntimeControlCommand::RequestExit => {
@@ -265,7 +265,7 @@ impl RuntimeControlPanel {
             });
         let event_lines = self.player_event_lines();
         format!(
-            "A-Life GPU Alpha Playground\nState: {}  speed={}x  tick={} world={}\n{}\n{}\nCreature: stable:1  Goal: {}  Action: {}\nTarget: {}  Intent: {}\nPatch: sealed={} count={}\nLearning: H_shadow pulse visible when count rises\n{}\n{}\nEvents (last 5):\n{}{}\nControls: Space run/pause | N step | R reset | Esc quit{}",
+            "A-Life Runtime Controls\nState: {}  speed={}x  tick={} world={}\n{}\n{}\nCreature: stable:1  Goal: {}  Action: {}\nTarget: {}  Intent: {}\nPatch: sealed={} count={}\nLearning: H_shadow pulse visible when count rises\n{}\n{}\nEvents (last 5):\n{}{}\nControls: Space run/pause | N step | R reset | Esc quit{}",
             self.playback.label(),
             self.run_speed_ticks,
             self.mind_tick,
@@ -302,7 +302,7 @@ impl RuntimeControlPanel {
         format!(
             concat!(
                 "Status\n",
-                "A-Life GPU Alpha Playground\n",
+                "A-Life Runtime Controls\n",
                 "State: {}  Speed: {}x\n",
                 "Tick: {}  World: {}\n",
                 "{}\n",
@@ -515,18 +515,19 @@ impl RuntimeControlPanel {
         &mut self,
         live: &LiveBrainLoop,
         recent_summaries: &[LiveBrainTickSummary],
-        gpu: Option<&GraphicalGpuRuntimeTelemetry>,
+        gpu: Option<&GpuBrainAuthorityTelemetry>,
     ) -> Result<(), GameAppShellError> {
         self.neural_profiler =
             NeuralActivityProfilerSnapshot::from_live_loop(live, recent_summaries, gpu)?;
         Ok(())
     }
 
-    pub fn reset_to_alpha_fixture(&mut self, live: &LiveBrainLoop) {
+    pub fn reset_to_fixture(&mut self, live: &LiveBrainLoop) {
         *self = Self::from_live_loop(live);
         self.player_events.clear();
         self.push_player_event(
-            "Alpha fixture reset; stable IDs preserved. Press Space or N to continue.".to_string(),
+            "Runtime fixture reset; stable IDs preserved. Press Space or N to continue."
+                .to_string(),
         );
     }
 
@@ -633,7 +634,7 @@ impl GraphicalControlSmokeSummary {
                 message: "graphical control smoke must verify F-equivalent stable-ID follow",
             });
         }
-        if !self.reset_verified || !self.overlay_text.contains("Alpha fixture reset") {
+        if !self.reset_verified || !self.overlay_text.contains("Runtime fixture reset") {
             return Err(GameAppShellError::VisibleWorldMismatch {
                 message: "graphical control smoke must verify R-equivalent reset/restart",
             });
@@ -660,7 +661,7 @@ impl GraphicalControlSmokeSummary {
         }
         if !self.overlay_text.contains("Controls:")
             || self.overlay_text.contains("Entity(")
-            || !self.overlay_text.contains("A-Life GPU Alpha Playground")
+            || !self.overlay_text.contains("A-Life Runtime Controls")
         {
             return Err(GameAppShellError::VisibleWorldMismatch {
                 message:
@@ -720,11 +721,11 @@ pub fn run_graphical_controls_smoke(
     panel.apply_command(&mut live, RuntimeControlCommand::SetRunSpeed(2))?;
     panel.apply_command(&mut live, RuntimeControlCommand::SetRunSpeed(3))?;
     let run = panel.apply_command(&mut live, RuntimeControlCommand::RunForTicks(3))?;
-    panel.apply_command(&mut live, RuntimeControlCommand::RestartAlphaFixture)?;
+    panel.apply_command(&mut live, RuntimeControlCommand::RestartFixture)?;
     let reset_verified = panel
         .player_events
         .iter()
-        .any(|event| event.contains("Alpha fixture reset"));
+        .any(|event| event.contains("Runtime fixture reset"));
     let reset_overlay_text = panel.status_overlay_text();
     panel.record_terminal_recovery("invalid action/state");
     let terminal_guidance_visible = panel

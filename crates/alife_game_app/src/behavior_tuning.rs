@@ -154,7 +154,7 @@ impl BehaviorTuningSummary {
             || !self.no_hidden_overfitting
             || !self
                 .manual_extended_command
-                .contains("longrun-balance-smoke")
+                .contains("g19_manual_extended_balance_run")
             || !self
                 .report_markdown
                 .contains("Known degenerate behavior list")
@@ -227,8 +227,7 @@ pub fn run_behavior_tuning_metrics_with_config(
         "population-collapse checks are bounded to current fixture caps until CA22 long-run ecology"
             .to_string(),
     ]);
-    let manual_extended_command =
-        "cargo run -p alife_game_app --bin alife_game_app -- longrun-balance-smoke".to_string();
+    let manual_extended_command = "cargo test -p alife_game_app --test app_shell g19_manual_extended_balance_run -- --ignored --nocapture".to_string();
     let mut summary = BehaviorTuningSummary {
         schema: CA21_BEHAVIOR_TUNING_SCHEMA,
         schema_version: CA21_BEHAVIOR_TUNING_SCHEMA_VERSION,

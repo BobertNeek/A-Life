@@ -108,5 +108,3 @@ impl GpuBrainAuthorityTelemetry {
         )
     }
 }
-
-pub type GraphicalGpuRuntimeTelemetry = GpuBrainAuthorityTelemetry;

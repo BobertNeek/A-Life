@@ -85,10 +85,12 @@ Rules:
 - never start a competing GPU corpus while one healthy run owns the target.
 
 The formula-derived performance ledger used by its focused test lives at
-`crates/alife_tools/tests/fixtures/P04_5_performance_contract.md`. The external
-tester form packaged by the legacy alpha helper lives at
-`examples/ca43/TESTER_FEEDBACK_TEMPLATE.md`. These are operational inputs, not
-project documentation authorities.
+`crates/alife_tools/tests/fixtures/P04_5_performance_contract.md`.
+
+Retired Alpha, True 2.5D, milestone smoke, and release-report helpers live under
+`archive/legacy_true25d` and `archive/legacy_app_milestones`. They are historical
+references. They are not Cargo targets, supported commands, package inputs, or
+active documentation authorities.
 
 ## Architecture boundaries
 

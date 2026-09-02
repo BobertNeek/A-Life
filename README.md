@@ -69,3 +69,7 @@ the v2.0 architecture.
 - Missing evidence is `Unknown` or `Blocked`, never a pass.
 
 Use the PowerShell wrappers in `scripts/` on Windows. They route shell checks through Git Bash rather than WSL.
+
+Retired renderer assets and milestone smoke/report code are preserved under
+`archive/legacy_true25d` and `archive/legacy_app_milestones`. Nothing under
+`archive/` is compiled, packaged, or treated as current product guidance.

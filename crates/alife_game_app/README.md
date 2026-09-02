@@ -26,25 +26,20 @@ renderer still builds creature records from the selected save and animates
 saved base positions. It does not yet project live runtime transforms, births,
 or deaths. See `docs/STATUS.md` and `docs/ROADMAP.md` for the exact boundary.
 
-## Headless and diagnostic commands
+## Validation and diagnostic commands
 
-The crate retains headless smokes for contracts and developer diagnosis. They
-are not production-authority evidence and do not make a CPU helper a product
-fallback.
+The current binary exposes production asset validation plus source-bound GPU
+acceptance and evidence commands. Use `--help` for their current arguments.
+These commands do not make a CPU helper a product fallback.
 
 ```powershell
-cargo run -p alife_game_app --bin alife_game_app -- headless-smoke crates/alife_world/tests/fixtures/p34
-cargo run -p alife_game_app --bin alife_game_app -- visible-signature crates/alife_world/tests/fixtures/p34
-cargo run -p alife_game_app --bin alife_game_app -- live-brain-tick-smoke crates/alife_world/tests/fixtures/p34
-cargo run -p alife_game_app --bin alife_game_app -- creature-inspector-smoke crates/alife_world/tests/fixtures/p34
-cargo run -p alife_game_app --bin alife_game_app -- school-mode-smoke
-cargo run -p alife_game_app --bin alife_game_app -- semantic-provider-smoke
-cargo run -p alife_game_app --bin alife_game_app -- gpu-product-smoke
+cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets
+cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- gpu-closed-loop-acceptance --help
+cargo run -p alife_game_app --features gpu-tests --bin alife_game_app -- gpu-closed-loop-soak --help
 ```
 
-The school smoke proves only its bounded perception and arbitration contracts.
-The semantic smoke uses disabled or deterministic fake providers. Neither is a
-live GPU school or private-SLM cognition proof.
+Historical milestone smoke runners and command catalogs are archived under
+`archive/legacy_app_milestones`. They are not supported CLI commands.
 
 ## Ownership
 

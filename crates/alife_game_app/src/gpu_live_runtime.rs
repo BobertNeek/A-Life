@@ -56,12 +56,14 @@ use alife_gpu_backend::{
     GpuClosedLoopMemoryTickInput, GpuClosedLoopTick, GpuCompactCheckpointAuthorityV1,
     GpuCuratedResidencyCohort, GpuCuratedResidencyEntry, GpuCuratedResidencyOutcome,
     GpuCuratedResidencyReceipt, GpuCuratedResidencyTargetIdentity,
-    GpuExactPopulationCaptureMetricsV1, GpuExactPopulationCapturePollV1,
+    GpuExactPopulationCapturePollV1,
     GpuExactPopulationCaptureTicketV1, GpuExactPopulationCaptureV1, GpuLearningReceipt,
     GpuMemoryContextUpload, GpuV11WorkReceipt, PendingEligibilityDiscardReceipt,
     PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
     GPU_FAST_PLASTICITY_COMMIT_BYTES, GPU_MOTOR_CHANNEL_SLOT_COUNT,
 };
+#[cfg(feature = "gpu-tests")]
+use alife_gpu_backend::GpuExactPopulationCaptureMetricsV1;
 use alife_runtime::{
     DurableGpuCheckpointMonotonicityPermit, DurableGpuCheckpointRef, GpuAuthoritativeSession,
     GpuExactCheckpointTransactionContextV1, GpuSessionAuthority, GpuSessionConsumerKind,
@@ -3800,8 +3802,6 @@ fn grounded_successor_state(
     SemanticStateVector::new(features.to_vec())
 }
 
-const SINGLE_ACTION_COMPATIBILITY_ADAPTER_VERSION: u16 = 1;
-
 fn factorized_motor_channel_for_action(kind: ActionKind) -> Option<MotorChannel> {
     match kind {
         ActionKind::Move => Some(MotorChannel::Locomotion),
@@ -3810,27 +3810,6 @@ fn factorized_motor_channel_for_action(kind: ActionKind) -> Option<MotorChannel>
         ActionKind::Hold | ActionKind::Rest | ActionKind::Inspect => Some(MotorChannel::Posture),
         ActionKind::Idle | ActionKind::Gesture => None,
     }
-}
-
-/// Versioned migration adapter for the old one-action production ABI.
-fn compatibility_bundle_for_selected_action_v1(
-    organism_id: OrganismId,
-    sequence_id: ExperienceSequenceId,
-    tick: Tick,
-    command: &alife_core::ActionCommand,
-) -> Result<MotorCommandBundle, ScaffoldContractError> {
-    debug_assert_eq!(SINGLE_ACTION_COMPATIBILITY_ADAPTER_VERSION, 1);
-    let channel = match command.kind {
-        ActionKind::Idle | ActionKind::Hold | ActionKind::Rest | ActionKind::Inspect => {
-            MotorChannel::Posture
-        }
-        ActionKind::Move => MotorChannel::Locomotion,
-        ActionKind::Interact | ActionKind::Write => MotorChannel::Manipulation,
-        ActionKind::Vocalize => MotorChannel::Vocal,
-        ActionKind::Gesture => MotorChannel::Posture,
-    };
-    let channel_command = channel_command_for_action(channel, command)?;
-    MotorCommandBundle::new(organism_id, sequence_id, tick, vec![channel_command])
 }
 
 fn factorized_motor_bundle_for_candidates(
@@ -14539,11 +14518,15 @@ mod tests {
                 v11_work: GpuV11WorkReceipt::default(),
                 pre_action,
                 decision: decision.clone(),
-                motor_bundle: compatibility_bundle_for_selected_action_v1(
+                motor_bundle: MotorCommandBundle::new(
                     organism_id,
                     sequence_id,
                     frame.tick(),
-                    &decision.selected_action,
+                    vec![channel_command_for_action(
+                        MotorChannel::Posture,
+                        &decision.selected_action,
+                    )
+                    .unwrap()],
                 )
                 .unwrap(),
                 speech_payload: None,

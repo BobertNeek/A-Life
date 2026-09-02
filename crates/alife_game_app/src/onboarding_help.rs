@@ -235,7 +235,7 @@ pub fn troubleshooting_reference() -> Vec<TroubleshootingReference> {
         TroubleshootingReference {
             symptom: "Balance smoke looks scripted",
             diagnostic: "G19 exposes degenerate behavior notes rather than hiding metrics",
-            command: "cargo run -p alife_game_app --bin alife_game_app -- longrun-balance-smoke",
+            command: "cargo test -p alife_game_app --test app_shell g19_manual_extended_balance_run -- --ignored --nocapture",
         },
     ]
 }

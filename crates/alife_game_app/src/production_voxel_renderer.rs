@@ -7669,9 +7669,11 @@ impl bevy_voxel_world::prelude::VoxelWorldConfig for Fvr03BevyVoxelWorldConfig {
         let procedural_config = self.procedural_config;
         let visible_chunks = self.visible_chunks.clone();
         Box::new(move |chunk_position, _, _| {
-            const PADDED_EDGE: i32 = bevy_voxel_world::prelude::CHUNK_SIZE_I + 2;
-            let origin_x = chunk_position.x * bevy_voxel_world::prelude::CHUNK_SIZE_I - 1;
-            let origin_z = chunk_position.z * bevy_voxel_world::prelude::CHUNK_SIZE_I - 1;
+            const PADDED_EDGE: i32 = bevy_voxel_world::custom_meshing::CHUNK_SIZE_I + 2;
+            let origin_x =
+                chunk_position.x * bevy_voxel_world::custom_meshing::CHUNK_SIZE_I - 1;
+            let origin_z =
+                chunk_position.z * bevy_voxel_world::custom_meshing::CHUNK_SIZE_I - 1;
             let mut columns = vec![None; (PADDED_EDGE * PADDED_EDGE) as usize];
             for local_z in 0..PADDED_EDGE {
                 for local_x in 0..PADDED_EDGE {

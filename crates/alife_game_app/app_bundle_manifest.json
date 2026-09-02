@@ -3,7 +3,6 @@
   "schema_version": 1,
   "bundle_id": "ca12-app-runtime-bundle",
   "environment_manifest": "crates/alife_game_app/environment_manifest.json",
-  "placeholder_art_manifest": "crates/alife_game_app/placeholder_art_manifest.json",
   "production_voxel_asset_manifest": "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json",
   "entries": [
     {
