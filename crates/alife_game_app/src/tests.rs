@@ -148,17 +148,9 @@ fn ca12_app_bundle_manifest_discovers_assets_shaders_and_placeholder_art() {
     );
     assert_eq!(summary.environment_scenarios, 3);
     assert_eq!(summary.config_entries, 6);
-    assert_eq!(summary.shader_assets, 16);
-    assert_eq!(summary.discovered_shader_assets, 16);
+    assert_eq!(summary.shader_assets, 15);
+    assert_eq!(summary.discovered_shader_assets, 15);
     assert_eq!(summary.placeholder_art_entries, 10);
-    assert_eq!(summary.alpha_art_entries, 36);
-    assert!(summary.alpha_art_required_roles_present);
-    assert!(summary.production_alpha_art);
-    assert_eq!(summary.true_25d_asset_entries, 15);
-    assert!(summary.true_25d_required_roles_present);
-    assert_eq!(summary.true_25d_endocrine_feedback_assets, 2);
-    assert!(summary.true_25d_endocrine_feedback_contract_validated);
-    assert!(summary.production_true_25d_assets);
     assert!(summary.production_voxel_asset_entries > 0);
     assert!(summary.production_voxel_generated_assets > 0);
     assert!(summary.production_voxel_asset_manifest_validated);
@@ -255,100 +247,6 @@ fn visible_world_signature_loads_from_p34_save_without_bevy() {
         .visible_signature
         .iter()
         .any(|line| line.contains("Food:berry")));
-}
-
-#[test]
-fn s01_graphical_playground_launch_plan_validates_without_graphics() {
-    let launch = GraphicalPlaygroundLaunchConfig::interactive(p34_fixture_root());
-    let summary = validate_graphical_playground_launch(&launch).unwrap();
-
-    assert_eq!(summary.schema, S01_GRAPHICAL_PLAYGROUND_SCHEMA);
-    assert_eq!(
-        summary.schema_version,
-        S01_GRAPHICAL_PLAYGROUND_SCHEMA_VERSION
-    );
-    assert_eq!(summary.window_title, S01_GRAPHICAL_WINDOW_TITLE);
-    assert_eq!(summary.mode_label, "interactive");
-    assert!(summary.persistent_window);
-    assert_eq!(summary.seed, 4242);
-    assert_eq!(summary.selected_backend, PolicyBackend::NeuralClosedLoopGpu);
-    assert_eq!(
-        summary.requested_gpu_mode,
-        GraphicalBrainPolicyMode::GpuRequired
-    );
-    assert!(!summary.require_gpu);
-    assert!(summary.gpu_mode_visible);
-    assert!(summary.gpu_unavailability_visible);
-    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
-    assert!(!summary.stable_id_overlay_visible);
-    assert!(summary.player_view_acceptance.dev_overlay_hidden);
-    assert!(
-        summary
-            .player_view_acceptance
-            .stable_id_labels_hidden_except_selected
-    );
-    assert_eq!(summary.object_count, 2);
-    assert_eq!(summary.creature_marker_count, 1);
-    assert_eq!(summary.food_marker_count, 1);
-    assert!(summary.signature_line().contains("persistent=true"));
-}
-
-#[test]
-fn s01_graphical_smoke_seconds_are_bounded() {
-    let ok = GraphicalPlaygroundLaunchConfig::smoke(p34_fixture_root(), 5);
-    let summary = validate_graphical_playground_launch(&ok).unwrap();
-    assert_eq!(summary.mode_label, "smoke-timeout");
-    assert_eq!(summary.smoke_seconds, Some(5));
-    assert!(!summary.persistent_window);
-
-    let zero = GraphicalPlaygroundLaunchConfig::smoke(p34_fixture_root(), 0);
-    assert!(zero.validate().is_err());
-    let too_long = GraphicalPlaygroundLaunchConfig::smoke(
-        p34_fixture_root(),
-        S01_MAX_GRAPHICAL_SMOKE_SECONDS + 1,
-    );
-    assert!(too_long.validate().is_err());
-}
-
-#[test]
-fn s01_graphical_launcher_script_uses_persistent_window_commands() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let script =
-        std::fs::read_to_string(root.join("scripts/run_graphical_playground.ps1")).unwrap();
-    let production =
-        std::fs::read_to_string(root.join("scripts/run_production_voxel_frontend.ps1")).unwrap();
-
-    assert!(script.contains("[switch]$DryRun"));
-    assert!(script.contains("[int]$SmokeSeconds"));
-    assert!(script.contains("[string]$BrainPolicy"));
-    assert!(script.contains("[string]$Scenario"));
-    assert!(script.contains("[string]$EnvironmentManifest"));
-    assert!(script.contains("[string]$GraphicsBackend"));
-    assert!(script.contains("FVR01 compatibility alias"));
-    assert!(script.contains("run_production_voxel_frontend.ps1"));
-    assert!(script.contains("production-voxel"));
-    assert!(!script.contains("Starting A-Life GPU Alpha Playground"));
-    assert!(production.contains("production-voxel"));
-    assert!(production.contains("A-Life Voxel Frontend"));
-    assert!(production.contains("MinSpecComfort1080p"));
-    assert!(production.contains("MinimumSettings30x30"));
-    assert!(production.contains("bevy-app gpu-runtime voxel-backend"));
-    assert!(production.contains("--brain-policy"));
-    assert!(production.contains("[switch]$DeveloperOverlay"));
-    assert!(production.contains("--smoke-seconds"));
-    assert!(production.contains("Format-CommandArgument"));
-    assert!(production.contains("-DryRun"));
-    assert!(!script.contains("\"visible-world-smoke\""));
-    assert!(!script.contains("$ModeArgs += \"crates/alife_world/tests/fixtures/gpu_alpha\""));
-}
-
-#[cfg(feature = "bevy-app")]
-#[test]
-fn production_player_view_default_camera_is_world_establishing() {
-    assert!(
-        crate::bevy_shell::CA37_EXPLORATION_CAMERA_ZOOM <= 1.05,
-        "default Player View should open as a wide world view, not a close-up debug crop"
-    );
 }
 
 #[test]
@@ -566,40 +464,4 @@ fn g05_pause_step_run_controls_map_to_live_tick_controls() {
     assert!(InspectorControlPanel::run_fixed(32, 100)
         .validate()
         .is_err());
-}
-
-#[cfg(feature = "bevy-app")]
-#[test]
-fn feature_gated_bevy_shell_builds_with_adapter_plugin() {
-    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
-    let summary = run_headless_app_shell_smoke(&launch).unwrap();
-    let mut app = crate::bevy_shell::build_minimal_bevy_app_shell(summary);
-    app.update();
-    assert!(app
-        .world()
-        .get_resource::<alife_bevy_adapter::AdapterScheduleTrace>()
-        .is_some());
-}
-
-#[cfg(feature = "bevy-app")]
-#[test]
-fn feature_gated_visible_world_spawns_stable_mapped_entities() {
-    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
-    let (mut app, summary) = crate::bevy_shell::build_visible_world_app_shell(&launch).unwrap();
-    assert!(summary.ground_spawned);
-    assert_eq!(summary.object_count, 2);
-    assert_eq!(summary.stable_map_count, 2);
-    let mut visible_query = app
-        .world_mut()
-        .query::<&crate::bevy_shell::VisibleWorldObject>();
-    let visible = visible_query.iter(app.world()).collect::<Vec<_>>();
-    assert_eq!(visible.len(), 2);
-    let map = app.world().resource::<alife_bevy_adapter::BevyEntityMap>();
-    for object in visible {
-        assert!(map.bevy_entity(object.stable_id).is_some());
-    }
-    let mut ground_query = app
-        .world_mut()
-        .query::<&crate::bevy_shell::VisibleGroundPlane>();
-    assert_eq!(ground_query.iter(app.world()).count(), 1);
 }

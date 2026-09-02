@@ -349,7 +349,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
         println!("{}", production_asset_validation_receipt()?);
         return Ok(());
     }
-    if command != PRODUCTION_VOXEL_COMMAND && command != "graphical-playground" {
+    if command != PRODUCTION_VOXEL_COMMAND {
         return Err(format!("unknown command: {command}\n{}", help()));
     }
     if rest
@@ -359,8 +359,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
         println!("{}", help());
         return Ok(());
     }
-    let legacy_alias = command == "graphical-playground";
-    let launch = parse_launch(rest, legacy_alias)?;
+    let launch = parse_launch(rest)?;
     let summary = if launch.dry_run {
         run_production_voxel_frontend_dry_run(&launch).map_err(|error| error.to_string())?
     } else {
@@ -375,9 +374,6 @@ fn run(args: Vec<String>) -> Result<(), String> {
         summary.diagnostics.authoritative,
         summary.signature_line(),
     );
-    if legacy_alias {
-        println!("legacy_alias=true routed_to={PRODUCTION_VOXEL_COMMAND}");
-    }
     Ok(())
 }
 
@@ -417,10 +413,7 @@ fn production_asset_validation_receipt() -> Result<String, String> {
     ))
 }
 
-fn parse_launch(
-    args: &[String],
-    legacy_alias: bool,
-) -> Result<ProductionVoxelLaunchConfig, String> {
+fn parse_launch(args: &[String]) -> Result<ProductionVoxelLaunchConfig, String> {
     let mut manifest = default_environment_manifest_path();
     let mut scenario = None::<String>;
     let mut profile = ProductionFrontendProfileId::default();
@@ -513,12 +506,6 @@ fn parse_launch(
                 developer_overlay = true;
                 index += 1;
             }
-            "--view-mode" if legacy_alias => {
-                index += 2;
-            }
-            unknown if legacy_alias && !unknown.starts_with("--") => {
-                index += 1;
-            }
             unknown => return Err(format!("unknown production option: {unknown}")),
         }
     }
@@ -542,7 +529,6 @@ fn parse_launch(
     launch.record_performance = record_performance;
     launch.require_gpu = require_gpu;
     launch.developer_overlay = developer_overlay;
-    launch.legacy_alias = legacy_alias;
     launch.ui_settings_path = ui_settings_path;
     Ok(launch)
 }
@@ -1008,7 +994,7 @@ mod tests {
     fn production_cli_parses_canonical_new_game() {
         let args = ["--new-game", "--population", "6", "--seed", "240824"].map(str::to_string);
 
-        let launch = parse_launch(&args, false).unwrap();
+        let launch = parse_launch(&args).unwrap();
 
         assert!(matches!(
             launch.world_source,

@@ -917,7 +917,7 @@ fn curated_first_gpu_action_consumes_receipt_updates_registered_world_and_publis
                 root.stable_id == stable_id && visual.organism_id == evidence.selected_organism_id
             })
             .map(|(_, _, transform)| transform.translation)
-            .expect("receipt-bound creature must have a production root");
+            .expect("receipt-bound creature must have a production root")
     };
     let post_action_object = evidence
         .post_action_world

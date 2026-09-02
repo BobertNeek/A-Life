@@ -4,8 +4,6 @@
   "bundle_id": "ca12-app-runtime-bundle",
   "environment_manifest": "crates/alife_game_app/environment_manifest.json",
   "placeholder_art_manifest": "crates/alife_game_app/placeholder_art_manifest.json",
-  "alpha_art_manifest": "crates/alife_game_app/assets/alpha_art_v1/alpha_art_manifest.json",
-  "true_25d_asset_manifest": "crates/alife_game_app/assets/true_25d_alpha_v1/true_25d_manifest.json",
   "production_voxel_asset_manifest": "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json",
   "entries": [
     {
@@ -119,11 +117,6 @@
     {
       "id": "p28-recompaction-autophagy",
       "relative_path": "crates/alife_gpu_backend/shaders/p28_recompaction_autophagy.wgsl",
-      "required": true
-    },
-    {
-      "id": "true25d-stylization-postprocess",
-      "relative_path": "crates/alife_gpu_backend/shaders/true25d_stylization_postprocess.wgsl",
       "required": true
     }
   ]

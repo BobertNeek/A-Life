@@ -42,32 +42,23 @@ cargo test --workspace --all-features --all-targets
 These commands are examples, not evidence by themselves. Record outputs under
 ignored `target/artifacts/` paths when a gate requires a durable receipt.
 
-## Headless playground and content checks
+## Focused content and persistence checks
 
-The retained headless playground exercises reference, persistence, school, and
-semantic boundaries without claiming production neural authority:
+Use the narrow validators for content and portable persistence:
 
 ```powershell
-cargo run -p alife_tools --bin p35_playground -- run-headless crates/alife_world/tests/fixtures/p34
-cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/tests/fixtures/p34 examples/p35/playground_manifest.json
+cargo run -p alife_tools --bin p34_persistence -- validate-save crates/alife_world/tests/fixtures/p34/tiny_save.json crates/alife_world/tests/fixtures/p34
 cargo run -p alife_tools --bin g16_content_authoring -- validate-pack content/fixtures/g16/content_pack_manifest.json
-cargo run -p alife_game_app --bin alife_game_app -- save-load-ux-smoke crates/alife_world/tests/fixtures/p34
-cargo run -p alife_game_app --bin alife_game_app -- longrun-balance-smoke
-cargo run -p alife_game_app --bin alife_game_app -- product-qa-smoke
-cargo run -p alife_game_app --bin alife_game_app -- release-candidate-smoke
+cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets
 cargo test -p alife_game_app --test app_shell g19_manual_extended_balance_run -- --ignored --nocapture
 cargo test -p alife_world --test headless_soak fast_headless_soak_preserves_release_gate_invariants
 ```
 
 Validate the committed content pack with `validate-pack` before using it in a
 tutorial or package. Optional GPU demonstrations remain manual.
-For the legacy P35 GPU diagnostic, compile with `--gpu-runtime` and select the
-static backend explicitly with `ALIFE_GPU_RUNTIME_BACKEND=static`.
-
 The platform wrappers are:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_headless_playground.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_production_voxel.ps1
 ```

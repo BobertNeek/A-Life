@@ -327,7 +327,7 @@ pub fn run_content_authoring_smoke() -> Result<ContentTutorialAuthoringSummary, 
         onboarding_tutorial_steps: onboarding.steps.len(),
         content_authoring_docs_path: docs_path,
         new_tester_headless_ready: docs.contains("validate-pack")
-            && docs.contains("p35_playground")
+            && docs.contains("p34_persistence")
             && docs.contains("PowerShell"),
         school_cues_perception_only: true,
         hidden_provider_required: false,

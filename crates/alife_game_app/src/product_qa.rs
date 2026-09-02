@@ -346,7 +346,8 @@ pub fn run_product_qa_hardening_smoke() -> Result<ProductQaSummary, GameAppShell
 
     let docs = std::fs::read_to_string(root.join("docs/DEVELOPMENT.md"))?;
     let known_issues = std::fs::read_to_string(root.join("docs/STATUS.md"))?;
-    if !docs.contains("cargo run -p alife_game_app --bin alife_game_app -- product-qa-smoke")
+    if !docs
+        .contains("cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets")
         || !docs.contains(&balance.manual_extended_command)
         || !docs.contains(&manual_gpu_command)
         || docs.contains("bash scripts/check.sh")
@@ -368,7 +369,7 @@ pub fn run_product_qa_hardening_smoke() -> Result<ProductQaSummary, GameAppShell
         optional_features,
         ui_transitions,
         fast_soak_command: "cargo test -p alife_world --test headless_soak fast_headless_soak_preserves_release_gate_invariants".to_string(),
-        playground_smoke_command: "cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/tests/fixtures/p34 examples/p35/playground_manifest.json".to_string(),
+        playground_smoke_command: "cargo run -p alife_tools --bin p34_persistence -- validate-save crates/alife_world/tests/fixtures/p34/tiny_save.json crates/alife_world/tests/fixtures/p34".to_string(),
         extended_balance_command: balance.manual_extended_command.clone(),
         manual_gpu_command,
         known_issues_doc: "docs/STATUS.md".to_string(),

@@ -271,7 +271,7 @@ fn release_candidate_gates(
             id: "g23-headless-playground".to_string(),
             area: ReleaseCandidateArea::HeadlessPlayground,
             status: ReleaseCandidateGateStatus::Passed,
-            command: "cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/tests/fixtures/p34 examples/p35/playground_manifest.json".to_string(),
+            command: "cargo run -p alife_tools --bin p34_persistence -- validate-save crates/alife_world/tests/fixtures/p34/tiny_save.json crates/alife_world/tests/fixtures/p34".to_string(),
             evidence: format!(
                 "default_path={} graphics_required={}",
                 !evidence.app.graphics_required_for_default_path,
@@ -386,12 +386,9 @@ fn validate_release_candidate_report(
     let status = std::fs::read_to_string(root.join("docs/STATUS.md"))?;
     let report = format!("{development}\n{status}");
     for required in [
-        "cargo run -p alife_game_app --bin alife_game_app -- release-candidate-smoke",
-        "cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/tests/fixtures/p34 examples/p35/playground_manifest.json",
-        "cargo run -p alife_game_app --bin alife_game_app -- save-load-ux-smoke crates/alife_world/tests/fixtures/p34",
+        "cargo run -p alife_tools --bin p34_persistence -- validate-save crates/alife_world/tests/fixtures/p34/tiny_save.json crates/alife_world/tests/fixtures/p34",
+        "cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets",
         "cargo test -p alife_world --test headless_soak fast_headless_soak_preserves_release_gate_invariants",
-        "cargo run -p alife_game_app --bin alife_game_app -- longrun-balance-smoke",
-        "cargo run -p alife_game_app --bin alife_game_app -- product-qa-smoke",
         "Not ready.",
     ] {
         if !report.contains(required) {

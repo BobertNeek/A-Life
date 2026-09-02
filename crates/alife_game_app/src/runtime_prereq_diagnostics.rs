@@ -5,7 +5,7 @@ use crate::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimePrereqDiagnosticsOptions {
-    pub gpu_mode: GraphicalGpuRuntimeMode,
+    pub gpu_mode: GraphicalBrainPolicyMode,
     pub require_gpu: bool,
     pub graphics_backend: String,
     pub log_path: PathBuf,
@@ -13,7 +13,7 @@ pub struct RuntimePrereqDiagnosticsOptions {
 
 impl RuntimePrereqDiagnosticsOptions {
     pub fn new(
-        gpu_mode: GraphicalGpuRuntimeMode,
+        gpu_mode: GraphicalBrainPolicyMode,
         require_gpu: bool,
         graphics_backend: impl Into<String>,
         log_path: impl Into<PathBuf>,
@@ -42,7 +42,7 @@ impl Default for RuntimePrereqDiagnosticsOptions {
 pub struct RuntimePrereqDiagnosticsSummary {
     pub schema: &'static str,
     pub schema_version: u16,
-    pub requested_gpu_mode: GraphicalGpuRuntimeMode,
+    pub requested_gpu_mode: GraphicalBrainPolicyMode,
     pub requested_backend: String,
     pub selected_backend: String,
     pub unavailable_reason: Option<String>,

@@ -14,7 +14,6 @@ use std::{
 
 use alife_bevy_adapter::BevyEntityMap;
 use alife_core::{OrganismId, Tick, Vec3f, WorldEntityId};
-#[cfg(test)]
 use alife_world::CreatureAppearanceGenome;
 use alife_world::{
     persistence::{CreatureSaveState, GpuRuntimeSaveState, PortableSaveFile},

@@ -250,8 +250,7 @@ pub fn run_platform_package_smoke() -> Result<PlatformPackageSummary, GameAppShe
     let manifest = load_g21_asset_bundle_manifest()?;
     let validation = manifest.validate_with_root(&root)?;
     let docs = std::fs::read_to_string(root.join("docs/DEVELOPMENT.md"))?;
-    if !docs.contains("scripts/run_headless_playground.ps1")
-        || !docs.contains("scripts/run_production_voxel_frontend.ps1")
+    if !docs.contains("scripts/run_production_voxel_frontend.ps1")
         || !docs.contains("scripts/package_windows_production_voxel.ps1")
         || !docs.contains("powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1")
         || docs.contains("bash scripts/check.sh")
@@ -279,23 +278,12 @@ pub fn run_platform_package_smoke() -> Result<PlatformPackageSummary, GameAppShe
 pub fn platform_package_commands() -> Vec<PlatformPackageCommand> {
     vec![
         PlatformPackageCommand {
-            id: "headless-run-script-dry-run".to_string(),
+            id: "portable-save-validation".to_string(),
             kind: PackageSmokeKind::Headless,
             windows_command:
-                "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_headless_playground.ps1 -DryRun"
+                "cargo run -p alife_tools --bin p34_persistence -- validate-save crates/alife_world/tests/fixtures/p34/tiny_save.json crates/alife_world/tests/fixtures/p34"
                     .to_string(),
-            non_windows_command: "./scripts/run_headless_playground.sh --dry-run".to_string(),
-            manual: false,
-            requires_graphics: false,
-            requires_gpu: false,
-        },
-        PlatformPackageCommand {
-            id: "headless-run-script".to_string(),
-            kind: PackageSmokeKind::Headless,
-            windows_command:
-                "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_headless_playground.ps1"
-                    .to_string(),
-            non_windows_command: "./scripts/run_headless_playground.sh".to_string(),
+            non_windows_command: "cargo run -p alife_tools --bin p34_persistence -- validate-save crates/alife_world/tests/fixtures/p34/tiny_save.json crates/alife_world/tests/fixtures/p34".to_string(),
             manual: false,
             requires_graphics: false,
             requires_gpu: false,

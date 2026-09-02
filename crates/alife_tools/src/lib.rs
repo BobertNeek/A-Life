@@ -1,7 +1,6 @@
 //! v0 scaffold: developer tooling contracts.
 
 pub mod benchmark;
-pub mod pass2_ei1_behavioral;
 pub mod creature_part_builder;
 pub mod ei0_exit_gate;
 pub mod era1_evolution;
@@ -16,7 +15,7 @@ pub mod p32_weights;
 pub mod p33_evaluation;
 pub mod p33_evolution;
 pub mod p33_selection;
-pub mod p35_playground;
+pub mod pass2_ei1_behavioral;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ToolingManifest {

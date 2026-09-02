@@ -11,8 +11,6 @@ fn fvr08_production_launcher_uses_finished_feature_stack() {
     let root = workspace_root();
     let launcher =
         std::fs::read_to_string(root.join("scripts/run_production_voxel_frontend.ps1")).unwrap();
-    let legacy_shell =
-        std::fs::read_to_string(root.join("scripts/run_graphical_playground.sh")).unwrap();
 
     assert!(launcher.contains("A-Life Voxel Frontend"));
     assert!(launcher.contains("[string]$Profile = \"MinSpecComfort1080p\""));
@@ -25,9 +23,7 @@ fn fvr08_production_launcher_uses_finished_feature_stack() {
     assert!(!launcher.contains("auto-with-cpu-fallback"));
     assert!(!launcher.contains("gpu-alpha"));
 
-    assert!(legacy_shell.contains("FVR08 compatibility alias"));
-    assert!(legacy_shell.contains("run_production_voxel_frontend.ps1"));
-    assert!(!legacy_shell.contains("MODE_ARGS=(graphical-playground"));
+    assert!(!root.join("scripts/run_graphical_playground.sh").exists());
 }
 
 #[test]
@@ -38,10 +34,6 @@ fn fvr08_windows_production_package_script_is_product_path() {
     let package_runner =
         std::fs::read_to_string(root.join("scripts/run_windows_production_voxel_package.ps1"))
             .unwrap();
-    let legacy_package =
-        std::fs::read_to_string(root.join("scripts/package_windows_alpha.ps1")).unwrap();
-    let legacy_runner =
-        std::fs::read_to_string(root.join("scripts/run_windows_alpha_package.ps1")).unwrap();
 
     assert!(package.contains("A-Life FVR08 Windows production voxel package builder"));
     assert!(package.contains("target/artifacts/fvr08_windows_production"));
@@ -70,8 +62,8 @@ fn fvr08_windows_production_package_script_is_product_path() {
     assert!(package_runner.contains("Pop-Location"));
     assert!(package_runner.contains("Save directory policy: package-local"));
 
-    assert!(legacy_package.contains("Legacy regression package"));
-    assert!(legacy_runner.contains("Legacy GPU Alpha package runner"));
+    assert!(!root.join("scripts/package_windows_alpha.ps1").exists());
+    assert!(!root.join("scripts/run_windows_alpha_package.ps1").exists());
 }
 
 #[test]

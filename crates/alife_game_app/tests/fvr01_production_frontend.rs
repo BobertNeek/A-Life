@@ -240,25 +240,6 @@ fn fvr01_cli_help_names_production_command_and_profiles() {
 }
 
 #[test]
-#[cfg(feature = "gpu-runtime")]
-fn fvr01_legacy_graphical_command_is_alias_not_product_path() {
-    let output = Command::new(env!("CARGO_BIN_EXE_alife_game_app"))
-        .args(["graphical-playground", "--dry-run"])
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "legacy graphical alias failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("legacy_alias=true"));
-    assert!(stdout.contains("routed_to=production-voxel"));
-    assert!(stdout.contains("profile=MinSpecComfort1080p"));
-    assert!(!stdout.contains("requires feature `bevy-app`"));
-}
-
-#[test]
 fn fvr01_windows_scripts_default_to_production_voxel_frontend() {
     let root = workspace_root();
     let production =
@@ -269,9 +250,5 @@ fn fvr01_windows_scripts_default_to_production_voxel_frontend() {
     assert!(production.contains("A-Life Voxel Frontend"));
     assert!(production.contains("-DryRun"));
 
-    let legacy =
-        std::fs::read_to_string(root.join("scripts/run_graphical_playground.ps1")).unwrap();
-    assert!(legacy.contains("FVR01 compatibility alias"));
-    assert!(legacy.contains("run_production_voxel_frontend.ps1"));
-    assert!(!legacy.contains("Starting A-Life GPU Alpha Playground"));
+    assert!(!root.join("scripts/run_graphical_playground.ps1").exists());
 }

@@ -1,0 +1,44 @@
+{
+  "schema": "alife.g20.tutorial_script.v1",
+  "schema_version": 1,
+  "tutorial_id": "g20-food-hazard-sleep-inspection",
+  "title": "Food, hazard, sleep, and inspection first-run path",
+  "manual_graphics_note": "The default tutorial path is headless. Graphics/Bevy demos remain optional/manual.",
+  "steps": [
+    {
+      "id": "run-headless",
+      "title": "Start a deterministic tiny world",
+      "goal": "Confirm the CPU/headless path runs without GPU, Bevy graphics, semantic provider, or school UI.",
+      "command": "cargo run -p alife_tools --bin p35_playground -- run-headless crates/alife_world/tests/fixtures/p34",
+      "expected_signal": "sealed patch and packed log counts are reported"
+    },
+    {
+      "id": "food-hazard-sleep",
+      "title": "Exercise survival outcomes",
+      "goal": "See food reward, missing affordance failure, hazard pain, and rest/sleep as sealed outcomes.",
+      "command": "cargo run -p alife_game_app --bin alife_game_app -- playable-survival-loop-smoke",
+      "expected_signal": "food, hazard, and sleep events appear without unsealed learning"
+    },
+    {
+      "id": "inspect-readonly",
+      "title": "Inspect a stable creature snapshot",
+      "goal": "Use inspector output as read-only context over stable IDs and sealed patch summaries.",
+      "command": "cargo run -p alife_game_app --bin alife_game_app -- creature-inspector-smoke crates/alife_world/tests/fixtures/p34",
+      "expected_signal": "selected creature, action, drives, and troubleshooting messages are reported"
+    },
+    {
+      "id": "balance-report",
+      "title": "Read the balance summary",
+      "goal": "Check first-pass long-run metrics and known degenerate behavior notes.",
+      "command": "cargo run -p alife_game_app --bin alife_game_app -- longrun-balance-smoke",
+      "expected_signal": "survival, energy, food, hazard, sleep, reproduction, and social metrics are reported"
+    },
+    {
+      "id": "validate-assets",
+      "title": "Validate example manifest paths",
+      "goal": "Catch missing or stale files before trying optional demos.",
+      "command": "cargo run -p alife_tools --bin p35_playground -- validate-manifest examples/p35/playground_manifest.json",
+      "expected_signal": "manifest path and manual optional command counts are reported"
+    }
+  ]
+}

@@ -149,12 +149,6 @@ pub use packaging_platform::*;
 mod runtime_prereq_diagnostics;
 pub use runtime_prereq_diagnostics::*;
 
-mod tester_feedback_capture;
-pub use tester_feedback_capture::*;
-
-mod alpha_art_assets;
-pub use alpha_art_assets::*;
-
 mod alpha_tick_stability;
 pub use alpha_tick_stability::*;
 
@@ -163,9 +157,6 @@ pub use product_qa::*;
 
 mod release_candidate;
 pub use release_candidate::*;
-
-mod graphical_playground;
-pub use graphical_playground::*;
 
 mod environment_launcher;
 pub use environment_launcher::*;
@@ -239,38 +230,11 @@ pub use affordance_loop::*;
 mod hazard_recovery_loop;
 pub use hazard_recovery_loop::*;
 
-mod graphical_population;
-pub use graphical_population::*;
-
 mod graphical_ecology;
 pub use graphical_ecology::*;
 
-mod world_art_style;
-pub use world_art_style::*;
-
-mod procedural_world_streaming;
-pub use procedural_world_streaming::*;
-
-mod production_asset_pipeline;
-pub use production_asset_pipeline::*;
-
 mod production_assets;
 pub use production_assets::*;
-
-mod true_25d_assets;
-pub use true_25d_assets::*;
-
-mod creature_animation_style;
-pub use creature_animation_style::*;
-
-mod drive_coupled_audio_vfx;
-pub use drive_coupled_audio_vfx::*;
-
-mod graphical_lifecycle;
-pub use graphical_lifecycle::*;
-
-mod graphical_school;
-pub use graphical_school::*;
 
 mod curriculum_authoring;
 pub use curriculum_authoring::*;
@@ -314,9 +278,6 @@ pub use behavior_comparison_lab::*;
 mod advanced_gameplay_ux;
 pub use advanced_gameplay_ux::*;
 
-mod gpu_graphics_performance;
-pub use gpu_graphics_performance::*;
-
 mod content_tutorial_authoring;
 pub use content_tutorial_authoring::*;
 
@@ -325,9 +286,6 @@ pub use gpu_product_telemetry::*;
 
 mod gpu_authority_telemetry;
 pub use gpu_authority_telemetry::*;
-
-mod graphical_gpu_runtime_controller;
-pub use graphical_gpu_runtime_controller::*;
 
 #[cfg(feature = "gpu-runtime")]
 mod factorized_arbitration;

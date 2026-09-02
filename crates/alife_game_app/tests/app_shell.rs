@@ -5,8 +5,8 @@ use alife_game_app::{
     load_geneforge_creature_part_catalog, resolve_creature_part_display_sources,
     run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, AppShellLaunchConfig,
     DoubleBufferedGraphicalScheduler, GpuBrainAuthorityTelemetry, GraphicalBrainPolicyMode,
-    GraphicalPlaygroundLaunchConfig, LifecycleSaveState, ProductionFrontendProfileId,
-    ProductionVoxelLaunchConfig, RuntimePlaybackState,
+    LifecycleSaveState, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
+    RuntimePlaybackState,
 };
 
 #[test]
@@ -70,10 +70,18 @@ fn headless_smoke_requires_an_explicit_heuristic_baseline() {
 
 #[test]
 fn graphical_product_default_is_gpu_required() {
-    let launch = GraphicalPlaygroundLaunchConfig::interactive(p34_fixture_root());
-    assert_eq!(launch.brain_policy, PolicyBackend::NeuralClosedLoopGpu);
+    let launch = ProductionVoxelLaunchConfig::from_manifest(
+        alife_game_app::default_environment_manifest_path(),
+        None,
+        ProductionFrontendProfileId::MinSpecComfort1080p,
+    )
+    .unwrap();
+    assert_eq!(
+        launch.app_launch.brain_policy,
+        PolicyBackend::NeuralClosedLoopGpu
+    );
     assert_eq!(launch.gpu_mode, GraphicalBrainPolicyMode::GpuRequired);
-    assert!(launch.brain_policy.requires_gpu());
+    assert!(launch.app_launch.brain_policy.requires_gpu());
 }
 
 #[test]

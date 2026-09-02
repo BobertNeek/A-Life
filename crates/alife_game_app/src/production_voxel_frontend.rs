@@ -665,14 +665,13 @@ pub struct ProductionVoxelLaunchConfig {
     pub world_source: ProductionWorldSource,
     pub population: Option<u16>,
     pub resolution: (u32, u32),
-    pub gpu_mode: GraphicalGpuRuntimeMode,
+    pub gpu_mode: GraphicalBrainPolicyMode,
     pub require_gpu: bool,
     pub graphics_backend: String,
     pub smoke_seconds: Option<u32>,
     pub dry_run: bool,
     pub record_performance: bool,
     pub developer_overlay: bool,
-    pub legacy_alias: bool,
     pub ui_settings_path: Option<PathBuf>,
 }
 
@@ -706,7 +705,6 @@ impl ProductionVoxelLaunchConfig {
             dry_run: false,
             record_performance: false,
             developer_overlay: false,
-            legacy_alias: false,
             ui_settings_path: None,
         })
     }
@@ -909,7 +907,6 @@ pub struct ProductionVoxelLaunchSummary {
     pub save_metadata: ProductionSaveMetadata,
     pub real_save_loaded: bool,
     pub mock_data_source: bool,
-    pub legacy_alias: bool,
     pub dry_run: bool,
     pub record_performance: bool,
     pub developer_overlay: bool,
@@ -1235,8 +1232,7 @@ pub fn run_production_voxel_frontend_preflight(
         ProductionWorldSource::NewGame { seed } => {
             validate_exact_canonical_new_game_save(&save, seed, population)?;
             let config = save.config.clone();
-            let gpu_runtime_state =
-                fvr06_gpu_runtime_save_state(launch, &runtime, &config, &save)?;
+            let gpu_runtime_state = fvr06_gpu_runtime_save_state(launch, &runtime, &config, &save)?;
             (config, save, gpu_runtime_state)
         }
     };
@@ -1351,7 +1347,6 @@ pub fn run_production_voxel_frontend_preflight(
         save_metadata,
         real_save_loaded: true,
         mock_data_source: false,
-        legacy_alias: launch.legacy_alias,
         dry_run: launch.dry_run,
         record_performance: launch.record_performance,
         developer_overlay: launch.developer_overlay,
@@ -1406,8 +1401,9 @@ fn validate_exact_canonical_new_game_save(
         || !resident_checkpoints_complete
     {
         return Err(GameAppShellError::InvalidProductionFrontend {
-            message: "canonical New Game exact save failed seed, population, or GPU admission validation"
-                .to_string(),
+            message:
+                "canonical New Game exact save failed seed, population, or GPU admission validation"
+                    .to_string(),
         });
     }
     Ok(())
@@ -1680,7 +1676,6 @@ mod tests {
             dry_run: true,
             record_performance: false,
             developer_overlay: false,
-            legacy_alias: false,
             ui_settings_path: None,
         }
     }

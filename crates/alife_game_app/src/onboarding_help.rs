@@ -156,8 +156,7 @@ pub fn run_onboarding_help_smoke() -> Result<OnboardingHelpSummary, GameAppShell
     let summary = OnboardingHelpSummary {
         schema: G20_ONBOARDING_HELP_SCHEMA,
         schema_version: G20_ONBOARDING_HELP_SCHEMA_VERSION,
-        first_run_command:
-            "cargo run -p alife_tools --bin p35_playground -- run-headless crates/alife_world/tests/fixtures/p34",
+        first_run_command: "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun",
         controls: controls_reference(),
         troubleshooting: troubleshooting_reference(),
         tutorial_script_path: g20_tutorial_script_path(),
@@ -216,19 +215,17 @@ pub fn troubleshooting_reference() -> Vec<TroubleshootingReference> {
         TroubleshootingReference {
             symptom: "GPU unavailable or unvalidated",
             diagnostic: "The playable sim should stop learned actions on typed GPU unavailability and avoid GPU performance claims",
-            command: "cargo run -p alife_tools --bin p35_playground -- gpu-fallback",
+            command: "cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets",
         },
         TroubleshootingReference {
             symptom: "Graphics or Bevy feature unavailable",
             diagnostic: "Use the default headless path; graphics demos are optional/manual",
-            command:
-                "cargo run -p alife_tools --bin p35_playground -- run-headless crates/alife_world/tests/fixtures/p34",
+            command: "cargo run -p alife_tools --bin p34_persistence -- validate-save crates/alife_world/tests/fixtures/p34/tiny_save.json crates/alife_world/tests/fixtures/p34",
         },
         TroubleshootingReference {
             symptom: "Schema mismatch or missing asset",
             diagnostic: "Validate P34 fixtures and the P35 manifest before running demos",
-            command:
-                "cargo run -p alife_tools --bin p35_playground -- validate-manifest examples/p35/playground_manifest.json",
+            command: "cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets",
         },
         TroubleshootingReference {
             symptom: "Windows validation tries WSL",

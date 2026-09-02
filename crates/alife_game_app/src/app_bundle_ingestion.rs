@@ -23,8 +23,6 @@ pub struct AppBundleManifest {
     pub bundle_id: String,
     pub environment_manifest: String,
     pub placeholder_art_manifest: String,
-    pub alpha_art_manifest: String,
-    pub true_25d_asset_manifest: String,
     pub production_voxel_asset_manifest: String,
     pub entries: Vec<AppBundleEntry>,
     pub shader_assets: Vec<ShaderAssetEntry>,
@@ -73,14 +71,6 @@ pub struct AppBundleIngestionSummary {
     pub shader_assets: usize,
     pub discovered_shader_assets: usize,
     pub placeholder_art_entries: usize,
-    pub alpha_art_entries: usize,
-    pub alpha_art_required_roles_present: bool,
-    pub production_alpha_art: bool,
-    pub true_25d_asset_entries: usize,
-    pub true_25d_required_roles_present: bool,
-    pub true_25d_endocrine_feedback_assets: usize,
-    pub true_25d_endocrine_feedback_contract_validated: bool,
-    pub production_true_25d_assets: bool,
     pub production_voxel_asset_entries: usize,
     pub production_voxel_generated_assets: usize,
     pub production_voxel_asset_manifest_validated: bool,
@@ -104,18 +94,11 @@ impl AppBundleIngestionSummary {
             || self.discovered_shader_assets == 0
             || self.shader_assets != self.discovered_shader_assets
             || self.placeholder_art_entries < 4
-            || self.alpha_art_entries < CA44A_REQUIRED_ALPHA_ART_ROLES
-            || !self.alpha_art_required_roles_present
-            || !self.production_alpha_art
-            || self.true_25d_asset_entries < TRUE_25D_ALPHA_MIN_REQUIRED_ROLES
-            || !self.true_25d_required_roles_present
-            || !self.true_25d_endocrine_feedback_contract_validated
-            || !self.production_true_25d_assets
             || self.production_voxel_asset_entries < FVR07_REQUIRED_USAGE_CATEGORIES.len()
             || self.production_voxel_generated_assets == 0
             || !self.production_voxel_asset_manifest_validated
             || self.required_entries == 0
-            || self.largest_file_bytes > CA44A_MAX_ALPHA_ART_BACKDROP_BYTES
+            || self.largest_file_bytes > CA12_MAX_BUNDLE_ASSET_BYTES
             || !self.missing_required_rejected
             || !self.shader_discovery_complete
             || !self.tiny_placeholder_art
@@ -129,17 +112,14 @@ impl AppBundleIngestionSummary {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:entries={}:shaders={}/{}:art={}:true25d={}:production_voxel_assets={}:endocrine={}:largest={}",
+            "{}:{}:{}:entries={}:shaders={}/{}:production_voxel_assets={}:largest={}",
             self.schema,
             self.schema_version,
             self.bundle_id,
             self.config_entries,
             self.shader_assets,
             self.discovered_shader_assets,
-            self.alpha_art_entries,
-            self.true_25d_asset_entries,
             self.production_voxel_asset_entries,
-            self.true_25d_endocrine_feedback_assets,
             self.largest_file_bytes
         )
     }
@@ -210,19 +190,6 @@ fn validate_app_bundle_manifest_inner(
     let placeholder_path = resolve_workspace_path(root, &manifest.placeholder_art_manifest)?;
     let placeholder_art = validate_placeholder_art_manifest(&placeholder_path)?;
     largest_file_bytes = largest_file_bytes.max(tiny_file_size(&placeholder_path)?);
-    let alpha_art_path = resolve_workspace_path(root, &manifest.alpha_art_manifest)?;
-    let alpha_art = validate_alpha_art_manifest_inner(
-        root,
-        &alpha_art_path,
-        &read_json(&alpha_art_path)?,
-        true,
-    )?;
-    largest_file_bytes = largest_file_bytes.max(alpha_art.largest_file_bytes);
-
-    let true_25d_path = resolve_workspace_path(root, &manifest.true_25d_asset_manifest)?;
-    let true_25d =
-        validate_true_25d_asset_manifest_inner(root, &true_25d_path, &read_json(&true_25d_path)?)?;
-    largest_file_bytes = largest_file_bytes.max(true_25d.largest_file_bytes);
 
     let production_voxel_asset_path =
         resolve_workspace_path(root, &manifest.production_voxel_asset_manifest)?;
@@ -295,26 +262,6 @@ fn validate_app_bundle_manifest_inner(
         shader_assets: manifest.shader_assets.len(),
         discovered_shader_assets,
         placeholder_art_entries: placeholder_art.entries.len(),
-        alpha_art_entries: alpha_art.entry_count,
-        alpha_art_required_roles_present: alpha_art.required_roles_present,
-        production_alpha_art: alpha_art.required_roles_present
-            && alpha_art.png_dimensions_validated
-            && alpha_art.largest_file_bytes <= CA44A_MAX_ALPHA_ART_BACKDROP_BYTES
-            && alpha_art.entry_count >= CA44A_REQUIRED_ALPHA_ART_ROLES
-            && alpha_art.pack_id == "alpha-art-v1",
-        true_25d_asset_entries: true_25d.entry_count,
-        true_25d_required_roles_present: true_25d.required_roles_present,
-        true_25d_endocrine_feedback_assets: true_25d.endocrine_feedback_assets,
-        true_25d_endocrine_feedback_contract_validated: true_25d
-            .endocrine_feedback_contract_validated,
-        production_true_25d_assets: true_25d.required_roles_present
-            && true_25d.gltf_files_validated
-            && true_25d.orthographic_camera_locked
-            && true_25d.shader_stack_declared
-            && true_25d.endocrine_feedback_contract_validated
-            && true_25d.no_action_authority
-            && true_25d.largest_file_bytes <= TRUE_25D_ALPHA_MAX_ASSET_BYTES
-            && true_25d.pack_id == "true-25d-alpha-v1",
         production_voxel_asset_entries: production_voxel_assets.asset_count,
         production_voxel_generated_assets: production_voxel_assets.generated_assets,
         production_voxel_asset_manifest_validated: production_voxel_assets
