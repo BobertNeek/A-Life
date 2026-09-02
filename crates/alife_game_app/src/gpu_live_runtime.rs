@@ -4067,21 +4067,17 @@ fn apply_cognitive_work_cost(
     receipt: CognitiveWorkReceipt,
     policy: CognitiveWorkCostPolicy,
 ) -> Result<(), GameAppShellError> {
-    let mut records = world
+    let mut record = world
         .organism_registry()
-        .iter()
+        .get(organism_id)
         .cloned()
-        .collect::<Vec<_>>();
-    let record = records
-        .iter_mut()
-        .find(|record| record.organism_id() == organism_id)
         .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
     record
         .account_cognitive_work(receipt, policy)
         .map_err(|error| GameAppShellError::InvalidProductionFrontend {
             message: error.to_string(),
         })?;
-    world.replace_organism_registry_exact(records)?;
+    world.replace_organism_record_exact(record)?;
     Ok(())
 }
 
@@ -4089,18 +4085,7 @@ fn replace_canonical_organism_record(
     world: &mut HeadlessWorld,
     replacement: WorldOrganismRecord,
 ) -> Result<(), ScaffoldContractError> {
-    let organism_id = replacement.organism_id();
-    let mut records = world
-        .organism_registry()
-        .iter()
-        .cloned()
-        .collect::<Vec<_>>();
-    let record = records
-        .iter_mut()
-        .find(|record| record.organism_id() == organism_id)
-        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-    *record = replacement;
-    world.replace_organism_registry_exact(records)
+    world.replace_organism_record_exact(replacement)
 }
 
 fn seal_prepared_selection_core(

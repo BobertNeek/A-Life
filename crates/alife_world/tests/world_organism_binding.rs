@@ -70,6 +70,26 @@ fn world_with_two_agents_and_food() -> (HeadlessWorld, WorldEntityId, WorldEntit
     (world, agent_a, agent_b, food)
 }
 
+fn world_with_six_agents() -> HeadlessWorld {
+    let mut world = HeadlessScenarioBuilder::new(3_106)
+        .agent("agent-1", OrganismId(1), Vec3f::ZERO)
+        .agent("agent-2", OrganismId(2), Vec3f::new(1.0, 0.0, 0.0))
+        .agent("agent-3", OrganismId(3), Vec3f::new(2.0, 0.0, 0.0))
+        .agent("agent-4", OrganismId(4), Vec3f::new(3.0, 0.0, 0.0))
+        .agent("agent-5", OrganismId(5), Vec3f::new(4.0, 0.0, 0.0))
+        .agent("agent-6", OrganismId(6), Vec3f::new(5.0, 0.0, 0.0))
+        .build()
+        .unwrap();
+    let records = (1..=6)
+        .map(|organism_id| {
+            let world_entity_id = world.entity_id(&format!("agent-{organism_id}")).unwrap();
+            record(organism_id, world_entity_id.raw())
+        })
+        .collect::<Vec<_>>();
+    world.replace_organism_registry_exact(records).unwrap();
+    world
+}
+
 fn registry_receipt(
     world: &HeadlessWorld,
 ) -> Vec<(
@@ -376,6 +396,51 @@ fn replace_registry_accepts_valid_biology_lifecycle_archive_state() {
             death_tick: Tick(1)
         }
     );
+}
+
+#[test]
+fn replace_one_organism_record_is_atomic_and_binding_exact() {
+    let mut world = world_with_six_agents();
+    let organism_id = OrganismId(3);
+    let original = world.organism_registry().get(organism_id).unwrap().clone();
+    let mut replacement = original.clone();
+    replacement
+        .seal_cognitive_subsystems(Tick::ZERO, [1; 4], [2; 4])
+        .unwrap();
+
+    world
+        .replace_organism_record_exact(replacement.clone())
+        .unwrap();
+
+    assert_eq!(world.organism_registry().len(), 6);
+    assert_eq!(
+        world.organism_registry().get(organism_id),
+        Some(&replacement)
+    );
+    assert_eq!(
+        world
+            .organism_registry()
+            .get_by_world_entity_id(replacement.world_entity_id()),
+        Some(&replacement)
+    );
+    let after_valid_replacement = receipt(&world);
+
+    let changed_organism = record(99, replacement.world_entity_id().raw());
+    assert!(world
+        .replace_organism_record_exact(changed_organism)
+        .is_err());
+    assert_unchanged(&world, &after_valid_replacement);
+
+    let changed_world_entity = record(organism_id.raw(), original.world_entity_id().raw() + 1);
+    assert!(world
+        .replace_organism_record_exact(changed_world_entity)
+        .is_err());
+    assert_unchanged(&world, &after_valid_replacement);
+
+    assert!(world
+        .replace_organism_record_exact(malformed_record(replacement))
+        .is_err());
+    assert_unchanged(&world, &after_valid_replacement);
 }
 
 #[test]

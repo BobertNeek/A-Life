@@ -1031,6 +1031,28 @@ impl WorldOrganismRegistry {
         Ok(())
     }
 
+    pub(crate) fn replace_existing_exact(
+        &mut self,
+        replacement: WorldOrganismRecord,
+    ) -> Result<(), OrganismRegistryError> {
+        replacement.validate_contract()?;
+        let organism_id = replacement.organism_id;
+        let world_entity_id = replacement.world_entity_id;
+        let current = self
+            .records_by_organism
+            .get(&organism_id.raw())
+            .ok_or(OrganismRegistryError::UnknownOrganism(organism_id))?;
+        if current.world_entity_id != world_entity_id
+            || self.organism_by_world_entity.get(&world_entity_id.raw()) != Some(&organism_id)
+        {
+            return Err(OrganismRegistryError::IndexMismatch);
+        }
+
+        self.records_by_organism
+            .insert(organism_id.raw(), replacement);
+        Ok(())
+    }
+
     pub fn get(&self, organism_id: OrganismId) -> Option<&WorldOrganismRecord> {
         self.records_by_organism.get(&organism_id.raw())
     }

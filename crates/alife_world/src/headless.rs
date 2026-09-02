@@ -1282,6 +1282,37 @@ impl HeadlessWorld {
         Ok(())
     }
 
+    pub fn replace_organism_record_exact(
+        &mut self,
+        replacement: WorldOrganismRecord,
+    ) -> Result<(), ScaffoldContractError> {
+        replacement.validate_contract()?;
+        let organism_id = replacement.organism_id();
+        let world_entity_id = replacement.world_entity_id();
+        let current = self
+            .organism_registry
+            .get(organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if current.world_entity_id() != world_entity_id {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        let object = self
+            .objects
+            .get(&world_entity_id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if object.id != world_entity_id
+            || object.kind != WorldObjectKind::Agent
+            || object.organism_id != Some(organism_id)
+            || self.labels.get(&object.label) != Some(&world_entity_id)
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+
+        self.organism_registry
+            .replace_existing_exact(replacement)
+            .map_err(map_organism_registry_error)
+    }
+
     fn validate_complete_organism_bindings(&self) -> Result<(), ScaffoldContractError> {
         self.validate_organism_bindings()?;
 
