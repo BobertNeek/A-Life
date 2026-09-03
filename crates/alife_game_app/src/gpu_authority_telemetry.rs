@@ -66,21 +66,31 @@ impl GpuBrainAuthorityTelemetry {
     }
 
     pub fn overlay_text(&self) -> String {
-        let selected = self.selected_candidate.map_or_else(
-            || "pending".to_string(),
-            |candidate| {
-                format!(
-                    "candidate {candidate}  logit {:+.3}",
-                    self.selected_logit.unwrap_or_default()
-                )
-            },
-        );
+        let selected = match (self.selected_candidate, self.selected_logit) {
+            (Some(candidate), Some(logit)) if logit.is_finite() => {
+                format!("candidate {candidate}  logit {logit:+.3}")
+            }
+            (Some(candidate), _) => format!("candidate {candidate}  logit unavailable"),
+            (None, _) => "pending".to_string(),
+        };
+        let authority_status = if self.authoritative {
+            "authoritative"
+        } else if self.unavailable_reason.is_some() {
+            "unavailable"
+        } else {
+            "initializing"
+        };
+        let unavailable = self
+            .unavailable_reason
+            .as_deref()
+            .map_or_else(String::new, |reason| format!("Unavailable: {reason}\n"));
         let checkpoint_tick = self
             .checkpoint_tick
             .map_or_else(|| "pending".to_string(), |tick| tick.to_string());
         format!(
             concat!(
                 "GPU neural: {}\n",
+                "{}",
                 "Adapter: {}\n",
                 "Class: {}\n",
                 "Selected: {}\n\n",
@@ -92,11 +102,8 @@ impl GpuBrainAuthorityTelemetry {
                 "Recovery: {}\n",
                 "Failure policy: stop learned actions"
             ),
-            if self.authoritative {
-                "authoritative"
-            } else {
-                "initializing"
-            },
+            authority_status,
+            unavailable,
             self.adapter,
             self.capacity_class,
             selected,
@@ -106,5 +113,33 @@ impl GpuBrainAuthorityTelemetry {
             self.checkpoint_consolidation_state,
             self.recovery_status,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn overlay_reports_a_terminal_backend_failure_as_unavailable() {
+        let mut telemetry = GpuBrainAuthorityTelemetry::pending("N512");
+        telemetry.unavailable_reason = Some("map callback failed".to_string());
+
+        let overlay = telemetry.overlay_text();
+
+        assert!(overlay.contains("GPU neural: unavailable"));
+        assert!(overlay.contains("map callback failed"));
+        assert!(!overlay.contains("GPU neural: initializing"));
+    }
+
+    #[test]
+    fn overlay_does_not_invent_a_zero_logit_for_a_selected_candidate() {
+        let mut telemetry = GpuBrainAuthorityTelemetry::pending("N512");
+        telemetry.selected_candidate = Some(7);
+
+        let overlay = telemetry.overlay_text();
+
+        assert!(overlay.contains("candidate 7  logit unavailable"));
+        assert!(!overlay.contains("candidate 7  logit +0.000"));
     }
 }
