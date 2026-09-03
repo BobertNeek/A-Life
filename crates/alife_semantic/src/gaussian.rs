@@ -83,12 +83,12 @@ impl EgocentricBinHasher {
             ((distance / grid.max_radius_meters).min(1.0) * grid.radial_bins as f32).floor();
         let radial_bin = (radial as u32).min(u32::from(grid.radial_bins).saturating_sub(1));
 
-        let yaw = offset.y.atan2(offset.x); // [-pi, pi] on the world's X/Y ground plane
+        let yaw = offset.z.atan2(offset.x); // [-pi, pi] on the world's X/Z ground plane
         let normalized_yaw = (yaw + std::f32::consts::PI) / (2.0 * std::f32::consts::PI);
         let azim = (normalized_yaw * grid.azimuth_bins as f32).floor();
         let azimuth_bin = (azim as u32).min(u32::from(grid.azimuth_bins).saturating_sub(1));
 
-        let elevation = (offset.z / distance).clamp(-1.0, 1.0).asin();
+        let elevation = (offset.y / distance).clamp(-1.0, 1.0).asin();
         let normalized_elev = (elevation / std::f32::consts::FRAC_PI_2 + 1.0) * 0.5;
         let elev = (normalized_elev * grid.elevation_bins as f32).floor();
         let elevation_bin = (elev as u32).min(u32::from(grid.elevation_bins).saturating_sub(1));

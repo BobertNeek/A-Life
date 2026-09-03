@@ -138,12 +138,12 @@ fn gaussian_context_conversion_sorts_and_caps() -> Result<(), ScaffoldContractEr
 
 #[cfg(feature = "gaussian-adapter")]
 #[test]
-fn gaussian_bins_distinguish_planar_y_and_ties_keep_nearest_clusters() {
+fn gaussian_bins_distinguish_planar_z_and_ties_keep_nearest_clusters() {
     let hasher = EgocentricBinHasher::new();
     let grid = EgocentricBinGrid::default();
     assert_ne!(
-        hasher.hash(alife_core::Vec3f::new(1.0, 1.0, 0.0), grid),
-        hasher.hash(alife_core::Vec3f::new(1.0, -1.0, 0.0), grid)
+        hasher.hash(alife_core::Vec3f::new(1.0, 0.0, 1.0), grid),
+        hasher.hash(alife_core::Vec3f::new(1.0, 0.0, -1.0), grid)
     );
 
     let context = build_gaussian_context(

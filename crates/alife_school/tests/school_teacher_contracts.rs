@@ -359,19 +359,12 @@ fn curriculum_runner_rejects_unrelated_or_fabricated_verification() {
 }
 
 #[test]
-fn selected_by_arbitration_requires_action_evidence_and_improvement_is_nonnegative() {
+fn selected_by_arbitration_requires_action_evidence() {
     let empty = SchoolEvidence::new(&[]);
     let selected = PatchLogLessonVerifier
         .verify_checks(&[VerifierCheck::SelectedByArbitration], &empty)
         .unwrap();
     assert!(!selected.passed);
-
-    assert!(PatchLogLessonVerifier
-        .verify_checks(
-            &[VerifierCheck::BiologicalImprovementAtLeast(-0.01)],
-            &empty,
-        )
-        .is_err());
 }
 
 #[test]

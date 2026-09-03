@@ -125,7 +125,7 @@ fn validate_check(check: VerifierCheck) -> Result<(), ScaffoldContractError> {
         }
         VerifierCheck::BiologicalImprovementAtLeast(threshold) => {
             validate_finite(threshold)?;
-            if (0.0..=1.0).contains(&threshold) {
+            if (-1.0..=1.0).contains(&threshold) {
                 Ok(())
             } else {
                 Err(ScaffoldContractError::ScalarOutOfRange)

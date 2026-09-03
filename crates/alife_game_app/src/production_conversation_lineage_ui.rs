@@ -128,8 +128,6 @@ struct SpeechTranslationJobCompletion {
 
 struct ActiveSpeechTranslationJob {
     context: SpeechTranslationJobContext,
-    /// Dropping this handle detaches the bounded worker so app shutdown never
-    /// waits for a local-model timeout.
     handle: JoinHandle<SpeechTranslationJobCompletion>,
 }
 
@@ -180,6 +178,14 @@ impl ProductionSpeechTranslationWorker {
                 result: Err("local SLM translation worker panicked".to_string()),
             },
         })
+    }
+}
+
+impl Drop for ProductionSpeechTranslationWorker {
+    fn drop(&mut self) {
+        if let Some(job) = self.active.take() {
+            let _ = job.handle.join();
+        }
     }
 }
 
