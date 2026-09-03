@@ -236,6 +236,79 @@ fn invalid_projection_schema_is_rejected() {
 }
 
 #[test]
+fn malformed_coo_payloads_and_metadata_are_rejected() {
+    let invalid_entry = CooEntry {
+        local_target: MICROTILE_EDGE as u8,
+        local_source: 0,
+        weights: SynapseWeightSplit::zero(),
+    };
+    assert_eq!(
+        CooTile::new(vec![invalid_entry]),
+        Err(ScaffoldContractError::InvalidSparseProjectionSchema)
+    );
+
+    let spec = BrainClassSpec::for_tier(BrainScaleTier::Nano512);
+    let mut schema = NeuralProjectionSchema::empty_for_brain_class(&spec).unwrap();
+    let mut tile = ProjectionTile::new_coo(
+        0,
+        SparseTileCoord::new(0, 0).unwrap(),
+        CooTile::new(vec![
+            CooEntry::new(0, 0, SynapseWeightSplit::zero()).unwrap()
+        ])
+        .unwrap(),
+    );
+    tile.metadata.nonzero_count = 2;
+    schema.projections[0].tiles.push(tile);
+
+    assert_eq!(
+        schema.validate(),
+        Err(ScaffoldContractError::InvalidSparseProjectionSchema)
+    );
+
+    let mut schema = NeuralProjectionSchema::empty_for_brain_class(&spec).unwrap();
+    let mut tile = ProjectionTile::new_coo(
+        0,
+        SparseTileCoord::new(0, 0).unwrap(),
+        CooTile::new(vec![
+            CooEntry::new(0, 0, SynapseWeightSplit::zero()).unwrap()
+        ])
+        .unwrap(),
+    );
+    let SparseTilePayload::Coo(coo) = &mut tile.payload else {
+        unreachable!();
+    };
+    coo.entries[0].weights.alpha = 1.5;
+    schema.projections[0].tiles.push(tile);
+
+    assert_eq!(
+        schema.validate(),
+        Err(ScaffoldContractError::ScalarOutOfRange)
+    );
+}
+
+#[test]
+fn tile_constructors_reject_invalid_weight_splits() {
+    let mut dense_weights = vec![SynapseWeightSplit::zero(); MICROTILE_CELLS];
+    dense_weights[0].alpha = 1.5;
+    assert_eq!(
+        DenseTile::new(dense_weights),
+        Err(ScaffoldContractError::ScalarOutOfRange)
+    );
+
+    assert_eq!(
+        CooTile::new(vec![CooEntry {
+            local_target: 0,
+            local_source: 0,
+            weights: SynapseWeightSplit {
+                h_shadow: f32::INFINITY,
+                ..SynapseWeightSplit::zero()
+            },
+        }]),
+        Err(ScaffoldContractError::NonFiniteFloat)
+    );
+}
+
+#[test]
 fn cpu_state_uses_linear_buffers_not_dense_weight_matrices() {
     let spec = BrainClassSpec::for_tier(BrainScaleTier::Nano512);
     let state = CpuNeuralState::for_brain_class(&spec).unwrap();

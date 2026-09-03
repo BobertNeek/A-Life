@@ -1,4 +1,4 @@
-//! v0 scaffold: CPU sparse neural state and projection oracle, not GPU runtime code.
+//! CPU sparse neural state and projection oracle used to verify GPU behavior.
 
 use std::collections::BTreeMap;
 
@@ -145,6 +145,9 @@ impl DenseTile {
         if weights.len() != MICROTILE_CELLS {
             return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
         }
+        for weights in &weights {
+            validate_weight_split(*weights)?;
+        }
         Ok(Self { weights })
     }
 }
@@ -165,6 +168,7 @@ impl CooEntry {
         if u32::from(local_target) >= MICROTILE_EDGE || u32::from(local_source) >= MICROTILE_EDGE {
             return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
         }
+        validate_weight_split(weights)?;
         Ok(Self {
             local_target,
             local_source,
@@ -180,6 +184,10 @@ pub struct CooTile {
 
 impl CooTile {
     pub fn new(entries: Vec<CooEntry>) -> Result<Self, ScaffoldContractError> {
+        validate_coo_entries(&entries)?;
+        for entry in &entries {
+            validate_weight_split(entry.weights)?;
+        }
         Ok(Self { entries })
     }
 }
@@ -740,7 +748,7 @@ pub fn cpu_spmv_projection(
                 continue;
             }
             report.active_tiles = report.active_tiles.saturating_add(1);
-            for synapse in tile.decode_synapses()? {
+            visit_decoded_synapses_unchecked(tile, |synapse| {
                 report.active_synapses = report.active_synapses.saturating_add(1);
                 let source = synapse.source as usize;
                 let target = synapse.target as usize;
@@ -758,7 +766,8 @@ pub fn cpu_spmv_projection(
                     report.overflow_warnings = report.overflow_warnings.saturating_add(1);
                 }
                 state.accumulators[target] = next;
-            }
+                Ok(())
+            })?;
         }
     }
     state.update_metadata.overflow_events = state
@@ -822,9 +831,9 @@ pub fn update_oja_shadow_traces(
 
     let mut report = NeuralUpdateReport::default();
     for projection in &mut schema.projections {
-        let active_masks = projection.supertile_masks.clone();
+        let active_masks = &projection.supertile_masks;
         for tile in &mut projection.tiles {
-            if !tile_active_from_masks(&active_masks, tile.metadata.coord) {
+            if !tile_active_from_masks(active_masks, tile.metadata.coord) {
                 report.mask_skipped_tiles = report.mask_skipped_tiles.saturating_add(1);
                 continue;
             }
@@ -866,33 +875,80 @@ pub fn update_oja_shadow_traces(
 }
 
 fn decode_tile(tile: &ProjectionTile) -> Result<Vec<DecodedSynapse>, ScaffoldContractError> {
-    match &tile.payload {
-        SparseTilePayload::Dense(dense) => {
-            if tile.metadata.tile_type != SparseTileType::Dense16x16
-                || dense.weights.len() != MICROTILE_CELLS
+    let capacity = match &tile.payload {
+        SparseTilePayload::Dense(_) => MICROTILE_CELLS,
+        SparseTilePayload::Coo(coo) => coo.entries.len(),
+        SparseTilePayload::RowRunUnsupported | SparseTilePayload::ColumnRunUnsupported => 0,
+    };
+    let mut decoded = Vec::with_capacity(capacity);
+    visit_decoded_synapses(tile, |synapse| {
+        decoded.push(synapse);
+        Ok(())
+    })?;
+    Ok(decoded)
+}
+
+fn validate_tile_payload(tile: &ProjectionTile) -> Result<(), ScaffoldContractError> {
+    match (&tile.metadata.tile_type, &tile.payload) {
+        (SparseTileType::Dense16x16, SparseTilePayload::Dense(dense)) => {
+            if dense.weights.len() != MICROTILE_CELLS
+                || usize::from(tile.metadata.nonzero_count) != MICROTILE_CELLS
             {
                 return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
             }
-            let mut decoded = Vec::with_capacity(MICROTILE_CELLS);
+            dense
+                .weights
+                .iter()
+                .try_for_each(|weights| validate_weight_split(*weights))
+        }
+        (SparseTileType::Coo, SparseTilePayload::Coo(coo)) => {
+            if usize::from(tile.metadata.nonzero_count) != coo.entries.len() {
+                return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+            }
+            validate_coo_entries(&coo.entries)?;
+            coo.entries
+                .iter()
+                .try_for_each(|entry| validate_weight_split(entry.weights))
+        }
+        (SparseTileType::RowRun, SparseTilePayload::RowRunUnsupported)
+        | (SparseTileType::ColumnRun, SparseTilePayload::ColumnRunUnsupported)
+            if tile.metadata.nonzero_count == 0 =>
+        {
+            Ok(())
+        }
+        _ => Err(ScaffoldContractError::InvalidSparseProjectionSchema),
+    }
+}
+
+fn visit_decoded_synapses(
+    tile: &ProjectionTile,
+    visit: impl FnMut(DecodedSynapse) -> Result<(), ScaffoldContractError>,
+) -> Result<(), ScaffoldContractError> {
+    validate_tile_payload(tile)?;
+    visit_decoded_synapses_unchecked(tile, visit)
+}
+
+fn visit_decoded_synapses_unchecked(
+    tile: &ProjectionTile,
+    mut visit: impl FnMut(DecodedSynapse) -> Result<(), ScaffoldContractError>,
+) -> Result<(), ScaffoldContractError> {
+    match &tile.payload {
+        SparseTilePayload::Dense(dense) => {
             for (index, weights) in dense.weights.iter().copied().enumerate() {
                 let local_target = (index / MICROTILE_EDGE as usize) as u32;
                 let local_source = (index % MICROTILE_EDGE as usize) as u32;
-                decoded.push(DecodedSynapse {
+                visit(DecodedSynapse {
                     target: checked_local_index(tile.metadata.coord.target_start(), local_target)?,
                     source: checked_local_index(tile.metadata.coord.source_start(), local_source)?,
                     effective_weight: weights.effective_weight()?,
                     weights,
-                });
+                })?;
             }
-            Ok(decoded)
+            Ok(())
         }
         SparseTilePayload::Coo(coo) => {
-            if tile.metadata.tile_type != SparseTileType::Coo {
-                return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
-            }
-            let mut decoded = Vec::with_capacity(coo.entries.len());
             for entry in &coo.entries {
-                decoded.push(DecodedSynapse {
+                visit(DecodedSynapse {
                     target: checked_local_index(
                         tile.metadata.coord.target_start(),
                         u32::from(entry.local_target),
@@ -903,9 +959,9 @@ fn decode_tile(tile: &ProjectionTile) -> Result<Vec<DecodedSynapse>, ScaffoldCon
                     )?,
                     effective_weight: entry.weights.effective_weight()?,
                     weights: entry.weights,
-                });
+                })?;
             }
-            Ok(decoded)
+            Ok(())
         }
         SparseTilePayload::RowRunUnsupported | SparseTilePayload::ColumnRunUnsupported => {
             Err(ScaffoldContractError::UnsupportedSparseTileFormat)
@@ -913,20 +969,35 @@ fn decode_tile(tile: &ProjectionTile) -> Result<Vec<DecodedSynapse>, ScaffoldCon
     }
 }
 
-fn validate_tile_payload(tile: &ProjectionTile) -> Result<(), ScaffoldContractError> {
-    match (&tile.metadata.tile_type, &tile.payload) {
-        (SparseTileType::Dense16x16, SparseTilePayload::Dense(dense)) => {
-            if dense.weights.len() == MICROTILE_CELLS {
-                Ok(())
-            } else {
-                Err(ScaffoldContractError::InvalidSparseProjectionSchema)
-            }
-        }
-        (SparseTileType::Coo, SparseTilePayload::Coo(_)) => Ok(()),
-        (SparseTileType::RowRun, SparseTilePayload::RowRunUnsupported)
-        | (SparseTileType::ColumnRun, SparseTilePayload::ColumnRunUnsupported) => Ok(()),
-        _ => Err(ScaffoldContractError::InvalidSparseProjectionSchema),
+fn validate_coo_entries(entries: &[CooEntry]) -> Result<(), ScaffoldContractError> {
+    if entries.len() > MICROTILE_CELLS {
+        return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
     }
+    let mut occupied = [false; MICROTILE_CELLS];
+    for entry in entries {
+        if u32::from(entry.local_target) >= MICROTILE_EDGE
+            || u32::from(entry.local_source) >= MICROTILE_EDGE
+        {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        let index = usize::from(entry.local_target) * MICROTILE_EDGE as usize
+            + usize::from(entry.local_source);
+        if std::mem::replace(&mut occupied[index], true) {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+    }
+    Ok(())
+}
+
+fn validate_weight_split(weights: SynapseWeightSplit) -> Result<(), ScaffoldContractError> {
+    SynapseWeightSplit::new(
+        weights.genetic_fixed,
+        weights.lifetime_consolidated,
+        weights.alpha,
+        weights.h_operational,
+        weights.h_shadow,
+    )?;
+    Ok(())
 }
 
 fn checked_local_index(start: u32, local: u32) -> Result<u32, ScaffoldContractError> {
