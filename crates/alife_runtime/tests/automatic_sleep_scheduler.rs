@@ -30,6 +30,8 @@ struct OneShotSleepWorkDriver {
     replay_digest: [u64; 4],
 }
 
+struct StaleSleepWorkReceiptDriver;
+
 impl OneShotSleepWorkDriver {
     fn new() -> Self {
         Self {
@@ -154,6 +156,30 @@ impl GpuSleepConsolidationDriver for StructuralBeforePendingDriver {
         self.calls.push("bounded-structural-work");
         self.replay_digest = [11, 12, 13, 14];
         Ok(Some(Self::skipped_receipt(tick)))
+    }
+}
+
+impl GpuSleepConsolidationDriver for StaleSleepWorkReceiptDriver {
+    fn progress(
+        &mut self,
+        _organism_id: OrganismId,
+        _state: SleepState,
+        _intent: Option<ConsolidationIntent>,
+    ) -> Result<Option<ConsolidationDriverEvent>, ScaffoldContractError> {
+        Ok(None)
+    }
+
+    fn run_bounded_sleep_transaction(
+        &mut self,
+        _organism_id: OrganismId,
+        _state: SleepState,
+        _homeostasis: &HomeostaticSnapshot,
+        _tick: Tick,
+        _due_work: SleepWorkDue,
+    ) -> Result<Option<SleepWorkReceipt>, ScaffoldContractError> {
+        Ok(Some(StructuralBeforePendingDriver::skipped_receipt(
+            Tick::ZERO,
+        )))
     }
 }
 
@@ -455,6 +481,35 @@ fn bounded_sleep_sidecars_run_once_before_replay_identity_is_sealed() {
         scheduler.state().consolidation,
         alife_core::ConsolidationState::Prepared { .. }
     ));
+}
+
+#[test]
+fn stale_sleep_work_receipt_is_rejected_before_the_phase_is_sealed() {
+    let config = SleepConsolidationConfig {
+        entering_duration: alife_core::DurationTicks::new(1),
+        ..SleepConsolidationConfig::reference()
+    };
+    let mut scheduler = GpuSleepScheduler::new(config).unwrap();
+    let mut organism = newborn_record(16);
+    let mut driver = StaleSleepWorkReceiptDriver;
+    scheduler.force_recovery_sleep(Tick::ZERO).unwrap();
+    let mut result = Ok(());
+
+    for raw_tick in 1..=64 {
+        if let Err(error) = scheduler.scheduled_tick_with_organism(
+            &mut organism,
+            HomeostaticParameters::reference(),
+            Tick::new(raw_tick),
+            &mut driver,
+            false,
+        ) {
+            result = Err(error);
+            break;
+        }
+    }
+
+    assert_eq!(result, Err(ScaffoldContractError::NonMonotonicTick));
+    assert_eq!(organism.sleep_work_units(), 0);
 }
 
 #[test]

@@ -39,7 +39,6 @@ impl SleepWorkDue {
     const fn insert(&mut self, other: Self) {
         self.0 |= other.0;
     }
-
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -354,15 +353,12 @@ impl GpuSleepScheduler {
         let work_homeostasis =
             Self::homeostasis_for_due_work(homeostasis, self.controller.config());
         let receipt = driver
-            .run_bounded_sleep_transaction(
-                organism_id,
-                state,
-                &work_homeostasis,
-                tick,
-                due_work,
-            )?
+            .run_bounded_sleep_transaction(organism_id, state, &work_homeostasis, tick, due_work)?
             .ok_or(ScaffoldContractError::MissingPhaseData)?;
         receipt.validate_contract()?;
+        if receipt.tick != tick {
+            return Err(ScaffoldContractError::NonMonotonicTick);
+        }
         self.commit_sleep_work(state.active_cycle_id, tick, due_work);
         Ok(receipt.work_units)
     }

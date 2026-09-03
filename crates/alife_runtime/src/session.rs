@@ -2,8 +2,8 @@ use std::ops::{Deref, DerefMut};
 
 use alife_core::{PhenotypeGrowthMigration, ScaffoldContractError, Tick};
 use alife_gpu_backend::{
-    GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuClosedLoopBackend,
-    GpuCuratedResidencyCohort, GpuCuratedResidencyOutcome, GpuResearchGrowthEquivalenceReceipt,
+    GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuClosedLoopBackend, GpuCuratedResidencyCohort,
+    GpuCuratedResidencyOutcome, GpuResearchGrowthEquivalenceReceipt,
     GpuResearchGrowthHandoffOutcome,
 };
 
@@ -110,9 +110,11 @@ impl GpuSessionAuthority {
         &self,
         checkpoint: DurableGpuCheckpointRef,
     ) -> Result<DurableGpuCheckpointMonotonicityPermit, ScaffoldContractError> {
-        if self.latest_durable_checkpoint.as_ref().is_some_and(|current| {
-            checkpoint.checkpoint_tick.raw() < current.checkpoint_tick.raw()
-        }) {
+        if self
+            .latest_durable_checkpoint
+            .as_ref()
+            .is_some_and(|current| checkpoint.checkpoint_tick.raw() < current.checkpoint_tick.raw())
+        {
             return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
         }
         Ok(DurableGpuCheckpointMonotonicityPermit { checkpoint })
@@ -126,7 +128,9 @@ impl GpuSessionAuthority {
     }
 
     pub fn fail_stop(&mut self, cause: GpuSessionFailStopCause) {
-        self.state = GpuSessionAuthorityState::FailedStop { cause };
+        if matches!(&self.state, GpuSessionAuthorityState::Ready) {
+            self.state = GpuSessionAuthorityState::FailedStop { cause };
+        }
     }
 
     pub fn ensure_neural_actions_available(&self) -> Result<(), ScaffoldContractError> {
@@ -180,8 +184,7 @@ impl GpuAuthoritativeSession {
         &self,
         checkpoint: DurableGpuCheckpointRef,
     ) -> Result<DurableGpuCheckpointMonotonicityPermit, ScaffoldContractError> {
-        self.authority
-            .prevalidate_durable_checkpoint(checkpoint)
+        self.authority.prevalidate_durable_checkpoint(checkpoint)
     }
 
     pub fn install_prevalidated_durable_checkpoint(
