@@ -157,13 +157,10 @@ impl MotorRingPresentation {
             proposals,
             ActionArbitrationConfig::default(),
         )?;
-        let mut channels = MotorRingChannelKind::all()
+        let channels = MotorRingChannelKind::all()
             .into_iter()
             .map(|kind| channel_from_kind(kind, proposals, &decision))
             .collect::<Result<Vec<_>, ScaffoldContractError>>()?;
-        for channel in &mut channels {
-            channel.selected = channel.action_id == Some(decision.selected.action_id);
-        }
         let selected_label = channels
             .iter()
             .find(|channel| channel.selected)
@@ -264,12 +261,29 @@ fn channel_from_kind(
     proposals: &[ActionProposal],
     decision: &ActionDecision,
 ) -> Result<MotorRingChannelPresentation, ScaffoldContractError> {
-    let candidate = proposals
+    let ranked_candidate = decision
+        .ranked_top_proposals
         .iter()
-        .copied()
-        .enumerate()
-        .find(|(_, proposal)| channel_kind_for_proposal(*proposal) == kind);
-    let Some((proposal_index, proposal)) = candidate else {
+        .find(|ranked| channel_kind_for_proposal(ranked.proposal) == kind);
+    let candidate = ranked_candidate
+        .map(|ranked| (ranked.proposal_index, ranked.proposal, ranked.final_score))
+        .or_else(|| {
+            proposals
+                .iter()
+                .copied()
+                .enumerate()
+                .find(|(_, proposal)| channel_kind_for_proposal(*proposal) == kind)
+                .map(|(proposal_index, proposal)| {
+                    let final_score = decision
+                        .trace
+                        .inhibition_outputs
+                        .iter()
+                        .find(|sample| sample.proposal_index == proposal_index)
+                        .map_or(proposal.score, |sample| sample.output_score);
+                    (proposal_index, proposal, final_score)
+                })
+        });
+    let Some((proposal_index, proposal, final_score)) = candidate else {
         return Ok(MotorRingChannelPresentation {
             kind,
             action_kind: None,
@@ -282,11 +296,6 @@ fn channel_from_kind(
             suppressed: false,
         });
     };
-    let final_score = decision
-        .ranked_top_proposals
-        .iter()
-        .find(|ranked| ranked.proposal_index == proposal_index)
-        .map_or(proposal.score, |ranked| ranked.final_score);
     let suppressed = decision
         .trace
         .suppressed_proposals
@@ -300,7 +309,7 @@ fn channel_from_kind(
         raw_score: proposal.score,
         final_score,
         confidence: proposal.confidence.raw(),
-        selected: false,
+        selected: decision.trace.wta_result.selected_proposal_index == Some(proposal_index),
         suppressed,
     };
     channel.validate()?;
@@ -329,4 +338,57 @@ fn score_bar(score: f32) -> String {
         "#".repeat(filled),
         ".".repeat(8usize.saturating_sub(filled))
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn channel_uses_the_selected_proposal_when_action_ids_repeat() {
+        let proposals = vec![
+            proposal(
+                HeadlessActionIds::APPROACH,
+                ActionKind::Move,
+                Some(WorldEntityId(2)),
+                None,
+                0.40,
+                0.90,
+                2.0,
+            )
+            .unwrap(),
+            proposal(
+                HeadlessActionIds::APPROACH,
+                ActionKind::Move,
+                Some(WorldEntityId(4)),
+                None,
+                0.90,
+                0.90,
+                1.0,
+            )
+            .unwrap(),
+            proposal(
+                ActionKind::Idle.canonical_id(),
+                ActionKind::Idle,
+                None,
+                None,
+                0.50,
+                0.90,
+                0.0,
+            )
+            .unwrap(),
+        ];
+
+        let ring = MotorRingPresentation::from_proposals(OrganismId(11), &proposals).unwrap();
+        let approach = ring
+            .channels
+            .iter()
+            .find(|channel| channel.kind == MotorRingChannelKind::Approach)
+            .unwrap();
+
+        assert!(approach.selected);
+        assert_eq!(approach.target_entity, Some(WorldEntityId(4)));
+        assert!((approach.final_score - 0.90).abs() < f32::EPSILON);
+        assert!((ring.winner_margin - 0.40).abs() < f32::EPSILON);
+    }
 }

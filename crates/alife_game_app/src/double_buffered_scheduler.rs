@@ -58,6 +58,17 @@ impl DoubleBufferedSchedulerConfig {
                 message: "CA13 scheduler config values must be nonzero",
             });
         }
+        let tick_micros = self.fixed_tick_micros();
+        if tick_micros == 0 || self.max_accumulator_micros < tick_micros {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA13 scheduler accumulator must hold at least one fixed tick",
+            });
+        }
+        if self.max_accumulator_micros / tick_micros > u64::from(u32::MAX) {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA13 scheduler accumulator tick capacity must fit u32",
+            });
+        }
         Ok(())
     }
 
@@ -165,21 +176,20 @@ impl DoubleBufferedGraphicalScheduler {
         let speed = speed_multiplier.clamp(1, S02_MAX_RUN_TICKS_PER_UPDATE);
         let frame_micros = (delta_seconds * 1_000_000.0).round() as u64;
         let added = frame_micros.saturating_mul(speed as u64);
-        self.accumulator_micros = self
-            .accumulator_micros
-            .saturating_add(added)
-            .min(self.config.max_accumulator_micros);
+        let tick_micros = self.config.fixed_tick_micros();
+        let uncapped_accumulator = self.accumulator_micros.saturating_add(added);
+        self.accumulator_micros = uncapped_accumulator.min(self.config.max_accumulator_micros);
+        let total_due = uncapped_accumulator / tick_micros;
 
-        let tick_micros = self.config.fixed_tick_micros().max(1);
         let due = (self.accumulator_micros / tick_micros) as u32;
         let ticks_to_run = due.min(self.config.max_catch_up_ticks_per_frame);
-        let catch_up_capped = due > ticks_to_run;
+        let dropped = total_due.saturating_sub(u64::from(ticks_to_run));
+        let catch_up_capped = dropped > 0;
+        self.catch_up_ticks_dropped = self.catch_up_ticks_dropped.saturating_add(dropped);
         self.accumulator_micros = self
             .accumulator_micros
             .saturating_sub(tick_micros.saturating_mul(ticks_to_run as u64));
         if catch_up_capped {
-            let remaining_due = self.accumulator_micros / tick_micros;
-            self.catch_up_ticks_dropped = self.catch_up_ticks_dropped.saturating_add(remaining_due);
             self.accumulator_micros = tick_micros.saturating_sub(1);
         }
         self.render_alpha_milli =
@@ -269,5 +279,43 @@ impl DoubleBufferedGraphicalScheduler {
             back_buffer: self.back_buffer,
             catch_up_capped,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn long_frame_accounts_for_ticks_discarded_by_accumulator_bound() {
+        let mut scheduler = DoubleBufferedGraphicalScheduler::default();
+
+        let plan = scheduler
+            .observe_render_frame(1.0, RuntimePlaybackState::Running, 1)
+            .unwrap();
+
+        assert_eq!(plan.ticks_to_run, 4);
+        assert!(plan.catch_up_capped);
+        assert_eq!(scheduler.catch_up_ticks_dropped, 16);
+    }
+
+    #[test]
+    fn config_rejects_an_accumulator_shorter_than_one_tick() {
+        let config = DoubleBufferedSchedulerConfig {
+            max_accumulator_micros: 49_999,
+            ..DoubleBufferedSchedulerConfig::default()
+        };
+
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn config_rejects_a_tick_rate_above_microsecond_resolution() {
+        let config = DoubleBufferedSchedulerConfig {
+            fixed_tick_hz: 1_000_001,
+            ..DoubleBufferedSchedulerConfig::default()
+        };
+
+        assert!(config.validate().is_err());
     }
 }

@@ -2,6 +2,36 @@
 
 use super::*;
 
+fn exact_population_capture_failure_error(
+    failure: alife_gpu_backend::GpuExactPopulationCaptureFailureV1,
+) -> GameAppShellError {
+    GameAppShellError::NeuralBackendUnavailable {
+        message: format!(
+            "exact population capture generation {} failed during {:?}",
+            failure.capture_transaction_generation, failure.stage
+        ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exact_capture_failure_keeps_generation_and_stage_context() {
+        let error = exact_population_capture_failure_error(
+            alife_gpu_backend::GpuExactPopulationCaptureFailureV1 {
+                capture_transaction_generation: 73,
+                stage: alife_gpu_backend::GpuExactPopulationCaptureFailureStageV1::MapCallback,
+            },
+        );
+        let message = error.to_string();
+
+        assert!(message.contains("73"));
+        assert!(message.contains("MapCallback"));
+    }
+}
+
 impl GpuLiveBrainRuntime {
     pub(super) fn poll_exact_population_checkpoint(&mut self) -> Result<(), GameAppShellError> {
         let work = std::mem::take(&mut self.exact_checkpoint_work);
@@ -56,12 +86,12 @@ impl GpuLiveBrainRuntime {
                             };
                         Ok(())
                     }
-                    GpuExactPopulationCapturePollV1::Failed(_) => {
+                    GpuExactPopulationCapturePollV1::Failed(failure) => {
                         self.exact_checkpoint_coordinator.fail_stop();
                         self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
                         self.backend
                             .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
-                        Err(ScaffoldContractError::NeuralBackendUnavailable.into())
+                        Err(exact_population_capture_failure_error(failure))
                     }
                     GpuExactPopulationCapturePollV1::Ready(capture) => {
                         if let Err(error) = self
