@@ -6,12 +6,12 @@ use alife_core::{
     ActionCandidate, ActionKind, ActionTarget, BodySnapshot, BrainCapacityClass, BrainGenome,
     CandidateActionFamily, CandidateObservationRef, Confidence, DecisionSnapshot, DevelopmentState,
     DurationTicks, EndocrineDelta, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
-    FoundationPromotionReceipt, FoundationWeightAsset, GroundedObjectSlotV1, HomeostaticDelta,
-    HomeostaticSnapshot, NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionFrame,
-    PhenotypeCompiler, PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome,
-    PreActionSnapshot, ScaffoldContractError, SensorProfile, SensorProfileProvenance,
-    SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence, Tick, TrackedObjectId,
-    Vec3f, Velocity,
+    FoundationPromotionReceipt, FoundationWeightAsset, GenomeId, GenomeSeedSet,
+    GroundedObjectSlotV1, HomeostaticDelta, HomeostaticSnapshot, NeuralActionSelection,
+    NormalizedScalar, OrganismId, PerceptionFrame, PhenotypeCompiler, PhysicalActionOutcome,
+    PhysicalContactKind, Pose, PostActionOutcome, PreActionSnapshot, ScaffoldContractError,
+    SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot,
+    SignedValence, Tick, TrackedObjectId, Vec3f, Velocity,
 };
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile};
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
@@ -167,7 +167,12 @@ pub fn mutate_hardening_genome(
             .wrapping_add(splitmix64(mutation_seed))
             .wrapping_add(mutation_tag(mutation)),
     );
-    let mut child = BrainGenome::scaffold(species_seed, parent.brain_class_id);
+    let seeds = GenomeSeedSet::from_species_seed(species_seed, parent.brain_class_id);
+    let mut child = parent.clone();
+    child.species_seed = species_seed;
+    child.id = GenomeId(seeds.genome_id_seed);
+    child.genetic_prior_seed = seeds.genetic_prior_seed;
+    child.seeds = seeds;
     child.parent_genome_ids = vec![parent.id];
     child.lineage_id = parent.lineage_id;
     match mutation {

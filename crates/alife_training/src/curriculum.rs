@@ -210,6 +210,21 @@ pub struct LanguageStageMetrics {
     pub unseen_surface_transfer: bool,
 }
 
+impl LanguageStageMetrics {
+    fn validate(self) -> Result<(), ScaffoldContractError> {
+        if !self.grounding_accuracy.is_finite()
+            || !(0.0..=1.0).contains(&self.grounding_accuracy)
+            || !self.false_grounding_rate.is_finite()
+            || !(0.0..=1.0).contains(&self.false_grounding_rate)
+            || !self.literal_narration_agreement.is_finite()
+            || !(0.0..=1.0).contains(&self.literal_narration_agreement)
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StageEvaluation {
     episodes: u32,
@@ -237,6 +252,9 @@ impl StageEvaluation {
             || maximum_locked_stage_regression < 0.0
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        if let Some(language) = language {
+            language.validate()?;
         }
         Ok(Self {
             episodes,
@@ -294,7 +312,11 @@ impl Default for StageGatePolicy {
 
 impl StageGatePolicy {
     pub fn validate(self, evaluation: &StageEvaluation) -> Result<(), ScaffoldContractError> {
-        if evaluation.lower_confidence_bound()? < self.minimum_lower_confidence_success
+        if !self.minimum_lower_confidence_success.is_finite()
+            || !(0.0..=1.0).contains(&self.minimum_lower_confidence_success)
+            || !self.maximum_locked_stage_regression.is_finite()
+            || !(0.0..=1.0).contains(&self.maximum_locked_stage_regression)
+            || evaluation.lower_confidence_bound()? < self.minimum_lower_confidence_success
             || evaluation.maximum_locked_stage_regression > self.maximum_locked_stage_regression
             || !evaluation.frozen_weights_bit_identical
         {

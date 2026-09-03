@@ -93,13 +93,12 @@ impl N2048FoundationProgram {
         let weights_before = self.trainer.read_weights()?;
         let mut first_training_loss = None;
         let mut final_training_loss = 0.0;
-        for step in 0..optimizer_steps {
+        for _ in 0..optimizer_steps {
             let sequence = self.curriculum.sequence(
                 self.trainer.phenotype(),
                 stage,
                 CurriculumSplit::Training,
-                seed.wrapping_add(u64::from(self.trainer.optimizer_step()))
-                    .wrapping_add(u64::from(step)),
+                training_sequence_seed(seed, self.trainer.optimizer_step()),
             )?;
             let receipt = self.trainer.train_step(&sequence)?;
             first_training_loss.get_or_insert(receipt.loss_before);
@@ -250,4 +249,20 @@ const fn is_language_stage(stage: FoundationCurriculumStage) -> bool {
             | FoundationCurriculumStage::SelfReporting
             | FoundationCurriculumStage::HeldOutGeneralization
     )
+}
+
+const fn training_sequence_seed(base_seed: u64, optimizer_step: u32) -> u64 {
+    base_seed.wrapping_add(optimizer_step as u64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::training_sequence_seed;
+
+    #[test]
+    fn training_sequence_seed_advances_once_per_optimizer_step() {
+        assert_eq!(training_sequence_seed(100, 0), 100);
+        assert_eq!(training_sequence_seed(100, 1), 101);
+        assert_eq!(training_sequence_seed(100, 2), 102);
+    }
 }

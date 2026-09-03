@@ -467,20 +467,32 @@ impl N2048ActiveBatteryRunner {
             let handle = self.session.insert_brain(organism_id, phenotype)?;
             let challenge_seed = challenge_base_seed
                 .wrapping_add((challenge_index as u64 + 1).wrapping_mul(0x9E37_79B9));
-            let mut world = build_challenge_world(spec.kind, challenge_seed, organism_id)?;
-            prime_challenge_language(spec.kind, &mut world, organism_id)?;
-            let score = run_challenge(
-                &mut self.session,
-                handle,
-                &genome,
-                development.clone(),
-                &mut world,
-                spec,
-                &mut gpu_dispatches,
-                &mut sealed_outcomes,
-                &mut sleep_consolidations,
-            )?;
-            self.session.remove_brain(handle)?;
+            let challenge_result = (|| {
+                let mut world = build_challenge_world(spec.kind, challenge_seed, organism_id)?;
+                prime_challenge_language(spec.kind, &mut world, organism_id)?;
+                run_challenge(
+                    &mut self.session,
+                    handle,
+                    &genome,
+                    development.clone(),
+                    &mut world,
+                    spec,
+                    &mut gpu_dispatches,
+                    &mut sealed_outcomes,
+                    &mut sleep_consolidations,
+                )
+            })();
+            let removal_result = self.session.remove_brain(handle);
+            let score = match challenge_result {
+                Ok(score) => {
+                    removal_result?;
+                    score
+                }
+                Err(error) => {
+                    let _ = removal_result;
+                    return Err(error.into());
+                }
+            };
             receipt.record(spec.kind, score)?;
         }
         receipt.validate_contract()?;
