@@ -294,8 +294,15 @@ pub fn validate_content_pack(
         }
     }
 
+    let mut seen_asset_refs = BTreeSet::new();
     for entry in &manifest.generated_weight_refs {
-        validate_asset_ref(entry, &asset_manifest)?;
+        validate_asset_ref(
+            entry,
+            &asset_manifest,
+            &workspace_root,
+            &asset_root,
+            &mut seen_asset_refs,
+        )?;
         if let Some(path) = required_or_optional_path(
             &workspace_root,
             "generated_weight.relative_path",
@@ -308,7 +315,13 @@ pub fn validate_content_pack(
     }
 
     for entry in &manifest.semantic_assets {
-        validate_asset_ref(entry, &asset_manifest)?;
+        validate_asset_ref(
+            entry,
+            &asset_manifest,
+            &workspace_root,
+            &asset_root,
+            &mut seen_asset_refs,
+        )?;
         if let Some(path) = required_or_optional_path(
             &workspace_root,
             "semantic.relative_path",
@@ -400,6 +413,12 @@ pub fn validate_world_preset(world: &WorldPreset) -> Result<(), ContentAuthoring
         if !labels.insert(object.label.clone()) {
             return invalid("objects.label", "duplicate object label");
         }
+        if matches!(object.kind, WorldObjectPresetKind::Agent) != object.organism_id.is_some() {
+            return invalid(
+                "objects.organism_id",
+                "only agent objects must carry an organism id",
+            );
+        }
         if let Some(organism_id) = object.organism_id {
             OrganismId(organism_id).validate()?;
         }
@@ -408,11 +427,19 @@ pub fn validate_world_preset(world: &WorldPreset) -> Result<(), ContentAuthoring
         validate_unitish_nonnegative("objects.nutrition", object.nutrition, 0.0, 1.0)?;
         validate_unitish_nonnegative("objects.hazard_pain", object.hazard_pain, 0.0, 1.0)?;
     }
+    let mut zone_ids = BTreeSet::new();
+    let mut zone_labels = BTreeSet::new();
     for zone in &world.terrain_zones {
-        if zone.zone_id == 0 {
-            return invalid("terrain_zones.zone_id", "terrain zone id must be nonzero");
+        if zone.zone_id == 0 || !zone_ids.insert(zone.zone_id) {
+            return invalid(
+                "terrain_zones.zone_id",
+                "terrain zone ids must be nonzero and unique",
+            );
         }
         require_nonempty_id("terrain_zones.label", &zone.label)?;
+        if !zone_labels.insert(zone.label.as_str()) {
+            return invalid("terrain_zones.label", "terrain zone labels must be unique");
+        }
         require_nonempty_id("terrain_zones.kind", &zone.kind)?;
         validate_vec3("terrain_zones.center", zone.center)?;
         validate_unitish_nonnegative("terrain_zones.radius", zone.radius, 0.01, 1024.0)?;
@@ -469,14 +496,14 @@ pub fn validate_creature_preset(
         G16_CREATURE_PRESET_SCHEMA_VERSION,
     )?;
     require_nonempty_id("preset_id", &creature.preset_id)?;
-    let organism_id = OrganismId(creature.organism_id).validate()?;
+    OrganismId(creature.organism_id).validate()?;
     let genome_id = GenomeId(creature.genome_id).validate()?;
     BrainClassSpec::for_tier(creature.brain_class).validate()?;
     let mut genome =
         BrainGenome::scaffold(creature.genome_id, creature.brain_class.default_class_id());
     genome.id = genome_id;
     genome.validate_contract()?;
-    if organism_id.raw() == genome_id.raw() && creature.role_tags.is_empty() {
+    if creature.role_tags.is_empty() {
         return invalid("role_tags", "creature preset role tags are required");
     }
     if !creature.inherited_weight_only || creature.lifetime_state_included {
@@ -492,9 +519,13 @@ pub fn validate_creature_preset(
             },
         ));
     }
+    let mut role_tags = BTreeSet::new();
     for tag in &creature.role_tags {
         require_nonempty_id("role_tags", tag)?;
         reject_engine_local_text("role_tags", tag)?;
+        if !role_tags.insert(tag.as_str()) {
+            return invalid("role_tags", "creature preset role tags must be unique");
+        }
     }
     Ok(())
 }
@@ -517,15 +548,35 @@ fn validate_entry(
 fn validate_asset_ref(
     entry: &ContentAssetRef,
     asset_manifest: &AssetManifest,
+    workspace_root: &Path,
+    asset_root: &Path,
+    seen_asset_refs: &mut BTreeSet<String>,
 ) -> Result<(), ContentAuthoringError> {
     require_nonempty_id("asset_ref.asset_id", &entry.asset_id)?;
+    if !seen_asset_refs.insert(entry.asset_id.clone()) {
+        return invalid("asset_ref.asset_id", "duplicate content asset reference");
+    }
     validate_relative_path("asset_ref.relative_path", Path::new(&entry.relative_path))?;
-    if entry.required && !asset_manifest.contains_asset(&entry.asset_id) {
+    let manifest_entry = asset_manifest
+        .entries
+        .iter()
+        .find(|candidate| candidate.asset_id == entry.asset_id);
+    if entry.required && manifest_entry.is_none() {
         return Err(ContentAuthoringError::Persistence(
             PersistenceError::MissingAssetReference {
                 asset_id: entry.asset_id.clone(),
             },
         ));
+    }
+    if let Some(manifest_entry) = manifest_entry {
+        let content_path = workspace_root.join(&entry.relative_path);
+        let manifest_path = asset_root.join(&manifest_entry.relative_path);
+        if content_path != manifest_path {
+            return invalid(
+                "asset_ref.relative_path",
+                "asset reference path does not match its P34 manifest entry",
+            );
+        }
     }
     Ok(())
 }
@@ -582,6 +633,9 @@ fn find_workspace_root(path: &Path) -> Option<PathBuf> {
 }
 
 fn validate_content_file(path: &Path) -> Result<u64, ContentAuthoringError> {
+    if !path.is_file() {
+        return invalid("content_file", "content path must identify a regular file");
+    }
     let bytes = file_size(path)?;
     if bytes > G16_MAX_CONTENT_FILE_BYTES {
         return Err(ContentAuthoringError::OversizedContent {

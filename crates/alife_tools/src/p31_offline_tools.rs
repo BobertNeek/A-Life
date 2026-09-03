@@ -326,6 +326,11 @@ pub fn validate_prototype_table(table: &EtfPrototypeTable) -> Result<(), P31Erro
             "prototype table must contain at least one class".to_string(),
         ));
     }
+    if table.source.trim().is_empty() {
+        return Err(P31Error::InvalidConfig(
+            "prototype source must be nonempty".to_string(),
+        ));
+    }
 
     let allowed_class_ids: HashSet<_> = fixed_affordance_classes()
         .iter()
@@ -336,13 +341,25 @@ pub fn validate_prototype_table(table: &EtfPrototypeTable) -> Result<(), P31Erro
     let mut class_count_map = HashSet::new();
     let mut centroid = vec![0.0f32; table.embedding_dimension];
     for class in &table.classes {
-        if !allowed_class_ids.contains(&class.class_id) {
+        let Some(canonical_class) = fixed_affordance_classes()
+            .iter()
+            .find(|entry| entry.class_id == class.class_id)
+        else {
             return Err(P31Error::InvalidConfig(format!(
                 "unexpected fixed class_id {}",
                 class.class_id
             )));
+        };
+        if !allowed_class_ids.contains(&class.class_id)
+            || class.class_key != canonical_class.class_key
+            || class.class_affordance_bit != canonical_class.affordance_bit
+        {
+            return Err(P31Error::InvalidConfig(format!(
+                "class {} identity does not match the fixed affordance registry",
+                class.class_id
+            )));
         }
-        if !class.class_key.is_empty() && !class_keys.insert(class.class_key.clone()) {
+        if !class_keys.insert(class.class_key.clone()) {
             return Err(P31Error::InvalidConfig(format!(
                 "duplicate class_key {}",
                 class.class_key
@@ -396,6 +413,20 @@ pub fn validate_prototype_table(table: &EtfPrototypeTable) -> Result<(), P31Erro
                 )));
             }
         }
+        let expected_dot = -1.0 / (table.classes.len() - 1) as f32;
+        for left in 0..table.classes.len() {
+            for right in (left + 1)..table.classes.len() {
+                let observed = dot(
+                    &table.classes[left].mean_embedding,
+                    &table.classes[right].mean_embedding,
+                );
+                if (observed - expected_dot).abs() > P31_UNIT_NORM_EPSILON {
+                    return Err(P31Error::InvalidConfig(format!(
+                        "prototype pair {left}/{right} is not simplex-equidistant"
+                    )));
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -411,6 +442,15 @@ pub fn write_lobe_asset_bundle(
     path: &Path,
     bundle: &SensoryLobePrototypeAssetBundle,
 ) -> Result<(), P31Error> {
+    if bundle.schema != P31_LOBE_ASSET_SCHEMA
+        || bundle.schema_version != P31_LOBE_ASSET_SCHEMA_VERSION
+        || bundle.generated_for.trim().is_empty()
+    {
+        return Err(P31Error::InvalidConfig(
+            "sensory lobe asset header is invalid".to_string(),
+        ));
+    }
+    validate_prototype_table(&bundle.prototype_table)?;
     let text = to_json(path, bundle)?;
     write_json_file(path, &text)?;
     Ok(())
@@ -565,11 +605,12 @@ pub fn analyze_activation_records(
         None
     };
 
+    let analyzed_sample_count = class_samples.values().map(Vec::len).sum();
     let drift = drift_over_time(records, &class_samples)?;
     Ok(NeuralCollapseSummary {
         schema: P31_NC_REPORT_SCHEMA.to_string(),
         schema_version: P31_NC_REPORT_SCHEMA_VERSION,
-        sample_count: records.len(),
+        sample_count: analyzed_sample_count,
         class_count: prototypes.classes.len(),
         class_mean_alignment,
         class_variance,
@@ -633,13 +674,16 @@ fn between_class_simplex_metric(
 
 fn drift_over_time(
     records: &[TraceActivationRecord],
-    _by_class: &HashMap<u16, Vec<Vec<f32>>>,
+    by_class: &HashMap<u16, Vec<Vec<f32>>>,
 ) -> Result<Option<DriftSeries>, P31Error> {
     if records.len() < 2 {
         return Ok(None);
     }
     let mut per_step: BTreeMap<u64, HashMap<u16, Vec<Vec<f32>>>> = BTreeMap::new();
-    for record in records {
+    for record in records
+        .iter()
+        .filter(|record| by_class.contains_key(&record.class_id))
+    {
         per_step
             .entry(record.step)
             .or_default()
@@ -807,7 +851,7 @@ fn resolve_class_id(
     class_count: usize,
 ) -> u16 {
     if let Some(class_id) = class_id {
-        return class_id % class_count as u16;
+        return class_id;
     }
     if let Some(class_name) = class_name {
         if let Some(class_id) = fixed_class_id_from_key(class_name) {
@@ -1076,7 +1120,7 @@ pub fn analyze_trace_file(
         .into_iter()
         .map(|record| TraceActivationRecord {
             step: record.step,
-            class_id: record.class_id % fixed_affordance_classes().len() as u16,
+            class_id: record.class_id,
             activation: resize_and_normalize_activation(
                 record.activation,
                 prototypes.embedding_dimension,
@@ -1187,9 +1231,12 @@ fn splitmix64(mut value: u64) -> u64 {
 }
 
 fn is_supported_trace_schema(schema: &str) -> bool {
-    P31_SUPPORTED_TRACE_SCHEMA_PREFIXES
-        .iter()
-        .any(|prefix| schema.starts_with(prefix))
+    P31_SUPPORTED_TRACE_SCHEMA_PREFIXES.iter().any(|&prefix| {
+        schema == prefix
+            || schema
+                .strip_prefix(prefix)
+                .is_some_and(|rest| rest.starts_with('.'))
+    })
 }
 
 fn read_text(path: &Path) -> Result<String, P31Error> {
@@ -1369,5 +1416,58 @@ mod tests {
         assert!(!summary.class_mean_alignment.is_empty());
         assert!(summary.between_class_simplex.is_none());
         assert!(summary.drift.is_none());
+    }
+
+    #[test]
+    fn prototype_validation_binds_fixed_class_identity_and_geometry() {
+        let table = generate_simplex_etf_prototypes(EtfGeneratorConfig {
+            class_count: 3,
+            embedding_dimension: 6,
+            source: "tests",
+        })
+        .unwrap();
+
+        let mut renamed = table.clone();
+        renamed.classes[0].class_key = "hazard".to_string();
+        assert!(validate_prototype_table(&renamed).is_err());
+
+        let mut distorted = table;
+        distorted.classes[0].mean_embedding.swap(0, 3);
+        assert!(validate_prototype_table(&distorted).is_err());
+    }
+
+    #[test]
+    fn invalid_explicit_class_ids_are_not_remapped_into_valid_evidence() {
+        let table = generate_simplex_etf_prototypes(EtfGeneratorConfig {
+            class_count: 3,
+            embedding_dimension: 6,
+            source: "tests",
+        })
+        .unwrap();
+        let records = vec![
+            TraceActivationRecord {
+                step: 0,
+                class_id: 99,
+                activation: deterministic_unit_vector(1, 6),
+            },
+            TraceActivationRecord {
+                step: 0,
+                class_id: 0,
+                activation: deterministic_unit_vector(2, 6),
+            },
+        ];
+
+        let summary = analyze_activation_records(&records, &table).unwrap();
+        assert_eq!(summary.sample_count, 1);
+        assert!(summary
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("class_id 99")));
+    }
+
+    #[test]
+    fn trace_schema_prefix_requires_a_namespace_boundary() {
+        assert!(is_supported_trace_schema("alife.p18.trace.v1"));
+        assert!(!is_supported_trace_schema("alife.p180.fake"));
     }
 }

@@ -77,6 +77,9 @@ impl TryFrom<PackedLogBundleRecord> for PackedExperienceRecord {
     fn try_from(value: PackedLogBundleRecord) -> Result<Self, Self::Error> {
         let frame = value.frame;
         frame.validate_contract()?;
+        frame
+            .side_buffer_spans
+            .validate_against_len(value.side_buffers.len())?;
         Ok(Self {
             frame,
             side_buffers: PackedSideBuffers::from_records(value.side_buffers)?,
@@ -142,6 +145,7 @@ impl PackedLogBundle {
     }
 
     pub fn to_json_file(&self, path: impl AsRef<Path>) -> Result<(), PackedLogBundleError> {
+        self.validate()?;
         let text = serde_json::to_string_pretty(self)?;
         fs::write(path, text)?;
         Ok(())
@@ -390,5 +394,22 @@ mod tests {
         let err = PackedLogBundle::from_json_file(&path).unwrap_err();
         assert!(matches!(err, super::PackedLogBundleError::Validation(_)));
         std::fs::remove_file(path).expect("cleanup");
+    }
+
+    #[test]
+    fn writer_rejects_invalid_bundle_instead_of_publishing_it() {
+        let mut bundle = PackedLogBundle::from_records(vec![], BundleConfig::default());
+        bundle.schema_version = 0;
+        let path = packed_records_file_path("invalid_writer");
+        let error = bundle.to_json_file(&path).unwrap_err();
+        assert!(matches!(error, PackedLogBundleError::Validation(_)));
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn record_conversion_rejects_spans_past_the_side_buffer() {
+        let mut record = valid_record();
+        record.frame.side_buffer_spans.visible_entities.count = 1;
+        assert!(alife_core::PackedExperienceRecord::try_from(record).is_err());
     }
 }

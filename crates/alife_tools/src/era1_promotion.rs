@@ -713,10 +713,7 @@ impl CausalEvidenceBundleWriter {
         self.encoder.flush()?;
         let file = self.encoder.finish()?;
         file.sync_all()?;
-        if self.final_path.is_file() {
-            fs::remove_file(&self.final_path)?;
-        }
-        fs::rename(&self.temp_path, &self.final_path)?;
+        crate::atomic_write::replace(&self.temp_path, &self.final_path)?;
         let evidence_count = u32::try_from(self.receipts.len())
             .map_err(|_| Era1CommittedReportError::Evidence("causal evidence count overflow"))?;
         let bundle = Era1CausalEvidenceBundle {
@@ -853,7 +850,7 @@ pub fn run_era1_promotion_and_write(
         .to_string_lossy()
         .replace('\\', "/");
     let report = generate_era1_promotion_report(bundle_path, bundle_relative_path)?;
-    fs::write(absolute_output, serde_json::to_vec_pretty(&report)?)?;
+    crate::atomic_write::write(absolute_output, &serde_json::to_vec_pretty(&report)?)?;
     Ok(report)
 }
 

@@ -89,7 +89,9 @@ pub fn deterministic_kmeans(
         .take(cluster_count)
         .map(feature_vector)
         .collect::<Vec<_>>();
-    let mut assignments = vec![0usize; records.len()];
+    // A sentinel forces a complete first assignment pass. Starting every row in
+    // cluster zero can otherwise make the first pass look converged.
+    let mut assignments = vec![usize::MAX; records.len()];
 
     for _ in 0..config.iterations.max(1) {
         let mut changed = false;
@@ -116,8 +118,15 @@ pub fn deterministic_kmeans(
         }
 
         for cluster in 0..cluster_count {
-            let next = sums[cluster].average();
+            // An empty cluster has no new evidence. Retain its deterministic
+            // seed instead of inventing a zero-vector centroid.
+            let next = if sums[cluster].count == 0 {
+                centroids[cluster]
+            } else {
+                sums[cluster].average()
+            };
             if next != centroids[cluster] {
+                changed = true;
                 centroids[cluster] = next;
             }
         }
@@ -263,5 +272,22 @@ mod tests {
         assert_eq!(summary.assignments.len(), 0);
         assert_eq!(summary.centroids.len(), 0);
         assert_eq!(summary.counts.len(), 0);
+    }
+
+    #[test]
+    fn empty_clusters_keep_their_seed_centroid() {
+        let duplicate = make_record(0.4, 0.3, 0.2, 0.1);
+        let distinct = make_record(0.9, 0.8, 0.7, 0.6);
+        let summary = deterministic_kmeans(
+            &[duplicate.clone(), duplicate, distinct],
+            ClusterConfig {
+                k: 3,
+                iterations: 8,
+            },
+        );
+
+        assert_eq!(summary.centroids[1], [0.4, 0.3, 0.2, 0.1]);
+        assert_ne!(summary.centroids[1], [0.0; 4]);
+        assert_eq!(summary.counts.iter().sum::<usize>(), 3);
     }
 }

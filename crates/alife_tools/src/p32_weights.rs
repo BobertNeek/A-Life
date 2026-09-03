@@ -43,6 +43,10 @@ pub enum GeneratedWeightAssetError {
     InvalidLobeBoundary,
     #[error("asset contains duplicate synapse entries")]
     DuplicateSynapse,
+    #[error("asset contains duplicate alpha overrides")]
+    DuplicateAlphaOverride,
+    #[error("asset metadata is inconsistent")]
+    InvalidMetadata,
     #[error("asset contract failed: {0}")]
     Contract(#[from] ScaffoldContractError),
     #[error("failed to read or write generated weight asset: {0}")]
@@ -224,6 +228,7 @@ impl GeneratedInitialWeightAsset {
         let mut rng = DeterministicGenerator::new(seed ^ template.stable_salt());
         let target_entries = procedural_entry_count(spec, template);
         let mut entries = Vec::with_capacity(target_entries as usize);
+        let mut generated = BTreeSet::new();
 
         while entries.len() < target_entries as usize {
             for projection in &schema.projections {
@@ -234,15 +239,20 @@ impl GeneratedInitialWeightAsset {
                     projection.source_range.start + rng.next_bounded(projection.source_range.len);
                 let target =
                     projection.target_range.start + rng.next_bounded(projection.target_range.len);
-                let source = align_to_lobe_index(source, projection.source_range.start);
-                let target = align_to_lobe_index(target, projection.target_range.start);
                 let weight = template_weight(template, &mut rng);
-                entries.push(GeneratedSynapseWeight {
+                let candidate = GeneratedSynapseWeight {
                     projection_index: projection.projection_index,
                     source,
                     target,
                     genetic_fixed: weight,
-                });
+                };
+                if generated.insert((
+                    candidate.projection_index,
+                    candidate.source,
+                    candidate.target,
+                )) {
+                    entries.push(candidate);
+                }
             }
         }
 
@@ -371,8 +381,23 @@ impl GeneratedInitialWeightAsset {
         {
             return Err(GeneratedWeightAssetError::BrainClassMismatch);
         }
-        if self.lobe_layout.hash != lobe_layout_digest(spec).hash {
+        if self.lobe_layout != lobe_layout_digest(spec) {
             return Err(GeneratedWeightAssetError::LobeLayoutHashMismatch);
+        }
+        if self.w_genetic_fixed.encoding != "sparse_coo_f32_genetic_fixed_only"
+            || self.alpha_mask.storage_policy != "hierarchical_sparse_with_synapse_overrides"
+            || self.provenance.seed == 0
+            || self.provenance.generator_name.trim().is_empty()
+            || self.provenance.generator_version.trim().is_empty()
+            || self.provenance.external_hook.as_ref().is_some_and(|hook| {
+                hook.hook_schema_version != 1
+                    || hook.command_hint.trim().is_empty()
+                    || hook.expected_input_contract.trim().is_empty()
+                    || hook.expected_output_schema != P32_INITIAL_WEIGHT_ASSET_SCHEMA
+                    || hook.python_or_ml_required_by_rust_runtime
+            })
+        {
+            return Err(GeneratedWeightAssetError::InvalidMetadata);
         }
         if !self.split.genetic_fixed_payload_present
             || self.split.lifetime_consolidated_payload_present
@@ -426,7 +451,8 @@ impl GeneratedInitialWeightAsset {
         let mut grouped: BTreeMap<(u32, u32, u32), Vec<CooEntry>> = BTreeMap::new();
         for entry in &self.w_genetic_fixed.entries {
             let coord = SparseTileCoord::from_neuron_indices(entry.target, entry.source)?;
-            let alpha = self.alpha_for_synapse(entry.source, entry.target)?;
+            let alpha =
+                self.alpha_for_synapse(entry.projection_index, entry.source, entry.target)?;
             let weights = SynapseWeightSplit::new(entry.genetic_fixed, 0.0, alpha, 0.0, 0.0)?;
             grouped
                 .entry((
@@ -510,6 +536,7 @@ impl GeneratedInitialWeightAsset {
 
     fn alpha_for_synapse(
         &self,
+        projection_index: u32,
         source: u32,
         target: u32,
     ) -> Result<f32, GeneratedWeightAssetError> {
@@ -518,6 +545,16 @@ impl GeneratedInitialWeightAsset {
                 NormalizedScalar::new(override_alpha.alpha)?;
                 return Ok(override_alpha.alpha);
             }
+        }
+        let microtile_row = target / MICROTILE_EDGE;
+        let microtile_col = source / MICROTILE_EDGE;
+        if let Some(tile) = self.alpha_mask.tile_overrides.iter().find(|tile| {
+            tile.projection_index == projection_index
+                && tile.microtile_row == microtile_row
+                && tile.microtile_col == microtile_col
+        }) {
+            NormalizedScalar::new(tile.alpha)?;
+            return Ok(tile.alpha);
         }
         NormalizedScalar::new(self.alpha_mask.default_alpha)?;
         Ok(self.alpha_mask.default_alpha)
@@ -592,13 +629,21 @@ fn validate_density(
     validate_finite(asset.density.density_ratio)?;
     let active_synapses = asset.w_genetic_fixed.entries.len() as u32;
     let active_tiles = count_active_microtiles(&asset.w_genetic_fixed.entries);
+    let active_supertiles = count_active_supertyles(&asset.w_genetic_fixed.entries);
+    let expected_density = if spec.max_active_synapses == 0 {
+        0.0
+    } else {
+        active_synapses as f32 / spec.max_active_synapses as f32
+    };
     if asset.density.active_synapses != active_synapses
         || asset.density.active_microtiles != active_tiles
         || asset.density.max_active_synapses != spec.max_active_synapses
         || asset.density.max_active_microtiles != spec.max_active_microtiles
+        || asset.density.active_supertiles != active_supertiles
         || active_synapses > spec.max_active_synapses
         || active_tiles > spec.max_active_microtiles
         || !(0.0..=1.0).contains(&asset.density.density_ratio)
+        || asset.density.density_ratio.to_bits() != expected_density.to_bits()
     {
         return Err(GeneratedWeightAssetError::DensityMetadataMismatch);
     }
@@ -609,11 +654,23 @@ fn validate_alpha_payload(
     alpha: &GeneratedAlphaMaskPayload,
 ) -> Result<(), GeneratedWeightAssetError> {
     NormalizedScalar::new(alpha.default_alpha)?;
+    let mut tile_keys = BTreeSet::new();
     for entry in &alpha.tile_overrides {
         NormalizedScalar::new(entry.alpha)?;
+        if !tile_keys.insert((
+            entry.projection_index,
+            entry.microtile_row,
+            entry.microtile_col,
+        )) {
+            return Err(GeneratedWeightAssetError::DuplicateAlphaOverride);
+        }
     }
+    let mut synapse_keys = BTreeSet::new();
     for entry in &alpha.synapse_overrides {
         NormalizedScalar::new(entry.alpha)?;
+        if !synapse_keys.insert((entry.source, entry.target)) {
+            return Err(GeneratedWeightAssetError::DuplicateAlphaOverride);
+        }
     }
     Ok(())
 }
@@ -647,6 +704,41 @@ fn validate_entries(
             || entry.source >= projection.source_range.start + projection.source_range.len
             || entry.target < projection.target_range.start
             || entry.target >= projection.target_range.start + projection.target_range.len
+        {
+            return Err(GeneratedWeightAssetError::InvalidLobeBoundary);
+        }
+    }
+    let entry_coordinates = asset
+        .w_genetic_fixed
+        .entries
+        .iter()
+        .map(|entry| (entry.source, entry.target))
+        .collect::<BTreeSet<_>>();
+    if asset
+        .alpha_mask
+        .synapse_overrides
+        .iter()
+        .any(|entry| !entry_coordinates.contains(&(entry.source, entry.target)))
+    {
+        return Err(GeneratedWeightAssetError::InvalidLobeBoundary);
+    }
+    for tile in &asset.alpha_mask.tile_overrides {
+        let projection = schema
+            .projections
+            .get(tile.projection_index as usize)
+            .ok_or(GeneratedWeightAssetError::InvalidLobeBoundary)?;
+        let target = tile
+            .microtile_row
+            .checked_mul(MICROTILE_EDGE)
+            .ok_or(GeneratedWeightAssetError::InvalidLobeBoundary)?;
+        let source = tile
+            .microtile_col
+            .checked_mul(MICROTILE_EDGE)
+            .ok_or(GeneratedWeightAssetError::InvalidLobeBoundary)?;
+        if source < projection.source_range.start
+            || source >= projection.source_range.start + projection.source_range.len
+            || target < projection.target_range.start
+            || target >= projection.target_range.start + projection.target_range.len
         {
             return Err(GeneratedWeightAssetError::InvalidLobeBoundary);
         }
@@ -702,10 +794,6 @@ fn template_weight(template: GeneratedWeightTemplate, rng: &mut DeterministicGen
         GeneratedWeightTemplate::LanguageBiasedLexicon => raw + 0.075,
         GeneratedWeightTemplate::NeutralControl => raw * 0.5,
     }
-}
-
-fn align_to_lobe_index(value: u32, lobe_start: u32) -> u32 {
-    lobe_start + (value - lobe_start)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -792,8 +880,8 @@ impl StableHasher {
 #[cfg(test)]
 mod tests {
     use super::{
-        GeneratedInitialWeightAsset, GeneratedWeightAssetError, GeneratedWeightProvenanceKind,
-        GeneratedWeightTemplate,
+        GeneratedInitialWeightAsset, GeneratedTileAlpha, GeneratedWeightAssetError,
+        GeneratedWeightProvenanceKind, GeneratedWeightTemplate,
     };
     use alife_core::{BrainClassSpec, BrainScaleTier};
 
@@ -868,6 +956,63 @@ mod tests {
             asset.validate_against_spec(&spec),
             Err(GeneratedWeightAssetError::DensityMetadataMismatch)
         ));
+    }
+
+    #[test]
+    fn derived_density_and_lobe_metadata_must_match_the_payload() {
+        let spec = BrainClassSpec::for_tier(BrainScaleTier::Nano512);
+        let mut asset = GeneratedInitialWeightAsset::procedural_fallback(
+            &spec,
+            GeneratedWeightTemplate::SurvivalBaseline,
+            56,
+        )
+        .unwrap();
+        asset.density.active_supertiles += 1;
+        asset.validation_digest = super::compute_validation_digest(&asset);
+        assert!(matches!(
+            asset.validate_against_spec(&spec),
+            Err(GeneratedWeightAssetError::DensityMetadataMismatch)
+        ));
+
+        let mut asset = GeneratedInitialWeightAsset::procedural_fallback(
+            &spec,
+            GeneratedWeightTemplate::SurvivalBaseline,
+            56,
+        )
+        .unwrap();
+        asset.lobe_layout.ranges[0].len -= 1;
+        asset.validation_digest = super::compute_validation_digest(&asset);
+        assert!(matches!(
+            asset.validate_against_spec(&spec),
+            Err(GeneratedWeightAssetError::LobeLayoutHashMismatch)
+        ));
+    }
+
+    #[test]
+    fn tile_alpha_override_is_applied_when_no_synapse_override_exists() {
+        let spec = BrainClassSpec::for_tier(BrainScaleTier::Nano512);
+        let mut asset = GeneratedInitialWeightAsset::procedural_fallback(
+            &spec,
+            GeneratedWeightTemplate::NeutralControl,
+            57,
+        )
+        .unwrap();
+        let entry = asset.w_genetic_fixed.entries[0];
+        asset.alpha_mask.synapse_overrides.clear();
+        asset.alpha_mask.tile_overrides.push(GeneratedTileAlpha {
+            projection_index: entry.projection_index,
+            microtile_row: entry.target / alife_core::MICROTILE_EDGE,
+            microtile_col: entry.source / alife_core::MICROTILE_EDGE,
+            alpha: 0.9,
+        });
+        asset.validation_digest = super::compute_validation_digest(&asset);
+        asset.validate_against_spec(&spec).unwrap();
+        assert_eq!(
+            asset
+                .alpha_for_synapse(entry.projection_index, entry.source, entry.target)
+                .unwrap(),
+            0.9
+        );
     }
 
     #[test]

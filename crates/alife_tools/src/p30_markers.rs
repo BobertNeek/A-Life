@@ -241,7 +241,7 @@ fn parse_benchmark_table_row(line: &str) -> Option<Result<BenchmarkMarker, Strin
     };
 
     Some((|| -> Result<BenchmarkMarker, String> {
-        Ok(BenchmarkMarker {
+        let marker = BenchmarkMarker {
             source_path: PathBuf::from(""),
             population: parse_u16(columns[0])?,
             manual_expected_slow: parse_bool(columns[2])?,
@@ -249,7 +249,18 @@ fn parse_benchmark_table_row(line: &str) -> Option<Result<BenchmarkMarker, Strin
             patches_per_second: parse_f64(columns[4])?,
             memory_bytes: parse_u64(columns[5])?,
             success_rate: parse_f64(columns[6])?,
-        })
+        };
+        if marker.population == 0
+            || !marker.tick_time_ms.is_finite()
+            || marker.tick_time_ms < 0.0
+            || !marker.patches_per_second.is_finite()
+            || marker.patches_per_second < 0.0
+            || !marker.success_rate.is_finite()
+            || !(0.0..=1.0).contains(&marker.success_rate)
+        {
+            return Err("benchmark metrics must be finite, nonnegative, and bounded".to_string());
+        }
+        Ok(marker)
     })())
 }
 
@@ -367,5 +378,19 @@ mod tests {
         );
         assert_eq!(markers[0].success_rate, 1.0);
         assert_eq!(markers[0].patches_per_second, 10.0);
+    }
+
+    #[test]
+    fn benchmark_rows_reject_nonfinite_or_out_of_range_metrics() {
+        for row in [
+            "| 1 | Nano512 | false | NaN | 10.0 | 2048 | 1.0 |",
+            "| 1 | Nano512 | false | 4.2 | -1.0 | 2048 | 1.0 |",
+            "| 1 | Nano512 | false | 4.2 | 10.0 | 2048 | 1.1 |",
+            "| 0 | Nano512 | false | 4.2 | 10.0 | 2048 | 1.0 |",
+        ] {
+            assert!(parse_benchmark_table_row(row)
+                .expect("row recognized")
+                .is_err());
+        }
     }
 }

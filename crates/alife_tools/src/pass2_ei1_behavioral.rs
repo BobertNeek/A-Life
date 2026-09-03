@@ -2,8 +2,7 @@
 
 use std::{
     collections::BTreeMap,
-    fs::{self, File},
-    io::{BufWriter, Write},
+    fs,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -481,9 +480,9 @@ fn write_raw(path: &Path, raw: &RawArtifact<'_>) -> Result<(), Pass2Ei1Behaviora
             "raw path has no parent",
         ))?;
     fs::create_dir_all(parent)?;
-    let mut file = BufWriter::new(File::create(path)?);
-    serde_json::to_writer(&mut file, raw)?;
-    file.write_all(b"\n")?;
+    let mut bytes = serde_json::to_vec(raw)?;
+    bytes.push(b'\n');
+    crate::atomic_write::write(path, &bytes)?;
     Ok(())
 }
 
@@ -494,7 +493,7 @@ fn write_json(path: &Path, value: &Value) -> Result<(), Pass2Ei1BehavioralError>
             "receipt path has no parent",
         ))?;
     fs::create_dir_all(parent)?;
-    serde_json::to_writer_pretty(File::create(path)?, value)?;
+    crate::atomic_write::write(path, &serde_json::to_vec_pretty(value)?)?;
     Ok(())
 }
 

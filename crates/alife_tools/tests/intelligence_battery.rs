@@ -7,7 +7,7 @@ use alife_core::{
 use alife_tools::p33_evaluation::{
     evaluate_battery, AssistanceKind, BatteryLayer, BatteryReport, BatterySuite, BatteryTrial,
     ComputeProvenance, EvaluationError, EvaluationFlag, EvaluationProvenance, LineageProvenance,
-    ScenarioBatteryFixture, TeamMode, TrialDomain, TrialPhase, TrialTrace,
+    ScenarioBatteryFixture, ScoreEstimate, TeamMode, TrialDomain, TrialPhase, TrialTrace,
     EI0_EVALUATION_SCHEMA_VERSION,
 };
 
@@ -111,6 +111,54 @@ fn hidden_promotion_requires_complete_provenance() {
         EvaluationError::MissingPromotionProvenance { test_id }
             if test_id == "hidden-learning"
     ));
+}
+
+#[test]
+fn duplicate_trial_ids_and_empty_compute_receipts_are_rejected() {
+    let candidate = trial(
+        "duplicate",
+        BatteryLayer::PermanentAnchor,
+        TrialDomain::Ecology,
+        TeamMode::Individual,
+        40,
+        "variant-a",
+        vec![trace(TrialPhase::ObservedOutcome, &[(true, 0.5, 0.1, 0.0)])],
+    );
+    let suite = BatterySuite {
+        schema_version: EI0_EVALUATION_SCHEMA_VERSION,
+        suite_id: "duplicates".to_string(),
+        trials: vec![candidate.clone(), candidate],
+    };
+    assert!(matches!(
+        evaluate_battery(&suite),
+        Err(EvaluationError::InvalidSuite("duplicate trial test id"))
+    ));
+
+    let mut candidate = trial(
+        "empty-compute",
+        BatteryLayer::PermanentAnchor,
+        TrialDomain::Ecology,
+        TeamMode::Individual,
+        40,
+        "variant-a",
+        vec![trace(TrialPhase::ObservedOutcome, &[(true, 0.5, 0.1, 0.0)])],
+    );
+    candidate.provenance.compute.dispatches = 0;
+    let suite = BatterySuite {
+        schema_version: EI0_EVALUATION_SCHEMA_VERSION,
+        suite_id: "empty-compute".to_string(),
+        trials: vec![candidate],
+    };
+    assert!(matches!(
+        evaluate_battery(&suite),
+        Err(EvaluationError::InvalidTrial { .. })
+    ));
+}
+
+#[test]
+fn score_estimates_do_not_publish_nonfinite_or_zero_sample_values() {
+    assert_eq!(ScoreEstimate::known(f32::NAN, 1), ScoreEstimate::UNKNOWN);
+    assert_eq!(ScoreEstimate::known(0.5, 0), ScoreEstimate::UNKNOWN);
 }
 
 #[test]

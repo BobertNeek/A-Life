@@ -1,5 +1,7 @@
 //! v0 scaffold: developer tooling contracts.
 
+mod atomic_write;
+
 pub mod benchmark;
 pub mod creature_part_builder;
 pub mod ei0_exit_gate;

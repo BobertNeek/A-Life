@@ -1141,10 +1141,7 @@ pub fn write_ei0_exit_gate_report(
     report: &Ei0ExitGateReport,
 ) -> Result<(), Ei0ExitGateError> {
     let path = path.as_ref();
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(path, serde_json::to_string_pretty(report)?)?;
+    crate::atomic_write::write(path, &serde_json::to_vec_pretty(report)?)?;
     Ok(())
 }
 
