@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use alife_core::{ScaffoldContractError, WorldEntityId, WorldEntityIdMapper};
 use bevy::prelude::{Entity, Resource};
 
-#[derive(Debug, Clone, Resource)]
+#[derive(Debug, Resource)]
 pub struct BevyEntityMap {
     next_id: u64,
     by_entity: HashMap<Entity, WorldEntityId>,
@@ -49,6 +49,11 @@ impl BevyEntityMap {
         world_id: WorldEntityId,
     ) -> Result<(), ScaffoldContractError> {
         world_id.validate()?;
+        if self.by_entity.get(&entity) == Some(&world_id)
+            && self.by_world_id.get(&world_id) == Some(&entity)
+        {
+            return Ok(());
+        }
         if let Some(previous_id) = self.by_entity.insert(entity, world_id) {
             self.by_world_id.remove(&previous_id);
         }

@@ -1,24 +1,66 @@
-//! v0 scaffold: Bevy plugin scheduling for the adapter causal order.
+//! Bevy plugin wiring for identity and the opt-in reference adapter pipeline.
 
-use alife_core::{AffordanceBits, Tick};
+use alife_core::{AffordanceBits, ScaffoldContractError, Tick};
 use bevy::prelude::{
-    App, Commands, Entity, IntoScheduleConfigs, ParamSet, Plugin, Query, Res, ResMut, Resource,
-    SystemSet, Transform, Update,
+    App, Commands, Entity, IntoScheduleConfigs, Or, ParamSet, Plugin, Query, Res, ResMut, Resource,
+    SystemSet, Transform, Update, With,
 };
 
 use crate::{
-    execute_action_command, gather_sensory_from_observed, ActionAdapterContext, ActionSink,
-    AffordanceTags, BevyEntityMap, CreatureBody, LatestSensorySnapshot, ObservedBevyEntity,
-    PatchTelemetry, SensoryEmitter, TargetAdapterState,
+    gather_sensory_from_observed_with_profile, plan_action_command, ActionAdapterContext,
+    ActionSink, AdapterContractFailure, AdapterStage, AffordanceTags, BevyEntityMap, CreatureBody,
+    LatestSensorySnapshot, ObservedBevyEntity, ObserverSensoryProfile, SensoryEmitter,
+    TargetAdapterState,
 };
+
+/// Production-safe adapter wiring. It installs identity mapping only.
+///
+/// The canonical game owns simulation cadence, cognition, world actions, and outcomes.
+/// Installing this plugin must not add a second tick loop or scan the render world.
+#[derive(Debug, Default)]
+pub struct AlifeBevyAdapterPlugin;
+
+impl Plugin for AlifeBevyAdapterPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<BevyEntityMap>();
+    }
+}
+
+/// Small opt-in adapter pipeline for examples and isolated integration tests.
+///
+/// It gathers derived sensory snapshots and translates queued action commands.
+/// The host must set [`AdapterWorldTick`] and execute plans through its authoritative
+/// world. This plugin never fabricates outcomes or advances simulation time.
+#[derive(Debug, Default)]
+pub struct AlifeReferenceAdapterPlugin;
+
+impl Plugin for AlifeReferenceAdapterPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<BevyEntityMap>()
+            .init_resource::<AdapterScheduleTrace>()
+            .init_resource::<AdapterWorldTick>()
+            .configure_sets(
+                Update,
+                (
+                    AlifeBevyAdapterSet::GatherSensory,
+                    AlifeBevyAdapterSet::PlanAction,
+                )
+                    .chain(),
+            )
+            .add_systems(
+                Update,
+                (
+                    gather_sensory_system.in_set(AlifeBevyAdapterSet::GatherSensory),
+                    plan_action_system.in_set(AlifeBevyAdapterSet::PlanAction),
+                ),
+            );
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SystemSet)]
 pub enum AlifeBevyAdapterSet {
     GatherSensory,
-    CpuBrainTick,
-    ExecuteAction,
-    MeasureOutcome,
-    SealPatch,
+    PlanAction,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Resource)]
@@ -40,6 +82,7 @@ impl AdapterScheduleTrace {
     }
 }
 
+/// Tick supplied by the authoritative host for derived adapter snapshots.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Resource)]
 pub struct AdapterWorldTick(Tick);
 
@@ -58,44 +101,16 @@ impl AdapterWorldTick {
         self.0
     }
 
-    pub fn advance(&mut self) -> Tick {
-        self.0 = Tick::new(self.0.raw().saturating_add(1));
-        self.0
+    pub fn set(&mut self, tick: Tick) {
+        self.0 = tick;
     }
 }
 
-#[derive(Debug, Default)]
-pub struct AlifeBevyAdapterPlugin;
-
-impl Plugin for AlifeBevyAdapterPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<BevyEntityMap>()
-            .init_resource::<PatchTelemetry>()
-            .init_resource::<AdapterScheduleTrace>()
-            .init_resource::<AdapterWorldTick>()
-            .configure_sets(
-                Update,
-                (
-                    AlifeBevyAdapterSet::GatherSensory,
-                    AlifeBevyAdapterSet::CpuBrainTick,
-                    AlifeBevyAdapterSet::ExecuteAction,
-                    AlifeBevyAdapterSet::MeasureOutcome,
-                    AlifeBevyAdapterSet::SealPatch,
-                )
-                    .chain(),
-            )
-            .add_systems(
-                Update,
-                (
-                    gather_sensory_system.in_set(AlifeBevyAdapterSet::GatherSensory),
-                    cpu_brain_tick_system.in_set(AlifeBevyAdapterSet::CpuBrainTick),
-                    execute_action_system.in_set(AlifeBevyAdapterSet::ExecuteAction),
-                    measure_outcome_system.in_set(AlifeBevyAdapterSet::MeasureOutcome),
-                    seal_patch_system.in_set(AlifeBevyAdapterSet::SealPatch),
-                ),
-            );
-    }
-}
+type ObservedFilter = Or<(
+    With<CreatureBody>,
+    With<AffordanceTags>,
+    With<SensoryEmitter>,
+)>;
 
 #[allow(clippy::type_complexity)]
 pub fn gather_sensory_system(
@@ -103,89 +118,98 @@ pub fn gather_sensory_system(
     tick: Res<AdapterWorldTick>,
     mut commands: Commands,
     mut map: ResMut<BevyEntityMap>,
-    observed_query: Query<(
-        Entity,
-        &Transform,
-        Option<&CreatureBody>,
-        Option<&AffordanceTags>,
-        Option<&SensoryEmitter>,
-    )>,
+    observed_query: Query<
+        (
+            Entity,
+            &Transform,
+            Option<&CreatureBody>,
+            Option<&AffordanceTags>,
+            Option<&SensoryEmitter>,
+        ),
+        ObservedFilter,
+    >,
     creature_query: Query<(Entity, &CreatureBody, &Transform)>,
 ) {
     trace.clear();
     trace.push(AlifeBevyAdapterSet::GatherSensory);
+    if creature_query.is_empty() {
+        return;
+    }
 
-    let observed = observed_query
-        .iter()
-        .filter_map(|(entity, transform, body, tags, emitter)| {
-            let mut affordances = tags.map_or(AffordanceBits::NONE, |tags| tags.bits);
-            if body.is_some() {
-                affordances |= AffordanceBits::SOCIAL_AGENT;
+    let mut observed = Vec::new();
+    for (entity, transform, body, tags, emitter) in &observed_query {
+        let result = observed_entity(entity, transform, body, tags, emitter, &mut map);
+        match result {
+            Ok(value) => {
+                commands.entity(entity).remove::<AdapterContractFailure>();
+                if let Some(value) = value {
+                    observed.push(value);
+                }
             }
-            if affordances == AffordanceBits::NONE
-                && emitter.and_then(|value| value.audible_token).is_none()
-            {
-                return None;
-            }
-            let world_id = world_id_for_entity(entity, body, &mut map)?;
-
-            let mut observed =
-                ObservedBevyEntity::new(entity, world_id, transform.translation, affordances);
-            if let Some(body) = body {
-                observed = observed.with_organism(body.organism_id);
-                observed.vision_radius_meters = body.vision_radius_meters;
-                observed.hearing_radius_meters = body.hearing_radius_meters;
-            }
-            if let Some(tags) = tags {
-                observed.nutrition = tags.nutrition;
-                observed.hazard_pain = tags.hazard_pain;
-            }
-            if let Some(emitter) = emitter {
-                observed.token_id = emitter.audible_token;
-                observed.hearing_radius_meters = emitter.audible_radius_meters;
-            }
-            Some(observed)
-        })
-        .collect::<Vec<_>>();
+            Err(error) => record_failure(&mut commands, entity, AdapterStage::GatherSensory, error),
+        }
+    }
 
     for (entity, body, transform) in &creature_query {
-        let _ = map.bind(entity, body.world_entity_id);
-        if let Ok(snapshot) = gather_sensory_from_observed(
-            body.organism_id,
-            tick.current(),
-            body.world_entity_id,
-            transform.translation,
-            &observed,
-        ) {
-            commands
-                .entity(entity)
-                .insert(LatestSensorySnapshot(snapshot));
+        let result = body.validate().and_then(|body| {
+            map.bind(entity, body.world_entity_id)?;
+            gather_sensory_from_observed_with_profile(
+                body.organism_id,
+                tick.current(),
+                body.world_entity_id,
+                transform.translation,
+                ObserverSensoryProfile {
+                    vision_radius_meters: body.vision_radius_meters,
+                    hearing_radius_meters: body.hearing_radius_meters,
+                },
+                &observed,
+            )
+        });
+        match result {
+            Ok(snapshot) => {
+                commands
+                    .entity(entity)
+                    .insert(LatestSensorySnapshot(snapshot))
+                    .remove::<AdapterContractFailure>();
+            }
+            Err(error) => {
+                commands.entity(entity).remove::<LatestSensorySnapshot>();
+                record_failure(&mut commands, entity, AdapterStage::GatherSensory, error);
+            }
         }
     }
 }
 
-pub fn cpu_brain_tick_system(mut trace: ResMut<AdapterScheduleTrace>) {
-    trace.push(AlifeBevyAdapterSet::CpuBrainTick);
-}
-
 #[allow(clippy::type_complexity)]
-pub fn execute_action_system(
+pub fn plan_action_system(
     mut trace: ResMut<AdapterScheduleTrace>,
     mut map: ResMut<BevyEntityMap>,
     mut set: ParamSet<(
-        Query<(
-            Entity,
-            &Transform,
-            Option<&AffordanceTags>,
-            Option<&CreatureBody>,
-        )>,
-        Query<(Entity, &CreatureBody, &mut Transform, &mut ActionSink)>,
+        Query<
+            (
+                Entity,
+                &Transform,
+                Option<&AffordanceTags>,
+                Option<&CreatureBody>,
+            ),
+            Or<(With<AffordanceTags>, With<CreatureBody>)>,
+        >,
+        Query<(Entity, &CreatureBody, &Transform, &mut ActionSink)>,
     )>,
 ) {
-    trace.push(AlifeBevyAdapterSet::ExecuteAction);
+    trace.push(AlifeBevyAdapterSet::PlanAction);
+    if !set
+        .p1()
+        .iter()
+        .any(|(_, _, _, sink)| sink.pending_command.is_some())
+    {
+        return;
+    }
+
     let targets = {
+        let query = set.p0();
         let mut targets = Vec::new();
-        for (entity, transform, tags, body) in &set.p0() {
+        for (entity, transform, tags, body) in &query {
             let mut affordances = tags.map_or(AffordanceBits::NONE, |tags| tags.bits);
             if body.is_some() {
                 affordances |= AffordanceBits::SOCIAL_AGENT;
@@ -193,8 +217,9 @@ pub fn execute_action_system(
             if affordances == AffordanceBits::NONE {
                 continue;
             }
-            let Some(world_id) = world_id_for_entity(entity, body, &mut map) else {
-                continue;
+            let world_id = match world_id_for_entity(entity, body, &mut map) {
+                Ok(world_id) => world_id,
+                Err(_) => continue,
             };
             targets.push(TargetAdapterState::new(
                 entity,
@@ -206,55 +231,106 @@ pub fn execute_action_system(
         targets
     };
 
-    for (entity, body, mut transform, mut sink) in &mut set.p1() {
+    for (entity, body, transform, mut sink) in &mut set.p1() {
         let Some(command) = sink.pending_command.take() else {
             continue;
         };
-        let mut context =
-            ActionAdapterContext::new(entity, body.world_entity_id, transform.translation);
+        let mut context = ActionAdapterContext::new(
+            entity,
+            body.organism_id,
+            body.world_entity_id,
+            transform.translation,
+        );
         context.movement_step_meters = body.movement_step_meters;
         context.targets = targets
             .iter()
             .copied()
             .filter(|target| target.entity != entity)
             .collect();
-        match execute_action_command(&command, &context) {
+        match plan_action_command(&command, &context) {
             Ok(feedback) => {
-                if feedback.execution.succeeded {
-                    transform.translation += feedback.plan.displacement * command.intensity.raw();
-                }
-                sink.last_execution = Some(feedback.execution);
+                sink.last_plan = Some(feedback.plan);
                 sink.last_failure = feedback.failure;
+                sink.last_contract_error = None;
             }
-            Err(_) => {
-                sink.last_execution = None;
+            Err(error) => {
+                sink.last_plan = None;
                 sink.last_failure = None;
+                sink.last_contract_error = Some(error.to_string());
             }
         }
     }
 }
 
-pub fn measure_outcome_system(mut trace: ResMut<AdapterScheduleTrace>) {
-    trace.push(AlifeBevyAdapterSet::MeasureOutcome);
+fn observed_entity(
+    entity: Entity,
+    transform: &Transform,
+    body: Option<&CreatureBody>,
+    tags: Option<&AffordanceTags>,
+    emitter: Option<&SensoryEmitter>,
+    map: &mut BevyEntityMap,
+) -> Result<Option<ObservedBevyEntity>, ScaffoldContractError> {
+    if let Some(body) = body {
+        body.validate()?;
+    }
+    if let Some(tags) = tags {
+        tags.validate()?;
+    }
+    if let Some(emitter) = emitter {
+        emitter.validate()?;
+    }
+    let world_id = world_id_for_entity(entity, body, map)?;
+    let mut affordances = tags.map_or(AffordanceBits::NONE, |tags| tags.bits);
+    if body.is_some() {
+        affordances |= AffordanceBits::SOCIAL_AGENT;
+    }
+    if affordances == AffordanceBits::NONE
+        && emitter.and_then(|emitter| emitter.audible_token).is_none()
+    {
+        return Ok(None);
+    }
+    let mut observed =
+        ObservedBevyEntity::new(entity, world_id, transform.translation, affordances);
+    observed.forward = transform.rotation * bevy::prelude::Vec3::NEG_Z;
+    if let Some(body) = body {
+        observed.organism_id = Some(body.organism_id);
+    }
+    if let Some(tags) = tags {
+        observed.nutrition = tags.nutrition;
+        observed.hazard_pain = tags.hazard_pain;
+    }
+    if let Some(emitter) = emitter {
+        observed.token_id = emitter.audible_token;
+        observed.visual_salience_scale = emitter.visual_salience_scale;
+        observed.smell_salience_scale = emitter.smell_salience_scale;
+        observed.audible_radius_meters = emitter.audible_radius_meters;
+    } else {
+        observed.audible_radius_meters = 0.0;
+    }
+    Ok(Some(observed))
 }
 
-pub fn seal_patch_system(
-    mut trace: ResMut<AdapterScheduleTrace>,
-    mut tick: ResMut<AdapterWorldTick>,
+fn record_failure(
+    commands: &mut Commands,
+    entity: Entity,
+    stage: AdapterStage,
+    error: ScaffoldContractError,
 ) {
-    trace.push(AlifeBevyAdapterSet::SealPatch);
-    let _ = tick.advance();
+    commands.entity(entity).insert(AdapterContractFailure {
+        stage,
+        message: error.to_string(),
+    });
 }
 
 fn world_id_for_entity(
     entity: Entity,
     body: Option<&CreatureBody>,
     map: &mut BevyEntityMap,
-) -> Option<alife_core::WorldEntityId> {
+) -> Result<alife_core::WorldEntityId, ScaffoldContractError> {
     if let Some(body) = body {
-        let _ = map.bind(entity, body.world_entity_id);
-        Some(body.world_entity_id)
+        map.bind(entity, body.world_entity_id)?;
+        Ok(body.world_entity_id)
     } else {
-        map.get_or_allocate(entity).ok()
+        map.get_or_allocate(entity)
     }
 }
