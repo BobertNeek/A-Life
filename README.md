@@ -2,7 +2,7 @@
 
 A-Life is a Rust, Bevy, wgpu, and WGSL artificial-life research project. It is building persistent embodied organisms whose neural policy runs on the GPU and whose actions remain subject to an authoritative world.
 
-The current product boundary is narrower than the ambition. `production-voxel` starts and ticks a GPU-authoritative cognition loop. The visible scene starts from the selected save, then projects live authoritative creature positions and newborns. Complete lifecycle removal and the full player loop remain open.
+The current product boundary is narrower than the ambition. `production-voxel` starts and ticks a GPU-authoritative cognition loop. The visible scene starts from the selected save, then projects live authoritative creature positions, adds newborns, and applies runtime retirement events. Fresh rendered lifecycle proof and the full player loop remain open.
 
 ## Run the current voxel frontend
 
@@ -38,7 +38,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_prod
 - WGSL selection, learning, memory, topology, sleep, and checkpoint paths are implemented in the GPU runtime.
 - The production shell constructs and ticks that runtime.
 - The voxel UI provides camera, selection, inspector, speech, save, load, pause, speed, and overlays.
-- The renderer does not yet project live runtime transforms, births, or deaths.
+- The renderer projects tick-bound runtime transforms, births, and retirement events without owning simulation truth.
+- The production graphics path uses one layered-grid terrain renderer and one lighting authority. Overlay geometry is created on demand.
 - EI0 passed a bounded source-bound exit gate. EI1 produced a complete source-bound corpus but remains `Blocked`.
 - This is a research alpha, not a release-ready autonomous simulation.
 

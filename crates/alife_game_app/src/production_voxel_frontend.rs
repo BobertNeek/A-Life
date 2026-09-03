@@ -14,7 +14,7 @@ use alife_world::{HabitatAuthority, HabitatAuthoritySnapshot, HabitatMembership,
 
 pub const PRODUCTION_VOXEL_COMMAND: &str = "production-voxel";
 pub const PRODUCTION_VOXEL_WINDOW_TITLE: &str = "A-Life Voxel Frontend";
-pub const PRODUCTION_VOXEL_RENDERER_PROFILE: &str = "internal-greedy-voxel";
+pub const PRODUCTION_VOXEL_RENDERER_PROFILE: &str = "internal-layered-grid";
 pub const PRODUCTION_VOXEL_SCENARIO_ID: &str = "production-voxel";
 pub const FVR01_RUNTIME_DIAGNOSTIC_LOG: &str =
     "target/artifacts/fvr01_production_voxel/runtime_prereq.log";

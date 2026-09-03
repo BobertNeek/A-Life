@@ -22,11 +22,21 @@ failed GPU neural path is reported as unavailable; it does not silently switch
 to CPU neural math.
 
 The shell restores and ticks a real `GpuLiveBrainRuntime`. The active renderer
-uses its internal greedy terrain meshes as the sole voxel drawing path. It
-starts creature presentation from the selected save, then projects live
-authoritative positions and adds newborn presentation records. Complete death
-removal remains open. See `docs/STATUS.md` and `docs/ROADMAP.md` for the exact
-boundary.
+uses its internal layered-grid terrain meshes as the sole terrain drawing path.
+It starts creature presentation from the selected save, then projects live
+authoritative positions, adds newborn presentation records, and consumes the
+runtime retirement queue. The renderer does not own lifecycle decisions. See
+`docs/STATUS.md` and `docs/ROADMAP.md` for the exact evidence boundary.
+
+Graphics work still open:
+
+- dynamic overlay contents are snapshot-derived, although their GPU meshes are
+  created only when first shown;
+- creature-attached effects follow live positions, but effect creation and
+  removal are not yet driven by live tick events;
+- camera-distance creature LOD is not implemented;
+- current-source Vulkan performance and rendered lifecycle evidence must be
+  refreshed after graphics work.
 
 ## Validation and diagnostic commands
 

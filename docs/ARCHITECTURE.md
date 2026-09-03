@@ -67,11 +67,16 @@ The production frontend performs a GPU and content preflight, selects or materia
 The current split is important:
 
 - the GPU runtime owns a live `HeadlessWorld`;
-- the renderer loads its visual records from the source save;
-- the renderer animates saved base positions procedurally;
-- no production system currently applies live runtime world transforms, births, or deaths to those entities.
+- the renderer loads its initial visual records from the source save;
+- the GPU runtime publishes immutable, tick-bound presentation frames;
+- the renderer projects matching live transforms and creates missing newborn presentation roots;
+- runtime retirement events remove the matching Bevy hierarchy and identity-map entry;
+- reconciliation clears stale selection, follow, and scene records;
+- procedural animation remains local presentation layered on the authoritative root position.
 
-An older graphical path contains a world-to-transform synchronizer, but the production voxel path does not use an equivalent adapter. [Roadmap](ROADMAP.md) phase one closes this boundary without giving the renderer authority.
+The adapter is read-only with respect to world truth. Presentation loss cannot change the organism, action, or lifecycle result.
+
+The active graphics stack uses one layered-grid terrain path, one lighting path, batched terrain surfaces, lazily created overlay meshes, shared effect assets per effect kind, and modular creature parts. Dynamic overlay contents and VFX trigger selection remain launch-snapshot derived and are explicitly flagged in source.
 
 ## Persistence
 
@@ -90,7 +95,7 @@ The runtime supports two required transactions:
 - create the immutable genetic birth archive before GPU insertion;
 - seal final outcome and life statistics, optionally capture learned state, archive the life, then retire the GPU handle and remove the world entity.
 
-These methods are implemented. The production voxel schedule does not yet call them as part of a complete autonomous lifecycle.
+These methods and presentation retirement hooks are implemented. A fresh production run still needs to prove the complete autonomous birth, archive, retirement, and reload sequence.
 
 ## Teacher and local SLM
 

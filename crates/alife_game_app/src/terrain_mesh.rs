@@ -296,7 +296,9 @@ fn append_top_surface(
         return;
     }
 
-    const SUBDIVISIONS: usize = 4;
+    // One quad preserves the tile's four-corner relief. The former 4x4 grid
+    // interpolated the same bilinear surface while multiplying vertices by 16.
+    const SUBDIVISIONS: usize = 1;
     for column in 0..SUBDIVISIONS {
         for row in 0..SUBDIVISIONS {
             let u0 = column as f32 / SUBDIVISIONS as f32;
@@ -880,7 +882,7 @@ mod tests {
         assert!(first.stats.transition_edges > 0);
         assert!(
             first.stats.max_vertices_per_source_tile <= 128,
-            "subdivided terrain exceeded its per-source-tile vertex budget: {}",
+            "terrain exceeded its per-source-tile vertex budget: {}",
             first.stats.max_vertices_per_source_tile
         );
     }
@@ -910,7 +912,7 @@ mod tests {
     }
 
     #[test]
-    fn solid_top_surfaces_use_bounded_subdivision_and_interior_relief() {
+    fn solid_top_surfaces_use_one_quad_with_corner_relief() {
         let tile = VoxelTileCoord::new(0, 0);
         let samples = [(
             tile,
@@ -945,12 +947,12 @@ mod tests {
 
         assert_eq!(
             positions.len(),
-            64,
-            "each solid tile should use a bounded four-by-four quad patch"
+            4,
+            "each solid tile should use one top quad"
         );
         assert!(
-            unique_heights.len() >= 5,
-            "solid terrain needs deterministic interior relief instead of one flat slab"
+            unique_heights.len() >= 2,
+            "solid terrain needs deterministic corner relief instead of one flat slab"
         );
 
         let Some(VertexAttributeValues::Float32x3(normals)) =
@@ -959,11 +961,11 @@ mod tests {
             panic!("solid top normals");
         };
         let surface = SurfaceCorners { heights: [1.0; 4] };
-        let expected = terrain_top_normal(&samples[&tile], surface, 1.0, 0.25, 0.25);
-        let actual = Vec3::from_array(normals[20]);
+        let expected = terrain_top_normal(&samples[&tile], surface, 1.0, 0.0, 0.0);
+        let actual = Vec3::from_array(normals[0]);
         assert!(
             actual.dot(Vec3::from_array(expected)) > 0.9999,
-            "subdivided terrain normals must include the interior relief derivative"
+            "terrain normals must include the deterministic relief derivative"
         );
     }
 

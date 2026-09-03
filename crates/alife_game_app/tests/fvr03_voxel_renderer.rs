@@ -13,21 +13,19 @@ use alife_game_app::bevy_shell::{LiveBrainPresentationFrame, LiveBrainPresentati
 use alife_game_app::Fvr07ProductionVfxKind;
 use alife_game_app::{
     default_environment_manifest_path, run_production_voxel_frontend_dry_run, CreaturePartSlot,
-    Fvr03ProductionVoxelCamera, Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelChunk,
-    Fvr03ProductionVoxelCreatureMarker, Fvr03ProductionVoxelMaterialKind,
-    Fvr03ProductionVoxelSceneResource, Fvr03ProductionVoxelSelectionMarker,
-    Fvr03ProductionVoxelSelectionResource, Fvr03ProductionVoxelTerrainBatch,
-    Fvr03ProductionVoxelTerrainTile, Fvr04ProductionCreatureFollowResource,
-    Fvr04ProductionCreatureInspectorPanel, Fvr04ProductionCreatureVisualMarker,
-    Fvr04ProductionCreatureWorldLabel, Fvr05ProductionInspectorTab,
-    Fvr05ProductionRightInspectorPanel, Fvr05ProductionUxStateResource,
-    Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker, Fvr07ProductionVisualDressing,
-    Fvr09CreatureFaceFeatureMarker, Fvr09CuteBipedCreatureMarker, Fvr09MesherMode,
-    Fvr10CreatureSpeciesMarker, Fvr10CreatureSurfaceDetailMarker, Fvr11ProductionContactShadow,
-    Fvr11ProductionTerrainLayer, Fvr11ProductionTerrainLightingMarker,
-    Fvr11ProductionTerrainMaterialContract, Fvr11ProductionTerrainSceneResource,
-    Fvr11TerrainSurfaceRole, LiveBrainCausalStage, LiveBrainTickSummary,
-    ProductionCreatureAssemblyRoot, ProductionCreatureJoinCoverMarker,
+    Fvr03ProductionVoxelCamera, Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelCreatureMarker,
+    Fvr03ProductionVoxelMaterialKind, Fvr03ProductionVoxelSceneResource,
+    Fvr03ProductionVoxelSelectionMarker, Fvr03ProductionVoxelSelectionResource,
+    Fvr03ProductionVoxelTerrainBatch, Fvr04ProductionCreatureFollowResource,
+    Fvr04ProductionCreatureVisualMarker, Fvr04ProductionCreatureWorldLabel,
+    Fvr05ProductionInspectorTab, Fvr05ProductionRightInspectorPanel,
+    Fvr05ProductionUxStateResource, Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker,
+    Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker, Fvr09CuteBipedCreatureMarker,
+    Fvr09MesherMode, Fvr10CreatureSpeciesMarker, Fvr10CreatureSurfaceDetailMarker,
+    Fvr11ProductionContactShadow, Fvr11ProductionTerrainLayer,
+    Fvr11ProductionTerrainLightingMarker, Fvr11ProductionTerrainMaterialContract,
+    Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, LiveBrainCausalStage,
+    LiveBrainTickSummary, ProductionCreatureAssemblyRoot, ProductionCreatureJoinCoverMarker,
     ProductionCreaturePartMarker, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
     V0PlayerControlStrip, V0PlayerCreaturePanel, V0PlayerStatusChip,
     FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
@@ -450,26 +448,6 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
         assert_eq!(scene.production_gpu_vfx_emitter_count, 0);
     }
 
-    let mut chunk_query = app.world_mut().query::<&Fvr03ProductionVoxelChunk>();
-    assert_eq!(
-        chunk_query.iter(app.world()).count(),
-        scene.resident_chunk_count
-    );
-
-    let mut tile_query = app.world_mut().query::<&Fvr03ProductionVoxelTerrainTile>();
-    let tiles = tile_query.iter(app.world()).copied().collect::<Vec<_>>();
-    assert!(tiles.len() >= scene.resident_chunk_count);
-    assert!(tiles
-        .iter()
-        .all(|tile| tile.stable_ref.kind == StableVoxelRefKind::Tile));
-    assert!(tiles
-        .iter()
-        .all(|tile| !format!("{:?}", tile.stable_ref).contains("Entity(")));
-
-    let materials = tiles
-        .iter()
-        .map(|tile| tile.material)
-        .collect::<BTreeSet<_>>();
     for required in [
         Fvr03ProductionVoxelMaterialKind::SafeGrass,
         Fvr03ProductionVoxelMaterialKind::Water,
@@ -478,7 +456,7 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
         Fvr03ProductionVoxelMaterialKind::Decay,
     ] {
         assert!(
-            materials.contains(&required),
+            scene.material_counts.contains_key(&required),
             "missing material {required:?}"
         );
     }
@@ -1537,16 +1515,6 @@ fn fvr04_live_creature_inspectors_report_current_authoritative_position_and_tick
     ));
     app.update();
 
-    let fvr04_text = {
-        let mut panels = app
-            .world_mut()
-            .query::<(&Fvr04ProductionCreatureInspectorPanel, &Text)>();
-        panels
-            .iter(app.world())
-            .next()
-            .map(|(_, text)| text.0.clone())
-            .expect("FVR04 creature inspector panel must exist")
-    };
     let fvr05_text = {
         let mut panels = app
             .world_mut()
@@ -1561,7 +1529,7 @@ fn fvr04_live_creature_inspectors_report_current_authoritative_position_and_tick
         "world position: x={:.2} y={:.2} z={:.2}",
         11.25, 4.5, -12.75
     );
-    for text in [&fvr04_text, &fvr05_text] {
+    for text in [&fvr05_text] {
         assert!(
             text.contains("world tick: 42"),
             "missing live tick in: {text}"
@@ -1630,16 +1598,6 @@ fn fvr04_live_creature_inspectors_reject_stable_id_mismatch() {
     ));
     app.update();
 
-    let fvr04_text = {
-        let mut panels = app
-            .world_mut()
-            .query::<(&Fvr04ProductionCreatureInspectorPanel, &Text)>();
-        panels
-            .iter(app.world())
-            .next()
-            .map(|(_, text)| text.0.clone())
-            .expect("FVR04 creature inspector panel must exist")
-    };
     let fvr05_text = {
         let mut panels = app
             .world_mut()
@@ -1655,7 +1613,7 @@ fn fvr04_live_creature_inspectors_reject_stable_id_mismatch() {
         stable_id.raw()
     );
     let mismatched_position = "world position: x=19.25 y=5.50 z=-23.75";
-    for text in [&fvr04_text, &fvr05_text] {
+    for text in [&fvr05_text] {
         assert!(
             text.contains(&expected_unavailable),
             "stable-ID mismatch must be explicit in: {text}"
@@ -1889,7 +1847,7 @@ fn v0_render_world_direction_is_warm_readable_and_creature_led() {
 }
 
 #[test]
-fn fvr09_greedy_mesher_records_material_aware_quad_reduction() {
+fn fvr09_layered_grid_mesher_records_visible_face_reduction() {
     let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
@@ -1900,11 +1858,7 @@ fn fvr09_greedy_mesher_records_material_aware_quad_reduction() {
         .resource::<Fvr03ProductionVoxelSceneResource>()
         .clone();
 
-    assert_eq!(scene.mesh_stats.mode, Fvr09MesherMode::BinaryGreedyQuads);
-    assert!(scene.mesh_stats.chunk_local_occupancy_masks);
-    assert!(scene.mesh_stats.six_direction_face_masks);
-    assert!(scene.mesh_stats.material_aware_merging);
-    assert!(scene.mesh_stats.neighbor_border_seams_checked);
+    assert_eq!(scene.mesh_stats.mode, Fvr09MesherMode::LayeredGridQuads);
     assert_eq!(
         scene.mesh_stats.material_palette_version,
         "fvr10-visible-surface-variation-v1"
@@ -1914,7 +1868,7 @@ fn fvr09_greedy_mesher_records_material_aware_quad_reduction() {
     assert!(scene.mesh_stats.variation_bucket_count >= 4);
     assert!(scene.mesh_stats.visible_voxels >= scene.tile_mesh_count);
     assert!(scene.mesh_stats.naive_visible_faces > scene.mesh_stats.emitted_quads);
-    assert!(scene.mesh_stats.merge_ratio >= 1.20);
+    assert!(scene.mesh_stats.face_reduction_ratio >= 1.20);
     assert!(scene.mesh_stats.dirty_chunks <= scene.mesh_stats.remesh_budget_chunks_per_frame);
     assert!(
         scene.mesh_stats.cached_chunks + scene.mesh_stats.dirty_chunks >= scene.visible_chunk_count

@@ -96,7 +96,6 @@ use crate::{
     terrain_lighting::{
         production_camera_extent, production_camera_transform, production_shadow_cascade_count,
         production_shadow_maximum_distance, spawn_production_terrain_camera,
-        spawn_production_terrain_lighting,
     },
     terrain_materials::{create_production_terrain_material_library, TerrainMaterialLibrary},
     terrain_water::install_animated_water_material,
@@ -108,14 +107,14 @@ use phase31_slow_frame_ranking::{
     retain_ranked_slow_frame, RankedSlowFrame, PHASE31_SLOW_FRAME_THRESHOLD_NS,
 };
 
-pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA: &str = "alife.fvr03.production_voxel_renderer.v2";
-pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA_VERSION: u16 = 2;
+pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA: &str = "alife.fvr03.production_voxel_renderer.v3";
+pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA_VERSION: u16 = 3;
 pub const FVR03_PERFORMANCE_ARTIFACT_DIR: &str = "target/artifacts/fvr03";
 pub const FVR04_PRODUCTION_CREATURE_RENDERER_SCHEMA: &str =
     "alife.fvr04.production_creature_renderer.v1";
 pub const FVR04_PRODUCTION_CREATURE_RENDERER_SCHEMA_VERSION: u16 = 1;
 pub const FVR10_RENDERER_BACKEND_ID: &str =
-    "fvr10-binary-greedy-terrain+modular-heritable-creatures";
+    "fvr10-layered-grid-terrain+modular-heritable-creatures";
 pub const FVR09_NATURAL_MATERIAL_PALETTE_VERSION: &str = "fvr09-natural-materials-v1";
 pub const FVR09_CUTE_BIPED_VISUAL_PROFILE: &str = "fvr09-cute-biped-v1";
 pub const FVR09_CUTE_BIPED_MATERIAL_VERSION: &str = "fvr09-soft-biped-materials-v1";
@@ -123,31 +122,31 @@ pub const FVR10_VISIBLE_SURFACE_VARIATION_VERSION: &str = "fvr10-visible-surface
 pub const FVR10_CUTE_BIPED_VISUAL_PROFILE: &str = "modular-heritable-part-assembly-v1";
 pub const FVR10_CUTE_BIPED_MATERIAL_VERSION: &str = "modular-textured-part-material-v1";
 pub const FVR10_SURFACE_DETAIL_VERSION: &str = "fvr10-screenshot-visible-surface-detail-v2";
+/// Dynamic overlay geometry still comes from the scene snapshot. See `docs/STATUS.md`.
+pub const FVR05_DYNAMIC_OVERLAYS_TRACK_LIVE_STATE: bool = false;
+/// VFX positions follow live creatures, but effect selection is not event-driven yet.
+pub const FVR07_VFX_TRIGGERS_TRACK_LIVE_STATE: bool = false;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Fvr09MesherMode {
-    BinaryGreedyQuads,
+    LayeredGridQuads,
 }
 
 impl Fvr09MesherMode {
     pub const fn label(self) -> &'static str {
         match self {
-            Self::BinaryGreedyQuads => "binary-greedy-quads",
+            Self::LayeredGridQuads => "layered-grid-quads",
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Fvr09GreedyMeshStats {
+pub struct Fvr09TerrainMeshStats {
     pub mode: Fvr09MesherMode,
-    pub chunk_local_occupancy_masks: bool,
-    pub six_direction_face_masks: bool,
-    pub material_aware_merging: bool,
-    pub neighbor_border_seams_checked: bool,
     pub visible_voxels: usize,
     pub naive_visible_faces: usize,
     pub emitted_quads: usize,
-    pub merge_ratio: f32,
+    pub face_reduction_ratio: f32,
     pub remesh_time_micros: u128,
     pub dirty_chunks: usize,
     pub cached_chunks: usize,
@@ -656,7 +655,7 @@ pub struct Fvr03ProductionVoxelSceneResource {
     pub production_vfx_budget_state: &'static str,
     pub production_visuals_display_only: bool,
     pub production_vfx_uses_hanabi_gpu_particles: bool,
-    pub mesh_stats: Fvr09GreedyMeshStats,
+    pub mesh_stats: Fvr09TerrainMeshStats,
     visible_tiles: BTreeSet<VoxelTileCoord>,
     visible_chunks: BTreeSet<VoxelChunkCoord>,
     tile_summaries_by_tile: BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
@@ -779,7 +778,7 @@ impl Fvr03ProductionVoxelSceneResource {
             .collect::<Vec<_>>()
             .join(" ");
         format!(
-            "World / Ecology\nchunks visible {} resident {} dirty {}\ntiles sampled {} | creatures {}\nmesher {} | quads {} | merge {:.2}x | remesh {}/frame dirty {} cached {} skipped {}\nmaterial atlas {}\nresource avg {:.2} | hazard avg {:.2}\nmaterials {}\nproduction polish: dressing {} vfx {} gpu_emitters {} budget {} display_only {}\ncore authority: world/action legality only",
+            "World / Ecology\nchunks visible {} resident {} dirty {}\ntiles sampled {} | creatures {}\nmesher {} | quads {} | face reduction {:.2}x | remesh {}/frame dirty {} cached {} skipped {}\nmaterial atlas {}\nresource avg {:.2} | hazard avg {:.2}\nmaterials {}\nproduction polish: dressing {} vfx {} gpu_emitters {} budget {} display_only {}\ncore authority: world/action legality only",
             self.visible_chunk_count,
             self.resident_chunk_count,
             self.dirty_chunk_count,
@@ -787,7 +786,7 @@ impl Fvr03ProductionVoxelSceneResource {
             self.creature_render_count,
             self.mesh_stats.mode.label(),
             self.mesh_stats.emitted_quads,
-            self.mesh_stats.merge_ratio,
+            self.mesh_stats.face_reduction_ratio,
             self.mesh_stats.remesh_budget_chunks_per_frame,
             self.mesh_stats.dirty_chunks,
             self.mesh_stats.cached_chunks,
@@ -1012,26 +1011,6 @@ impl Phase31PerformanceMetricsResource {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Component)]
-pub struct Fvr03ProductionVoxelChunk {
-    pub coord: VoxelChunkCoord,
-    pub signature: String,
-    pub lod_level: u8,
-    pub dirty_generation: u64,
-    pub sampled_tiles: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
-pub struct Fvr03ProductionVoxelTerrainTile {
-    pub tile: VoxelTileCoord,
-    pub chunk: VoxelChunkCoord,
-    pub material: Fvr03ProductionVoxelMaterialKind,
-    pub height_units: f32,
-    pub resource_bias: f32,
-    pub hazard_pressure: f32,
-    pub stable_ref: StableVoxelObjectRef,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct Fvr03ProductionVoxelCamera {
     pub mode: Fvr03ProductionVoxelCameraMode,
@@ -1152,9 +1131,6 @@ pub struct Fvr04ProductionCreatureAffordanceCue {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
-pub struct Fvr04ProductionCreatureInspectorPanel;
-
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct Fvr03ProductionVoxelTerrainBatch {
     pub material: Fvr03ProductionVoxelMaterialKind,
     pub tile_count: usize,
@@ -1269,6 +1245,7 @@ pub struct Fvr07ProductionGpuVfxMarker {
     pub kind: Fvr07ProductionVfxKind,
     pub tile: Option<VoxelTileCoord>,
     pub stable_id: Option<alife_core::WorldEntityId>,
+    pub follows_creature: bool,
     pub display_only: bool,
     pub no_renderer_authority_over_actions_or_cognition: bool,
     pub budget_state: &'static str,
@@ -1281,6 +1258,8 @@ pub struct Fvr07ProductionGpuVfxMarker {
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct Fvr07ProductionHanabiVfxEmitter {
     pub kind: Fvr07ProductionVfxKind,
+    pub stable_id: Option<alife_core::WorldEntityId>,
+    pub follows_creature: bool,
     pub display_only: bool,
     pub no_renderer_authority_over_actions_or_cognition: bool,
     pub budget_state: &'static str,
@@ -1311,7 +1290,7 @@ pub struct V0PlayerCreaturePanel;
 pub struct V0PlayerControlStrip;
 
 struct Fvr11TerrainSpawnReceipt {
-    mesh_stats: Fvr09GreedyMeshStats,
+    mesh_stats: Fvr09TerrainMeshStats,
     top_layer_count: usize,
     cliff_layer_count: usize,
     transition_edge_count: usize,
@@ -1377,7 +1356,7 @@ struct Fvr04RuntimeSceneState {
 
 #[derive(Resource)]
 struct Fvr04RuntimeSceneAssets {
-    voxel_materials: BTreeMap<Fvr03ProductionVoxelMaterialKind, Handle<StandardMaterial>>,
+    selection_material: Handle<StandardMaterial>,
     terrain_materials: TerrainMaterialLibrary,
     dressing_library: TerrainDressingLibrary,
     vfx_unit_mesh: Option<Handle<Mesh>>,
@@ -1390,6 +1369,11 @@ struct Fvr04OverlaySpawnPlan {
     kind: Fvr05ProductionOverlayKind,
     cells: Vec<Fvr05OverlayCell>,
     visible: bool,
+}
+
+#[derive(Resource)]
+struct Fvr05OverlayGeometryCache {
+    cells_by_kind: BTreeMap<Fvr05ProductionOverlayKind, Vec<Fvr05OverlayCell>>,
 }
 
 struct Fvr04RuntimeSceneCandidate {
@@ -1433,6 +1417,7 @@ struct Fvr04PreparedContactShadow {
     translation: Vec3,
     scale: f32,
     source_kind: &'static str,
+    stable_id: Option<alife_core::WorldEntityId>,
 }
 
 struct Fvr04PreparedLighting {
@@ -1476,6 +1461,7 @@ struct Fvr07VfxSpawn {
     kind: Fvr07ProductionVfxKind,
     tile: Option<VoxelTileCoord>,
     stable_id: Option<alife_core::WorldEntityId>,
+    follows_creature: bool,
     translation: Vec3,
     scale: Vec3,
     color: [f32; 4],
@@ -1762,11 +1748,6 @@ fn despawn_fvr04_runtime_scene(world: &mut World) {
     for (mut text, mut visibility) in labels.iter_mut(world) {
         text.0 = "creature".to_string();
         *visibility = Visibility::Hidden;
-    }
-    let mut inspectors =
-        world.query_filtered::<&mut Text, With<Fvr04ProductionCreatureInspectorPanel>>();
-    for mut text in inspectors.iter_mut(world) {
-        text.0 = "Creature\nselection: none".to_string();
     }
 }
 
@@ -2057,17 +2038,11 @@ pub fn spawn_fvr03_production_voxel_scene(
     )?;
     let selected =
         fvr04_runtime_scene_selection(&candidate.runtime_state, &candidate.visible_tiles);
-    let tile_heights = candidate
-        .tile_summaries_by_tile
-        .iter()
-        .map(|(tile, summary)| (*tile, summary.height_units))
-        .collect::<BTreeMap<_, _>>();
     let prepared =
         prepare_fvr04_runtime_scene(app.world_mut(), candidate, &mut creature_spawn_context)?;
     let (mut scene, creature_scene) =
         spawn_fvr04_runtime_scene_candidate(app.world_mut(), prepared, &scene_assets);
     spawn_production_terrain_camera(app, &settings);
-    spawn_production_terrain_lighting(app, &settings, &tile_heights);
 
     if summary.record_performance {
         scene.performance_artifact_path = Some(write_fvr03_performance_artifact(&scene, None)?);
@@ -2116,9 +2091,9 @@ pub fn spawn_fvr03_production_voxel_scene(
         Update,
         (
             sync_fvr04_selection_marker,
+            sync_fvr11_creature_contact_shadows,
             sync_fvr04_camera_follow,
             sync_fvr04_creature_label,
-            sync_fvr04_creature_inspector_panel,
             sync_fvr05_panel_visibility,
             sync_fvr05_overlay_visibility,
             sync_fvr05_top_runtime_bar,
@@ -2141,7 +2116,18 @@ pub fn spawn_fvr03_production_voxel_scene(
     #[cfg(not(feature = "vfx-hanabi"))]
     app.add_systems(
         Update,
+        sync_fvr07_attached_fallback_vfx
+            .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
+    )
+    .add_systems(
+        Update,
         animate_fvr07_production_vfx.in_set(ProductionVoxelPresentationSet::ProceduralAnimation),
+    );
+    #[cfg(feature = "vfx-hanabi")]
+    app.add_systems(
+        Update,
+        sync_fvr07_attached_hanabi_vfx
+            .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
     );
     #[cfg(feature = "gpu-runtime")]
     app.add_systems(
@@ -2222,8 +2208,6 @@ pub fn spawn_fvr03_production_voxel_scene(
         })
         .add_systems(Update, request_fvr03_recorded_screenshot);
     }
-    spawn_fvr03_diagnostics_ui(app, summary, &settings);
-    spawn_fvr04_creature_inspector_panel(app);
     spawn_fvr05_production_ux_ui(app);
     spawn_v0_player_experience_ui(app);
     spawn_fvr04_creature_world_label(app, selected);
@@ -2840,6 +2824,7 @@ fn prepare_fvr04_lighting(
             ),
             scale: 1.0,
             source_kind: "creature",
+            stable_id: Some(creature.record.visual.stable_id),
         })
         .collect::<Vec<_>>();
     contact_shadows.extend(
@@ -2856,6 +2841,7 @@ fn prepare_fvr04_lighting(
                 ),
                 scale: 0.78,
                 source_kind: "dressing",
+                stable_id: None,
             }),
     );
     Fvr04PreparedLighting {
@@ -2922,6 +2908,7 @@ fn spawn_fvr04_prepared_lighting(world: &mut World, lighting: Fvr04PreparedLight
             crate::Fvr11ProductionContactShadow {
                 source_kind: shadow.source_kind,
                 tile: shadow.tile,
+                stable_id: shadow.stable_id,
                 display_only: true,
                 no_renderer_authority_over_world_actions_or_cognition: true,
             },
@@ -2983,7 +2970,7 @@ fn create_fvr04_runtime_scene_assets(
     app: &mut App,
     settings: &Fvr03ProductionVoxelRendererSettings,
 ) -> Fvr04RuntimeSceneAssets {
-    let voxel_materials = create_fvr03_materials(app, &settings.material_palette());
+    let selection_material = create_fvr03_selection_material(app, &settings.material_palette());
     let terrain_materials = create_production_terrain_material_library(app);
     install_animated_water_material(app, terrain_materials.water.clone());
     let dressing_library = create_terrain_dressing_library(app);
@@ -3011,7 +2998,7 @@ fn create_fvr04_runtime_scene_assets(
         })
         .collect();
     Fvr04RuntimeSceneAssets {
-        voxel_materials,
+        selection_material,
         terrain_materials,
         dressing_library,
         vfx_unit_mesh,
@@ -3050,51 +3037,6 @@ fn spawn_fvr04_runtime_scene_candidate(
     } = candidate;
     let snapshot = &runtime_state.snapshot;
     let selected = fvr04_runtime_scene_selection(&runtime_state, &visible_tiles);
-    for tile in tile_summaries_by_tile.values() {
-        world.spawn((
-            Name::new(format!(
-                "A-Life FVR03 voxel tile {}:{}",
-                tile.tile.x, tile.tile.z
-            )),
-            Transform::from_xyz(
-                tile.tile.x as f32 + 0.5,
-                tile.height_units * 0.5,
-                tile.tile.z as f32 + 0.5,
-            ),
-            Visibility::Hidden,
-            Fvr03ProductionVoxelTerrainTile {
-                tile: tile.tile,
-                chunk: tile.chunk,
-                material: tile.material,
-                height_units: tile.height_units,
-                resource_bias: tile.resource_bias,
-                hazard_pressure: tile.hazard_pressure,
-                stable_ref: tile.stable_ref,
-            },
-            Fvr04ProductionRuntimeSceneRoot,
-        ));
-    }
-    for chunk in &snapshot.visible_chunks {
-        world.spawn((
-            Name::new(format!(
-                "A-Life FVR03 resident voxel chunk {}:{}",
-                chunk.coord.x, chunk.coord.z
-            )),
-            Transform::default(),
-            Visibility::Hidden,
-            Fvr03ProductionVoxelChunk {
-                coord: chunk.coord,
-                signature: chunk.signature.0.clone(),
-                lod_level: fvr03_lod_for_chunk(chunk.coord),
-                dirty_generation: chunk.dirty_generation,
-                sampled_tiles: tile_summaries_by_tile
-                    .values()
-                    .filter(|tile| tile.chunk == chunk.coord)
-                    .count(),
-            },
-            Fvr04ProductionRuntimeSceneRoot,
-        ));
-    }
     let terrain_receipt = spawn_fvr11_layered_terrain_meshes(
         world,
         &assets.terrain_materials,
@@ -3129,7 +3071,7 @@ fn spawn_fvr04_runtime_scene_candidate(
     if let Some(selection) = selected {
         spawn_fvr03_selection_marker(
             world,
-            &assets.voxel_materials,
+            assets.selection_material.clone(),
             assets.selection_mesh.clone(),
             selection,
         );
@@ -3212,15 +3154,18 @@ fn install_fvr04_runtime_scene_resources(
     world.insert_resource(creatures);
 }
 
-fn create_fvr03_materials(
+fn create_fvr03_selection_material(
     app: &mut App,
     palette: &[Fvr03ProductionVoxelMaterialEntry],
-) -> BTreeMap<Fvr03ProductionVoxelMaterialKind, Handle<StandardMaterial>> {
-    let mut assets = app.world_mut().resource_mut::<Assets<StandardMaterial>>();
-    palette
+) -> Handle<StandardMaterial> {
+    let material = palette
         .iter()
-        .map(|entry| (entry.kind, assets.add(entry.standard_material())))
-        .collect()
+        .find(|entry| entry.kind == Fvr03ProductionVoxelMaterialKind::Selection)
+        .expect("FVR03 selection material exists")
+        .standard_material();
+    app.world_mut()
+        .resource_mut::<Assets<StandardMaterial>>()
+        .add(material)
 }
 
 fn prepare_fvr03_chunk_tiles(
@@ -3384,7 +3329,7 @@ fn spawn_fvr11_layered_terrain_meshes(
         .saturating_add(terrain_stats.transition_edges)
         .saturating_add(terrain_stats.water_quads)
         .clamp(1, naive_visible_faces.max(1));
-    let merge_ratio = if emitted_quads == 0 {
+    let face_reduction_ratio = if emitted_quads == 0 {
         0.0
     } else {
         naive_visible_faces as f32 / emitted_quads as f32
@@ -3399,16 +3344,12 @@ fn spawn_fvr11_layered_terrain_meshes(
         .collect::<BTreeSet<_>>()
         .len();
     Fvr11TerrainSpawnReceipt {
-        mesh_stats: Fvr09GreedyMeshStats {
-            mode: Fvr09MesherMode::BinaryGreedyQuads,
-            chunk_local_occupancy_masks: true,
-            six_direction_face_masks: true,
-            material_aware_merging: true,
-            neighbor_border_seams_checked: true,
+        mesh_stats: Fvr09TerrainMeshStats {
+            mode: Fvr09MesherMode::LayeredGridQuads,
             visible_voxels,
             naive_visible_faces,
             emitted_quads,
-            merge_ratio,
+            face_reduction_ratio,
             remesh_time_micros: started.elapsed().as_micros(),
             dirty_chunks,
             cached_chunks,
@@ -3433,38 +3374,49 @@ fn spawn_fvr05_overlay_batches(
     plans: Vec<Fvr04OverlaySpawnPlan>,
     materials: &BTreeMap<Fvr05ProductionOverlayKind, Handle<StandardMaterial>>,
 ) {
+    let mut cells_by_kind = BTreeMap::new();
     for plan in plans {
         let Fvr04OverlaySpawnPlan {
             kind,
             cells,
             visible,
         } = plan;
-        if cells.is_empty() {
-            continue;
+        if visible && !cells.is_empty() {
+            spawn_fvr05_overlay_batch(world, kind, &cells, materials, Visibility::Visible);
         }
-        let mesh = fvr05_batched_overlay_mesh(&cells);
-        let mesh_handle = world.resource_mut::<Assets<Mesh>>().add(mesh);
-        let material_handle = materials
-            .get(&kind)
-            .expect("prepared FVR05 overlay material exists")
-            .clone();
-        world.spawn((
-            Name::new(format!("A-Life FVR05 overlay {}", kind.label())),
-            Mesh3d(mesh_handle),
-            MeshMaterial3d(material_handle),
-            Transform::default(),
-            if visible {
-                Visibility::Visible
-            } else {
-                Visibility::Hidden
-            },
-            Fvr05ProductionOverlayBatch {
-                kind,
-                cell_count: cells.len(),
-            },
-            Fvr04ProductionRuntimeSceneRoot,
-        ));
+        cells_by_kind.insert(kind, cells);
     }
+    world.insert_resource(Fvr05OverlayGeometryCache { cells_by_kind });
+}
+
+fn spawn_fvr05_overlay_batch(
+    world: &mut World,
+    kind: Fvr05ProductionOverlayKind,
+    cells: &[Fvr05OverlayCell],
+    materials: &BTreeMap<Fvr05ProductionOverlayKind, Handle<StandardMaterial>>,
+    visibility: Visibility,
+) {
+    if cells.is_empty() {
+        return;
+    }
+    let mesh = fvr05_batched_overlay_mesh(cells);
+    let mesh_handle = world.resource_mut::<Assets<Mesh>>().add(mesh);
+    let material_handle = materials
+        .get(&kind)
+        .expect("prepared FVR05 overlay material exists")
+        .clone();
+    world.spawn((
+        Name::new(format!("A-Life FVR05 overlay {}", kind.label())),
+        Mesh3d(mesh_handle),
+        MeshMaterial3d(material_handle),
+        Transform::default(),
+        visibility,
+        Fvr05ProductionOverlayBatch {
+            kind,
+            cell_count: cells.len(),
+        },
+        Fvr04ProductionRuntimeSceneRoot,
+    ));
 }
 
 fn fvr05_overlay_cells(
@@ -3692,6 +3644,7 @@ fn spawn_fvr07_production_visual_polish(
                     kind: spawn.kind,
                     tile: spawn.tile,
                     stable_id: spawn.stable_id,
+                    follows_creature: spawn.follows_creature,
                     display_only: true,
                     no_renderer_authority_over_actions_or_cognition: true,
                     budget_state: settings.production_vfx_budget_state,
@@ -3923,6 +3876,7 @@ fn fvr07_push_tile_vfx(
         kind,
         tile: Some(tile.tile),
         stable_id: tile.stable_ref.stable_id,
+        follows_creature: false,
         translation: Vec3::new(
             tile.tile.x as f32 + 0.5,
             tile.height_units + fvr07_vfx_y_offset(kind),
@@ -3948,6 +3902,7 @@ fn fvr07_push_creature_vfx(
         kind,
         tile: Some(creature.tile),
         stable_id: Some(creature.visual.stable_id),
+        follows_creature: true,
         translation: Vec3::new(
             creature.tile.x as f32 + 0.5,
             2.08,
@@ -4076,44 +4031,47 @@ fn spawn_fvr07_hanabi_gpu_vfx_emitters(
 
     let budget = fvr07_hanabi_budget(settings.profile_id);
     let mut emitted = 0_usize;
+    let mut effects_by_kind = BTreeMap::new();
     for spawn in vfx_spawns.iter().take(budget.emitter_cap) {
-        let writer = ExprWriter::new();
-        let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
-        let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, writer.lit(1.85).expr());
-        let init_pos = SetPositionSphereModifier {
-            center: writer.lit(Vec3::ZERO).expr(),
-            radius: writer.lit(0.32).expr(),
-            dimension: ShapeDimension::Surface,
-        };
-        let init_vel = SetVelocitySphereModifier {
-            center: writer.lit(Vec3::ZERO).expr(),
-            speed: writer.lit(0.38).expr(),
-        };
-        let mut gradient = bevy_hanabi::Gradient::new();
-        gradient.add_key(
-            0.0,
-            bevy::prelude::Vec4::new(
-                spawn.color[0],
-                spawn.color[1],
-                spawn.color[2],
-                spawn.color[3] * budget.alpha_scale,
-            ),
-        );
-        gradient.add_key(
-            0.72,
-            bevy::prelude::Vec4::new(
-                spawn.color[0],
-                spawn.color[1],
-                spawn.color[2],
-                spawn.color[3] * budget.alpha_scale * 0.62,
-            ),
-        );
-        gradient.add_key(1.0, bevy::prelude::Vec4::splat(0.0));
-        let size_gradient =
-            bevy_hanabi::Gradient::constant(bevy::prelude::Vec3::splat(budget.particle_size));
-        let effect = {
-            let mut effects = world.resource_mut::<Assets<EffectAsset>>();
-            effects.add(
+        let effect = if let Some(effect) = effects_by_kind.get(&spawn.kind) {
+            effect.clone()
+        } else {
+            let writer = ExprWriter::new();
+            let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
+            let init_lifetime =
+                SetAttributeModifier::new(Attribute::LIFETIME, writer.lit(1.85).expr());
+            let init_pos = SetPositionSphereModifier {
+                center: writer.lit(Vec3::ZERO).expr(),
+                radius: writer.lit(0.32).expr(),
+                dimension: ShapeDimension::Surface,
+            };
+            let init_vel = SetVelocitySphereModifier {
+                center: writer.lit(Vec3::ZERO).expr(),
+                speed: writer.lit(0.38).expr(),
+            };
+            let mut gradient = bevy_hanabi::Gradient::new();
+            gradient.add_key(
+                0.0,
+                bevy::prelude::Vec4::new(
+                    spawn.color[0],
+                    spawn.color[1],
+                    spawn.color[2],
+                    spawn.color[3] * budget.alpha_scale,
+                ),
+            );
+            gradient.add_key(
+                0.72,
+                bevy::prelude::Vec4::new(
+                    spawn.color[0],
+                    spawn.color[1],
+                    spawn.color[2],
+                    spawn.color[3] * budget.alpha_scale * 0.62,
+                ),
+            );
+            gradient.add_key(1.0, bevy::prelude::Vec4::splat(0.0));
+            let size_gradient =
+                bevy_hanabi::Gradient::constant(bevy::prelude::Vec3::splat(budget.particle_size));
+            let effect = world.resource_mut::<Assets<EffectAsset>>().add(
                 EffectAsset::new(
                     budget.capacity,
                     SpawnerSettings::rate(budget.rate.into()),
@@ -4129,7 +4087,9 @@ fn spawn_fvr07_hanabi_gpu_vfx_emitters(
                     gradient: size_gradient,
                     screen_space_size: false,
                 }),
-            )
+            );
+            effects_by_kind.insert(spawn.kind, effect.clone());
+            effect
         };
         world.spawn((
             Name::new(format!(
@@ -4140,6 +4100,8 @@ fn spawn_fvr07_hanabi_gpu_vfx_emitters(
             Transform::from_translation(spawn.translation),
             Fvr07ProductionHanabiVfxEmitter {
                 kind: spawn.kind,
+                stable_id: spawn.stable_id,
+                follows_creature: spawn.follows_creature,
                 display_only: true,
                 no_renderer_authority_over_actions_or_cognition: true,
                 budget_state: settings.production_vfx_budget_state,
@@ -4611,6 +4573,9 @@ fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
 
     world.resource_scope(
         |world, frame: bevy::prelude::Mut<LiveBrainPresentationFrameResource>| {
+            if !frame.is_changed() {
+                return;
+            }
             let mut roots = world.query::<(
                 &ProductionCreatureAssemblyRoot,
                 &Fvr04ProductionCreatureVisualMarker,
@@ -4936,6 +4901,106 @@ fn fvr04_animation_speed(animation: CreatureAnimationState) -> f32 {
     }
 }
 
+fn live_agent_ground_position(
+    frame: &LiveBrainPresentationFrameResource,
+    stable_id: WorldEntityId,
+) -> Option<(VoxelTileCoord, Vec3)> {
+    let object = frame.current.object(stable_id)?;
+    (object.kind == WorldObjectKind::Agent).then(|| {
+        let tile = VoxelTileCoord::new(
+            object.position.x.round() as i32,
+            object.position.z.round() as i32,
+        );
+        (
+            tile,
+            Vec3::new(tile.x as f32 + 0.5, 0.0, tile.z as f32 + 0.5),
+        )
+    })
+}
+
+fn sync_fvr11_creature_contact_shadows(
+    mut commands: Commands,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    scene: Res<Fvr03ProductionVoxelSceneResource>,
+    mut shadows: bevy::prelude::Query<(
+        Entity,
+        &mut Transform,
+        &mut crate::Fvr11ProductionContactShadow,
+    )>,
+) {
+    let Some(frame) = frame.filter(|frame| frame.is_changed()) else {
+        return;
+    };
+    for (entity, mut transform, mut shadow) in &mut shadows {
+        let Some(stable_id) = shadow.stable_id else {
+            continue;
+        };
+        let Some((tile, position)) = live_agent_ground_position(&frame, stable_id) else {
+            commands.entity(entity).despawn();
+            continue;
+        };
+        shadow.tile = tile;
+        transform.translation.x = position.x;
+        transform.translation.z = position.z;
+        if let Some(summary) = scene.tile_summaries_by_tile.get(&tile) {
+            transform.translation.y = summary.height_units + 0.018;
+        }
+    }
+}
+
+#[cfg(not(feature = "vfx-hanabi"))]
+fn sync_fvr07_attached_fallback_vfx(
+    mut commands: Commands,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    mut markers: bevy::prelude::Query<(Entity, &mut Transform, &mut Fvr07ProductionGpuVfxMarker)>,
+) {
+    let Some(frame) = frame.filter(|frame| frame.is_changed()) else {
+        return;
+    };
+    for (entity, mut transform, mut marker) in &mut markers {
+        if !marker.follows_creature {
+            continue;
+        }
+        let Some(stable_id) = marker.stable_id else {
+            continue;
+        };
+        let Some((tile, position)) = live_agent_ground_position(&frame, stable_id) else {
+            commands.entity(entity).despawn();
+            continue;
+        };
+        marker.tile = Some(tile);
+        marker.base_translation.x = position.x;
+        marker.base_translation.z = position.z;
+        transform.translation.x = position.x;
+        transform.translation.z = position.z;
+    }
+}
+
+#[cfg(feature = "vfx-hanabi")]
+fn sync_fvr07_attached_hanabi_vfx(
+    mut commands: Commands,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    mut emitters: bevy::prelude::Query<(Entity, &mut Transform, &Fvr07ProductionHanabiVfxEmitter)>,
+) {
+    let Some(frame) = frame.filter(|frame| frame.is_changed()) else {
+        return;
+    };
+    for (entity, mut transform, emitter) in &mut emitters {
+        if !emitter.follows_creature {
+            continue;
+        }
+        let Some(stable_id) = emitter.stable_id else {
+            continue;
+        };
+        let Some((_, position)) = live_agent_ground_position(&frame, stable_id) else {
+            commands.entity(entity).despawn();
+            continue;
+        };
+        transform.translation.x = position.x;
+        transform.translation.z = position.z;
+    }
+}
+
 #[cfg(not(feature = "vfx-hanabi"))]
 fn animate_fvr07_production_vfx(
     time: Res<Time>,
@@ -5145,17 +5210,13 @@ fn fvr04_sleep_phase_text(phase: alife_core::SleepPhase) -> &'static str {
 
 fn spawn_fvr03_selection_marker(
     world: &mut World,
-    materials: &BTreeMap<Fvr03ProductionVoxelMaterialKind, Handle<StandardMaterial>>,
+    material: Handle<StandardMaterial>,
     mesh: Handle<Mesh>,
     selection: StableVoxelObjectRef,
 ) {
     let Some(tile) = selection.tile else {
         return;
     };
-    let material = materials
-        .get(&Fvr03ProductionVoxelMaterialKind::Selection)
-        .expect("FVR03 selection material exists")
-        .clone();
     world.spawn((
         Name::new(format!("A-Life FVR03 selected tile {}:{}", tile.x, tile.z)),
         Mesh3d(mesh),
@@ -5184,79 +5245,6 @@ fn spawn_fvr04_creature_world_label(app: &mut App, selected: Option<StableVoxelO
             Visibility::Hidden
         },
         Fvr04ProductionCreatureWorldLabel,
-    ));
-}
-
-fn spawn_fvr04_creature_inspector_panel(app: &mut App) {
-    app.world_mut().spawn((
-        Name::new("A-Life FVR04 creature inspector panel"),
-        Text::new("Creature\nselection: none"),
-        TextFont {
-            font_size: 15.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.90, 0.96, 0.86)),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(18.0),
-            right: Val::Px(18.0),
-            max_width: Val::Px(420.0),
-            padding: bevy::ui::UiRect::all(Val::Px(12.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.014, 0.020, 0.017, 0.84)),
-        Visibility::Hidden,
-        Fvr04ProductionCreatureInspectorPanel,
-    ));
-}
-
-fn spawn_fvr03_diagnostics_ui(
-    app: &mut App,
-    summary: &ProductionVoxelLaunchSummary,
-    settings: &Fvr03ProductionVoxelRendererSettings,
-) {
-    app.world_mut().spawn((
-        Name::new("A-Life FVR03 production voxel diagnostics"),
-        Text::new(format!(
-            "A-Life Voxel Frontend\nprofile: {} | population: {}\nrenderer: {} | backend: {}\ntarget: {} FPS | chunks radius: {} | stride: {}\nmesher: {} | material atlas: {}\ncreatures: {} / {}\nruntime: {} | unavailable: {}\nsave: {}",
-            summary.profile_id.label(),
-            summary.effective_population,
-            summary.renderer_profile,
-            FVR10_RENDERER_BACKEND_ID,
-            settings.target_fps,
-            settings.draw_radius_chunks,
-            settings.tile_stride,
-            Fvr09MesherMode::BinaryGreedyQuads.label(),
-            settings.material_palette_version,
-            FVR10_CUTE_BIPED_VISUAL_PROFILE,
-            FVR10_CUTE_BIPED_MATERIAL_VERSION,
-            summary.diagnostics.selected_backend,
-            summary
-                .diagnostics
-                .unavailable_reason
-                .as_deref()
-                .unwrap_or("None"),
-            summary
-                .save_path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("unknown"),
-        )),
-        TextFont {
-            font_size: 16.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.86, 0.96, 0.90)),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(18.0),
-            left: Val::Px(18.0),
-            max_width: Val::Px(650.0),
-            padding: bevy::ui::UiRect::all(Val::Px(12.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.015, 0.026, 0.020, 0.82)),
-        Visibility::Hidden,
     ));
 }
 
@@ -5956,18 +5944,53 @@ fn sync_fvr05_panel_visibility(
 }
 
 fn sync_fvr05_overlay_visibility(
+    mut commands: Commands,
     ux: Res<Fvr05ProductionUxStateResource>,
+    cache: Res<Fvr05OverlayGeometryCache>,
+    assets: Res<Fvr04RuntimeSceneAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
     mut overlays: bevy::prelude::Query<(&Fvr05ProductionOverlayBatch, &mut Visibility)>,
 ) {
     if !ux.is_changed() {
         return;
     }
+    let mut spawned = BTreeSet::new();
     for (overlay, mut visibility) in &mut overlays {
+        spawned.insert(overlay.kind);
         *visibility = if ux.active_overlay(overlay.kind) {
             Visibility::Visible
         } else {
             Visibility::Hidden
         };
+    }
+    for kind in Fvr05ProductionOverlayKind::all().iter().copied() {
+        if !ux.active_overlay(kind) || spawned.contains(&kind) {
+            continue;
+        }
+        let Some(cells) = cache.cells_by_kind.get(&kind) else {
+            continue;
+        };
+        if cells.is_empty() {
+            continue;
+        }
+        let mesh = meshes.add(fvr05_batched_overlay_mesh(cells));
+        let material = assets
+            .overlay_materials
+            .get(&kind)
+            .expect("prepared FVR05 overlay material exists")
+            .clone();
+        commands.spawn((
+            Name::new(format!("A-Life FVR05 overlay {}", kind.label())),
+            Mesh3d(mesh),
+            MeshMaterial3d(material),
+            Transform::default(),
+            Visibility::Visible,
+            Fvr05ProductionOverlayBatch {
+                kind,
+                cell_count: cells.len(),
+            },
+            Fvr04ProductionRuntimeSceneRoot,
+        ));
     }
 }
 
@@ -6036,7 +6059,7 @@ fn sync_fvr05_left_control_panel(
         .map(|error| format!("\nERROR\n{error}\n"))
         .unwrap_or_default();
     let text = format!(
-        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1/2/3 speed\n[ ] adjust speed\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\n4-9/B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nSTATS (REAL RUNTIME)\ncreatures {}\nchunks loaded {}\nchunks resident {}\ntiles sampled {}\nmesher {} quads {} merge {:.2}x\nremesh budget {} dirty {} cached {} skipped {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
+        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1/2/3 speed\n[ ] adjust speed\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\n4-9/B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nSTATS (REAL RUNTIME)\ncreatures {}\nchunks loaded {}\nchunks resident {}\ntiles sampled {}\nmesher {} quads {} face reduction {:.2}x\nremesh budget {} dirty {} cached {} skipped {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
         if ux.settings.paused { "paused" } else { "running" },
         ux.settings.follow_selection,
         ux.settings.pause_on_focus_loss,
@@ -6048,7 +6071,7 @@ fn sync_fvr05_left_control_panel(
         scene.tile_mesh_count,
         scene.mesh_stats.mode.label(),
         scene.mesh_stats.emitted_quads,
-        scene.mesh_stats.merge_ratio,
+        scene.mesh_stats.face_reduction_ratio,
         scene.mesh_stats.remesh_budget_chunks_per_frame,
         scene.mesh_stats.dirty_chunks,
         scene.mesh_stats.cached_chunks,
@@ -6183,7 +6206,7 @@ fn sync_fvr05_footer_status_bar(
         scene.visible_chunk_count,
         scene.creature_lod.label(),
         scene.mesh_stats.mode.label(),
-        scene.mesh_stats.merge_ratio,
+        scene.mesh_stats.face_reduction_ratio,
         scene.estimated_resident_bytes,
         ux.selected_backend,
         ux.ui_settings_path.display(),
@@ -6430,59 +6453,6 @@ fn sync_fvr04_creature_label(
         if *visibility != Visibility::Visible {
             *visibility = Visibility::Visible;
         }
-    }
-}
-
-fn sync_fvr04_creature_inspector_panel(
-    selection: Res<Fvr03ProductionVoxelSelectionResource>,
-    creatures: Res<Fvr04ProductionCreatureSceneResource>,
-    follow: Res<Fvr04ProductionCreatureFollowResource>,
-    frame: Option<Res<LiveBrainPresentationFrameResource>>,
-    entity_map: Res<BevyEntityMap>,
-    roots: bevy::prelude::Query<(
-        &ProductionCreatureAssemblyRoot,
-        &Fvr04ProductionCreatureVisualMarker,
-    )>,
-    mut panels: bevy::prelude::Query<&mut Text, With<Fvr04ProductionCreatureInspectorPanel>>,
-) {
-    if !selection.is_changed()
-        && !creatures.is_changed()
-        && !follow.is_changed()
-        && !frame.as_ref().is_some_and(|frame| frame.is_changed())
-    {
-        return;
-    }
-    let selected_live =
-        selected_live_creature_object(selection.selected, frame.as_ref().map(|frame| &**frame));
-    let live_state = selected_live.and_then(|(stable_id, organism_id, tick, position)| {
-        entity_map
-            .bevy_entity(stable_id)
-            .and_then(|entity| roots.get(entity).ok())
-            .is_some_and(|(root, visual)| {
-                root.stable_id == stable_id
-                    && visual.stable_id == stable_id
-                    && root.stable_id == visual.stable_id
-                    && visual.organism_id == organism_id
-            })
-            .then_some((tick, position))
-    });
-    let suffix = if follow.enabled {
-        "follow: on"
-    } else {
-        "follow: off"
-    };
-    let text = format!(
-        "{}\n{}",
-        fvr04_live_creature_inspector_text(
-            selection.selected,
-            &creatures,
-            live_state,
-            frame.as_ref().map(|frame| &**frame),
-        ),
-        suffix
-    );
-    for mut panel in &mut panels {
-        panel.0 = text.clone();
     }
 }
 
@@ -7379,17 +7349,6 @@ fn fvr03_tile_height(
     base.clamp(0.16, 1.28)
 }
 
-fn fvr03_lod_for_chunk(coord: VoxelChunkCoord) -> u8 {
-    let distance = coord.x.abs().max(coord.z.abs());
-    if distance <= 2 {
-        0
-    } else if distance <= 5 {
-        1
-    } else {
-        2
-    }
-}
-
 fn fvr03_estimated_resident_bytes(tile_count: usize, chunk_count: usize) -> usize {
     tile_count
         .saturating_mul(192)
@@ -7424,7 +7383,7 @@ fn write_fvr03_performance_artifact(
             )
         };
     let contents = format!(
-        "{{\n  \"schema\": \"{}\",\n  \"profile\": \"{}\",\n  \"backend\": \"{}\",\n  \"target_fps\": {},\n  \"visible_chunks\": {},\n  \"resident_chunks\": {},\n  \"tile_mesh_count\": {},\n  \"mesher_mode\": \"{}\",\n  \"material_palette_version\": \"{}\",\n  \"visible_voxels\": {},\n  \"naive_visible_faces\": {},\n  \"emitted_quads\": {},\n  \"merge_ratio\": {:.3},\n  \"remesh_time_micros\": {},\n  \"dirty_chunks\": {},\n  \"cached_chunks\": {},\n  \"skipped_chunks\": {},\n  \"remesh_budget_chunks_per_frame\": {},\n  \"mesh_cache_key\": \"{}\",\n  \"creature_render_count\": {},\n  \"creature_visual_profile\": \"{}\",\n  \"creature_mesh_material_version\": \"{}\",\n  \"creature_material_bucket_count\": {},\n  \"creature_lod\": \"{}\",\n  \"creature_root_count\": {},\n  \"creature_part_entity_count\": {},\n  \"creature_join_cover_count\": {},\n  \"creature_part_family_count\": {},\n  \"creature_mixed_assembly_count\": {},\n  \"creature_shared_mesh_handle_count\": {},\n  \"production_dressing_count\": {},\n  \"production_vfx_marker_count\": {},\n  \"production_gpu_vfx_emitter_count\": {},\n  \"production_vfx_budget_state\": \"{}\",\n  \"production_visuals_display_only\": {},\n  \"production_vfx_uses_hanabi_gpu_particles\": {},\n  \"estimated_resident_bytes\": {},\n  \"measured_fps\": {},\n  \"measured_frame_count\": {},\n  \"measured_seconds\": {},\n  \"performance_claim_status\": \"{}\"\n}}\n",
+        "{{\n  \"schema\": \"{}\",\n  \"profile\": \"{}\",\n  \"backend\": \"{}\",\n  \"target_fps\": {},\n  \"visible_chunks\": {},\n  \"resident_chunks\": {},\n  \"tile_mesh_count\": {},\n  \"mesher_mode\": \"{}\",\n  \"material_palette_version\": \"{}\",\n  \"visible_voxels\": {},\n  \"naive_visible_faces\": {},\n  \"emitted_quads\": {},\n  \"face_reduction_ratio\": {:.3},\n  \"remesh_time_micros\": {},\n  \"dirty_chunks\": {},\n  \"cached_chunks\": {},\n  \"skipped_chunks\": {},\n  \"remesh_budget_chunks_per_frame\": {},\n  \"mesh_cache_key\": \"{}\",\n  \"creature_render_count\": {},\n  \"creature_visual_profile\": \"{}\",\n  \"creature_mesh_material_version\": \"{}\",\n  \"creature_material_bucket_count\": {},\n  \"creature_lod\": \"{}\",\n  \"creature_root_count\": {},\n  \"creature_part_entity_count\": {},\n  \"creature_join_cover_count\": {},\n  \"creature_part_family_count\": {},\n  \"creature_mixed_assembly_count\": {},\n  \"creature_shared_mesh_handle_count\": {},\n  \"production_dressing_count\": {},\n  \"production_vfx_marker_count\": {},\n  \"production_gpu_vfx_emitter_count\": {},\n  \"production_vfx_budget_state\": \"{}\",\n  \"production_visuals_display_only\": {},\n  \"production_vfx_uses_hanabi_gpu_particles\": {},\n  \"estimated_resident_bytes\": {},\n  \"measured_fps\": {},\n  \"measured_frame_count\": {},\n  \"measured_seconds\": {},\n  \"performance_claim_status\": \"{}\"\n}}\n",
         scene.schema,
         scene.profile_id.label(),
         scene.backend_id,
@@ -7437,7 +7396,7 @@ fn write_fvr03_performance_artifact(
         scene.mesh_stats.visible_voxels,
         scene.mesh_stats.naive_visible_faces,
         scene.mesh_stats.emitted_quads,
-        scene.mesh_stats.merge_ratio,
+        scene.mesh_stats.face_reduction_ratio,
         scene.mesh_stats.remesh_time_micros,
         scene.mesh_stats.dirty_chunks,
         scene.mesh_stats.cached_chunks,
@@ -7725,16 +7684,12 @@ mod tests {
             production_vfx_budget_state: "conservative",
             production_visuals_display_only: true,
             production_vfx_uses_hanabi_gpu_particles: cfg!(feature = "vfx-hanabi"),
-            mesh_stats: Fvr09GreedyMeshStats {
-                mode: Fvr09MesherMode::BinaryGreedyQuads,
-                chunk_local_occupancy_masks: true,
-                six_direction_face_masks: true,
-                material_aware_merging: true,
-                neighbor_border_seams_checked: true,
+            mesh_stats: Fvr09TerrainMeshStats {
+                mode: Fvr09MesherMode::LayeredGridQuads,
                 visible_voxels: 4,
                 naive_visible_faces: 24,
                 emitted_quads: 18,
-                merge_ratio: 1.333,
+                face_reduction_ratio: 1.333,
                 remesh_time_micros: 0,
                 dirty_chunks: 0,
                 cached_chunks: 1,
@@ -7782,6 +7737,7 @@ mod tests {
                 kind: Fvr07ProductionVfxKind::SleepGlow,
                 tile: None,
                 stable_id: None,
+                follows_creature: false,
                 display_only: true,
                 no_renderer_authority_over_actions_or_cognition: true,
                 budget_state: "test",

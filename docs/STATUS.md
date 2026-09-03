@@ -1,10 +1,10 @@
 # Current status
 
-Status date: 2026-08-08
+Status date: 2026-09-02
 
 ## Honest headline
 
-The GPU-authoritative headless organism loop is implemented and starts inside the production voxel application. The active voxel renderer remains a save-derived projection. The visible application is therefore not yet causally closed around the live simulation.
+The GPU-authoritative organism loop starts inside the production voxel application. The renderer seeds its records from the selected save, then consumes tick-bound authoritative frames for movement, births, selection, follow state, and retirement. The source path is causally connected. Current-source rendered lifecycle and performance proof remain outstanding.
 
 The project is a research alpha. It is not ready for a public claim of an autonomous GPU voxel life game.
 
@@ -22,9 +22,9 @@ The project is a research alpha. It is not ready for a public claim of an autono
 | World legality, unscored candidates, action execution, outcomes | Yes | Yes | Indirectly | Source-backed; prior bounded receipts |
 | GPU closed-loop cognition and learning | Yes | Yes | Telemetry only | Source-bound EI receipts; not current-HEAD product proof |
 | Save and GPU checkpoint contracts | Yes | Yes | Save surface | Source and prior round-trip receipts |
-| Live world-to-voxel transforms | No | No | No | Open |
-| Autonomous birth, ageing, reproduction, and death | Partial | No complete loop | No | Open |
-| Birth/death archive transactions | Yes | No active production caller | No | Source methods only |
+| Live world-to-voxel transforms | Yes | Yes | Yes | Source-backed; fresh rendered proof pending |
+| Autonomous birth, ageing, reproduction, and death | Partial | Runtime presentation hooks active | Partial | Fresh autonomous lifecycle proof pending |
+| Birth/death archive transactions | Yes | Runtime lifecycle path present | Retirement is visible | Source-backed; fresh transaction receipt pending |
 | Teacher perception boundary | Yes | School smoke only | Diagnostic surfaces | Bounded smoke source, not live GPU school proof |
 | Private local SLM prior | Yes | No live cognition call | No | Local inference smoke only |
 | Optional SLM speech translation | Yes | Yes | Yes | Not exercised in this reset |
@@ -37,16 +37,21 @@ The project is a research alpha. It is not ready for a public claim of an autono
 1. `production-voxel` runs preflight and selects a source save.
 2. The Bevy shell restores a required `GpuLiveBrainRuntime` and schedules its tick.
 3. The GPU runtime gathers perception, enumerates unscored candidates, selects an action in WGSL, asks the world to execute it, applies the sealed result, and advances the world.
-4. The renderer separately reconstructs creature records from the save and animates them around immutable base positions.
+4. The renderer reconstructs initial creature records from the save.
+5. Each changed presentation frame moves matching creature roots, creates missing newborn roots, and reconciles retired identities.
+6. UI, selection, follow, contact shadows, and creature-attached effects read the same tick-bound presentation state.
 
-The missing link is a read-only presentation projection from the live authoritative world to matching voxel entities. A GPU tick can change the headless world without changing a visible creature transform.
+The bridge is implemented and integrated in source. This status does not substitute for a fresh Vulkan run showing a complete birth-to-retirement sequence.
 
 ## Important control gaps
 
 - Pause currently stops procedural animation, not the GPU tick.
 - Load reads and validates save and UX state, but does not replace the active runtime and rendered scene.
 - Save can capture a real GPU checkpoint, but save/load/player-visible restoration still needs one fresh-process causal proof.
-- The production shell does not attach the lineage archive or schedule organism birth, ageing, death, and reproduction.
+- Full autonomous lifecycle and lineage behavior still needs current-source causal and rendered proof.
+- Dynamic overlay geometry is still derived from the launch snapshot.
+- VFX placement follows live creatures, but effect triggers are still selected from launch state rather than live events.
+- Creature LOD is profile-selected rather than camera-distance selected.
 
 ## Evolutionary-intelligence results
 
@@ -70,4 +75,4 @@ Production insertion supports N512, N1024, and N2048. N2048 is the current train
 
 ## Release status
 
-Not ready. Release requires a live presentation bridge, autonomous lifecycle, truthful controls, current-source GPU and rendered evidence, target-hardware measurements, external playtest feedback, and an explicit release decision.
+Not ready. Release requires autonomous lifecycle proof, truthful controls, current-source GPU and rendered evidence, target-hardware measurements, external playtest feedback, and an explicit release decision.

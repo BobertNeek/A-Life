@@ -53,7 +53,7 @@ fn fvr01_profile_registry_exposes_minimum_default_and_scale_up_profiles() {
     assert_eq!(minimum.cold_brain_slots, 14);
     assert!((minimum.internal_render_scale_floor - 0.67).abs() < f32::EPSILON);
     assert!(minimum.hard_floor);
-    assert_eq!(minimum.renderer_profile, "internal-greedy-voxel");
+    assert_eq!(minimum.renderer_profile, "internal-layered-grid");
 
     let comfort = ProductionFrontendProfileId::MinSpecComfort1080p.budget();
     assert_eq!(comfort.default_population, 30);
@@ -128,7 +128,7 @@ fn fvr01_dry_run_uses_real_save_and_production_state_pipeline() {
         ]
     );
     assert_eq!(summary.window_title, "A-Life Voxel Frontend");
-    assert_eq!(summary.renderer_profile, "internal-greedy-voxel");
+    assert_eq!(summary.renderer_profile, "internal-layered-grid");
     assert!(summary.real_save_loaded);
     assert!(!summary.mock_data_source);
     assert_eq!(

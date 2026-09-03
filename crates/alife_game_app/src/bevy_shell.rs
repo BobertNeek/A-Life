@@ -856,6 +856,10 @@ fn reconcile_production_presentation(
     mut follow: ResMut<crate::production_voxel_renderer::Fvr04ProductionCreatureFollowResource>,
     mut scene: ResMut<crate::production_voxel_renderer::Fvr04ProductionCreatureSceneResource>,
 ) {
+    if !frame.is_changed() {
+        return;
+    }
+
     for (entity, root) in roots.iter() {
         let is_live = frame.current.organism(root.stable_id).is_some_and(|row| {
             row.organism_id == root.organism_id
