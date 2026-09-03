@@ -50,20 +50,19 @@ use alife_core::{
     Validate, Vec3f, WorldEntityId, MAX_ACTIVE_CONCEPTS, MAX_ACTIVE_GAPS,
     MAX_CONTEXT_MEMORY_EXPECTANCIES,
 };
+#[cfg(feature = "gpu-tests")]
+use alife_gpu_backend::GpuExactPopulationCaptureMetricsV1;
 use alife_gpu_backend::{
     decode_exact_population_sleep_replay, GpuActivityRuntimeSnapshot, GpuAuthorityReceiptV1,
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
     GpuClosedLoopMemoryTickInput, GpuClosedLoopTick, GpuCompactCheckpointAuthorityV1,
     GpuCuratedResidencyCohort, GpuCuratedResidencyEntry, GpuCuratedResidencyOutcome,
-    GpuCuratedResidencyReceipt, GpuCuratedResidencyTargetIdentity,
-    GpuExactPopulationCapturePollV1,
+    GpuCuratedResidencyReceipt, GpuCuratedResidencyTargetIdentity, GpuExactPopulationCapturePollV1,
     GpuExactPopulationCaptureTicketV1, GpuExactPopulationCaptureV1, GpuLearningReceipt,
     GpuMemoryContextUpload, GpuV11WorkReceipt, PendingEligibilityDiscardReceipt,
     PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
     GPU_FAST_PLASTICITY_COMMIT_BYTES, GPU_MOTOR_CHANNEL_SLOT_COUNT,
 };
-#[cfg(feature = "gpu-tests")]
-use alife_gpu_backend::GpuExactPopulationCaptureMetricsV1;
 use alife_runtime::{
     DurableGpuCheckpointMonotonicityPermit, DurableGpuCheckpointRef, GpuAuthoritativeSession,
     GpuExactCheckpointTransactionContextV1, GpuSessionAuthority, GpuSessionConsumerKind,
@@ -456,7 +455,7 @@ fn advance_and_synchronize_authority(
     body_events: &BTreeMap<u64, BodyEventDelta>,
 ) -> Result<AuthorityAdvanceTiming, ScaffoldContractError> {
     let world_advance_started = Instant::now();
-    let advanced_tick = world.try_advance_tick_with_body_events(body_events)?;
+    let advanced_tick = world.try_advance_tick_with_body_events_in_staged_tick(body_events)?;
     let world_advance_ns = elapsed_ns(world_advance_started);
     if advanced_tick != tick_after {
         return Err(ScaffoldContractError::NonMonotonicTick);
@@ -1391,11 +1390,10 @@ fn run_exact_population_checkpoint_finalize_worker(
                                 durability.store.root(),
                                 &durability.published.save,
                             )?;
-                            let manual_manifest = GpuDurableSaveManifest::open(
+                            let (_, manual_published) = GpuDurableSaveManifest::open_loaded(
                                 &request.destination,
                                 durability.store.root(),
                             )?;
-                            let manual_published = manual_manifest.load()?;
                             if manual_published.save != durability.published.save {
                                 return Err(GameAppShellError::InvalidProductionFrontend {
                                         message: "manual checkpoint reload differs from the exact worker generation"
@@ -1786,9 +1784,9 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                 {
                     return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
                 }
-                let request = self
-                    .backend
-                    .prepare_sleep_consolidation(self.handle, intent, &replay)?;
+                let request =
+                    self.backend
+                        .prepare_sleep_consolidation(self.handle, intent, &replay)?;
                 ConsolidationDriverEvent::Prepared { request }
             }
             (ConsolidationState::Prepared { request }, None) => {
@@ -1796,9 +1794,9 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
                 if replay.canonical_digest != request.replay_digest {
                     return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
                 }
-                let job_id = self
-                    .backend
-                    .submit_sleep_consolidation(self.handle, &request, &replay)?;
+                let job_id =
+                    self.backend
+                        .submit_sleep_consolidation(self.handle, &request, &replay)?;
                 ConsolidationDriverEvent::Submitted { request, job_id }
             }
             (ConsolidationState::Submitted { request, job_id }, None) => {
@@ -2947,7 +2945,7 @@ pub struct GpuLiveBrainRuntime {
     pending_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
     exact_checkpoint_waiting_for_sleep_journal: bool,
     manual_checkpoint_waiting_for_sleep_journal: Option<PathBuf>,
-    post_promotion_fail_stop_armed: bool,
+    post_irreversible_gpu_commit_fail_stop_armed: bool,
     retained_learning: BTreeMap<u64, RetainedLearningRecovery>,
     world: HeadlessWorld,
     deterministic_seed: u64,
@@ -4067,12 +4065,19 @@ fn replace_canonical_organism_record(
     world.replace_organism_record_exact(replacement)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WorldMutationRollback {
+    Local,
+    EnclosingStagedTick,
+}
+
 fn seal_prepared_selection_core(
     world: &mut HeadlessWorld,
     residents: &mut BTreeMap<u64, ResidentCognition>,
     sealed_patch_count: usize,
     cognitive_work_cost_policy: CognitiveWorkCostPolicy,
     schedule_sleep: bool,
+    rollback: WorldMutationRollback,
     prepared: PreparedSealInput,
 ) -> Result<SealedWorldSelection, GameAppShellError> {
     let PreparedSealInput {
@@ -4121,20 +4126,27 @@ fn seal_prepared_selection_core(
             )?,
         ],
     )?;
-    let motor_receipt = world
-        .apply_registered_motor_bundle_with_neural_emission(
+    let motor_result = match rollback {
+        WorldMutationRollback::Local => world.apply_registered_motor_bundle_with_neural_emission(
             &motor_bundle,
             world_entity_id,
             &neural_emission,
-        )
-        .map_err(|error| match error {
-            alife_world::HeadlessMotorTransactionError::Contract(error) => {
-                GameAppShellError::Core(error)
-            }
-            alife_world::HeadlessMotorTransactionError::UnsupportedChannel(_) => {
-                GameAppShellError::Core(ScaffoldContractError::InvalidActionDecision)
-            }
-        })?;
+        ),
+        WorldMutationRollback::EnclosingStagedTick => world
+            .apply_registered_motor_bundle_with_neural_emission_in_staged_tick(
+                &motor_bundle,
+                world_entity_id,
+                &neural_emission,
+            ),
+    };
+    let motor_receipt = motor_result.map_err(|error| match error {
+        alife_world::HeadlessMotorTransactionError::Contract(error) => {
+            GameAppShellError::Core(error)
+        }
+        alife_world::HeadlessMotorTransactionError::UnsupportedChannel(_) => {
+            GameAppShellError::Core(ScaffoldContractError::InvalidActionDecision)
+        }
+    })?;
     let physical = motor_receipt.joint.execution;
     let succeeded = motor_receipt.succeeded;
     let target_state = grounded_successor_state(
@@ -4284,8 +4296,8 @@ impl GpuLiveBrainRuntime {
         config.validate()?;
         let manifest = AssetManifest::from_json_file(&launch.asset_manifest_path)?;
         manifest.validate_with_root(&launch.asset_root)?;
-        let durable_manifest = GpuDurableSaveManifest::open(&launch.save_path, &launch.asset_root)?;
-        let loaded_save = durable_manifest.load()?;
+        let (durable_manifest, loaded_save) =
+            GpuDurableSaveManifest::open_loaded(&launch.save_path, &launch.asset_root)?;
         let save = loaded_save.save.clone();
         save.validate_with_asset_root(&launch.asset_root)?;
         if launch.brain_policy != alife_core::PolicyBackend::NeuralClosedLoopGpu
@@ -5308,7 +5320,7 @@ impl GpuLiveBrainRuntime {
             pending_sleep_journal_entries: Vec::new(),
             exact_checkpoint_waiting_for_sleep_journal: false,
             manual_checkpoint_waiting_for_sleep_journal: None,
-            post_promotion_fail_stop_armed: false,
+            post_irreversible_gpu_commit_fail_stop_armed: false,
             retained_learning: BTreeMap::new(),
             world,
             deterministic_seed,
@@ -5438,7 +5450,7 @@ impl GpuLiveBrainRuntime {
             pending_sleep_journal_entries: Vec::new(),
             exact_checkpoint_waiting_for_sleep_journal: false,
             manual_checkpoint_waiting_for_sleep_journal: None,
-            post_promotion_fail_stop_armed: false,
+            post_irreversible_gpu_commit_fail_stop_armed: false,
             retained_learning: BTreeMap::new(),
             world,
             deterministic_seed,
@@ -5992,8 +6004,8 @@ impl GpuLiveBrainRuntime {
         let save_path = save_path.as_ref();
         let asset_root = asset_root.as_ref();
         GpuDurableSaveManifest::publish_snapshot(save_path, asset_root, &base)?;
-        let durable_manifest = GpuDurableSaveManifest::open(save_path, asset_root)?;
-        let published = durable_manifest.load()?;
+        let (durable_manifest, published) =
+            GpuDurableSaveManifest::open_loaded(save_path, asset_root)?;
         let store = GpuCheckpointAssetStore::new(durable_manifest.asset_root().to_path_buf())?;
         let canonical_save_id = published.save.save_id.clone();
         let durability = GpuLiveCheckpointDurability {
@@ -6069,9 +6081,8 @@ impl GpuLiveBrainRuntime {
         asset_root: impl AsRef<Path>,
         expected: &PortableSaveFile,
     ) -> Result<(), GameAppShellError> {
-        let durable_manifest =
-            GpuDurableSaveManifest::open(save_path.as_ref(), asset_root.as_ref())?;
-        let published = durable_manifest.load()?;
+        let (durable_manifest, published) =
+            GpuDurableSaveManifest::open_loaded(save_path.as_ref(), asset_root.as_ref())?;
         if published.save != *expected {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "rebound GPU checkpoint boundary differs from the exact save".to_string(),
@@ -6332,9 +6343,7 @@ impl GpuLiveBrainRuntime {
         if entries.is_empty() {
             return Ok(());
         }
-        if self.sleep_journal_publication_worker.is_some()
-            || self.checkpoint_durability.is_none()
-        {
+        if self.sleep_journal_publication_worker.is_some() || self.checkpoint_durability.is_none() {
             append_bounded_sleep_journal_entries(&mut self.pending_sleep_journal_entries, entries)?;
             self.performance_metrics.sleep_journal_pending_entries_peak = self
                 .performance_metrics
@@ -8305,6 +8314,7 @@ impl GpuLiveBrainRuntime {
         };
         match result {
             Ok(receipt) => {
+                self.post_irreversible_gpu_commit_fail_stop_armed = true;
                 self.retained_learning.remove(&raw);
                 self.last_learning_receipts.push(receipt);
                 Ok(false)
@@ -8570,7 +8580,7 @@ impl GpuLiveBrainRuntime {
             Option<ConsolidationIntent>,
         ) -> SleepProgressResult,
     {
-        self.post_promotion_fail_stop_armed = false;
+        self.post_irreversible_gpu_commit_fail_stop_armed = false;
         self.poll_sleep_journal_publication()?;
         if self.exact_checkpoint_waiting_for_sleep_journal {
             return Ok(GpuLiveTickOutcome::NoProgress(
@@ -8630,11 +8640,13 @@ impl GpuLiveBrainRuntime {
                 .rollback_clone_zero_progress_calls
                 .saturating_add(1);
         }
-        if result.is_err() && self.post_promotion_fail_stop_armed {
+        // Host staging can restore the world and resident maps, but it cannot
+        // undo a committed GPU learning or sleep-promotion transaction.
+        if result.is_err() && self.post_irreversible_gpu_commit_fail_stop_armed {
             self.backend
                 .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
         }
-        self.post_promotion_fail_stop_armed = false;
+        self.post_irreversible_gpu_commit_fail_stop_armed = false;
         if let Err(error) = &result {
             let contract_error = match error {
                 GameAppShellError::Core(error)
@@ -9343,7 +9355,7 @@ impl GpuLiveBrainRuntime {
                 .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
             return Err(error);
         }
-        self.post_promotion_fail_stop_armed = !completed_promotions.is_empty();
+        self.post_irreversible_gpu_commit_fail_stop_armed |= !completed_promotions.is_empty();
         for (organism_id, memory, receipt) in memory_commits {
             let previous = self.memories.insert(organism_id.raw(), memory);
             debug_assert!(previous.is_some());
@@ -9391,7 +9403,7 @@ impl GpuLiveBrainRuntime {
             }
             self.record_gpu_tick_metrics(&gpu_ticks)?;
             let rows = batch.into_iter().zip(gpu_ticks).collect();
-            self.process_selection_batch(rows)?
+            self.process_selection_batch_in_staged_tick(rows)?
         };
         for summary in awake_summaries {
             summaries_by_organism.insert(summary.organism_id.raw(), summary);
@@ -9437,8 +9449,7 @@ impl GpuLiveBrainRuntime {
         if persist_exact_sleep_boundary {
             let sleep_persistence_started = Instant::now();
             self.request_exact_population_checkpoint()?;
-            if self.exact_checkpoint_accepts_journal_entries()
-                && !sleep_journal_entries.is_empty()
+            if self.exact_checkpoint_accepts_journal_entries() && !sleep_journal_entries.is_empty()
             {
                 self.queue_exact_checkpoint_journal_entries(sleep_journal_entries)?;
             } else if !sleep_journal_entries.is_empty() {
@@ -9712,6 +9723,10 @@ impl GpuLiveBrainRuntime {
     /// It contains no GPU handles or neural payloads.
     pub fn world_snapshot(&self) -> HeadlessWorld {
         self.world.clone()
+    }
+
+    pub(crate) const fn world(&self) -> &HeadlessWorld {
+        &self.world
     }
 
     pub fn world_seed(&self) -> u64 {
@@ -10422,6 +10437,18 @@ impl GpuLiveBrainRuntime {
         tick_after: Tick,
     ) -> Result<(), ScaffoldContractError> {
         let mut movement_by_organism = BTreeMap::<u64, u32>::new();
+        let throttled_by_organism = self
+            .last_activity_work_receipts
+            .iter()
+            .filter(|receipt| receipt.tick == tick_before.raw())
+            .map(|receipt| {
+                let resident = self.residents.get(&receipt.organism_id_raw);
+                let throttled = resident.is_some_and(|resident| {
+                    receipt.counters.microsteps < u32::from(resident.phenotype.microstep_count())
+                });
+                (receipt.organism_id_raw, throttled)
+            })
+            .collect::<BTreeMap<_, _>>();
         let (residents, retained, recent) = (
             &mut self.residents,
             &self.sealed_patches,
@@ -10452,13 +10479,8 @@ impl GpuLiveBrainRuntime {
                 .observe_sealed_patch(patch)?;
         }
         for (&raw, resident) in residents {
-            let work = self.last_activity_work_receipts.iter().find(|receipt| {
-                receipt.organism_id_raw == raw && receipt.tick == tick_before.raw()
-            });
-            let gpu_dispatched = work.is_some();
-            let gpu_throttled = work.is_some_and(|receipt| {
-                receipt.counters.microsteps < u32::from(resident.phenotype.microstep_count())
-            });
+            let gpu_dispatched = throttled_by_organism.contains_key(&raw);
+            let gpu_throttled = throttled_by_organism.get(&raw).copied().unwrap_or(false);
             resident
                 .life_statistics
                 .observe(PassiveLifeEvent::SurvivalTick {
@@ -10473,9 +10495,25 @@ impl GpuLiveBrainRuntime {
         Ok(())
     }
 
+    fn process_selection_batch_in_staged_tick(
+        &mut self,
+        rows: Vec<(PreparedGpuBrainFrame, GpuClosedLoopTick)>,
+    ) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
+        self.process_selection_batch_with_rollback(rows, WorldMutationRollback::EnclosingStagedTick)
+    }
+
+    #[cfg(test)]
     fn process_selection_batch(
         &mut self,
         rows: Vec<(PreparedGpuBrainFrame, GpuClosedLoopTick)>,
+    ) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
+        self.process_selection_batch_with_rollback(rows, WorldMutationRollback::Local)
+    }
+
+    fn process_selection_batch_with_rollback(
+        &mut self,
+        rows: Vec<(PreparedGpuBrainFrame, GpuClosedLoopTick)>,
+        rollback: WorldMutationRollback,
     ) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
         let pending = rows
             .iter()
@@ -10506,13 +10544,20 @@ impl GpuLiveBrainRuntime {
         let seal_started = Instant::now();
         let mut sealed = Vec::with_capacity(prepared.len());
         for (index, selection) in prepared.into_iter().enumerate() {
-            match self.seal_prepared_selection(selection) {
+            match self.seal_prepared_selection(selection, rollback) {
                 Ok(selection) => sealed.push(selection),
                 Err(error) => {
-                    if !sealed.is_empty() {
-                        self.commit_sealed_batch(sealed)?;
+                    match rollback {
+                        WorldMutationRollback::Local => {
+                            if !sealed.is_empty() {
+                                self.commit_sealed_batch(sealed)?;
+                            }
+                            self.discard_pending_transactions(&pending[index..]);
+                        }
+                        WorldMutationRollback::EnclosingStagedTick => {
+                            self.discard_pending_transactions(&pending);
+                        }
                     }
-                    self.discard_pending_transactions(&pending[index..]);
                     return Err(error);
                 }
             }
@@ -10670,6 +10715,7 @@ impl GpuLiveBrainRuntime {
     fn seal_prepared_selection(
         &mut self,
         prepared: PreparedLiveSelection,
+        rollback: WorldMutationRollback,
     ) -> Result<SealedLiveSelection, GameAppShellError> {
         let PreparedLiveSelection {
             handle,
@@ -10700,6 +10746,7 @@ impl GpuLiveBrainRuntime {
             self.sealed_patch_count,
             self.cognitive_work_cost_policy,
             self.schedule_sleep,
+            rollback,
             PreparedSealInput {
                 organism_id,
                 world_entity_id,
@@ -10762,41 +10809,15 @@ impl GpuLiveBrainRuntime {
                 u64::try_from(learning_started.elapsed().as_nanos()).unwrap_or(u64::MAX),
             );
         let learning = match learning_result {
-            Ok(receipts) if receipts.len() == sealed.len() => Some(receipts),
+            Ok(receipts) if receipts.len() == sealed.len() => {
+                self.post_irreversible_gpu_commit_fail_stop_armed = true;
+                Some(receipts)
+            }
             Ok(_) => {
-                for selection in &sealed {
-                    let organism_id = selection.handle.organism_id();
-                    let pending_is_live = self
-                        .backend
-                        .pending_eligibility(selection.handle)
-                        .ok()
-                        .flatten()
-                        == Some(selection.pending_eligibility);
-                    let retained_for_recovery =
-                        pending_is_live && !self.retained_learning.contains_key(&organism_id.raw());
-                    if retained_for_recovery {
-                        self.retained_learning.insert(
-                            organism_id.raw(),
-                            RetainedLearningRecovery {
-                                handle: selection.handle,
-                                pending: selection.pending_eligibility,
-                                sealed_patch: selection.patch.clone(),
-                                neural_receptors: selection.neural_receptors.clone(),
-                                attempts: 0,
-                                last_error: RetainedLearningErrorCode::NeuralBackendUnavailable,
-                            },
-                        );
-                    }
-                    self.last_post_seal_learning_failures
-                        .push(PostSealLearningFailure {
-                            organism_id,
-                            sequence_id: selection.patch.header().sequence_id,
-                            pending: selection.pending_eligibility,
-                            error: RetainedLearningErrorCode::NeuralBackendUnavailable,
-                            retained_for_recovery,
-                        });
-                }
-                None
+                self.post_irreversible_gpu_commit_fail_stop_armed = true;
+                self.backend
+                    .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
             }
             Err(error) => {
                 let error_code = RetainedLearningErrorCode::from_error(&error);
@@ -10982,15 +11003,22 @@ impl GpuLiveBrainRuntime {
             self.sealed_patches
                 .extend(committed_patches.iter().cloned());
         }
+        let mut last_patch_index_by_organism = self
+            .last_sealed_patches
+            .iter()
+            .enumerate()
+            .map(|(index, patch)| (patch.header().organism_id.raw(), index))
+            .collect::<BTreeMap<_, _>>();
         for patch in committed_patches {
             let organism_id = patch.header().organism_id;
-            if let Some(previous) = self
-                .last_sealed_patches
-                .iter_mut()
-                .find(|previous| previous.header().organism_id == organism_id)
+            if let Some(index) = last_patch_index_by_organism
+                .get(&organism_id.raw())
+                .copied()
             {
-                *previous = patch;
+                self.last_sealed_patches[index] = patch;
             } else {
+                last_patch_index_by_organism
+                    .insert(organism_id.raw(), self.last_sealed_patches.len());
                 self.last_sealed_patches.push(patch);
             }
         }
@@ -12616,9 +12644,8 @@ mod tests {
         let durable_save_path = durable_root.join("live-save.json");
         GpuDurableSaveManifest::publish_snapshot(&durable_save_path, &asset_root, &source_save)
             .unwrap();
-        let durable_manifest =
-            GpuDurableSaveManifest::open(&durable_save_path, &asset_root).unwrap();
-        let published = durable_manifest.load().unwrap();
+        let (durable_manifest, published) =
+            GpuDurableSaveManifest::open_loaded(&durable_save_path, &asset_root).unwrap();
         let store = GpuCheckpointAssetStore::new(asset_root.clone()).unwrap();
         CuratedRuntimeAuthorityFixture {
             request,
@@ -12749,9 +12776,8 @@ mod tests {
         let durable_save_path = durable_root.join("live-save.json");
         GpuDurableSaveManifest::publish_snapshot(&durable_save_path, &asset_root, &source_save)
             .unwrap();
-        let durable_manifest =
-            GpuDurableSaveManifest::open(&durable_save_path, &asset_root).unwrap();
-        let published = durable_manifest.load().unwrap();
+        let (durable_manifest, published) =
+            GpuDurableSaveManifest::open_loaded(&durable_save_path, &asset_root).unwrap();
         let store = GpuCheckpointAssetStore::new(asset_root.clone()).unwrap();
         let residents = [101_u64, 202_u64]
             .into_iter()
@@ -12923,11 +12949,11 @@ mod tests {
             &changed_save,
         )
         .unwrap();
-        let changed_durable_manifest =
-            GpuDurableSaveManifest::open(&changed_save_path, &fixture.asset_root).unwrap();
+        let (changed_durable_manifest, changed_published) =
+            GpuDurableSaveManifest::open_loaded(&changed_save_path, &fixture.asset_root).unwrap();
         let changed_durability = GpuLiveCheckpointDurability {
             store: GpuCheckpointAssetStore::new(fixture.asset_root.clone()).unwrap(),
-            published: changed_durable_manifest.load().unwrap(),
+            published: changed_published,
             durable_manifest: changed_durable_manifest,
         };
         let changed_root = fixture.archive_root.join("changed-generation");
@@ -14506,6 +14532,7 @@ mod tests {
             0,
             CognitiveWorkCostPolicy::disabled(),
             false,
+            WorldMutationRollback::Local,
             PreparedSealInput {
                 organism_id,
                 world_entity_id,

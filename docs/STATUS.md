@@ -29,7 +29,7 @@ The project is a research alpha. It is not ready for a public claim of an autono
 | Private local SLM prior | Yes | No live cognition call | No | Local inference smoke only |
 | Optional SLM speech translation | Yes | Yes | Yes | Not exercised in this reset |
 | Player speech into live world | Yes | Yes | Yes | Source-backed; not freshly exercised |
-| Pause and load semantics | Partial | Partial | Yes | Pause/load do not yet control or replace the live runtime |
+| Pause and load semantics | Yes | Yes | Yes | Source-backed; fresh real-input and fresh-process proof pending |
 | Release package | Yes | Build path exists | Yes | Public release gates remain open |
 
 ## Production path today
@@ -45,9 +45,10 @@ The bridge is implemented and integrated in source. This status does not substit
 
 ## Important control gaps
 
-- Pause currently stops procedural animation, not the GPU tick.
-- Load reads and validates save and UX state, but does not replace the active runtime and rendered scene.
+- Pause controls GPU scheduler playback in the integrated production path. Fresh real-input proof remains pending.
+- Load validates the durable save, replaces the live runtime, resets scheduler state, and rebuilds the rendered scene. Fresh-process proof remains pending.
 - Save can capture a real GPU checkpoint, but save/load/player-visible restoration still needs one fresh-process causal proof.
+- The save/load UX autosave policy is 15 minutes of production simulation time. Sleep-journal publication is separate neural durability work, not a player save on every tick.
 - Full autonomous lifecycle and lineage behavior still needs current-source causal and rendered proof.
 - Dynamic overlay geometry is still derived from the launch snapshot.
 - VFX placement follows live creatures, but effect triggers are still selected from launch state rather than live events.

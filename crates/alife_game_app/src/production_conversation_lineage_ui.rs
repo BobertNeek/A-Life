@@ -3,6 +3,7 @@
 use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
+    thread::{self, JoinHandle},
 };
 
 use alife_archive::{
@@ -33,16 +34,16 @@ use bevy::{
     ecs::schedule::IntoScheduleConfigs,
     input::{keyboard::KeyboardInput, ButtonState},
     prelude::{
-        App, BackgroundColor, ButtonInput, ChildOf, Color, Component, FlexDirection, FlexWrap,
-        GlobalZIndex, KeyCode, MessageReader, MessageWriter, Name, Node, NonSend, NonSendMut,
-        ParamSet, PositionType, Res, ResMut, Resource, Text, Text2d, TextColor, TextFont,
-        Transform, UiRect, Update, Val, Visibility, With,
+        App, BackgroundColor, ButtonInput, ChildOf, Color, Component, DetectChanges, FlexDirection,
+        FlexWrap, GlobalZIndex, KeyCode, MessageReader, MessageWriter, Name, Node, NonSend,
+        NonSendMut, ParamSet, PositionType, Res, ResMut, Resource, Text, Text2d, TextColor,
+        TextFont, Transform, UiRect, Update, Val, Visibility, With,
     },
 };
 
 use crate::bevy_shell::{
-    ProductionCuratedFounderResetCommand, ProductionCuratedFounderResetResultResource,
-    ProductionGpuBrainRuntimeResource,
+    LiveBrainPresentationFrameResource, ProductionCuratedFounderResetCommand,
+    ProductionCuratedFounderResetResultResource, ProductionGpuBrainRuntimeResource,
 };
 use crate::{
     curated_founder_reset::CuratedFounderAgentInput,
@@ -57,6 +58,137 @@ const MAX_TYPED_CHARS: usize = 512;
 const MAX_COHORT_SIZE: usize = 16;
 const MIN_COHORT_SIZE: usize = 4;
 const MAX_LIST_ROW_NODES: usize = 12;
+const SLM_TRANSLATION_TIMEOUT_MS: u64 = 5_000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SpeechTranslationJobKey {
+    Player,
+    Creature(UtteranceId),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SpeechRuntimeIdentity {
+    authority: crate::gpu_live_runtime::LiveRuntimeSaveAuthorityView,
+    started_at_tick: Tick,
+}
+
+impl SpeechRuntimeIdentity {
+    fn capture(runtime: &crate::GpuLiveBrainRuntime) -> Result<Self, GameAppShellError> {
+        Ok(Self {
+            authority: runtime.live_save_authority_view()?,
+            started_at_tick: runtime.world().tick(),
+        })
+    }
+
+    fn still_matches(&self, runtime: &crate::GpuLiveBrainRuntime) -> bool {
+        runtime.world().tick() >= self.started_at_tick
+            && runtime
+                .live_save_authority_view()
+                .is_ok_and(|current| current == self.authority)
+    }
+}
+
+#[derive(Debug, Clone)]
+enum SpeechTranslationJobContext {
+    Player {
+        addressee: Option<OrganismId>,
+        source_position: Vec3f,
+        runtime_identity: SpeechRuntimeIdentity,
+    },
+    Creature {
+        utterance_id: UtteranceId,
+        speaker_id: Option<OrganismId>,
+        runtime_identity: SpeechRuntimeIdentity,
+    },
+}
+
+impl SpeechTranslationJobContext {
+    const fn key(&self) -> SpeechTranslationJobKey {
+        match self {
+            Self::Player { .. } => SpeechTranslationJobKey::Player,
+            Self::Creature { utterance_id, .. } => SpeechTranslationJobKey::Creature(*utterance_id),
+        }
+    }
+
+    const fn runtime_identity(&self) -> &SpeechRuntimeIdentity {
+        match self {
+            Self::Player {
+                runtime_identity, ..
+            }
+            | Self::Creature {
+                runtime_identity, ..
+            } => runtime_identity,
+        }
+    }
+}
+
+struct SpeechTranslationJobCompletion {
+    context: SpeechTranslationJobContext,
+    result: Result<(SpeechTranslationReceipt, Option<String>), String>,
+}
+
+struct ActiveSpeechTranslationJob {
+    context: SpeechTranslationJobContext,
+    handle: JoinHandle<SpeechTranslationJobCompletion>,
+}
+
+#[derive(Default)]
+struct ProductionSpeechTranslationWorker {
+    active: Option<ActiveSpeechTranslationJob>,
+}
+
+impl ProductionSpeechTranslationWorker {
+    fn active_key(&self) -> Option<SpeechTranslationJobKey> {
+        self.active.as_ref().map(|job| job.context.key())
+    }
+
+    fn start(
+        &mut self,
+        request: &SpeechTranslationRequest,
+        context: SpeechTranslationJobContext,
+    ) -> Result<bool, String> {
+        if self.active.is_some() {
+            return Ok(false);
+        }
+        let request = request.clone();
+        let worker_context = context.clone();
+        let handle = thread::Builder::new()
+            .name("alife-speech-slm".to_string())
+            .spawn(move || SpeechTranslationJobCompletion {
+                context: worker_context,
+                result: translate_speech_assisted_with_fallback(&request),
+            })
+            .map_err(|error| format!("could not start local SLM translation: {error}"))?;
+        self.active = Some(ActiveSpeechTranslationJob { context, handle });
+        Ok(true)
+    }
+
+    fn poll(&mut self) -> Option<SpeechTranslationJobCompletion> {
+        if !self
+            .active
+            .as_ref()
+            .is_some_and(|job| job.handle.is_finished())
+        {
+            return None;
+        }
+        let job = self.active.take().expect("finished job remains owned");
+        Some(match job.handle.join() {
+            Ok(completion) => completion,
+            Err(_) => SpeechTranslationJobCompletion {
+                context: job.context,
+                result: Err("local SLM translation worker panicked".to_string()),
+            },
+        })
+    }
+}
+
+impl Drop for ProductionSpeechTranslationWorker {
+    fn drop(&mut self) {
+        if let Some(job) = self.active.take() {
+            let _ = job.handle.join();
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NarrationDisplayFrequency {
@@ -653,6 +785,7 @@ pub struct ProductionConversationLineageUiState {
     lineage_source_filter: LineageSourceFilter,
     lineage_data_filter: LineageDataFilter,
     lineage_sort: LineageSort,
+    lineage_loaded: bool,
     lineage_rows: Vec<LineageUiRow>,
     lineage_cursor: usize,
     pending_founder_mode: FounderMode,
@@ -664,12 +797,6 @@ pub struct ProductionConversationLineageUiState {
 impl ProductionConversationLineageUiState {
     fn new(summary: &ProductionVoxelLaunchSummary) -> Self {
         let lineage_root = default_lineage_root();
-        let (lineage_rows, status) = load_lineage_rows(&lineage_root)
-            .map(|rows| {
-                let status = format!("Lineage Library: {} current archives", rows.len());
-                (rows, status)
-            })
-            .unwrap_or_else(|error| (Vec::new(), format!("Lineage Library unavailable: {error}")));
         Self {
             input_open: false,
             input: String::new(),
@@ -686,13 +813,14 @@ impl ProductionConversationLineageUiState {
             last_creature_utterance_id: None,
             last_creature_speaker: None,
             creature_utterance_active: false,
-            status,
+            status: "Lineage Library loads when opened".to_string(),
             lineage_root,
             lineage_open: false,
             lineage_source_filter: LineageSourceFilter::All,
             lineage_data_filter: LineageDataFilter::All,
             lineage_sort: LineageSort::Overall,
-            lineage_rows,
+            lineage_loaded: false,
+            lineage_rows: Vec::new(),
             lineage_cursor: 0,
             pending_founder_mode: FounderMode::GeneticFounder,
             cohort: Vec::new(),
@@ -714,6 +842,7 @@ impl ProductionConversationLineageUiState {
     }
 
     pub(crate) fn prepare_recorded_lineage_capture(&mut self) {
+        self.ensure_lineage_loaded();
         self.input_open = false;
         self.lineage_open = true;
         self.status = "Choose archived founders from this run or earlier simulations".to_string();
@@ -738,6 +867,23 @@ impl ProductionConversationLineageUiState {
         filtered
             .get(self.lineage_cursor.min(filtered.len().saturating_sub(1)))
             .and_then(|index| self.lineage_rows.get(*index))
+    }
+
+    fn ensure_lineage_loaded(&mut self) {
+        if self.lineage_loaded {
+            return;
+        }
+        match load_lineage_rows(&self.lineage_root) {
+            Ok(rows) => {
+                self.status = format!("Lineage Library: {} current archives", rows.len());
+                self.lineage_rows = rows;
+            }
+            Err(error) => {
+                self.status = format!("Lineage Library unavailable: {error}");
+                self.lineage_rows.clear();
+            }
+        }
+        self.lineage_loaded = true;
     }
 
     fn cycle_source_filter(&mut self) {
@@ -867,18 +1013,25 @@ pub fn install_production_conversation_lineage_ui(
     summary: &ProductionVoxelLaunchSummary,
 ) {
     app.insert_resource(ProductionConversationLineageUiState::new(summary));
+    app.insert_non_send_resource(ProductionSpeechTranslationWorker::default());
     let layout = LineageLabLayout::for_resolution(summary.resolution.0, summary.resolution.1);
     app.insert_resource(layout);
     spawn_ui(app, layout);
     app.add_systems(
         Update,
+        handle_production_conversation_lineage_input
+            .in_set(crate::production_voxel_renderer::ProductionVoxelPresentationSet::Input),
+    )
+    .add_systems(
+        Update,
         (
-            handle_production_conversation_lineage_input
-                .in_set(crate::production_voxel_renderer::ProductionVoxelPresentationSet::Input),
+            poll_speech_translation_worker,
             refresh_creature_speech_receipt,
             sync_production_conversation_lineage_ui,
             sync_production_lineage_laboratory_ui,
-        ),
+        )
+            .chain()
+            .in_set(crate::production_voxel_renderer::ProductionVoxelPresentationSet::RootReaders),
     );
 }
 
@@ -1715,9 +1868,16 @@ pub(crate) fn handle_production_conversation_lineage_input(
     reset_result: Res<ProductionCuratedFounderResetResultResource>,
     mut reset_commands: MessageWriter<ProductionCuratedFounderResetCommand>,
     mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
+    mut speech_worker: NonSendMut<ProductionSpeechTranslationWorker>,
     mut state: ResMut<ProductionConversationLineageUiState>,
 ) {
+    if !state.input_open && !state.lineage_open && keyboard.get_just_pressed().next().is_none() {
+        return;
+    }
     if state.lineage_open {
+        if keyboard.get_just_pressed().next().is_none() {
+            return;
+        }
         handle_lineage_input(
             &keyboard,
             &selection,
@@ -1736,6 +1896,7 @@ pub(crate) fn handle_production_conversation_lineage_input(
             state.input.clear();
             state.status = "Player speech input opened at the Hand".to_string();
         } else if keyboard.just_pressed(KeyCode::KeyY) {
+            state.ensure_lineage_loaded();
             state.lineage_open = true;
             state.input_open = false;
             state.status = "Lineage Library opened".to_string();
@@ -1770,9 +1931,13 @@ pub(crate) fn handle_production_conversation_lineage_input(
         }
     }
     if keyboard.just_pressed(KeyCode::Enter) && !state.input.trim().is_empty() {
-        if let Err(error) =
-            send_player_speech(&selection, &creatures, &mut runtime.runtime, &mut state)
-        {
+        if let Err(error) = send_player_speech(
+            &selection,
+            &creatures,
+            &mut runtime.runtime,
+            &mut speech_worker,
+            &mut state,
+        ) {
             state.status = format!("Player speech failed: {error}");
         }
     }
@@ -1803,11 +1968,11 @@ fn send_player_speech(
     selection: &Fvr03ProductionVoxelSelectionResource,
     creatures: &Fvr04ProductionCreatureSceneResource,
     runtime: &mut crate::GpuLiveBrainRuntime,
+    speech_worker: &mut ProductionSpeechTranslationWorker,
     state: &mut ProductionConversationLineageUiState,
 ) -> Result<(), GameAppShellError> {
     let text = state.input.trim().to_string();
-    let snapshot = runtime.world_snapshot();
-    let explicit_addressee = named_addressee(&text, &snapshot);
+    let explicit_addressee = named_addressee(&text, runtime.world());
     let selected_addressee = state
         .address_selected
         .then(|| selected_organism(selection, creatures))
@@ -1825,7 +1990,49 @@ fn send_player_speech(
         SpeechTranslationInput::PlayerText { text: text.clone() },
         state.bindings.clone(),
     )?;
-    let (mut receipt, translation_warning) = translate_speech(&request, state.slm_off)?;
+    if !state.slm_off {
+        let context = SpeechTranslationJobContext::Player {
+            addressee,
+            source_position,
+            runtime_identity: SpeechRuntimeIdentity::capture(runtime)?,
+        };
+        match speech_worker.start(&request, context) {
+            Ok(true) => {
+                state.input.clear();
+                state.input_open = false;
+                state.status = "Translating player speech with the bounded local SLM".to_string();
+            }
+            Ok(false) => {
+                state.status = "Local SLM translation is busy; speech was not emitted".to_string();
+            }
+            Err(error) => {
+                let receipt = translate_speech_unaided(&request)?;
+                return complete_player_speech(
+                    runtime,
+                    state,
+                    addressee,
+                    source_position,
+                    receipt,
+                    Some(format!(
+                        "Local SLM worker failed to start ({error}); used bounded unaided translation"
+                    )),
+                );
+            }
+        }
+        return Ok(());
+    }
+    let receipt = translate_speech_unaided(&request)?;
+    complete_player_speech(runtime, state, addressee, source_position, receipt, None)
+}
+
+fn complete_player_speech(
+    runtime: &mut crate::GpuLiveBrainRuntime,
+    state: &mut ProductionConversationLineageUiState,
+    addressee: Option<OrganismId>,
+    source_position: Vec3f,
+    mut receipt: SpeechTranslationReceipt,
+    translation_warning: Option<String>,
+) -> Result<(), GameAppShellError> {
     let audible =
         runtime.emit_player_tokens(addressee, source_position, receipt.literal_tokens.clone())?;
     receipt.utterance_id = audible.utterance_id;
@@ -1896,8 +2103,13 @@ fn selected_organism(
 
 fn refresh_creature_speech_receipt(
     runtime: NonSend<ProductionGpuBrainRuntimeResource>,
+    frame: Res<LiveBrainPresentationFrameResource>,
+    mut speech_worker: NonSendMut<ProductionSpeechTranslationWorker>,
     mut state: ResMut<ProductionConversationLineageUiState>,
 ) {
+    if !frame.is_changed() {
+        return;
+    }
     let Some(utterance) = runtime
         .runtime
         .active_utterances()
@@ -1905,23 +2117,72 @@ fn refresh_creature_speech_receipt(
         .filter(|utterance| utterance.source_kind == UtteranceSourceKind::Creature)
         .max_by_key(|utterance| utterance.utterance_id.raw())
     else {
-        state.creature_utterance_active = false;
+        if state.creature_utterance_active {
+            state.creature_utterance_active = false;
+        }
         return;
     };
-    state.creature_utterance_active = true;
+    if !state.creature_utterance_active {
+        state.creature_utterance_active = true;
+    }
     if state.last_creature_utterance_id == Some(utterance.utterance_id) {
         return;
     }
-    let receipt = SpeechTranslationRequest::try_new(
+    let request = SpeechTranslationRequest::try_new(
         utterance.utterance_id,
         utterance.addressee,
         SpeechTranslationInput::CreatureTokens {
             tokens: utterance.tokens.clone(),
         },
         state.bindings.clone(),
-    )
-    .and_then(|request| translate_speech(&request, state.slm_off).map(|value| value.0));
-    match receipt {
+    );
+    let request = match request {
+        Ok(request) => request,
+        Err(error) => {
+            state.status = format!("Creature speech translation failed: {error}");
+            return;
+        }
+    };
+    if !state.slm_off {
+        let key = SpeechTranslationJobKey::Creature(utterance.utterance_id);
+        if speech_worker.active_key() == Some(key) {
+            return;
+        }
+        let context = SpeechTranslationJobContext::Creature {
+            utterance_id: utterance.utterance_id,
+            speaker_id: utterance.speaker_id,
+            runtime_identity: match SpeechRuntimeIdentity::capture(&runtime.runtime) {
+                Ok(identity) => identity,
+                Err(error) => {
+                    state.status = format!("Creature speech authority unavailable: {error}");
+                    return;
+                }
+            },
+        };
+        match speech_worker.start(&request, context) {
+            Ok(true) => {
+                state.status = "Translating creature speech with the bounded local SLM".to_string();
+            }
+            Ok(false) => {}
+            Err(error) => match translate_speech_unaided(&request) {
+                Ok(receipt) => {
+                    state.last_creature_utterance_id = Some(utterance.utterance_id);
+                    state.last_creature_speaker = utterance.speaker_id;
+                    state.last_creature_receipt = Some(receipt);
+                    state.status = format!(
+                            "Creature SLM worker failed to start ({error}); used bounded unaided translation"
+                        );
+                }
+                Err(fallback) => {
+                    state.status = format!(
+                            "Creature SLM translation could not start ({error}); bounded fallback failed: {fallback}"
+                        );
+                }
+            },
+        }
+        return;
+    }
+    match translate_speech_unaided(&request) {
         Ok(receipt) => {
             state.last_creature_utterance_id = Some(utterance.utterance_id);
             state.last_creature_speaker = utterance.speaker_id;
@@ -1931,25 +2192,103 @@ fn refresh_creature_speech_receipt(
     }
 }
 
-fn translate_speech(
-    request: &SpeechTranslationRequest,
-    slm_off: bool,
-) -> Result<(SpeechTranslationReceipt, Option<String>), alife_core::ScaffoldContractError> {
-    if !slm_off {
-        let assisted = LlamaCppSpeechTranslator::new(LlamaCppSpeechTranslationConfig::default())
-            .map_err(|error| error.to_string())
-            .and_then(|translator| translator.translate(request));
-        if let Ok(receipt) = assisted {
-            return Ok((receipt, None));
+fn poll_speech_translation_worker(
+    mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
+    mut speech_worker: NonSendMut<ProductionSpeechTranslationWorker>,
+    mut state: ResMut<ProductionConversationLineageUiState>,
+) {
+    let Some(completion) = speech_worker.poll() else {
+        return;
+    };
+    let SpeechTranslationJobCompletion { context, result } = completion;
+    if !context.runtime_identity().still_matches(&runtime.runtime) {
+        state.status = "Discarded stale speech translation after runtime replacement".to_string();
+        return;
+    }
+    match (context, result) {
+        (
+            SpeechTranslationJobContext::Player {
+                addressee,
+                source_position,
+                ..
+            },
+            Ok((receipt, warning)),
+        ) => {
+            if let Err(error) = complete_player_speech(
+                &mut runtime.runtime,
+                &mut state,
+                addressee,
+                source_position,
+                receipt,
+                warning,
+            ) {
+                state.status = format!("Player speech failed after translation: {error}");
+            }
+        }
+        (
+            SpeechTranslationJobContext::Creature {
+                utterance_id,
+                speaker_id,
+                ..
+            },
+            Ok((receipt, warning)),
+        ) => {
+            if !runtime
+                .runtime
+                .active_utterances()
+                .iter()
+                .any(|utterance| utterance.utterance_id == utterance_id)
+            {
+                state.creature_utterance_active = false;
+                state.status = "Discarded expired creature speech translation".to_string();
+                return;
+            }
+            state.last_creature_utterance_id = Some(utterance_id);
+            state.last_creature_speaker = speaker_id;
+            state.last_creature_receipt = Some(receipt);
+            state.status = warning.unwrap_or_else(|| {
+                "Creature speech translated by the bounded local SLM".to_string()
+            });
+        }
+        (SpeechTranslationJobContext::Player { .. }, Err(error)) => {
+            state.status =
+                format!("Player SLM translation failed; speech was not emitted: {error}");
+        }
+        (SpeechTranslationJobContext::Creature { .. }, Err(error)) => {
+            state.status = format!("Creature SLM translation failed: {error}");
         }
     }
+}
+
+fn translate_speech_unaided(
+    request: &SpeechTranslationRequest,
+) -> Result<SpeechTranslationReceipt, alife_core::ScaffoldContractError> {
     let translator =
         BoundedSpeechTranslator::new("alife-bounded-unaided-v1", TranslationAssistance::Disabled)?;
-    let receipt = translator.translate(request)?;
-    let warning = (!slm_off).then(|| {
-        "Local SLM unavailable or rejected its bounded output; used literal translation".to_string()
-    });
-    Ok((receipt, warning))
+    translator.translate(request)
+}
+
+fn translate_speech_assisted_with_fallback(
+    request: &SpeechTranslationRequest,
+) -> Result<(SpeechTranslationReceipt, Option<String>), String> {
+    let mut config = LlamaCppSpeechTranslationConfig::default();
+    config.timeout_ms = SLM_TRANSLATION_TIMEOUT_MS;
+    let assisted = LlamaCppSpeechTranslator::new(config)
+        .map_err(|error| format!("invalid local SLM configuration: {error:?}"))
+        .and_then(|translator| translator.translate(request));
+    match assisted {
+        Ok(receipt) => Ok((receipt, None)),
+        Err(error) => {
+            let receipt = translate_speech_unaided(request)
+                .map_err(|fallback| format!("{error}; bounded fallback failed: {fallback:?}"))?;
+            Ok((
+                receipt,
+                Some(format!(
+                    "Local SLM failed ({error}); used bounded unaided translation"
+                )),
+            ))
+        }
+    }
 }
 
 fn handle_lineage_input(
@@ -2043,6 +2382,7 @@ fn handle_lineage_input(
         match load_lineage_rows(&state.lineage_root) {
             Ok(rows) => {
                 state.lineage_rows = rows;
+                state.lineage_loaded = true;
                 state.lineage_cursor = 0;
                 state.status = "Lineage Library refreshed".to_string();
             }
@@ -2318,6 +2658,11 @@ fn sync_production_conversation_lineage_ui(
         >,
     )>,
 ) {
+    if !state.is_changed()
+        && !(state.creature_utterance_active && (scene.is_changed() || creatures.is_changed()))
+    {
+        return;
+    }
     for (mut text, mut visibility) in &mut panels.p0() {
         text.0 = format!(
             "Speak near the Hand  |  To: {}\n{}▌\nEnter send  Tab address selected  Esc cancel",
@@ -2450,6 +2795,21 @@ fn sync_production_lineage_laboratory_ui(
         With<LineageLabTextRole>,
     >,
 ) {
+    if !state.lineage_open {
+        if state.is_changed() {
+            for mut visibility in &mut roots {
+                *visibility = Visibility::Hidden;
+            }
+        }
+        return;
+    }
+    if !state.is_changed()
+        && !selection.is_changed()
+        && !creatures.is_changed()
+        && !reset_result.is_changed()
+    {
+        return;
+    }
     for mut visibility in &mut roots {
         *visibility = lineage_panel_visibility(state.lineage_open);
     }
@@ -2463,11 +2823,11 @@ fn sync_production_lineage_laboratory_ui(
         0
     };
     let selected = state.current_row();
-    let world = runtime.runtime.world_snapshot();
+    let world = runtime.runtime.world();
     let reset_status = curated_founder_reset_status(&reset_result.outcome);
     let live_selected = selected_organism(&selection, &creatures);
     let habitat_view = live_selected
-        .map(|organism_id| habitat_lab_view(&world, organism_id, state.habitat_focus_id));
+        .map(|organism_id| habitat_lab_view(world, organism_id, state.habitat_focus_id));
 
     for (role, mut text, mut visibility) in &mut texts {
         *visibility = Visibility::Inherited;
@@ -2556,7 +2916,7 @@ fn sync_production_lineage_laboratory_ui(
             LineageLabTextRole::HabitatMembership => habitat_view.as_ref().map_or_else(
                 || "Selected world creature: None".to_string(),
                 |result| match result {
-                    Ok(view) => habitat_membership_text(view, &world),
+                    Ok(view) => habitat_membership_text(view, world),
                     Err(error) => format!("Selected world creature: {error}"),
                 },
             ),

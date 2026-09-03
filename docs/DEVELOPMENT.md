@@ -11,10 +11,11 @@ Read root `AGENTS.md` and the nearest subtree `AGENTS.md` before changing code o
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -PreviewCommand
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_production_voxel.ps1
 ```
 
-The default profile is `MinSpecComfort1080p`. `MinimumSettings30x30` is a graphics floor, not permission for CPU neural fallback.
+`-DryRun` executes application preflight without opening a window. `-PreviewCommand` only prints the Cargo command. The default profile is `MinSpecComfort1080p`. `MinimumSettings30x30` is a graphics floor, not permission for CPU neural fallback.
 
 ## Standard checks
 

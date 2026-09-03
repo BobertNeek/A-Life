@@ -24,6 +24,10 @@ const ENGINE_LOCAL_TOKENS: [&str; 8] = [
     "EcsEntity",
 ];
 
+/// Fifteen minutes of authoritative simulation time at the production tick rate.
+/// Autosaves are recovery points, not part of the ordinary tick transaction.
+const DEFAULT_AUTOSAVE_INTERVAL_TICKS: u32 = CA13_FIXED_SIM_TICK_HZ * 15 * 60;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SaveSlotKind {
     Manual,
@@ -460,7 +464,7 @@ impl AutosavePolicy {
         Self {
             enabled: true,
             slot_id: "autosave-0",
-            every_ticks: DurationTicks(5),
+            every_ticks: DurationTicks(DEFAULT_AUTOSAVE_INTERVAL_TICKS),
         }
     }
 

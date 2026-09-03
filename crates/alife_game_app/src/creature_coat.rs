@@ -1100,6 +1100,11 @@ impl CreatureCoatCache {
         update
     }
 
+    pub fn acquire_existing(&mut self, key: CreatureCoatKey) -> Option<CreatureCoatCacheUpdate> {
+        let pair = self.entries.get(&key)?.pair;
+        Some(self.acquire(key, pair))
+    }
+
     pub fn release(&mut self, key: CreatureCoatKey) -> Result<(), CreatureCoatCacheError> {
         let entry = self
             .entries

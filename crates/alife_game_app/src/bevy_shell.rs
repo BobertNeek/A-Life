@@ -129,17 +129,20 @@ impl LiveBrainPresentationFrame {
     }
 
     fn install_organism_snapshot(&mut self, snapshot: WorldPresentationSnapshot) {
+        let mut world_id_by_organism = BTreeMap::new();
         self.organisms_by_world_id = snapshot
             .organisms
             .into_iter()
-            .map(|row| (row.world_entity_id.raw(), row))
+            .map(|row| {
+                world_id_by_organism.insert(row.organism_id.raw(), row.world_entity_id.raw());
+                (row.world_entity_id.raw(), row)
+            })
             .collect();
         for summary in &self.tick_summaries {
-            let Some(row) = self
-                .organisms_by_world_id
-                .values_mut()
-                .find(|row| row.organism_id == summary.organism_id)
-            else {
+            let Some(world_id) = world_id_by_organism.get(&summary.organism_id.raw()) else {
+                continue;
+            };
+            let Some(row) = self.organisms_by_world_id.get_mut(world_id) else {
                 continue;
             };
             row.motor = Some(alife_world::PresentationMotorSnapshot {
@@ -218,10 +221,10 @@ impl LiveBrainPresentationFrameResource {
             // moved snapshot with an empty or stale summary batch.
             return Ok(());
         }
-        let expected_organism_ids = world
-            .presentation_snapshot()
+        let snapshot = world.presentation_snapshot();
+        let expected_organism_ids = snapshot
             .organisms
-            .into_iter()
+            .iter()
             .filter(|organism| organism.lifecycle.is_alive())
             .map(|organism| organism.organism_id.raw())
             .collect::<BTreeSet<_>>();
@@ -237,7 +240,6 @@ impl LiveBrainPresentationFrameResource {
             // frame until the next all-resident batch arrives.
             return Ok(());
         }
-        let snapshot = world.presentation_snapshot();
         let mut next = LiveBrainPresentationFrame::try_new(
             tick_summaries,
             authoritative_world_tick,
@@ -248,8 +250,7 @@ impl LiveBrainPresentationFrameResource {
             .into_iter()
             .map(|snapshot| (snapshot.organism_id.raw(), snapshot))
             .collect();
-        self.previous = self.current.clone();
-        self.current = next;
+        self.previous = std::mem::replace(&mut self.current, next);
         Ok(())
     }
 
@@ -264,8 +265,7 @@ impl LiveBrainPresentationFrameResource {
             authoritative_world_tick,
             world_objects,
         )?;
-        self.previous = self.current.clone();
-        self.current = next;
+        self.previous = std::mem::replace(&mut self.current, next);
         Ok(())
     }
 }
@@ -368,6 +368,10 @@ impl ProductionGpuBrainTickScheduleResource {
     pub(crate) fn queue_step(&mut self) {
         self.playback = RuntimePlaybackState::Paused;
         self.step_pending = true;
+    }
+
+    pub(crate) fn pause(&mut self) {
+        self.playback = RuntimePlaybackState::Paused;
     }
 
     pub(crate) fn set_running_speed(&mut self, ticks: u32) {
@@ -482,9 +486,14 @@ fn apply_presentation_retirements(
     commands: &mut Commands,
     map: &mut BevyEntityMap,
     retired_ids: &[WorldEntityId],
+    coat_keys: &Query<&crate::production_voxel_renderer::ProductionCreatureCoatKey>,
+    coat_context: &mut crate::production_voxel_renderer::Fvr04CreatureSpawnContext,
 ) {
     for world_id in retired_ids.iter().copied() {
         if let Some(entity) = map.remove_by_world_id(world_id) {
+            if let Ok(key) = coat_keys.get(entity) {
+                coat_context.release_coat(key.0);
+            }
             commands.entity(entity).despawn();
         }
     }
@@ -502,6 +511,8 @@ fn tick_production_gpu_brain(
     >,
     mut commands: Commands,
     mut map: ResMut<BevyEntityMap>,
+    coat_keys: Query<&crate::production_voxel_renderer::ProductionCreatureCoatKey>,
+    mut coat_context: ResMut<crate::production_voxel_renderer::Fvr04CreatureSpawnContext>,
 ) {
     if performance
         .as_deref()
@@ -632,13 +643,19 @@ fn tick_production_gpu_brain(
             return;
         }
         let retired_ids = runtime.runtime.take_presentation_retirements();
-        apply_presentation_retirements(&mut commands, &mut map, &retired_ids);
-        let world = runtime.runtime.world_snapshot();
+        apply_presentation_retirements(
+            &mut commands,
+            &mut map,
+            &retired_ids,
+            &coat_keys,
+            &mut coat_context,
+        );
+        let world = runtime.runtime.world();
 
         match presentation.try_publish_successful_tick_with_cognitive(
             tick_summaries,
             cognitive_snapshots,
-            &world,
+            world,
         ) {
             Ok(()) => {
                 authority.telemetry = runtime.runtime.authority_telemetry();
@@ -883,12 +900,18 @@ fn reconcile_production_presentation(
             })
         })
     };
-    selection.selected = selection
+    let next_selected = selection
         .selected
         .filter(|reference| is_live_creature_ref(reference));
-    selection.hovered = selection
+    if selection.selected != next_selected {
+        selection.selected = next_selected;
+    }
+    let next_hovered = selection
         .hovered
         .filter(|reference| is_live_creature_ref(reference));
+    if selection.hovered != next_hovered {
+        selection.hovered = next_hovered;
+    }
 
     if follow.enabled
         && !follow.target_stable_id.is_some_and(|stable_id| {
@@ -901,6 +924,7 @@ fn reconcile_production_presentation(
         follow.target_stable_id = None;
     }
 
+    let prior_expression_count = scene.expression_buffer.len();
     scene.expression_buffer.retain_mut(|sample| {
         let Some(row) = frame.current.organism(sample.stable_id) else {
             return false;
@@ -961,7 +985,7 @@ fn reconcile_production_presentation(
         sample.display_label = row.object.label.clone();
         true
     });
-    {
+    if scene.expression_buffer.len() != prior_expression_count {
         let lookup_entries = scene
             .expression_buffer
             .iter()
@@ -973,7 +997,10 @@ fn reconcile_production_presentation(
             scene.stable_lookup_by_raw_id.insert(raw_id, index);
         }
     }
-    scene.rendered_creature_count = scene.expression_buffer.len();
+    let rendered_creature_count = scene.expression_buffer.len();
+    if scene.rendered_creature_count != rendered_creature_count {
+        scene.rendered_creature_count = rendered_creature_count;
+    }
 }
 
 fn production_voxel_render_plugin(record_performance: bool) -> RenderPlugin {

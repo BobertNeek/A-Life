@@ -1,5 +1,6 @@
 param(
     [switch]$DryRun,
+    [switch]$PreviewCommand,
     [ValidateRange(0, 120)]
     [int]$SmokeSeconds = 0,
     [ValidateSet("MinimumSettings30x30", "MinSpecComfort1080p", "Balanced1080p", "HighSpecScaleUp", "ResearchScale")]
@@ -19,7 +20,8 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $FeatureList = "bevy-app gpu-runtime production-assets vfx-hanabi"
-# Usage: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
+# Use -DryRun to execute the application's real preflight without opening a window.
+# Use -PreviewCommand to print the Cargo command without executing it.
 
 function Format-CommandArgument {
     param([string]$Value)
@@ -81,8 +83,8 @@ Write-Host "Save directory policy: fixture saves stay under the selected environ
 Write-Host "Brain policy: $BrainPolicy; GPU failure stops learned actions."
 Write-Host "Command: $CommandPreview"
 
-if ($DryRun) {
-    Write-Host "Dry run only; production-voxel command was not executed."
+if ($PreviewCommand) {
+    Write-Host "Command preview only; production-voxel command was not executed."
     exit 0
 }
 

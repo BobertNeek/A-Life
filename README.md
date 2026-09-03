@@ -18,10 +18,16 @@ Launch the frontend:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
 ```
 
-Inspect the launch without opening a window:
+Run the application's manifest, asset, save, and GPU preflight without opening a window:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
+```
+
+Print the Cargo command without executing it:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -PreviewCommand
 ```
 
 Build the local Windows package:

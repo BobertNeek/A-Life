@@ -735,6 +735,13 @@ impl GpuDurableSaveManifest {
         save_path: impl Into<PathBuf>,
         asset_root: impl AsRef<Path>,
     ) -> Result<Self, GameAppShellError> {
+        Self::open_loaded(save_path, asset_root).map(|(durable, _)| durable)
+    }
+
+    pub fn open_loaded(
+        save_path: impl Into<PathBuf>,
+        asset_root: impl AsRef<Path>,
+    ) -> Result<(Self, GpuLoadedSaveManifest), GameAppShellError> {
         let save_path = save_path.into();
         let asset_root = fs::canonicalize(asset_root)?;
         let canonical_save = fs::canonicalize(&save_path)?;
@@ -742,8 +749,8 @@ impl GpuDurableSaveManifest {
             save_path: canonical_save,
             asset_root,
         };
-        durable.load()?;
-        Ok(durable)
+        let loaded = durable.load()?;
+        Ok((durable, loaded))
     }
 
     pub fn save_path(&self) -> &Path {
@@ -1224,11 +1231,7 @@ impl GpuDurableSaveManifest {
         );
 
         self.commit_prevalidated_authority_pointer_profiled(
-            &base.save,
-            pointer,
-            measure,
-            timing,
-            false,
+            &base.save, pointer, measure, timing, false,
         )
     }
 

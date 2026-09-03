@@ -46,8 +46,8 @@ fn status_records_honest_gpu_product_and_scale_limits() {
     let status = read_workspace_file("docs/STATUS.md");
 
     for required in [
-        "active voxel renderer remains a save-derived projection",
-        "Pause currently stops procedural animation, not the GPU tick",
+        "renderer seeds its records from the selected save",
+        "Pause controls GPU scheduler playback in the integrated production path. Fresh real-input proof remains pending.",
         "Its promotion verdict is `Blocked`",
         "N4096 is research-only",
         "Not ready.",

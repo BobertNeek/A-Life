@@ -43,7 +43,7 @@ use bevy::{
         render_resource::PrimitiveTopology,
         view::screenshot::{save_to_disk, Screenshot},
     },
-    window::PrimaryWindow,
+    window::{PrimaryWindow, WindowFocused},
 };
 
 use crate::bevy_shell::{LiveBrainPresentationFrame, LiveBrainPresentationFrameResource};
@@ -778,7 +778,7 @@ impl Fvr03ProductionVoxelSceneResource {
             .collect::<Vec<_>>()
             .join(" ");
         format!(
-            "World / Ecology\nchunks visible {} resident {} dirty {}\ntiles sampled {} | creatures {}\nmesher {} | quads {} | face reduction {:.2}x | remesh {}/frame dirty {} cached {} skipped {}\nmaterial atlas {}\nresource avg {:.2} | hazard avg {:.2}\nmaterials {}\nproduction polish: dressing {} vfx {} gpu_emitters {} budget {} display_only {}\ncore authority: world/action legality only",
+            "World / Ecology\nstartup chunks visible {} resident {} dirty {}\nstartup tiles sampled {} | live creatures {}\nstartup mesher {} | quads {} | face reduction {:.2}x | configured remesh budget {}/frame, snapshot dirty {} estimated cached {} deferred {}\nmaterial atlas {}\nresource avg {:.2} | hazard avg {:.2}\nmaterials {}\nproduction polish: dressing {} vfx {} gpu_emitters {} budget {} display_only {}\ncore authority: world/action legality only",
             self.visible_chunk_count,
             self.resident_chunk_count,
             self.dirty_chunk_count,
@@ -1044,6 +1044,9 @@ pub struct ProductionCreatureAssemblyRoot {
     pub organism_id: OrganismId,
     pub display_only: bool,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
+pub(crate) struct ProductionCreatureCoatKey(pub CreatureCoatKey);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
 struct Fvr04ProductionRuntimeSceneRoot;
@@ -1340,12 +1343,18 @@ struct Fvr04CreatureVisualRecord {
 }
 
 #[derive(Debug, Resource)]
-struct Fvr04CreatureSpawnContext {
+pub(crate) struct Fvr04CreatureSpawnContext {
     settings: Fvr04ProductionCreatureRendererSettings,
     catalog: GeneForgeCreaturePartCatalog,
     preparations: GeneForgeAssemblyPreparationIndex,
     assets_root: PathBuf,
     creature_part_assets: CreaturePartAssetLibrary,
+}
+
+impl Fvr04CreatureSpawnContext {
+    pub(crate) fn release_coat(&mut self, key: CreatureCoatKey) {
+        let _ = self.creature_part_assets.release_coat(key);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1500,6 +1509,8 @@ pub struct Fvr05ProductionUxStateResource {
     pub gpu_runtime_state: GpuRuntimeSaveState,
     pub last_action: String,
     pub last_error: Option<String>,
+    #[cfg(feature = "gpu-runtime")]
+    last_manual_checkpoint_status: Option<crate::GpuManualCheckpointStatus>,
 }
 
 impl Fvr05ProductionUxStateResource {
@@ -1544,6 +1555,8 @@ impl Fvr05ProductionUxStateResource {
             gpu_runtime_state: summary.gpu_runtime_state.clone(),
             last_action: "Ready: production voxel world loaded from validated save".to_string(),
             last_error: summary.ui_settings_load_error.clone(),
+            #[cfg(feature = "gpu-runtime")]
+            last_manual_checkpoint_status: None,
         }
     }
 
@@ -1735,6 +1748,16 @@ fn despawn_production_entity_hierarchy(world: &mut World, entity: Entity) {
 
 #[cfg(feature = "gpu-runtime")]
 fn despawn_fvr04_runtime_scene(world: &mut World) {
+    let coat_keys = {
+        let mut query = world
+            .query_filtered::<&ProductionCreatureCoatKey, With<ProductionCreatureAssemblyRoot>>();
+        query.iter(world).map(|key| key.0).collect::<Vec<_>>()
+    };
+    if let Some(mut context) = world.get_resource_mut::<Fvr04CreatureSpawnContext>() {
+        for key in coat_keys {
+            context.release_coat(key);
+        }
+    }
     let roots = production_entities_with::<Fvr04ProductionRuntimeSceneRoot>(world);
     for root in roots {
         if let Some(mut map) = world.get_resource_mut::<BevyEntityMap>() {
@@ -1823,8 +1846,8 @@ fn apply_production_runtime_load(world: &mut World) {
             })?
             .clone();
         let save_path = PathBuf::from(&current_ux.settings.runtime_save_path);
-        let durable = crate::GpuDurableSaveManifest::open(&save_path, &current_ux.asset_root)?;
-        let loaded = durable.load()?;
+        let (durable, loaded) =
+            crate::GpuDurableSaveManifest::open_loaded(&save_path, &current_ux.asset_root)?;
         let candidate_runtime_state = load_fvr04_runtime_state_from_save(
             &loaded.save,
             &current_ux.asset_root,
@@ -2078,6 +2101,7 @@ pub fn spawn_fvr03_production_voxel_scene(
             handle_fvr03_mouse_selection,
             handle_fvr03_camera_mode_input,
             handle_fvr04_camera_follow_input,
+            handle_pause_on_focus_loss.before(handle_fvr05_production_ux_input),
             handle_fvr05_production_ux_input,
         )
             .in_set(ProductionVoxelPresentationSet::Input),
@@ -2632,139 +2656,148 @@ fn prepare_fvr04_creature_batch(
         Fvr04CreatureLod::ImpostorVoxel => CreaturePartLodId::Impostor,
     };
     let mut prepared = Vec::new();
-    for (index, creature) in creatures
-        .iter()
-        .take(usize::from(settings.max_visible_creatures))
-        .enumerate()
-    {
-        let visual = &creature.visual;
-        let coat_key = CreatureCoatKey::new(
-            visual.appearance.part_sources,
-            visual.appearance.palette_family,
-            visual.appearance.fur_pattern,
-            visual.appearance.marking_density,
-        );
-        let recipe = resolve_geneforge_creature_assembly(
-            visual.appearance.part_sources,
-            lod,
-            coat_key,
-            &context.catalog,
-            &context.preparations,
-        )
-        .map_err(|error| {
-            fvr04_scene_preflight_error(format!(
-                "FVR04 saved creature {} assembly preparation failed: {error}",
-                visual.stable_id.raw()
-            ))
-        })?;
-        if recipe.parts.is_empty() {
-            return Err(fvr04_scene_preflight_error(format!(
-                "FVR04 saved creature {} has no visible assembly parts",
-                visual.stable_id.raw()
-            )));
-        }
-        let mut parts = Vec::with_capacity(recipe.parts.len());
-        let mut local_bounds = None::<CreatureVisualBounds>;
-        for part in recipe.parts.values() {
-            let key = part.mesh_key();
-            let bounds = context
-                .creature_part_assets
-                .bounds(key.clone())
-                .ok_or_else(|| {
+    let preparation_result = (|| -> Result<(), GameAppShellError> {
+        for (index, creature) in creatures
+            .iter()
+            .take(usize::from(settings.max_visible_creatures))
+            .enumerate()
+        {
+            let visual = &creature.visual;
+            let coat_key = CreatureCoatKey::new(
+                visual.appearance.part_sources,
+                visual.appearance.palette_family,
+                visual.appearance.fur_pattern,
+                visual.appearance.marking_density,
+            );
+            let recipe = resolve_geneforge_creature_assembly(
+                visual.appearance.part_sources,
+                lod,
+                coat_key,
+                &context.catalog,
+                &context.preparations,
+            )
+            .map_err(|error| {
+                fvr04_scene_preflight_error(format!(
+                    "FVR04 saved creature {} assembly preparation failed: {error}",
+                    visual.stable_id.raw()
+                ))
+            })?;
+            if recipe.parts.is_empty() {
+                return Err(fvr04_scene_preflight_error(format!(
+                    "FVR04 saved creature {} has no visible assembly parts",
+                    visual.stable_id.raw()
+                )));
+            }
+            let mut parts = Vec::with_capacity(recipe.parts.len());
+            let mut local_bounds = None::<CreatureVisualBounds>;
+            for part in recipe.parts.values() {
+                let key = part.mesh_key();
+                let bounds = context
+                    .creature_part_assets
+                    .bounds(key.clone())
+                    .ok_or_else(|| {
+                        fvr04_scene_preflight_error(format!(
+                            "FVR04 saved creature {} part {:?} has no finite bounds",
+                            visual.stable_id.raw(),
+                            part.slot
+                        ))
+                    })?;
+                let mesh = context.creature_part_assets.mesh(key).ok_or_else(|| {
                     fvr04_scene_preflight_error(format!(
-                        "FVR04 saved creature {} part {:?} has no finite bounds",
+                        "FVR04 saved creature {} part {:?} mesh is not loaded",
                         visual.stable_id.raw(),
                         part.slot
                     ))
                 })?;
-            let mesh = context.creature_part_assets.mesh(key).ok_or_else(|| {
-                fvr04_scene_preflight_error(format!(
-                    "FVR04 saved creature {} part {:?} mesh is not loaded",
-                    visual.stable_id.raw(),
-                    part.slot
-                ))
-            })?;
-            let transform = geneforge_authored_transform_to_bevy(part.authored_transform);
-            let transformed = transform_creature_visual_bounds(bounds, transform);
-            if let Some(current) = &mut local_bounds {
-                current.include(transformed);
-            } else {
-                local_bounds = Some(transformed);
+                let transform = geneforge_authored_transform_to_bevy(part.authored_transform);
+                let transformed = transform_creature_visual_bounds(bounds, transform);
+                if let Some(current) = &mut local_bounds {
+                    current.include(transformed);
+                } else {
+                    local_bounds = Some(transformed);
+                }
+                parts.push(Fvr04PreparedCreaturePart {
+                    recipe: part.clone(),
+                    mesh,
+                    transform,
+                });
             }
-            parts.push(Fvr04PreparedCreaturePart {
-                recipe: part.clone(),
-                mesh,
-                transform,
-            });
-        }
-        let local_bounds = local_bounds.ok_or_else(|| {
-            fvr04_scene_preflight_error(format!(
-                "FVR04 saved creature {} produced no visible bounds",
-                visual.stable_id.raw()
-            ))
-        })?;
-        let coat = world
-            .resource_scope(|world, mut images: bevy::prelude::Mut<Assets<Image>>| {
-                world.resource_scope(
-                    |_world, mut materials: bevy::prelude::Mut<Assets<StandardMaterial>>| {
-                        context.creature_part_assets.acquire_geneforge_coat(
-                            &context.assets_root,
-                            &context.catalog,
-                            &recipe,
-                            &mut images,
-                            &mut materials,
-                        )
-                    },
-                )
-            })
-            .map_err(|error| {
+            let local_bounds = local_bounds.ok_or_else(|| {
                 fvr04_scene_preflight_error(format!(
-                    "FVR04 saved creature {} coat preparation failed: {error}",
+                    "FVR04 saved creature {} produced no visible bounds",
                     visual.stable_id.raw()
                 ))
             })?;
-        let surface_height = tile_summaries
-            .get(&creature.tile)
-            .map(|tile| tile.height_units)
-            .unwrap_or(0.44);
-        let base_scale = fvr04_creature_scale(visual, settings.lod);
-        let base_height = grounded_root_height(
-            surface_height,
-            0.04,
-            local_bounds,
-            base_scale.to_array(),
-            bevy::math::Mat3::IDENTITY.to_cols_array(),
-        );
-        let base_translation = Vec3::new(
-            creature.tile.x as f32 + 0.5,
-            base_height,
-            creature.tile.z as f32 + 0.5,
-        );
-        let root_transform = Transform::from_translation(base_translation)
-            .with_rotation(Quat::from_rotation_y(std::f32::consts::PI))
-            .with_scale(base_scale);
-        let phase = (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11;
-        prepared.push(Fvr04PreparedCreature {
-            record: creature.clone(),
-            recipe,
-            coat,
-            parts,
-            root_transform,
-            root_visual: Fvr04ProductionCreatureVisualMarker {
-                stable_id: visual.stable_id,
-                organism_id: visual.organism_id,
-                tile: creature.tile,
-                expression: visual.expression,
-                animation: visual.animation,
-                lod: settings.lod,
-                base_translation,
-                local_offset: Vec3::ZERO,
-                base_scale,
-                local_bounds,
+            let coat = world
+                .resource_scope(|world, mut images: bevy::prelude::Mut<Assets<Image>>| {
+                    world.resource_scope(
+                        |_world, mut materials: bevy::prelude::Mut<Assets<StandardMaterial>>| {
+                            context.creature_part_assets.acquire_geneforge_coat(
+                                &context.assets_root,
+                                &context.catalog,
+                                &recipe,
+                                &mut images,
+                                &mut materials,
+                            )
+                        },
+                    )
+                })
+                .map_err(|error| {
+                    fvr04_scene_preflight_error(format!(
+                        "FVR04 saved creature {} coat preparation failed: {error}",
+                        visual.stable_id.raw()
+                    ))
+                })?;
+            let surface_height = tile_summaries
+                .get(&creature.tile)
+                .map(|tile| tile.height_units)
+                .unwrap_or(0.44);
+            let base_scale = fvr04_creature_scale(visual, settings.lod);
+            let base_height = grounded_root_height(
                 surface_height,
-                phase,
-            },
-        });
+                0.04,
+                local_bounds,
+                base_scale.to_array(),
+                bevy::math::Mat3::IDENTITY.to_cols_array(),
+            );
+            let base_translation = Vec3::new(
+                creature.tile.x as f32 + 0.5,
+                base_height,
+                creature.tile.z as f32 + 0.5,
+            );
+            let root_transform = Transform::from_translation(base_translation)
+                .with_rotation(Quat::from_rotation_y(std::f32::consts::PI))
+                .with_scale(base_scale);
+            let phase = (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11;
+            prepared.push(Fvr04PreparedCreature {
+                record: creature.clone(),
+                recipe,
+                coat,
+                parts,
+                root_transform,
+                root_visual: Fvr04ProductionCreatureVisualMarker {
+                    stable_id: visual.stable_id,
+                    organism_id: visual.organism_id,
+                    tile: creature.tile,
+                    expression: visual.expression,
+                    animation: visual.animation,
+                    lod: settings.lod,
+                    base_translation,
+                    local_offset: Vec3::ZERO,
+                    base_scale,
+                    local_bounds,
+                    surface_height,
+                    phase,
+                },
+            });
+        }
+        Ok(())
+    })();
+    if let Err(error) = preparation_result {
+        for creature in &prepared {
+            context.release_coat(creature.coat.selected_key);
+        }
+        return Err(error);
     }
     Ok(Fvr04PreparedCreatureBatch {
         settings,
@@ -4378,6 +4411,9 @@ fn spawn_fvr04_prepared_creature_batch(
             ))
             .id();
         world
+            .entity_mut(root)
+            .insert(ProductionCreatureCoatKey(creature.coat.selected_key));
+        world
             .resource_mut::<BevyEntityMap>()
             .bind(root, visual.stable_id)
             .expect("validated creature root stable ID must bind");
@@ -4576,21 +4612,116 @@ fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
             if !frame.is_changed() {
                 return;
             }
-            let mut roots = world.query::<(
-                &ProductionCreatureAssemblyRoot,
-                &Fvr04ProductionCreatureVisualMarker,
-                &mut Transform,
-            )>();
-            for (root, visual, mut transform) in roots.iter_mut(world) {
-                let mut projected = *transform;
-                if project_authoritative_creature_root_transform(
-                    root.stable_id,
-                    visual.organism_id,
-                    &mut projected,
-                    &frame.current,
-                ) && *transform != projected
-                {
-                    *transform = projected;
+            let mut animation_by_stable_id = BTreeMap::new();
+            world.resource_scope(
+                |world, mut scene: bevy::prelude::Mut<Fvr03ProductionVoxelSceneResource>| {
+                    scene.creature_refs_by_tile.clear();
+                    scene.selection_positions_by_raw_id.clear();
+                    let mut rendered_count = 0_usize;
+                    let mut roots = world.query::<(
+                        &ProductionCreatureAssemblyRoot,
+                        &mut Fvr03ProductionVoxelCreatureMarker,
+                        &mut Fvr04ProductionCreatureVisualMarker,
+                        &mut Transform,
+                    )>();
+                    for (root, mut creature, mut visual, mut transform) in roots.iter_mut(world) {
+                        let Some(object) = frame.current.object(root.stable_id) else {
+                            continue;
+                        };
+                        if object.kind != WorldObjectKind::Agent
+                            || object.organism_id != Some(root.organism_id)
+                        {
+                            continue;
+                        }
+                        let tile = VoxelTileCoord::new(
+                            object.position.x.round() as i32,
+                            object.position.z.round() as i32,
+                        );
+                        let surface_height = scene
+                            .tile_summaries_by_tile
+                            .get(&tile)
+                            .map(|summary| summary.height_units)
+                            .unwrap_or(visual.surface_height);
+                        let mut projected = *transform;
+                        if !project_authoritative_creature_root_transform(
+                            root.stable_id,
+                            root.organism_id,
+                            &mut projected,
+                            &frame.current,
+                        ) {
+                            continue;
+                        }
+                        projected.translation.y = grounded_root_height(
+                            surface_height,
+                            0.04,
+                            visual.local_bounds,
+                            visual.base_scale.to_array(),
+                            bevy::math::Mat3::IDENTITY.to_cols_array(),
+                        );
+                        if *transform != projected {
+                            *transform = projected;
+                        }
+                        if creature.tile != tile {
+                            creature.tile = tile;
+                        }
+                        if visual.tile != tile {
+                            visual.tile = tile;
+                        }
+                        if visual.surface_height != surface_height {
+                            visual.surface_height = surface_height;
+                        }
+                        if visual.base_translation != projected.translation {
+                            visual.base_translation = projected.translation;
+                        }
+
+                        if let Some(row) = frame.current.organism(root.stable_id) {
+                            let selected_action_kind =
+                                row.motor.as_ref().and_then(|motor| motor.action_kind);
+                            if let Ok(snapshot) = crate::creature_visual_snapshot_from_parts(
+                                row.organism_id,
+                                row.world_entity_id,
+                                row.object.position,
+                                None,
+                                None,
+                                &row.biochemistry.homeostasis,
+                                row.sleep_phase,
+                                selected_action_kind,
+                            ) {
+                                if visual.expression != snapshot.expression {
+                                    visual.expression = snapshot.expression;
+                                }
+                                if visual.animation != snapshot.animation {
+                                    visual.animation = snapshot.animation;
+                                }
+                            }
+                        }
+                        animation_by_stable_id.insert(root.stable_id.raw(), visual.animation);
+                        let stable_ref = StableVoxelObjectRef {
+                            kind: StableVoxelRefKind::Creature,
+                            stable_id: Some(root.stable_id),
+                            chunk: scene
+                                .tile_summaries_by_tile
+                                .get(&tile)
+                                .map(|summary| summary.chunk)
+                                .unwrap_or_else(|| VoxelChunkCoord::for_tile(16, tile)),
+                            tile: Some(tile),
+                        };
+                        scene.creature_refs_by_tile.insert(tile, stable_ref);
+                        scene
+                            .selection_positions_by_raw_id
+                            .insert(root.stable_id.raw(), projected.translation);
+                        rendered_count = rendered_count.saturating_add(1);
+                    }
+                    scene.creature_render_count = rendered_count;
+                    scene.creature_root_count = rendered_count;
+                },
+            );
+            let mut parts = world.query::<&mut ProductionCreaturePartMarker>();
+            for mut part in parts.iter_mut(world) {
+                if let Some(animation) = animation_by_stable_id.get(&part.stable_id.raw()) {
+                    if part.animation != *animation {
+                        part.animation = *animation;
+                    }
                 }
             }
 
@@ -4664,7 +4795,11 @@ fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                     .get_resource::<Fvr04CreatureSpawnContext>()
                     .map(|context| usize::from(context.settings.max_visible_creatures))
                     .unwrap_or(0);
-                newborns.truncate(max_visible);
+                let current_visible = world
+                    .get_resource::<Fvr03ProductionVoxelSceneResource>()
+                    .map(|scene| scene.creature_render_count)
+                    .unwrap_or(0);
+                newborns.truncate(max_visible.saturating_sub(current_visible));
                 if newborns.is_empty() {
                     return;
                 }
@@ -5613,7 +5748,9 @@ fn handle_fvr03_mouse_selection(
         return;
     };
     let hovered = scene.selectable_ref_at_tile(tile);
-    selection.hovered = Some(hovered);
+    if selection.hovered != Some(hovered) {
+        selection.hovered = Some(hovered);
+    }
     if mouse.just_pressed(MouseButton::Left) {
         selection.selected = Some(hovered);
     }
@@ -5642,15 +5779,33 @@ fn handle_fvr05_production_ux_input(
     {
         return;
     }
-    ux.update_selection_snapshot(selection.selected, follow.enabled);
+    let selected_stable_id = selection
+        .selected
+        .and_then(|selected| selected.stable_id.map(|stable_id| stable_id.raw()));
+    if ux.settings.selected_stable_id != selected_stable_id
+        || ux.settings.follow_selection != follow.enabled
+    {
+        ux.update_selection_snapshot(selection.selected, follow.enabled);
+    }
     #[cfg(feature = "gpu-runtime")]
     if let Some(schedule) = schedule.as_deref() {
-        ux.settings.paused = schedule.is_paused();
-        ux.settings.simulation_speed = schedule.speed_ticks() as f32;
+        let paused = schedule.is_paused();
+        let speed = schedule.speed_ticks() as f32;
+        if ux.settings.paused != paused {
+            ux.settings.paused = paused;
+        }
+        if ux.settings.simulation_speed != speed {
+            ux.settings.simulation_speed = speed;
+        }
     }
     #[cfg(feature = "gpu-runtime")]
     if let Some(runtime) = gpu_runtime.as_ref() {
-        ux.observe_gpu_runtime_save_status(runtime.runtime.manual_checkpoint_status());
+        let status = runtime.runtime.manual_checkpoint_status();
+        if ux.last_manual_checkpoint_status.as_ref() != Some(status) {
+            let status = status.clone();
+            ux.observe_gpu_runtime_save_status(&status);
+            ux.last_manual_checkpoint_status = Some(status);
+        }
     }
     if keyboard.just_pressed(KeyCode::Space) || keyboard.just_pressed(KeyCode::KeyP) {
         #[cfg(feature = "gpu-runtime")]
@@ -5856,6 +6011,27 @@ fn handle_fvr05_production_ux_input(
     }
 }
 
+fn handle_pause_on_focus_loss(
+    mut focus_events: MessageReader<WindowFocused>,
+    mut ux: ResMut<Fvr05ProductionUxStateResource>,
+    #[cfg(feature = "gpu-runtime")] mut schedule: Option<
+        ResMut<crate::bevy_shell::ProductionGpuBrainTickScheduleResource>,
+    >,
+) {
+    let lost_focus = focus_events.read().any(|event| !event.focused);
+    if !lost_focus || !ux.settings.pause_on_focus_loss {
+        return;
+    }
+    #[cfg(feature = "gpu-runtime")]
+    if let Some(schedule) = schedule.as_deref_mut() {
+        schedule.pause();
+    }
+    if !ux.settings.paused {
+        ux.settings.paused = true;
+        ux.last_action = "Paused production simulation after focus loss".to_string();
+    }
+}
+
 fn fvr05_next_profile(profile: ProductionFrontendProfileId) -> ProductionFrontendProfileId {
     let all = ProductionFrontendProfileId::all();
     let index = all
@@ -6013,7 +6189,7 @@ fn sync_fvr05_top_runtime_bar(
         .unwrap_or("runtime_save.json")
         .to_string();
     let text = format!(
-        "A-Life | Profile: {} | Backend: {} | GPU: {} | Runtime: {} | Target FPS: {} | Frame: {:.1} ms | {} | Save: {}",
+        "A-Life | Profile: {} | Backend: {} | GPU: {} | Runtime: {} | Target FPS: {} | Frame budget: {:.1} ms | {} | Save: {}",
         ux.profile_id.label(),
         ux.graphics_backend,
         ux.adapter_name,
@@ -6059,7 +6235,7 @@ fn sync_fvr05_left_control_panel(
         .map(|error| format!("\nERROR\n{error}\n"))
         .unwrap_or_default();
     let text = format!(
-        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1/2/3 speed\n[ ] adjust speed\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\n4-9/B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nSTATS (REAL RUNTIME)\ncreatures {}\nchunks loaded {}\nchunks resident {}\ntiles sampled {}\nmesher {} quads {} face reduction {:.2}x\nremesh budget {} dirty {} cached {} skipped {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
+        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1/2/3 speed\n[ ] adjust speed\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\n4-9/B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nLIVE / STARTUP ESTIMATES\nlive creatures {}\nstartup chunks loaded {}\nstartup chunks resident {}\nstartup tiles sampled {}\nstartup mesher {} quads {} face reduction {:.2}x\nconfigured remesh budget {} snapshot dirty {} estimated cached {} deferred {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
         if ux.settings.paused { "paused" } else { "running" },
         ux.settings.follow_selection,
         ux.settings.pause_on_focus_loss,
@@ -6202,7 +6378,7 @@ fn sync_fvr05_footer_status_bar(
         return;
     }
     let text = format!(
-        "Select LMB | Camera O orbit / I iso / F follow | chunks {} | LOD {} | mesher {} {:.2}x | resident bytes {} | backend {} | config {} | sim signature {}",
+        "Select LMB | Camera O orbit / I iso / F follow | startup chunks {} | LOD {} | mesher {} {:.2}x | estimated resident bytes {} | backend {} | config {} | sim signature {}",
         scene.visible_chunk_count,
         scene.creature_lod.label(),
         scene.mesh_stats.mode.label(),
@@ -6446,7 +6622,7 @@ fn sync_fvr04_creature_label(
         if let Some(label_text) = &label_text {
             text.0.clone_from(label_text);
         }
-        let next_translation = Vec3::new(position.translation.x, 2.35, position.translation.z);
+        let next_translation = position.translation + Vec3::Y * 1.55;
         if transform.translation != next_translation {
             transform.translation = next_translation;
         }

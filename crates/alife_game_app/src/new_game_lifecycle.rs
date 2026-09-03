@@ -173,7 +173,7 @@ fn create_canonical_new_game_runtime_inner(
         std::fs::rename(&staging_path, &final_save_path)?;
         final_created = true;
         runtime.rebind_durable_checkpoint_boundary(&final_save_path, &asset_root, &exact_save)?;
-        let final_loaded = GpuDurableSaveManifest::open(&final_save_path, &asset_root)?.load()?;
+        let (_, final_loaded) = GpuDurableSaveManifest::open_loaded(&final_save_path, &asset_root)?;
         if final_loaded.save != exact_save {
             return Err(invalid_launch(
                 "canonical New Game final reload differs from the exact checkpoint",

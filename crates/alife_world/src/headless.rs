@@ -522,7 +522,30 @@ impl HeadlessWorld {
         body_events: &BTreeMap<u64, BodyEventDelta>,
     ) -> Result<Tick, ScaffoldContractError> {
         let mut candidate = self.clone();
-        let next_tick = Tick::new(self.tick.raw().saturating_add(1));
+        let next_tick = candidate.try_advance_tick_with_body_events_inner(body_events)?;
+        *self = candidate;
+        Ok(next_tick)
+    }
+
+    /// Advances one tick without creating a nested rollback snapshot.
+    ///
+    /// This is reserved for a caller that already owns a complete
+    /// `HeadlessWorld` rollback snapshot for the enclosing tick transaction.
+    #[doc(hidden)]
+    pub fn try_advance_tick_with_body_events_in_staged_tick(
+        &mut self,
+        body_events: &BTreeMap<u64, BodyEventDelta>,
+    ) -> Result<Tick, ScaffoldContractError> {
+        self.try_advance_tick_with_body_events_inner(body_events)
+    }
+
+    fn try_advance_tick_with_body_events_inner(
+        &mut self,
+        body_events: &BTreeMap<u64, BodyEventDelta>,
+    ) -> Result<Tick, ScaffoldContractError> {
+        let candidate = self;
+        let current_tick = candidate.tick;
+        let next_tick = Tick::new(current_tick.raw().saturating_add(1));
         candidate.validate_organism_bindings()?;
         for (organism_raw, event) in body_events {
             let organism_id = OrganismId(*organism_raw);
@@ -629,7 +652,7 @@ impl HeadlessWorld {
                 .biochemistry()
                 .tick;
             match biology_tick {
-                tick if tick == self.tick => {
+                tick if tick == current_tick => {
                     let ambient_event = if mating_organism_ids.contains(&organism_id.raw()) {
                         BodyEventDelta {
                             mating_opportunity: 1.0,
@@ -797,7 +820,6 @@ impl HeadlessWorld {
         candidate.tick = next_tick;
         candidate.speech.retire_expired(candidate.tick);
         let _ = candidate.advance_ecology_at_current_tick();
-        *self = candidate;
         Ok(next_tick)
     }
 
@@ -2180,6 +2202,20 @@ impl HeadlessWorld {
             return Err(error);
         }
         result
+    }
+
+    /// Executes a motor bundle without creating a nested rollback snapshot.
+    ///
+    /// This is reserved for a caller that already owns a complete
+    /// `HeadlessWorld` rollback snapshot for the enclosing tick transaction.
+    #[doc(hidden)]
+    pub fn apply_registered_motor_bundle_with_neural_emission_in_staged_tick(
+        &mut self,
+        bundle: &MotorCommandBundle,
+        world_entity_id: WorldEntityId,
+        neural: &NeuralEmissionFrame,
+    ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
+        self.apply_registered_motor_bundle_inner(bundle, world_entity_id, Some(neural))
     }
 
     fn apply_registered_motor_bundle_inner(
