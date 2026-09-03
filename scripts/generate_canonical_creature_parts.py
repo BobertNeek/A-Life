@@ -19,6 +19,7 @@ from typing import Iterable
 from PIL import Image, ImageDraw
 
 
+WORKSPACE = Path(__file__).resolve().parents[1]
 SLOTS = (
     "head",
     "torso",
@@ -589,12 +590,13 @@ def main() -> None:
     parser.add_argument(
         "--output-root",
         type=Path,
-        default=Path("crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated"),
+        default=WORKSPACE
+        / "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated",
     )
     parser.add_argument(
         "--texture-root",
         type=Path,
-        default=Path("crates/alife_game_app/assets/production_voxel_v1/models"),
+        default=WORKSPACE / "crates/alife_game_app/assets/production_voxel_v1/models",
     )
     parser.add_argument("--preview-root", type=Path)
     args = parser.parse_args()

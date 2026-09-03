@@ -32,19 +32,27 @@ function Assert-TargetArtifactPath {
         [System.IO.Path]::DirectorySeparatorChar,
         [System.IO.Path]::AltDirectorySeparatorChar
     ) + [System.IO.Path]::DirectorySeparatorChar
-    $IsAllowedRoot = [System.String]::Equals(
-        $FullPath,
-        $AllowedRoot,
-        [System.StringComparison]::OrdinalIgnoreCase
-    )
     $IsAllowedChild = $FullPath.StartsWith(
         $AllowedRootWithSeparator,
         [System.StringComparison]::OrdinalIgnoreCase
     )
-    if (-not ($IsAllowedRoot -or $IsAllowedChild)) {
+    if (-not $IsAllowedChild) {
         throw "Refusing to write outside target/artifacts: $FullPath"
     }
     return $FullPath
+}
+
+function Assert-PackageName {
+    param([string]$Name)
+
+    if ([string]::IsNullOrWhiteSpace($Name) -or $Name -in @('.', '..')) {
+        throw "PackageName must be a non-empty directory name."
+    }
+    if ($Name.IndexOfAny([System.IO.Path]::GetInvalidFileNameChars()) -ge 0 `
+        -or $Name.Contains([System.IO.Path]::DirectorySeparatorChar) `
+        -or $Name.Contains([System.IO.Path]::AltDirectorySeparatorChar)) {
+        throw "PackageName must be one directory name, not a path: $Name"
+    }
 }
 
 function Copy-PackageFile {
@@ -75,7 +83,9 @@ function Copy-PackageDirectory {
     $Parent = Split-Path -Parent $Destination
     New-Item -ItemType Directory -Force -Path $Parent | Out-Null
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-    Copy-Item -Path (Join-Path $Source "*") -Destination $Destination -Recurse -Force
+    foreach ($Child in Get-ChildItem -LiteralPath $Source -Force) {
+        Copy-Item -LiteralPath $Child.FullName -Destination $Destination -Recurse -Force
+    }
 }
 
 function Write-ProductionOnlyEnvironmentManifest {
@@ -96,6 +106,7 @@ function Write-ProductionOnlyEnvironmentManifest {
     [System.IO.File]::WriteAllText($EnvironmentPath, $Json + [Environment]::NewLine, $Utf8NoBom)
 }
 
+Assert-PackageName $PackageName
 $PackageRoot = Assert-TargetArtifactPath (Join-Path $OutputRoot $PackageName)
 $ZipPath = Assert-TargetArtifactPath ((Join-Path $OutputRoot "$PackageName.zip"))
 $ReleaseExe = Join-Path $Root "target/release/alife_game_app.exe"
@@ -120,7 +131,6 @@ $BuildCommand = @(
 $CopyFiles = @(
     "LICENSE",
     "scripts/run_production_voxel_frontend.ps1",
-    "scripts/run_windows_production_voxel_package.ps1",
     "crates/alife_game_app/environment_manifest.json",
     "crates/alife_game_app/app_bundle_manifest.json",
     "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json",

@@ -1,6 +1,7 @@
 param(
     [string]$LlamaServerPath = "",
     [string]$ModelPath = "",
+    [ValidateRange(1, 65535)]
     [int]$Port = 18082,
     [int]$GpuLayers = 999,
     [switch]$PrintOnly
@@ -16,38 +17,45 @@ if ([string]::IsNullOrWhiteSpace($ModelPath)) {
 function Resolve-LlamaServer {
     param([string]$ExplicitPath)
 
-    $candidates = @()
     if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) {
-        $candidates += $ExplicitPath
+        if (-not (Test-Path -LiteralPath $ExplicitPath -PathType Leaf)) {
+            throw "USER_ACTION_REQUIRED: explicit llama-server.exe was not found: $ExplicitPath"
+        }
+        $resolved = (Resolve-Path -LiteralPath $ExplicitPath).Path
+        if ($resolved -match "\\Ollama\\") {
+            throw "USER_ACTION_REQUIRED: Ollama-bundled llama-server.exe is intentionally rejected."
+        }
+        return $resolved
     }
 
     $pathCommand = Get-Command llama-server.exe -ErrorAction SilentlyContinue
-    if ($pathCommand) {
-        $candidates += $pathCommand.Source
+    if ($pathCommand -and $pathCommand.Source -notmatch "\\Ollama\\") {
+        return (Resolve-Path -LiteralPath $pathCommand.Source).Path
     }
 
+    $candidates = @()
     $wingetRoot = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages"
-    if (Test-Path $wingetRoot) {
-        $candidates += Get-ChildItem -Path $wingetRoot -Recurse -Filter llama-server.exe -ErrorAction SilentlyContinue |
+    if (Test-Path -LiteralPath $wingetRoot -PathType Container) {
+        $candidates += Get-ChildItem -LiteralPath $wingetRoot -Recurse -Filter llama-server.exe -File -ErrorAction SilentlyContinue |
             Where-Object { $_.FullName -like "*ggml.llamacpp*" } |
             Select-Object -ExpandProperty FullName
     }
 
     foreach ($candidate in $candidates | Select-Object -Unique) {
-        if (-not (Test-Path $candidate)) {
+        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
             continue
         }
         if ($candidate -match "\\Ollama\\") {
             continue
         }
-        return (Resolve-Path $candidate).Path
+        return (Resolve-Path -LiteralPath $candidate).Path
     }
 
     throw "USER_ACTION_REQUIRED: llama-server.exe from llama.cpp was not found. Install ggml.llamacpp or pass -LlamaServerPath. Ollama-bundled llama-server.exe is intentionally rejected."
 }
 
 $server = Resolve-LlamaServer -ExplicitPath $LlamaServerPath
-if (-not (Test-Path $ModelPath)) {
+if (-not (Test-Path -LiteralPath $ModelPath -PathType Leaf)) {
     throw "USER_ACTION_REQUIRED: local GGUF embedding model file not found: $ModelPath"
 }
 $model = (Resolve-Path $ModelPath).Path
@@ -77,3 +85,5 @@ if ($PrintOnly) {
 }
 
 & $server @arguments
+$serverExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+exit $serverExitCode
