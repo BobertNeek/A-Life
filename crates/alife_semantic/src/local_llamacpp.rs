@@ -5,9 +5,10 @@
 //! returns bounded context data, not actions or weight updates.
 
 use std::{
+    collections::BTreeSet,
     fs,
     io::{Read, Write},
-    net::TcpStream,
+    net::{SocketAddr, TcpStream},
     path::Path,
     time::Duration,
 };
@@ -27,6 +28,7 @@ pub const CA26_DEFAULT_LLAMA_CPP_EMBEDDING_PORT: u16 = 18_082;
 pub const CA26_EMBEDDING_PROJECTION_DIMS: usize = 32;
 pub const CA26_MAX_RAW_EMBEDDING_DIMS: usize = 8_192;
 pub const CA26_MAX_CONTEXT_INPUT_CHARS: usize = 512;
+const MAX_LLAMA_CPP_HTTP_RESPONSE_BYTES: u64 = 1_048_576;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LocalSemanticModelManifest {
@@ -57,6 +59,14 @@ impl LocalSemanticModelManifest {
         }
         for model in &self.models {
             model.validate()?;
+        }
+        let roles = self
+            .models
+            .iter()
+            .map(|model| model.model_role.as_str())
+            .collect::<BTreeSet<_>>();
+        if roles.len() != self.models.len() {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
         }
         Ok(())
     }
@@ -109,6 +119,8 @@ impl LocalSemanticModelEntry {
             || validate_local_llamacpp_host(&self.llamacpp_host).is_err()
             || self.llamacpp_port == 0
             || self.sha256.len() != 64
+            || !self.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
+            || (self.inference_smoke_passed && !self.downloaded_locally)
             || self.limitations.is_empty()
             || self.limitations.len() > 8
         {
@@ -206,8 +218,9 @@ impl LlamaCppServerClient {
             return Err("local llama.cpp path must be a relative /v1 endpoint".to_string());
         }
         let address = self.address();
+        let socket = SocketAddr::from(([127, 0, 0, 1], self.port));
         let timeout = Duration::from_millis(self.timeout_ms);
-        let mut stream = TcpStream::connect(&address).map_err(|err| {
+        let mut stream = TcpStream::connect_timeout(&socket, timeout).map_err(|err| {
             format!("USER_ACTION_REQUIRED: local llama.cpp unavailable at {address}: {err}")
         })?;
         stream
@@ -224,11 +237,16 @@ impl LlamaCppServerClient {
         stream
             .write_all(http.as_bytes())
             .map_err(|err| format!("local llama.cpp request failed: {err}"))?;
-        let mut response = String::new();
+        let mut response = Vec::new();
         stream
-            .read_to_string(&mut response)
+            .take(MAX_LLAMA_CPP_HTTP_RESPONSE_BYTES + 1)
+            .read_to_end(&mut response)
             .map_err(|err| format!("local llama.cpp response failed: {err}"))?;
-        Ok(response)
+        if response.len() as u64 > MAX_LLAMA_CPP_HTTP_RESPONSE_BYTES {
+            return Err("local llama.cpp response exceeded the bounded response size".to_string());
+        }
+        String::from_utf8(response)
+            .map_err(|_| "local llama.cpp response was not valid UTF-8".to_string())
     }
 }
 
@@ -450,24 +468,29 @@ fn parse_llamacpp_embedding_response(response: &str) -> Result<Vec<f32>, String>
     Ok(embedding)
 }
 
-fn decode_chunked_http_body(body: &str) -> Result<String, String> {
-    let mut remaining = body;
-    let mut decoded = String::new();
+pub(crate) fn decode_chunked_http_body(body: &str) -> Result<String, String> {
+    let mut remaining = body.as_bytes();
+    let mut decoded = Vec::new();
     loop {
-        let (size_line, rest) = remaining
-            .split_once("\r\n")
+        let line_end = remaining
+            .windows(2)
+            .position(|window| window == b"\r\n")
             .ok_or_else(|| "chunked llama.cpp response missing chunk size".to_string())?;
+        let size_line = std::str::from_utf8(&remaining[..line_end])
+            .map_err(|_| "chunked llama.cpp response has invalid chunk size".to_string())?;
         let size_text = size_line.split(';').next().unwrap_or_default().trim();
         let size = usize::from_str_radix(size_text, 16)
             .map_err(|_| "chunked llama.cpp response has invalid chunk size".to_string())?;
         if size == 0 {
-            return Ok(decoded);
+            return String::from_utf8(decoded)
+                .map_err(|_| "chunked llama.cpp response body was not valid UTF-8".to_string());
         }
-        if rest.len() < size + 2 {
+        remaining = &remaining[line_end + 2..];
+        if remaining.len() < size.saturating_add(2) {
             return Err("chunked llama.cpp response ended inside a chunk".to_string());
         }
-        decoded.push_str(&rest[..size]);
-        let trailer = &rest[size..];
+        decoded.extend_from_slice(&remaining[..size]);
+        let trailer = &remaining[size..];
         if !trailer.starts_with("\r\n") {
             return Err("chunked llama.cpp response missing chunk terminator".to_string());
         }
@@ -521,6 +544,36 @@ mod tests {
     }
 
     #[test]
+    fn local_model_manifest_rejects_duplicate_roles_and_invalid_digests() {
+        let entry = LocalSemanticModelEntry {
+            repo_id: "local/model".to_string(),
+            target_repo_id: None,
+            model_role: "semantic_embedding_provider".to_string(),
+            license: "apache-2.0".to_string(),
+            selected_file: "model.gguf".to_string(),
+            runtime_backend: "llamacpp-server-gguf".to_string(),
+            expected_local_path: "models/local/model.gguf".to_string(),
+            llamacpp_alias: "local-model".to_string(),
+            llamacpp_host: "127.0.0.1".to_string(),
+            llamacpp_port: 18_082,
+            sha256: "0".repeat(64),
+            downloaded_locally: true,
+            inference_smoke_passed: true,
+            limitations: vec!["localhost-only".to_string()],
+        };
+        let duplicate = LocalSemanticModelManifest {
+            schema: CA26_LOCAL_MODEL_MANIFEST_SCHEMA.to_string(),
+            schema_version: CA26_LOCAL_MODEL_MANIFEST_SCHEMA_VERSION,
+            models: vec![entry.clone(), entry.clone()],
+        };
+        assert!(duplicate.validate().is_err());
+
+        let mut invalid_digest = entry;
+        invalid_digest.sha256 = "z".repeat(64);
+        assert!(invalid_digest.validate().is_err());
+    }
+
+    #[test]
     fn unavailable_llamacpp_alias_is_user_action_required_not_fake_output() {
         let provider = LlamaCppEmbeddingProvider::new(LlamaCppEmbeddingConfig {
             port: 9,
@@ -536,6 +589,11 @@ mod tests {
     fn chunked_llamacpp_response_decodes_before_json_parse() {
         let decoded = decode_chunked_http_body("5\r\nhello\r\n0\r\n\r\n").unwrap();
         assert_eq!(decoded, "hello");
+    }
+
+    #[test]
+    fn malformed_chunk_size_cannot_panic_on_a_utf8_boundary() {
+        assert!(decode_chunked_http_body("1\r\né\r\n0\r\n\r\n").is_err());
     }
 
     #[test]

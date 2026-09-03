@@ -83,7 +83,7 @@ impl EgocentricBinHasher {
             ((distance / grid.max_radius_meters).min(1.0) * grid.radial_bins as f32).floor();
         let radial_bin = (radial as u32).min(u32::from(grid.radial_bins).saturating_sub(1));
 
-        let yaw = offset.z.atan2(offset.x); // [-pi, pi]
+        let yaw = offset.y.atan2(offset.x); // [-pi, pi] on the world's X/Y ground plane
         let normalized_yaw = (yaw + std::f32::consts::PI) / (2.0 * std::f32::consts::PI);
         let azim = (normalized_yaw * grid.azimuth_bins as f32).floor();
         let azimuth_bin = (azim as u32).min(u32::from(grid.azimuth_bins).saturating_sub(1));
@@ -131,7 +131,7 @@ pub fn build_gaussian_context(
         rhs.salience
             .raw()
             .total_cmp(&lhs.salience.raw())
-            .then(rhs.distance_meters.total_cmp(&lhs.distance_meters))
+            .then(lhs.distance_meters.total_cmp(&rhs.distance_meters))
     });
     entries.truncate(MAX_GAUSSIAN_CONTEXT_CLUSTERS);
 

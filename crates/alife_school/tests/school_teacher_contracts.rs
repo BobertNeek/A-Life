@@ -12,9 +12,9 @@ use alife_core::{
 };
 use alife_school::{
     Curriculum, CurriculumStepKind, EmbodiedTeacherActor, ExpectedObservation, FeedbackPolarity,
-    HeadlessCurriculumRunner, LessonId, LessonResponse, LessonResponseKind, PatchLogLessonVerifier,
-    SchoolEvidence, TeacherAct, TeacherChannelContract, TeacherInputKind, TopologySummary,
-    VerifierCheck, TEACHER_SCHOOL_SCHEMA_VERSION,
+    HeadlessCurriculumRunner, LessonId, LessonResponse, LessonResponseKind, LessonVerification,
+    PatchLogLessonVerifier, SchoolEvidence, TeacherAct, TeacherChannelContract, TeacherInputKind,
+    TopologySummary, VerifierCheck, TEACHER_SCHOOL_SCHEMA_VERSION,
 };
 use alife_world::{ScenarioFixture, ScenarioName};
 
@@ -238,6 +238,21 @@ fn teacher_channel_contract_only_allows_perception_inputs() {
 }
 
 #[test]
+fn embodied_actor_rejects_payloads_that_do_not_match_the_input_kind() {
+    let actor = EmbodiedTeacherActor::new(WorldEntityId(99)).unwrap();
+    let mut malformed = TeacherAct::spoken_token(LessonId::new(2301).unwrap(), 77);
+    malformed.gesture_id = Some(11);
+    assert!(actor.enact(malformed).is_err());
+
+    let mut wrong_polarity = TeacherAct::social_approval(
+        LessonId::new(2301).unwrap(),
+        NormalizedScalar::new(0.6).unwrap(),
+    );
+    wrong_polarity.feedback = Some(FeedbackPolarity::Warning);
+    assert!(actor.enact(wrong_polarity).is_err());
+}
+
+#[test]
 fn grounded_curriculum_defines_required_p23_steps_and_response_channels() {
     let curriculum = Curriculum::grounded_object_food_poison();
 
@@ -325,6 +340,38 @@ fn curriculum_runner_emits_perceptual_events_and_advances_on_verifier_pass() {
 
     assert!(runner.observe_verification(&passed).unwrap());
     assert_eq!(runner.completed_step_count(), 1);
+}
+
+#[test]
+fn curriculum_runner_rejects_unrelated_or_fabricated_verification() {
+    let curriculum = Curriculum::grounded_object_food_poison();
+    let actor = EmbodiedTeacherActor::new(WorldEntityId(99)).unwrap();
+    let mut runner = HeadlessCurriculumRunner::new(curriculum, actor);
+    let expected_checks = runner.current_step().unwrap().verifier_checks.clone();
+    let fabricated = LessonVerification {
+        passed: true,
+        observed_checks: expected_checks,
+        failed_checks: Vec::new(),
+    };
+
+    assert!(!runner.observe_verification(&fabricated).unwrap());
+    assert_eq!(runner.completed_step_count(), 0);
+}
+
+#[test]
+fn selected_by_arbitration_requires_action_evidence_and_improvement_is_nonnegative() {
+    let empty = SchoolEvidence::new(&[]);
+    let selected = PatchLogLessonVerifier
+        .verify_checks(&[VerifierCheck::SelectedByArbitration], &empty)
+        .unwrap();
+    assert!(!selected.passed);
+
+    assert!(PatchLogLessonVerifier
+        .verify_checks(
+            &[VerifierCheck::BiologicalImprovementAtLeast(-0.01)],
+            &empty,
+        )
+        .is_err());
 }
 
 #[test]

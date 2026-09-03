@@ -157,6 +157,21 @@ impl SemanticProviderConfig {
         {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
+        match self.provider_kind {
+            SemanticProviderKind::Disabled => {}
+            SemanticProviderKind::FakeLocalTable => {
+                if self.provider_id != "fake-local-table" || self.max_display_entries == 0 {
+                    return Err(ScaffoldContractError::ScalarOutOfRange);
+                }
+            }
+            SemanticProviderKind::ExternalExtension | SemanticProviderKind::LlamaCppEmbedding => {
+                if matches!(self.provider_id.as_str(), "disabled" | "fake-local-table")
+                    || self.max_display_entries == 0
+                {
+                    return Err(ScaffoldContractError::ScalarOutOfRange);
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -266,6 +281,28 @@ impl SemanticProviderCapabilityManifest {
             || self.max_semantic_codes == 0
             || self.max_semantic_bindings == 0
         {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        let consistent_kind = match self.provider_kind {
+            SemanticProviderKind::Disabled => {
+                self.provider_id == "disabled"
+                    && !self.available
+                    && !self.optional_runtime_dependency
+                    && !self.requires_external_model
+            }
+            SemanticProviderKind::FakeLocalTable => {
+                self.provider_id == "fake-local-table"
+                    && self.available
+                    && !self.optional_runtime_dependency
+                    && !self.requires_external_model
+            }
+            SemanticProviderKind::ExternalExtension | SemanticProviderKind::LlamaCppEmbedding => {
+                !matches!(self.provider_id.as_str(), "disabled" | "fake-local-table")
+                    && self.optional_runtime_dependency
+                    && self.requires_external_model
+            }
+        };
+        if !consistent_kind {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
         Ok(())
