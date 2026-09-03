@@ -18,13 +18,6 @@ pub(super) fn handle_fvr05_production_ux_input(
     >,
     #[cfg(feature = "gpu-runtime")] mut load_request: ResMut<ProductionRuntimeLoadRequest>,
 ) {
-    #[cfg(feature = "gpu-runtime")]
-    if conversation
-        .as_ref()
-        .is_some_and(|conversation| conversation.blocks_world_shortcuts())
-    {
-        return;
-    }
     let selected_stable_id = selection
         .selected
         .and_then(|selected| selected.stable_id.map(|stable_id| stable_id.raw()));
@@ -52,6 +45,13 @@ pub(super) fn handle_fvr05_production_ux_input(
             ux.observe_gpu_runtime_save_status(&status);
             ux.last_manual_checkpoint_status = Some(status);
         }
+    }
+    #[cfg(feature = "gpu-runtime")]
+    if conversation
+        .as_ref()
+        .is_some_and(|conversation| conversation.blocks_world_shortcuts())
+    {
+        return;
     }
     if keyboard.just_pressed(KeyCode::Space) || keyboard.just_pressed(KeyCode::KeyP) {
         #[cfg(feature = "gpu-runtime")]
@@ -128,7 +128,7 @@ pub(super) fn handle_fvr05_production_ux_input(
         (KeyCode::Digit2, 2),
         (KeyCode::Digit3, 3),
     ] {
-        if keyboard.just_pressed(key) {
+        if keyboard.just_pressed(key) && !fvr05_overlay_modifier_pressed(&keyboard) {
             if let Some(schedule) = schedule.as_deref_mut() {
                 schedule.set_running_speed(speed);
                 ux.settings.paused = schedule.is_paused();
@@ -245,6 +245,7 @@ pub(super) fn handle_fvr05_production_ux_input(
     }
     #[cfg(feature = "gpu-runtime")]
     let scheduler_speed_key = schedule.is_some()
+        && !fvr05_overlay_modifier_pressed(&keyboard)
         && [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3]
             .into_iter()
             .any(|key| keyboard.just_pressed(key));

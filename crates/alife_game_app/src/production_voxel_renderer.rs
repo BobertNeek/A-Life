@@ -33,11 +33,11 @@ use bevy::{
     prelude::{
         default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, ChildOf, Children,
         Color, Commands, Component, Cuboid, DetectChanges, DirectionalLight, Entity, EulerRot,
-        GlobalTransform, Handle, Image, KeyCode, Mat4, Mesh, Mesh3d, MeshMaterial3d, MessageReader,
-        MessageWriter, MouseButton, Name, Node, NonSend, NonSendMut, ParamSet, PositionType,
-        Projection, Quat, Res, ResMut, Resource, StandardMaterial, Text, Text2d, TextColor,
-        TextFont, Time, Torus, Transform, Update, Val, Vec3, ViewVisibility, Visibility, Window,
-        With, Without, World,
+        GlobalTransform, Handle, Image, KeyCode, Local, Mat4, Mesh, Mesh3d, MeshMaterial3d,
+        MessageReader, MessageWriter, MouseButton, Name, Node, NonSend, NonSendMut, ParamSet,
+        PositionType, Projection, Quat, Res, ResMut, Resource, StandardMaterial, Text, Text2d,
+        TextColor, TextFont, Time, Torus, Transform, Update, Val, Vec3, ViewVisibility, Visibility,
+        Window, With, Without, World,
     },
     render::{
         render_resource::PrimitiveTopology,
@@ -4718,16 +4718,20 @@ fn append_fvr04_creature_scene_resource(
 fn animate_fvr04_creatures(
     time: Res<Time>,
     ux: Option<Res<Fvr05ProductionUxStateResource>>,
+    mut animation_seconds: Local<f32>,
     mut creatures: bevy::prelude::Query<(&mut Transform, &Fvr04ProductionCreatureVisualMarker)>,
 ) {
-    if ux.as_ref().is_some_and(|ux| ux.settings.paused) {
-        return;
-    }
+    let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
     let speed = ux
         .as_ref()
         .map(|ux| ux.settings.simulation_speed)
         .unwrap_or(1.0);
-    let seconds = time.elapsed_secs() * speed;
+    let seconds =
+        advance_fvr04_animation_phase(*animation_seconds, time.delta_secs(), speed, paused);
+    *animation_seconds = seconds;
+    if paused {
+        return;
+    }
     for (mut transform, marker) in &mut creatures {
         let wave = (seconds * fvr04_animation_speed(marker.animation) + marker.phase).sin();
         let lateral = (seconds * 7.0 + marker.phase * 1.7).sin();
@@ -4747,6 +4751,7 @@ fn animate_fvr04_creatures(
 fn animate_fvr04_creature_parts(
     time: Res<Time>,
     ux: Option<Res<Fvr05ProductionUxStateResource>>,
+    mut animation_seconds: Local<f32>,
     mut parts: bevy::prelude::Query<(
         &mut Transform,
         &ProductionCreaturePartMarker,
@@ -4754,14 +4759,17 @@ fn animate_fvr04_creature_parts(
         &ViewVisibility,
     )>,
 ) {
-    if ux.as_ref().is_some_and(|ux| ux.settings.paused) {
-        return;
-    }
+    let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
     let speed = ux
         .as_ref()
         .map(|ux| ux.settings.simulation_speed)
         .unwrap_or(1.0);
-    let seconds = time.elapsed_secs() * speed;
+    let seconds =
+        advance_fvr04_animation_phase(*animation_seconds, time.delta_secs(), speed, paused);
+    *animation_seconds = seconds;
+    if paused {
+        return;
+    }
     for (mut transform, marker, rest_transform, view_visibility) in &mut parts {
         if !view_visibility.get() {
             continue;
@@ -4791,6 +4799,18 @@ fn fvr04_animation_speed(animation: CreatureAnimationState) -> f32 {
         CreatureAnimationState::Sleeping => 0.45,
         CreatureAnimationState::Hurt | CreatureAnimationState::Afraid => 8.0,
     }
+}
+
+fn advance_fvr04_animation_phase(
+    current_seconds: f32,
+    delta_seconds: f32,
+    speed: f32,
+    paused: bool,
+) -> f32 {
+    if paused {
+        return current_seconds;
+    }
+    current_seconds + delta_seconds.max(0.0) * speed.max(0.0)
 }
 
 fn live_agent_ground_position(
@@ -4897,20 +4917,24 @@ fn sync_fvr07_attached_hanabi_vfx(
 fn animate_fvr07_production_vfx(
     time: Res<Time>,
     ux: Option<Res<Fvr05ProductionUxStateResource>>,
+    mut animation_seconds: Local<f32>,
     mut markers: bevy::prelude::Query<(
         &mut Transform,
         &Fvr07ProductionGpuVfxMarker,
         &ViewVisibility,
     )>,
 ) {
-    if ux.as_ref().is_some_and(|ux| ux.settings.paused) {
-        return;
-    }
+    let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
     let speed = ux
         .as_ref()
         .map(|ux| ux.settings.simulation_speed)
         .unwrap_or(1.0);
-    let seconds = time.elapsed_secs() * speed;
+    let seconds =
+        advance_fvr04_animation_phase(*animation_seconds, time.delta_secs(), speed, paused);
+    *animation_seconds = seconds;
+    if paused {
+        return;
+    }
     for (mut transform, marker, view_visibility) in &mut markers {
         if !view_visibility.get() {
             continue;
@@ -5485,31 +5509,34 @@ fn handle_fvr03_mouse_selection(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     mut selection: ResMut<Fvr03ProductionVoxelSelectionResource>,
 ) {
-    let Ok(window) = windows.single() else {
-        return;
-    };
-    let Some(cursor_position) = window.cursor_position() else {
-        return;
-    };
-    let Ok((camera, camera_transform)) = cameras.single() else {
-        return;
-    };
-    let Ok(ray) = camera.viewport_to_world(camera_transform, cursor_position) else {
-        return;
-    };
-    let Some(distance) = ray.intersect_plane(Vec3::ZERO, InfinitePlane3d::default()) else {
-        return;
-    };
-    let world_position = ray.get_point(distance);
-    let Some(tile) = scene.tile_from_world_position(world_position) else {
-        return;
-    };
-    let hovered = scene.selectable_ref_at_tile(tile);
-    if selection.hovered != Some(hovered) {
-        selection.hovered = Some(hovered);
-    }
-    if mouse.just_pressed(MouseButton::Left) {
-        selection.selected = Some(hovered);
+    let hovered = (|| {
+        let window = windows.single().ok()?;
+        let cursor_position = window.cursor_position()?;
+        let (camera, camera_transform) = cameras.single().ok()?;
+        let ray = camera
+            .viewport_to_world(camera_transform, cursor_position)
+            .ok()?;
+        let distance = ray.intersect_plane(Vec3::ZERO, InfinitePlane3d::default())?;
+        let tile = scene.tile_from_world_position(ray.get_point(distance))?;
+        Some(scene.selectable_ref_at_tile(tile))
+    })();
+    apply_fvr03_pointer_sample(
+        &mut selection,
+        hovered,
+        mouse.just_pressed(MouseButton::Left),
+    );
+}
+
+fn apply_fvr03_pointer_sample(
+    selection: &mut Fvr03ProductionVoxelSelectionResource,
+    hovered: Option<StableVoxelObjectRef>,
+    select: bool,
+) {
+    selection.hovered = hovered;
+    if select {
+        if let Some(hovered) = hovered {
+            selection.selected = Some(hovered);
+        }
     }
 }
 
@@ -5546,10 +5573,20 @@ fn fvr05_next_profile(profile: ProductionFrontendProfileId) -> ProductionFronten
 fn fvr05_overlay_key_pressed(
     keyboard: &ButtonInput<KeyCode>,
 ) -> Option<Fvr05ProductionOverlayKind> {
-    let mappings = [
+    let shifted_mappings = [
         (KeyCode::Digit1, Fvr05ProductionOverlayKind::Resources),
         (KeyCode::Digit2, Fvr05ProductionOverlayKind::Danger),
         (KeyCode::Digit3, Fvr05ProductionOverlayKind::Pheromones),
+    ];
+    if fvr05_overlay_modifier_pressed(keyboard) {
+        if let Some(kind) = shifted_mappings
+            .iter()
+            .find_map(|(key, kind)| keyboard.just_pressed(*key).then_some(*kind))
+        {
+            return Some(kind);
+        }
+    }
+    let mappings = [
         (KeyCode::Digit4, Fvr05ProductionOverlayKind::Energy),
         (KeyCode::Digit5, Fvr05ProductionOverlayKind::Age),
         (KeyCode::Digit6, Fvr05ProductionOverlayKind::Fertility),
@@ -5564,6 +5601,10 @@ fn fvr05_overlay_key_pressed(
     mappings
         .iter()
         .find_map(|(key, kind)| keyboard.just_pressed(*key).then_some(*kind))
+}
+
+fn fvr05_overlay_modifier_pressed(keyboard: &ButtonInput<KeyCode>) -> bool {
+    keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight)
 }
 
 fn sync_fvr05_panel_visibility(
@@ -5737,7 +5778,7 @@ fn sync_fvr05_left_control_panel(
         .map(|error| format!("\nERROR\n{error}\n"))
         .unwrap_or_default();
     let text = format!(
-        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1/2/3 speed\n[ ] adjust speed\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\n4-9/B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nLIVE / STARTUP ESTIMATES\nlive creatures {}\nstartup chunks loaded {}\nstartup chunks resident {}\nstartup tiles sampled {}\nstartup mesher {} quads {} face reduction {:.2}x\nconfigured remesh budget {} snapshot dirty {} estimated cached {} deferred {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
+        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1/2/3 speed\n[ ] adjust speed\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\nShift+1-3, 4-9, B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nLIVE / STARTUP ESTIMATES\nlive creatures {}\nstartup chunks loaded {}\nstartup chunks resident {}\nstartup tiles sampled {}\nstartup mesher {} quads {} face reduction {:.2}x\nconfigured remesh budget {} snapshot dirty {} estimated cached {} deferred {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
         if ux.settings.paused { "paused" } else { "running" },
         ux.settings.follow_selection,
         ux.settings.pause_on_focus_loss,
@@ -5863,7 +5904,7 @@ fn sync_fvr05_bottom_overlay_toolbar(
     let first = labels[..labels.len().min(7)].join(" | ");
     let second = labels[labels.len().min(7)..].join(" | ");
     let text = format!(
-        "OVERLAYS\n{}\n{}\nkeys: 1 Resources 2 Danger 3 Pheromones 4 Energy 5 Age 6 Fertility 7 Territory 8 Neural 9 Residency B Backend C Chunks D LOD V Persistence",
+        "OVERLAYS\n{}\n{}\nkeys: Shift+1 Resources Shift+2 Danger Shift+3 Pheromones 4 Energy 5 Age 6 Fertility 7 Territory 8 Neural 9 Residency B Backend C Chunks D LOD V Persistence",
         first, second
     );
     for mut panel in &mut panels {
@@ -6855,6 +6896,35 @@ mod tests {
         assert!(!fvr03_legacy_capture_controls_lifetime(true));
     }
 
+    #[test]
+    fn presentation_animation_phase_freezes_while_paused_and_resumes_without_a_jump() {
+        let running = advance_fvr04_animation_phase(1.25, 0.5, 2.0, false);
+        assert!((running - 2.25).abs() <= f32::EPSILON);
+
+        let paused = advance_fvr04_animation_phase(running, 30.0, 5.0, true);
+        assert_eq!(paused, running);
+
+        let resumed = advance_fvr04_animation_phase(paused, 0.25, 1.0, false);
+        assert!((resumed - 2.5).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn overlay_shortcuts_reserve_plain_digits_one_to_three_for_simulation_speed() {
+        for key in [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3] {
+            let mut keyboard = ButtonInput::default();
+            keyboard.press(key);
+            assert_eq!(fvr05_overlay_key_pressed(&keyboard), None);
+        }
+
+        let mut shifted = ButtonInput::default();
+        shifted.press(KeyCode::ShiftLeft);
+        shifted.press(KeyCode::Digit1);
+        assert_eq!(
+            fvr05_overlay_key_pressed(&shifted),
+            Some(Fvr05ProductionOverlayKind::Resources)
+        );
+    }
+
     #[derive(Resource, Default)]
     struct ProjectionScheduleOrder(Vec<&'static str>);
 
@@ -7131,6 +7201,26 @@ mod tests {
             .expect("follow resource");
         assert!(!follow.enabled);
         assert!(follow.target_stable_id.is_none());
+    }
+
+    #[test]
+    fn missing_pointer_sample_clears_hover_without_clearing_selection() {
+        let tile = VoxelTileCoord::new(0, 0);
+        let target = StableVoxelObjectRef {
+            kind: StableVoxelRefKind::Tile,
+            stable_id: None,
+            chunk: VoxelChunkCoord::for_tile(16, tile),
+            tile: Some(tile),
+        };
+        let mut selection = Fvr03ProductionVoxelSelectionResource {
+            hovered: Some(target),
+            selected: Some(target),
+        };
+
+        apply_fvr03_pointer_sample(&mut selection, None, true);
+
+        assert!(selection.hovered.is_none());
+        assert_eq!(selection.selected, Some(target));
     }
 
     #[test]
