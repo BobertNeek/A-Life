@@ -4,8 +4,9 @@ use alife_core::{
 };
 use alife_world::{
     persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
-    HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldSignatureDigest, WorldEditorSpawnSpec,
-    WorldObject, WorldObjectKind, WorldOrganismRecord,
+    HabitatAuthority, HabitatId, HeadlessScenarioBuilder, HeadlessWorld,
+    HeadlessWorldSignatureDigest, WorldEditorSpawnSpec, WorldObject, WorldObjectKind,
+    WorldOrganismRecord,
 };
 
 #[derive(Debug, PartialEq)]
@@ -508,6 +509,36 @@ fn registered_agent_cannot_be_removed_through_world_or_editor_paths() {
         Some(&before_record)
     );
     world.validate_organism_bindings().unwrap();
+}
+
+#[test]
+fn habitat_replacement_rejects_memberships_outside_the_world_registry() {
+    let mut world = world_with_six_agents();
+    let mut authority = HabitatAuthority::default();
+    authority
+        .register_creature(OrganismId(99), HabitatId::DEFAULT_WILD, Tick::ZERO)
+        .unwrap();
+
+    assert!(world.replace_habitat_authority(authority).is_err());
+    assert!(world.habitat_authority().memberships().is_empty());
+}
+
+#[test]
+fn habitat_replacement_rejects_memberships_from_a_future_world_tick() {
+    let mut world = world_with_six_agents();
+    let mut authority = HabitatAuthority::default();
+    for organism_id in 1..=6 {
+        authority
+            .register_creature(
+                OrganismId(organism_id),
+                HabitatId::DEFAULT_WILD,
+                Tick::new(1),
+            )
+            .unwrap();
+    }
+
+    assert!(world.replace_habitat_authority(authority).is_err());
+    assert!(world.habitat_authority().memberships().is_empty());
 }
 
 #[test]

@@ -80,6 +80,68 @@ fn world_allocates_collision_free_player_utterance_ids() {
 }
 
 #[test]
+fn duplicate_utterance_rejection_preserves_the_original_emission() {
+    let listener = OrganismId(1);
+    let mut world = HeadlessScenarioBuilder::new(71_006)
+        .agent("listener", listener, Vec3f::ZERO)
+        .build()
+        .unwrap();
+    let first = PlayerUtterance::try_new(
+        UtteranceId::new(7).unwrap(),
+        Some(listener),
+        Vec3f::ZERO,
+        vec![token(1)],
+    )
+    .unwrap();
+    let duplicate = PlayerUtterance::try_new(
+        UtteranceId::new(7).unwrap(),
+        Some(listener),
+        Vec3f::ZERO,
+        vec![token(2)],
+    )
+    .unwrap();
+
+    world.emit_player_utterance(first.clone()).unwrap();
+    assert!(world.emit_player_utterance(duplicate).is_err());
+
+    let audible = world.audible_utterances();
+    assert_eq!(audible.len(), 1);
+    assert_eq!(audible[0].tokens, first.tokens);
+}
+
+#[test]
+fn rejected_creature_utterance_does_not_advance_the_world_allocator() {
+    let listener = OrganismId(1);
+    let mut world = HeadlessScenarioBuilder::new(71_007)
+        .agent("listener", listener, Vec3f::ZERO)
+        .build()
+        .unwrap();
+    let first = world
+        .emit_player_tokens(None, Vec3f::ZERO, vec![token(1)])
+        .unwrap();
+    let payload = SpeechMotorPayload::try_new(
+        SpeechActKind::Declare,
+        vec![token(2)],
+        Confidence::new(1.0).unwrap(),
+    )
+    .unwrap();
+
+    assert!(world
+        .emit_creature_utterance(
+            UtteranceId::new(100).unwrap(),
+            OrganismId(99),
+            None,
+            payload
+        )
+        .is_err());
+    let second = world
+        .emit_player_tokens(None, Vec3f::ZERO, vec![token(3)])
+        .unwrap();
+
+    assert_eq!(second.utterance_id.raw(), first.utterance_id.raw() + 1);
+}
+
+#[test]
 fn broadcast_range_and_creature_raw_token_identity_are_preserved() {
     let speaker = OrganismId(1);
     let near = OrganismId(2);

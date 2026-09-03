@@ -36,7 +36,9 @@ pub fn grounded_peripheral_summaries(
             .clamp(0.0, 1.0);
         let proximity = (1.0 - slot.distance).clamp(0.0, 1.0);
         let intensity = motion.max(slot.contact).max(proximity * 0.25);
-        let novelty = (motion + slot.contact).mul_add(0.5, proximity * 0.25).clamp(0.0, 1.0);
+        let novelty = (motion + slot.contact)
+            .mul_add(0.5, proximity * 0.25)
+            .clamp(0.0, 1.0);
         let uncertainty = (1.0 - slot.confidence.raw()).clamp(0.0, 1.0);
         let summary = PeripheralSummary {
             identity: StableFocusIdentity::TrackedObject(slot.tracked_object_id),
@@ -264,15 +266,21 @@ impl GroundedSensorExtractor {
 
         let mut observed = snapshot.visible.to_vec();
         observed.sort_by_key(|object| object.tracking_key);
-        let mut tracked = Vec::with_capacity(observed.len());
-        for object in observed {
-            let descriptor = StablePhysicalDescriptor::try_from(object.properties)?;
-            let receipt = tracker.observe(
-                snapshot.observer,
-                object.tracking_provenance,
-                descriptor,
-                snapshot.tick,
-            )?;
+        let prepared = observed
+            .into_iter()
+            .map(|object| {
+                let descriptor = StablePhysicalDescriptor::try_from(object.properties)?;
+                Ok((object, descriptor))
+            })
+            .collect::<Result<Vec<_>, ScaffoldContractError>>()?;
+        let receipts = tracker.observe_batch(
+            snapshot.observer,
+            prepared.iter().map(|(object, descriptor)| {
+                (object.tracking_provenance, *descriptor, snapshot.tick)
+            }),
+        )?;
+        let mut tracked = Vec::with_capacity(prepared.len());
+        for ((object, _), receipt) in prepared.into_iter().zip(receipts) {
             let relative = subtract(object.position, snapshot.observer_pose.translation);
             tracked.push(TrackedVisibleObject {
                 object,

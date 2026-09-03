@@ -172,13 +172,11 @@ impl SpatialSpeechBus {
 
     pub fn emit(&mut self, utterance: AudibleUtterance) -> Result<(), ScaffoldContractError> {
         utterance.validate_contract()?;
-        if self
-            .utterances
-            .insert(utterance.utterance_id.raw(), utterance)
-            .is_some()
-        {
+        let utterance_id = utterance.utterance_id.raw();
+        if self.utterances.contains_key(&utterance_id) {
             return Err(ScaffoldContractError::InvalidId);
         }
+        self.utterances.insert(utterance_id, utterance);
         Ok(())
     }
 

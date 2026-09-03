@@ -395,13 +395,16 @@ pub struct PersistentVoxelWorldSaveState {
 
 impl PersistentVoxelWorldSaveState {
     pub fn validate(&self) -> Result<(), ScaffoldContractError> {
+        let canonical_budget = self.profile_id.budget();
+        let canonical_generator = generator_descriptor(self.world_seed, canonical_budget);
         if self.schema != FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA
             || self.schema_version != FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA_VERSION
             || self.world_seed == 0
             || self.generator.seed != self.world_seed
             || self.generator.ruleset_id != FVR02_GENERATOR_RULESET_ID
             || self.generator.ruleset_version != FVR02_GENERATOR_RULESET_VERSION
-            || self.profile_budget.profile_id != self.profile_id
+            || self.profile_budget != canonical_budget
+            || self.generator != canonical_generator
             || self.materialized_chunk_count != self.materialized_chunks.len()
             || self.materialized_chunk_count > usize::from(self.profile_budget.active_chunk_cap)
             || self.selected_backend_mode.is_empty()
@@ -556,8 +559,10 @@ impl PersistentVoxelWorldBackend {
     }
 
     pub fn apply_tile_edit(&mut self, edit: VoxelTileEdit) -> Result<(), ScaffoldContractError> {
+        self.state.validate()?;
         edit.validate()?;
         let chunk = VoxelChunkCoord::for_tile(self.state.profile_budget.chunk_tile_size, edit.tile);
+        procedural_chunk_summary(self.procedural_config(), chunk.into())?;
         let next_generation = self
             .state
             .dirty_regions
@@ -565,19 +570,27 @@ impl PersistentVoxelWorldBackend {
             .map(|region| region.generation)
             .max()
             .unwrap_or(0)
-            .saturating_add(1);
-        self.state.saved_edits.push(edit.clone());
-        self.state
-            .saved_edits
-            .sort_by_key(|edit| (edit.tile.x, edit.tile.z));
-        self.state.dirty_regions.push(DirtyVoxelRegion {
-            chunk,
-            min_tile: edit.tile,
-            max_tile: edit.tile,
-            generation: next_generation,
-        });
-        self.upsert_materialized_chunk(chunk, next_generation)?;
-        self.state.validate()?;
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let original = self.state.clone();
+        let result = (|| {
+            self.state.saved_edits.push(edit.clone());
+            self.state
+                .saved_edits
+                .sort_by_key(|edit| (edit.tile.x, edit.tile.z));
+            self.state.dirty_regions.push(DirtyVoxelRegion {
+                chunk,
+                min_tile: edit.tile,
+                max_tile: edit.tile,
+                generation: next_generation,
+            });
+            self.upsert_materialized_chunk(chunk, next_generation)?;
+            self.state.validate()
+        })();
+        if let Err(error) = result {
+            self.state = original;
+            return Err(error);
+        }
         Ok(())
     }
 

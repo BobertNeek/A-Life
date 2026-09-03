@@ -259,3 +259,41 @@ fn fvr02_portable_save_migrates_legacy_p34_and_preserves_voxel_roundtrip() {
         Err(PersistenceError::MigrationUnsupported { .. })
     ));
 }
+
+#[test]
+fn fvr02_rejects_tampered_profile_budget_and_generator_identity() {
+    let backend =
+        PersistentVoxelWorldBackend::new(4242, PersistentVoxelProfileId::MinimumSettings30x30)
+            .unwrap();
+    let state = backend.to_save_state().unwrap();
+
+    let mut budget_tamper = state.clone();
+    budget_tamper.profile_budget.chunk_tile_size = 0;
+    assert!(PersistentVoxelWorldBackend::from_save_state(budget_tamper).is_err());
+
+    let mut generator_tamper = state;
+    generator_tamper.generator.output_digest =
+        alife_world::PortableAssetDigest("fnv1a64:0000000000000001".to_string());
+    assert!(PersistentVoxelWorldBackend::from_save_state(generator_tamper).is_err());
+}
+
+#[test]
+fn fvr02_failed_out_of_bounds_edit_preserves_exact_backend_state() {
+    let mut backend =
+        PersistentVoxelWorldBackend::new(4242, PersistentVoxelProfileId::MinimumSettings30x30)
+            .unwrap();
+    let before = backend.to_save_state().unwrap();
+    let edit = VoxelTileEdit {
+        tile: VoxelTileCoord::new(i32::MAX, i32::MAX),
+        material: VoxelTerrainMaterialId::CultivatedResource,
+        biome: VoxelBiomeId::ResourceGrove,
+        elevation_delta: 1,
+        resource_bias_override: Some(1.0),
+        hazard_pressure_override: Some(0.0),
+        author_stable_id: Some(WorldEntityId(1)),
+        reason: "out-of-bounds-rollback".to_string(),
+    };
+
+    assert!(backend.apply_tile_edit(edit).is_err());
+    assert_eq!(backend.to_save_state().unwrap(), before);
+}

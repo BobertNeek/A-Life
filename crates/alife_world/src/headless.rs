@@ -442,12 +442,19 @@ impl HeadlessWorld {
         &mut self,
         authority: HabitatAuthority,
     ) -> Result<(), HabitatAuthorityError> {
-        let known_creatures = authority
-            .memberships()
-            .iter()
-            .map(|membership| membership.organism_id)
-            .collect::<Vec<_>>();
-        authority.validate(&known_creatures)?;
+        let known_creatures = if self.organism_registry.is_empty() {
+            authority
+                .memberships()
+                .iter()
+                .map(|membership| membership.organism_id)
+                .collect::<Vec<_>>()
+        } else {
+            self.organism_registry
+                .iter()
+                .map(WorldOrganismRecord::organism_id)
+                .collect::<Vec<_>>()
+        };
+        authority.validate_at_tick(&known_creatures, self.tick)?;
         self.habitats = authority;
         Ok(())
     }
@@ -545,7 +552,12 @@ impl HeadlessWorld {
     ) -> Result<Tick, ScaffoldContractError> {
         let candidate = self;
         let current_tick = candidate.tick;
-        let next_tick = Tick::new(current_tick.raw().saturating_add(1));
+        let next_tick = Tick::new(
+            current_tick
+                .raw()
+                .checked_add(1)
+                .ok_or(ScaffoldContractError::InvalidId)?,
+        );
         candidate.validate_organism_bindings()?;
         for (organism_raw, event) in body_events {
             let organism_id = OrganismId(*organism_raw);
@@ -837,11 +849,15 @@ impl HeadlessWorld {
         &mut self,
         utterance: PlayerUtterance,
     ) -> Result<(), ScaffoldContractError> {
-        self.next_utterance_id = self
-            .next_utterance_id
-            .max(utterance.utterance_id.raw().saturating_add(1));
-        self.speech
-            .emit(AudibleUtterance::from_player(utterance, self.tick)?)
+        let next_utterance_id = utterance
+            .utterance_id
+            .raw()
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let audible = AudibleUtterance::from_player(utterance, self.tick)?;
+        self.speech.emit(audible)?;
+        self.next_utterance_id = self.next_utterance_id.max(next_utterance_id);
+        Ok(())
     }
 
     pub fn emit_player_tokens(
@@ -851,7 +867,7 @@ impl HeadlessWorld {
         tokens: Vec<alife_core::LanguageTokenId>,
     ) -> Result<AudibleUtterance, ScaffoldContractError> {
         let utterance_id = UtteranceId::new(self.next_utterance_id)?;
-        self.next_utterance_id = self
+        let next_utterance_id = self
             .next_utterance_id
             .checked_add(1)
             .ok_or(ScaffoldContractError::InvalidId)?;
@@ -860,6 +876,7 @@ impl HeadlessWorld {
             self.tick,
         )?;
         self.speech.emit(audible.clone())?;
+        self.next_utterance_id = next_utterance_id;
         Ok(audible)
     }
 
@@ -874,9 +891,6 @@ impl HeadlessWorld {
         addressee: Option<OrganismId>,
         payload: SpeechMotorPayload,
     ) -> Result<AudibleUtterance, ScaffoldContractError> {
-        self.next_utterance_id = self
-            .next_utterance_id
-            .max(utterance_id.raw().saturating_add(1));
         let position = self.agent_for(speaker_id)?.position;
         let utterance = AudibleUtterance::from_creature(
             utterance_id,
@@ -886,7 +900,12 @@ impl HeadlessWorld {
             payload,
             self.tick,
         )?;
+        let next_utterance_id = utterance_id
+            .raw()
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::InvalidId)?;
         self.speech.emit(utterance.clone())?;
+        self.next_utterance_id = self.next_utterance_id.max(next_utterance_id);
         Ok(utterance)
     }
 
@@ -898,7 +917,7 @@ impl HeadlessWorld {
         teacher_channel: TeacherPerceptionChannel,
     ) -> Result<AudibleUtterance, ScaffoldContractError> {
         let utterance_id = UtteranceId::new(self.next_utterance_id)?;
-        self.next_utterance_id = self
+        let next_utterance_id = self
             .next_utterance_id
             .checked_add(1)
             .ok_or(ScaffoldContractError::InvalidId)?;
@@ -911,6 +930,7 @@ impl HeadlessWorld {
             self.tick,
         )?;
         self.speech.emit(utterance.clone())?;
+        self.next_utterance_id = next_utterance_id;
         Ok(utterance)
     }
 
@@ -2612,10 +2632,6 @@ impl HeadlessWorld {
             return Ok(result);
         }
         let utterance_id = UtteranceId::new(self.next_utterance_id)?;
-        self.next_utterance_id = self
-            .next_utterance_id
-            .checked_add(1)
-            .ok_or(ScaffoldContractError::InvalidId)?;
         let utterance =
             self.emit_creature_utterance(utterance_id, command.organism_id, None, payload)?;
         self.last_creature_utterance_ticks
@@ -2652,12 +2668,12 @@ impl HeadlessWorld {
             return Err(ScaffoldContractError::InvalidId);
         }
         let id = WorldEntityId(self.next_entity_id);
-        self.next_entity_id = self
+        let next_entity_id = self
             .next_entity_id
             .checked_add(1)
             .ok_or(ScaffoldContractError::InvalidId)?;
         let spawn_sequence = self.next_spawn_sequence;
-        self.next_spawn_sequence = self
+        let next_spawn_sequence = self
             .next_spawn_sequence
             .checked_add(1)
             .ok_or(ScaffoldContractError::TrackedObjectIdentityExhausted)?;
@@ -2691,6 +2707,8 @@ impl HeadlessWorld {
             tracking_provenance,
             tracking_key,
         };
+        self.next_entity_id = next_entity_id;
+        self.next_spawn_sequence = next_spawn_sequence;
         self.objects.insert(id.raw(), object);
         self.labels.insert(spec.label.to_string(), id);
         Ok(id)
@@ -5131,6 +5149,44 @@ mod task_6_factorized_motor_tests {
 #[cfg(test)]
 mod task_3_2a_tests {
     use super::*;
+
+    #[test]
+    fn exhausted_world_tick_is_rejected_without_mutation() {
+        let mut world = HeadlessScenarioBuilder::new(32_000).build().unwrap();
+        world.tick = Tick::new(u64::MAX);
+        let before = world.clone();
+
+        assert_eq!(
+            world.try_advance_tick(),
+            Err(ScaffoldContractError::InvalidId)
+        );
+        assert_eq!(world.tick, before.tick);
+        assert_eq!(world.next_entity_id, before.next_entity_id);
+        assert_eq!(world.next_spawn_sequence, before.next_spawn_sequence);
+    }
+
+    #[test]
+    fn exhausted_spawn_sequence_does_not_consume_an_entity_id() {
+        let mut world = HeadlessScenarioBuilder::new(32_001).build().unwrap();
+        world.next_spawn_sequence = u64::MAX;
+        let before_next_entity_id = world.next_entity_id;
+
+        assert_eq!(
+            world.editor_spawn_object(WorldEditorSpawnSpec {
+                label: "overflow-object".to_string(),
+                kind: WorldObjectKind::Food,
+                organism_id: None,
+                position: Vec3f::ZERO,
+                nutrition: 1.0,
+                hazard_pain: 0.0,
+                radius: 0.5,
+                token_id: None,
+            }),
+            Err(ScaffoldContractError::TrackedObjectIdentityExhausted)
+        );
+        assert_eq!(world.next_entity_id, before_next_entity_id);
+        assert!(world.entity_id("overflow-object").is_none());
+    }
 
     const ORGANISM_ID: OrganismId = OrganismId(7);
 

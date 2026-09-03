@@ -231,15 +231,39 @@ impl TrackedObjectRegistry {
         descriptor: StablePhysicalDescriptor,
         tick: Tick,
     ) -> Result<TrackedObjectObservationReceipt, ScaffoldContractError> {
+        let mut receipts = self.observe_batch(observer, [(provenance, descriptor, tick)])?;
+        receipts.pop().ok_or(ScaffoldContractError::InvalidId)
+    }
+
+    pub(crate) fn observe_batch(
+        &mut self,
+        observer: OrganismId,
+        observations: impl IntoIterator<
+            Item = (PhysicalTrackingProvenance, StablePhysicalDescriptor, Tick),
+        >,
+    ) -> Result<Vec<TrackedObjectObservationReceipt>, ScaffoldContractError> {
         observer.validate()?;
-        let world_seed = self.world_seed;
-        let capacity = self.per_organism_capacity;
         let observer_raw = observer.raw();
-        let state = self
+        let mut candidate = self
             .organisms
-            .entry(observer_raw)
-            .or_insert_with(|| OrganismTrackedObjects::new(observer_raw, world_seed, capacity));
-        state.observe(provenance, descriptor, tick)
+            .get(&observer_raw)
+            .cloned()
+            .unwrap_or_else(|| {
+                OrganismTrackedObjects::new(
+                    observer_raw,
+                    self.world_seed,
+                    self.per_organism_capacity,
+                )
+            });
+        let mut receipts = Vec::new();
+        for (provenance, descriptor, tick) in observations {
+            receipts.push(candidate.observe(provenance, descriptor, tick)?);
+        }
+        if receipts.is_empty() {
+            return Ok(receipts);
+        }
+        self.organisms.insert(observer_raw, candidate);
+        Ok(receipts)
     }
 
     pub fn records_for(
@@ -475,4 +499,44 @@ fn splitmix64(mut value: u64) -> u64 {
     value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
     value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
     value ^ (value >> 31)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn provenance(spawn_sequence: u64) -> PhysicalTrackingProvenance {
+        PhysicalTrackingProvenance {
+            schema_version: PHYSICAL_TRACKING_PROVENANCE_SCHEMA_VERSION,
+            world_seed: 77,
+            zone_id: 0,
+            spawn_sequence,
+            lineage_key: 0,
+        }
+    }
+
+    fn descriptor() -> StablePhysicalDescriptor {
+        StablePhysicalDescriptor([0.0; 15])
+    }
+
+    #[test]
+    fn failed_observation_batch_preserves_the_observer_registry() {
+        let observer = OrganismId(1);
+        let mut registry = TrackedObjectRegistry::new(77, 4).unwrap();
+        registry
+            .observe(observer, provenance(2), descriptor(), Tick::new(10))
+            .unwrap();
+        let before = registry.save_state(observer).unwrap();
+
+        assert!(registry
+            .observe_batch(
+                observer,
+                [
+                    (provenance(1), descriptor(), Tick::new(5)),
+                    (provenance(2), descriptor(), Tick::new(9)),
+                ],
+            )
+            .is_err());
+        assert_eq!(registry.save_state(observer).unwrap(), before);
+    }
 }
