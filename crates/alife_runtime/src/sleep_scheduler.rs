@@ -40,9 +40,6 @@ impl SleepWorkDue {
         self.0 |= other.0;
     }
 
-    const fn remove(&mut self, other: Self) {
-        self.0 &= !other.0;
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -309,21 +306,6 @@ impl GpuSleepScheduler {
         self.progress_driver(input.organism_id, driver)?;
 
         let state = self.controller.state();
-        if due_work.is_empty()
-            && state.phase != SleepPhase::Awake
-            && driver.has_bounded_sleep_phase_data(input.organism_id, state)?
-        {
-            due_work = self.sleep_work_due(state, tick);
-            work_units = self.run_due_sleep_work(
-                driver,
-                input.organism_id,
-                state,
-                &input.homeostasis,
-                tick,
-                due_work,
-            )?;
-        }
-
         if state.phase == SleepPhase::Awake {
             self.last_emitted_intent_cycle = None;
             self.reset_sleep_work_schedule();
@@ -447,21 +429,6 @@ impl GpuSleepScheduler {
             }
         }
         Ok(())
-    }
-
-    fn sleep_work_due(&self, state: SleepState, tick: Tick) -> SleepWorkDue {
-        if state.phase != SleepPhase::Consolidating
-            || state.consolidation == ConsolidationState::None
-        {
-            return SleepWorkDue::empty();
-        }
-
-        let mut due = self.sleep_work_due_for_cycle(state.active_cycle_id, tick);
-        // Pending and later states bind the exact replay identity. Defer any
-        // subsequent structural cadence until the next cycle's pre-Pending
-        // boundary rather than mutating that in-flight identity.
-        due.remove(SleepWorkDue::STRUCTURAL_GROWTH_PRUNING);
-        due
     }
 
     fn sleep_work_due_before_pending(&self, state: SleepState, tick: Tick) -> SleepWorkDue {

@@ -25,6 +25,74 @@ struct StructuralBeforePendingDriver {
     replay_digest: [u64; 4],
 }
 
+struct OneShotSleepWorkDriver {
+    bounded_calls: u32,
+    replay_digest: [u64; 4],
+}
+
+impl OneShotSleepWorkDriver {
+    fn new() -> Self {
+        Self {
+            bounded_calls: 0,
+            replay_digest: [101, 102, 103, 104],
+        }
+    }
+}
+
+impl GpuSleepConsolidationDriver for OneShotSleepWorkDriver {
+    fn progress(
+        &mut self,
+        _organism_id: OrganismId,
+        state: SleepState,
+        intent: Option<ConsolidationIntent>,
+    ) -> Result<Option<ConsolidationDriverEvent>, ScaffoldContractError> {
+        if let Some(intent) = intent {
+            return Ok(Some(ConsolidationDriverEvent::ReplayAssetPersisted {
+                intent,
+                replay_digest: self.replay_digest,
+                replay_event_count: 1,
+                replay_eligibility_sample_count: 1,
+            }));
+        }
+        if let alife_core::ConsolidationState::Pending {
+            intent,
+            replay_digest,
+            replay_event_count,
+            replay_eligibility_sample_count,
+        } = state.consolidation
+        {
+            let mut request = GpuConsolidationRequest {
+                schema_version: GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
+                request_flags: 0,
+                cycle_id: intent.cycle_id,
+                phenotype_hash: PhenotypeHash([21, 22, 23, 24]),
+                input_generation: 1,
+                expected_output_generation: 2,
+                input_digest: [31, 32, 33, 34],
+                replay_digest,
+                max_replay_events: replay_event_count,
+                max_replay_eligibility_samples: replay_eligibility_sample_count,
+                request_digest: [0; 4],
+            };
+            request.request_digest = request.recompute_request_digest()?;
+            return Ok(Some(ConsolidationDriverEvent::Prepared { request }));
+        }
+        Ok(None)
+    }
+
+    fn run_bounded_sleep_transaction(
+        &mut self,
+        _organism_id: OrganismId,
+        _state: SleepState,
+        _homeostasis: &HomeostaticSnapshot,
+        tick: Tick,
+        _due_work: SleepWorkDue,
+    ) -> Result<Option<SleepWorkReceipt>, ScaffoldContractError> {
+        self.bounded_calls += 1;
+        Ok(Some(StructuralBeforePendingDriver::skipped_receipt(tick)))
+    }
+}
+
 impl StructuralBeforePendingDriver {
     fn new() -> Self {
         Self {
@@ -356,6 +424,36 @@ fn bounded_structural_work_precedes_first_pending_replay_identity() {
             replay_digest: [11, 12, 13, 14],
             ..
         }
+    ));
+}
+
+#[test]
+fn bounded_sleep_sidecars_run_once_before_replay_identity_is_sealed() {
+    let config = SleepConsolidationConfig {
+        entering_duration: alife_core::DurationTicks::new(1),
+        ..SleepConsolidationConfig::reference()
+    };
+    let mut scheduler = GpuSleepScheduler::new(config).unwrap();
+    let mut organism = newborn_record(15);
+    let mut driver = OneShotSleepWorkDriver::new();
+    scheduler.force_recovery_sleep(Tick::ZERO).unwrap();
+
+    for raw_tick in 1..=16 {
+        scheduler
+            .scheduled_tick_with_organism(
+                &mut organism,
+                HomeostaticParameters::reference(),
+                Tick::new(raw_tick),
+                &mut driver,
+                false,
+            )
+            .unwrap();
+    }
+
+    assert_eq!(driver.bounded_calls, 1);
+    assert!(matches!(
+        scheduler.state().consolidation,
+        alife_core::ConsolidationState::Prepared { .. }
     ));
 }
 
