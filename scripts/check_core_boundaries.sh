@@ -22,16 +22,16 @@ if [ "${1:-}" = "--self-test" ]; then
   exit 0
 fi
 
-if ! command -v cargo >/dev/null 2>&1; then
-  echo "cargo is required for core boundary checks" >&2
-  exit 1
-fi
-
-tree_output="$(cargo tree -p alife_core --format "{lib}")"
-if printf '%s\n' "${tree_output}" | grep -Eiq "${forbidden_dep_regex}"; then
-  echo "alife_core has a forbidden engine/runtime dependency:" >&2
-  printf '%s\n' "${tree_output}" >&2
-  exit 1
+if [ "${1:-}" != "--static" ]; then
+  # shellcheck source=rust_env.sh
+  source scripts/rust_env.sh
+  ensure_cargo
+  tree_output="$(cargo tree -p alife_core --format "{lib}")"
+  if printf '%s\n' "${tree_output}" | grep -Eiq "${forbidden_dep_regex}"; then
+    echo "alife_core has a forbidden engine/runtime dependency:" >&2
+    printf '%s\n' "${tree_output}" >&2
+    exit 1
+  fi
 fi
 
 if grep -InE '^[[:space:]]*(bevy|avian|wgpu|winit|render|python|pyo3)[[:space:]]*=' crates/alife_core/Cargo.toml; then

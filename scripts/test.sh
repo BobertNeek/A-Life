@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if ! command -v cargo >/dev/null 2>&1 && [ -n "${USERPROFILE:-}" ] && [ -x "${USERPROFILE}/.cargo/bin/cargo.exe" ]; then
-  export PATH="${USERPROFILE}/.cargo/bin:${PATH}"
-fi
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=rust_env.sh
+source "${script_dir}/rust_env.sh"
+ensure_cargo
 
 cargo test --workspace --all-targets

@@ -48,14 +48,14 @@ function Get-GateCommands {
     if ($shell -eq 'bash') {
         return @(
             ,@('git', 'diff', '--check')
-            ,@('bash', 'scripts/check_core_boundaries.sh')
+            ,@('bash', 'scripts/check_core_boundaries.sh', '--static')
             ,@('bash', 'scripts/docs_check.sh')
         )
     }
 
     return @(
         ,@('git', 'diff', '--check')
-        ,@($shell, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/check_core_boundaries.ps1')
+        ,@($shell, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/check_core_boundaries.ps1', '--static')
         ,@($shell, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/docs_check.ps1')
     )
 }

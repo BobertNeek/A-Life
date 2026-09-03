@@ -4,6 +4,8 @@
 
 A-Life is a Rust workspace targeting Windows, Bevy 0.18, wgpu 29, Vulkan, and WGSL. Install a current Rust toolchain and Git for Windows. Repository PowerShell wrappers call Git Bash for shell gates and avoid accidental WSL use.
 
+Run `bash scripts/setup.sh` to check the Rust, Git, Python, production-asset, Vulkan-tool, Blender, and optional Graphify environment. It reports optional tool gaps without pretending to install them.
+
 Read root `AGENTS.md` and the nearest subtree `AGENTS.md` before changing code or documentation.
 
 ## Launch and package
@@ -22,10 +24,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_prod
 Run the smallest check that can falsify the changed behavior.
 
 ```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1 --quick
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_core_boundaries.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
 ```
+
+`check.ps1 --quick` runs only Git whitespace, static dependency/source boundaries, and documentation assertions. The default full check adds formatting, workspace check, workspace tests, and Clippy.
 
 Use a focused `cargo test -p <crate> <filter>` when a Rust behavior changes. Do not launch a second Cargo build while another shared-target build is active.
 
@@ -57,6 +62,9 @@ cargo test -p alife_world --test headless_soak fast_headless_soak_preserves_rele
 
 Validate the committed content pack with `validate-pack` before using it in a
 tutorial or package. Optional GPU demonstrations remain manual.
+`scripts/build_geneforge_creature_parts.py` is the supported GeneForge command.
+It launches `scripts/geneforge_blender_worker.py` inside Blender; do not invoke
+the worker directly.
 The platform wrappers are:
 
 ```powershell
@@ -89,7 +97,7 @@ The formula-derived performance ledger used by its focused test lives at
 `crates/alife_tools/tests/fixtures/P04_5_performance_contract.md`.
 
 Retired Alpha, True 2.5D, milestone smoke, and release-report helpers live under
-`archive/legacy_true25d` and `archive/legacy_app_milestones`. They are historical
+`archive/legacy_true25d`, `archive/legacy_app_milestones`, and `archive/legacy_pass2`. They are historical
 references. They are not Cargo targets, supported commands, package inputs, or
 active documentation authorities.
 

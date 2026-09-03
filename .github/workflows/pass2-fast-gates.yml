@@ -2,7 +2,7 @@ name: Pass 2 fast gates
 
 on:
   push:
-    branches: ["main", "codex/**"]
+    branches: ["main", "codex/**", "phase3-**"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
