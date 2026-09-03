@@ -24,6 +24,36 @@ function Resolve-InWorkspacePath {
     return [System.IO.Path]::GetFullPath((Join-Path $Root $Path))
 }
 
+function Assert-NoReparseAncestor {
+    param(
+        [string]$FullPath,
+        [string]$WorkspaceRoot
+    )
+
+    $Current = $FullPath
+    while (-not [string]::IsNullOrWhiteSpace($Current)) {
+        if (Test-Path -LiteralPath $Current) {
+            $Item = Get-Item -LiteralPath $Current -Force
+            if (($Item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "Refusing to use a reparse-point package path: $Current"
+            }
+        }
+        if ([System.String]::Equals(
+                $Current,
+                $WorkspaceRoot,
+                [System.StringComparison]::OrdinalIgnoreCase
+            )) {
+            return
+        }
+        $Parent = Split-Path -Parent $Current
+        if ([string]::IsNullOrWhiteSpace($Parent) -or $Parent -eq $Current) {
+            break
+        }
+        $Current = $Parent
+    }
+    throw "Package path is not rooted in the workspace: $FullPath"
+}
+
 function Assert-TargetArtifactPath {
     param([string]$Path)
     $FullPath = Resolve-InWorkspacePath $Path
@@ -39,6 +69,7 @@ function Assert-TargetArtifactPath {
     if (-not $IsAllowedChild) {
         throw "Refusing to write outside target/artifacts: $FullPath"
     }
+    Assert-NoReparseAncestor -FullPath $FullPath -WorkspaceRoot ([System.IO.Path]::GetFullPath($Root))
     return $FullPath
 }
 

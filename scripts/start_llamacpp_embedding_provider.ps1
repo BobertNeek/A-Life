@@ -58,7 +58,7 @@ $server = Resolve-LlamaServer -ExplicitPath $LlamaServerPath
 if (-not (Test-Path -LiteralPath $ModelPath -PathType Leaf)) {
     throw "USER_ACTION_REQUIRED: local GGUF embedding model file not found: $ModelPath"
 }
-$model = (Resolve-Path $ModelPath).Path
+$model = (Resolve-Path -LiteralPath $ModelPath).Path
 $arguments = @(
     "-m", $model,
     "--host", "127.0.0.1",
