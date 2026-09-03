@@ -5,8 +5,9 @@ use std::{
 };
 
 use alife_tools::g16_content_authoring::{
-    validate_content_pack, validate_creature_preset_file, validate_lesson_pack,
-    validate_lesson_pack_file, ContentAuthoringError, G16_MAX_CONTENT_FILE_BYTES,
+    validate_content_pack, validate_creature_preset, validate_creature_preset_file,
+    validate_lesson_pack, validate_lesson_pack_file, validate_world_preset,
+    validate_world_preset_file, ContentAuthoringError, G16_MAX_CONTENT_FILE_BYTES,
 };
 use alife_world::persistence::AssetManifest;
 
@@ -92,6 +93,44 @@ fn creature_preset_genome_valid_and_birth_weight_only() {
     assert!(creature.inherited_weight_only);
     assert!(!creature.lifetime_state_included);
     assert_eq!(creature.generated_weight_asset_id, "tiny-generated-weights");
+}
+
+#[test]
+fn world_and_creature_identity_metadata_is_unambiguous() {
+    let world_path = workspace_root().join("content/fixtures/g16/worlds/tiny_meadow_world.json");
+    let mut world = validate_world_preset_file(&world_path).unwrap();
+    world.objects[1].organism_id = Some(99);
+    assert!(validate_world_preset(&world).is_err());
+
+    let mut world = validate_world_preset_file(&world_path).unwrap();
+    world.terrain_zones.push(world.terrain_zones[0].clone());
+    assert!(validate_world_preset(&world).is_err());
+
+    let asset_manifest = p34_asset_manifest();
+    let creature_path = workspace_root().join("content/fixtures/g16/creatures/nano_forager.json");
+    let mut creature = validate_creature_preset_file(&creature_path, &asset_manifest).unwrap();
+    creature.role_tags.clear();
+    assert!(validate_creature_preset(&creature, &asset_manifest).is_err());
+}
+
+#[test]
+fn asset_reference_path_must_match_the_p34_manifest_entry() {
+    let manifest = fs::read_to_string(content_manifest()).unwrap();
+    let broken = manifest.replace(
+        "crates/alife_world/tests/fixtures/p34/assets/tiny_generated_weights_ref.json",
+        "content/fixtures/g16/semantic/fake_provider_context.json",
+    );
+    let path = unique_temp_file("g16_mismatched_asset_path.json");
+    fs::write(&path, broken).unwrap();
+    let error = validate_content_pack(&path).unwrap_err();
+    assert!(matches!(
+        error,
+        ContentAuthoringError::InvalidContent {
+            field: "asset_ref.relative_path",
+            ..
+        }
+    ));
+    let _ = fs::remove_file(path);
 }
 
 #[test]

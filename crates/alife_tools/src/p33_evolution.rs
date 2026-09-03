@@ -68,6 +68,7 @@ pub fn mutate_genome(
 ) -> Result<MutationOutcome, EvolutionLabError> {
     parent.validate_contract()?;
     spec.validate()?;
+    NormalizedScalar::new(config.intensity.raw())?;
     if parent.brain_class_id != spec.id || config.seed == 0 {
         return Err(EvolutionLabError::InvalidConfig);
     }
@@ -95,11 +96,12 @@ pub fn mutate_genome(
     child.inheritance.lamarckian_weights_enabled = false;
 
     child.validate_contract()?;
+    let touched_fields = mutation_fields_changed(parent, &child);
     Ok(MutationOutcome {
         child,
         generation: config.generation,
         random_seed: config.seed,
-        touched_fields: all_mutation_fields(),
+        touched_fields,
     })
 }
 
@@ -162,7 +164,11 @@ fn crossover_genomes_with_initializer(
     }
     if birth_weight_initializer
         .as_ref()
-        .is_some_and(|initializer| !initializer.birth_only || initializer.asset_schema_version == 0)
+        .is_some_and(|initializer| {
+            initializer.asset_id.trim().is_empty()
+                || !initializer.birth_only
+                || initializer.asset_schema_version == 0
+        })
     {
         return Err(EvolutionLabError::WeightInitializerNotBirthOnly);
     }
@@ -202,16 +208,6 @@ fn crossover_genomes_with_initializer(
         &mut rng,
         &parent_a.sparse_density_priors,
         &parent_b.sparse_density_priors,
-    );
-    child.endocrine_constants = choose_vec(
-        &mut rng,
-        &parent_a.endocrine_constants,
-        &parent_b.endocrine_constants,
-    );
-    child.drive_thresholds = choose_vec(
-        &mut rng,
-        &parent_a.drive_thresholds,
-        &parent_b.drive_thresholds,
     );
     child.mutation_rates = if rng.next_bool() {
         parent_a.mutation_rates
@@ -357,6 +353,28 @@ impl FitnessSummary {
             composite_score,
         })
     }
+
+    fn validate(&self) -> Result<(), EvolutionLabError> {
+        for value in [
+            self.energy_stability,
+            self.food_success,
+            self.pain_avoidance,
+            self.curiosity_resolution,
+            self.social_word_task_score,
+            self.composite_score,
+        ] {
+            if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+                return Err(EvolutionLabError::InvalidConfig);
+            }
+        }
+        if self
+            .teacher_verifier_score
+            .is_some_and(|value| !value.is_finite() || !(0.0..=1.0).contains(&value))
+        {
+            return Err(EvolutionLabError::InvalidConfig);
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -420,13 +438,19 @@ pub fn run_selection_generation(
     if config
         .birth_weight_initializer
         .as_ref()
-        .is_some_and(|initializer| !initializer.birth_only || initializer.asset_schema_version == 0)
+        .is_some_and(|initializer| {
+            initializer.asset_id.trim().is_empty()
+                || !initializer.birth_only
+                || initializer.asset_schema_version == 0
+        })
     {
         return Err(EvolutionLabError::WeightInitializerNotBirthOnly);
     }
     spec.validate()?;
+    NormalizedScalar::new(config.mutation_intensity.raw())?;
     for candidate in candidates {
         candidate.genome.validate_contract()?;
+        candidate.fitness.validate()?;
         if candidate.genome.brain_class_id != spec.id {
             return Err(EvolutionLabError::IncompatibleParentGenomes);
         }
@@ -619,13 +643,20 @@ fn mutate_alpha_mask(
         .first()
         .map(|mask| mask.projection)
     {
-        genome
+        let alpha = bounded_delta(genome.alpha_mask.default_alpha, rng, 0.05, intensity)?;
+        if let Some(existing) = genome
             .alpha_mask
             .projection_overrides
-            .push(ProjectionAlphaOverride {
-                projection,
-                alpha: bounded_delta(genome.alpha_mask.default_alpha, rng, 0.05, intensity)?,
-            });
+            .iter_mut()
+            .find(|existing| existing.projection == projection)
+        {
+            existing.alpha = alpha;
+        } else {
+            genome
+                .alpha_mask
+                .projection_overrides
+                .push(ProjectionAlphaOverride { projection, alpha });
+        }
     }
     Ok(())
 }
@@ -651,8 +682,7 @@ fn mutate_motor_affordances(affordances: &mut [MotorAffordanceGene], rng: &mut L
 fn compare_candidates(a: &SelectionCandidate, b: &SelectionCandidate) -> Ordering {
     b.fitness
         .composite_score
-        .partial_cmp(&a.fitness.composite_score)
-        .unwrap_or(Ordering::Equal)
+        .total_cmp(&a.fitness.composite_score)
         .then_with(|| a.genome.id.0.cmp(&b.genome.id.0))
 }
 
@@ -701,15 +731,33 @@ fn choose_vec<T: Clone>(rng: &mut LabRng, a: &[T], b: &[T]) -> Vec<T> {
     out
 }
 
-fn all_mutation_fields() -> Vec<MutationField> {
-    vec![
-        MutationField::LobeRatios,
-        MutationField::MacroConnectomeMasks,
-        MutationField::SparseDensityPriors,
-        MutationField::AlphaMask,
-        MutationField::SensorLayout,
-        MutationField::MotorAffordances,
-    ]
+fn mutation_fields_changed(parent: &BrainGenome, child: &BrainGenome) -> Vec<MutationField> {
+    let mut fields = Vec::new();
+    if child.lobe_ratios != parent.lobe_ratios {
+        fields.push(MutationField::LobeRatios);
+    }
+    if child.macro_connectome_masks != parent.macro_connectome_masks {
+        fields.push(MutationField::MacroConnectomeMasks);
+    }
+    if child.sparse_density_priors != parent.sparse_density_priors {
+        fields.push(MutationField::SparseDensityPriors);
+    }
+    if child.alpha_mask != parent.alpha_mask {
+        fields.push(MutationField::AlphaMask);
+    }
+    if child.sensor_layout != parent.sensor_layout {
+        fields.push(MutationField::SensorLayout);
+    }
+    if child.motor_affordances != parent.motor_affordances {
+        fields.push(MutationField::MotorAffordances);
+    }
+    if child.mutation_rates != parent.mutation_rates {
+        fields.push(MutationField::MutationRates);
+    }
+    if child.developmental_schedule != parent.developmental_schedule {
+        fields.push(MutationField::DevelopmentalSchedule);
+    }
+    fields
 }
 
 fn bounded_delta(
