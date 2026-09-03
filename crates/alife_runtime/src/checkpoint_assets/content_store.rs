@@ -215,14 +215,44 @@ fn write_content_addressed(path: &Path, bytes: &[u8]) -> Result<(), GameAppShell
     file.write_all(bytes)?;
     file.sync_all()?;
     drop(file);
-    match fs::rename(&temporary, path) {
-        Ok(()) => sync_parent(path),
-        Err(_error) if path.exists() && fs::read(path)? == bytes => {
-            fs::remove_file(&temporary)?;
-            Ok(())
+    publish_temporary_content_addressed(&temporary, path, bytes)
+}
+
+fn publish_temporary_content_addressed(
+    temporary: &Path,
+    path: &Path,
+    bytes: &[u8],
+) -> Result<(), GameAppShellError> {
+    match fs::hard_link(temporary, path) {
+        Ok(()) => {
+            fs::remove_file(temporary)?;
+            sync_parent(path)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let existing = fs::read(path);
+            let cleanup = fs::remove_file(temporary);
+            match existing {
+                Ok(existing) if existing == bytes => {
+                    cleanup?;
+                    Ok(())
+                }
+                Ok(_) => {
+                    let _ = cleanup;
+                    Err(GameAppShellError::InvalidProductionFrontend {
+                        message: format!(
+                            "content-addressed GPU checkpoint collision at {}",
+                            path.display()
+                        ),
+                    })
+                }
+                Err(read_error) => {
+                    let _ = cleanup;
+                    Err(read_error.into())
+                }
+            }
         }
         Err(error) => {
-            let _ = fs::remove_file(&temporary);
+            let _ = fs::remove_file(temporary);
             Err(error.into())
         }
     }
@@ -236,4 +266,35 @@ fn sync_parent(path: &Path) -> Result<(), GameAppShellError> {
     #[cfg(not(unix))]
     let _ = path;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn raced_content_addressed_publication_never_replaces_existing_bytes() {
+        let nonce = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "alife-content-addressed-race-{}-{nonce}",
+            std::process::id()
+        ));
+        if root.exists() {
+            fs::remove_dir_all(&root).unwrap();
+        }
+        fs::create_dir_all(&root).unwrap();
+        let destination = root.join("asset.json");
+        let temporary = root.join("asset.tmp");
+        fs::write(&destination, b"existing-authority").unwrap();
+        fs::write(&temporary, b"racing-candidate").unwrap();
+
+        assert!(
+            publish_temporary_content_addressed(&temporary, &destination, b"racing-candidate")
+                .is_err()
+        );
+        assert_eq!(fs::read(&destination).unwrap(), b"existing-authority");
+        assert!(!temporary.exists());
+
+        fs::remove_dir_all(root).unwrap();
+    }
 }

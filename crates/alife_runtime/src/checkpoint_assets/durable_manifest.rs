@@ -1467,17 +1467,17 @@ impl GpuDurableSaveManifest {
             });
         }
 
-        let pre_replace = self.load()?;
-        if &pre_replace.digest != expected {
+        let (pre_replace_digest, pre_replace_authority) = self.load_current_manifest_identity()?;
+        if &pre_replace_digest != expected {
             return Err(GameAppShellError::GpuCheckpointManifestConflict {
                 expected: expected.as_str().to_string(),
-                actual: pre_replace.digest.as_str().to_string(),
+                actual: pre_replace_digest.as_str().to_string(),
             });
         }
         let replacement_base = GpuLoadedSaveManifest {
             save: replacement.clone(),
             digest: replacement_content_digest,
-            authority: pre_replace.authority,
+            authority: pre_replace_authority,
         };
         let reset_journal = GpuSleepTransactionJournalV2::empty(&replacement_base)?;
         let pointer = self.prepare_authority_generation(&replacement_base, &reset_journal)?;

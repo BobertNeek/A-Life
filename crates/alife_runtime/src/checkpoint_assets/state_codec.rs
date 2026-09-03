@@ -38,7 +38,7 @@ use alife_world::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{GameAppShellError, GpuAuthoritativeSession};
+use crate::{GameAppShellError, GpuAuthoritativeSession, GpuSessionFailStopCause};
 
 use super::{
     content_store::GpuCheckpointAssetStore,
@@ -305,7 +305,6 @@ impl GpuBrainCheckpointWrite {
         {
             return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
         }
-        let _ = state.encode()?;
         let (asset, entry) = store.write_json("v11-exact-cognitive", state)?;
         self.save_state.exact_cognitive_state = Some(asset.clone());
         self.manifest_entries.push(entry);
@@ -318,7 +317,6 @@ impl GpuBrainCheckpointWrite {
         state: &DurableFounderCognitiveState,
     ) -> Result<GpuBrainAssetRef, GameAppShellError> {
         state.validate()?;
-        let _ = state.encode()?;
         let (asset, entry) = store.write_json("v11-durable-founder-cognitive", state)?;
         self.manifest_entries.push(entry);
         Ok(asset)
@@ -442,20 +440,10 @@ impl GpuCheckpointAssetStore {
         manifest: &AssetManifest,
         checkpoint: &GpuBrainCheckpointWrite,
     ) -> Result<RestoredGpuBrainCheckpoint, GameAppShellError> {
-        let exact_asset = checkpoint
-            .save_state
-            .exact_cognitive_state
-            .as_ref()
-            .ok_or(ScaffoldContractError::MissingPhaseData)?;
-        let exact_cognitive_state = self.read_exact_cognitive_state(manifest, exact_asset)?;
-        if exact_cognitive_state.organism_id != checkpoint.save_state.organism_id
-            || exact_cognitive_state.checkpoint_tick != checkpoint.save_state.checkpoint_tick
-        {
-            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+        if checkpoint.save_state.exact_cognitive_state.is_none() {
+            return Err(ScaffoldContractError::MissingPhaseData.into());
         }
-        let mut restored = self.restore_brain(backend, manifest, &checkpoint.save_state)?;
-        restored.exact_cognitive_state = Some(exact_cognitive_state);
-        Ok(restored)
+        self.restore_brain(backend, manifest, &checkpoint.save_state)
     }
 
     pub fn read_exact_cognitive_state(
@@ -463,9 +451,10 @@ impl GpuCheckpointAssetStore {
         manifest: &AssetManifest,
         asset: &GpuBrainAssetRef,
     ) -> Result<ExactCognitiveCheckpointState, GameAppShellError> {
-        let (_candidate, bytes): (ExactCognitiveCheckpointState, Vec<u8>) =
+        let (candidate, _): (ExactCognitiveCheckpointState, Vec<u8>) =
             self.read_json(manifest, asset)?;
-        Ok(ExactCognitiveCheckpointState::decode(&bytes)?)
+        candidate.validate()?;
+        Ok(candidate)
     }
 
     pub fn read_durable_founder_state(
@@ -473,9 +462,10 @@ impl GpuCheckpointAssetStore {
         manifest: &AssetManifest,
         asset: &GpuBrainAssetRef,
     ) -> Result<DurableFounderCognitiveState, GameAppShellError> {
-        let (_candidate, bytes): (DurableFounderCognitiveState, Vec<u8>) =
+        let (candidate, _): (DurableFounderCognitiveState, Vec<u8>) =
             self.read_json(manifest, asset)?;
-        Ok(DurableFounderCognitiveState::decode(&bytes)?)
+        candidate.validate()?;
+        Ok(candidate)
     }
 
     /// Creates a healthy cross-save mind clone through the production GPU
@@ -1063,6 +1053,11 @@ impl GpuCheckpointAssetStore {
             .as_ref()
             .map(|asset| self.read_exact_cognitive_state(manifest, asset))
             .transpose()?;
+        if exact_cognitive_state.as_ref().is_some_and(|exact| {
+            exact.organism_id != state.organism_id || exact.checkpoint_tick != state.checkpoint_tick
+        }) {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+        }
         let capacity = BrainCapacityClass::production_for_id(state.capacity_class_id)?;
         let current_provenance = current_backend_provenance(backend, &capacity)?;
         state
@@ -1332,62 +1327,74 @@ impl GpuCheckpointAssetStore {
             )?,
             None => backend.restore_brain(state.organism_id, phenotype.clone(), request)?,
         };
-        if let Err(error) = backend.restore_activity_state(
-            receipt.handle,
-            GpuActivityRestoreInput {
-                next_sequence_cursor: state.throttle_replay.next_sequence_cursor,
-                checkpoint_tick: state.checkpoint_tick.raw(),
-                next_completed_gpu_time_ns: state.throttle_replay.next_completed_gpu_time_ns,
-                brain_atp_q16: state.throttle_replay.brain_atp_q16,
-                last_world_atp_tick: state.throttle_replay.last_world_atp_tick,
-                record: state
-                    .throttle_replay
-                    .last_checkpoint
-                    .as_ref()
-                    .map(activity_restore_record),
-            },
-        ) {
-            if let Some(pending) = receipt.pending_eligibility {
-                let _ = backend.discard_pending_eligibility(receipt.handle, pending.identity());
-            }
-            let _ = backend.remove_brain(receipt.handle);
-            return Err(error.into());
-        }
+        let post_restore = (|| -> Result<Option<ExperiencePatchBuilder>, GameAppShellError> {
+            backend.restore_activity_state(
+                receipt.handle,
+                GpuActivityRestoreInput {
+                    next_sequence_cursor: state.throttle_replay.next_sequence_cursor,
+                    checkpoint_tick: state.checkpoint_tick.raw(),
+                    next_completed_gpu_time_ns: state.throttle_replay.next_completed_gpu_time_ns,
+                    brain_atp_q16: state.throttle_replay.brain_atp_q16,
+                    last_world_atp_tick: state.throttle_replay.last_world_atp_tick,
+                    record: state
+                        .throttle_replay
+                        .last_checkpoint
+                        .as_ref()
+                        .map(activity_restore_record),
+                },
+            )?;
 
-        let pending_transaction = match &state.pending_experience_transaction {
-            Some(asset_ref) => {
-                let (pending, _): (PendingExperienceTransactionV1, Vec<u8>) =
-                    self.read_json(manifest, asset_ref)?;
-                if pending.schema_version != PENDING_TRANSACTION_SCHEMA_VERSION {
-                    return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
+            let pending_transaction = match &state.pending_experience_transaction {
+                Some(asset_ref) => {
+                    let (pending, _): (PendingExperienceTransactionV1, Vec<u8>) =
+                        self.read_json(manifest, asset_ref)?;
+                    if pending.schema_version != PENDING_TRANSACTION_SCHEMA_VERSION {
+                        return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
+                    }
+                    let saved_pending = state
+                        .pending_eligibility
+                        .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
+                    validate_pending_transaction(&pending.builder, receipt.handle, saved_pending)?;
+                    Some(pending.builder)
                 }
-                let saved_pending = state
-                    .pending_eligibility
-                    .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
-                validate_pending_transaction(&pending.builder, receipt.handle, saved_pending)?;
-                Some(pending.builder)
+                None => None,
+            };
+            let pending_shape_valid = if retained_learning.is_some() {
+                pending_transaction.is_none() && receipt.pending_eligibility.is_some()
+            } else {
+                pending_transaction.is_some() == receipt.pending_eligibility.is_some()
+            };
+            if !pending_shape_valid {
+                return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
             }
-            None => None,
-        };
-        let pending_shape_valid = if retained_learning.is_some() {
-            pending_transaction.is_none() && receipt.pending_eligibility.is_some()
-        } else {
-            pending_transaction.is_some() == receipt.pending_eligibility.is_some()
-        };
-        if !pending_shape_valid {
-            return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
-        }
 
-        self.restore_sleep_assets(
-            backend,
-            manifest,
-            state,
-            receipt.handle,
-            &phenotype,
-            live_total_synapse_count,
-            live_recurrent_synapse_count,
-            live_decoder_synapse_count,
-        )?;
+            self.restore_sleep_assets(
+                backend,
+                manifest,
+                state,
+                receipt.handle,
+                &phenotype,
+                live_total_synapse_count,
+                live_recurrent_synapse_count,
+                live_decoder_synapse_count,
+            )?;
+            Ok(pending_transaction)
+        })();
+        let pending_transaction = match post_restore {
+            Ok(pending_transaction) => pending_transaction,
+            Err(error) => {
+                if let Err(cleanup_error) = cleanup_failed_restore(backend, &receipt) {
+                    backend.record_contract_failure(&cleanup_error);
+                    backend.fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                    return Err(GameAppShellError::InvalidProductionFrontend {
+                        message: format!(
+                            "GPU checkpoint restore failed: {error}; cleanup failed: {cleanup_error}"
+                        ),
+                    });
+                }
+                return Err(error);
+            }
+        };
         Ok(RestoredGpuBrainCheckpoint {
             receipt,
             phenotype,
@@ -1683,6 +1690,20 @@ impl GpuCheckpointAssetStore {
         }
         Ok(())
     }
+}
+
+fn cleanup_failed_restore(
+    backend: &mut GpuAuthoritativeSession,
+    receipt: &GpuBrainRestoreReceipt,
+) -> Result<(), ScaffoldContractError> {
+    let discard_result = receipt
+        .pending_eligibility
+        .as_ref()
+        .map(|pending| backend.discard_pending_eligibility(receipt.handle, pending.identity()))
+        .transpose();
+    let remove_result = backend.remove_brain(receipt.handle);
+    discard_result?;
+    remove_result
 }
 
 fn activation_asset(

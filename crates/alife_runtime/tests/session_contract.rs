@@ -38,6 +38,21 @@ fn device_loss_fail_stops_actions_and_retains_latest_durable_checkpoint() {
 }
 
 #[test]
+fn first_fail_stop_cause_remains_stable_for_the_session() {
+    let mut authority = GpuSessionAuthority::new(GpuSessionConsumerKind::Gameplay);
+
+    authority.fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+    authority.fail_stop(GpuSessionFailStopCause::DeviceLost);
+
+    assert_eq!(
+        authority.state(),
+        &alife_runtime::GpuSessionAuthorityState::FailedStop {
+            cause: GpuSessionFailStopCause::CheckpointRestoreFailed,
+        }
+    );
+}
+
+#[test]
 fn durable_checkpoint_permit_owns_the_exact_prevalidated_reference() {
     let mut authority = GpuSessionAuthority::new(GpuSessionConsumerKind::Gameplay);
     let initial = DurableGpuCheckpointRef::try_new(
