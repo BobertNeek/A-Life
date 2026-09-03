@@ -340,11 +340,14 @@ impl GpuAuthorityReceiptV1 {
                 transaction_generation,
                 hardware_receipt_generation,
             } if input_fast_generation > 0
-                && output_fast_generation == input_fast_generation.saturating_add(1)
+                && input_fast_generation.checked_add(1) == Some(output_fast_generation)
                 && output_eligibility_generation > 0
                 && replay_journal_generation > 0
                 && transaction_generation > 0
-                && hardware_receipt_generation > 0 => Ok(()),
+                && hardware_receipt_generation > 0 =>
+            {
+                Ok(())
+            }
             GpuAuthorityCommitEvidenceV1::LearningRetained {
                 active_eligibility_generation,
                 staging_eligibility_generation,
@@ -352,11 +355,14 @@ impl GpuAuthorityReceiptV1 {
                 hardware_receipt_generation,
                 pending_receipt_digest,
             } if active_eligibility_generation > 0
-                && staging_eligibility_generation
-                    == active_eligibility_generation.saturating_add(1)
+                && active_eligibility_generation.checked_add(1)
+                    == Some(staging_eligibility_generation)
                 && transaction_generation > 0
                 && hardware_receipt_generation > 0
-                && pending_receipt_digest != [0; 4] => Ok(()),
+                && pending_receipt_digest != [0; 4] =>
+            {
+                Ok(())
+            }
             _ => Err(ScaffoldContractError::LearningEvidenceMismatch),
         }
     }
@@ -829,8 +835,9 @@ mod tests {
     };
 
     use super::{
-        GpuAuthorityReceiptV1, GpuFastPlasticityCommitRecord, GpuLearningReceipt,
-        PendingEligibilityIdentity, PendingEligibilityReceipt, PENDING_RECEIPT_DOMAIN,
+        GpuAuthorityCommitEvidenceV1, GpuAuthorityReceiptV1, GpuFastPlasticityCommitRecord,
+        GpuLearningReceipt, PendingEligibilityIdentity, PendingEligibilityReceipt,
+        PENDING_RECEIPT_DOMAIN,
     };
     use crate::GpuBrainHandle;
 
@@ -933,6 +940,32 @@ mod tests {
 
         receipt.validate().unwrap();
         assert_ne!(receipt.evidence(), authority_fixture().3.evidence());
+    }
+
+    #[test]
+    fn compact_authority_receipt_rejects_wrapped_generation_successors() {
+        let (_, _, _, mut committed) = authority_fixture();
+        committed.evidence = GpuAuthorityCommitEvidenceV1::LearningCommitted {
+            input_fast_generation: u64::MAX,
+            output_fast_generation: u64::MAX,
+            output_eligibility_generation: 6,
+            replay_journal_generation: 10,
+            transaction_generation: 12,
+            hardware_receipt_generation: 14,
+        };
+        committed.receipt_digest = committed.recompute_digest();
+        assert!(committed.validate().is_err());
+
+        let (_, _, _, mut retained) = authority_fixture();
+        retained.evidence = GpuAuthorityCommitEvidenceV1::LearningRetained {
+            active_eligibility_generation: u64::MAX,
+            staging_eligibility_generation: u64::MAX,
+            transaction_generation: 12,
+            hardware_receipt_generation: 14,
+            pending_receipt_digest: [1; 4],
+        };
+        retained.receipt_digest = retained.recompute_digest();
+        assert!(retained.validate().is_err());
     }
 
     #[test]

@@ -33,6 +33,77 @@ const REPLAY_EVENT_WORDS: usize = size_of::<GpuReplayEventRecord>() / 4;
 const LEARNING_STATE_WORDS: usize = size_of::<GpuSlotLearningStateRecord>() / 4;
 const SLEEP_DIAGNOSTIC_Q12: f32 = 4096.0;
 
+#[derive(Debug, Clone, Copy)]
+struct ResidentLearningStateIdentity {
+    active_weight_generation: u64,
+    active_weight_bank: u8,
+    active_eligibility_generation: u64,
+    inactive_eligibility_generation: u64,
+    active_eligibility_bank: u8,
+    replay_journal_generation: u64,
+    replay_journal_cursor: u32,
+    replay_journal_event_count: u32,
+    transaction_generation: u64,
+}
+
+fn learning_state_identity_matches(
+    state: &GpuSlotLearningStateRecord,
+    expected: ResidentLearningStateIdentity,
+) -> bool {
+    join_pair([
+        state.active_weight_generation_lo,
+        state.active_weight_generation_hi,
+    ]) == expected.active_weight_generation
+        && state.active_weight_bank == u32::from(expected.active_weight_bank)
+        && join_pair([
+            state.active_eligibility_generation_lo,
+            state.active_eligibility_generation_hi,
+        ]) == expected.active_eligibility_generation
+        && join_pair([
+            state.inactive_eligibility_generation_lo,
+            state.inactive_eligibility_generation_hi,
+        ]) == expected.inactive_eligibility_generation
+        && state.active_eligibility_bank == u32::from(expected.active_eligibility_bank)
+        && join_pair([state.replay_generation_lo, state.replay_generation_hi])
+            == expected.replay_journal_generation
+        && state.replay_cursor == expected.replay_journal_cursor
+        && state.replay_event_count == expected.replay_journal_event_count
+        && join_pair([
+            state.transaction_generation_lo,
+            state.transaction_generation_hi,
+        ]) == expected.transaction_generation
+}
+
+#[cfg(test)]
+fn learning_state_record_for_test(
+    identity: ResidentLearningStateIdentity,
+) -> GpuSlotLearningStateRecord {
+    let mut state = GpuSlotLearningStateRecord::zeroed();
+    [
+        state.active_weight_generation_lo,
+        state.active_weight_generation_hi,
+    ] = split_pair(identity.active_weight_generation);
+    state.active_weight_bank = u32::from(identity.active_weight_bank);
+    [
+        state.active_eligibility_generation_lo,
+        state.active_eligibility_generation_hi,
+    ] = split_pair(identity.active_eligibility_generation);
+    [
+        state.inactive_eligibility_generation_lo,
+        state.inactive_eligibility_generation_hi,
+    ] = split_pair(identity.inactive_eligibility_generation);
+    state.active_eligibility_bank = u32::from(identity.active_eligibility_bank);
+    [state.replay_generation_lo, state.replay_generation_hi] =
+        split_pair(identity.replay_journal_generation);
+    state.replay_cursor = identity.replay_journal_cursor;
+    state.replay_event_count = identity.replay_journal_event_count;
+    [
+        state.transaction_generation_lo,
+        state.transaction_generation_hi,
+    ] = split_pair(identity.transaction_generation);
+    state
+}
+
 /// Decodes one immutable row produced by the nonblocking population capture.
 /// No live backend state is consulted after submission.
 pub fn decode_exact_population_capture_row(
@@ -1699,7 +1770,7 @@ impl GpuClosedLoopBackend {
     ) -> Result<GpuBrainCheckpointSnapshot, ScaffoldContractError> {
         self.ensure_ready()?;
         self.validate_handle_backend(handle)?;
-        let (brain_slot, ranges, resident_state, active_side) = {
+        let (brain_slot, ranges, resident_state, learning_identity, active_side) = {
             let bucket = self
                 .class_buckets
                 .get(&handle.class_id().raw())
@@ -1716,17 +1787,22 @@ impl GpuClosedLoopBackend {
                 resident.brain_slot.clone(),
                 resident.ranges.clone(),
                 (
-                    resident.active_weight_generation,
-                    resident.active_weight_bank,
-                    resident.active_eligibility_generation,
-                    resident.active_eligibility_bank,
-                    resident.replay_journal_generation,
-                    resident.transaction_generation,
                     resident.logical_dispatch_generation,
                     resident.learning_sequence_guard.last_committed(),
                     resident.pending_eligibility,
                     resident.pending_eligibility_record,
                 ),
+                ResidentLearningStateIdentity {
+                    active_weight_generation: resident.active_weight_generation,
+                    active_weight_bank: resident.active_weight_bank,
+                    active_eligibility_generation: resident.active_eligibility_generation,
+                    inactive_eligibility_generation: resident.inactive_eligibility_generation,
+                    active_eligibility_bank: resident.active_eligibility_bank,
+                    replay_journal_generation: resident.replay_journal_generation,
+                    replay_journal_cursor: resident.replay_journal_cursor,
+                    replay_journal_event_count: resident.replay_journal_event_count,
+                    transaction_generation: resident.transaction_generation,
+                },
                 side,
             )
         };
@@ -1754,12 +1830,7 @@ impl GpuClosedLoopBackend {
         if state.schema_version != u32::from(SchemaVersions::CURRENT.learning.raw())
             || state.active_weight_bank > 1
             || state.active_eligibility_bank > 1
-            || active_weight_generation != resident_state.0
-            || state.active_weight_bank != u32::from(resident_state.1)
-            || active_eligibility_generation != resident_state.2
-            || state.active_eligibility_bank != u32::from(resident_state.3)
-            || replay_generation != resident_state.4
-            || transaction_generation != resident_state.5
+            || !learning_state_identity_matches(&state, learning_identity)
             || state.replay_event_capacity == 0
             || state.replay_event_capacity > 65_536
             || state.replay_span_count == 0
@@ -1771,7 +1842,7 @@ impl GpuClosedLoopBackend {
         {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
         }
-        let pending = match (resident_state.8, resident_state.9, state.pending_valid) {
+        let pending = match (resident_state.2, resident_state.3, state.pending_valid) {
             (Some(receipt), Some(record), 1) => {
                 let gpu_record: GpuPendingEligibilityRecord =
                     record_from_range(&words, base, &ranges.layout.pending_eligibility_words)?;
@@ -1802,7 +1873,7 @@ impl GpuClosedLoopBackend {
             phenotype_hash: handle.phenotype_hash(),
             checkpoint_tick,
             active_activation_side: active_side,
-            logical_dispatch_generation: resident_state.6,
+            logical_dispatch_generation: resident_state.0,
             activation_a_bits: exact_bits(
                 &words,
                 base,
@@ -1896,7 +1967,7 @@ impl GpuClosedLoopBackend {
                 &ranges.layout.replay_sample_words,
                 state.replay_sample_capacity as usize,
             )?,
-            last_learning_replay_key: resident_state.7,
+            last_learning_replay_key: resident_state.1,
             pending_eligibility: pending,
         };
         GpuBrainCheckpointSnapshot::try_from_parts(parts)
@@ -2114,6 +2185,17 @@ impl GpuClosedLoopBackend {
             }
             None => (GpuPendingEligibilityRecord::zeroed(), None),
         };
+        let restored_learning_sequence_guard = LearningSequenceGuard::restore_validated(
+            handle.organism_id(),
+            handle.phenotype_hash(),
+            parts.last_learning_replay_key,
+        )?;
+        let next_dispatch_generation = self.next_dispatch_generation.max(
+            parts
+                .logical_dispatch_generation
+                .checked_add(1)
+                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?,
+        );
         let mut state = initialized_state;
         state.active_weight_bank = u32::from(parts.active_weight_bank);
         state.active_eligibility_bank = u32::from(parts.active_eligibility_bank);
@@ -2210,6 +2292,18 @@ impl GpuClosedLoopBackend {
         ] {
             write_exact_prefix(&self.queue, buffer, range, words)?;
         }
+        let submission = self.queue.submit(std::iter::empty());
+        if self
+            .device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            })
+            .is_err()
+        {
+            self.mark_device_lost();
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
         {
             let bucket = self
                 .class_buckets
@@ -2237,27 +2331,11 @@ impl GpuClosedLoopBackend {
             resident.replay_journal_event_count = parts.replay_journal_event_count;
             resident.transaction_generation = parts.learning_transaction_generation;
             resident.logical_dispatch_generation = parts.logical_dispatch_generation;
-            resident.learning_sequence_guard = LearningSequenceGuard::restore_validated(
-                handle.organism_id(),
-                handle.phenotype_hash(),
-                parts.last_learning_replay_key,
-            )?;
+            resident.learning_sequence_guard = restored_learning_sequence_guard;
             resident.pending_eligibility = pending_receipt;
             resident.pending_eligibility_record = pending_receipt.map(|_| pending_record);
         }
-        self.next_dispatch_generation = self.next_dispatch_generation.max(
-            parts
-                .logical_dispatch_generation
-                .checked_add(1)
-                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?,
-        );
-        let submission = self.queue.submit(std::iter::empty());
-        self.device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(submission),
-                timeout: None,
-            })
-            .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?;
+        self.next_dispatch_generation = next_dispatch_generation;
         Ok(GpuBrainRestoreReceipt {
             handle,
             pending_eligibility: pending_receipt,
@@ -2780,3 +2858,34 @@ fn write_words_at_offset(
 
 const _: () = assert!(LEARNING_STATE_WORDS == 24);
 const _: () = assert!(REPLAY_EVENT_WORDS == 28);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn learning_state_identity_includes_inactive_generation_and_replay_position() {
+        let expected = ResidentLearningStateIdentity {
+            active_weight_generation: 3,
+            active_weight_bank: 1,
+            active_eligibility_generation: 5,
+            inactive_eligibility_generation: 6,
+            active_eligibility_bank: 0,
+            replay_journal_generation: 7,
+            replay_journal_cursor: 8,
+            replay_journal_event_count: 9,
+            transaction_generation: 10,
+        };
+        let mut state = learning_state_record_for_test(expected);
+        assert!(learning_state_identity_matches(&state, expected));
+
+        state.inactive_eligibility_generation_lo += 1;
+        assert!(!learning_state_identity_matches(&state, expected));
+        state = learning_state_record_for_test(expected);
+        state.replay_cursor += 1;
+        assert!(!learning_state_identity_matches(&state, expected));
+        state = learning_state_record_for_test(expected);
+        state.replay_event_count += 1;
+        assert!(!learning_state_identity_matches(&state, expected));
+    }
+}

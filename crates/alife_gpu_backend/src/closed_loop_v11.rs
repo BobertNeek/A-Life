@@ -7,10 +7,11 @@
 use alife_core::cognitive_work::CognitiveWorkCounters;
 use alife_core::{
     apply_dendritic_conjunctions, BrainCapacityClass, BrainPhenotype, CanonicalDigestBuilder,
-    CoactivationEvidence, CognitiveWorkReceipt, PhenotypeHash,
-    DendriticBranch, DendriticBranchSet, DendriticInputRef, DendriticWorkReceipt,
-    ScaffoldContractError, StructuralPlasticityConfig, StructuralPlasticityState,
-    StructuralWorkReceipt, MAX_ACCEPTED_PER_PHASE, MAX_CANDIDATES_PER_REGION,
+    CoactivationEvidence, CognitiveWorkReceipt, DendriticBranch, DendriticBranchSet,
+    DendriticInputRef, DendriticWorkReceipt, PhenotypeHash, ScaffoldContractError,
+    StructuralPlasticityConfig, StructuralPlasticityState, StructuralWorkReceipt,
+    MAX_ACCEPTED_PER_PHASE, MAX_CANDIDATES_PER_REGION, MAX_DENDRITIC_BRANCHES,
+    MAX_DENDRITIC_BRANCHES_PER_NEURON, MAX_DENDRITIC_INPUTS,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -94,7 +95,9 @@ impl GpuLiveTopologyCheckpointV1 {
             || self.neuron_count > capacity.execution().max_neurons()
             || self.total_synapse_count > capacity.execution().max_total_synapses()
             || self.recurrent_synapse_count > capacity.execution().max_recurrent_synapses()
-            || self.recurrent_synapse_count.checked_add(self.decoder_synapse_count)
+            || self
+                .recurrent_synapse_count
+                .checked_add(self.decoder_synapse_count)
                 != Some(self.total_synapse_count)
             || self.target_offsets.len() != neuron_count.saturating_add(1)
             || self.target_offsets.first().copied() != Some(0)
@@ -102,7 +105,10 @@ impl GpuLiveTopologyCheckpointV1 {
             || self.target_offsets.windows(2).any(|pair| pair[0] > pair[1])
             || self.source_indices.len() != recurrent
             || self.route_indices.len() != recurrent
-            || self.source_indices.iter().any(|source| *source >= self.neuron_count)
+            || self
+                .source_indices
+                .iter()
+                .any(|source| *source >= self.neuron_count)
             || self.genetic_weight_bits.len() != total
             || self.alpha_bits.len() != total
             || self
@@ -246,10 +252,7 @@ impl GpuV11CausalState {
         let architecture = phenotype.cognitive_architecture_plan();
         let structural_edit_budget = u16::from(architecture.structural_edit_budget().max(1));
         let structural_config = StructuralPlasticityConfig {
-            max_candidates_per_region: architecture
-                .structural_candidate_budget()
-                .max(1)
-                .min(8),
+            max_candidates_per_region: architecture.structural_candidate_budget().max(1).min(8),
             max_regions: 1,
             max_accepted_per_phase: structural_edit_budget.min(4),
             max_structural_edges: structural_edit_budget.saturating_mul(4).clamp(1, 64),
@@ -271,6 +274,7 @@ impl GpuV11CausalState {
         if neuron_count == 0 {
             return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
         }
+        validate_dendritic_branches(neuron_count, &dendritic_branches)?;
         let structural = StructuralPlasticityState::new(neuron_count, structural_config)
             .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
         Ok(Self {
@@ -290,8 +294,7 @@ impl GpuV11CausalState {
     ) -> Result<Self, ScaffoldContractError> {
         let plan = phenotype.cognitive_architecture();
         if phenotype.neuron_count() != neuron_count
-            || dendritic_branches.branches().len()
-                > usize::from(plan.dendritic_branch_capacity())
+            || dendritic_branches.branches().len() > usize::from(plan.dendritic_branch_capacity())
         {
             return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
         }
@@ -363,13 +366,7 @@ impl GpuV11CausalState {
         &mut self,
         branches: DendriticBranchSet,
     ) -> Result<(), ScaffoldContractError> {
-        let mut accumulators = vec![0.0; self.neuron_count as usize];
-        apply_dendritic_conjunctions(
-            &vec![0.0; self.neuron_count as usize],
-            &mut accumulators,
-            &branches,
-        )
-        .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
+        validate_dendritic_branches(self.neuron_count, &branches)?;
         self.dendritic_branches = branches;
         Ok(())
     }
@@ -553,6 +550,7 @@ impl GpuV11CausalState {
             pending_lifetime_synapse: checkpoint.pending_lifetime_synapse,
             last_work: checkpoint.work,
         };
+        validate_dendritic_branches(state.neuron_count, &state.dendritic_branches)?;
         if state.sparse_spans.iter().any(|span| {
             span.target >= state.neuron_count
                 || span.edges.iter().any(|edge| {
@@ -624,6 +622,42 @@ impl GpuV11CausalState {
     }
 }
 
+fn validate_dendritic_branches(
+    neuron_count: u32,
+    branches: &DendriticBranchSet,
+) -> Result<(), ScaffoldContractError> {
+    if branches.branches().len() > MAX_DENDRITIC_BRANCHES {
+        return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+    }
+    let mut previous_target = None;
+    let mut branches_for_target = 0_usize;
+    for branch in branches.branches() {
+        if branch.target >= neuron_count
+            || branch.inputs.is_empty()
+            || branch.inputs.len() > MAX_DENDRITIC_INPUTS
+            || !branch.threshold.is_finite()
+            || !branch.output_gain.is_finite()
+            || branch
+                .inputs
+                .iter()
+                .any(|input| input.source >= neuron_count || !input.weight.is_finite())
+            || previous_target.is_some_and(|previous| branch.target < previous)
+        {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        if previous_target == Some(branch.target) {
+            branches_for_target += 1;
+        } else {
+            previous_target = Some(branch.target);
+            branches_for_target = 1;
+        }
+        if branches_for_target > MAX_DENDRITIC_BRANCHES_PER_NEURON {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -685,5 +719,26 @@ mod tests {
             GpuV11CausalState::restore(state.checkpoint()).unwrap(),
             state
         );
+    }
+
+    #[test]
+    fn restore_rejects_dendritic_indices_outside_the_neuron_layout() {
+        let state = GpuV11CausalState::new(
+            8,
+            DendriticBranchSet::new(Vec::new()).unwrap(),
+            StructuralPlasticityConfig::default(),
+        )
+        .unwrap();
+        let mut checkpoint = state.checkpoint();
+        checkpoint.dendritic_branches = DendriticBranchSet::new(vec![DendriticBranch::new(
+            8,
+            1.0,
+            1.0,
+            vec![DendriticInputRef::new(0, 1.0).unwrap()],
+        )
+        .unwrap()])
+        .unwrap();
+
+        assert!(GpuV11CausalState::restore(checkpoint).is_err());
     }
 }
