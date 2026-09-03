@@ -8,6 +8,9 @@ const CANDIDATE_FEATURE_COUNT:u32 = 24u;
 const PENDING_ELIGIBILITY_WORDS:u32 = 36u;
 const ELIGIBILITY_DIAGNOSTIC_LANE:u32 = 2u;
 const ELIGIBILITY_DIAGNOSTIC_UNKNOWN_DECODER_HEAD:u32 = 0x80000000u;
+const ELIGIBILITY_DIAGNOSTIC_INVALID_VALUE:u32 = 0x40000000u;
+const ELIGIBILITY_DIAGNOSTIC_FAILURE_MASK:u32 =
+  ELIGIBILITY_DIAGNOSTIC_UNKNOWN_DECODER_HEAD | ELIGIBILITY_DIAGNOSTIC_INVALID_VALUE;
 
 fn finite_eligibility(value:f32) -> bool {
   return value == value && abs(value) <= 3.402823466e+38;
@@ -131,24 +134,31 @@ fn accumulate_recurrent_eligibility(@builtin(global_invocation_id) gid:vec3<u32>
   let header = load_learning_header(learning_base);
   if (header.brain_slot_index >= arrayLength(&brain_slots)) { return; }
   let brain = brain_slots[header.brain_slot_index];
-  let extension = load_slot_extension(brain);
-  let learning = load_slot_learning_state(extension);
   let selection = load_selection_record(header.selection_offset);
   if (selection.status != 2u) { return; }
   let local_synapse = gid.x;
   if (local_synapse >= header.recurrent_synapse_count) { return; }
-  let active_bases = active_eligibility_bases(brain, extension, learning);
-  let staging_bases = inactive_eligibility_bases(brain, extension, learning);
+  let bank_pair = load_eligibility_bank_pair_direct(brain);
+  let active_bases = bank_pair.active;
+  let staging_bases = bank_pair.staging;
   let route_index = immutable_plan_words[brain.route_indices_offset + local_synapse];
   let route_mask_base = gid.y * ACTIVE_DISPATCH_ROW_WORDS + ACTIVITY_HEADER_OFFSET + 8u;
   if (!route_enabled_at(route_mask_base, route_index)) {
     let previous = load_state_f32(active_bases.recurrent + local_synapse);
+    if (!finite_eligibility(previous)) {
+      atomicOr(
+        &mutable_state_words[brain.diagnostic_offset + ELIGIBILITY_DIAGNOSTIC_LANE],
+        ELIGIBILITY_DIAGNOSTIC_INVALID_VALUE
+      );
+      return;
+    }
     store_state_f32(staging_bases.recurrent + local_synapse, previous);
     return;
   }
-  let metadata_base = extension.synapse_metadata_offset + local_synapse * 8u;
+  let extension_base = brain.extension_record_offset;
+  let metadata_base = load_state_u32(extension_base + 7u) + local_synapse * 8u;
   let metadata = load_synapse_learning_metadata(metadata_base);
-  let receptor_base = extension.receptor_offset + metadata.receptor_index * 16u;
+  let receptor_base = load_state_u32(extension_base + 4u) + metadata.receptor_index * 16u;
   let eligibility_decay = bitcast<f32>(immutable_plan_words[receptor_base]);
   let post_activation_offset = select(
     brain.activation_a_offset,
@@ -166,8 +176,15 @@ fn accumulate_recurrent_eligibility(@builtin(global_invocation_id) gid:vec3<u32>
   let staging_index = staging_bases.recurrent + metadata.eligibility_local_index;
   let local = load_state_f32(source) * load_state_f32(target_index);
   let previous = load_state_f32(active_index);
-  if (!finite_eligibility(local) || !finite_eligibility(previous)) { return; }
-  store_state_f32(staging_index, clamp(eligibility_decay * previous + local, -1.0, 1.0));
+  let next = eligibility_decay * previous + local;
+  if (!finite_eligibility(local) || !finite_eligibility(previous) || !finite_eligibility(next)) {
+    atomicOr(
+      &mutable_state_words[brain.diagnostic_offset + ELIGIBILITY_DIAGNOSTIC_LANE],
+      ELIGIBILITY_DIAGNOSTIC_INVALID_VALUE
+    );
+    return;
+  }
+  store_state_f32(staging_index, clamp(next, -1.0, 1.0));
 }
 
 @compute @workgroup_size(64)
@@ -176,21 +193,21 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
   let header = load_learning_header(learning_base);
   if (header.brain_slot_index >= arrayLength(&brain_slots)) { return; }
   let brain = brain_slots[header.brain_slot_index];
-  let extension = load_slot_extension(brain);
-  let learning = load_slot_learning_state(extension);
   let selection = load_selection_record(header.selection_offset);
   if (selection.status != 2u) { return; }
   let local_synapse = gid.x;
   if (local_synapse >= header.decoder_synapse_count) { return; }
-  let metadata_base = extension.decoder_metadata_offset + local_synapse * 8u;
+  let extension_base = brain.extension_record_offset;
+  let metadata_base = load_state_u32(extension_base + 6u) + local_synapse * 8u;
   let metadata = load_decoder_eligibility_metadata(metadata_base);
-  let receptor_base = extension.receptor_offset + metadata.receptor_index * 16u;
+  let receptor_base = load_state_u32(extension_base + 4u) + metadata.receptor_index * 16u;
   let eligibility_decay = bitcast<f32>(immutable_plan_words[receptor_base]);
   if (selection.status != 2u || selection.candidate_index >= header.candidate_count
       || selection.active_activation_side != header.active_activation_side) { return; }
   let selected = load_candidate(header.candidate_offset + selection.candidate_index * 8u);
-  let active_bases = active_eligibility_bases(brain, extension, learning);
-  let staging_bases = inactive_eligibility_bases(brain, extension, learning);
+  let bank_pair = load_eligibility_bank_pair_direct(brain);
+  let active_bases = bank_pair.active;
+  let staging_bases = bank_pair.staging;
   let active_index = active_bases.decoder + metadata.eligibility_local_index;
   let staging_index = staging_bases.decoder + metadata.eligibility_local_index;
   var local = 0.0;
@@ -225,7 +242,7 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
         header.active_activation_side == 1u
       );
       let synapse = load_synapse_learning_metadata(
-        extension.synapse_metadata_offset + metadata.global_synapse_id * 8u
+        load_state_u32(extension_base + 7u) + metadata.global_synapse_id * 8u
       );
       if (synapse.global_synapse_id != metadata.global_synapse_id
           || synapse.source_neuron != metadata.motor_index
@@ -241,8 +258,15 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
     return;
   }
   let previous = load_state_f32(active_index);
-  if (!finite_eligibility(local) || !finite_eligibility(previous)) { return; }
-  store_state_f32(staging_index, clamp(eligibility_decay * previous + local, -1.0, 1.0));
+  let next = eligibility_decay * previous + local;
+  if (!finite_eligibility(local) || !finite_eligibility(previous) || !finite_eligibility(next)) {
+    atomicOr(
+      &mutable_state_words[brain.diagnostic_offset + ELIGIBILITY_DIAGNOSTIC_LANE],
+      ELIGIBILITY_DIAGNOSTIC_INVALID_VALUE
+    );
+    return;
+  }
+  store_state_f32(staging_index, clamp(next, -1.0, 1.0));
 }
 
 @compute @workgroup_size(1)
@@ -258,7 +282,7 @@ fn finalize_pending_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
   let selection = load_selection_record(header.selection_offset);
   if (selection.status != 2u) { return; }
   if ((atomicLoad(&mutable_state_words[brain.diagnostic_offset + ELIGIBILITY_DIAGNOSTIC_LANE])
-      & ELIGIBILITY_DIAGNOSTIC_UNKNOWN_DECODER_HEAD) != 0u) { return; }
+      & ELIGIBILITY_DIAGNOSTIC_FAILURE_MASK) != 0u) { return; }
   if (selection.status != 2u || selection.candidate_index >= header.candidate_count
       || selection.active_activation_side != header.active_activation_side) { return; }
   let selected = load_candidate(header.candidate_offset + selection.candidate_index * 8u);

@@ -61,8 +61,7 @@ fn replay_sleep_learning(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (!state_span_within(completion,16u)
       || load_state_u32(completion+3u) != SLEEP_STATUS_PREPARED) { return; }
   if (gid.x >= header.replay_span_count) { return; }
-  let extension = load_slot_extension(brain);
-  let learning = load_slot_learning_state(extension);
+  let extension_base = brain.extension_record_offset;
   let span_base = header.replay_span_offset + gid.x*4u;
   if (!sleep_frame_span_within(span_base,4u)) { sleep_reject(completion); return; }
   let span = load_sleep_replay_span(span_base);
@@ -73,10 +72,10 @@ fn replay_sleep_learning(@builtin(global_invocation_id) gid:vec3<u32>) {
       || span.sample_count > header.replay_sample_count-span.sample_start) {
     sleep_reject(completion); return;
   }
-  let metadata_base = extension.synapse_metadata_offset + span.local_synapse_id*8u;
+  let metadata_base = load_state_u32(extension_base + 7u) + span.local_synapse_id*8u;
   if (!sleep_immutable_plan_span_within(metadata_base,8u)) { sleep_reject(completion); return; }
   let metadata = load_synapse_learning_metadata(metadata_base);
-  let receptor_base = extension.receptor_offset + metadata.receptor_index*16u;
+  let receptor_base = load_state_u32(extension_base + 4u) + metadata.receptor_index*16u;
   if (metadata.global_synapse_id != span.local_synapse_id
       || !sleep_immutable_plan_span_within(receptor_base,16u)) {
     sleep_reject(completion); return;
@@ -109,9 +108,12 @@ fn replay_sleep_learning(@builtin(global_invocation_id) gid:vec3<u32>) {
       scale += abs(receptor.receptor_weights[lane]);
     }
     if (!sleep_finite(unpacked.y) || !sleep_finite(local)) { sleep_reject(completion); return; }
-    replay_credit += unpacked.y*select(clamp(local/scale,-1.0,1.0),0.0,scale==0.0);
+    if (scale != 0.0) {
+      replay_credit += unpacked.y*clamp(local/scale,-1.0,1.0);
+    }
   }
-  let inactive = inactive_weight_bases(brain,extension,learning);
+  let direct_weight_banks = load_weight_bank_pair_direct(brain);
+  let inactive = direct_weight_banks.staging;
   let fast_index = inactive.fast+span.local_synapse_id;
   let previous = load_state_f32(fast_index);
   let next = clamp(previous+receptor.sleep_replay_rate*alpha*replay_credit,receptor.fast_min,receptor.fast_max);

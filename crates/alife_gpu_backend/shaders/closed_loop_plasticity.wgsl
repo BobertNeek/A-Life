@@ -132,7 +132,8 @@ fn project_third_factor(receptor:GpuPlasticityReceptorRecord, outcome:GpuOutcome
     weighted += lanes[index]*receptor.receptor_weights[index];
     scale += abs(receptor.receptor_weights[index]);
   }
-  return select(clamp(weighted/scale,-1.0,1.0),0.0,scale==0.0);
+  if (scale == 0.0) { return 0.0; }
+  return clamp(weighted/scale,-1.0,1.0);
 }
 
 fn plasticity_guard_bit(bit:u32, failed:bool) -> u32 {
@@ -159,6 +160,19 @@ fn load_staging_eligibility_value(
   metadata:GpuSynapseLearningMetadata,
 ) -> f32 {
   let staging = inactive_eligibility_bases(brain, extension, learning);
+  let index = select(
+    staging.decoder + metadata.eligibility_local_index,
+    staging.recurrent + metadata.eligibility_local_index,
+    metadata.kind == SYNAPSE_KIND_RECURRENT_PLASTICITY
+  );
+  return load_state_f32(index);
+}
+
+fn load_staging_eligibility_value_direct(
+  brain:GpuBrainSlotRecord,
+  metadata:GpuSynapseLearningMetadata,
+) -> f32 {
+  let staging = load_eligibility_bank_pair_direct(brain).staging;
   let index = select(
     staging.decoder + metadata.eligibility_local_index,
     staging.recurrent + metadata.eligibility_local_index,
@@ -296,23 +310,23 @@ fn apply_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (load_state_u32(receipt_base+3u) != PLASTICITY_STATUS_PREPARED) { return; }
   let local_synapse = gid.x;
   if (local_synapse >= brain.synapse_count) { return; }
-  let extension = load_slot_extension(brain);
-  let learning = load_slot_learning_state(extension);
-  let metadata_base = extension.synapse_metadata_offset + local_synapse*8u;
+  let extension_base = brain.extension_record_offset;
+  let metadata_base = load_state_u32(extension_base + 7u) + local_synapse*8u;
   let metadata = load_synapse_learning_metadata(metadata_base);
-  let receptor_base = extension.receptor_offset + metadata.receptor_index*16u;
+  let receptor_base = load_state_u32(extension_base + 4u) + metadata.receptor_index*16u;
   let receptor = load_plasticity_receptor(receptor_base);
   let learning_rate = receptor.learning_rate;
   let normalization_rate = receptor.normalization_rate;
   let fast_min = receptor.fast_min;
   let fast_max = receptor.fast_max;
-  let active_weights = active_weight_bases(brain,extension,learning);
-  let inactive_weights = inactive_weight_bases(brain,extension,learning);
+  let weight_pair = load_weight_bank_pair_direct(brain);
+  let active_weights = weight_pair.active;
+  let inactive_weights = weight_pair.staging;
   let active_lifetime_index = active_weights.lifetime + local_synapse;
   let inactive_lifetime_index = inactive_weights.lifetime + local_synapse;
   let active_fast_index = active_weights.fast + local_synapse;
   let inactive_fast_index = inactive_weights.fast + local_synapse;
-  let staging_eligibility = load_staging_eligibility_value(brain,extension,learning,metadata);
+  let staging_eligibility = load_staging_eligibility_value_direct(brain,metadata);
   let activation_base = select(brain.activation_a_offset,brain.activation_b_offset,header.active_activation_side==1u);
   let post = load_state_f32(activation_base+metadata.target_neuron);
   let genetic = bitcast<f32>(immutable_weight_words[brain.genetic_weight_offset+local_synapse]);
