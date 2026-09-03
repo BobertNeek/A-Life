@@ -329,13 +329,12 @@ impl LineageLibrary {
                 .filter(|(_, entry)| entry.path != DESCRIPTOR_PATH)
             {
                 let destination = self.config.root.join(&entry.path);
-                let existed = destination.exists();
-                write_content_addressed(
+                let created = write_content_addressed(
                     &self.config.root.join("staging"),
                     &destination,
                     &entry.bytes,
                 )?;
-                if !existed {
+                if created {
                     created_files.push((destination, entry_index));
                 }
             }

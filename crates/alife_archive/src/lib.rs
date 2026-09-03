@@ -3483,11 +3483,11 @@ fn write_content_addressed(
     staging_root: &Path,
     destination: &Path,
     bytes: &[u8],
-) -> Result<(), ArchiveError> {
+) -> Result<bool, ArchiveError> {
     let canonical_staging = canonical_content_staging_root(staging_root)?;
     if destination.exists() {
         if fs::read(destination)? == bytes {
-            return Ok(());
+            return Ok(false);
         }
         return Err(ArchiveError::Integrity(format!(
             "content-addressed collision at {}",
@@ -3511,10 +3511,10 @@ fn write_content_addressed(
     file.sync_all()?;
     drop(file);
     match fs::rename(&staged, destination) {
-        Ok(()) => Ok(()),
+        Ok(()) => Ok(true),
         Err(_) if destination.exists() && fs::read(destination)? == bytes => {
             remove_exact_content_staging_file(&canonical_staging, &staged, bytes)?;
-            Ok(())
+            Ok(false)
         }
         Err(error) => {
             let _ = remove_exact_content_staging_file(&canonical_staging, &staged, bytes);
@@ -3546,6 +3546,7 @@ fn write_archive_content_addressed(
         &checked_destination.canonical_path,
         bytes,
     )
+    .map(|_| ())
 }
 
 fn canonical_content_staging_root(staging_root: &Path) -> Result<PathBuf, ArchiveError> {
