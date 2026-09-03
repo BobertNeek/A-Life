@@ -241,8 +241,8 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
     let topology_readback_after = backend.mutable_slot_readback_metrics();
     assert_eq!(
         topology_readback_after.calls - topology_readback_before.calls,
-        2,
-        "live topology capture must read only immutable plan and weight ranges"
+        1,
+        "live topology capture must batch immutable plan and weight ranges into one readback"
     );
     assert!(topology_readback_after.bytes > topology_readback_before.bytes);
     let mut tampered_topology = growth_live_topology.clone();

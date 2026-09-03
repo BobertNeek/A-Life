@@ -3440,7 +3440,7 @@ impl GpuClosedLoopBackend {
             )
             .map_err(map_gpu_contract_error)?;
         self.mutable_slot_readback_counters.record_many(
-            2,
+            1,
             readback_bytes,
             poll_wait_ns,
             map_receive_wait_ns,

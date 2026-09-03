@@ -11,12 +11,12 @@ use alife_core::{
 };
 use bytemuck::Zeroable;
 
+#[cfg(feature = "gpu-tests")]
+use crate::closed_loop_v11::GpuV11MutableStateProbe;
 use crate::closed_loop_v11::{
     AddLifetimeSynapse, GpuLiveTopologyCheckpointV1, GpuV11Checkpoint,
     GPU_LIVE_TOPOLOGY_CHECKPOINT_SCHEMA_VERSION,
 };
-#[cfg(feature = "gpu-tests")]
-use crate::closed_loop_v11::GpuV11MutableStateProbe;
 
 use super::{
     GpuBrainSlotExtensionRecord, GpuBrainSlotRecord, GpuClosedLoopError,
@@ -3062,10 +3062,8 @@ impl GpuFixedSlotUpload {
     ) -> Result<Self, GpuClosedLoopError> {
         if self.brain_slot.record.neuron_count != checkpoint.neuron_count
             || self.brain_slot.record.synapse_count != checkpoint.total_synapse_count
-            || self.brain_slot.record.recurrent_synapse_count
-                != checkpoint.recurrent_synapse_count
-            || self.brain_slot.counts.decoder_families
-                != checkpoint.decoder_synapse_starts.len()
+            || self.brain_slot.record.recurrent_synapse_count != checkpoint.recurrent_synapse_count
+            || self.brain_slot.counts.decoder_families != checkpoint.decoder_synapse_starts.len()
             || self.brain_slot.counts.decoder_weight_indices
                 != checkpoint.decoder_weight_global_synapse_ids.len()
             || self.brain_slot.counts.memory_weight_indices
@@ -3077,9 +3075,18 @@ impl GpuFixedSlotUpload {
         let weight_base = self.ranges.immutable_weight_words.start;
         let mut plan = self.immutable_plan_words.clone();
         for (range, words) in [
-            (&self.ranges.layout.target_offset_words, &checkpoint.target_offsets),
-            (&self.ranges.layout.source_index_words, &checkpoint.source_indices),
-            (&self.ranges.layout.route_index_words, &checkpoint.route_indices),
+            (
+                &self.ranges.layout.target_offset_words,
+                &checkpoint.target_offsets,
+            ),
+            (
+                &self.ranges.layout.source_index_words,
+                &checkpoint.source_indices,
+            ),
+            (
+                &self.ranges.layout.route_index_words,
+                &checkpoint.route_indices,
+            ),
             (
                 &self.ranges.layout.synapse_learning_metadata_words,
                 &checkpoint.synapse_learning_metadata_words,
@@ -3101,10 +3108,7 @@ impl GpuFixedSlotUpload {
             &self.ranges.layout.decoder_family_words,
             self.brain_slot.counts.decoder_families,
         )?;
-        for (family, start) in families
-            .iter_mut()
-            .zip(&checkpoint.decoder_synapse_starts)
-        {
+        for (family, start) in families.iter_mut().zip(&checkpoint.decoder_synapse_starts) {
             family.decoder_synapse_start = *start;
         }
         store_pod_slice_at(
@@ -4231,76 +4235,71 @@ impl GpuFixedClassArenaBuffers {
         ranges: GpuFixedSlotRanges,
     ) -> Result<(GpuFixedSlotUpload, u64, u64, u64), GpuClosedLoopError> {
         self.validate_ranges(&ranges)?;
-        let read_words = |buffer: &wgpu::Buffer,
-                          range: Range<u32>,
-                          label: &'static str|
-         -> Result<(Vec<u32>, u64, u64), GpuClosedLoopError> {
-            let byte_count = u64::from(range.end - range.start)
+        let plan_byte_count =
+            u64::from(ranges.immutable_plan_words.end - ranges.immutable_plan_words.start)
                 .checked_mul(4)
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
-            let readback = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(label),
-                size: byte_count,
-                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("closed-loop-live-topology-readback-encoder"),
-            });
-            encoder.copy_buffer_to_buffer(
-                buffer,
-                u64::from(range.start) * 4,
-                &readback,
-                0,
-                byte_count,
-            );
-            queue.submit(Some(encoder.finish()));
-            let (sender, receiver) = mpsc::channel();
-            readback
-                .slice(..)
-                .map_async(wgpu::MapMode::Read, move |result| {
-                    let _ = sender.send(result);
-                });
-            let poll_started = std::time::Instant::now();
-            device
-                .poll(wgpu::PollType::wait_indefinitely())
-                .map_err(|_| GpuClosedLoopError::SubmissionFailed)?;
-            let poll_wait_ns = u64::try_from(poll_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
-            let receive_started = std::time::Instant::now();
-            receiver
-                .recv()
-                .map_err(|_| GpuClosedLoopError::SubmissionFailed)?
-                .map_err(|_| GpuClosedLoopError::SubmissionFailed)?;
-            let receive_wait_ns =
-                u64::try_from(receive_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
-            let mapped = readback.slice(..).get_mapped_range();
-            let words = bytemuck::cast_slice(&mapped).to_vec();
-            drop(mapped);
-            readback.unmap();
-            Ok((words, poll_wait_ns, receive_wait_ns))
-        };
-        let (immutable_plan_words, plan_poll_ns, plan_receive_ns) = read_words(
+        let weight_byte_count =
+            u64::from(ranges.immutable_weight_words.end - ranges.immutable_weight_words.start)
+                .checked_mul(4)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let byte_count = plan_byte_count
+            .checked_add(weight_byte_count)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let readback = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("closed-loop-live-topology-readback"),
+            size: byte_count,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("closed-loop-live-topology-readback-encoder"),
+        });
+        encoder.copy_buffer_to_buffer(
             &self.immutable_plan_words,
-            ranges.immutable_plan_words.clone(),
-            "closed-loop-live-topology-plan-readback",
-        )?;
-        let (immutable_weight_words, weight_poll_ns, weight_receive_ns) = read_words(
+            u64::from(ranges.immutable_plan_words.start) * 4,
+            &readback,
+            0,
+            plan_byte_count,
+        );
+        encoder.copy_buffer_to_buffer(
             &self.immutable_weight_words,
-            ranges.immutable_weight_words.clone(),
-            "closed-loop-live-topology-weight-readback",
-        )?;
-        let mutable_word_count = usize::try_from(
-            ranges.mutable_state_words.end - ranges.mutable_state_words.start,
-        )
-        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
-        let bytes = u64::try_from(
-            immutable_plan_words
-                .len()
-                .checked_add(immutable_weight_words.len())
-                .and_then(|words| words.checked_mul(4))
-                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
-        )
-        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+            u64::from(ranges.immutable_weight_words.start) * 4,
+            &readback,
+            plan_byte_count,
+            weight_byte_count,
+        );
+        queue.submit(Some(encoder.finish()));
+        let (sender, receiver) = mpsc::channel();
+        readback
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, move |result| {
+                let _ = sender.send(result);
+            });
+        let poll_started = std::time::Instant::now();
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .map_err(|_| GpuClosedLoopError::SubmissionFailed)?;
+        let poll_wait_ns = u64::try_from(poll_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        let receive_started = std::time::Instant::now();
+        receiver
+            .recv()
+            .map_err(|_| GpuClosedLoopError::SubmissionFailed)?
+            .map_err(|_| GpuClosedLoopError::SubmissionFailed)?;
+        let receive_wait_ns =
+            u64::try_from(receive_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        let mapped = readback.slice(..).get_mapped_range();
+        let words = bytemuck::cast_slice::<u8, u32>(&mapped);
+        let plan_word_count = usize::try_from(plan_byte_count / 4)
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        let (immutable_plan_words, immutable_weight_words) = words.split_at(plan_word_count);
+        let immutable_plan_words = immutable_plan_words.to_vec();
+        let immutable_weight_words = immutable_weight_words.to_vec();
+        drop(mapped);
+        readback.unmap();
+        let mutable_word_count =
+            usize::try_from(ranges.mutable_state_words.end - ranges.mutable_state_words.start)
+                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
         Ok((
             GpuFixedSlotUpload::from_existing_slot(
                 brain_slot,
@@ -4309,9 +4308,9 @@ impl GpuFixedClassArenaBuffers {
                 immutable_weight_words,
                 vec![0; mutable_word_count],
             ),
-            bytes,
-            plan_poll_ns.saturating_add(weight_poll_ns),
-            plan_receive_ns.saturating_add(weight_receive_ns),
+            byte_count,
+            poll_wait_ns,
+            receive_wait_ns,
         ))
     }
 
