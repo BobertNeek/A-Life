@@ -65,16 +65,40 @@ pub struct RuntimePrereqDiagnosticsSummary {
 
 impl RuntimePrereqDiagnosticsSummary {
     pub fn validate(&self) -> Result<(), GameAppShellError> {
+        let selected_authoritative = self.selected_backend == "GpuAuthoritative";
+        let probe_proves_available = self.gpu_probe_attempted
+            && self.adapter_available
+            && self.device_request_succeeded
+            && self.unavailable_reason.is_none();
         if self.schema != CA42_RUNTIME_PREREQ_SCHEMA
             || self.schema_version != CA42_RUNTIME_PREREQ_SCHEMA_VERSION
-            || self.requested_backend.is_empty()
-            || self.selected_backend.is_empty()
+            || self.requested_gpu_mode != GraphicalBrainPolicyMode::GpuRequired
+            || self.requested_backend != "GpuAuthoritative"
+            || !matches!(
+                self.selected_backend.as_str(),
+                "GpuAuthoritative" | "Unavailable"
+            )
             || self.graphics_backend.trim().is_empty()
             || self.log_path.as_os_str().is_empty()
             || self.missing_driver_guidance.trim().is_empty()
             || !self.failure_stops_learned_actions
-            || (self.authoritative && !self.device_request_succeeded)
-            || (self.would_block_launch && !self.require_gpu)
+            || self.authoritative != selected_authoritative
+            || self.authoritative != probe_proves_available
+            || self.would_block_launch != (self.require_gpu && !self.authoritative)
+            || (!self.authoritative
+                && self
+                    .unavailable_reason
+                    .as_deref()
+                    .is_none_or(|reason| reason.trim().is_empty()))
+            || (self.authoritative
+                && (self
+                    .adapter_name
+                    .as_deref()
+                    .is_none_or(|name| name.trim().is_empty())
+                    || self
+                        .backend_api
+                        .as_deref()
+                        .is_none_or(|api| api.trim().is_empty())))
         {
             return Err(ScaffoldContractError::MissingPhaseData.into());
         }
@@ -194,5 +218,46 @@ fn build_summary(
         missing_driver_guidance: "Update the GPU driver, verify Vulkan support, and retry; learned actions remain stopped while unavailable.".to_string(),
         authoritative: available,
         failure_stops_learned_actions: true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diagnostics_reject_contradictory_authority_labels() {
+        let options = RuntimePrereqDiagnosticsOptions::default();
+        let mut summary = build_summary(
+            &options,
+            true,
+            true,
+            true,
+            true,
+            Some("test adapter".to_string()),
+            Some("Vulkan".to_string()),
+            Some("DiscreteGpu".to_string()),
+            Some("test driver".to_string()),
+            Some("test driver info".to_string()),
+        );
+        summary.validate().expect("consistent probe must validate");
+
+        summary.authoritative = false;
+        assert!(summary.validate().is_err());
+
+        let mut unavailable = build_summary(
+            &options,
+            false,
+            true,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            Some("adapter request failed".to_string()),
+        );
+        unavailable.unavailable_reason = None;
+        assert!(unavailable.validate().is_err());
     }
 }

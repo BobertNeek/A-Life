@@ -184,7 +184,7 @@ pub fn controls_reference() -> Vec<HelpControlReference> {
         },
         HelpControlReference {
             label: "Step",
-            action: "Advance one deterministic headless brain/world tick",
+            action: "Advance one GPU-authoritative brain/world tick while paused",
             source_plan: "G03/G05",
         },
         HelpControlReference {
@@ -204,7 +204,7 @@ pub fn controls_reference() -> Vec<HelpControlReference> {
         },
         HelpControlReference {
             label: "Save/Load",
-            action: "Use P34 stable IDs, schema validation, and asset manifest diagnostics",
+            action: "Queue or restore an exact GPU checkpoint with stable-ID and asset validation",
             source_plan: "G15",
         },
     ]
@@ -214,8 +214,8 @@ pub fn troubleshooting_reference() -> Vec<TroubleshootingReference> {
     vec![
         TroubleshootingReference {
             symptom: "GPU unavailable or unvalidated",
-            diagnostic: "The playable sim should stop learned actions on typed GPU unavailability and avoid GPU performance claims",
-            command: "cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets",
+            diagnostic: "The production preflight reports the adapter or device failure and blocks launch when GPU authority is required",
+            command: "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun -RequireGpu",
         },
         TroubleshootingReference {
             symptom: "Graphics or Bevy feature unavailable",

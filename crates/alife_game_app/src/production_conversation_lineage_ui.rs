@@ -128,6 +128,8 @@ struct SpeechTranslationJobCompletion {
 
 struct ActiveSpeechTranslationJob {
     context: SpeechTranslationJobContext,
+    /// Dropping this handle detaches the bounded worker so app shutdown never
+    /// waits for a local-model timeout.
     handle: JoinHandle<SpeechTranslationJobCompletion>,
 }
 
@@ -178,14 +180,6 @@ impl ProductionSpeechTranslationWorker {
                 result: Err("local SLM translation worker panicked".to_string()),
             },
         })
-    }
-}
-
-impl Drop for ProductionSpeechTranslationWorker {
-    fn drop(&mut self) {
-        if let Some(job) = self.active.take() {
-            let _ = job.handle.join();
-        }
     }
 }
 
@@ -768,7 +762,7 @@ pub struct ProductionConversationLineageUiState {
     address_selected: bool,
     muted: bool,
     narration: NarrationDisplayFrequency,
-    translation_enabled: bool,
+    rendered_translation_visible: bool,
     raw_tokens_visible: bool,
     slm_off: bool,
     developer_overlay: bool,
@@ -802,7 +796,7 @@ impl ProductionConversationLineageUiState {
             address_selected: false,
             muted: false,
             narration: NarrationDisplayFrequency::Normal,
-            translation_enabled: true,
+            rendered_translation_visible: true,
             raw_tokens_visible: summary.developer_overlay,
             slm_off: true,
             developer_overlay: summary.developer_overlay,
@@ -1953,7 +1947,7 @@ fn handle_speech_setting_keys(
         state.narration = state.narration.next();
     }
     if keyboard.just_pressed(KeyCode::F8) {
-        state.translation_enabled = !state.translation_enabled;
+        state.rendered_translation_visible = !state.rendered_translation_visible;
     }
     if keyboard.just_pressed(KeyCode::F10) {
         state.raw_tokens_visible = !state.raw_tokens_visible;
@@ -2663,7 +2657,7 @@ fn sync_production_conversation_lineage_ui(
         return;
     }
     for (mut text, mut visibility) in &mut panels.p0() {
-        text.0 = format!(
+        let next_text = format!(
             "Speak near the Hand  |  To: {}\n{}▌\nEnter send  Tab address selected  Esc cancel",
             if state.address_selected {
                 "selected creature"
@@ -2672,22 +2666,31 @@ fn sync_production_conversation_lineage_ui(
             },
             state.input
         );
-        *visibility = if state.input_open {
+        if text.0 != next_text {
+            text.0 = next_text;
+        }
+        let next_visibility = if state.input_open {
             Visibility::Visible
         } else {
             Visibility::Hidden
         };
+        if *visibility != next_visibility {
+            *visibility = next_visibility;
+        }
     }
     for mut text in &mut panels.p1() {
-        text.0 = format!(
-            "Enter speak | Y Lineage Library | F6 mute:{} | F7 narration:{} | F8 translation:{} | F10 raw:{} | F11 SLM:{}\n{}",
-            state.muted,
+        let next_text = format!(
+            "Enter speak | Y Lineage Library | F6 creature text:{} | F7 narration:{} | F8 rendered text:{} | F10 raw:{} | F11 SLM:{}\n{}",
+            if state.muted { "off" } else { "on" },
             state.narration.label(),
-            state.translation_enabled,
-            state.raw_tokens_visible,
+            on_off(state.rendered_translation_visible),
+            on_off(state.raw_tokens_visible),
             if state.slm_off { "off" } else { "assisted" },
             state.status
         );
+        if text.0 != next_text {
+            text.0 = next_text;
+        }
     }
     let codebook = LanguageCodebookV1::canonical();
     for (mut text, mut visibility) in &mut panels.p2() {
@@ -2695,9 +2698,19 @@ fn sync_production_conversation_lineage_ui(
             .last_creature_receipt
             .as_ref()
             .or(state.last_player_receipt.as_ref());
-        text.0 = receipt.map_or_else(
+        let next_text = receipt.map_or_else(
             || "Speech Inspector [DEV ONLY]\nNo utterance receipt".to_string(),
             |receipt| {
+                let raw_tokens = if state.raw_tokens_visible {
+                    receipt
+                        .literal_tokens
+                        .iter()
+                        .map(|token| token.raw().to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                } else {
+                    "hidden".to_string()
+                };
                 format!(
                     "Speech Inspector [DEV ONLY]\nutterance {} | addressee {}\nraw tokens: {}\nliteral: {}\nrendered: {}\nconfidence {:.2} | SLM-assisted {} | uncertain {}",
                     receipt.utterance_id.raw(),
@@ -2705,12 +2718,7 @@ fn sync_production_conversation_lineage_ui(
                         .addressee
                         .map(|id| id.raw().to_string())
                         .unwrap_or_else(|| "broadcast".to_string()),
-                    receipt
-                        .literal_tokens
-                        .iter()
-                        .map(|token| token.raw().to_string())
-                        .collect::<Vec<_>>()
-                        .join(" "),
+                    raw_tokens,
                     receipt.literal_text,
                     receipt.rendered_text,
                     receipt.confidence.raw(),
@@ -2719,11 +2727,17 @@ fn sync_production_conversation_lineage_ui(
                 )
             },
         );
-        *visibility = if state.developer_overlay && receipt.is_some() {
+        if text.0 != next_text {
+            text.0 = next_text;
+        }
+        let next_visibility = if state.developer_overlay && receipt.is_some() {
             Visibility::Visible
         } else {
             Visibility::Hidden
         };
+        if *visibility != next_visibility {
+            *visibility = next_visibility;
+        }
     }
     for (mut text, mut transform, mut visibility) in &mut panels.p3() {
         let receipt = state.last_creature_receipt.as_ref();
@@ -2743,22 +2757,26 @@ fn sync_production_conversation_lineage_ui(
                     NarrationDisplayFrequency::Normal => id.raw() % 2 == 0,
                     NarrationDisplayFrequency::Frequent => true,
                 });
-        if !state.creature_utterance_active
-            || !show_for_frequency
-            || receipt.is_none()
-            || stable_id.is_none()
-        {
-            *visibility = Visibility::Hidden;
+        if !creature_speech_visible(
+            state.muted,
+            state.creature_utterance_active,
+            show_for_frequency,
+            receipt.is_some(),
+            stable_id.is_some(),
+        ) {
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
             continue;
         }
         let receipt = receipt.expect("checked above");
-        text.0 = if state.translation_enabled {
+        let mut next_text = if state.rendered_translation_visible {
             format!("{}\n{}", receipt.literal_text, receipt.rendered_text)
         } else {
             receipt.literal_text.clone()
         };
         if state.developer_overlay && state.raw_tokens_visible {
-            text.0.push_str(&format!(
+            next_text.push_str(&format!(
                 "\n[{}]",
                 receipt
                     .literal_tokens
@@ -2768,10 +2786,36 @@ fn sync_production_conversation_lineage_ui(
                     .join(" ")
             ));
         }
-        if let Some(position) = scene.selection_position(stable_id.expect("checked above")) {
-            transform.translation = position + bevy::prelude::Vec3::Y * 1.55;
+        if text.0 != next_text {
+            text.0 = next_text;
         }
-        *visibility = Visibility::Visible;
+        if let Some(position) = scene.selection_position(stable_id.expect("checked above")) {
+            let next_translation = position + bevy::prelude::Vec3::Y * 1.55;
+            if transform.translation != next_translation {
+                transform.translation = next_translation;
+            }
+        }
+        if *visibility != Visibility::Visible {
+            *visibility = Visibility::Visible;
+        }
+    }
+}
+
+const fn creature_speech_visible(
+    muted: bool,
+    utterance_active: bool,
+    frequency_allows: bool,
+    receipt_available: bool,
+    speaker_visible: bool,
+) -> bool {
+    !muted && utterance_active && frequency_allows && receipt_available && speaker_visible
+}
+
+const fn on_off(enabled: bool) -> &'static str {
+    if enabled {
+        "on"
+    } else {
+        "off"
     }
 }
 
@@ -3848,6 +3892,12 @@ mod tests {
     fn closed_laboratory_hides_the_entire_structured_surface() {
         assert_eq!(lineage_panel_visibility(false), Visibility::Hidden);
         assert_eq!(lineage_panel_visibility(true), Visibility::Visible);
+    }
+
+    #[test]
+    fn muted_creature_text_never_becomes_visible() {
+        assert!(!creature_speech_visible(true, true, true, true, true));
+        assert!(creature_speech_visible(false, true, true, true, true));
     }
 
     #[test]

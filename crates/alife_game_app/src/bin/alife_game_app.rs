@@ -366,7 +366,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
         run_graphical(&launch)?
     };
     println!(
-        "A-Life production voxel profile={} population={} backend={} adapter={} authoritative={} signature={}",
+        "A-Life production voxel profile={} population={} backend={} adapter={} gpu_prereq_ready={} signature={}",
         summary.profile_id.label(),
         summary.effective_population,
         summary.diagnostics.selected_backend,
@@ -982,7 +982,7 @@ fn run_graphical(
 
 fn help() -> String {
     format!(
-        "{PRODUCTION_VOXEL_COMMAND} [--new-game --seed N] [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --seed N --output PATH\n{GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks 64|10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1\n{GPU_CLOSED_LOOP_SOAK_COMMAND} --class n512|n1024|n2048 --ticks 10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|b|c|d --input PATH\n{GPU_CLOSED_LOOP_PROMOTION_COMMAND} --slice-a PATH (x3) --slice-b PATH (x3) --slice-c PATH (x6) --slice-d PATH (x6) --benchmark PATH --gates PATH --output PATH\n{GPU_CLOSED_LOOP_GATE_SEAL_COMMAND} --capture PATH --gate-script PATH --adapter-evidence PATH --output PATH\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
+        "{PRODUCTION_VOXEL_COMMAND} [--manifest PATH] [--scenario ID] [--new-game --seed N] [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--ui-settings PATH] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --seed N --output PATH\n{GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks 64|10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1\n{GPU_CLOSED_LOOP_SOAK_COMMAND} --class n512|n1024|n2048 --ticks 10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|b|c|d --input PATH\n{GPU_CLOSED_LOOP_PROMOTION_COMMAND} --slice-a PATH (x3) --slice-b PATH (x3) --slice-c PATH (x6) --slice-d PATH (x6) --benchmark PATH --gates PATH --output PATH\n{GPU_CLOSED_LOOP_GATE_SEAL_COMMAND} --capture PATH --gate-script PATH --adapter-evidence PATH --output PATH\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
     )
 }
 

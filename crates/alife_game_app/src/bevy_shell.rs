@@ -54,6 +54,11 @@ pub struct LiveBrainPresentationFrame {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LiveBrainPresentationFrameError {
     DuplicateWorldEntityId(WorldEntityId),
+    DuplicateTickSummaryOrganismId(OrganismId),
+    UnexpectedTickSummaryOrganismId(OrganismId),
+    DuplicateCognitiveOrganismId(OrganismId),
+    UnexpectedCognitiveOrganismId(OrganismId),
+    MissingCognitiveOrganismId(OrganismId),
 }
 
 impl LiveBrainPresentationFrame {
@@ -200,7 +205,7 @@ impl LiveBrainPresentationFrameResource {
         tick_summaries: Vec<LiveBrainTickSummary>,
         world: &HeadlessWorld,
     ) -> Result<(), LiveBrainPresentationFrameError> {
-        self.try_publish_successful_tick_with_cognitive(tick_summaries, Vec::new(), world)
+        self.try_publish_successful_tick_inner(tick_summaries, Vec::new(), world, false)
     }
 
     pub fn try_publish_successful_tick_with_cognitive(
@@ -208,6 +213,16 @@ impl LiveBrainPresentationFrameResource {
         tick_summaries: Vec<LiveBrainTickSummary>,
         cognitive_snapshots: Vec<LiveCognitivePresentationSnapshot>,
         world: &HeadlessWorld,
+    ) -> Result<(), LiveBrainPresentationFrameError> {
+        self.try_publish_successful_tick_inner(tick_summaries, cognitive_snapshots, world, true)
+    }
+
+    fn try_publish_successful_tick_inner(
+        &mut self,
+        tick_summaries: Vec<LiveBrainTickSummary>,
+        cognitive_snapshots: Vec<LiveCognitivePresentationSnapshot>,
+        world: &HeadlessWorld,
+        require_cognitive_snapshots: bool,
     ) -> Result<(), LiveBrainPresentationFrameError> {
         let authoritative_world_tick = world.tick();
         if tick_summaries.is_empty()
@@ -228,10 +243,23 @@ impl LiveBrainPresentationFrameResource {
             .filter(|organism| organism.lifecycle.is_alive())
             .map(|organism| organism.organism_id.raw())
             .collect::<BTreeSet<_>>();
-        let returned_organism_ids = tick_summaries
-            .iter()
-            .map(|summary| summary.organism_id.raw())
-            .collect::<BTreeSet<_>>();
+        let mut returned_organism_ids = BTreeSet::new();
+        for summary in &tick_summaries {
+            if !expected_organism_ids.contains(&summary.organism_id.raw()) {
+                return Err(
+                    LiveBrainPresentationFrameError::UnexpectedTickSummaryOrganismId(
+                        summary.organism_id,
+                    ),
+                );
+            }
+            if !returned_organism_ids.insert(summary.organism_id.raw()) {
+                return Err(
+                    LiveBrainPresentationFrameError::DuplicateTickSummaryOrganismId(
+                        summary.organism_id,
+                    ),
+                );
+            }
+        }
         if tick_summaries.len() != expected_organism_ids.len()
             || returned_organism_ids != expected_organism_ids
         {
@@ -245,11 +273,37 @@ impl LiveBrainPresentationFrameResource {
             authoritative_world_tick,
             world.object_snapshots(),
         )?;
+        let mut cognitive_by_organism_id = BTreeMap::new();
+        for cognitive in cognitive_snapshots {
+            if !expected_organism_ids.contains(&cognitive.organism_id.raw()) {
+                return Err(
+                    LiveBrainPresentationFrameError::UnexpectedCognitiveOrganismId(
+                        cognitive.organism_id,
+                    ),
+                );
+            }
+            let organism_id = cognitive.organism_id;
+            if cognitive_by_organism_id
+                .insert(organism_id.raw(), cognitive)
+                .is_some()
+            {
+                return Err(
+                    LiveBrainPresentationFrameError::DuplicateCognitiveOrganismId(organism_id),
+                );
+            }
+        }
+        if require_cognitive_snapshots {
+            if let Some(missing) = snapshot.organisms.iter().find(|organism| {
+                organism.lifecycle.is_alive()
+                    && !cognitive_by_organism_id.contains_key(&organism.organism_id.raw())
+            }) {
+                return Err(LiveBrainPresentationFrameError::MissingCognitiveOrganismId(
+                    missing.organism_id,
+                ));
+            }
+        }
         next.install_organism_snapshot(snapshot);
-        next.cognitive_by_organism_id = cognitive_snapshots
-            .into_iter()
-            .map(|snapshot| (snapshot.organism_id.raw(), snapshot))
-            .collect();
+        next.cognitive_by_organism_id = cognitive_by_organism_id;
         self.previous = std::mem::replace(&mut self.current, next);
         Ok(())
     }
@@ -348,6 +402,17 @@ impl ProductionGpuBrainTickScheduleResource {
         }
     }
 
+    fn new_with_playback(
+        startup_render_frames: u8,
+        playback: RuntimePlaybackState,
+        run_speed_ticks: u32,
+    ) -> Self {
+        let mut schedule = Self::new(startup_render_frames);
+        schedule.playback = playback;
+        schedule.run_speed_ticks = run_speed_ticks.clamp(1, crate::S02_MAX_RUN_TICKS_PER_UPDATE);
+        schedule
+    }
+
     fn take_dispatch_permit(&mut self) -> bool {
         if self.startup_render_frames_remaining == 0 {
             true
@@ -374,15 +439,14 @@ impl ProductionGpuBrainTickScheduleResource {
         self.playback = RuntimePlaybackState::Paused;
     }
 
+    /// Updates the running rate without changing the paused/running state.
     pub(crate) fn set_running_speed(&mut self, ticks: u32) {
         self.run_speed_ticks = ticks.clamp(1, crate::S02_MAX_RUN_TICKS_PER_UPDATE);
-        self.playback = RuntimePlaybackState::Running;
     }
 
     pub(crate) fn reset_after_load(&mut self, playback: RuntimePlaybackState, speed_ticks: u32) {
-        *self = Self::new(PRODUCTION_GPU_STARTUP_RENDER_FRAMES);
-        self.playback = playback;
-        self.run_speed_ticks = speed_ticks.clamp(1, crate::S02_MAX_RUN_TICKS_PER_UPDATE);
+        *self =
+            Self::new_with_playback(PRODUCTION_GPU_STARTUP_RENDER_FRAMES, playback, speed_ticks);
     }
 
     pub(crate) fn is_paused(&self) -> bool {
@@ -757,9 +821,28 @@ pub fn build_production_voxel_frontend_app_shell_with_runtime(
 
 fn build_production_voxel_frontend_app_shell_inner(
     launch: &crate::ProductionVoxelLaunchConfig,
-    summary: crate::ProductionVoxelLaunchSummary,
+    mut summary: crate::ProductionVoxelLaunchSummary,
     #[cfg(feature = "gpu-runtime")] mut runtime: crate::GpuLiveBrainRuntime,
 ) -> Result<(App, crate::ProductionVoxelLaunchSummary), GameAppShellError> {
+    #[cfg(feature = "gpu-runtime")]
+    let initial_runtime_settings = {
+        let start_paused = launch.app_launch.start_paused || summary.ui_settings.paused;
+        let speed_ticks = (summary.ui_settings.simulation_speed.round() as u32)
+            .clamp(1, crate::S02_MAX_RUN_TICKS_PER_UPDATE);
+        summary.ui_settings.paused = start_paused;
+        summary.ui_settings.simulation_speed = speed_ticks as f32;
+        if start_paused && summary.state_trace.last() == Some(&crate::ProductionAppState::Running) {
+            summary.state_trace.push(crate::ProductionAppState::Paused);
+        }
+        (
+            if start_paused {
+                RuntimePlaybackState::Paused
+            } else {
+                RuntimePlaybackState::Running
+            },
+            speed_ticks,
+        )
+    };
     let mut app = App::new();
     if launch.dry_run {
         app.add_plugins(MinimalPlugins);
@@ -832,8 +915,10 @@ fn build_production_voxel_frontend_app_shell_inner(
         })?;
         app.insert_resource(ProductionGpuBrainAuthorityResource { telemetry })
             .insert_resource(presentation)
-            .insert_resource(ProductionGpuBrainTickScheduleResource::new(
+            .insert_resource(ProductionGpuBrainTickScheduleResource::new_with_playback(
                 PRODUCTION_GPU_STARTUP_RENDER_FRAMES,
+                initial_runtime_settings.0,
+                initial_runtime_settings.1,
             ))
             .insert_non_send_resource(ProductionGpuBrainRuntimeResource { runtime })
             .add_systems(
@@ -1063,6 +1148,123 @@ mod production_app_exit_tests {
     #[test]
     fn production_window_accepts_bevy_success_exit() {
         require_successful_production_app_exit(AppExit::Success).unwrap();
+    }
+}
+
+#[cfg(all(test, feature = "gpu-runtime"))]
+mod production_schedule_regression_tests {
+    use super::ProductionGpuBrainTickScheduleResource;
+    use crate::RuntimePlaybackState;
+
+    #[test]
+    fn configured_pause_and_speed_survive_scheduler_initialization() {
+        let mut schedule = ProductionGpuBrainTickScheduleResource::new_with_playback(
+            12,
+            RuntimePlaybackState::Paused,
+            3,
+        );
+
+        assert!(schedule.is_paused());
+        assert_eq!(schedule.speed_ticks(), 3);
+
+        schedule.set_running_speed(2);
+
+        assert!(schedule.is_paused());
+        assert_eq!(schedule.speed_ticks(), 2);
+    }
+}
+
+#[cfg(test)]
+mod live_presentation_regression_tests {
+    use super::{LiveBrainPresentationFrameError, LiveBrainPresentationFrameResource};
+    use crate::{
+        LiveBrainTickSummary, LiveCognitivePresentationSnapshot, G03_LIVE_BRAIN_LOOP_SCHEMA,
+        G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
+    };
+    use alife_core::{BrainTickStatus, OrganismId, Tick, Vec3f};
+    use alife_world::HeadlessScenarioBuilder;
+
+    fn tick_summary(organism_id: OrganismId) -> LiveBrainTickSummary {
+        LiveBrainTickSummary {
+            schema: G03_LIVE_BRAIN_LOOP_SCHEMA,
+            schema_version: G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
+            organism_id,
+            tick_before: Tick::ZERO,
+            tick_after: Tick::new(1),
+            world_tick_before: Tick::ZERO,
+            world_tick_after: Tick::new(1),
+            status: BrainTickStatus::Normal,
+            selected_action_kind: None,
+            selected_action_id: None,
+            target_entity: None,
+            patch_sealed: true,
+            patch_sequence_id: Some(1),
+            patch_success: Some(true),
+            physical_contact: None,
+            action_failure: None,
+            sealed_patch_count: 1,
+            packed_record_count: 1,
+            memory_updates: 0,
+            topology_updates: 0,
+            learning_updates: 0,
+            invalid_or_rejected_action_count: 0,
+            last_diagnostic: None,
+            causal_stages: Vec::new(),
+        }
+    }
+
+    fn cognitive_snapshot(organism_id: OrganismId) -> LiveCognitivePresentationSnapshot {
+        LiveCognitivePresentationSnapshot {
+            organism_id,
+            brain_class_id: None,
+            brain_neuron_count: None,
+            fast_memory_count: None,
+            lifetime_memory_count: None,
+            concept_count: None,
+            unresolved_gap_count: None,
+            learning_active: None,
+            sleep_phase_raw: None,
+            consolidation_state_raw: None,
+            last_consolidated_tick: None,
+            topology_update_count: None,
+        }
+    }
+
+    #[test]
+    fn publication_rejects_incomplete_or_foreign_cognition() {
+        let resident = OrganismId::new(1).unwrap();
+        let foreign = OrganismId::new(2).unwrap();
+        let mut world = HeadlessScenarioBuilder::new(21)
+            .agent("agent", resident, Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let mut frames =
+            LiveBrainPresentationFrameResource::from_authoritative_world(&world).unwrap();
+        world.advance_tick();
+
+        assert_eq!(
+            frames.try_publish_successful_tick_with_cognitive(
+                vec![tick_summary(resident)],
+                vec![cognitive_snapshot(foreign)],
+                &world,
+            ),
+            Err(LiveBrainPresentationFrameError::UnexpectedCognitiveOrganismId(foreign,)),
+        );
+        assert_eq!(
+            frames.try_publish_successful_tick_with_cognitive(
+                vec![tick_summary(resident)],
+                Vec::new(),
+                &world,
+            ),
+            Err(LiveBrainPresentationFrameError::MissingCognitiveOrganismId(
+                resident,
+            )),
+        );
+        let summary = tick_summary(resident);
+        assert_eq!(
+            frames.try_publish_successful_tick(vec![summary.clone(), summary], &world),
+            Err(LiveBrainPresentationFrameError::DuplicateTickSummaryOrganismId(resident,)),
+        );
     }
 }
 
