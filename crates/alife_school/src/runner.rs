@@ -1,5 +1,7 @@
 //! v0 scaffold: simple headless curriculum runner.
 
+use std::cell::Cell;
+
 use alife_core::ScaffoldContractError;
 
 use crate::{
@@ -20,6 +22,7 @@ pub struct HeadlessCurriculumRunner {
     completed_step_count: usize,
     planner: CurriculumTeacherPlanner,
     actor: EmbodiedTeacherActor,
+    dispatched_lesson: Cell<Option<LessonId>>,
 }
 
 impl HeadlessCurriculumRunner {
@@ -30,6 +33,7 @@ impl HeadlessCurriculumRunner {
             completed_step_count: 0,
             planner: CurriculumTeacherPlanner::bounded_default(),
             actor,
+            dispatched_lesson: Cell::new(None),
         }
     }
 
@@ -42,6 +46,16 @@ impl HeadlessCurriculumRunner {
     }
 
     pub fn dispatch_current(&self) -> Result<LessonDispatch, ScaffoldContractError> {
+        if self.curriculum.schema_version != crate::TEACHER_SCHOOL_SCHEMA_VERSION {
+            return Err(ScaffoldContractError::IncompatibleAbi {
+                kind: alife_core::SchemaKind::TeacherSchool,
+                expected: crate::TEACHER_SCHOOL_SCHEMA_VERSION,
+                actual: self.curriculum.schema_version,
+            });
+        }
+        if !self.curriculum.lesson_ids_are_unique() {
+            return Err(ScaffoldContractError::InvalidId);
+        }
         let step = self
             .current_step()
             .ok_or(ScaffoldContractError::InvalidId)?;
@@ -55,6 +69,7 @@ impl HeadlessCurriculumRunner {
             },
         )?;
         let perception_events = self.actor.enact_plan(&plan)?;
+        self.dispatched_lesson.set(Some(step.lesson_id));
         Ok(LessonDispatch {
             lesson_id: step.lesson_id,
             perception_events,
@@ -65,14 +80,22 @@ impl HeadlessCurriculumRunner {
         &mut self,
         verification: &LessonVerification,
     ) -> Result<bool, ScaffoldContractError> {
-        let _ = self
+        let step = self
             .current_step()
             .ok_or(ScaffoldContractError::InvalidId)?;
-        if !verification.passed {
+        if self.dispatched_lesson.get() != Some(step.lesson_id)
+            || !verification.passed
+            || !verification.failed_checks.is_empty()
+            || step
+                .verifier_checks
+                .iter()
+                .any(|check| !verification.observed_checks.contains(check))
+        {
             return Ok(false);
         }
         self.completed_step_count = self.completed_step_count.saturating_add(1);
         self.current_index = (self.current_index + 1).min(self.curriculum.steps.len());
+        self.dispatched_lesson.set(None);
         Ok(true)
     }
 }

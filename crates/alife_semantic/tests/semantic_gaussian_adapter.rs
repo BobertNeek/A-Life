@@ -88,6 +88,21 @@ fn g11_fake_and_external_manifests_preserve_action_weight_boundary() {
     assert!(!external.can_rewrite_weights);
 }
 
+#[test]
+fn provider_manifests_reject_contradictory_capability_claims() {
+    let mut disabled = SemanticProviderCapabilityManifest::disabled();
+    disabled.available = true;
+    assert!(disabled.validate().is_err());
+
+    let mut local = SemanticProviderCapabilityManifest::fake_local_table();
+    local.requires_external_model = true;
+    assert!(local.validate().is_err());
+
+    let mut external = SemanticProviderCapabilityManifest::external_extension("local-slm", true);
+    external.optional_runtime_dependency = false;
+    assert!(external.validate().is_err());
+}
+
 #[cfg(feature = "gaussian-adapter")]
 #[test]
 fn gaussian_context_conversion_sorts_and_caps() -> Result<(), ScaffoldContractError> {
@@ -119,6 +134,39 @@ fn gaussian_context_conversion_sorts_and_caps() -> Result<(), ScaffoldContractEr
     assert!(context.confidence.raw() > 0.0);
 
     Ok(())
+}
+
+#[cfg(feature = "gaussian-adapter")]
+#[test]
+fn gaussian_bins_distinguish_planar_y_and_ties_keep_nearest_clusters() {
+    let hasher = EgocentricBinHasher::new();
+    let grid = EgocentricBinGrid::default();
+    assert_ne!(
+        hasher.hash(alife_core::Vec3f::new(1.0, 1.0, 0.0), grid),
+        hasher.hash(alife_core::Vec3f::new(1.0, -1.0, 0.0), grid)
+    );
+
+    let context = build_gaussian_context(
+        &[
+            GaussianClusterObservation {
+                cluster_id: GaussianClusterId(1),
+                salience: 0.8,
+                distance_meters: 1.0,
+                egocentric_offset: alife_core::Vec3f::new(1.0, 0.0, 0.0),
+            },
+            GaussianClusterObservation {
+                cluster_id: GaussianClusterId(2),
+                salience: 0.8,
+                distance_meters: 2.0,
+                egocentric_offset: alife_core::Vec3f::new(2.0, 0.0, 0.0),
+            },
+        ],
+        1.0,
+        1,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(context.clusters[0].cluster_id, GaussianClusterId(1));
 }
 
 #[cfg(feature = "gaussian-adapter")]

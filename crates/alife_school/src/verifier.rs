@@ -125,7 +125,7 @@ fn validate_check(check: VerifierCheck) -> Result<(), ScaffoldContractError> {
         }
         VerifierCheck::BiologicalImprovementAtLeast(threshold) => {
             validate_finite(threshold)?;
-            if (-1.0..=1.0).contains(&threshold) {
+            if (0.0..=1.0).contains(&threshold) {
                 Ok(())
             } else {
                 Err(ScaffoldContractError::ScalarOutOfRange)
@@ -158,10 +158,13 @@ fn check_passes(check: VerifierCheck, evidence: &SchoolEvidence<'_>) -> bool {
             .patches
             .iter()
             .all(selected_action_came_from_arbitration),
-        VerifierCheck::SelectedByArbitration => evidence
-            .patches
-            .iter()
-            .all(selected_action_came_from_arbitration),
+        VerifierCheck::SelectedByArbitration => {
+            !evidence.patches.is_empty()
+                && evidence
+                    .patches
+                    .iter()
+                    .all(selected_action_came_from_arbitration)
+        }
         VerifierCheck::MinimumMemoryRecords(min) => evidence.memory_record_count >= min,
         VerifierCheck::MinimumTopologyConcepts(min) => {
             evidence.topology_summary.concept_count >= min

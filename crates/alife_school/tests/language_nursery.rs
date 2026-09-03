@@ -141,3 +141,56 @@ fn peer_demonstration_executes_real_world_actions_without_controlling_the_subjec
         .unwrap()
         .is_consumed());
 }
+
+#[test]
+fn repeated_lessons_refresh_consumed_targets_and_move_existing_peers() {
+    let subject = OrganismId(7);
+    let peer = OrganismId(8);
+    let mut nursery = LanguageNursery::new(4407, subject).unwrap();
+    let lesson = LanguageNurseryLesson::try_new(
+        LanguageTokenId::new(44).unwrap(),
+        "repeatable-fruit",
+        WorldObjectKind::Food,
+        Vec3f::new(1.0, 0.0, 0.0),
+        NurseryDemonstration::Eat,
+    )
+    .unwrap();
+
+    nursery
+        .present(
+            NurserySpeaker::Peer {
+                organism_id: peer,
+                source_position: Vec3f::new(0.25, 0.0, 0.0),
+            },
+            &lesson,
+        )
+        .unwrap();
+    let second = nursery
+        .present(
+            NurserySpeaker::Peer {
+                organism_id: peer,
+                source_position: Vec3f::new(-0.25, 0.0, 0.0),
+            },
+            &lesson,
+        )
+        .unwrap();
+
+    assert!(
+        second
+            .demonstration_actions
+            .last()
+            .unwrap()
+            .observation
+            .success
+    );
+    let peer_entity = nursery
+        .world()
+        .organism_entity_ids()
+        .into_iter()
+        .find_map(|(id, entity)| (id == peer).then_some(entity))
+        .unwrap();
+    assert_ne!(
+        nursery.world().entity(peer_entity).unwrap().position,
+        Vec3f::new(0.25, 0.0, 0.0)
+    );
+}

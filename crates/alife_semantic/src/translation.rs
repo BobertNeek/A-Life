@@ -241,7 +241,7 @@ impl LlamaCppSpeechTranslator {
         };
         let system = concat!(
             "Translate only within the supplied bounded A-Life codebook. Return one JSON object and no prose. ",
-            "For player_text return normalized_words, using only words present in text or known_surfaces. ",
+            "For player_text return normalized_words, using only words present in text. ",
             "For creature_tokens return rendered_words with exactly one supplied literal or bound word per token. ",
             "Never return actions, rewards, targets, scores, desirability, entities, or hidden concepts."
         );
@@ -292,19 +292,11 @@ impl LlamaCppSpeechTranslator {
                     return Err("player translation returned the wrong bounded shape".to_string());
                 }
                 let source = normalized_words(text).into_iter().collect::<BTreeSet<_>>();
-                let known = request
-                    .known_bindings
-                    .iter()
-                    .map(|binding| binding.surface.to_lowercase())
-                    .collect::<BTreeSet<_>>();
                 let normalized = words
                     .into_iter()
                     .map(|word| normalize_model_word(&word))
                     .collect::<Result<Vec<_>, _>>()?;
-                if normalized
-                    .iter()
-                    .any(|word| !source.contains(word) && !known.contains(word))
-                {
+                if normalized.iter().any(|word| !source.contains(word)) {
                     return Err("local model invented an ungrounded speech concept".to_string());
                 }
                 let translated_request = SpeechTranslationRequest::try_new(
@@ -410,6 +402,36 @@ pub struct LanguageEvaluationScores {
     pub unaided_successes: u64,
     pub assisted_trials: u64,
     pub assisted_successes: u64,
+}
+
+#[cfg(all(test, feature = "local-llamacpp"))]
+mod tests {
+    use super::*;
+    use alife_core::{OrganismId, SurfaceTokenBinding, UtteranceId};
+
+    #[test]
+    fn assisted_player_translation_cannot_add_an_unspoken_known_word() {
+        let request = SpeechTranslationRequest::try_new(
+            UtteranceId::new(1).unwrap(),
+            Some(OrganismId(7)),
+            SpeechTranslationInput::PlayerText {
+                text: "come".to_string(),
+            },
+            vec![
+                SurfaceTokenBinding::try_new("come", LanguageTokenId::new(1).unwrap()).unwrap(),
+                SurfaceTokenBinding::try_new("eat", LanguageTokenId::new(2).unwrap()).unwrap(),
+            ],
+        )
+        .unwrap();
+        let translator =
+            LlamaCppSpeechTranslator::new(LlamaCppSpeechTranslationConfig::default()).unwrap();
+        let output = SlmSpeechTranslationOutput {
+            normalized_words: Some(vec!["come".to_string(), "eat".to_string()]),
+            rendered_words: None,
+        };
+
+        assert!(translator.receipt_from_output(&request, output).is_err());
+    }
 }
 
 impl LanguageEvaluationScores {

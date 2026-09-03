@@ -356,6 +356,47 @@ fn validate_event(event: &TeacherPerceptualEvent) -> Result<(), ScaffoldContract
     if let Some(entity) = event.object_entity {
         entity.validate()?;
     }
+    let payload_matches_kind = match event.input_kind {
+        TeacherInputKind::SpokenToken => {
+            event.token_id.is_some()
+                && event.gesture_id.is_none()
+                && event.object_entity.is_none()
+                && event.feedback.is_none()
+        }
+        TeacherInputKind::Gesture => {
+            event.token_id.is_none()
+                && event.gesture_id.is_some()
+                && event.object_entity.is_none()
+                && event.feedback.is_none()
+        }
+        TeacherInputKind::ObjectHighlight => {
+            event.token_id.is_none()
+                && event.gesture_id.is_none()
+                && event.object_entity.is_some()
+                && event.feedback.is_none()
+        }
+        TeacherInputKind::SocialFeedback => {
+            event.token_id.is_none()
+                && event.gesture_id.is_none()
+                && event.object_entity.is_none()
+                && event.feedback.is_some()
+        }
+        TeacherInputKind::SocialApproval => {
+            event.token_id.is_none()
+                && event.gesture_id.is_none()
+                && event.object_entity.is_none()
+                && event.feedback == Some(FeedbackPolarity::Praise)
+        }
+        TeacherInputKind::SocialDisapproval => {
+            event.token_id.is_none()
+                && event.gesture_id.is_none()
+                && event.object_entity.is_none()
+                && event.feedback == Some(FeedbackPolarity::Warning)
+        }
+    };
+    if !payload_matches_kind {
+        return Err(ScaffoldContractError::InvalidId);
+    }
     event.teacher_entity.validate()?;
     if event.actor_seal != event.teacher_entity.raw() ^ event.lesson_id.raw().rotate_left(17) {
         return Err(ScaffoldContractError::InvalidId);

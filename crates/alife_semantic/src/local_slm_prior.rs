@@ -16,7 +16,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::local_llamacpp::{
-    validate_local_llamacpp_host, LlamaCppServerClient, CA26_DEFAULT_LLAMA_CPP_HOST,
+    decode_chunked_http_body, validate_local_llamacpp_host, LlamaCppServerClient,
+    CA26_DEFAULT_LLAMA_CPP_HOST,
 };
 
 pub const CA27_SLM_PRIOR_OUTPUT_SCHEMA: &str = "alife.ca27.local_slm_prior_output.v1";
@@ -624,31 +625,6 @@ fn contains_forbidden_runtime_text(value: &str) -> bool {
     ]
     .iter()
     .any(|needle| lower.contains(needle))
-}
-
-fn decode_chunked_http_body(body: &str) -> Result<String, String> {
-    let mut remaining = body;
-    let mut decoded = String::new();
-    loop {
-        let (size_line, rest) = remaining
-            .split_once("\r\n")
-            .ok_or_else(|| "chunked llama.cpp response missing chunk size".to_string())?;
-        let size_text = size_line.split(';').next().unwrap_or_default().trim();
-        let size = usize::from_str_radix(size_text, 16)
-            .map_err(|_| "chunked llama.cpp response has invalid chunk size".to_string())?;
-        if size == 0 {
-            return Ok(decoded);
-        }
-        if rest.len() < size + 2 {
-            return Err("chunked llama.cpp response ended inside a chunk".to_string());
-        }
-        decoded.push_str(&rest[..size]);
-        let trailer = &rest[size..];
-        if !trailer.starts_with("\r\n") {
-            return Err("chunked llama.cpp response missing chunk terminator".to_string());
-        }
-        remaining = &trailer[2..];
-    }
 }
 
 #[cfg(test)]
