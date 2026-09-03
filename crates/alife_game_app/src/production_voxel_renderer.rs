@@ -4072,7 +4072,8 @@ fn spawn_fvr07_hanabi_gpu_vfx_emitters(
 
     let budget = fvr07_hanabi_budget(settings.profile_id);
     let mut emitted = 0_usize;
-    let mut effects_by_kind = BTreeMap::new();
+    let mut effects_by_kind: BTreeMap<Fvr07ProductionVfxKind, Handle<EffectAsset>> =
+        BTreeMap::new();
     for spawn in vfx_spawns.iter().take(budget.emitter_cap) {
         let effect = if let Some(effect) = effects_by_kind.get(&spawn.kind) {
             effect.clone()

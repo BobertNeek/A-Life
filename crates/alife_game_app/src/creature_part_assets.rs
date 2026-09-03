@@ -259,7 +259,7 @@ impl CreaturePartAssetLibrary {
         self.next_coat_asset_id = self.next_coat_asset_id.saturating_add(2);
         let update = self.coat_cache.acquire(key, candidate);
 
-        for evicted in update.evicted {
+        for evicted in &update.evicted {
             if let Some(handle) = self.coat_images.remove(&evicted.image_id) {
                 image_assets.remove(handle.id());
             }

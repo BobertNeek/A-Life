@@ -18,9 +18,9 @@ use bevy::{
     asset::{AssetPlugin, Assets},
     ecs::schedule::IntoScheduleConfigs,
     prelude::{
-        default, App, ButtonInput, ClearColor, Color, Commands, DefaultPlugins, Entity, KeyCode,
-        Mesh, Message, MessageWriter, MinimalPlugins, MouseButton, NonSendMut, PluginGroup, Query,
-        Res, ResMut, Resource, StandardMaterial, Time, Update,
+        default, App, ButtonInput, ClearColor, Color, Commands, DefaultPlugins, DetectChanges,
+        Entity, KeyCode, Mesh, Message, MessageWriter, MinimalPlugins, MouseButton, NonSendMut,
+        PluginGroup, Query, Res, ResMut, Resource, StandardMaterial, Time, Update,
     },
     render::{
         settings::{RenderCreation, WgpuSettings},

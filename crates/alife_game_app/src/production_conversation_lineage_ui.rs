@@ -23,12 +23,11 @@ use alife_semantic::{
 };
 use alife_world::{
     AssistanceProvenance, FoundationProvenance, Habitat, HabitatActor, HabitatAuthorityError,
-    HabitatAuthorityKind, HabitatBreedingKind, HabitatBreedingReceipt, HabitatBreedingRequest,
-    HabitatCreaturePresentation, HabitatId, HabitatMembership, HabitatMode, HabitatOperation,
-    HabitatOperationRequest, HabitatPermissionReceipt, HabitatTagRecord, HabitatTransferProvenance,
-    HabitatTransferRecord, HabitatTransferRequest, HeadlessWorld, PossessionProvenance,
-    PresentationEvidence, QuarantineProvenance, SelectionExposureProvenance, StableVoxelRefKind,
-    WorldObjectKind,
+    HabitatAuthorityKind, HabitatBreedingReceipt, HabitatCreaturePresentation, HabitatId,
+    HabitatMembership, HabitatMode, HabitatOperation, HabitatOperationRequest,
+    HabitatPermissionReceipt, HabitatTagRecord, HabitatTransferProvenance, HabitatTransferRecord,
+    HabitatTransferRequest, HeadlessWorld, PossessionProvenance, PresentationEvidence,
+    QuarantineProvenance, SelectionExposureProvenance, StableVoxelRefKind, WorldObjectKind,
 };
 use bevy::{
     ecs::schedule::IntoScheduleConfigs,
@@ -133,7 +132,7 @@ struct ActiveSpeechTranslationJob {
 }
 
 #[derive(Default)]
-struct ProductionSpeechTranslationWorker {
+pub(crate) struct ProductionSpeechTranslationWorker {
     active: Option<ActiveSpeechTranslationJob>,
 }
 
@@ -1603,7 +1602,7 @@ fn validate_resolved_genetic_founder(
         });
     }
     let capacity =
-        BrainCapacityClass::production_for_id(genetic.brain_class_id).map_err(|error| {
+        BrainCapacityClass::production_for_id(genetic.brain_class_id).map_err(|_error| {
             LineageResetMappingError::FoundationMismatch {
                 digest,
                 field: "architecture/brain class",
@@ -1665,7 +1664,7 @@ fn validate_resolved_genetic_founder(
             reason: format!("compiled genetic founder phenotype is invalid: {error}"),
         }
     })?;
-    foundation.validate_against(&phenotype).map_err(|error| {
+    foundation.validate_against(&phenotype).map_err(|_error| {
         LineageResetMappingError::FoundationMismatch {
             digest,
             field: "foundation ABI/route/plasticity/address-map contract",
