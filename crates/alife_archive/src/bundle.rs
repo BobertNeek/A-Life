@@ -22,7 +22,8 @@ use alife_world::{CreatureAppearanceGenome, WorldObjectKind};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    digest_bytes, digest_hex, write_content_addressed, ArchiveError, LineageLibrary, TEMP_SEQUENCE,
+    archive_metadata_is_reparse_point, digest_bytes, digest_hex, write_content_addressed,
+    ArchiveError, LineageLibrary, TEMP_SEQUENCE,
 };
 use std::sync::atomic::Ordering;
 
@@ -232,6 +233,9 @@ impl LineageLibrary {
         if let Some(foundation) = &manifest.genetic.foundation_asset {
             assets.push(foundation);
         }
+        if let Some(composite_genome) = &manifest.genetic.composite_genome_asset {
+            assets.push(composite_genome);
+        }
         if let Some(life) = &manifest.life {
             assets.push(&life.statistics_asset);
             if let ArchiveCheckpointDisposition::Stored(checkpoint) = &life.checkpoint {
@@ -317,44 +321,36 @@ impl LineageLibrary {
         }
         validate_bundle_graph(&entries, &descriptor)?;
 
-        let staged = self.config.root.join("staging").join(format!(
-            "import-{}-{}",
-            std::process::id(),
-            TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&staged)?;
+        let mut created_files = Vec::new();
         let publish = (|| -> Result<(), ArchiveError> {
-            for entry in entries.iter().filter(|entry| entry.path != DESCRIPTOR_PATH) {
-                let staged_path = staged.join(&entry.path);
-                if let Some(parent) = staged_path.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                fs::write(&staged_path, &entry.bytes)?;
-            }
-            for entry in entries.iter().filter(|entry| {
-                entry.path.starts_with("assets/") || entry.path.starts_with("checkpoints/")
-            }) {
-                write_content_addressed(
-                    &self.config.root.join("staging"),
-                    &self.config.root.join(&entry.path),
-                    &entry.bytes,
-                )?;
-            }
-            for entry in entries
+            for (entry_index, entry) in entries
                 .iter()
-                .filter(|entry| entry.path.starts_with("manifests/"))
+                .enumerate()
+                .filter(|(_, entry)| entry.path != DESCRIPTOR_PATH)
             {
+                let destination = self.config.root.join(&entry.path);
+                let existed = destination.exists();
                 write_content_addressed(
                     &self.config.root.join("staging"),
-                    &self.config.root.join(&entry.path),
+                    &destination,
                     &entry.bytes,
                 )?;
+                if !existed {
+                    created_files.push((destination, entry_index));
+                }
             }
+            self.rebuild_index()?;
             Ok(())
         })();
-        let _ = fs::remove_dir_all(&staged);
-        publish?;
-        self.rebuild_index()?;
+        if let Err(operation) = publish {
+            let cleanup = rollback_bundle_import(&created_files, &entries).err();
+            return Err(match cleanup {
+                Some(cleanup) => ArchiveError::Integrity(format!(
+                    "{operation}; bundle import rollback failed: {cleanup}"
+                )),
+                None => operation,
+            });
+        }
         Ok(BundleImportReceipt {
             kind,
             manifest_digests: descriptor.manifest_digests,
@@ -545,13 +541,12 @@ impl LineageLibrary {
                 "founder base world already contains creatures".to_string(),
             ));
         }
-        let staging = asset_root.join(".founder-staging");
-        fs::create_dir_all(&staging)?;
+        let staging = FounderStagingDirectory::create(asset_root)?;
         let cohort_bytes = serde_json::to_vec_pretty(&cohort.manifest)?;
         add_save_asset(
             &mut base_save.assets,
             asset_root,
-            &staging,
+            staging.path(),
             "founder.cohort",
             "founders/cohort.json",
             &cohort_bytes,
@@ -591,7 +586,7 @@ impl LineageLibrary {
             add_save_asset(
                 &mut base_save.assets,
                 asset_root,
-                &staging,
+                staging.path(),
                 &format!("founder.{index}.genome"),
                 &format!("founders/{index:04}/genome.json"),
                 &genome_bytes,
@@ -601,7 +596,7 @@ impl LineageLibrary {
                 add_save_asset(
                     &mut base_save.assets,
                     asset_root,
-                    &staging,
+                    staging.path(),
                     &format!("founder.{index}.foundation"),
                     &format!("founders/{index:04}/foundation.alife-foundation"),
                     foundation,
@@ -610,7 +605,13 @@ impl LineageLibrary {
             }
             if let Some(checkpoint) = &founder.gpu_checkpoint {
                 for (entry, bytes) in checkpoint.manifest_entries.iter().zip(&checkpoint.assets) {
-                    copy_manifest_asset(&mut base_save.assets, asset_root, &staging, entry, bytes)?;
+                    copy_manifest_asset(
+                        &mut base_save.assets,
+                        asset_root,
+                        staging.path(),
+                        entry,
+                        bytes,
+                    )?;
                 }
             }
 
@@ -670,8 +671,87 @@ impl LineageLibrary {
         base_save
             .validate_with_asset_root(asset_root)
             .map_err(|error| ArchiveError::Integrity(format!("invalid founder save: {error}")))?;
-        let _ = fs::remove_dir_all(staging);
         Ok(base_save)
+    }
+}
+
+struct FounderStagingDirectory {
+    path: std::path::PathBuf,
+}
+
+impl FounderStagingDirectory {
+    fn create(root: &Path) -> Result<Self, ArchiveError> {
+        fs::create_dir_all(root)?;
+        for _ in 0..128 {
+            let path = root.join(format!(
+                ".founder-staging-{}-{}",
+                std::process::id(),
+                TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+            ));
+            match fs::create_dir(&path) {
+                Ok(()) => return Ok(Self { path }),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Err(ArchiveError::Integrity(
+            "could not allocate a unique founder staging directory".to_string(),
+        ))
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for FounderStagingDirectory {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir(&self.path);
+    }
+}
+
+fn rollback_bundle_import(
+    created_files: &[(std::path::PathBuf, usize)],
+    entries: &[BundleEntry],
+) -> Result<(), ArchiveError> {
+    let mut failures = Vec::new();
+    for (path, entry_index) in created_files.iter().rev() {
+        let entry = entries.get(*entry_index).ok_or_else(|| {
+            ArchiveError::Integrity("bundle import rollback entry is missing".to_string())
+        })?;
+        let metadata = match fs::symlink_metadata(path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                failures.push(format!("could not inspect {}: {error}", path.display()));
+                continue;
+            }
+        };
+        if archive_metadata_is_reparse_point(&metadata) || !metadata.is_file() {
+            failures.push(format!("preserved changed import path {}", path.display()));
+            continue;
+        }
+        let current = match fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                failures.push(format!("could not read {}: {error}", path.display()));
+                continue;
+            }
+        };
+        if current.as_slice() != entry.bytes.as_slice() || digest_bytes(&current) != entry.digest {
+            failures.push(format!("preserved changed import path {}", path.display()));
+            continue;
+        }
+        if let Err(error) = fs::remove_file(path) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                failures.push(format!("could not remove {}: {error}", path.display()));
+            }
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(ArchiveError::Integrity(failures.join("; ")))
     }
 }
 
@@ -888,28 +968,57 @@ fn validate_bundle_graph(
             "bundle descriptor has invalid founder count".to_string(),
         ));
     }
+    if !descriptor
+        .manifest_digests
+        .windows(2)
+        .all(|pair| pair[0] < pair[1])
+    {
+        return Err(ArchiveError::Integrity(
+            "bundle descriptor founder manifests are not unique and ordered".to_string(),
+        ));
+    }
     let map = entries
         .iter()
         .map(|entry| (entry.path.as_str(), entry))
         .collect::<BTreeMap<_, _>>();
+    let mut referenced_paths = BTreeSet::from([DESCRIPTOR_PATH.to_string()]);
     for selected in &descriptor.manifest_digests {
-        let path = format!("manifests/{}.json", digest_hex(*selected));
-        let entry = map.get(path.as_str()).ok_or_else(|| {
-            ArchiveError::Integrity("selected creature manifest is missing".to_string())
-        })?;
-        validate_manifest_graph(entry, &map)?;
+        validate_manifest_graph(*selected, &map, &mut referenced_paths)?;
+    }
+    if referenced_paths.len() != entries.len()
+        || entries
+            .iter()
+            .any(|entry| !referenced_paths.contains(&entry.path))
+    {
+        return Err(ArchiveError::Integrity(
+            "bundle contains unreferenced entries".to_string(),
+        ));
     }
     Ok(())
 }
 
 fn validate_manifest_graph(
-    entry: &BundleEntry,
+    expected_digest: Blake3Digest,
     entries: &BTreeMap<&str, &BundleEntry>,
+    referenced_paths: &mut BTreeSet<String>,
 ) -> Result<(), ArchiveError> {
+    let manifest_path = format!("manifests/{}.json", digest_hex(expected_digest));
+    let entry = entries.get(manifest_path.as_str()).ok_or_else(|| {
+        ArchiveError::Integrity("selected creature manifest is missing".to_string())
+    })?;
+    if entry.digest != expected_digest {
+        return Err(ArchiveError::Integrity(
+            "bundle manifest path does not match its content digest".to_string(),
+        ));
+    }
+    if !referenced_paths.insert(manifest_path) {
+        return Ok(());
+    }
     let manifest = serde_json::from_slice::<CreatureArchiveManifest>(&entry.bytes)?;
     validate_supported_manifest(&manifest)?;
     for asset in [
         Some(&manifest.genetic.genome_asset),
+        manifest.genetic.composite_genome_asset.as_ref(),
         manifest.genetic.foundation_asset.as_ref(),
         manifest.life.as_ref().map(|life| &life.statistics_asset),
     ]
@@ -925,13 +1034,10 @@ fn validate_manifest_graph(
                 "bundle asset does not match its manifest".to_string(),
             ));
         }
+        referenced_paths.insert(path);
     }
     if let Some(previous) = manifest.previous_manifest_digest {
-        let path = format!("manifests/{}.json", digest_hex(previous));
-        let previous_entry = entries
-            .get(path.as_str())
-            .ok_or_else(|| ArchiveError::Integrity("birth manifest is missing".to_string()))?;
-        validate_manifest_graph(previous_entry, entries)?;
+        validate_manifest_graph(previous, entries, referenced_paths)?;
     }
     if let Some(life) = &manifest.life {
         if let ArchiveCheckpointDisposition::Stored(checkpoint) = &life.checkpoint {
@@ -951,6 +1057,7 @@ fn validate_manifest_graph(
                         "checkpoint page does not match its manifest".to_string(),
                     ));
                 }
+                referenced_paths.insert(path);
             }
             let checkpoint_bytes = decode_checkpoint_from_entries(checkpoint, entries)?;
             if let Ok(envelope) =
@@ -971,6 +1078,7 @@ fn validate_manifest_graph(
                             "GPU checkpoint asset does not match its manifest".to_string(),
                         ));
                     }
+                    referenced_paths.insert(asset.relative_path.clone());
                 }
             }
         }
@@ -1185,7 +1293,8 @@ mod tests {
 
     use alife_core::{
         ArchiveCheckpointRetention, BrainCapacityClass, BrainGenome, DevelopmentState, FounderMode,
-        FounderSelection, NormalizedScalar, OrganismId, PhenotypeCompiler, SensorProfile, Tick,
+        FounderSelection, NormalizedScalar, OrganismId, PassiveLifeStatistics, PhenotypeCompiler,
+        SensorProfile, Tick,
     };
 
     use super::*;
@@ -1247,12 +1356,16 @@ mod tests {
             return (library, birth, None);
         }
         let checkpoint = format!("durable-learned-founder-{organism_raw}").into_bytes();
+        let mut statistics =
+            PassiveLifeStatistics::new(OrganismId(organism_raw), Tick::ZERO).unwrap();
+        statistics.finalize(Tick(80), "fixture retirement").unwrap();
+        let statistics_bytes = serde_json::to_vec(&statistics).unwrap();
         let retirement = library
             .archive_life(LifeArchiveInput {
                 birth_manifest_digest: birth,
                 death_tick: Tick(80),
                 final_experience_sequence: None,
-                statistics_bytes: b"{}",
+                statistics_bytes: &statistics_bytes,
                 learned_checkpoint_bytes: Some(&checkpoint),
                 checkpoint_retention: ArchiveCheckpointRetention::Pinned,
             })
@@ -1428,6 +1541,108 @@ mod tests {
             .next()
             .is_none());
         assert!(fs::read_dir(import_root.join("manifests"))
+            .unwrap()
+            .next()
+            .is_none());
+
+        drop(imported);
+        drop(source);
+        let _ = fs::remove_dir_all(source_root);
+        let _ = fs::remove_dir_all(import_root);
+        let _ = fs::remove_file(bundle_path);
+        let _ = fs::remove_file(bad_path);
+    }
+
+    #[test]
+    fn manifest_path_digest_mismatch_cannot_publish_partial_content() {
+        let source_root = temp_root("misnamed-source");
+        let import_root = temp_root("misnamed-import");
+        let bundle_path = temp_root("misnamed-bundle").with_extension("alife-creature");
+        let bad_path = temp_root("misnamed-bad").with_extension("alife-creature");
+        let (source, _, _) = archive_fixture(&source_root, 62, false);
+        let manifest_digest = source.latest_manifest_digests().unwrap()[0];
+        source
+            .export_creature_bundle(manifest_digest, &bundle_path)
+            .unwrap();
+        let compressed = fs::read(&bundle_path).unwrap();
+        let encoded = zstd::stream::decode_all(compressed.as_slice()).unwrap();
+        let (kind, mut entries) = decode_bundle(&encoded).unwrap();
+        let fake_digest = Blake3Digest::from_bytes([7; 32]);
+        let descriptor = BundleDescriptor {
+            schema_version: BUNDLE_VERSION,
+            kind,
+            manifest_digests: vec![fake_digest],
+        };
+        let descriptor_entry = entries
+            .iter_mut()
+            .find(|entry| entry.path == DESCRIPTOR_PATH)
+            .unwrap();
+        descriptor_entry.bytes = serde_json::to_vec(&descriptor).unwrap();
+        descriptor_entry.digest = digest_bytes(&descriptor_entry.bytes);
+        let manifest_entry = entries
+            .iter_mut()
+            .find(|entry| entry.path.starts_with("manifests/"))
+            .unwrap();
+        manifest_entry.path = format!("manifests/{}.json", digest_hex(fake_digest));
+        let malformed = encode_bundle(kind, &entries).unwrap();
+        fs::write(
+            &bad_path,
+            zstd::stream::encode_all(malformed.as_slice(), 3).unwrap(),
+        )
+        .unwrap();
+
+        let mut imported =
+            LineageLibrary::open(LineageLibraryConfig::profile_default(&import_root)).unwrap();
+        assert!(imported.import_bundle(&bad_path).is_err());
+        assert_eq!(imported.manifest_count().unwrap(), 0);
+        assert!(fs::read_dir(import_root.join("assets"))
+            .unwrap()
+            .next()
+            .is_none());
+        assert!(fs::read_dir(import_root.join("manifests"))
+            .unwrap()
+            .next()
+            .is_none());
+
+        drop(imported);
+        drop(source);
+        let _ = fs::remove_dir_all(source_root);
+        let _ = fs::remove_dir_all(import_root);
+        let _ = fs::remove_file(bundle_path);
+        let _ = fs::remove_file(bad_path);
+    }
+
+    #[test]
+    fn bundle_rejects_unreferenced_entries_before_publication() {
+        let source_root = temp_root("extra-source");
+        let import_root = temp_root("extra-import");
+        let bundle_path = temp_root("extra-bundle").with_extension("alife-creature");
+        let bad_path = temp_root("extra-bad").with_extension("alife-creature");
+        let (source, manifest_digest, _) = archive_fixture(&source_root, 63, false);
+        source
+            .export_creature_bundle(manifest_digest, &bundle_path)
+            .unwrap();
+        let compressed = fs::read(&bundle_path).unwrap();
+        let encoded = zstd::stream::decode_all(compressed.as_slice()).unwrap();
+        let (kind, mut entries) = decode_bundle(&encoded).unwrap();
+        let bytes = b"unreferenced archive content".to_vec();
+        entries.push(BundleEntry {
+            path: "assets/unreferenced/payload.bin".to_string(),
+            digest: digest_bytes(&bytes),
+            bytes,
+        });
+        let malformed = encode_bundle(kind, &entries).unwrap();
+        fs::write(
+            &bad_path,
+            zstd::stream::encode_all(malformed.as_slice(), 3).unwrap(),
+        )
+        .unwrap();
+
+        let mut imported =
+            LineageLibrary::open(LineageLibraryConfig::profile_default(&import_root)).unwrap();
+        assert!(imported.import_bundle(&bad_path).is_err());
+        assert_eq!(imported.manifest_count().unwrap(), 0);
+        assert!(fs::read_dir(import_root.join("assets"))
             .unwrap()
             .next()
             .is_none());
