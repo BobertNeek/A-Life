@@ -176,6 +176,7 @@ pub fn compare_visible_world_to_headless(
 ) -> Result<(), GameAppShellError> {
     if presentation.object_count != presentation.objects.len()
         || presentation.object_count != presentation.headless_signature.len()
+        || presentation.object_count != presentation.visible_signature.len()
     {
         return Err(GameAppShellError::VisibleWorldMismatch {
             message: "presentation, visible signature, and headless signature counts must match",
@@ -216,5 +217,28 @@ pub const fn placeholder_for_kind(
             VisiblePlaceholderShape::TokenBillboard,
             VisibleMaterialKind::Token,
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn visible_world_comparison_rejects_a_stale_visible_signature() {
+        let presentation = VisibleWorldPresentation {
+            schema: G02_VISIBLE_WORLD_SCHEMA,
+            schema_version: G02_VISIBLE_WORLD_SCHEMA_VERSION,
+            save_id: "test-save".to_string(),
+            seed: 7,
+            object_count: 0,
+            ground_shape: VisiblePlaceholderShape::GroundPlane,
+            ground_material: VisibleMaterialKind::Ground,
+            objects: Vec::new(),
+            headless_signature: Vec::new(),
+            visible_signature: vec!["stale".to_string()],
+        };
+
+        assert!(compare_visible_world_to_headless(&presentation).is_err());
     }
 }
