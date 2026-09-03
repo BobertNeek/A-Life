@@ -44,6 +44,26 @@ fn hardening_mutations_are_deterministic_distinct_and_parent_bound() {
 }
 
 #[test]
+fn descendant_mutations_preserve_the_finalists_inherited_genome_changes() {
+    let founder = BrainGenome::scaffold(77, BrainCapacityClass::N2048_ID);
+    let finalist =
+        mutate_hardening_genome(&founder, HardeningMutationKind::AlphaPlasticity, 991).unwrap();
+    assert_ne!(
+        finalist.alpha_mask.default_alpha,
+        founder.alpha_mask.default_alpha
+    );
+
+    let descendant =
+        mutate_hardening_genome(&finalist, HardeningMutationKind::SparseGeneticDelta, 992).unwrap();
+    assert_eq!(
+        descendant.alpha_mask.default_alpha,
+        finalist.alpha_mask.default_alpha
+    );
+    assert_eq!(descendant.parent_genome_ids, vec![finalist.id]);
+    assert_eq!(descendant.lineage_id, finalist.lineage_id);
+}
+
+#[test]
 fn pareto_selection_keeps_tradeoffs_instead_of_collapsing_to_one_iq_scalar() {
     let evaluations = vec![
         evaluation(1, 0.9, 0.4),
