@@ -123,12 +123,8 @@ pub fn validate_app_bundle_manifest(
     let summary = validate_app_bundle_manifest_inner(&root, manifest_path, &manifest)?;
 
     let mut broken = manifest.clone();
-    if let Some(entry) = broken.entries.first_mut() {
-        entry.relative_path =
-            "crates/alife_world/tests/fixtures/gpu_alpha/missing_config.json".to_string();
-    }
-    let missing_required_rejected =
-        validate_app_bundle_manifest_inner(&root, manifest_path, &broken).is_err();
+    let missing_required_rejected = replace_first_required_entry_with_missing_path(&mut broken)
+        && validate_app_bundle_manifest_inner(&root, manifest_path, &broken).is_err();
 
     let summary = AppBundleIngestionSummary {
         missing_required_rejected,
@@ -136,6 +132,15 @@ pub fn validate_app_bundle_manifest(
     };
     summary.validate()?;
     Ok(summary)
+}
+
+fn replace_first_required_entry_with_missing_path(manifest: &mut AppBundleManifest) -> bool {
+    let Some(entry) = manifest.entries.iter_mut().find(|entry| entry.required) else {
+        return false;
+    };
+    entry.relative_path =
+        "crates/alife_world/tests/fixtures/gpu_alpha/missing_config.json".to_string();
+    true
 }
 
 fn validate_app_bundle_manifest_inner(
@@ -338,10 +343,18 @@ fn validate_relative_path(relative: &str) -> Result<(), GameAppShellError> {
         return Err(ScaffoldContractError::MissingPhaseData.into());
     }
     let path = Path::new(relative);
+    let bytes = relative.as_bytes();
+    let has_windows_drive_prefix =
+        bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';
     if path.is_absolute()
-        || path
-            .components()
-            .any(|component| matches!(component, Component::ParentDir | Component::RootDir))
+        || relative.starts_with('\\')
+        || has_windows_drive_prefix
+        || path.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        })
     {
         return Err(ScaffoldContractError::MissingPhaseData.into());
     }
@@ -402,4 +415,47 @@ fn has_binary_like_extension(path: &Path) -> bool {
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, GameAppShellError> {
     Ok(serde_json::from_str(&std::fs::read_to_string(path)?)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_required_probe_skips_optional_entries() {
+        let mut manifest = AppBundleManifest {
+            schema: "test".to_string(),
+            schema_version: 1,
+            bundle_id: "test".to_string(),
+            environment_manifest: "environment.json".to_string(),
+            production_voxel_asset_manifest: "voxel.json".to_string(),
+            entries: vec![
+                AppBundleEntry {
+                    id: "optional".to_string(),
+                    kind: "runtime-config".to_string(),
+                    relative_path: "optional.json".to_string(),
+                    required: false,
+                },
+                AppBundleEntry {
+                    id: "required".to_string(),
+                    kind: "runtime-config".to_string(),
+                    relative_path: "required.json".to_string(),
+                    required: true,
+                },
+            ],
+            shader_assets: Vec::new(),
+        };
+
+        assert!(replace_first_required_entry_with_missing_path(
+            &mut manifest
+        ));
+        assert_eq!(manifest.entries[0].relative_path, "optional.json");
+        assert!(manifest.entries[1].relative_path.contains("missing_config"));
+    }
+
+    #[test]
+    fn drive_relative_paths_are_not_workspace_relative() {
+        assert!(validate_relative_path("C:outside.json").is_err());
+        assert!(validate_relative_path(r"\\server\share\outside.json").is_err());
+    }
 }

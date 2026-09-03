@@ -37,6 +37,37 @@ pub fn materialize_founder_gpu_states(
         });
     }
     let asset_root = asset_root.as_ref();
+    save.validate_with_asset_root(asset_root)?;
+    if cohort.founders.len() != cohort.manifest.founders.len()
+        || cohort
+            .founders
+            .iter()
+            .zip(&cohort.manifest.founders)
+            .any(|(founder, provenance)| founder.provenance != *provenance)
+    {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: "resolved founder order differs from cohort provenance".to_string(),
+        });
+    }
+    for founder in &cohort.founders {
+        founder.manifest.validate_contract()?;
+        founder.genome.validate_contract()?;
+    }
+    let save_organism_ids = save
+        .creatures
+        .iter()
+        .map(|creature| creature.organism_id)
+        .collect::<Vec<_>>();
+    let founder_organism_ids = cohort
+        .founders
+        .iter()
+        .map(|founder| founder.provenance.remap.target_organism_id)
+        .collect::<Vec<_>>();
+    if !same_organism_id_set(&save_organism_ids, &founder_organism_ids) {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: "founder targets do not exactly cover save creatures".to_string(),
+        });
+    }
     let store = GpuCheckpointAssetStore::new(asset_root)?;
     let mut session = GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Gameplay);
     for founder in &cohort.founders {
@@ -111,6 +142,20 @@ pub fn materialize_founder_gpu_states(
     }
     save.validate_with_asset_root(asset_root)?;
     Ok(save)
+}
+
+fn same_organism_id_set(left: &[alife_core::OrganismId], right: &[alife_core::OrganismId]) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    let mut left = left.iter().map(|id| id.raw()).collect::<Vec<_>>();
+    let mut right = right.iter().map(|id| id.raw()).collect::<Vec<_>>();
+    left.sort_unstable();
+    right.sort_unstable();
+    if left.windows(2).any(|ids| ids[0] == ids[1]) || right.windows(2).any(|ids| ids[0] == ids[1]) {
+        return false;
+    }
+    left == right
 }
 
 /// Backward-compatible descriptive name for callers that only selected mind
@@ -218,4 +263,27 @@ fn capture_genetic_founder(
     let write = write?;
     removal?;
     Ok(write)
+}
+
+#[cfg(test)]
+mod tests {
+    use alife_core::OrganismId;
+
+    use super::same_organism_id_set;
+
+    #[test]
+    fn founder_targets_must_exactly_cover_save_creatures() {
+        assert!(same_organism_id_set(
+            &[OrganismId(1), OrganismId(2)],
+            &[OrganismId(2), OrganismId(1)]
+        ));
+        assert!(!same_organism_id_set(
+            &[OrganismId(1), OrganismId(2)],
+            &[OrganismId(1), OrganismId(1)]
+        ));
+        assert!(!same_organism_id_set(
+            &[OrganismId(1)],
+            &[OrganismId(1), OrganismId(2)]
+        ));
+    }
 }
