@@ -43,6 +43,18 @@ fn sleep_transaction_valid(
   learning:GpuSlotLearningStateRecord,
   request:GpuConsolidationRequestRecord,
 ) -> bool {
+  if (extension.schema_version != GPU_CLOSED_LOOP_LAYOUT_VERSION
+      || extension.sleep_parameter_offset == 0xffffffffu
+      || !consolidate_immutable_plan_span_within(extension.sleep_parameter_offset,8u)
+      || brain.recurrent_synapse_count > brain.synapse_count
+      || learning.replay_event_capacity > 0xffffffffu / 28u
+      || learning.replay_span_count > 0xffffffffu / 4u
+      || header.replay_event_count > 0xffffffffu / 28u
+      || header.replay_span_count > 0xffffffffu / 4u
+      || learning.replay_span_count == 0u
+      || learning.replay_event_capacity > 0xffffffffu / learning.replay_span_count) {
+    return false;
+  }
   let parameters = load_sleep_parameter(extension.sleep_parameter_offset);
   return header.schema_version == GPU_SLEEP_SCHEMA_VERSION
     && header.flags == 0u && header.reserved == 0u
@@ -62,9 +74,6 @@ fn sleep_transaction_valid(
     && request.max_replay_events == learning.replay_event_capacity
     && request.max_replay_eligibility_samples == learning.replay_sample_capacity
     && request.reserved_tail.x == 0u && request.reserved_tail.y == 0u
-    && extension.schema_version == GPU_CLOSED_LOOP_LAYOUT_VERSION
-    && extension.sleep_parameter_offset != 0xffffffffu
-    && consolidate_immutable_plan_span_within(extension.sleep_parameter_offset,8u)
     && parameters.schema_version == GPU_SLEEP_SCHEMA_VERSION
     && consolidate_finite(parameters.staging_rate)
     && consolidate_finite(parameters.weight_limit)
@@ -110,7 +119,16 @@ fn initialize_sleep_transaction(@builtin(global_invocation_id) gid:vec3<u32>) {
   store_state_u32(completion,GPU_SLEEP_SCHEMA_VERSION);
   store_state_u32(completion+1u,brain.slot);
   store_state_u32(completion+2u,brain.slot_generation);
+  if (!state_span_within(brain.extension_record_offset,20u)) {
+    consolidate_reject(completion); return;
+  }
   let extension = load_slot_extension(brain);
+  if (!state_span_within(extension.learning_state_offset,24u)
+      || extension.sleep_parameter_offset == 0xffffffffu
+      || !consolidate_immutable_plan_span_within(extension.sleep_parameter_offset,8u)
+      || !consolidate_frame_span_within(header.request_offset,44u)) {
+    consolidate_reject(completion); return;
+  }
   let learning = load_slot_learning_state(extension);
   let request = load_consolidation_request(header.request_offset);
   if (!sleep_transaction_valid(header,brain,extension,learning,request)
@@ -136,10 +154,9 @@ fn copy_sleep_weight_banks(@builtin(global_invocation_id) gid:vec3<u32>) {
       || load_state_u32(header.completion_offset+3u) != SLEEP_STATUS_PREPARED
       || gid.x >= header.synapse_count) { return; }
   let brain = brain_slots[header.brain_slot_index];
-  let extension = load_slot_extension(brain);
-  let learning = load_slot_learning_state(extension);
-  let active_bases = active_weight_bases(brain,extension,learning);
-  let inactive = inactive_weight_bases(brain,extension,learning);
+  let bank_pair = load_weight_bank_pair_direct(brain);
+  let active_bases = bank_pair.active;
+  let inactive = bank_pair.staging;
   let lifetime = load_state_f32(active_bases.lifetime+gid.x);
   let fast = load_state_f32(active_bases.fast+gid.x);
   if (!consolidate_finite(lifetime) || !consolidate_finite(fast)) {
@@ -156,11 +173,12 @@ fn consolidate_fast_weights(@builtin(global_invocation_id) gid:vec3<u32>) {
       || load_state_u32(header.completion_offset+3u) != SLEEP_STATUS_PREPARED
       || gid.x >= header.synapse_count) { return; }
   let brain = brain_slots[header.brain_slot_index];
-  let extension = load_slot_extension(brain);
-  let learning = load_slot_learning_state(extension);
-  let parameters = load_sleep_parameter(extension.sleep_parameter_offset);
-  let active_bases = active_weight_bases(brain,extension,learning);
-  let inactive = inactive_weight_bases(brain,extension,learning);
+  let parameters = load_sleep_parameter(
+    load_state_u32(brain.extension_record_offset + 12u)
+  );
+  let bank_pair = load_weight_bank_pair_direct(brain);
+  let active_bases = bank_pair.active;
+  let inactive = bank_pair.staging;
   let active_lifetime = load_state_f32(active_bases.lifetime+gid.x);
   let replayed_fast = load_state_f32(inactive.fast+gid.x);
   let promoted = parameters.staging_rate*replayed_fast;

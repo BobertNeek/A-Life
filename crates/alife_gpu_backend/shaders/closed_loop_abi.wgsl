@@ -178,6 +178,12 @@ struct GpuReplaySynapseSpanRecord {
 }
 struct GpuWeightBankBases { lifetime:u32, fast:u32, }
 struct GpuEligibilityBankBases { recurrent:u32, decoder:u32, }
+struct GpuWeightBankPair {
+  active:GpuWeightBankBases, staging:GpuWeightBankBases,
+}
+struct GpuEligibilityBankPair {
+  active:GpuEligibilityBankBases, staging:GpuEligibilityBankBases,
+}
 
 @group(0) @binding(0) var<storage, read> brain_slots: array<GpuBrainSlotRecord>;
 @group(0) @binding(1) var<storage, read> phenotype_identities: array<GpuPhenotypeIdentityRecord>;
@@ -421,6 +427,52 @@ fn inactive_eligibility_bases(
   return GpuEligibilityBankBases(
     select(brain.recurrent_eligibility_offset, extension.recurrent_eligibility_bank_1_offset, bank_1),
     select(brain.decoder_eligibility_offset, extension.decoder_eligibility_bank_1_offset, bank_1)
+  );
+}
+
+// Parallel waking kernels need only the bank selectors and bank-one offsets.
+// Loading the complete 20-word extension and 24-word learning records in every
+// invocation turns four addresses into 44 atomic heap reads. Transaction
+// prepasses still use the complete records for validation; these helpers only
+// consume the already-validated address fields in later ordered passes.
+fn load_weight_bank_pair_direct(brain:GpuBrainSlotRecord) -> GpuWeightBankPair {
+  let extension_base = brain.extension_record_offset;
+  let fast_bank_1 = load_state_u32(extension_base + 10u);
+  let lifetime_bank_1 = load_state_u32(extension_base + 11u);
+  let learning_base = load_state_u32(extension_base + 15u);
+  let bank_1_active = load_state_u32(learning_base + 1u) == 1u;
+  return GpuWeightBankPair(
+    GpuWeightBankBases(
+      select(brain.lifetime_weight_offset, lifetime_bank_1, bank_1_active),
+      select(brain.fast_weight_offset, fast_bank_1, bank_1_active)
+    ),
+    GpuWeightBankBases(
+      select(brain.lifetime_weight_offset, lifetime_bank_1, !bank_1_active),
+      select(brain.fast_weight_offset, fast_bank_1, !bank_1_active)
+    )
+  );
+}
+
+fn direct_active_weight_bases(brain:GpuBrainSlotRecord) -> GpuWeightBankBases {
+  let banks = load_weight_bank_pair_direct(brain);
+  return banks.active;
+}
+
+fn load_eligibility_bank_pair_direct(brain:GpuBrainSlotRecord) -> GpuEligibilityBankPair {
+  let extension_base = brain.extension_record_offset;
+  let recurrent_bank_1 = load_state_u32(extension_base + 8u);
+  let decoder_bank_1 = load_state_u32(extension_base + 9u);
+  let learning_base = load_state_u32(extension_base + 15u);
+  let bank_1_active = load_state_u32(learning_base + 2u) == 1u;
+  return GpuEligibilityBankPair(
+    GpuEligibilityBankBases(
+      select(brain.recurrent_eligibility_offset, recurrent_bank_1, bank_1_active),
+      select(brain.decoder_eligibility_offset, decoder_bank_1, bank_1_active)
+    ),
+    GpuEligibilityBankBases(
+      select(brain.recurrent_eligibility_offset, recurrent_bank_1, !bank_1_active),
+      select(brain.decoder_eligibility_offset, decoder_bank_1, !bank_1_active)
+    )
   );
 }
 fn sparse_selector_request_spans_valid(header:GpuPerceptionHeader) -> bool {

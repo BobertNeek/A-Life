@@ -34,9 +34,8 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
   let header = load_perception_header(gid.y * ACTIVE_DISPATCH_ROW_WORDS);
   if (!activity_contract_prevalidated(header)) { return; }
   let brain = brain_slots[header.brain_slot_index];
-  let extension = load_slot_extension(brain);
-  let learning = load_slot_learning_state(extension);
-  let weight_bases = active_weight_bases(brain, extension, learning);
+  let direct_weight_banks = load_weight_bank_pair_direct(brain);
+  let weight_bases = direct_weight_banks.active;
   let candidate = gid.x;
   if (candidate >= header.candidate_count) { return; }
   let candidate_record = load_candidate(header.candidate_offset + candidate * 8u);
@@ -208,31 +207,6 @@ fn factorized_motor_slot(kind:u32) -> u32 {
   return 0xffffffffu;
 }
 
-fn select_factorized_motor_candidate(
-  header:GpuPerceptionHeader,
-  brain:GpuBrainSlotRecord,
-  slot:u32
-) -> u32 {
-  var found = false;
-  var selected = 0xffffffffu;
-  var selected_logit = 0.0;
-  for (var candidate=0u; candidate<header.candidate_count; candidate++) {
-    let record = load_candidate(header.candidate_offset + candidate * 8u);
-    if (factorized_motor_slot(record.kind) != slot) { continue; }
-    let bits = load_state_u32(brain.candidate_logit_offset + candidate);
-    if (bits == INVALID_LOGIT_BITS) { continue; }
-    let logit = bitcast<f32>(bits);
-    if (!finite_decode(logit)) { continue; }
-    if (!found || logit > selected_logit || (logit == selected_logit && candidate < selected)) {
-      found = true;
-      selected = candidate;
-      selected_logit = logit;
-    }
-  }
-  if (!found || selected >= 255u) { return 0u; }
-  return selected + 1u;
-}
-
 fn load_speech_selection(base:u32) -> GpuSelectionRecord {
   return GpuSelectionRecord(
     load_state_u32(base),load_state_u32(base+1u),load_state_u32(base+2u),load_state_u32(base+3u),
@@ -259,11 +233,34 @@ fn decode_speech_payload(@builtin(global_invocation_id) gid:vec3<u32>) {
   store_state_u32(output_base + 3u, 0u);
 
   var motor_words:array<u32,2>;
+  var motor_found:array<bool,6>;
+  var motor_candidates:array<u32,6>;
+  var motor_logits:array<f32,6>;
   motor_words[0] = 0u;
   motor_words[1] = 0u;
+  // One scan selects every factorized motor channel. The previous helper
+  // rescanned the complete candidate list once for each of the six slots.
+  for (var candidate = 0u; candidate < header.candidate_count; candidate++) {
+    let record = load_candidate(header.candidate_offset + candidate * 8u);
+    let slot = factorized_motor_slot(record.kind);
+    if (slot >= FACTORIZED_MOTOR_CHANNEL_SLOT_COUNT) { continue; }
+    let bits = load_state_u32(brain.candidate_logit_offset + candidate);
+    if (bits == INVALID_LOGIT_BITS) { continue; }
+    let logit = bitcast<f32>(bits);
+    if (!finite_decode(logit)) { continue; }
+    if (!motor_found[slot]
+        || logit > motor_logits[slot]
+        || (logit == motor_logits[slot] && candidate < motor_candidates[slot])) {
+      motor_found[slot] = true;
+      motor_candidates[slot] = candidate;
+      motor_logits[slot] = logit;
+    }
+  }
   for (var slot=0u; slot<FACTORIZED_MOTOR_CHANNEL_SLOT_COUNT; slot++) {
-    let selected = select_factorized_motor_candidate(header, brain, slot);
-    motor_words[slot / 4u] |= selected << ((slot % 4u) * 8u);
+    if (motor_found[slot] && motor_candidates[slot] < 255u) {
+      let encoded = motor_candidates[slot] + 1u;
+      motor_words[slot / 4u] |= encoded << ((slot % 4u) * 8u);
+    }
   }
   store_state_u32(output_base + 2u, motor_words[0]);
   store_state_u32(output_base + 3u, motor_words[1]);
@@ -288,8 +285,8 @@ fn decode_speech_payload(@builtin(global_invocation_id) gid:vec3<u32>) {
   }
   if (speech_synapses != SPEECH_SYNAPSE_COUNT) { return; }
 
-  let learning = load_slot_learning_state(extension);
-  let weight_bases = active_weight_bases(brain, extension, learning);
+  let direct_weight_banks = load_weight_bank_pair_direct(brain);
+  let weight_bases = direct_weight_banks.active;
   let activation_base = select(
     brain.activation_a_offset,
     brain.activation_b_offset,

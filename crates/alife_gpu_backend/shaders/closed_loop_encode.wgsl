@@ -50,7 +50,10 @@ fn encode_perception(@builtin(global_invocation_id) gid:vec3<u32>) {
   let begin = immutable_plan_words[encoder.target_offsets_offset + index];
   let end = immutable_plan_words[encoder.target_offsets_offset + index + 1u];
   if (begin > end || end > encoder.assignment_count) {
-    atomicAdd(&mutable_state_words[brain.diagnostic_offset + 2u], 1u);
+    atomicOr(
+      &mutable_state_words[brain.diagnostic_offset + 2u],
+      CONTRACT_INVALID_DIAGNOSTIC_BIT
+    );
     store_state_f32(brain.encoded_input_offset + index, 0.0);
     return;
   }
@@ -58,13 +61,21 @@ fn encode_perception(@builtin(global_invocation_id) gid:vec3<u32>) {
   for (var cursor = begin; cursor < end; cursor++) {
     let assignment = load_encoder_assignment(encoder.assignment_offset + cursor * 8u);
     if (assignment.target_neuron != index) {
-      atomicAdd(&mutable_state_words[brain.diagnostic_offset + 2u], 1u);
+      atomicOr(
+        &mutable_state_words[brain.diagnostic_offset + 2u],
+        CONTRACT_INVALID_DIAGNOSTIC_BIT
+      );
+      store_state_f32(brain.encoded_input_offset + index, 0.0);
       return;
     }
     let source_lane = resolve_encoder_source_lane(encoder, assignment);
     if (source_lane == INVALID_LANE) {
-      atomicAdd(&mutable_state_words[brain.diagnostic_offset + 2u], 1u);
-      continue;
+      atomicOr(
+        &mutable_state_words[brain.diagnostic_offset + 2u],
+        CONTRACT_INVALID_DIAGNOSTIC_BIT
+      );
+      store_state_f32(brain.encoded_input_offset + index, 0.0);
+      return;
     }
     var source = bitcast<f32>(frame_payload_words[header.sensory_offset + source_lane]);
     if (assignment.source_group_raw == 1u) {

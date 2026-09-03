@@ -33,9 +33,12 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
       || header.candidate_count == 0u
       || header.neural_receptor_effects_offset == 0u
       || gid.x >= header.candidate_count) { return; }
-  let extension = load_slot_extension(brain);
-  if (extension.memory_plan_offset == 0xffffffffu || extension.memory_weight_map_offset == 0xffffffffu) { return; }
-  let plan = load_memory_channel_plan(extension.memory_plan_offset);
+  let extension_base = brain.extension_record_offset;
+  let decoder_metadata_offset = load_state_u32(extension_base + 6u);
+  let memory_plan_offset = load_state_u32(extension_base + 13u);
+  let memory_weight_map_offset = load_state_u32(extension_base + 14u);
+  if (memory_plan_offset == 0xffffffffu || memory_weight_map_offset == 0xffffffffu) { return; }
+  let plan = load_memory_channel_plan(memory_plan_offset);
   let valid_plan = plan.schema_version == MEMORY_SCHEMA_VERSION
     && plan.target_latent_lane_start == 24u
     && plan.family_value_lane_start == 32u
@@ -46,20 +49,20 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
     && plan.max_candidate_gain >= 0.0
     && all(plan.reserved == vec2<u32>(0u));
   if (!valid_plan) {
-    atomicAdd(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], 1u);
+    atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
     return;
   }
   let candidate = load_candidate(header.candidate_offset + gid.x * 8u);
   let context = load_candidate_memory(header.memory_context_offset + gid.x * MEMORY_RECORD_WORDS);
   if (candidate.candidate_index != gid.x || context.candidate_index != gid.x || candidate.family >= MEMORY_FAMILY_COUNT) {
-    atomicAdd(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], 1u);
+    atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
     return;
   }
   var samples:array<f32,12>;
   for (var channel=0u; channel<MEMORY_CHANNEL_WIDTH; channel++) {
     let sample = memory_sample(context, channel);
     if (!finite_memory_value(sample)) {
-      atomicAdd(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], 1u);
+      atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
       return;
     }
     samples[channel] = sample;
@@ -68,26 +71,26 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
       header.decoder_learning_input_offset + gid.x * plan.decoder_input_stride + input_lane
     ] = bitcast<u32>(sample);
   }
-  let learning = load_slot_learning_state(extension);
-  let weight_bases = active_weight_bases(brain, extension, learning);
+  let direct_weight_banks = load_weight_bank_pair_direct(brain);
+  let weight_bases = direct_weight_banks.active;
   let rows_per_family = plan.memory_decoder_synapse_count / MEMORY_FAMILY_COUNT;
   var delta = 0.0;
   for (var row=0u; row<rows_per_family; row++) {
     let local_synapse = immutable_plan_words[
-      extension.memory_weight_map_offset + candidate.family * rows_per_family + row
+      memory_weight_map_offset + candidate.family * rows_per_family + row
     ];
     if (local_synapse < brain.recurrent_synapse_count || local_synapse >= brain.synapse_count) {
-      atomicAdd(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], 1u);
+      atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
       return;
     }
     let decoder_local = local_synapse - brain.recurrent_synapse_count;
-    let metadata = load_decoder_eligibility_metadata(extension.decoder_metadata_offset + decoder_local * 8u);
+    let metadata = load_decoder_eligibility_metadata(decoder_metadata_offset + decoder_local * 8u);
     if (metadata.global_synapse_id != local_synapse
         || metadata.decoder_head != 2u
         || metadata.family != candidate.family
         || metadata.input_lane < plan.target_latent_lane_start
         || metadata.input_lane >= plan.decoder_input_stride) {
-      atomicAdd(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], 1u);
+      atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
       return;
     }
     let channel = metadata.input_lane - plan.target_latent_lane_start;
@@ -97,7 +100,7 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
     let fast = load_state_f32(weight_bases.fast + local_synapse);
     delta += samples[channel] * (genetic + lifetime + alpha * fast);
     if (!finite_memory_value(delta)) {
-      atomicAdd(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], 1u);
+      atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
       return;
     }
   }
