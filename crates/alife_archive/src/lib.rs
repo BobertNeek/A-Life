@@ -414,7 +414,7 @@ impl LineageLibrary {
         &mut self,
         input: GeneticArchiveInput<'_>,
     ) -> Result<Blake3Digest, ArchiveError> {
-        self.archive_birth_internal(input, None)
+        self.archive_birth_internal(input)
     }
 
     pub fn archive_composite_birth(
@@ -792,7 +792,7 @@ impl LineageLibrary {
         combine_composite_batch_failure(operation, rollback_error, cleanup_error)
     }
 
-    fn archive_digest_is_referenced(&self, digest: Blake3Digest) -> Result<bool, ArchiveError> {
+    fn indexed_archive_digests(&self) -> Result<HashSet<Blake3Digest>, ArchiveError> {
         let mut statement = self.connection.prepare("SELECT digest FROM manifests")?;
         let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
         let manifest_digests = rows
@@ -801,34 +801,28 @@ impl LineageLibrary {
             .map(|text| parse_digest_hex(&text))
             .collect::<Result<Vec<_>, _>>()?;
         drop(statement);
+        let archive_root = canonical_archive_root(&self.config.root)?;
+        let mut referenced = HashSet::new();
         for manifest_digest in manifest_digests {
-            if manifest_digest == digest {
-                return Ok(true);
-            }
-            let manifest = self.load_manifest(manifest_digest)?;
+            referenced.insert(manifest_digest);
+            let (_, manifest) = self.load_manifest_with_bytes(&archive_root, manifest_digest)?;
             let genetic = &manifest.genetic;
-            if genetic.genome_asset.digest == digest
-                || genetic
-                    .composite_genome_asset
-                    .as_ref()
-                    .is_some_and(|asset| asset.digest == digest)
-                || genetic
-                    .foundation_asset
-                    .as_ref()
-                    .is_some_and(|asset| asset.digest == digest)
-                || manifest.life.as_ref().is_some_and(|life| {
-                    life.statistics_asset.digest == digest
-                        || matches!(
-                            &life.checkpoint,
-                            ArchiveCheckpointDisposition::Stored(reference)
-                                if reference.digest == digest
-                        )
-                })
-            {
-                return Ok(true);
+            referenced.insert(genetic.genome_asset.digest);
+            if let Some(asset) = &genetic.composite_genome_asset {
+                referenced.insert(asset.digest);
+            }
+            if let Some(asset) = &genetic.foundation_asset {
+                referenced.insert(asset.digest);
+            }
+            if let Some(life) = &manifest.life {
+                referenced.insert(life.statistics_asset.digest);
+                if let ArchiveCheckpointDisposition::Stored(checkpoint) = &life.checkpoint {
+                    referenced.insert(checkpoint.digest);
+                    referenced.extend(checkpoint.pages.iter().map(|page| page.digest));
+                }
             }
         }
-        Ok(false)
+        Ok(referenced)
     }
 
     fn prepare_composite_birth_item(
@@ -1222,18 +1216,15 @@ impl LineageLibrary {
     fn archive_birth_internal(
         &mut self,
         input: GeneticArchiveInput<'_>,
-        composite_genome: Option<&CreatureGenome>,
     ) -> Result<Blake3Digest, ArchiveError> {
         validate_run_id(input.source_run_id)?;
         input.organism_id.validate()?;
         input.genome.validate_contract()?;
+        let capacity = BrainCapacityClass::production_for_id(input.genome.brain_class_id)?;
+        input.phenotype.validate_against(&capacity)?;
+        validate_genetic_foundation_asset(input.phenotype, input.foundation_asset_bytes)?;
         let genome_bytes = serde_json::to_vec(input.genome)?;
         let genome_asset = self.write_asset(ArchiveAssetKind::Genome, &genome_bytes)?;
-        let composite_genome_asset = composite_genome
-            .map(|genome| serde_json::to_vec(genome))
-            .transpose()?
-            .map(|bytes| self.write_asset(ArchiveAssetKind::CompositeGenome, &bytes))
-            .transpose()?;
         let foundation_asset = input
             .foundation_asset_bytes
             .map(|bytes| self.write_asset(ArchiveAssetKind::Foundation, bytes))
@@ -1259,7 +1250,7 @@ impl LineageLibrary {
                 language_codebook_id: language.id(),
                 language_codebook_digest: language.canonical_digest(),
                 genome_asset,
-                composite_genome_asset,
+                composite_genome_asset: None,
                 foundation_asset,
             },
             previous_manifest_digest: None,
@@ -1284,6 +1275,15 @@ impl LineageLibrary {
         if birth.life.is_some() || birth.previous_manifest_digest.is_some() {
             return Err(ArchiveError::Integrity(
                 "life archive must extend an immutable birth manifest".to_string(),
+            ));
+        }
+        let statistics = serde_json::from_slice::<PassiveLifeStatistics>(input.statistics_bytes)?;
+        statistics.validate_contract()?;
+        if statistics.organism_id() != birth.genetic.organism_id
+            || statistics.death_tick() != Some(input.death_tick)
+        {
+            return Err(ArchiveError::Integrity(
+                "life statistics identity does not match the birth manifest".to_string(),
             ));
         }
         let statistics_asset =
@@ -1585,7 +1585,8 @@ impl LineageLibrary {
     pub fn life_manifest_digests(&self) -> Result<Vec<Blake3Digest>, ArchiveError> {
         let mut statement = self.connection.prepare(
             "SELECT digest FROM manifests WHERE is_life=1 \
-             ORDER BY source_run_id, organism_id, rowid",
+             ORDER BY source_run_id,length(organism_id),organism_id,\
+                      length(death_tick),death_tick,digest",
         )?;
         let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
         rows.map(|row| parse_digest_hex(&row?)).collect()
@@ -1596,8 +1597,9 @@ impl LineageLibrary {
     /// through their immutable genetic archive.
     pub fn latest_manifest_digests(&self) -> Result<Vec<Blake3Digest>, ArchiveError> {
         let mut statement = self.connection.prepare(
-            "SELECT digest,source_run_id,organism_id,is_life,rowid FROM manifests \
-             ORDER BY source_run_id,organism_id,is_life DESC,rowid DESC",
+            "SELECT digest,source_run_id,organism_id FROM manifests \
+             ORDER BY source_run_id,length(organism_id),organism_id,is_life DESC,\
+                      length(COALESCE(death_tick,'')) DESC,death_tick DESC,digest DESC",
         )?;
         let rows = statement.query_map([], |row| {
             Ok((
@@ -1618,14 +1620,14 @@ impl LineageLibrary {
     }
 
     pub fn rebuild_index(&mut self) -> Result<(), ArchiveError> {
-        let transaction = self.connection.transaction()?;
-        transaction.execute("DELETE FROM checkpoints", [])?;
-        transaction.execute("DELETE FROM manifests", [])?;
         let mut manifests = fs::read_dir(self.config.root.join("manifests"))?
-            .filter_map(Result::ok)
-            .filter(|entry| entry.path().extension().and_then(|ext| ext.to_str()) == Some("json"))
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, std::io::Error>>()?;
+        manifests
+            .retain(|entry| entry.path().extension().and_then(|ext| ext.to_str()) == Some("json"));
         manifests.sort_by_key(|entry| entry.file_name());
+        let transaction = self.connection.transaction()?;
+        transaction.execute("DELETE FROM checkpoint_manifests", [])?;
+        transaction.execute("DELETE FROM manifests", [])?;
         for entry in manifests {
             let path = entry.path();
             let bytes = fs::read(&path)?;
@@ -1641,6 +1643,7 @@ impl LineageLibrary {
             }
             let manifest = serde_json::from_slice::<CreatureArchiveManifest>(&bytes)?;
             manifest.validate_contract()?;
+            validate_run_id(&manifest.genetic.source_run_id)?;
             index_manifest_transaction(&transaction, digest, &manifest)?;
         }
         transaction.commit()?;
@@ -1662,7 +1665,8 @@ impl LineageLibrary {
         organism_id.validate()?;
         let mut statement = self.connection.prepare(
             "SELECT digest FROM manifests WHERE source_run_id=?1 AND organism_id=?2 \
-             ORDER BY is_life DESC, rowid DESC LIMIT 1",
+             ORDER BY is_life DESC,length(COALESCE(death_tick,'')) DESC,\
+                      death_tick DESC,digest DESC LIMIT 1",
         )?;
         let mut rows = statement.query(params![source_run_id, organism_id.raw().to_string()])?;
         rows.next()?
@@ -1738,7 +1742,8 @@ impl LineageLibrary {
         };
         if let Some(limit) = count_limit {
             let count: u32 = self.connection.query_row(
-                "SELECT COUNT(*) FROM checkpoints WHERE source_run_id=?1 AND retention=?2",
+                "SELECT COUNT(*) FROM checkpoint_manifests \
+                 WHERE source_run_id=?1 AND retention=?2",
                 params![source_run_id, retention_slug(retention)],
                 |row| row.get(0),
             )?;
@@ -1765,25 +1770,33 @@ impl LineageLibrary {
             .iter()
             .map(|page| u64::from(page.compressed_bytes))
             .sum::<u64>();
-        if retention != ArchiveCheckpointRetention::Pinned {
-            let used: u64 = self.connection.query_row(
-                "SELECT COALESCE(SUM(compressed_bytes),0) FROM checkpoints",
-                [],
-                |row| row.get(0),
-            )?;
-            if used.saturating_add(total_compressed_bytes) > self.config.full_state_quota_bytes {
-                return Ok(ArchiveCheckpointDisposition::DowngradedToGeneticOnly {
-                    reason: "full-state quota reached".to_string(),
-                });
-            }
-        }
-
         let digest = digest_bytes(bytes);
         let destination = self
             .config
             .root
             .join("checkpoints")
             .join(digest_hex(digest));
+        if retention != ArchiveCheckpointRetention::Pinned {
+            let used: u64 = self.connection.query_row(
+                "SELECT COALESCE(SUM(compressed_bytes),0) FROM (\
+                   SELECT digest,MAX(compressed_bytes) AS compressed_bytes \
+                   FROM checkpoint_manifests GROUP BY digest\
+                 )",
+                [],
+                |row| row.get(0),
+            )?;
+            let additional_bytes = if destination.exists() {
+                0
+            } else {
+                total_compressed_bytes
+            };
+            if used.saturating_add(additional_bytes) > self.config.full_state_quota_bytes {
+                return Ok(ArchiveCheckpointDisposition::DowngradedToGeneticOnly {
+                    reason: "full-state quota reached".to_string(),
+                });
+            }
+        }
+
         if !destination.exists() {
             let staged = self.config.root.join("staging").join(format!(
                 "checkpoint-{}-{}-{}",
@@ -1890,15 +1903,20 @@ fn collect_target_observations(
         .collect::<Vec<_>>();
     let sorted_indexed = sorted_indexed_observations(indexed_by_digest);
 
-    for (index, (source_run_id, organism_id)) in target_keys.iter().enumerate() {
-        targets[index].indexed_manifests = sorted_indexed
-            .iter()
-            .filter(|observation| {
-                observation.manifest.genetic.source_run_id == *source_run_id
-                    && observation.manifest.genetic.organism_id == *organism_id
-            })
-            .cloned()
-            .collect();
+    let mut indexed_targets = HashMap::<_, Vec<_>>::new();
+    for observation in sorted_indexed {
+        indexed_targets
+            .entry((
+                observation.manifest.genetic.source_run_id.clone(),
+                observation.manifest.genetic.organism_id,
+            ))
+            .or_default()
+            .push(observation);
+    }
+    for target in &mut targets {
+        target.indexed_manifests = indexed_targets
+            .remove(&(target.source_run_id.clone(), target.organism_id))
+            .unwrap_or_default();
     }
 
     for existing in existing_manifest_files {
@@ -2542,6 +2560,15 @@ fn cleanup_failed_composite_batch(
     created_directories: &[PathBuf],
 ) -> Result<(), ArchiveError> {
     let mut failures = Vec::new();
+    let referenced_digests = match library.indexed_archive_digests() {
+        Ok(digests) => Some(digests),
+        Err(error) => {
+            failures.push(format!(
+                "could not inspect committed archive references: {error}"
+            ));
+            None
+        }
+    };
     for final_file in new_final_files.iter().rev() {
         let path = match revalidate_archive_deletion_target(archive_root, &final_file.path) {
             Ok(Some(path)) => path,
@@ -2577,16 +2604,11 @@ fn cleanup_failed_composite_batch(
             failures.push(format!("preserved changed final path {}", path.display()));
             continue;
         }
-        match library.archive_digest_is_referenced(final_file.digest) {
-            Ok(true) => continue,
-            Ok(false) => {}
-            Err(error) => {
-                failures.push(format!(
-                    "could not prove ownership of {}: {error}",
-                    final_file.path.display()
-                ));
-                continue;
-            }
+        let Some(referenced_digests) = &referenced_digests else {
+            continue;
+        };
+        if referenced_digests.contains(&final_file.digest) {
+            continue;
         }
         let delete_path = match revalidate_archive_deletion_target(archive_root, &path) {
             Ok(Some(path)) => path,
@@ -3010,6 +3032,39 @@ fn validate_foundation_identity(
     Ok(())
 }
 
+fn validate_genetic_foundation_asset(
+    phenotype: &BrainPhenotype,
+    foundation_asset_bytes: Option<&[u8]>,
+) -> Result<(), ArchiveError> {
+    let abi = phenotype.foundation_abi();
+    match (foundation_asset_bytes, abi.foundation_payload_digest()) {
+        (None, None) => Ok(()),
+        (Some(bytes), Some(expected_digest)) => {
+            let foundation = FoundationWeightAsset::decode_canonical(bytes)?;
+            if foundation.encode_canonical()? != bytes {
+                return Err(ArchiveError::Integrity(
+                    "genetic birth foundation bytes are not canonical".to_string(),
+                ));
+            }
+            foundation.validate_against(phenotype)?;
+            let manifest = foundation.manifest();
+            if abi.foundation_id() != Some(manifest.foundation_id())
+                || abi.foundation_version() != Some(manifest.foundation_version())
+                || abi.compatibility_family_id() != Some(manifest.compatibility_family_id())
+                || foundation.digest() != expected_digest
+            {
+                return Err(ArchiveError::Integrity(
+                    "genetic birth foundation provenance does not match phenotype ABI".to_string(),
+                ));
+            }
+            Ok(())
+        }
+        _ => Err(ArchiveError::Integrity(
+            "genetic birth foundation bytes do not match phenotype ABI".to_string(),
+        )),
+    }
+}
+
 fn checked_byte_len(length: usize) -> Result<u64, ArchiveError> {
     u64::try_from(length)
         .map_err(|_| ArchiveError::Integrity("archive byte count does not fit u64".to_string()))
@@ -3370,13 +3425,16 @@ fn open_index(path: &Path) -> Result<Connection, ArchiveError> {
            is_life INTEGER NOT NULL,
            death_tick TEXT
          );
-         CREATE TABLE IF NOT EXISTS checkpoints(
-           digest TEXT PRIMARY KEY,
+         CREATE TABLE IF NOT EXISTS checkpoint_manifests(
+           digest TEXT NOT NULL,
            source_run_id TEXT NOT NULL,
            retention TEXT NOT NULL,
            compressed_bytes INTEGER NOT NULL,
-           manifest_digest TEXT NOT NULL
-         );",
+           manifest_digest TEXT NOT NULL,
+           PRIMARY KEY(digest,manifest_digest)
+         );
+         CREATE INDEX IF NOT EXISTS checkpoint_manifests_by_run_retention
+           ON checkpoint_manifests(source_run_id,retention);",
     )?;
     Ok(connection)
 }
@@ -3407,7 +3465,7 @@ fn index_manifest_transaction(
     }) = &manifest.life
     {
         transaction.execute(
-            "INSERT OR REPLACE INTO checkpoints(digest,source_run_id,retention,compressed_bytes,manifest_digest) \
+            "INSERT OR REPLACE INTO checkpoint_manifests(digest,source_run_id,retention,compressed_bytes,manifest_digest) \
              VALUES(?1,?2,?3,?4,?5)",
             params![
                 digest_hex(reference.digest),
