@@ -1,4 +1,5 @@
-use serde::{Deserialize, Serialize};
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer, Serialize};
 use std::ops::Range;
 
 use crate::{validate_finite, ScaffoldContractError};
@@ -7,7 +8,7 @@ pub const MAX_DENDRITIC_INPUTS: usize = 32;
 pub const MAX_DENDRITIC_BRANCHES: usize = 4096;
 pub const MAX_DENDRITIC_BRANCHES_PER_NEURON: usize = 4;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct DendriticInputRef {
     pub source: u32,
     pub weight: f32,
@@ -20,12 +21,49 @@ impl DendriticInputRef {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+impl<'de> Deserialize<'de> for DendriticInputRef {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            source: u32,
+            weight: f32,
+        }
+
+        let wire = Wire::deserialize(deserializer)?;
+        Self::new(wire.source, wire.weight).map_err(D::Error::custom)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct DendriticBranch {
     pub target: u32,
     pub threshold: f32,
     pub output_gain: f32,
     pub inputs: Vec<DendriticInputRef>,
+}
+
+impl<'de> Deserialize<'de> for DendriticBranch {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            target: u32,
+            threshold: f32,
+            output_gain: f32,
+            inputs: Vec<DendriticInputRef>,
+        }
+
+        let wire = Wire::deserialize(deserializer)?;
+        Self::new(wire.target, wire.threshold, wire.output_gain, wire.inputs)
+            .map_err(D::Error::custom)
+    }
 }
 
 impl DendriticBranch {
@@ -77,9 +115,29 @@ impl DendriticBranch {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct DendriticBranchSet {
     branches: Vec<DendriticBranch>,
+}
+
+impl<'de> Deserialize<'de> for DendriticBranchSet {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            branches: Vec<DendriticBranch>,
+        }
+
+        let wire = Wire::deserialize(deserializer)?;
+        let canonical = Self::new(wire.branches.clone()).map_err(D::Error::custom)?;
+        if canonical.branches != wire.branches {
+            return Err(D::Error::custom("dendritic branches are not canonical"));
+        }
+        Ok(canonical)
+    }
 }
 
 impl DendriticBranchSet {
@@ -109,6 +167,21 @@ impl DendriticBranchSet {
 
     pub fn branches(&self) -> &[DendriticBranch] {
         &self.branches
+    }
+
+    pub fn validate_for_neuron_count(
+        &self,
+        neuron_count: u32,
+    ) -> Result<(), ScaffoldContractError> {
+        let neuron_count = usize::try_from(neuron_count)
+            .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
+        if neuron_count == 0 {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        for branch in &self.branches {
+            branch.validate_for_shape(neuron_count, neuron_count)?;
+        }
+        Ok(())
     }
 
     /// Returns the stable branch span for one target without adding derived
@@ -230,5 +303,36 @@ mod tests {
         assert_eq!(branches.target_span(3), 1..1);
         assert_eq!(branches.target_span(5), 1..3);
         assert_eq!(branches.branches()[branches.target_span(5)].len(), 2);
+    }
+
+    #[test]
+    fn deserialization_rejects_branch_sets_that_bypass_constructor_bounds() {
+        let malformed = serde_json::json!({
+            "branches": [{
+                "target": 0,
+                "threshold": 0.0,
+                "output_gain": 1.0,
+                "inputs": []
+            }]
+        });
+
+        assert!(serde_json::from_value::<DendriticBranchSet>(malformed).is_err());
+    }
+
+    #[test]
+    fn neuron_count_validation_rejects_out_of_range_sources_and_targets() {
+        let branches = DendriticBranchSet::new(vec![DendriticBranch::new(
+            4,
+            0.0,
+            1.0,
+            vec![DendriticInputRef::new(5, 1.0).unwrap()],
+        )
+        .unwrap()])
+        .unwrap();
+
+        assert_eq!(
+            branches.validate_for_neuron_count(5),
+            Err(ScaffoldContractError::InvalidSparseProjectionSchema)
+        );
     }
 }

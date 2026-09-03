@@ -1,4 +1,4 @@
-//! Temporary explicit `HeuristicBaseline` comparison runtime in pure Rust.
+//! Explicit `HeuristicBaseline` comparison runtime in pure Rust.
 //!
 //! This separately labelled baseline never shadows, gates, or replaces the
 //! GPU-authoritative production neural policy. It orchestrates existing core
@@ -19,12 +19,12 @@ use crate::{
     HomeostaticSnapshot, Intensity, LobeKind, MemoryBank, MemoryBankConfig,
     MemoryExpectancySnapshot, MemoryId, NeuralActivationConfig, NeuralDiagnostics,
     NeuralProjectionSchema, NeuralUpdateReport, NormalizedScalar, OjaUpdateConfig, OrganismId,
-    PackedExperienceRecord, PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, Pose,
-    PostActionOutcome, PreActionSnapshot, ScaffoldContractError, SensorProfile, SensorySnapshot,
-    SignedValence, SleepConsolidationConfig, SleepConsolidationReport, SleepConsolidator,
-    SleepController, SleepPhase, SleepState, SleepTransition, SleepTrigger, StructuralEditBatch,
-    Tick, TopologicalMap, TopologicalMapConfig, TopologySidecar, TopologyUpdate, Validate, Vec3f,
-    Velocity, WeightSplitContract,
+    PackedExperienceRecord, PerceptionFrame, PhysicalActionOutcome, Pose, PostActionOutcome,
+    PreActionSnapshot, ScaffoldContractError, SensorProfile, SensorySnapshot, SignedValence,
+    SleepConsolidationConfig, SleepConsolidationReport, SleepConsolidator, SleepController,
+    SleepPhase, SleepState, SleepTransition, SleepTrigger, StructuralEditBatch, Tick,
+    TopologicalMap, TopologicalMapConfig, TopologySidecar, TopologyUpdate, Validate, Velocity,
+    WeightSplitContract,
 };
 
 const DEFAULT_MEMORY_CAPACITY: usize = 64;
@@ -1053,17 +1053,4 @@ fn fallible<T>(
         diagnostics.observe_error(&error);
         (error, *diagnostics)
     })
-}
-
-#[allow(dead_code)]
-fn idle_physical_outcome() -> Result<PhysicalActionOutcome, ScaffoldContractError> {
-    let outcome = PhysicalActionOutcome {
-        contact: PhysicalContactKind::None,
-        target_entity: None,
-        displacement: Vec3f::ZERO,
-        collision_normal: None,
-        energy_cost: NormalizedScalar::new(0.0)?,
-    };
-    outcome.validate_contract()?;
-    Ok(outcome)
 }
