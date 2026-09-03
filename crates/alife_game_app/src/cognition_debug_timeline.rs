@@ -428,6 +428,8 @@ pub fn cognition_debug_timeline_panel_from_summaries(
         mutation_controls_enabled: false,
         panel_notes: vec![
             "timeline is derived from sealed ExperiencePatch summaries only".to_string(),
+            "proposal lines are a bounded heuristic fixture, not production neural arbitration"
+                .to_string(),
             "memory and topology lines are bias metadata, not action sources".to_string(),
             "GPU diagnostics are boundary-scoped and may report typed unavailability".to_string(),
         ],

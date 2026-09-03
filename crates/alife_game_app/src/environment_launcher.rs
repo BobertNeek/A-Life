@@ -282,7 +282,7 @@ pub fn run_environment_launcher_smoke(
         food_count: visible.kind_count(WorldObjectKind::Food),
         hazard_count: visible.kind_count(WorldObjectKind::Hazard),
         obstacle_count: visible.kind_count(WorldObjectKind::Obstacle),
-        player_visible_error_sample: "Unknown scenario. Pick one of the listed alpha scenarios."
+        player_visible_error_sample: "Unknown scenario. Pick one of the listed environments."
             .to_string(),
     })
 }
