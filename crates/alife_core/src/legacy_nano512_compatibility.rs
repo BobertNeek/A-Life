@@ -346,7 +346,6 @@ impl MigratedN2048FoundationV1Descriptor {
     pub const fn sensor_profile(&self) -> SensorProfile {
         self.source_sensor_profile
     }
-
     pub const fn runtime_address_map_digest(&self) -> Blake3Digest {
         self.runtime_address_map_digest
     }
@@ -613,6 +612,10 @@ impl LegacyNano512CompatibilityAbiDescriptor {
         self.source_sensor_profile
     }
 
+    pub(crate) const fn runtime_layout_digest(&self) -> Blake3Digest {
+        self.runtime_layout_digest
+    }
+
     pub(crate) fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         let expected_asset = FoundationWeightAsset::builtin_nano512_v1(self.source_sensor_profile)?;
         let manifest = expected_asset.manifest();
@@ -644,24 +647,16 @@ impl LegacyNano512CompatibilityAbiDescriptor {
         phenotype: &BrainPhenotype,
     ) -> Result<(), ScaffoldContractError> {
         self.validate_contract()?;
-        let expected_asset = FoundationWeightAsset::builtin_nano512_v1(self.source_sensor_profile)?;
         if phenotype.brain_class_id() != BrainCapacityClass::N512_ID
             || phenotype.sensor_profile() != self.source_sensor_profile
             || phenotype.lobe_layout() != &legacy_nano512_runtime_layout()?
             || phenotype.synapses().len() != self.source_weight_asset.weight_count() as usize
-            || phenotype.foundation_abi().canonical_v2().is_some()
-            || phenotype
-                .synapses()
-                .iter()
-                .zip(expected_asset.weights())
-                .any(|(synapse, weight)| synapse.genetic_weight().to_bits() != weight.to_bits())
+            || phenotype.legacy_foundation_compatibility_abi() != Some(self)
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
-        let (endpoint_digest, graph_weight_digest) = compatibility_graph_digests(phenotype)?;
-        if endpoint_digest != EXPECTED_ENDPOINT_DIGEST
-            || graph_weight_digest != EXPECTED_GRAPH_WEIGHT_DIGEST
-        {
+        let (endpoint_digest, _) = compatibility_graph_digests(phenotype)?;
+        if endpoint_digest != EXPECTED_ENDPOINT_DIGEST {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
         Ok(())

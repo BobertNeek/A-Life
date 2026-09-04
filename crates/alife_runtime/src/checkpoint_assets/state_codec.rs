@@ -2,9 +2,9 @@
 
 use alife_core::{
     BoundedReplayBatch, BrainActivityPolicyV1, BrainCapacityClass, BrainPhenotype,
-    ConsolidationState, ExperiencePatch, ExperiencePatchBuilder, FoundationWeightAsset,
-    LanguageGroundingLedger, LegacyNano512CompatibilityReceipt, MemorySidecarState,
-    NeuralReceptorFrame, OrganismId, PassiveLifeStatistics, PhenotypeCompiler,
+    ConsolidationState, ExperiencePatch, ExperiencePatchBuilder, FoundationWeightApplication,
+    FoundationWeightAsset, LanguageGroundingLedger, LegacyNano512CompatibilityReceipt,
+    MemorySidecarState, NeuralReceptorFrame, OrganismId, PassiveLifeStatistics, PhenotypeCompiler,
     PhenotypeCompilerInputs, PortableMemoryBankAssetV2, PortableTopologySidecarAssetV1,
     ScaffoldContractError, SensorProfileIdentity, SensoryAbiVersion, SleepState, Tick,
     TopologySidecar, Validate,
@@ -47,6 +47,29 @@ use super::{
 
 const PENDING_TRANSACTION_SCHEMA_VERSION: u16 = 1;
 const RUNTIME_REPLAY_STATE_SCHEMA_VERSION: u16 = 1;
+
+fn validate_nano512_foundation_authority(
+    phenotype: &BrainPhenotype,
+    compiler_inputs: &PhenotypeCompilerInputs,
+    exact_receipt: Option<&LegacyNano512CompatibilityReceipt>,
+) -> Result<(), ScaffoldContractError> {
+    match (
+        phenotype.legacy_foundation_compatibility_abi(),
+        compiler_inputs.foundation_weight_application(),
+        exact_receipt,
+    ) {
+        (None, None, None) => Ok(()),
+        (Some(_), None, Some(receipt)) => {
+            let asset = FoundationWeightAsset::builtin_nano512_v1(phenotype.sensor_profile())?;
+            receipt.validate_against(phenotype, &asset)
+        }
+        (Some(_), Some(FoundationWeightApplication::Nano512FounderOverlayV1 { .. }), None) => {
+            let asset = FoundationWeightAsset::builtin_nano512_v1(phenotype.sensor_profile())?;
+            asset.validate_against(phenotype)
+        }
+        _ => Err(ScaffoldContractError::PhenotypeCompile),
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct PortableRuntimeReplayStateV1 {
@@ -704,17 +727,11 @@ impl GpuCheckpointAssetStore {
         if recompiled != *phenotype || serde_json::to_vec(&recompiled)? != phenotype_bytes {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
-        match (
-            phenotype.legacy_foundation_compatibility_abi(),
+        validate_nano512_foundation_authority(
+            phenotype,
+            compiler_inputs,
             sidecars.legacy_nano512_compatibility_receipt,
-        ) {
-            (Some(_), Some(receipt)) => {
-                let asset = FoundationWeightAsset::builtin_nano512_v1(phenotype.sensor_profile())?;
-                receipt.validate_against(phenotype, &asset)?;
-            }
-            (None, None) => {}
-            _ => return Err(ScaffoldContractError::PhenotypeCompile.into()),
-        }
+        )?;
         if phenotype.phenotype_hash() != handle.phenotype_hash()
             || handle.class_id() != phenotype.brain_class_id()
             || handle.organism_id().raw() == 0
@@ -1108,17 +1125,11 @@ impl GpuCheckpointAssetStore {
         {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
-        match (
-            phenotype.legacy_foundation_compatibility_abi(),
+        validate_nano512_foundation_authority(
+            &phenotype,
+            &compiler_inputs,
             state.legacy_nano512_compatibility_receipt.as_ref(),
-        ) {
-            (Some(_), Some(receipt)) => {
-                let asset = FoundationWeightAsset::builtin_nano512_v1(phenotype.sensor_profile())?;
-                receipt.validate_against(&phenotype, &asset)?;
-            }
-            (None, None) => {}
-            _ => return Err(ScaffoldContractError::PhenotypeCompile.into()),
-        }
+        )?;
         let phenotype_profile = SensorProfileIdentity {
             profile_id: phenotype.sensor_profile().into(),
             profile_schema_version: 1,

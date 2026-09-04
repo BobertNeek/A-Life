@@ -45,12 +45,11 @@ fn valid_alternate_same_profile_foundation(sensor_profile: SensorProfile) -> Fou
         Tick::ZERO,
         NormalizedScalar::new(1.0).unwrap(),
     );
-    let coordinate = PhenotypeCompiler::compile_from_foundation_asset(
+    let coordinate = PhenotypeCompiler::compile(
         &coordinate_genome,
         &capacity,
         &coordinate_development,
         sensor_profile,
-        &builtin,
     )
     .unwrap();
     let mut weights = coordinate

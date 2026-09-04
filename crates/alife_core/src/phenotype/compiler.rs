@@ -7,6 +7,7 @@ use crate::{
     SensorProfile,
 };
 
+use super::FoundationWeightApplication;
 use super::{BrainCapacityClass, BrainPhenotype, PhenotypeCompilerInputs};
 
 pub struct PhenotypeCompiler;
@@ -42,11 +43,21 @@ impl PhenotypeCompiler {
             if descriptor.source_weight_asset() != foundation.asset_ref() {
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }
-            return super::construction::compile_with_foundation_asset(
-                inputs,
-                capacity,
-                &foundation,
-            );
+            return match inputs.foundation_weight_application() {
+                None => super::construction::compile_with_foundation_asset(
+                    inputs,
+                    capacity,
+                    &foundation,
+                ),
+                Some(FoundationWeightApplication::Nano512FounderOverlayV1 { seed }) => {
+                    super::construction::compile_with_foundation_asset_and_overlay_seed(
+                        inputs,
+                        capacity,
+                        &foundation,
+                        seed,
+                    )
+                }
+            };
         }
         if let Some(descriptor) = inputs.migrated_n2048_foundation_v1() {
             let foundation = FoundationWeightAsset::builtin_n2048_v1(descriptor.sensor_profile())?;
@@ -177,52 +188,5 @@ impl PhenotypeCompiler {
         Ok(LegacyNano512CompatibilityAdmission::new(
             phenotype, inputs, receipt,
         ))
-    }
-
-    pub(super) fn compile_from_foundation_asset_with_overlay_seed(
-        genome: &BrainGenome,
-        capacity: &BrainCapacityClass,
-        development: &DevelopmentState,
-        sensor_profile: SensorProfile,
-        foundation: &FoundationWeightAsset,
-        overlay_seed: u64,
-    ) -> Result<BrainPhenotype, ScaffoldContractError> {
-        if overlay_seed == 0 {
-            return Err(ScaffoldContractError::PhenotypeCompile);
-        }
-        let inputs = if capacity.id() == BrainCapacityClass::N2048_ID
-            && MigratedN2048FoundationV1Descriptor::recognizes_source_asset(
-                sensor_profile,
-                foundation,
-            )? {
-            let descriptor = MigratedN2048FoundationV1Descriptor::for_asset(
-                capacity,
-                sensor_profile,
-                foundation,
-            )?;
-            PhenotypeCompilerInputs::try_new_with_migrated_n2048_foundation_v1(
-                genome.clone(),
-                capacity,
-                development.clone(),
-                sensor_profile,
-                descriptor,
-            )?
-        } else {
-            let foundation_abi =
-                FoundationAbiBinding::canonical_for_foundation_asset(capacity, foundation)?;
-            PhenotypeCompilerInputs::try_new_with_foundation_abi(
-                genome.clone(),
-                capacity,
-                development.clone(),
-                sensor_profile,
-                foundation_abi,
-            )?
-        };
-        super::construction::compile_with_foundation_asset_and_overlay_seed(
-            &inputs,
-            capacity,
-            foundation,
-            overlay_seed,
-        )
     }
 }

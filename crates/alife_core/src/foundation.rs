@@ -979,6 +979,12 @@ impl FoundationWeightAsset {
         if let Some(descriptor) = phenotype.migrated_n2048_foundation_v1() {
             descriptor.validate_source_asset(self)?;
             descriptor.validate_for_phenotype(phenotype)?;
+        } else if let Some(descriptor) = phenotype.legacy_foundation_compatibility_abi() {
+            descriptor.validate_contract()?;
+            if descriptor.source_weight_asset() != self.asset_ref() {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+            descriptor.validate_for_phenotype(phenotype)?;
         } else {
             self.manifest.validate_against(phenotype)?;
         }

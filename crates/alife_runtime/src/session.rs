@@ -1,6 +1,8 @@
 use std::ops::{Deref, DerefMut};
 
-use alife_core::{PhenotypeGrowthMigration, ScaffoldContractError, Tick};
+use alife_core::{
+    BrainPhenotype, OrganismId, PhenotypeGrowthMigration, ScaffoldContractError, Tick,
+};
 use alife_gpu_backend::{
     GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuClosedLoopBackend, GpuCuratedResidencyCohort,
     GpuCuratedResidencyOutcome, GpuResearchGrowthEquivalenceReceipt,
@@ -151,6 +153,8 @@ impl GpuSessionAuthority {
 pub struct GpuAuthoritativeSession {
     backend: GpuClosedLoopBackend,
     authority: GpuSessionAuthority,
+    #[cfg(feature = "gpu-tests")]
+    forced_admission_failures_remaining: u8,
 }
 
 impl GpuAuthoritativeSession {
@@ -158,6 +162,8 @@ impl GpuAuthoritativeSession {
         Self {
             backend,
             authority: GpuSessionAuthority::new(consumer),
+            #[cfg(feature = "gpu-tests")]
+            forced_admission_failures_remaining: 0,
         }
     }
 
@@ -203,6 +209,29 @@ impl GpuAuthoritativeSession {
         if *error == ScaffoldContractError::NeuralBackendUnavailable {
             self.fail_stop(GpuSessionFailStopCause::BackendUnavailable);
         }
+    }
+
+    pub fn insert_brain(
+        &mut self,
+        organism_id: OrganismId,
+        phenotype: BrainPhenotype,
+    ) -> Result<GpuBrainHandle, ScaffoldContractError> {
+        self.ensure_neural_actions_available()?;
+        #[cfg(feature = "gpu-tests")]
+        if self.forced_admission_failures_remaining > 0 {
+            self.forced_admission_failures_remaining -= 1;
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        let result = self.backend.insert_brain(organism_id, phenotype);
+        if let Err(error) = &result {
+            self.record_contract_failure(error);
+        }
+        result
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn force_admission_failures_for_test(&mut self, failure_count: u8) {
+        self.forced_admission_failures_remaining = failure_count;
     }
 
     /// Commits an already verified sealed growth handoff. Cognitive sidecars

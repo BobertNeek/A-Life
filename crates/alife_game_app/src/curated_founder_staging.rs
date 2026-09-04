@@ -1663,8 +1663,8 @@ mod tests {
         LineageLibraryConfig,
     };
     use alife_core::{
-        BiochemistryState, BrainCapacityClass, BrainScaleTier, FoundationGeneticIdentity,
-        FoundationWeightAsset, GenomeId, OrganismId, SensorProfile, Tick, Vec3f, WorldEntityId,
+        BrainCapacityClass, BrainScaleTier, FoundationGeneticIdentity, FoundationWeightAsset,
+        GenomeId, OrganismId, SensorProfile, Tick, Vec3f, WorldEntityId,
     };
     use alife_runtime::GpuDurableSaveManifest;
     use alife_world::{

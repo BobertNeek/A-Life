@@ -6,10 +6,10 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::{
     AlleleSide, Blake3Digest, BrainCapacityClass, BrainClassId, BrainGenome, BrainPhenotype,
     CanonicalDigestBuilder, ChromosomeKind, CreaturePhenotype, DevelopmentState,
-    FoundationAbiBinding, FoundationCompatibilityFamilyId, FoundationGeneticIdentity, FoundationId,
-    FoundationVersion, FoundationWeightAsset, GeneticLineageProvenance, GenomeId, LineageId,
-    MutationRecord, PhenotypeCompiler, PhenotypeCompilerInputs, PhenotypeHash,
-    ScaffoldContractError, SensorProfile, Tick, Validate,
+    FoundationAbiSelection, FoundationCompatibilityFamilyId, FoundationGeneticIdentity,
+    FoundationId, FoundationVersion, FoundationWeightAsset, GeneticLineageProvenance, GenomeId,
+    LegacyNano512CompatibilityAbiDescriptor, LineageId, MutationRecord, PhenotypeCompiler,
+    PhenotypeCompilerInputs, PhenotypeHash, ScaffoldContractError, SensorProfile, Tick, Validate,
 };
 
 const N512_PROJECTION_SCHEMA_VERSION: u16 = 1;
@@ -24,7 +24,7 @@ pub struct N512FrozenAbiRecipe {
     schema_version: u16,
     coordinate_genome: BrainGenome,
     coordinate_development_state: DevelopmentState,
-    foundation_abi: FoundationAbiBinding,
+    foundation_abi: FoundationAbiSelection,
     layout_digest: Blake3Digest,
     address_map_digest: Blake3Digest,
     decoder_digest: [u64; 4],
@@ -38,16 +38,17 @@ impl N512FrozenAbiRecipe {
         coordinate_development_state: DevelopmentState,
         compiled: &BrainPhenotype,
     ) -> Self {
-        let foundation_abi = compiled
-            .foundation_abi()
-            .canonical_v2()
-            .expect("frozen founder projection requires canonical foundation ABI");
+        let foundation_abi = compiled.foundation_abi().clone();
+        let descriptor = foundation_abi
+            .legacy_nano512_compatibility_v1()
+            .expect("Nano512 founder projection requires the explicit legacy ABI");
+        let layout_digest = descriptor.runtime_layout_digest();
         Self {
             schema_version: N512_PROJECTION_SCHEMA_VERSION,
             coordinate_genome,
             coordinate_development_state,
-            foundation_abi: foundation_abi.clone(),
-            layout_digest: foundation_abi.layout_digest(),
+            foundation_abi,
+            layout_digest,
             address_map_digest: compiled.persistent_address_map().digest(),
             decoder_digest: compiled.candidate_decoder().canonical_digest(),
             route_abi_digest: compiled.route_abi_digest(),
@@ -59,7 +60,7 @@ impl N512FrozenAbiRecipe {
         self.schema_version
     }
 
-    pub const fn foundation_abi(&self) -> &FoundationAbiBinding {
+    pub const fn foundation_abi(&self) -> &FoundationAbiSelection {
         &self.foundation_abi
     }
 
@@ -362,8 +363,12 @@ impl N512FounderFoundationProjection {
         let capacity = BrainCapacityClass::n512();
         validate_source(phenotype, &capacity)?;
         let foundation = canonical_builtin_foundation(sensor_profile, foundation)?;
-        let foundation_abi =
-            FoundationAbiBinding::canonical_for_foundation_asset(&capacity, &foundation)?;
+        let foundation_descriptor = LegacyNano512CompatibilityAbiDescriptor::for_asset(
+            &capacity,
+            sensor_profile,
+            &foundation,
+        )?;
+        let foundation_abi = FoundationAbiSelection::legacy_nano512(foundation_descriptor.clone());
         let runtime_development_state = phenotype.development_state_at(Tick::ZERO)?;
         let material = projection_material(
             &phenotype.brain_genome,
@@ -382,16 +387,16 @@ impl N512FounderFoundationProjection {
             Tick::ZERO,
             crate::NormalizedScalar::new(1.0)?,
         );
-        let compiled_phenotype =
-            PhenotypeCompiler::compile_from_foundation_asset_with_overlay_seed(
-                &coordinate_genome,
-                &capacity,
-                &coordinate_development_state,
-                sensor_profile,
-                &foundation,
-                material.overlay_seed,
-            )?;
-        foundation.validate_against(&compiled_phenotype)?;
+        let compiler_inputs = PhenotypeCompilerInputs::try_new_with_nano512_founder_overlay(
+            coordinate_genome.clone(),
+            &capacity,
+            coordinate_development_state.clone(),
+            sensor_profile,
+            foundation_descriptor.clone(),
+            material.overlay_seed,
+        )?;
+        let compiled_phenotype = PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)?;
+        foundation_descriptor.validate_for_phenotype(&compiled_phenotype)?;
         let frozen_abi = N512FrozenAbiRecipe::from_compiled(
             coordinate_genome,
             coordinate_development_state,
@@ -438,8 +443,7 @@ impl N512FounderFoundationProjection {
             || self.compiled_phenotype.sensor_profile() != self.receipt.sensor_profile()
             || self.overlay_seed != self.receipt.overlay_seed()
             || self.compiled_phenotype.phenotype_hash() != self.receipt.phenotype_hash()
-            || self.compiled_phenotype.foundation_abi().canonical_v2()
-                != Some(self.frozen_abi.foundation_abi())
+            || self.compiled_phenotype.foundation_abi() != self.frozen_abi.foundation_abi()
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
@@ -448,6 +452,12 @@ impl N512FounderFoundationProjection {
         self.frozen_abi
             .validate_against(&capacity, &self.compiled_phenotype)?;
         self.receipt.validate()?;
+        let compiler_inputs = self.compiler_inputs()?;
+        if PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)?
+            != self.compiled_phenotype
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
         if self.receipt.source_genome_id() != self.source_genome_id
             || self.receipt.lineage_id() != self.lineage_id
             || self.receipt.capacity_class_id() != capacity.id()
@@ -532,6 +542,22 @@ impl N512FounderFoundationProjection {
     pub const fn compiled_phenotype(&self) -> &BrainPhenotype {
         &self.compiled_phenotype
     }
+
+    pub fn compiler_inputs(&self) -> Result<PhenotypeCompilerInputs, ScaffoldContractError> {
+        let descriptor = self
+            .frozen_abi
+            .foundation_abi()
+            .legacy_nano512_compatibility_v1()
+            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+        PhenotypeCompilerInputs::try_new_with_nano512_founder_overlay(
+            self.frozen_abi.coordinate_genome().clone(),
+            &BrainCapacityClass::n512(),
+            self.frozen_abi.coordinate_development_state().clone(),
+            self.sensor_profile(),
+            descriptor.clone(),
+            self.overlay_seed,
+        )
+    }
 }
 
 impl N512FrozenAbiRecipe {
@@ -540,16 +566,16 @@ impl N512FrozenAbiRecipe {
         capacity: &BrainCapacityClass,
         compiled: &BrainPhenotype,
     ) -> Result<(), ScaffoldContractError> {
-        let compiled_foundation_abi = compiled
-            .foundation_abi()
-            .canonical_v2()
+        let compiled_foundation_abi = compiled.foundation_abi();
+        let descriptor = compiled_foundation_abi
+            .legacy_nano512_compatibility_v1()
             .ok_or(ScaffoldContractError::PhenotypeCompile)?;
         if self.schema_version != N512_PROJECTION_SCHEMA_VERSION
             || self.coordinate_genome.brain_class_id != capacity.id()
             || self.coordinate_development_state.genome_id != self.coordinate_genome.id
             || self.coordinate_development_state.maturation.raw() != 1.0
-            || self.foundation_abi != *compiled_foundation_abi
-            || self.layout_digest != compiled_foundation_abi.layout_digest()
+            || &self.foundation_abi != compiled_foundation_abi
+            || self.layout_digest != descriptor.runtime_layout_digest()
             || self.address_map_digest != compiled.persistent_address_map().digest()
             || self.decoder_digest != compiled.candidate_decoder().canonical_digest()
             || self.route_abi_digest != compiled.route_abi_digest()
@@ -557,7 +583,7 @@ impl N512FrozenAbiRecipe {
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
-        self.foundation_abi.validate_against(capacity)
+        descriptor.validate_contract()
     }
 }
 
@@ -585,13 +611,14 @@ fn canonical_frozen_abi(
         Tick::ZERO,
         crate::NormalizedScalar::new(1.0)?,
     );
-    let compiled = PhenotypeCompiler::compile_from_foundation_asset(
+    let admission = PhenotypeCompiler::compile_from_legacy_nano512_compatibility_asset(
         &coordinate_genome,
         &capacity,
         &coordinate_development_state,
         sensor_profile,
         &foundation,
     )?;
+    let (compiled, _) = admission.into_parts();
     Ok(N512FrozenAbiRecipe::from_compiled(
         coordinate_genome,
         coordinate_development_state,
@@ -615,9 +642,9 @@ fn projection_material(
     runtime_development_state: &DevelopmentState,
     capacity: &BrainCapacityClass,
     sensor_profile: SensorProfile,
-    foundation_abi: &FoundationAbiBinding,
+    foundation_abi: &FoundationAbiSelection,
 ) -> Result<ProjectionMaterial, ScaffoldContractError> {
-    let source_inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
+    let source_inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
         source_brain_genome.clone(),
         capacity,
         runtime_development_state.clone(),
@@ -638,8 +665,7 @@ fn projection_material(
     write_digest4(&mut digest, genetic_provenance_digest);
     write_digest4(&mut digest, runtime_development_digest);
     digest.write_u16(sensor_profile.raw());
-    digest.write_u64(foundation_abi.layout_id().0);
-    write_blake3(&mut digest, foundation_abi.layout_digest());
+    write_digest4(&mut digest, foundation_abi.selector_digest());
     write_blake3(
         &mut digest,
         foundation_abi

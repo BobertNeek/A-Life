@@ -31,7 +31,7 @@ pub use compiled::{
 pub use compiler::PhenotypeCompiler;
 pub use decoder::{AuxiliaryDecoderPlan, CandidateDecoderFamilyPlan, CandidateDecoderPlan};
 pub use encoder::{SensorEncoderAssignment, SensorEncoderPlan, SensorEncoderSourceGroup};
-pub use inputs::PhenotypeCompilerInputs;
+pub use inputs::{FoundationWeightApplication, PhenotypeCompilerInputs};
 pub use learning::{
     PlasticityReceptorPlan, ReplayCapturePlan, SleepConsolidationPlan, MAX_REPLAY_CAPTURE_SYNAPSES,
 };

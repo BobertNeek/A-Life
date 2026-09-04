@@ -527,7 +527,13 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
     let mut batch_query = app.world_mut().query::<&Fvr03ProductionVoxelTerrainBatch>();
     let batches = batch_query.iter(app.world()).copied().collect::<Vec<_>>();
     assert!(!batches.is_empty());
-    assert!(batches.len() <= materials.len());
+    assert!(
+        batches.len()
+            <= app
+                .world()
+                .resource::<Fvr11ProductionTerrainMaterialContract>()
+                .material_count
+    );
     assert_eq!(
         batches.iter().map(|batch| batch.tile_count).sum::<usize>(),
         scene.tile_mesh_count

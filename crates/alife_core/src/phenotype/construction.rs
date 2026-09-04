@@ -149,8 +149,30 @@ fn compile_inner(
             {
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }
-            for (synapse, weight) in synapses.iter_mut().zip(foundation.weights()) {
-                synapse.set_genetic_weight(*weight);
+            for (global_index, (synapse, weight)) in
+                synapses.iter_mut().zip(foundation.weights()).enumerate()
+            {
+                let Some(overlay_seed) = overlay_seed else {
+                    synapse.set_genetic_weight(*weight);
+                    continue;
+                };
+                let projection = projections
+                    .get(usize::from(synapse.route_index()))
+                    .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+                let delta = genome_weight_delta(overlay_seed, global_index as u32);
+                let mut composed = *weight + delta;
+                match projection.projection_type() {
+                    crate::ProjectionType::LateralInhibition if composed >= 0.0 => {
+                        composed = -0.000_1;
+                    }
+                    crate::ProjectionType::Homeostatic | crate::ProjectionType::MotorProposal
+                        if composed < 0.0 =>
+                    {
+                        composed = 0.000_1;
+                    }
+                    _ => {}
+                }
+                synapse.set_genetic_weight(composed);
             }
         } else {
             let coordinate_plan = BrainPhenotype::try_new(

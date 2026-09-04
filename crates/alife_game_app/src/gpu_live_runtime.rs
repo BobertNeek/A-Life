@@ -37,21 +37,21 @@ use alife_core::{
     ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState, DecisionSnapshot,
     DevelopmentState, EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId,
     FinalizedMemoryAttentionEvidence, FinalizedMemoryRecall, FoundationCompatibilityFamilyId,
-    FoundationGeneticIdentity, FoundationId, FoundationVersion, FoundationWeightAsset,
-    HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition, LanguageGroundingLedger,
-    LegacyNano512CompatibilityReceipt, LineageId, MemoryBankConfig, MemoryCompactionCheckpoint,
-    MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState, MemoryUpdateReceipt,
-    MotorChannel, MotorCommandBundle, N512FounderFoundationProjection, NeuralActionSelection,
-    NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame, NeuralReceptorEffects,
-    NeuralReceptorFrame, NeuralReceptorPhenotype, NormalizedScalar, OrganismId, PassiveLifeEvent,
-    PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft, PhenotypeCompiler,
-    PhenotypeCompilerInputs, PhysicalContactKind, PostActionOutcome, PreActionSnapshot,
-    PredictionTargetReceipt, PreparedMemoryRecall, ScaffoldContractError, SemanticStateVector,
-    SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SignedValence,
+    FoundationGeneticIdentity, FoundationId, FoundationVersion, FoundationWeightApplication,
+    FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition,
+    LanguageGroundingLedger, LegacyNano512CompatibilityReceipt, LineageId, MemoryBankConfig,
+    MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState,
+    MemoryUpdateReceipt, MotorChannel, MotorCommandBundle, N512FounderFoundationProjection,
+    NeuralActionSelection, NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame,
+    NeuralReceptorEffects, NeuralReceptorFrame, NeuralReceptorPhenotype, NormalizedScalar,
+    OrganismId, PassiveLifeEvent, PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft,
+    PhenotypeCompiler, PhenotypeCompilerInputs, PhysicalContactKind, PostActionOutcome,
+    PreActionSnapshot, PredictionTargetReceipt, PreparedMemoryRecall, ScaffoldContractError,
+    SemanticStateVector, SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SignedValence,
     SleepConsolidationConfig, SleepConsolidator, SleepPhase, SleepState, SleepTransition, Tick,
     TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind,
-    Validate, Vec3f, WorldEntityId, MAX_ACTIVE_CONCEPTS, MAX_ACTIVE_GAPS,
-    MAX_CONTEXT_MEMORY_EXPECTANCIES,
+    Validate, Vec3f, WorldEntityId, LEGACY_NANO512_V1_COORDINATE_SEED, MAX_ACTIVE_CONCEPTS,
+    MAX_ACTIVE_GAPS, MAX_CONTEXT_MEMORY_EXPECTANCIES,
 };
 #[cfg(feature = "gpu-tests")]
 use alife_gpu_backend::GpuExactPopulationCaptureMetricsV1;
@@ -329,13 +329,17 @@ fn resident_authority_plan_from_record(
     let (phenotype, compiler_inputs, legacy_nano512_compatibility_receipt) =
         if selects_legacy_nano512 {
             let foundation = FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?;
-            let (phenotype, compiler_inputs, receipt) =
-                PhenotypeCompiler::compile_fixed_legacy_nano512_compatibility_asset(
-                    sensor_profile,
-                    &foundation,
-                )?
-                .into_runtime_parts();
-            (phenotype, compiler_inputs, Some(receipt))
+            let projection = N512FounderFoundationProjection::compile(
+                &admission.phenotype,
+                sensor_profile,
+                &foundation,
+            )?;
+            let compiler_inputs = projection.compiler_inputs()?;
+            (
+                projection.compiled_phenotype().clone(),
+                compiler_inputs,
+                None,
+            )
         } else {
             let (phenotype, compiler_inputs) = compile_gpu_components_from_genome(
                 genome.clone(),
@@ -484,14 +488,57 @@ fn compare_resident_checkpoint_metadata(
     if checkpoint.capacity_class_id != plan.phenotype.brain_class_id()
         || checkpoint.phenotype_hash != plan.phenotype.phenotype_hash()
         || checkpoint.phenotype != &plan.phenotype
-        || checkpoint.compiler_inputs.genome() != plan.compiler_inputs.genome()
-        || checkpoint.compiler_inputs.development() != plan.compiler_inputs.development()
-        || checkpoint.compiler_inputs.sensor_profile() != plan.compiler_inputs.sensor_profile()
+        || checkpoint.compiler_inputs != &plan.compiler_inputs
         || checkpoint.legacy_nano512_compatibility_receipt
             != plan.legacy_nano512_compatibility_receipt.as_ref()
     {
         return Err(ScaffoldContractError::PhenotypeCompile);
     }
+    Ok(())
+}
+
+fn adopt_exact_legacy_nano512_checkpoint(
+    plan: &mut ResidentAuthorityPlan,
+    checkpoint: ResidentCheckpointMetadata<'_>,
+) -> Result<(), ScaffoldContractError> {
+    let exact_receipt = checkpoint
+        .legacy_nano512_compatibility_receipt
+        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+    if checkpoint.organism_id != plan.organism_id
+        || checkpoint.checkpoint_tick != plan.world_tick
+        || checkpoint.capacity_class_id != BrainCapacityClass::N512_ID
+        || plan.phenotype.brain_class_id() != BrainCapacityClass::N512_ID
+        || checkpoint.phenotype_hash != checkpoint.phenotype.phenotype_hash()
+        || checkpoint.phenotype.sensor_profile() != plan.phenotype.sensor_profile()
+        || checkpoint.compiler_inputs.foundation_abi() != plan.compiler_inputs.foundation_abi()
+        || checkpoint
+            .compiler_inputs
+            .foundation_weight_application()
+            .is_some()
+        || !matches!(
+            plan.compiler_inputs.foundation_weight_application(),
+            Some(FoundationWeightApplication::Nano512FounderOverlayV1 { .. })
+        )
+        || plan.legacy_nano512_compatibility_receipt.is_some()
+    {
+        return Err(ScaffoldContractError::PhenotypeCompile);
+    }
+
+    let capacity = BrainCapacityClass::n512();
+    let recompiled = PhenotypeCompiler::compile_validated(checkpoint.compiler_inputs, &capacity)?;
+    if recompiled != *checkpoint.phenotype {
+        return Err(ScaffoldContractError::PhenotypeCompile);
+    }
+    let foundation =
+        FoundationWeightAsset::builtin_nano512_v1(checkpoint.phenotype.sensor_profile())?;
+    exact_receipt.validate_against(checkpoint.phenotype, &foundation)?;
+
+    // Preserve old exact saves byte-for-byte. The world record still owns the
+    // organism's biological genome and development; only neural authority is
+    // adopted from the already validated checkpoint.
+    plan.phenotype = checkpoint.phenotype.clone();
+    plan.compiler_inputs = checkpoint.compiler_inputs.clone();
+    plan.legacy_nano512_compatibility_receipt = Some(exact_receipt.clone());
     Ok(())
 }
 
@@ -504,7 +551,7 @@ fn restore_resident_authority_from_record(
     sensor_profile: SensorProfile,
     checkpoint: Option<ResidentCheckpointMetadata<'_>>,
 ) -> Result<ResidentAuthorityPlan, ScaffoldContractError> {
-    let authority = resident_authority_plan_from_record(
+    let mut authority = resident_authority_plan_from_record(
         record,
         organism_id,
         world_entity_id,
@@ -513,7 +560,11 @@ fn restore_resident_authority_from_record(
         sensor_profile,
     )?;
     if let Some(checkpoint) = checkpoint {
-        compare_resident_checkpoint_metadata(&authority, checkpoint)?;
+        if let Err(compare_error) = compare_resident_checkpoint_metadata(&authority, checkpoint) {
+            if adopt_exact_legacy_nano512_checkpoint(&mut authority, checkpoint).is_err() {
+                return Err(compare_error);
+            }
+        }
     }
     Ok(authority)
 }
@@ -4760,14 +4811,9 @@ impl GpuLiveBrainRuntime {
                 .map_err(
                     |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
                 )?;
-            let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
-                entry.projection.source_brain_genome().clone(),
-                &capacity,
-                entry.projection.runtime_development_state().clone(),
-                entry.projection.sensor_profile(),
-                phenotype.foundation_abi_selection().clone(),
-            )
-            .map_err(|error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })?;
+            let compiler_inputs = entry.projection.compiler_inputs().map_err(|error| {
+                CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
+            })?;
             let verified = PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)
                 .map_err(
                     |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
@@ -4783,8 +4829,8 @@ impl GpuLiveBrainRuntime {
             }
             let resident = ResidentCognition {
                 phenotype: phenotype.clone(),
-                genome: compiler_inputs.genome().clone(),
-                development: compiler_inputs.development().clone(),
+                genome: entry.projection.source_brain_genome().clone(),
+                development: entry.projection.runtime_development_state().clone(),
                 compiler_inputs,
                 legacy_nano512_compatibility_receipt: None,
                 homeostasis: HomeostaticSnapshot::baseline(plan.world_tick),
@@ -9033,8 +9079,6 @@ const fn gpu_consolidation_overlay_label(state: &ConsolidationState) -> &'static
     }
 }
 
-const N512_FOUNDATION_SEED: u64 = 0x4E35_3132_5F00_0001;
-
 fn foundation_construction_development(
     genome: &BrainGenome,
     capacity: &BrainCapacityClass,
@@ -9082,20 +9126,34 @@ pub(crate) fn compile_gpu_components_from_genome(
     };
     let construction_development =
         foundation_construction_development(&genome, &capacity, &development)?;
-    let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
-        &genome,
-        &capacity,
-        &construction_development,
-        sensor_profile,
-        &foundation,
-    )?;
-    let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
-        genome,
-        &capacity,
-        construction_development,
-        sensor_profile,
-        phenotype.foundation_abi_selection().clone(),
-    )?;
+    let (phenotype, compiler_inputs) = if capacity.id() == BrainCapacityClass::N512_ID {
+        let (phenotype, compiler_inputs, _) =
+            PhenotypeCompiler::compile_from_legacy_nano512_compatibility_asset(
+                &genome,
+                &capacity,
+                &construction_development,
+                sensor_profile,
+                &foundation,
+            )?
+            .into_runtime_parts();
+        (phenotype, compiler_inputs)
+    } else {
+        let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
+            &genome,
+            &capacity,
+            &construction_development,
+            sensor_profile,
+            &foundation,
+        )?;
+        let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
+            genome,
+            &capacity,
+            construction_development,
+            sensor_profile,
+            phenotype.foundation_abi_selection().clone(),
+        )?;
+        (phenotype, compiler_inputs)
+    };
     let verified_phenotype = PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)?;
     if verified_phenotype != phenotype {
         return Err(ScaffoldContractError::PhenotypeCompile);
@@ -9128,7 +9186,7 @@ pub(crate) fn compile_gpu_birth_components(
     }
 
     if capacity.id() == BrainCapacityClass::N512_ID {
-        let genome = BrainGenome::scaffold(N512_FOUNDATION_SEED, capacity.id());
+        let genome = BrainGenome::scaffold(LEGACY_NANO512_V1_COORDINATE_SEED, capacity.id());
         let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(1.0)?);
         let (phenotype, _) = compile_gpu_components_from_genome(
             genome.clone(),
@@ -9167,7 +9225,7 @@ mod tests {
     use alife_runtime::{GpuDurableSaveManifest, GpuSessionAuthority, GpuSessionConsumerKind};
     use alife_world::{
         persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
-        HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord,
+        HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldCommand, WorldOrganismRecord,
     };
 
     #[test]
@@ -9329,7 +9387,7 @@ mod tests {
     #[test]
     fn phenotype_policy_and_subsystem_work_join_are_causal() {
         let capacity = BrainCapacityClass::n512();
-        let genome = BrainGenome::scaffold(N512_FOUNDATION_SEED, capacity.id())
+        let genome = BrainGenome::scaffold(LEGACY_NANO512_V1_COORDINATE_SEED, capacity.id())
             .with_cognitive_architecture(
                 alife_core::genome::CognitiveArchitectureGenomeParameters::try_new_v1(
                     1, 16, 4, 8, 0.031, 1, 8, 64, 4, 1, 0.41, 0.73, 0.62, 0.11, 0.12, 0.13, 0.14,
@@ -9620,9 +9678,17 @@ mod tests {
             birth_resident.genome,
             birth_record.phenotype().brain_genome.clone()
         );
-        assert_eq!(
+        assert_ne!(
             birth_resident.compiler_inputs.genome(),
             &birth_record.phenotype().brain_genome
+        );
+        assert_eq!(
+            PhenotypeCompiler::compile_validated(
+                &birth_resident.compiler_inputs,
+                &BrainCapacityClass::n512(),
+            )
+            .unwrap(),
+            birth_resident.phenotype
         );
         assert_eq!(
             birth_resident.homeostasis,
@@ -10180,30 +10246,30 @@ mod tests {
         let residents = [101_u64, 202_u64]
             .into_iter()
             .map(|raw| {
-                let (phenotype, genome, development) = compile_gpu_birth_components(
-                    seed,
-                    BrainScaleTier::Nano512,
-                    OrganismId(raw),
-                    world_tick,
-                    sensor_profile,
-                )
-                .unwrap();
-                let capacity =
-                    BrainCapacityClass::production_for_id(phenotype.brain_class_id()).unwrap();
-                let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
-                    genome.clone(),
-                    &capacity,
-                    development.clone(),
-                    sensor_profile,
-                    phenotype.foundation_abi_selection().clone(),
-                )
-                .unwrap();
+                let foundation = FoundationWeightAsset::builtin_nano512_v1(sensor_profile).unwrap();
+                let (phenotype, compiler_inputs, receipt) =
+                    PhenotypeCompiler::compile_fixed_legacy_nano512_compatibility_asset(
+                        sensor_profile,
+                        &foundation,
+                    )
+                    .unwrap()
+                    .into_runtime_parts();
+                let genome = compiler_inputs.genome().clone();
+                let development = compiler_inputs.development().clone();
+                assert_eq!(
+                    PhenotypeCompiler::compile_validated(
+                        &compiler_inputs,
+                        &BrainCapacityClass::n512(),
+                    )
+                    .unwrap(),
+                    phenotype
+                );
                 (
                     raw,
                     ResidentCognition {
                         phenotype,
                         compiler_inputs,
-                        legacy_nano512_compatibility_receipt: None,
+                        legacy_nano512_compatibility_receipt: Some(receipt),
                         genome,
                         development,
                         homeostasis: HomeostaticSnapshot::baseline(world_tick),
@@ -11126,7 +11192,7 @@ mod tests {
     }
 
     #[test]
-    fn gpu_restore_resident_identity_uses_world_record_and_rejects_checkpoint_metadata_drift() {
+    fn gpu_restore_resident_identity_uses_world_record_and_admits_exact_legacy_checkpoint() {
         let organism_id = OrganismId::new(77).unwrap();
         let sensor_profile = SensorProfile::PrivilegedAffordanceV1;
         let mut world = HeadlessScenarioBuilder::new(0x3_3B_00_0001)
@@ -11225,14 +11291,14 @@ mod tests {
             record.phenotype().brain_genome.id
         );
         assert_eq!(plan.development, authoritative_development);
-        let (expected_phenotype, expected_inputs, expected_receipt) =
-            PhenotypeCompiler::compile_fixed_legacy_nano512_compatibility_asset(
-                sensor_profile,
-                &foundation_asset,
-            )
-            .unwrap()
-            .into_runtime_parts();
-        assert_eq!(plan.phenotype, expected_phenotype);
+        let expected_projection = N512FounderFoundationProjection::compile(
+            record.phenotype(),
+            sensor_profile,
+            &foundation_asset,
+        )
+        .unwrap();
+        let expected_inputs = expected_projection.compiler_inputs().unwrap();
+        assert_eq!(plan.phenotype, *expected_projection.compiled_phenotype());
         assert_ne!(plan.compiler_inputs.genome(), &plan.genome);
         assert_ne!(plan.compiler_inputs.development(), &plan.development);
         assert_eq!(plan.compiler_inputs.genome(), expected_inputs.genome());
@@ -11240,47 +11306,52 @@ mod tests {
             plan.compiler_inputs.development(),
             expected_inputs.development()
         );
-        assert_eq!(
-            plan.legacy_nano512_compatibility_receipt.as_ref(),
-            Some(&expected_receipt)
-        );
-        expected_receipt
-            .validate_against(&plan.phenotype, &foundation_asset)
-            .unwrap();
+        assert_eq!(plan.legacy_nano512_compatibility_receipt.as_ref(), None);
+        foundation_asset.validate_against(&plan.phenotype).unwrap();
         assert_eq!(
             plan.biochemistry.homeostasis,
             record.biochemistry().homeostasis
         );
 
-        let (_, checkpoint_genome, checkpoint_development) = compile_gpu_birth_components(
-            0x3_3B_00_0002,
-            BrainScaleTier::Nano512,
+        let (checkpoint_phenotype, checkpoint_inputs, checkpoint_receipt) =
+            PhenotypeCompiler::compile_fixed_legacy_nano512_compatibility_asset(
+                sensor_profile,
+                &foundation_asset,
+            )
+            .unwrap()
+            .into_runtime_parts();
+        let checkpoint = ResidentCheckpointMetadata {
             organism_id,
-            world.tick(),
-            sensor_profile,
-        )
-        .unwrap();
-        let (checkpoint_phenotype, checkpoint_inputs) = compile_gpu_components_from_genome(
-            checkpoint_genome,
-            checkpoint_development,
-            sensor_profile,
-        )
-        .unwrap();
-        let comparison = compare_resident_checkpoint_metadata(
-            &plan,
-            ResidentCheckpointMetadata {
-                organism_id,
-                phenotype_hash: checkpoint_phenotype.phenotype_hash(),
-                capacity_class_id: checkpoint_phenotype.brain_class_id(),
-                checkpoint_tick: world.tick(),
-                phenotype: &checkpoint_phenotype,
-                compiler_inputs: &checkpoint_inputs,
-                legacy_nano512_compatibility_receipt: None,
-            },
+            phenotype_hash: checkpoint_phenotype.phenotype_hash(),
+            capacity_class_id: checkpoint_phenotype.brain_class_id(),
+            checkpoint_tick: world.tick(),
+            phenotype: &checkpoint_phenotype,
+            compiler_inputs: &checkpoint_inputs,
+            legacy_nano512_compatibility_receipt: Some(&checkpoint_receipt),
+        };
+        assert_eq!(
+            compare_resident_checkpoint_metadata(&plan, checkpoint),
+            Err(ScaffoldContractError::PhenotypeCompile)
         );
-        assert_eq!(comparison, Err(ScaffoldContractError::PhenotypeCompile));
-        let accepted_authority_plan = comparison.ok().map(|_| plan.clone());
-        assert!(accepted_authority_plan.is_none());
+        let restored = restore_resident_authority_from_record(
+            record,
+            organism_id,
+            world_entity_id,
+            world.tick(),
+            BrainScaleTier::Nano512,
+            sensor_profile,
+            Some(checkpoint),
+        )
+        .unwrap();
+        assert_eq!(restored.genome, plan.genome);
+        assert_eq!(restored.development, plan.development);
+        assert_eq!(restored.biochemistry, plan.biochemistry);
+        assert_eq!(restored.phenotype, checkpoint_phenotype);
+        assert_eq!(restored.compiler_inputs, checkpoint_inputs);
+        assert_eq!(
+            restored.legacy_nano512_compatibility_receipt,
+            Some(checkpoint_receipt)
+        );
     }
 
     #[test]
@@ -11350,7 +11421,7 @@ mod tests {
             (80, SensorProfile::GroundedObjectSlotsV1),
         ] {
             let asset = alife_core::FoundationWeightAsset::builtin_nano512_v1(profile).unwrap();
-            let (phenotype, _, _) = compile_gpu_birth_components(
+            let (phenotype, genome, development) = compile_gpu_birth_components(
                 0xB17A_DA7C,
                 BrainScaleTier::Nano512,
                 OrganismId::new(organism_id).unwrap(),
@@ -11358,8 +11429,19 @@ mod tests {
                 profile,
             )
             .unwrap();
+            let (recompiled, compiler_inputs) =
+                compile_gpu_components_from_genome(genome, development, profile).unwrap();
             let abi = phenotype.foundation_abi();
 
+            assert_eq!(recompiled, phenotype);
+            assert_eq!(
+                PhenotypeCompiler::compile_validated(
+                    &compiler_inputs,
+                    &BrainCapacityClass::n512(),
+                )
+                .unwrap(),
+                phenotype
+            );
             assert_eq!(abi.capacity_class_id(), BrainCapacityClass::N512_ID);
             assert_eq!(phenotype.sensor_profile(), profile);
             assert_eq!(
@@ -12318,7 +12400,7 @@ mod tests {
         let archive_root =
             std::env::temp_dir().join(format!("alife-gpu-newborn-{label}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&archive_root);
-        let backend = GpuClosedLoopBackend::new_in_process(
+        let backend = GpuClosedLoopBackend::new_required(
             alife_gpu_backend::GpuRuntimeProfile::production_v1(),
         )
         .expect("in-process GPU backend");
@@ -12402,7 +12484,7 @@ mod tests {
         let digest = runtime
             .archive_birth_manifest(newborn)
             .expect("newborn archive manifest");
-        assert_eq!(record.birth_manifest_digest(), Some(digest));
+        assert_eq!(record.archive().birth_manifest_digest(), Some(digest));
         assert_eq!(runtime.world.tick(), Tick::new(1));
         let world_entity_id = record.world_entity_id();
         assert!(runtime
@@ -12447,7 +12529,7 @@ mod tests {
 
         let newborn = newborn_id(&runtime);
         let failed_record = runtime.world.organism_registry().get(newborn).unwrap();
-        assert_eq!(failed_record.birth_manifest_digest(), None);
+        assert_eq!(failed_record.archive().birth_manifest_digest(), None);
         assert!(runtime.archive_birth_manifest(newborn).is_none());
         assert!(!runtime.handles.contains_key(&newborn.raw()));
         assert!(!runtime.residents.contains_key(&newborn.raw()));
@@ -12470,6 +12552,7 @@ mod tests {
                 .organism_registry()
                 .get(newborn)
                 .unwrap()
+                .archive()
                 .birth_manifest_digest(),
             Some(digest)
         );

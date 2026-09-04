@@ -13,6 +13,15 @@ use crate::{
 const INPUTS_SCHEMA_VERSION: u16 = 5;
 const INPUTS_DOMAIN: &[u8] = b"alife.phenotype.compiler-inputs.v5";
 
+/// An explicit non-default application of immutable foundation weights.
+///
+/// `None` preserves the existing compiler behavior: exact weights for the
+/// legacy Nano512 admission and genome-derived weights for native layouts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FoundationWeightApplication {
+    Nano512FounderOverlayV1 { seed: u64 },
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PhenotypeCompilerInputs {
     schema_version: u16,
@@ -20,6 +29,8 @@ pub struct PhenotypeCompilerInputs {
     development: DevelopmentState,
     sensor_profile: SensorProfile,
     foundation_abi_selection: FoundationAbiSelection,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    foundation_weight_application: Option<FoundationWeightApplication>,
     capacity_class_id: BrainClassId,
     capacity_digest: [u64; 4],
     canonical_digest: [u64; 4],
@@ -66,10 +77,29 @@ impl PhenotypeCompilerInputs {
         sensor_profile: SensorProfile,
         foundation_abi_selection: FoundationAbiSelection,
     ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_foundation_selection_and_application(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            foundation_abi_selection,
+            None,
+        )
+    }
+
+    fn try_new_with_foundation_selection_and_application(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        foundation_abi_selection: FoundationAbiSelection,
+        foundation_weight_application: Option<FoundationWeightApplication>,
+    ) -> Result<Self, ScaffoldContractError> {
         capacity.validate_contract()?;
         genome.validate_contract()?;
         development.validate_contract()?;
         foundation_abi_selection.validate_against(capacity, sensor_profile)?;
+        validate_weight_application(&foundation_abi_selection, foundation_weight_application)?;
         if genome.brain_class_id != capacity.id() || development.genome_id != genome.id {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
@@ -80,6 +110,7 @@ impl PhenotypeCompilerInputs {
             development,
             sensor_profile,
             foundation_abi_selection,
+            foundation_weight_application,
             capacity_class_id: capacity.id(),
             capacity_digest: capacity.canonical_digest(),
             canonical_digest: [0; 4],
@@ -120,6 +151,24 @@ impl PhenotypeCompilerInputs {
         )
     }
 
+    pub(crate) fn try_new_with_nano512_founder_overlay(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        descriptor: LegacyNano512CompatibilityAbiDescriptor,
+        seed: u64,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_foundation_selection_and_application(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            FoundationAbiSelection::legacy_nano512(descriptor),
+            Some(FoundationWeightApplication::Nano512FounderOverlayV1 { seed }),
+        )
+    }
+
     pub const fn canonical_digest(&self) -> [u64; 4] {
         self.canonical_digest
     }
@@ -134,6 +183,9 @@ impl PhenotypeCompilerInputs {
     }
     pub const fn foundation_abi(&self) -> &FoundationAbiSelection {
         &self.foundation_abi_selection
+    }
+    pub const fn foundation_weight_application(&self) -> Option<FoundationWeightApplication> {
+        self.foundation_weight_application
     }
     pub const fn legacy_foundation_compatibility_abi(
         &self,
@@ -162,6 +214,10 @@ impl PhenotypeCompilerInputs {
         self.development.validate_contract()?;
         self.foundation_abi_selection
             .validate_against(capacity, self.sensor_profile)?;
+        validate_weight_application(
+            &self.foundation_abi_selection,
+            self.foundation_weight_application,
+        )?;
         if self.schema_version != INPUTS_SCHEMA_VERSION
             || self.capacity_class_id != capacity.id()
             || self.capacity_digest != capacity.canonical_digest()
@@ -182,6 +238,12 @@ impl PhenotypeCompilerInputs {
         encode_development(&mut d, &self.development)?;
         d.write_u16(self.sensor_profile.raw());
         self.foundation_abi_selection.write_canonical(&mut d);
+        if let Some(FoundationWeightApplication::Nano512FounderOverlayV1 { seed }) =
+            self.foundation_weight_application
+        {
+            d.write_u8(1);
+            d.write_u64(seed);
+        }
         let language_codebook = self.foundation_abi_selection.language_codebook();
         d.write_u32(language_codebook.id().0);
         for byte in language_codebook.canonical_digest().bytes() {
@@ -207,6 +269,8 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             development: DevelopmentState,
             sensor_profile: SensorProfile,
             foundation_abi_selection: FoundationAbiSelection,
+            #[serde(default)]
+            foundation_weight_application: Option<FoundationWeightApplication>,
             capacity_class_id: BrainClassId,
             capacity_digest: [u64; 4],
             canonical_digest: [u64; 4],
@@ -218,6 +282,7 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             development: w.development,
             sensor_profile: w.sensor_profile,
             foundation_abi_selection: w.foundation_abi_selection,
+            foundation_weight_application: w.foundation_weight_application,
             capacity_class_id: w.capacity_class_id,
             capacity_digest: w.capacity_digest,
             canonical_digest: w.canonical_digest,
@@ -228,6 +293,21 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             .validate_against(&capacity)
             .map_err(D::Error::custom)?;
         Ok(value)
+    }
+}
+
+fn validate_weight_application(
+    selection: &FoundationAbiSelection,
+    application: Option<FoundationWeightApplication>,
+) -> Result<(), ScaffoldContractError> {
+    match application {
+        None => Ok(()),
+        Some(FoundationWeightApplication::Nano512FounderOverlayV1 { seed })
+            if seed != 0 && selection.legacy_nano512_compatibility_v1().is_some() =>
+        {
+            Ok(())
+        }
+        Some(_) => Err(ScaffoldContractError::PhenotypeCompile),
     }
 }
 
