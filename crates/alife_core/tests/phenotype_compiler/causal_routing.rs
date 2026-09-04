@@ -8,10 +8,10 @@ mod task3_causal_genome_and_routing_red_tests {
         ActivationFunction, ActiveTilePolicy, AlphaStoragePolicy, BiologicalPriority,
         BrainCapacityClass, BrainGenome, BrainPhenotype, CandidateActionFamily, CompiledProjection,
         CompiledSynapseKind, CriticalPeriod, DecoderHeadKind, DevelopmentStage, DevelopmentState,
-        DriveThresholdKind, EndocrineConstantKind, LobeKind, LobeRatioOverride, LobeRatioPlan,
-        LobeRatioRegistryRef, MacroConnectomeMask, MotorAffordanceGene, MotorAffordanceKind,
-        NormalizedScalar, PhenotypeCompiler, ProjectionAlphaOverride, ProjectionKey,
-        ProjectionType, ScaffoldContractError, SensorChannelGene, SensorChannelKind,
+        DriveThresholdKind, EndocrineConstantKind, LegacyLobeKindV1, LobeKind, LobeRatioOverride,
+        LobeRatioPlan, LobeRatioRegistryRef, MacroConnectomeMask, MotorAffordanceGene,
+        MotorAffordanceKind, NormalizedScalar, PhenotypeCompiler, ProjectionAlphaOverride,
+        ProjectionKey, ProjectionType, ScaffoldContractError, SensorChannelGene, SensorChannelKind,
         SensorEncoderSourceGroup, SensorProfile, SparseDensityPrior, Tick, UpdateCadence,
         CANDIDATE_FEATURE_COUNT,
     };
@@ -19,10 +19,12 @@ mod task3_causal_genome_and_routing_red_tests {
     const TEST_SEED: u64 = 0xCA55_A11E;
     const BASE_MATURATION: f32 = 0.35;
 
-    const SENSORY_TO_ASSOCIATION: ProjectionKey =
-        ProjectionKey::new(LobeKind::SensoryGrounding, LobeKind::CoreAssociation);
+    const SENSORY_TO_ASSOCIATION: ProjectionKey = ProjectionKey::new(
+        LobeKind::PerceptualIntegration,
+        LobeKind::TemporalPredictive,
+    );
     const ASSOCIATION_TO_MOTOR: ProjectionKey =
-        ProjectionKey::new(LobeKind::CoreAssociation, LobeKind::MotorArbitration);
+        ProjectionKey::new(LobeKind::TemporalPredictive, LobeKind::ActionPlanning);
 
     fn fixture() -> (BrainGenome, DevelopmentState) {
         let capacity = BrainCapacityClass::n512();
@@ -125,7 +127,7 @@ mod task3_causal_genome_and_routing_red_tests {
 
     fn mutate_lobe_override(genome: &mut BrainGenome, _: &mut DevelopmentState) {
         genome.lobe_ratios = LobeRatioPlan::InlineOverrides(vec![LobeRatioOverride {
-            lobe: LobeKind::CoreAssociation,
+            lobe: LobeKind::TemporalPredictive,
             ratio: NormalizedScalar::new(0.50).unwrap(),
         }]);
     }
@@ -133,11 +135,11 @@ mod task3_causal_genome_and_routing_red_tests {
     fn assert_lobe_override_change(before: &BrainPhenotype, after: &BrainPhenotype) {
         let before_region = before
             .lobe_layout()
-            .region(LobeKind::CoreAssociation)
+            .region(LobeKind::TemporalPredictive)
             .unwrap();
         let after_region = after
             .lobe_layout()
-            .region(LobeKind::CoreAssociation)
+            .region(LobeKind::TemporalPredictive)
             .unwrap();
         assert!(after_region.enabled);
         assert!(after_region.len > before_region.len);
@@ -230,7 +232,7 @@ mod task3_causal_genome_and_routing_red_tests {
         genome.sensor_layout.channels.push(SensorChannelGene {
             kind: SensorChannelKind::Proprioception,
             receptor_count: 13,
-            target_lobe: LobeKind::SensoryGrounding,
+            target_lobe: LobeKind::PerceptualIntegration,
             enabled_at_maturation: 0,
         });
     }
@@ -245,7 +247,7 @@ mod task3_causal_genome_and_routing_red_tests {
                 assert_eq!(*source_group, SensorEncoderSourceGroup::Body.raw());
                 let sensory = after
                     .lobe_layout()
-                    .region(LobeKind::SensoryGrounding)
+                    .region(LobeKind::PerceptualIntegration)
                     .unwrap();
                 assert!(sensory.contains_neuron(*target));
                 *source_index
@@ -296,7 +298,7 @@ mod task3_causal_genome_and_routing_red_tests {
         genome.sensor_layout.channels.push(SensorChannelGene {
             kind: SensorChannelKind::Hearing,
             receptor_count: 8,
-            target_lobe: LobeKind::AuditorySpeech,
+            target_lobe: LobeKind::SocialCommunication,
             enabled_at_maturation: 60,
         });
     }
@@ -318,7 +320,7 @@ mod task3_causal_genome_and_routing_red_tests {
                 );
                 let auditory = after
                     .lobe_layout()
-                    .region(LobeKind::AuditorySpeech)
+                    .region(LobeKind::SocialCommunication)
                     .unwrap();
                 assert!(auditory.contains_neuron(*target));
                 *source_index
@@ -427,13 +429,13 @@ mod task3_causal_genome_and_routing_red_tests {
 
     fn enable_mask_on_disabled_lobe(genome: &mut BrainGenome) {
         genome.lobe_ratios = LobeRatioPlan::InlineOverrides(vec![LobeRatioOverride {
-            lobe: LobeKind::CoreAssociation,
+            lobe: LobeKind::TemporalPredictive,
             ratio: NormalizedScalar::new(0.0).unwrap(),
         }]);
     }
 
     fn add_noncanonical_route_key(genome: &mut BrainGenome) {
-        let key = ProjectionKey::new(LobeKind::SensoryGrounding, LobeKind::MotorArbitration);
+        let key = ProjectionKey::new(LobeKind::PerceptualIntegration, LobeKind::ActionPlanning);
         genome.macro_connectome_masks.push(MacroConnectomeMask {
             projection: key,
             enabled: true,
@@ -545,7 +547,7 @@ mod task3_causal_genome_and_routing_red_tests {
         let (genome, mut development) = fixture();
         let baseline = compile_result(&genome, &development).unwrap();
         development.open_critical_periods.push(CriticalPeriod {
-            lobe: LobeKind::CoreAssociation,
+            lobe: LobeKind::TemporalPredictive,
             opens_at: Tick::ZERO,
             closes_at: Tick(10),
             plasticity_bias: NormalizedScalar::new(0.5).unwrap(),
@@ -576,29 +578,115 @@ mod task3_causal_genome_and_routing_red_tests {
         assert!(ActivationFunction::try_from_raw(4).is_err());
 
         for (value, raw) in [
-            (LobeKind::SensoryGrounding, 1),
-            (LobeKind::MetabolicDrive, 2),
-            (LobeKind::AuditorySpeech, 3),
-            (LobeKind::GlyphVision, 4),
-            (LobeKind::LexiconConcept, 5),
-            (LobeKind::CoreAssociation, 6),
-            (LobeKind::EpisodicMemory, 7),
-            (LobeKind::WorkingMemory, 8),
-            (LobeKind::MotorArbitration, 9),
-            (LobeKind::HomeostaticRegulation, 10),
-            (LobeKind::LanguageExpansion, 11),
-            (LobeKind::MathQuantity, 12),
-            (LobeKind::NarrativeHistory, 13),
-            (LobeKind::SocialReasoning, 14),
-            (LobeKind::SelfCriticUncertainty, 15),
-            (LobeKind::PlanningDream, 16),
-            (LobeKind::SpeechWritingMotor, 17),
+            (LobeKind::PerceptualIntegration, 1),
+            (LobeKind::InteroceptiveMotivational, 2),
+            (LobeKind::MultimodalAssociation, 3),
+            (LobeKind::TemporalPredictive, 4),
+            (LobeKind::WorkingContextExecutive, 5),
+            (LobeKind::MemoryInterface, 6),
+            (LobeKind::ActionPlanning, 7),
+            (LobeKind::SocialCommunication, 8),
+            (LobeKind::FlexibleReserve, 9),
         ] {
             assert_eq!(value.raw(), raw);
             assert_eq!(LobeKind::try_from_raw(raw).unwrap(), value);
         }
         assert!(LobeKind::try_from_raw(0).is_err());
-        assert!(LobeKind::try_from_raw(18).is_err());
+        assert!(LobeKind::try_from_raw(10).is_err());
+
+        for (legacy, raw, founder) in [
+            (
+                LegacyLobeKindV1::SensoryGrounding,
+                1,
+                LobeKind::PerceptualIntegration,
+            ),
+            (
+                LegacyLobeKindV1::MetabolicDrive,
+                2,
+                LobeKind::InteroceptiveMotivational,
+            ),
+            (
+                LegacyLobeKindV1::AuditorySpeech,
+                3,
+                LobeKind::SocialCommunication,
+            ),
+            (
+                LegacyLobeKindV1::GlyphVision,
+                4,
+                LobeKind::SocialCommunication,
+            ),
+            (
+                LegacyLobeKindV1::LexiconConcept,
+                5,
+                LobeKind::MultimodalAssociation,
+            ),
+            (
+                LegacyLobeKindV1::CoreAssociation,
+                6,
+                LobeKind::TemporalPredictive,
+            ),
+            (
+                LegacyLobeKindV1::EpisodicMemory,
+                7,
+                LobeKind::MemoryInterface,
+            ),
+            (
+                LegacyLobeKindV1::WorkingMemory,
+                8,
+                LobeKind::WorkingContextExecutive,
+            ),
+            (
+                LegacyLobeKindV1::MotorArbitration,
+                9,
+                LobeKind::ActionPlanning,
+            ),
+            (
+                LegacyLobeKindV1::HomeostaticRegulation,
+                10,
+                LobeKind::FlexibleReserve,
+            ),
+            (
+                LegacyLobeKindV1::LanguageExpansion,
+                11,
+                LobeKind::SocialCommunication,
+            ),
+            (
+                LegacyLobeKindV1::MathQuantity,
+                12,
+                LobeKind::MultimodalAssociation,
+            ),
+            (
+                LegacyLobeKindV1::NarrativeHistory,
+                13,
+                LobeKind::TemporalPredictive,
+            ),
+            (
+                LegacyLobeKindV1::SocialReasoning,
+                14,
+                LobeKind::SocialCommunication,
+            ),
+            (
+                LegacyLobeKindV1::SelfCriticUncertainty,
+                15,
+                LobeKind::WorkingContextExecutive,
+            ),
+            (
+                LegacyLobeKindV1::PlanningDream,
+                16,
+                LobeKind::TemporalPredictive,
+            ),
+            (
+                LegacyLobeKindV1::SpeechWritingMotor,
+                17,
+                LobeKind::ActionPlanning,
+            ),
+        ] {
+            assert_eq!(legacy.raw(), raw);
+            assert_eq!(LegacyLobeKindV1::try_from_raw(raw).unwrap(), legacy);
+            assert_eq!(legacy.migrate_to_founder(), founder);
+        }
+        assert!(LegacyLobeKindV1::try_from_raw(0).is_err());
+        assert!(LegacyLobeKindV1::try_from_raw(18).is_err());
 
         for (value, raw) in [
             (ProjectionType::FeedForward, 0),

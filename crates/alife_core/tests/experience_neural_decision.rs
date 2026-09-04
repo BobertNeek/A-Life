@@ -37,9 +37,9 @@ fn genome(spec: &BrainClassSpec) -> BrainGenome {
 fn development(genome: &BrainGenome, tick: Tick) -> DevelopmentState {
     DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.35).unwrap()).with_enabled_lobes(
         [
-            LobeKind::SensoryGrounding,
-            LobeKind::CoreAssociation,
-            LobeKind::MotorArbitration,
+            LobeKind::PerceptualIntegration,
+            LobeKind::TemporalPredictive,
+            LobeKind::ActionPlanning,
         ],
     )
 }

@@ -61,7 +61,10 @@ fn genome_validation_rejects_bad_version_unknown_class_and_invalid_ranges() {
         .alpha_mask
         .projection_overrides
         .push(ProjectionAlphaOverride {
-            projection: ProjectionKey::new(LobeKind::SensoryGrounding, LobeKind::CoreAssociation),
+            projection: ProjectionKey::new(
+                LobeKind::PerceptualIntegration,
+                LobeKind::TemporalPredictive,
+            ),
             alpha: NormalizedScalar(f32::NAN),
         });
     assert!(matches!(
@@ -96,7 +99,7 @@ fn development_schedule_and_state_validate_monotonicity() {
     ));
 
     let critical_period = CriticalPeriod {
-        lobe: LobeKind::CoreAssociation,
+        lobe: LobeKind::TemporalPredictive,
         opens_at: Tick(20),
         closes_at: Tick(10),
         plasticity_bias: NormalizedScalar::new(0.5).unwrap(),
@@ -109,7 +112,7 @@ fn development_schedule_and_state_validate_monotonicity() {
     ));
 
     let state = DevelopmentState::new(GenomeId(77), Tick(40), NormalizedScalar::new(0.6).unwrap())
-        .with_enabled_lobes([LobeKind::SensoryGrounding, LobeKind::MotorArbitration]);
+        .with_enabled_lobes([LobeKind::PerceptualIntegration, LobeKind::ActionPlanning]);
     assert_eq!(state.age_ticks, Tick(40));
     assert_eq!(state.enabled_lobes.len(), 2);
     assert!(state.validate_contract().is_ok());

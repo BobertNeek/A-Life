@@ -34,9 +34,9 @@ fn development(genome: &BrainGenome) -> DevelopmentState {
         NormalizedScalar::new(0.35).unwrap(),
     )
     .with_enabled_lobes([
-        LobeKind::SensoryGrounding,
-        LobeKind::CoreAssociation,
-        LobeKind::MotorArbitration,
+        LobeKind::PerceptualIntegration,
+        LobeKind::TemporalPredictive,
+        LobeKind::ActionPlanning,
     ])
 }
 

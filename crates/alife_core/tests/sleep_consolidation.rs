@@ -6,17 +6,17 @@ use alife_core::{
     Confidence, CreatureMind, DenseTile, DriveDelta, DurationTicks, EndocrineDelta,
     HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition, LobeKind,
     MemoryBank, MemoryBankConfig, MemoryExpectancy, MemoryOutcomeSummary, MemoryRecord,
-    MemoryUpdateKind, MotorChannel, MotorChannelFactor, NeuralActionSelection, NeuralProjectionSchema,
-    NeuromodulatorSample, NormalizedScalar, OrganismId, PerceptionFrameDigest,
-    PerceptionFrameDraft, PhenotypeHash, PhysicalActionOutcome, PhysicalContactKind,
-    PostActionOutcome, PredictionTargetReceipt, ProjectionRoutingRef, ProjectionTile,
-    ReplayCapturePlan, ScaffoldContractError, SemanticStateVector, SensorProfile,
+    MemoryUpdateKind, MotorChannel, MotorChannelFactor, NeuralActionSelection,
+    NeuralProjectionSchema, NeuromodulatorSample, NormalizedScalar, OrganismId,
+    PerceptionFrameDigest, PerceptionFrameDraft, PhenotypeHash, PhysicalActionOutcome,
+    PhysicalContactKind, PostActionOutcome, PredictionTargetReceipt, ProjectionRoutingRef,
+    ProjectionTile, ReplayCapturePlan, ScaffoldContractError, SemanticStateVector, SensorProfile,
     SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence,
     SleepConsolidationConfig, SleepConsolidator, SleepController, SleepPhase, SleepReplayEvent,
     SleepReplayJournal, SleepTrigger, SparseTileCoord, SparseTilePayload, StableLifetimeTraitKind,
     StructuralEditBatch, StructuralEditCandidate, StructuralEditKind, StructuralEditReason,
-    SynapseWeightSplit, Tick, TopologicalMapConfig, TopologySidecar, TrackedObjectId, Vec3f,
-    Validate, Velocity, WorldEntityId, MICROTILE_CELLS,
+    SynapseWeightSplit, Tick, TopologicalMapConfig, TopologySidecar, TrackedObjectId, Validate,
+    Vec3f, Velocity, WorldEntityId, MICROTILE_CELLS,
 };
 
 fn organism() -> OrganismId {
@@ -251,9 +251,9 @@ fn sealed_patch(
             NormalizedScalar::new(0.35).unwrap(),
         )
         .with_enabled_lobes([
-            LobeKind::SensoryGrounding,
-            LobeKind::CoreAssociation,
-            LobeKind::MotorArbitration,
+            LobeKind::PerceptualIntegration,
+            LobeKind::TemporalPredictive,
+            LobeKind::ActionPlanning,
         ]),
         perception.clone(),
     )
@@ -559,8 +559,8 @@ fn concept_consolidation_preserves_gaps_and_cannot_emit_actions() {
 #[test]
 fn structural_edit_batches_validate_sort_and_defer_application() {
     let projection = ProjectionRoutingRef {
-        source_lobe: LobeKind::CoreAssociation,
-        target_lobe: LobeKind::MotorArbitration,
+        source_lobe: LobeKind::TemporalPredictive,
+        target_lobe: LobeKind::ActionPlanning,
         projection_type: alife_core::ProjectionType::FeedForward,
     };
     let candidates = vec![
@@ -796,7 +796,10 @@ fn sleep_receipt_accepts_multiple_replay_events_merged_into_one_memory() {
     let second_patch = sealed_patch(2, 11, target_entity, false);
     memory.observe_sealed_patch(&first_patch).unwrap();
     let second_update = memory.observe_sealed_patch(&second_patch).unwrap();
-    assert!(matches!(second_update.kind, MemoryUpdateKind::Merged { .. }));
+    assert!(matches!(
+        second_update.kind,
+        MemoryUpdateKind::Merged { .. }
+    ));
 
     let plan = ReplayCapturePlan::try_new(vec![3], 1, 2, 2).unwrap();
     let mut journal = SleepReplayJournal::new(plan).unwrap();
@@ -809,8 +812,7 @@ fn sleep_receipt_accepts_multiple_replay_events_merged_into_one_memory() {
             candidate_feature_digest: CandidateFeatureDigest([sequence, 9]),
             action_id: ActionId(400),
             family: CandidateActionFamily::Contact,
-            modulator: NeuromodulatorSample::from_components(0.4, 0.1, 0.2, 0.0, 0.3)
-                .unwrap(),
+            modulator: NeuromodulatorSample::from_components(0.4, 0.1, 0.2, 0.0, 0.3).unwrap(),
         };
         journal.push(event, &[0.75]).unwrap();
         targets.push(

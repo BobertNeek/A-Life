@@ -2,7 +2,8 @@ use alife_core::{
     ActionCommand, ActionKind, BrainClassSpec, BrainGenome, BrainScaleTier, EndocrineProfile,
     EndocrineSnapshot, ExperiencePatchHeader, ExperienceSequenceId, GenomeId,
     LineageExportManifest, LineageId, LobeKind, LobeLayout, NeuralComputeBackend, OrganismId,
-    SemanticPriorProvider, SemanticPriorRequest, TeacherPerceptionChannel, Tick, WorldEntityId,
+    ScaffoldContractError, SemanticPriorProvider, SemanticPriorRequest, TeacherPerceptionChannel,
+    Tick, WorldEntityId,
 };
 use alife_core::{Confidence, DurationTicks};
 
@@ -27,17 +28,14 @@ fn standard2048_is_one_scalable_reference_tier() {
 }
 
 #[test]
-fn lobe_layout_supports_absent_lobes_without_deleting_variants() {
-    let layout = LobeLayout::with_disabled_lobe(
-        BrainScaleTier::Nano512.neuron_count().unwrap(),
-        LobeKind::GlyphVision,
-    )
-    .expect("disabled-lobe layout should still be valid");
-
-    assert_eq!(layout.total_neurons(), 512);
-    assert!(layout.contains_lobe(LobeKind::GlyphVision));
-    assert_eq!(layout.region(LobeKind::GlyphVision).unwrap().len, 0);
-    assert!(!layout.region(LobeKind::GlyphVision).unwrap().enabled);
+fn founder_homologues_cannot_be_disabled() {
+    assert_eq!(
+        LobeLayout::with_disabled_lobe(
+            BrainScaleTier::Nano512.neuron_count().unwrap(),
+            LobeKind::SocialCommunication,
+        ),
+        Err(ScaffoldContractError::PhenotypeCompile)
+    );
 }
 
 #[test]
