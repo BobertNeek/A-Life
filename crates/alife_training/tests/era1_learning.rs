@@ -86,9 +86,9 @@ fn grounded_patch(source: UtteranceSourceKind) -> (ExperiencePatch, UtteranceId,
         NormalizedScalar::new(1.0).unwrap(),
     )
     .with_enabled_lobes([
-        LobeKind::SensoryGrounding,
-        LobeKind::CoreAssociation,
-        LobeKind::MotorArbitration,
+        LobeKind::PerceptualIntegration,
+        LobeKind::TemporalPredictive,
+        LobeKind::ActionPlanning,
     ]);
     let pre_action = PreActionSnapshot::from_neural_frame(
         sequence,

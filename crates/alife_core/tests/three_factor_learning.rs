@@ -1,15 +1,17 @@
 use alife_core::{
     heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
-    ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome, BrainScaleTier,
-    CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, Confidence,
-    DecisionSnapshot, DevelopmentState, DriveDelta, DurationTicks, EndocrineDelta, ExperiencePatch,
-    ExperiencePatchBuilder, ExperiencePatchPhase, ExperienceSequenceId, FastWeightSemantics,
+    ActionProposal, ActionTarget, BiochemistryState, BodyEventDelta, BodySnapshot, BrainClassSpec,
+    BrainGenome, BrainScaleTier, CandidateActionFamily, CandidateFeatureVector,
+    CandidateObservationRef, Confidence, CreatureGenome, DecisionSnapshot, DevelopmentState,
+    DriveDelta, DurationTicks, EndocrineDelta, ExperiencePatch, ExperiencePatchBuilder,
+    ExperiencePatchPhase, ExperienceSequenceId, FastWeightSemantics, FoundationGeneticIdentity,
     HomeostaticDelta, HomeostaticSnapshot, Intensity, LearningSequenceGuard, LobeKind,
-    MemoryExpectancySnapshot, NeuralActionSelection, NeuromodulatorSample, NormalizedScalar,
-    OrganismId, OutcomeCreditPacket, OutcomeCreditReplayKey, PerceptionFrame, PhenotypeHash,
-    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, ScaffoldContractError,
-    SchemaVersions, SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensoryChannels,
-    SensorySnapshot, SignedValence, Tick, Vec3f, Velocity, WeightSplitContract, WorldEntityId,
+    MeasuredPhysiologyTransition, MemoryExpectancySnapshot, NeuralActionSelection,
+    NeuromodulatorSample, NormalizedScalar, OrganismId, OutcomeCreditPacket,
+    OutcomeCreditReplayKey, PerceptionFrame, PhenotypeHash, PhysicalActionOutcome,
+    PhysicalContactKind, PostActionOutcome, ScaffoldContractError, SchemaVersions, SensorProfile,
+    SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence,
+    Tick, Vec3f, Velocity, WeightSplitContract, WorldEntityId,
 };
 
 const ORGANISM: OrganismId = OrganismId(7);
@@ -80,9 +82,9 @@ fn sealed_neural_patch(
     let genome = BrainGenome::scaffold(42, spec.id);
     let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.35).unwrap())
         .with_enabled_lobes([
-            LobeKind::SensoryGrounding,
-            LobeKind::CoreAssociation,
-            LobeKind::MotorArbitration,
+            LobeKind::PerceptualIntegration,
+            LobeKind::TemporalPredictive,
+            LobeKind::ActionPlanning,
         ]);
     let pre_action = alife_core::PreActionSnapshot::from_neural_frame(
         sequence_id,
@@ -114,6 +116,22 @@ fn sealed_neural_patch(
         command,
     )
     .unwrap();
+    let physiology = CreatureGenome::early_mammal_founder(
+        42,
+        FoundationGeneticIdentity::new(42, 1, 1, spec.id).unwrap(),
+    )
+    .unwrap()
+    .express()
+    .unwrap();
+    let before = BiochemistryState::new(&physiology, tick).unwrap();
+    let after = before
+        .advance(
+            Tick::new(tick.raw() + 1),
+            BodyEventDelta::zero(),
+            &physiology,
+        )
+        .unwrap();
+    let measured = MeasuredPhysiologyTransition::new(before, after).unwrap();
     let outcome = PostActionOutcome::new(
         organism_id,
         sequence_id,
@@ -141,6 +159,8 @@ fn sealed_neural_patch(
         SignedValence::new(0.1).unwrap(),
         NormalizedScalar::new(novelty).unwrap(),
     )
+    .unwrap()
+    .with_measured_physiology(measured)
     .unwrap();
 
     ExperiencePatchBuilder::new(sequence_id)
@@ -162,9 +182,9 @@ fn sealed_heuristic_patch() -> ExperiencePatch {
     let genome = BrainGenome::scaffold(99, spec.id);
     let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.35).unwrap())
         .with_enabled_lobes([
-            LobeKind::SensoryGrounding,
-            LobeKind::CoreAssociation,
-            LobeKind::MotorArbitration,
+            LobeKind::PerceptualIntegration,
+            LobeKind::TemporalPredictive,
+            LobeKind::ActionPlanning,
         ]);
     let pre_action = alife_core::PreActionSnapshot::from_heuristic_frame(
         sequence_id,
@@ -239,16 +259,33 @@ fn sealed_heuristic_patch() -> ExperiencePatch {
 }
 
 #[test]
-fn pain_and_reward_create_opposite_bounded_modulators() {
+fn component_frames_preserve_bounded_causal_evidence() {
     let reward = NeuromodulatorSample::from_components(0.8, 0.0, 0.2, 0.0, 0.1).unwrap();
     let pain = NeuromodulatorSample::from_components(-0.2, 0.9, -0.4, 0.3, 0.0).unwrap();
-    assert!(reward.value() > 0.0);
-    assert!(pain.value() < 0.0);
-    assert!((-1.0..=1.0).contains(&reward.value()));
-    assert!((-1.0..=1.0).contains(&pain.value()));
+    assert_eq!(
+        reward.frame().lanes(),
+        &[0.8, 0.0, 0.2, 0.0, 0.1, 0.0, 0.0, 0.0]
+    );
+    assert_eq!(
+        pain.frame().lanes(),
+        &[-0.2, 0.9, -0.4, 0.3, 0.0, 0.0, 0.0, 0.0]
+    );
+    assert!(reward
+        .frame()
+        .lanes()
+        .iter()
+        .all(|value| (-1.0..=1.0).contains(value)));
+    assert!(pain
+        .frame()
+        .lanes()
+        .iter()
+        .all(|value| (-1.0..=1.0).contains(value)));
 
     let saturated = NeuromodulatorSample::from_components(1.0, -1.0, 1.0, -1.0, 1.0).unwrap();
-    assert_eq!(saturated.value(), 1.0);
+    assert_eq!(
+        saturated.frame().lanes(),
+        &[1.0, -1.0, 1.0, -1.0, 1.0, 0.0, 0.0, 0.0]
+    );
     assert_eq!(
         NeuromodulatorSample::from_components(f32::NAN, 0.0, 0.0, 0.0, 0.0),
         Err(ScaffoldContractError::NonFiniteFloat)
@@ -260,10 +297,10 @@ fn pain_and_reward_create_opposite_bounded_modulators() {
 }
 
 #[test]
-fn serialized_modulator_recomputes_and_rejects_a_forged_value() {
+fn serialized_modulator_recomputes_and_rejects_a_forged_component() {
     let sample = NeuromodulatorSample::from_components(0.8, 0.0, 0.2, 0.0, 0.1).unwrap();
     let mut json = serde_json::to_value(sample).unwrap();
-    json["value"] = serde_json::json!(-1.0);
+    json["prediction_residual"] = serde_json::json!(-1.0);
     assert!(serde_json::from_value::<NeuromodulatorSample>(json).is_err());
 
     let round_trip: NeuromodulatorSample =
@@ -296,11 +333,15 @@ fn credit_packet_is_derived_exactly_from_matching_sealed_gpu_evidence() {
         evidence.candidate_feature_digest
     );
     assert_eq!(packet.dispatch_generation(), evidence.dispatch_generation);
-    assert_eq!(packet.modulator().prediction_residual(), 0.25);
-    assert_eq!(packet.modulator().pain(), 0.1);
+    assert_eq!(packet.modulator().prediction_residual(), 0.3);
+    let physiology = patch.outcome().measured_physiology.unwrap();
+    assert_eq!(
+        packet.modulator().pain(),
+        physiology.pain_delta.raw().max(0.0)
+    );
     assert_eq!(packet.modulator().frustration(), 0.2);
-    assert_eq!(packet.modulator().novelty(), 0.3);
-    assert!(packet.modulator().homeostatic_improvement() > 0.0);
+    assert_eq!(packet.modulator().novelty(), 0.0);
+    assert!((-1.0..=1.0).contains(&packet.modulator().homeostatic_improvement()));
     assert_eq!(
         packet.replay_key(),
         OutcomeCreditReplayKey {

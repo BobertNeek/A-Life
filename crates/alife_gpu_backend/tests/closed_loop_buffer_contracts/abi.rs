@@ -248,12 +248,12 @@ fn closed_loop_enum_rows_round_trip_and_unknown_values_are_rejected() {
     }
     assert!(ActivationFunction::try_from_raw(4).is_err());
 
-    for raw in 1_u16..=17 {
+    for raw in 1_u16..=9 {
         let value = LobeKind::try_from_raw(raw).unwrap();
         assert_eq!(value.raw(), raw);
     }
     assert!(LobeKind::try_from_raw(0).is_err());
-    assert!(LobeKind::try_from_raw(18).is_err());
+    assert!(LobeKind::try_from_raw(10).is_err());
 
     for raw in 0_u8..=6 {
         let value = ProjectionType::try_from_raw(raw).unwrap();
