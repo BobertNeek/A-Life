@@ -1138,7 +1138,7 @@ fn genetic_birth_rejects_unexpected_foundation_bytes_before_writing_assets() {
     let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
     let (genome, phenotype) = fixture(304, 11);
     let foundation =
-        FoundationWeightAsset::builtin_n512_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
+        FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
     let foundation_bytes = foundation.encode_canonical().unwrap();
     let before = snapshot_archive_state(&library, &root);
 
