@@ -4,7 +4,7 @@ use alife_archive::{ResolvedFounder, ResolvedFounderCohort};
 use alife_core::{
     BrainCapacityClass, DevelopmentState, FounderMode, LanguageGroundingLedger, MemoryBankConfig,
     MemorySidecarState, NormalizedScalar, PassiveLifeStatistics, PhenotypeCompiler,
-    PhenotypeCompilerInputs, ScaffoldContractError, SensorProfileIdentity, SensoryAbiVersion,
+    PhenotypeCompilerInputs, SensorProfileIdentity, SensoryAbiVersion,
     SleepState, Tick, TopologicalMapConfig, TopologySidecar, Validate,
 };
 use alife_gpu_backend::GpuClosedLoopBackend;
@@ -208,16 +208,12 @@ fn capture_genetic_founder(
     {
         return Err(alife_core::ScaffoldContractError::PhenotypeCompile.into());
     }
-    let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
+    let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
         founder.genome.clone(),
         &capacity,
         development,
         founder.manifest.genetic.sensor_profile,
-        phenotype
-            .foundation_abi()
-            .canonical_v2()
-            .cloned()
-            .ok_or(ScaffoldContractError::PhenotypeCompile)?,
+        phenotype.foundation_abi_selection().clone(),
     )?;
     let sensor_profile = SensorProfileIdentity {
         profile_id: founder.manifest.genetic.sensor_profile.into(),

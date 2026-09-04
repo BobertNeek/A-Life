@@ -43,15 +43,15 @@ fn standard2048_lobe_topology_matches_reference_boundaries() {
     let layout = &spec.lobe_layout;
 
     let expected = [
-        (LobeKind::PerceptualIntegration, 0, 256),
-        (LobeKind::InteroceptiveMotivational, 256, 128),
-        (LobeKind::SocialCommunication, 384, 256),
-        (LobeKind::MultimodalAssociation, 640, 256),
-        (LobeKind::TemporalPredictive, 896, 448),
-        (LobeKind::MemoryInterface, 1344, 256),
-        (LobeKind::WorkingContextExecutive, 1600, 128),
-        (LobeKind::ActionPlanning, 1728, 224),
-        (LobeKind::FlexibleReserve, 1952, 96),
+        (LobeKind::PerceptualIntegration, 0, 336),
+        (LobeKind::InteroceptiveMotivational, 336, 128),
+        (LobeKind::MultimodalAssociation, 464, 448),
+        (LobeKind::TemporalPredictive, 912, 272),
+        (LobeKind::WorkingContextExecutive, 1184, 208),
+        (LobeKind::MemoryInterface, 1392, 144),
+        (LobeKind::ActionPlanning, 1536, 208),
+        (LobeKind::SocialCommunication, 1744, 160),
+        (LobeKind::FlexibleReserve, 1904, 144),
     ];
 
     for (kind, start, len) in expected {
@@ -64,22 +64,22 @@ fn standard2048_lobe_topology_matches_reference_boundaries() {
         assert!(!kind.purpose().is_empty());
     }
 
-    assert_eq!(spec.motor_logical_nodes, 224);
+    assert_eq!(spec.motor_logical_nodes, 208);
     assert_eq!(spec.motor_physical_stride, 256);
     assert_eq!(
-        layout.lobe_by_neuron_index(1727).unwrap().kind,
+        layout.lobe_by_neuron_index(1391).unwrap().kind,
         LobeKind::WorkingContextExecutive
     );
     assert_eq!(
-        layout.lobe_by_neuron_index(1728).unwrap().kind,
+        layout.lobe_by_neuron_index(1536).unwrap().kind,
         LobeKind::ActionPlanning
     );
     assert_eq!(
-        layout.lobe_by_neuron_index(1951).unwrap().kind,
+        layout.lobe_by_neuron_index(1743).unwrap().kind,
         LobeKind::ActionPlanning
     );
     assert_eq!(
-        layout.lobe_by_neuron_index(1952).unwrap().kind,
+        layout.lobe_by_neuron_index(1904).unwrap().kind,
         LobeKind::FlexibleReserve
     );
     assert!(layout.lobe_by_neuron_index(2048).is_none());

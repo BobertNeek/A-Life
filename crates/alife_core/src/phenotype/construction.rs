@@ -46,6 +46,8 @@ fn compile_inner(
     validate_supported_inputs(genome, capacity)?;
     let layout = if inputs.legacy_foundation_compatibility_abi().is_some() {
         crate::legacy_nano512_compatibility::legacy_nano512_runtime_layout()?
+    } else if capacity.id() == BrainCapacityClass::N2048_ID {
+        crate::N2048FoundationLayoutV1::lobe_layout()
     } else {
         super::layout_compile::compile_layout(
             genome,

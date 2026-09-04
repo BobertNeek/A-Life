@@ -220,9 +220,9 @@ fn pre_action(frame: PerceptionFrame) -> PreActionSnapshot {
     let development =
         DevelopmentState::new(genome.id, frame.tick(), NormalizedScalar::new(0.5).unwrap())
             .with_enabled_lobes([
-                LobeKind::SensoryGrounding,
-                LobeKind::CoreAssociation,
-                LobeKind::MotorArbitration,
+                LobeKind::PerceptualIntegration,
+                LobeKind::TemporalPredictive,
+                LobeKind::ActionPlanning,
             ]);
     PreActionSnapshot::from_neural_frame(
         sequence(),
@@ -386,9 +386,9 @@ fn sequenced_patch(
     let genome = BrainGenome::scaffold(321, spec.id);
     let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.5).unwrap())
         .with_enabled_lobes([
-            LobeKind::SensoryGrounding,
-            LobeKind::CoreAssociation,
-            LobeKind::MotorArbitration,
+            LobeKind::PerceptualIntegration,
+            LobeKind::TemporalPredictive,
+            LobeKind::ActionPlanning,
         ]);
     let pre_action = PreActionSnapshot::from_neural_frame(
         sequence,

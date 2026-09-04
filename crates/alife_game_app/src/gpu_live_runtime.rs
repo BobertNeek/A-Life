@@ -4760,19 +4760,12 @@ impl GpuLiveBrainRuntime {
                 .map_err(
                     |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
                 )?;
-            let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
+            let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
                 entry.projection.source_brain_genome().clone(),
                 &capacity,
                 entry.projection.runtime_development_state().clone(),
                 entry.projection.sensor_profile(),
-                phenotype
-                    .foundation_abi()
-                    .canonical_v2()
-                    .cloned()
-                    .ok_or(ScaffoldContractError::PhenotypeCompile)
-                    .map_err(
-                        |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
-                    )?,
+                phenotype.foundation_abi_selection().clone(),
             )
             .map_err(|error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error })?;
             let verified = PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)
@@ -9096,16 +9089,12 @@ pub(crate) fn compile_gpu_components_from_genome(
         sensor_profile,
         &foundation,
     )?;
-    let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
+    let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
         genome,
         &capacity,
         construction_development,
         sensor_profile,
-        phenotype
-            .foundation_abi()
-            .canonical_v2()
-            .cloned()
-            .ok_or(ScaffoldContractError::PhenotypeCompile)?,
+        phenotype.foundation_abi_selection().clone(),
     )?;
     let verified_phenotype = PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)?;
     if verified_phenotype != phenotype {
@@ -10201,12 +10190,12 @@ mod tests {
                 .unwrap();
                 let capacity =
                     BrainCapacityClass::production_for_id(phenotype.brain_class_id()).unwrap();
-                let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
+                let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
                     genome.clone(),
                     &capacity,
                     development.clone(),
                     sensor_profile,
-                    phenotype.foundation_abi().canonical_v2().cloned().unwrap(),
+                    phenotype.foundation_abi_selection().clone(),
                 )
                 .unwrap();
                 (
@@ -11310,15 +11299,19 @@ mod tests {
             .foundation_payload_digest()
             .is_some());
         let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id()).unwrap();
-        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
+        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
             genome,
             &capacity,
             development,
             SensorProfile::PrivilegedAffordanceV1,
-            phenotype.foundation_abi().canonical_v2().cloned().unwrap(),
+            phenotype.foundation_abi_selection().clone(),
         )
         .unwrap();
         assert_eq!(inputs.foundation_abi(), phenotype.foundation_abi());
+        assert_eq!(
+            PhenotypeCompiler::compile_validated(&inputs, &capacity).unwrap(),
+            phenotype
+        );
     }
 
     #[test]
@@ -11830,12 +11823,12 @@ mod tests {
         )
         .unwrap();
         let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id()).unwrap();
-        let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
+        let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
             genome.clone(),
             &capacity,
             development.clone(),
             SensorProfile::PrivilegedAffordanceV1,
-            phenotype.foundation_abi().canonical_v2().cloned().unwrap(),
+            phenotype.foundation_abi_selection().clone(),
         )
         .unwrap();
         let mut residents = BTreeMap::from([(
