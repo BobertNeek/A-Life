@@ -5,8 +5,7 @@ use std::path::{Path, PathBuf};
 
 use alife_core::{
     BrainCapacityClass, BrainGenome, BrainPhenotype, DevelopmentState, FoundationAbiBinding,
-    FoundationWeightAsset, NormalizedScalar, PhenotypeCompiler, PhenotypeCompilerInputs,
-    SensorProfile, Tick,
+    FoundationWeightAsset, NormalizedScalar, PhenotypeCompiler, SensorProfile, Tick,
 };
 
 const N512_FOUNDATION_ID: u64 = 0x004E_3531_325F_5631;
@@ -86,15 +85,18 @@ fn n512_builtins_bind_exact_profiles_and_compile_validated_matches_asset_path() 
         let development =
             DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
 
-        let from_asset = PhenotypeCompiler::compile_from_foundation_asset(
-            &genome,
-            &capacity,
-            &development,
-            sensor_profile,
-            &asset,
-        )
-        .unwrap();
+        let (from_asset, inputs, receipt) =
+            PhenotypeCompiler::compile_from_legacy_nano512_compatibility_asset(
+                &genome,
+                &capacity,
+                &development,
+                sensor_profile,
+                &asset,
+            )
+            .unwrap()
+            .into_runtime_parts();
         asset.validate_against(&from_asset).unwrap();
+        receipt.validate_against(&from_asset, &asset).unwrap();
         assert_eq!(from_asset.sensor_profile(), sensor_profile);
         assert_eq!(
             from_asset.foundation_abi().capacity_class_id(),
@@ -117,14 +119,6 @@ fn n512_builtins_bind_exact_profiles_and_compile_validated_matches_asset_path() 
             Some(asset.digest())
         );
 
-        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
-            genome,
-            &capacity,
-            development,
-            sensor_profile,
-            from_asset.foundation_abi().clone(),
-        )
-        .unwrap();
         assert_eq!(
             PhenotypeCompiler::compile_validated(&inputs, &capacity).unwrap(),
             from_asset
@@ -144,6 +138,7 @@ fn n512_foundations_reject_class_profile_and_forged_cross_wires() {
 
     assert!(FoundationAbiBinding::canonical_for_foundation_asset(&n1024, &privileged).is_err());
     assert!(FoundationAbiBinding::canonical_for_foundation_asset(&n2048, &privileged).is_err());
+    assert!(FoundationAbiBinding::canonical_for_foundation_asset(&n512, &privileged).is_err());
 
     let n512_genome = BrainGenome::scaffold(0x5120_2000, n512.id());
     let n512_development = DevelopmentState::new(
@@ -159,17 +154,16 @@ fn n512_foundations_reject_class_profile_and_forged_cross_wires() {
         &privileged,
     )
     .is_err());
-    let privileged_binding =
-        FoundationAbiBinding::canonical_for_foundation_asset(&n512, &privileged).unwrap();
-    let mismatched_inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
-        n512_genome.clone(),
-        &n512,
-        n512_development.clone(),
-        SensorProfile::GroundedObjectSlotsV1,
-        privileged_binding,
-    )
-    .unwrap();
-    assert!(PhenotypeCompiler::compile_validated(&mismatched_inputs, &n512).is_err());
+    assert!(
+        PhenotypeCompiler::compile_from_legacy_nano512_compatibility_asset(
+            &n512_genome,
+            &n512,
+            &n512_development,
+            SensorProfile::GroundedObjectSlotsV1,
+            &privileged,
+        )
+        .is_err()
+    );
 
     let n1024_genome = BrainGenome::scaffold(0x5120_2001, n1024.id());
     let n1024_development = DevelopmentState::new(
@@ -215,6 +209,16 @@ fn n512_foundations_reject_class_profile_and_forged_cross_wires() {
         forged["manifest"]["capacity_class_id"] = serde_json::json!(class_id);
         let forged: FoundationWeightAsset = serde_json::from_value(forged).unwrap();
         assert!(FoundationAbiBinding::canonical_for_foundation_asset(&n512, &forged).is_err());
+        assert!(
+            PhenotypeCompiler::compile_from_legacy_nano512_compatibility_asset(
+                &n512_genome,
+                &n512,
+                &n512_development,
+                SensorProfile::GroundedObjectSlotsV1,
+                &forged,
+            )
+            .is_err()
+        );
     }
 }
 
