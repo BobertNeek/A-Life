@@ -6,12 +6,12 @@
 
 use alife_core::cognitive_work::CognitiveWorkCounters;
 use alife_core::{
-    apply_dendritic_conjunctions, BrainCapacityClass, BrainPhenotype, CanonicalDigestBuilder,
-    CoactivationEvidence, CognitiveWorkReceipt, DendriticBranch, DendriticBranchSet,
-    DendriticInputRef, DendriticWorkReceipt, PhenotypeHash, ScaffoldContractError,
-    StructuralPlasticityConfig, StructuralPlasticityState, StructuralWorkReceipt,
-    MAX_ACCEPTED_PER_PHASE, MAX_CANDIDATES_PER_REGION, MAX_DENDRITIC_BRANCHES,
-    MAX_DENDRITIC_BRANCHES_PER_NEURON, MAX_DENDRITIC_INPUTS,
+    BrainCapacityClass, BrainPhenotype, CanonicalDigestBuilder, CoactivationEvidence,
+    CognitiveWorkReceipt, DendriticBranch, DendriticBranchSet, DendriticInputRef,
+    DendriticWorkReceipt, PhenotypeHash, ScaffoldContractError, StructuralPlasticityConfig,
+    StructuralPlasticityState, StructuralWorkReceipt, MAX_ACCEPTED_PER_PHASE,
+    MAX_CANDIDATES_PER_REGION, MAX_DENDRITIC_BRANCHES, MAX_DENDRITIC_BRANCHES_PER_NEURON,
+    MAX_DENDRITIC_INPUTS,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -391,9 +391,12 @@ impl GpuV11CausalState {
             return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
         }
         let mut accumulators = base_accumulators.to_vec();
-        let dendritic =
-            apply_dendritic_conjunctions(activations, &mut accumulators, &self.dendritic_branches)
-                .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
+        let dendritic = alife_core::apply_dendritic_conjunctions(
+            activations,
+            &mut accumulators,
+            &self.dendritic_branches,
+        )
+        .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
         for span in &self.sparse_spans {
             let target = span.target as usize;
             for edge in &span.edges {

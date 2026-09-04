@@ -229,10 +229,12 @@ fn consolidation_promotes_fast_preserves_genetic_and_commits_once() {
         "sleep replay must carry nonzero captured eligibility: {replay:?}"
     );
     assert!(
-        replay
-            .events
+        replay.events.iter().any(|event| event
+            .modulator
+            .frame()
+            .lanes()
             .iter()
-            .any(|event| event.modulator.value() != 0.0),
+            .any(|value| *value != 0.0)),
         "sleep replay must carry a nonzero outcome modulator: {replay:?}"
     );
     staged.staged.validate_against(&request, 1, 1).unwrap();
@@ -488,7 +490,10 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
             sealed_reward(handles[0], &frames[0], &ticks[0], exposure + 1, 0.8),
             sealed_reward(handles[1], &frames[1], &ticks[1], exposure + 1, 0.8),
         ];
-        let receptors = patches.map(|patch| support::test_receptor_frame(&patch));
+        let receptors = [
+            support::test_receptor_frame(&patches[0]),
+            support::test_receptor_frame(&patches[1]),
+        ];
         backend
             .apply_sealed_outcome_batch(&[
                 (handles[0], &patches[0], &receptors[0]),

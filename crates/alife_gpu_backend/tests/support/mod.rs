@@ -120,7 +120,7 @@ pub fn heterogeneous_n512_phenotypes() -> [BrainPhenotype; 2] {
         .push(SensorChannelGene {
             kind: SensorChannelKind::Hearing,
             receptor_count: 8,
-            target_lobe: LobeKind::AuditorySpeech,
+            target_lobe: LobeKind::SocialCommunication,
             enabled_at_maturation: 0,
         });
     let changed = PhenotypeCompiler::compile(
@@ -774,7 +774,7 @@ mod hardware {
             let upload = GpuPhenotypeUpload::try_from(phenotype).unwrap();
             let motor = phenotype
                 .lobe_layout()
-                .region(alife_core::LobeKind::MotorArbitration)
+                .region(alife_core::LobeKind::ActionPlanning)
                 .expect("test phenotype must contain the motor lobe");
             assert!(upload
                 .neuron_dynamics

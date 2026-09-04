@@ -491,7 +491,7 @@ pub(crate) fn decode_chunked_http_body(body: &str) -> Result<String, String> {
         }
         decoded.extend_from_slice(&remaining[..size]);
         let trailer = &remaining[size..];
-        if !trailer.starts_with("\r\n") {
+        if !trailer.starts_with(b"\r\n") {
             return Err("chunked llama.cpp response missing chunk terminator".to_string());
         }
         remaining = &trailer[2..];

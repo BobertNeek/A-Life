@@ -850,7 +850,7 @@ pub fn run_era1_promotion_and_write(
         .to_string_lossy()
         .replace('\\', "/");
     let report = generate_era1_promotion_report(bundle_path, bundle_relative_path)?;
-    crate::atomic_write::write(absolute_output, &serde_json::to_vec_pretty(&report)?)?;
+    crate::atomic_write::write(&absolute_output, &serde_json::to_vec_pretty(&report)?)?;
     Ok(report)
 }
 

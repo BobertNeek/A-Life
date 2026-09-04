@@ -4,9 +4,9 @@ use alife_core::{
     AffordanceBits, Confidence, ContextStreams, HeardToken, LanguageContextSnapshot,
     NormalizedScalar, OrganismId, ReferenceSensoryAdapter, ReferenceSensoryRequest,
     ScaffoldContractError, SensoryChannels, SensorySnapshot, SignedValence, SocialAgentSnapshot,
-    SocialProximityEntry, Tick, Validate, Vec3f, WorldEntityId, MAX_HEARD_TOKENS,
-    MAX_SOCIAL_AGENTS, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_SMELL_CHANNEL_COUNT,
-    SENSORY_TACTILE_CHANNEL_COUNT, SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
+    SocialProximityEntry, Tick, Validate, WorldEntityId, MAX_HEARD_TOKENS, MAX_SOCIAL_AGENTS,
+    SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
+    SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
 use bevy::prelude::{Entity, Vec3};
 
