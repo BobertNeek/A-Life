@@ -177,6 +177,11 @@ impl BrainPhenotype {
         self.foundation_abi_selection
             .legacy_nano512_compatibility_v1()
     }
+    pub const fn migrated_n2048_foundation_v1(
+        &self,
+    ) -> Option<&crate::MigratedN2048FoundationV1Descriptor> {
+        self.foundation_abi_selection.migrated_n2048_foundation_v1()
+    }
     pub const fn language_codebook(&self) -> &LanguageCodebookV1 {
         &self.language_codebook
     }
@@ -689,6 +694,9 @@ impl BrainPhenotype {
             .foundation_abi_selection
             .legacy_nano512_compatibility_v1()
         {
+            descriptor.validate_for_phenotype(self)?;
+        }
+        if let Some(descriptor) = self.foundation_abi_selection.migrated_n2048_foundation_v1() {
             descriptor.validate_for_phenotype(self)?;
         }
         Ok(())

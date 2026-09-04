@@ -1,5 +1,7 @@
 //! Explicit admission contract for the immutable pre-v2 Nano512 foundation.
 
+use std::sync::OnceLock;
+
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -16,6 +18,13 @@ const SELECTION_DOMAIN: &[u8] = b"alife.foundation.abi-selection.v1";
 const RECEIPT_DOMAIN: &[u8] = b"alife.foundation.compatibility.receipt.nano512.v1";
 const ENDPOINT_AUDIT_DOMAIN: &[u8] = b"alife.audit.nano512.endpoints.v1";
 const GRAPH_WEIGHT_AUDIT_DOMAIN: &[u8] = b"alife.audit.nano512.graph-and-weights.v1";
+
+const EXPECTED_N2048_V1_TO_V2_MIGRATION_RECIPE_DIGEST: [u64; 4] = [
+    0x0ed9_76a6_7662_5381,
+    0x7f63_ccf0_ce75_07df,
+    0x8a99_0a43_017d_da13,
+    0x6323_baab_7821_2ea6,
+];
 
 pub const LEGACY_NANO512_V1_COORDINATE_SEED: u64 = 0x4E35_3132_5F00_0001;
 
@@ -67,6 +76,7 @@ impl ProductionRuntimePath {
 pub enum FoundationAbiSelection {
     CanonicalV2(FoundationAbiBinding),
     LegacyNano512CompatibilityV1(LegacyNano512CompatibilityAbiDescriptor),
+    MigratedN2048FoundationV1(MigratedN2048FoundationV1Descriptor),
 }
 
 impl FoundationAbiSelection {
@@ -74,10 +84,14 @@ impl FoundationAbiSelection {
         Self::LegacyNano512CompatibilityV1(descriptor)
     }
 
+    pub(crate) fn migrated_n2048(descriptor: MigratedN2048FoundationV1Descriptor) -> Self {
+        Self::MigratedN2048FoundationV1(descriptor)
+    }
+
     pub const fn canonical_v2(&self) -> Option<&FoundationAbiBinding> {
         match self {
             Self::CanonicalV2(binding) => Some(binding),
-            Self::LegacyNano512CompatibilityV1(_) => None,
+            Self::LegacyNano512CompatibilityV1(_) | Self::MigratedN2048FoundationV1(_) => None,
         }
     }
 
@@ -87,6 +101,16 @@ impl FoundationAbiSelection {
         match self {
             Self::CanonicalV2(_) => None,
             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor),
+            Self::MigratedN2048FoundationV1(_) => None,
+        }
+    }
+
+    pub const fn migrated_n2048_foundation_v1(
+        &self,
+    ) -> Option<&MigratedN2048FoundationV1Descriptor> {
+        match self {
+            Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor),
+            Self::CanonicalV2(_) | Self::LegacyNano512CompatibilityV1(_) => None,
         }
     }
 
@@ -106,6 +130,15 @@ impl FoundationAbiSelection {
                 }
                 Ok(())
             }
+            Self::MigratedN2048FoundationV1(descriptor) => {
+                descriptor.validate_contract()?;
+                if capacity.id() != BrainCapacityClass::N2048_ID
+                    || descriptor.sensor_profile() != sensor_profile
+                {
+                    return Err(ScaffoldContractError::PhenotypeCompile);
+                }
+                Ok(())
+            }
         }
     }
 
@@ -113,6 +146,7 @@ impl FoundationAbiSelection {
         match self {
             Self::CanonicalV2(binding) => binding.language_codebook().clone(),
             Self::LegacyNano512CompatibilityV1(_) => LanguageCodebookV1::canonical(),
+            Self::MigratedN2048FoundationV1(_) => LanguageCodebookV1::canonical(),
         }
     }
 
@@ -120,6 +154,7 @@ impl FoundationAbiSelection {
         match self {
             Self::CanonicalV2(binding) => binding.capacity_class_id(),
             Self::LegacyNano512CompatibilityV1(_) => BrainCapacityClass::N512_ID,
+            Self::MigratedN2048FoundationV1(_) => BrainCapacityClass::N2048_ID,
         }
     }
 
@@ -127,6 +162,7 @@ impl FoundationAbiSelection {
         match self {
             Self::CanonicalV2(binding) => binding.foundation_id(),
             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor.source_foundation_id),
+            Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor.source_foundation_id),
         }
     }
 
@@ -134,6 +170,9 @@ impl FoundationAbiSelection {
         match self {
             Self::CanonicalV2(binding) => binding.foundation_version(),
             Self::LegacyNano512CompatibilityV1(descriptor) => {
+                Some(descriptor.source_foundation_version)
+            }
+            Self::MigratedN2048FoundationV1(descriptor) => {
                 Some(descriptor.source_foundation_version)
             }
         }
@@ -145,6 +184,9 @@ impl FoundationAbiSelection {
             Self::LegacyNano512CompatibilityV1(descriptor) => {
                 Some(descriptor.source_compatibility_family_id)
             }
+            Self::MigratedN2048FoundationV1(descriptor) => {
+                Some(descriptor.source_compatibility_family_id)
+            }
         }
     }
 
@@ -152,6 +194,7 @@ impl FoundationAbiSelection {
         match self {
             Self::CanonicalV2(binding) => binding.foundation_weight_asset(),
             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor.source_weight_asset),
+            Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor.source_weight_asset),
         }
     }
 
@@ -197,8 +240,305 @@ impl FoundationAbiSelection {
                     digest.write_u64(word);
                 }
             }
+            Self::MigratedN2048FoundationV1(descriptor) => {
+                digest.write_u8(3);
+                for word in descriptor.canonical_digest() {
+                    digest.write_u64(word);
+                }
+            }
         }
     }
+}
+
+/// Authenticated admission of the immutable pre-v2 N2048 payload into the
+/// current nine-homologue runtime. Source and target ABIs remain distinct.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MigratedN2048FoundationV1Descriptor {
+    schema_version: u16,
+    source_foundation_id: FoundationId,
+    source_foundation_version: FoundationVersion,
+    source_compatibility_family_id: FoundationCompatibilityFamilyId,
+    source_sensor_profile: SensorProfile,
+    source_weight_asset: FoundationWeightAssetRef,
+    source_layout_digest: Blake3Digest,
+    source_route_abi_digest: Blake3Digest,
+    source_plasticity_abi_digest: Blake3Digest,
+    source_address_map_digest: Blake3Digest,
+    runtime_abi_id: ProductionRuntimeAbiId,
+    runtime_path: ProductionRuntimePath,
+    runtime_layout_digest: Blake3Digest,
+    runtime_route_abi_digest: Blake3Digest,
+    runtime_plasticity_abi_digest: Blake3Digest,
+    runtime_address_map_digest: Blake3Digest,
+    migration_recipe_digest: [u64; 4],
+    descriptor_digest: [u64; 4],
+}
+
+impl MigratedN2048FoundationV1Descriptor {
+    pub(crate) fn recognizes_source_asset(
+        sensor_profile: SensorProfile,
+        asset: &FoundationWeightAsset,
+    ) -> Result<bool, ScaffoldContractError> {
+        asset.validate_self_contained()?;
+        let expected = FoundationWeightAsset::builtin_n2048_v1(sensor_profile)?;
+        let manifest = asset.manifest();
+        let expected_manifest = expected.manifest();
+        Ok(
+            manifest.foundation_id() == expected_manifest.foundation_id()
+                && manifest.foundation_version() == expected_manifest.foundation_version()
+                && manifest.compatibility_family_id()
+                    == expected_manifest.compatibility_family_id()
+                && manifest.capacity_class_id() == expected_manifest.capacity_class_id()
+                && manifest.layout_digest() == expected_manifest.layout_digest()
+                && manifest.route_abi_digest() == expected_manifest.route_abi_digest()
+                && manifest.plasticity_abi_digest() == expected_manifest.plasticity_abi_digest()
+                && manifest.address_map_digest() == expected_manifest.address_map_digest(),
+        )
+    }
+
+    pub(crate) fn for_asset(
+        capacity: &BrainCapacityClass,
+        sensor_profile: SensorProfile,
+        asset: &FoundationWeightAsset,
+    ) -> Result<Self, ScaffoldContractError> {
+        capacity.validate_contract()?;
+        asset.validate_self_contained()?;
+        let expected = FoundationWeightAsset::builtin_n2048_v1(sensor_profile)?;
+        if capacity.id() != BrainCapacityClass::N2048_ID || asset != &expected {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        let manifest = asset.manifest();
+        let runtime_layout = crate::N2048FoundationLayoutV1::lobe_layout();
+        if crate::foundation::n2048_coordinate_migration_recipe_digest()
+            != EXPECTED_N2048_V1_TO_V2_MIGRATION_RECIPE_DIGEST
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        let mut value = Self {
+            schema_version: 1,
+            source_foundation_id: manifest.foundation_id(),
+            source_foundation_version: manifest.foundation_version(),
+            source_compatibility_family_id: manifest.compatibility_family_id(),
+            source_sensor_profile: sensor_profile,
+            source_weight_asset: asset.asset_ref(),
+            source_layout_digest: manifest.layout_digest(),
+            source_route_abi_digest: manifest.route_abi_digest(),
+            source_plasticity_abi_digest: manifest.plasticity_abi_digest(),
+            source_address_map_digest: manifest.address_map_digest(),
+            runtime_abi_id: ProductionRuntimeAbiId::V2,
+            runtime_path: ProductionRuntimePath::ORDINARY_GPU_ORGANISM_V2,
+            runtime_layout_digest: layout_digest(&runtime_layout),
+            runtime_route_abi_digest: crate::N2048FoundationLayoutV1::route_abi_digest(),
+            runtime_plasticity_abi_digest: crate::N2048FoundationLayoutV1::plasticity_abi_digest(),
+            runtime_address_map_digest: canonical_n2048_runtime_address_digest(sensor_profile)?,
+            migration_recipe_digest: EXPECTED_N2048_V1_TO_V2_MIGRATION_RECIPE_DIGEST,
+            descriptor_digest: [0; 4],
+        };
+        value.descriptor_digest = value.recompute_digest();
+        value.validate_contract()?;
+        Ok(value)
+    }
+
+    pub const fn source_weight_asset(&self) -> FoundationWeightAssetRef {
+        self.source_weight_asset
+    }
+
+    pub const fn sensor_profile(&self) -> SensorProfile {
+        self.source_sensor_profile
+    }
+
+    pub const fn runtime_address_map_digest(&self) -> Blake3Digest {
+        self.runtime_address_map_digest
+    }
+
+    pub const fn migration_recipe_digest(&self) -> [u64; 4] {
+        self.migration_recipe_digest
+    }
+
+    pub const fn canonical_digest(&self) -> [u64; 4] {
+        self.descriptor_digest
+    }
+
+    pub(crate) fn validate_source_asset(
+        &self,
+        asset: &FoundationWeightAsset,
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_contract()?;
+        let expected = FoundationWeightAsset::builtin_n2048_v1(self.source_sensor_profile)?;
+        if asset != &expected || asset.asset_ref() != self.source_weight_asset {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        let expected_asset = FoundationWeightAsset::builtin_n2048_v1(self.source_sensor_profile)?;
+        let manifest = expected_asset.manifest();
+        let runtime_layout = crate::N2048FoundationLayoutV1::lobe_layout();
+        if self.schema_version != 1
+            || self.source_foundation_id != FoundationId::N2048_V1
+            || self.source_foundation_version != FoundationVersion::V1
+            || self.source_compatibility_family_id
+                != FoundationCompatibilityFamilyId::N2048_FOUNDATION
+            || self.source_foundation_id != manifest.foundation_id()
+            || self.source_foundation_version != manifest.foundation_version()
+            || self.source_compatibility_family_id != manifest.compatibility_family_id()
+            || self.source_weight_asset != expected_asset.asset_ref()
+            || self.source_layout_digest != manifest.layout_digest()
+            || self.source_route_abi_digest != manifest.route_abi_digest()
+            || self.source_plasticity_abi_digest != manifest.plasticity_abi_digest()
+            || self.source_address_map_digest != manifest.address_map_digest()
+            || self.runtime_abi_id != ProductionRuntimeAbiId::V2
+            || self.runtime_path != ProductionRuntimePath::ORDINARY_GPU_ORGANISM_V2
+            || self.runtime_layout_digest != layout_digest(&runtime_layout)
+            || self.runtime_route_abi_digest != crate::N2048FoundationLayoutV1::route_abi_digest()
+            || self.runtime_plasticity_abi_digest
+                != crate::N2048FoundationLayoutV1::plasticity_abi_digest()
+            || self.runtime_address_map_digest
+                != canonical_n2048_runtime_address_digest(self.source_sensor_profile)?
+            || self.migration_recipe_digest != EXPECTED_N2048_V1_TO_V2_MIGRATION_RECIPE_DIGEST
+            || crate::foundation::n2048_coordinate_migration_recipe_digest()
+                != EXPECTED_N2048_V1_TO_V2_MIGRATION_RECIPE_DIGEST
+            || self.descriptor_digest != self.recompute_digest()
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_for_phenotype(
+        &self,
+        phenotype: &BrainPhenotype,
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_contract()?;
+        if phenotype.brain_class_id() != BrainCapacityClass::N2048_ID
+            || phenotype.sensor_profile() != self.source_sensor_profile
+            || phenotype.lobe_layout() != &crate::N2048FoundationLayoutV1::lobe_layout()
+            || phenotype.route_abi_digest() != crate::N2048FoundationLayoutV1::route_abi_digest()
+            || phenotype.plasticity_abi_digest()
+                != crate::N2048FoundationLayoutV1::plasticity_abi_digest()
+            || phenotype.persistent_address_map().digest() != self.runtime_address_map_digest
+            || phenotype.synapses().len() != self.source_weight_asset.weight_count() as usize
+            || phenotype.foundation_abi().migrated_n2048_foundation_v1() != Some(self)
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Ok(())
+    }
+
+    fn recompute_digest(&self) -> [u64; 4] {
+        let mut digest =
+            CanonicalDigestBuilder::new(b"alife.foundation.migration.n2048-v1-to-v2.v1");
+        digest.write_u16(self.schema_version);
+        digest.write_u64(self.source_foundation_id.raw());
+        digest.write_u32(self.source_foundation_version.raw());
+        digest.write_u64(self.source_compatibility_family_id.raw());
+        digest.write_u16(self.source_sensor_profile.raw());
+        write_blake3(&mut digest, self.source_weight_asset.digest());
+        digest.write_u32(self.source_weight_asset.weight_count());
+        for value in [
+            self.source_layout_digest,
+            self.source_route_abi_digest,
+            self.source_plasticity_abi_digest,
+            self.source_address_map_digest,
+            self.runtime_layout_digest,
+            self.runtime_route_abi_digest,
+            self.runtime_plasticity_abi_digest,
+            self.runtime_address_map_digest,
+        ] {
+            write_blake3(&mut digest, value);
+        }
+        digest.write_u32(self.runtime_abi_id.raw());
+        digest.write_u32(self.runtime_path.raw());
+        for word in self.migration_recipe_digest {
+            digest.write_u64(word);
+        }
+        digest.finish256()
+    }
+}
+
+impl<'de> Deserialize<'de> for MigratedN2048FoundationV1Descriptor {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Wire {
+            schema_version: u16,
+            source_foundation_id: FoundationId,
+            source_foundation_version: FoundationVersion,
+            source_compatibility_family_id: FoundationCompatibilityFamilyId,
+            source_sensor_profile: SensorProfile,
+            source_weight_asset: FoundationWeightAssetRef,
+            source_layout_digest: Blake3Digest,
+            source_route_abi_digest: Blake3Digest,
+            source_plasticity_abi_digest: Blake3Digest,
+            source_address_map_digest: Blake3Digest,
+            runtime_abi_id: ProductionRuntimeAbiId,
+            runtime_path: ProductionRuntimePath,
+            runtime_layout_digest: Blake3Digest,
+            runtime_route_abi_digest: Blake3Digest,
+            runtime_plasticity_abi_digest: Blake3Digest,
+            runtime_address_map_digest: Blake3Digest,
+            migration_recipe_digest: [u64; 4],
+            descriptor_digest: [u64; 4],
+        }
+        let wire = Wire::deserialize(deserializer)?;
+        let value = Self {
+            schema_version: wire.schema_version,
+            source_foundation_id: wire.source_foundation_id,
+            source_foundation_version: wire.source_foundation_version,
+            source_compatibility_family_id: wire.source_compatibility_family_id,
+            source_sensor_profile: wire.source_sensor_profile,
+            source_weight_asset: wire.source_weight_asset,
+            source_layout_digest: wire.source_layout_digest,
+            source_route_abi_digest: wire.source_route_abi_digest,
+            source_plasticity_abi_digest: wire.source_plasticity_abi_digest,
+            source_address_map_digest: wire.source_address_map_digest,
+            runtime_abi_id: wire.runtime_abi_id,
+            runtime_path: wire.runtime_path,
+            runtime_layout_digest: wire.runtime_layout_digest,
+            runtime_route_abi_digest: wire.runtime_route_abi_digest,
+            runtime_plasticity_abi_digest: wire.runtime_plasticity_abi_digest,
+            runtime_address_map_digest: wire.runtime_address_map_digest,
+            migration_recipe_digest: wire.migration_recipe_digest,
+            descriptor_digest: wire.descriptor_digest,
+        };
+        value.validate_contract().map_err(D::Error::custom)?;
+        Ok(value)
+    }
+}
+
+fn canonical_n2048_runtime_address_digest(
+    sensor_profile: SensorProfile,
+) -> Result<Blake3Digest, ScaffoldContractError> {
+    static PRIVILEGED: OnceLock<Option<Blake3Digest>> = OnceLock::new();
+    static GROUNDED: OnceLock<Option<Blake3Digest>> = OnceLock::new();
+    let cache = match sensor_profile {
+        SensorProfile::PrivilegedAffordanceV1 => &PRIVILEGED,
+        SensorProfile::GroundedObjectSlotsV1 => &GROUNDED,
+    };
+    cache
+        .get_or_init(|| compute_canonical_n2048_runtime_address_digest(sensor_profile).ok())
+        .as_ref()
+        .copied()
+        .ok_or(ScaffoldContractError::PhenotypeCompile)
+}
+
+fn compute_canonical_n2048_runtime_address_digest(
+    sensor_profile: SensorProfile,
+) -> Result<Blake3Digest, ScaffoldContractError> {
+    let capacity = BrainCapacityClass::n2048();
+    let genome = crate::BrainGenome::scaffold(0x4E32_3034_385F_5632, capacity.id());
+    let development = crate::DevelopmentState::new(
+        genome.id,
+        crate::Tick::ZERO,
+        crate::NormalizedScalar::new(1.0)?,
+    );
+    let inputs =
+        crate::PhenotypeCompilerInputs::try_new(genome, &capacity, development, sensor_profile)?;
+    let phenotype = crate::PhenotypeCompiler::compile_validated(&inputs, &capacity)?;
+    Ok(phenotype.persistent_address_map().digest())
 }
 
 /// Separately typed source ABI selected only from exact asset metadata.

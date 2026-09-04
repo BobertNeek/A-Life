@@ -6,8 +6,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::{
     AlphaStoragePolicy, BrainCapacityClass, BrainClassId, BrainGenome, CanonicalDigestBuilder,
     DevelopmentState, FoundationAbiBinding, FoundationAbiSelection,
-    LegacyNano512CompatibilityAbiDescriptor, LobeRatioPlan, ScaffoldContractError, SensorProfile,
-    Validate,
+    LegacyNano512CompatibilityAbiDescriptor, LobeRatioPlan, MigratedN2048FoundationV1Descriptor,
+    ScaffoldContractError, SensorProfile, Validate,
 };
 
 const INPUTS_SCHEMA_VERSION: u16 = 5;
@@ -49,10 +49,27 @@ impl PhenotypeCompilerInputs {
         sensor_profile: SensorProfile,
         foundation_abi: FoundationAbiBinding,
     ) -> Result<Self, ScaffoldContractError> {
+        foundation_abi.validate_against(capacity)?;
+        Self::try_new_with_foundation_selection(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            FoundationAbiSelection::CanonicalV2(foundation_abi),
+        )
+    }
+
+    pub fn try_new_with_foundation_selection(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        foundation_abi_selection: FoundationAbiSelection,
+    ) -> Result<Self, ScaffoldContractError> {
         capacity.validate_contract()?;
         genome.validate_contract()?;
         development.validate_contract()?;
-        foundation_abi.validate_against(capacity)?;
+        foundation_abi_selection.validate_against(capacity, sensor_profile)?;
         if genome.brain_class_id != capacity.id() || development.genome_id != genome.id {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
@@ -62,7 +79,7 @@ impl PhenotypeCompilerInputs {
             genome,
             development,
             sensor_profile,
-            foundation_abi_selection: FoundationAbiSelection::CanonicalV2(foundation_abi),
+            foundation_abi_selection,
             capacity_class_id: capacity.id(),
             capacity_digest: capacity.canonical_digest(),
             canonical_digest: [0; 4],
@@ -78,22 +95,29 @@ impl PhenotypeCompilerInputs {
         sensor_profile: SensorProfile,
         descriptor: LegacyNano512CompatibilityAbiDescriptor,
     ) -> Result<Self, ScaffoldContractError> {
-        capacity.validate_contract()?;
-        genome.validate_contract()?;
-        development.validate_contract()?;
-        let mut value = Self {
-            schema_version: INPUTS_SCHEMA_VERSION,
+        Self::try_new_with_foundation_selection(
             genome,
+            capacity,
             development,
             sensor_profile,
-            foundation_abi_selection: FoundationAbiSelection::legacy_nano512(descriptor),
-            capacity_class_id: capacity.id(),
-            capacity_digest: capacity.canonical_digest(),
-            canonical_digest: [0; 4],
-        };
-        value.canonical_digest = value.recompute_digest()?;
-        value.validate_against(capacity)?;
-        Ok(value)
+            FoundationAbiSelection::legacy_nano512(descriptor),
+        )
+    }
+
+    pub(crate) fn try_new_with_migrated_n2048_foundation_v1(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        descriptor: MigratedN2048FoundationV1Descriptor,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_foundation_selection(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            FoundationAbiSelection::migrated_n2048(descriptor),
+        )
     }
 
     pub const fn canonical_digest(&self) -> [u64; 4] {
@@ -116,6 +140,11 @@ impl PhenotypeCompilerInputs {
     ) -> Option<&LegacyNano512CompatibilityAbiDescriptor> {
         self.foundation_abi_selection
             .legacy_nano512_compatibility_v1()
+    }
+    pub const fn migrated_n2048_foundation_v1(
+        &self,
+    ) -> Option<&MigratedN2048FoundationV1Descriptor> {
+        self.foundation_abi_selection.migrated_n2048_foundation_v1()
     }
     pub const fn genome(&self) -> &BrainGenome {
         &self.genome

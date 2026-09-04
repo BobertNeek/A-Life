@@ -102,7 +102,8 @@ impl PhenotypeGrowthMigration {
         let mut synapses = Vec::with_capacity(65_536);
         let mut receipts = Vec::with_capacity(source.projections().len());
 
-        for projection in source.projections().iter().take(16) {
+        let recurrent_route_count = crate::N2048FoundationLayoutV1::route_specs().len();
+        for projection in source.projections().iter().take(recurrent_route_count) {
             let route = projection.route_index();
             let start = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
             let (source_start, source_len) = projection.synapse_range();
@@ -173,7 +174,10 @@ impl PhenotypeGrowthMigration {
             receipts.push(route_receipt(route, active_tiles, len, 0, 0));
         }
 
-        let action_projection = source.projections().get(16).ok_or_else(compile_error)?;
+        let action_projection = source
+            .projections()
+            .get(recurrent_route_count)
+            .ok_or_else(compile_error)?;
         let action_route = action_projection.route_index();
         let action_start = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
         let target_motor = target_layout
@@ -299,7 +303,14 @@ impl PhenotypeGrowthMigration {
         ));
         receipts.push(route_receipt(action_route, 0, 0, action_len, 0));
 
-        let memory_projection = source.projections().get(17).ok_or_else(compile_error)?;
+        let memory_projection = source
+            .projections()
+            .get(
+                recurrent_route_count
+                    .checked_add(1)
+                    .ok_or_else(compile_error)?,
+            )
+            .ok_or_else(compile_error)?;
         let memory_route = memory_projection.route_index();
         let memory_start = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
         let source_episodic_len = source

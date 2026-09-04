@@ -8,8 +8,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::blake3_digest::{domain_hasher, Blake3Write};
 use crate::{
     ActiveTilePolicy, BiologicalPriority, Blake3Digest, BrainCapacityClass, BrainClassId,
-    BrainPhenotype, LobeKind, LobeLayout, ProjectionType, ScaffoldContractError, SensorProfile,
-    UpdateCadence,
+    BrainPhenotype, CanonicalDigestBuilder, LobeKind, LobeLayout, ProjectionType,
+    ScaffoldContractError, SensorProfile, UpdateCadence,
 };
 use crate::{LanguageCodebookV1, LobeRegion};
 
@@ -131,7 +131,7 @@ const fn fast(count: u32) -> FoundationSectionPolicy {
     FoundationSectionPolicy::new(0, 0, count)
 }
 
-const N2048_ROUTES: [N2048FoundationRouteSpec; 16] = [
+const N2048_ROUTES: [N2048FoundationRouteSpec; 15] = [
     N2048FoundationRouteSpec::new(
         LobeKind::PerceptualIntegration,
         LobeKind::TemporalPredictive,
@@ -144,17 +144,8 @@ const N2048_ROUTES: [N2048FoundationRouteSpec; 16] = [
     N2048FoundationRouteSpec::new(
         LobeKind::SocialCommunication,
         LobeKind::TemporalPredictive,
-        1_536,
-        slow(1_536),
-        ProjectionType::FeedForward,
-        UpdateCadence::Hot15To60Hz,
-        BiologicalPriority::High,
-    ),
-    N2048FoundationRouteSpec::new(
-        LobeKind::SocialCommunication,
-        LobeKind::TemporalPredictive,
-        1_536,
-        slow(1_536),
+        3_072,
+        slow(3_072),
         ProjectionType::FeedForward,
         UpdateCadence::Hot15To60Hz,
         BiologicalPriority::High,
@@ -278,6 +269,150 @@ const N2048_ROUTES: [N2048FoundationRouteSpec; 16] = [
     ),
 ];
 
+/// One source-ABI coordinate shard inside a current logical N2048 route.
+/// Offsets are relative to the current v2 source and target homologues.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct N2048CoordinateSegmentV1 {
+    source_offset: u32,
+    source_len: u32,
+    target_offset: u32,
+    target_len: u32,
+    synapse_count: u32,
+    legacy_route_ordinal: u16,
+}
+
+impl N2048CoordinateSegmentV1 {
+    const fn new(
+        source_offset: u32,
+        source_len: u32,
+        target_offset: u32,
+        target_len: u32,
+        synapse_count: u32,
+        legacy_route_ordinal: u16,
+    ) -> Self {
+        Self {
+            source_offset,
+            source_len,
+            target_offset,
+            target_len,
+            synapse_count,
+            legacy_route_ordinal,
+        }
+    }
+
+    pub(crate) const fn source_offset(self) -> u32 {
+        self.source_offset
+    }
+    pub(crate) const fn source_len(self) -> u32 {
+        self.source_len
+    }
+    pub(crate) const fn target_offset(self) -> u32 {
+        self.target_offset
+    }
+    pub(crate) const fn target_len(self) -> u32 {
+        self.target_len
+    }
+    pub(crate) const fn synapse_count(self) -> u32 {
+        self.synapse_count
+    }
+    pub(crate) const fn legacy_route_ordinal(self) -> u16 {
+        self.legacy_route_ordinal
+    }
+}
+
+const N2048_SEGMENT_ROUTE_0: [N2048CoordinateSegmentV1; 1] =
+    [N2048CoordinateSegmentV1::new(0, 256, 0, 448, 3_584, 0)];
+const N2048_SEGMENT_ROUTE_1: [N2048CoordinateSegmentV1; 2] = [
+    N2048CoordinateSegmentV1::new(0, 128, 0, 448, 1_536, 1),
+    N2048CoordinateSegmentV1::new(128, 128, 0, 448, 1_536, 2),
+];
+const N2048_SEGMENT_ROUTE_2: [N2048CoordinateSegmentV1; 1] =
+    [N2048CoordinateSegmentV1::new(0, 128, 0, 96, 1_024, 3)];
+const N2048_SEGMENT_ROUTE_3: [N2048CoordinateSegmentV1; 1] =
+    [N2048CoordinateSegmentV1::new(0, 96, 0, 448, 1_024, 4)];
+const N2048_SEGMENT_ROUTE_4: [N2048CoordinateSegmentV1; 1] =
+    [N2048CoordinateSegmentV1::new(0, 96, 0, 224, 768, 5)];
+const N2048_SEGMENT_ROUTE_5: [N2048CoordinateSegmentV1; 1] =
+    [N2048CoordinateSegmentV1::new(0, 448, 0, 224, 3_072, 6)];
+const N2048_SEGMENT_ROUTE_6: [N2048CoordinateSegmentV1; 1] =
+    [N2048CoordinateSegmentV1::new(0, 224, 0, 224, 1_536, 7)];
+const N2048_SEGMENT_ROUTE_7: [N2048CoordinateSegmentV1; 1] =
+    [N2048CoordinateSegmentV1::new(0, 448, 0, 128, 1_536, 8)];
+const N2048_SEGMENT_ROUTE_8: [N2048CoordinateSegmentV1; 1] =
+    [N2048CoordinateSegmentV1::new(0, 128, 0, 448, 1_536, 9)];
+const N2048_SEGMENT_ROUTE_9: [N2048CoordinateSegmentV1; 1] =
+    [N2048CoordinateSegmentV1::new(0, 448, 0, 256, 1_536, 10)];
+const N2048_SEGMENT_ROUTE_10: [N2048CoordinateSegmentV1; 1] =
+    [N2048CoordinateSegmentV1::new(0, 256, 0, 448, 1_536, 11)];
+const N2048_SEGMENT_ROUTE_11: [N2048CoordinateSegmentV1; 1] =
+    [N2048CoordinateSegmentV1::new(0, 448, 0, 256, 1_536, 12)];
+const N2048_SEGMENT_ROUTE_12: [N2048CoordinateSegmentV1; 1] =
+    [N2048CoordinateSegmentV1::new(0, 256, 0, 448, 1_536, 13)];
+const N2048_SEGMENT_ROUTE_13: [N2048CoordinateSegmentV1; 1] =
+    [N2048CoordinateSegmentV1::new(0, 256, 0, 128, 768, 14)];
+const N2048_SEGMENT_ROUTE_14: [N2048CoordinateSegmentV1; 1] =
+    [N2048CoordinateSegmentV1::new(0, 128, 0, 256, 512, 15)];
+
+const N2048_COORDINATE_SEGMENTS: [&[N2048CoordinateSegmentV1]; 15] = [
+    &N2048_SEGMENT_ROUTE_0,
+    &N2048_SEGMENT_ROUTE_1,
+    &N2048_SEGMENT_ROUTE_2,
+    &N2048_SEGMENT_ROUTE_3,
+    &N2048_SEGMENT_ROUTE_4,
+    &N2048_SEGMENT_ROUTE_5,
+    &N2048_SEGMENT_ROUTE_6,
+    &N2048_SEGMENT_ROUTE_7,
+    &N2048_SEGMENT_ROUTE_8,
+    &N2048_SEGMENT_ROUTE_9,
+    &N2048_SEGMENT_ROUTE_10,
+    &N2048_SEGMENT_ROUTE_11,
+    &N2048_SEGMENT_ROUTE_12,
+    &N2048_SEGMENT_ROUTE_13,
+    &N2048_SEGMENT_ROUTE_14,
+];
+
+pub(crate) fn n2048_coordinate_segments(
+    route_index: usize,
+) -> Result<&'static [N2048CoordinateSegmentV1], ScaffoldContractError> {
+    N2048_COORDINATE_SEGMENTS
+        .get(route_index)
+        .copied()
+        .ok_or(ScaffoldContractError::PhenotypeCompile)
+}
+
+pub(crate) fn n2048_coordinate_migration_recipe_digest() -> [u64; 4] {
+    let mut digest = CanonicalDigestBuilder::new(b"alife.foundation.n2048-v1-to-v2-coordinates.v1");
+    let layout = N2048FoundationLayoutV1::lobe_layout();
+    digest.write_sequence_len(N2048_COORDINATE_SEGMENTS.len());
+    for (route_index, segments) in N2048_COORDINATE_SEGMENTS.iter().enumerate() {
+        let spec = N2048_ROUTES[route_index];
+        let source = layout
+            .region(spec.source_lobe())
+            .expect("N2048 migration source lobe is present");
+        let target = layout
+            .region(spec.target_lobe())
+            .expect("N2048 migration target lobe is present");
+        digest.write_u16(route_index as u16);
+        digest.write_u16(spec.source_lobe().raw());
+        digest.write_u16(spec.target_lobe().raw());
+        digest.write_u32(source.start);
+        digest.write_u32(source.len);
+        digest.write_u32(target.start);
+        digest.write_u32(target.len);
+        digest.write_u32(spec.synapse_count());
+        digest.write_sequence_len(segments.len());
+        for segment in *segments {
+            digest.write_u32(segment.source_offset);
+            digest.write_u32(segment.source_len);
+            digest.write_u32(segment.target_offset);
+            digest.write_u32(segment.target_len);
+            digest.write_u32(segment.synapse_count);
+            digest.write_u16(segment.legacy_route_ordinal);
+        }
+    }
+    digest.finish256()
+}
+
 pub struct N2048FoundationLayoutV1;
 
 impl N2048FoundationLayoutV1 {
@@ -293,16 +428,27 @@ impl N2048FoundationLayoutV1 {
     pub const MEMORY_DECODER_OUTPUT_WIDTH: u16 = 64;
 
     pub fn lobe_layout() -> LobeLayout {
-        let lengths = [256, 128, 128, 128, 256, 448, 256, 128, 224, 96];
+        // Keep the frozen v1 neuron ranges while projecting them into the nine
+        // permanent v2 homologues. The two contiguous communication regions
+        // are one v2 authority, not duplicate lobe records.
+        let regions_and_lengths = [
+            (LobeKind::PerceptualIntegration, 256),
+            (LobeKind::InteroceptiveMotivational, 128),
+            (LobeKind::SocialCommunication, 256),
+            (LobeKind::MultimodalAssociation, 256),
+            (LobeKind::TemporalPredictive, 448),
+            (LobeKind::MemoryInterface, 256),
+            (LobeKind::WorkingContextExecutive, 128),
+            (LobeKind::ActionPlanning, 224),
+            (LobeKind::FlexibleReserve, 96),
+        ];
         let mut cursor = 0_u32;
         let mut regions = Vec::with_capacity(LobeKind::ALL.len());
-        for (kind, len) in LobeKind::CORE.into_iter().zip(lengths) {
+        for (kind, len) in regions_and_lengths {
             regions.push(LobeRegion::enabled(kind, cursor, len));
             cursor += len;
         }
-        for kind in LobeKind::ALL.into_iter().skip(LobeKind::CORE.len()) {
-            regions.push(LobeRegion::disabled(kind, cursor));
-        }
+        debug_assert_eq!(cursor, Self::NEURON_COUNT);
         let layout = LobeLayout { regions };
         debug_assert!(layout.validate_for_neuron_count(Self::NEURON_COUNT).is_ok());
         layout
@@ -601,6 +747,10 @@ impl FoundationManifest {
         self.compatibility_family_id
     }
 
+    pub const fn capacity_class_id(&self) -> BrainClassId {
+        self.capacity_class_id
+    }
+
     pub const fn sensor_profile(&self) -> SensorProfile {
         self.sensor_profile
     }
@@ -611,6 +761,10 @@ impl FoundationManifest {
 
     pub const fn route_abi_digest(&self) -> Blake3Digest {
         self.route_abi_digest
+    }
+
+    pub const fn plasticity_abi_digest(&self) -> Blake3Digest {
+        self.plasticity_abi_digest
     }
 
     pub const fn address_map_digest(&self) -> Blake3Digest {
@@ -822,7 +976,12 @@ impl FoundationWeightAsset {
         &self,
         phenotype: &BrainPhenotype,
     ) -> Result<(), ScaffoldContractError> {
-        self.manifest.validate_against(phenotype)?;
+        if let Some(descriptor) = phenotype.migrated_n2048_foundation_v1() {
+            descriptor.validate_source_asset(self)?;
+            descriptor.validate_for_phenotype(phenotype)?;
+        } else {
+            self.manifest.validate_against(phenotype)?;
+        }
         if self.weights.len() != phenotype.synapses().len()
             || self.weights.iter().any(|weight| !weight.is_finite())
         {
@@ -965,6 +1124,11 @@ impl FoundationAbiBinding {
     ) -> Result<Self, ScaffoldContractError> {
         asset.validate_self_contained()?;
         let mut value = Self::canonical_for_capacity(capacity)?;
+        // A source asset whose layout predates this capacity's runtime ABI must
+        // use an explicit migration descriptor, never a native-v2 label.
+        if asset.manifest().layout_digest() != value.layout_digest {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
         value.foundation_id = Some(asset.manifest.foundation_id());
         value.foundation_version = Some(asset.manifest.foundation_version());
         value.compatibility_family_id = Some(asset.manifest.compatibility_family_id());

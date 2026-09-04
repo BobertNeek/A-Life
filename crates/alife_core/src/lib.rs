@@ -214,8 +214,9 @@ pub use learning::{
 };
 pub use legacy_nano512_compatibility::{
     FoundationAbiSelection, LegacyFoundationAbiId, LegacyNano512CompatibilityAbiDescriptor,
-    LegacyNano512CompatibilityAdmission, LegacyNano512CompatibilityReceipt, ProductionRuntimeAbiId,
-    ProductionRuntimePath, LEGACY_NANO512_V1_COORDINATE_SEED,
+    LegacyNano512CompatibilityAdmission, LegacyNano512CompatibilityReceipt,
+    MigratedN2048FoundationV1Descriptor, ProductionRuntimeAbiId, ProductionRuntimePath,
+    LEGACY_NANO512_V1_COORDINATE_SEED,
 };
 pub use lineage::LineageExportManifest;
 pub use lobe::{

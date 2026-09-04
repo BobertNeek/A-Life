@@ -207,6 +207,15 @@ fn compile_n2048_foundation(
             .region(spec.target_lobe())
             .filter(|region| region.enabled)
             .ok_or_else(compile_error)?;
+        let possible = (u64::from(source.len) * u64::from(target.len)) as f32;
+        let expected_density = spec.synapse_count() as f32 / possible;
+        let expected_share = spec.synapse_count() as f32
+            / crate::N2048FoundationLayoutV1::RECURRENT_SYNAPSE_COUNT as f32;
+        if density.density.raw().to_bits() != expected_density.to_bits()
+            || density.max_active_synapse_share.raw().to_bits() != expected_share.to_bits()
+        {
+            return Err(compile_error());
+        }
         let route_index = u16::try_from(index).map_err(|_| compile_error())?;
         let start = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
         let active_tiles = spec.synapse_count().div_ceil(256).max(1);
@@ -224,35 +233,59 @@ fn compile_n2048_foundation(
             spec.update_cadence(),
             spec.priority(),
         );
-        let mut rows = deterministic_tile_pairs(
-            source.start,
-            source.len,
-            target.start,
-            target.len,
-            spec.synapse_count(),
-            0xF0A0_DA71_2048_0001_u64
-                ^ u64::from(route_index)
-                ^ u64::from(density.density.raw().to_bits()).rotate_left(19),
-            spec.active_tile_policy(),
-        );
-        rows.sort_unstable();
-        for (source_neuron, target_neuron) in rows {
-            let weight = genetic_weight(
-                genome.genetic_prior_seed,
-                route_index,
-                source_neuron,
-                target_neuron,
-                spec.projection_type(),
+        let segments = crate::foundation::n2048_coordinate_segments(index)?;
+        if segments
+            .iter()
+            .map(|segment| segment.synapse_count())
+            .sum::<u32>()
+            != spec.synapse_count()
+        {
+            return Err(compile_error());
+        }
+        for segment in segments {
+            let segment_source = source
+                .start
+                .checked_add(segment.source_offset())
+                .ok_or_else(compile_error)?;
+            let segment_target = target
+                .start
+                .checked_add(segment.target_offset())
+                .ok_or_else(compile_error)?;
+            if segment.source_offset() + segment.source_len() > source.len
+                || segment.target_offset() + segment.target_len() > target.len
+            {
+                return Err(compile_error());
+            }
+            let mut rows = deterministic_tile_pairs(
+                segment_source,
+                segment.source_len(),
+                segment_target,
+                segment.target_len(),
+                segment.synapse_count(),
+                0xF0A0_DA71_2048_0001_u64
+                    ^ u64::from(segment.legacy_route_ordinal())
+                    ^ u64::from(density.density.raw().to_bits()).rotate_left(19),
+                spec.active_tile_policy(),
             );
-            let alpha = alpha_for(genome, route, source_neuron, target_neuron, target.start);
-            synapses.push(CompiledSynapse::new(
-                source_neuron,
-                target_neuron,
-                weight,
-                alpha,
-                route_index,
-                CompiledSynapseKind::Recurrent,
-            ));
+            rows.sort_unstable();
+            for (source_neuron, target_neuron) in rows {
+                let weight = genetic_weight(
+                    genome.genetic_prior_seed,
+                    segment.legacy_route_ordinal(),
+                    source_neuron,
+                    target_neuron,
+                    spec.projection_type(),
+                );
+                let alpha = alpha_for(genome, route, source_neuron, target_neuron, target.start);
+                synapses.push(CompiledSynapse::new(
+                    source_neuron,
+                    target_neuron,
+                    weight,
+                    alpha,
+                    route_index,
+                    CompiledSynapseKind::Recurrent,
+                ));
+            }
         }
         let len = u32::try_from(synapses.len()).map_err(|_| compile_error())? - start;
         if len != spec.synapse_count() {

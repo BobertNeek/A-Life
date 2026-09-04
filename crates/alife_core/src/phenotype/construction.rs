@@ -170,7 +170,11 @@ fn compile_inner(
                 learning.digest,
                 budgets.clone(),
             )?;
-            foundation.validate_against(&coordinate_plan)?;
+            if let Some(descriptor) = inputs.migrated_n2048_foundation_v1() {
+                descriptor.validate_source_asset(foundation)?;
+            } else {
+                foundation.validate_against(&coordinate_plan)?;
+            }
             for (global_index, (synapse, weight)) in
                 synapses.iter_mut().zip(foundation.weights()).enumerate()
             {
@@ -196,7 +200,9 @@ fn compile_inner(
                 synapse.set_genetic_weight(composed);
             }
         }
-    } else if inputs.legacy_foundation_compatibility_abi().is_some() {
+    } else if inputs.legacy_foundation_compatibility_abi().is_some()
+        || inputs.migrated_n2048_foundation_v1().is_some()
+    {
         return Err(ScaffoldContractError::PhenotypeCompile);
     }
 
