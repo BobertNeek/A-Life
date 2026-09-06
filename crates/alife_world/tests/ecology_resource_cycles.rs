@@ -92,6 +92,8 @@ fn resource_regrowth_is_deterministic_and_preserves_bounds() {
 #[test]
 fn hazard_zone_pressure_is_negative_bounded_and_visible_to_sensory_report() {
     let mut world = ecology_world();
+    let creature = world.entity_id("creature").unwrap();
+    world.editor_move_object(creature, pos(1.5, 0.0)).unwrap();
 
     let before = world.sensory_report(organism(), Tick::ZERO).unwrap();
     assert_eq!(before.ecology.terrain_kind, Some(TerrainZoneKind::Meadow));
@@ -103,7 +105,7 @@ fn hazard_zone_pressure_is_negative_bounded_and_visible_to_sensory_report() {
         result.execution.physical.contact,
         PhysicalContactKind::Moved
     );
-    assert!(result.observation.reward_valence.raw() < 0.0);
+    assert_eq!(result.observation.reward_valence.raw(), 0.0);
     assert!(result.observation.pain_delta.raw() > 0.0);
     assert!(result.observation.pain_delta.raw() <= 1.0);
 

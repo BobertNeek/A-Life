@@ -1235,9 +1235,15 @@ mod tests {
 
     #[test]
     fn production_crates_do_not_embed_the_training_shader() {
+        fn production_dependencies(manifest: &str) -> &str {
+            manifest
+                .split_once("[dev-dependencies]")
+                .map_or(manifest, |(production, _)| production)
+        }
+
         let game_manifest = include_str!("../../alife_game_app/Cargo.toml");
         let backend_manifest = include_str!("../../alife_gpu_backend/Cargo.toml");
-        assert!(!game_manifest.contains("alife_training"));
-        assert!(!backend_manifest.contains("alife_training"));
+        assert!(!production_dependencies(game_manifest).contains("alife_training"));
+        assert!(!production_dependencies(backend_manifest).contains("alife_training"));
     }
 }

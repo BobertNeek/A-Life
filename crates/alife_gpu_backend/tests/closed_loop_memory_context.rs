@@ -453,8 +453,7 @@ fn decoder_eligibility_uses_the_exact_derivative_for_each_known_head() {
     assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("atomicOr("));
     assert!(CLOSED_LOOP_ELIGIBILITY_WGSL
         .contains("&mutable_state_words[brain.diagnostic_offset + ELIGIBILITY_DIAGNOSTIC_LANE]"));
-    assert!(CLOSED_LOOP_ELIGIBILITY_WGSL
-        .contains("& ELIGIBILITY_DIAGNOSTIC_UNKNOWN_DECODER_HEAD) != 0u"));
+    assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("& ELIGIBILITY_DIAGNOSTIC_FAILURE_MASK) != 0u"));
 }
 
 #[test]

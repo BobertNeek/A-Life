@@ -849,6 +849,20 @@ fn v11_active_concepts_and_gaps_change_context_and_reconcile() {
 
     observe(
         &mut sidecar,
+        &patch(104, 50, WorldEntityId(2), true, 0.25, 0.05, false),
+    );
+    assert_eq!(
+        sidecar.gap(mismatch_gap_id).unwrap().status,
+        GapResolutionStatus::Resolved
+    );
+    assert!(sidecar
+        .context_contribution()
+        .unwrap()
+        .active_gaps
+        .is_empty());
+
+    observe(
+        &mut sidecar,
         &patch(105, 60, WorldEntityId(2), true, 0.25, 0.05, false),
     );
     assert!(
@@ -862,20 +876,6 @@ fn v11_active_concepts_and_gaps_change_context_and_reconcile() {
             .raw()
             <= 0.35
     );
-
-    observe(
-        &mut sidecar,
-        &patch(104, 50, WorldEntityId(2), true, 0.25, 0.05, false),
-    );
-    assert_eq!(
-        sidecar.gap(mismatch_gap_id).unwrap().status,
-        GapResolutionStatus::Resolved
-    );
-    assert!(sidecar
-        .context_contribution()
-        .unwrap()
-        .active_gaps
-        .is_empty());
 
     let before_decay = sidecar
         .context_contribution()

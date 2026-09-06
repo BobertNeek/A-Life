@@ -72,7 +72,7 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
     ] = bitcast<u32>(sample);
   }
   let direct_weight_banks = load_weight_bank_pair_direct(brain);
-  let weight_bases = direct_weight_banks.active;
+  let weight_bases = direct_weight_banks.active_bases;
   let rows_per_family = plan.memory_decoder_synapse_count / MEMORY_FAMILY_COUNT;
   var delta = 0.0;
   for (var row=0u; row<rows_per_family; row++) {

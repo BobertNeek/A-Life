@@ -172,7 +172,7 @@ fn load_staging_eligibility_value_direct(
   brain:GpuBrainSlotRecord,
   metadata:GpuSynapseLearningMetadata,
 ) -> f32 {
-  let staging = load_eligibility_bank_pair_direct(brain).staging;
+  let staging = load_eligibility_bank_pair_direct(brain).staging_bases;
   let index = select(
     staging.decoder + metadata.eligibility_local_index,
     staging.recurrent + metadata.eligibility_local_index,
@@ -320,8 +320,8 @@ fn apply_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
   let fast_min = receptor.fast_min;
   let fast_max = receptor.fast_max;
   let weight_pair = load_weight_bank_pair_direct(brain);
-  let active_weights = weight_pair.active;
-  let inactive_weights = weight_pair.staging;
+  let active_weights = weight_pair.active_bases;
+  let inactive_weights = weight_pair.staging_bases;
   let active_lifetime_index = active_weights.lifetime + local_synapse;
   let inactive_lifetime_index = inactive_weights.lifetime + local_synapse;
   let active_fast_index = active_weights.fast + local_synapse;

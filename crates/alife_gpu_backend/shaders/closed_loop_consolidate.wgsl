@@ -155,8 +155,8 @@ fn copy_sleep_weight_banks(@builtin(global_invocation_id) gid:vec3<u32>) {
       || gid.x >= header.synapse_count) { return; }
   let brain = brain_slots[header.brain_slot_index];
   let bank_pair = load_weight_bank_pair_direct(brain);
-  let active_bases = bank_pair.active;
-  let inactive = bank_pair.staging;
+  let active_bases = bank_pair.active_bases;
+  let inactive = bank_pair.staging_bases;
   let lifetime = load_state_f32(active_bases.lifetime+gid.x);
   let fast = load_state_f32(active_bases.fast+gid.x);
   if (!consolidate_finite(lifetime) || !consolidate_finite(fast)) {
@@ -177,8 +177,8 @@ fn consolidate_fast_weights(@builtin(global_invocation_id) gid:vec3<u32>) {
     load_state_u32(brain.extension_record_offset + 12u)
   );
   let bank_pair = load_weight_bank_pair_direct(brain);
-  let active_bases = bank_pair.active;
-  let inactive = bank_pair.staging;
+  let active_bases = bank_pair.active_bases;
+  let inactive = bank_pair.staging_bases;
   let active_lifetime = load_state_f32(active_bases.lifetime+gid.x);
   let replayed_fast = load_state_f32(inactive.fast+gid.x);
   let promoted = parameters.staging_rate*replayed_fast;

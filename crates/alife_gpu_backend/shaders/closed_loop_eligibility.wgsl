@@ -139,8 +139,8 @@ fn accumulate_recurrent_eligibility(@builtin(global_invocation_id) gid:vec3<u32>
   let local_synapse = gid.x;
   if (local_synapse >= header.recurrent_synapse_count) { return; }
   let bank_pair = load_eligibility_bank_pair_direct(brain);
-  let active_bases = bank_pair.active;
-  let staging_bases = bank_pair.staging;
+  let active_bases = bank_pair.active_bases;
+  let staging_bases = bank_pair.staging_bases;
   let route_index = immutable_plan_words[brain.route_indices_offset + local_synapse];
   let route_mask_base = gid.y * ACTIVE_DISPATCH_ROW_WORDS + ACTIVITY_HEADER_OFFSET + 8u;
   if (!route_enabled_at(route_mask_base, route_index)) {
@@ -206,8 +206,8 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
       || selection.active_activation_side != header.active_activation_side) { return; }
   let selected = load_candidate(header.candidate_offset + selection.candidate_index * 8u);
   let bank_pair = load_eligibility_bank_pair_direct(brain);
-  let active_bases = bank_pair.active;
-  let staging_bases = bank_pair.staging;
+  let active_bases = bank_pair.active_bases;
+  let staging_bases = bank_pair.staging_bases;
   let active_index = active_bases.decoder + metadata.eligibility_local_index;
   let staging_index = staging_bases.decoder + metadata.eligibility_local_index;
   var local = 0.0;

@@ -1,8 +1,8 @@
 use alife_core::{
     ActionCommand, ActionId, ActionKind, ActionProposal, ActionTarget, BrainScaleTier,
     BrainTickInput, BrainTickStatus, Confidence, CreatureMind, DurationTicks, Intensity,
-    NormalizedScalar, OrganismId, PhysicalContactKind, ReferenceActionFailure, SignedValence,
-    SleepPhase, Tick, Vec3f, WorldEntityId,
+    NormalizedScalar, OrganismId, PhysicalContactKind, ReferenceActionFailure, SleepPhase, Tick,
+    Vec3f, WorldEntityId,
 };
 use alife_world::{
     HeadlessActionIds, HeadlessBrainHarness, HeadlessScenarioBuilder, HeadlessWorld,
@@ -166,10 +166,7 @@ fn action_execution_supports_move_inspect_eat_rest_and_idle() {
         ))
         .unwrap();
     assert!(inspected.execution.succeeded);
-    assert_eq!(
-        inspected.observation.reward_valence,
-        SignedValence::new(0.05).unwrap()
-    );
+    assert_eq!(inspected.observation.reward_valence.raw(), 0.0);
 
     let eaten = world
         .apply_command(&HeadlessWorldCommand::eat(organism(), berry).unwrap())
@@ -179,7 +176,7 @@ fn action_execution_supports_move_inspect_eat_rest_and_idle() {
         eaten.execution.physical.contact,
         PhysicalContactKind::Consumed
     );
-    assert!(eaten.observation.reward_valence.raw() > 0.5);
+    assert_eq!(eaten.observation.reward_valence.raw(), 0.0);
     assert!(world.entity(berry).unwrap().is_consumed());
 
     let rested = world
@@ -230,7 +227,7 @@ fn missing_affordance_and_invalid_target_failures_are_distinct() {
 }
 
 #[test]
-fn food_reward_and_hazard_pain_are_measured_in_outcomes() {
+fn food_biology_and_hazard_pain_are_measured_without_host_reward() {
     let mut world = world_with_food_and_hazard();
     let berry = world.entity_id("berry").unwrap();
     let thorn = world.entity_id("thorn").unwrap();
@@ -238,7 +235,7 @@ fn food_reward_and_hazard_pain_are_measured_in_outcomes() {
     let food = world
         .apply_command(&HeadlessWorldCommand::eat(organism(), berry).unwrap())
         .unwrap();
-    assert!(food.observation.reward_valence.raw() > 0.5);
+    assert_eq!(food.observation.reward_valence.raw(), 0.0);
     assert!(food.observation.homeostatic_delta.drives.hunger < 0.0);
     assert!(food.observation.energy_delta.raw() > 0.0);
 
@@ -250,7 +247,7 @@ fn food_reward_and_hazard_pain_are_measured_in_outcomes() {
             None,
         ))
         .unwrap();
-    assert!(pain.observation.reward_valence.raw() < 0.0);
+    assert_eq!(pain.observation.reward_valence.raw(), 0.0);
     assert!(pain.observation.pain_delta.raw() > 0.0);
     assert!(pain.observation.homeostatic_delta.drives.fear > 0.0);
 }
@@ -346,7 +343,7 @@ fn action_execution_supports_approach_flee_grab_and_vocalize() {
         ))
         .unwrap();
     assert!(vocalized.execution.succeeded);
-    assert!(vocalized.observation.reward_valence.raw() > 0.0);
+    assert_eq!(vocalized.observation.reward_valence.raw(), 0.0);
 }
 
 #[test]

@@ -471,13 +471,14 @@ fn teacher_token_adds_teacher_affordance_without_changing_candidate_transport() 
         .token("token", pos(3.0, 4.0), 77)
         .build()
         .unwrap();
+    let ordinary_token = ordinary.entity_id("token").unwrap();
     let mut teacher = HeadlessScenarioBuilder::new(101)
         .agent("agent", ORGANISM, pos(0.0, 0.0))
         .social_agent("source", OrganismId(2), pos(3.0, 4.0), 0.0)
         .build()
         .unwrap();
     let source = teacher.entity_id("source").unwrap();
-    teacher
+    let teacher_token = teacher
         .grounded_teacher_actor(source)
         .unwrap()
         .emit_perceptual_cue(
@@ -522,11 +523,23 @@ fn teacher_token_adds_teacher_affordance_without_changing_candidate_transport() 
 
     let glyph_lane = CANDIDATE_FEATURE_AFFORDANCE_START_LANE + 7;
     let teacher_lane = CANDIDATE_FEATURE_AFFORDANCE_START_LANE + 8;
-    for candidate in &ordinary_frame.candidates()[3..8] {
+    let ordinary_token_candidates = ordinary_frame
+        .candidates()
+        .iter()
+        .filter(|candidate| candidate.target.entity == Some(ordinary_token))
+        .collect::<Vec<_>>();
+    let teacher_token_candidates = teacher_frame
+        .candidates()
+        .iter()
+        .filter(|candidate| candidate.target.entity == Some(teacher_token))
+        .collect::<Vec<_>>();
+    assert_eq!(ordinary_token_candidates.len(), 5);
+    assert_eq!(teacher_token_candidates.len(), 5);
+    for candidate in ordinary_token_candidates {
         assert_eq!(candidate.features.0[glyph_lane], 1.0);
         assert_eq!(candidate.features.0[teacher_lane], 0.0);
     }
-    for candidate in &teacher_frame.candidates()[3..8] {
+    for candidate in teacher_token_candidates {
         assert_eq!(candidate.features.0[glyph_lane], 1.0);
         assert_eq!(candidate.features.0[teacher_lane], 1.0);
     }

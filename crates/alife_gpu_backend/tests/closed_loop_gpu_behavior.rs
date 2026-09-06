@@ -222,7 +222,7 @@ fn assert_compact_selection(result: &GpuFrameResult) -> CompactSelection {
 #[test]
 fn decode_wgsl_parses_and_abi_remains_compact_candidate_conditioned_and_entity_blind() {
     assert_eq!(GPU_CANDIDATE_RECORD_BYTES, 32);
-    assert_eq!(GPU_SELECTION_RECORD_BYTES, 48);
+    assert_eq!(GPU_SELECTION_RECORD_BYTES, 64);
     let module = naga::front::wgsl::parse_str(CLOSED_LOOP_DECODE_WGSL).unwrap();
     let entries = module
         .entry_points

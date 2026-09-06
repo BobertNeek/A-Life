@@ -611,14 +611,17 @@ struct LineageLabRect {
 }
 
 impl LineageLabRect {
+    #[cfg(test)]
     const fn right(self) -> f32 {
         self.left + self.width
     }
 
+    #[cfg(test)]
     const fn bottom(self) -> f32 {
         self.top + self.height
     }
 
+    #[cfg(test)]
     fn overlaps(self, other: Self) -> bool {
         self.left < other.right()
             && self.right() > other.left
@@ -705,6 +708,7 @@ impl LineageLabLayout {
         }
     }
 
+    #[cfg(test)]
     const fn primary_sections(self) -> [LineageLabRect; 6] {
         [
             self.filters,
@@ -716,6 +720,7 @@ impl LineageLabLayout {
         ]
     }
 
+    #[cfg(test)]
     fn primary_sections_overlap(self) -> bool {
         let sections = self.primary_sections();
         sections.iter().enumerate().any(|(index, section)| {
@@ -3306,6 +3311,7 @@ fn overall_score(statistics: Option<&PassiveLifeStatistics>) -> Option<u32> {
     })
 }
 
+#[cfg(test)]
 fn combined_metric(
     statistics: Option<&PassiveLifeStatistics>,
     kinds: &[PassiveMetricKind],
@@ -3329,6 +3335,7 @@ fn combined_metric_value(
     }
 }
 
+#[cfg(test)]
 fn metric_text(statistics: Option<&PassiveLifeStatistics>, kind: PassiveMetricKind) -> String {
     option_q16(metric_value(statistics, kind))
 }

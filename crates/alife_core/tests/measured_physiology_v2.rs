@@ -13,13 +13,19 @@ fn phenotype() -> alife_core::CreaturePhenotype {
     .unwrap()
 }
 
+fn mature_tick(phenotype: &alife_core::CreaturePhenotype) -> Tick {
+    let maturation = u64::from(phenotype.development.maturation_duration_ticks);
+    Tick(((maturation + 119) / 120) * 120)
+}
+
 #[test]
 fn physiology_transition_is_derived_from_authoritative_before_and_after_states() {
     let phenotype = phenotype();
-    let before = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+    let tick = mature_tick(&phenotype);
+    let before = BiochemistryState::new(&phenotype, tick).unwrap();
     let after = before
         .advance(
-            Tick(1),
+            Tick(tick.raw() + 1),
             BodyEventDelta {
                 damage: 0.4,
                 energy: -0.2,

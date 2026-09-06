@@ -70,8 +70,6 @@ pub(super) struct ExactPopulationCheckpointCoordinatorV1 {
     stage: ExactPopulationCheckpointStageV1,
     checkpoint_needed_after_current: bool,
     pending_manual: Option<ManualCheckpointRequestV1>,
-    #[cfg(test)]
-    stage_trace: Vec<ExactPopulationCheckpointStageV1>,
 }
 
 impl Default for ExactPopulationCheckpointCoordinatorV1 {
@@ -82,8 +80,6 @@ impl Default for ExactPopulationCheckpointCoordinatorV1 {
             stage: ExactPopulationCheckpointStageV1::Idle,
             checkpoint_needed_after_current: false,
             pending_manual: None,
-            #[cfg(test)]
-            stage_trace: vec![ExactPopulationCheckpointStageV1::Idle],
         }
     }
 }
@@ -108,15 +104,6 @@ impl ExactPopulationCheckpointCoordinatorV1 {
 
     pub(super) const fn checkpoint_needed_after_current(&self) -> bool {
         self.checkpoint_needed_after_current
-    }
-
-    pub(super) fn pending_manual(&self) -> Option<&ManualCheckpointRequestV1> {
-        self.pending_manual.as_ref()
-    }
-
-    #[cfg(test)]
-    pub(super) fn stage_trace(&self) -> &[ExactPopulationCheckpointStageV1] {
-        &self.stage_trace
     }
 
     pub(super) fn request_exact(
@@ -152,9 +139,6 @@ impl ExactPopulationCheckpointCoordinatorV1 {
         self.active = Some(identity);
         self.next_transaction_id = next_transaction_id;
         self.stage = ExactPopulationCheckpointStageV1::CaptureSubmitted;
-        #[cfg(test)]
-        self.stage_trace
-            .push(ExactPopulationCheckpointStageV1::CaptureSubmitted);
         Ok(ExactCheckpointRequestDispositionV1::Started { transaction_id })
     }
 
@@ -179,9 +163,6 @@ impl ExactPopulationCheckpointCoordinatorV1 {
         self.active = Some(identity);
         self.next_transaction_id = next_transaction_id;
         self.stage = ExactPopulationCheckpointStageV1::DurablePermitInstalled;
-        #[cfg(test)]
-        self.stage_trace
-            .push(ExactPopulationCheckpointStageV1::DurablePermitInstalled);
         Ok(transaction_id)
     }
 
@@ -252,16 +233,11 @@ impl ExactPopulationCheckpointCoordinatorV1 {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
         }
         self.stage = next;
-        #[cfg(test)]
-        self.stage_trace.push(next);
         Ok(())
     }
 
     pub(super) fn fail_stop(&mut self) {
         self.stage = ExactPopulationCheckpointStageV1::Failed;
-        #[cfg(test)]
-        self.stage_trace
-            .push(ExactPopulationCheckpointStageV1::Failed);
     }
 
     pub(super) fn take_pending_manual_after_durable_permit(
@@ -282,9 +258,6 @@ impl ExactPopulationCheckpointCoordinatorV1 {
         }
         self.active = None;
         self.stage = ExactPopulationCheckpointStageV1::Idle;
-        #[cfg(test)]
-        self.stage_trace
-            .push(ExactPopulationCheckpointStageV1::Idle);
         let follow_up = std::mem::take(&mut self.checkpoint_needed_after_current);
         Ok(follow_up)
     }

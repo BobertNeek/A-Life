@@ -103,8 +103,8 @@ fn packed_records_decode_from_deliberately_unaligned_word_subslices() {
 
 #[test]
 fn closed_loop_records_have_stable_aligned_sizes_and_offsets() {
-    assert_eq!(GPU_CLOSED_LOOP_LAYOUT_VERSION, 3);
-    assert!(CLOSED_LOOP_ABI_WGSL.contains("const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 3u;"));
+    assert_eq!(GPU_CLOSED_LOOP_LAYOUT_VERSION, 4);
+    assert!(CLOSED_LOOP_ABI_WGSL.contains("const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 4u;"));
     assert!(CLOSED_LOOP_ABI_WGSL
         .contains("header.dispatch_generation_lo != 0u || header.dispatch_generation_hi != 0u"));
     assert_eq!(
@@ -127,7 +127,7 @@ fn closed_loop_records_have_stable_aligned_sizes_and_offsets() {
     assert_eq!(GPU_PERCEPTION_HEADER_BYTES, 64);
     assert_eq!(GPU_BRAIN_SLOT_RECORD_BYTES, 144);
     assert_eq!(GPU_CANDIDATE_RECORD_BYTES, 32);
-    assert_eq!(GPU_SELECTION_RECORD_BYTES, 48);
+    assert_eq!(GPU_SELECTION_RECORD_BYTES, 64);
 
     assert_eq!(std::mem::align_of::<GpuPerceptionHeader>(), 16);
     assert_eq!(std::mem::align_of::<GpuBrainSlotRecord>(), 16);
@@ -178,7 +178,8 @@ fn closed_loop_records_have_stable_aligned_sizes_and_offsets() {
     assert_record_offsets!(GpuSelectionRecord, SELECTION_FIELDS;
         slot, slot_generation, candidate_index, logit_bits, confidence_q16, status, active_tiles,
         active_synapses, finite_rejections, dispatch_generation_lo, dispatch_generation_hi,
-        active_activation_side);
+        active_activation_side, dendritic_branches_evaluated, dendritic_inputs_evaluated,
+        dendritic_gated_branches, structural_edges_evaluated);
     assert_record_offsets!(GpuEncoderPlanRecord, ENCODER_PLAN_FIELDS;
         schema_version, sensor_profile_raw, assignment_offset, assignment_count,
         target_offsets_offset, sensory_lane_count, body_lane_count, homeostasis_lane_count);
@@ -294,7 +295,7 @@ fn naga_reflection_matches_every_closed_loop_wgsl_record() {
         ("GpuBrainSlotRecord", (&BRAIN_SLOT_FIELDS[..], 144)),
         ("GpuPhenotypeIdentityRecord", (&IDENTITY_FIELDS[..], 32)),
         ("GpuCandidateRecord", (&CANDIDATE_FIELDS[..], 32)),
-        ("GpuSelectionRecord", (&SELECTION_FIELDS[..], 48)),
+        ("GpuSelectionRecord", (&SELECTION_FIELDS[..], 64)),
         ("GpuEncoderPlanRecord", (&ENCODER_PLAN_FIELDS[..], 32)),
         (
             "GpuEncoderAssignmentRecord",
@@ -419,7 +420,7 @@ const CANDIDATE_FIELDS: [(&str, u32); 8] = sequential(&[
     "confidence_q16",
     "effort_q16",
 ]);
-const SELECTION_FIELDS: [(&str, u32); 12] = sequential(&[
+const SELECTION_FIELDS: [(&str, u32); 16] = sequential(&[
     "slot",
     "slot_generation",
     "candidate_index",
@@ -432,6 +433,10 @@ const SELECTION_FIELDS: [(&str, u32); 12] = sequential(&[
     "dispatch_generation_lo",
     "dispatch_generation_hi",
     "active_activation_side",
+    "dendritic_branches_evaluated",
+    "dendritic_inputs_evaluated",
+    "dendritic_gated_branches",
+    "structural_edges_evaluated",
 ]);
 const ENCODER_PLAN_FIELDS: [(&str, u32); 8] = sequential(&[
     "schema_version",

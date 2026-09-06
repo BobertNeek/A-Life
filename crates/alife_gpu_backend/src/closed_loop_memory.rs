@@ -15,6 +15,7 @@ pub const GPU_NEURAL_RECEPTOR_EFFECTS_WORDS: usize = 16;
 
 pub const CLOSED_LOOP_MEMORY_CONTEXT_WGSL: &str = concat!(
     include_str!("../shaders/closed_loop_abi.wgsl"),
+    include_str!("../shaders/closed_loop_activity_validation.wgsl"),
     include_str!("../shaders/closed_loop_memory_context.wgsl")
 );
 

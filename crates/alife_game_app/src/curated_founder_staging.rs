@@ -71,6 +71,7 @@ pub(crate) struct CuratedFounderResetStage {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg(test)]
 struct CuratedFounderResetApplyResult {
     committed_archive_batch: CommittedCompositeBirthBatch,
     reset_receipt: CuratedFounderResetReceipt,
@@ -389,6 +390,7 @@ impl CuratedFounderDurableOperation {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn proposed_save_digest(&self) -> &str {
         &self.proposed_save_digest
     }
@@ -674,6 +676,7 @@ pub(crate) fn stage_curated_founder_reset(
     })
 }
 
+#[cfg(test)]
 fn apply_curated_founder_reset(
     stage: &CuratedFounderResetStage,
     bundle: &CuratedFounderBundle,
@@ -907,28 +910,56 @@ fn publish_curated_founder_operation_durably(
         ));
     }
 
-    let cas_outcome =
-        match durable_manifest.compare_and_swap(expected_save_digest, &replacement_save) {
-            Ok(outcome) => outcome,
-            Err(GpuRuntimeError::GpuCheckpointManifestConflict { expected, actual }) => {
-                receipt.status = CuratedFounderPublicationStatus::ArchiveCommittedSaveConflict;
-                return Err(
-                    CuratedFounderDurablePublicationError::ArchiveCommittedSaveConflict {
-                        receipt,
-                        expected_save_digest: expected,
-                        actual_save_digest: actual,
+    let cas_outcome = match durable_manifest
+        .compare_and_swap(expected_save_digest, &replacement_save)
+    {
+        Ok(outcome) => outcome,
+        Err(GpuRuntimeError::GpuCheckpointManifestConflict { expected, actual }) => {
+            match retry_cas_for_equivalent_source_generation(
+                durable_manifest,
+                &bound_source.loaded_generation,
+                &replacement_save,
+            ) {
+                Ok(Some(outcome)) => outcome,
+                Ok(None) => {
+                    receipt.status = CuratedFounderPublicationStatus::ArchiveCommittedSaveConflict;
+                    return Err(
+                        CuratedFounderDurablePublicationError::ArchiveCommittedSaveConflict {
+                            receipt,
+                            expected_save_digest: expected,
+                            actual_save_digest: actual,
+                            proposed_save_digest,
+                        },
+                    );
+                }
+                Err(GpuRuntimeError::GpuCheckpointManifestConflict { expected, actual }) => {
+                    receipt.status = CuratedFounderPublicationStatus::ArchiveCommittedSaveConflict;
+                    return Err(
+                        CuratedFounderDurablePublicationError::ArchiveCommittedSaveConflict {
+                            receipt,
+                            expected_save_digest: expected,
+                            actual_save_digest: actual,
+                            proposed_save_digest,
+                        },
+                    );
+                }
+                Err(error) => {
+                    return Err(archive_committed_save_failure(
+                        &receipt,
                         proposed_save_digest,
-                    },
-                );
+                        error,
+                    ));
+                }
             }
-            Err(error) => {
-                return Err(archive_committed_save_failure(
-                    &receipt,
-                    proposed_save_digest,
-                    error,
-                ));
-            }
-        };
+        }
+        Err(error) => {
+            return Err(archive_committed_save_failure(
+                &receipt,
+                proposed_save_digest,
+                error,
+            ));
+        }
+    };
     let (status, final_save_digest) = match cas_outcome {
         GpuSaveManifestCasOutcome::Replaced { replacement_digest } => (
             CuratedFounderPublicationStatus::Published,
@@ -970,6 +1001,25 @@ fn publish_curated_founder_operation_durably(
     }
     *live_world = candidate_world;
     Ok(receipt)
+}
+
+fn retry_cas_for_equivalent_source_generation(
+    durable_manifest: &GpuDurableSaveManifest,
+    bound_source: &GpuLoadedSaveManifest,
+    replacement_save: &PortableSaveFile,
+) -> Result<Option<GpuSaveManifestCasOutcome>, GpuRuntimeError> {
+    let current = durable_manifest.load()?;
+    if current.save != bound_source.save {
+        return Ok(None);
+    }
+    let bound_journal = durable_manifest.load_sleep_transaction_journal(bound_source)?;
+    let current_journal = durable_manifest.load_sleep_transaction_journal(&current)?;
+    if current_journal != bound_journal {
+        return Ok(None);
+    }
+    durable_manifest
+        .compare_and_swap(&current.digest, replacement_save)
+        .map(Some)
 }
 
 #[cfg(test)]

@@ -1,16 +1,16 @@
 use serde::Serialize;
 
 use alife_core::{
-    ActionCandidate, ActionId, ActionKind, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome,
-    BrainScaleTier, CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef,
-    ChannelCommand, CognitiveContextFrame, CognitiveWorkReceipt, Confidence, DecisionSnapshot,
-    DevelopmentState, DurationTicks, ExperiencePatch, ExperienceSequenceId, HomeostaticDelta,
-    HomeostaticSnapshot, Intensity, JointMotorCondition, JointPhysicalOutcome,
-    MeasuredChannelObservation,
-    MemoryExpectancySnapshot, MotorChannel, MotorCommandBundle, NormalizedScalar, OrganismId,
-    PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome,
-    PredictionTargetReceipt, ScaffoldContractError, SemanticStateVector, SensorProfile,
-    SensorProfileProvenance,
+    ActionCandidate, ActionId, ActionKind, ActionTarget, BiochemistryState, BodyEventDelta,
+    BodySnapshot, BrainClassSpec, BrainGenome, BrainScaleTier, CandidateActionFamily,
+    CandidateFeatureVector, CandidateObservationRef, ChannelCommand, CognitiveContextFrame,
+    CognitiveWorkReceipt, Confidence, CreatureGenome, DecisionSnapshot, DevelopmentState,
+    DurationTicks, ExperiencePatch, ExperienceSequenceId, FoundationGeneticIdentity,
+    HomeostaticDelta, HomeostaticSnapshot, Intensity, JointMotorCondition, JointPhysicalOutcome,
+    MeasuredChannelObservation, MeasuredPhysiologyTransition, MemoryExpectancySnapshot,
+    MotorChannel, MotorCommandBundle, NormalizedScalar, OrganismId, PerceptionFrame,
+    PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome, PredictionTargetReceipt,
+    ScaffoldContractError, SemanticStateVector, SensorProfile, SensorProfileProvenance,
     SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence, Tick, Validate, Vec3f,
     Velocity, WeightSplitContract,
 };
@@ -82,6 +82,22 @@ fn joint_outcome() -> JointPhysicalOutcome {
     .unwrap()
 }
 
+fn measured_physiology() -> MeasuredPhysiologyTransition {
+    let spec = BrainClassSpec::for_tier(BrainScaleTier::Standard2048);
+    let phenotype = CreatureGenome::early_mammal_founder(
+        0xA0A_2011,
+        FoundationGeneticIdentity::new(7, 1, 1, spec.id).unwrap(),
+    )
+    .unwrap()
+    .express()
+    .unwrap();
+    let before = BiochemistryState::new(&phenotype, Tick::new(10)).unwrap();
+    let after = before
+        .advance(Tick::new(12), BodyEventDelta::zero(), &phenotype)
+        .unwrap();
+    MeasuredPhysiologyTransition::new(before, after).unwrap()
+}
+
 fn measured_outcome(joint: JointPhysicalOutcome) -> PostActionOutcome {
     PostActionOutcome::new(
         organism(),
@@ -96,6 +112,8 @@ fn measured_outcome(joint: JointPhysicalOutcome) -> PostActionOutcome {
         SignedValence::new(-0.2).unwrap(),
         NormalizedScalar::new(0.6).unwrap(),
     )
+    .unwrap()
+    .with_measured_physiology(measured_physiology())
     .unwrap()
     .with_v11_joint(joint, work())
     .unwrap()

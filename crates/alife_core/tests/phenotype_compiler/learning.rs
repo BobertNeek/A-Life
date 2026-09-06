@@ -140,7 +140,10 @@ fn every_genome_learning_lane_changes_the_compiled_plasticity_identity() {
         ("base_learning_rate", serde_json::json!(0.02)),
         ("normalization_rate", serde_json::json!(0.003)),
         ("sleep_replay_rate", serde_json::json!(0.4)),
-        ("modulator_sign", serde_json::json!(-1.0)),
+        (
+            "receptor_profile",
+            serde_json::json!([-0.2, 1.0, -1.0, 0.5, -0.2, 0.0, -0.5, 0.5]),
+        ),
         ("fast_min", serde_json::json!(-3.0)),
         ("fast_max", serde_json::json!(3.0)),
         ("sleep_staging_rate", serde_json::json!(0.6)),
@@ -171,7 +174,10 @@ fn invalid_genome_learning_parameters_and_stale_phenotypes_are_rejected() {
     for (field, replacement) in [
         ("eligibility_decay", serde_json::json!(f32::NAN)),
         ("base_learning_rate", serde_json::json!(0.0)),
-        ("modulator_sign", serde_json::json!(0.0)),
+        (
+            "receptor_profile",
+            serde_json::json!([2.1, -1.0, 1.0, -0.5, 0.2, 0.0, 0.5, -0.5]),
+        ),
         ("fast_min", serde_json::json!(9.0)),
         ("sleep_weight_limit", serde_json::json!(0.0)),
     ] {

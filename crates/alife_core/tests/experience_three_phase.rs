@@ -259,7 +259,7 @@ fn unprofiled_v2_patch_migrates_to_profiled_current_schema() {
     wire["outcome"]["abi_version"] = serde_json::json!(2);
 
     let migrated: alife_core::ExperiencePatch = serde_json::from_value(wire).unwrap();
-    assert_eq!(migrated.header().abi_version, 3);
+    assert_eq!(migrated.header().abi_version, 4);
     assert_eq!(
         migrated.header().sensor_profile,
         migrated.pre_action().perception().profile_provenance()
@@ -324,7 +324,7 @@ fn incompatible_versions_and_invalid_learning_values_are_rejected() {
         ExperiencePatchBuilder::new(sequence()).record_pre_action(pre),
         Err(ScaffoldContractError::IncompatibleAbi {
             kind: SchemaKind::Experience,
-            expected: 3,
+            expected: 4,
             actual: 999,
         })
     );

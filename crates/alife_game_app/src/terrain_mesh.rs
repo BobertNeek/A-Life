@@ -344,13 +344,9 @@ fn terrain_top_position(
     let x = sample.center_x - half + tile_stride * u;
     let z = sample.center_z - half + tile_stride * v;
     let base_height = bilinear_scalar(surface.heights, u, v);
-    let sin_u = (std::f32::consts::PI * u).sin();
-    let sin_v = (std::f32::consts::PI * v).sin();
-    let edge_envelope = sin_u * sin_u * sin_v * sin_v;
-    let relief = ((x * 1.73 + z * 0.61).sin() * 0.050
+    let relief = (x * 1.73 + z * 0.61).sin() * 0.050
         + (x * 0.47 - z * 1.37).cos() * 0.032
-        + ((x + z) * 2.11).sin() * 0.014)
-        * edge_envelope;
+        + ((x + z) * 2.11).sin() * 0.014;
     [x, base_height + relief, z]
 }
 
@@ -372,24 +368,12 @@ fn terrain_top_normal(
     let phase_a = x * 1.73 + z * 0.61;
     let phase_b = x * 0.47 - z * 1.37;
     let phase_c = (x + z) * 2.11;
-    let noise = phase_a.sin() * 0.050 + phase_b.cos() * 0.032 + phase_c.sin() * 0.014;
     let noise_dx =
         phase_a.cos() * 1.73 * 0.050 - phase_b.sin() * 0.47 * 0.032 + phase_c.cos() * 2.11 * 0.014;
     let noise_dz =
         phase_a.cos() * 0.61 * 0.050 + phase_b.sin() * 1.37 * 0.032 + phase_c.cos() * 2.11 * 0.014;
-    let sin_u = (std::f32::consts::PI * u).sin();
-    let sin_v = (std::f32::consts::PI * v).sin();
-    let envelope = sin_u * sin_u * sin_v * sin_v;
-    let envelope_dx =
-        2.0 * std::f32::consts::PI * sin_u * (std::f32::consts::PI * u).cos() * sin_v * sin_v
-            / stride;
-    let envelope_dz =
-        2.0 * std::f32::consts::PI * sin_u * sin_u * sin_v * (std::f32::consts::PI * v).cos()
-            / stride;
-    let relief_dx = noise_dx * envelope + noise * envelope_dx;
-    let relief_dz = noise_dz * envelope + noise * envelope_dz;
 
-    Vec3::new(-(base_dx + relief_dx), 1.0, -(base_dz + relief_dz))
+    Vec3::new(-(base_dx + noise_dx), 1.0, -(base_dz + noise_dz))
         .normalize()
         .to_array()
 }

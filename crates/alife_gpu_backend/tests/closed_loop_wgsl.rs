@@ -208,13 +208,28 @@ fn closed_loop_wgsl_parses_validates_and_exposes_only_the_required_entries() {
         ),
     ] {
         let module = validated_module(source);
+        let expected_entry_count = if entry == "recurrent_microstep" {
+            let clear = module
+                .entry_points
+                .iter()
+                .find(|point| point.name == "clear_v11_work")
+                .expect("recurrent shader must clear v1.1 work counters before microsteps");
+            assert_eq!(clear.stage, ShaderStage::Compute);
+            assert_eq!(clear.workgroup_size, [1, 1, 1]);
+            2
+        } else {
+            1
+        };
         assert_eq!(
             module.entry_points.len(),
-            1,
+            expected_entry_count,
             "unexpected entries for {entry}"
         );
-        let point = &module.entry_points[0];
-        assert_eq!(point.name, entry);
+        let point = module
+            .entry_points
+            .iter()
+            .find(|point| point.name == entry)
+            .expect("required compute entry");
         assert_eq!(point.stage, ShaderStage::Compute);
         assert_eq!(point.workgroup_size, workgroup);
     }

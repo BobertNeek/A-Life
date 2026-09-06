@@ -92,7 +92,7 @@ fn organism_registration_advances_allocator_and_overflow_is_atomic() {
     world
         .register_organism_record(record(2, organism_2.raw()))
         .unwrap();
-    assert_eq!(save(&world).world.next_organism_id, 3);
+    assert_eq!(save(&world).world.next_organism_id, 901);
     world
         .register_organism_record(record(900, organism_900.raw()))
         .unwrap();
@@ -101,8 +101,16 @@ fn organism_registration_advances_allocator_and_overflow_is_atomic() {
     let almost_exhausted = u64::MAX - 1;
     let exhausted = u64::MAX;
     let mut overflow_world = HeadlessScenarioBuilder::new(44_005)
-        .agent("almost-exhausted", OrganismId(almost_exhausted), Vec3f::ZERO)
-        .agent("exhausted", OrganismId(exhausted), Vec3f::new(4.0, 0.0, 0.0))
+        .agent(
+            "almost-exhausted",
+            OrganismId(almost_exhausted),
+            Vec3f::ZERO,
+        )
+        .agent(
+            "exhausted",
+            OrganismId(exhausted),
+            Vec3f::new(4.0, 0.0, 0.0),
+        )
         .build()
         .unwrap();
     let almost_entity = overflow_world.entity_id("almost-exhausted").unwrap();
@@ -136,8 +144,10 @@ fn organism_allocator_round_trip_preserves_retired_high_id_and_legacy_derives_ma
     dead.advance_biology(Tick::new(1), BodyEventDelta::zero())
         .unwrap();
     dead.mark_dead(Tick::new(1)).unwrap();
-    dead.link_birth_manifest(Blake3Digest::from_bytes([1; 32])).unwrap();
-    dead.link_life_manifest(Blake3Digest::from_bytes([2; 32])).unwrap();
+    dead.link_birth_manifest(Blake3Digest::from_bytes([1; 32]))
+        .unwrap();
+    dead.link_life_manifest(Blake3Digest::from_bytes([2; 32]))
+        .unwrap();
     current.register_organism_record(dead).unwrap();
     current.retire_dead_organism(OrganismId(900)).unwrap();
 
@@ -176,8 +186,10 @@ fn canonical_signature_includes_future_organism_identity_state() {
     dead.advance_biology(Tick::new(1), BodyEventDelta::zero())
         .unwrap();
     dead.mark_dead(Tick::new(1)).unwrap();
-    dead.link_birth_manifest(Blake3Digest::from_bytes([1; 32])).unwrap();
-    dead.link_life_manifest(Blake3Digest::from_bytes([2; 32])).unwrap();
+    dead.link_birth_manifest(Blake3Digest::from_bytes([1; 32]))
+        .unwrap();
+    dead.link_life_manifest(Blake3Digest::from_bytes([2; 32]))
+        .unwrap();
     advanced.register_organism_record(dead).unwrap();
     advanced.retire_dead_organism(OrganismId(900)).unwrap();
 

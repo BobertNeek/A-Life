@@ -1361,7 +1361,7 @@ mod tests {
         assert_eq!(
             result,
             Err(OrganismRegistryError::InvalidRecord(
-                ScaffoldContractError::InvalidId,
+                ScaffoldContractError::BrainOwnershipMismatch,
             ))
         );
         assert!(!closure_called);
@@ -1378,7 +1378,7 @@ mod tests {
         assert_eq!(
             result,
             Err(OrganismRegistryError::InvalidRecord(
-                ScaffoldContractError::InvalidId,
+                ScaffoldContractError::BrainOwnershipMismatch,
             ))
         );
         assert_eq!(*registry.get(organism_id).unwrap().biochemistry(), before);

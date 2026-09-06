@@ -226,7 +226,6 @@ where
 #[derive(Debug, Clone)]
 struct ResidentAuthorityPlan {
     organism_id: OrganismId,
-    world_entity_id: WorldEntityId,
     world_tick: Tick,
     phenotype: alife_core::BrainPhenotype,
     compiler_inputs: PhenotypeCompilerInputs,
@@ -353,7 +352,6 @@ fn resident_authority_plan_from_record(
     }
     Ok(ResidentAuthorityPlan {
         organism_id,
-        world_entity_id,
         world_tick,
         phenotype,
         compiler_inputs,
@@ -967,9 +965,11 @@ enum FailedExactPopulationCheckpointWorkerJoinPollV1 {
 struct FailedExactPopulationCheckpointWorkerJoinV1 {
     error: Option<GameAppShellError>,
     join_handle: Option<JoinHandle<()>>,
+    #[cfg(test)]
     abort_delivery: ExactPopulationCheckpointAbortDeliveryV1,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ExactPopulationCheckpointAbortDeliveryV1 {
     Enqueued,
@@ -999,19 +999,23 @@ impl ExactPopulationCheckpointWorkerOwnerV1 {
         self,
         error: GameAppShellError,
     ) -> FailedExactPopulationCheckpointWorkerJoinV1 {
-        let abort_delivery =
-            match self.try_send_command(ExactPopulationCheckpointWorkerCommandV1::Abort) {
-                Ok(()) => ExactPopulationCheckpointAbortDeliveryV1::Enqueued,
-                Err(TrySendError::Full(_)) => {
-                    ExactPopulationCheckpointAbortDeliveryV1::CommandAlreadyQueued
-                }
-                Err(TrySendError::Disconnected(_)) => {
-                    ExactPopulationCheckpointAbortDeliveryV1::WorkerDisconnected
-                }
-            };
+        let abort_result = self.try_send_command(ExactPopulationCheckpointWorkerCommandV1::Abort);
+        #[cfg(test)]
+        let abort_delivery = match abort_result {
+            Ok(()) => ExactPopulationCheckpointAbortDeliveryV1::Enqueued,
+            Err(TrySendError::Full(_)) => {
+                ExactPopulationCheckpointAbortDeliveryV1::CommandAlreadyQueued
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                ExactPopulationCheckpointAbortDeliveryV1::WorkerDisconnected
+            }
+        };
+        #[cfg(not(test))]
+        let _ = abort_result;
         FailedExactPopulationCheckpointWorkerJoinV1 {
             error: Some(error),
             join_handle: Some(self.join_handle),
+            #[cfg(test)]
             abort_delivery,
         }
     }
@@ -4121,6 +4125,7 @@ fn replace_canonical_organism_record(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WorldMutationRollback {
+    #[cfg(test)]
     Local,
     EnclosingStagedTick,
 }
@@ -4181,6 +4186,7 @@ fn seal_prepared_selection_core(
         ],
     )?;
     let motor_result = match rollback {
+        #[cfg(test)]
         WorldMutationRollback::Local => world.apply_registered_motor_bundle_with_neural_emission(
             &motor_bundle,
             world_entity_id,
@@ -7991,16 +7997,17 @@ impl GpuLiveBrainRuntime {
 
         let seal_started = Instant::now();
         let mut sealed = Vec::with_capacity(prepared.len());
-        for (index, selection) in prepared.into_iter().enumerate() {
+        for (_index, selection) in prepared.into_iter().enumerate() {
             match self.seal_prepared_selection(selection, rollback) {
                 Ok(selection) => sealed.push(selection),
                 Err(error) => {
                     match rollback {
+                        #[cfg(test)]
                         WorldMutationRollback::Local => {
                             if !sealed.is_empty() {
                                 self.commit_sealed_batch(sealed)?;
                             }
-                            self.discard_pending_transactions(&pending[index..]);
+                            self.discard_pending_transactions(&pending[_index..]);
                         }
                         WorldMutationRollback::EnclosingStagedTick => {
                             self.discard_pending_transactions(&pending);
@@ -9090,15 +9097,14 @@ fn foundation_construction_development(
     }
     if !matches!(
         capacity.id(),
-        BrainCapacityClass::N512_ID | BrainCapacityClass::N2048_ID
+        BrainCapacityClass::N512_ID | BrainCapacityClass::N1024_ID | BrainCapacityClass::N2048_ID
     ) {
         return Ok(development.clone());
     }
 
-    // Checked production foundation assets own a full immutable coordinate ABI.
-    // World development remains authoritative in ResidentCognition; the
-    // construction input removes runtime chronology and dynamic gates that
-    // would reshape that ABI.
+    // Production brain classes own a stable coordinate topology. World
+    // development remains authoritative in ResidentCognition; the construction
+    // input removes runtime chronology and dynamic gates that would reshape it.
     let mut construction = development.clone();
     construction.age_ticks = Tick::ZERO;
     construction.maturation = NormalizedScalar::new(1.0)?;
@@ -9119,40 +9125,51 @@ pub(crate) fn compile_gpu_components_from_genome(
     sensor_profile: SensorProfile,
 ) -> Result<(alife_core::BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
     let capacity = BrainCapacityClass::production_for_id(genome.brain_class_id)?;
-    let foundation = match capacity.id() {
-        BrainCapacityClass::N2048_ID => FoundationWeightAsset::builtin_n2048_v1(sensor_profile)?,
-        BrainCapacityClass::N512_ID => FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?,
-        _ => return Err(ScaffoldContractError::UnsupportedProductionBrainClass),
-    };
     let construction_development =
         foundation_construction_development(&genome, &capacity, &development)?;
-    let (phenotype, compiler_inputs) = if capacity.id() == BrainCapacityClass::N512_ID {
-        let (phenotype, compiler_inputs, _) =
-            PhenotypeCompiler::compile_from_legacy_nano512_compatibility_asset(
+    let (phenotype, compiler_inputs) = match capacity.id() {
+        BrainCapacityClass::N512_ID => {
+            let foundation = FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?;
+            let (phenotype, compiler_inputs, _) =
+                PhenotypeCompiler::compile_from_legacy_nano512_compatibility_asset(
+                    &genome,
+                    &capacity,
+                    &construction_development,
+                    sensor_profile,
+                    &foundation,
+                )?
+                .into_runtime_parts();
+            (phenotype, compiler_inputs)
+        }
+        BrainCapacityClass::N1024_ID => {
+            let compiler_inputs = PhenotypeCompilerInputs::try_new(
+                genome,
+                &capacity,
+                construction_development,
+                sensor_profile,
+            )?;
+            let phenotype = PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)?;
+            (phenotype, compiler_inputs)
+        }
+        BrainCapacityClass::N2048_ID => {
+            let foundation = FoundationWeightAsset::builtin_n2048_v1(sensor_profile)?;
+            let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
                 &genome,
                 &capacity,
                 &construction_development,
                 sensor_profile,
                 &foundation,
-            )?
-            .into_runtime_parts();
-        (phenotype, compiler_inputs)
-    } else {
-        let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
-            &genome,
-            &capacity,
-            &construction_development,
-            sensor_profile,
-            &foundation,
-        )?;
-        let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
-            genome,
-            &capacity,
-            construction_development,
-            sensor_profile,
-            phenotype.foundation_abi_selection().clone(),
-        )?;
-        (phenotype, compiler_inputs)
+            )?;
+            let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
+                genome,
+                &capacity,
+                construction_development,
+                sensor_profile,
+                phenotype.foundation_abi_selection().clone(),
+            )?;
+            (phenotype, compiler_inputs)
+        }
+        _ => return Err(ScaffoldContractError::UnsupportedProductionBrainClass),
     };
     let verified_phenotype = PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)?;
     if verified_phenotype != phenotype {
@@ -9188,6 +9205,18 @@ pub(crate) fn compile_gpu_birth_components(
     if capacity.id() == BrainCapacityClass::N512_ID {
         let genome = BrainGenome::scaffold(LEGACY_NANO512_V1_COORDINATE_SEED, capacity.id());
         let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(1.0)?);
+        let (phenotype, _) = compile_gpu_components_from_genome(
+            genome.clone(),
+            development.clone(),
+            sensor_profile,
+        )?;
+        return Ok((phenotype, genome, development));
+    }
+
+    if capacity.id() == BrainCapacityClass::N1024_ID {
+        let birth_seed = deterministic_seed ^ organism_id.raw().rotate_left(17);
+        let genome = BrainGenome::scaffold(birth_seed, capacity.id());
+        let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.35)?);
         let (phenotype, _) = compile_gpu_components_from_genome(
             genome.clone(),
             development.clone(),
@@ -11278,7 +11307,6 @@ mod tests {
             sensor_profile,
         )
         .unwrap();
-        assert_eq!(plan.world_entity_id, world_entity_id);
         let authoritative_age = record.age_at(world.tick()).unwrap();
         let authoritative_development = record
             .phenotype()
@@ -11395,7 +11423,7 @@ mod tests {
         .enumerate()
         {
             let asset = alife_core::FoundationWeightAsset::builtin_n2048_v1(profile).unwrap();
-            assert_eq!(asset.manifest().training_stage().completed_stage_count(), 0);
+            assert_eq!(asset.manifest().training_stage().completed_stage_count(), 9);
             assert!(!asset.manifest().promotion_receipt().is_promoted());
             assert!(!asset.weights().is_empty());
             let (phenotype, _, _) = compile_gpu_birth_components(
@@ -11477,14 +11505,22 @@ mod tests {
             0x004E_3531_325F_5631
         );
 
-        assert!(compile_gpu_birth_components(
+        let (n1024, n1024_genome, n1024_development) = compile_gpu_birth_components(
             0xB17A_DA7E,
             BrainScaleTier::Small1024,
             OrganismId::new(82).unwrap(),
             Tick::ZERO,
             SensorProfile::PrivilegedAffordanceV1,
         )
-        .is_err());
+        .unwrap();
+        assert_eq!(n1024.brain_class_id(), BrainCapacityClass::N1024_ID);
+        assert_eq!(n1024_genome.brain_class_id, BrainCapacityClass::N1024_ID);
+        assert_eq!(n1024_development.maturation.raw(), 0.35);
+        assert_eq!(
+            n1024.sensor_profile(),
+            SensorProfile::PrivilegedAffordanceV1
+        );
+        assert!(n1024.foundation_abi().foundation_payload_digest().is_none());
     }
 
     impl GpuSleepConsolidationDriver for NoProgressSleepDriver {

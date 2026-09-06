@@ -1181,8 +1181,11 @@ mod live_presentation_regression_tests {
         LiveBrainTickSummary, LiveCognitivePresentationSnapshot, G03_LIVE_BRAIN_LOOP_SCHEMA,
         G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
     };
-    use alife_core::{BrainTickStatus, OrganismId, Tick, Vec3f};
-    use alife_world::HeadlessScenarioBuilder;
+    use alife_core::{
+        BrainCapacityClass, BrainTickStatus, CreatureGenome, FoundationGeneticIdentity, OrganismId,
+        Tick, Vec3f,
+    };
+    use alife_world::{HeadlessScenarioBuilder, WorldOrganismRecord};
 
     fn tick_summary(organism_id: OrganismId) -> LiveBrainTickSummary {
         LiveBrainTickSummary {
@@ -1237,6 +1240,25 @@ mod live_presentation_regression_tests {
         let mut world = HeadlessScenarioBuilder::new(21)
             .agent("agent", resident, Vec3f::ZERO)
             .build()
+            .unwrap();
+        let resident_entity = world.entity_id("agent").unwrap();
+        let genome = CreatureGenome::early_mammal_founder(
+            21,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        world
+            .register_organism_record(
+                WorldOrganismRecord::newborn(
+                    resident,
+                    resident_entity,
+                    genome,
+                    phenotype,
+                    Tick::ZERO,
+                )
+                .unwrap(),
+            )
             .unwrap();
         let mut frames =
             LiveBrainPresentationFrameResource::from_authoritative_world(&world).unwrap();

@@ -571,12 +571,6 @@ impl HeadlessWorld {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
-        let mut organism_ids = candidate
-            .organism_registry
-            .iter()
-            .map(|record| record.organism_id())
-            .collect::<Vec<_>>();
-        organism_ids.sort_unstable_by_key(|organism_id| organism_id.raw());
         let mut alive_organism_ids = candidate
             .organism_registry
             .iter()
@@ -623,10 +617,11 @@ impl HeadlessWorld {
                 {
                     continue;
                 }
-                let maternal_membership = candidate
-                    .habitats
-                    .membership(*maternal_id)
-                    .ok_or(ScaffoldContractError::InvalidId)?;
+                let Some(maternal_membership) = candidate.habitats.membership(*maternal_id) else {
+                    // Habitat membership gates reproduction, but it is not a
+                    // prerequisite for an otherwise valid world organism.
+                    continue;
+                };
                 let habitat_id = maternal_membership.habitat_id;
                 if candidate
                     .habitats
@@ -656,7 +651,7 @@ impl HeadlessWorld {
 
         #[cfg(test)]
         let mut advanced_organism = false;
-        for organism_id in organism_ids {
+        for organism_id in alive_organism_ids {
             let biology_tick = candidate
                 .organism_registry
                 .get(organism_id)
@@ -762,6 +757,11 @@ impl HeadlessWorld {
             }
         }
 
+        // All existing organisms now hold next-tick biology. Advance the
+        // staged world's causal clock before admitting a next-tick newborn or
+        // its habitat membership. The transaction still publishes atomically.
+        candidate.tick = next_tick;
+
         if let Some((maternal_id, paternal_id, maternal_position, paternal_position, habitat_id)) =
             conception_pair
         {
@@ -829,7 +829,6 @@ impl HeadlessWorld {
             candidate.validate_complete_organism_bindings()?;
         }
 
-        candidate.tick = next_tick;
         candidate.speech.retire_expired(candidate.tick);
         let _ = candidate.advance_ecology_at_current_tick();
         Ok(next_tick)
@@ -5139,9 +5138,11 @@ mod task_6_factorized_motor_tests {
                 .neural_emitter_evaluations,
             1
         );
-        assert!(
-            receipt.biology_after.homeostasis.hormones.acetylcholine
-                > before.homeostasis.hormones.acetylcholine
+        // A newborn's biochemical-expression gate is closed. The neural
+        // emitter is evaluated and receipted, but cannot yet alter chemistry.
+        assert_eq!(
+            receipt.biology_after.homeostasis.hormones.acetylcholine,
+            before.homeostasis.hormones.acetylcholine
         );
     }
 }
@@ -5241,9 +5242,11 @@ mod task_3_2a_tests {
             .unwrap();
 
         assert!(safe_receipt.action_result.observation.success);
+        // V2 does not accept a host-authored reward. Biological value is
+        // derived later from the measured physiology transition.
         assert_eq!(
             safe_receipt.action_result.observation.reward_valence.raw(),
-            0.05
+            0.0
         );
         assert_eq!(safe_receipt.action_result.observation.pain_delta.raw(), 0.0);
         assert_eq!(
@@ -5697,7 +5700,7 @@ mod task_3_2a_tests {
                         biology.cadence.metabolism_ticks = 1;
                         biology.cadence.development_ticks = 1;
                         if organism_id == TASK_4_1_LOW_ORGANISM {
-                            biology.body.set_health(0.1)?;
+                            biology.body.set_health(0.01)?;
                         }
                         Ok(())
                     })
@@ -5711,6 +5714,14 @@ mod task_3_2a_tests {
         let expected_low_development = before_low
             .phenotype()
             .development_state_at(next_tick)
+            .unwrap();
+        let expected_high_biology = before_high
+            .biochemistry()
+            .advance(
+                next_tick,
+                alife_core::BodyEventDelta::zero(),
+                before_high.phenotype(),
+            )
             .unwrap();
         let forward_low_entity = forward.entity_id("agent-low").unwrap();
         let reverse_low_entity = reverse.entity_id("agent-low").unwrap();
@@ -5802,7 +5813,7 @@ mod task_3_2a_tests {
         );
         assert_eq!(
             forward_high.biochemistry().body.energy,
-            before_high.biochemistry().body.energy
+            expected_high_biology.body.energy
         );
         for (before, after) in [(&before_low, &forward_low), (&before_high, &forward_high)] {
             assert_eq!(after.archive(), before.archive());
@@ -5839,21 +5850,12 @@ mod task_3_2a_tests {
             alife_core::PassiveBodyUpkeepPolicy::maximum_lifespan_ticks(before_low.phenotype());
         let high_maximum =
             alife_core::PassiveBodyUpkeepPolicy::maximum_lifespan_ticks(before_high.phenotype());
-        assert_ne!(low_maximum, high_maximum);
-        let minimum_maximum = low_maximum.min(high_maximum);
-        assert!(minimum_maximum > 0);
-        let next_tick = Tick::new(minimum_maximum);
+        // Founder seed variation no longer changes the shared v2 body
+        // foundation's maximum lifespan.
+        assert_eq!(low_maximum, high_maximum);
+        assert!(low_maximum > 0);
+        let next_tick = Tick::new(low_maximum);
         let current_tick = Tick::new(next_tick.raw().saturating_sub(1));
-        let terminal_organism = if low_maximum < high_maximum {
-            TASK_4_1_LOW_ORGANISM
-        } else {
-            TASK_4_1_HIGH_ORGANISM
-        };
-        let survivor_organism = if terminal_organism == TASK_4_1_LOW_ORGANISM {
-            TASK_4_1_HIGH_ORGANISM
-        } else {
-            TASK_4_1_LOW_ORGANISM
-        };
 
         for world in [&mut forward, &mut reverse] {
             world.tick = current_tick;
@@ -5868,22 +5870,6 @@ mod task_3_2a_tests {
                 world
                     .organism_registry
                     .with_biology_mut(organism_id, |current| {
-                        *current = biology;
-                        Ok(())
-                    })
-                    .unwrap();
-            }
-            if terminal_organism == TASK_4_1_HIGH_ORGANISM {
-                let phenotype = world
-                    .organism_registry
-                    .get(TASK_4_1_LOW_ORGANISM)
-                    .unwrap()
-                    .phenotype()
-                    .clone();
-                let biology = alife_core::BiochemistryState::new(&phenotype, next_tick).unwrap();
-                world
-                    .organism_registry
-                    .with_biology_mut(TASK_4_1_LOW_ORGANISM, |current| {
                         *current = biology;
                         Ok(())
                     })
@@ -5980,11 +5966,11 @@ mod task_3_2a_tests {
                 }
             });
         }
-        let terminal_record = task_4_1_record_state(&forward, terminal_organism);
-        let survivor_record = task_4_1_record_state(&forward, survivor_organism);
-        assert_eq!(terminal_record.lifecycle().death_tick(), Some(next_tick));
-        assert!(!terminal_record.lifecycle().is_alive());
-        assert!(survivor_record.lifecycle().is_alive());
+        for organism_id in [TASK_4_1_LOW_ORGANISM, TASK_4_1_HIGH_ORGANISM] {
+            let terminal_record = task_4_1_record_state(&forward, organism_id);
+            assert_eq!(terminal_record.lifecycle().death_tick(), Some(next_tick));
+            assert!(!terminal_record.lifecycle().is_alive());
+        }
         assert_eq!(
             forward.canonical_signature_digest().unwrap(),
             reverse.canonical_signature_digest().unwrap()
@@ -6014,14 +6000,17 @@ mod task_3_2a_tests {
         let mut one_tick_cadence = baseline.biochemistry().cadence;
         one_tick_cadence.metabolism_ticks = 1;
         one_tick_cadence.development_ticks = 1;
-        let expected_upkeep_cost = 0.7925_f32 / 2551.0_f32;
         let expected_upkeep = alife_core::PassiveBodyUpkeepPolicy::upkeep_event(
             baseline.phenotype(),
             one_tick_cadence,
             1,
         );
-        assert!(((-expected_upkeep.energy) - expected_upkeep_cost).abs() <= 1.0e-7);
-        let low_energy = expected_upkeep_cost - 1.0e-6;
+        let expected_upkeep_cost = -expected_upkeep.energy;
+        assert!(expected_upkeep_cost > 0.0);
+        // Every organ receives a positive share of upkeep. Start above zero
+        // but below even the smallest share so the passive cost is causal to
+        // the terminal transition.
+        let low_energy = expected_upkeep_cost * 0.05;
 
         for world in [&mut forward, &mut reverse] {
             for organism_id in [TASK_4_1_LOW_ORGANISM, TASK_4_1_HIGH_ORGANISM] {
@@ -6040,8 +6029,15 @@ mod task_3_2a_tests {
 
         let before_low = task_4_1_record_state(&forward, TASK_4_1_LOW_ORGANISM);
         let before_high = task_4_1_record_state(&forward, TASK_4_1_HIGH_ORGANISM);
-        assert!((before_high.biochemistry().body.energy - 0.7925).abs() <= 1.0e-6);
         let next_tick = Tick::new(1);
+        let expected_high_biology = before_high
+            .biochemistry()
+            .advance(
+                next_tick,
+                alife_core::BodyEventDelta::zero(),
+                before_high.phenotype(),
+            )
+            .unwrap();
         let expected_development = before_high
             .phenotype()
             .development_state_at(next_tick)
@@ -6088,12 +6084,7 @@ mod task_3_2a_tests {
         assert_eq!(reverse.try_advance_tick().unwrap(), next_tick);
         let forward_low = task_4_1_record_state(&forward, TASK_4_1_LOW_ORGANISM);
         let forward_high = task_4_1_record_state(&forward, TASK_4_1_HIGH_ORGANISM);
-        assert!(
-            (forward_high.biochemistry().body.energy
-                - (before_high.biochemistry().body.energy - expected_upkeep_cost))
-                .abs()
-                <= 1.0e-6
-        );
+        assert_eq!(forward_high.biochemistry(), &expected_high_biology);
         assert!(forward_high.biochemistry().body.energy > 0.0);
         assert_eq!(forward_low.biochemistry().body.energy, 0.0);
         assert_eq!(forward_low.lifecycle().death_tick(), Some(next_tick));
@@ -6378,6 +6369,15 @@ mod task_4_3a2_tests {
                 .unwrap(),
             )
             .unwrap();
+        let mut habitats = world.habitat_authority().clone();
+        habitats
+            .register_creature(
+                terminal_id,
+                crate::habitat::HabitatId::DEFAULT_WILD,
+                world.tick(),
+            )
+            .unwrap();
+        world.replace_habitat_authority(habitats).unwrap();
         world
             .organism_registry
             .with_biology_mut(terminal_id, |biology| {

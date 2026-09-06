@@ -37,7 +37,7 @@ fn genome_validation_rejects_bad_version_unknown_class_and_invalid_ranges() {
         genome.validate_contract(),
         Err(ScaffoldContractError::IncompatibleAbi {
             kind: SchemaKind::Genome,
-            expected: 1,
+            expected: 3,
             actual: 99,
         })
     ));

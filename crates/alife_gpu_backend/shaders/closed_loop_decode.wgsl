@@ -35,7 +35,7 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (!activity_contract_prevalidated(header)) { return; }
   let brain = brain_slots[header.brain_slot_index];
   let direct_weight_banks = load_weight_bank_pair_direct(brain);
-  let weight_bases = direct_weight_banks.active;
+  let weight_bases = direct_weight_banks.active_bases;
   let candidate = gid.x;
   if (candidate >= header.candidate_count) { return; }
   let candidate_record = load_candidate(header.candidate_offset + candidate * 8u);
@@ -286,7 +286,7 @@ fn decode_speech_payload(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (speech_synapses != SPEECH_SYNAPSE_COUNT) { return; }
 
   let direct_weight_banks = load_weight_bank_pair_direct(brain);
-  let weight_bases = direct_weight_banks.active;
+  let weight_bases = direct_weight_banks.active_bases;
   let activation_base = select(
     brain.activation_a_offset,
     brain.activation_b_offset,

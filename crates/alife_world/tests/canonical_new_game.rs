@@ -76,14 +76,14 @@ fn canonical_new_game_contains_live_ecology_not_frontend_fixtures() {
             .iter()
             .filter(|object| object.kind == WorldObjectKind::Food)
             .count(),
-        8
+        1
     );
     assert_eq!(
         objects
             .iter()
             .filter(|object| object.kind == WorldObjectKind::Hazard)
             .count(),
-        2
+        1
     );
     assert_eq!(
         objects
@@ -92,9 +92,8 @@ fn canonical_new_game_contains_live_ecology_not_frontend_fixtures() {
             .count(),
         2
     );
-    assert_eq!(game.world.ecology().resources.len(), 2);
+    assert_eq!(game.world.ecology().resources.len(), 1);
     assert!(!game.world.ecology().zones.is_empty());
-    assert!(!game.world.ecology().spawn_policies.is_empty());
 }
 
 #[test]

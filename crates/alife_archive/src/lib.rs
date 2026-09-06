@@ -2478,6 +2478,7 @@ fn revalidate_archive_deletion_target(
     archive_root: &Path,
     candidate: &Path,
 ) -> Result<Option<PathBuf>, ArchiveError> {
+    validate_archive_deletion_target_lexically(archive_root, candidate)?;
     let live_root = canonical_archive_root(archive_root)?;
     if live_root != archive_root {
         return Err(ArchiveError::Integrity(
@@ -2502,6 +2503,25 @@ fn revalidate_archive_deletion_target(
         )));
     }
     Ok(Some(checked.canonical_path))
+}
+
+fn validate_archive_deletion_target_lexically(
+    archive_root: &Path,
+    candidate: &Path,
+) -> Result<(), ArchiveError> {
+    let relative = candidate.strip_prefix(archive_root).map_err(|_| {
+        ArchiveError::Integrity("archive path escapes the canonical archive root".to_string())
+    })?;
+    if relative.as_os_str().is_empty()
+        || relative
+            .components()
+            .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err(ArchiveError::Integrity(
+            "archive path contains unsafe components".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn remove_tree_without_following(archive_root: &Path, target: &Path) -> Result<(), ArchiveError> {

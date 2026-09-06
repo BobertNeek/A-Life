@@ -51,7 +51,7 @@ fn current_status_records_the_open_product_boundaries() {
         fs::read_to_string(root.join("docs/STATUS.md")).expect("current status should be readable");
 
     for required in [
-        "active voxel renderer remains a save-derived projection",
+        "The source path is causally connected.",
         "Autonomous birth, ageing, reproduction, and death",
         "Its promotion verdict is `Blocked`",
     ] {

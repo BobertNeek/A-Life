@@ -1423,19 +1423,28 @@ impl PortableSaveFile {
             .and_then(serde_json::Value::as_u64)
             .and_then(|value| u16::try_from(value).ok())
             .unwrap_or_default();
-        let migrated;
-        let source = if actual_version == P34_SAVE_FILE_SCHEMA_VERSION {
-            text
-        } else if actual_version == 2 && P34_SAVE_FILE_SCHEMA_VERSION == 3 {
-            migrated = migrate_portable_save_v2_to_v3(value)?;
-            &migrated
-        } else {
-            return Err(PersistenceError::MigrationUnsupported {
-                from_schema_version: actual_version,
-                to_schema_version: P34_SAVE_FILE_SCHEMA_VERSION,
+        if actual_version > P34_SAVE_FILE_SCHEMA_VERSION {
+            return Err(PersistenceError::SchemaVersion {
+                schema: P34_SAVE_FILE_SCHEMA,
+                expected: P34_SAVE_FILE_SCHEMA_VERSION,
+                actual: actual_version,
             });
+        }
+        let migrated = match (actual_version, P34_SAVE_FILE_SCHEMA_VERSION) {
+            (actual, current) if actual == current => value,
+            (1, 3) => {
+                let value = migrate_portable_save_v1_to_v2(value)?;
+                migrate_portable_save_v2_to_v3(value)?
+            }
+            (2, 3) => migrate_portable_save_v2_to_v3(value)?,
+            _ => {
+                return Err(PersistenceError::MigrationUnsupported {
+                    from_schema_version: actual_version,
+                    to_schema_version: P34_SAVE_FILE_SCHEMA_VERSION,
+                });
+            }
         };
-        let mut save: Self = serde_json::from_str(source)?;
+        let mut save: Self = serde_json::from_value(migrated)?;
         save.world.migrate_legacy_habitats(&save.creatures)?;
         Ok(save)
     }
@@ -2433,9 +2442,22 @@ fn peek_schema(
     )
 }
 
+fn migrate_portable_save_v1_to_v2(
+    mut value: serde_json::Value,
+) -> Result<serde_json::Value, PersistenceError> {
+    value
+        .as_object_mut()
+        .ok_or(PersistenceError::InvalidConfig {
+            field: "save",
+            message: "portable save root must be an object",
+        })?
+        .insert("schema_version".to_string(), serde_json::Value::from(2));
+    Ok(value)
+}
+
 fn migrate_portable_save_v2_to_v3(
     mut value: serde_json::Value,
-) -> Result<String, PersistenceError> {
+) -> Result<serde_json::Value, PersistenceError> {
     fn contains_legacy_lobe_name(value: &serde_json::Value) -> bool {
         const LEGACY_NAMES: [&str; 17] = [
             "SensoryGrounding",
@@ -2496,7 +2518,7 @@ fn migrate_portable_save_v2_to_v3(
             "schema_version".to_string(),
             serde_json::Value::from(P34_SAVE_FILE_SCHEMA_VERSION),
         );
-    Ok(serde_json::to_string(&value)?)
+    Ok(value)
 }
 
 fn validate_relative_path(asset_id: &str, path: &Path) -> Result<(), PersistenceError> {

@@ -151,7 +151,7 @@ fn world_with_agent_without_organism_id() -> HeadlessWorld {
     save.restore_headless_world().unwrap()
 }
 
-fn world_with_non_agent_organism_id() -> (HeadlessWorld, WorldEntityId, WorldEntityId) {
+fn save_with_non_agent_organism_id() -> PortableSaveFile {
     let (world, _, _) = world_with_agent_and_food();
     let save = PortableSaveFile::from_headless_world(
         "task-3-2b3b1-food-id",
@@ -168,11 +168,7 @@ fn world_with_non_agent_organism_id() -> (HeadlessWorld, WorldEntityId, WorldEnt
         .find(|object| object["label"] == "food")
         .unwrap();
     food["organism_id"] = serde_json::json!(99);
-    let save = PortableSaveFile::from_json_str(&serde_json::to_string(&value).unwrap()).unwrap();
-    let world = save.restore_headless_world().unwrap();
-    let agent = world.entity_id("agent").unwrap();
-    let food = world.entity_id("food").unwrap();
-    (world, agent, food)
+    PortableSaveFile::from_json_str(&serde_json::to_string(&value).unwrap()).unwrap()
 }
 
 fn world_with_duplicate_agent_organism_id() -> HeadlessWorld {
@@ -353,19 +349,10 @@ fn replace_registry_rejects_duplicate_agent_organism_identity_atomically() {
 }
 
 #[test]
-fn replace_registry_excludes_non_agent_organism_ids_from_reverse_cohort() {
-    let (mut world, agent, food) = world_with_non_agent_organism_id();
-
-    world
-        .replace_organism_registry_exact([record(7, agent.raw())].into_iter())
-        .unwrap();
-
-    assert_eq!(
-        world.entity(food).unwrap().organism_id,
-        Some(OrganismId(99))
-    );
-    assert_eq!(world.organism_registry().len(), 1);
-    world.validate_organism_bindings().unwrap();
+fn persistence_rejects_non_agent_organism_identity() {
+    assert!(save_with_non_agent_organism_id()
+        .restore_headless_world()
+        .is_err());
 }
 
 #[test]

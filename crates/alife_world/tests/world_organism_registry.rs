@@ -1,5 +1,5 @@
 use alife_core::{
-    BiochemistryState, Blake3Digest, BodyEventDelta, BrainCapacityClass, CreatureGenome,
+    Blake3Digest, BodyEventDelta, BrainCapacityClass, CreatureGenome,
     FoundationGeneticIdentity, GenomeId, LineageId, OrganismId, ScaffoldContractError, Tick,
     WorldEntityId,
 };
@@ -158,7 +158,7 @@ fn malformed_record_advance_rolls_back_biology_after_record_validation_fails() {
     assert_eq!(
         result,
         Err(OrganismRegistryError::InvalidRecord(
-            ScaffoldContractError::InvalidId,
+            ScaffoldContractError::BrainOwnershipMismatch,
         ))
     );
     assert_eq!(*organism.biochemistry(), before);
@@ -318,7 +318,7 @@ fn malformed_death_transition_leaves_lifecycle_unchanged() {
     assert_eq!(
         result,
         Err(OrganismRegistryError::InvalidRecord(
-            ScaffoldContractError::InvalidId,
+            ScaffoldContractError::BrainOwnershipMismatch,
         ))
     );
     assert_eq!(organism.lifecycle(), before);
@@ -336,7 +336,7 @@ fn malformed_birth_link_transition_leaves_archive_unchanged() {
     assert_eq!(
         result,
         Err(OrganismRegistryError::InvalidRecord(
-            ScaffoldContractError::InvalidId,
+            ScaffoldContractError::BrainOwnershipMismatch,
         ))
     );
     assert_eq!(*organism.archive(), before);
@@ -357,7 +357,7 @@ fn malformed_life_link_transition_leaves_archive_unchanged() {
     assert_eq!(
         result,
         Err(OrganismRegistryError::InvalidRecord(
-            ScaffoldContractError::InvalidId,
+            ScaffoldContractError::BrainOwnershipMismatch,
         ))
     );
     assert_eq!(*organism.archive(), before);

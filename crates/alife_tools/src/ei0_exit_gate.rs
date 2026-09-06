@@ -36,7 +36,8 @@ use alife_world::{
     TerrainZoneKind, WeightLayerSaveSummary, HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION,
     P34_ASSET_MANIFEST_SCHEMA, P34_ASSET_MANIFEST_SCHEMA_VERSION,
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::value::RawValue;
 
 pub const EI0_EXIT_GATE_SCHEMA_VERSION: u16 = 3;
 const WORLD_SEED: u64 = 0xE10_0A11;
@@ -179,9 +180,171 @@ pub struct Ei0LifecycleGateReport {
     pub player_directed_wild_breeding_rejected: bool,
     pub creature_directed_managed_breeding_rejected: bool,
     pub lanes: Vec<Ei0LaneReceipt>,
-    pub population_genomes: Vec<CreatureGenome>,
+    pub population_genomes: Vec<Ei0GenomeEvidence>,
     pub population_residents: Vec<Ei0ResidentIdentityReceipt>,
     pub evidence_digests: Ei0EvidenceDigests,
+}
+
+/// A genome embedded in an EI0 evidence report.
+///
+/// Current reports retain the fully typed runtime genome. Historical v1
+/// reports retain their exact JSON object instead: those genomes predate the
+/// required biochemical graph and must not be promoted into current runtime
+/// state by inventing one.
+#[derive(Debug, Clone)]
+pub enum Ei0GenomeEvidence {
+    Current(CreatureGenome),
+    HistoricalV1(Box<RawValue>),
+}
+
+impl Ei0GenomeEvidence {
+    pub const fn is_historical_v1(&self) -> bool {
+        matches!(self, Self::HistoricalV1(_))
+    }
+
+    fn current(&self) -> Option<&CreatureGenome> {
+        match self {
+            Self::Current(genome) => Some(genome),
+            Self::HistoricalV1(_) => None,
+        }
+    }
+
+    fn identity(&self) -> Result<Ei0GenomeIdentity, Ei0ExitGateError> {
+        match self {
+            Self::Current(genome) => Ok(Ei0GenomeIdentity {
+                id: genome.id,
+                parent_genome_ids: genome.parent_genome_ids.clone(),
+                lineage_id: genome.lineage_id,
+                conception_seed: genome.conception_seed,
+            }),
+            Self::HistoricalV1(raw) => historical_genome_identity(raw.get()),
+        }
+    }
+
+    fn digest(&self) -> Result<String, serde_json::Error> {
+        match self {
+            Self::Current(genome) => serde_json::to_vec(genome).map(|bytes| digest_bytes(&bytes)),
+            Self::HistoricalV1(raw) => Ok(digest_bytes(&compact_raw_json(raw.get()))),
+        }
+    }
+}
+
+impl PartialEq for Ei0GenomeEvidence {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Current(left), Self::Current(right)) => left == right,
+            (Self::HistoricalV1(left), Self::HistoricalV1(right)) => left.get() == right.get(),
+            _ => false,
+        }
+    }
+}
+
+impl Serialize for Ei0GenomeEvidence {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Current(genome) => genome.serialize(serializer),
+            Self::HistoricalV1(raw) => raw.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Ei0GenomeEvidence {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = Box::<RawValue>::deserialize(deserializer)?;
+        if let Ok(genome) = serde_json::from_str::<CreatureGenome>(raw.get()) {
+            return Ok(Self::Current(genome));
+        }
+        let value: serde_json::Value = serde_json::from_str(raw.get()).map_err(D::Error::custom)?;
+        if value
+            .get("schema_version")
+            .and_then(serde_json::Value::as_u64)
+            != Some(1)
+        {
+            return Err(D::Error::custom(
+                "EI0 genome is neither a current genome nor historical schema v1 evidence",
+            ));
+        }
+        historical_genome_identity_from_value(&value).map_err(D::Error::custom)?;
+        Ok(Self::HistoricalV1(raw))
+    }
+}
+
+impl From<CreatureGenome> for Ei0GenomeEvidence {
+    fn from(genome: CreatureGenome) -> Self {
+        Self::Current(genome)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Ei0GenomeIdentity {
+    id: GenomeId,
+    parent_genome_ids: Vec<GenomeId>,
+    lineage_id: LineageId,
+    conception_seed: u64,
+}
+
+fn historical_genome_identity(raw: &str) -> Result<Ei0GenomeIdentity, Ei0ExitGateError> {
+    let value: serde_json::Value = serde_json::from_str(raw)?;
+    historical_genome_identity_from_value(&value).map_err(Ei0ExitGateError::Source)
+}
+
+fn historical_genome_identity_from_value(
+    value: &serde_json::Value,
+) -> Result<Ei0GenomeIdentity, String> {
+    let required_u64 = |field: &'static str| {
+        value
+            .get(field)
+            .and_then(serde_json::Value::as_u64)
+            .ok_or_else(|| format!("historical EI0 genome is missing {field}"))
+    };
+    let parent_genome_ids = value
+        .get("parent_genome_ids")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "historical EI0 genome is missing parent_genome_ids".to_string())?
+        .iter()
+        .map(|parent| {
+            parent
+                .as_u64()
+                .map(GenomeId)
+                .ok_or_else(|| "historical EI0 parent genome ID is invalid".to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Ei0GenomeIdentity {
+        id: GenomeId(required_u64("id")?),
+        parent_genome_ids,
+        lineage_id: LineageId(required_u64("lineage_id")?),
+        conception_seed: required_u64("conception_seed")?,
+    })
+}
+
+fn compact_raw_json(raw: &str) -> Vec<u8> {
+    let mut compact = Vec::with_capacity(raw.len());
+    let mut in_string = false;
+    let mut escaped = false;
+    for byte in raw.bytes() {
+        if in_string {
+            compact.push(byte);
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                in_string = false;
+            }
+        } else if byte == b'"' {
+            in_string = true;
+            compact.push(byte);
+        } else if !byte.is_ascii_whitespace() {
+            compact.push(byte);
+        }
+    }
+    compact
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -630,7 +793,10 @@ pub fn run_ei0_lifecycle_gate(
         player_directed_wild_breeding_rejected,
         creature_directed_managed_breeding_rejected,
         lanes,
-        population_genomes,
+        population_genomes: population_genomes
+            .into_iter()
+            .map(Ei0GenomeEvidence::from)
+            .collect(),
         population_residents,
         evidence_digests,
     };
@@ -1443,6 +1609,20 @@ pub fn validate_committed_ei0_exit_gate_report(
     let lifecycle = report.lifecycle.as_ref().ok_or(Ei0ExitGateError::Evidence(
         "committed report is missing lifecycle evidence",
     ))?;
+    let historical_genomes = lifecycle
+        .population_genomes
+        .iter()
+        .all(Ei0GenomeEvidence::is_historical_v1);
+    if !historical_genomes
+        && lifecycle
+            .population_genomes
+            .iter()
+            .any(Ei0GenomeEvidence::is_historical_v1)
+    {
+        return Err(Ei0ExitGateError::Evidence(
+            "committed report mixes current and historical genome evidence",
+        ));
+    }
     let baseline = report
         .heuristic_baseline
         .as_ref()
@@ -1473,7 +1653,7 @@ pub fn validate_committed_ei0_exit_gate_report(
     )? != binding.source_contract_digest
     {
         return Err(Ei0ExitGateError::Evidence(
-            "current source files do not match the report binding",
+            "bound source files do not match the report binding",
         ));
     }
     let bound_tree = git_output(
@@ -1488,28 +1668,45 @@ pub fn validate_committed_ei0_exit_gate_report(
             "producing source commit does not resolve to the recorded tree",
         ));
     }
-    let mut source_diff = Command::new("git");
-    source_diff
-        .current_dir(&root)
-        .args(["diff", "--quiet", &binding.producing_source_commit, "--"])
-        .args(SOURCE_CONTRACT_PATHS);
-    if !source_diff
-        .status()
-        .map_err(|error| Ei0ExitGateError::Source(error.to_string()))?
-        .success()
-    {
-        return Err(Ei0ExitGateError::Evidence(
-            "relevant source differs from the producing commit",
-        ));
+    if !historical_genomes {
+        let mut source_diff = Command::new("git");
+        source_diff
+            .current_dir(&root)
+            .args(["diff", "--quiet", &binding.producing_source_commit, "--"])
+            .args(SOURCE_CONTRACT_PATHS);
+        if !source_diff
+            .status()
+            .map_err(|error| Ei0ExitGateError::Source(error.to_string()))?
+            .success()
+        {
+            return Err(Ei0ExitGateError::Evidence(
+                "relevant source differs from the producing commit",
+            ));
+        }
     }
 
-    let current_foundation =
-        FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1)?;
+    let current_assets_match = if historical_genomes {
+        true
+    } else {
+        let current_foundation =
+            FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1)?;
+        report.evidence_digests.foundation_weights.as_deref()
+            == Some(format_blake3(current_foundation.digest()).as_str())
+            && report.evidence_digests.shader_bundle.as_deref()
+                == Some(format_blake3(closed_loop_shader_bundle_digest()).as_str())
+    };
     if report.evidence_digests != lifecycle.evidence_digests
-        || report.evidence_digests.foundation_weights.as_deref()
-            != Some(format_blake3(current_foundation.digest()).as_str())
-        || report.evidence_digests.shader_bundle.as_deref()
-            != Some(format_blake3(closed_loop_shader_bundle_digest()).as_str())
+        || !current_assets_match
+        || report
+            .evidence_digests
+            .foundation_weights
+            .as_deref()
+            .is_none_or(|digest| !valid_blake3_text(digest))
+        || report
+            .evidence_digests
+            .shader_bundle
+            .as_deref()
+            .is_none_or(|digest| !valid_blake3_text(digest))
         || report.evidence_digests.source_genomes.len() != 14
         || report.evidence_digests.archive_manifests.len() != 14
         || report.evidence_digests.archive_composite_assets
@@ -1538,7 +1735,7 @@ pub fn validate_committed_ei0_exit_gate_report(
     let recomputed_source_digests = lifecycle
         .population_genomes
         .iter()
-        .map(|genome| serde_json::to_vec(genome).map(|bytes| digest_bytes(&bytes)))
+        .map(Ei0GenomeEvidence::digest)
         .collect::<Result<BTreeSet<_>, _>>()?;
     if reported_source_digests != recomputed_source_digests {
         return Err(Ei0ExitGateError::Evidence(
@@ -1556,8 +1753,8 @@ pub fn validate_committed_ei0_exit_gate_report(
     let genomes = lifecycle
         .population_genomes
         .iter()
-        .map(|genome| (genome.id.0, genome))
-        .collect::<BTreeMap<_, _>>();
+        .map(|genome| genome.identity().map(|identity| (identity.id.0, genome)))
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
     let residents = lifecycle
         .population_residents
         .iter()
@@ -1592,11 +1789,18 @@ pub fn validate_committed_ei0_exit_gate_report(
                     .ok_or(Ei0ExitGateError::Evidence(
                         "birth receipt second parent is absent",
                     ))?;
-            if genome.parent_genome_ids != birth.parent_genome_ids
+            let phenotype_mismatch = match genome.current() {
+                Some(genome) => {
+                    expected_n2048_creature_phenotype_hash(genome)? != birth.child_phenotype_hash
+                }
+                None => false,
+            };
+            let genome_identity = genome.identity()?;
+            if genome_identity.parent_genome_ids != birth.parent_genome_ids
                 || birth.parent_genome_ids.as_slice()
                     != [first_parent.genome_id, second_parent.genome_id]
-                || genome.lineage_id != birth.lineage_id
-                || genome.conception_seed != birth.conception_seed
+                || genome_identity.lineage_id != birth.lineage_id
+                || genome_identity.conception_seed != birth.conception_seed
                 || resident.genome_id != birth.genome_id
                 || resident.generation != birth.generation
                 || resident.phenotype_hash != birth.child_phenotype_hash
@@ -1606,7 +1810,7 @@ pub fn validate_committed_ei0_exit_gate_report(
                 || breeding.cognition_policy != birth.cognition_policy
                 || breeding.first_parent == breeding.second_parent
                 || (lane.mode == HabitatMode::Wild && !wild_birth_semantics_are_exact(birth))
-                || expected_n2048_creature_phenotype_hash(genome)? != birth.child_phenotype_hash
+                || phenotype_mismatch
             {
                 return Err(Ei0ExitGateError::Evidence(
                     "causal birth receipt does not match its resident genome",
@@ -1635,9 +1839,19 @@ pub fn validate_committed_ei0_exit_gate_report(
                 .ok_or(Ei0ExitGateError::Evidence(
                     "GPU source genome is absent from the population",
                 ))?;
-        if expected_n2048_creature_phenotype_hash(genome)? != gpu.phenotype_hash {
+        let phenotype_matches = if let Some(genome) = genome.current() {
+            expected_n2048_creature_phenotype_hash(genome)? == gpu.phenotype_hash
+        } else {
+            lifecycle
+                .lanes
+                .iter()
+                .flat_map(|lane| &lane.births)
+                .find(|birth| birth.genome_id == gpu.source_creature_genome_id)
+                .is_some_and(|birth| birth.child_phenotype_hash == gpu.phenotype_hash)
+        };
+        if !phenotype_matches {
             return Err(Ei0ExitGateError::Evidence(
-                "GPU phenotype does not match independent compilation",
+                "GPU phenotype does not match the bound genome evidence",
             ));
         }
     }

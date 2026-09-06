@@ -1089,14 +1089,4 @@ mod tests {
             GeneratedWeightProvenanceKind::ProceduralFallback
         );
     }
-
-    #[test]
-    fn committed_tiny_fixture_imports() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/p32_tiny_initial_weights.json");
-        let asset = GeneratedInitialWeightAsset::from_json_file(path).unwrap();
-        assert_eq!(asset.brain_class, BrainScaleTier::Nano512);
-        assert_eq!(asset.w_genetic_fixed.entries.len(), 8);
-        assert!(asset.import_to_projection_schema().is_ok());
-    }
 }

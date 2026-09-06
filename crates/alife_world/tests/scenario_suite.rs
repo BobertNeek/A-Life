@@ -15,7 +15,7 @@ fn run(name: ScenarioName) -> ScenarioRun {
 }
 
 #[test]
-fn food_seeking_scenario_links_hunger_food_salience_eating_and_reward() {
+fn food_seeking_scenario_links_hunger_food_salience_and_measured_biology() {
     let run = run(ScenarioName::FoodSeeking);
     let patch = run.first_patch();
 
@@ -32,7 +32,7 @@ fn food_seeking_scenario_links_hunger_food_salience_eating_and_reward() {
         PhysicalContactKind::Consumed
     );
     assert!(patch.outcome().homeostatic_delta.drives.hunger < 0.0);
-    assert!(patch.outcome().reward_valence.raw() > 0.0);
+    assert_eq!(patch.outcome().reward_valence.raw(), 0.0);
     assert!(patch.outcome().energy_delta.raw() > 0.0);
     assert!(run
         .world_signature
@@ -57,7 +57,7 @@ fn pain_poison_scenario_records_danger_without_heuristic_replay() {
     assert!(painful.outcome().pain_delta.raw() > 0.0);
     assert!(painful.outcome().homeostatic_delta.drives.fear > 0.0);
     assert!(painful.outcome().homeostatic_delta.hormones.cortisol > 0.0);
-    assert!(painful.outcome().reward_valence.raw() < 0.0);
+    assert_eq!(painful.outcome().reward_valence.raw(), 0.0);
 
     let repeat = run.patch_at(1);
     let memory = &repeat

@@ -11,10 +11,10 @@
     "key": "obstacle-frustration",
     "label": "obstacle frustration",
     "seed": 18003,
-    "experience_schema_version": 3,
+    "experience_schema_version": 4,
     "action_abi_version": 2,
     "sensory_abi_version": 1,
-    "chemistry_schema_version": 1
+    "chemistry_schema_version": 3
   },
   "patches": [
     {
@@ -34,7 +34,7 @@
       "target_entity": null,
       "success": false,
       "contact": "Blocked",
-      "reward_milli": -200,
+      "reward_milli": 0,
       "pain_milli": 50,
       "frustration_milli": 450,
       "prediction_error_milli": 600,

@@ -179,10 +179,10 @@ struct GpuReplaySynapseSpanRecord {
 struct GpuWeightBankBases { lifetime:u32, fast:u32, }
 struct GpuEligibilityBankBases { recurrent:u32, decoder:u32, }
 struct GpuWeightBankPair {
-  active:GpuWeightBankBases, staging:GpuWeightBankBases,
+  active_bases:GpuWeightBankBases, staging_bases:GpuWeightBankBases,
 }
 struct GpuEligibilityBankPair {
-  active:GpuEligibilityBankBases, staging:GpuEligibilityBankBases,
+  active_bases:GpuEligibilityBankBases, staging_bases:GpuEligibilityBankBases,
 }
 
 @group(0) @binding(0) var<storage, read> brain_slots: array<GpuBrainSlotRecord>;
@@ -455,7 +455,7 @@ fn load_weight_bank_pair_direct(brain:GpuBrainSlotRecord) -> GpuWeightBankPair {
 
 fn direct_active_weight_bases(brain:GpuBrainSlotRecord) -> GpuWeightBankBases {
   let banks = load_weight_bank_pair_direct(brain);
-  return banks.active;
+  return banks.active_bases;
 }
 
 fn load_eligibility_bank_pair_direct(brain:GpuBrainSlotRecord) -> GpuEligibilityBankPair {

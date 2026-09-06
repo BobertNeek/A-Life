@@ -123,7 +123,7 @@ require_text crates/alife_world/AGENTS.md 'Death archiving completes before GPU 
 for authority in "${authorities[@]}"; do
   forbid_text "${authority}" 'EI1 promotion passed' 'false EI1 promotion claim'
   forbid_text "${authority}" 'N4096 is production' 'false N4096 production claim'
-  forbid_text "${authority}" 'GPU work, if any, is gated by CPU parity' 'obsolete CPU parity gate'
+  forbid_text "${authority}" 'GPU work, if any, is gated by CPU parity' 'obsolete CPU comparison requirement'
 done
 
 if [[ "$(($(wc -l < docs/architecture/requirement_registry.csv) - 1))" -ne 365 ]]; then

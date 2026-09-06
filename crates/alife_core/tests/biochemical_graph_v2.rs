@@ -13,6 +13,11 @@ fn founder_phenotype() -> alife_core::CreaturePhenotype {
     .unwrap()
 }
 
+fn mature_tick(phenotype: &alife_core::CreaturePhenotype) -> Tick {
+    let maturation = u64::from(phenotype.development.maturation_duration_ticks);
+    Tick(((maturation + 119) / 120) * 120)
+}
+
 #[test]
 fn founder_chemistry_is_a_bounded_sparse_active_graph() {
     let phenotype = founder_phenotype();
@@ -31,13 +36,14 @@ fn founder_chemistry_is_a_bounded_sparse_active_graph() {
 #[test]
 fn neural_emission_changes_authoritative_chemistry_and_targeted_receptors() {
     let phenotype = founder_phenotype();
-    let state = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+    let tick = mature_tick(&phenotype);
+    let state = BiochemistryState::new(&phenotype, tick).unwrap();
     let before = state
         .neural_receptor_frame(&phenotype)
         .unwrap()
         .activation_for(alife_core::NeuralReceptorClass::RegionalExcitability);
     let emission = NeuralEmissionFrame::new(
-        Tick::ZERO,
+        tick,
         1,
         vec![NeuralEmission::new(NeuralEmissionClass::PredictionResidual, 0.9, 0.8).unwrap()],
     )
@@ -45,8 +51,8 @@ fn neural_emission_changes_authoritative_chemistry_and_targeted_receptors() {
 
     let next = state
         .advance_with_neural_emission(
-            Tick(1),
-            Tick(1),
+            Tick(tick.raw() + 1),
+            Tick(tick.raw() + 1),
             BodyEventDelta::zero(),
             Some(&emission),
             &phenotype,
@@ -65,11 +71,12 @@ fn neural_emission_changes_authoritative_chemistry_and_targeted_receptors() {
 #[test]
 fn drive_frame_is_a_tick_bound_derivation_of_the_graph() {
     let phenotype = founder_phenotype();
-    let state = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+    let tick = mature_tick(&phenotype);
+    let state = BiochemistryState::new(&phenotype, tick).unwrap();
     let next = state
         .advance_with_neural_emission(
-            Tick(1),
-            Tick(1),
+            Tick(tick.raw() + 1),
+            Tick(tick.raw() + 1),
             BodyEventDelta {
                 nutrition: 0.8,
                 ..BodyEventDelta::zero()

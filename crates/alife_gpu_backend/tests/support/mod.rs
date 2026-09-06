@@ -375,8 +375,8 @@ mod hardware {
 
     use alife_core::{
         BrainActivityPolicyV1, BrainCapacityClass, BrainDispatchIdentity, BrainPhenotype,
-        FinalizedMemoryRecall, GpuPressureSample, GpuPressureSampleInput, NeuralThrottleDecision,
-        PerceptionFrame,
+        FinalizedMemoryRecall, GpuPressureSample, GpuPressureSampleInput, LobeKind,
+        NeuralThrottleDecision, PerceptionFrame,
     };
     use alife_gpu_backend::{
         GpuActiveBatchEntry, GpuBrainSlot, GpuClassBucketBuffers, GpuClassBucketPlan,
@@ -1890,13 +1890,19 @@ mod hardware {
         let sensory_association_routes = upload
             .projections
             .iter()
-            .filter(|route| route.source_lobe_raw == 1 && route.target_lobe_raw == 6)
+            .filter(|route| {
+                route.source_lobe_raw == LobeKind::PerceptualIntegration as u32
+                    && route.target_lobe_raw == LobeKind::TemporalPredictive as u32
+            })
             .map(|route| route.route_index)
             .collect::<Vec<_>>();
         let motor_loop_routes = upload
             .projections
             .iter()
-            .filter(|route| route.source_lobe_raw == 9 && route.target_lobe_raw == 9)
+            .filter(|route| {
+                route.source_lobe_raw == LobeKind::ActionPlanning as u32
+                    && route.target_lobe_raw == LobeKind::ActionPlanning as u32
+            })
             .map(|route| route.route_index)
             .collect::<Vec<_>>();
         assert!(!motor_loop_routes.is_empty());
