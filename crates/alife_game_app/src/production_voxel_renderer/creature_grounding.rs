@@ -28,7 +28,7 @@ impl RenderedTerrainSurface {
         Self { stride, quads }
     }
 
-    fn height(&self, position: Vec3) -> Option<f32> {
+    pub(super) fn height(&self, position: Vec3) -> Option<f32> {
         let cell = |coordinate: f32| {
             ((coordinate + self.stride * 0.5 - 0.5) / self.stride).floor() as i32
                 * self.stride as i32
@@ -54,16 +54,27 @@ pub(super) fn ground_creatures(
             &mut Transform,
             &Fvr04ProductionCreatureVisualMarker,
             &Children,
+            Option<&hearthling::HearthlingVisual>,
         ),
         With<ProductionCreatureAssemblyRoot>,
     >,
     parts: bevy::prelude::Query<(&Transform, &Aabb), Without<ProductionCreatureAssemblyRoot>>,
 ) {
-    for (mut root, visual, children) in &mut roots {
+    for (mut root, visual, children, hearthling) in &mut roots {
         let mut lowest = f32::INFINITY;
         let mut surface = surface_mesh
             .height(root.translation)
             .unwrap_or(visual.surface_height);
+        if hearthling.is_some() {
+            // The Blender clips keep their lowest deformed vertex at local Y=0.
+            // Sample both contacts on the same triangles used by the terrain renderer.
+            for x in [-0.20, 0.20] {
+                let contact = root.translation + root.rotation * Vec3::new(x, 0.0, 0.0);
+                surface = surface.max(surface_mesh.height(contact).unwrap_or(surface));
+            }
+            root.translation.y = surface + 0.025;
+            continue;
+        }
         for child in children.iter() {
             let Ok((part, aabb)) = parts.get(*child) else {
                 continue;

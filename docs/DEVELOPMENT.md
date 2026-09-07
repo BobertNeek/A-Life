@@ -144,6 +144,21 @@ Check relative links and scan for stale claims such as production CPU fallback, 
 
 ## Repository hygiene
 
+Production graphics load the approved Hearthling GLB and landscape props from
+`crates/alife_game_app/assets/creatures/hearthling` and `assets/landscape`.
+The character includes idle, walk, and seated sleep clips. Existing organism
+state selects animation, pause freezes it, and the appearance genome supplies
+coat, mass, ear/head, and tail variation. The source Blender files and export
+commands are documented in the Hearthling asset README. After any art export,
+run `python scripts/register_approved_art.py` to refresh the manifest digests.
+Terrain remains a projection of the existing streamed world, with shared hill
+corners and blended ground colors. The full Blender sample landscape is a
+reference scene and is not substituted for the simulated world.
+Mouse wheel zooms the creature view. F12 saves the current game view under
+`target/artifacts/player-captures`. For bounded visual verification, setting
+`ALIFE_GRAPHICS_CAPTURE_DIR` captures at most 96 frames and read-only animation
+and grounding receipts while the ordinary game continues.
+
 - Keep one worktree per active isolated task; remove it after its commits are merged and any uncommitted instruction edits are backed up.
 - Keep durable reports in tracked report paths. Keep generated Cargo, graph, screenshot, log, and raw corpus output under ignored targets.
 - Do not use `git clean`, force-push, destructive reset, branch deletion, reflog expiration, or Git garbage collection as routine cleanup.

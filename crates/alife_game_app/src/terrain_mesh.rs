@@ -153,6 +153,7 @@ pub(crate) fn build_production_terrain_meshes(
         let surface = surfaces[&sample.tile];
         append_top_surface(
             &mut batches,
+            samples,
             sample,
             surface,
             tile_stride,
@@ -177,7 +178,7 @@ pub(crate) fn build_production_terrain_meshes(
                 (display_surface_height(sample) - display_surface_height(neighbor)).abs();
             let water_boundary = (sample.material == Fvr03ProductionVoxelMaterialKind::Water)
                 != (neighbor.material == Fvr03ProductionVoxelMaterialKind::Water);
-            if height_delta >= 0.24 || (water_boundary && height_delta >= 0.08) {
+            if water_boundary && height_delta >= 0.08 {
                 append_interior_cliff(
                     &mut batches,
                     sample,
@@ -190,7 +191,7 @@ pub(crate) fn build_production_terrain_meshes(
                     &mut vertices_by_tile,
                 );
                 stats.cliff_quads += 1;
-                if !water_boundary && sample.material != neighbor.material {
+                if water_boundary {
                     append_transition_strip(
                         &mut batches,
                         sample,
@@ -202,7 +203,7 @@ pub(crate) fn build_production_terrain_meshes(
                     );
                     stats.transition_edges += 1;
                 }
-            } else if sample.material != neighbor.material {
+            } else if water_boundary {
                 append_transition_strip(
                     &mut batches,
                     sample,
@@ -259,6 +260,7 @@ fn append_top_surface(
         (Fvr11TerrainSurfaceRole, Fvr03ProductionVoxelMaterialKind),
         MeshAccumulator,
     >,
+    samples: &ProductionTerrainSampleMap,
     sample: &ProductionTerrainSample,
     surface: SurfaceCorners,
     tile_stride: f32,
@@ -317,14 +319,14 @@ fn append_top_surface(
                 terrain_top_normal(sample, surface, tile_stride, u1, v1),
                 terrain_top_normal(sample, surface, tile_stride, u1, v0),
             ];
-            let colors = terrain_vertex_colors(sample.material, role, positions);
+            let colors = blended_ground_colors(samples, sample, tile_stride, positions);
             batches
                 .entry((role, sample.material))
                 .or_default()
                 .push_quad(
                     positions,
                     normals,
-                    atlas_grid_uvs(rect, column, row, SUBDIVISIONS),
+                    positions.map(|p| [p[0] / 6.0, p[2] / 6.0]),
                     colors,
                     sample.tile,
                 );
@@ -406,10 +408,11 @@ fn append_interior_cliff(
         } else {
             (second, second_surface, first_edge.opposite(), first)
         };
-    let material = if first.material == Fvr03ProductionVoxelMaterialKind::Water
-        || second.material == Fvr03ProductionVoxelMaterialKind::Water
-    {
-        Fvr03ProductionVoxelMaterialKind::Water
+    // The bank is exposed earth, not a vertical wall of bright water.
+    let material = if first.material == Fvr03ProductionVoxelMaterialKind::Water {
+        second.material
+    } else if second.material == Fvr03ProductionVoxelMaterialKind::Water {
+        first.material
     } else {
         high.material
     };
@@ -500,7 +503,12 @@ fn append_transition_strip(
     atlas: TerrainAtlasLayout,
     vertices_by_tile: &mut BTreeMap<VoxelTileCoord, usize>,
 ) {
-    let material = transition_material(first.material, second.material);
+    let boundary = transition_material(first.material, second.material);
+    let material = if boundary == Fvr03ProductionVoxelMaterialKind::Water {
+        Fvr03ProductionVoxelMaterialKind::Soil
+    } else {
+        boundary
+    };
     let owner = if first.material == material {
         first
     } else {
@@ -509,7 +517,13 @@ fn append_transition_strip(
     let half = tile_stride * 0.5;
     let edge_hash = terrain_edge_hash(first.tile, second.tile);
     let width_multiplier = transition_width_multiplier(first.material, second.material);
-    let y = display_surface_height(first).max(display_surface_height(second)) + 0.018;
+    let y = if first.material == Fvr03ProductionVoxelMaterialKind::Water {
+        display_surface_height(first)
+    } else if second.material == Fvr03ProductionVoxelMaterialKind::Water {
+        display_surface_height(second)
+    } else {
+        display_surface_height(first).max(display_surface_height(second))
+    } - 0.012;
     let role = Fvr11TerrainSurfaceRole::Transition;
     let slot = terrain_atlas_slot(material, role);
     let rect = atlas.slot_rect(slot);
@@ -608,7 +622,7 @@ fn smoothed_surface_corners(
             (sign_x * tile_step, sign_z * tile_step),
         ];
         let mut total = 0.0;
-        let mut count = 0.0;
+        let mut count = 0.0_f32;
         for (dx, dz) in coordinates {
             let tile = VoxelTileCoord::new(sample.tile.x + dx, sample.tile.z + dz);
             if let Some(neighbor) = samples
@@ -624,7 +638,7 @@ fn smoothed_surface_corners(
         } else {
             sample.height
         };
-        average.clamp(sample.height - 0.20, sample.height + 0.20)
+        average
     });
     SurfaceCorners { heights }
 }
@@ -675,21 +689,6 @@ fn atlas_uvs(rect: TerrainAtlasUvRect, _visual_bucket: u8) -> [[f32; 2]; 4] {
     ]
 }
 
-fn atlas_grid_uvs(
-    rect: TerrainAtlasUvRect,
-    column: usize,
-    row: usize,
-    subdivisions: usize,
-) -> [[f32; 2]; 4] {
-    let width = rect.max[0] - rect.min[0];
-    let height = rect.max[1] - rect.min[1];
-    let u0 = rect.min[0] + width * column as f32 / subdivisions as f32;
-    let u1 = rect.min[0] + width * (column + 1) as f32 / subdivisions as f32;
-    let v0 = rect.min[1] + height * row as f32 / subdivisions as f32;
-    let v1 = rect.min[1] + height * (row + 1) as f32 / subdivisions as f32;
-    [[u0, v0], [u0, v1], [u1, v1], [u1, v0]]
-}
-
 fn atlas_segment_uvs(
     rect: TerrainAtlasUvRect,
     segment: usize,
@@ -711,6 +710,38 @@ fn terrain_atlas_slot(
     role: Fvr11TerrainSurfaceRole,
 ) -> u8 {
     production_terrain_material_spec(material).atlas_slot(role)
+}
+
+fn blended_ground_colors(
+    samples: &ProductionTerrainSampleMap,
+    sample: &ProductionTerrainSample,
+    stride: f32,
+    positions: [[f32; 3]; 4],
+) -> [[f32; 4]; 4] {
+    let step = stride.round().max(1.0) as i32;
+    let signs = [(-1, -1), (-1, 1), (1, 1), (1, -1)];
+    std::array::from_fn(|corner| {
+        let (x, z) = signs[corner];
+        let mut color = Vec3::ZERO;
+        let mut count = 0.0_f32;
+        for (dx, dz) in [(0, 0), (x * step, 0), (0, z * step), (x * step, z * step)] {
+            if let Some(neighbor) =
+                samples.get(&VoxelTileCoord::new(sample.tile.x + dx, sample.tile.z + dz))
+            {
+                if neighbor.material == Fvr03ProductionVoxelMaterialKind::Water {
+                    continue;
+                }
+                let tint = production_terrain_material_spec(neighbor.material).base_tint;
+                let linear = bevy::prelude::Color::srgb(tint[0], tint[1], tint[2]).to_linear();
+                color += Vec3::new(linear.red, linear.green, linear.blue);
+                count += 1.0;
+            }
+        }
+        let p = positions[corner];
+        let shade = 1.0 + (p[0] * 0.19).sin() * 0.045 + (p[2] * 0.17).cos() * 0.035;
+        let c = color / count.max(1.0) * shade;
+        [c.x, c.y, c.z, 1.0]
+    })
 }
 
 fn terrain_vertex_colors(
@@ -840,6 +871,22 @@ mod tests {
     }
 
     #[test]
+    fn hillside_neighbors_share_the_same_edge_height() {
+        let mut samples = sample_map();
+        let left = VoxelTileCoord::new(0, 0);
+        let right = VoxelTileCoord::new(1, 0);
+        samples.get_mut(&left).unwrap().height = 1.0;
+        samples.get_mut(&right).unwrap().height = 2.0;
+        let a = smoothed_surface_corners(&samples, &samples[&left], 1);
+        let b = smoothed_surface_corners(&samples, &samples[&right], 1);
+        assert_eq!(
+            a.heights[3], b.heights[0],
+            "hills must meet without a tile wall"
+        );
+        assert_eq!(a.heights[2], b.heights[1]);
+    }
+
+    #[test]
     fn layered_mesh_build_is_deterministic_complete_and_bounded() {
         let samples = sample_map();
         let first = build_production_terrain_meshes(&samples, 1.0, TerrainAtlasLayout::PRODUCTION);
@@ -892,6 +939,33 @@ mod tests {
                     layer.material
                 );
             }
+        }
+    }
+
+    #[test]
+    fn shoreline_uses_earth_banks_and_submerged_edges_instead_of_water_outlines() {
+        let samples = sample_map();
+        let build = build_production_terrain_meshes(&samples, 1.0, TerrainAtlasLayout::PRODUCTION);
+        let edges = build
+            .layers
+            .iter()
+            .filter(|l| l.role == Fvr11TerrainSurfaceRole::Transition)
+            .collect::<Vec<_>>();
+        assert!(!edges.is_empty());
+        for edge in edges {
+            assert_eq!(edge.material, Fvr03ProductionVoxelMaterialKind::Soil);
+            let Some(VertexAttributeValues::Float32x3(positions)) =
+                edge.mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+            else {
+                panic!("positions")
+            };
+            let waterline = display_surface_height(
+                samples
+                    .values()
+                    .find(|s| s.material == Fvr03ProductionVoxelMaterialKind::Water)
+                    .unwrap(),
+            );
+            assert!(positions.iter().all(|p| p[1] < waterline));
         }
     }
 
@@ -954,7 +1028,7 @@ mod tests {
     }
 
     #[test]
-    fn elevated_material_boundaries_add_a_mossy_transition_collar() {
+    fn elevated_biome_edges_do_not_spawn_floating_collars() {
         let samples = [
             (0, Fvr03ProductionVoxelMaterialKind::SafeGrass, 1.0),
             (1, Fvr03ProductionVoxelMaterialKind::Stone, 1.5),
@@ -981,137 +1055,60 @@ mod tests {
 
         assert!(build.stats.cliff_quads > 0);
         assert_eq!(
-            build.stats.transition_edges, 1,
-            "raised biome boundaries should receive one top-textured transition collar"
+            build.stats.transition_edges, 0,
+            "shared ground colors replace raised transition collars"
         );
     }
 
     #[test]
-    fn material_transition_uses_a_segmented_irregular_ecotone() {
-        let samples = [
-            (0, Fvr03ProductionVoxelMaterialKind::SafeGrass),
-            (1, Fvr03ProductionVoxelMaterialKind::Hazard),
-        ]
-        .into_iter()
-        .map(|(x, material)| {
-            let tile = VoxelTileCoord::new(x, 0);
-            (
-                tile,
-                ProductionTerrainSample {
-                    tile,
-                    material,
-                    center_x: x as f32 + 0.5,
-                    center_z: 0.5,
-                    height: 1.0,
-                    resource_bias: 0.0,
-                    hazard_pressure: usize::from(
-                        material == Fvr03ProductionVoxelMaterialKind::Hazard,
-                    ) as f32,
-                    visual_bucket: x as u8,
-                },
-            )
-        })
-        .collect::<ProductionTerrainSampleMap>();
-        let build = build_production_terrain_meshes(&samples, 1.0, TerrainAtlasLayout::PRODUCTION);
-        let transition = build
-            .layers
-            .iter()
-            .find(|layer| layer.role == Fvr11TerrainSurfaceRole::Transition)
-            .expect("hazard ecotone layer");
-        let Some(VertexAttributeValues::Float32x3(positions)) =
-            transition.mesh.attribute(Mesh::ATTRIBUTE_POSITION)
-        else {
-            panic!("transition positions");
-        };
-        let unique_cross_edge = positions
-            .iter()
-            .map(|position| (position[0] * 1_000.0).round() as i32)
-            .collect::<BTreeSet<_>>();
-        let min_x = positions
-            .iter()
-            .map(|position| position[0])
-            .fold(f32::INFINITY, f32::min);
-        let max_x = positions
-            .iter()
-            .map(|position| position[0])
-            .fold(f32::NEG_INFINITY, f32::max);
-
-        assert_eq!(
-            positions.len(),
-            12,
-            "ecotones should use three joined quads"
-        );
-        assert!(
-            unique_cross_edge.len() >= 6,
-            "ecotone edges need deterministic lateral variation"
-        );
-        assert!(
-            max_x - min_x >= 0.14,
-            "ecotones should visibly overlap both biome tops"
-        );
-        assert!(
-            max_x - min_x <= 0.24,
-            "ecotones must not cover the path or form broad sawtooth overlays"
-        );
-    }
-
-    #[test]
-    fn fungal_decay_ecotones_blend_wider_than_walkable_path_edges() {
-        let transition_span = |first_material, second_material| {
-            let samples = [(0, first_material), (1, second_material)]
-                .into_iter()
-                .map(|(x, material)| {
-                    let tile = VoxelTileCoord::new(x, 0);
-                    (
-                        tile,
-                        ProductionTerrainSample {
-                            tile,
-                            material,
-                            center_x: x as f32 + 0.5,
-                            center_z: 0.5,
-                            height: 1.0,
-                            resource_bias: 0.0,
-                            hazard_pressure: usize::from(
-                                material == Fvr03ProductionVoxelMaterialKind::Hazard,
-                            ) as f32,
-                            visual_bucket: x as u8,
-                        },
-                    )
-                })
-                .collect::<ProductionTerrainSampleMap>();
-            let build =
-                build_production_terrain_meshes(&samples, 1.0, TerrainAtlasLayout::PRODUCTION);
-            let transition = build
-                .layers
-                .iter()
-                .find(|layer| layer.role == Fvr11TerrainSurfaceRole::Transition)
-                .expect("transition layer");
-            let Some(VertexAttributeValues::Float32x3(positions)) =
-                transition.mesh.attribute(Mesh::ATTRIBUTE_POSITION)
-            else {
-                panic!("transition positions");
-            };
-            let min_x = positions
-                .iter()
-                .map(|position| position[0])
-                .fold(f32::INFINITY, f32::min);
-            let max_x = positions
-                .iter()
-                .map(|position| position[0])
-                .fold(f32::NEG_INFINITY, f32::max);
-            max_x - min_x
-        };
-
-        let path_span = transition_span(
-            Fvr03ProductionVoxelMaterialKind::SafeGrass,
+    fn biome_colors_meet_at_shared_mesh_vertices_without_overlay_strips() {
+        for material in [
             Fvr03ProductionVoxelMaterialKind::Soil,
-        );
-        let fungal_span = transition_span(
             Fvr03ProductionVoxelMaterialKind::Hazard,
             Fvr03ProductionVoxelMaterialKind::Decay,
-        );
-        assert!(fungal_span >= path_span * 1.50);
-        assert!(fungal_span <= 0.42);
+        ] {
+            let mut samples = sample_map();
+            samples.retain(|tile, _| tile.z == 0 && tile.x <= 1);
+            samples
+                .get_mut(&VoxelTileCoord::new(1, 0))
+                .unwrap()
+                .material = material;
+            let build =
+                build_production_terrain_meshes(&samples, 1.0, TerrainAtlasLayout::PRODUCTION);
+            assert_eq!(build.stats.transition_edges, 0);
+            let mut shared = BTreeMap::<i32, Vec<[f32; 4]>>::new();
+            for layer in build
+                .layers
+                .iter()
+                .filter(|l| l.role == Fvr11TerrainSurfaceRole::Top)
+            {
+                let Some(VertexAttributeValues::Float32x3(positions)) =
+                    layer.mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+                else {
+                    panic!("positions")
+                };
+                let Some(VertexAttributeValues::Float32x4(colors)) =
+                    layer.mesh.attribute(Mesh::ATTRIBUTE_COLOR)
+                else {
+                    panic!("colors")
+                };
+                for (position, color) in positions.iter().zip(colors) {
+                    if (position[0] - 1.0).abs() < 0.001 {
+                        shared
+                            .entry((position[2] * 1000.0) as i32)
+                            .or_default()
+                            .push(*color);
+                    }
+                }
+            }
+            assert_eq!(shared.len(), 2);
+            for colors in shared.values() {
+                assert_eq!(colors.len(), 2);
+                for channel in 0..4 {
+                    assert!((colors[0][channel] - colors[1][channel]).abs() < 1e-6);
+                }
+            }
+        }
     }
 
     #[test]

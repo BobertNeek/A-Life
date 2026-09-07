@@ -47,6 +47,8 @@ bevy-app = [
     "bevy/bevy_core_pipeline",
     "bevy/bevy_render",
     "bevy/bevy_pbr",
+    "bevy/bevy_gltf",
+    "bevy/gltf_animation",
     "bevy/bevy_picking",
     "bevy/bevy_sprite",
     "bevy/bevy_sprite_render",

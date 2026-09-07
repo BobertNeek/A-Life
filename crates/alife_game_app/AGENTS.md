@@ -12,6 +12,10 @@ Architecture authority:
 
 This crate owns the playable-sim product app shell and launch policy.
 
+Production art uses the approved skinned Hearthling and Blender landscape props.
+Keep exported GLBs and production manifest digests together. Animation and
+inherited visual proportions remain read-only projections of organism state.
+
 Rules:
 
 - Keep the default path headless and CI-safe.

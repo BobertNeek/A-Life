@@ -1,6 +1,23 @@
 //! Camera input in game-window coordinates, independent of monitor layout.
 
 use super::*;
+
+pub(super) fn zoom_camera(
+    mut wheel: bevy::prelude::MessageReader<bevy::input::mouse::MouseWheel>,
+    windows: bevy::prelude::Query<&bevy::window::Window, With<bevy::window::PrimaryWindow>>,
+    mut cameras: bevy::prelude::Query<&mut Projection, With<Fvr03ProductionVoxelCamera>>,
+) {
+    let delta: f32 = wheel.read().map(|event| event.y).sum();
+    if delta == 0.0 || !windows.single().is_ok_and(|window| window.focused) {
+        return;
+    }
+    for mut projection in &mut cameras {
+        if let Projection::Orthographic(camera) = &mut *projection {
+            camera.scale = (camera.scale * (-delta * 0.10).exp()).clamp(0.35, 3.5);
+        }
+    }
+}
+
 use bevy::math::Vec2;
 
 fn camera_pan_axis(keys: Vec2, cursor: Option<Vec2>, window_size: Vec2, focused: bool) -> Vec2 {

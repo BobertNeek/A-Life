@@ -3,7 +3,10 @@
 use std::collections::BTreeMap;
 
 use bevy::{
-    image::ImageLoaderSettings,
+    image::{
+        ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSampler,
+        ImageSamplerDescriptor,
+    },
     prelude::{
         AlphaMode, App, AssetServer, Assets, Color, Handle, Image, Resource, StandardMaterial,
     },
@@ -81,6 +84,7 @@ impl TerrainMaterialLibrary {
 
 #[derive(Clone)]
 struct TerrainTextureHandles {
+    detail: Handle<Image>,
     albedo: Handle<Image>,
     normal: Handle<Image>,
     orm: Handle<Image>,
@@ -104,42 +108,42 @@ pub(crate) fn production_terrain_material_specs() -> [ProductionTerrainMaterialS
             Fvr03ProductionVoxelMaterialKind::SafeGrass,
             0,
             1,
-            [0.82, 0.98, 0.72, 1.0],
+            [0.30, 0.57, 0.22, 1.0],
             0.86,
         ),
         spec(
             Fvr03ProductionVoxelMaterialKind::Soil,
             2,
             3,
-            [0.98, 0.79, 0.58, 1.0],
+            [0.52, 0.43, 0.27, 1.0],
             0.94,
         ),
         spec(
             Fvr03ProductionVoxelMaterialKind::Resource,
             4,
             5,
-            [0.91, 0.98, 0.68, 1.0],
+            [0.47, 0.64, 0.27, 1.0],
             0.78,
         ),
         spec(
             Fvr03ProductionVoxelMaterialKind::Hazard,
             6,
             7,
-            [0.98, 0.67, 0.56, 1.0],
+            [0.28, 0.43, 0.31, 1.0],
             0.72,
         ),
         spec(
             Fvr03ProductionVoxelMaterialKind::Decay,
             8,
             9,
-            [0.78, 0.62, 0.43, 1.0],
+            [0.38, 0.36, 0.24, 1.0],
             0.90,
         ),
         spec(
             Fvr03ProductionVoxelMaterialKind::Stone,
             10,
             11,
-            [0.80, 0.85, 0.75, 1.0],
+            [0.51, 0.55, 0.52, 1.0],
             0.92,
         ),
         spec(
@@ -153,7 +157,7 @@ pub(crate) fn production_terrain_material_specs() -> [ProductionTerrainMaterialS
             Fvr03ProductionVoxelMaterialKind::Sand,
             14,
             15,
-            [1.00, 0.89, 0.63, 1.0],
+            [0.76, 0.67, 0.43, 1.0],
             0.88,
         ),
     ]
@@ -173,6 +177,18 @@ pub(crate) fn create_production_terrain_material_library(app: &mut App) -> Terra
         .world()
         .get_resource::<AssetServer>()
         .map(|server| TerrainTextureHandles {
+            detail: server.load_with_settings::<Image, ImageLoaderSettings>(
+                "landscape/ground-detail.png",
+                |settings| {
+                    settings.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+                        address_mode_u: ImageAddressMode::Repeat,
+                        address_mode_v: ImageAddressMode::Repeat,
+                        mag_filter: ImageFilterMode::Linear,
+                        min_filter: ImageFilterMode::Linear,
+                        ..Default::default()
+                    });
+                },
+            ),
             albedo: server.load(TERRAIN_ALBEDO_ATLAS_PATH),
             normal: server.load_with_settings::<Image, ImageLoaderSettings>(
                 TERRAIN_NORMAL_ATLAS_PATH,
@@ -235,16 +251,22 @@ fn opaque_terrain_material(
     role_tint: f32,
 ) -> StandardMaterial {
     StandardMaterial {
-        base_color: Color::srgba(
-            spec.base_tint[0] * role_tint,
-            spec.base_tint[1] * role_tint,
-            spec.base_tint[2] * role_tint,
-            1.0,
-        ),
-        base_color_texture: textures.map(|textures| textures.albedo.clone()),
-        normal_map_texture: textures.map(|textures| textures.normal.clone()),
-        metallic_roughness_texture: textures.map(|textures| textures.orm.clone()),
-        occlusion_texture: textures.map(|textures| textures.orm.clone()),
+        base_color: if role_tint == 1.0 {
+            Color::WHITE
+        } else {
+            Color::srgba(
+                spec.base_tint[0] * role_tint,
+                spec.base_tint[1] * role_tint,
+                spec.base_tint[2] * role_tint,
+                1.0,
+            )
+        },
+        // The detail map repeats in world space, independently of biome tile edges.
+        base_color_texture: if role_tint == 1.0 {
+            textures.map(|t| t.detail.clone())
+        } else {
+            None
+        },
         perceptual_roughness: spec.perceptual_roughness,
         metallic: 0.0,
         unlit: false,

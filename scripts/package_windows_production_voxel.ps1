@@ -173,6 +173,8 @@ $CopyFiles = @(
 
 $CopyDirectories = @(
     "crates/alife_game_app/assets/production_voxel_v1",
+    "crates/alife_game_app/assets/creatures",
+    "crates/alife_game_app/assets/landscape",
     "crates/alife_gpu_backend/shaders"
 )
 
