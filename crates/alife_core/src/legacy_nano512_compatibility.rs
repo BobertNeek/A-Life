@@ -77,6 +77,7 @@ pub enum FoundationAbiSelection {
     CanonicalV2(FoundationAbiBinding),
     LegacyNano512CompatibilityV1(LegacyNano512CompatibilityAbiDescriptor),
     MigratedN2048FoundationV1(MigratedN2048FoundationV1Descriptor),
+    Nano512ReadoutCandidateV1(crate::Nano512ReadoutCandidateV1),
 }
 
 impl FoundationAbiSelection {
@@ -91,7 +92,9 @@ impl FoundationAbiSelection {
     pub const fn canonical_v2(&self) -> Option<&FoundationAbiBinding> {
         match self {
             Self::CanonicalV2(binding) => Some(binding),
-            Self::LegacyNano512CompatibilityV1(_) | Self::MigratedN2048FoundationV1(_) => None,
+            Self::LegacyNano512CompatibilityV1(_)
+            | Self::MigratedN2048FoundationV1(_)
+            | Self::Nano512ReadoutCandidateV1(_) => None,
         }
     }
 
@@ -101,7 +104,7 @@ impl FoundationAbiSelection {
         match self {
             Self::CanonicalV2(_) => None,
             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor),
-            Self::MigratedN2048FoundationV1(_) => None,
+            Self::MigratedN2048FoundationV1(_) | Self::Nano512ReadoutCandidateV1(_) => None,
         }
     }
 
@@ -110,7 +113,9 @@ impl FoundationAbiSelection {
     ) -> Option<&MigratedN2048FoundationV1Descriptor> {
         match self {
             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor),
-            Self::CanonicalV2(_) | Self::LegacyNano512CompatibilityV1(_) => None,
+            Self::CanonicalV2(_)
+            | Self::LegacyNano512CompatibilityV1(_)
+            | Self::Nano512ReadoutCandidateV1(_) => None,
         }
     }
 
@@ -120,6 +125,15 @@ impl FoundationAbiSelection {
         sensor_profile: SensorProfile,
     ) -> Result<(), ScaffoldContractError> {
         match self {
+            Self::Nano512ReadoutCandidateV1(candidate) => {
+                candidate.asset()?;
+                if capacity.id() != BrainCapacityClass::N512_ID
+                    || candidate.sensor_profile() != sensor_profile
+                {
+                    return Err(ScaffoldContractError::PhenotypeCompile);
+                }
+                Ok(())
+            }
             Self::CanonicalV2(binding) => binding.validate_against(capacity),
             Self::LegacyNano512CompatibilityV1(descriptor) => {
                 descriptor.validate_contract()?;
@@ -144,6 +158,7 @@ impl FoundationAbiSelection {
 
     pub(crate) fn language_codebook(&self) -> LanguageCodebookV1 {
         match self {
+            Self::Nano512ReadoutCandidateV1(_) => LanguageCodebookV1::canonical(),
             Self::CanonicalV2(binding) => binding.language_codebook().clone(),
             Self::LegacyNano512CompatibilityV1(_) => LanguageCodebookV1::canonical(),
             Self::MigratedN2048FoundationV1(_) => LanguageCodebookV1::canonical(),
@@ -152,6 +167,7 @@ impl FoundationAbiSelection {
 
     pub const fn capacity_class_id(&self) -> crate::BrainClassId {
         match self {
+            Self::Nano512ReadoutCandidateV1(_) => BrainCapacityClass::N512_ID,
             Self::CanonicalV2(binding) => binding.capacity_class_id(),
             Self::LegacyNano512CompatibilityV1(_) => BrainCapacityClass::N512_ID,
             Self::MigratedN2048FoundationV1(_) => BrainCapacityClass::N2048_ID,
@@ -160,6 +176,7 @@ impl FoundationAbiSelection {
 
     pub const fn foundation_id(&self) -> Option<FoundationId> {
         match self {
+            Self::Nano512ReadoutCandidateV1(_) => Some(FoundationId::N512_READOUT_CANDIDATE_V1),
             Self::CanonicalV2(binding) => binding.foundation_id(),
             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor.source_foundation_id),
             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor.source_foundation_id),
@@ -168,6 +185,7 @@ impl FoundationAbiSelection {
 
     pub const fn foundation_version(&self) -> Option<FoundationVersion> {
         match self {
+            Self::Nano512ReadoutCandidateV1(_) => Some(FoundationVersion::V1),
             Self::CanonicalV2(binding) => binding.foundation_version(),
             Self::LegacyNano512CompatibilityV1(descriptor) => {
                 Some(descriptor.source_foundation_version)
@@ -180,6 +198,9 @@ impl FoundationAbiSelection {
 
     pub const fn compatibility_family_id(&self) -> Option<FoundationCompatibilityFamilyId> {
         match self {
+            Self::Nano512ReadoutCandidateV1(_) => {
+                Some(FoundationCompatibilityFamilyId::N512_FOUNDATION)
+            }
             Self::CanonicalV2(binding) => binding.compatibility_family_id(),
             Self::LegacyNano512CompatibilityV1(descriptor) => {
                 Some(descriptor.source_compatibility_family_id)
@@ -192,6 +213,7 @@ impl FoundationAbiSelection {
 
     pub const fn foundation_weight_asset(&self) -> Option<FoundationWeightAssetRef> {
         match self {
+            Self::Nano512ReadoutCandidateV1(candidate) => Some(candidate.asset_ref()),
             Self::CanonicalV2(binding) => binding.foundation_weight_asset(),
             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor.source_weight_asset),
             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor.source_weight_asset),
@@ -213,6 +235,13 @@ impl FoundationAbiSelection {
 
     pub(crate) fn write_canonical(&self, digest: &mut CanonicalDigestBuilder) {
         match self {
+            Self::Nano512ReadoutCandidateV1(candidate) => {
+                digest.write_u8(4);
+                digest.write_sequence_len(candidate.bytes().len());
+                for byte in candidate.bytes() {
+                    digest.write_u8(*byte);
+                }
+            }
             Self::CanonicalV2(binding) => {
                 digest.write_u8(1);
                 digest.write_u16(binding.capacity_class_id().raw());

@@ -13,6 +13,39 @@ use super::{BrainCapacityClass, BrainPhenotype, PhenotypeCompilerInputs};
 pub struct PhenotypeCompiler;
 
 impl PhenotypeCompiler {
+    /// Explicit opt-in admission; this does not change New Game defaults.
+    pub fn compile_nano512_readout_candidate(
+        foundation: &FoundationWeightAsset,
+    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
+        let result = Self::compile_nano512_readout_candidate_unchecked(foundation)?;
+        result.0.validate_against(&BrainCapacityClass::n512())?;
+        Ok(result)
+    }
+
+    pub(crate) fn compile_nano512_readout_candidate_unchecked(
+        foundation: &FoundationWeightAsset,
+    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
+        let selection = crate::FoundationAbiSelection::Nano512ReadoutCandidateV1(
+            crate::Nano512ReadoutCandidateV1::new(foundation)?,
+        );
+        let profile = foundation.manifest().sensor_profile();
+        let builtin = FoundationWeightAsset::builtin_nano512_v1(profile)?;
+        let (baseline, source_inputs, _) =
+            Self::compile_fixed_legacy_nano512_compatibility_asset(profile, &builtin)?
+                .into_runtime_parts();
+        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
+            source_inputs.genome().clone(),
+            &BrainCapacityClass::n512(),
+            source_inputs.development().clone(),
+            profile,
+            selection,
+        )?;
+        Ok((
+            baseline.with_nano512_readout_candidate(&inputs, foundation)?,
+            inputs,
+        ))
+    }
+
     pub fn compile_fixed_legacy_nano512_compatibility_asset(
         sensor_profile: SensorProfile,
         foundation: &FoundationWeightAsset,
@@ -37,6 +70,17 @@ impl PhenotypeCompiler {
         inputs: &PhenotypeCompilerInputs,
         capacity: &BrainCapacityClass,
     ) -> Result<BrainPhenotype, ScaffoldContractError> {
+        if let crate::FoundationAbiSelection::Nano512ReadoutCandidateV1(candidate) =
+            inputs.foundation_abi()
+        {
+            inputs.validate_against(capacity)?;
+            let (phenotype, expected_inputs) =
+                Self::compile_nano512_readout_candidate(&candidate.asset()?)?;
+            if inputs != &expected_inputs {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+            return Ok(phenotype);
+        }
         if let Some(descriptor) = inputs.legacy_foundation_compatibility_abi() {
             let foundation =
                 FoundationWeightAsset::builtin_nano512_v1(descriptor.sensor_profile())?;

@@ -31,6 +31,8 @@ pub mod ids;
 pub mod language;
 pub mod learning;
 mod legacy_nano512_compatibility;
+mod nano512_readout_candidate;
+pub use nano512_readout_candidate::Nano512ReadoutCandidateV1;
 pub mod lineage;
 pub mod lobe;
 pub mod math;

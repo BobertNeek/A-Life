@@ -141,6 +141,23 @@ pub struct BrainPhenotype {
 }
 
 impl BrainPhenotype {
+    pub(super) fn with_nano512_readout_candidate(
+        mut self,
+        inputs: &PhenotypeCompilerInputs,
+        asset: &crate::FoundationWeightAsset,
+    ) -> Result<Self, ScaffoldContractError> {
+        if self.synapses.len() != asset.weights().len() {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        self.foundation_abi_selection = inputs.foundation_abi_selection().clone();
+        self.compiler_inputs_digest = inputs.canonical_digest();
+        for (synapse, weight) in self.synapses.iter_mut().zip(asset.weights()) {
+            synapse.set_genetic_weight(*weight);
+        }
+        self.phenotype_hash = self.recompute_phenotype_hash()?;
+        Ok(self)
+    }
+
     pub const fn schema_version(&self) -> u16 {
         self.schema_version
     }
@@ -698,6 +715,17 @@ impl BrainPhenotype {
         }
         if let Some(descriptor) = self.foundation_abi_selection.migrated_n2048_foundation_v1() {
             descriptor.validate_for_phenotype(self)?;
+        }
+        if let FoundationAbiSelection::Nano512ReadoutCandidateV1(candidate) =
+            &self.foundation_abi_selection
+        {
+            let (expected, _) =
+                super::PhenotypeCompiler::compile_nano512_readout_candidate_unchecked(
+                    &candidate.asset()?,
+                )?;
+            if self != &expected {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
         }
         Ok(())
     }

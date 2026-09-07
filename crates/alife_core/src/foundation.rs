@@ -475,6 +475,7 @@ pub struct FoundationId(u64);
 
 impl FoundationId {
     pub const N512_V1: Self = Self(0x004E_3531_325F_5631);
+    pub const N512_READOUT_CANDIDATE_V1: Self = Self(0x4E35_3132_5243_0001);
     pub const N2048_V1: Self = Self(0x4E32_3034_385F_5631);
 
     pub const fn raw(self) -> u64 {
@@ -835,6 +836,78 @@ pub struct FoundationWeightAsset {
 }
 
 impl FoundationWeightAsset {
+    pub const fn is_nano512_readout_candidate(&self) -> bool {
+        self.manifest.foundation_id.raw() == FoundationId::N512_READOUT_CANDIDATE_V1.raw()
+    }
+
+    pub(crate) fn nano512_readout_source(
+        profile: SensorProfile,
+    ) -> Result<BrainPhenotype, ScaffoldContractError> {
+        let source = Self::builtin_nano512_v1(profile)?;
+        Ok(
+            crate::PhenotypeCompiler::compile_fixed_legacy_nano512_compatibility_asset(
+                profile, &source,
+            )?
+            .into_runtime_parts()
+            .0,
+        )
+    }
+
+    /// Unpromoted prior on the fixed playable Nano512 graph. Only candidate
+    /// readout genes may change. Personal state has no representation here.
+    pub fn from_nano512_readout_candidate(
+        phenotype: &BrainPhenotype,
+        weights: Vec<f32>,
+        training_stage: TrainingStageManifest,
+    ) -> Result<Self, ScaffoldContractError> {
+        let baseline = Self::nano512_readout_source(phenotype.sensor_profile())?;
+        if phenotype != &baseline
+            || weights.len() != baseline.synapses().len()
+            || weights.iter().any(|w| !w.is_finite())
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        for (synapse, weight) in baseline.synapses().iter().zip(&weights) {
+            let trainable = matches!(synapse.kind(), crate::CompiledSynapseKind::Decoder(c)
+                if c.head() == crate::DecoderHeadKind::ActionCandidate);
+            if !trainable && weight.to_bits() != synapse.genetic_weight().to_bits() {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        }
+        training_stage.validate()?;
+        let source = Self::builtin_nano512_v1(phenotype.sensor_profile())?;
+        let mut provenance = domain_hasher(b"alife.nano512.fixed-readout-candidate.v1");
+        for byte in source.digest().bytes() {
+            provenance.write_u8(*byte);
+        }
+        for word in baseline.phenotype_hash().0 {
+            provenance.write_u64(word);
+        }
+        let mut manifest = source.manifest.clone();
+        manifest.foundation_id = FoundationId::N512_READOUT_CANDIDATE_V1;
+        manifest.layout_digest = layout_digest(baseline.lobe_layout());
+        manifest.route_abi_digest = baseline.route_abi_digest();
+        manifest.plasticity_abi_digest = baseline.plasticity_abi_digest();
+        manifest.address_map_digest = baseline.persistent_address_map().digest();
+        manifest.action_decoder_digest = baseline.candidate_decoder().canonical_digest();
+        manifest.training_stage = training_stage;
+        manifest.promotion_receipt = FoundationPromotionReceipt::new(
+            training_stage.digest(),
+            None,
+            Blake3Digest::from_hasher(provenance),
+        );
+        let digest = compute_weight_asset_digest(&manifest, &weights)?;
+        manifest.weight_asset = FoundationWeightAssetRef {
+            digest,
+            weight_count: weights.len() as u32,
+        };
+        Ok(Self {
+            manifest,
+            weights,
+            digest,
+        })
+    }
+
     pub fn builtin_nano512_v1(
         sensor_profile: SensorProfile,
     ) -> Result<Self, ScaffoldContractError> {
@@ -897,6 +970,9 @@ impl FoundationWeightAsset {
         weights: Vec<f32>,
         training_stage: TrainingStageManifest,
     ) -> Result<Self, ScaffoldContractError> {
+        if phenotype.legacy_foundation_compatibility_abi().is_some() {
+            return Self::from_nano512_readout_candidate(phenotype, weights, training_stage);
+        }
         Self::from_weights_with_provenance(
             phenotype,
             weights,
@@ -976,7 +1052,13 @@ impl FoundationWeightAsset {
         &self,
         phenotype: &BrainPhenotype,
     ) -> Result<(), ScaffoldContractError> {
-        if let Some(descriptor) = phenotype.migrated_n2048_foundation_v1() {
+        if self.is_nano512_readout_candidate() {
+            self.validate_self_contained()?;
+            let (expected, _) = crate::PhenotypeCompiler::compile_nano512_readout_candidate(self)?;
+            if phenotype != &expected {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        } else if let Some(descriptor) = phenotype.migrated_n2048_foundation_v1() {
             descriptor.validate_source_asset(self)?;
             descriptor.validate_for_phenotype(phenotype)?;
         } else if let Some(descriptor) = phenotype.legacy_foundation_compatibility_abi() {
@@ -1069,7 +1151,8 @@ impl FoundationWeightAsset {
         let (foundation_id, compatibility_family_id) =
             foundation_identity_for_class(self.manifest.capacity_class_id)?;
         if self.manifest.schema_version != 1
-            || self.manifest.foundation_id != foundation_id
+            || (self.manifest.foundation_id != foundation_id
+                && !self.is_nano512_readout_candidate())
             || self.manifest.foundation_version != FoundationVersion::V1
             || self.manifest.compatibility_family_id != compatibility_family_id
             || self.weights.is_empty()
@@ -1082,6 +1165,17 @@ impl FoundationWeightAsset {
         let digest = compute_weight_asset_digest(&self.manifest, &self.weights)?;
         if digest != self.digest || digest != self.manifest.weight_asset.digest {
             return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        if self.is_nano512_readout_candidate() {
+            let baseline = Self::nano512_readout_source(self.manifest.sensor_profile)?;
+            let expected = Self::from_nano512_readout_candidate(
+                &baseline,
+                self.weights.clone(),
+                self.manifest.training_stage,
+            )?;
+            if self != &expected {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
         }
         Ok(())
     }
