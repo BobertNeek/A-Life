@@ -509,25 +509,18 @@ fn prepare_production_gpu_runtime_launch(
     summary: &ProductionVoxelLaunchSummary,
 ) -> Result<AppShellLaunchConfig, GameAppShellError> {
     let runtime_save_path = PathBuf::from(&summary.ui_settings.runtime_save_path);
-    if runtime_save_path.exists() && !launch.dry_run {
-        let existing = PortableSaveFile::from_json_file(&runtime_save_path)?;
-        existing.validate_with_asset_root(&summary.asset_root)?;
-        let existing_population = existing
-            .world
-            .objects
-            .iter()
-            .filter(|object| object.kind == alife_world::WorldObjectKind::Agent)
-            .count();
-        if existing_population != usize::from(summary.effective_population) {
-            return Err(GameAppShellError::InvalidProductionFrontend {
-                message: format!(
-                    "runtime save population {existing_population} does not match requested profile population {}; select a matching save or create a new world",
-                    summary.effective_population
-                ),
-            });
+    let source = PortableSaveFile::from_json_file(&summary.save_path)?;
+    if let Some((existing, migrate_legacy)) =
+        load_production_resume_checkpoint(launch, summary, &source)?
+    {
+        if migrate_legacy {
+            crate::GpuDurableSaveManifest::publish_snapshot(
+                &runtime_save_path,
+                &summary.asset_root,
+                &existing,
+            )?;
         }
     } else {
-        let source = PortableSaveFile::from_json_file(&summary.save_path)?;
         let production = crate::production_voxel_save_with_population(
             &source,
             &summary.asset_root,
@@ -544,6 +537,58 @@ fn prepare_production_gpu_runtime_launch(
     let mut runtime_launch = launch.app_launch.clone();
     runtime_launch.save_path = runtime_save_path;
     Ok(runtime_launch)
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn load_production_resume_checkpoint(
+    launch: &ProductionVoxelLaunchConfig,
+    summary: &ProductionVoxelLaunchSummary,
+    source: &PortableSaveFile,
+) -> Result<Option<(PortableSaveFile, bool)>, GameAppShellError> {
+    let runtime_save_path = PathBuf::from(&summary.ui_settings.runtime_save_path);
+    let same_world = |saved: &PortableSaveFile| {
+        saved.save_id == source.save_id
+            && saved.config.deterministic_seed == source.config.deterministic_seed
+    };
+    let legacy_save_path = runtime_save_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .join(format!("{}_runtime_save.json", summary.profile_id.label()));
+    let resumed = if launch.dry_run {
+        None
+    } else if runtime_save_path.exists() {
+        Some((PortableSaveFile::from_json_file(&runtime_save_path)?, false))
+    } else if legacy_save_path.exists() {
+        // Copy a matching legacy autosave to its world-specific location. An
+        // unrelated world's old autosave is retained and never chosen here.
+        let saved = PortableSaveFile::from_json_file(&legacy_save_path)?;
+        same_world(&saved).then_some((saved, true))
+    } else {
+        None
+    };
+    if let Some((existing, _)) = &resumed {
+        if !same_world(existing) {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "runtime checkpoint belongs to a different saved world".to_string(),
+            });
+        }
+        existing.validate_with_asset_root(&summary.asset_root)?;
+        let existing_population = existing
+            .world
+            .objects
+            .iter()
+            .filter(|object| object.kind == alife_world::WorldObjectKind::Agent)
+            .count();
+        let capacity = summary.profile_id.budget().maximum_profile_population;
+        if existing_population > usize::from(capacity) {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: format!(
+                    "saved world population {existing_population} exceeds this graphics profile's capacity of {capacity}; select a larger profile"
+                ),
+            });
+        }
+    }
+    Ok(resumed)
 }
 
 fn apply_presentation_retirements(
@@ -591,6 +636,16 @@ fn tick_production_gpu_brain(
 
     if schedule.failed {
         return;
+    }
+
+    // Pausing stops simulation time, not the asynchronous publication of a
+    // checkpoint already requested by Save (or an in-flight sleep journal).
+    if schedule.is_paused() {
+        if let Err(error) = runtime.runtime.poll_persistence_for_shutdown() {
+            schedule.failed = true;
+            mark_production_gpu_authority_unavailable(&mut authority, error.to_string());
+            return;
+        }
     }
 
     let playback = schedule.playback;
@@ -853,6 +908,7 @@ fn build_production_voxel_frontend_app_shell_inner(
         app.init_resource::<ButtonInput<KeyCode>>();
         app.init_resource::<ButtonInput<MouseButton>>();
         app.add_message::<bevy::input::keyboard::KeyboardInput>();
+        app.add_message::<bevy::window::WindowFocused>();
     } else {
         let present_mode = if launch.record_performance {
             PresentMode::Immediate

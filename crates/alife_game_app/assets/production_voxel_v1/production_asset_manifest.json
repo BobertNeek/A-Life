@@ -433,7 +433,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-arms;lod:compact;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-arms;lod:compact;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -445,8 +445,8 @@
       "asset_id": "geneforge-ettin-arms-compact-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/ettin_arms_compact_sockets.json",
-      "digest": "fnv1a64:0aefd0aba3b27b23",
-      "size_bytes": 36666,
+      "digest": "fnv1a64:bd2299d2e5fbfc7c",
+      "size_bytes": 96205,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -455,7 +455,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-arms;lod:compact;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-arms;lod:compact;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -477,7 +477,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-arms;lod:compact;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-arms;lod:compact;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -499,7 +499,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-arms;lod:compact;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-arms;lod:compact;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -521,7 +521,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-arms;lod:full;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-arms;lod:full;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -533,8 +533,8 @@
       "asset_id": "geneforge-ettin-arms-full-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/ettin_arms_full_sockets.json",
-      "digest": "fnv1a64:30bead0d1050297f",
-      "size_bytes": 36634,
+      "digest": "fnv1a64:f3a49b1a550ba3de",
+      "size_bytes": 96119,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -543,7 +543,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-arms;lod:full;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-arms;lod:full;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -565,7 +565,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-arms;lod:full;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-arms;lod:full;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -587,7 +587,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-arms;lod:full;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-arms;lod:full;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -609,7 +609,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-arms;lod:impostor;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-arms;lod:impostor;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -621,8 +621,8 @@
       "asset_id": "geneforge-ettin-arms-impostor-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/ettin_arms_impostor_sockets.json",
-      "digest": "fnv1a64:b66d90e141752b43",
-      "size_bytes": 36678,
+      "digest": "fnv1a64:c17257f38380749a",
+      "size_bytes": 96235,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -631,7 +631,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-arms;lod:impostor;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-arms;lod:impostor;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -653,7 +653,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-arms;lod:impostor;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-arms;lod:impostor;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -675,7 +675,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-arms;lod:impostor;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-arms;lod:impostor;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -697,7 +697,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-head;lod:compact;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-head;lod:compact;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -709,8 +709,8 @@
       "asset_id": "geneforge-ettin-head-compact-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/ettin_head_compact_sockets.json",
-      "digest": "fnv1a64:b40c5d06d7331f21",
-      "size_bytes": 29877,
+      "digest": "fnv1a64:87cca5e75ffa90a3",
+      "size_bytes": 74532,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -719,7 +719,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-head;lod:compact;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-head;lod:compact;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -741,7 +741,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-head;lod:compact;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-head;lod:compact;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -763,7 +763,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-head;lod:compact;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-head;lod:compact;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -785,7 +785,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-head;lod:full;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-head;lod:full;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -797,8 +797,8 @@
       "asset_id": "geneforge-ettin-head-full-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/ettin_head_full_sockets.json",
-      "digest": "fnv1a64:ddbbe94144a9eb3d",
-      "size_bytes": 29853,
+      "digest": "fnv1a64:417e1003e78742c3",
+      "size_bytes": 74476,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -807,7 +807,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-head;lod:full;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-head;lod:full;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -829,7 +829,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-head;lod:full;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-head;lod:full;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -851,7 +851,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-head;lod:full;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-head;lod:full;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -873,7 +873,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-head;lod:impostor;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-head;lod:impostor;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -885,8 +885,8 @@
       "asset_id": "geneforge-ettin-head-impostor-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/ettin_head_impostor_sockets.json",
-      "digest": "fnv1a64:8e45ec59066484c6",
-      "size_bytes": 29887,
+      "digest": "fnv1a64:98df265720e0e0ca",
+      "size_bytes": 74558,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -895,7 +895,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-head;lod:impostor;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-head;lod:impostor;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -917,7 +917,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-head;lod:impostor;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-head;lod:impostor;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -939,7 +939,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-head;lod:impostor;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-head;lod:impostor;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -961,7 +961,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-legs;lod:compact;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-legs;lod:compact;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -973,8 +973,8 @@
       "asset_id": "geneforge-ettin-legs-compact-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/ettin_legs_compact_sockets.json",
-      "digest": "fnv1a64:867a07c2616cc8c7",
-      "size_bytes": 56544,
+      "digest": "fnv1a64:85897cc5b1c358fe",
+      "size_bytes": 154365,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -983,7 +983,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-legs;lod:compact;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-legs;lod:compact;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1005,7 +1005,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-legs;lod:compact;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-legs;lod:compact;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1027,7 +1027,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-legs;lod:compact;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-legs;lod:compact;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1049,7 +1049,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-legs;lod:full;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-legs;lod:full;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1061,8 +1061,8 @@
       "asset_id": "geneforge-ettin-legs-full-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/ettin_legs_full_sockets.json",
-      "digest": "fnv1a64:20f3a84e5bf149bb",
-      "size_bytes": 56503,
+      "digest": "fnv1a64:eae097220b118406",
+      "size_bytes": 154254,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -1071,7 +1071,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-legs;lod:full;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-legs;lod:full;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1093,7 +1093,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-legs;lod:full;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-legs;lod:full;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1115,7 +1115,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-legs;lod:full;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-legs;lod:full;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1137,7 +1137,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-legs;lod:impostor;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-legs;lod:impostor;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1149,8 +1149,8 @@
       "asset_id": "geneforge-ettin-legs-impostor-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/ettin_legs_impostor_sockets.json",
-      "digest": "fnv1a64:81a8c8061c80a3c1",
-      "size_bytes": 56504,
+      "digest": "fnv1a64:0360f9d42540eb38",
+      "size_bytes": 154255,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -1159,7 +1159,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-legs;lod:impostor;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-legs;lod:impostor;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1181,7 +1181,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-legs;lod:impostor;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-legs;lod:impostor;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1203,7 +1203,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-legs;lod:impostor;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-legs;lod:impostor;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1225,7 +1225,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-torso;lod:compact;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-torso;lod:compact;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1237,8 +1237,8 @@
       "asset_id": "geneforge-ettin-torso-compact-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/ettin_torso_compact_sockets.json",
-      "digest": "fnv1a64:ad3414cc4c797254",
-      "size_bytes": 65271,
+      "digest": "fnv1a64:57c3af4cc34bfc43",
+      "size_bytes": 65283,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -1247,7 +1247,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-torso;lod:compact;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-torso;lod:compact;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1269,7 +1269,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-torso;lod:compact;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-torso;lod:compact;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1291,7 +1291,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-torso;lod:compact;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-torso;lod:compact;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1313,7 +1313,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-torso;lod:full;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-torso;lod:full;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1325,8 +1325,8 @@
       "asset_id": "geneforge-ettin-torso-full-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/ettin_torso_full_sockets.json",
-      "digest": "fnv1a64:ca78adfcdc5fe0b6",
-      "size_bytes": 65211,
+      "digest": "fnv1a64:9b46f77069c1cbdf",
+      "size_bytes": 65223,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -1335,7 +1335,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-torso;lod:full;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-torso;lod:full;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1357,7 +1357,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-torso;lod:full;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-torso;lod:full;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1379,7 +1379,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-torso;lod:full;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-torso;lod:full;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1401,7 +1401,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-torso;lod:impostor;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-torso;lod:impostor;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1413,8 +1413,8 @@
       "asset_id": "geneforge-ettin-torso-impostor-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/ettin_torso_impostor_sockets.json",
-      "digest": "fnv1a64:2c1f9b86d75dc9c1",
-      "size_bytes": 65300,
+      "digest": "fnv1a64:08cbc3bc9da3b516",
+      "size_bytes": 65312,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -1423,7 +1423,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-torso;lod:impostor;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-torso;lod:impostor;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1445,7 +1445,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-torso;lod:impostor;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-torso;lod:impostor;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1467,7 +1467,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:ettin-torso;lod:impostor;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:ettin-torso;lod:impostor;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1489,7 +1489,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-arms;lod:compact;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-arms;lod:compact;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1501,8 +1501,8 @@
       "asset_id": "geneforge-grendel-arms-compact-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_arms_compact_sockets.json",
-      "digest": "fnv1a64:c83c08d92772ad9a",
-      "size_bytes": 47495,
+      "digest": "fnv1a64:664f1d9f94e8eca2",
+      "size_bytes": 126119,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -1511,7 +1511,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-arms;lod:compact;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-arms;lod:compact;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1533,7 +1533,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-arms;lod:compact;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-arms;lod:compact;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1555,7 +1555,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-arms;lod:compact;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-arms;lod:compact;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1577,7 +1577,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-arms;lod:full;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-arms;lod:full;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1589,8 +1589,8 @@
       "asset_id": "geneforge-grendel-arms-full-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_arms_full_sockets.json",
-      "digest": "fnv1a64:d5456bded32fb3a8",
-      "size_bytes": 47452,
+      "digest": "fnv1a64:733d04c921df4064",
+      "size_bytes": 126004,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -1599,7 +1599,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-arms;lod:full;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-arms;lod:full;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1621,7 +1621,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-arms;lod:full;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-arms;lod:full;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1643,7 +1643,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-arms;lod:full;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-arms;lod:full;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1665,7 +1665,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-arms;lod:impostor;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-arms;lod:impostor;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1677,8 +1677,8 @@
       "asset_id": "geneforge-grendel-arms-impostor-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_arms_impostor_sockets.json",
-      "digest": "fnv1a64:5b52599c713d610e",
-      "size_bytes": 47465,
+      "digest": "fnv1a64:662d7f783a3725e4",
+      "size_bytes": 126033,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -1687,7 +1687,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-arms;lod:impostor;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-arms;lod:impostor;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1709,7 +1709,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-arms;lod:impostor;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-arms;lod:impostor;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1731,7 +1731,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-arms;lod:impostor;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-arms;lod:impostor;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1753,7 +1753,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-head;lod:compact;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-head;lod:compact;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1765,8 +1765,8 @@
       "asset_id": "geneforge-grendel-head-compact-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_head_compact_sockets.json",
-      "digest": "fnv1a64:79b943c55f7947c7",
-      "size_bytes": 31023,
+      "digest": "fnv1a64:3d9077ffbd81cc4b",
+      "size_bytes": 76030,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -1775,7 +1775,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-head;lod:compact;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-head;lod:compact;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1797,7 +1797,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-head;lod:compact;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-head;lod:compact;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1819,7 +1819,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-head;lod:compact;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-head;lod:compact;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1841,7 +1841,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-head;lod:full;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-head;lod:full;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1853,8 +1853,8 @@
       "asset_id": "geneforge-grendel-head-full-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_head_full_sockets.json",
-      "digest": "fnv1a64:320c7491bba097c7",
-      "size_bytes": 30986,
+      "digest": "fnv1a64:05e4b75b433f1fd1",
+      "size_bytes": 75929,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -1863,7 +1863,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-head;lod:full;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-head;lod:full;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1885,7 +1885,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-head;lod:full;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-head;lod:full;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1907,7 +1907,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-head;lod:full;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-head;lod:full;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1929,7 +1929,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-head;lod:impostor;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-head;lod:impostor;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1941,8 +1941,8 @@
       "asset_id": "geneforge-grendel-head-impostor-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_head_impostor_sockets.json",
-      "digest": "fnv1a64:7fde2d82591858ac",
-      "size_bytes": 31053,
+      "digest": "fnv1a64:a206b4d6f3dcf016",
+      "size_bytes": 76108,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -1951,7 +1951,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-head;lod:impostor;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-head;lod:impostor;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1973,7 +1973,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-head;lod:impostor;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-head;lod:impostor;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -1995,7 +1995,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-head;lod:impostor;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-head;lod:impostor;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2017,7 +2017,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-legs;lod:compact;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-legs;lod:compact;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2029,8 +2029,8 @@
       "asset_id": "geneforge-grendel-legs-compact-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_legs_compact_sockets.json",
-      "digest": "fnv1a64:7b0c26ff63962c1f",
-      "size_bytes": 47041,
+      "digest": "fnv1a64:167c696a91cbed77",
+      "size_bytes": 124757,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -2039,7 +2039,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-legs;lod:compact;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-legs;lod:compact;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2061,7 +2061,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-legs;lod:compact;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-legs;lod:compact;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2083,7 +2083,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-legs;lod:compact;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-legs;lod:compact;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2105,7 +2105,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-legs;lod:full;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-legs;lod:full;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2117,8 +2117,8 @@
       "asset_id": "geneforge-grendel-legs-full-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_legs_full_sockets.json",
-      "digest": "fnv1a64:2151241b7ae75017",
-      "size_bytes": 46985,
+      "digest": "fnv1a64:74b65d27e3490e27",
+      "size_bytes": 124597,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -2127,7 +2127,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-legs;lod:full;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-legs;lod:full;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2149,7 +2149,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-legs;lod:full;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-legs;lod:full;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2171,7 +2171,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-legs;lod:full;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-legs;lod:full;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2193,7 +2193,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-legs;lod:impostor;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-legs;lod:impostor;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2205,8 +2205,8 @@
       "asset_id": "geneforge-grendel-legs-impostor-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_legs_impostor_sockets.json",
-      "digest": "fnv1a64:1ba83c261be608ce",
-      "size_bytes": 47058,
+      "digest": "fnv1a64:bfcb3115e34d5d1e",
+      "size_bytes": 124798,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -2215,7 +2215,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-legs;lod:impostor;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-legs;lod:impostor;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2237,7 +2237,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-legs;lod:impostor;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-legs;lod:impostor;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2259,7 +2259,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-legs;lod:impostor;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-legs;lod:impostor;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2281,7 +2281,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-tail;lod:compact;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-tail;lod:compact;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2293,8 +2293,8 @@
       "asset_id": "geneforge-grendel-tail-compact-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_tail_compact_sockets.json",
-      "digest": "fnv1a64:388bfbebca78c47d",
-      "size_bytes": 45962,
+      "digest": "fnv1a64:08cc0f3f84d01690",
+      "size_bytes": 123386,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -2303,7 +2303,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-tail;lod:compact;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-tail;lod:compact;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2325,7 +2325,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-tail;lod:compact;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-tail;lod:compact;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2347,7 +2347,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-tail;lod:compact;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-tail;lod:compact;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2369,7 +2369,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-tail;lod:full;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-tail;lod:full;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2381,8 +2381,8 @@
       "asset_id": "geneforge-grendel-tail-full-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_tail_full_sockets.json",
-      "digest": "fnv1a64:74085746f7f957a4",
-      "size_bytes": 45911,
+      "digest": "fnv1a64:1d62d923d12513fd",
+      "size_bytes": 123251,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -2391,7 +2391,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-tail;lod:full;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-tail;lod:full;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2413,7 +2413,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-tail;lod:full;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-tail;lod:full;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2435,7 +2435,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-tail;lod:full;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-tail;lod:full;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2457,7 +2457,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-tail;lod:impostor;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-tail;lod:impostor;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2469,8 +2469,8 @@
       "asset_id": "geneforge-grendel-tail-impostor-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_tail_impostor_sockets.json",
-      "digest": "fnv1a64:6f462bf325fc25ba",
-      "size_bytes": 45980,
+      "digest": "fnv1a64:40c80a21c6faffcd",
+      "size_bytes": 123432,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -2479,7 +2479,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-tail;lod:impostor;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-tail;lod:impostor;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2501,7 +2501,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-tail;lod:impostor;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-tail;lod:impostor;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2523,7 +2523,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-tail;lod:impostor;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-tail;lod:impostor;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2545,7 +2545,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-torso;lod:compact;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-torso;lod:compact;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2557,8 +2557,8 @@
       "asset_id": "geneforge-grendel-torso-compact-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_torso_compact_sockets.json",
-      "digest": "fnv1a64:f3a549f3141114a6",
-      "size_bytes": 65611,
+      "digest": "fnv1a64:0d156e90cb1d501d",
+      "size_bytes": 65623,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -2567,7 +2567,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-torso;lod:compact;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-torso;lod:compact;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2589,7 +2589,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-torso;lod:compact;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-torso;lod:compact;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2611,7 +2611,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-torso;lod:compact;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-torso;lod:compact;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2633,7 +2633,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-torso;lod:full;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-torso;lod:full;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2645,8 +2645,8 @@
       "asset_id": "geneforge-grendel-torso-full-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_torso_full_sockets.json",
-      "digest": "fnv1a64:e77b2cf84b48d007",
-      "size_bytes": 65570,
+      "digest": "fnv1a64:7e56ba97de540cec",
+      "size_bytes": 65582,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -2655,7 +2655,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-torso;lod:full;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-torso;lod:full;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2677,7 +2677,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-torso;lod:full;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-torso;lod:full;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2699,7 +2699,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-torso;lod:full;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-torso;lod:full;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2721,7 +2721,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-torso;lod:impostor;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-torso;lod:impostor;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2733,8 +2733,8 @@
       "asset_id": "geneforge-grendel-torso-impostor-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/grendel_torso_impostor_sockets.json",
-      "digest": "fnv1a64:121a8f29202344bd",
-      "size_bytes": 65598,
+      "digest": "fnv1a64:b18d0d54c2d203c6",
+      "size_bytes": 65610,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -2743,7 +2743,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-torso;lod:impostor;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-torso;lod:impostor;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2765,7 +2765,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-torso;lod:impostor;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-torso;lod:impostor;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2787,7 +2787,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:grendel-torso;lod:impostor;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:grendel-torso;lod:impostor;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2809,7 +2809,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-arms;lod:compact;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-arms;lod:compact;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2821,8 +2821,8 @@
       "asset_id": "geneforge-norn-arms-compact-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_arms_compact_sockets.json",
-      "digest": "fnv1a64:5cacb314022458b1",
-      "size_bytes": 57196,
+      "digest": "fnv1a64:e2a6236753f41c5c",
+      "size_bytes": 155339,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -2831,7 +2831,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-arms;lod:compact;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-arms;lod:compact;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2853,7 +2853,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-arms;lod:compact;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-arms;lod:compact;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2875,7 +2875,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-arms;lod:compact;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-arms;lod:compact;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2897,7 +2897,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-arms;lod:full;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-arms;lod:full;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2909,8 +2909,8 @@
       "asset_id": "geneforge-norn-arms-full-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_arms_full_sockets.json",
-      "digest": "fnv1a64:c9d625eee118dc05",
-      "size_bytes": 57151,
+      "digest": "fnv1a64:7a55f35f7f9d3180",
+      "size_bytes": 155224,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -2919,7 +2919,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-arms;lod:full;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-arms;lod:full;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2941,7 +2941,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-arms;lod:full;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-arms;lod:full;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2963,7 +2963,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-arms;lod:full;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-arms;lod:full;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2985,7 +2985,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-arms;lod:impostor;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-arms;lod:impostor;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -2997,8 +2997,8 @@
       "asset_id": "geneforge-norn-arms-impostor-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_arms_impostor_sockets.json",
-      "digest": "fnv1a64:6405f23f1757b6c2",
-      "size_bytes": 56889,
+      "digest": "fnv1a64:57e4795e2e9dbfb3",
+      "size_bytes": 154482,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -3007,7 +3007,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-arms;lod:impostor;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-arms;lod:impostor;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3029,7 +3029,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-arms;lod:impostor;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-arms;lod:impostor;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3051,7 +3051,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-arms;lod:impostor;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-arms;lod:impostor;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3073,7 +3073,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-head;lod:compact;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-head;lod:compact;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3085,8 +3085,8 @@
       "asset_id": "geneforge-norn-head-compact-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_head_compact_sockets.json",
-      "digest": "fnv1a64:184a9cf510b2c6cd",
-      "size_bytes": 30777,
+      "digest": "fnv1a64:cf039fbad436ebe7",
+      "size_bytes": 74837,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -3095,7 +3095,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-head;lod:compact;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-head;lod:compact;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3117,7 +3117,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-head;lod:compact;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-head;lod:compact;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3139,7 +3139,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-head;lod:compact;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-head;lod:compact;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3161,7 +3161,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-head;lod:full;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-head;lod:full;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3173,8 +3173,8 @@
       "asset_id": "geneforge-norn-head-full-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_head_full_sockets.json",
-      "digest": "fnv1a64:92192c361e0cc5bd",
-      "size_bytes": 30723,
+      "digest": "fnv1a64:e63148b73e9cf509",
+      "size_bytes": 74703,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -3183,7 +3183,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-head;lod:full;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-head;lod:full;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3205,7 +3205,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-head;lod:full;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-head;lod:full;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3227,7 +3227,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-head;lod:full;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-head;lod:full;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3249,7 +3249,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-head;lod:impostor;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-head;lod:impostor;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3261,8 +3261,8 @@
       "asset_id": "geneforge-norn-head-impostor-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_head_impostor_sockets.json",
-      "digest": "fnv1a64:6bd086dab18b6b0d",
-      "size_bytes": 30814,
+      "digest": "fnv1a64:e264bfdda202d3e1",
+      "size_bytes": 74954,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -3271,7 +3271,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-head;lod:impostor;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-head;lod:impostor;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3293,7 +3293,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-head;lod:impostor;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-head;lod:impostor;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3315,7 +3315,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-head;lod:impostor;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-head;lod:impostor;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3337,7 +3337,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-legs;lod:compact;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-legs;lod:compact;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3349,8 +3349,8 @@
       "asset_id": "geneforge-norn-legs-compact-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_legs_compact_sockets.json",
-      "digest": "fnv1a64:b5cb957612d9f7de",
-      "size_bytes": 37421,
+      "digest": "fnv1a64:642732beda998e96",
+      "size_bytes": 95489,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -3359,7 +3359,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-legs;lod:compact;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-legs;lod:compact;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3381,7 +3381,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-legs;lod:compact;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-legs;lod:compact;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3403,7 +3403,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-legs;lod:compact;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-legs;lod:compact;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3425,7 +3425,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-legs;lod:full;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-legs;lod:full;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3437,8 +3437,8 @@
       "asset_id": "geneforge-norn-legs-full-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_legs_full_sockets.json",
-      "digest": "fnv1a64:eb8e24145042f129",
-      "size_bytes": 37389,
+      "digest": "fnv1a64:e40a2312f54ca8cf",
+      "size_bytes": 95403,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -3447,7 +3447,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-legs;lod:full;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-legs;lod:full;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3469,7 +3469,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-legs;lod:full;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-legs;lod:full;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3491,7 +3491,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-legs;lod:full;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-legs;lod:full;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3513,7 +3513,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-legs;lod:impostor;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-legs;lod:impostor;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3525,8 +3525,8 @@
       "asset_id": "geneforge-norn-legs-impostor-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_legs_impostor_sockets.json",
-      "digest": "fnv1a64:04b51d7949db297a",
-      "size_bytes": 37448,
+      "digest": "fnv1a64:dfca980ecfcb5bbc",
+      "size_bytes": 95570,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -3535,7 +3535,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-legs;lod:impostor;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-legs;lod:impostor;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3557,7 +3557,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-legs;lod:impostor;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-legs;lod:impostor;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3579,7 +3579,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-legs;lod:impostor;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-legs;lod:impostor;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3601,7 +3601,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-tail;lod:compact;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-tail;lod:compact;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3613,8 +3613,8 @@
       "asset_id": "geneforge-norn-tail-compact-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_tail_compact_sockets.json",
-      "digest": "fnv1a64:05e09c96fbd23e3d",
-      "size_bytes": 34427,
+      "digest": "fnv1a64:f4a4330cfc0a8762",
+      "size_bytes": 89787,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -3623,7 +3623,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-tail;lod:compact;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-tail;lod:compact;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3645,7 +3645,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-tail;lod:compact;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-tail;lod:compact;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3667,7 +3667,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-tail;lod:compact;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-tail;lod:compact;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3689,7 +3689,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-tail;lod:full;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-tail;lod:full;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3701,8 +3701,8 @@
       "asset_id": "geneforge-norn-tail-full-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_tail_full_sockets.json",
-      "digest": "fnv1a64:011dcd493192c2ae",
-      "size_bytes": 34386,
+      "digest": "fnv1a64:94c7748217054b89",
+      "size_bytes": 89686,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -3711,7 +3711,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-tail;lod:full;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-tail;lod:full;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3733,7 +3733,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-tail;lod:full;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-tail;lod:full;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3755,7 +3755,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-tail;lod:full;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-tail;lod:full;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3777,7 +3777,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-tail;lod:impostor;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-tail;lod:impostor;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3789,8 +3789,8 @@
       "asset_id": "geneforge-norn-tail-impostor-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_tail_impostor_sockets.json",
-      "digest": "fnv1a64:089f872d10e65222",
-      "size_bytes": 34383,
+      "digest": "fnv1a64:37a4b1a4c919fdf9",
+      "size_bytes": 89655,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -3799,7 +3799,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-tail;lod:impostor;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-tail;lod:impostor;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3821,7 +3821,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-tail;lod:impostor;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-tail;lod:impostor;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3843,7 +3843,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-tail;lod:impostor;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-tail;lod:impostor;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3865,7 +3865,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-torso;lod:compact;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-torso;lod:compact;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3877,8 +3877,8 @@
       "asset_id": "geneforge-norn-torso-compact-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_torso_compact_sockets.json",
-      "digest": "fnv1a64:9acd5b8b8c9ebd25",
-      "size_bytes": 64279,
+      "digest": "fnv1a64:982fdf35abc7f988",
+      "size_bytes": 64291,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -3887,7 +3887,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-torso;lod:compact;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-torso;lod:compact;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3909,7 +3909,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-torso;lod:compact;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-torso;lod:compact;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3931,7 +3931,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-torso;lod:compact;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-torso;lod:compact;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3953,7 +3953,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-torso;lod:full;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-torso;lod:full;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3965,8 +3965,8 @@
       "asset_id": "geneforge-norn-torso-full-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_torso_full_sockets.json",
-      "digest": "fnv1a64:62c74b24b9206e97",
-      "size_bytes": 64259,
+      "digest": "fnv1a64:dde7fc0cb9571914",
+      "size_bytes": 64271,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -3975,7 +3975,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-torso;lod:full;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-torso;lod:full;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -3997,7 +3997,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-torso;lod:full;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-torso;lod:full;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -4019,7 +4019,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-torso;lod:full;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-torso;lod:full;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,
@@ -4041,7 +4041,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-torso;lod:impostor;kind:obj",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-torso;lod:impostor;kind:obj",
         "date": "2026-07-19"
       },
       "external": false,
@@ -4053,8 +4053,8 @@
       "asset_id": "geneforge-norn-torso-impostor-sockets",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/geneforge/norn_torso_impostor_sockets.json",
-      "digest": "fnv1a64:f20e666fe1ea42f8",
-      "size_bytes": 64151,
+      "digest": "fnv1a64:afe7c7720cb7c0b3",
+      "size_bytes": 64163,
       "source": "https://eem.foo/geneforge/",
       "license": "MIT",
       "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md",
@@ -4063,7 +4063,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-torso;lod:impostor;kind:sockets",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-torso;lod:impostor;kind:sockets",
         "date": "2026-07-19"
       },
       "external": false,
@@ -4085,7 +4085,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-torso;lod:impostor;kind:semantic",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-torso;lod:impostor;kind:semantic",
         "date": "2026-07-19"
       },
       "external": false,
@@ -4107,7 +4107,7 @@
       "generator": {
         "tool": "alife.geneforge_importer.v2",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
-        "seed": "recipe:316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2;asset:norn-torso;lod:impostor;kind:anatomy",
+        "seed": "recipe:8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1;asset:norn-torso;lod:impostor;kind:anatomy",
         "date": "2026-07-19"
       },
       "external": false,

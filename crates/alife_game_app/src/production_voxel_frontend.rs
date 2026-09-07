@@ -193,7 +193,7 @@ impl Fvr05ProductionUxSettings {
             camera_mode: "orthographic-isometric".to_string(),
             paused: false,
             simulation_speed: 1.0,
-            follow_selection: false,
+            follow_selection: true,
             show_menu: false,
             show_settings: false,
             show_overlays: false,
@@ -201,7 +201,11 @@ impl Fvr05ProductionUxSettings {
             selected_stable_id: None,
             source_save_path: launch.app_launch.save_path.display().to_string(),
             runtime_save_path: artifact_dir
-                .join(format!("{profile}_runtime_save.json"))
+                .join(fvr05_world_runtime_save_name(
+                    profile,
+                    &save_metadata.save_id,
+                    save_metadata.deterministic_seed,
+                ))
                 .display()
                 .to_string(),
             created_world_save_path: artifact_dir
@@ -291,6 +295,11 @@ impl Fvr05ProductionUxSettings {
             .map(|overlay| overlay.label())
             .collect()
     }
+}
+
+fn fvr05_world_runtime_save_name(profile: &str, save_id: &str, seed: u64) -> String {
+    let identity = blake3::hash(save_id.as_bytes()).to_hex();
+    format!("{profile}_{seed}_{}_runtime_save.json", &identity[..16])
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1384,8 +1393,9 @@ fn validate_exact_canonical_new_game_save(
         .count();
     let resident_checkpoints_complete = save.creatures.iter().all(|creature| {
         creature.gpu_brain.as_ref().is_some_and(|brain| {
+            // Current founders carry exact state. A legacy migration receipt
+            // applies only to imported legacy checkpoints, not new organisms.
             brain.exact_cognitive_state.is_some()
-                && brain.legacy_nano512_compatibility_receipt.is_some()
         })
     });
     if requested_seed == 0

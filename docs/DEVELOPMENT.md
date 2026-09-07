@@ -19,6 +19,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_prod
 
 `-DryRun` executes application preflight without opening a window. `-PreviewCommand` only prints the Cargo command. The default profile is `MinSpecComfort1080p`. `MinimumSettings30x30` is a graphics floor, not permission for CPU neural fallback.
 
+Camera controls: hold the arrow keys or move the pointer within 16 pixels of a
+game-window edge to pan. Panning releases creature follow. Home snaps to the
+selected creature, or finds the first creature when none is selected.
+Page Up and Page Down select and follow the previous or next creature. F toggles
+follow, and R returns to the starting view. Camera movement loads a bounded
+terrain region around the view without moving creatures or advancing simulation
+time. World shortcuts are suspended while typing in the conversation panel.
+
+Creature pose transitions blend over time. Ground contact uses the posed mesh
+bounds and rendered terrain heights, including the current placeholder sleep
+pose. The planned graphics redesign will replace that pose and the creature art.
+The shipped assembly metadata covers inherited parts on all supported torso
+types. Creature display capacity follows the graphics profile budget, so births
+can appear beyond the initial population.
+Runtime checkpoints are separated by world identity and graphics profile.
+Matching older profile-wide checkpoints are copied to the world's checkpoint
+path, retaining the original. Resume accepts population changes within the
+selected profile's capacity.
+
 ## Standard checks
 
 Run the smallest check that can falsify the changed behavior.

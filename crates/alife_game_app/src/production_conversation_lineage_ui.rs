@@ -1073,7 +1073,7 @@ fn spawn_ui(app: &mut App, layout: LineageLabLayout) {
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(18.0),
-            bottom: Val::Px(12.0),
+            bottom: Val::Px(100.0),
             padding: bevy::ui::UiRect::all(Val::Px(8.0)),
             ..Default::default()
         },

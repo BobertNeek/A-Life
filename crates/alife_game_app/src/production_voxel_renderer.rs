@@ -73,6 +73,9 @@ use crate::{
     GeneForgeCreaturePartCatalog,
 };
 
+mod camera_navigation;
+mod camera_terrain;
+mod creature_grounding;
 mod live_creature_projection;
 #[cfg(feature = "gpu-runtime")]
 mod performance_receipt;
@@ -505,7 +508,7 @@ impl Fvr04ProductionCreatureRendererSettings {
         Self {
             profile_id,
             requested_population,
-            max_visible_creatures: requested_population.min(budget.maximum_profile_population),
+            max_visible_creatures: budget.maximum_profile_population,
             lod,
             selected_hover_label_only: matches!(
                 profile_id,
@@ -679,7 +682,12 @@ impl Fvr03ProductionVoxelSceneResource {
     }
 
     pub fn contains_tile(&self, tile: VoxelTileCoord) -> bool {
+        // Terrain meshes cover whole chunks even when their samples use a
+        // two/four-tile stride. Unsampled tiles must still accept player input.
         self.visible_tiles.contains(&tile)
+            || self
+                .visible_chunks
+                .contains(&VoxelChunkCoord::for_tile(16, tile))
     }
 
     pub fn contains_chunk(&self, chunk: VoxelChunkCoord) -> bool {
@@ -1365,8 +1373,9 @@ impl Fvr04CreatureSpawnContext {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 struct Fvr04RuntimeSceneState {
+    backend: PersistentVoxelWorldBackend,
     snapshot: PersistentVoxelWorldSnapshot,
     creatures: Vec<Fvr04CreatureVisualRecord>,
 }
@@ -2088,7 +2097,7 @@ pub fn spawn_fvr03_production_voxel_scene(
         selected,
     });
     app.insert_resource(Fvr04ProductionCreatureFollowResource {
-        enabled: false,
+        enabled: summary.ui_settings.follow_selection,
         target_stable_id: selected.and_then(|selection| {
             (selection.kind == StableVoxelRefKind::Creature)
                 .then_some(selection.stable_id)
@@ -2109,6 +2118,10 @@ pub fn spawn_fvr03_production_voxel_scene(
             handle_fvr03_mouse_selection,
             handle_fvr03_camera_mode_input,
             handle_fvr04_camera_follow_input,
+            camera_navigation::pan_camera
+                .after(handle_fvr03_camera_mode_input)
+                .after(handle_fvr04_camera_follow_input)
+                .before(handle_fvr05_production_ux_input),
             handle_pause_on_focus_loss.before(handle_fvr05_production_ux_input),
             handle_fvr05_production_ux_input,
         )
@@ -2116,7 +2129,13 @@ pub fn spawn_fvr03_production_voxel_scene(
     )
     .add_systems(
         Update,
-        (animate_fvr04_creatures, animate_fvr04_creature_parts)
+        (
+            animate_fvr04_creatures,
+            animate_fvr04_creature_parts,
+            creature_grounding::ground_creatures
+                .after(animate_fvr04_creatures)
+                .after(animate_fvr04_creature_parts),
+        )
             .in_set(ProductionVoxelPresentationSet::ProceduralAnimation),
     )
     .add_systems(
@@ -2125,6 +2144,7 @@ pub fn spawn_fvr03_production_voxel_scene(
             sync_fvr04_selection_marker,
             sync_fvr11_creature_contact_shadows,
             sync_fvr04_camera_follow,
+            camera_terrain::stream_camera_terrain.after(sync_fvr04_camera_follow),
             sync_fvr04_creature_label,
             sync_fvr05_panel_visibility,
             sync_fvr05_overlay_visibility,
@@ -2289,6 +2309,7 @@ fn load_fvr04_runtime_state_from_save(
     }
     let creatures = fvr04_creature_visual_records_from_save(&production_save, &snapshot)?;
     Ok(Fvr04RuntimeSceneState {
+        backend,
         snapshot,
         creatures,
     })
@@ -3078,6 +3099,10 @@ fn spawn_fvr04_runtime_scene_candidate(
     } = candidate;
     let snapshot = &runtime_state.snapshot;
     let selected = fvr04_runtime_scene_selection(&runtime_state, &visible_tiles);
+    world.insert_resource(camera_terrain::CameraTerrainStream::new(
+        runtime_state.backend.clone(),
+        snapshot.creatures.first().map(|creature| creature.stable_id),
+    ));
     let terrain_receipt = spawn_fvr11_layered_terrain_meshes(
         world,
         &assets.terrain_materials,
@@ -3292,6 +3317,12 @@ fn spawn_fvr11_layered_terrain_meshes(
     tile_mesh_count: usize,
 ) -> Fvr11TerrainSpawnReceipt {
     let started = Instant::now();
+    world.insert_resource(creature_grounding::RenderedTerrainSurface::from_meshes(
+        build.layers.iter().filter(|layer| {
+            matches!(layer.role, Fvr11TerrainSurfaceRole::Top | Fvr11TerrainSurfaceRole::Water)
+        }).map(|layer| &layer.mesh),
+        f32::from(settings.tile_stride.max(1)),
+    ));
     let terrain_stats = build.stats.clone();
     let top_layer_count = build
         .layers
@@ -4743,7 +4774,8 @@ fn animate_fvr04_creatures(
             pose.rotation_xyz[2],
         );
         let rotation = Quat::from_rotation_y(std::f32::consts::PI) * pose_rotation;
-        transform.rotation = rotation;
+        let blend = 1.0 - (-8.0 * time.delta_secs().min(0.05)).exp();
+        transform.rotation = transform.rotation.slerp(rotation, blend);
         transform.scale = marker.base_scale * Vec3::from_array(pose.scale);
     }
 }
@@ -5370,7 +5402,7 @@ fn sync_v0_player_creature_panel(
         .and_then(|stable_id| creatures.sample_for_stable_id(stable_id))
         .map(|sample| v0_selected_creature_text(sample, follow.enabled))
         .unwrap_or_else(|| {
-            "CREATURES\nNo creature selected\n\nLMB selects a creature or terrain.\nR restores the default view."
+            "CREATURES\nNo creature selected\n\nHome finds a creature.\nPage Up / Down selects another.\nLMB selects a creature or terrain."
                 .to_string()
         });
     for mut panel in &mut panels {
@@ -5397,8 +5429,9 @@ fn sync_v0_player_control_strip(
         "Free camera"
     };
     let text = format!(
-        "{}  {:.1}x  |  {}  |  LMB Select  E Place Food (Tile)  O Orbit  I Isometric  F Follow  R Recover  Space/P Pause  N Step  [ ] or 1/2/3 Speed",
-        playback, ux.settings.simulation_speed, follow_state
+        "{} {:.1}x | {} | Space/P Pause | N Step | 1/2/3 Speed | S Save | L Load\nArrows/Edges Pan | Home Snap | F Follow | PgUp/PgDn Creature | LMB Select | E Food | R Starting view\n{}{}",
+        playback, ux.settings.simulation_speed, follow_state, ux.last_action,
+        ux.last_error.as_ref().map(|error| format!(" | {error}")).unwrap_or_default()
     );
     for mut strip in &mut strips {
         strip.0 = text.clone();
@@ -6021,19 +6054,66 @@ fn sync_fvr04_selection_marker(
 
 fn handle_fvr04_camera_follow_input(
     keyboard: Res<ButtonInput<KeyCode>>,
-    selection: Res<Fvr03ProductionVoxelSelectionResource>,
+    mut selection: ResMut<Fvr03ProductionVoxelSelectionResource>,
     mut follow: ResMut<Fvr04ProductionCreatureFollowResource>,
+    roots: bevy::prelude::Query<(
+        &ProductionCreatureAssemblyRoot,
+        &Fvr03ProductionVoxelCreatureMarker,
+    )>,
+    #[cfg(feature = "gpu-runtime")] conversation: Option<
+        Res<crate::ProductionConversationLineageUiState>,
+    >,
 ) {
-    if !keyboard.just_pressed(KeyCode::KeyF) {
+    #[cfg(feature = "gpu-runtime")]
+    if conversation
+        .as_ref()
+        .is_some_and(|state| state.blocks_world_shortcuts())
+    {
         return;
     }
-    let selected_creature = selection.selected.and_then(|selection| {
+    let previous = keyboard.just_pressed(KeyCode::PageUp);
+    let next = keyboard.just_pressed(KeyCode::PageDown);
+    let recover = keyboard.just_pressed(KeyCode::Home);
+    if !previous && !next && !recover && !keyboard.just_pressed(KeyCode::KeyF) {
+        return;
+    }
+    let mut selected_creature = selection.selected.and_then(|selection| {
         (selection.kind == StableVoxelRefKind::Creature)
             .then_some(selection.stable_id)
             .flatten()
     });
+    if previous || next || recover || selected_creature.is_none() {
+        let mut creatures = roots
+            .iter()
+            .map(|(root, marker)| StableVoxelObjectRef {
+                kind: StableVoxelRefKind::Creature,
+                stable_id: Some(root.stable_id),
+                tile: Some(marker.tile),
+                chunk: VoxelChunkCoord::for_tile(16, marker.tile),
+            })
+            .collect::<Vec<_>>();
+        creatures.sort_unstable_by_key(|creature| creature.stable_id.map(WorldEntityId::raw));
+        if !creatures.is_empty() {
+            let current = creatures
+                .iter()
+                .position(|creature| creature.stable_id == selected_creature);
+            let index = match current {
+                Some(index) if previous => (index + creatures.len() - 1) % creatures.len(),
+                Some(index) if next => (index + 1) % creatures.len(),
+                Some(index) => index,
+                None if previous => creatures.len() - 1,
+                None => 0,
+            };
+            selection.selected = Some(creatures[index]);
+            selected_creature = creatures[index].stable_id;
+        }
+    }
     if let Some(stable_id) = selected_creature {
-        follow.enabled = follow.target_stable_id != Some(stable_id) || !follow.enabled;
+        follow.enabled = previous
+            || next
+            || recover
+            || follow.target_stable_id != Some(stable_id)
+            || !follow.enabled;
         follow.target_stable_id = Some(stable_id);
     } else {
         follow.enabled = false;
@@ -6068,7 +6148,7 @@ fn sync_fvr04_camera_follow(
     else {
         return;
     };
-    let target = Vec3::new(position.x, 0.0, position.z);
+    let target = position;
     let extent = production_camera_extent(scene.profile_id);
     for (mut transform, camera) in &mut cameras {
         let next_transform = fvr04_follow_camera_transform(camera.mode, extent, target);
@@ -7046,6 +7126,64 @@ mod tests {
                 final_population_slot: 0,
                 legacy_genome_id: None,
             }],
+        }
+    }
+
+    #[test]
+    fn keyboard_navigation_finds_and_follows_creatures_outside_the_starting_view() {
+        let mut app = App::new();
+        app.init_resource::<ButtonInput<KeyCode>>();
+        app.insert_resource(Fvr03ProductionVoxelSelectionResource {
+            selected: None,
+            hovered: None,
+        });
+        app.insert_resource(Fvr04ProductionCreatureFollowResource {
+            enabled: false,
+            target_stable_id: None,
+        });
+        for id in [2, 1] {
+            app.world_mut().spawn((
+                ProductionCreatureAssemblyRoot {
+                    stable_id: WorldEntityId(id),
+                    organism_id: OrganismId(id),
+                    display_only: true,
+                },
+                Fvr03ProductionVoxelCreatureMarker {
+                    stable_id: WorldEntityId(id),
+                    tile: VoxelTileCoord::new(200 + id as i32, 0),
+                },
+            ));
+        }
+        app.add_systems(Update, handle_fvr04_camera_follow_input);
+        for (key, expected) in [
+            (KeyCode::Home, 1),
+            (KeyCode::PageDown, 2),
+            (KeyCode::PageDown, 1),
+            (KeyCode::PageUp, 2),
+        ] {
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(key);
+            app.world_mut().run_schedule(Update);
+            let follow = app
+                .world()
+                .resource::<Fvr04ProductionCreatureFollowResource>();
+            assert!(
+                follow.enabled,
+                "navigation must recover an off-camera creature"
+            );
+            assert_eq!(follow.target_stable_id, Some(WorldEntityId(expected)));
+            assert_eq!(
+                app.world()
+                    .resource::<Fvr03ProductionVoxelSelectionResource>()
+                    .selected
+                    .unwrap()
+                    .stable_id,
+                Some(WorldEntityId(expected))
+            );
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .reset_all();
         }
     }
 

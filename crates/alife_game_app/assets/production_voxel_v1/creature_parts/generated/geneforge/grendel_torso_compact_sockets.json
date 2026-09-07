@@ -1,6 +1,6 @@
 {
   "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_torso_compact_anatomy.png",
-  "assembly_preparation_population": "canonical-only",
+  "assembly_preparation_population": "canonical-plus-cross-torso",
   "assembly_preparation_schema": "alife.geneforge_assembly_preparation.v2",
   "assembly_preparation_schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
   "assembly_preparations": [

@@ -112,7 +112,7 @@ fn production_new_game_source_builds_exact_runtime_before_scene_construction() {
         .iter()
         .all(|creature| creature.gpu_brain.as_ref().is_some_and(|brain| {
             brain.exact_cognitive_state.is_some()
-                && brain.legacy_nano512_compatibility_receipt.is_some()
+                && brain.legacy_nano512_compatibility_receipt.is_none()
         })));
     launch.app_launch.save_path = summary.save_path.clone();
     let repeated_preflight = run_production_voxel_frontend_preflight(&launch).unwrap();

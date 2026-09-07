@@ -4461,6 +4461,25 @@ impl GpuLiveBrainRuntime {
         if requires_checkpoint_reconciliation {
             runtime.persist_sleep_checkpoint_boundary()?;
         }
+        // Restoring a Completed sleep checkpoint can hand the durable boundary
+        // to a recommit worker. Return only after that worker gives it back:
+        // archive attachment and replacement both need the restored authority.
+        let restore_deadline = Instant::now() + std::time::Duration::from_secs(30);
+        while !runtime.persistence_idle_for_shutdown() {
+            runtime.poll_persistence_for_shutdown()?;
+            if runtime.persistence_failed_for_shutdown() {
+                return Err(ScaffoldContractError::NeuralBackendUnavailable.into());
+            }
+            if Instant::now() >= restore_deadline {
+                return Err(GameAppShellError::InvalidProductionFrontend {
+                    message: format!(
+                        "restored checkpoint publication timed out: {}",
+                        runtime.persistence_shutdown_diagnostics()
+                    ),
+                });
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
         Ok(runtime)
     }
 

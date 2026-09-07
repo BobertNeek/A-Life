@@ -67,16 +67,43 @@ fn set_runtime_save_path(app: &mut App, path: &Path) {
 
 fn save_runtime(app: &mut App, path: &Path, asset_root: &Path) -> PortableSaveFile {
     set_runtime_save_path(app, path);
+    let tick_before = app
+        .world()
+        .resource::<LiveBrainPresentationFrameResource>()
+        .current
+        .authoritative_world_tick;
     press_key(app, KeyCode::KeyS);
-    if !path.exists() {
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    loop {
         let ux = app.world().resource::<Fvr05ProductionUxStateResource>();
-        panic!(
-            "S did not publish {}: action={:?} error={:?}",
-            path.display(),
-            ux.last_action,
+        if ux.last_action
+            == format!(
+                "Saved exact GPU checkpoint asynchronously: {}",
+                path.display()
+            )
+        {
+            break;
+        }
+        assert!(
+            ux.last_error.is_none(),
+            "manual save failed: {:?}",
             ux.last_error
         );
+        assert!(
+            std::time::Instant::now() < deadline,
+            "paused Save did not finish publishing"
+        );
+        run_render_updates(app, 1);
+        std::thread::sleep(Duration::from_millis(1));
     }
+    assert_eq!(
+        app.world()
+            .resource::<LiveBrainPresentationFrameResource>()
+            .current
+            .authoritative_world_tick,
+        tick_before,
+        "publishing a paused save must not advance simulation time"
+    );
     let save = PortableSaveFile::from_json_file(path)
         .expect("S writes an exact production GPU checkpoint");
     save.validate_with_asset_root(asset_root)
@@ -90,9 +117,12 @@ fn load_runtime(app: &mut App, path: &Path) {
 }
 
 fn tamper_required_embodiment(source: &Path, target: &Path) {
-    let mut value: serde_json::Value =
-        serde_json::from_slice(&fs::read(source).expect("read exact baseline save"))
-            .expect("baseline save is JSON");
+    // Serialize a direct save so a retained authority pointer cannot redirect
+    // this negative test to the original, undamaged checkpoint generation.
+    let mut value: serde_json::Value = serde_json::to_value(
+        PortableSaveFile::from_json_file(source).expect("read exact baseline save"),
+    )
+    .expect("baseline save is JSON");
     let first_record = value
         .pointer_mut("/world/organism_records/0")
         .and_then(serde_json::Value::as_object_mut)
@@ -163,6 +193,8 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
 
     let reached_meaningful_state = (0..384).any(|_| {
         app.update();
+        // Give asynchronous GPU readback and checkpoint workers wall-clock time.
+        std::thread::sleep(Duration::from_millis(10));
         let frame = &app
             .world()
             .resource::<LiveBrainPresentationFrameResource>()
@@ -187,7 +219,109 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
         "manual save starts from a bounded paused state"
     );
 
+    assert!(
+        alife_game_app::Fvr04ProductionCreatureRendererSettings::for_profile(
+            ProductionFrontendProfileId::MinSpecComfort1080p,
+            4,
+        )
+        .max_visible_creatures
+            > 4,
+        "the display must have room for births"
+    );
     let before_action_path = root.join("player-before-resource-action.json");
+    // Exercise the actual production input/schedule without a native window.
+    let window_entity = app
+        .world_mut()
+        .spawn((bevy::window::Window::default(), bevy::window::PrimaryWindow))
+        .id();
+    press_key(&mut app, KeyCode::Home);
+    assert!(
+        app.world()
+            .resource::<alife_game_app::Fvr04ProductionCreatureFollowResource>()
+            .enabled
+    );
+    let camera_entity = app.world_mut().query_filtered::<bevy::prelude::Entity, bevy::prelude::With<alife_game_app::Fvr03ProductionVoxelCamera>>()
+        .single(app.world()).unwrap();
+    let snapped = *app
+        .world()
+        .get::<bevy::prelude::Transform>(camera_entity)
+        .unwrap();
+    press_key(&mut app, KeyCode::ArrowRight);
+    assert!(
+        !app.world()
+            .resource::<alife_game_app::Fvr04ProductionCreatureFollowResource>()
+            .enabled
+    );
+    assert_ne!(
+        app.world()
+            .get::<bevy::prelude::Transform>(camera_entity)
+            .unwrap()
+            .translation,
+        snapped.translation
+    );
+    press_key(&mut app, KeyCode::Home);
+    assert_eq!(
+        *app.world()
+            .get::<bevy::prelude::Transform>(camera_entity)
+            .unwrap(),
+        snapped
+    );
+    {
+        let mut window = app
+            .world_mut()
+            .get_mut::<bevy::window::Window>(window_entity)
+            .unwrap();
+        let edge = bevy::math::Vec2::new(window.width() - 1.0, window.height() / 2.0);
+        window.set_cursor_position(Some(edge));
+    }
+    run_render_updates(&mut app, 1);
+    assert!(
+        !app.world()
+            .resource::<alife_game_app::Fvr04ProductionCreatureFollowResource>()
+            .enabled
+    );
+    assert_ne!(
+        app.world()
+            .get::<bevy::prelude::Transform>(camera_entity)
+            .unwrap()
+            .translation,
+        snapped.translation
+    );
+    app.world_mut()
+        .get_mut::<bevy::window::Window>(window_entity)
+        .unwrap()
+        .set_cursor_position(None);
+    let mut mesh_counts = Vec::new();
+    for distance in [200.0, 400.0, 600.0, 0.0] {
+        let mut moved = snapped;
+        moved.translation.x += distance;
+        *app.world_mut()
+            .get_mut::<bevy::prelude::Transform>(camera_entity)
+            .unwrap() = moved;
+        run_render_updates(&mut app, 1);
+        let forward = moved.rotation * bevy::math::Vec3::NEG_Z;
+        let focus = moved.translation + forward * (-moved.translation.y / forward.y);
+        let scene = app
+            .world()
+            .resource::<alife_game_app::Fvr03ProductionVoxelSceneResource>();
+        assert!(scene.contains_tile(VoxelTileCoord::new(
+            focus.x.floor() as i32,
+            focus.z.floor() as i32
+        )));
+        assert_eq!(scene.creature_render_count, 4);
+        mesh_counts.push(
+            app.world()
+                .resource::<bevy::prelude::Assets<bevy::prelude::Mesh>>()
+                .len(),
+        );
+    }
+    assert!(
+        mesh_counts.iter().max().unwrap() - mesh_counts.iter().min().unwrap() < 100,
+        "terrain mesh assets must remain bounded: {mesh_counts:?}"
+    );
+    press_key(&mut app, KeyCode::Home);
+    app.world_mut().despawn(window_entity);
+    println!("PASS arrows, window-edge input, Home snap, follow release, terrain streaming: {mesh_counts:?}");
     let before_action = save_runtime(&mut app, &before_action_path, &asset_root);
     let selected_tile = VoxelTileCoord::new(2, 2);
     let existing_food_id = before_action
@@ -200,11 +334,11 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
     app.world_mut()
         .resource_mut::<Fvr03ProductionVoxelSelectionResource>()
         .selected = Some(StableVoxelObjectRef {
-            kind: StableVoxelRefKind::Resource,
-            stable_id: Some(existing_food_id),
-            chunk: VoxelChunkCoord::for_tile(16, selected_tile),
-            tile: Some(selected_tile),
-        });
+        kind: StableVoxelRefKind::Resource,
+        stable_id: Some(existing_food_id),
+        chunk: VoxelChunkCoord::for_tile(16, selected_tile),
+        tile: Some(selected_tile),
+    });
     press_key(&mut app, KeyCode::KeyE);
     {
         let ux = app.world().resource::<Fvr05ProductionUxStateResource>();
@@ -224,11 +358,11 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
     app.world_mut()
         .resource_mut::<Fvr03ProductionVoxelSelectionResource>()
         .selected = Some(StableVoxelObjectRef {
-            kind: StableVoxelRefKind::Tile,
-            stable_id: None,
-            chunk: VoxelChunkCoord::for_tile(16, selected_tile),
-            tile: Some(selected_tile),
-        });
+        kind: StableVoxelRefKind::Tile,
+        stable_id: None,
+        chunk: VoxelChunkCoord::for_tile(16, selected_tile),
+        tile: Some(selected_tile),
+    });
     press_key(&mut app, KeyCode::KeyE);
     {
         let ux = app.world().resource::<Fvr05ProductionUxStateResource>();

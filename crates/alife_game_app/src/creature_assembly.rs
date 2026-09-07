@@ -166,6 +166,8 @@ impl GeneForgeAssemblyPreparationIndex {
 #[derive(Debug, Deserialize)]
 struct StoredPreparationManifest {
     assembly_preparations: Vec<StoredAssemblyPreparation>,
+    #[serde(default)]
+    cross_torso_preparations: Vec<StoredAssemblyPreparation>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -217,7 +219,11 @@ pub fn load_geneforge_assembly_preparation_index(
                         message: error.to_string(),
                     }
                 })?;
-            for preparation in manifest.assembly_preparations {
+            for preparation in manifest
+                .assembly_preparations
+                .into_iter()
+                .chain(manifest.cross_torso_preparations)
+            {
                 for stored in preparation.group_transforms {
                     let mut record = stored.record;
                     if record.socket_evidence.is_empty() {
@@ -795,6 +801,38 @@ mod geneforge_tests {
 
     fn coat_key(sources: CreaturePartSources) -> CreatureCoatKey {
         CreatureCoatKey::new(sources, 3, 5, 7)
+    }
+
+    #[test]
+    fn shipped_preparations_resolve_inherited_parts_on_every_torso() {
+        let catalog = load_geneforge_creature_part_catalog().unwrap();
+        let preparations = load_geneforge_assembly_preparation_index(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("assets"),
+            &catalog,
+        )
+        .unwrap();
+        for source in &catalog.families {
+            for torso in &catalog.families {
+                let mut sources = CreaturePartSources::coherent(source.id);
+                sources.torso = torso.id;
+                for lod in [
+                    CreaturePartLodId::Full,
+                    CreaturePartLodId::Compact,
+                    CreaturePartLodId::Impostor,
+                ] {
+                    let recipe = resolve_geneforge_creature_assembly(
+                        sources,
+                        lod,
+                        coat_key(sources),
+                        &catalog,
+                        &preparations,
+                    )
+                    .unwrap();
+                    assert_eq!(recipe.displayed_sources, sources);
+                    assert!(recipe.warning.is_none());
+                }
+            }
+        }
     }
 
     #[test]
