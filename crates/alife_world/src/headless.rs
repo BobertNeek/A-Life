@@ -4231,6 +4231,11 @@ fn legacy_action_for_motor_channel(
             ActionKind::Vocalize,
             alife_core::ActionTarget::new(None, None),
         ),
+        MotorChannel::Posture if command.primitive == ActionKind::Inspect.canonical_id() => (
+            ActionKind::Inspect.canonical_id(),
+            ActionKind::Inspect,
+            command.target.unwrap_or(alife_core::ActionTarget::NONE),
+        ),
         MotorChannel::Posture => (
             ActionKind::Rest.canonical_id(),
             ActionKind::Rest,
@@ -4882,6 +4887,74 @@ mod task_6_factorized_motor_tests {
         )
         .unwrap();
         (world, agent, food, bundle)
+    }
+
+    fn posture_bundle(primitive: ActionId, target: Option<WorldEntityId>) -> MotorCommandBundle {
+        let command = ChannelCommand::new(
+            MotorChannel::Posture,
+            primitive,
+            target.map(|entity| alife_core::ActionTarget::new(Some(entity), None)),
+            Vec3f::ZERO,
+            Intensity::new(1.0).unwrap(),
+            alife_core::DurationTicks::new(1),
+            0.0,
+            Confidence::new(0.9).unwrap(),
+            0,
+        )
+        .unwrap();
+        MotorCommandBundle::new(
+            ORGANISM_ID,
+            alife_core::ExperienceSequenceId::new(1).unwrap(),
+            Tick::ZERO,
+            vec![command],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn factorized_posture_inspect_reaches_world_target() {
+        let (mut world, agent, food, _) = prepared_world();
+        let bundle = posture_bundle(ActionKind::Inspect.canonical_id(), Some(food));
+
+        let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+
+        let result = world.last_action_result.as_ref().unwrap();
+        assert_eq!(result.command.kind, ActionKind::Inspect);
+        assert_eq!(result.command.target_entity, Some(food));
+        assert!(receipt.succeeded);
+        assert_eq!(
+            result.execution.physical.contact,
+            PhysicalContactKind::Touch
+        );
+        assert!(!world.entity(food).unwrap().consumed);
+    }
+
+    #[test]
+    fn factorized_posture_inspect_rejects_missing_world_target() {
+        let (mut world, agent, _, _) = prepared_world();
+        let bundle = posture_bundle(ActionKind::Inspect.canonical_id(), None);
+
+        let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+
+        assert!(!receipt.succeeded);
+        assert_eq!(
+            world.last_action_result.as_ref().unwrap().command.kind,
+            ActionKind::Inspect
+        );
+    }
+
+    #[test]
+    fn factorized_posture_rest_retains_rest_outcome() {
+        let (mut world, agent, food, _) = prepared_world();
+        let bundle = posture_bundle(ActionKind::Rest.canonical_id(), Some(food));
+
+        let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+
+        let result = world.last_action_result.as_ref().unwrap();
+        assert_eq!(result.command.kind, ActionKind::Rest);
+        assert_eq!(result.command.target_entity, None);
+        assert!(receipt.succeeded);
+        assert_eq!(result.execution.physical.contact, PhysicalContactKind::None);
     }
 
     #[test]
