@@ -10,6 +10,8 @@ mod exact_population_checkpoint;
 mod founder_consequence_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod nociception_food_tests;
+#[cfg(all(test, feature = "gpu-tests"))]
+mod recovery_sleep_tests;
 mod staged_tick;
 
 use durability_hold::{
@@ -253,6 +255,12 @@ struct ResidentCheckpointMetadata<'a> {
 struct SleepJournalNeuralAuthority {
     compact: GpuCompactCheckpointAuthorityV1,
     activity: GpuActivityRuntimeSnapshot,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PendingRecoverySleepEdge {
+    source: SleepState,
+    target: SleepState,
 }
 
 fn capture_sleep_journal_neural_authority(
@@ -3031,6 +3039,8 @@ pub struct GpuLiveBrainRuntime {
     memories: BTreeMap<u64, MemorySidecarState>,
     topologies: BTreeMap<u64, TopologySidecar>,
     sleep_journal_neural_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
+    // Process-local transitions made before the staged tick observes the scheduler.
+    pending_recovery_sleep_edges: BTreeMap<u64, PendingRecoverySleepEdge>,
     pending_exact_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
     sleep_journal_publication_worker: Option<SleepJournalPublicationWorkerOwnerV1>,
     pending_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
@@ -5371,6 +5381,7 @@ impl GpuLiveBrainRuntime {
             memories: BTreeMap::new(),
             topologies: BTreeMap::new(),
             sleep_journal_neural_authorities: BTreeMap::new(),
+            pending_recovery_sleep_edges: BTreeMap::new(),
             pending_exact_sleep_journal_entries: Vec::new(),
             sleep_journal_publication_worker: None,
             pending_sleep_journal_entries: Vec::new(),
@@ -5501,6 +5512,7 @@ impl GpuLiveBrainRuntime {
             memories: BTreeMap::new(),
             topologies: BTreeMap::new(),
             sleep_journal_neural_authorities: BTreeMap::new(),
+            pending_recovery_sleep_edges: BTreeMap::new(),
             pending_exact_sleep_journal_entries: Vec::new(),
             sleep_journal_publication_worker: None,
             pending_sleep_journal_entries: Vec::new(),
@@ -6473,6 +6485,7 @@ impl GpuLiveBrainRuntime {
         self.memories.remove(&raw);
         self.topologies.remove(&raw);
         self.retained_learning.remove(&raw);
+        self.pending_recovery_sleep_edges.remove(&raw);
         let (final_record, _) = self.world.retire_dead_organism(organism_id)?;
         self.presentation_retirements
             .insert(final_record.world_entity_id().raw());
@@ -6684,12 +6697,17 @@ impl GpuLiveBrainRuntime {
             recovery.last_error = error;
             recovery.attempts
         };
-        if attempts >= MAX_RETAINED_LEARNING_RETRIES {
-            self.residents
-                .get_mut(&raw)
+        if attempts >= MAX_RETAINED_LEARNING_RETRIES
+            && self
+                .residents
+                .get(&raw)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
                 .sleep_scheduler
-                .force_recovery_sleep(tick)?;
+                .state()
+                .phase
+                == SleepPhase::Awake
+        {
+            self.enter_recovery_sleep(organism_id, tick)?;
         }
         Ok(true)
     }
@@ -6872,12 +6890,32 @@ impl GpuLiveBrainRuntime {
         if !record.lifecycle().is_alive() {
             return Err(ScaffoldContractError::InvalidId.into());
         }
-        self.residents
+        self.enter_recovery_sleep(organism_id, world_tick)
+    }
+
+    fn enter_recovery_sleep(
+        &mut self,
+        organism_id: OrganismId,
+        tick: Tick,
+    ) -> Result<SleepTransition, GameAppShellError> {
+        let resident = self
+            .residents
             .get_mut(&organism_id.raw())
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-            .sleep_scheduler
-            .force_recovery_sleep(world_tick)
-            .map_err(Into::into)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let source = resident.sleep_scheduler.state();
+        if source.phase != SleepPhase::Awake {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "recovery sleep requires an Awake organism; an existing sleep cycle cannot be restarted".to_string(),
+            });
+        }
+        let transition = resident.sleep_scheduler.force_recovery_sleep(tick)?;
+        self.pending_recovery_sleep_edges
+            .entry(organism_id.raw())
+            .or_insert(PendingRecoverySleepEdge {
+                source,
+                target: resident.sleep_scheduler.state(),
+            });
+        Ok(transition)
     }
 
     pub fn tick_with_sleep_driver<D: GpuSleepConsolidationDriver>(

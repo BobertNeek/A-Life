@@ -682,6 +682,17 @@ impl GpuLiveBrainRuntime {
                 transaction_id,
                 &handles,
             )?;
+            let captured_recovery_edges = host
+                .brains
+                .iter()
+                .filter_map(|brain| {
+                    let raw = brain.handle.organism_id().raw();
+                    self.pending_recovery_sleep_edges
+                        .get(&raw)
+                        .filter(|edge| edge.target == brain.sleep)
+                        .map(|_| raw)
+                })
+                .collect::<Vec<_>>();
             self.performance_metrics.sleep_checkpoint_capture_calls = self
                 .performance_metrics
                 .sleep_checkpoint_capture_calls
@@ -698,6 +709,11 @@ impl GpuLiveBrainRuntime {
                 context,
                 ticket,
             };
+            // Only an adopted capture owns these edges. A portable export does not.
+            // An older active capture returns above and leaves its later edges queued.
+            for raw in captured_recovery_edges {
+                self.pending_recovery_sleep_edges.remove(&raw);
+            }
             Ok::<_, GameAppShellError>(())
         })();
         if result.is_err() {
@@ -714,10 +730,25 @@ impl GpuLiveBrainRuntime {
         if !self.exact_checkpoint_coordinator.is_active() {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
         }
+        let admitted_recovery_edges = entries
+            .iter()
+            .filter_map(|entry| {
+                let raw = entry.organism_id.raw();
+                self.pending_recovery_sleep_edges
+                    .get(&raw)
+                    .filter(|edge| edge.source == entry.source && edge.target == entry.target)
+                    .map(|_| raw)
+            })
+            .collect::<Vec<_>>();
         append_bounded_sleep_journal_entries(
             &mut self.pending_exact_sleep_journal_entries,
             entries,
         )?;
+        // The exact queue owns admitted edges even if later tick work fails.
+        // Failed append leaves both owners unchanged.
+        for raw in admitted_recovery_edges {
+            self.pending_recovery_sleep_edges.remove(&raw);
+        }
         Ok(())
     }
 

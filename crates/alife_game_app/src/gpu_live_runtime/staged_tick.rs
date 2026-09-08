@@ -118,6 +118,7 @@ impl GpuLiveBrainRuntime {
         let mut scheduled_body_events = BTreeMap::new();
         let mut persist_exact_sleep_boundary = false;
         let mut sleep_journal_entries = Vec::new();
+        let mut journaled_recovery_edges = Vec::new();
         let mut sleep_journal_neural_authority_updates = BTreeMap::new();
         let mut completed_promotions = Vec::new();
         let scheduled_handles = if let Some(first) = curated_first_tick_resident {
@@ -169,6 +170,7 @@ impl GpuLiveBrainRuntime {
             let sleep_preparation_started = measure_preparation.then(Instant::now);
             let retained_learning_pending =
                 self.retry_retained_learning(OrganismId(raw), tick_before)?;
+            let recovery_edge = self.pending_recovery_sleep_edges.get(&raw).copied();
             let mut record = self
                 .world
                 .organism_registry()
@@ -331,6 +333,25 @@ impl GpuLiveBrainRuntime {
                 );
             }
             let checkpoint_preparation_started = measure_preparation.then(Instant::now);
+            let journal_start = sleep_journal_entries.len();
+            if let Some(edge) = recovery_edge {
+                if edge.target != sleep_before {
+                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+                }
+                sleep_journal_entries.push(GpuSleepTransactionJournalEntryV2::try_new(
+                    OrganismId(raw),
+                    tick_after,
+                    edge.source,
+                    edge.target,
+                )?);
+                if !checkpoint_active {
+                    sleep_journal_neural_authority_updates.insert(
+                        raw,
+                        capture_sleep_journal_neural_authority(&mut self.backend, handle)?,
+                    );
+                }
+                journaled_recovery_edges.push(raw);
+            }
             if sleep_after != sleep_before {
                 match (sleep_before.consolidation, sleep_after.consolidation) {
                     (
@@ -433,6 +454,21 @@ impl GpuLiveBrainRuntime {
                         )?);
                     }
                     _ => return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into()),
+                }
+            }
+            if recovery_edge.is_some() {
+                for (ordinal, entry) in sleep_journal_entries[journal_start..]
+                    .iter_mut()
+                    .enumerate()
+                {
+                    *entry = GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
+                        entry.organism_id,
+                        entry.transition_tick,
+                        u8::try_from(ordinal)
+                            .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?,
+                        entry.source,
+                        entry.target,
+                    )?;
                 }
             }
             checkpoint_publication_wall_ns = checkpoint_publication_wall_ns
@@ -664,6 +700,7 @@ impl GpuLiveBrainRuntime {
         {
             self.queue_exact_checkpoint_journal_entries(sleep_journal_entries.clone())?;
             sleep_journal_entries.clear();
+            journaled_recovery_edges.clear();
         }
 
         // The GPU selector has already committed, while the world is still at
@@ -800,6 +837,7 @@ impl GpuLiveBrainRuntime {
             if self.exact_checkpoint_accepts_journal_entries() && !sleep_journal_entries.is_empty()
             {
                 self.queue_exact_checkpoint_journal_entries(sleep_journal_entries)?;
+                journaled_recovery_edges.clear();
             } else if !sleep_journal_entries.is_empty() {
                 self.sleep_journal_neural_authorities
                     .extend(sleep_journal_neural_authority_updates);
@@ -885,6 +923,10 @@ impl GpuLiveBrainRuntime {
                 .performance_metrics
                 .sleep_persistence_wall_ns
                 .saturating_add(elapsed_ns(sleep_persistence_started));
+        }
+        // A failed tick or enqueue must retain the earliest unjournaled source.
+        for raw in journaled_recovery_edges {
+            self.pending_recovery_sleep_edges.remove(&raw);
         }
         Ok(summaries_by_organism.into_values().collect())
     }
