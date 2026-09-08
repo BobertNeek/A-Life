@@ -94,7 +94,9 @@ fn paired_world(
         .build()
         .unwrap();
     let colors = [[0.0, 1.0, 1.0], [1.0, 0.55, 0.1]];
-    let radii = if held { [0.6, -1.1] } else { [0.5, -1.0] };
+    // Grounded contact uses the object's actual radius (0.2), not the
+    // privileged report's contact radius. Both distances remain ingestible.
+    let radii = if held { [0.15, -1.1] } else { [0.1, -1.0] };
     for (i, radius) in radii.into_iter().enumerate() {
         let food = world
             .editor_spawn_object(alife_world::WorldEditorSpawnSpec {
@@ -279,6 +281,40 @@ fn margin(receipt: &GpuSelectorDiagnosticReceipt, ids: [u16; 2]) -> f32 {
     .abs()
 }
 
+fn assert_sensory_coverage(
+    features: &CandidateFeatureVector,
+    expected_bearing: [f32; 2],
+    expected_contact: f32,
+) -> serde_json::Value {
+    for (actual, expected) in features.0[..2].iter().copied().zip(expected_bearing) {
+        assert!(
+            actual.is_finite() && (actual - expected).abs() < 1e-5,
+            "captured horizontal bearing {:?} does not match {expected_bearing:?}",
+            &features.0[..2]
+        );
+    }
+    assert_eq!(
+        features.0[18], expected_contact,
+        "captured physical contact coverage missing"
+    );
+    serde_json::json!({"bearing":[features.0[0],features.0[1]],
+        "distance":features.0[2],"contact":features.0[18]})
+}
+
+fn assert_pair_coverage(
+    frame: &PerceptionFrame,
+    ids: [u16; 2],
+    near_bearing: [f32; 2],
+) -> serde_json::Value {
+    let near = &frame.candidates()[usize::from(ids[0])];
+    let far = &frame.candidates()[usize::from(ids[1])];
+    assert!(near.features.0[2] < far.features.0[2]);
+    serde_json::json!({
+        "near":assert_sensory_coverage(&near.features,near_bearing,1.0),
+        "far":assert_sensory_coverage(&far.features,[-near_bearing[0],-near_bearing[1]],0.0),
+    })
+}
+
 #[test]
 #[ignore = "one bounded calibration candidate; requires retained ALIFE_FOUNDER_CANDIDATE"]
 fn inherited_readout_calibration_once() {
@@ -301,7 +337,10 @@ fn inherited_readout_calibration_once() {
     save(
         &root,
         "bounds.json",
-        &serde_json::json!({"training_frames":16,
+        &serde_json::json!({"curriculum_revision":2,"bearing_plane":"XZ, Y-up",
+        "calibration_object_radius":0.2,"calibration_distances":[0.1,1.0],
+        "held_out_distances":[0.15,1.1],"coverage_gate":"captured cardinal bearings and contact 1/0 before optimizer",
+        "training_frames":16,
         "competence_frames":8,"calibration_frames":8,"weighted_pairs":96,
         "competence_pairs":48,"calibration_pairs":48,"steps":STEPS,"optimizer_rate":RATE,
         "held_out_calibration_cases":4,"margin_limit":MARGIN_LIMIT,
@@ -319,15 +358,18 @@ fn inherited_readout_calibration_once() {
     save(&root, "hardware.json", &backend.hardware_receipt());
     let mut session = GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Training);
     let mut examples = Vec::new();
+    let mut competence_coverage = Vec::new();
+    let mut calibration_coverage = Vec::new();
+    // Match distance/contact across opposite bearings in each competence pair.
     for (case, p) in [
         [0.5, 0.0],
-        [-0.8, 0.0],
+        [-0.5, 0.0],
         [0.0, 0.7],
-        [0.0, -0.6],
+        [0.0, -0.7],
         [2.0, 0.0],
-        [-4.0, 0.0],
+        [-2.0, 0.0],
         [0.0, 3.0],
-        [0.0, -2.5],
+        [0.0, -3.0],
     ]
     .into_iter()
     .enumerate()
@@ -362,6 +404,17 @@ fn inherited_readout_calibration_once() {
         };
         let approaching = frame.candidates()[usize::from(step.teacher_candidate_index)].family
             == CandidateActionFamily::Approach;
+        assert_eq!(
+            approaching,
+            case >= 4,
+            "competence label must follow matched contact class"
+        );
+        let expected_bearing = [[0.0, 1.0], [0.0, -1.0], [1.0, 0.0], [-1.0, 0.0]][case % 4];
+        competence_coverage.push(assert_sensory_coverage(
+            &frame.candidates()[usize::from(index(CandidateActionFamily::Ingest))].features,
+            expected_bearing,
+            if approaching { 0.0 } else { 1.0 },
+        ));
         let pairs = [
             (
                 index(CandidateActionFamily::Approach),
@@ -407,6 +460,9 @@ fn inherited_readout_calibration_once() {
             &root,
             &format!("calibration-{case}.json"),
         );
+        let expected_bearing =
+            [[0.0, 1.0], [1.0, 0.0], [0.0, -1.0], [-1.0, 0.0]][case as usize / 2];
+        calibration_coverage.push(assert_pair_coverage(&frame, [a, b], expected_bearing));
         for (positive, negative) in [(a, b), (b, a)] {
             let example = ProductionReadoutExample::from_diagnostic(
                 &phenotype, &frame, &receipt, positive, negative,
@@ -417,6 +473,16 @@ fn inherited_readout_calibration_once() {
     }
     assert_eq!(examples.len(), 96);
     drop(session);
+    assert_eq!(competence_coverage.len(), 8);
+    assert_eq!(calibration_coverage.len(), 8);
+    save(
+        &root,
+        "training-coverage-gate.json",
+        &serde_json::json!({
+            "pass":true,"competence":competence_coverage,"calibration":calibration_coverage,
+            "source":"actual frames bound to the saved fresh GPU receipts; checked before optimizer creation",
+        }),
+    );
     let mut trainer =
         Nano512ReadoutTrainer::new_required(baseline, initial.clone(), &examples, RATE).unwrap();
     let loss_before = trainer.loss().unwrap();
@@ -469,12 +535,24 @@ fn inherited_readout_calibration_once() {
         let world = paired_world(&initial, 98000 + case, angle, case % 2 != 0, true);
         let mut scores = Vec::new();
         for (name, p) in [("initial", &phenotype), ("calibrated", &after)] {
-            let (_, receipt, ids) = capture_pair(
+            let (frame, receipt, ids) = capture_pair(
                 &mut session,
                 p,
                 &world,
                 &root,
                 &format!("held-{case}-{name}.json"),
+            );
+            let diagonal = std::f32::consts::FRAC_1_SQRT_2;
+            let expected_bearing = if case < 2 {
+                [diagonal, diagonal]
+            } else {
+                [-diagonal, -diagonal]
+            };
+            let coverage = assert_pair_coverage(&frame, ids, expected_bearing);
+            save(
+                &root,
+                &format!("held-{case}-{name}-coverage.json"),
+                &coverage,
             );
             scores.push(margin(&receipt, ids));
         }

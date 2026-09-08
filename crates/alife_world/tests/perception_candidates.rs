@@ -16,6 +16,61 @@ use alife_world::{
 
 const ORGANISM: OrganismId = OrganismId(17);
 
+fn assert_privileged_horizontal_bearing(offset: Vec3f, expected: [f32; 2]) {
+    let observer = Vec3f::new(1.0, 0.25, -2.0);
+    let target = Vec3f::new(
+        observer.x + offset.x,
+        observer.y + offset.y,
+        observer.z + offset.z,
+    );
+    let mut world = HeadlessScenarioBuilder::new(74)
+        .agent("agent", ORGANISM, observer)
+        .food("object", target, 0.9)
+        .build()
+        .unwrap();
+    let frame = perception_frame(
+        &mut world,
+        Tick::new(6),
+        SensorProfile::PrivilegedAffordanceV1,
+    );
+    let candidate = frame
+        .candidates()
+        .iter()
+        .find(|c| c.family == CandidateActionFamily::Ingest)
+        .unwrap();
+    for (actual, expected) in candidate.features.0[..2].iter().copied().zip(expected) {
+        assert!(
+            actual.is_finite() && (actual - expected).abs() < 1e-6,
+            "offset={offset:?}, bearing={:?}, expected lane={expected}",
+            &candidate.features.0[..2]
+        );
+    }
+}
+
+#[test]
+fn privileged_horizontal_bearing_distinguishes_xz_cardinals_and_diagonals() {
+    for (offset, expected) in [
+        (Vec3f::new(0.0, 0.0, 1.0), [1.0, 0.0]),
+        (Vec3f::new(0.0, 0.0, -1.0), [-1.0, 0.0]),
+        (Vec3f::new(1.0, 0.0, 0.0), [0.0, 1.0]),
+        (Vec3f::new(-1.0, 0.0, 0.0), [0.0, -1.0]),
+        (Vec3f::new(3.0, 0.0, 4.0), [0.8, 0.6]),
+        (Vec3f::new(-3.0, 0.0, 4.0), [0.8, -0.6]),
+        (Vec3f::new(3.0, 0.0, -4.0), [-0.8, 0.6]),
+        (Vec3f::new(-3.0, 0.0, -4.0), [-0.8, -0.6]),
+    ] {
+        assert_privileged_horizontal_bearing(offset, expected);
+    }
+}
+
+#[test]
+fn privileged_horizontal_bearing_ignores_height_and_has_finite_zero_xz_fallback() {
+    for height in [2.0, -2.0, 0.0] {
+        assert_privileged_horizontal_bearing(Vec3f::new(0.0, height, 0.0), [0.0, 1.0]);
+        assert_privileged_horizontal_bearing(Vec3f::new(3.0, height, 4.0), [0.8, 0.6]);
+    }
+}
+
 fn pos(x: f32, y: f32) -> Vec3f {
     Vec3f::new(x, y, 0.0)
 }
@@ -256,7 +311,7 @@ fn candidate_enumerator_source_contains_observations_not_privileged_scores() {
 fn privileged_feature_lanes_have_exact_geometry_affordance_evidence_and_reserved_values() {
     let world = HeadlessScenarioBuilder::new(73)
         .agent("agent", ORGANISM, pos(0.0, 0.0))
-        .food("three_four_five", pos(3.0, 4.0), 0.9)
+        .food("three_four_five", Vec3f::new(3.0, 0.0, 4.0), 0.9)
         .build()
         .unwrap();
     let tick = Tick::new(6);
@@ -266,7 +321,7 @@ fn privileged_feature_lanes_have_exact_geometry_affordance_evidence_and_reserved
         .enumerate_candidates(&report, SensorProfile::PrivilegedAffordanceV1)
         .unwrap();
 
-    assert_eq!(visible.relative_position, pos(3.0, 4.0));
+    assert_eq!(visible.relative_position, Vec3f::new(3.0, 0.0, 4.0));
     assert!((visible.distance - 5.0).abs() < 1e-6);
     assert_eq!(CANDIDATE_FEATURE_BEARING_SIN_LANE, 0);
     assert_eq!(CANDIDATE_FEATURE_BEARING_COS_LANE, 1);

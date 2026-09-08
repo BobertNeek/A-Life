@@ -302,9 +302,10 @@ impl GroundedSensorExtractor {
         let mut slots = Vec::with_capacity(tracked.len());
         let mut transports = Vec::with_capacity(tracked.len());
         for (slot_index, tracked) in tracked.into_iter().enumerate() {
-            let planar = tracked.relative.x.hypot(tracked.relative.y);
+            // Game space is Y-up; horizontal bearing keeps [sin, cos] in X/Z.
+            let planar = tracked.relative.x.hypot(tracked.relative.z);
             let bearing = if planar > f32::EPSILON {
-                [tracked.relative.y / planar, tracked.relative.x / planar]
+                [tracked.relative.z / planar, tracked.relative.x / planar]
             } else {
                 [0.0, 1.0]
             };
