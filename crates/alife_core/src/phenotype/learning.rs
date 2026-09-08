@@ -486,7 +486,9 @@ pub(super) fn compile_learning_plans(
             let effective_scale = (scale * developmental_multiplier).clamp(0.0, 1.0);
             let profile = match (synapse.kind(), parameters.action_candidate_credit_profile()) {
                 (CompiledSynapseKind::Decoder(c), Some(profile))
-                    if c.head() == super::DecoderHeadKind::ActionCandidate =>
+                    if c.head() == super::DecoderHeadKind::ActionCandidate
+                        || (profile == crate::ActionCandidateCreditProfileV1::SignedChoiceReadouts
+                            && c.head() == super::DecoderHeadKind::MemoryContext) =>
                 {
                     profile.receptor_profile()
                 }

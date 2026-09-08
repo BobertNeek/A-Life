@@ -923,15 +923,21 @@ pub struct PlasticityMask {
     pub projection_masks: Vec<ProjectionPlasticityMask>,
 }
 
-/// Explicit action-learning role. Other learning roles retain their profile.
+/// Explicit inherited credit scope. Existing variants retain their exact meaning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ActionCandidateCreditProfileV1 {
+    /// Signed credit for ActionCandidate only; preserve existing V2 founders.
     SignedConsequences,
+    /// Signed credit for ActionCandidate and MemoryContext action-scoring readouts.
+    SignedChoiceReadouts,
 }
 
 impl ActionCandidateCreditProfileV1 {
     pub const fn raw(self) -> u8 {
-        1
+        match self {
+            Self::SignedConsequences => 1,
+            Self::SignedChoiceReadouts => 2,
+        }
     }
 
     pub fn receptor_profile(self) -> crate::PlasticityReceptorProfile {

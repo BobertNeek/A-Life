@@ -450,7 +450,8 @@ fn inherited_readout_calibration_once() {
             },
         ];
         let contact = frame.candidates()[usize::from(index(CandidateActionFamily::Ingest))]
-            .features.0[18];
+            .features
+            .0[18];
         let ingest = index(CandidateActionFamily::Ingest);
         let approach = index(CandidateActionFamily::Approach);
         let expected_handoff = if contact == 1.0 {
@@ -721,8 +722,8 @@ fn saved_handoff_candidate_preference_once() {
     assert_eq!(
         candidate.digest().bytes(),
         &[
-            40, 161, 51, 234, 158, 204, 236, 70, 61, 99, 211, 218, 78, 154, 50, 208,
-            109, 194, 193, 113, 108, 113, 39, 239, 166, 78, 186, 38, 133, 91, 128, 250,
+            40, 161, 51, 234, 158, 204, 236, 70, 61, 99, 211, 218, 78, 154, 50, 208, 109, 194, 193,
+            113, 108, 113, 39, 239, 166, 78, 186, 38, 133, 91, 128, 250,
         ],
         "assessment must use the unchanged saved revision-3 candidate"
     );
@@ -731,7 +732,10 @@ fn saved_handoff_candidate_preference_once() {
         ActionCandidateCreditProfileV1::SignedConsequences,
     )
     .unwrap();
-    assert_eq!(configured.asset().unwrap().encode_canonical().unwrap(), bytes);
+    assert_eq!(
+        configured.asset().unwrap().encode_canonical().unwrap(),
+        bytes
+    );
     let (phenotype, inputs) =
         PhenotypeCompiler::compile_nano512_action_credit_candidate(&configured).unwrap();
     for (synapse, weight) in phenotype.synapses().iter().zip(candidate.weights()) {
@@ -776,8 +780,15 @@ fn saved_handoff_candidate_preference_once() {
         &root.join("amber-nutritious"),
         Some(&configured),
     );
-    save(&root, "outcomes.json", &[&cyan_nutritious, &amber_nutritious]);
-    println!("paired_preference_evidence={}; cyan={cyan_nutritious:?}; amber={amber_nutritious:?}", root.display());
+    save(
+        &root,
+        "outcomes.json",
+        &[&cyan_nutritious, &amber_nutritious],
+    );
+    println!(
+        "paired_preference_evidence={}; cyan={cyan_nutritious:?}; amber={amber_nutritious:?}",
+        root.display()
+    );
     assert_choices(&cyan_nutritious, &amber_nutritious);
 }
 
@@ -834,19 +845,132 @@ fn feeding_case(asset: &FoundationWeightAsset, seed: u64, position: Vec3f, root:
     false
 }
 
+#[test]
+#[ignore = "one short live profile check; saved ALIFE_PREFERENCE_CANDIDATE, no optimizer"]
+fn signed_choice_readouts_first_meal_once() {
+    let bytes = std::fs::read(std::env::var("ALIFE_PREFERENCE_CANDIDATE").unwrap()).unwrap();
+    let asset = FoundationWeightAsset::decode_canonical(&bytes).unwrap();
+    assert_eq!(
+        asset.digest().bytes(),
+        &[
+            40, 161, 51, 234, 158, 204, 236, 70, 61, 99, 211, 218, 78, 154, 50, 208, 109, 194, 193,
+            113, 108, 113, 39, 239, 166, 78, 186, 38, 133, 91, 128, 250,
+        ]
+    );
+    let configured = Nano512ActionCreditCandidateV2::new(
+        &asset,
+        ActionCandidateCreditProfileV1::SignedChoiceReadouts,
+    )
+    .unwrap();
+    assert_eq!(
+        configured.asset().unwrap().encode_canonical().unwrap(),
+        bytes
+    );
+    let (phenotype, inputs) =
+        PhenotypeCompiler::compile_nano512_action_credit_candidate(&configured).unwrap();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
+        "../../target/founder-training-evidence/signed-choice-profile-{}",
+        std::process::id()
+    ));
+    assert!(!root.exists(), "preserve prior evidence");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("candidate.alife-foundation"), bytes).unwrap();
+    save(&root, "neural-phenotype.json", &phenotype);
+    save(&root, "compiler-inputs.json", &inputs);
+    save(
+        &root,
+        "bounds.json",
+        &serde_json::json!({
+            "candidate_source":"readout-calibration-16188","profile":"SignedChoiceReadouts",
+            "optimizer_steps":0,"lives":1,"tick_cap":4,"wall_seconds":75,
+            "outer_wall_seconds":120,"stop_after":"first meal plus next decision",
+            "preference_assessment":false,"default_promoted":false,
+        }),
+    );
+    first_meal_with_configured(&configured, &root);
+    let receipt: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(root.join("receipt.json")).unwrap()).unwrap();
+    let mut credit_receipts = Vec::new();
+    let mut harmful_meals = 0;
+    for tick in 1..=receipt["ticks"].as_u64().unwrap() {
+        let outcome: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(root.join(format!("tick-{tick}-outcome.json"))).unwrap(),
+        )
+        .unwrap();
+        let patch: ExperiencePatch = serde_json::from_value(outcome["patch"].clone()).unwrap();
+        assert_eq!(
+            patch.decision().neural_evidence().unwrap().phenotype_hash,
+            phenotype.phenotype_hash()
+        );
+        let selector: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(root.join(format!("tick-{tick:02}-selector.json"))).unwrap(),
+        )
+        .unwrap();
+        let receptors: NeuralReceptorFrame =
+            serde_json::from_value(selector["neural_receptors"].clone()).unwrap();
+        let credit = OutcomeCreditPacket::from_sealed_patch(&patch)
+            .unwrap()
+            .with_biochemical_receptors(&receptors)
+            .unwrap();
+        let lanes = *credit.modulator().frame().lanes();
+        let harmful = patch.outcome().physical.contact == PhysicalContactKind::Consumed
+            && patch.outcome().pain_delta.raw() > 0.0;
+        harmful_meals += usize::from(harmful);
+        for head in [
+            DecoderHeadKind::ActionCandidate,
+            DecoderHeadKind::MemoryContext,
+        ] {
+            let synapse = phenotype
+                .synapses()
+                .iter()
+                .find(|s| {
+                    matches!(s.kind(), CompiledSynapseKind::Decoder(c)
+                if c.head() == head && c.family() == CandidateActionFamily::Ingest)
+                })
+                .unwrap();
+            let receptor = &phenotype.plasticity_receptors()[usize::from(synapse.receptor_index())];
+            let weights = *receptor.receptor_profile().weights();
+            assert_eq!(weights, [0.0, -1.0, 1.0, -0.5, 0.2, 0.0, 0.5, -0.5]);
+            let factor = weights.iter().zip(lanes).map(|(w, l)| w * l).sum::<f32>()
+                / weights.iter().map(|w| w.abs()).sum::<f32>();
+            credit_receipts.push(serde_json::json!({"tick":tick,"head":head,
+                "credit_lanes":lanes,"receptor":receptor,"third_factor":factor,
+                "actual_harmful_meal":harmful,"pass":!harmful || factor < 0.0}));
+        }
+    }
+    save(
+        &root,
+        "profile-credit-gate.json",
+        &serde_json::json!({
+            "harmful_meals":harmful_meals,"receipts":credit_receipts,
+            "source":"sealed physical outcomes and receptor frames bound to saved GPU dispatches",
+        }),
+    );
+    assert!(
+        harmful_meals > 0,
+        "short check did not expose harmful meal credit"
+    );
+    assert!(credit_receipts.iter().all(|r| r["pass"] == true));
+}
+
 fn first_meal(asset: &FoundationWeightAsset, root: &Path) {
     let configured = Nano512ActionCreditCandidateV2::new(
         asset,
         ActionCandidateCreditProfileV1::SignedConsequences,
     )
     .unwrap();
+    first_meal_with_configured(&configured, root);
+}
+
+fn first_meal_with_configured(configured: &Nano512ActionCreditCandidateV2, root: &Path) {
+    let asset = configured.asset().unwrap();
     let (mut runtime, _) =
         super::super::founder_consequence_tests::paired_food_runtime_with_action_credit(
-            asset,
+            &asset,
             true,
             &root.join("world"),
             true,
-            Some(&configured),
+            Some(configured),
         );
     save(root, "configured-candidate.json", &configured);
     SELECTOR_CAPTURE_ROOT.with(|capture| *capture.borrow_mut() = Some(root.to_path_buf()));

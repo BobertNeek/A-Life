@@ -207,12 +207,21 @@ fn v2_reuses_exact_v1_weights_and_changes_only_action_profiles_and_bound_identit
 
 #[test]
 fn v2_genetic_roundtrip_and_reproduction_preserve_profile_and_source_only() {
+    assert_profile_inheritance(ActionCandidateCreditProfileV1::SignedConsequences);
+}
+
+#[test]
+fn signed_choice_readouts_are_inherited_and_expressed() {
+    assert_profile_inheritance(signed_choice_readouts());
+}
+
+fn signed_choice_readouts() -> ActionCandidateCreditProfileV1 {
+    serde_json::from_str("\"SignedChoiceReadouts\"").unwrap()
+}
+
+fn assert_profile_inheritance(profile: ActionCandidateCreditProfileV1) {
     let asset = candidate();
-    let configured = Nano512ActionCreditCandidateV2::new(
-        &asset,
-        ActionCandidateCreditProfileV1::SignedConsequences,
-    )
-    .unwrap();
+    let configured = Nano512ActionCreditCandidateV2::new(&asset, profile).unwrap();
     let founder = |seed| {
         CreatureGenome::early_mammal_founder(
             seed,
@@ -249,7 +258,7 @@ fn v2_genetic_roundtrip_and_reproduction_preserve_profile_and_source_only() {
             .brain_genome
             .plasticity_parameters()
             .action_candidate_credit_profile(),
-        Some(ActionCandidateCreditProfileV1::SignedConsequences)
+        Some(profile)
     );
     let (_, compiled_inputs) = PhenotypeCompiler::compile_nano512_action_credit_candidate(
         child.nano512_action_credit_candidate_v2.as_ref().unwrap(),
@@ -278,4 +287,158 @@ fn v2_genetic_roundtrip_and_reproduction_preserve_profile_and_source_only() {
     let mut missing = a;
     missing.nano512_action_credit_candidate_v2 = None;
     assert!(missing.validate_contract().is_err());
+}
+
+#[test]
+fn signed_choice_readouts_change_only_memory_credit_and_preserve_legacy_identity() {
+    let asset = candidate();
+    let legacy = Nano512ActionCreditCandidateV2::new(
+        &asset,
+        ActionCandidateCreditProfileV1::SignedConsequences,
+    )
+    .unwrap();
+    let (old, old_inputs) =
+        PhenotypeCompiler::compile_nano512_action_credit_candidate(&legacy).unwrap();
+    assert_eq!(ActionCandidateCreditProfileV1::SignedConsequences.raw(), 1);
+    assert_eq!(
+        serde_json::to_vec(&ActionCandidateCreditProfileV1::SignedConsequences).unwrap(),
+        b"\"SignedConsequences\""
+    );
+    // Captured from the unchanged implementation in choice-profile-red2.txt.
+    assert_eq!(
+        blake3::hash(&serde_json::to_vec(&legacy).unwrap())
+            .to_hex()
+            .as_str(),
+        "efeb8800589439bf4bdeeaf05e079fc1e3ee377e98407b048cca6daaedcc3eb2"
+    );
+    assert_eq!(
+        old_inputs.canonical_digest(),
+        [
+            10621227889739061846,
+            15676694472456571315,
+            808417191675935125,
+            7358195558162990042
+        ]
+    );
+    assert_eq!(
+        old.phenotype_hash().0,
+        [
+            4439484190016503590,
+            2612154758923131406,
+            4569233200771077877,
+            5665210318612809102
+        ]
+    );
+    let profile = signed_choice_readouts();
+    assert_eq!(profile.raw(), 2);
+    let configured = Nano512ActionCreditCandidateV2::new(&asset, profile).unwrap();
+    assert_eq!(configured.asset().unwrap(), asset);
+    let restored: Nano512ActionCreditCandidateV2 =
+        serde_json::from_slice(&serde_json::to_vec(&configured).unwrap()).unwrap();
+    assert_eq!(restored, configured);
+    let (new, inputs) =
+        PhenotypeCompiler::compile_nano512_action_credit_candidate(&restored).unwrap();
+    assert_ne!(old.phenotype_hash(), new.phenotype_hash());
+    assert_ne!(old.plasticity_plan_digest(), new.plasticity_plan_digest());
+    assert_ne!(old_inputs.canonical_digest(), inputs.canonical_digest());
+    assert_ne!(
+        old_inputs.foundation_abi().selector_digest(),
+        inputs.foundation_abi().selector_digest()
+    );
+    let mut memory_rows = 0;
+    for (a, b) in old.synapses().iter().zip(new.synapses()) {
+        let mut before = serde_json::to_value(a).unwrap();
+        let mut after = serde_json::to_value(b).unwrap();
+        before.as_object_mut().unwrap().remove("receptor_index");
+        after.as_object_mut().unwrap().remove("receptor_index");
+        assert_eq!(before, after, "synapse topology, weight or alpha changed");
+        let old_receptor = &old.plasticity_receptors()[usize::from(a.receptor_index())];
+        let new_receptor = &new.plasticity_receptors()[usize::from(b.receptor_index())];
+        let mut expected = serde_json::to_value(old_receptor).unwrap();
+        if old_receptor.is_delta_enabled()
+            && matches!(a.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::MemoryContext)
+        {
+            memory_rows += 1;
+            assert_eq!(old_receptor.receptor_profile().weights()[0], 0.2);
+            expected["receptor_profile"] =
+                serde_json::to_value(profile.receptor_profile()).unwrap();
+        }
+        assert_eq!(
+            expected,
+            serde_json::to_value(new_receptor).unwrap(),
+            "only MemoryContext prediction credit may differ from legacy V2"
+        );
+    }
+    assert!(memory_rows > 0);
+    let mut before = serde_json::to_value(&old).unwrap();
+    let mut after = serde_json::to_value(&new).unwrap();
+    for field in [
+        "foundation_abi_selection",
+        "compiler_inputs_digest",
+        "plasticity_receptors",
+        "plasticity_plan_digest",
+        "phenotype_hash",
+        "synapses",
+    ] {
+        before.as_object_mut().unwrap().remove(field);
+        after.as_object_mut().unwrap().remove(field);
+    }
+    assert_eq!(before, after, "non-plasticity plans changed");
+    let restored_inputs: PhenotypeCompilerInputs =
+        serde_json::from_slice(&serde_json::to_vec(&inputs).unwrap()).unwrap();
+    assert_eq!(
+        PhenotypeCompiler::compile_validated(&restored_inputs, &BrainCapacityClass::n512())
+            .unwrap(),
+        new
+    );
+    let restored_phenotype: BrainPhenotype =
+        serde_json::from_slice(&serde_json::to_vec(&new).unwrap()).unwrap();
+    assert_eq!(restored_phenotype, new);
+    // Recorded credit lanes from harmful meals 12 and 31 in run 29540.
+    // Unit regression inputs only; the runtime still derives credit from outcomes.
+    for lanes in [
+        [
+            0.342110008,
+            0.040599972,
+            -0.003060920,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ],
+        [
+            0.282640517,
+            0.011600018,
+            -0.002724667,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ],
+    ] {
+        for head in [
+            DecoderHeadKind::ActionCandidate,
+            DecoderHeadKind::MemoryContext,
+        ] {
+            let s = new
+                .synapses()
+                .iter()
+                .find(|s| {
+                    matches!(s.kind(), CompiledSynapseKind::Decoder(c)
+                if c.head() == head && c.family() == CandidateActionFamily::Ingest)
+                })
+                .unwrap();
+            let weights = *new.plasticity_receptors()[usize::from(s.receptor_index())]
+                .receptor_profile()
+                .weights();
+            let factor = weights.iter().zip(lanes).map(|(w, l)| w * l).sum::<f32>()
+                / weights.iter().map(|w| w.abs()).sum::<f32>();
+            assert!(
+                factor < 0.0,
+                "both action-scoring readouts need negative harmful credit"
+            );
+        }
+    }
 }
