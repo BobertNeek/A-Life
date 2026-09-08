@@ -596,6 +596,94 @@ fn inherited_readout_calibration_once() {
     first_meal(&trained, &root.join("first-meal"));
 }
 
+#[test]
+#[ignore = "one behavioral assessment; requires ALIFE_BEHAVIOR_CANDIDATE from corrected run 23928"]
+fn saved_calibration_candidate_behavior_once() {
+    let bytes = std::fs::read(std::env::var("ALIFE_BEHAVIOR_CANDIDATE").unwrap()).unwrap();
+    let candidate = FoundationWeightAsset::decode_canonical(&bytes).unwrap();
+    assert_eq!(
+        candidate.digest().bytes(),
+        &[
+            153, 191, 252, 5, 245, 201, 169, 20, 96, 179, 146, 80, 193, 153, 202, 153, 100, 125,
+            83, 63, 187, 111, 59, 222, 179, 83, 92, 147, 205, 82, 191, 157,
+        ]
+    );
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
+        "../../target/founder-training-evidence/saved-candidate-behavior-{}",
+        std::process::id()
+    ));
+    assert!(!root.exists(), "preserve previous behavioral evidence");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("candidate.alife-foundation"), bytes).unwrap();
+    let configured = Nano512ActionCreditCandidateV2::new(
+        &candidate,
+        ActionCandidateCreditProfileV1::SignedConsequences,
+    )
+    .unwrap();
+    let (phenotype, inputs) =
+        PhenotypeCompiler::compile_nano512_action_credit_candidate(&configured).unwrap();
+    save(&root, "configured-candidate.json", &configured);
+    save(&root, "neural-phenotype.json", &phenotype);
+    save(&root, "compiler-inputs.json", &inputs);
+    save(
+        &root,
+        "bounds.json",
+        &serde_json::json!({
+            "assessment":"distinct behavioral diagnostic, not a calibration rerun",
+            "source_calibration_run":23928,"source_calibration_gate":"FAIL at unchanged 0.02",
+            "candidate_digest":candidate.digest(),"optimizer_steps":0,
+            "positions":[[-3.0,0.0,1.5],[0.7,0.0,-0.2],[2.7,0.0,-1.0]],
+            "feeding_case_cap":3,"feeding_tick_cap_per_case":16,
+            "feeding_wall_seconds_per_case":90,"first_meal_tick_cap":4,
+            "first_meal_wall_seconds":75,"stop_on_first_feeding_failure":true,
+            "default_promoted":false,
+        }),
+    );
+    let mut feeding = Vec::new();
+    for (case, position) in [
+        Vec3f::new(-3.0, 0.0, 1.5),
+        Vec3f::new(0.7, 0.0, -0.2),
+        Vec3f::new(2.7, 0.0, -1.0),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let consumed = feeding_case(
+            &candidate,
+            95000 + case as u64,
+            position,
+            &root.join(format!("feeding-{case}")),
+        );
+        feeding.push(consumed);
+        save(
+            &root,
+            &format!("feeding-gate-{case}.json"),
+            &serde_json::json!({
+                "completed_cases":feeding,"case":case,"consumed":consumed,
+                "first_meal_diagnostic":"not yet run","optimizer_steps":0,
+            }),
+        );
+        println!(
+            "behavior_case={case}; consumed={consumed}; evidence={}",
+            root.display()
+        );
+        assert!(
+            consumed,
+            "behavioral feeding failure; stop and inspect before any tuning"
+        );
+    }
+    first_meal(&candidate, &root.join("first-meal"));
+    save(
+        &root,
+        "completion.json",
+        &serde_json::json!({
+            "feeding_cases":feeding,"first_meal_plus_next_decision_observed":true,
+            "source_calibration_gate":"still FAIL","optimizer_steps":0,
+            "learned_avoidance":"not established by this bounded diagnostic",
+        }),
+    );
+}
+
 fn feeding_case(asset: &FoundationWeightAsset, seed: u64, position: Vec3f, root: &Path) -> bool {
     std::fs::create_dir_all(root).unwrap();
     let mut world = HeadlessScenarioBuilder::new(seed)
