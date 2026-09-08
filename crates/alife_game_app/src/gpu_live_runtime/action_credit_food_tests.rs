@@ -10,6 +10,9 @@ thread_local! {
     static SELECTOR_CAPTURE_ROOT: std::cell::RefCell<Option<PathBuf>> = const {
         std::cell::RefCell::new(None)
     };
+    static CHOICE_TRIAL_SELECTOR_CAPTURE: std::cell::Cell<bool> = const {
+        std::cell::Cell::new(false)
+    };
 }
 
 pub(super) fn tick_with_selector_capture(
@@ -22,19 +25,44 @@ pub(super) fn tick_with_selector_capture(
     };
     assert_eq!(prepared.len(), 1, "diagnostic has exactly one organism");
     let row = &prepared[0];
-    assert!(row.frame.tick().raw() < 4, "finite diagnostic tick bound");
+    let choice_trial = CHOICE_TRIAL_SELECTOR_CAPTURE.with(|capture| capture.get());
+    let tick_limit = if choice_trial { 32 } else { 4 };
+    assert!(
+        row.frame.tick().raw() < tick_limit,
+        "finite diagnostic tick bound"
+    );
+    if choice_trial && (4..16).contains(&row.frame.tick().raw()) {
+        return backend.tick_memory_batch(memory_batch);
+    }
     let requested = row
         .frame
         .candidates()
         .iter()
-        .filter(|candidate| candidate.family == alife_core::CandidateActionFamily::Ingest)
+        .filter(|candidate| {
+            candidate.family == alife_core::CandidateActionFamily::Ingest
+                || (choice_trial
+                    && matches!(
+                        candidate.family,
+                        alife_core::CandidateActionFamily::Approach
+                            | alife_core::CandidateActionFamily::Avoid
+                            | alife_core::CandidateActionFamily::Contact
+                    ))
+        })
         .map(|candidate| candidate.candidate_index)
         .collect::<Vec<_>>();
-    assert_eq!(
-        requested.len(),
-        2,
-        "both food candidates must remain available"
+    // Detailed rows are bounded by the existing API. Every candidate still
+    // has its final score in the receipt, including families not requested.
+    assert!(
+        requested.len() <= 8,
+        "existing GPU diagnostic request bound"
     );
+    if !choice_trial {
+        assert_eq!(
+            requested.len(),
+            2,
+            "both food candidates must remain available"
+        );
+    }
     let ticks = backend
         .tick_memory_batch_with_selector_diagnostics(memory_batch, &requested)
         .unwrap_or_else(|error| panic!("authoritative selector capture failed: {error:?}"));

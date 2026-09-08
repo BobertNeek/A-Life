@@ -860,13 +860,49 @@ fn save_choice_credit_rows(phenotype: &BrainPhenotype, root: &Path) {
 }
 
 fn feeding_case(asset: &FoundationWeightAsset, seed: u64, position: Vec3f, root: &Path) -> bool {
+    feeding_case_configured(asset, seed, position, root, None)
+}
+
+fn feeding_case_configured(
+    asset: &FoundationWeightAsset,
+    seed: u64,
+    position: Vec3f,
+    root: &Path,
+    configured: Option<&Nano512ActionCreditCandidateV2>,
+) -> bool {
     std::fs::create_dir_all(root).unwrap();
     let mut world = HeadlessScenarioBuilder::new(seed)
         .agent("learner", ORGANISM, Vec3f::ZERO)
         .food("object", position, 1.0)
         .build()
         .unwrap();
-    register(&mut world, asset);
+    let expected_phenotype = if let Some(configured) = configured {
+        assert_eq!(configured.asset().unwrap(), *asset);
+        let genome = founder(seed, asset)
+            .with_nano512_action_credit_candidate(configured.clone())
+            .unwrap();
+        let body = genome.express().unwrap();
+        let entity = world.organism_entity_ids()[0].1;
+        world
+            .register_organism_record(
+                WorldOrganismRecord::newborn(ORGANISM, entity, genome.clone(), body, Tick::ZERO)
+                    .unwrap(),
+            )
+            .unwrap();
+        assert_eq!(
+            world.organism_registry().get(ORGANISM).unwrap().genome(),
+            &genome
+        );
+        save(root, "configured-candidate.json", configured);
+        Some(
+            PhenotypeCompiler::compile_nano512_action_credit_candidate(configured)
+                .unwrap()
+                .0,
+        )
+    } else {
+        register(&mut world, asset);
+        None
+    };
     let food = world.entity_id("object").unwrap();
     let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()).unwrap();
     save(root, "hardware.json", &backend.hardware_receipt());
@@ -900,6 +936,19 @@ fn feeding_case(asset: &FoundationWeightAsset, seed: u64, position: Vec3f, root:
             GpuLiveTickOutcome::Progressed(_) => {}
         }
         let world = runtime.world_snapshot();
+        if let Some(expected) = &expected_phenotype {
+            assert_eq!(
+                runtime
+                    .sealed_patches()
+                    .last()
+                    .unwrap()
+                    .decision()
+                    .neural_evidence()
+                    .unwrap()
+                    .phenotype_hash,
+                expected.phenotype_hash()
+            );
+        }
         save(
             root,
             &format!("tick-{}.json", world.tick().raw()),
@@ -910,6 +959,205 @@ fn feeding_case(asset: &FoundationWeightAsset, seed: u64, position: Vec3f, root:
         }
     }
     false
+}
+
+#[test]
+#[ignore = "one 5% inherited AC trial: three feeding cases, then paired preference; no optimizer"]
+fn scaled_choice_readouts_once() {
+    let bytes = std::fs::read(std::env::var("ALIFE_PREFERENCE_CANDIDATE").unwrap()).unwrap();
+    let source = FoundationWeightAsset::decode_canonical(&bytes).unwrap();
+    assert_eq!(
+        source.digest().bytes(),
+        &[
+            40, 161, 51, 234, 158, 204, 236, 70, 61, 99, 211, 218, 78, 154, 50, 208, 109, 194, 193,
+            113, 108, 113, 39, 239, 166, 78, 186, 38, 133, 91, 128, 250,
+        ]
+    );
+    let factor = 0.05_f32;
+    let profile = ActionCandidateCreditProfileV1::SignedChoiceReadouts;
+    let source_configured = Nano512ActionCreditCandidateV2::new(&source, profile).unwrap();
+    let (before, _) =
+        PhenotypeCompiler::compile_nano512_action_credit_candidate(&source_configured).unwrap();
+    let mut weights = source.weights().to_vec();
+    let mut ac_coordinates = Vec::new();
+    for (i, synapse) in before.synapses().iter().enumerate() {
+        if matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate)
+        {
+            weights[i] *= factor;
+            ac_coordinates.push(i);
+        }
+    }
+    let builtin =
+        FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
+    let baseline = PhenotypeCompiler::compile_fixed_legacy_nano512_compatibility_asset(
+        SensorProfile::GroundedObjectSlotsV1,
+        &builtin,
+    )
+    .unwrap()
+    .into_runtime_parts()
+    .0;
+    let candidate = FoundationWeightAsset::from_nano512_readout_candidate(
+        &baseline,
+        weights,
+        source.manifest().training_stage(),
+    )
+    .unwrap();
+    let configured = Nano512ActionCreditCandidateV2::new(&candidate, profile).unwrap();
+    let (phenotype, inputs) =
+        PhenotypeCompiler::compile_nano512_action_credit_candidate(&configured).unwrap();
+    assert_eq!(configured.asset().unwrap(), candidate);
+    assert_ne!(candidate.digest(), source.digest());
+    let mut changed_coordinates = Vec::new();
+    for (i, (old, new)) in before
+        .synapses()
+        .iter()
+        .zip(phenotype.synapses())
+        .enumerate()
+    {
+        let expected = if ac_coordinates.contains(&i) {
+            source.weights()[i] * factor
+        } else {
+            source.weights()[i]
+        };
+        assert_eq!(candidate.weights()[i].to_bits(), expected.to_bits());
+        assert_eq!(new.genetic_weight().to_bits(), expected.to_bits());
+        let mut old_row = serde_json::to_value(old).unwrap();
+        old_row["genetic_weight"] = serde_json::json!(expected);
+        assert_eq!(old_row, serde_json::to_value(new).unwrap());
+        if old.genetic_weight().to_bits() != new.genetic_weight().to_bits() {
+            changed_coordinates.push(i);
+        }
+    }
+    assert_eq!(ac_coordinates.len(), 984);
+    assert!(!changed_coordinates.is_empty());
+    // Gene values, their two derived identities, and the embedded canonical
+    // asset change together. Verify the embedded bytes before normalizing them.
+    let mut old = serde_json::to_value(&before).unwrap();
+    let new = serde_json::to_value(&phenotype).unwrap();
+    assert_eq!(
+        old["foundation_abi_selection"]["contract"]["source"]["canonical_asset"],
+        serde_json::json!(source.encode_canonical().unwrap())
+    );
+    assert_eq!(
+        new["foundation_abi_selection"]["contract"]["source"]["canonical_asset"],
+        serde_json::json!(candidate.encode_canonical().unwrap())
+    );
+    old["foundation_abi_selection"]["contract"]["source"]["canonical_asset"] =
+        new["foundation_abi_selection"]["contract"]["source"]["canonical_asset"].clone();
+    for key in ["synapses", "phenotype_hash", "compiler_inputs_digest"] {
+        old[key] = new[key].clone();
+    }
+    assert_eq!(old, new);
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
+        "../../target/founder-training-evidence/scaled-choice-{}",
+        std::process::id(),
+    ));
+    assert!(!root.exists(), "preserve previous scaling evidence");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("source.alife-foundation"), bytes).unwrap();
+    let encoded = candidate.encode_canonical().unwrap();
+    assert_eq!(
+        FoundationWeightAsset::decode_canonical(&encoded).unwrap(),
+        candidate
+    );
+    std::fs::write(root.join("candidate.alife-foundation"), encoded).unwrap();
+    save(&root, "configured-candidate.json", &configured);
+    save(&root, "neural-phenotype.json", &phenotype);
+    save(&root, "compiler-inputs.json", &inputs);
+    save(
+        &root,
+        "scaling.json",
+        &serde_json::json!({
+            "source_digest":source.digest(), "candidate_digest":candidate.digest(),
+            "factor":factor, "factor_bits":factor.to_bits(), "ac_coordinates":ac_coordinates,
+            "changed_coordinates":changed_coordinates, "all_coordinates_verified":true,
+            "non_gene_phenotype_fields_unchanged":true, "optimizer_steps":0,
+            "embedded_assets_verified":"each equals its respective canonical asset",
+            "source_phenotype_hash":before.phenotype_hash(), "candidate_phenotype_hash":phenotype.phenotype_hash(),
+            "training_stage":"retained source provenance; this is arithmetic scaling, not further training",
+        }),
+    );
+    save(
+        &root,
+        "bounds.json",
+        &serde_json::json!({
+            "profile":profile, "feeding_cases":3, "feeding_ticks_per_case":16,
+            "feeding_seconds_per_case":90, "feeding_outer_seconds":360,
+            "preference_lives":2, "preference_ticks_per_life":32,
+            "preference_seconds_per_life":120, "preference_outer_seconds":360,
+            "outer_seconds":720, "selector_capture_ticks":"1-4 and 17-32 of paired lives",
+            "selector_details":"Ingest, Approach, Avoid, Contact; at most eight candidates",
+            "selector_final_scores":"all candidates",
+            "stop_on_first_feeding_failure":true, "automatic_repeat":false, "default_promoted":false,
+            "fresh_arithmetic":"preserves original decisions; not eight teacher successes",
+            "scale_status":"experimental choice, not a proven optimum",
+        }),
+    );
+    let feeding_started = Instant::now();
+    let mut feeding = Vec::new();
+    for (case, position) in [
+        Vec3f::new(-3.0, 0.0, 1.5),
+        Vec3f::new(0.7, 0.0, -0.2),
+        Vec3f::new(2.7, 0.0, -1.0),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let consumed = feeding_case_configured(
+            &candidate,
+            95000 + case as u64,
+            position,
+            &root.join(format!("feeding-{case}")),
+            Some(&configured),
+        );
+        feeding.push(consumed);
+        save(
+            &root,
+            &format!("feeding-gate-{case}.json"),
+            &serde_json::json!({
+                "completed_cases":feeding, "candidate_digest":candidate.digest(), "profile":profile,
+                "phenotype_hash":phenotype.phenotype_hash(), "preference":"not yet run",
+            }),
+        );
+        assert!(
+            consumed,
+            "scaled founder feeding failed; stop before preference or retuning"
+        );
+        assert!(feeding_started.elapsed().as_secs() < 360);
+    }
+    let preference_started = Instant::now();
+    let mut outcomes = Vec::new();
+    for (cyan_nutritious, life) in [(true, "cyan-nutritious"), (false, "amber-nutritious")] {
+        let life_root = root.join(life);
+        SELECTOR_CAPTURE_ROOT.with(|capture| *capture.borrow_mut() = Some(life_root.clone()));
+        CHOICE_TRIAL_SELECTOR_CAPTURE.with(|capture| capture.set(true));
+        let outcome = run_food_life(
+            &candidate,
+            &phenotype,
+            cyan_nutritious,
+            &life_root,
+            Some(&configured),
+        );
+        CHOICE_TRIAL_SELECTOR_CAPTURE.with(|capture| capture.set(false));
+        SELECTOR_CAPTURE_ROOT.with(|capture| *capture.borrow_mut() = None);
+        save_choice_credit_rows(&phenotype, &life_root);
+        outcomes.push(outcome);
+        save(
+            &root,
+            &format!("preference-outcomes-{life}.json"),
+            &outcomes,
+        );
+        assert!(preference_started.elapsed().as_secs() < 360);
+    }
+    save(&root, "preference-outcomes.json", &outcomes);
+    assert_choices(&outcomes[0], &outcomes[1]);
+    save(
+        &root,
+        "completion.json",
+        &serde_json::json!({
+            "feeding_cases":feeding, "preference_gate":"PASS", "default_promoted":false,
+        }),
+    );
 }
 
 #[test]
