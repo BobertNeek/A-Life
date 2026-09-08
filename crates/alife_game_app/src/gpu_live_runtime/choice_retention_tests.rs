@@ -10,6 +10,59 @@ fn save(root: &Path, name: &str, value: &impl serde::Serialize) {
     write_capture(&root.join(name), &serde_json::to_value(value).unwrap());
 }
 
+fn wait_for_normal_persistence(
+    runtime: &mut GpuLiveBrainRuntime,
+    root: &Path,
+    label: &str,
+    sleep_started: Instant,
+    poll_count: &mut u64,
+    ready: impl Fn(&GpuLiveBrainRuntime) -> bool,
+) -> Result<(), String> {
+    let mut previous_stage = None;
+    let mut error = None;
+    loop {
+        let is_ready = ready(runtime);
+        if !is_ready && sleep_started.elapsed().as_secs() >= 120 && error.is_none() {
+            error = Some(
+                "normal persistence did not become ready within the original sleep deadline"
+                    .to_string(),
+            );
+        }
+        let stage = runtime.exact_checkpoint_state_for_test();
+        if previous_stage.as_ref() != Some(&stage) || is_ready || error.is_some() {
+            save(
+                root,
+                &format!("persistence-{label}-{poll_count:06}.json"),
+                &serde_json::json!({
+                    "elapsed_ms":sleep_started.elapsed().as_millis(), "poll_count":poll_count,
+                    "world_tick":runtime.world.tick(), "checkpoint_state":stage,
+                    "active_checkpoint_tick":runtime.exact_checkpoint_active_tick_for_test(),
+                    "matching_completed_permits":runtime.durable_completed_sleep_permitted_ids_for_test(),
+                    "durability_in_runtime":runtime.checkpoint_durability.is_some(),
+                    "ready":is_ready,"error":error,
+                }),
+            );
+            previous_stage = Some(stage);
+        }
+        if let Some(error) = error {
+            return Err(error);
+        }
+        if is_ready {
+            return Ok(());
+        }
+        *poll_count += 1;
+        // Same order as a normal tick. Do not advance the world or finalize via shutdown.
+        error = runtime
+            .poll_sleep_journal_publication()
+            .and_then(|()| runtime.poll_exact_population_checkpoint())
+            .err()
+            .map(|error| format!("{error:?}"));
+        if error.is_none() {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    }
+}
+
 fn retain(
     runtime: &mut GpuLiveBrainRuntime,
     root: &Path,
@@ -239,6 +292,7 @@ fn scaled_choice_checkpoint_sleep_retention_once() {
             "post_wake_awake_ticks":8, "post_wake_seconds":60,
             "no_progress":"counted separately; wall bound applies",
             "sleep_trigger":"public request_recovery_sleep, one cycle",
+            "persistence_scheduling":"poll normal persistence while Completed awaits its matching permit; no zero-work world ticks",
             "automatic_retry":false, "default_promoted":false,
         }),
     );
@@ -398,7 +452,31 @@ fn scaled_choice_checkpoint_sleep_retention_once() {
     let mut observations = Vec::new();
     let mut prior_state = None;
     let mut sleep_error = None;
+    let mut persistence_polls = 0;
     while progressed < 96 && started.elapsed().as_secs() < 120 {
+        if matches!(
+            restored
+                .sleep_state_for_test(ORGANISM)
+                .unwrap()
+                .consolidation,
+            ConsolidationState::Completed { .. }
+        ) {
+            if let Err(error) = wait_for_normal_persistence(
+                &mut restored,
+                &root,
+                "completed-permit",
+                started,
+                &mut persistence_polls,
+                |runtime| {
+                    runtime
+                        .durable_completed_sleep_permitted_ids_for_test()
+                        .contains(&ORGANISM)
+                },
+            ) {
+                sleep_error = Some(error);
+                break;
+            }
+        }
         match restored.tick_outcome() {
             Ok(GpuLiveTickOutcome::Progressed(_)) => progressed += 1,
             Ok(GpuLiveTickOutcome::NoProgress(_)) => polls += 1,
@@ -438,6 +516,14 @@ fn scaled_choice_checkpoint_sleep_retention_once() {
     }
     let after_sleep = restored.sleep_state_for_test(ORGANISM).unwrap();
     let compaction = restored.memory_compaction_checkpoint(ORGANISM);
+    let capture_wait = wait_for_normal_persistence(
+        &mut restored,
+        &root,
+        "after-sleep-capture",
+        started,
+        &mut persistence_polls,
+        |runtime| runtime.checkpoint_durability.is_some(),
+    );
     let sleep_pass = sleep_error.is_none()
         && saw_submitted
         && saw_completed
@@ -449,7 +535,10 @@ fn scaled_choice_checkpoint_sleep_retention_once() {
         && compaction.is_some_and(|c| {
             c.last_committed_cycle_id == Some(after_sleep.last_consolidated_cycle_id)
         });
-    let sleep_checkpoint = retain(&mut restored, &root, &assets, "after-sleep");
+    let sleep_checkpoint = capture_wait
+        .as_ref()
+        .ok()
+        .and_then(|()| retain(&mut restored, &root, &assets, "after-sleep"));
     save(
         &root,
         "sleep-gate.json",
@@ -458,6 +547,8 @@ fn scaled_choice_checkpoint_sleep_retention_once() {
             "before":pre_sleep,"after":after_sleep,"compactions":compactions,"compaction_checkpoint":compaction,
             "saw_submitted":saw_submitted,"saw_completed":saw_completed,"saw_committed":saw_committed,
             "saw_waking":saw_waking,"complete_checkpoint":sleep_checkpoint.is_some(),
+            "persistence_polls":persistence_polls,"capture_wait_error":capture_wait.err(),
+            "sleep_elapsed_ms":started.elapsed().as_millis(),
         }),
     );
     assert!(
@@ -465,12 +556,24 @@ fn scaled_choice_checkpoint_sleep_retention_once() {
         "sleep failed; partial receipts and prior checkpoints retained"
     );
     let post_wake = observe_awake(&mut restored, &phenotype, &root, "post-wake", 8, None);
-    let final_checkpoint = retain(&mut restored, &root, &assets, "final");
+    let final_capture_wait = wait_for_normal_persistence(
+        &mut restored,
+        &root,
+        "final-capture",
+        started,
+        &mut persistence_polls,
+        |runtime| runtime.checkpoint_durability.is_some(),
+    );
+    let final_checkpoint = final_capture_wait
+        .as_ref()
+        .ok()
+        .and_then(|()| retain(&mut restored, &root, &assets, "final"));
     save(
         &root,
         "post-wake-preference-gate.json",
         &serde_json::json!({
             "pass":post_wake.preference_passed(),"observations":post_wake,"complete_checkpoint":final_checkpoint.is_some(),
+            "capture_wait_error":final_capture_wait.err(),"persistence_polls":persistence_polls,
         }),
     );
     assert!(
