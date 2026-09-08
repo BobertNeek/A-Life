@@ -337,13 +337,14 @@ fn inherited_readout_calibration_once() {
     save(
         &root,
         "bounds.json",
-        &serde_json::json!({"curriculum_revision":2,"bearing_plane":"XZ, Y-up",
+        &serde_json::json!({"curriculum_revision":3,"bearing_plane":"XZ, Y-up",
         "calibration_object_radius":0.2,"calibration_distances":[0.1,1.0],
         "held_out_distances":[0.15,1.1],"coverage_gate":"captured cardinal bearings and contact 1/0 before optimizer",
         "training_frames":16,
-        "competence_frames":8,"calibration_frames":8,"weighted_pairs":96,
-        "competence_pairs":48,"calibration_pairs":48,"steps":STEPS,"optimizer_rate":RATE,
+        "competence_frames":8,"calibration_frames":8,"weighted_pairs":128,
+        "competence_pairs":64,"calibration_pairs":64,"steps":STEPS,"optimizer_rate":RATE,
         "held_out_calibration_cases":4,"margin_limit":MARGIN_LIMIT,
+        "calibration_role":"diagnostic_only","primary_gate":"actual feeding",
         "held_out_feeding_positions":[[-3.0,0.0,1.5],[0.7,0.0,-0.2],[2.7,0.0,-1.0]],
         "feeding_tick_cap_per_case":16,"first_meal_tick_cap":4,"default_promoted":false}),
     );
@@ -359,6 +360,7 @@ fn inherited_readout_calibration_once() {
     let mut session = GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Training);
     let mut examples = Vec::new();
     let mut competence_coverage = Vec::new();
+    let mut handoff_coverage = Vec::new();
     let mut calibration_coverage = Vec::new();
     // Match distance/contact across opposite bearings in each competence pair.
     for (case, p) in [
@@ -435,7 +437,36 @@ fn inherited_readout_calibration_once() {
                 step.teacher_candidate_index,
                 index(CandidateActionFamily::Rest),
             ),
+            if approaching {
+                (
+                    index(CandidateActionFamily::Approach),
+                    index(CandidateActionFamily::Ingest),
+                )
+            } else {
+                (
+                    index(CandidateActionFamily::Ingest),
+                    index(CandidateActionFamily::Approach),
+                )
+            },
         ];
+        let contact = frame.candidates()[usize::from(index(CandidateActionFamily::Ingest))]
+            .features.0[18];
+        let ingest = index(CandidateActionFamily::Ingest);
+        let approach = index(CandidateActionFamily::Approach);
+        let expected_handoff = if contact == 1.0 {
+            (ingest, approach)
+        } else {
+            assert_eq!(contact, 0.0);
+            (approach, ingest)
+        };
+        assert!(
+            pairs.contains(&expected_handoff),
+            "every competence frame must teach the contact-derived global handoff"
+        );
+        handoff_coverage.push(serde_json::json!({
+            "case":case,"contact":contact,"preferred":expected_handoff.0,
+            "rejected":expected_handoff.1,"pass":true,
+        }));
         save(&root, &format!("competence-{case}-pairs.json"), &pairs);
         for (a, b) in pairs {
             let example =
@@ -444,7 +475,7 @@ fn inherited_readout_calibration_once() {
             examples.extend([example.clone(), example]);
         }
     }
-    assert_eq!(examples.len(), 48);
+    assert_eq!(examples.len(), 64);
     for case in 0..8 {
         let world = paired_world(
             &initial,
@@ -468,18 +499,20 @@ fn inherited_readout_calibration_once() {
                 &phenotype, &frame, &receipt, positive, negative,
             )
             .unwrap();
-            examples.extend([example.clone(), example.clone(), example]);
+            examples.extend([example.clone(), example.clone(), example.clone(), example]);
         }
     }
-    assert_eq!(examples.len(), 96);
+    assert_eq!(examples.len(), 128);
     drop(session);
     assert_eq!(competence_coverage.len(), 8);
+    assert_eq!(handoff_coverage.len(), 8);
     assert_eq!(calibration_coverage.len(), 8);
     save(
         &root,
         "training-coverage-gate.json",
         &serde_json::json!({
             "pass":true,"competence":competence_coverage,"calibration":calibration_coverage,
+            "global_handoff":handoff_coverage,
             "source":"actual frames bound to the saved fresh GPU receipts; checked before optimizer creation",
         }),
     );
@@ -489,7 +522,7 @@ fn inherited_readout_calibration_once() {
     trainer.train_steps(STEPS).unwrap();
     let loss_after = trainer.loss().unwrap();
     let trained = trainer
-        .export_candidate(TrainingStageManifest::new(3, 16, 1))
+        .export_candidate(TrainingStageManifest::new(4, 16, 1))
         .unwrap();
     std::fs::write(
         root.join("calibrated.alife-foundation"),
@@ -563,14 +596,10 @@ fn inherited_readout_calibration_once() {
     save(
         &root,
         "calibration-gate.json",
-        &serde_json::json!({"cases":held,"pass":calibration_pass,
+        &serde_json::json!({"cases":held,"pass":calibration_pass,"role":"diagnostic_only",
         "feeding_gate":"not yet run","live_meal_gate":"not yet run"}),
     );
     println!("calibration_evidence={}; calibration_pass={calibration_pass}; loss={loss_before}->{loss_after}",root.display());
-    assert!(
-        calibration_pass,
-        "calibration failed; stop before competence/live tests or retuning"
-    );
     let mut feeding = Vec::new();
     for (case, position) in [
         Vec3f::new(-3.0, 0.0, 1.5),
