@@ -22,6 +22,12 @@ evolutionary hardening.
 - Stage masks must preserve frozen weights bit-for-bit.
 - N2048 is the only trained foundation until another class receives a separate
   approved curriculum and evidence program.
+- The approved Nano512 founder experiment uses the distinct, unpromoted fixed
+  readout candidate. Record ordinary grounded world commands and body outcomes;
+  keep teacher labels separate from sensory input. Fit genetic readout weights
+  from complete production GPU receipts, preserving upstream genes bit-for-bit.
+  First-frame-only sampling is a bounded diagnostic, not inspection-sequence,
+  lifetime-adaptation, or founder-promotion evidence.
 - Cross-run screening is capped at 64 candidates per run and 16 active-battery
   candidates. Ranking may display ancestry and genome distance but never apply
   an implicit kinship penalty.
