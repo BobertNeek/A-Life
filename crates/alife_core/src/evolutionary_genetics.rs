@@ -673,12 +673,7 @@ impl CreatureGenome {
     ) -> Result<Self, ScaffoldContractError> {
         self.validate_contract()?;
         let candidate = crate::Nano512ReadoutCandidateV1::new(asset)?;
-        self.foundation = FoundationGeneticIdentity::new(
-            asset.manifest().foundation_id().raw(),
-            asset.manifest().foundation_version().raw() as u16,
-            asset.manifest().compatibility_family_id().raw(),
-            asset.manifest().capacity_class_id(),
-        )?;
+        self.foundation = candidate.genetic_identity();
         self.nano512_readout_candidate = Some(candidate);
         self.validate_contract()?;
         Ok(self)
@@ -2210,16 +2205,7 @@ impl Validate for CreatureGenome {
         self.foundation.validate_contract()?;
         match &self.nano512_readout_candidate {
             Some(candidate) => {
-                let asset = candidate.asset()?;
-                let manifest = asset.manifest();
-                if self.foundation
-                    != FoundationGeneticIdentity::new(
-                        manifest.foundation_id().raw(),
-                        manifest.foundation_version().raw() as u16,
-                        manifest.compatibility_family_id().raw(),
-                        manifest.capacity_class_id(),
-                    )?
-                {
+                if self.foundation != candidate.genetic_identity() {
                     return Err(ScaffoldContractError::PhenotypeCompile);
                 }
             }

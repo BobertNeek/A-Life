@@ -12,6 +12,8 @@ pub struct Nano512ReadoutCandidateV1 {
     profile: crate::SensorProfile,
     #[serde(skip)]
     weight_asset: crate::FoundationWeightAssetRef,
+    #[serde(skip)]
+    genetic_identity: crate::FoundationGeneticIdentity,
 }
 
 impl Nano512ReadoutCandidateV1 {
@@ -23,6 +25,12 @@ impl Nano512ReadoutCandidateV1 {
             canonical_asset: asset.encode_canonical()?,
             profile: asset.manifest().sensor_profile(),
             weight_asset: asset.asset_ref(),
+            genetic_identity: crate::FoundationGeneticIdentity::new(
+                asset.manifest().foundation_id().raw(),
+                asset.manifest().foundation_version().raw() as u16,
+                asset.manifest().compatibility_family_id().raw(),
+                asset.manifest().capacity_class_id(),
+            )?,
         })
     }
 
@@ -42,6 +50,9 @@ impl Nano512ReadoutCandidateV1 {
     }
     pub const fn asset_ref(&self) -> crate::FoundationWeightAssetRef {
         self.weight_asset
+    }
+    pub(crate) const fn genetic_identity(&self) -> crate::FoundationGeneticIdentity {
+        self.genetic_identity
     }
 }
 
