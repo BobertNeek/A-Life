@@ -338,7 +338,7 @@ fn first_meal_life(
     steps
 }
 
-fn candidate_base_save(
+pub(super) fn candidate_base_save(
     runtime: &mut GpuLiveBrainRuntime,
     asset_root: &std::path::Path,
 ) -> PortableSaveFile {

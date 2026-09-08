@@ -3,6 +3,9 @@ use super::nociception_food_tests::{assert_choices, run_food_life};
 use super::*;
 use alife_core::{ActionCandidateCreditProfileV1, Nano512ActionCreditCandidateV2};
 
+#[path = "readout_calibration_tests.rs"]
+mod readout_calibration_tests;
+
 thread_local! {
     static SELECTOR_CAPTURE_ROOT: std::cell::RefCell<Option<PathBuf>> = const {
         std::cell::RefCell::new(None)
