@@ -726,6 +726,13 @@ impl GpuLiveBrainRuntime {
             let memory_batch = GpuClosedLoopMemoryBatchInput::try_new(memory_inputs)?;
             let inference_rows = u64::try_from(batch.len()).unwrap_or(u64::MAX);
             let inference_started = Instant::now();
+            #[cfg(all(test, feature = "gpu-tests"))]
+            let gpu_ticks = super::action_credit_food_tests::tick_with_selector_capture(
+                &mut self.backend,
+                &memory_batch,
+                &batch,
+            )?;
+            #[cfg(not(all(test, feature = "gpu-tests")))]
             let gpu_ticks = self.backend.tick_memory_batch(&memory_batch)?;
             self.performance_metrics.inference_batches =
                 self.performance_metrics.inference_batches.saturating_add(1);
