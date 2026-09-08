@@ -577,6 +577,8 @@ pub struct CreatureGenome {
     pub lineage_id: LineageId,
     pub conception_seed: u64,
     pub foundation: FoundationGeneticIdentity,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nano512_readout_candidate: Option<crate::Nano512ReadoutCandidateV1>,
     pub provenance: GeneticLineageProvenance,
     pub body: BodyChromosome,
     pub brain: BrainChromosome,
@@ -664,6 +666,24 @@ pub struct CreaturePhenotype {
 }
 
 impl CreatureGenome {
+    /// Attach an explicit, sanitized fixed-graph prior to a fresh genome.
+    pub fn with_nano512_readout_candidate(
+        mut self,
+        asset: &crate::FoundationWeightAsset,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.validate_contract()?;
+        let candidate = crate::Nano512ReadoutCandidateV1::new(asset)?;
+        self.foundation = FoundationGeneticIdentity::new(
+            asset.manifest().foundation_id().raw(),
+            asset.manifest().foundation_version().raw() as u16,
+            asset.manifest().compatibility_family_id().raw(),
+            asset.manifest().capacity_class_id(),
+        )?;
+        self.nano512_readout_candidate = Some(candidate);
+        self.validate_contract()?;
+        Ok(self)
+    }
+
     pub fn early_mammal_founder(
         species_seed: u64,
         foundation: FoundationGeneticIdentity,
@@ -683,6 +703,7 @@ impl CreatureGenome {
             lineage_id: LineageId(nonzero_mix(species_seed ^ 0xE10_0002)),
             conception_seed: species_seed,
             foundation,
+            nano512_readout_candidate: None,
             provenance: GeneticLineageProvenance::founder(species_seed),
             body: BodyChromosome {
                 size: ContinuousLocus::mean(0.42, 0.48)?,
@@ -781,6 +802,7 @@ impl CreatureGenome {
         maternal.validate_contract()?;
         paternal.validate_contract()?;
         if conception_seed == 0
+            || maternal.nano512_readout_candidate != paternal.nano512_readout_candidate
             || maternal.id == paternal.id
             || maternal.foundation.compatibility_family_id
                 != paternal.foundation.compatibility_family_id
@@ -843,6 +865,7 @@ impl CreatureGenome {
             lineage_id,
             conception_seed,
             foundation,
+            nano512_readout_candidate: maternal.nano512_readout_candidate.clone(),
             provenance: GeneticLineageProvenance {
                 conception_seed,
                 ordinary_birth: true,
@@ -2185,6 +2208,28 @@ impl Validate for CreatureGenome {
             return Err(ScaffoldContractError::InvalidId);
         }
         self.foundation.validate_contract()?;
+        match &self.nano512_readout_candidate {
+            Some(candidate) => {
+                let asset = candidate.asset()?;
+                let manifest = asset.manifest();
+                if self.foundation
+                    != FoundationGeneticIdentity::new(
+                        manifest.foundation_id().raw(),
+                        manifest.foundation_version().raw() as u16,
+                        manifest.compatibility_family_id().raw(),
+                        manifest.capacity_class_id(),
+                    )?
+                {
+                    return Err(ScaffoldContractError::PhenotypeCompile);
+                }
+            }
+            None if self.foundation.foundation_id
+                == crate::FoundationId::N512_READOUT_CANDIDATE_V1.raw() =>
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+            None => {}
+        }
         self.provenance.validate_contract()?;
         if self.provenance.conception_seed != self.conception_seed
             || self.provenance.ordinary_birth != (self.parent_genome_ids.len() == 2)
