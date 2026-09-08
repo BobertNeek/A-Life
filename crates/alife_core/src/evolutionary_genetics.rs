@@ -595,6 +595,8 @@ pub struct CreatureGenome {
     pub foundation: FoundationGeneticIdentity,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nano512_readout_candidate: Option<crate::Nano512ReadoutCandidateV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nano512_action_credit_candidate_v2: Option<crate::Nano512ActionCreditCandidateV2>,
     pub provenance: GeneticLineageProvenance,
     pub body: BodyChromosome,
     pub brain: BrainChromosome,
@@ -691,6 +693,19 @@ impl CreatureGenome {
         let candidate = crate::Nano512ReadoutCandidateV1::new(asset)?;
         self.foundation = candidate.genetic_identity();
         self.nano512_readout_candidate = Some(candidate);
+        self.nano512_action_credit_candidate_v2 = None;
+        self.validate_contract()?;
+        Ok(self)
+    }
+
+    pub fn with_nano512_action_credit_candidate(
+        mut self,
+        candidate: crate::Nano512ActionCreditCandidateV2,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.validate_contract()?;
+        self.foundation = candidate.source().genetic_identity();
+        self.nano512_readout_candidate = None;
+        self.nano512_action_credit_candidate_v2 = Some(candidate);
         self.validate_contract()?;
         Ok(self)
     }
@@ -715,6 +730,7 @@ impl CreatureGenome {
             conception_seed: species_seed,
             foundation,
             nano512_readout_candidate: None,
+            nano512_action_credit_candidate_v2: None,
             provenance: GeneticLineageProvenance::founder(species_seed),
             body: BodyChromosome {
                 size: ContinuousLocus::mean(0.42, 0.48)?,
@@ -814,6 +830,8 @@ impl CreatureGenome {
         paternal.validate_contract()?;
         if conception_seed == 0
             || maternal.nano512_readout_candidate != paternal.nano512_readout_candidate
+            || maternal.nano512_action_credit_candidate_v2
+                != paternal.nano512_action_credit_candidate_v2
             || maternal.id == paternal.id
             || maternal.foundation.compatibility_family_id
                 != paternal.foundation.compatibility_family_id
@@ -877,6 +895,7 @@ impl CreatureGenome {
             conception_seed,
             foundation,
             nano512_readout_candidate: maternal.nano512_readout_candidate.clone(),
+            nano512_action_credit_candidate_v2: maternal.nano512_action_credit_candidate_v2.clone(),
             provenance: GeneticLineageProvenance {
                 conception_seed,
                 ordinary_birth: true,
@@ -1145,6 +1164,12 @@ fn express_brain_genome(
 ) -> Result<BrainGenome, ScaffoldContractError> {
     let brain_class_id = source.expressed_brain_class()?;
     let mut genome = BrainGenome::scaffold(source.conception_seed, brain_class_id);
+    if let Some(candidate) = &source.nano512_action_credit_candidate_v2 {
+        let parameters = genome
+            .plasticity_parameters()
+            .with_action_candidate_credit_profile(candidate.action_profile())?;
+        genome = genome.with_plasticity_parameters(parameters)?;
+    }
     genome.id = source.id;
     genome.parent_genome_ids = source.parent_genome_ids.clone();
     genome.lineage_id = Some(source.lineage_id);
@@ -2219,18 +2244,28 @@ impl Validate for CreatureGenome {
             return Err(ScaffoldContractError::InvalidId);
         }
         self.foundation.validate_contract()?;
-        match &self.nano512_readout_candidate {
-            Some(candidate) => {
+        match (
+            &self.nano512_readout_candidate,
+            &self.nano512_action_credit_candidate_v2,
+        ) {
+            (Some(_), Some(_)) => return Err(ScaffoldContractError::PhenotypeCompile),
+            (Some(candidate), None) => {
                 if self.foundation != candidate.genetic_identity() {
                     return Err(ScaffoldContractError::PhenotypeCompile);
                 }
             }
-            None if self.foundation.foundation_id
-                == crate::FoundationId::N512_READOUT_CANDIDATE_V1.raw() =>
+            (None, Some(candidate)) => {
+                if self.foundation != candidate.source().genetic_identity() {
+                    return Err(ScaffoldContractError::PhenotypeCompile);
+                }
+            }
+            (None, None)
+                if self.foundation.foundation_id
+                    == crate::FoundationId::N512_READOUT_CANDIDATE_V1.raw() =>
             {
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }
-            None => {}
+            (None, None) => {}
         }
         self.provenance.validate_contract()?;
         if self.provenance.conception_seed != self.conception_seed

@@ -432,7 +432,8 @@ pub const fn unpack_replay_eligibility_sample(word: u32) -> (u16, i16) {
 impl GpuBrainSlotRecord {
     pub fn validate_slice_a(&self) -> Result<(), GpuClosedLoopError> {
         if self.schema_version != GPU_CLOSED_LOOP_LAYOUT_VERSION
-            || self.reserved != [0; 3]
+            || !valid_joint_motor_mode(self.reserved[0])
+            || self.reserved[1..] != [0; 2]
             || self.extension_record_offset == GPU_NO_EXTENSION_SENTINEL
             || self.slot_generation == 0
             || self.microstep_count == 0
@@ -441,4 +442,19 @@ impl GpuBrainSlotRecord {
         }
         Ok(())
     }
+}
+
+/// Explicit extension tag. Zero retains historical global-only eligibility.
+pub const GPU_JOINT_SELECTION_V1_MARKER: u32 = 0x4a31_0000;
+pub fn valid_joint_motor_mode(mode: u32) -> bool {
+    mode == 0
+        || (mode & 0xffff_ff00 == GPU_JOINT_SELECTION_V1_MARKER
+            && matches!(mode & 0xff, 1 | 5 | 13 | 29))
+}
+pub fn pack_joint_motor_candidates(candidates: [u16; 6]) -> [u32; 2] {
+    let mut words = [0, GPU_JOINT_SELECTION_V1_MARKER];
+    for (slot, encoded) in candidates.into_iter().enumerate() {
+        words[slot / 4] |= u32::from(encoded) << ((slot % 4) * 8);
+    }
+    words
 }

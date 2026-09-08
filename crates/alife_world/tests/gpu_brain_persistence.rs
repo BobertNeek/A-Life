@@ -19,9 +19,8 @@ use alife_world::persistence::{
     ThrottleReplaySaveState, TopologySidecarSaveSummary,
     GPU_BACKEND_PROVENANCE_SAVE_SCHEMA_VERSION, GPU_BRAIN_HOMEOSTASIS_LANES_PER_NEURON,
     GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION, GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION,
-    GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
-    GPU_BRAIN_WEIGHT_LAYER_FAST, GPU_BRAIN_WEIGHT_LAYER_LIFETIME,
-    RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION,
+    GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION, GPU_BRAIN_WEIGHT_LAYER_FAST,
+    GPU_BRAIN_WEIGHT_LAYER_LIFETIME, RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION,
 };
 use alife_world::TrackedObjectRegistry;
 
@@ -38,7 +37,10 @@ fn live_topology_selector_is_fail_closed_across_v5_and_v6() {
     save.validate().unwrap();
 
     save.schema_version = GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION;
-    assert!(save.validate().is_err(), "v6 must carry an explicit topology");
+    assert!(
+        save.validate().is_err(),
+        "v6 must carry an explicit topology"
+    );
 
     save.schema_version = GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION;
     save.live_structural_topology = Some(asset("forged-live-topology"));
@@ -645,4 +647,17 @@ fn portable_replay_journal_preserves_bounded_ring_identity_and_empty_reset_state
     };
     reset.canonical_digest = reset.recompute_canonical_digest().unwrap();
     reset.validate().unwrap();
+}
+
+#[test]
+fn legacy_pending_json_stays_absent_and_malformed_index_is_rejected() {
+    let pending = pending_eligibility();
+    let value = serde_json::to_value(pending).unwrap();
+    assert!(value.get("joint_selection").is_none());
+    let restored: PendingEligibilityCheckpoint = serde_json::from_value(value).unwrap();
+    assert_eq!(restored, pending);
+    restored.validate_contract().unwrap();
+    let mut malformed = restored;
+    malformed.candidate_index = u16::MAX;
+    assert!(malformed.validate_contract().is_err());
 }

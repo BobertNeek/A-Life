@@ -211,28 +211,41 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
   let active_index = active_bases.decoder + metadata.eligibility_local_index;
   let staging_index = staging_bases.decoder + metadata.eligibility_local_index;
   var local = 0.0;
-  if (metadata.decoder_head == DECODER_HEAD_ACTION_CANDIDATE) {
-    if (metadata.family == selected.family) {
-      if (metadata.input_lane >= CANDIDATE_FEATURE_COUNT) { return; }
+  if (metadata.decoder_head == DECODER_HEAD_ACTION_CANDIDATE
+      || metadata.decoder_head == DECODER_HEAD_MEMORY_CONTEXT) {
+    let extension = load_slot_extension(brain);
+    let packed = vec2<u32>(load_state_u32(extension.reserved0 + 2u), load_state_u32(extension.reserved0 + 3u));
+    let joint_mode = (packed.y & 0xffff0000u) == JOINT_SELECTION_V1_MARKER;
+    let count = select(1u, 6u, joint_mode);
+    let activation_offset = select(brain.activation_a_offset, brain.activation_b_offset,
+      header.active_activation_side == 1u);
+    for (var slot = 0u; slot < count; slot++) {
+      var candidate_index = selection.candidate_index;
+      if (joint_mode) {
+        let encoded = (packed[slot / 4u] >> ((slot % 4u) * 8u)) & 255u;
+        if (encoded == 0u) { continue; }
+        candidate_index = encoded - 1u;
+        var duplicate = false;
+        for (var prior = 0u; prior < slot; prior++) {
+          let previous_encoded = (packed[prior / 4u] >> ((prior % 4u) * 8u)) & 255u;
+          duplicate = duplicate || previous_encoded == encoded;
+        }
+        if (duplicate) { continue; }
+      }
+      if (candidate_index >= header.candidate_count) { return; }
+      let candidate = load_candidate(header.candidate_offset + candidate_index * 8u);
+      if (metadata.family != candidate.family) { continue; }
       let feature_index = header.decoder_learning_input_offset
-        + selection.candidate_index * header.decoder_input_stride
-        + metadata.input_lane;
-      let activation_offset = select(
-        brain.activation_a_offset,
-        brain.activation_b_offset,
-        header.active_activation_side == 1u
-      );
-      local = load_state_f32(activation_offset + metadata.motor_index)
-        * bitcast<f32>(frame_payload_words[feature_index]);
-    }
-  } else if (metadata.decoder_head == DECODER_HEAD_MEMORY_CONTEXT) {
-    if (metadata.family == selected.family) {
-      if (metadata.input_lane < CANDIDATE_FEATURE_COUNT
-          || metadata.input_lane >= header.decoder_input_stride) { return; }
-      let feature_index = header.decoder_learning_input_offset
-        + selection.candidate_index * header.decoder_input_stride
-        + metadata.input_lane;
-      local = bitcast<f32>(frame_payload_words[feature_index]);
+        + candidate_index * header.decoder_input_stride + metadata.input_lane;
+      if (metadata.decoder_head == DECODER_HEAD_ACTION_CANDIDATE) {
+        if (metadata.input_lane >= CANDIDATE_FEATURE_COUNT) { return; }
+        local += load_state_f32(activation_offset + metadata.motor_index)
+          * bitcast<f32>(frame_payload_words[feature_index]);
+      } else {
+        if (metadata.input_lane < CANDIDATE_FEATURE_COUNT
+            || metadata.input_lane >= header.decoder_input_stride) { return; }
+        local += bitcast<f32>(frame_payload_words[feature_index]);
+      }
     }
   } else if (metadata.decoder_head == DECODER_HEAD_SPEECH_PAYLOAD) {
     if (selected.kind == 6u) {

@@ -422,6 +422,10 @@ fn encode_genome(
     d.write_f32(plasticity.sleep_staging_rate())?;
     d.write_f32(plasticity.sleep_weight_limit())?;
     d.write_f32(plasticity.sleep_fast_decay_rate())?;
+    if let Some(profile) = plasticity.action_candidate_credit_profile() {
+        d.write_utf8("alife.action-candidate-credit.v1");
+        d.write_u8(profile.raw());
+    }
     g.cognitive_architecture().write_canonical(d)?;
     d.write_sequence_len(g.sensor_layout.channels.len());
     for row in &g.sensor_layout.channels {

@@ -923,6 +923,23 @@ pub struct PlasticityMask {
     pub projection_masks: Vec<ProjectionPlasticityMask>,
 }
 
+/// Explicit action-learning role. Other learning roles retain their profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ActionCandidateCreditProfileV1 {
+    SignedConsequences,
+}
+
+impl ActionCandidateCreditProfileV1 {
+    pub const fn raw(self) -> u8 {
+        1
+    }
+
+    pub fn receptor_profile(self) -> crate::PlasticityReceptorProfile {
+        crate::PlasticityReceptorProfile::try_new([0.0, -1.0, 1.0, -0.5, 0.2, 0.0, 0.5, -0.5])
+            .expect("named action profile is bounded")
+    }
+}
+
 /// Versioned heritable parameters from which phenotype receptor and sleep
 /// plans are compiled. Fields are private so invalid learning lanes cannot be
 /// introduced through struct literals or unchecked deserialization.
@@ -934,6 +951,8 @@ pub struct PlasticityGenomeParameters {
     normalization_rate: f32,
     sleep_replay_rate: f32,
     receptor_profile: crate::PlasticityReceptorProfile,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    action_candidate_credit_profile: Option<ActionCandidateCreditProfileV1>,
     fast_min: f32,
     fast_max: f32,
     sleep_staging_rate: f32,
@@ -962,6 +981,7 @@ impl PlasticityGenomeParameters {
             normalization_rate,
             sleep_replay_rate,
             receptor_profile,
+            action_candidate_credit_profile: None,
             fast_min,
             fast_max,
             sleep_staging_rate,
@@ -1003,6 +1023,7 @@ impl PlasticityGenomeParameters {
                 0.5 * modulator_sign,
                 -0.5 * modulator_sign,
             ])?,
+            action_candidate_credit_profile: None,
             fast_min,
             fast_max,
             sleep_staging_rate,
@@ -1024,6 +1045,7 @@ impl PlasticityGenomeParameters {
                 0.2, -1.0, 1.0, -0.5, 0.2, 0.0, 0.5, -0.5,
             ])
             .expect("canonical receptor profile is bounded"),
+            action_candidate_credit_profile: None,
             fast_min: -2.0,
             fast_max: 2.0,
             sleep_staging_rate: 0.5,
@@ -1049,6 +1071,17 @@ impl PlasticityGenomeParameters {
     }
     pub const fn receptor_profile(&self) -> crate::PlasticityReceptorProfile {
         self.receptor_profile
+    }
+    pub const fn action_candidate_credit_profile(&self) -> Option<ActionCandidateCreditProfileV1> {
+        self.action_candidate_credit_profile
+    }
+    pub fn with_action_candidate_credit_profile(
+        mut self,
+        profile: ActionCandidateCreditProfileV1,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.action_candidate_credit_profile = Some(profile);
+        self.validate_contract()?;
+        Ok(self)
     }
     pub const fn fast_bounds(&self) -> (f32, f32) {
         (self.fast_min, self.fast_max)
@@ -1114,6 +1147,8 @@ impl<'de> Deserialize<'de> for PlasticityGenomeParameters {
             normalization_rate: f32,
             sleep_replay_rate: f32,
             receptor_profile: crate::PlasticityReceptorProfile,
+            #[serde(default)]
+            action_candidate_credit_profile: Option<ActionCandidateCreditProfileV1>,
             fast_min: f32,
             fast_max: f32,
             sleep_staging_rate: f32,
@@ -1128,6 +1163,7 @@ impl<'de> Deserialize<'de> for PlasticityGenomeParameters {
             normalization_rate: wire.normalization_rate,
             sleep_replay_rate: wire.sleep_replay_rate,
             receptor_profile: wire.receptor_profile,
+            action_candidate_credit_profile: wire.action_candidate_credit_profile,
             fast_min: wire.fast_min,
             fast_max: wire.fast_max,
             sleep_staging_rate: wire.sleep_staging_rate,

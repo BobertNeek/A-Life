@@ -182,10 +182,18 @@ pub fn decode_exact_population_capture_row(
                     identity.slot,
                     identity.organism_id,
                     identity.phenotype_hash,
-                )? != receipt
+                )?
+                .with_joint_selection(receipt.identity().joint_selection())?
+                    != receipt
             {
                 return Err(ScaffoldContractError::LearningEvidenceMismatch);
             }
+            validate_pending_joint_payload(
+                receipt,
+                words,
+                base,
+                &row.ranges.layout.speech_payload_words,
+            )?;
             Some(pending_parts_from_receipt(receipt)?)
         }
         (None, None, 0) => None,
@@ -429,6 +437,7 @@ pub struct GpuCandidateLogitEvidenceSnapshot {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PendingEligibilityRestoreParts {
+    joint_selection: Option<alife_core::JointActionSelectionV1>,
     dispatch_generation: u64,
     originating_tick: Tick,
     frame_digest: PerceptionFrameDigest,
@@ -516,6 +525,27 @@ impl GpuCompactCheckpointAuthorityV1 {
 }
 
 impl PendingEligibilityRestoreParts {
+    pub const fn joint_selection(self) -> Option<alife_core::JointActionSelectionV1> {
+        self.joint_selection
+    }
+    pub fn with_joint_selection(
+        mut self,
+        joint: Option<alife_core::JointActionSelectionV1>,
+    ) -> Result<Self, ScaffoldContractError> {
+        if let Some(proof) = joint {
+            proof.validate()?;
+            if !proof.candidate_slots().contains(
+                &(self
+                    .candidate_index
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?),
+            ) {
+                return Err(ScaffoldContractError::LearningEvidenceMismatch);
+            }
+        }
+        self.joint_selection = joint;
+        Ok(self)
+    }
     #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         dispatch_generation: u64,
@@ -530,7 +560,8 @@ impl PendingEligibilityRestoreParts {
         staging_eligibility_generation: u64,
     ) -> Result<Self, ScaffoldContractError> {
         action_id.validate()?;
-        if dispatch_generation == 0
+        if usize::from(candidate_index) >= alife_core::MAX_ACTION_CANDIDATES
+            || dispatch_generation == 0
             || frame_digest == PerceptionFrameDigest([0; 4])
             || active_activation_side > 1
             || candidate_feature_digest == CandidateFeatureDigest([0; 2])
@@ -541,6 +572,7 @@ impl PendingEligibilityRestoreParts {
         }
         Ok(Self {
             dispatch_generation,
+            joint_selection: None,
             originating_tick,
             frame_digest,
             active_activation_side,
@@ -604,6 +636,10 @@ impl PendingEligibilityRestoreParts {
         write_digest2(digest, self.candidate_feature_digest.0);
         digest.write_u64(self.active_eligibility_generation);
         digest.write_u64(self.staging_eligibility_generation);
+        if let Some(joint) = self.joint_selection {
+            digest.write_bytes(b"alife.pending-joint-action.v1");
+            joint.write_canonical(digest);
+        }
     }
 }
 
@@ -1575,7 +1611,8 @@ fn pending_parts_from_receipt(
         identity.candidate_feature_digest(),
         identity.active_eligibility_generation(),
         identity.staging_eligibility_generation(),
-    )
+    )?
+    .with_joint_selection(identity.joint_selection())
 }
 
 fn restored_pending_record(
@@ -1604,6 +1641,7 @@ fn restored_pending_record(
         handle.organism_id(),
         handle.phenotype_hash(),
     )?;
+    let receipt = receipt.with_joint_selection(pending.joint_selection())?;
     Ok((record, receipt))
 }
 
@@ -1852,10 +1890,18 @@ impl GpuClosedLoopBackend {
                         handle.slot(),
                         handle.organism_id(),
                         handle.phenotype_hash(),
-                    )? != receipt
+                    )?
+                    .with_joint_selection(receipt.identity().joint_selection())?
+                        != receipt
                 {
                     return Err(ScaffoldContractError::LearningEvidenceMismatch);
                 }
+                validate_pending_joint_payload(
+                    receipt,
+                    &words,
+                    base,
+                    &ranges.layout.speech_payload_words,
+                )?;
                 Some(pending_parts_from_receipt(receipt)?)
             }
             (None, None, 0) => None,
@@ -2185,6 +2231,11 @@ impl GpuClosedLoopBackend {
             }
             None => (GpuPendingEligibilityRecord::zeroed(), None),
         };
+        let joint_words = pending_receipt
+            .and_then(|receipt| receipt.identity().joint_selection())
+            .map(|joint| crate::pack_joint_motor_candidates(joint.candidate_slots()))
+            .unwrap_or([0; 2]);
+        let restored_speech_words = [0, 0, joint_words[0], joint_words[1]];
         let restored_learning_sequence_guard = LearningSequenceGuard::restore_validated(
             handle.organism_id(),
             handle.phenotype_hash(),
@@ -2283,6 +2334,10 @@ impl GpuClosedLoopBackend {
             (
                 &ranges.layout.replay_sample_words,
                 parts.replay_samples.as_slice(),
+            ),
+            (
+                &ranges.layout.speech_payload_words,
+                restored_speech_words.as_slice(),
             ),
             (&ranges.layout.learning_state_words, state.words()),
             (
@@ -2888,4 +2943,24 @@ mod tests {
         state.replay_event_count += 1;
         assert!(!learning_state_identity_matches(&state, expected));
     }
+}
+
+fn validate_pending_joint_payload(
+    receipt: PendingEligibilityReceipt,
+    words: &[u32],
+    base: u32,
+    range: &std::ops::Range<u32>,
+) -> Result<(), ScaffoldContractError> {
+    let payload = local_slice(words, base, range)?;
+    let packed = payload
+        .get(2..4)
+        .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
+    if let Some(joint) = receipt.identity().joint_selection() {
+        if packed != crate::pack_joint_motor_candidates(joint.candidate_slots()) {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
+    } else if packed[1] & 0xffff_0000 == crate::GPU_JOINT_SELECTION_V1_MARKER {
+        return Err(ScaffoldContractError::LearningEvidenceMismatch);
+    }
+    Ok(())
 }

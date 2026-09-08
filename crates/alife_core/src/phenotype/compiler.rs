@@ -13,6 +13,37 @@ use super::{BrainCapacityClass, BrainPhenotype, PhenotypeCompilerInputs};
 pub struct PhenotypeCompiler;
 
 impl PhenotypeCompiler {
+    pub fn compile_nano512_action_credit_candidate(
+        candidate: &crate::Nano512ActionCreditCandidateV2,
+    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
+        let result = Self::compile_nano512_action_credit_candidate_unchecked(candidate)?;
+        result.0.validate_against(&BrainCapacityClass::n512())?;
+        Ok(result)
+    }
+
+    pub(crate) fn compile_nano512_action_credit_candidate_unchecked(
+        candidate: &crate::Nano512ActionCreditCandidateV2,
+    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
+        let asset = candidate.asset()?;
+        let (baseline, source_inputs) = Self::compile_nano512_readout_candidate_unchecked(&asset)?;
+        let parameters = source_inputs
+            .genome()
+            .plasticity_parameters()
+            .with_action_candidate_credit_profile(candidate.action_profile())?;
+        let genome = source_inputs
+            .genome()
+            .clone()
+            .with_plasticity_parameters(parameters)?;
+        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
+            genome,
+            &BrainCapacityClass::n512(),
+            source_inputs.development().clone(),
+            candidate.source().sensor_profile(),
+            crate::FoundationAbiSelection::Nano512ActionCreditCandidateV2(candidate.clone()),
+        )?;
+        Ok((baseline.with_action_credit_candidate(&inputs)?, inputs))
+    }
+
     /// Explicit opt-in admission; this does not change New Game defaults.
     pub fn compile_nano512_readout_candidate(
         foundation: &FoundationWeightAsset,
@@ -70,6 +101,17 @@ impl PhenotypeCompiler {
         inputs: &PhenotypeCompilerInputs,
         capacity: &BrainCapacityClass,
     ) -> Result<BrainPhenotype, ScaffoldContractError> {
+        if let crate::FoundationAbiSelection::Nano512ActionCreditCandidateV2(candidate) =
+            inputs.foundation_abi()
+        {
+            inputs.validate_against(capacity)?;
+            let (phenotype, expected_inputs) =
+                Self::compile_nano512_action_credit_candidate(candidate)?;
+            if inputs != &expected_inputs {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+            return Ok(phenotype);
+        }
         if let crate::FoundationAbiSelection::Nano512ReadoutCandidateV1(candidate) =
             inputs.foundation_abi()
         {

@@ -297,7 +297,7 @@ impl OutcomeCreditPacket {
             .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
         let modulator = NeuromodulatorSample::from_components(
             outcome.prediction_error.raw(),
-            physiology.pain_delta.raw().max(0.0),
+            physiology.aversive_harm(),
             homeostatic_improvement(physiology),
             outcome.frustration_delta.raw(),
             0.0,

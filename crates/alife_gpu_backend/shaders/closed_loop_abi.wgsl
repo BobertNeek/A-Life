@@ -1,4 +1,10 @@
 const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 4u;
+const JOINT_SELECTION_V1_MARKER:u32 = 0x4a310000u;
+fn valid_joint_motor_mode(mode:u32) -> bool {
+  let mask = mode & 255u;
+  return mode == 0u || ((mode & 0xffffff00u) == JOINT_SELECTION_V1_MARKER
+    && (mask == 1u || mask == 5u || mask == 13u || mask == 29u));
+}
 const GPU_SELECTION_RECORD_WORDS:u32 = 16u;
 const GPU_LEARNING_SCHEMA_VERSION:u32 = 3u;
 const GPU_SLEEP_SCHEMA_VERSION:u32 = 1u;
@@ -519,7 +525,7 @@ fn validate_slice_a_slot(slot_index:u32, header:GpuPerceptionHeader) -> bool {
     && header.active_activation_side <= 1u
     && slot.extension_record_offset != 0xffffffffu
     && state_span_within(slot.extension_record_offset, 20u)
-    && slot.reserved[0] == 0u && slot.reserved[1] == 0u && slot.reserved[2] == 0u
+    && valid_joint_motor_mode(slot.reserved[0]) && slot.reserved[1] == 0u && slot.reserved[2] == 0u
     && (header.dispatch_generation_lo != 0u || header.dispatch_generation_hi != 0u)
     && selector_span_valid;
   if (!valid) { return false; }

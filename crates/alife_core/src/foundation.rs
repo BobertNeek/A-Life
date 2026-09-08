@@ -1052,7 +1052,19 @@ impl FoundationWeightAsset {
         &self,
         phenotype: &BrainPhenotype,
     ) -> Result<(), ScaffoldContractError> {
-        if self.is_nano512_readout_candidate() {
+        if let crate::FoundationAbiSelection::Nano512ActionCreditCandidateV2(candidate) =
+            phenotype.foundation_abi()
+        {
+            self.validate_self_contained()?;
+            if self != &candidate.asset()? {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+            let (expected, _) =
+                crate::PhenotypeCompiler::compile_nano512_action_credit_candidate(candidate)?;
+            if phenotype != &expected {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        } else if self.is_nano512_readout_candidate() {
             self.validate_self_contained()?;
             let (expected, _) = crate::PhenotypeCompiler::compile_nano512_readout_candidate(self)?;
             if phenotype != &expected {

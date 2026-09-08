@@ -238,12 +238,15 @@ fn decode_speech_payload(@builtin(global_invocation_id) gid:vec3<u32>) {
   var motor_logits:array<f32,6>;
   motor_words[0] = 0u;
   motor_words[1] = 0u;
+  let joint_mode = brain.reserved[0] != 0u;
+  let enabled_channels = brain.reserved[0] & 255u;
   // One scan selects every factorized motor channel. The previous helper
   // rescanned the complete candidate list once for each of the six slots.
   for (var candidate = 0u; candidate < header.candidate_count; candidate++) {
     let record = load_candidate(header.candidate_offset + candidate * 8u);
     let slot = factorized_motor_slot(record.kind);
     if (slot >= FACTORIZED_MOTOR_CHANNEL_SLOT_COUNT) { continue; }
+    if (joint_mode && (enabled_channels & (1u << slot)) == 0u) { continue; }
     let bits = load_state_u32(brain.candidate_logit_offset + candidate);
     if (bits == INVALID_LOGIT_BITS) { continue; }
     let logit = bitcast<f32>(bits);
@@ -256,6 +259,17 @@ fn decode_speech_payload(@builtin(global_invocation_id) gid:vec3<u32>) {
       motor_logits[slot] = logit;
     }
   }
+  let selection = load_speech_selection(brain.selection_offset);
+  if (joint_mode && selection.status == 1u && selection.candidate_index < header.candidate_count) {
+    let selected = load_candidate(header.candidate_offset + selection.candidate_index * 8u);
+    var slot = factorized_motor_slot(selected.kind);
+    if (selected.kind == ACTION_KIND_IDLE || selected.kind == ACTION_KIND_GESTURE) { slot = 4u; }
+    if (slot < FACTORIZED_MOTOR_CHANNEL_SLOT_COUNT) {
+      motor_found[slot] = true;
+      motor_candidates[slot] = selection.candidate_index;
+    }
+    motor_words[1] = JOINT_SELECTION_V1_MARKER;
+  }
   for (var slot=0u; slot<FACTORIZED_MOTOR_CHANNEL_SLOT_COUNT; slot++) {
     if (motor_found[slot] && motor_candidates[slot] < 255u) {
       let encoded = motor_candidates[slot] + 1u;
@@ -265,7 +279,6 @@ fn decode_speech_payload(@builtin(global_invocation_id) gid:vec3<u32>) {
   store_state_u32(output_base + 2u, motor_words[0]);
   store_state_u32(output_base + 3u, motor_words[1]);
 
-  let selection = load_speech_selection(brain.selection_offset);
   if (selection.status != 1u || selection.candidate_index >= header.candidate_count) { return; }
   let selected = load_candidate(header.candidate_offset + selection.candidate_index * 8u);
   if (selected.kind != ACTION_KIND_VOCALIZE) { return; }

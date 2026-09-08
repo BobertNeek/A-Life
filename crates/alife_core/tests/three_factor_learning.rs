@@ -353,6 +353,47 @@ fn credit_packet_is_derived_exactly_from_matching_sealed_gpu_evidence() {
 }
 
 #[test]
+fn fresh_injury_keeps_aversive_credit_when_pain_is_saturated() {
+    let original = sealed_neural_patch(ORGANISM, PHENOTYPE, sequence(99), 0.0, 0.0, 0.0, 0.0);
+    let physiology = original.outcome().measured_physiology.unwrap();
+    let mut before = physiology.before;
+    before.homeostasis.drives.pain = 1.0;
+    let mut after = physiology.after;
+    after.homeostasis.drives.pain = 1.0;
+    after.body.set_health(before.body.health - 0.2).unwrap();
+    let measured = MeasuredPhysiologyTransition::new(before, after).unwrap();
+    assert_eq!(measured.pain_delta.raw(), 0.0);
+    let patch = ExperiencePatchBuilder::new(original.header().sequence_id)
+        .record_pre_action(original.pre_action().clone())
+        .unwrap()
+        .record_decision(original.decision().clone())
+        .unwrap()
+        .record_outcome(
+            original
+                .outcome()
+                .clone()
+                .with_measured_physiology(measured)
+                .unwrap(),
+        )
+        .unwrap()
+        .seal()
+        .unwrap();
+    let pain = OutcomeCreditPacket::from_sealed_patch(&patch)
+        .unwrap()
+        .modulator()
+        .pain();
+    assert!(
+        (pain - 0.2).abs() < 1e-6,
+        "fresh injury must remain aversive: {pain}"
+    );
+    assert_eq!(
+        patch.outcome().pain_delta.raw(),
+        pain,
+        "memory must receive the same fresh harm"
+    );
+}
+
+#[test]
 fn tampered_or_unsealed_patch_wire_cannot_become_credit_evidence() {
     let patch = sealed_neural_patch(ORGANISM, PHENOTYPE, sequence(99), 0.25, 0.1, 0.2, 0.3);
     let original = serde_json::to_value(&patch).unwrap();

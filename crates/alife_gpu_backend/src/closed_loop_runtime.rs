@@ -376,6 +376,7 @@ pub enum GpuLearningEvidenceMismatchField {
     ActionId,
     ActionFamily,
     CandidateFeatureDigest,
+    JointActionSelection,
     ActiveEligibilityGeneration,
     StagingEligibilityGeneration,
     ActiveWeightGenerationNonZero,
@@ -4086,6 +4087,16 @@ impl GpuClosedLoopBackend {
             )));
         }
         let identity = pending_receipt.identity();
+        if identity
+            .joint_selection()
+            .is_some_and(|joint| joint.validate_decision(patch.decision()).is_err())
+        {
+            return Ok(Some(scalar(
+                GpuLearningEvidenceMismatchField::JointActionSelection,
+                1,
+                0,
+            )));
+        }
         if identity.handle_generation() != handle.generation {
             return Ok(Some(scalar(
                 GpuLearningEvidenceMismatchField::HandleGeneration,
@@ -4233,7 +4244,7 @@ impl GpuClosedLoopBackend {
             }
             let packet = OutcomeCreditPacket::from_sealed_patch(patch)?
                 .with_biochemical_receptors(receptors)?;
-            let outcome = GpuOutcomeCreditRecord::try_from(&packet)?;
+            let mut outcome = GpuOutcomeCreditRecord::try_from(&packet)?;
             let pool = self
                 .class_buckets
                 .get(&class_id)
@@ -4253,6 +4264,10 @@ impl GpuClosedLoopBackend {
                 .pending_eligibility_record
                 .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
             let identity = pending_receipt.identity();
+            if let Some(joint) = identity.joint_selection() {
+                joint.validate_decision(patch.decision())?;
+                outcome.reserved = crate::pack_joint_motor_candidates(joint.candidate_slots());
+            }
             if packet.organism_id() != handle.organism_id
                 || packet.phenotype_hash() != handle.phenotype_hash
                 || identity.handle_generation() != handle.generation

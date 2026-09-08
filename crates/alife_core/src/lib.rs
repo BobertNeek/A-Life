@@ -24,6 +24,7 @@ pub mod evaluation;
 pub mod evidence_digest;
 pub mod evolutionary_genetics;
 pub mod experience;
+mod factorized_selection;
 pub mod foundation;
 pub mod genome;
 pub mod grounding;
@@ -32,7 +33,13 @@ pub mod language;
 pub mod learning;
 mod legacy_nano512_compatibility;
 mod nano512_readout_candidate;
-pub use nano512_readout_candidate::Nano512ReadoutCandidateV1;
+pub use factorized_selection::{
+    arbitrate_gpu_selected_command_into_factorized_bundle, channel_command_for_action,
+    factorized_motor_bundle_for_candidates, factorized_motor_channel_order,
+    normalized_motor_bundle_digest, JointActionSelectionV1, VOCAL_CHANNEL_PAYLOAD_MAGIC_V1,
+};
+pub use genome::ActionCandidateCreditProfileV1;
+pub use nano512_readout_candidate::{Nano512ActionCreditCandidateV2, Nano512ReadoutCandidateV1};
 pub mod lineage;
 pub mod lobe;
 pub mod math;

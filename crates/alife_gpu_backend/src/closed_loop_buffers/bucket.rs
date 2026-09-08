@@ -576,7 +576,7 @@ impl GpuClassBucketPlan {
             selection_offset: ranges.selection_words.start,
             neuron_homeostasis_offset: ranges.homeostasis_words.start,
             extension_record_offset: ranges.extension_words.start,
-            reserved: [0; 3],
+            reserved: [upload.joint_motor_mode, 0, 0],
         };
         record.validate_slice_a()?;
         let brain = GpuBrainSlot {
@@ -2847,7 +2847,7 @@ impl GpuFixedClassArenaPlan {
             selection_offset: ranges.layout.selection_words.start,
             neuron_homeostasis_offset: ranges.layout.homeostasis_words.start,
             extension_record_offset: ranges.layout.extension_words.start,
-            reserved: [0; 3],
+            reserved: [upload.joint_motor_mode, 0, 0],
         };
         record.validate_slice_a()?;
         validate_learning_slot_layout(

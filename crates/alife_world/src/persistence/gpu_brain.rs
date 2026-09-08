@@ -835,6 +835,8 @@ impl PortableReplayJournalV1 {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PendingEligibilityCheckpoint {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub joint_selection: Option<alife_core::JointActionSelectionV1>,
     pub dispatch_generation: u64,
     pub originating_tick: Tick,
     pub frame_digest: PerceptionFrameDigest,
@@ -848,6 +850,14 @@ pub struct PendingEligibilityCheckpoint {
 }
 
 impl PendingEligibilityCheckpoint {
+    pub fn with_joint_selection(
+        mut self,
+        joint: Option<alife_core::JointActionSelectionV1>,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.joint_selection = joint;
+        self.validate_contract()?;
+        Ok(self)
+    }
     #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         dispatch_generation: u64,
@@ -863,6 +873,7 @@ impl PendingEligibilityCheckpoint {
     ) -> Result<Self, ScaffoldContractError> {
         let value = Self {
             dispatch_generation,
+            joint_selection: None,
             originating_tick,
             frame_digest,
             active_activation_side,
@@ -879,6 +890,20 @@ impl PendingEligibilityCheckpoint {
 
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         self.action_id.validate()?;
+        if usize::from(self.candidate_index) >= alife_core::MAX_ACTION_CANDIDATES {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
+        if let Some(joint) = self.joint_selection {
+            joint.validate()?;
+            if !joint.candidate_slots().contains(
+                &(self
+                    .candidate_index
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?),
+            ) {
+                return Err(ScaffoldContractError::LearningEvidenceMismatch);
+            }
+        }
         let expected_staging = self.active_eligibility_generation.checked_add(1);
         if self.dispatch_generation == 0
             || self.frame_digest == PerceptionFrameDigest([0; 4])

@@ -589,6 +589,7 @@ impl GpuPendingEligibilityRecord {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PendingEligibilityIdentity {
+    joint_selection: Option<alife_core::JointActionSelectionV1>,
     handle_generation: u32,
     phenotype_hash: PhenotypeHash,
     dispatch_generation: u64,
@@ -604,6 +605,9 @@ pub struct PendingEligibilityIdentity {
 }
 
 impl PendingEligibilityIdentity {
+    pub const fn joint_selection(&self) -> Option<alife_core::JointActionSelectionV1> {
+        self.joint_selection
+    }
     pub const fn handle_generation(&self) -> u32 {
         self.handle_generation
     }
@@ -660,6 +664,10 @@ impl PendingEligibilityIdentity {
         }
         digest.write_u64(self.active_eligibility_generation);
         digest.write_u64(self.staging_eligibility_generation);
+        if let Some(joint) = self.joint_selection {
+            digest.write_bytes(b"alife.pending-joint-action.v1");
+            joint.write_canonical(digest);
+        }
     }
 }
 
@@ -670,6 +678,28 @@ pub struct PendingEligibilityReceipt {
 }
 
 impl PendingEligibilityReceipt {
+    pub(crate) fn with_joint_selection(
+        mut self,
+        joint: Option<alife_core::JointActionSelectionV1>,
+    ) -> Result<Self, ScaffoldContractError> {
+        if let Some(proof) = joint {
+            proof.validate()?;
+            if !proof.candidate_slots().contains(
+                &(self
+                    .identity
+                    .candidate_index
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?),
+            ) {
+                return Err(ScaffoldContractError::LearningEvidenceMismatch);
+            }
+        }
+        self.identity.joint_selection = joint;
+        let mut digest = CanonicalDigestBuilder::new(PENDING_RECEIPT_DOMAIN);
+        self.identity.write_canonical(&mut digest);
+        self.receipt_digest = digest.finish256();
+        Ok(self)
+    }
     pub const fn identity(&self) -> &PendingEligibilityIdentity {
         &self.identity
     }
@@ -734,6 +764,7 @@ impl PendingEligibilityReceipt {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
         let identity = PendingEligibilityIdentity {
+            joint_selection: None,
             handle_generation: record.slot_generation,
             phenotype_hash,
             dispatch_generation,
@@ -857,6 +888,7 @@ mod tests {
             phenotype_hash,
         );
         let identity = PendingEligibilityIdentity {
+            joint_selection: None,
             handle_generation: 3,
             phenotype_hash,
             dispatch_generation: 7,

@@ -714,3 +714,177 @@ fn exact_population_capture_is_one_nonblocking_identity_bound_gpu_transaction() 
         "terminal failure polling must not release or account staging twice"
     );
 }
+
+#[test]
+fn joint_pending_checkpoint_preserves_exact_confidence_and_legacy_pending_banks() {
+    let organism = alife_core::OrganismId(71_019);
+    let capacity = BrainCapacityClass::n512();
+    let genome = support::two_head_n512_genome();
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+    let phenotype = PhenotypeCompiler::compile(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+    let template = support::perception_frame_for_profile_at_tick(
+        organism.raw(),
+        4100,
+        SensorProfile::PrivilegedAffordanceV1,
+        true,
+        2,
+    );
+    let mut candidates = template.candidates().to_vec();
+    for (index, candidate) in candidates.iter_mut().enumerate() {
+        candidate.kind = if index == 0 {
+            alife_core::ActionKind::Move
+        } else {
+            alife_core::ActionKind::Interact
+        };
+        candidate.family = if index == 0 {
+            alife_core::CandidateActionFamily::Approach
+        } else {
+            alife_core::CandidateActionFamily::Ingest
+        };
+        candidate.action_id = alife_core::ActionId(if index == 0 { 102 } else { 210 });
+        candidate.sensor_confidence = Confidence::new(0.731234).unwrap();
+        candidate.target =
+            alife_core::ActionTarget::new(None, Some(Vec3f::new(index as f32 + 2.0, 0.0, 1.0)));
+    }
+    let frame = alife_core::PerceptionFrame::new(
+        organism,
+        template.tick(),
+        template.sensor_profile(),
+        template.sensory().clone(),
+        template.body(),
+        template.homeostasis().clone(),
+        candidates,
+        template.profile_provenance(),
+        template.grounded_object_slots().to_vec(),
+    )
+    .unwrap();
+    let mut source =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
+    let handle = source.insert_brain(organism, phenotype.clone()).unwrap();
+    let (frame, tick) = support::tick_with_receptors(&mut source, handle, &frame);
+    let proof = tick
+        .pending_eligibility
+        .identity()
+        .joint_selection()
+        .unwrap();
+    assert_eq!(
+        proof.candidate_slots().iter().filter(|v| **v != 0).count(),
+        2
+    );
+    assert_eq!(
+        tick.selection.confidence.raw().to_bits(),
+        0.731234_f32.to_bits()
+    );
+    let command = frame.candidates()[tick.selection.candidate_index as usize]
+        .to_command(organism, tick.selection.confidence)
+        .unwrap();
+    let bundle = alife_core::factorized_motor_bundle_for_candidates(
+        organism,
+        ExperienceSequenceId(1),
+        frame.tick(),
+        &frame,
+        tick.factorized_motor_candidates,
+        &phenotype
+            .candidate_decoder()
+            .factorized_motor_channels(&phenotype)
+            .unwrap(),
+        &command,
+        tick.selection.candidate_index,
+        tick.speech_payload.as_ref(),
+        false,
+    )
+    .unwrap();
+    proof.validate_bundle(&bundle).unwrap();
+    let snapshot = source.snapshot_brain(handle, frame.tick()).unwrap();
+    let mut restored =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
+    let restored_receipt = restored
+        .restore_brain(
+            organism,
+            phenotype.clone(),
+            GpuBrainRestoreRequest::try_new(snapshot.clone()).unwrap(),
+        )
+        .unwrap();
+    let restored_pending = restored_receipt.pending_eligibility.unwrap();
+    assert_eq!(restored_pending.identity().joint_selection(), Some(proof));
+    assert_eq!(
+        restored
+            .snapshot_brain(restored_receipt.handle, frame.tick())
+            .unwrap()
+            .canonical_digest(),
+        snapshot.canonical_digest()
+    );
+    restored
+        .discard_pending_eligibility(restored_receipt.handle, restored_pending.identity())
+        .unwrap();
+    restored.remove_brain(restored_receipt.handle).unwrap();
+    source
+        .discard_pending_eligibility(handle, tick.pending_eligibility.identity())
+        .unwrap();
+
+    // A single Inspect candidate has the identical eligibility interpretation
+    // under the historical global-only path. Remove only the optional metadata,
+    // then prove a live legacy pending restore keeps every acquired bank bit.
+    let legacy_frame = support::perception_frame_for_profile_at_tick(
+        organism.raw(),
+        4101,
+        SensorProfile::PrivilegedAffordanceV1,
+        true,
+        1,
+    );
+    let (legacy_frame, _) = support::tick_with_receptors(&mut source, handle, &legacy_frame);
+    let mut parts = source
+        .snapshot_brain(handle, legacy_frame.tick())
+        .unwrap()
+        .into_parts();
+    let pending = parts.pending_eligibility.unwrap();
+    parts.pending_eligibility = Some(pending.with_joint_selection(None).unwrap());
+    let legacy =
+        alife_gpu_backend::GpuBrainCheckpointSnapshot::try_from_parts(parts.clone()).unwrap();
+    let legacy_receipt = restored
+        .restore_brain(
+            organism,
+            phenotype,
+            GpuBrainRestoreRequest::try_new(legacy.clone()).unwrap(),
+        )
+        .unwrap();
+    let pending = legacy_receipt.pending_eligibility.unwrap();
+    assert_eq!(pending.identity().joint_selection(), None);
+    let after = restored
+        .snapshot_brain(legacy_receipt.handle, legacy_frame.tick())
+        .unwrap();
+    assert_eq!(after.canonical_digest(), legacy.canonical_digest());
+    assert_eq!(after.into_parts(), parts);
+    restored
+        .discard_pending_eligibility(legacy_receipt.handle, pending.identity())
+        .unwrap();
+    let new_frame = support::perception_frame_for_profile_at_tick(
+        organism.raw(),
+        4102,
+        SensorProfile::PrivilegedAffordanceV1,
+        true,
+        1,
+    );
+    let (_, new_tick) =
+        support::tick_with_receptors(&mut restored, legacy_receipt.handle, &new_frame);
+    assert!(new_tick
+        .pending_eligibility
+        .identity()
+        .joint_selection()
+        .is_some());
+    restored
+        .discard_pending_eligibility(
+            legacy_receipt.handle,
+            new_tick.pending_eligibility.identity(),
+        )
+        .unwrap();
+}

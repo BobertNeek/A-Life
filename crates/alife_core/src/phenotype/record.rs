@@ -141,6 +141,27 @@ pub struct BrainPhenotype {
 }
 
 impl BrainPhenotype {
+    pub(super) fn with_action_credit_candidate(
+        mut self,
+        inputs: &PhenotypeCompilerInputs,
+    ) -> Result<Self, ScaffoldContractError> {
+        let learning = super::learning::compile_learning_plans(
+            inputs.genome(),
+            inputs.development(),
+            &BrainCapacityClass::n512(),
+            &self.projections,
+            &mut self.synapses,
+        )?;
+        self.plasticity_receptors = learning.receptors;
+        self.replay_capture_plan = learning.replay;
+        self.sleep_consolidation_plan = learning.sleep;
+        self.plasticity_plan_digest = learning.digest;
+        self.foundation_abi_selection = inputs.foundation_abi_selection().clone();
+        self.compiler_inputs_digest = inputs.canonical_digest();
+        self.phenotype_hash = self.recompute_phenotype_hash()?;
+        Ok(self)
+    }
+
     pub(super) fn with_nano512_readout_candidate(
         mut self,
         inputs: &PhenotypeCompilerInputs,
@@ -715,6 +736,17 @@ impl BrainPhenotype {
         }
         if let Some(descriptor) = self.foundation_abi_selection.migrated_n2048_foundation_v1() {
             descriptor.validate_for_phenotype(self)?;
+        }
+        if let FoundationAbiSelection::Nano512ActionCreditCandidateV2(candidate) =
+            &self.foundation_abi_selection
+        {
+            let (expected, _) =
+                super::PhenotypeCompiler::compile_nano512_action_credit_candidate_unchecked(
+                    candidate,
+                )?;
+            if self != &expected {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
         }
         if let FoundationAbiSelection::Nano512ReadoutCandidateV1(candidate) =
             &self.foundation_abi_selection

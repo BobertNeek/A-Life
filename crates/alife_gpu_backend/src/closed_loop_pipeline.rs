@@ -685,6 +685,7 @@ struct GpuBatchEntryView<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuActiveBatchUpload {
+    joint_motor_modes: Vec<u32>,
     headers: Vec<GpuPerceptionHeader>,
     learning_headers: Vec<GpuLearningHeader>,
     activity_headers: Vec<GpuActivityDispatchHeader>,
@@ -1027,6 +1028,10 @@ impl GpuActiveBatchUpload {
 
         Ok(Self {
             headers,
+            joint_motor_modes: entries
+                .iter()
+                .map(|entry| entry.slot.record().reserved[0])
+                .collect(),
             learning_headers,
             activity_headers,
             pending_templates,
@@ -3426,9 +3431,22 @@ impl GpuClosedLoopPipelines {
         let mut records = Vec::with_capacity(batch.row_count());
         let mut speech_payloads = Vec::with_capacity(batch.row_count());
         let mut factorized_motor_candidates = Vec::with_capacity(batch.row_count());
-        for row in words.chunks_exact(row_words) {
+        for (index, row) in words.chunks_exact(row_words).enumerate() {
             records.push(GpuSelectionRecord::from_words(&row[..selection_words])?);
             let speech_record = GpuSpeechPayloadRecord::from_words(&row[selection_words..])?;
+            let mode = *batch
+                .joint_motor_modes
+                .get(index)
+                .ok_or(GpuClosedLoopError::MalformedUpload)?;
+            let successful = records[index].status == 3;
+            let expected_marker = if mode != 0 && successful {
+                crate::GPU_JOINT_SELECTION_V1_MARKER
+            } else {
+                0
+            };
+            if speech_record.reserved[1] & 0xffff_0000 != expected_marker {
+                return Err(GpuClosedLoopError::SubmissionFailed);
+            }
             factorized_motor_candidates.push(speech_record.factorized_motor_candidates());
             speech_payloads.push(decode_speech_payload_record(speech_record)?);
         }

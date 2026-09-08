@@ -1,9 +1,15 @@
 //! GPU-authoritative live cognition for the explicit neural policy.
 
+#[cfg(all(test, feature = "gpu-tests"))]
+mod action_credit_food_tests;
 mod checkpoint_poll;
 mod checkpoint_runtime;
 mod durability_hold;
 mod exact_population_checkpoint;
+#[cfg(all(test, feature = "gpu-tests"))]
+mod founder_consequence_tests;
+#[cfg(all(test, feature = "gpu-tests"))]
+mod nociception_food_tests;
 mod staged_tick;
 
 use durability_hold::{
@@ -30,24 +36,24 @@ use alife_core::{
     finalized_memory_attention_evidence, select_focal_targets, ActionKind,
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
     AttentionFrame, AttentionSelectionPolicy, BiochemistryState, Blake3Digest, BodyEventDelta,
-    BoundedMotorPayload, BoundedReplayBatch, BrainCapacityClass, BrainGenome, BrainScaleTier,
-    BrainTickStatus, BrainWorkCounters, BrainWorkReceipt, CandidateObservationRef,
-    CanonicalDigestBuilder, CognitiveConceptActivation, CognitiveContextFrame,
-    CognitiveGapActivation, CognitiveMemoryExpectancy, CognitiveWorkReceipt, Confidence,
-    ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState, DecisionSnapshot,
-    DevelopmentState, EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId,
-    FinalizedMemoryAttentionEvidence, FinalizedMemoryRecall, FoundationCompatibilityFamilyId,
-    FoundationGeneticIdentity, FoundationId, FoundationVersion, FoundationWeightApplication,
-    FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition,
-    LanguageGroundingLedger, LegacyNano512CompatibilityReceipt, LineageId, MemoryBankConfig,
-    MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState,
-    MemoryUpdateReceipt, MotorChannel, MotorCommandBundle, N512FounderFoundationProjection,
-    NeuralActionSelection, NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame,
-    NeuralReceptorEffects, NeuralReceptorFrame, NeuralReceptorPhenotype, NormalizedScalar,
-    OrganismId, PassiveLifeEvent, PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft,
-    PhenotypeCompiler, PhenotypeCompilerInputs, PhysicalContactKind, PostActionOutcome,
-    PreActionSnapshot, PredictionTargetReceipt, PreparedMemoryRecall, ScaffoldContractError,
-    SemanticStateVector, SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SignedValence,
+    BoundedReplayBatch, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
+    BrainWorkCounters, BrainWorkReceipt, CandidateObservationRef, CanonicalDigestBuilder,
+    CognitiveConceptActivation, CognitiveContextFrame, CognitiveGapActivation,
+    CognitiveMemoryExpectancy, CognitiveWorkReceipt, Confidence, ConsolidationDriverEvent,
+    ConsolidationIntent, ConsolidationState, DecisionSnapshot, DevelopmentState,
+    EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId, FinalizedMemoryAttentionEvidence,
+    FinalizedMemoryRecall, FoundationCompatibilityFamilyId, FoundationGeneticIdentity,
+    FoundationId, FoundationVersion, FoundationWeightApplication, FoundationWeightAsset,
+    HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition, LanguageGroundingLedger,
+    LegacyNano512CompatibilityReceipt, LineageId, MemoryBankConfig, MemoryCompactionCheckpoint,
+    MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState, MemoryUpdateReceipt,
+    MotorChannel, MotorCommandBundle, N512FounderFoundationProjection, NeuralActionSelection,
+    NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame, NeuralReceptorEffects,
+    NeuralReceptorFrame, NeuralReceptorPhenotype, NormalizedScalar, OrganismId, PassiveLifeEvent,
+    PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft, PhenotypeCompiler,
+    PhenotypeCompilerInputs, PhysicalContactKind, PostActionOutcome, PreActionSnapshot,
+    PredictionTargetReceipt, PreparedMemoryRecall, ScaffoldContractError, SemanticStateVector,
+    SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SignedValence,
     SleepConsolidationConfig, SleepConsolidator, SleepPhase, SleepState, SleepTransition, Tick,
     TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind,
     Validate, Vec3f, WorldEntityId, LEGACY_NANO512_V1_COORDINATE_SEED, MAX_ACTIVE_CONCEPTS,
@@ -86,10 +92,7 @@ use alife_world::{
 };
 use thiserror::Error;
 
-use crate::factorized_arbitration::{
-    arbitrate_gpu_selected_command_into_factorized_bundle, channel_command_for_action,
-    VOCAL_CHANNEL_PAYLOAD_MAGIC_V1,
-};
+use crate::factorized_arbitration::channel_command_for_action;
 use crate::{
     curated_founder_materializer::{
         materialize_curated_founder_bundle, CuratedFounderMaterializationError,
@@ -325,7 +328,18 @@ fn resident_authority_plan_from_record(
     let development = admission.phenotype.development_state_at(admission.age)?;
     let genome = admission.phenotype.brain_genome.clone();
     let (phenotype, compiler_inputs, legacy_nano512_compatibility_receipt) =
-        if let Some(candidate) = &admission.genome.nano512_readout_candidate {
+        if let Some(candidate) = admission
+            .genome
+            .nano512_readout_candidate
+            .as_ref()
+            .or_else(|| {
+                admission
+                    .genome
+                    .nano512_action_credit_candidate_v2
+                    .as_ref()
+                    .map(|c| c.source())
+            })
+        {
             let body = &admission.phenotype;
             let source = &admission.genome;
             if candidate.sensor_profile() != sensor_profile
@@ -339,7 +353,11 @@ fn resident_authority_plan_from_record(
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }
             let (phenotype, compiler_inputs) =
-                PhenotypeCompiler::compile_nano512_readout_candidate(&candidate.asset()?)?;
+                if let Some(configured) = &source.nano512_action_credit_candidate_v2 {
+                    PhenotypeCompiler::compile_nano512_action_credit_candidate(configured)?
+                } else {
+                    PhenotypeCompiler::compile_nano512_readout_candidate(&candidate.asset()?)?
+                };
             (phenotype, compiler_inputs, None)
         } else if selects_legacy_nano512_compatibility_from_record(&admission)? {
             let foundation = FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?;
@@ -3564,6 +3582,13 @@ fn archive_birth_into_library(
 fn archive_foundation_asset_bytes(
     resident: &ResidentCognition,
 ) -> Result<Option<Vec<u8>>, GameAppShellError> {
+    if let alife_core::FoundationAbiSelection::Nano512ActionCreditCandidateV2(candidate) =
+        resident.phenotype.foundation_abi()
+    {
+        let foundation = candidate.asset()?;
+        foundation.validate_against(&resident.phenotype)?;
+        return Ok(Some(foundation.encode_canonical()?));
+    }
     if let alife_core::FoundationAbiSelection::Nano512ReadoutCandidateV1(candidate) =
         resident.phenotype.foundation_abi()
     {
@@ -3823,14 +3848,28 @@ fn grounded_semantic_state_from_frame(
     frame: &PerceptionFrame,
 ) -> Result<SemanticStateVector, ScaffoldContractError> {
     let body = frame.body();
-    let drives = frame.homeostasis().drives.to_array();
+    grounded_semantic_state(
+        body.pose.translation,
+        body.velocity.linear,
+        frame.homeostasis(),
+    )
+}
+
+// Both sides describe the same observable quantities: position, velocity and
+// seven drives. Contact, success and physical damage remain outcome evidence.
+fn grounded_semantic_state(
+    position: Vec3f,
+    velocity: Vec3f,
+    homeostasis: &HomeostaticSnapshot,
+) -> Result<SemanticStateVector, ScaffoldContractError> {
+    let drives = homeostasis.drives.to_array();
     SemanticStateVector::new(vec![
-        bounded_successor_scalar(body.pose.translation.x)?,
-        bounded_successor_scalar(body.pose.translation.y)?,
-        bounded_successor_scalar(body.pose.translation.z)?,
-        bounded_successor_scalar(body.velocity.linear.x)?,
-        bounded_successor_scalar(body.velocity.linear.y)?,
-        bounded_successor_scalar(body.velocity.linear.z)?,
+        bounded_successor_scalar(position.x)?,
+        bounded_successor_scalar(position.y)?,
+        bounded_successor_scalar(position.z)?,
+        bounded_successor_scalar(velocity.x)?,
+        bounded_successor_scalar(velocity.y)?,
+        bounded_successor_scalar(velocity.z)?,
         unit_successor_scalar(drives[0])?,
         unit_successor_scalar(drives[1])?,
         unit_successor_scalar(drives[2])?,
@@ -3845,49 +3884,16 @@ fn grounded_successor_state(
     world: &HeadlessWorld,
     world_entity_id: WorldEntityId,
     biology_after: &BiochemistryState,
-    physical: alife_core::PhysicalActionOutcome,
-    succeeded: bool,
-    pain_delta: f32,
+    profile: SensorProfile,
 ) -> Result<SemanticStateVector, ScaffoldContractError> {
     let object = world
         .entity(world_entity_id)
         .ok_or(ScaffoldContractError::InvalidId)?;
-    let displacement = physical.displacement;
-    let body = biology_after.body;
-    let contact = match physical.contact {
-        PhysicalContactKind::None => 0.0,
-        PhysicalContactKind::Touch => 0.2,
-        PhysicalContactKind::Collision => 0.4,
-        PhysicalContactKind::Blocked => 0.6,
-        PhysicalContactKind::Consumed => 0.8,
-        PhysicalContactKind::Moved => 1.0,
+    let velocity = match profile {
+        SensorProfile::GroundedObjectSlotsV1 => object.grounded_physical.velocity,
+        SensorProfile::PrivilegedAffordanceV1 => Vec3f::ZERO,
     };
-    let features = [
-        bounded_successor_scalar(object.position.x)?,
-        bounded_successor_scalar(object.position.y)?,
-        bounded_successor_scalar(object.position.z)?,
-        bounded_successor_scalar(displacement.x)?,
-        bounded_successor_scalar(displacement.y)?,
-        bounded_successor_scalar(displacement.z)?,
-        unit_successor_scalar(body.energy)?,
-        unit_successor_scalar(body.health)?,
-        unit_successor_scalar(body.injury)?,
-        unit_successor_scalar(body.temperature_stress)?,
-        contact,
-        if succeeded { 1.0 } else { 0.0 },
-        unit_successor_scalar(pain_delta)?,
-    ];
-    SemanticStateVector::new(features.to_vec())
-}
-
-fn factorized_motor_channel_for_action(kind: ActionKind) -> Option<MotorChannel> {
-    match kind {
-        ActionKind::Move => Some(MotorChannel::Locomotion),
-        ActionKind::Interact | ActionKind::Write => Some(MotorChannel::Manipulation),
-        ActionKind::Vocalize => Some(MotorChannel::Vocal),
-        ActionKind::Hold | ActionKind::Rest | ActionKind::Inspect => Some(MotorChannel::Posture),
-        ActionKind::Idle | ActionKind::Gesture => None,
-    }
+    grounded_semantic_state(object.position, velocity, &biology_after.homeostasis)
 }
 
 fn factorized_motor_bundle_for_candidates(
@@ -3902,56 +3908,15 @@ fn factorized_motor_bundle_for_candidates(
     speech_payload: Option<&alife_core::SpeechMotorPayload>,
     speech_prompted: bool,
 ) -> Result<MotorCommandBundle, ScaffoldContractError> {
-    let mut channel_commands = Vec::with_capacity(channels.len());
-    for head_channel in channels {
-        let slot = match head_channel {
-            MotorChannel::Locomotion => 0,
-            MotorChannel::Orientation => 1,
-            MotorChannel::Manipulation => 2,
-            MotorChannel::Vocal => 3,
-            MotorChannel::Posture => 4,
-            MotorChannel::SpeciesSpecific(_) => 5,
-        };
-        let encoded = candidate_slots
-            .get(slot)
-            .copied()
-            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-        if encoded == 0 {
-            continue;
-        }
-        let candidate_index = encoded - 1;
-        let candidate = *frame
-            .candidates()
-            .get(usize::from(candidate_index))
-            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-        let command = candidate.to_command(organism_id, candidate.sensor_confidence)?;
-        let channel = factorized_motor_channel_for_action(command.kind)
-            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-        if channel != *head_channel {
-            return Err(ScaffoldContractError::InvalidDecisionEvidence);
-        }
-        let mut channel_command = channel_command_for_action(channel, &command)?;
-        if channel == MotorChannel::Vocal && candidate_index == selected_candidate_index {
-            if let Some(payload) = speech_payload {
-                let mut values = Vec::with_capacity(payload.tokens.len() + 4);
-                values.push(VOCAL_CHANNEL_PAYLOAD_MAGIC_V1);
-                values.push(u32::from(payload.speech_act.raw()));
-                values.push(if speech_prompted { 1 } else { 0 });
-                values.push((payload.confidence.raw() * 65_535.0).round() as u32);
-                values.extend(payload.tokens.iter().map(|token| u32::from(token.raw())));
-                let payload = BoundedMotorPayload::new(values)?;
-                channel_command = channel_command.with_payload(payload)?;
-            }
-        }
-        channel_commands.push(channel_command);
-    }
-
-    arbitrate_gpu_selected_command_into_factorized_bundle(
+    alife_core::factorized_motor_bundle_for_candidates(
         organism_id,
         sequence_id,
         tick,
-        channel_commands,
+        frame,
+        candidate_slots,
+        channels,
         compatibility_command,
+        selected_candidate_index,
         speech_payload,
         speech_prompted,
     )
@@ -4184,6 +4149,7 @@ fn seal_prepared_selection_core(
         return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
     }
     let source_state = grounded_semantic_state_from_frame(&frame)?;
+    let pre_action_context = cognitive_context.clone();
     let motor_condition = JointMotorCondition::from_bundle(&motor_bundle)?;
     let neural_evidence = decision.neural_evidence()?;
     let neural_emission = NeuralEmissionFrame::new(
@@ -4235,9 +4201,7 @@ fn seal_prepared_selection_core(
         world,
         world_entity_id,
         &motor_receipt.biology_after,
-        physical,
-        succeeded,
-        motor_receipt.body_event.damage,
+        frame.sensor_profile(),
     )?;
     let prediction_target = PredictionTargetReceipt::for_successor(
         organism_id,
@@ -4266,10 +4230,19 @@ fn seal_prepared_selection_core(
     resident.last_selected_motor_bundle = Some(motor_bundle.clone());
     resident.last_cognitive_work = cognitive_work;
     let combined_prediction_error = grounded_prediction_error;
-    let physiology = alife_core::MeasuredPhysiologyTransition::new(
-        motor_receipt.biology_before,
-        motor_receipt.biology_after,
+    apply_cognitive_work_cost(
+        world,
+        organism_id,
+        cognitive_work,
+        cognitive_work_cost_policy,
     )?;
+    let biology_after = *world
+        .organism_registry()
+        .get(organism_id)
+        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+        .biochemistry();
+    let physiology =
+        alife_core::MeasuredPhysiologyTransition::new(motor_receipt.biology_before, biology_after)?;
     let mut outcome = PostActionOutcome::new(
         organism_id,
         sequence_id,
@@ -4279,7 +4252,7 @@ fn seal_prepared_selection_core(
         physiology.homeostatic_delta,
         SignedValence::ZERO,
         NormalizedScalar::new(if succeeded { 0.0 } else { 1.0 })?,
-        NormalizedScalar::new(physiology.pain_delta.raw().max(0.0))?,
+        NormalizedScalar::new(physiology.aversive_harm())?,
         physiology.energy_delta,
         NormalizedScalar::new(combined_prediction_error)?,
     )?
@@ -4296,13 +4269,7 @@ fn seal_prepared_selection_core(
         outcome,
         prediction_target,
         cognitive_work,
-        cognitive_context,
-    )?;
-    apply_cognitive_work_cost(
-        world,
-        organism_id,
-        cognitive_work,
-        cognitive_work_cost_policy,
+        pre_action_context,
     )?;
     resident.language_grounding.observe_sealed(&patch)?;
     resident.next_sequence = resident
@@ -11925,6 +11892,69 @@ mod tests {
         ));
     }
 
+    fn register_sealing_test_organism(world: &mut HeadlessWorld, organism_id: OrganismId) {
+        let entity_id = world
+            .organism_entity_ids()
+            .into_iter()
+            .find(|(id, _)| *id == organism_id)
+            .unwrap()
+            .1;
+        let asset = FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1)
+            .unwrap();
+        let manifest = asset.manifest();
+        let foundation = FoundationGeneticIdentity::new(
+            manifest.foundation_id().raw(),
+            manifest.foundation_version().raw() as u16,
+            manifest.compatibility_family_id().raw(),
+            BrainCapacityClass::N512_ID,
+        )
+        .unwrap();
+        let genome = alife_core::CreatureGenome::early_mammal_founder(9_308, foundation).unwrap();
+        let phenotype = genome.express().unwrap();
+        let biology = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+        world
+            .register_organism_record(
+                WorldOrganismRecord::new(
+                    organism_id,
+                    entity_id,
+                    genome,
+                    phenotype,
+                    biology,
+                    Tick::ZERO,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn unchanged_grounded_state_has_zero_successor_distance() {
+        let organism_id = OrganismId(1);
+        let mut world = HeadlessScenarioBuilder::new(9_308)
+            .agent("agent", organism_id, Vec3f::new(1.0, 0.0, 2.0))
+            .build()
+            .unwrap();
+        register_sealing_test_organism(&mut world, organism_id);
+        let entity_id = world.organism_entity_ids()[0].1;
+        let biology = *world
+            .organism_registry()
+            .get(organism_id)
+            .unwrap()
+            .biochemistry();
+        let frame = world
+            .perception_frame(
+                organism_id,
+                Tick::ZERO,
+                SensorProfile::GroundedObjectSlotsV1,
+                biology.homeostasis,
+            )
+            .unwrap();
+        let source = grounded_semantic_state_from_frame(&frame).unwrap();
+        let target =
+            grounded_successor_state(&world, entity_id, &biology, frame.sensor_profile()).unwrap();
+        assert_eq!(source.mean_absolute_distance(&target).unwrap(), 0.0);
+    }
+
     #[test]
     fn seal_prepared_selection_uses_world_biology_receipt_as_resident_authority() {
         let organism_id = OrganismId(1);
@@ -11932,6 +11962,7 @@ mod tests {
             .agent("agent", organism_id, Vec3f::ZERO)
             .build()
             .unwrap();
+        register_sealing_test_organism(&mut world, organism_id);
         let world_entity_id = world
             .organism_entity_ids()
             .into_iter()
@@ -12087,11 +12118,15 @@ mod tests {
             atp_after_q16: 0,
             receipt_digest: [0; 4],
         };
+        let expected_pre_action_context = cognitive_context.clone();
         let sealed = seal_prepared_selection_core(
             &mut world,
             &mut residents,
             0,
-            CognitiveWorkCostPolicy::disabled(),
+            CognitiveWorkCostPolicy {
+                enabled: true,
+                energy_per_work_unit: 0.001,
+            },
             false,
             WorldMutationRollback::Local,
             PreparedSealInput {
@@ -12127,6 +12162,30 @@ mod tests {
             .get(organism_id)
             .unwrap()
             .biochemistry();
+        assert_eq!(
+            sealed.patch.pre_action().cognitive_context.as_ref(),
+            Some(&expected_pre_action_context)
+        );
+        assert_ne!(
+            residents[&organism_id.raw()]
+                .last_cognitive_context
+                .as_ref(),
+            Some(&expected_pre_action_context)
+        );
+        let measured = sealed.patch.outcome().measured_physiology.unwrap();
+        assert_eq!(
+            measured.after, world_after,
+            "learning must include the cognitive debit"
+        );
+        assert!(
+            world
+                .organism_registry()
+                .get(organism_id)
+                .unwrap()
+                .cognitive_energy_debit()
+                > 0.0
+        );
+        assert!(measured.after.body.energy < expected_receipt.biology_after.body.energy);
         assert_eq!(
             sealed.patch.header().abi_version,
             ExperiencePatch::V11_ABI_VERSION
@@ -12171,16 +12230,12 @@ mod tests {
             world_after.homeostasis,
             expected_receipt.biology_after.homeostasis
         );
-        assert_eq!(
-            residents.get(&organism_id.raw()).unwrap().homeostasis,
-            expected_receipt.biology_after.homeostasis
-        );
         let next_frame = world
             .perception_frame(
                 organism_id,
                 expected_receipt.outcome_tick,
                 SensorProfile::PrivilegedAffordanceV1,
-                residents.get(&organism_id.raw()).unwrap().homeostasis,
+                world_after.homeostasis,
             )
             .unwrap();
         assert_eq!(
@@ -12188,6 +12243,10 @@ mod tests {
             expected_receipt.biology_after.homeostasis
         );
         assert_eq!(
+            sealed.patch.outcome().homeostatic_delta,
+            measured.homeostatic_delta
+        );
+        assert_ne!(
             sealed.patch.outcome().homeostatic_delta,
             expected_receipt.action_result.observation.homeostatic_delta
         );

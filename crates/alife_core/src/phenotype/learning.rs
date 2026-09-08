@@ -484,6 +484,14 @@ pub(super) fn compile_learning_plans(
             );
             let developmental_multiplier = critical_period_multiplier(development, projection);
             let effective_scale = (scale * developmental_multiplier).clamp(0.0, 1.0);
+            let profile = match (synapse.kind(), parameters.action_candidate_credit_profile()) {
+                (CompiledSynapseKind::Decoder(c), Some(profile))
+                    if c.head() == super::DecoderHeadKind::ActionCandidate =>
+                {
+                    profile.receptor_profile()
+                }
+                _ => parameters.receptor_profile(),
+            };
             let receptor = if effective_scale == 0.0 {
                 disabled
             } else {
@@ -492,7 +500,7 @@ pub(super) fn compile_learning_plans(
                     (parameters.base_learning_rate() * effective_scale).clamp(0.0, 1.0),
                     (parameters.sleep_replay_rate() * effective_scale).clamp(0.0, 1.0),
                     (parameters.normalization_rate() * effective_scale).clamp(0.0, 1.0),
-                    parameters.receptor_profile(),
+                    profile,
                     fast_min,
                     fast_max,
                 )?

@@ -1966,7 +1966,8 @@ fn pending_checkpoint_from_parts(
         parts.candidate_feature_digest(),
         parts.active_eligibility_generation(),
         parts.staging_eligibility_generation(),
-    )
+    )?
+    .with_joint_selection(parts.joint_selection())
 }
 
 fn pending_restore_parts(
@@ -1983,7 +1984,8 @@ fn pending_restore_parts(
         pending.candidate_feature_digest,
         pending.active_eligibility_generation,
         pending.staging_eligibility_generation,
-    )
+    )?
+    .with_joint_selection(pending.joint_selection)
 }
 
 fn validate_pending_transaction(
@@ -1992,6 +1994,9 @@ fn validate_pending_transaction(
     pending: PendingEligibilityCheckpoint,
 ) -> Result<(), ScaffoldContractError> {
     let (pre_action, decision) = builder.pending_decision()?;
+    if let Some(joint) = pending.joint_selection {
+        joint.validate_decision(decision)?;
+    }
     let evidence = decision.neural_evidence()?;
     if pre_action.organism_id != handle.organism_id()
         || evidence.phenotype_hash != handle.phenotype_hash()

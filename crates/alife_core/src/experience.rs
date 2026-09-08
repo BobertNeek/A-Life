@@ -1158,6 +1158,17 @@ impl MeasuredPhysiologyTransition {
         value.validate_contract()?;
         Ok(value)
     }
+
+    /// Fresh aversive change, including tissue harm when the pain drive is
+    /// already saturated. The maximum avoids counting the same injury once
+    /// as tissue damage, again as lost health, and again as increased pain.
+    pub fn aversive_harm(&self) -> f32 {
+        self.pain_delta
+            .raw()
+            .max(self.after.body.injury - self.before.body.injury)
+            .max(self.before.body.health - self.after.body.health)
+            .max(0.0)
+    }
 }
 
 impl Validate for MeasuredPhysiologyTransition {
@@ -1251,6 +1262,8 @@ pub struct PostActionOutcome {
     pub homeostatic_delta: HomeostaticDelta,
     pub reward_valence: SignedValence,
     pub frustration_delta: NormalizedScalar,
+    /// Fresh pain or tissue harm for learning and memory. The signed change
+    /// in the pain drive remains in `measured_physiology.pain_delta`.
     pub pain_delta: NormalizedScalar,
     pub energy_delta: SignedValence,
     pub prediction_error: NormalizedScalar,
@@ -1331,7 +1344,7 @@ impl PostActionOutcome {
         transition.validate_contract()?;
         self.homeostatic_delta = transition.homeostatic_delta;
         self.energy_delta = transition.energy_delta;
-        self.pain_delta = NormalizedScalar::new(transition.pain_delta.raw().max(0.0))?;
+        self.pain_delta = NormalizedScalar::new(transition.aversive_harm())?;
         self.reward_valence = SignedValence::ZERO;
         self.measured_physiology = Some(transition);
         self.validate_contract()?;

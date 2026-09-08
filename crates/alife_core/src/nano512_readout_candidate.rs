@@ -5,6 +5,35 @@ use crate::{FoundationWeightAsset, ScaffoldContractError};
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 
+/// Versioned receptor configuration over an unchanged, validated V1 weight file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Nano512ActionCreditCandidateV2 {
+    source: Nano512ReadoutCandidateV1,
+    action_profile: crate::ActionCandidateCreditProfileV1,
+}
+
+impl Nano512ActionCreditCandidateV2 {
+    pub fn new(
+        asset: &FoundationWeightAsset,
+        action_profile: crate::ActionCandidateCreditProfileV1,
+    ) -> Result<Self, ScaffoldContractError> {
+        Ok(Self {
+            source: Nano512ReadoutCandidateV1::new(asset)?,
+            action_profile,
+        })
+    }
+    pub fn asset(&self) -> Result<FoundationWeightAsset, ScaffoldContractError> {
+        self.source.asset()
+    }
+    pub const fn source(&self) -> &Nano512ReadoutCandidateV1 {
+        &self.source
+    }
+    pub const fn action_profile(&self) -> crate::ActionCandidateCreditProfileV1 {
+        self.action_profile
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Nano512ReadoutCandidateV1 {
     canonical_asset: Vec<u8>,

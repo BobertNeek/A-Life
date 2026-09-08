@@ -735,7 +735,7 @@ impl GpuClosedLoopBackend {
                         .candidates()
                         .get(candidate_index as usize)
                         .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-                    let receipt = PendingEligibilityReceipt::from_gpu_record(
+                    let mut receipt = PendingEligibilityReceipt::from_gpu_record(
                         *pending_record,
                         handle.slot,
                         handle.organism_id,
@@ -766,6 +766,44 @@ impl GpuClosedLoopBackend {
                                 .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?
                     {
                         return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                    }
+                    if resident.brain_slot.record().reserved[0] != 0 {
+                        let channels = resident
+                            .phenotype
+                            .candidate_decoder()
+                            .factorized_motor_channels(&resident.phenotype)?;
+                        let command = candidate
+                            .to_command(handle.organism_id, candidate.sensor_confidence)?;
+                        let prompted = frame
+                            .sensory()
+                            .language_context
+                            .heard_tokens
+                            .iter()
+                            .flatten()
+                            .any(|token| {
+                                token.source_kind == alife_core::UtteranceSourceKind::Player
+                            });
+                        let bundle = alife_core::factorized_motor_bundle_for_candidates(
+                            handle.organism_id,
+                            alife_core::ExperienceSequenceId(1),
+                            frame.tick(),
+                            frame,
+                            *motor_candidates,
+                            &channels,
+                            &command,
+                            candidate_index,
+                            speech_payload.as_ref(),
+                            prompted,
+                        )?;
+                        // Reject any packed candidate that the shared builder did not execute.
+                        if motor_candidates.iter().filter(|v| **v != 0).count()
+                            != bundle.channels.len()
+                        {
+                            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                        }
+                        receipt = receipt.with_joint_selection(Some(
+                            alife_core::JointActionSelectionV1::new(*motor_candidates, &bundle)?,
+                        ))?;
                     }
                     match (input.memory_upload, *memory_binding) {
                         (None, None) => {}

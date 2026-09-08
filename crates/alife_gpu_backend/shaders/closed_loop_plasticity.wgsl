@@ -225,7 +225,8 @@ fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
       plasticity_guard_bit(0u, extension.schema_version != GPU_CLOSED_LOOP_LAYOUT_VERSION)
     | plasticity_guard_bit(1u, extension.pending_eligibility_offset != header.pending_eligibility_offset)
     | plasticity_guard_bit(2u, !state_span_within(extension.learning_state_offset,24u))
-    | plasticity_guard_bit(3u, !state_span_within(extension.pending_eligibility_offset,PENDING_ELIGIBILITY_WORDS_PLASTICITY));
+    | plasticity_guard_bit(3u, !state_span_within(extension.pending_eligibility_offset,PENDING_ELIGIBILITY_WORDS_PLASTICITY))
+    | plasticity_guard_bit(4u, !state_span_within(extension.reserved0,4u));
   if (extension_guard != 0u) {
     reject_plasticity(receipt_base, PLASTICITY_GUARD_EXTENSION_LAYOUT, extension_guard, 0u, 0u); return;
   }
@@ -266,6 +267,9 @@ fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
     | plasticity_guard_bit(29u, !finite_plasticity(outcome.social_consequence) || abs(outcome.social_consequence) > 1.0)
     | plasticity_guard_bit(30u, pending.schema_version != GPU_LEARNING_SCHEMA_VERSION)
     | plasticity_guard_bit(31u, pending.slot != brain.slot);
+  let pending_motor = vec2<u32>(load_state_u32(extension.reserved0 + 2u), load_state_u32(extension.reserved0 + 3u));
+  let pending_joint = (pending_motor.y & 0xffff0000u) == JOINT_SELECTION_V1_MARKER;
+  let motor_matches = select(all(outcome.reserved == vec2<u32>(0u)), all(outcome.reserved == pending_motor), pending_joint);
   let state_guard_hi =
       plasticity_guard_bit(0u, pending.slot_generation != brain.slot_generation)
     | plasticity_guard_bit(1u, pending.active_activation_side != outcome.active_activation_side)
@@ -291,7 +295,8 @@ fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
     | plasticity_guard_bit(21u, !state_span_within(extension.fast_bank_1_offset,brain.synapse_count))
     | plasticity_guard_bit(22u, !immutable_weight_span_within(brain.genetic_weight_offset,brain.synapse_count))
     | plasticity_guard_bit(23u, !immutable_weight_span_within(brain.alpha_offset,brain.synapse_count))
-    | plasticity_guard_bit(24u, !immutable_plan_span_within(extension.synapse_metadata_offset,brain.synapse_count*8u));
+    | plasticity_guard_bit(24u, !immutable_plan_span_within(extension.synapse_metadata_offset,brain.synapse_count*8u))
+    | plasticity_guard_bit(25u, !motor_matches);
   if (state_guard_lo != 0u || state_guard_hi != 0u) {
     reject_plasticity(receipt_base, PLASTICITY_GUARD_STATE_EVIDENCE, state_guard_lo, state_guard_hi, 0u); return;
   }

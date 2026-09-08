@@ -2144,3 +2144,69 @@ pub use hardware::{
     expected_cadence_counts, BatchReadback, CompactSelection, DecoderLesionReceipt, GpuFrameResult,
     GpuPendingFrameResult, GpuPipelineFixture, SlotReadback,
 };
+
+pub fn two_head_n512_genome() -> BrainGenome {
+    let genome = BrainGenome::scaffold(42, BrainCapacityClass::n512().id());
+    let p = genome.cognitive_architecture();
+    let architecture = alife_core::genome::CognitiveArchitectureGenomeParameters::try_new_v1(
+        p.attention_capacity(),
+        p.active_concept_limit(),
+        p.active_gap_limit(),
+        p.predictor_capacity(),
+        p.predictor_learning_rate(),
+        2,
+        p.motor_head_width(),
+        p.dendritic_branch_capacity(),
+        p.structural_candidate_budget(),
+        p.structural_edit_budget(),
+        p.sleep_trigger_threshold(),
+        p.sleep_replay_rate(),
+        p.sleep_consolidation_rate(),
+        p.attention_learning_rate(),
+        p.concept_learning_rate(),
+        p.motor_learning_rate(),
+        p.structural_learning_rate(),
+    )
+    .unwrap();
+    genome.with_cognitive_architecture(architecture).unwrap()
+}
+pub fn empty_recall(
+    source: &PerceptionFrame,
+) -> (PerceptionFrame, alife_core::FinalizedMemoryRecall) {
+    let draft = alife_core::PerceptionFrameDraft::new(
+        source.organism_id(),
+        source.tick(),
+        source.sensor_profile(),
+        source.sensory().clone(),
+        source.body(),
+        *source.homeostasis(),
+        source.candidates().to_vec(),
+        source.profile_provenance(),
+        source.grounded_object_slots().to_vec(),
+    )
+    .unwrap();
+    let bank = alife_core::MemoryBank::new(
+        alife_core::MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap(),
+    )
+    .unwrap();
+    bank.recall_frame(&draft).unwrap().finalize(draft).unwrap()
+}
+
+#[cfg(feature = "gpu-tests")]
+pub fn tick_with_receptors(
+    backend: &mut alife_gpu_backend::GpuClosedLoopBackend,
+    handle: alife_gpu_backend::GpuBrainHandle,
+    source: &PerceptionFrame,
+) -> (PerceptionFrame, alife_gpu_backend::GpuClosedLoopTick) {
+    let (frame, recall) = empty_recall(source);
+    let upload = backend
+        .prepare_memory_context_upload(handle, &frame, &recall)
+        .unwrap()
+        .bind_neural_receptor_effects(test_receptor_effects(frame.tick()))
+        .unwrap();
+    let input =
+        alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &upload).unwrap();
+    let batch = alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(vec![input]).unwrap();
+    let tick = backend.tick_memory_batch(&batch).unwrap().remove(0);
+    (frame, tick)
+}
