@@ -158,7 +158,7 @@ pub(super) fn recall_target_channel(
     }
     let ids = collect_shortlist(
         &neighbor_target_keys(exact_key),
-        |key| store.target_index.get(key),
+        |key| store.target_namespace_index.get(key),
         store,
         exact_key.target_bins,
         MEMORY_TARGET_SEARCH_CAP,
@@ -196,7 +196,13 @@ pub(super) fn recall_family_channel(
 ) -> Result<FamilyRecallResult, ScaffoldContractError> {
     let ids = collect_shortlist(
         &neighbor_family_keys(exact_key),
-        |key| store.family_index.get(key),
+        |key| {
+            if query.tracked_object_id().is_some() {
+                store.family_namespace_index.get(key)
+            } else {
+                store.family_index.get(key)
+            }
+        },
         store,
         exact_key.target_bins,
         MEMORY_FAMILY_SEARCH_CAP,
@@ -238,11 +244,10 @@ fn collect_shortlist<'a, K: Ord>(
     let mut eligible = 0_u32;
     for key in keys {
         if let Some(ids) = lookup(key) {
-            // Each record belongs to exactly one exact-bin key in this
-            // already de-duplicated neighbor set. Keep the full bounded-bank
-            // population count for truthful pressure evidence, but admit at
-            // most one search cap from each ranked bucket into the bounded
-            // global shortlist.
+            // A tracked-object query reads one ranked namespace. Untracked
+            // queries retain disjoint exact-bin neighbors. Count all eligible
+            // records, but read at most one search cap from each bucket before
+            // applying the global similarity cap.
             eligible = eligible.saturating_add(u32::try_from(ids.len()).unwrap_or(u32::MAX));
             unique.extend(ids.iter().take(cap).map(|id| id.raw()));
         }
@@ -259,6 +264,9 @@ fn collect_shortlist<'a, K: Ord>(
 }
 
 pub(super) fn neighbor_family_keys(exact: &MemoryBucketKey) -> Vec<MemoryBucketKey> {
+    if exact.tracked_object_id_raw != 0 {
+        return vec![exact.namespace_key()];
+    }
     neighbor_target_bins(exact.target_bins)
         .into_iter()
         .map(|target_bins| MemoryBucketKey {
@@ -269,6 +277,9 @@ pub(super) fn neighbor_family_keys(exact: &MemoryBucketKey) -> Vec<MemoryBucketK
 }
 
 pub(super) fn neighbor_target_keys(exact: &TargetMemoryBucketKey) -> Vec<TargetMemoryBucketKey> {
+    if exact.tracked_object_id_raw != 0 {
+        return vec![exact.namespace_key()];
+    }
     neighbor_target_bins(exact.target_bins)
         .into_iter()
         .map(|target_bins| TargetMemoryBucketKey {

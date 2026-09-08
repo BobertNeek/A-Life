@@ -156,6 +156,12 @@ pub(super) struct CandidateMemoryStoreV2 {
     pub(super) family_index: BTreeMap<MemoryBucketKey, Vec<MemoryId>>,
     #[serde(skip, default)]
     pub(super) target_index: BTreeMap<TargetMemoryBucketKey, Vec<MemoryId>>,
+    // Derived retrieval indices keep transient sensory bins out of the lookup
+    // namespace. Exact indices above still own merge identity.
+    #[serde(skip, default)]
+    pub(super) family_namespace_index: BTreeMap<MemoryBucketKey, Vec<MemoryId>>,
+    #[serde(skip, default)]
+    pub(super) target_namespace_index: BTreeMap<TargetMemoryBucketKey, Vec<MemoryId>>,
 }
 
 impl Default for CandidateMemoryStoreV2 {
@@ -169,6 +175,8 @@ impl Default for CandidateMemoryStoreV2 {
             last_sequence_by_organism: BTreeMap::new(),
             family_index: BTreeMap::new(),
             target_index: BTreeMap::new(),
+            family_namespace_index: BTreeMap::new(),
+            target_namespace_index: BTreeMap::new(),
         }
     }
 }
@@ -226,6 +234,8 @@ impl<'de> Deserialize<'de> for CandidateMemoryStoreV2 {
             last_sequence_by_organism: wire.last_sequence_by_organism,
             family_index: BTreeMap::new(),
             target_index: BTreeMap::new(),
+            family_namespace_index: BTreeMap::new(),
+            target_namespace_index: BTreeMap::new(),
         };
         store.rebuild_indices();
         Ok(store)
@@ -327,6 +337,30 @@ impl CandidateMemoryStoreV2 {
             .expect("validated candidate memory record exists");
         let family_key = record.family_key();
         let target_key = record.target_key();
+        if record.tracked_object_id_raw != 0 {
+            let family_namespace = family_key.namespace_key();
+            let target_namespace = target_key.namespace_key();
+            let mut family_ids = self
+                .family_namespace_index
+                .remove(&family_namespace)
+                .unwrap_or_default();
+            let mut target_ids = self
+                .target_namespace_index
+                .remove(&target_namespace)
+                .unwrap_or_default();
+            if !family_ids.contains(&memory_id) {
+                family_ids.push(memory_id);
+            }
+            if !target_ids.contains(&memory_id) {
+                target_ids.push(memory_id);
+            }
+            self.rank_index_ids(&mut family_ids);
+            self.rank_index_ids(&mut target_ids);
+            self.family_namespace_index
+                .insert(family_namespace, family_ids);
+            self.target_namespace_index
+                .insert(target_namespace, target_ids);
+        }
         self.insert_family_index_id(family_key, memory_id);
         self.insert_target_index_id(target_key, memory_id);
     }
@@ -373,6 +407,13 @@ impl CandidateMemoryStoreV2 {
 
     pub(super) fn remove_record_from_indices(&mut self, record: &CandidateMemoryRecordV2) {
         let family_key = record.family_key();
+        let family_namespace = family_key.namespace_key();
+        if let Some(ids) = self.family_namespace_index.get_mut(&family_namespace) {
+            ids.retain(|id| *id != record.memory_id);
+            if ids.is_empty() {
+                self.family_namespace_index.remove(&family_namespace);
+            }
+        }
         if let Some(ids) = self.family_index.get_mut(&family_key) {
             ids.retain(|id| *id != record.memory_id);
             if ids.is_empty() {
@@ -380,6 +421,13 @@ impl CandidateMemoryStoreV2 {
             }
         }
         let target_key = record.target_key();
+        let target_namespace = target_key.namespace_key();
+        if let Some(ids) = self.target_namespace_index.get_mut(&target_namespace) {
+            ids.retain(|id| *id != record.memory_id);
+            if ids.is_empty() {
+                self.target_namespace_index.remove(&target_namespace);
+            }
+        }
         if let Some(ids) = self.target_index.get_mut(&target_key) {
             ids.retain(|id| *id != record.memory_id);
             if ids.is_empty() {
@@ -391,6 +439,8 @@ impl CandidateMemoryStoreV2 {
     pub(super) fn rebuild_indices(&mut self) {
         self.family_index.clear();
         self.target_index.clear();
+        self.family_namespace_index.clear();
+        self.target_namespace_index.clear();
         let ids = self
             .records
             .keys()
@@ -404,6 +454,13 @@ impl CandidateMemoryStoreV2 {
 }
 
 impl MemoryBucketKey {
+    pub(super) fn namespace_key(&self) -> Self {
+        Self {
+            target_bins: [0; CANDIDATE_FEATURE_COUNT],
+            ..self.clone()
+        }
+    }
+
     pub(super) fn receipt(&self) -> MemoryBucketReceiptKey {
         MemoryBucketReceiptKey {
             organism_id_raw: self.organism_id_raw,
@@ -415,6 +472,15 @@ impl MemoryBucketKey {
             family_raw: self.family_raw,
             other_action_id_raw: self.other_action_id_raw,
             target_bins: self.target_bins,
+        }
+    }
+}
+
+impl TargetMemoryBucketKey {
+    pub(super) fn namespace_key(&self) -> Self {
+        Self {
+            target_bins: [0; CANDIDATE_FEATURE_COUNT],
+            ..self.clone()
         }
     }
 }

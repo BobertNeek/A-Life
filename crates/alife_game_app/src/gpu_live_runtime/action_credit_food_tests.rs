@@ -57,6 +57,7 @@ pub(super) fn tick_with_selector_capture(
             "selector": ticks[0].selector_diagnostic,
             "frame": row.frame,
             "memory_upload_inputs": memory,
+            "memory_recall_receipt": row.memory_recall.receipt(),
             "neural_receptors": row.neural_receptors,
             "receptor_effects": row.receptor_effects,
             "memory_input_provenance": "host records bound to the exact GPU perception dispatch",
@@ -157,10 +158,6 @@ fn first_harmful_meal_selector_diagnostic() {
             .unwrap()
         })
         .collect::<Vec<_>>();
-    let pressures = references
-        .iter()
-        .map(|row| serde_json::from_value(row["pressure"].clone()).unwrap())
-        .collect();
     let (mut runtime, _) = super::founder_consequence_tests::paired_food_runtime_with_action_credit(
         &source,
         true,
@@ -177,6 +174,15 @@ fn first_harmful_meal_selector_diagnostic() {
         initial_genome, saved_genome,
         "identical organism starting genome"
     );
+    let saved_world: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(prior.join("cyan-nutritious/world.json")).unwrap())
+            .unwrap();
+    let initial_world: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(root.join("world/world.json")).unwrap()).unwrap();
+    assert_eq!(
+        initial_world["world"], saved_world["world"],
+        "identical initial world"
+    );
     let organism = OrganismId(1);
     let initial_bits = runtime
         .active_fast_weights_for_test(organism)
@@ -188,10 +194,11 @@ fn first_harmful_meal_selector_diagnostic() {
         serde_json::to_value(initial_bits).unwrap(),
         references[0]["fast_before"]
     );
-    runtime.install_recorded_pressure_replay(pressures).unwrap();
     SELECTOR_CAPTURE_ROOT.with(|capture| *capture.borrow_mut() = Some(root.clone()));
     let started = Instant::now();
     let mut first_meal = None;
+    let mut meal_memory_generation = None;
+    let mut next_decision_memory_delta = None;
     let mut completed = 0;
     let mut polls = 0;
     while completed < 4 && started.elapsed().as_secs() < 75 {
@@ -224,8 +231,10 @@ fn first_harmful_meal_selector_diagnostic() {
                 "patch": patch,
                 "bound_credit_lanes": credit.modulator().frame().lanes(),
                 "credit_provenance": "host projection from actual sealed outcome and dispatch-bound receptor frame",
-            "activity": {"pressure": activity.pressure, "throttle": activity.throttle,
-                "work": activity.work, "brain_atp_q16": activity.brain_atp_q16},
+                "activity": {"pressure": activity.pressure, "throttle": activity.throttle,
+                    "work": activity.work, "brain_atp_q16": activity.brain_atp_q16},
+                "memory_updates": runtime.last_memory_update_receipts(),
+                "memory_observation_errors": format!("{:?}", runtime.last_memory_observation_errors()),
                 "learning": {"changed": learning.fast_weights_changed, "max_abs_delta": learning.max_abs_delta,
                     "input_fast": learning.input_fast_generation, "output_fast": learning.output_fast_generation},
             }),
@@ -239,11 +248,14 @@ fn first_harmful_meal_selector_diagnostic() {
             &root.join(format!("tick-{completed:02}-after-gpu.json")),
         );
         let actual_patch = serde_json::to_value(&patch).unwrap();
-        assert_eq!(
-            actual_patch["pre_action"]["perception"],
-            references[completed - 1]["patch"]["pre_action"]["perception"],
-            "instrumentation must preserve the reference perception at tick {completed}"
-        );
+        if completed == 1 {
+            assert_eq!(
+                actual_patch["pre_action"]["perception"],
+                references[0]["patch"]["pre_action"]["perception"],
+                "preserve initial empty-memory perception; later recall may change attention and inputs"
+            );
+        }
+        assert!(runtime.last_memory_observation_errors().is_empty());
         println!(
             "selector_diagnostic_tick={completed}; contact={:?}; evidence={}",
             patch.outcome().physical.contact,
@@ -256,9 +268,42 @@ fn first_harmful_meal_selector_diagnostic() {
                 Some(WorldEntityId(3))
             );
             assert!(patch.outcome().pain_delta.raw() > 0.0);
+            let update = runtime
+                .last_memory_update_receipts()
+                .iter()
+                .find(|receipt| receipt.sealed_sequence_id == patch.header().sequence_id)
+                .unwrap();
+            assert!(update.output_generation > update.input_generation);
+            meal_memory_generation = Some(update.output_generation);
             first_meal = Some(completed);
         }
         if first_meal.is_some_and(|tick| completed > tick) {
+            assert_eq!(
+                selector["memory_recall_receipt"]["input_generation"].as_u64(),
+                meal_memory_generation
+            );
+            let food = selector["selector"]["candidates"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|candidate| {
+                    candidate["family"] == "Ingest" && candidate["target"]["entity"] == 3
+                })
+                .unwrap();
+            let memory = selector["memory_upload_inputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|memory| memory["candidate_index"] == food["candidate_index"])
+                .unwrap();
+            let sources = memory["source_counts_packed"].as_u64().unwrap();
+            assert!(sources & 0xffff > 0 && sources >> 16 > 0);
+            assert!(memory["target_confidence"].as_f64().unwrap() > 0.0);
+            assert!(memory["family_confidence"].as_f64().unwrap() > 0.0);
+            assert!(memory["target_latent"][2].as_f64().unwrap() > 0.0);
+            assert!(memory["family_value"][2].as_f64().unwrap() > 0.0);
+            next_decision_memory_delta = food["memory_context_delta"].as_f64();
+            assert!(next_decision_memory_delta.is_some());
             break;
         }
     }
@@ -271,7 +316,12 @@ fn first_harmful_meal_selector_diagnostic() {
         &root.join("receipt.json"),
         &serde_json::json!({
             "max_world_ticks": 4, "completed_world_ticks": completed, "first_harmful_meal_tick": first_meal,
-            "pressure_source": prior.join("cyan-nutritious"), "no_progress_polls": polls,
+            "pressure_source": "actual production dispatch pressure; no replay", "no_progress_polls": polls,
+            "post_initial_perception_divergence": "expected: repaired recall may change neural input and attention",
+            "meal_memory_generation": meal_memory_generation,
+            "next_decision_memory_delta": next_decision_memory_delta,
+            "recall_repaired": true,
+            "gpu_memory_influence_nonzero": next_decision_memory_delta.is_some_and(|delta| delta != 0.0),
             "separate_hebbian_oja_terms_measured": false,
             "term_limit": "GPU eligibility, activations, weights, logits are measured; separate update terms require labeled reconstruction",
         }),

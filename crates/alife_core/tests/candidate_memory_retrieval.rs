@@ -318,14 +318,25 @@ fn sequenced_patch(
     reward: f32,
     pain: f32,
 ) -> ExperiencePatch {
-    let tick = Tick::new(tick_raw);
-    let sequence = ExperienceSequenceId(sequence_raw);
     let color = if tracked_raw == 71 {
         [0.0, 0.8, 0.9]
     } else {
         [0.2, 0.5, 0.8]
     };
     let object = slot(0, tracked_raw, distance, color);
+    sequenced_patch_for_object(sequence_raw, tick_raw, object, reward, pain)
+}
+
+fn sequenced_patch_for_object(
+    sequence_raw: u64,
+    tick_raw: u64,
+    object: GroundedObjectSlotV1,
+    reward: f32,
+    pain: f32,
+) -> ExperiencePatch {
+    let tick = Tick::new(tick_raw);
+    let sequence = ExperienceSequenceId(sequence_raw);
+    let tracked_raw = object.tracked_object_id.raw();
     let candidate = candidate(&object, 0);
     let sensory = SensorySnapshot::new(
         ORGANISM,
@@ -623,6 +634,156 @@ fn memory_bank_roundtrip_rebuilds_indices_and_preserves_recall() {
 
     assert_eq!(after.context(), before.context());
     assert_eq!(after.receipt(), before.receipt());
+}
+
+fn stopped_meal_fixture() -> (MemoryBank, PerceptionFrameDraft) {
+    // Captured first-meal-selector-19160: the same object stops moving relative
+    // to the creature. Candidate lanes 3 and 19 change by one quantization bin.
+    let mut moving = slot(0, 112_164_366_696_106, 0.0, [1.0, 0.55, 0.1]);
+    moving.bearing = [0.0, 1.0];
+    moving.relative_velocity = [-0.125, 0.0, 0.0];
+    moving.proprioception = [0.125, 0.0];
+    moving.contact = 1.0;
+    let patch = sequenced_patch_for_object(1, 1, moving, -0.12, 0.12);
+    let mut bank = empty_bank();
+    bank.observe_sealed_patch(&patch).unwrap();
+    let stopped = GroundedObjectSlotV1 {
+        relative_velocity: [0.0; 3],
+        proprioception: [0.0; 2],
+        ..moving
+    };
+    let probe_patch = sequenced_patch_for_object(2, 2, stopped, 0.0, 0.0);
+    let frame = probe_patch.pre_action().perception();
+    let draft = PerceptionFrameDraft::new(
+        frame.organism_id(),
+        frame.tick(),
+        frame.sensor_profile(),
+        frame.sensory().clone(),
+        frame.body(),
+        *frame.homeostasis(),
+        frame.candidates().to_vec(),
+        frame.profile_provenance(),
+        frame.grounded_object_slots().to_vec(),
+    )
+    .unwrap();
+    (bank, draft)
+}
+
+#[test]
+fn stopped_meal_recall_survives_motion_changes_and_persistence_rebuild() {
+    let (bank, draft) = stopped_meal_fixture();
+    let bytes = serde_json::to_vec(&bank).unwrap();
+    let before = bank.recall_frame(&draft).unwrap();
+    let context = &before.context().candidates[0];
+    assert_eq!(
+        context.target_source_count, 1,
+        "stored harmful meal must reach target similarity after stopping"
+    );
+    assert_eq!(context.family_source_count, 1);
+    assert!(context.target_confidence.raw() > 0.72);
+    assert!(context.family_confidence.raw() > 0.72);
+    assert!(context.target_latent[2] > 0.0);
+    assert!(context.family_value[2] > 0.0);
+    let receipt = &before.receipt().candidates[0];
+    assert_eq!(
+        (
+            receipt.target_eligible,
+            receipt.target_searched,
+            receipt.target_matches
+        ),
+        (1, 1, 1)
+    );
+    assert_eq!(
+        (
+            receipt.family_eligible,
+            receipt.family_searched,
+            receipt.family_matches
+        ),
+        (1, 1, 1)
+    );
+    assert_eq!(before.receipt().exact_bucket_reads, 2);
+    assert_eq!(before.receipt().neighbor_bucket_reads, 0);
+    assert_eq!(
+        serde_json::to_vec(&bank).unwrap(),
+        bytes,
+        "recall is read-only"
+    );
+    let restored: MemoryBank = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        serde_json::to_vec(&restored).unwrap(),
+        bytes,
+        "derived indices must not change canonical stored records"
+    );
+    let after = restored.recall_frame(&draft).unwrap();
+    assert_eq!(before.receipt(), after.receipt());
+    assert_eq!(before.context(), after.context());
+}
+
+#[test]
+fn stopped_meal_recall_preserves_identity_and_similarity_boundaries() {
+    let (bank, draft) = stopped_meal_fixture();
+    let original = serde_json::to_value(&bank).unwrap();
+    for (field, value) in [
+        ("tracked_object_id_raw", serde_json::json!(99_u64)),
+        ("profile_id_raw", serde_json::json!(1_u16)),
+        ("profile_schema_version", serde_json::json!(2_u16)),
+        ("sensory_abi_version_raw", serde_json::json!(2_u16)),
+    ] {
+        let mut wire = original.clone();
+        wire["candidate_store"]["records"]["1"][field] = value;
+        let foreign: MemoryBank = serde_json::from_value(wire).unwrap();
+        let recall = foreign.recall_frame(&draft).unwrap();
+        assert_eq!(
+            recall.context().candidates[0].target_source_count,
+            0,
+            "{field}"
+        );
+        assert_eq!(
+            recall.context().candidates[0].family_source_count,
+            0,
+            "{field}"
+        );
+    }
+    let mut wire = original.clone();
+    wire["candidate_store"]["records"]["1"]["organism_id_raw"] = serde_json::json!(812_u64);
+    wire["candidate_store"]["last_sequence_by_organism"] = serde_json::json!({"812":1});
+    let foreign: MemoryBank = serde_json::from_value(wire).unwrap();
+    assert_eq!(
+        foreign.recall_frame(&draft).unwrap().context().candidates[0].target_source_count,
+        0
+    );
+    let mut wire = original.clone();
+    wire["candidate_store"]["records"]["1"]["query_version_raw"] = serde_json::json!(1_u16);
+    assert!(serde_json::from_value::<MemoryBank>(wire).is_err());
+    let mut wire = original.clone();
+    wire["candidate_store"]["records"]["1"]["family_raw"] = serde_json::json!(4_u16);
+    wire["candidate_store"]["records"]["1"]["action_kind_raw"] =
+        serde_json::json!(ActionKind::Move.raw());
+    let other_family: MemoryBank = serde_json::from_value(wire).unwrap();
+    let recall = other_family.recall_frame(&draft).unwrap();
+    assert!(
+        recall.context().candidates[0].target_source_count > 0,
+        "target evidence can cross action families"
+    );
+    assert_eq!(recall.context().candidates[0].family_source_count, 0);
+    let mut wire = original;
+    let features = wire["candidate_store"]["records"]["1"]["query_features"]
+        .as_array_mut()
+        .unwrap();
+    for feature in &mut features[alife_core::MEMORY_TARGET_RANGE] {
+        *feature = serde_json::json!(0.0);
+    }
+    features[alife_core::MEMORY_TARGET_RANGE.start + 1] = serde_json::json!(-1.0);
+    let dissimilar: MemoryBank = serde_json::from_value(wire).unwrap();
+    let recall = dissimilar.recall_frame(&draft).unwrap();
+    assert_eq!(
+        recall.receipt().candidates[0].target_searched,
+        1,
+        "same-object record must reach similarity"
+    );
+    assert_eq!(recall.receipt().candidates[0].family_searched, 1);
+    assert_eq!(recall.context().candidates[0].target_source_count, 0);
+    assert_eq!(recall.context().candidates[0].family_source_count, 0);
 }
 
 #[test]
