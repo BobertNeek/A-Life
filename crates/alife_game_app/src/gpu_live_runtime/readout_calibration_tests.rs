@@ -717,6 +717,22 @@ fn saved_calibration_candidate_behavior_once() {
 #[test]
 #[ignore = "one paired preference assessment; requires saved revision-3 ALIFE_PREFERENCE_CANDIDATE"]
 fn saved_handoff_candidate_preference_once() {
+    saved_handoff_preference(
+        ActionCandidateCreditProfileV1::SignedConsequences,
+        "handoff-preference",
+    );
+}
+
+#[test]
+#[ignore = "one paired assessment of SignedChoiceReadouts; saved ALIFE_PREFERENCE_CANDIDATE"]
+fn signed_choice_readouts_preference_once() {
+    saved_handoff_preference(
+        ActionCandidateCreditProfileV1::SignedChoiceReadouts,
+        "signed-choice-preference",
+    );
+}
+
+fn saved_handoff_preference(profile: ActionCandidateCreditProfileV1, evidence_prefix: &str) {
     let bytes = std::fs::read(std::env::var("ALIFE_PREFERENCE_CANDIDATE").unwrap()).unwrap();
     let candidate = FoundationWeightAsset::decode_canonical(&bytes).unwrap();
     assert_eq!(
@@ -727,11 +743,7 @@ fn saved_handoff_candidate_preference_once() {
         ],
         "assessment must use the unchanged saved revision-3 candidate"
     );
-    let configured = Nano512ActionCreditCandidateV2::new(
-        &candidate,
-        ActionCandidateCreditProfileV1::SignedConsequences,
-    )
-    .unwrap();
+    let configured = Nano512ActionCreditCandidateV2::new(&candidate, profile).unwrap();
     assert_eq!(
         configured.asset().unwrap().encode_canonical().unwrap(),
         bytes
@@ -742,7 +754,7 @@ fn saved_handoff_candidate_preference_once() {
         assert_eq!(synapse.genetic_weight().to_bits(), weight.to_bits());
     }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
-        "../../target/founder-training-evidence/handoff-preference-{}",
+        "../../target/founder-training-evidence/{evidence_prefix}-{}",
         std::process::id()
     ));
     assert!(!root.exists(), "preserve prior evidence");
@@ -756,6 +768,7 @@ fn saved_handoff_candidate_preference_once() {
         "bounds.json",
         &serde_json::json!({
             "candidate_source":"readout-calibration-16188","optimizer_steps":0,
+            "profile":profile,"outer_wall_seconds":360,
             "lives":2,"ticks_per_life":32,"wall_seconds_per_life":120,
             "assignments":["cyan nutritious, amber harmful","amber nutritious, cyan harmful"],
             "runtime":"existing run_food_life; identical initial candidate and physiology",
@@ -785,11 +798,65 @@ fn saved_handoff_candidate_preference_once() {
         "outcomes.json",
         &[&cyan_nutritious, &amber_nutritious],
     );
+    if profile == ActionCandidateCreditProfileV1::SignedChoiceReadouts {
+        for life in ["cyan-nutritious", "amber-nutritious"] {
+            save_choice_credit_rows(&phenotype, &root.join(life));
+        }
+    }
     println!(
         "paired_preference_evidence={}; cyan={cyan_nutritious:?}; amber={amber_nutritious:?}",
         root.display()
     );
     assert_choices(&cyan_nutritious, &amber_nutritious);
+}
+
+fn save_choice_credit_rows(phenotype: &BrainPhenotype, root: &Path) {
+    let mut rows = Vec::new();
+    for tick in 1..=32 {
+        let path = root.join(format!("tick-{tick:02}.json"));
+        if !path.exists() {
+            break;
+        }
+        let row: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        if row["sealed"] != true {
+            rows.push(serde_json::json!({"tick":tick,"sealed":false}));
+            continue;
+        }
+        let family: CandidateActionFamily =
+            serde_json::from_value(row["receptor_family"].clone()).unwrap();
+        let lanes: [f32; 8] = serde_json::from_value(row["credit_lanes"].clone()).unwrap();
+        let mut heads = Vec::new();
+        for head in [
+            DecoderHeadKind::ActionCandidate,
+            DecoderHeadKind::MemoryContext,
+        ] {
+            let receptor = phenotype.synapses().iter().find_map(|s| match s.kind() {
+                CompiledSynapseKind::Decoder(c) if c.head() == head && c.family() == family => {
+                    Some(&phenotype.plasticity_receptors()[usize::from(s.receptor_index())])
+                }
+                _ => None,
+            });
+            let factor = receptor.map(|r| {
+                let weights = *r.receptor_profile().weights();
+                assert_eq!(weights, [0.0, -1.0, 1.0, -0.5, 0.2, 0.0, 0.5, -0.5]);
+                weights.iter().zip(lanes).map(|(w, l)| w * l).sum::<f32>()
+                    / weights.iter().map(|w| w.abs()).sum::<f32>()
+            });
+            heads.push(serde_json::json!({"head":head,"receptor":receptor,"third_factor":factor}));
+        }
+        rows.push(
+            serde_json::json!({"tick":tick,"sealed":true,"family":family,
+            "target":row["patch"]["outcome"]["physical"]["target_entity"],
+            "contact":row["patch"]["outcome"]["physical"]["contact"],
+            "credit_lanes":lanes,"heads":heads}),
+        );
+    }
+    save(
+        root,
+        "choice-credit-rows.json",
+        &serde_json::json!({"rows":rows,
+        "source":"existing run_food_life sealed-outcome credit lanes and compiled dispatch phenotype; no injected credit"}),
+    );
 }
 
 fn feeding_case(asset: &FoundationWeightAsset, seed: u64, position: Vec3f, root: &Path) -> bool {
