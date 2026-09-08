@@ -440,6 +440,22 @@ impl BiochemicalGraphChromosome {
         self.validate_contract()?;
         Ok(self)
     }
+
+    /// Changes one inherited emitter without acquiring live concentration state.
+    pub fn with_emitter_expression_floor(
+        mut self,
+        side: AlleleSide,
+        emitter_index: usize,
+        floor: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let homolog = match side {
+            AlleleSide::Maternal => &mut self.maternal,
+            AlleleSide::Paternal => &mut self.paternal,
+        };
+        *homolog = homolog.with_emitter_expression_floor(emitter_index, floor)?;
+        self.validate_contract()?;
+        Ok(self)
+    }
 }
 
 impl Validate for BiochemicalGraphChromosome {

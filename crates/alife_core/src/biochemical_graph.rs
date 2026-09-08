@@ -161,15 +161,27 @@ pub struct BiochemicalEmitter {
     pub gain: f32,
     pub response: EmitterResponse,
     pub inverted: bool,
+    /// Inherited basal expression for this emitter while other chemistry matures.
+    #[serde(default, skip_serializing_if = "zero_expression_floor")]
+    pub developmental_expression_floor: f32,
+}
+
+fn zero_expression_floor(value: &f32) -> bool {
+    *value == 0.0
 }
 
 impl Validate for BiochemicalEmitter {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         self.target.validate()?;
-        validate_finite_values(&[self.threshold, self.gain])?;
+        validate_finite_values(&[
+            self.threshold,
+            self.gain,
+            self.developmental_expression_floor,
+        ])?;
         if self.cadence_ticks == 0
             || !(0.0..=1.0).contains(&self.threshold)
             || !(-1.0..=1.0).contains(&self.gain)
+            || !(0.0..=1.0).contains(&self.developmental_expression_floor)
         {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
@@ -449,6 +461,21 @@ impl BiochemicalPhenotype {
             .get_mut(reaction_index)
             .ok_or(ScaffoldContractError::InvalidGeneticBounds)?;
         reaction.rate = rate;
+        value.validate_contract()?;
+        Ok(value)
+    }
+
+    pub(crate) fn with_emitter_expression_floor(
+        &self,
+        emitter_index: usize,
+        floor: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut value = self.clone();
+        let emitter = value
+            .emitters
+            .get_mut(emitter_index)
+            .ok_or(ScaffoldContractError::InvalidGeneticBounds)?;
+        emitter.developmental_expression_floor = floor;
         value.validate_contract()?;
         Ok(value)
     }
@@ -751,7 +778,9 @@ impl BiochemicalGraphState {
                     phenotype,
                     &mut next,
                     emitter.target,
-                    response * emitter.gain * developmental_expression,
+                    response
+                        * emitter.gain
+                        * developmental_expression.max(emitter.developmental_expression_floor),
                 )?;
             }
         }
@@ -1118,6 +1147,7 @@ const fn emitter(
         gain,
         response: EmitterResponse::Analogue,
         inverted: false,
+        developmental_expression_floor: 0.0,
     }
 }
 
