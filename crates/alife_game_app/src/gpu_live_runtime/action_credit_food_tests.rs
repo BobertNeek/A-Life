@@ -6,6 +6,9 @@ use alife_core::{ActionCandidateCreditProfileV1, Nano512ActionCreditCandidateV2}
 #[path = "readout_calibration_tests.rs"]
 mod readout_calibration_tests;
 
+#[path = "choice_retention_tests.rs"]
+mod choice_retention_tests;
+
 thread_local! {
     static SELECTOR_CAPTURE_ROOT: std::cell::RefCell<Option<PathBuf>> = const {
         std::cell::RefCell::new(None)
