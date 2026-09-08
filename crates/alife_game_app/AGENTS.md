@@ -30,6 +30,9 @@ Rules:
   different adapter/tree.
 - In the GPU live loop, seal the measured world outcome before applying or
   explicitly discarding the matching pending eligibility transaction.
+- Explicit Nano512 readout candidates enter through their genome-bound canonical
+  asset and archive before GPU insertion. Reconstruct that exact foundation on
+  restore; preserve builtin admission and deployed lifetime learning.
 - Observe each sealed patch in its organism-owned memory sidecar and then its
   diagnostic topology sidecar even when post-seal GPU learning is rejected;
   neither sidecar may abort or influence candidate arbitration.

@@ -324,9 +324,24 @@ fn resident_authority_plan_from_record(
     }
     let development = admission.phenotype.development_state_at(admission.age)?;
     let genome = admission.phenotype.brain_genome.clone();
-    let selects_legacy_nano512 = selects_legacy_nano512_compatibility_from_record(&admission)?;
     let (phenotype, compiler_inputs, legacy_nano512_compatibility_receipt) =
-        if selects_legacy_nano512 {
+        if let Some(candidate) = &admission.genome.nano512_readout_candidate {
+            let body = &admission.phenotype;
+            let source = &admission.genome;
+            if candidate.sensor_profile() != sensor_profile
+                || body.foundation != source.foundation
+                || body.source_genome_id != source.id
+                || body.lineage_id != source.lineage_id
+                || body.genetic_provenance != source.provenance
+                || body.brain_genome.id != source.id
+                || body.brain_genome.lineage_id != Some(source.lineage_id)
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+            let (phenotype, compiler_inputs) =
+                PhenotypeCompiler::compile_nano512_readout_candidate(&candidate.asset()?)?;
+            (phenotype, compiler_inputs, None)
+        } else if selects_legacy_nano512_compatibility_from_record(&admission)? {
             let foundation = FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?;
             let projection = N512FounderFoundationProjection::compile(
                 &admission.phenotype,
@@ -3549,6 +3564,13 @@ fn archive_birth_into_library(
 fn archive_foundation_asset_bytes(
     resident: &ResidentCognition,
 ) -> Result<Option<Vec<u8>>, GameAppShellError> {
+    if let alife_core::FoundationAbiSelection::Nano512ReadoutCandidateV1(candidate) =
+        resident.phenotype.foundation_abi()
+    {
+        let foundation = candidate.asset()?;
+        foundation.validate_against(&resident.phenotype)?;
+        return Ok(Some(foundation.encode_canonical()?));
+    }
     let Some(expected_digest) = resident
         .phenotype
         .foundation_abi()
