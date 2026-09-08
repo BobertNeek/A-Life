@@ -713,6 +713,74 @@ fn saved_calibration_candidate_behavior_once() {
     );
 }
 
+#[test]
+#[ignore = "one paired preference assessment; requires saved revision-3 ALIFE_PREFERENCE_CANDIDATE"]
+fn saved_handoff_candidate_preference_once() {
+    let bytes = std::fs::read(std::env::var("ALIFE_PREFERENCE_CANDIDATE").unwrap()).unwrap();
+    let candidate = FoundationWeightAsset::decode_canonical(&bytes).unwrap();
+    assert_eq!(
+        candidate.digest().bytes(),
+        &[
+            40, 161, 51, 234, 158, 204, 236, 70, 61, 99, 211, 218, 78, 154, 50, 208,
+            109, 194, 193, 113, 108, 113, 39, 239, 166, 78, 186, 38, 133, 91, 128, 250,
+        ],
+        "assessment must use the unchanged saved revision-3 candidate"
+    );
+    let configured = Nano512ActionCreditCandidateV2::new(
+        &candidate,
+        ActionCandidateCreditProfileV1::SignedConsequences,
+    )
+    .unwrap();
+    assert_eq!(configured.asset().unwrap().encode_canonical().unwrap(), bytes);
+    let (phenotype, inputs) =
+        PhenotypeCompiler::compile_nano512_action_credit_candidate(&configured).unwrap();
+    for (synapse, weight) in phenotype.synapses().iter().zip(candidate.weights()) {
+        assert_eq!(synapse.genetic_weight().to_bits(), weight.to_bits());
+    }
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
+        "../../target/founder-training-evidence/handoff-preference-{}",
+        std::process::id()
+    ));
+    assert!(!root.exists(), "preserve prior evidence");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("candidate.alife-foundation"), bytes).unwrap();
+    save(&root, "configured-candidate.json", &configured);
+    save(&root, "neural-phenotype.json", &phenotype);
+    save(&root, "compiler-inputs.json", &inputs);
+    save(
+        &root,
+        "bounds.json",
+        &serde_json::json!({
+            "candidate_source":"readout-calibration-16188","optimizer_steps":0,
+            "lives":2,"ticks_per_life":32,"wall_seconds_per_life":120,
+            "assignments":["cyan nutritious, amber harmful","amber nutritious, cyan harmful"],
+            "runtime":"existing run_food_life; identical initial candidate and physiology",
+            "stop_on_crash_or_invariant_failure":true,"automatic_repeat":false,
+            "late_choice_gate":"existing assert_choices after both lives; ticks 17-32",
+            "genetic_feeding_competence":"prior revision-3 held-out 3/3 PASS",
+            "calibration_diagnostic":"prior revision-3 FAIL preserved",
+            "default_promoted":false,
+        }),
+    );
+    let cyan_nutritious = run_food_life(
+        &candidate,
+        &phenotype,
+        true,
+        &root.join("cyan-nutritious"),
+        Some(&configured),
+    );
+    let amber_nutritious = run_food_life(
+        &candidate,
+        &phenotype,
+        false,
+        &root.join("amber-nutritious"),
+        Some(&configured),
+    );
+    save(&root, "outcomes.json", &[&cyan_nutritious, &amber_nutritious]);
+    println!("paired_preference_evidence={}; cyan={cyan_nutritious:?}; amber={amber_nutritious:?}", root.display());
+    assert_choices(&cyan_nutritious, &amber_nutritious);
+}
+
 fn feeding_case(asset: &FoundationWeightAsset, seed: u64, position: Vec3f, root: &Path) -> bool {
     std::fs::create_dir_all(root).unwrap();
     let mut world = HeadlessScenarioBuilder::new(seed)
