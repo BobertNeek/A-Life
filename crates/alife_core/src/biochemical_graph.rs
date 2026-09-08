@@ -55,6 +55,17 @@ pub struct ChemicalSpecies {
     pub maximum: f32,
 }
 
+impl ChemicalSpecies {
+    fn expressed_baseline(self, developmental_expression: f32) -> f32 {
+        match self.kind {
+            ChemicalSpeciesKind::Material => self.baseline,
+            ChemicalSpeciesKind::Regulatory => {
+                self.minimum + (self.baseline - self.minimum) * developmental_expression
+            }
+        }
+    }
+}
+
 impl Validate for ChemicalSpecies {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         self.id.validate()?;
@@ -665,8 +676,7 @@ impl BiochemicalGraphState {
         validate_developmental_expression(developmental_expression)?;
         let mut concentrations = [0.0; MAX_ACTIVE_CHEMICAL_SPECIES];
         for (index, species) in phenotype.species.iter().enumerate() {
-            concentrations[index] =
-                species.minimum + (species.baseline - species.minimum) * developmental_expression;
+            concentrations[index] = species.expressed_baseline(developmental_expression);
         }
         Ok(Self {
             schema_version: BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
@@ -713,8 +723,7 @@ impl BiochemicalGraphState {
         let mut next = *self;
         next.tick = next_tick;
         for (index, species) in phenotype.species.iter().enumerate() {
-            let expressed_baseline =
-                species.minimum + (species.baseline - species.minimum) * developmental_expression;
+            let expressed_baseline = species.expressed_baseline(developmental_expression);
             next.concentrations[index] = (expressed_baseline
                 + (self.concentrations[index] - expressed_baseline)
                     * species.decay_retention.powf(elapsed))
