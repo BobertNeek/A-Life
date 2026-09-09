@@ -16,6 +16,8 @@ pub const MAX_ACTIVE_NEUROEMITTERS: usize = 32;
 pub const MAX_NEURAL_RECEPTOR_ACTIVATIONS: usize = 32;
 pub const MAX_NEURAL_EMISSIONS: usize = 16;
 
+const CONCENTRATION_ROUNDING_TOLERANCE: f64 = 1.0e-6;
+
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ChemicalSpeciesId(pub u16);
@@ -976,29 +978,160 @@ fn apply_reaction(
     reaction: &SparseReaction,
     elapsed: f32,
 ) -> Result<(), ScaffoldContractError> {
-    let available = reaction
-        .reactants
+    let original_concentrations = state.concentrations;
+    let mut net_coefficients = [0.0_f64; MAX_ACTIVE_CHEMICAL_SPECIES];
+    let mut gross_reactant_coefficients = [0.0_f64; MAX_ACTIVE_CHEMICAL_SPECIES];
+
+    for term in &reaction.reactants {
+        let index = phenotype
+            .species_index(term.species)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let coefficient = f64::from(term.amount);
+        gross_reactant_coefficients[index] += coefficient;
+        net_coefficients[index] -= coefficient;
+        if !gross_reactant_coefficients[index].is_finite() || !net_coefficients[index].is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+    }
+    for term in &reaction.products {
+        let index = phenotype
+            .species_index(term.species)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        net_coefficients[index] += f64::from(term.amount);
+        if !net_coefficients[index].is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+    }
+
+    let active_species = usize::from(state.active_species);
+    if !net_coefficients[..active_species]
         .iter()
-        .map(|term| {
-            state
-                .concentration(phenotype, term.species)
-                .map(|value| value / term.amount)
-        })
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .fold(f32::INFINITY, f32::min);
+        .any(|coefficient| *coefficient != 0.0)
+    {
+        return Ok(());
+    }
+
+    let mut available = f64::INFINITY;
+    for (index, gross_coefficient) in gross_reactant_coefficients
+        .iter()
+        .enumerate()
+        .take(active_species)
+    {
+        if *gross_coefficient <= 0.0 {
+            continue;
+        }
+        let row = phenotype.species[index];
+        let concentration = f64::from(original_concentrations[index]);
+        let resource = if net_coefficients[index] < 0.0 {
+            concentration - f64::from(row.minimum)
+        } else {
+            concentration
+        };
+        if !resource.is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        if resource < 0.0 {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        let candidate = resource / *gross_coefficient;
+        if !candidate.is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        available = available.min(candidate);
+    }
+    if !available.is_finite() {
+        return Err(ScaffoldContractError::NonFiniteFloat);
+    }
+
     let control = reaction
         .rate_control
         .map(|id| state.concentration(phenotype, id))
         .transpose()?
         .unwrap_or(1.0);
-    let amount = (reaction.rate * elapsed * control * available).max(0.0);
-    for term in &reaction.reactants {
-        apply_delta(phenotype, state, term.species, -amount * term.amount)?;
+    if !control.is_finite() {
+        return Err(ScaffoldContractError::NonFiniteFloat);
     }
-    for term in &reaction.products {
-        apply_delta(phenotype, state, term.species, amount * term.amount)?;
+    let mut extent = f64::from(reaction.rate) * f64::from(elapsed) * f64::from(control) * available;
+    if !extent.is_finite() {
+        return Err(ScaffoldContractError::NonFiniteFloat);
     }
+    extent = extent.max(0.0);
+    if extent == 0.0 {
+        return Ok(());
+    }
+
+    for index in 0..active_species {
+        let coefficient = net_coefficients[index];
+        let row = phenotype.species[index];
+        let (room, divisor) = if coefficient < 0.0 {
+            (
+                f64::from(original_concentrations[index]) - f64::from(row.minimum),
+                -coefficient,
+            )
+        } else if coefficient > 0.0 {
+            (
+                f64::from(row.maximum) - f64::from(original_concentrations[index]),
+                coefficient,
+            )
+        } else {
+            continue;
+        };
+        if !room.is_finite() || !divisor.is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        if room < 0.0 {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        let candidate = room / divisor;
+        if !candidate.is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        extent = extent.min(candidate);
+        if !extent.is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+    }
+    if extent == 0.0 {
+        return Ok(());
+    }
+
+    let mut updated_concentrations = original_concentrations;
+    for index in 0..active_species {
+        let coefficient = net_coefficients[index];
+        if coefficient == 0.0 {
+            continue;
+        }
+        let row = phenotype.species[index];
+        let delta = extent * coefficient;
+        let candidate = f64::from(original_concentrations[index]) + delta;
+        if !delta.is_finite() || !candidate.is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        let minimum = f64::from(row.minimum);
+        let maximum = f64::from(row.maximum);
+        if candidate < minimum - CONCENTRATION_ROUNDING_TOLERANCE
+            || candidate > maximum + CONCENTRATION_ROUNDING_TOLERANCE
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        let mut candidate = candidate as f32;
+        if !candidate.is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        if candidate < row.minimum {
+            if minimum - f64::from(candidate) > CONCENTRATION_ROUNDING_TOLERANCE {
+                return Err(ScaffoldContractError::ScalarOutOfRange);
+            }
+            candidate = row.minimum;
+        } else if candidate > row.maximum {
+            if f64::from(candidate) - maximum > CONCENTRATION_ROUNDING_TOLERANCE {
+                return Err(ScaffoldContractError::ScalarOutOfRange);
+            }
+            candidate = row.maximum;
+        }
+        updated_concentrations[index] = candidate;
+    }
+    state.concentrations = updated_concentrations;
     Ok(())
 }
 
