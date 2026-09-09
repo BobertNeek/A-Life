@@ -8,11 +8,15 @@ mod durable_manifest;
 mod replay_codec;
 mod state_codec;
 
-pub use content_store::{merge_gpu_checkpoint_manifest_entries, GpuCheckpointAssetStore};
+pub use content_store::{
+    merge_gpu_checkpoint_manifest_entries, retain_current_gpu_checkpoint_manifest_entries,
+    GpuCheckpointAssetStore,
+};
 pub use durable_manifest::{
     GpuDurableSaveManifest, GpuLoadedSaveManifest, GpuSaveManifestCasOutcome,
     GpuSaveManifestDigest, GpuSleepJournalPublicationReceipt, GpuSleepJournalPublicationTiming,
     GpuSleepTransactionJournalEntryV2, GpuSleepTransactionJournalV2,
+    GPU_SLEEP_TRANSACTION_JOURNAL_MAX_ENTRIES,
 };
 pub use state_codec::current_backend_provenance;
 pub use state_codec::{

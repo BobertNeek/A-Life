@@ -430,6 +430,67 @@ fn completed_sleep_promotion_moves_exact_staging_refs_into_committed_main_state(
 }
 
 #[test]
+fn gpu_checkpoint_asset_reference_enumeration_structurally_covers_every_optional_class() {
+    let mut save = save_for_sleep(sleep_state(SleepPhase::Awake, ConsolidationState::None));
+    // This fixture deliberately combines phase-specific references that cannot
+    // coexist in one valid checkpoint. The contract under test is enumeration.
+    save.live_structural_topology = Some(asset("live-topology"));
+    save.exact_cognitive_state = Some(asset("exact-cognitive"));
+    save.pending_experience_transaction = Some(asset("pending-experience"));
+    save.memory.compaction.staged_bank_asset = Some(asset("memory-staged"));
+    save.memory.retained_learning = Some(RetainedLearningRecoverySaveState {
+        schema_version: RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION,
+        organism_id_raw: save.organism_id.raw(),
+        pending: pending_eligibility(),
+        sealed_patch_asset: asset("retained-learning-sealed-patch"),
+        neural_receptor_frame_asset: asset("retained-learning-receptors"),
+        attempts: 1,
+        last_error_code: "neural-backend-unavailable".to_owned(),
+    });
+    save.sleep_assets = GpuSleepAssetState {
+        replay_batch: Some(asset("sleep-replay")),
+        lifetime_staging: Some(asset("sleep-lifetime-staging")),
+        fast_staging: Some(asset("sleep-fast-staging")),
+        eligibility_staging: Some(asset("sleep-eligibility-staging")),
+        replay_journal_staging: Some(asset("sleep-replay-journal-staging")),
+    };
+
+    let mut actual = save
+        .asset_references()
+        .into_iter()
+        .map(|asset| asset.asset_id.as_str())
+        .collect::<Vec<_>>();
+    actual.sort_unstable();
+    let mut expected = vec![
+        "activations",
+        "compiler-inputs",
+        "eligibility",
+        "exact-cognitive",
+        "fast",
+        "immutable-phenotype",
+        "lifetime",
+        "live-topology",
+        "memory-active",
+        "memory-staged",
+        "neuron-homeostasis",
+        "pending-experience",
+        "replay",
+        "retained-learning-receptors",
+        "retained-learning-sealed-patch",
+        "sleep-eligibility-staging",
+        "sleep-fast-staging",
+        "sleep-lifetime-staging",
+        "sleep-replay",
+        "sleep-replay-journal-staging",
+        "throttle-sequence",
+        "topology",
+    ];
+    expected.sort_unstable();
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn gpu_checkpoint_requires_exact_enclosing_manifest_references() {
     let save = save_for_sleep(sleep_state(SleepPhase::Awake, ConsolidationState::None));
     let refs = [

@@ -26,6 +26,7 @@ static SAVE_CAS_NONCE: AtomicU64 = AtomicU64::new(1);
 #[cfg(test)]
 static AUTHORITY_TEST_FAILURE_STAGE: AtomicU64 = AtomicU64::new(0);
 pub const GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION: u16 = 2;
+pub const GPU_SLEEP_TRANSACTION_JOURNAL_MAX_ENTRIES: usize = 4096;
 const SLEEP_JOURNAL_DIGEST_DOMAIN: &[u8] = b"alife.gpu.sleep-transaction-journal.v2";
 const GPU_CHECKPOINT_AUTHORITY_FIELD: &str = "gpu_checkpoint_authority";
 const GPU_CHECKPOINT_AUTHORITY_SCHEMA: &str = "alife.gpu-checkpoint-authority";
@@ -321,6 +322,9 @@ impl GpuSleepTransactionJournalV2 {
         exact_base_checkpoint_tick: Tick,
         entries: Vec<GpuSleepTransactionJournalEntryV2>,
     ) -> Result<Self, ScaffoldContractError> {
+        if entries.len() > GPU_SLEEP_TRANSACTION_JOURNAL_MAX_ENTRIES {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
         let mut journal = Self {
             schema_version: GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION,
             exact_base_manifest_digest,
@@ -334,6 +338,9 @@ impl GpuSleepTransactionJournalV2 {
     }
 
     pub fn validate(&self) -> Result<(), ScaffoldContractError> {
+        if self.entries.len() > GPU_SLEEP_TRANSACTION_JOURNAL_MAX_ENTRIES {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
         let mut last_by_organism = BTreeMap::new();
         let mut previous_key = None;
         let mut previous_entry: Option<&GpuSleepTransactionJournalEntryV2> = None;
@@ -381,7 +388,6 @@ impl GpuSleepTransactionJournalV2 {
             || PortableAssetDigest(self.exact_base_manifest_digest.clone())
                 .validate_format()
                 .is_err()
-            || self.entries.len() > 256
             || self.entries.iter().any(|entry| entry.validate().is_err())
             || self.journal_digest != self.recompute_digest()?
         {

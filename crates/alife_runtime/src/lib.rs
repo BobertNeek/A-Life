@@ -5,13 +5,14 @@ mod session;
 mod sleep_scheduler;
 
 pub use checkpoint_assets::{
-    current_backend_provenance, merge_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite,
+    current_backend_provenance, merge_gpu_checkpoint_manifest_entries,
+    retain_current_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite,
     GpuBrainSidecarCapture, GpuCheckpointAssetStore, GpuDurableFounderWrite,
     GpuDurableSaveManifest, GpuExactCheckpointTransactionContextV1, GpuLoadedSaveManifest,
     GpuSaveManifestCasOutcome, GpuSaveManifestDigest, GpuSleepJournalPublicationReceipt,
     GpuSleepJournalPublicationTiming, GpuSleepTransactionJournalEntryV2,
     GpuSleepTransactionJournalV2, RestoredGpuBrainCheckpoint, RestoredRetainedLearning,
-    RetainedLearningCapture,
+    RetainedLearningCapture, GPU_SLEEP_TRANSACTION_JOURNAL_MAX_ENTRIES,
 };
 pub use session::*;
 pub use sleep_scheduler::*;

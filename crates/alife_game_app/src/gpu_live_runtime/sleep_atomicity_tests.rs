@@ -2,7 +2,7 @@
 use super::*;
 
 #[derive(Debug, PartialEq)]
-struct HostSleepSnapshot {
+pub(super) struct HostSleepSnapshot {
     world: String,
     residents: String,
     memories: BTreeMap<u64, MemorySidecarState>,
@@ -18,7 +18,18 @@ struct HostSleepSnapshot {
 }
 
 impl HostSleepSnapshot {
-    fn capture(runtime: &GpuLiveBrainRuntime) -> Self {
+    pub(super) fn assert_cognition_matches(&self, other: &Self) {
+        assert_eq!(self.world, other.world);
+        assert_eq!(self.residents, other.residents);
+        assert_eq!(self.memories, other.memories);
+        assert_eq!(self.topologies, other.topologies);
+        assert_eq!(self.restored_replay, other.restored_replay);
+        assert_eq!(self.sealed, other.sealed);
+        assert_eq!(self.last_sealed, other.last_sealed);
+        assert_eq!(self.sealed_count, other.sealed_count);
+    }
+
+    pub(super) fn capture(runtime: &GpuLiveBrainRuntime) -> Self {
         Self {
             world: format!("{:?}", runtime.world),
             residents: format!("{:?}", runtime.residents),
@@ -100,7 +111,7 @@ fn poll_persistence(runtime: &mut GpuLiveBrainRuntime) {
     runtime.poll_exact_population_checkpoint().unwrap();
 }
 
-fn at_sleep_boundary(label: &str, completed: bool) -> GpuLiveBrainRuntime {
+pub(super) fn at_sleep_boundary(label: &str, completed: bool) -> GpuLiveBrainRuntime {
     let mut runtime = recovery_sleep_tests::fixture(label);
     runtime.request_recovery_sleep(OrganismId(1)).unwrap();
     let deadline = Instant::now() + std::time::Duration::from_secs(120);

@@ -1196,13 +1196,8 @@ impl GpuBrainSaveState {
         Ok(promoted)
     }
 
-    /// Verifies that every bulk checkpoint reference is present exactly once
-    /// in the enclosing portable-save manifest and binds the same digest.
-    pub fn validate_asset_manifest(
-        &self,
-        manifest: &AssetManifest,
-    ) -> Result<(), PersistenceError> {
-        self.validate()?;
+    /// Returns every bulk asset referenced by this exact GPU brain state.
+    pub fn asset_references(&self) -> Vec<&GpuBrainAssetRef> {
         let mut refs = vec![
             &self.immutable_phenotype,
             &self.phenotype_compiler_inputs,
@@ -1237,8 +1232,18 @@ impl GpuBrainSaveState {
         refs.extend(self.sleep_assets.eligibility_staging.iter());
         refs.extend(self.sleep_assets.replay_journal_staging.iter());
         refs.push(&self.throttle_replay.sequence_asset);
+        refs
+    }
 
-        for asset in refs {
+    /// Verifies that every bulk checkpoint reference is present exactly once
+    /// in the enclosing portable-save manifest and binds the same digest.
+    pub fn validate_asset_manifest(
+        &self,
+        manifest: &AssetManifest,
+    ) -> Result<(), PersistenceError> {
+        self.validate()?;
+
+        for asset in self.asset_references() {
             let mut matches = manifest
                 .entries
                 .iter()

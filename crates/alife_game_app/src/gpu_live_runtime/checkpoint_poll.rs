@@ -161,6 +161,8 @@ impl GpuLiveBrainRuntime {
                             capture,
                             context,
                             durability,
+                            #[cfg(all(test, feature = "gpu-tests"))]
+                            self.next_checkpoint_worker_start_gate.take(),
                         );
                         self.exact_checkpoint_work =
                             ExactPopulationCheckpointRuntimeWorkV1::Worker {

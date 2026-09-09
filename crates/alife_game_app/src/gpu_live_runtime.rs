@@ -2,12 +2,18 @@
 
 #[cfg(all(test, feature = "gpu-tests"))]
 mod action_credit_food_tests;
+#[cfg(all(test, feature = "gpu-tests"))]
+mod checkpoint_manifest_pruning_tests;
 mod checkpoint_poll;
 mod checkpoint_runtime;
 mod durability_hold;
 mod exact_population_checkpoint;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod founder_consequence_tests;
+#[cfg(all(test, feature = "gpu-tests"))]
+mod journal_capacity_tests;
+#[cfg(all(test, feature = "gpu-tests"))]
+mod journal_worker_poll_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod nociception_food_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
@@ -718,17 +724,107 @@ impl ResidentAuthorityPlan {
 }
 
 const LIVE_COGNITIVE_ENERGY_PER_WORK_UNIT: f32 = 0.000_001;
-const MAX_EXACT_CHECKPOINT_PENDING_JOURNAL_ENTRIES: usize = 64;
+const MIN_SLEEP_JOURNAL_PENDING_CAPACITY: usize = 64;
+
+fn sleep_journal_pending_capacity_for_population(
+    population: usize,
+) -> Result<usize, ScaffoldContractError> {
+    let reserve = sleep_journal_tick_reserve(population)?;
+    // Admission guarantees that both an overlapping tick and a finalization
+    // tick fit. This is a resource limit, not an allocation.
+    Ok((reserve * 2).max(MIN_SLEEP_JOURNAL_PENDING_CAPACITY))
+}
+
+fn sleep_journal_tick_reserve(population: usize) -> Result<usize, ScaffoldContractError> {
+    population
+        .checked_mul(2)
+        .filter(|reserve| *reserve <= alife_runtime::GPU_SLEEP_TRANSACTION_JOURNAL_MAX_ENTRIES / 2)
+        .ok_or(ScaffoldContractError::ScalarOutOfRange)
+}
+
+fn validate_sleep_journal_population(
+    population: usize,
+    max_hot_brains: u32,
+) -> Result<usize, ScaffoldContractError> {
+    if population > max_hot_brains as usize {
+        return Err(ScaffoldContractError::NeuralBackendUnavailable);
+    }
+    sleep_journal_tick_reserve(population)
+}
+
+fn exact_sleep_journal_tick_fits(
+    pending: usize,
+    reserve: usize,
+    capacity: usize,
+    has_durable_permit: bool,
+) -> Result<bool, ScaffoldContractError> {
+    // Overlapping ticks leave at least half the nondecreasing capacity free.
+    // This covers finalization even after population shrinkage and regrowth.
+    let finalization_reserve = if has_durable_permit {
+        0
+    } else {
+        reserve.max(capacity / 2)
+    };
+    let required = pending
+        .checked_add(reserve)
+        .and_then(|count| count.checked_add(finalization_reserve))
+        .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+    Ok(required <= capacity)
+}
+
+fn ordinary_sleep_journal_requires_rollover(
+    durable: usize,
+    in_flight: usize,
+    pending: usize,
+    reserve: usize,
+    capacity: usize,
+) -> Result<bool, ScaffoldContractError> {
+    let required = durable
+        .checked_add(in_flight)
+        .and_then(|count| count.checked_add(pending))
+        .and_then(|count| count.checked_add(reserve))
+        .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+    Ok(required > capacity)
+}
+
+#[derive(Debug)]
+struct SleepJournalCapacity {
+    high_water: usize,
+}
+
+impl Default for SleepJournalCapacity {
+    fn default() -> Self {
+        Self {
+            high_water: MIN_SLEEP_JOURNAL_PENDING_CAPACITY,
+        }
+    }
+}
+
+impl SleepJournalCapacity {
+    fn prospective(&self, population: usize) -> Result<usize, ScaffoldContractError> {
+        Ok(self
+            .high_water
+            .max(sleep_journal_pending_capacity_for_population(population)?))
+    }
+
+    fn admit_population(&mut self, population: usize) -> Result<(), ScaffoldContractError> {
+        // Only successful population admission may raise this high-water mark.
+        // Death must not shrink capacity beneath already owned journal entries.
+        self.high_water = self.prospective(population)?;
+        Ok(())
+    }
+}
 
 fn append_bounded_sleep_journal_entries(
     pending: &mut Vec<GpuSleepTransactionJournalEntryV2>,
     entries: Vec<GpuSleepTransactionJournalEntryV2>,
+    capacity: usize,
 ) -> Result<(), ScaffoldContractError> {
     let next_len = pending
         .len()
         .checked_add(entries.len())
         .ok_or(ScaffoldContractError::InvalidId)?;
-    if next_len > MAX_EXACT_CHECKPOINT_PENDING_JOURNAL_ENTRIES {
+    if next_len > capacity {
         return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
     }
     for entry in &entries {
@@ -763,6 +859,7 @@ struct GpuLiveCheckpointDurability {
     store: GpuCheckpointAssetStore,
     durable_manifest: GpuDurableSaveManifest,
     published: GpuLoadedSaveManifest,
+    sleep_journal_entry_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1005,6 +1102,7 @@ struct SleepJournalPublicationWorkerFinalV1 {
 struct SleepJournalPublicationWorkerOwnerV1 {
     receiver: Receiver<SleepJournalPublicationWorkerFinalV1>,
     join_handle: Option<JoinHandle<()>>,
+    incremental_entry_count: usize,
 }
 
 enum SleepJournalPublicationWorkerPollV1 {
@@ -1015,6 +1113,15 @@ enum SleepJournalPublicationWorkerPollV1 {
 
 impl SleepJournalPublicationWorkerOwnerV1 {
     fn poll(&mut self) -> SleepJournalPublicationWorkerPollV1 {
+        // A final message can precede thread exit. Keep it buffered until
+        // joining the worker is known not to wait.
+        if self
+            .join_handle
+            .as_ref()
+            .is_some_and(|worker| !worker.is_finished())
+        {
+            return SleepJournalPublicationWorkerPollV1::Pending;
+        }
         match self.receiver.try_recv() {
             Ok(final_result) => {
                 let worker_panicked = self
@@ -1272,6 +1379,7 @@ fn assemble_checkpointed_save_from_immutable_capture(
     if host.replacement.creatures.len() != host.brains.len() {
         return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
     }
+    alife_runtime::retain_current_gpu_checkpoint_manifest_entries(&mut host.replacement);
     merge_gpu_checkpoint_manifest_entries(&mut host.replacement.assets, manifest_entries)?;
     host.replacement.validate_with_asset_root(store.root())?;
     Ok((host.replacement, exact_neural_captures))
@@ -1300,11 +1408,17 @@ fn spawn_exact_population_checkpoint_worker(
     capture: GpuExactPopulationCaptureV1,
     context: GpuExactCheckpointTransactionContextV1,
     mut durability: GpuLiveCheckpointDurability,
+    #[cfg(all(test, feature = "gpu-tests"))] start_gate: Option<Receiver<()>>,
 ) -> ExactPopulationCheckpointWorkerOwnerV1 {
     let (event_sender, event_receiver) = mpsc::sync_channel(1);
     let (command_sender, command_receiver) = mpsc::sync_channel(1);
     let join_handle = thread::spawn(move || {
         configure_persistence_worker_priority();
+        #[cfg(all(test, feature = "gpu-tests"))]
+        if let Some(gate) = start_gate {
+            // Disconnect releases normal work, including after a test panic.
+            let _ = gate.recv();
+        }
         let checkpoint_tick = host.checkpoint_tick;
         let capture_transaction_generation = capture.capture_transaction_generation();
         let population_set_digest = capture.population_set_digest();
@@ -1458,10 +1572,16 @@ fn spawn_sleep_journal_publication_worker(
     mut durability: GpuLiveCheckpointDurability,
     entries: Vec<GpuSleepTransactionJournalEntryV2>,
     measure: bool,
+    #[cfg(all(test, feature = "gpu-tests"))] start_gate: Option<Receiver<()>>,
 ) -> SleepJournalPublicationWorkerOwnerV1 {
+    let incremental_entry_count = entries.len();
     let (sender, receiver) = mpsc::sync_channel(1);
     let join_handle = thread::spawn(move || {
         configure_persistence_worker_priority();
+        #[cfg(all(test, feature = "gpu-tests"))]
+        if let Some(gate) = start_gate {
+            let _ = gate.recv();
+        }
         let started = measure.then(Instant::now);
         let entry_count = u64::try_from(entries.len()).unwrap_or(u64::MAX);
         let expected_base_digest = durability.published.digest.as_str().to_string();
@@ -1481,6 +1601,7 @@ fn spawn_sleep_journal_publication_worker(
     SleepJournalPublicationWorkerOwnerV1 {
         receiver,
         join_handle: Some(join_handle),
+        incremental_entry_count,
     }
 }
 
@@ -1664,6 +1785,15 @@ impl GpuLiveCheckpointDurability {
         let current = self
             .durable_manifest
             .load_sleep_transaction_journal(&self.published)?;
+        if current.entries.len() != self.sleep_journal_entry_count {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+        }
+        let next_count = current
+            .entries
+            .len()
+            .checked_add(entries.len())
+            .filter(|count| *count <= alife_runtime::GPU_SLEEP_TRANSACTION_JOURNAL_MAX_ENTRIES)
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
         record_optional_elapsed_ns(&mut timing.current_journal_load_validation_wall_ns, started);
         let started = measure.then(Instant::now);
         let mut combined = current.entries;
@@ -1690,6 +1820,7 @@ impl GpuLiveCheckpointDurability {
             .publish_sleep_transaction_journal_profiled(&self.published, &journal, measure)?;
         timing.durable = receipt.timing;
         self.published = receipt.published;
+        self.sleep_journal_entry_count = next_count;
         Ok(timing)
     }
 
@@ -1753,7 +1884,13 @@ impl GpuLiveCheckpointDurability {
                     .to_string(),
             });
         }
+        let count = self
+            .durable_manifest
+            .load_sleep_transaction_journal(&published)?
+            .entries
+            .len();
         self.published = published;
+        self.sleep_journal_entry_count = count;
         self.durable_reference()
     }
 
@@ -1770,7 +1907,13 @@ impl GpuLiveCheckpointDurability {
                 ),
             });
         }
+        let count = self
+            .durable_manifest
+            .load_sleep_transaction_journal(&published)?
+            .entries
+            .len();
         self.published = published;
+        self.sleep_journal_entry_count = count;
         self.durable_reference()
     }
 }
@@ -3122,6 +3265,13 @@ pub struct GpuLiveBrainRuntime {
     pending_exact_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
     sleep_journal_publication_worker: Option<SleepJournalPublicationWorkerOwnerV1>,
     pending_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
+    #[cfg(all(test, feature = "gpu-tests"))]
+    sleep_journal_capacity_override: Option<usize>,
+    #[cfg(all(test, feature = "gpu-tests"))]
+    sleep_journal_durable_capacity_override: Option<usize>,
+    sleep_journal_capacity: SleepJournalCapacity,
+    #[cfg(all(test, feature = "gpu-tests"))]
+    next_checkpoint_worker_start_gate: Option<Receiver<()>>,
     exact_checkpoint_waiting_for_sleep_journal: bool,
     manual_checkpoint_waiting_for_sleep_journal: Option<PathBuf>,
     post_irreversible_gpu_commit_fail_stop_armed: bool,
@@ -4511,6 +4661,7 @@ impl GpuLiveBrainRuntime {
             store,
             durable_manifest,
             published: loaded_save,
+            sleep_journal_entry_count: rollback_journal.entries.len(),
         });
         let durable_reference = runtime
             .checkpoint_durability
@@ -4528,11 +4679,12 @@ impl GpuLiveBrainRuntime {
                 .durable_manifest
                 .publish_sleep_transaction_journal(&exact_base.published, &cleared)?;
             let refreshed = exact_base.durable_manifest.load()?;
-            runtime
+            let durability = runtime
                 .checkpoint_durability
                 .as_mut()
-                .expect("durability remains installed during startup reconciliation")
-                .published = refreshed;
+                .expect("durability remains installed during startup reconciliation");
+            durability.published = refreshed;
+            durability.sleep_journal_entry_count = cleared.entries.len();
         }
         runtime.admit_restored_durable_completed_recommit(rollback_journal)?;
         if requires_checkpoint_reconciliation {
@@ -5463,6 +5615,13 @@ impl GpuLiveBrainRuntime {
             pending_exact_sleep_journal_entries: Vec::new(),
             sleep_journal_publication_worker: None,
             pending_sleep_journal_entries: Vec::new(),
+            sleep_journal_capacity: SleepJournalCapacity::default(),
+            #[cfg(all(test, feature = "gpu-tests"))]
+            sleep_journal_capacity_override: None,
+            #[cfg(all(test, feature = "gpu-tests"))]
+            sleep_journal_durable_capacity_override: None,
+            #[cfg(all(test, feature = "gpu-tests"))]
+            next_checkpoint_worker_start_gate: None,
             exact_checkpoint_waiting_for_sleep_journal: false,
             manual_checkpoint_waiting_for_sleep_journal: None,
             post_irreversible_gpu_commit_fail_stop_armed: false,
@@ -5579,6 +5738,10 @@ impl GpuLiveBrainRuntime {
             })
             .collect::<BTreeMap<_, _>>();
         let live_ids = live_bindings.keys().copied().collect::<BTreeSet<_>>();
+        validate_sleep_journal_population(
+            live_ids.len(),
+            backend.runtime_profile().max_hot_brains,
+        )?;
         if checkpoint_index.keys().any(|raw| !live_ids.contains(raw)) {
             return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
         }
@@ -5594,6 +5757,13 @@ impl GpuLiveBrainRuntime {
             pending_exact_sleep_journal_entries: Vec::new(),
             sleep_journal_publication_worker: None,
             pending_sleep_journal_entries: Vec::new(),
+            sleep_journal_capacity: SleepJournalCapacity::default(),
+            #[cfg(all(test, feature = "gpu-tests"))]
+            sleep_journal_capacity_override: None,
+            #[cfg(all(test, feature = "gpu-tests"))]
+            sleep_journal_durable_capacity_override: None,
+            #[cfg(all(test, feature = "gpu-tests"))]
+            next_checkpoint_worker_start_gate: None,
             exact_checkpoint_waiting_for_sleep_journal: false,
             manual_checkpoint_waiting_for_sleep_journal: None,
             post_irreversible_gpu_commit_fail_stop_armed: false,
@@ -5915,6 +6085,9 @@ impl GpuLiveBrainRuntime {
             }
             return Err(error.into());
         }
+        runtime
+            .sleep_journal_capacity
+            .admit_population(runtime.handles.len())?;
         Ok(runtime)
     }
 
@@ -6311,20 +6484,14 @@ impl GpuLiveBrainRuntime {
     }
 
     pub fn reconcile_population(&mut self) -> Result<(), GameAppShellError> {
+        let live_ids = self.prospective_live_organism_ids();
+        let population = live_ids.len();
+        validate_sleep_journal_population(
+            population,
+            self.backend.runtime_profile().max_hot_brains,
+        )?;
         let resident_set_before = self.handles.keys().copied().collect::<BTreeSet<_>>();
         self.retire_dead_organisms()?;
-        let live_ids = self
-            .world
-            .organism_entity_ids()
-            .into_iter()
-            .filter(|(organism_id, _)| {
-                self.world
-                    .organism_registry()
-                    .get(*organism_id)
-                    .is_none_or(|record| record.lifecycle().is_alive())
-            })
-            .map(|(organism_id, _)| organism_id.raw())
-            .collect::<BTreeSet<_>>();
 
         let retired = self
             .handles
@@ -6407,6 +6574,7 @@ impl GpuLiveBrainRuntime {
             self.topologies.insert(raw, topology);
         }
         let resident_set_after = self.handles.keys().copied().collect::<BTreeSet<_>>();
+        self.sleep_journal_capacity.admit_population(population)?;
         if resident_set_after != resident_set_before {
             if let Err(error) = self.request_exact_population_checkpoint() {
                 self.backend
@@ -7061,6 +7229,21 @@ impl GpuLiveBrainRuntime {
             no_progress_reason_for_checkpoint_stage(self.exact_checkpoint_coordinator.stage())
         {
             return Ok(GpuLiveTickOutcome::NoProgress(reason));
+        }
+        match self.preflight_sleep_journal_tick() {
+            Ok(Some(reason)) => return Ok(GpuLiveTickOutcome::NoProgress(reason)),
+            Ok(None) => {}
+            Err(error) => {
+                if self.post_irreversible_gpu_commit_fail_stop_armed
+                    || self.exact_checkpoint_coordinator.stage()
+                        == ExactPopulationCheckpointStageV1::Failed
+                {
+                    self.backend
+                        .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                }
+                self.post_irreversible_gpu_commit_fail_stop_armed = false;
+                return Err(error);
+            }
         }
         let world_tick_before = self.world.tick().raw();
         let measure_clone_wall_time = self.performance_measurement_enabled;
@@ -10287,6 +10470,7 @@ mod tests {
                 store,
                 durable_manifest,
                 published,
+                sleep_journal_entry_count: 0,
             }),
             lineage_library: Some(lineage_library),
             archive_run_id: "curated-runtime-archive".to_string(),
@@ -10462,6 +10646,7 @@ mod tests {
                 store,
                 durable_manifest,
                 published,
+                sleep_journal_entry_count: 0,
             },
             residents,
             sensor_profile,
@@ -10583,6 +10768,7 @@ mod tests {
             store: GpuCheckpointAssetStore::new(fixture.asset_root.clone()).unwrap(),
             published: changed_published,
             durable_manifest: changed_durable_manifest,
+            sleep_journal_entry_count: 0,
         };
         let changed_root = fixture.archive_root.join("changed-generation");
         let mut changed = archive_attachment_test_carrier(&fixture, Some(changed_durability));
