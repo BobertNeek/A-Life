@@ -248,7 +248,12 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
       }
     }
   } else if (metadata.decoder_head == DECODER_HEAD_SPEECH_PAYLOAD) {
-    if (selected.kind == 6u) {
+    let extension = load_slot_extension(brain);
+    let packed = vec2<u32>(load_state_u32(extension.reserved0 + 2u), load_state_u32(extension.reserved0 + 3u));
+    let joint_mode = (packed.y & 0xffff0000u) == JOINT_SELECTION_V1_MARKER;
+    let vocal_selected = select(selected.kind == 6u, (packed.x >> 24u) != 0u, joint_mode);
+    // An absent speech receipt does not authorize speech-specific credit.
+    if (vocal_selected && (load_state_u32(extension.reserved0) & 1u) != 0u) {
       let activation_offset = select(
         brain.activation_a_offset,
         brain.activation_b_offset,

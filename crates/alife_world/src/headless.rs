@@ -2276,7 +2276,7 @@ impl HeadlessWorld {
                     Some((payload, prompted)) => {
                         self.apply_neural_command(&command, Some(payload), prompted)?
                     }
-                    None => self.execute_command(&command)?,
+                    None => self.apply_neural_command(&command, None, false)?,
                 }
             } else {
                 self.execute_command(&command)?
@@ -4909,6 +4909,94 @@ mod task_6_factorized_motor_tests {
             vec![command],
         )
         .unwrap()
+    }
+
+    #[test]
+    fn factorized_vocal_preserves_gpu_payload_for_primary_and_auxiliary_channels() {
+        for primary_kind in [ActionKind::Move, ActionKind::Interact, ActionKind::Vocalize] {
+            let (mut world, agent, food, _) = prepared_world();
+            let vocal = HeadlessWorldCommand::vocalize(ORGANISM_ID).unwrap();
+            let primary = match primary_kind {
+                ActionKind::Move => HeadlessWorldCommand::approach(ORGANISM_ID, food).unwrap(),
+                ActionKind::Interact => HeadlessWorldCommand::eat(ORGANISM_ID, food).unwrap(),
+                _ => vocal,
+            };
+            let payload = SpeechMotorPayload::try_new(
+                alife_core::SpeechActKind::Declare,
+                vec![
+                    alife_core::LanguageTokenId::new(9).unwrap(),
+                    alife_core::LanguageTokenId::new(33).unwrap(),
+                ],
+                Confidence::new(0.9).unwrap(),
+            )
+            .unwrap();
+            let bundle = alife_core::arbitrate_gpu_selected_command_into_factorized_bundle(
+                ORGANISM_ID,
+                alife_core::ExperienceSequenceId(1),
+                Tick::ZERO,
+                vec![alife_core::channel_command_for_action(MotorChannel::Vocal, &vocal).unwrap()],
+                &primary,
+                Some(&payload),
+                false,
+            )
+            .unwrap();
+            world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+            let speech = world.audible_utterances();
+            assert_eq!(speech.len(), 1, "{primary_kind:?}");
+            assert_eq!(speech[0].tokens, payload.tokens, "{primary_kind:?}");
+            assert!(world.entity_id("voice-token-7").is_none());
+        }
+    }
+
+    #[test]
+    fn factorized_vocal_missing_payload_never_creates_or_refreshes_legacy_token() {
+        for primary_kind in [ActionKind::Move, ActionKind::Interact, ActionKind::Vocalize] {
+            for existing_token in [false, true] {
+                let (mut world, agent, food, _) = prepared_world();
+                let vocal = HeadlessWorldCommand::vocalize(ORGANISM_ID).unwrap();
+                let primary = match primary_kind {
+                    ActionKind::Move => HeadlessWorldCommand::approach(ORGANISM_ID, food).unwrap(),
+                    ActionKind::Interact => HeadlessWorldCommand::eat(ORGANISM_ID, food).unwrap(),
+                    _ => vocal,
+                };
+                if existing_token {
+                    world.apply_command(&vocal).unwrap();
+                    world.advance_tick();
+                }
+                let before_token = world
+                    .entity_id("voice-token-7")
+                    .and_then(|id| world.entity(id))
+                    .cloned();
+                let before_speech = world.audible_utterances();
+                let before_cooldown = world.last_creature_utterance_ticks.clone();
+                let bundle = alife_core::arbitrate_gpu_selected_command_into_factorized_bundle(
+                    ORGANISM_ID,
+                    alife_core::ExperienceSequenceId(1),
+                    world.tick(),
+                    vec![
+                        alife_core::channel_command_for_action(MotorChannel::Vocal, &vocal)
+                            .unwrap(),
+                    ],
+                    &primary,
+                    None,
+                    false,
+                )
+                .unwrap();
+                world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+                let vocal_result = world.last_action_result.as_ref().unwrap();
+                assert_eq!(vocal_result.command.kind, ActionKind::Vocalize);
+                assert!(!vocal_result.execution.succeeded, "{primary_kind:?}");
+                assert_eq!(
+                    world
+                        .entity_id("voice-token-7")
+                        .and_then(|id| world.entity(id))
+                        .cloned(),
+                    before_token
+                );
+                assert_eq!(world.audible_utterances(), before_speech);
+                assert_eq!(world.last_creature_utterance_ticks, before_cooldown);
+            }
+        }
     }
 
     #[test]

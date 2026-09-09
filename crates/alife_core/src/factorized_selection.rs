@@ -153,18 +153,7 @@ pub fn arbitrate_gpu_selected_command_into_factorized_bundle(
         ActionKind::Interact | ActionKind::Write => MotorChannel::Manipulation,
         ActionKind::Vocalize => MotorChannel::Vocal,
     };
-    let mut selected = channel_command_for_action(selected_channel, selected_action)?;
-    if selected_channel == MotorChannel::Vocal {
-        if let Some(payload) = speech_payload {
-            let mut values = Vec::with_capacity(payload.tokens.len() + 4);
-            values.push(VOCAL_CHANNEL_PAYLOAD_MAGIC_V1);
-            values.push(u32::from(payload.speech_act.raw()));
-            values.push(if speech_prompted { 1 } else { 0 });
-            values.push((payload.confidence.raw() * 65_535.0).round() as u32);
-            values.extend(payload.tokens.iter().map(|token| u32::from(token.raw())));
-            selected = selected.with_payload(BoundedMotorPayload::new(values)?)?;
-        }
-    }
+    let selected = channel_command_for_action(selected_channel, selected_action)?;
     if let Some(existing) = channel_commands
         .iter_mut()
         .find(|command| command.channel == selected.channel)
@@ -172,6 +161,21 @@ pub fn arbitrate_gpu_selected_command_into_factorized_bundle(
         *existing = selected;
     } else {
         channel_commands.push(selected);
+    }
+    // The speech receipt belongs to the selected Vocal channel, including
+    // when a different channel owns the compatibility/global winner.
+    if let Some(payload) = speech_payload {
+        let vocal = channel_commands
+            .iter_mut()
+            .find(|command| command.channel == MotorChannel::Vocal)
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        let mut values = Vec::with_capacity(payload.tokens.len() + 4);
+        values.push(VOCAL_CHANNEL_PAYLOAD_MAGIC_V1);
+        values.push(u32::from(payload.speech_act.raw()));
+        values.push(u32::from(speech_prompted));
+        values.push((payload.confidence.raw() * 65_535.0).round() as u32);
+        values.extend(payload.tokens.iter().map(|token| u32::from(token.raw())));
+        vocal.payload = BoundedMotorPayload::new(values)?;
     }
     channel_commands.sort_by_key(|command| factorized_motor_channel_order(command.channel));
     let coordination = (channel_commands.len() > 1).then(|| BoundedCoordinationSummary {

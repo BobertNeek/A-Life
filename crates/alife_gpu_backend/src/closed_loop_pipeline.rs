@@ -3469,7 +3469,12 @@ impl GpuClosedLoopPipelines {
             }
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
-        if !self.validate_speech_payloads(batch, &records, &speech_payloads) {
+        if !self.validate_speech_payloads(
+            batch,
+            &records,
+            &speech_payloads,
+            &factorized_motor_candidates,
+        ) {
             if let Some(diagnostic) = diagnostic.as_deref_mut() {
                 diagnostic.substage = Some(GpuDecodeMappedRecordsSubstage::SpeechValidation);
             }
@@ -3964,25 +3969,43 @@ impl GpuClosedLoopPipelines {
         batch: &GpuActiveBatchUpload,
         selections: &[GpuSelectionRecord],
         payloads: &[Option<SpeechMotorPayload>],
+        motor_candidates: &[[u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]],
     ) -> bool {
         selections.len() == payloads.len()
             && selections.len() == batch.headers.len()
-            && selections.iter().zip(payloads).zip(&batch.headers).all(
-                |((selection, payload), header)| {
+            && selections.len() == motor_candidates.len()
+            && selections.len() == batch.joint_motor_modes.len()
+            && selections
+                .iter()
+                .zip(payloads)
+                .zip(&batch.headers)
+                .enumerate()
+                .all(|(row, ((selection, payload), header))| {
                     if selection.status != 3 || selection.candidate_index >= header.candidate_count
                     {
                         return payload.is_none();
                     }
+                    if payload.is_none() {
+                        return true;
+                    }
+                    let candidate_index = if batch.joint_motor_modes[row] != 0 {
+                        let Some(index) = motor_candidates[row][3].checked_sub(1) else {
+                            return false;
+                        };
+                        u32::from(index)
+                    } else {
+                        selection.candidate_index
+                    };
+                    if candidate_index >= header.candidate_count {
+                        return false;
+                    }
                     let base = header.candidate_offset as usize
-                        + selection.candidate_index as usize * GPU_CANDIDATE_RECORD_WORDS;
+                        + candidate_index as usize * GPU_CANDIDATE_RECORD_WORDS;
                     GpuCandidateRecord::from_words(
                         &batch.dispatch_header_words[base..base + GPU_CANDIDATE_RECORD_WORDS],
                     )
-                    .is_ok_and(|candidate| {
-                        candidate.kind == u32::from(ActionKind::Vocalize.raw()) || payload.is_none()
-                    })
-                },
-            )
+                    .is_ok_and(|candidate| candidate.kind == u32::from(ActionKind::Vocalize.raw()))
+                })
     }
 
     fn validate_factorized_motor_candidates(

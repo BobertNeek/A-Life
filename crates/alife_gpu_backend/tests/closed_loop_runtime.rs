@@ -547,6 +547,189 @@ mod hardware {
     }
 
     #[test]
+    fn n2048_auxiliary_vocal_payload_and_eligibility_are_gpu_authored() {
+        for kind in [ActionKind::Move, ActionKind::Interact] {
+            let mut backend = required_backend();
+            eprintln!("adapter={:?}", backend.hardware_receipt());
+            let organism = OrganismId(21);
+            let capacity = BrainCapacityClass::n2048();
+            let genome = alife_core::BrainGenome::scaffold(92, capacity.id());
+            let p = genome.cognitive_architecture();
+            let architecture =
+                alife_core::genome::CognitiveArchitectureGenomeParameters::try_new_v1(
+                    p.attention_capacity(),
+                    p.active_concept_limit(),
+                    p.active_gap_limit(),
+                    p.predictor_capacity(),
+                    p.predictor_learning_rate(),
+                    3,
+                    p.motor_head_width(),
+                    p.dendritic_branch_capacity(),
+                    p.structural_candidate_budget(),
+                    p.structural_edit_budget(),
+                    p.sleep_trigger_threshold(),
+                    p.sleep_replay_rate(),
+                    p.sleep_consolidation_rate(),
+                    p.attention_learning_rate(),
+                    p.concept_learning_rate(),
+                    p.motor_learning_rate(),
+                    p.structural_learning_rate(),
+                )
+                .unwrap();
+            let genome = genome.with_cognitive_architecture(architecture).unwrap();
+            let development = alife_core::DevelopmentState::new(
+                genome.id,
+                Tick::ZERO,
+                NormalizedScalar::new(0.35).unwrap(),
+            );
+            let phenotype = alife_core::PhenotypeCompiler::compile(
+                &genome,
+                &capacity,
+                &development,
+                SensorProfile::PrivilegedAffordanceV1,
+            )
+            .unwrap();
+            let upload = alife_gpu_backend::GpuPhenotypeUpload::try_from(&phenotype).unwrap();
+            assert_eq!(
+                upload.joint_motor_mode,
+                alife_gpu_backend::GPU_JOINT_SELECTION_V1_MARKER | 0b1101
+            );
+            let channels = phenotype
+                .candidate_decoder()
+                .factorized_motor_channels(&phenotype)
+                .unwrap();
+            let handle = backend.insert_brain(organism, phenotype).unwrap();
+            let original = vocalize_frame(organism, Tick::new(220));
+            let primary = ActionCandidate::new(
+                0,
+                kind.canonical_id(),
+                kind,
+                if kind == ActionKind::Move {
+                    CandidateActionFamily::Approach
+                } else {
+                    CandidateActionFamily::Ingest
+                },
+                CandidateObservationRef::None,
+                ActionTarget::NONE,
+                CandidateFeatureVector::zero(),
+                Confidence::new(1.0).unwrap(),
+                NormalizedScalar::new(0.01).unwrap(),
+                DurationTicks::new(1),
+                DurationTicks::new(1),
+            )
+            .unwrap();
+            let vocal = ActionCandidate::new(
+                1,
+                ActionKind::Vocalize.canonical_id(),
+                ActionKind::Vocalize,
+                CandidateActionFamily::Other,
+                CandidateObservationRef::None,
+                ActionTarget::NONE,
+                CandidateFeatureVector::zero(),
+                Confidence::new(1.0).unwrap(),
+                NormalizedScalar::new(0.01).unwrap(),
+                DurationTicks::new(1),
+                DurationTicks::new(1),
+            )
+            .unwrap();
+            let frame = PerceptionFrame::new(
+                organism,
+                original.tick(),
+                original.sensor_profile(),
+                original.sensory().clone(),
+                original.body(),
+                original.homeostasis().clone(),
+                vec![primary, vocal],
+                original.profile_provenance(),
+                Vec::new(),
+            )
+            .unwrap();
+            let (frame, recall) = super::support::empty_recall(&frame);
+            let memory = backend
+                .prepare_memory_context_upload(handle, &frame, &recall)
+                .unwrap()
+                .bind_neural_receptor_effects(super::support::test_receptor_effects(frame.tick()))
+                .unwrap();
+            let input =
+                alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &memory)
+                    .unwrap();
+            let batch =
+                alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(vec![input]).unwrap();
+            let tick = backend
+                .tick_memory_batch_with_selector_diagnostics(&batch, &[0])
+                .unwrap()
+                .remove(0);
+            assert_eq!(
+                tick.selection.candidate_index, 0,
+                "zero-feature candidates tie on the primary {kind:?}"
+            );
+            assert_eq!(tick.factorized_motor_candidates[3], 2);
+            let payload = tick
+                .speech_payload
+                .as_ref()
+                .expect("auxiliary Vocal must decode GPU speech");
+            assert!(!payload.tokens.is_empty());
+            let command = frame.candidates()[0]
+                .to_command(organism, tick.selection.confidence)
+                .unwrap();
+            let bundle = alife_core::factorized_motor_bundle_for_candidates(
+                organism,
+                alife_core::ExperienceSequenceId(1),
+                frame.tick(),
+                &frame,
+                tick.factorized_motor_candidates,
+                &channels,
+                &command,
+                0,
+                Some(payload),
+                false,
+            )
+            .unwrap();
+            tick.pending_eligibility
+                .identity()
+                .joint_selection()
+                .expect("production joint receipt")
+                .validate_bundle(&bundle)
+                .unwrap();
+            let vocal = bundle
+                .channels
+                .iter()
+                .find(|channel| channel.channel == alife_core::MotorChannel::Vocal)
+                .unwrap();
+            assert_eq!(
+                &vocal.payload.values[4..],
+                payload
+                    .tokens
+                    .iter()
+                    .map(|token| u32::from(token.raw()))
+                    .collect::<Vec<_>>()
+            );
+            let snapshot = backend
+                .snapshot_brain(handle, frame.tick())
+                .unwrap()
+                .into_parts();
+            assert!(
+                upload
+                    .decoder_eligibility_metadata
+                    .iter()
+                    .filter(|row| {
+                        row.decoder_head == alife_core::DecoderHeadKind::SpeechPayload.raw()
+                    })
+                    .any(|row| {
+                        f32::from_bits(
+                            snapshot.decoder_eligibility_bank_1_bits
+                                [row.eligibility_local_index as usize],
+                        )
+                        .abs()
+                            > 1e-7
+                    }),
+                "auxiliary Vocal must accumulate speech eligibility"
+            );
+            discard_tick(&mut backend, &tick);
+        }
+    }
+
+    #[test]
     fn n2048_vocalize_payload_is_authored_by_the_gpu_speech_head() {
         let mut backend = required_backend();
         let organism = OrganismId(21);
@@ -559,10 +742,8 @@ mod hardware {
         assert!(phenotype.speech_decoder().is_some());
         let handle = backend.insert_brain(organism, phenotype).unwrap();
         let frame = vocalize_frame(organism, Tick::new(220));
-        let tick = backend
-            .tick_batch(&[(handle, frame.clone())])
-            .unwrap()
-            .remove(0);
+        // The production encoder requires a tick-bound chemistry receptor frame.
+        let (frame, tick) = super::support::tick_with_receptors(&mut backend, handle, &frame);
         assert_eq!(
             frame.candidates()[usize::from(tick.selection.candidate_index)].kind,
             ActionKind::Vocalize

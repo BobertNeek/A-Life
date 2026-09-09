@@ -281,7 +281,8 @@ fn decode_speech_payload(@builtin(global_invocation_id) gid:vec3<u32>) {
 
   if (selection.status != 1u || selection.candidate_index >= header.candidate_count) { return; }
   let selected = load_candidate(header.candidate_offset + selection.candidate_index * 8u);
-  if (selected.kind != ACTION_KIND_VOCALIZE) { return; }
+  let vocal_selected = select(selected.kind == ACTION_KIND_VOCALIZE, motor_found[3], joint_mode);
+  if (!vocal_selected) { return; }
 
   let decoder = load_decoder_plan(extension.decoder_input_plan_offset);
   let source_start = decoder.motor_start + SPEECH_SOURCE_OFFSET;
