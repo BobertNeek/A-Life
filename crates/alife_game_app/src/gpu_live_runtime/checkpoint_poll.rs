@@ -601,10 +601,19 @@ impl GpuLiveBrainRuntime {
                     return Err(error);
                 }
                 if let Some(manual) = report.manual_completion {
-                    self.manual_checkpoint_status = GpuManualCheckpointStatus::Complete {
-                        destination: manual.destination,
-                        checkpoint_tick: manual.checkpoint_tick,
-                    };
+                    // Finalize owns its immutable request, but a later Save may
+                    // now own the UI status and the bounded follow-up slot.
+                    if matches!(
+                        &self.manual_checkpoint_status,
+                        GpuManualCheckpointStatus::Queued { destination, checkpoint_tick }
+                            if destination == &manual.destination
+                                && manual.checkpoint_tick >= *checkpoint_tick
+                    ) {
+                        self.manual_checkpoint_status = GpuManualCheckpointStatus::Complete {
+                            destination: manual.destination,
+                            checkpoint_tick: manual.checkpoint_tick,
+                        };
+                    }
                 }
                 if let Some(journal_commit) = journal_commit {
                     if journal_commit.contains_completed_promotion {

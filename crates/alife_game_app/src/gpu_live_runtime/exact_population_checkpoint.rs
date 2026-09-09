@@ -48,6 +48,7 @@ impl ExactPopulationCheckpointIdentityV1 {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ManualCheckpointRequestV1 {
+    /// Minimum requested world tick that may satisfy this manual request.
     pub checkpoint_tick: Tick,
     pub destination: PathBuf,
 }
@@ -111,6 +112,9 @@ impl ExactPopulationCheckpointCoordinatorV1 {
         checkpoint_tick: Tick,
         expected_base_digest: String,
     ) -> Result<ExactCheckpointRequestDispositionV1, ScaffoldContractError> {
+        if self.stage == ExactPopulationCheckpointStageV1::Failed {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
         if let Some(active) = &self.active {
             if active.checkpoint_tick == checkpoint_tick
                 && active.expected_base_digest == expected_base_digest
@@ -170,25 +174,41 @@ impl ExactPopulationCheckpointCoordinatorV1 {
         &mut self,
         request: ManualCheckpointRequestV1,
     ) -> ExactCheckpointRequestDispositionV1 {
-        if self.active.is_some() {
-            if let Some(pending) = &self.pending_manual {
-                return if pending == &request {
-                    ExactCheckpointRequestDispositionV1::ManualCoalesced
-                } else {
-                    ExactCheckpointRequestDispositionV1::Busy
-                };
+        if self.stage == ExactPopulationCheckpointStageV1::Failed {
+            return ExactCheckpointRequestDispositionV1::Busy;
+        }
+        let Some(active_checkpoint_tick) =
+            self.active.as_ref().map(|active| active.checkpoint_tick)
+        else {
+            return ExactCheckpointRequestDispositionV1::Busy;
+        };
+        if let Some(pending) = self.pending_manual.as_mut() {
+            if pending.destination != request.destination {
+                return ExactCheckpointRequestDispositionV1::Busy;
             }
-            if matches!(
+            pending.checkpoint_tick = pending.checkpoint_tick.max(request.checkpoint_tick);
+            if active_checkpoint_tick < pending.checkpoint_tick
+                || matches!(
+                    self.stage,
+                    ExactPopulationCheckpointStageV1::DeferredJournalPublishing
+                        | ExactPopulationCheckpointStageV1::Complete
+                )
+            {
+                self.checkpoint_needed_after_current = true;
+            }
+            return ExactCheckpointRequestDispositionV1::ManualCoalesced;
+        }
+        if active_checkpoint_tick < request.checkpoint_tick
+            || matches!(
                 self.stage,
                 ExactPopulationCheckpointStageV1::DeferredJournalPublishing
                     | ExactPopulationCheckpointStageV1::Complete
-            ) {
-                self.checkpoint_needed_after_current = true;
-            }
-            self.pending_manual = Some(request);
-            return ExactCheckpointRequestDispositionV1::ManualQueued;
+            )
+        {
+            self.checkpoint_needed_after_current = true;
         }
-        ExactCheckpointRequestDispositionV1::Busy
+        self.pending_manual = Some(request);
+        ExactCheckpointRequestDispositionV1::ManualQueued
     }
 
     pub(super) fn transition(
@@ -246,6 +266,18 @@ impl ExactPopulationCheckpointCoordinatorV1 {
         if self.stage != ExactPopulationCheckpointStageV1::DurablePermitInstalled {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
         }
+        let active_checkpoint_tick = self
+            .active
+            .as_ref()
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?
+            .checkpoint_tick;
+        if self
+            .pending_manual
+            .as_ref()
+            .is_some_and(|request| request.checkpoint_tick > active_checkpoint_tick)
+        {
+            return Ok(None);
+        }
         Ok(self.pending_manual.take())
     }
 
@@ -266,6 +298,20 @@ impl ExactPopulationCheckpointCoordinatorV1 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn advance_to_durable_permit(coordinator: &mut ExactPopulationCheckpointCoordinatorV1) {
+        for stage in [
+            ExactPopulationCheckpointStageV1::MappingPending,
+            ExactPopulationCheckpointStageV1::CpuBytesReady,
+            ExactPopulationCheckpointStageV1::Encoding,
+            ExactPopulationCheckpointStageV1::ManifestPrepared,
+            ExactPopulationCheckpointStageV1::CasCommitted,
+            ExactPopulationCheckpointStageV1::ReloadValidated,
+            ExactPopulationCheckpointStageV1::DurablePermitInstalled,
+        ] {
+            coordinator.transition(stage).unwrap();
+        }
+    }
 
     #[test]
     fn transaction_order_is_strict_and_follow_up_is_one_bit() {
@@ -315,7 +361,7 @@ mod tests {
     }
 
     #[test]
-    fn manual_request_has_one_bounded_slot() {
+    fn stale_manual_request_survives_old_capture_and_fresh_follow_up() {
         let mut coordinator = ExactPopulationCheckpointCoordinatorV1::default();
         coordinator
             .request_exact(Tick::new(20), "base-b".to_string())
@@ -328,37 +374,121 @@ mod tests {
             coordinator.request_manual(request.clone()),
             ExactCheckpointRequestDispositionV1::ManualQueued
         );
+        assert!(coordinator.checkpoint_needed_after_current());
+        advance_to_durable_permit(&mut coordinator);
         assert_eq!(
-            coordinator.request_manual(request),
-            ExactCheckpointRequestDispositionV1::ManualCoalesced
+            coordinator
+                .take_pending_manual_after_durable_permit()
+                .unwrap(),
+            None
         );
+        coordinator
+            .transition(ExactPopulationCheckpointStageV1::Complete)
+            .unwrap();
+        assert!(coordinator.finish().unwrap());
+        assert_eq!(coordinator.pending_manual.as_ref(), Some(&request));
+        assert_eq!(coordinator.stage(), ExactPopulationCheckpointStageV1::Idle);
         assert_eq!(
-            coordinator.request_manual(ManualCheckpointRequestV1 {
-                checkpoint_tick: Tick::new(22),
-                destination: PathBuf::from("manual-b.json"),
-            }),
-            ExactCheckpointRequestDispositionV1::Busy
+            coordinator
+                .request_exact(Tick::new(21), "base-c".to_string())
+                .unwrap(),
+            ExactCheckpointRequestDispositionV1::Started { transaction_id: 2 }
         );
-        for stage in [
-            ExactPopulationCheckpointStageV1::MappingPending,
-            ExactPopulationCheckpointStageV1::CpuBytesReady,
-            ExactPopulationCheckpointStageV1::Encoding,
-            ExactPopulationCheckpointStageV1::ManifestPrepared,
-            ExactPopulationCheckpointStageV1::CasCommitted,
-            ExactPopulationCheckpointStageV1::ReloadValidated,
-            ExactPopulationCheckpointStageV1::DurablePermitInstalled,
-        ] {
-            coordinator.transition(stage).unwrap();
-        }
-        assert!(coordinator.finish().is_err());
-        assert!(coordinator
-            .take_pending_manual_after_durable_permit()
-            .unwrap()
-            .is_some());
+        advance_to_durable_permit(&mut coordinator);
+        assert_eq!(
+            coordinator
+                .take_pending_manual_after_durable_permit()
+                .unwrap(),
+            Some(request)
+        );
         coordinator
             .transition(ExactPopulationCheckpointStageV1::Complete)
             .unwrap();
         assert!(!coordinator.finish().unwrap());
+    }
+
+    #[test]
+    fn equal_tick_manual_request_attaches_to_active_capture() {
+        let mut coordinator = ExactPopulationCheckpointCoordinatorV1::default();
+        coordinator
+            .request_exact(Tick::new(20), "base-equal".to_string())
+            .unwrap();
+        let request = ManualCheckpointRequestV1 {
+            checkpoint_tick: Tick::new(20),
+            destination: PathBuf::from("manual-equal.json"),
+        };
+        assert_eq!(
+            coordinator.request_manual(request.clone()),
+            ExactCheckpointRequestDispositionV1::ManualQueued
+        );
+        assert!(!coordinator.checkpoint_needed_after_current());
+        advance_to_durable_permit(&mut coordinator);
+        assert_eq!(
+            coordinator
+                .take_pending_manual_after_durable_permit()
+                .unwrap(),
+            Some(request)
+        );
+        coordinator
+            .transition(ExactPopulationCheckpointStageV1::Complete)
+            .unwrap();
+        assert!(!coordinator.finish().unwrap());
+    }
+
+    #[test]
+    fn same_destination_later_request_coalesces_to_maximum_tick() {
+        let mut coordinator = ExactPopulationCheckpointCoordinatorV1::default();
+        coordinator
+            .request_exact(Tick::new(20), "base-max".to_string())
+            .unwrap();
+        let destination = PathBuf::from("manual-max.json");
+        assert_eq!(
+            coordinator.request_manual(ManualCheckpointRequestV1 {
+                checkpoint_tick: Tick::new(21),
+                destination: destination.clone(),
+            }),
+            ExactCheckpointRequestDispositionV1::ManualQueued
+        );
+        assert_eq!(
+            coordinator.request_manual(ManualCheckpointRequestV1 {
+                checkpoint_tick: Tick::new(22),
+                destination: destination.clone(),
+            }),
+            ExactCheckpointRequestDispositionV1::ManualCoalesced
+        );
+        assert_eq!(
+            coordinator.pending_manual.as_ref(),
+            Some(&ManualCheckpointRequestV1 {
+                checkpoint_tick: Tick::new(22),
+                destination,
+            })
+        );
+        assert!(coordinator.checkpoint_needed_after_current());
+    }
+
+    #[test]
+    fn different_destination_is_busy_and_preserves_prior_manual_request() {
+        let mut coordinator = ExactPopulationCheckpointCoordinatorV1::default();
+        coordinator
+            .request_exact(Tick::new(20), "base-destination".to_string())
+            .unwrap();
+        let prior = ManualCheckpointRequestV1 {
+            checkpoint_tick: Tick::new(21),
+            destination: PathBuf::from("manual-prior.json"),
+        };
+        assert_eq!(
+            coordinator.request_manual(prior.clone()),
+            ExactCheckpointRequestDispositionV1::ManualQueued
+        );
+        assert_eq!(
+            coordinator.request_manual(ManualCheckpointRequestV1 {
+                checkpoint_tick: Tick::new(22),
+                destination: PathBuf::from("manual-other.json"),
+            }),
+            ExactCheckpointRequestDispositionV1::Busy
+        );
+        assert_eq!(coordinator.pending_manual.as_ref(), Some(&prior));
+        assert!(coordinator.checkpoint_needed_after_current());
     }
 
     #[test]
@@ -373,14 +503,38 @@ mod tests {
         coordinator
             .request_exact(Tick::new(30), "base-c".to_string())
             .unwrap();
+        let queued_manual = ManualCheckpointRequestV1 {
+            checkpoint_tick: Tick::new(31),
+            destination: PathBuf::from("manual-terminal.json"),
+        };
+        assert_eq!(
+            coordinator.request_manual(queued_manual.clone()),
+            ExactCheckpointRequestDispositionV1::ManualQueued
+        );
         coordinator.fail_stop();
         assert!(coordinator.is_active());
         assert_eq!(
             coordinator.stage(),
             ExactPopulationCheckpointStageV1::Failed
         );
-        assert!(coordinator
-            .request_exact(Tick::new(31), "base-c".to_string())
-            .is_err());
+        let snapshot = format!("{coordinator:?}");
+        assert!(matches!(
+            coordinator.request_exact(Tick::new(30), "base-c".to_string()),
+            Err(ScaffoldContractError::ConsolidationGenerationMismatch)
+        ));
+        assert_eq!(format!("{coordinator:?}"), snapshot);
+        assert!(matches!(
+            coordinator.request_exact(Tick::new(31), "base-c".to_string()),
+            Err(ScaffoldContractError::ConsolidationGenerationMismatch)
+        ));
+        assert_eq!(format!("{coordinator:?}"), snapshot);
+        assert_eq!(
+            coordinator.request_manual(ManualCheckpointRequestV1 {
+                checkpoint_tick: Tick::new(99),
+                destination: queued_manual.destination.clone(),
+            }),
+            ExactCheckpointRequestDispositionV1::Busy
+        );
+        assert_eq!(format!("{coordinator:?}"), snapshot);
     }
 }

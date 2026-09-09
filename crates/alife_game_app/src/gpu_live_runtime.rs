@@ -7138,12 +7138,18 @@ impl GpuLiveBrainRuntime {
         if destination.as_os_str().is_empty() {
             return Err(ScaffoldContractError::InvalidId.into());
         }
+        // A manual request names its minimum acceptable world boundary. An
+        // older active capture must finish before a fresh follow-up can serve it.
+        let checkpoint_tick = self.world.tick();
         if self.sleep_journal_publication_worker.is_some()
             || !self.pending_sleep_journal_entries.is_empty()
         {
-            let checkpoint_tick = self.world.tick();
             if let Some(pending) = &self.manual_checkpoint_waiting_for_sleep_journal {
                 return if pending == &destination {
+                    self.manual_checkpoint_status = GpuManualCheckpointStatus::Queued {
+                        destination,
+                        checkpoint_tick,
+                    };
                     Ok(GpuManualCheckpointRequestDisposition::Coalesced)
                 } else {
                     Err(ScaffoldContractError::ConsolidationGenerationMismatch.into())
@@ -7160,10 +7166,8 @@ impl GpuLiveBrainRuntime {
         if !self.exact_checkpoint_coordinator.is_active() {
             self.request_exact_population_checkpoint()?;
         }
-        let checkpoint_tick = self
-            .exact_checkpoint_coordinator
+        self.exact_checkpoint_coordinator
             .active_identity()
-            .map(|identity| identity.checkpoint_tick)
             .ok_or(ScaffoldContractError::MissingPhaseData)?;
         let disposition =
             self.exact_checkpoint_coordinator

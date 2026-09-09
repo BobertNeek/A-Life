@@ -13,7 +13,8 @@ use alife_core::{
 };
 use alife_game_app::{
     create_canonical_new_game_runtime, CanonicalNewGameLaunchRequest, GameAppShellError,
-    GpuDurableSaveManifest, GpuLiveBrainRuntime,
+    GpuDurableSaveManifest, GpuLiveBrainRuntime, GpuManualCheckpointRequestDisposition,
+    GpuManualCheckpointStatus,
 };
 use alife_world::persistence::PortableAssetDigest;
 use alife_world::{AssetManifest, RuntimeConfig};
@@ -84,6 +85,172 @@ fn authority_journal_artifact_path(save_path: &Path) -> std::path::PathBuf {
         .as_str()
         .unwrap();
     save_path.parent().unwrap().join(file_name)
+}
+
+fn wait_for_manual_save_while_paused(
+    fixture: &mut CanonicalRuntimeFixture,
+    destination: &Path,
+    requested_tick: Tick,
+) -> Tick {
+    let paused_world = fixture
+        .runtime
+        .world_snapshot()
+        .canonical_signature_digest()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(90);
+    let completed_tick = loop {
+        assert!(
+            Instant::now() < deadline,
+            "manual save must finish while simulation stays paused"
+        );
+        fixture
+            .runtime
+            .poll_persistence_for_shutdown_for_test()
+            .unwrap();
+        assert_eq!(fixture.runtime.world_tick_for_test(), requested_tick);
+        match fixture.runtime.manual_checkpoint_status() {
+            GpuManualCheckpointStatus::Complete {
+                destination: actual,
+                checkpoint_tick,
+            } => {
+                assert_eq!(
+                    actual, destination,
+                    "an older destination cannot complete this request"
+                );
+                assert!(
+                    *checkpoint_tick >= requested_tick,
+                    "an older capture cannot complete this request"
+                );
+                break *checkpoint_tick;
+            }
+            GpuManualCheckpointStatus::Queued {
+                destination: actual,
+                checkpoint_tick,
+            } => {
+                assert_eq!(actual, destination);
+                assert!(*checkpoint_tick >= requested_tick);
+            }
+            status => panic!("manual save failed: {status:?}"),
+        }
+        std::thread::park_timeout(Duration::from_millis(1));
+    };
+    let (_, loaded) =
+        GpuDurableSaveManifest::open_loaded(destination, &fixture.asset_root).unwrap();
+    assert_eq!(loaded.save.world.tick, completed_tick);
+    assert_eq!(
+        fixture
+            .runtime
+            .world_snapshot()
+            .canonical_signature_digest()
+            .unwrap(),
+        paused_world
+    );
+    completed_tick
+}
+
+#[test]
+fn phase31_manual_save_while_paused_waits_for_the_request_tick() {
+    let mut fixture = canonical_runtime(31_090_901, alife_world::PHASE3_MIN_POPULATION);
+    fixture.runtime.tick().unwrap();
+    let capture_tick = fixture.runtime.world_tick_for_test();
+    fixture.runtime.request_exact_checkpoint_for_test().unwrap();
+    fixture.runtime.tick().unwrap();
+    let requested_tick = fixture.runtime.world_tick_for_test();
+    assert!(requested_tick > capture_tick);
+    assert_eq!(
+        fixture.runtime.exact_checkpoint_active_tick_for_test(),
+        Some(capture_tick)
+    );
+    let destination = fixture.root.join("manual-fresh.json");
+    assert_eq!(
+        fixture
+            .runtime
+            .request_manual_checkpoint(destination.clone())
+            .unwrap(),
+        GpuManualCheckpointRequestDisposition::Queued
+    );
+    assert_eq!(
+        fixture.runtime.manual_checkpoint_status(),
+        &GpuManualCheckpointStatus::Queued {
+            destination: destination.clone(),
+            checkpoint_tick: requested_tick,
+        }
+    );
+    let completed_tick =
+        wait_for_manual_save_while_paused(&mut fixture, &destination, requested_tick);
+    println!(
+        "MANUAL_FRESHNESS capture={} request={} complete={} simulation_ticks_after_request=0",
+        capture_tick.raw(),
+        requested_tick.raw(),
+        completed_tick.raw()
+    );
+    drop(fixture.runtime);
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn phase31_manual_save_old_completion_preserves_a_later_request() {
+    // Isolate both admission predicates: same destination with a newer minimum,
+    // then a different destination at the same tick. Neither may accept the old
+    // worker completion as completion of the current request.
+    for advance_tick in [true, false] {
+        let mut fixture = canonical_runtime(
+            31_090_902 + u64::from(advance_tick),
+            alife_world::PHASE3_MIN_POPULATION,
+        );
+        fixture.runtime.tick().unwrap();
+        let first_tick = fixture.runtime.world_tick_for_test();
+        let first_destination = fixture.root.join("manual-first.json");
+        fixture
+            .runtime
+            .request_manual_checkpoint(first_destination.clone())
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(90);
+        while fixture.runtime.exact_checkpoint_state_for_test().1 != "JournalWorker" {
+            assert!(
+                Instant::now() < deadline,
+                "first manual request must enter the immutable Finalize worker"
+            );
+            fixture
+                .runtime
+                .poll_persistence_for_shutdown_for_test()
+                .unwrap();
+            std::thread::park_timeout(Duration::from_millis(1));
+        }
+        if advance_tick {
+            // One poll can move JournalWorker to Finalizing, but cannot admit
+            // that final result until the next poll. Advance the real world in
+            // this interval after the old request left the coordinator slot.
+            fixture.runtime.tick().unwrap();
+        }
+        assert!(matches!(
+            fixture.runtime.exact_checkpoint_state_for_test().1,
+            "JournalWorker" | "Finalizing"
+        ));
+        let requested_tick = fixture.runtime.world_tick_for_test();
+        assert_eq!(
+            requested_tick.raw(),
+            first_tick.raw() + u64::from(advance_tick)
+        );
+        let destination = if advance_tick {
+            first_destination
+        } else {
+            fixture.root.join("manual-second.json")
+        };
+        assert_eq!(
+            fixture
+                .runtime
+                .request_manual_checkpoint(destination.clone())
+                .unwrap(),
+            GpuManualCheckpointRequestDisposition::Queued
+        );
+        let completed_tick =
+            wait_for_manual_save_while_paused(&mut fixture, &destination, requested_tick);
+        println!("MANUAL_LATE_REQUEST same_destination={advance_tick} first={} request={} complete={} simulation_ticks_after_request=0",
+            first_tick.raw(), requested_tick.raw(), completed_tick.raw());
+        drop(fixture.runtime);
+        fs::remove_dir_all(fixture.root).unwrap();
+    }
 }
 
 #[test]
