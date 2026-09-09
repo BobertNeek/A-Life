@@ -8,7 +8,7 @@ use std::fs;
 
 use crate::prelude::*;
 use crate::*;
-#[cfg(test)]
+#[cfg(all(test, feature = "gpu-runtime"))]
 use alife_core::{FoundationWeightAsset, SensorProfile};
 use alife_world::{HabitatAuthority, HabitatAuthoritySnapshot, HabitatMembership, HabitatMode};
 
@@ -2099,11 +2099,23 @@ mod tests {
     #[test]
     fn fvr05_population_restore_has_complete_organism_bindings() {
         let root = gpu_alpha_fixture_root();
+        let mut config =
+            RuntimeConfig::deterministic_default(4242, alife_core::BrainScaleTier::Nano512);
+        config.features.gpu_backend_enabled = true;
+        let staged = stage_phase3_new_game(CanonicalNewGameLaunchRequest {
+            world_seed: 4242,
+            population: 4,
+            save_path: root.join("fvr05-current-canonical-not-written.json"),
+            asset_root: root.clone(),
+            config,
+            assets: AssetManifest::empty(),
+        })
+        .unwrap();
         let production = production_voxel_save_with_population(
-            &gpu_alpha_save(),
+            &staged.save,
             &root,
             ProductionFrontendProfileId::MinimumSettings30x30,
-            3,
+            4,
         )
         .unwrap();
         let restored = production.restore_headless_world().unwrap();
@@ -2129,21 +2141,23 @@ mod tests {
 
         assert_eq!(agent_ids, creature_ids);
         assert_eq!(record_ids, creature_ids);
-        assert_eq!(restored.organism_registry().len(), 3);
+        assert_eq!(restored.organism_registry().len(), 4);
         restored.validate_organism_bindings().unwrap();
+        // The default lane still proves the CPU-owned population bindings above.
+        // Exact production compiler parity belongs to the explicit GPU runtime lane.
+        #[cfg(feature = "gpu-runtime")]
         for record in restored.organism_registry().iter() {
             let age = record.age_at(restored.tick()).unwrap();
             let development = record.phenotype().development_state_at(age).unwrap();
             let compiled = if record.phenotype().brain_genome.brain_class_id
                 == alife_core::BrainCapacityClass::N512_ID
             {
-                let foundation = FoundationWeightAsset::builtin_nano512_v1(
-                    SensorProfile::PrivilegedAffordanceV1,
-                )
-                .unwrap();
+                let foundation =
+                    FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1)
+                        .unwrap();
                 let projection = alife_core::N512FounderFoundationProjection::compile(
                     record.phenotype(),
-                    SensorProfile::PrivilegedAffordanceV1,
+                    SensorProfile::GroundedObjectSlotsV1,
                     &foundation,
                 )
                 .unwrap_or_else(|error| {
@@ -2158,7 +2172,7 @@ mod tests {
                         .frozen_abi()
                         .coordinate_development_state()
                         .clone(),
-                    SensorProfile::PrivilegedAffordanceV1,
+                    SensorProfile::GroundedObjectSlotsV1,
                 )
                 .unwrap_or_else(|error| {
                     panic!(
@@ -2171,7 +2185,7 @@ mod tests {
                 crate::gpu_live_runtime::compile_gpu_components_from_genome(
                     record.phenotype().brain_genome.clone(),
                     development,
-                    SensorProfile::PrivilegedAffordanceV1,
+                    SensorProfile::GroundedObjectSlotsV1,
                 )
                 .unwrap_or_else(|error| {
                     panic!(
