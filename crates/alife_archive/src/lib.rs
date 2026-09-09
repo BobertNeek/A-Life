@@ -11,7 +11,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt,
     fs::{self, OpenOptions},
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant},
@@ -37,11 +37,74 @@ pub const DEFAULT_MAX_TEMPORARY_PER_RUN: u32 = 64;
 pub const DEFAULT_MAX_AUTOMATIC_PER_RUN: u32 = 24;
 pub const MAX_COMPOSITE_BIRTH_BATCH_ITEMS: usize = 256;
 pub const MAX_COMPOSITE_BIRTH_BATCH_BYTES: u64 = 32 * 1024 * 1024;
+pub const MAX_CHECKPOINT_DECODED_BYTES: u64 = 512 * 1024 * 1024;
+pub const MAX_CHECKPOINT_COMPRESSED_BYTES: u64 = 1024 * 1024 * 1024;
+pub const MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES: u64 = 256 * 1024;
+
+const CHECKPOINT_ZSTD_WINDOW_LOG_MAX: u32 = 21;
 
 const COMPOSITE_BIRTH_STAGE_LEASE_FILE: &str = ".composite-birth-stage-lease";
 const COMPOSITE_BIRTH_PUBLICATION_LEASE_FILE: &str = ".composite-birth-publication-lease";
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CheckpointDecodePlan {
+    output_capacity: usize,
+    decoded_bytes: u64,
+    compressed_bytes: u64,
+}
+
+#[derive(Debug)]
+pub(crate) struct CheckpointDecodeBudget {
+    max_decoded_work_bytes: u64,
+    max_compressed_work_bytes: u64,
+    decoded_work_bytes: u64,
+    compressed_work_bytes: u64,
+}
+
+impl CheckpointDecodeBudget {
+    pub(crate) fn new(max_decoded_work_bytes: u64, max_compressed_work_bytes: u64) -> Self {
+        Self {
+            max_decoded_work_bytes,
+            max_compressed_work_bytes,
+            decoded_work_bytes: 0,
+            compressed_work_bytes: 0,
+        }
+    }
+
+    pub(crate) fn charge(&mut self, plan: CheckpointDecodePlan) -> Result<(), ArchiveError> {
+        let decoded_work_bytes = self
+            .decoded_work_bytes
+            .checked_add(plan.decoded_bytes)
+            .ok_or_else(|| {
+                ArchiveError::Integrity(
+                    "nested checkpoint decoded work byte count overflow".to_string(),
+                )
+            })?;
+        if decoded_work_bytes > self.max_decoded_work_bytes {
+            return Err(ArchiveError::Integrity(
+                "nested checkpoint decoded work limit exceeded".to_string(),
+            ));
+        }
+        let compressed_work_bytes = self
+            .compressed_work_bytes
+            .checked_add(plan.compressed_bytes)
+            .ok_or_else(|| {
+                ArchiveError::Integrity(
+                    "nested checkpoint compressed work byte count overflow".to_string(),
+                )
+            })?;
+        if compressed_work_bytes > self.max_compressed_work_bytes {
+            return Err(ArchiveError::Integrity(
+                "nested checkpoint compressed work limit exceeded".to_string(),
+            ));
+        }
+        self.decoded_work_bytes = decoded_work_bytes;
+        self.compressed_work_bytes = compressed_work_bytes;
+        Ok(())
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ArchiveError {
@@ -55,6 +118,156 @@ pub enum ArchiveError {
     Contract(#[from] ScaffoldContractError),
     #[error("archive integrity error: {0}")]
     Integrity(String),
+}
+
+pub(crate) fn checkpoint_decode_plan(
+    reference: &ArchiveCheckpointRef,
+) -> Result<CheckpointDecodePlan, ArchiveError> {
+    reference.validate_contract()?;
+    if reference.total_uncompressed_bytes > MAX_CHECKPOINT_DECODED_BYTES {
+        return Err(ArchiveError::Integrity(
+            "checkpoint decoded byte limit exceeded".to_string(),
+        ));
+    }
+    if reference.total_compressed_bytes > MAX_CHECKPOINT_COMPRESSED_BYTES {
+        return Err(ArchiveError::Integrity(
+            "checkpoint compressed byte limit exceeded".to_string(),
+        ));
+    }
+
+    let mut decoded_bytes = 0_u64;
+    let mut compressed_bytes = 0_u64;
+    for page in &reference.pages {
+        page.validate_contract()?;
+        let page_compressed_bytes = u64::from(page.compressed_bytes);
+        if page_compressed_bytes > MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES {
+            return Err(ArchiveError::Integrity(
+                "checkpoint page compressed byte limit exceeded".to_string(),
+            ));
+        }
+        usize::try_from(page.uncompressed_bytes).map_err(|_| {
+            ArchiveError::Integrity("checkpoint page byte count does not fit usize".to_string())
+        })?;
+        usize::try_from(page.compressed_bytes).map_err(|_| {
+            ArchiveError::Integrity("checkpoint page byte count does not fit usize".to_string())
+        })?;
+        decoded_bytes = decoded_bytes
+            .checked_add(u64::from(page.uncompressed_bytes))
+            .ok_or_else(|| {
+                ArchiveError::Integrity("checkpoint decoded byte count overflow".to_string())
+            })?;
+        compressed_bytes = compressed_bytes
+            .checked_add(page_compressed_bytes)
+            .ok_or_else(|| {
+                ArchiveError::Integrity("checkpoint compressed byte count overflow".to_string())
+            })?;
+    }
+    if decoded_bytes != reference.total_uncompressed_bytes
+        || compressed_bytes != reference.total_compressed_bytes
+    {
+        return Err(ArchiveError::Integrity(
+            "checkpoint page totals do not match checkpoint reference".to_string(),
+        ));
+    }
+
+    let output_capacity = usize::try_from(decoded_bytes).map_err(|_| {
+        ArchiveError::Integrity("checkpoint byte count does not fit usize".to_string())
+    })?;
+    Ok(CheckpointDecodePlan {
+        output_capacity,
+        decoded_bytes,
+        compressed_bytes,
+    })
+}
+
+pub(crate) fn allocate_checkpoint_output(
+    plan: CheckpointDecodePlan,
+) -> Result<Vec<u8>, ArchiveError> {
+    let mut output = Vec::new();
+    output.try_reserve_exact(plan.output_capacity).map_err(|error| {
+        ArchiveError::Integrity(format!("checkpoint output allocation failed: {error}"))
+    })?;
+    Ok(output)
+}
+
+pub(crate) fn decode_checkpoint_page_bounded(
+    compressed: &[u8],
+    page: &ArchivePageRef,
+) -> Result<Vec<u8>, ArchiveError> {
+    page.validate_contract()?;
+    let compressed_bytes = usize::try_from(page.compressed_bytes).map_err(|_| {
+        ArchiveError::Integrity("checkpoint page byte count does not fit usize".to_string())
+    })?;
+    if u64::from(page.compressed_bytes) > MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES {
+        return Err(ArchiveError::Integrity(
+            "checkpoint page compressed byte limit exceeded".to_string(),
+        ));
+    }
+    if compressed.len() != compressed_bytes || digest_bytes(compressed) != page.digest {
+        return Err(ArchiveError::Integrity(
+            "learned checkpoint page digest mismatch".to_string(),
+        ));
+    }
+
+    let uncompressed_bytes = usize::try_from(page.uncompressed_bytes).map_err(|_| {
+        ArchiveError::Integrity("checkpoint page byte count does not fit usize".to_string())
+    })?;
+    let read_limit = uncompressed_bytes.checked_add(1).ok_or_else(|| {
+        ArchiveError::Integrity("checkpoint page byte count overflow".to_string())
+    })?;
+    let mut decoder = zstd::stream::read::Decoder::new(compressed)?;
+    decoder.window_log_max(CHECKPOINT_ZSTD_WINDOW_LOG_MAX)?;
+    let mut decoded = Vec::new();
+    decoded.try_reserve_exact(read_limit).map_err(|error| {
+        ArchiveError::Integrity(format!("checkpoint page allocation failed: {error}"))
+    })?;
+    decoder
+        .by_ref()
+        .take(u64::try_from(read_limit).map_err(|_| {
+            ArchiveError::Integrity("checkpoint page byte count does not fit u64".to_string())
+        })?)
+        .read_to_end(&mut decoded)?;
+    if decoded.len() != uncompressed_bytes {
+        return Err(ArchiveError::Integrity(
+            "learned checkpoint page length mismatch".to_string(),
+        ));
+    }
+    Ok(decoded)
+}
+
+fn read_checkpoint_page_bounded(
+    path: &Path,
+    page: &ArchivePageRef,
+) -> Result<Vec<u8>, ArchiveError> {
+    let compressed_bytes = usize::try_from(page.compressed_bytes).map_err(|_| {
+        ArchiveError::Integrity("checkpoint page byte count does not fit usize".to_string())
+    })?;
+    if u64::from(page.compressed_bytes) > MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES {
+        return Err(ArchiveError::Integrity(
+            "checkpoint page compressed byte limit exceeded".to_string(),
+        ));
+    }
+    let file = OpenOptions::new().read(true).open(path)?;
+    if file.metadata()?.len() != u64::from(page.compressed_bytes) {
+        return Err(ArchiveError::Integrity(
+            "learned checkpoint page digest mismatch".to_string(),
+        ));
+    }
+    let read_limit = u64::from(page.compressed_bytes)
+        .checked_add(1)
+        .ok_or_else(|| {
+            ArchiveError::Integrity("checkpoint page byte count overflow".to_string())
+        })?;
+    let mut compressed = Vec::new();
+    compressed
+        .try_reserve_exact(compressed_bytes.checked_add(1).ok_or_else(|| {
+            ArchiveError::Integrity("checkpoint page byte count overflow".to_string())
+        })?)
+        .map_err(|error| {
+            ArchiveError::Integrity(format!("checkpoint page allocation failed: {error}"))
+        })?;
+    file.take(read_limit).read_to_end(&mut compressed)?;
+    decode_checkpoint_page_bounded(&compressed, page)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1358,40 +1571,19 @@ impl LineageLibrary {
         &self,
         reference: &ArchiveCheckpointRef,
     ) -> Result<Vec<u8>, ArchiveError> {
-        reference.validate_contract()?;
+        let plan = checkpoint_decode_plan(reference)?;
         let archive_root = canonical_archive_root(&self.config.root)?;
         let root = archive_root
             .join("checkpoints")
             .join(digest_hex(reference.digest));
-        let output_capacity =
-            usize::try_from(reference.total_uncompressed_bytes).map_err(|_| {
-                ArchiveError::Integrity("checkpoint byte count does not fit usize".to_string())
-            })?;
-        let mut output = Vec::with_capacity(output_capacity);
+        let mut output = allocate_checkpoint_output(plan)?;
         for (index, page) in reference.pages.iter().enumerate() {
             let path = root.join(format!("{index:08}-{}.zst", digest_hex(page.digest)));
             let checked_path = checked_archive_path(&archive_root, &path)?;
-            let compressed = fs::read(&checked_path.canonical_path)?;
-            let compressed_bytes = usize::try_from(page.compressed_bytes).map_err(|_| {
-                ArchiveError::Integrity("checkpoint page byte count does not fit usize".to_string())
-            })?;
-            let uncompressed_bytes = usize::try_from(page.uncompressed_bytes).map_err(|_| {
-                ArchiveError::Integrity("checkpoint page byte count does not fit usize".to_string())
-            })?;
-            if compressed.len() != compressed_bytes || digest_bytes(&compressed) != page.digest {
-                return Err(ArchiveError::Integrity(
-                    "learned checkpoint page digest mismatch".to_string(),
-                ));
-            }
-            let decoded = zstd::stream::decode_all(compressed.as_slice())?;
-            if decoded.len() != uncompressed_bytes {
-                return Err(ArchiveError::Integrity(
-                    "learned checkpoint page length mismatch".to_string(),
-                ));
-            }
+            let decoded = read_checkpoint_page_bounded(&checked_path.canonical_path, page)?;
             output.extend_from_slice(&decoded);
         }
-        if output.len() != output_capacity || digest_bytes(&output) != reference.digest {
+        if output.len() != plan.output_capacity || digest_bytes(&output) != reference.digest {
             return Err(ArchiveError::Integrity(
                 "learned checkpoint digest mismatch".to_string(),
             ));
@@ -1733,6 +1925,14 @@ impl LineageLibrary {
                 "learned checkpoint cannot be empty".to_string(),
             ));
         }
+        let total_uncompressed_bytes = u64::try_from(bytes.len()).map_err(|_| {
+            ArchiveError::Integrity("checkpoint byte count does not fit u64".to_string())
+        })?;
+        if total_uncompressed_bytes > MAX_CHECKPOINT_DECODED_BYTES {
+            return Err(ArchiveError::Integrity(
+                "checkpoint decoded byte limit exceeded".to_string(),
+            ));
+        }
         let count_limit = match retention {
             ArchiveCheckpointRetention::TemporaryPeak => Some(self.config.max_temporary_per_run),
             ArchiveCheckpointRetention::AutomaticPermanent => {
@@ -1760,17 +1960,40 @@ impl LineageLibrary {
             let compressed = zstd::stream::encode_all(page, 3)?;
             let page_ref = ArchivePageRef {
                 digest: digest_bytes(&compressed),
-                compressed_bytes: compressed.len() as u32,
-                uncompressed_bytes: page.len() as u32,
+                compressed_bytes: u32::try_from(compressed.len()).map_err(|_| {
+                    ArchiveError::Integrity(
+                        "checkpoint page byte count does not fit u32".to_string(),
+                    )
+                })?,
+                uncompressed_bytes: u32::try_from(page.len()).map_err(|_| {
+                    ArchiveError::Integrity(
+                        "checkpoint page byte count does not fit u32".to_string(),
+                    )
+                })?,
             };
             compressed_pages.push(compressed);
             page_refs.push(page_ref);
         }
         let total_compressed_bytes = page_refs
             .iter()
-            .map(|page| u64::from(page.compressed_bytes))
-            .sum::<u64>();
+            .try_fold(0_u64, |total, page| {
+                total
+                    .checked_add(u64::from(page.compressed_bytes))
+                    .ok_or_else(|| {
+                        ArchiveError::Integrity(
+                            "checkpoint compressed byte count overflow".to_string(),
+                        )
+                    })
+            })?;
         let digest = digest_bytes(bytes);
+        let reference = ArchiveCheckpointRef {
+            digest,
+            retention,
+            total_uncompressed_bytes,
+            total_compressed_bytes,
+            pages: page_refs,
+        };
+        checkpoint_decode_plan(&reference)?;
         let destination = self
             .config
             .root
@@ -1806,7 +2029,7 @@ impl LineageLibrary {
             ));
             fs::create_dir(&staged)?;
             for (index, (reference, compressed)) in
-                page_refs.iter().zip(&compressed_pages).enumerate()
+                reference.pages.iter().zip(&compressed_pages).enumerate()
             {
                 let path = staged.join(format!("{index:08}-{}.zst", digest_hex(reference.digest)));
                 fs::write(path, compressed)?;
@@ -1830,14 +2053,6 @@ impl LineageLibrary {
                 }
             }
         }
-        let reference = ArchiveCheckpointRef {
-            digest,
-            retention,
-            total_uncompressed_bytes: bytes.len() as u64,
-            total_compressed_bytes,
-            pages: page_refs,
-        };
-        reference.validate_contract()?;
         Ok(ArchiveCheckpointDisposition::Stored(reference))
     }
 
@@ -3150,6 +3365,24 @@ fn archive_reparse_point_flags(is_symlink: bool, file_attributes: u32) -> bool {
 
 #[cfg(test)]
 mod archive_path_tests {
+    fn checkpoint_reference(
+        pages: Vec<super::ArchivePageRef>,
+    ) -> super::ArchiveCheckpointRef {
+        super::ArchiveCheckpointRef {
+            digest: super::Blake3Digest::from_bytes([1; 32]),
+            retention: super::ArchiveCheckpointRetention::Pinned,
+            total_uncompressed_bytes: pages
+                .iter()
+                .map(|page| u64::from(page.uncompressed_bytes))
+                .sum(),
+            total_compressed_bytes: pages
+                .iter()
+                .map(|page| u64::from(page.compressed_bytes))
+                .sum(),
+            pages,
+        }
+    }
+
     #[test]
     fn reparse_metadata_predicate_rejects_link_bits_without_link_creation() {
         assert!(super::archive_reparse_point_flags(false, 0x400));
@@ -3159,17 +3392,11 @@ mod archive_path_tests {
 
     #[test]
     fn deletion_target_predicate_rejects_lexical_escape_without_link_creation() {
-        let root = std::env::temp_dir().join(format!(
-            "alife-archive-delete-predicate-{}",
-            super::TEMP_SEQUENCE.fetch_add(1, super::Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        let canonical_root = super::canonical_archive_root(&root).unwrap();
-        let escaped = canonical_root.join("assets").join("..").join("outside");
+        let archive_root = std::path::Path::new("archive");
+        let escaped = std::path::Path::new("archive/assets/../outside");
         let error =
-            super::revalidate_archive_deletion_target(&canonical_root, &escaped).unwrap_err();
+            super::validate_archive_deletion_target_lexically(archive_root, escaped).unwrap_err();
         assert!(error.to_string().contains("unsafe components"));
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -3240,6 +3467,92 @@ mod archive_path_tests {
         let text = error.to_string();
         assert!(text.contains("original operation failure"));
         assert!(text.contains(&residual.display().to_string()));
+    }
+
+    #[test]
+    fn checkpoint_page_decode_stops_at_declared_length_plus_one() {
+        let expanded = vec![0x5a; super::ARCHIVE_PAGE_BYTES + 1];
+        let compressed = zstd::stream::encode_all(expanded.as_slice(), 3).unwrap();
+        let page = super::ArchivePageRef {
+            digest: super::digest_bytes(&compressed),
+            compressed_bytes: u32::try_from(compressed.len()).unwrap(),
+            uncompressed_bytes: u32::try_from(super::ARCHIVE_PAGE_BYTES).unwrap(),
+        };
+
+        let error = super::decode_checkpoint_page_bounded(&compressed, &page).unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("learned checkpoint page length mismatch"));
+    }
+
+    #[test]
+    fn checkpoint_decode_plan_rejects_oversized_totals_before_reservation() {
+        let decoded_page = super::ArchivePageRef {
+            digest: super::Blake3Digest::from_bytes([2; 32]),
+            compressed_bytes: 1,
+            uncompressed_bytes: u32::try_from(super::ARCHIVE_PAGE_BYTES).unwrap(),
+        };
+        let decoded_page_count = usize::try_from(
+            super::MAX_CHECKPOINT_DECODED_BYTES
+                / u64::try_from(super::ARCHIVE_PAGE_BYTES).unwrap()
+                + 1,
+        )
+        .unwrap();
+        let decoded = checkpoint_reference(vec![decoded_page; decoded_page_count]);
+        let decoded_error = super::checkpoint_decode_plan(&decoded).unwrap_err();
+        assert!(decoded_error
+            .to_string()
+            .contains("checkpoint decoded byte limit"));
+
+        let compressed_page = super::ArchivePageRef {
+            digest: super::Blake3Digest::from_bytes([3; 32]),
+            compressed_bytes: u32::try_from(super::MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES).unwrap(),
+            uncompressed_bytes: 1,
+        };
+        let compressed_page_count = usize::try_from(
+            super::MAX_CHECKPOINT_COMPRESSED_BYTES
+                / super::MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES
+                + 1,
+        )
+        .unwrap();
+        let compressed =
+            checkpoint_reference(vec![compressed_page; compressed_page_count]);
+        let compressed_error = super::checkpoint_decode_plan(&compressed).unwrap_err();
+        assert!(compressed_error
+            .to_string()
+            .contains("checkpoint compressed byte limit"));
+    }
+
+    #[test]
+    fn current_writer_multi_page_checkpoint_round_trip_preserves_bytes() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-archive-checkpoint-roundtrip-{}",
+            super::TEMP_SEQUENCE.fetch_add(1, super::Ordering::Relaxed)
+        ));
+        let library = super::LineageLibrary::open(super::LineageLibraryConfig::profile_default(
+            &root,
+        ))
+        .unwrap();
+        let bytes = (0..(super::ARCHIVE_PAGE_BYTES * 2 + 137))
+            .map(|index| (index % 251) as u8)
+            .collect::<Vec<_>>();
+        let stored = library
+            .store_checkpoint(
+                "bounded-decode-roundtrip",
+                &bytes,
+                super::ArchiveCheckpointRetention::Pinned,
+            )
+            .unwrap();
+        let reference = match stored {
+            super::ArchiveCheckpointDisposition::Stored(reference) => reference,
+            other => panic!("expected stored checkpoint, got {other:?}"),
+        };
+
+        assert_eq!(library.read_checkpoint(&reference).unwrap(), bytes);
+
+        drop(library);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
 

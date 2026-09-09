@@ -22,8 +22,9 @@ use alife_world::{CreatureAppearanceGenome, WorldObjectKind};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    archive_metadata_is_reparse_point, digest_bytes, digest_hex, write_content_addressed,
-    ArchiveError, LineageLibrary, TEMP_SEQUENCE,
+    allocate_checkpoint_output, archive_metadata_is_reparse_point, checkpoint_decode_plan,
+    decode_checkpoint_page_bounded, digest_bytes, digest_hex, write_content_addressed,
+    ArchiveError, CheckpointDecodeBudget, CheckpointDecodePlan, LineageLibrary, TEMP_SEQUENCE,
 };
 use std::sync::atomic::Ordering;
 
@@ -981,8 +982,17 @@ fn validate_bundle_graph(
         .map(|entry| (entry.path.as_str(), entry))
         .collect::<BTreeMap<_, _>>();
     let mut referenced_paths = BTreeSet::from([DESCRIPTOR_PATH.to_string()]);
+    let mut checkpoint_budget = CheckpointDecodeBudget::new(
+        MAX_BUNDLE_UNCOMPRESSED_BYTES as u64,
+        MAX_BUNDLE_UNCOMPRESSED_BYTES as u64,
+    );
     for selected in &descriptor.manifest_digests {
-        validate_manifest_graph(*selected, &map, &mut referenced_paths)?;
+        validate_manifest_graph(
+            *selected,
+            &map,
+            &mut referenced_paths,
+            &mut checkpoint_budget,
+        )?;
     }
     if referenced_paths.len() != entries.len()
         || entries
@@ -1000,6 +1010,7 @@ fn validate_manifest_graph(
     expected_digest: Blake3Digest,
     entries: &BTreeMap<&str, &BundleEntry>,
     referenced_paths: &mut BTreeSet<String>,
+    checkpoint_budget: &mut CheckpointDecodeBudget,
 ) -> Result<(), ArchiveError> {
     let manifest_path = format!("manifests/{}.json", digest_hex(expected_digest));
     let entry = entries.get(manifest_path.as_str()).ok_or_else(|| {
@@ -1036,10 +1047,11 @@ fn validate_manifest_graph(
         referenced_paths.insert(path);
     }
     if let Some(previous) = manifest.previous_manifest_digest {
-        validate_manifest_graph(previous, entries, referenced_paths)?;
+        validate_manifest_graph(previous, entries, referenced_paths, checkpoint_budget)?;
     }
     if let Some(life) = &manifest.life {
         if let ArchiveCheckpointDisposition::Stored(checkpoint) = &life.checkpoint {
+            let decode_plan = checkpoint_decode_plan(checkpoint)?;
             for (index, page) in checkpoint.pages.iter().enumerate() {
                 let path = format!(
                     "checkpoints/{}/{index:08}-{}.zst",
@@ -1058,7 +1070,12 @@ fn validate_manifest_graph(
                 }
                 referenced_paths.insert(path);
             }
-            let checkpoint_bytes = decode_checkpoint_from_entries(checkpoint, entries)?;
+            let checkpoint_bytes = decode_checkpoint_from_entries(
+                checkpoint,
+                decode_plan,
+                entries,
+                checkpoint_budget,
+            )?;
             if let Ok(envelope) =
                 serde_json::from_slice::<ArchivedGpuCheckpointEnvelope>(&checkpoint_bytes)
             {
@@ -1111,9 +1128,12 @@ fn validate_checkpoint_envelope(
 
 fn decode_checkpoint_from_entries(
     checkpoint: &alife_core::ArchiveCheckpointRef,
+    plan: CheckpointDecodePlan,
     entries: &BTreeMap<&str, &BundleEntry>,
+    budget: &mut CheckpointDecodeBudget,
 ) -> Result<Vec<u8>, ArchiveError> {
-    let mut output = Vec::with_capacity(checkpoint.total_uncompressed_bytes as usize);
+    budget.charge(plan)?;
+    let mut output = allocate_checkpoint_output(plan)?;
     for (index, page) in checkpoint.pages.iter().enumerate() {
         let path = format!(
             "checkpoints/{}/{index:08}-{}.zst",
@@ -1123,17 +1143,10 @@ fn decode_checkpoint_from_entries(
         let entry = entries
             .get(path.as_str())
             .ok_or_else(|| ArchiveError::Integrity("checkpoint page is missing".to_string()))?;
-        let decoded = zstd::stream::decode_all(entry.bytes.as_slice())?;
-        if decoded.len() != page.uncompressed_bytes as usize {
-            return Err(ArchiveError::Integrity(
-                "checkpoint page length mismatch".to_string(),
-            ));
-        }
+        let decoded = decode_checkpoint_page_bounded(&entry.bytes, page)?;
         output.extend_from_slice(&decoded);
     }
-    if output.len() != checkpoint.total_uncompressed_bytes as usize
-        || digest_bytes(&output) != checkpoint.digest
-    {
+    if output.len() != plan.output_capacity || digest_bytes(&output) != checkpoint.digest {
         return Err(ArchiveError::Integrity(
             "learned checkpoint digest mismatch".to_string(),
         ));
@@ -1310,17 +1323,97 @@ mod tests {
         ))
     }
 
-    fn copy_tree(source: &Path, destination: &Path) {
-        fs::create_dir_all(destination).unwrap();
-        for entry in fs::read_dir(source).unwrap() {
-            let entry = entry.unwrap();
-            let target = destination.join(entry.file_name());
-            if entry.file_type().unwrap().is_dir() {
-                copy_tree(&entry.path(), &target);
-            } else {
-                fs::copy(entry.path(), target).unwrap();
-            }
-        }
+    #[test]
+    fn nested_checkpoint_budget_charges_repeated_decode_work_for_shared_payload() {
+        let bytes = vec![0x3c; crate::ARCHIVE_PAGE_BYTES + 29];
+        let compressed_pages = bytes
+            .chunks(crate::ARCHIVE_PAGE_BYTES)
+            .map(|page| zstd::stream::encode_all(page, 3).unwrap())
+            .collect::<Vec<_>>();
+        let pages = bytes
+            .chunks(crate::ARCHIVE_PAGE_BYTES)
+            .zip(&compressed_pages)
+            .map(|(page, compressed)| alife_core::ArchivePageRef {
+                digest: digest_bytes(compressed),
+                compressed_bytes: u32::try_from(compressed.len()).unwrap(),
+                uncompressed_bytes: u32::try_from(page.len()).unwrap(),
+            })
+            .collect::<Vec<_>>();
+        let checkpoint = alife_core::ArchiveCheckpointRef {
+            digest: digest_bytes(&bytes),
+            retention: ArchiveCheckpointRetention::Pinned,
+            total_uncompressed_bytes: u64::try_from(bytes.len()).unwrap(),
+            total_compressed_bytes: pages
+                .iter()
+                .map(|page| u64::from(page.compressed_bytes))
+                .sum(),
+            pages,
+        };
+        let entries = compressed_pages
+            .into_iter()
+            .enumerate()
+            .map(|(index, compressed)| BundleEntry {
+                path: format!(
+                    "checkpoints/{}/{index:08}-{}.zst",
+                    digest_hex(checkpoint.digest),
+                    digest_hex(checkpoint.pages[index].digest)
+                ),
+                digest: checkpoint.pages[index].digest,
+                bytes: compressed,
+            })
+            .collect::<Vec<_>>();
+        let entry_map = entries
+            .iter()
+            .map(|entry| (entry.path.as_str(), entry))
+            .collect::<BTreeMap<_, _>>();
+        let mut budget = CheckpointDecodeBudget::new(
+            checkpoint.total_uncompressed_bytes,
+            checkpoint.total_compressed_bytes,
+        );
+        let decode_plan = checkpoint_decode_plan(&checkpoint).unwrap();
+
+        assert_eq!(
+            decode_checkpoint_from_entries(
+                &checkpoint,
+                decode_plan,
+                &entry_map,
+                &mut budget,
+            )
+            .unwrap(),
+            bytes
+        );
+        let error = decode_checkpoint_from_entries(
+            &checkpoint,
+            decode_plan,
+            &entry_map,
+            &mut budget,
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("nested checkpoint decoded work limit"));
+
+        let mut input_budget = CheckpointDecodeBudget::new(
+            checkpoint.total_uncompressed_bytes * 2,
+            checkpoint.total_compressed_bytes,
+        );
+        decode_checkpoint_from_entries(
+            &checkpoint,
+            decode_plan,
+            &entry_map,
+            &mut input_budget,
+        )
+        .unwrap();
+        let error = decode_checkpoint_from_entries(
+            &checkpoint,
+            decode_plan,
+            &entry_map,
+            &mut input_budget,
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("nested checkpoint compressed work limit"));
     }
 
     fn archive_fixture(
@@ -1731,7 +1824,6 @@ mod tests {
     fn genetic_founders_create_a_complete_valid_new_save() {
         let archive_root = temp_root("new-save-archive");
         let save_root = temp_root("new-save-root");
-        copy_tree(Path::new("../alife_world/tests/fixtures/p34"), &save_root);
         let (library, manifest_digest, _) = archive_fixture(&archive_root, 81, false);
         let cohort = library
             .resolve_founder_cohort(
@@ -1743,13 +1835,15 @@ mod tests {
                 }],
             )
             .unwrap();
-        let mut base = PortableSaveFile::from_json_file(save_root.join("tiny_save.json")).unwrap();
-        let mut world = base.restore_headless_world().unwrap();
-        world.remove_organism(OrganismId(1)).unwrap();
-        base.replace_headless_world_snapshot(&world).unwrap();
-        base.save_id = "founder-world".to_string();
-        base.gpu_runtime = None;
-        base.creatures.clear();
+        let world = alife_world::HeadlessWorld::new(4242);
+        let base = PortableSaveFile::from_headless_world(
+            "founder-world",
+            &world,
+            alife_world::RuntimeConfig::deterministic_default(4242, BrainScaleTier::Nano512),
+            AssetManifest::empty(),
+            Vec::new(),
+        )
+        .unwrap();
 
         let save = library
             .create_new_save_from_founders(base, &save_root, &cohort)
