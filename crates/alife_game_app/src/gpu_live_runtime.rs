@@ -12,6 +12,8 @@ mod founder_consequence_tests;
 mod nociception_food_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod recovery_sleep_tests;
+#[cfg(all(test, feature = "gpu-tests"))]
+mod sleep_atomicity_tests;
 mod staged_tick;
 
 use durability_hold::{
@@ -139,6 +141,65 @@ struct ResidentCognition {
 struct StagedLiveAuthority {
     world: HeadlessWorld,
     residents: BTreeMap<u64, ResidentCognition>,
+}
+
+// Cognitive sidecars share the enclosing world/resident transaction. Persistence
+// workers cannot be rolled back: after acceptance their queues retain ownership.
+struct StagedSleepAuthority {
+    memories: BTreeMap<u64, MemorySidecarState>,
+    topologies: BTreeMap<u64, TopologySidecar>,
+    restored_replay_patches: Vec<ExperiencePatch>,
+    sealed_patches_len: usize,
+    last_sealed_patches: Vec<ExperiencePatch>,
+    sealed_patch_count: usize,
+    retained_learning: BTreeMap<u64, RetainedLearningRecovery>,
+    sleep_journal_neural_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
+    pending_recovery_sleep_edges: BTreeMap<u64, PendingRecoverySleepEdge>,
+    pending_exact_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
+    pending_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
+    exact_checkpoint_waiting_for_sleep_journal: bool,
+}
+
+impl StagedSleepAuthority {
+    fn capture(runtime: &GpuLiveBrainRuntime) -> Self {
+        Self {
+            memories: runtime.memories.clone(),
+            topologies: runtime.topologies.clone(),
+            restored_replay_patches: runtime.restored_replay_patches.clone(),
+            // Optional lifetime history is append-only during a tick. Retain
+            // its boundary, never clone an individual's complete history.
+            sealed_patches_len: runtime.sealed_patches.len(),
+            last_sealed_patches: runtime.last_sealed_patches.clone(),
+            sealed_patch_count: runtime.sealed_patch_count,
+            retained_learning: runtime.retained_learning.clone(),
+            sleep_journal_neural_authorities: runtime.sleep_journal_neural_authorities.clone(),
+            pending_recovery_sleep_edges: runtime.pending_recovery_sleep_edges.clone(),
+            pending_exact_sleep_journal_entries: runtime
+                .pending_exact_sleep_journal_entries
+                .clone(),
+            pending_sleep_journal_entries: runtime.pending_sleep_journal_entries.clone(),
+            exact_checkpoint_waiting_for_sleep_journal: runtime
+                .exact_checkpoint_waiting_for_sleep_journal,
+        }
+    }
+
+    fn restore(self, runtime: &mut GpuLiveBrainRuntime) {
+        runtime.memories = self.memories;
+        runtime.topologies = self.topologies;
+        runtime.restored_replay_patches = self.restored_replay_patches;
+        runtime.sealed_patches.truncate(self.sealed_patches_len);
+        runtime.last_sealed_patches = self.last_sealed_patches;
+        runtime.sealed_patch_count = self.sealed_patch_count;
+        runtime.retained_learning = self.retained_learning;
+        if !runtime.post_irreversible_gpu_commit_fail_stop_armed {
+            runtime.sleep_journal_neural_authorities = self.sleep_journal_neural_authorities;
+            runtime.pending_recovery_sleep_edges = self.pending_recovery_sleep_edges;
+            runtime.pending_exact_sleep_journal_entries = self.pending_exact_sleep_journal_entries;
+            runtime.pending_sleep_journal_entries = self.pending_sleep_journal_entries;
+            runtime.exact_checkpoint_waiting_for_sleep_journal =
+                self.exact_checkpoint_waiting_for_sleep_journal;
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1721,6 +1782,7 @@ struct AuthoritativeGpuSleepDriver<'a> {
     context: Option<AuthoritativeSleepContext<'a>>,
     replay_evidence_before_commit: Option<SleepReplayEvidence>,
     last_sleep_work: Option<&'a mut Option<SleepWorkReceipt>>,
+    fail_stop_armed: Option<&'a mut bool>,
 }
 
 struct AuthoritativeSleepContext<'a> {
@@ -1977,6 +2039,9 @@ impl GpuSleepConsolidationDriver for AuthoritativeGpuSleepDriver<'_> {
             &evidence,
         )?;
         if due_work.contains(SleepWorkDue::STRUCTURAL_GROWTH_PRUNING) {
+            if let Some(armed) = self.fail_stop_armed.as_deref_mut() {
+                *armed = true;
+            }
             self.backend
                 .apply_v11_sleep_structural_phase(self.handle, &evidence)?;
         }
@@ -2043,6 +2108,18 @@ where
                     context.sealed_patches,
                     context.last_sealed_patches,
                 )?);
+        }
+        // The operation can fail after mutating device state. Arm before calling
+        // it, including Submitted recovery, which may submit a replacement job.
+        if matches!(
+            state.consolidation,
+            ConsolidationState::Prepared { .. }
+                | ConsolidationState::Submitted { .. }
+                | ConsolidationState::Completed { .. }
+        ) {
+            if let Some(armed) = self.authoritative.fail_stop_armed.as_deref_mut() {
+                *armed = true;
+            }
         }
         let result = (self.progress)(
             self.authoritative.backend,
@@ -2246,6 +2323,7 @@ impl TopologyObservationDisposition {
     }
 }
 
+#[derive(Clone)]
 struct RetainedLearningRecovery {
     handle: GpuBrainHandle,
     pending: PendingEligibilityReceipt,
@@ -6806,6 +6884,7 @@ impl GpuLiveBrainRuntime {
                     context: None,
                     replay_evidence_before_commit: None,
                     last_sleep_work: None,
+                    fail_stop_armed: None,
                 };
                 driver.progress(organism_id, state, intent)
             });
@@ -6959,6 +7038,7 @@ impl GpuLiveBrainRuntime {
             Option<ConsolidationIntent>,
         ) -> SleepProgressResult,
     {
+        self.backend.ensure_neural_actions_available()?;
         self.post_irreversible_gpu_commit_fail_stop_armed = false;
         self.poll_sleep_journal_publication()?;
         if self.exact_checkpoint_waiting_for_sleep_journal {
@@ -6984,10 +7064,14 @@ impl GpuLiveBrainRuntime {
         }
         let world_tick_before = self.world.tick().raw();
         let measure_clone_wall_time = self.performance_measurement_enabled;
+        let staged_sleep = StagedSleepAuthority::capture(self);
         let (result, clone_sample) =
             tick_with_sleep_progress_inner(self, measure_clone_wall_time, |runtime| {
                 runtime.tick_with_sleep_progress_staged(&mut progress)
             });
+        if result.is_err() {
+            staged_sleep.restore(self);
+        }
         self.performance_metrics.rollback_clone_calls = self
             .performance_metrics
             .rollback_clone_calls
@@ -7050,6 +7134,7 @@ impl GpuLiveBrainRuntime {
         &mut self,
         destination: PathBuf,
     ) -> Result<GpuManualCheckpointRequestDisposition, GameAppShellError> {
+        self.backend.ensure_neural_actions_available()?;
         if destination.as_os_str().is_empty() {
             return Err(ScaffoldContractError::InvalidId.into());
         }

@@ -94,6 +94,7 @@ impl GpuLiveBrainRuntime {
     /// The caller may atomically publish the returned manifest as a manual save;
     /// all bulk neural state remains behind content-addressed asset references.
     pub fn capture_portable_checkpoint(&mut self) -> Result<PortableSaveFile, GameAppShellError> {
+        self.backend.ensure_neural_actions_available()?;
         self.flush_sleep_journal_publication_blocking()?;
         let started = Instant::now();
         let readback_before = self.backend.mutable_slot_readback_metrics();
@@ -415,6 +416,7 @@ impl GpuLiveBrainRuntime {
         }
         if self.sleep_journal_publication_worker.is_some() || self.checkpoint_durability.is_none() {
             append_bounded_sleep_journal_entries(&mut self.pending_sleep_journal_entries, entries)?;
+            self.post_irreversible_gpu_commit_fail_stop_armed = true;
             self.performance_metrics.sleep_journal_pending_entries_peak = self
                 .performance_metrics
                 .sleep_journal_pending_entries_peak
@@ -426,6 +428,7 @@ impl GpuLiveBrainRuntime {
             .as_ref()
             .cloned()
             .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        self.post_irreversible_gpu_commit_fail_stop_armed = true;
         self.sleep_journal_publication_worker = Some(spawn_sleep_journal_publication_worker(
             durability,
             entries,
@@ -632,11 +635,13 @@ impl GpuLiveBrainRuntime {
     }
 
     pub(super) fn request_exact_population_checkpoint(&mut self) -> Result<(), GameAppShellError> {
+        self.backend.ensure_neural_actions_available()?;
         if let Some(active) = self.exact_checkpoint_coordinator.active_identity() {
             let expected_base_digest = active.expected_base_digest.clone();
             let _ = self
                 .exact_checkpoint_coordinator
                 .request_exact(self.world.tick(), expected_base_digest)?;
+            self.post_irreversible_gpu_commit_fail_stop_armed = true;
             return Ok(());
         }
         if self.sleep_journal_publication_worker.is_some()
@@ -677,6 +682,7 @@ impl GpuLiveBrainRuntime {
             let context =
                 GpuExactCheckpointTransactionContextV1::capture(self.backend.backend(), &capacity)?;
             let handles = self.handles.values().copied().collect::<Vec<_>>();
+            self.post_irreversible_gpu_commit_fail_stop_armed = true;
             let ticket = self.backend.submit_exact_population_capture(
                 checkpoint_tick,
                 transaction_id,
@@ -744,6 +750,7 @@ impl GpuLiveBrainRuntime {
             &mut self.pending_exact_sleep_journal_entries,
             entries,
         )?;
+        self.post_irreversible_gpu_commit_fail_stop_armed = true;
         // The exact queue owns admitted edges even if later tick work fails.
         // Failed append leaves both owners unchanged.
         for raw in admitted_recovery_edges {

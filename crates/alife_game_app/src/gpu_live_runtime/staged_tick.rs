@@ -239,6 +239,9 @@ impl GpuLiveBrainRuntime {
                         }),
                         replay_evidence_before_commit: None,
                         last_sleep_work: Some(&mut resident.last_sleep_work),
+                        fail_stop_armed: Some(
+                            &mut self.post_irreversible_gpu_commit_fail_stop_armed,
+                        ),
                     },
                     progress,
                     timing: &mut sleep_timing,

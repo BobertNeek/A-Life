@@ -1,7 +1,7 @@
 //! Recovery requests must retain the transition across durable checkpoint boundaries.
 use super::*;
 
-fn fixture(label: &str) -> GpuLiveBrainRuntime {
+pub(super) fn fixture(label: &str) -> GpuLiveBrainRuntime {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
         "../../target/founder-training-evidence/recovery-journal-{}-{label}",
         std::process::id()
