@@ -51,6 +51,22 @@ use crate::{
 };
 
 pub const GPU_HARDWARE_RECEIPT_SCHEMA_VERSION: u16 = 1;
+
+/// Raw device evidence retained after an injected plasticity rejection.
+#[cfg(feature = "gpu-tests")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuPlasticityProbeForTest {
+    pub receipt: Vec<u32>,
+    pub learning: Vec<u32>,
+    pub pending: Vec<u32>,
+    pub active_lifetime: Vec<u32>,
+    pub active_fast: Vec<u32>,
+    pub replay_spans: Vec<u32>,
+    pub replay_samples: Vec<u32>,
+    pub replay_events: Vec<u32>,
+    pub synapse_count: u32,
+    pub host_generations: [u64; 6],
+}
 pub const GPU_DRIVER_DIGEST_DOMAIN: &[u8] = b"alife.gpu.hardware.driver.v1";
 pub const GPU_FEATURE_DIGEST_DOMAIN: &[u8] = b"alife.gpu.hardware.features.v1";
 pub const GPU_LIMITS_DIGEST_DOMAIN: &[u8] = b"alife.gpu.hardware.limits.v1";
@@ -5450,6 +5466,206 @@ impl GpuClosedLoopBackend {
             return Err(ScaffoldContractError::NonFiniteFloat);
         }
         Ok(values)
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn plasticity_probe_for_test(
+        &self,
+        handle: GpuBrainHandle,
+    ) -> Result<GpuPlasticityProbeForTest, ScaffoldContractError> {
+        // Deliberately read-only: a failed commit must remain inspectable.
+        self.validate_handle_backend(handle)?;
+        let resident = self
+            .class_buckets
+            .get(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .resident(handle)?;
+        let ranges = &resident.ranges;
+        let words = self.read_slot_mutable_words(handle, ranges)?;
+        let read = |range: &std::ops::Range<u32>| -> Result<Vec<u32>, ScaffoldContractError> {
+            let start = range
+                .start
+                .checked_sub(ranges.mutable_state_words.start)
+                .ok_or(ScaffoldContractError::GpuLayoutMismatch)? as usize;
+            let end = range
+                .end
+                .checked_sub(ranges.mutable_state_words.start)
+                .ok_or(ScaffoldContractError::GpuLayoutMismatch)? as usize;
+            words
+                .get(start..end)
+                .map(<[u32]>::to_vec)
+                .ok_or(ScaffoldContractError::GpuLayoutMismatch)
+        };
+        let layout = &ranges.layout;
+        let learning = read(&layout.learning_state_words)?;
+        let bank = *learning
+            .get(1)
+            .ok_or(ScaffoldContractError::GpuLayoutMismatch)?;
+        if bank > 1 {
+            return Err(ScaffoldContractError::GpuLayoutMismatch);
+        }
+        let receipt_end = layout
+            .diagnostic_words
+            .start
+            .checked_add(16)
+            .ok_or(ScaffoldContractError::GpuLayoutMismatch)?;
+        Ok(GpuPlasticityProbeForTest {
+            receipt: read(&(layout.diagnostic_words.start..receipt_end))?,
+            learning,
+            pending: read(&layout.pending_eligibility_words)?,
+            active_lifetime: read(if bank == 0 {
+                &layout.lifetime_weight_words
+            } else {
+                &layout.lifetime_weight_bank_1_words
+            })?,
+            active_fast: read(if bank == 0 {
+                &layout.fast_weight_words
+            } else {
+                &layout.fast_weight_bank_1_words
+            })?,
+            replay_spans: read(&layout.replay_span_words)?,
+            replay_samples: read(&layout.replay_sample_words)?,
+            replay_events: read(&layout.replay_event_words)?,
+            synapse_count: resident.brain_slot.record().synapse_count,
+            host_generations: [
+                u64::from(resident.active_weight_bank),
+                u64::from(resident.active_eligibility_bank),
+                resident.active_weight_generation,
+                resident.active_eligibility_generation,
+                resident.replay_journal_generation,
+                resident.transaction_generation,
+            ],
+        })
+    }
+
+    /// Inject only the three parallel guard faults, once, into a pending native transaction.
+    #[cfg(feature = "gpu-tests")]
+    pub fn inject_plasticity_guard_faults_for_test(
+        &mut self,
+        handle: GpuBrainHandle,
+        nonfinite_synapses_before_apply: &[u32],
+        invalid_replay_spans: &[u32],
+        nonfinite_replay_eligibility: &[u32],
+    ) -> Result<(), ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let count = nonfinite_synapses_before_apply
+            .len()
+            .checked_add(invalid_replay_spans.len())
+            .and_then(|count| count.checked_add(nonfinite_replay_eligibility.len()))
+            .ok_or(ScaffoldContractError::GpuLayoutMismatch)?;
+        if count == 0 || count > 128 {
+            return Err(ScaffoldContractError::GpuLayoutMismatch);
+        }
+        let pool = self
+            .class_buckets
+            .get(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let resident = pool.resident(handle)?;
+        if resident.pending_eligibility.is_none() || resident.pending_eligibility_record.is_none() {
+            return Err(ScaffoldContractError::LearningReplayRejected);
+        }
+        let ranges = &resident.ranges;
+        let layout = &ranges.layout;
+        let probe = self.plasticity_probe_for_test(handle)?;
+        let eligibility_bank = *probe
+            .learning
+            .get(2)
+            .ok_or(ScaffoldContractError::GpuLayoutMismatch)?;
+        let replay_count = *probe
+            .learning
+            .get(16)
+            .ok_or(ScaffoldContractError::GpuLayoutMismatch)?;
+        if eligibility_bank > 1 {
+            return Err(ScaffoldContractError::GpuLayoutMismatch);
+        }
+        let bounded_offset = |range: &std::ops::Range<u32>, local: u32| {
+            let offset = range
+                .start
+                .checked_add(local)
+                .ok_or(ScaffoldContractError::GpuLayoutMismatch)?;
+            let end = offset
+                .checked_add(1)
+                .ok_or(ScaffoldContractError::GpuLayoutMismatch)?;
+            if range.start < ranges.mutable_state_words.start
+                || end > range.end
+                || range.end > ranges.mutable_state_words.end
+            {
+                return Err(ScaffoldContractError::GpuLayoutMismatch);
+            }
+            Ok(offset)
+        };
+        let eligibility_offset = |synapse: u32| {
+            let record = resident.brain_slot.record();
+            if synapse >= record.synapse_count {
+                return Err(ScaffoldContractError::GpuLayoutMismatch);
+            }
+            let (range, local) = if synapse < record.recurrent_synapse_count {
+                (
+                    if eligibility_bank == 0 {
+                        &layout.recurrent_eligibility_bank_1_words
+                    } else {
+                        &layout.recurrent_eligibility_words
+                    },
+                    synapse,
+                )
+            } else {
+                (
+                    if eligibility_bank == 0 {
+                        &layout.decoder_eligibility_bank_1_words
+                    } else {
+                        &layout.decoder_eligibility_words
+                    },
+                    synapse - record.recurrent_synapse_count,
+                )
+            };
+            bounded_offset(range, local)
+        };
+        let mut before_apply = Vec::new();
+        let mut before_replay = Vec::new();
+        for &synapse in nonfinite_synapses_before_apply {
+            before_apply.push((eligibility_offset(synapse)?, f32::INFINITY.to_bits()));
+        }
+        for &span in invalid_replay_spans {
+            if span >= replay_count {
+                return Err(ScaffoldContractError::GpuLayoutMismatch);
+            }
+            let local = span
+                .checked_mul(4)
+                .and_then(|base| base.checked_add(3))
+                .ok_or(ScaffoldContractError::GpuLayoutMismatch)?;
+            before_replay.push((bounded_offset(&layout.replay_span_words, local)?, 1));
+        }
+        for &span in nonfinite_replay_eligibility {
+            if span >= replay_count {
+                return Err(ScaffoldContractError::GpuLayoutMismatch);
+            }
+            let local = span
+                .checked_mul(4)
+                .ok_or(ScaffoldContractError::GpuLayoutMismatch)?;
+            let synapse = *probe
+                .replay_spans
+                .get(local as usize)
+                .ok_or(ScaffoldContractError::GpuLayoutMismatch)?;
+            before_replay.push((eligibility_offset(synapse)?, f32::INFINITY.to_bits()));
+        }
+        let pipeline = &mut self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .bucket_for_handle_mut(handle)?
+            .pipelines;
+        if pipeline.fast_plasticity_faults_for_test.is_some() {
+            return Err(ScaffoldContractError::LearningReplayRejected);
+        }
+        pipeline.fast_plasticity_faults_for_test =
+            Some(crate::closed_loop_pipeline::FastPlasticityFaultsForTest {
+                slot: handle.slot,
+                generation: handle.generation,
+                before_apply,
+                before_replay,
+            });
+        Ok(())
     }
 
     #[cfg(feature = "gpu-tests")]

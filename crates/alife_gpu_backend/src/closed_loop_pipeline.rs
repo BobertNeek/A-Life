@@ -1753,6 +1753,14 @@ impl GpuClosedLoopKernelSet {
     }
 }
 
+#[cfg(feature = "gpu-tests")]
+pub(crate) struct FastPlasticityFaultsForTest {
+    pub slot: u32,
+    pub generation: u32,
+    pub before_apply: Vec<(u32, u32)>,
+    pub before_replay: Vec<(u32, u32)>,
+}
+
 pub struct GpuClosedLoopPipelines {
     kernels: Arc<GpuClosedLoopKernelSet>,
     bind_group: wgpu::BindGroup,
@@ -1769,6 +1777,8 @@ pub struct GpuClosedLoopPipelines {
     force_all_invalid_slot: Option<(u32, u32)>,
     #[cfg(feature = "gpu-tests")]
     force_pending_identity_mismatch_slot: Option<(u32, u32)>,
+    #[cfg(feature = "gpu-tests")]
+    pub(crate) fast_plasticity_faults_for_test: Option<FastPlasticityFaultsForTest>,
 }
 
 impl GpuClosedLoopPipelines {
@@ -1834,6 +1844,8 @@ impl GpuClosedLoopPipelines {
             force_all_invalid_slot: None,
             #[cfg(feature = "gpu-tests")]
             force_pending_identity_mismatch_slot: None,
+            #[cfg(feature = "gpu-tests")]
+            fast_plasticity_faults_for_test: None,
         })
     }
 
@@ -2264,6 +2276,8 @@ impl GpuClosedLoopPipelines {
         entries: &[GpuFastPlasticityBatchEntry<'_>],
         timestamp: GpuTimestampQueryResources<'_>,
     ) -> Result<GpuTimedFastPlasticityResult, GpuClosedLoopError> {
+        #[cfg(feature = "gpu-tests")]
+        let faults = self.fast_plasticity_faults_for_test.take();
         self.last_fast_plasticity_malformed = None;
         self.authority.ensure_healthy()?;
         if self.authority.pending.is_some()
@@ -2558,6 +2572,50 @@ impl GpuClosedLoopPipelines {
         {
             return Err(GpuClosedLoopError::CapacityExceeded);
         }
+        #[cfg(feature = "gpu-tests")]
+        let fault_buffer = if let Some(faults) = &faults {
+            let entry = entries
+                .iter()
+                .find(|entry| {
+                    entry.slot.record().slot == faults.slot
+                        && entry.slot.record().slot_generation == faults.generation
+                })
+                .ok_or(GpuClosedLoopError::StaleOrForeignHandle)?;
+            let ranges = entry.slot.word_ranges();
+            for (offset, _) in faults.before_apply.iter().chain(&faults.before_replay) {
+                let end = offset
+                    .checked_add(1)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+                if ![
+                    &ranges.recurrent_eligibility_words,
+                    &ranges.recurrent_eligibility_bank_1_words,
+                    &ranges.decoder_eligibility_words,
+                    &ranges.decoder_eligibility_bank_1_words,
+                    &ranges.replay_span_words,
+                ]
+                .iter()
+                .any(|range| *offset >= range.start && end <= range.end)
+                {
+                    return Err(GpuClosedLoopError::MalformedUpload);
+                }
+            }
+            let values = faults
+                .before_apply
+                .iter()
+                .chain(&faults.before_replay)
+                .map(|(_, value)| *value)
+                .collect::<Vec<_>>();
+            use wgpu::util::DeviceExt;
+            Some(
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("closed-loop-test-plasticity-faults"),
+                    contents: bytemuck::cast_slice(&values),
+                    usage: wgpu::BufferUsages::COPY_SRC,
+                }),
+            )
+        } else {
+            None
+        };
         let neural = buffers.neural_buffers();
         queue.write_buffer(neural[4], 0, bytemuck::cast_slice(&dispatch_words));
         queue.write_buffer(neural[5], 0, bytemuck::cast_slice(&frame_words));
@@ -2596,6 +2654,27 @@ impl GpuClosedLoopPipelines {
                 1,
             ),
         ] {
+            #[cfg(feature = "gpu-tests")]
+            if let (Some(faults), Some(source)) = (&faults, &fault_buffer) {
+                let writes = match label {
+                    "closed-loop-apply-fast-plasticity-pass" => Some((0, &faults.before_apply)),
+                    "closed-loop-capture-fast-plasticity-replay-pass" => {
+                        Some((faults.before_apply.len(), &faults.before_replay))
+                    }
+                    _ => None,
+                };
+                if let Some((base, writes)) = writes {
+                    for (index, (offset, _)) in writes.iter().enumerate() {
+                        encoder.copy_buffer_to_buffer(
+                            source,
+                            ((base + index) as u64) * 4,
+                            neural[6],
+                            u64::from(*offset) * 4,
+                            4,
+                        );
+                    }
+                }
+            }
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some(label),
                 timestamp_writes: None,

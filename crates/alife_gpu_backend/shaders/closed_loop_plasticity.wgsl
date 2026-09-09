@@ -15,6 +15,26 @@ const PLASTICITY_GUARD_SYNAPSE_FINITE:u32 = 4u;
 const PLASTICITY_GUARD_REPLAY_SPAN:u32 = 5u;
 const PLASTICITY_GUARD_REPLAY_ELIGIBILITY:u32 = 6u;
 const PLASTICITY_GUARD_GENERATION_OVERFLOW:u32 = 7u;
+const PLASTICITY_GUARD_CONTEXT_EMPTY:u32 = 0xffffffffu;
+const PLASTICITY_GUARD_SYNAPSE_CONTEXT_WORD:u32 = 10u;
+const PLASTICITY_GUARD_REPLAY_SPAN_CONTEXT_WORD:u32 = 11u;
+const PLASTICITY_GUARD_REPLAY_ELIGIBILITY_CONTEXT_WORD:u32 = 12u;
+
+struct FastPlasticitySynapseEvaluation {
+  inactive_lifetime_index:u32,
+  inactive_fast_index:u32,
+  lifetime:f32,
+  fast:f32,
+  next_fast:f32,
+  guard:u32,
+}
+
+struct FastPlasticityReplaySpanEvaluation {
+  span_base:u32,
+  local_synapse:u32,
+  sample_start:u32,
+  guard:u32,
+}
 
 fn finite_plasticity(value:f32) -> bool {
   return value == value && abs(value) <= 3.402823466e+38;
@@ -140,15 +160,29 @@ fn plasticity_guard_bit(bit:u32, failed:bool) -> u32 {
   return select(0u, 1u << bit, failed);
 }
 
-fn reject_plasticity(receipt_base:u32, guard_id:u32, operand0:u32, operand1:u32, context:u32) {
+fn publish_plasticity_rejection(receipt_base:u32, guard_id:u32, operand0:u32, operand1:u32, context:u32) {
   if (state_span_within(receipt_base, FAST_PLASTICITY_RECEIPT_WORDS)) {
-    let previous = atomicMin(&mutable_state_words[receipt_base+6u], guard_id);
-    if (previous > guard_id) {
-      store_state_u32(receipt_base+7u, operand0);
-      store_state_u32(receipt_base+8u, operand1);
-      store_state_u32(receipt_base+9u, context);
+    store_state_u32(receipt_base+6u, guard_id);
+    store_state_u32(receipt_base+7u, operand0);
+    store_state_u32(receipt_base+8u, operand1);
+    store_state_u32(receipt_base+9u, context);
+    atomicMax(&mutable_state_words[receipt_base+3u], PLASTICITY_STATUS_GUARD_REJECTED);
+  }
+}
+
+fn nominate_plasticity_rejection(receipt_base:u32, guard_id:u32, context:u32) {
+  if (state_span_within(receipt_base, FAST_PLASTICITY_RECEIPT_WORDS)) {
+    var context_word = 0u;
+    if (guard_id == PLASTICITY_GUARD_SYNAPSE_FINITE) {
+      context_word = PLASTICITY_GUARD_SYNAPSE_CONTEXT_WORD;
+    } else if (guard_id == PLASTICITY_GUARD_REPLAY_SPAN) {
+      context_word = PLASTICITY_GUARD_REPLAY_SPAN_CONTEXT_WORD;
+    } else if (guard_id == PLASTICITY_GUARD_REPLAY_ELIGIBILITY) {
+      context_word = PLASTICITY_GUARD_REPLAY_ELIGIBILITY_CONTEXT_WORD;
+    } else {
+      return;
     }
-    storageBarrier();
+    atomicMin(&mutable_state_words[receipt_base+context_word], context);
     atomicMax(&mutable_state_words[receipt_base+3u], PLASTICITY_STATUS_GUARD_REJECTED);
   }
 }
@@ -181,6 +215,89 @@ fn load_staging_eligibility_value_direct(
   return load_state_f32(index);
 }
 
+fn evaluate_fast_plasticity_synapse(
+  brain:GpuBrainSlotRecord,
+  header:GpuLearningHeader,
+  local_synapse:u32,
+) -> FastPlasticitySynapseEvaluation {
+  let extension_base = brain.extension_record_offset;
+  let metadata_base = load_state_u32(extension_base + 7u) + local_synapse*8u;
+  let metadata = load_synapse_learning_metadata(metadata_base);
+  let receptor_base = load_state_u32(extension_base + 4u) + metadata.receptor_index*16u;
+  let receptor = load_plasticity_receptor(receptor_base);
+  let learning_rate = receptor.learning_rate;
+  let normalization_rate = receptor.normalization_rate;
+  let fast_min = receptor.fast_min;
+  let fast_max = receptor.fast_max;
+  let weight_pair = load_weight_bank_pair_direct(brain);
+  let active_weights = weight_pair.active_bases;
+  let inactive_weights = weight_pair.staging_bases;
+  let active_lifetime_index = active_weights.lifetime + local_synapse;
+  let inactive_lifetime_index = inactive_weights.lifetime + local_synapse;
+  let active_fast_index = active_weights.fast + local_synapse;
+  let inactive_fast_index = inactive_weights.fast + local_synapse;
+  let staging_eligibility = load_staging_eligibility_value_direct(brain,metadata);
+  let activation_base = select(brain.activation_a_offset,brain.activation_b_offset,header.active_activation_side==1u);
+  let post = load_state_f32(activation_base+metadata.target_neuron);
+  let genetic = bitcast<f32>(immutable_weight_words[brain.genetic_weight_offset+local_synapse]);
+  let alpha = bitcast<f32>(immutable_weight_words[brain.alpha_offset+local_synapse]);
+  let lifetime = load_state_f32(active_lifetime_index);
+  let fast = load_state_f32(active_fast_index);
+  let outcome = load_outcome_credit(header.outcome_offset);
+  let local_third_factor = project_third_factor(receptor,outcome);
+  let effective = genetic + lifetime + alpha*fast;
+  let delta = learning_rate*alpha*local_third_factor*staging_eligibility
+    - normalization_rate*post*post*effective;
+  let next_fast = clamp(fast+delta,fast_min,fast_max);
+  let guard =
+      plasticity_guard_bit(0u, !finite_plasticity(staging_eligibility))
+    | plasticity_guard_bit(1u, !finite_plasticity(post))
+    | plasticity_guard_bit(2u, !finite_plasticity(genetic))
+    | plasticity_guard_bit(3u, !finite_plasticity(alpha))
+    | plasticity_guard_bit(4u, !finite_plasticity(lifetime))
+    | plasticity_guard_bit(5u, !finite_plasticity(fast))
+    | plasticity_guard_bit(6u, !finite_plasticity(delta))
+    | plasticity_guard_bit(7u, !finite_plasticity(next_fast));
+  return FastPlasticitySynapseEvaluation(
+    inactive_lifetime_index,
+    inactive_fast_index,
+    lifetime,
+    fast,
+    next_fast,
+    guard
+  );
+}
+
+fn evaluate_fast_plasticity_replay_span(
+  brain:GpuBrainSlotRecord,
+  learning:GpuSlotLearningStateRecord,
+  context:u32,
+) -> FastPlasticityReplaySpanEvaluation {
+  let span_base = learning.replay_span_offset + context*4u;
+  let local_synapse = load_state_u32(span_base);
+  let sample_start = load_state_u32(span_base+1u);
+  let reserved = load_state_u32(span_base+3u);
+  let guard =
+      plasticity_guard_bit(0u, local_synapse >= brain.synapse_count)
+    | plasticity_guard_bit(1u, reserved != 0u)
+    | plasticity_guard_bit(2u, sample_start > learning.replay_sample_capacity)
+    | plasticity_guard_bit(3u, sample_start <= learning.replay_sample_capacity
+      && learning.replay_event_capacity > learning.replay_sample_capacity-sample_start);
+  return FastPlasticityReplaySpanEvaluation(span_base,local_synapse,sample_start,guard);
+}
+
+fn fast_plasticity_replay_eligibility(
+  brain:GpuBrainSlotRecord,
+  extension:GpuBrainSlotExtensionRecord,
+  learning:GpuSlotLearningStateRecord,
+  context:u32,
+) -> f32 {
+  let span_base = learning.replay_span_offset + context*4u;
+  let local_synapse = load_state_u32(span_base);
+  let metadata = load_synapse_learning_metadata(extension.synapse_metadata_offset+local_synapse*8u);
+  return load_staging_eligibility_value(brain,extension,learning,metadata);
+}
+
 @compute @workgroup_size(1)
 fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
   let row = gid.y;
@@ -193,6 +310,9 @@ fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
     store_state_u32(receipt_base+word, 0u);
   }
   store_state_u32(receipt_base+6u, 0xffffffffu);
+  store_state_u32(receipt_base+PLASTICITY_GUARD_SYNAPSE_CONTEXT_WORD, PLASTICITY_GUARD_CONTEXT_EMPTY);
+  store_state_u32(receipt_base+PLASTICITY_GUARD_REPLAY_SPAN_CONTEXT_WORD, PLASTICITY_GUARD_CONTEXT_EMPTY);
+  store_state_u32(receipt_base+PLASTICITY_GUARD_REPLAY_ELIGIBILITY_CONTEXT_WORD, PLASTICITY_GUARD_CONTEXT_EMPTY);
   store_state_u32(receipt_base, GPU_LEARNING_SCHEMA_VERSION);
   store_state_u32(receipt_base+1u, brain.slot);
   store_state_u32(receipt_base+2u, brain.slot_generation);
@@ -218,7 +338,7 @@ fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
     | plasticity_guard_bit(18u, !state_span_within(brain.extension_record_offset,20u))
     | plasticity_guard_bit(19u, !plasticity_frame_span_within(header.outcome_offset,OUTCOME_CREDIT_WORDS));
   if (header_guard != 0u) {
-    reject_plasticity(receipt_base, PLASTICITY_GUARD_HEADER_LAYOUT, header_guard, 0u, 0u); return;
+    publish_plasticity_rejection(receipt_base, PLASTICITY_GUARD_HEADER_LAYOUT, header_guard, 0u, 0u); return;
   }
   let extension = load_slot_extension(brain);
   let extension_guard =
@@ -228,7 +348,7 @@ fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
     | plasticity_guard_bit(3u, !state_span_within(extension.pending_eligibility_offset,PENDING_ELIGIBILITY_WORDS_PLASTICITY))
     | plasticity_guard_bit(4u, !state_span_within(extension.reserved0,4u));
   if (extension_guard != 0u) {
-    reject_plasticity(receipt_base, PLASTICITY_GUARD_EXTENSION_LAYOUT, extension_guard, 0u, 0u); return;
+    publish_plasticity_rejection(receipt_base, PLASTICITY_GUARD_EXTENSION_LAYOUT, extension_guard, 0u, 0u); return;
   }
   let learning = load_slot_learning_state(extension);
   let outcome = load_outcome_credit(header.outcome_offset);
@@ -298,7 +418,7 @@ fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
     | plasticity_guard_bit(24u, !immutable_plan_span_within(extension.synapse_metadata_offset,brain.synapse_count*8u))
     | plasticity_guard_bit(25u, !motor_matches);
   if (state_guard_lo != 0u || state_guard_hi != 0u) {
-    reject_plasticity(receipt_base, PLASTICITY_GUARD_STATE_EVIDENCE, state_guard_lo, state_guard_hi, 0u); return;
+    publish_plasticity_rejection(receipt_base, PLASTICITY_GUARD_STATE_EVIDENCE, state_guard_lo, state_guard_hi, 0u); return;
   }
   store_state_u32(receipt_base+4u,learning.active_weight_generation_lo);
   store_state_u32(receipt_base+5u,learning.active_weight_generation_hi);
@@ -315,50 +435,13 @@ fn apply_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (load_state_u32(receipt_base+3u) != PLASTICITY_STATUS_PREPARED) { return; }
   let local_synapse = gid.x;
   if (local_synapse >= brain.synapse_count) { return; }
-  let extension_base = brain.extension_record_offset;
-  let metadata_base = load_state_u32(extension_base + 7u) + local_synapse*8u;
-  let metadata = load_synapse_learning_metadata(metadata_base);
-  let receptor_base = load_state_u32(extension_base + 4u) + metadata.receptor_index*16u;
-  let receptor = load_plasticity_receptor(receptor_base);
-  let learning_rate = receptor.learning_rate;
-  let normalization_rate = receptor.normalization_rate;
-  let fast_min = receptor.fast_min;
-  let fast_max = receptor.fast_max;
-  let weight_pair = load_weight_bank_pair_direct(brain);
-  let active_weights = weight_pair.active_bases;
-  let inactive_weights = weight_pair.staging_bases;
-  let active_lifetime_index = active_weights.lifetime + local_synapse;
-  let inactive_lifetime_index = inactive_weights.lifetime + local_synapse;
-  let active_fast_index = active_weights.fast + local_synapse;
-  let inactive_fast_index = inactive_weights.fast + local_synapse;
-  let staging_eligibility = load_staging_eligibility_value_direct(brain,metadata);
-  let activation_base = select(brain.activation_a_offset,brain.activation_b_offset,header.active_activation_side==1u);
-  let post = load_state_f32(activation_base+metadata.target_neuron);
-  let genetic = bitcast<f32>(immutable_weight_words[brain.genetic_weight_offset+local_synapse]);
-  let alpha = bitcast<f32>(immutable_weight_words[brain.alpha_offset+local_synapse]);
-  let lifetime = load_state_f32(active_lifetime_index);
-  let fast = load_state_f32(active_fast_index);
-  let outcome = load_outcome_credit(header.outcome_offset);
-  let local_third_factor = project_third_factor(receptor,outcome);
-  let effective = genetic + lifetime + alpha*fast;
-  let delta = learning_rate*alpha*local_third_factor*staging_eligibility
-    - normalization_rate*post*post*effective;
-  let next_fast = clamp(fast+delta,fast_min,fast_max);
-  let synapse_guard =
-      plasticity_guard_bit(0u, !finite_plasticity(staging_eligibility))
-    | plasticity_guard_bit(1u, !finite_plasticity(post))
-    | plasticity_guard_bit(2u, !finite_plasticity(genetic))
-    | plasticity_guard_bit(3u, !finite_plasticity(alpha))
-    | plasticity_guard_bit(4u, !finite_plasticity(lifetime))
-    | plasticity_guard_bit(5u, !finite_plasticity(fast))
-    | plasticity_guard_bit(6u, !finite_plasticity(delta))
-    | plasticity_guard_bit(7u, !finite_plasticity(next_fast));
-  if (synapse_guard != 0u) {
-    reject_plasticity(receipt_base, PLASTICITY_GUARD_SYNAPSE_FINITE, synapse_guard, 0u, local_synapse); return;
+  let evaluation = evaluate_fast_plasticity_synapse(brain,header,local_synapse);
+  if (evaluation.guard != 0u) {
+    nominate_plasticity_rejection(receipt_base, PLASTICITY_GUARD_SYNAPSE_FINITE, local_synapse); return;
   }
-  store_state_f32(inactive_lifetime_index,lifetime);
-  store_state_f32(inactive_fast_index,canonicalize_state_zero(next_fast));
-  let applied = abs(next_fast-fast);
+  store_state_f32(evaluation.inactive_lifetime_index,evaluation.lifetime);
+  store_state_f32(evaluation.inactive_fast_index,canonicalize_state_zero(evaluation.next_fast));
+  let applied = abs(evaluation.next_fast-evaluation.fast);
   if (applied > 0.0) {
     atomicAdd(&mutable_state_words[receipt_base+14u],1u);
     atomicMax(&mutable_state_words[receipt_base+15u],bitcast<u32>(applied));
@@ -375,28 +458,18 @@ fn capture_fast_plasticity_replay(@builtin(global_invocation_id) gid:vec3<u32>) 
   let extension = load_slot_extension(brain);
   let learning = load_slot_learning_state(extension);
   if (gid.x >= learning.replay_span_count) { return; }
-  let span_base = learning.replay_span_offset + gid.x*4u;
-  let local_synapse = load_state_u32(span_base);
-  let sample_start = load_state_u32(span_base+1u);
-  let reserved = load_state_u32(span_base+3u);
-  let replay_span_guard =
-      plasticity_guard_bit(0u, local_synapse >= brain.synapse_count)
-    | plasticity_guard_bit(1u, reserved != 0u)
-    | plasticity_guard_bit(2u, sample_start > learning.replay_sample_capacity)
-    | plasticity_guard_bit(3u, sample_start <= learning.replay_sample_capacity
-      && learning.replay_event_capacity > learning.replay_sample_capacity-sample_start);
-  if (replay_span_guard != 0u) {
-    reject_plasticity(receipt_base, PLASTICITY_GUARD_REPLAY_SPAN, replay_span_guard, 0u, gid.x); return;
+  let span = evaluate_fast_plasticity_replay_span(brain,learning,gid.x);
+  if (span.guard != 0u) {
+    nominate_plasticity_rejection(receipt_base, PLASTICITY_GUARD_REPLAY_SPAN, gid.x); return;
   }
-  let metadata = load_synapse_learning_metadata(extension.synapse_metadata_offset+local_synapse*8u);
-  let eligibility = load_staging_eligibility_value(brain,extension,learning,metadata);
+  let eligibility = fast_plasticity_replay_eligibility(brain,extension,learning,gid.x);
   if (!finite_plasticity(eligibility)) {
-    reject_plasticity(receipt_base, PLASTICITY_GUARD_REPLAY_ELIGIBILITY, bitcast<u32>(eligibility), 0u, gid.x); return;
+    nominate_plasticity_rejection(receipt_base, PLASTICITY_GUARD_REPLAY_ELIGIBILITY, gid.x); return;
   }
   let signed_q15 = i32(round(clamp(eligibility,-1.0,1.0)*32767.0));
   let packed = (learning.replay_cursor & 0xffffu) | ((u32(signed_q15)&0xffffu)<<16u);
-  store_state_u32(learning.replay_sample_offset+sample_start+learning.replay_cursor,packed);
-  store_state_u32(span_base+2u,min(learning.replay_event_count+1u,learning.replay_event_capacity));
+  store_state_u32(learning.replay_sample_offset+span.sample_start+learning.replay_cursor,packed);
+  store_state_u32(span.span_base+2u,min(learning.replay_event_count+1u,learning.replay_event_capacity));
 }
 
 @compute @workgroup_size(1)
@@ -405,7 +478,28 @@ fn finalize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (header.brain_slot_index >= arrayLength(&brain_slots)) { return; }
   let brain = brain_slots[header.brain_slot_index];
   let receipt_base = brain.diagnostic_offset;
-  if (load_state_u32(receipt_base+3u) != PLASTICITY_STATUS_PREPARED) { return; }
+  let status = load_state_u32(receipt_base+3u);
+  if (status == PLASTICITY_STATUS_GUARD_REJECTED) {
+    let synapse_context = load_state_u32(receipt_base+PLASTICITY_GUARD_SYNAPSE_CONTEXT_WORD);
+    let replay_span_context = load_state_u32(receipt_base+PLASTICITY_GUARD_REPLAY_SPAN_CONTEXT_WORD);
+    let replay_eligibility_context = load_state_u32(receipt_base+PLASTICITY_GUARD_REPLAY_ELIGIBILITY_CONTEXT_WORD);
+    if (synapse_context != PLASTICITY_GUARD_CONTEXT_EMPTY) {
+      let evaluation = evaluate_fast_plasticity_synapse(brain,header,synapse_context);
+      publish_plasticity_rejection(receipt_base,PLASTICITY_GUARD_SYNAPSE_FINITE,evaluation.guard,0u,synapse_context);
+    } else if (replay_span_context != PLASTICITY_GUARD_CONTEXT_EMPTY) {
+      let extension = load_slot_extension(brain);
+      let learning = load_slot_learning_state(extension);
+      let span = evaluate_fast_plasticity_replay_span(brain,learning,replay_span_context);
+      publish_plasticity_rejection(receipt_base,PLASTICITY_GUARD_REPLAY_SPAN,span.guard,0u,replay_span_context);
+    } else if (replay_eligibility_context != PLASTICITY_GUARD_CONTEXT_EMPTY) {
+      let extension = load_slot_extension(brain);
+      let learning = load_slot_learning_state(extension);
+      let eligibility = fast_plasticity_replay_eligibility(brain,extension,learning,replay_eligibility_context);
+      publish_plasticity_rejection(receipt_base,PLASTICITY_GUARD_REPLAY_ELIGIBILITY,bitcast<u32>(eligibility),0u,replay_eligibility_context);
+    }
+    return;
+  }
+  if (status != PLASTICITY_STATUS_PREPARED) { return; }
   let extension = load_slot_extension(brain);
   let learning = load_slot_learning_state(extension);
   let outcome = load_outcome_credit(header.outcome_offset);
@@ -417,7 +511,7 @@ fn finalize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
     | plasticity_guard_bit(1u, !pair_nonzero(output_replay))
     | plasticity_guard_bit(2u, !pair_nonzero(output_transaction));
   if (generation_guard != 0u) {
-    reject_plasticity(receipt_base, PLASTICITY_GUARD_GENERATION_OVERFLOW, generation_guard, 0u, 0u); return;
+    publish_plasticity_rejection(receipt_base, PLASTICITY_GUARD_GENERATION_OVERFLOW, generation_guard, 0u, 0u); return;
   }
   let family = (outcome.selected_candidate_and_family>>16u)&0xffu;
   let event_base = learning.replay_event_rows_offset + learning.replay_cursor*28u;

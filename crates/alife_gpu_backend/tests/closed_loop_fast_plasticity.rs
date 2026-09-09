@@ -20,6 +20,317 @@ use alife_gpu_backend::{GpuClosedLoopBackend, GpuOutcomeCreditRecord};
 
 const GPU_LEARNING_TOLERANCE: f32 = 1.0e-5;
 
+fn r12_pending_fixture() -> (
+    GpuClosedLoopBackend,
+    alife_gpu_backend::GpuBrainHandle,
+    ExperiencePatch,
+    alife_core::NeuralReceptorFrame,
+) {
+    let phenotype = support::controlled_learning_n512_phenotype(1.0);
+    let organism = alife_core::OrganismId(12_004);
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
+    println!("R12 hardware {:?}", backend.hardware_receipt());
+    let handle = backend.insert_brain(organism, phenotype.clone()).unwrap();
+    let source = support::perception_frame_for_profile_at_tick(
+        organism.raw(),
+        900,
+        SensorProfile::PrivilegedAffordanceV1,
+        true,
+        2,
+    );
+    let physiology = CreatureGenome::early_mammal_founder(
+        42,
+        FoundationGeneticIdentity::new(42, 1, 1, handle.class_id()).unwrap(),
+    )
+    .unwrap()
+    .express()
+    .unwrap();
+    let chemistry = BiochemistryState::new(&physiology, source.tick()).unwrap();
+    let receptors = chemistry.neural_receptor_frame(&physiology).unwrap();
+    assert!(!receptors.activations.is_empty());
+    let expression = alife_core::NeuralReceptorPhenotype::compile(&phenotype).unwrap();
+    let effects = alife_core::NeuralReceptorEffects::from_frame(&receptors, &expression).unwrap();
+    let (frame, recall) = support::empty_recall(&source);
+    let upload = backend
+        .prepare_memory_context_upload(handle, &frame, &recall)
+        .unwrap()
+        .bind_neural_receptor_effects(effects)
+        .unwrap();
+    let batch = alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(vec![
+        alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &upload).unwrap(),
+    ])
+    .unwrap();
+    let tick = backend.tick_memory_batch(&batch).unwrap().remove(0);
+    let measured = sealed_measured_outcome(handle, &frame, &tick);
+    let command = frame.candidates()[usize::from(tick.selection.candidate_index)]
+        .to_command(organism, tick.selection.confidence)
+        .unwrap();
+    let bundle = alife_core::factorized_motor_bundle_for_candidates(
+        organism,
+        ExperienceSequenceId(1),
+        frame.tick(),
+        &frame,
+        tick.factorized_motor_candidates,
+        &phenotype
+            .candidate_decoder()
+            .factorized_motor_channels(&phenotype)
+            .unwrap(),
+        &command,
+        tick.selection.candidate_index,
+        tick.speech_payload.as_ref(),
+        false,
+    )
+    .unwrap();
+    tick.pending_eligibility
+        .identity()
+        .joint_selection()
+        .unwrap()
+        .validate_bundle(&bundle)
+        .unwrap();
+    // Declared physical/prediction fixtures exercise transaction mechanics only.
+    // Chemistry and the selected joint command come from their real owners.
+    let work = alife_core::CognitiveWorkReceipt::zero();
+    let outcome = measured
+        .outcome()
+        .clone()
+        .with_v11_joint(
+            alife_core::JointPhysicalOutcome::new(measured.outcome().physical, Vec::new()).unwrap(),
+            work,
+        )
+        .unwrap();
+    let target = alife_core::PredictionTargetReceipt::for_successor(
+        organism,
+        ExperienceSequenceId(1),
+        command.action_id,
+        frame.tick(),
+        frame.frame_digest().0,
+        SemanticStateVector::new(vec![0.5, 0.25]).unwrap(),
+        JointMotorCondition::from_bundle(&bundle).unwrap(),
+        SemanticStateVector::new(vec![0.4, 0.3]).unwrap(),
+    )
+    .unwrap();
+    let patch = ExperiencePatch::new_v11_with_decision(
+        measured.pre_action().clone(),
+        measured.decision().clone(),
+        bundle,
+        outcome,
+        target,
+        work,
+        alife_core::CognitiveContextFrame::empty(organism, ExperienceSequenceId(1), frame.tick())
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        backend
+            .sealed_outcome_credit_mismatch_receipt(handle, &patch)
+            .unwrap(),
+        None
+    );
+    (backend, handle, patch, receptors)
+}
+
+fn r12_assert_no_promotion(
+    before: &alife_gpu_backend::GpuPlasticityProbeForTest,
+    after: &alife_gpu_backend::GpuPlasticityProbeForTest,
+) {
+    assert_eq!(
+        after.learning, before.learning,
+        "device banks, generations, cursor and pending flag"
+    );
+    assert_eq!(
+        after.pending, before.pending,
+        "exact pending transaction remains owned"
+    );
+    assert_eq!(after.host_generations, before.host_generations);
+    assert_eq!(after.active_lifetime, before.active_lifetime);
+    assert_eq!(after.active_fast, before.active_fast);
+    assert_eq!(after.replay_events, before.replay_events);
+}
+
+fn r12_reject(
+    backend: &mut GpuClosedLoopBackend,
+    handle: alife_gpu_backend::GpuBrainHandle,
+    patch: &ExperiencePatch,
+    receptors: &alife_core::NeuralReceptorFrame,
+) -> alife_gpu_backend::GpuPlasticityProbeForTest {
+    assert_eq!(
+        backend
+            .apply_sealed_outcome(handle, patch, receptors)
+            .unwrap_err(),
+        alife_core::ScaffoldContractError::LearningEvidenceMismatch
+    );
+    let receipt = backend
+        .take_apply_fast_plasticity_failure_receipt()
+        .unwrap();
+    assert_eq!(
+        receipt.malformed_field,
+        Some(alife_gpu_backend::GpuRuntimeApplyFastPlasticityMalformedField::CommitGuardRejected)
+    );
+    let probe = backend.plasticity_probe_for_test(handle).unwrap();
+    assert_eq!(probe.receipt[3], 512);
+    assert_eq!(probe.receipt[8], 0);
+    assert_eq!(
+        receipt.actual,
+        Some(
+            probe.receipt[6..10]
+                .iter()
+                .map(|word| u64::from(*word))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap()
+        )
+    );
+    let source = support::perception_frame_for_profile_at_tick(
+        handle.organism_id().raw(),
+        patch.outcome().outcome_tick.raw(),
+        SensorProfile::PrivilegedAffordanceV1,
+        true,
+        2,
+    );
+    let physiology = CreatureGenome::early_mammal_founder(
+        42,
+        FoundationGeneticIdentity::new(42, 1, 1, handle.class_id()).unwrap(),
+    )
+    .unwrap()
+    .express()
+    .unwrap();
+    let receptors = BiochemistryState::new(&physiology, source.tick())
+        .unwrap()
+        .neural_receptor_frame(&physiology)
+        .unwrap();
+    let expression = alife_core::NeuralReceptorPhenotype::compile(
+        &support::controlled_learning_n512_phenotype(1.0),
+    )
+    .unwrap();
+    let effects = alife_core::NeuralReceptorEffects::from_frame(&receptors, &expression).unwrap();
+    let (frame, recall) = support::empty_recall(&source);
+    let upload = backend
+        .prepare_memory_context_upload(handle, &frame, &recall)
+        .unwrap()
+        .bind_neural_receptor_effects(effects)
+        .unwrap();
+    let batch = alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(vec![
+        alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &upload).unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(
+        backend.tick_memory_batch(&batch).unwrap_err(),
+        alife_core::ScaffoldContractError::LearningReplayRejected
+    );
+    assert_eq!(
+        backend.plasticity_probe_for_test(handle).unwrap(),
+        probe,
+        "rejected next tick leaves raw device and host authority unchanged"
+    );
+    println!(
+        "R12 rejected receipt={:?}, host={:?}, synapses={}, replay_spans={}",
+        probe.receipt, probe.host_generations, probe.synapse_count, probe.learning[16]
+    );
+    probe
+}
+
+#[test]
+fn r12_native_synapse_rejection_blocks_replay_and_retains_authority() {
+    for last_only in [true, false] {
+        let (mut backend, handle, patch, receptors) = r12_pending_fixture();
+        let before = backend.plasticity_probe_for_test(handle).unwrap();
+        assert!(before.synapse_count > 128);
+        let last = before.synapse_count - 1;
+        let faults = if last_only {
+            vec![last]
+        } else {
+            vec![0, 64, last]
+        };
+        println!(
+            "R12 apply tail lanes={}, faults={faults:?}",
+            before.synapse_count % 64
+        );
+        backend
+            .inject_plasticity_guard_faults_for_test(handle, &faults, &[], &[])
+            .unwrap();
+        let after = r12_reject(&mut backend, handle, &patch, &receptors);
+        assert_eq!(after.receipt[6], 4);
+        assert_eq!(after.receipt[9], after.receipt[10]);
+        assert!(faults.contains(&after.receipt[9]));
+        assert_ne!(after.receipt[7] & 1, 0, "seeded nonfinite eligibility bit");
+        assert_eq!(&after.receipt[11..13], &[u32::MAX, u32::MAX]);
+        r12_assert_no_promotion(&before, &after);
+        assert_eq!(
+            after.replay_samples, before.replay_samples,
+            "later replay pass did not capture"
+        );
+        assert_eq!(after.replay_spans, before.replay_spans);
+    }
+}
+
+#[test]
+fn r12_native_replay_guards_publish_coherent_actual_nominees() {
+    // Valid production replay plans contain at most 64 spans. Mixed guards therefore
+    // share one production workgroup; this is not cross-workgroup replay evidence.
+    for (spans, eligibility) in [
+        (vec![1, 7], vec![]),
+        (vec![], vec![2, 9]),
+        (vec![1, 7], vec![2, 9]),
+        (vec![2, 9], vec![1, 7]),
+    ] {
+        let (mut backend, handle, patch, receptors) = r12_pending_fixture();
+        let before = backend.plasticity_probe_for_test(handle).unwrap();
+        assert!((10..=64).contains(&before.learning[16]));
+        backend
+            .inject_plasticity_guard_faults_for_test(handle, &[], &spans, &eligibility)
+            .unwrap();
+        let after = r12_reject(&mut backend, handle, &patch, &receptors);
+        r12_assert_no_promotion(&before, &after);
+        assert_eq!(
+            after.receipt[10],
+            u32::MAX,
+            "apply completed before replay fault injection"
+        );
+        let (guard, context, payload) = if after.receipt[11] != u32::MAX {
+            assert!(spans.contains(&after.receipt[11]));
+            (5, after.receipt[11], 2)
+        } else {
+            assert_ne!(after.receipt[12], u32::MAX, "at least one actual nominee");
+            assert!(eligibility.contains(&after.receipt[12]));
+            (6, after.receipt[12], f32::INFINITY.to_bits())
+        };
+        if after.receipt[12] != u32::MAX {
+            assert!(eligibility.contains(&after.receipt[12]));
+        }
+        assert_eq!(&after.receipt[6..10], &[guard, payload, 0, context]);
+    }
+}
+
+#[test]
+fn r12_native_success_promotes_exactly_one_transaction() {
+    let (mut backend, handle, patch, receptors) = r12_pending_fixture();
+    let before = backend.plasticity_probe_for_test(handle).unwrap();
+    let receipt = backend
+        .apply_sealed_outcome(handle, &patch, &receptors)
+        .unwrap();
+    let after = backend.plasticity_probe_for_test(handle).unwrap();
+    assert_eq!(after.receipt[3], 1);
+    assert_eq!(
+        receipt.output_fast_generation,
+        receipt.input_fast_generation + 1
+    );
+    assert_eq!(after.learning[1], 1 - before.learning[1]);
+    assert_eq!(after.learning[2], 1 - before.learning[2]);
+    assert_eq!(after.learning[3], 0);
+    assert_eq!(after.learning[13], before.learning[13] + 1);
+    assert_eq!(after.host_generations[2], before.host_generations[2] + 1);
+    assert_eq!(after.host_generations[4], before.host_generations[4] + 1);
+    assert_eq!(after.host_generations[5], before.host_generations[5] + 1);
+    assert!(after
+        .replay_spans
+        .chunks_exact(4)
+        .take(after.learning[16] as usize)
+        .all(|span| span[2] == 1));
+    println!("R12 success receipt={:?}", after.receipt);
+}
+
 #[test]
 fn superseded_p26_oja_product_runtime_is_absent() {
     let crate_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
