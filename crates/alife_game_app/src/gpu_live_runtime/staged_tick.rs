@@ -598,6 +598,15 @@ impl GpuLiveBrainRuntime {
                 )?;
                 let cognitive_context =
                     cognitive_context_with_attention(cognitive_context, attention)?;
+                let cognitive_projection = cognitive_projection_for_draft(
+                    &routed_draft,
+                    &routed_recall,
+                    sequence_id,
+                    &resident.predictor,
+                    topology,
+                )?;
+                let cognitive_context =
+                    cognitive_context_with_projection(cognitive_context, cognitive_projection)?;
                 let prepared_recall = routed_recall.with_cognitive_context(cognitive_context)?;
                 let (frame, memory_recall) = prepared_recall.finalize(routed_draft)?;
                 memory_recall.validate_for_frame(&frame)?;

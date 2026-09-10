@@ -315,6 +315,9 @@ fn recurrent_and_decoder_coordinates_are_sorted_unique_and_in_range() {
             DecoderHeadKind::SpeechPayload => {
                 panic!("procedural N512 must not compile a speech decoder")
             }
+            DecoderHeadKind::CognitiveContext => {
+                panic!("procedural N512 must not compile a cognitive decoder")
+            }
         }
     }
 }
@@ -382,6 +385,7 @@ fn projections_routes_and_global_budgets_are_exact_partitions() {
                         action_decoder += 1
                     }
                     DecoderHeadKind::MemoryContext => memory_decoder += 1,
+                    DecoderHeadKind::CognitiveContext => action_decoder += 1,
                 },
             }
         }
@@ -848,6 +852,9 @@ fn decoder_serialized_identity_contains_no_raw_entity_id_lane() {
                 DecoderHeadKind::MemoryContext => memory_coordinate_count += 1,
                 DecoderHeadKind::SpeechPayload => {
                     panic!("procedural N512 must not serialize a speech coordinate")
+                }
+                DecoderHeadKind::CognitiveContext => {
+                    panic!("procedural N512 must not serialize a cognitive coordinate")
                 }
             }
         }

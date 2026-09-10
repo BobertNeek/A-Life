@@ -80,7 +80,8 @@ fn exact_checkpoint_manifest_restore_preserves_control_path() {
             direction: Vec3f::new(1.0, 0.0, 0.0),
             stand_off_distance: 0.5,
             confidence: 0.9,
-            payload_len: 0,
+            target: None,
+            payload: Vec::new(),
             coordination_group: 0,
         }])
         .expect("joint motor condition"),

@@ -12,6 +12,7 @@ pub(super) enum ProjectionKind {
     Recurrent,
     ActionAndSpeechDecoder,
     MemoryDecoder,
+    CognitiveDecoder,
 }
 
 pub(super) fn classify_projection(
@@ -28,6 +29,11 @@ pub(super) fn classify_projection(
                 ) =>
             {
                 ProjectionKind::ActionAndSpeechDecoder
+            }
+            CompiledSynapseKind::Decoder(coordinate)
+                if coordinate.head() == DecoderHeadKind::CognitiveContext =>
+            {
+                ProjectionKind::CognitiveDecoder
             }
             CompiledSynapseKind::Decoder(coordinate)
                 if coordinate.head() == DecoderHeadKind::MemoryContext =>
@@ -124,6 +130,32 @@ pub(super) fn validate_decoder_synapse(
                 || synapse.source() >= source_end
                 || synapse.target() != core.start + u32::from(coordinate.motor_index())
                 || synapse.target() >= target_end
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        }
+        DecoderHeadKind::CognitiveContext => {
+            let plan = phenotype
+                .cognitive_decoder()
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            let episodic = phenotype
+                .lobe_layout()
+                .region(crate::LobeKind::MemoryInterface)
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            let core = phenotype
+                .lobe_layout()
+                .region(crate::LobeKind::TemporalPredictive)
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            if projection_kind != ProjectionKind::CognitiveDecoder
+                || plan.head() != DecoderHeadKind::CognitiveContext
+                || coordinate.input_lane() < crate::COGNITIVE_CHANNEL_LANE_START
+                || coordinate.input_lane() >= crate::COGNITIVE_CHANNEL_LANE_END
+                || coordinate.family().raw() >= crate::COGNITIVE_CHANNEL_FAMILY_COUNT
+                || coordinate.motor_index() >= plan.output_width()
+                || coordinate.motor_index() != u16::from(coordinate.family().raw())
+                || synapse.source() < episodic.start
+                || synapse.source() >= episodic.start + episodic.len
+                || synapse.target() != core.start + u32::from(coordinate.family().raw())
             {
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }

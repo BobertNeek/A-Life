@@ -285,6 +285,8 @@ pub fn perception_frame_for_profile_at_tick(
 pub struct GpuTestBrain {
     pub backend: alife_gpu_backend::GpuClosedLoopBackend,
     pub handle: alife_gpu_backend::GpuBrainHandle,
+    brain_phenotype: BrainPhenotype,
+    physiology: alife_core::CreaturePhenotype,
 }
 
 #[cfg(feature = "gpu-tests")]
@@ -298,52 +300,102 @@ pub fn test_receptor_frame(patch: &alife_core::ExperiencePatch) -> alife_core::N
 }
 
 #[cfg(feature = "gpu-tests")]
-pub fn test_receptor_effects(tick: alife_core::Tick) -> alife_core::NeuralReceptorEffects {
-    alife_core::NeuralReceptorEffects {
-        source_tick: tick,
-        source_chemistry_version: alife_core::BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
-        interoceptive_gain: 1.0,
-        regional_excitability: 1.0,
-        projection_gain: 1.0,
-        local_threshold_shift: 0.0,
-        attention_gain: 1.0,
-        plasticity_appetitive: 0.0,
-        plasticity_aversive: 0.0,
-        structural_growth_gate: 0.5,
-        sleep_gate: 0.5,
-        consolidation_gate: 0.5,
-    }
+pub fn test_physiology(
+    species_seed: u64,
+    brain: &BrainPhenotype,
+) -> Result<alife_core::CreaturePhenotype, alife_core::ScaffoldContractError> {
+    let foundation =
+        alife_core::FoundationGeneticIdentity::new(species_seed, 1, 1, brain.brain_class_id())?;
+    alife_core::CreatureGenome::early_mammal_founder(species_seed, foundation)?.express()
+}
+
+#[cfg(feature = "gpu-tests")]
+pub fn physiology_receptor_frame(
+    physiology: &alife_core::CreaturePhenotype,
+    source_tick: Tick,
+) -> Result<alife_core::NeuralReceptorFrame, alife_core::ScaffoldContractError> {
+    alife_core::BiochemistryState::new(physiology, source_tick)?.neural_receptor_frame(physiology)
+}
+
+#[cfg(feature = "gpu-tests")]
+pub fn chemistry_receptor_effects(
+    brain: &BrainPhenotype,
+    physiology: &alife_core::CreaturePhenotype,
+    source_tick: Tick,
+) -> Result<alife_core::NeuralReceptorEffects, alife_core::ScaffoldContractError> {
+    let receptors = physiology_receptor_frame(physiology, source_tick)?;
+    let expression = alife_core::NeuralReceptorPhenotype::compile(brain)?;
+    alife_core::NeuralReceptorEffects::from_frame(&receptors, &expression)
+}
+
+#[cfg(feature = "gpu-tests")]
+pub fn bind_chemistry_receptor_effects(
+    upload: alife_gpu_backend::GpuMemoryContextUpload,
+    brain: &BrainPhenotype,
+    physiology: &alife_core::CreaturePhenotype,
+    source_tick: Tick,
+) -> Result<alife_gpu_backend::GpuMemoryContextUpload, alife_core::ScaffoldContractError> {
+    let effects = chemistry_receptor_effects(brain, physiology, source_tick)?;
+    upload
+        .bind_neural_receptor_effects(effects)
+        .map_err(|_| alife_core::ScaffoldContractError::InvalidPerceptionFrame)
 }
 
 #[cfg(feature = "gpu-tests")]
 impl GpuTestBrain {
+    pub fn brain_phenotype(&self) -> &BrainPhenotype {
+        &self.brain_phenotype
+    }
+
+    pub fn physiology(&self) -> &alife_core::CreaturePhenotype {
+        &self.physiology
+    }
+
     pub fn from_phenotype(
         organism_id: OrganismId,
         phenotype: BrainPhenotype,
     ) -> Result<Self, alife_core::ScaffoldContractError> {
+        let physiology = test_physiology(organism_id.raw(), &phenotype)?;
         let mut backend = alife_gpu_backend::GpuClosedLoopBackend::new_required(
             alife_gpu_backend::GpuRuntimeProfile::production_v1(),
         )?;
-        let handle = backend.insert_brain(organism_id, phenotype)?;
-        Ok(Self { backend, handle })
+        let handle = backend.insert_brain(organism_id, phenotype.clone())?;
+        Ok(Self {
+            backend,
+            handle,
+            brain_phenotype: phenotype,
+            physiology,
+        })
     }
 
     pub fn tick(
         &mut self,
         frame: &PerceptionFrame,
     ) -> Result<alife_gpu_backend::GpuClosedLoopTick, alife_core::ScaffoldContractError> {
-        self.backend
-            .tick_batch(&[(self.handle, frame.clone())])?
-            .into_iter()
-            .next()
-            .ok_or(alife_core::ScaffoldContractError::InvalidDecisionEvidence)
+        self.tick_with_frame(frame).map(|(_, tick)| tick)
+    }
+
+    pub fn tick_with_frame(
+        &mut self,
+        frame: &PerceptionFrame,
+    ) -> Result<
+        (PerceptionFrame, alife_gpu_backend::GpuClosedLoopTick),
+        alife_core::ScaffoldContractError,
+    > {
+        tick_with_receptors(
+            &mut self.backend,
+            self.handle,
+            &self.brain_phenotype,
+            &self.physiology,
+            frame,
+        )
     }
 
     pub fn apply_sealed_outcome(
         &mut self,
         patch: &alife_core::ExperiencePatch,
     ) -> Result<alife_gpu_backend::GpuLearningReceipt, alife_core::ScaffoldContractError> {
-        let receptors = test_receptor_frame(patch);
+        let receptors = physiology_receptor_frame(&self.physiology, patch.pre_action().tick)?;
         self.backend
             .apply_sealed_outcome(self.handle, patch, &receptors)
     }
@@ -1073,8 +1125,15 @@ mod hardware {
                 perception.frame_binding,
                 &self.slots[0],
             )
-            .unwrap()
-            .bind_neural_receptor_effects(super::test_receptor_effects(frame.tick()))
+            .unwrap();
+            let physiology =
+                super::test_physiology(frame.organism_id().raw(), &self.phenotypes[0]).unwrap();
+            let memory = super::bind_chemistry_receptor_effects(
+                memory,
+                &self.phenotypes[0],
+                &physiology,
+                frame.tick(),
+            )
             .unwrap();
             let decision = activity_decision_for(
                 &self.phenotypes[0],
@@ -2170,9 +2229,10 @@ pub fn two_head_n512_genome() -> BrainGenome {
     .unwrap();
     genome.with_cognitive_architecture(architecture).unwrap()
 }
-pub fn empty_recall(
+pub fn try_empty_recall(
     source: &PerceptionFrame,
-) -> (PerceptionFrame, alife_core::FinalizedMemoryRecall) {
+) -> Result<(PerceptionFrame, alife_core::FinalizedMemoryRecall), alife_core::ScaffoldContractError>
+{
     let draft = alife_core::PerceptionFrameDraft::new(
         source.organism_id(),
         source.tick(),
@@ -2183,30 +2243,95 @@ pub fn empty_recall(
         source.candidates().to_vec(),
         source.profile_provenance(),
         source.grounded_object_slots().to_vec(),
-    )
-    .unwrap();
-    let bank = alife_core::MemoryBank::new(
-        alife_core::MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap(),
-    )
-    .unwrap();
-    bank.recall_frame(&draft).unwrap().finalize(draft).unwrap()
+    )?;
+    let bank = alife_core::MemoryBank::new(alife_core::MemoryBankConfig::new(
+        8,
+        64,
+        4,
+        0.72,
+        Confidence::new(0.0)?,
+    )?)?;
+    bank.recall_frame(&draft)?.finalize(draft)
+}
+
+pub fn empty_recall(
+    source: &PerceptionFrame,
+) -> (PerceptionFrame, alife_core::FinalizedMemoryRecall) {
+    try_empty_recall(source).unwrap()
+}
+
+#[cfg(feature = "gpu-tests")]
+pub fn tick_chemistry_batch(
+    backend: &mut alife_gpu_backend::GpuClosedLoopBackend,
+    rows: &[(
+        alife_gpu_backend::GpuBrainHandle,
+        &BrainPhenotype,
+        &alife_core::CreaturePhenotype,
+        &PerceptionFrame,
+    )],
+) -> Result<
+    Vec<(PerceptionFrame, alife_gpu_backend::GpuClosedLoopTick)>,
+    alife_core::ScaffoldContractError,
+> {
+    let mut frames = Vec::with_capacity(rows.len());
+    let mut recalls = Vec::with_capacity(rows.len());
+    for (handle, brain, _, source) in rows.iter().copied() {
+        if handle.organism_id() != source.organism_id()
+            || handle.class_id() != brain.brain_class_id()
+            || handle.phenotype_hash() != brain.phenotype_hash()
+        {
+            return Err(alife_core::ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        let (frame, recall) = try_empty_recall(source)?;
+        frames.push(frame);
+        recalls.push(recall);
+    }
+
+    let mut uploads = Vec::with_capacity(rows.len());
+    for (index, (handle, brain, physiology, _)) in rows.iter().copied().enumerate() {
+        let upload =
+            backend.prepare_memory_context_upload(handle, &frames[index], &recalls[index])?;
+        uploads.push(bind_chemistry_receptor_effects(
+            upload,
+            brain,
+            physiology,
+            frames[index].tick(),
+        )?);
+    }
+
+    let inputs = rows
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(index, (handle, _, _, _))| {
+            alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(
+                handle,
+                &frames[index],
+                &uploads[index],
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let batch = alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(inputs)?;
+    let ticks = backend.tick_memory_batch(&batch)?;
+    if frames.len() != ticks.len() {
+        return Err(alife_core::ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    Ok(frames.into_iter().zip(ticks).collect())
 }
 
 #[cfg(feature = "gpu-tests")]
 pub fn tick_with_receptors(
     backend: &mut alife_gpu_backend::GpuClosedLoopBackend,
     handle: alife_gpu_backend::GpuBrainHandle,
+    brain: &BrainPhenotype,
+    physiology: &alife_core::CreaturePhenotype,
     source: &PerceptionFrame,
-) -> (PerceptionFrame, alife_gpu_backend::GpuClosedLoopTick) {
-    let (frame, recall) = empty_recall(source);
-    let upload = backend
-        .prepare_memory_context_upload(handle, &frame, &recall)
-        .unwrap()
-        .bind_neural_receptor_effects(test_receptor_effects(frame.tick()))
-        .unwrap();
-    let input =
-        alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &upload).unwrap();
-    let batch = alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(vec![input]).unwrap();
-    let tick = backend.tick_memory_batch(&batch).unwrap().remove(0);
-    (frame, tick)
+) -> Result<
+    (PerceptionFrame, alife_gpu_backend::GpuClosedLoopTick),
+    alife_core::ScaffoldContractError,
+> {
+    tick_chemistry_batch(backend, &[(handle, brain, physiology, source)])?
+        .into_iter()
+        .next()
+        .ok_or(alife_core::ScaffoldContractError::InvalidDecisionEvidence)
 }

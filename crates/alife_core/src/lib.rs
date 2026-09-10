@@ -13,6 +13,8 @@ pub mod brain_class;
 pub mod canonical_digest;
 pub mod checkpoint;
 pub mod chemistry;
+#[path = "newphenotype/cognitive_channel.rs"]
+pub mod cognitive_channel;
 pub mod cognitive_context;
 pub mod cognitive_work;
 pub mod dendritic;
@@ -33,6 +35,13 @@ pub mod language;
 pub mod learning;
 mod legacy_nano512_compatibility;
 mod nano512_readout_candidate;
+pub use cognitive_channel::{
+    CognitiveChannelExtensionV1, CognitiveChannelPlanV1,
+    COGNITIVE_CHANNEL_EXTENSION_SCHEMA_VERSION, COGNITIVE_CHANNEL_FAMILY_COUNT,
+    COGNITIVE_CHANNEL_LANE_COUNT, COGNITIVE_CHANNEL_LANE_END, COGNITIVE_CHANNEL_LANE_START,
+    COGNITIVE_CHANNEL_REPLAY_CAPTURE_LIMIT, COGNITIVE_CHANNEL_TOTAL_SYNAPSES,
+    COGNITIVE_CONTEXT_DECODER_HEAD_RAW, COGNITIVE_DECODER_ROLE_RAW,
+};
 pub use factorized_selection::{
     arbitrate_gpu_selected_command_into_factorized_bundle, channel_command_for_action,
     factorized_motor_bundle_for_candidates, factorized_motor_channel_order,
@@ -312,11 +321,12 @@ pub use phenotype::{
     MAX_REPLAY_CAPTURE_SYNAPSES, REQUIRED_GPU_FEATURE_MASK,
 };
 pub use predictive::{
-    GroundedSuccessorPredictor, JointMotorCondition, MotorChannelFactor, PredictionTargetFamily,
-    PredictionTargetReceipt, SemanticStateVector, JOINT_MOTOR_CONDITION_ABI_V1,
-    JOINT_MOTOR_CONDITION_SCHEMA_VERSION, MAX_SEMANTIC_STATE_VALUES, MAX_SUCCESSOR_FEATURES,
-    PREDICTION_TARGET_SCHEMA_VERSION, SEMANTIC_STATE_VECTOR_ABI_V1,
-    SEMANTIC_STATE_VECTOR_SCHEMA_VERSION, SUCCESSOR_FEATURE_ABI_V1,
+    GroundedSuccessorPredictor, JointMotorCondition, MotorChannelFactor,
+    PredictionCategoryCoverage, PredictionTargetFamily, PredictionTargetReceipt,
+    SemanticStateVector, GROUNDED_PREDICTOR_ABI_VERSION, JOINT_MOTOR_CONDITION_ABI_V1,
+    JOINT_MOTOR_CONDITION_ABI_V2, JOINT_MOTOR_CONDITION_SCHEMA_VERSION, MAX_PREDICTOR_CATEGORIES,
+    MAX_SEMANTIC_STATE_VALUES, MAX_SUCCESSOR_FEATURES, PREDICTION_TARGET_SCHEMA_VERSION,
+    SEMANTIC_STATE_VECTOR_ABI_V1, SEMANTIC_STATE_VECTOR_SCHEMA_VERSION, SUCCESSOR_FEATURE_ABI_V1,
 };
 pub use reference_brain::{
     BrainTickDiagnostics, BrainTickInput, BrainTickOutput, BrainTickStatus, CreatureActionState,

@@ -758,7 +758,10 @@ mod task3_causal_genome_and_routing_red_tests {
             assert_eq!(DecoderHeadKind::try_from_raw(raw).unwrap(), value);
         }
         assert!(DecoderHeadKind::try_from_raw(0).is_err());
-        assert!(DecoderHeadKind::try_from_raw(4).is_err());
+        assert_eq!(
+            DecoderHeadKind::try_from_raw(4).unwrap(),
+            DecoderHeadKind::CognitiveContext
+        );
     }
 
     #[test]

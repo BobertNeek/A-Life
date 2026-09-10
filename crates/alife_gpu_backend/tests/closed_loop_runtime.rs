@@ -203,10 +203,11 @@ fn brain_handle_source_keeps_capability_fields_private_and_nonserializable() {
 mod hardware {
     use alife_core::{
         ActionCandidate, ActionKind, ActionTarget, BodySnapshot, BrainCapacityClass,
-        CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, Confidence,
-        DurationTicks, HomeostaticSnapshot, NormalizedScalar, OrganismId, PerceptionFrame, Pose,
-        ScaffoldContractError, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
-        SensoryChannels, SensorySnapshot, Tick, Vec3f, Velocity,
+        BrainDispatchIdentity, CandidateActionFamily, CandidateFeatureVector,
+        CandidateObservationRef, Confidence, DurationTicks, GpuPressureSample,
+        GpuPressureSampleInput, HomeostaticSnapshot, NormalizedScalar, OrganismId, PerceptionFrame,
+        Pose, ScaffoldContractError, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
+        SensoryChannels, SensorySnapshot, Tick, Vec3f, Velocity, BRAIN_ATP_Q16_MAX,
     };
     use alife_gpu_backend::{
         GpuBackendState, GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopTick,
@@ -307,6 +308,54 @@ mod hardware {
             Vec::new(),
         )
         .unwrap()
+    }
+
+    fn install_synthetic_acquired_speech_weights(
+        backend: &mut GpuClosedLoopBackend,
+        handle: GpuBrainHandle,
+        organism: OrganismId,
+        phenotype: &alife_core::BrainPhenotype,
+    ) -> GpuBrainHandle {
+        let upload = alife_gpu_backend::GpuPhenotypeUpload::try_from(phenotype)
+            .expect("synthetic speech fixture uses the exact phenotype upload metadata");
+        let mut parts = backend
+            .snapshot_brain(handle, Tick::new(219))
+            .expect("synthetic speech fixture snapshots the inserted GPU brain")
+            .into_parts();
+        let speech_rows = upload
+            .decoder_eligibility_metadata
+            .iter()
+            .filter(|row| row.decoder_head == alife_core::DecoderHeadKind::SpeechPayload.raw())
+            .collect::<Vec<_>>();
+        assert_eq!(speech_rows.len(), 32 * 32);
+        // Synthetic acquired-weight fixture only; this is not evidence of learned speech competence.
+        for metadata in &speech_rows {
+            let global = metadata.global_synapse_id as usize;
+            let genetic = *upload
+                .genetic_weights
+                .get(global)
+                .expect("speech metadata references an exact genetic weight");
+            assert!(genetic > 0.0);
+            assert_eq!(parts.lifetime_bank_0_bits[global], 0.0_f32.to_bits());
+            assert_eq!(parts.lifetime_bank_1_bits[global], 0.0_f32.to_bits());
+            assert_eq!(parts.fast_bank_0_bits[global], 0.0_f32.to_bits());
+            assert_eq!(parts.fast_bank_1_bits[global], 0.0_f32.to_bits());
+            let synthetic_acquired_weight = -2.0 * genetic;
+            parts.lifetime_bank_0_bits[global] = synthetic_acquired_weight.to_bits();
+            parts.lifetime_bank_1_bits[global] = synthetic_acquired_weight.to_bits();
+        }
+        let snapshot = alife_gpu_backend::GpuBrainCheckpointSnapshot::try_from_parts(parts)
+            .expect("synthetic acquired speech weights form a valid checkpoint");
+        backend.remove_brain(handle).unwrap();
+        let receipt = backend
+            .restore_brain(
+                organism,
+                phenotype.clone(),
+                alife_gpu_backend::GpuBrainRestoreRequest::try_new(snapshot).unwrap(),
+            )
+            .expect("synthetic acquired speech weights restore through the public API");
+        assert!(receipt.pending_eligibility.is_none());
+        receipt.handle
     }
 
     #[test]
@@ -443,6 +492,11 @@ mod hardware {
                 .insert_brain(OrganismId(3), phenotypes[2].clone())
                 .unwrap(),
         ];
+        let physiologies = [
+            super::support::test_physiology(81, &phenotypes[0]).unwrap(),
+            super::support::test_physiology(82, &phenotypes[1]).unwrap(),
+            super::support::test_physiology(83, &phenotypes[2]).unwrap(),
+        ];
         let frames = [
             perception_frame_for_profile_at_tick(
                 1,
@@ -467,8 +521,17 @@ mod hardware {
             ),
         ];
         let order = [2_usize, 0, 1];
-        let ordered_batch = order.map(|index| (handles[index], frames[index].clone()));
-        let ticks = backend.tick_batch(&ordered_batch).unwrap();
+        let ordered_batch = order.map(|index| {
+            (
+                handles[index],
+                &phenotypes[index],
+                &physiologies[index],
+                &frames[index],
+            )
+        });
+        let bound_ticks =
+            super::support::tick_chemistry_batch(&mut backend, &ordered_batch).unwrap();
+        let ticks = bound_ticks.iter().map(|(_, tick)| tick).collect::<Vec<_>>();
         assert_eq!(ticks.len(), 3);
         assert_eq!(
             ticks.iter().map(|tick| tick.handle).collect::<Vec<_>>(),
@@ -489,7 +552,7 @@ mod hardware {
         assert_eq!(backend.completed_selection_count(), 3);
         assert_eq!(backend.shared_kernel_set_count_for_test(), 1);
         assert_eq!(backend.shared_resource_counts_for_test(), (1, 1, 1));
-        for (tick, index) in ticks.iter().zip(order) {
+        for ((frame, tick), index) in bound_ticks.iter().zip(order) {
             assert_eq!(
                 tick.handle.phenotype_hash(),
                 phenotypes[index].phenotype_hash()
@@ -497,7 +560,7 @@ mod hardware {
             assert_tick_identity(
                 tick,
                 handles[index],
-                &frames[index],
+                frame,
                 backend.hardware_receipt().generation,
             );
         }
@@ -517,8 +580,10 @@ mod hardware {
                 0.35,
                 SensorProfile::PrivilegedAffordanceV1,
             );
+            let physiology =
+                super::support::test_physiology(91 + index as u64, &phenotype).unwrap();
             let handle = backend
-                .insert_brain(OrganismId(organism_raw), phenotype)
+                .insert_brain(OrganismId(organism_raw), phenotype.clone())
                 .unwrap();
             let frame = perception_frame_for_profile_at_tick(
                 organism_raw,
@@ -527,14 +592,15 @@ mod hardware {
                 true,
                 2,
             );
-            let ticks = backend.tick_batch(&[(handle, frame.clone())]).unwrap();
-            assert_eq!(ticks.len(), 1);
-            assert_tick_identity(
-                &ticks[0],
+            let (frame, tick) = super::support::tick_with_receptors(
+                &mut backend,
                 handle,
+                &phenotype,
+                &physiology,
                 &frame,
-                backend.hardware_receipt().generation,
-            );
+            )
+            .unwrap();
+            assert_tick_identity(&tick, handle, &frame, backend.hardware_receipt().generation);
             assert_eq!(
                 backend.last_compact_readback_bytes_for_test(),
                 GPU_CLOSED_LOOP_TICK_READBACK_BYTES
@@ -598,7 +664,14 @@ mod hardware {
                 .candidate_decoder()
                 .factorized_motor_channels(&phenotype)
                 .unwrap();
-            let handle = backend.insert_brain(organism, phenotype).unwrap();
+            let physiology = super::support::test_physiology(92, &phenotype).unwrap();
+            let handle = backend.insert_brain(organism, phenotype.clone()).unwrap();
+            let handle = install_synthetic_acquired_speech_weights(
+                &mut backend,
+                handle,
+                organism,
+                &phenotype,
+            );
             let original = vocalize_frame(organism, Tick::new(220));
             let primary = ActionCandidate::new(
                 0,
@@ -647,9 +720,14 @@ mod hardware {
             let (frame, recall) = super::support::empty_recall(&frame);
             let memory = backend
                 .prepare_memory_context_upload(handle, &frame, &recall)
-                .unwrap()
-                .bind_neural_receptor_effects(super::support::test_receptor_effects(frame.tick()))
                 .unwrap();
+            let memory = super::support::bind_chemistry_receptor_effects(
+                memory,
+                &phenotype,
+                &physiology,
+                frame.tick(),
+            )
+            .unwrap();
             let input =
                 alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &memory)
                     .unwrap();
@@ -730,6 +808,38 @@ mod hardware {
     }
 
     #[test]
+    fn n2048_vocalize_payload_stays_silent_without_synthetic_acquired_weights() {
+        let mut backend = required_backend();
+        let organism = OrganismId(21);
+        let phenotype = phenotype_for_capacity_at_maturation(
+            BrainCapacityClass::n2048(),
+            92,
+            0.35,
+            SensorProfile::PrivilegedAffordanceV1,
+        );
+        let physiology = super::support::test_physiology(92, &phenotype).unwrap();
+        let handle = backend.insert_brain(organism, phenotype.clone()).unwrap();
+        let frame = vocalize_frame(organism, Tick::new(220));
+        let (frame, tick) = super::support::tick_with_receptors(
+            &mut backend,
+            handle,
+            &phenotype,
+            &physiology,
+            &frame,
+        )
+        .unwrap();
+        assert_eq!(
+            frame.candidates()[usize::from(tick.selection.candidate_index)].kind,
+            ActionKind::Vocalize
+        );
+        assert!(
+            tick.speech_payload.is_none(),
+            "unchanged positive speech weights are the silent neural control"
+        );
+        discard_tick(&mut backend, &tick);
+    }
+
+    #[test]
     fn n2048_vocalize_payload_is_authored_by_the_gpu_speech_head() {
         let mut backend = required_backend();
         let organism = OrganismId(21);
@@ -740,10 +850,20 @@ mod hardware {
             SensorProfile::PrivilegedAffordanceV1,
         );
         assert!(phenotype.speech_decoder().is_some());
-        let handle = backend.insert_brain(organism, phenotype).unwrap();
+        let physiology = super::support::test_physiology(92, &phenotype).unwrap();
+        let handle = backend.insert_brain(organism, phenotype.clone()).unwrap();
+        let handle =
+            install_synthetic_acquired_speech_weights(&mut backend, handle, organism, &phenotype);
         let frame = vocalize_frame(organism, Tick::new(220));
         // The production encoder requires a tick-bound chemistry receptor frame.
-        let (frame, tick) = super::support::tick_with_receptors(&mut backend, handle, &frame);
+        let (frame, tick) = super::support::tick_with_receptors(
+            &mut backend,
+            handle,
+            &phenotype,
+            &physiology,
+            &frame,
+        )
+        .unwrap();
         assert_eq!(
             frame.candidates()[usize::from(tick.selection.candidate_index)].kind,
             ActionKind::Vocalize
@@ -765,7 +885,10 @@ mod hardware {
             .unwrap();
         let empty: Vec<(GpuBrainHandle, PerceptionFrame)> = Vec::new();
         let before = backend.runtime_counters_for_test();
-        assert!(backend.tick_batch(&empty).is_err());
+        assert_eq!(
+            backend.tick_batch(&empty).unwrap_err(),
+            ScaffoldContractError::InvalidPerceptionFrame
+        );
         assert_eq!(backend.runtime_counters_for_test(), before);
 
         let frame = perception_frame_for_profile_at_tick(
@@ -775,21 +898,99 @@ mod hardware {
             true,
             2,
         );
-        assert!(backend
-            .tick_batch(&[(handle, frame.clone()), (handle, frame)])
-            .is_err());
+        assert_eq!(
+            backend
+                .tick_batch(&[(handle, frame.clone()), (handle, frame)])
+                .unwrap_err(),
+            ScaffoldContractError::BrainOwnershipMismatch
+        );
         assert_eq!(backend.runtime_counters_for_test(), before);
         assert_eq!(backend.last_compact_readback_bytes_for_test(), 0);
     }
 
     #[test]
+    fn valid_bare_batch_rejects_missing_chemistry_without_consuming_state() {
+        let mut backend = required_backend();
+        let handle = backend
+            .insert_brain(OrganismId(1), n512_phenotype(102))
+            .unwrap();
+        let frame = perception_frame_for_profile_at_tick(
+            1,
+            100,
+            SensorProfile::PrivilegedAffordanceV1,
+            true,
+            2,
+        );
+        let before = backend.runtime_counters_for_test();
+        let activity_before = backend.snapshot_activity_state(handle).unwrap();
+        let gpu_before = backend
+            .snapshot_brain(handle, frame.tick())
+            .unwrap()
+            .into_parts();
+        let pressure = GpuPressureSample::try_new(
+            backend.activity_policy(),
+            GpuPressureSampleInput {
+                identity: BrainDispatchIdentity {
+                    organism_id_raw: handle.organism_id().raw(),
+                    tick: frame.tick().raw(),
+                    class_id_raw: handle.class_id().raw(),
+                    handle_slot: handle.slot(),
+                    handle_generation: handle.generation(),
+                    sequence_cursor: activity_before.next_sequence_cursor,
+                    dispatch_generation: 1,
+                    frame_digest: frame.frame_digest().0,
+                },
+                source_dispatch_generation: 0,
+                source_frame_digest: [0; 4],
+                completed_gpu_time_ns: activity_before.next_completed_gpu_time_ns,
+                queue_depth: 0,
+                logical_heap_used: backend.admission_receipt().logical_committed_bytes,
+                logical_heap_capacity: backend.runtime_budget().logical_neural_heap_budget_bytes,
+                brain_atp_remaining_q16: activity_before.brain_atp_q16,
+                brain_atp_capacity_q16: BRAIN_ATP_Q16_MAX,
+            },
+        )
+        .unwrap();
+        backend
+            .install_recorded_pressure_replay(vec![pressure])
+            .unwrap();
+
+        assert_eq!(
+            backend.tick_batch(&[(handle, frame.clone())]).unwrap_err(),
+            ScaffoldContractError::InvalidPerceptionFrame
+        );
+        assert_eq!(backend.runtime_counters_for_test(), before);
+        assert_eq!(backend.last_compact_readback_bytes_for_test(), 0);
+        assert_eq!(backend.recorded_pressure_replay_remaining(), 1);
+        assert_eq!(
+            backend.snapshot_activity_state(handle).unwrap(),
+            activity_before
+        );
+        assert_eq!(
+            backend.brain_atp_q16(handle).unwrap(),
+            activity_before.brain_atp_q16
+        );
+        assert_eq!(
+            backend
+                .snapshot_brain(handle, frame.tick())
+                .unwrap()
+                .into_parts(),
+            gpu_before
+        );
+    }
+
+    #[test]
     fn post_submit_receipt_corruption_fails_stop_without_partial_selections() {
         let mut backend = required_backend();
+        let first_phenotype = n512_phenotype(111);
+        let second_phenotype = n512_phenotype(112);
+        let first_physiology = super::support::test_physiology(111, &first_phenotype).unwrap();
+        let second_physiology = super::support::test_physiology(112, &second_phenotype).unwrap();
         let first = backend
-            .insert_brain(OrganismId(1), n512_phenotype(111))
+            .insert_brain(OrganismId(1), first_phenotype.clone())
             .unwrap();
         let second = backend
-            .insert_brain(OrganismId(2), n512_phenotype(112))
+            .insert_brain(OrganismId(2), second_phenotype.clone())
             .unwrap();
         backend.force_all_invalid_after_next_decode_for_test(second);
         let first_frame = perception_frame_for_profile_at_tick(
@@ -807,9 +1008,14 @@ mod hardware {
             2,
         );
         assert_eq!(
-            backend
-                .tick_batch(&[(first, first_frame), (second, second_frame)])
-                .unwrap_err(),
+            super::support::tick_chemistry_batch(
+                &mut backend,
+                &[
+                    (first, &first_phenotype, &first_physiology, &first_frame),
+                    (second, &second_phenotype, &second_physiology, &second_frame),
+                ],
+            )
+            .unwrap_err(),
             ScaffoldContractError::NeuralBackendUnavailable
         );
         assert!(matches!(
@@ -825,11 +1031,15 @@ mod hardware {
     #[test]
     fn post_validation_pending_identity_corruption_fails_stop_without_orphaning_gpu_state() {
         let mut backend = required_backend();
+        let first_phenotype = n512_phenotype(113);
+        let second_phenotype = n512_phenotype(114);
+        let first_physiology = super::support::test_physiology(113, &first_phenotype).unwrap();
+        let second_physiology = super::support::test_physiology(114, &second_phenotype).unwrap();
         let first = backend
-            .insert_brain(OrganismId(1), n512_phenotype(113))
+            .insert_brain(OrganismId(1), first_phenotype.clone())
             .unwrap();
         let second = backend
-            .insert_brain(OrganismId(2), n512_phenotype(114))
+            .insert_brain(OrganismId(2), second_phenotype.clone())
             .unwrap();
         backend.force_pending_identity_mismatch_after_next_decode_for_test(second);
         let first_frame = perception_frame_for_profile_at_tick(
@@ -848,9 +1058,14 @@ mod hardware {
         );
 
         assert_eq!(
-            backend
-                .tick_batch(&[(first, first_frame), (second, second_frame)])
-                .unwrap_err(),
+            super::support::tick_chemistry_batch(
+                &mut backend,
+                &[
+                    (first, &first_phenotype, &first_physiology, &first_frame),
+                    (second, &second_phenotype, &second_physiology, &second_frame),
+                ],
+            )
+            .unwrap_err(),
             ScaffoldContractError::NeuralBackendUnavailable
         );
         assert!(matches!(
@@ -871,8 +1086,14 @@ mod hardware {
             0.35,
             SensorProfile::GroundedObjectSlotsV1,
         );
-        let first = backend.insert_brain(OrganismId(1), privileged).unwrap();
-        let second = backend.insert_brain(OrganismId(2), grounded).unwrap();
+        let privileged_physiology = super::support::test_physiology(31, &privileged).unwrap();
+        let grounded_physiology = super::support::test_physiology(32, &grounded).unwrap();
+        let first = backend
+            .insert_brain(OrganismId(1), privileged.clone())
+            .unwrap();
+        let second = backend
+            .insert_brain(OrganismId(2), grounded.clone())
+            .unwrap();
         let frame_a = perception_frame_for_profile_at_tick(
             1,
             100,
@@ -887,9 +1108,17 @@ mod hardware {
             true,
             2,
         );
-        let baseline = backend
-            .tick_batch(&[(first, frame_a.clone()), (second, frame_b.clone())])
-            .unwrap();
+        let baseline = super::support::tick_chemistry_batch(
+            &mut backend,
+            &[
+                (first, &privileged, &privileged_physiology, &frame_a),
+                (second, &grounded, &grounded_physiology, &frame_b),
+            ],
+        )
+        .unwrap()
+        .into_iter()
+        .map(|(_, tick)| tick)
+        .collect::<Vec<_>>();
         let baseline_generation = baseline[0].dispatch_generation;
         discard_ticks(&mut backend, &baseline);
         let before = (
@@ -934,9 +1163,17 @@ mod hardware {
             true,
             2,
         );
-        let next = backend
-            .tick_batch(&[(first, next_a), (second, next_b)])
-            .unwrap();
+        let next = super::support::tick_chemistry_batch(
+            &mut backend,
+            &[
+                (first, &privileged, &privileged_physiology, &next_a),
+                (second, &grounded, &grounded_physiology, &next_b),
+            ],
+        )
+        .unwrap()
+        .into_iter()
+        .map(|(_, tick)| tick)
+        .collect::<Vec<_>>();
         assert_eq!(next[0].dispatch_generation, baseline_generation + 1);
         assert_eq!(next[0].dispatch_generation, next[1].dispatch_generation);
     }
@@ -1014,8 +1251,10 @@ mod hardware {
     #[test]
     fn removed_handle_is_stale_after_generation_checked_slot_reuse() {
         let mut backend = required_backend();
+        let first_phenotype = n512_phenotype(61);
+        let first_physiology = super::support::test_physiology(61, &first_phenotype).unwrap();
         let first = backend
-            .insert_brain(OrganismId(1), n512_phenotype(61))
+            .insert_brain(OrganismId(1), first_phenotype.clone())
             .unwrap();
         let first_frame = perception_frame_for_profile_at_tick(
             1,
@@ -1024,16 +1263,26 @@ mod hardware {
             true,
             2,
         );
-        let first_tick = backend.tick_batch(&[(first, first_frame)]).unwrap();
-        assert_eq!(first_tick[0].active_activation_side, 1);
-        discard_ticks(&mut backend, &first_tick);
+        let first_tick = super::support::tick_with_receptors(
+            &mut backend,
+            first,
+            &first_phenotype,
+            &first_physiology,
+            &first_frame,
+        )
+        .unwrap()
+        .1;
+        assert_eq!(first_tick.active_activation_side, 1);
+        discard_tick(&mut backend, &first_tick);
         backend.remove_brain(first).unwrap();
         assert_eq!(
             backend.remove_brain(first).unwrap_err(),
             ScaffoldContractError::BrainOwnershipMismatch
         );
+        let second_phenotype = n512_phenotype(62);
+        let second_physiology = super::support::test_physiology(62, &second_phenotype).unwrap();
         let second = backend
-            .insert_brain(OrganismId(2), n512_phenotype(62))
+            .insert_brain(OrganismId(2), second_phenotype.clone())
             .unwrap();
         assert_eq!(first.slot(), second.slot());
         assert_ne!(first.generation(), second.generation());
@@ -1057,8 +1306,16 @@ mod hardware {
             true,
             2,
         );
-        let second_tick = backend.tick_batch(&[(second, second_frame)]).unwrap();
-        assert_eq!(second_tick[0].active_activation_side, 1);
+        let second_tick = super::support::tick_with_receptors(
+            &mut backend,
+            second,
+            &second_phenotype,
+            &second_physiology,
+            &second_frame,
+        )
+        .unwrap()
+        .1;
+        assert_eq!(second_tick.active_activation_side, 1);
     }
 
     #[test]
@@ -1072,8 +1329,14 @@ mod hardware {
             expected_cadence_counts(&phenotype_a, u32::from(phenotype_a.microstep_count()));
         let expected_b =
             expected_cadence_counts(&phenotype_b, u32::from(phenotype_b.microstep_count()));
-        let handle_a = backend.insert_brain(OrganismId(1), phenotype_a).unwrap();
-        let handle_b = backend.insert_brain(OrganismId(2), phenotype_b).unwrap();
+        let physiology_a = super::support::test_physiology(9, &phenotype_a).unwrap();
+        let physiology_b = super::support::test_physiology(10, &phenotype_b).unwrap();
+        let handle_a = backend
+            .insert_brain(OrganismId(1), phenotype_a.clone())
+            .unwrap();
+        let handle_b = backend
+            .insert_brain(OrganismId(2), phenotype_b.clone())
+            .unwrap();
         assert_eq!(handle_a.phenotype_hash(), hash_a);
         assert_eq!(handle_b.phenotype_hash(), hash_b);
         assert_ne!(handle_a.slot(), handle_b.slot());
@@ -1094,13 +1357,20 @@ mod hardware {
             false,
             1,
         );
-        let first = backend
-            .tick_batch(&[(handle_a, frame_a_1.clone()), (handle_b, frame_b_1.clone())])
-            .unwrap();
+        let (first_frames, first): (Vec<_>, Vec<_>) = super::support::tick_chemistry_batch(
+            &mut backend,
+            &[
+                (handle_a, &phenotype_a, &physiology_a, &frame_a_1),
+                (handle_b, &phenotype_b, &physiology_b, &frame_b_1),
+            ],
+        )
+        .unwrap()
+        .into_iter()
+        .unzip();
         assert_eq!(first.len(), 2);
         assert_eq!(first[0].dispatch_generation, first[1].dispatch_generation);
-        assert_tick_identity(&first[0], handle_a, &frame_a_1, receipt_generation);
-        assert_tick_identity(&first[1], handle_b, &frame_b_1, receipt_generation);
+        assert_tick_identity(&first[0], handle_a, &first_frames[0], receipt_generation);
+        assert_tick_identity(&first[1], handle_b, &first_frames[1], receipt_generation);
         assert_eq!(first[0].active_activation_side, 1);
         assert_eq!(first[1].active_activation_side, 1);
         assert_eq!(
@@ -1126,18 +1396,23 @@ mod hardware {
             false,
             2,
         );
-        let only_a = backend
-            .tick_batch(&[(handle_a, frame_a_2.clone())])
-            .unwrap();
-        assert_eq!(only_a[0].active_activation_side, 0);
+        let (_, only_a) = super::support::tick_with_receptors(
+            &mut backend,
+            handle_a,
+            &phenotype_a,
+            &physiology_a,
+            &frame_a_2,
+        )
+        .unwrap();
+        assert_eq!(only_a.active_activation_side, 0);
         assert_eq!(
             (
-                only_a[0].selection.active_tiles,
-                only_a[0].selection.active_synapses
+                only_a.selection.active_tiles,
+                only_a.selection.active_synapses
             ),
             expected_a
         );
-        discard_ticks(&mut backend, &only_a);
+        discard_tick(&mut backend, &only_a);
 
         let frame_a_3 = perception_frame_for_profile_at_tick(
             1,
@@ -1153,13 +1428,20 @@ mod hardware {
             true,
             1,
         );
-        let third = backend
-            .tick_batch(&[(handle_a, frame_a_3.clone()), (handle_b, frame_b_3.clone())])
-            .unwrap();
+        let (third_frames, third): (Vec<_>, Vec<_>) = super::support::tick_chemistry_batch(
+            &mut backend,
+            &[
+                (handle_a, &phenotype_a, &physiology_a, &frame_a_3),
+                (handle_b, &phenotype_b, &physiology_b, &frame_b_3),
+            ],
+        )
+        .unwrap()
+        .into_iter()
+        .unzip();
         assert_eq!(third[0].active_activation_side, 1);
         assert_eq!(third[1].active_activation_side, 0);
-        assert_tick_identity(&third[0], handle_a, &frame_a_3, receipt_generation);
-        assert_tick_identity(&third[1], handle_b, &frame_b_3, receipt_generation);
+        assert_tick_identity(&third[0], handle_a, &third_frames[0], receipt_generation);
+        assert_tick_identity(&third[1], handle_b, &third_frames[1], receipt_generation);
         assert_eq!(
             (
                 third[0].selection.active_tiles,
@@ -1178,19 +1460,28 @@ mod hardware {
 
         let mut control = required_backend();
         let control_b = control
-            .insert_brain(OrganismId(2), control_phenotype_b)
+            .insert_brain(OrganismId(2), control_phenotype_b.clone())
             .unwrap();
-        let control_first = control
-            .tick_batch(&[(control_b, frame_b_1.clone())])
-            .unwrap();
-        discard_ticks(&mut control, &control_first);
-        let control_third = control
-            .tick_batch(&[(control_b, frame_b_3.clone())])
-            .unwrap();
-        for (interleaved, isolated) in [
-            (&first[1], &control_first[0]),
-            (&third[1], &control_third[0]),
-        ] {
+        let control_first = super::support::tick_with_receptors(
+            &mut control,
+            control_b,
+            &control_phenotype_b,
+            &physiology_b,
+            &frame_b_1,
+        )
+        .unwrap()
+        .1;
+        discard_tick(&mut control, &control_first);
+        let control_third = super::support::tick_with_receptors(
+            &mut control,
+            control_b,
+            &control_phenotype_b,
+            &physiology_b,
+            &frame_b_3,
+        )
+        .unwrap()
+        .1;
+        for (interleaved, isolated) in [(&first[1], &control_first), (&third[1], &control_third)] {
             assert_eq!(
                 interleaved.selection.candidate_index,
                 isolated.selection.candidate_index
@@ -1216,13 +1507,14 @@ mod hardware {
     #[test]
     fn deterministic_replay_matches_across_fresh_backends_excluding_process_local_ids() {
         let phenotype = n512_phenotype(121);
+        let physiology = super::support::test_physiology(121, &phenotype).unwrap();
         let mut first_backend = required_backend();
         let mut second_backend = required_backend();
         let first_handle = first_backend
             .insert_brain(OrganismId(1), phenotype.clone())
             .unwrap();
         let second_handle = second_backend
-            .insert_brain(OrganismId(1), phenotype)
+            .insert_brain(OrganismId(1), phenotype.clone())
             .unwrap();
         assert_ne!(first_handle, second_handle);
         assert_eq!(first_handle.class_id(), second_handle.class_id());
@@ -1246,18 +1538,23 @@ mod hardware {
                 offset % 2 == 0,
                 if offset % 3 == 0 { 1 } else { 2 },
             );
-            let first = first_backend
-                .tick_batch(&[(first_handle, frame.clone())])
-                .unwrap()
-                .into_iter()
-                .next()
-                .unwrap();
-            let second = second_backend
-                .tick_batch(&[(second_handle, frame)])
-                .unwrap()
-                .into_iter()
-                .next()
-                .unwrap();
+            let (first_frame, first) = super::support::tick_with_receptors(
+                &mut first_backend,
+                first_handle,
+                &phenotype,
+                &physiology,
+                &frame,
+            )
+            .unwrap();
+            let (second_frame, second) = super::support::tick_with_receptors(
+                &mut second_backend,
+                second_handle,
+                &phenotype,
+                &physiology,
+                &frame,
+            )
+            .unwrap();
+            assert_eq!(first_frame.frame_digest(), second_frame.frame_digest());
             assert_eq!(
                 first.selection.candidate_index,
                 second.selection.candidate_index
@@ -1288,16 +1585,17 @@ mod hardware {
     #[test]
     fn device_loss_is_fail_stop_and_never_switches_policy() {
         let mut backend = required_backend();
-        let handle_a = backend
-            .insert_brain(OrganismId(1), n512_phenotype(71))
-            .unwrap();
+        let n512 = n512_phenotype(71);
+        let n512_physiology = super::support::test_physiology(71, &n512).unwrap();
+        let handle_a = backend.insert_brain(OrganismId(1), n512.clone()).unwrap();
         let n1024 = phenotype_for_capacity_at_maturation(
             BrainCapacityClass::n1024(),
             72,
             0.35,
             SensorProfile::PrivilegedAffordanceV1,
         );
-        let handle_b = backend.insert_brain(OrganismId(2), n1024).unwrap();
+        let n1024_physiology = super::support::test_physiology(72, &n1024).unwrap();
+        let handle_b = backend.insert_brain(OrganismId(2), n1024.clone()).unwrap();
         backend.force_device_lost_after_next_submit_for_test();
         let frame_a = perception_frame_for_profile_at_tick(
             1,
@@ -1314,9 +1612,14 @@ mod hardware {
             2,
         );
         assert_eq!(
-            backend
-                .tick_batch(&[(handle_a, frame_a), (handle_b, frame_b)])
-                .unwrap_err(),
+            super::support::tick_chemistry_batch(
+                &mut backend,
+                &[
+                    (handle_a, &n512, &n512_physiology, &frame_a),
+                    (handle_b, &n1024, &n1024_physiology, &frame_b),
+                ],
+            )
+            .unwrap_err(),
             ScaffoldContractError::NeuralBackendUnavailable
         );
         assert!(matches!(

@@ -8,11 +8,11 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::{
     ensure_current_version, ActionCandidate, ActionId, ActionKind, BodySnapshot,
     CandidateActionFamily, CandidateFeatureDigest, CandidateObservationRef, CanonicalDigestBuilder,
-    Confidence, FinalizedMemoryRecall, HomeostaticSnapshot, MemoryId, NormalizedScalar,
-    OrganismId, PerceptionBaseDigest,
-    PerceptionContextBlock, PerceptionContextDigest, PerceptionContextKind, PerceptionFrame,
-    PerceptionFrameDigest, PerceptionFrameDraft, ScaffoldContractError, SchemaKind, SchemaVersions,
-    SensorProfileIdentity, SensorySnapshot, Tick, TrackedObjectId, Validate, MAX_ACTION_CANDIDATES,
+    Confidence, FinalizedMemoryRecall, HomeostaticSnapshot, MemoryId, NormalizedScalar, OrganismId,
+    PerceptionBaseDigest, PerceptionContextBlock, PerceptionContextDigest, PerceptionContextKind,
+    PerceptionFrame, PerceptionFrameDigest, PerceptionFrameDraft, ScaffoldContractError,
+    SchemaKind, SchemaVersions, SensorProfileIdentity, SensorySnapshot, Tick, TrackedObjectId,
+    Validate, MAX_ACTION_CANDIDATES,
 };
 
 pub const MEMORY_QUERY_V2_FEATURE_COUNT: usize = 96;

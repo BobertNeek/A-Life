@@ -4,12 +4,11 @@ mod support;
 
 use alife_core::{
     BiochemistryState, BodyEventDelta, BrainCapacityClass, BrainGenome, Confidence,
-    CreatureGenome, DecisionSnapshot, DevelopmentState, EndocrineDelta, ExperiencePatch,
-    ExperiencePatchBuilder, ExperienceSequenceId, FoundationGeneticIdentity,
-    FoundationWeightAsset, HomeostaticDelta, LegacyNano512CompatibilityReceipt,
-    MeasuredPhysiologyTransition, NeuralActionSelection, NormalizedScalar, PhenotypeCompiler,
-    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, PreActionSnapshot, SensorProfile,
-    SignedValence, Tick, Vec3f,
+    DecisionSnapshot, DevelopmentState, EndocrineDelta, ExperiencePatch, ExperiencePatchBuilder,
+    ExperienceSequenceId, FoundationWeightAsset, HomeostaticDelta,
+    LegacyNano512CompatibilityReceipt, MeasuredPhysiologyTransition, NeuralActionSelection,
+    NormalizedScalar, PhenotypeCompiler, PhysicalActionOutcome, PhysicalContactKind,
+    PostActionOutcome, PreActionSnapshot, SensorProfile, SignedValence, Tick, Vec3f,
 };
 use alife_gpu_backend::{
     GpuBrainRestoreRequest, GpuClassBucketPlan, GpuClosedLoopBackend, GpuRuntimeProfile,
@@ -44,14 +43,12 @@ fn sealed_measured_outcome(
     handle: alife_gpu_backend::GpuBrainHandle,
     frame: &alife_core::PerceptionFrame,
     tick: &alife_gpu_backend::GpuClosedLoopTick,
-) -> ExperiencePatch {
+    physiology: &alife_core::CreaturePhenotype,
+) -> (ExperiencePatch, alife_core::NeuralReceptorFrame) {
     let sequence_id = ExperienceSequenceId(1);
-    let genome = BrainGenome::scaffold(42, handle.class_id());
-    let development = DevelopmentState::new(
-        genome.id,
-        frame.tick(),
-        NormalizedScalar::new(0.35).unwrap(),
-    );
+    let genome = BrainGenome::scaffold(FOUNDATION_SEED, handle.class_id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
     let selection = NeuralActionSelection {
         candidate_index: tick.selection.candidate_index,
         logit: tick.selection.logit,
@@ -85,19 +82,13 @@ fn sealed_measured_outcome(
         command,
     )
     .unwrap();
-    let physiology = CreatureGenome::early_mammal_founder(
-        42,
-        FoundationGeneticIdentity::new(42, 1, 1, handle.class_id()).unwrap(),
-    )
-    .unwrap()
-    .express()
-    .unwrap();
-    let before = BiochemistryState::new(&physiology, frame.tick()).unwrap();
+    let before = BiochemistryState::new(physiology, frame.tick()).unwrap();
+    let receptors = before.neural_receptor_frame(physiology).unwrap();
     let after = before
         .advance(
             Tick::new(frame.tick().raw() + 1),
             BodyEventDelta::zero(),
-            &physiology,
+            physiology,
         )
         .unwrap();
     let measured = MeasuredPhysiologyTransition::new(before, after).unwrap();
@@ -126,7 +117,7 @@ fn sealed_measured_outcome(
     .unwrap()
     .with_measured_physiology(measured)
     .unwrap();
-    ExperiencePatchBuilder::new(sequence_id)
+    let patch = ExperiencePatchBuilder::new(sequence_id)
         .record_pre_action(pre_action)
         .unwrap()
         .record_decision(decision)
@@ -134,7 +125,8 @@ fn sealed_measured_outcome(
         .record_outcome(outcome)
         .unwrap()
         .seal()
-        .unwrap()
+        .unwrap();
+    (patch, receptors)
 }
 
 #[test]
@@ -144,20 +136,15 @@ fn canonical_v2_control_ticks_under_the_same_profile() {
     let genome = BrainGenome::scaffold(FOUNDATION_SEED, capacity.id());
     let development =
         DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
-    let phenotype =
-        PhenotypeCompiler::compile(&genome, &capacity, &development, profile).unwrap();
+    let phenotype = PhenotypeCompiler::compile(&genome, &capacity, &development, profile).unwrap();
     let organism = alife_core::OrganismId(51_200_003);
+    let physiology = support::test_physiology(51_200_003, &phenotype).unwrap();
     let mut backend =
         GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()).unwrap();
-    let handle = backend.insert_brain(organism, phenotype).unwrap();
-    let frame = support::perception_frame_for_profile_at_tick(
-        organism.raw(),
-        51_200,
-        profile,
-        true,
-        2,
-    );
-    backend.tick_batch(&[(handle, frame)]).unwrap();
+    let handle = backend.insert_brain(organism, phenotype.clone()).unwrap();
+    let source =
+        support::perception_frame_for_profile_at_tick(organism.raw(), 51_200, profile, true, 2);
+    support::tick_with_receptors(&mut backend, handle, &phenotype, &physiology, &source).unwrap();
 }
 
 #[test]
@@ -178,20 +165,19 @@ fn explicit_legacy_selector_uses_ordinary_gpu_learning_checkpoint_and_restore() 
     println!("BACKEND_API={:?}", hardware.backend_api);
     println!("ADAPTER={}", hardware.adapter_name);
     let handle = source.insert_brain(organism, phenotype.clone()).unwrap();
+    let physiology = support::test_physiology(42, &phenotype).unwrap();
 
-    let frame = support::perception_frame_for_profile_at_tick(
+    let source_frame = support::perception_frame_for_profile_at_tick(
         organism.raw(),
         51_200,
         SensorProfile::GroundedObjectSlotsV1,
         true,
         2,
     );
-    let tick = source
-        .tick_batch(&[(handle, frame.clone())])
-        .unwrap()
-        .remove(0);
-    let patch = sealed_measured_outcome(handle, &frame, &tick);
-    let receptors = support::test_receptor_frame(&patch);
+    let (frame, tick) =
+        support::tick_with_receptors(&mut source, handle, &phenotype, &physiology, &source_frame)
+            .unwrap();
+    let (patch, receptors) = sealed_measured_outcome(handle, &frame, &tick, &physiology);
     assert_eq!(
         source
             .sealed_outcome_credit_mismatch_receipt(handle, &patch)
@@ -219,7 +205,7 @@ fn explicit_legacy_selector_uses_ordinary_gpu_learning_checkpoint_and_restore() 
     let restore = restored
         .restore_brain(
             organism,
-            restored_phenotype,
+            restored_phenotype.clone(),
             GpuBrainRestoreRequest::try_new(snapshot).unwrap(),
         )
         .unwrap();
@@ -239,10 +225,14 @@ fn explicit_legacy_selector_uses_ordinary_gpu_learning_checkpoint_and_restore() 
         true,
         2,
     );
-    let restored_tick = restored
-        .tick_batch(&[(restore.handle, probe)])
-        .unwrap()
-        .remove(0);
+    let (_probe, restored_tick) = support::tick_with_receptors(
+        &mut restored,
+        restore.handle,
+        &restored_phenotype,
+        &physiology,
+        &probe,
+    )
+    .unwrap();
     restored
         .discard_pending_eligibility(restore.handle, restored_tick.pending_eligibility.identity())
         .unwrap();

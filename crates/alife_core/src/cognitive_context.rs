@@ -3,13 +3,16 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AttentionFrame, CanonicalDigestBuilder, ConceptCellId, ExperienceSequenceId, HysteresisState,
-    MemoryId, NormalizedScalar, OrganismId, SalienceComponents, ScaffoldContractError,
-    SemanticStateVector, SignedValence, StableFocusIdentity, Tick, UnresolvedGapId, Validate,
-    MAX_FOCAL_TARGETS, MAX_PERIPHERAL_SUMMARIES, MAX_SEMANTIC_STATE_VALUES,
+    AttentionFrame, CandidateFeatureDigest, CanonicalDigestBuilder, ConceptCellId,
+    ExperienceSequenceId, HysteresisState, MemoryId, NormalizedScalar, OrganismId,
+    PerceptionBaseDigest, SalienceComponents, ScaffoldContractError, SemanticStateVector,
+    SignedValence, StableFocusIdentity, Tick, TrackedObjectId, UnresolvedGapId, Validate,
+    MAX_ACTION_CANDIDATES, MAX_FOCAL_TARGETS, MAX_PERIPHERAL_SUMMARIES,
+    MAX_SEMANTIC_STATE_VALUES,
 };
+use crate::predictive::SuccessorPrediction;
 
-pub const COGNITIVE_CONTEXT_SCHEMA_VERSION: u16 = 1;
+pub const COGNITIVE_CONTEXT_SCHEMA_VERSION: u16 = 2;
 pub const MAX_CONTEXT_MEMORY_EXPECTANCIES: usize = 32;
 pub const MAX_ACTIVE_CONCEPTS: usize = 32;
 pub const MAX_ACTIVE_GAPS: usize = 32;
@@ -215,7 +218,8 @@ pub struct CognitivePredictionView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_state: Option<SemanticStateVector>,
     pub prediction_error: Vec<NormalizedScalar>,
-    pub action_sensitivity: NormalizedScalar,
+    pub motor_condition_magnitude: NormalizedScalar,
+    pub category_coverage: Option<crate::predictive::PredictionCategoryCoverage>,
 }
 
 impl Default for CognitivePredictionView {
@@ -225,7 +229,8 @@ impl Default for CognitivePredictionView {
             semantic_state_abi: 0,
             source_state: None,
             prediction_error: Vec::new(),
-            action_sensitivity: NormalizedScalar(0.0),
+            motor_condition_magnitude: NormalizedScalar(0.0),
+            category_coverage: None,
         }
     }
 }
@@ -245,7 +250,12 @@ impl Validate for CognitivePredictionView {
             }
             _ => return Err(ScaffoldContractError::InvalidDecisionEvidence),
         }
-        NormalizedScalar::new(self.action_sensitivity.raw())?;
+        NormalizedScalar::new(self.motor_condition_magnitude.raw())?;
+        match (&self.source_state, self.category_coverage) {
+            (None, None) => {}
+            (Some(_), Some(coverage)) => coverage.validate_contract()?,
+            _ => return Err(ScaffoldContractError::InvalidDecisionEvidence),
+        }
         for value in &self.prediction_error {
             NormalizedScalar::new(value.raw())?;
         }
@@ -284,6 +294,97 @@ impl Validate for CognitiveBudgetView {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct CognitiveObjectEvidence {
+    pub tracked_object_id: TrackedObjectId,
+    pub concept_match: NormalizedScalar,
+    pub gap_match: NormalizedScalar,
+    pub prior_residual: NormalizedScalar,
+}
+
+impl Validate for CognitiveObjectEvidence {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.tracked_object_id.validate()?;
+        for value in [self.concept_match, self.gap_match, self.prior_residual] {
+            NormalizedScalar::new(value.raw())?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CognitiveCandidateInput {
+    pub candidate_index: u16,
+    pub candidate_feature_digest: CandidateFeatureDigest,
+    pub tracked_object_id: Option<TrackedObjectId>,
+    pub prediction: SuccessorPrediction,
+    pub forecast_available: bool,
+    pub concept_match: NormalizedScalar,
+    pub gap_match: NormalizedScalar,
+    pub prior_residual: NormalizedScalar,
+}
+
+impl Validate for CognitiveCandidateInput {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if usize::from(self.candidate_index) >= MAX_ACTION_CANDIDATES {
+            return Err(ScaffoldContractError::InvalidActionCandidate);
+        }
+        if let Some(tracked_object_id) = self.tracked_object_id {
+            tracked_object_id.validate()?;
+        }
+        for value in [self.concept_match, self.gap_match, self.prior_residual] {
+            NormalizedScalar::new(value.raw())?;
+        }
+        self.prediction.source_state.validate_contract()?;
+        if self.prediction.source_digest == [0; 4]
+            || self.prediction.source_state.abi_version != self.prediction.semantic_state_abi
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CognitiveProjectionFrame {
+    pub schema_version: u16,
+    pub base_frame_digest: PerceptionBaseDigest,
+    pub candidates: Vec<CognitiveCandidateInput>,
+    pub objects: Vec<CognitiveObjectEvidence>,
+}
+
+impl CognitiveProjectionFrame {
+    pub const SCHEMA_VERSION: u16 = 1;
+}
+
+impl Validate for CognitiveProjectionFrame {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.schema_version != Self::SCHEMA_VERSION
+            || self.base_frame_digest.0 == [0; 4]
+            || self.candidates.len() > MAX_ACTION_CANDIDATES
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        for (index, candidate) in self.candidates.iter().enumerate() {
+            candidate.validate_contract()?;
+            if usize::from(candidate.candidate_index) != index {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+        }
+        if self.objects.len() > MAX_PERIPHERAL_SUMMARIES
+            || self.objects.windows(2).any(|pair| {
+                pair[0].tracked_object_id >= pair[1].tracked_object_id
+            })
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        for object in &self.objects {
+            object.validate_contract()?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CognitiveContextFrame {
     pub schema_version: u16,
@@ -298,6 +399,8 @@ pub struct CognitiveContextFrame {
     pub concept: CognitiveConceptView,
     pub gap: CognitiveGapView,
     pub prediction: CognitivePredictionView,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cognitive_projection: Option<CognitiveProjectionFrame>,
     pub budget: CognitiveBudgetView,
 }
 
@@ -321,6 +424,7 @@ impl CognitiveContextFrame {
             concept: CognitiveConceptView::default(),
             gap: CognitiveGapView::default(),
             prediction: CognitivePredictionView::default(),
+            cognitive_projection: None,
             budget: CognitiveBudgetView::default(),
         };
         frame.validate_contract()?;
@@ -428,7 +532,46 @@ impl CognitiveContextFrame {
             }
             None => builder.write_none(),
         }
-        builder.write_f32(self.prediction.action_sensitivity.raw())?;
+        builder.write_f32(self.prediction.motor_condition_magnitude.raw())?;
+        match self.prediction.category_coverage {
+            Some(coverage) => {
+                builder.write_some();
+                builder.write_u16(coverage.stored_categorical_keys);
+                builder.write_u16(coverage.modelled_categories);
+                builder.write_u16(coverage.unmodelled_categories);
+            }
+            None => builder.write_none(),
+        }
+        if let Some(projection) = &self.cognitive_projection {
+            builder.write_some();
+            builder.write_u16(projection.schema_version);
+            for word in projection.base_frame_digest.0 {
+                builder.write_u64(word);
+            }
+            builder.write_sequence_len(projection.candidates.len());
+            for candidate in &projection.candidates {
+                builder.write_u16(candidate.candidate_index);
+                builder.write_u64(candidate.candidate_feature_digest.0[0]);
+                builder.write_u64(candidate.candidate_feature_digest.0[1]);
+                match candidate.tracked_object_id {
+                    Some(id) => { builder.write_some(); builder.write_u64(id.raw()); }
+                    None => builder.write_none(),
+                }
+                builder.write_bool(candidate.forecast_available);
+                for value in [candidate.concept_match, candidate.gap_match, candidate.prior_residual] {
+                    builder.write_f32(value.raw())?;
+                }
+                for word in candidate.prediction.source_digest { builder.write_u64(word); }
+                for value in &candidate.prediction.predicted_successor { builder.write_f32(*value)?; }
+            }
+            builder.write_sequence_len(projection.objects.len());
+            for object in &projection.objects {
+                builder.write_u64(object.tracked_object_id.raw());
+                for value in [object.concept_match, object.gap_match, object.prior_residual] {
+                    builder.write_f32(value.raw())?;
+                }
+            }
+        }
         builder.write_u16(self.budget.peripheral_capacity);
         builder.write_u8(self.budget.focal_capacity);
         builder.write_u64(self.budget.work_limit);
@@ -462,6 +605,9 @@ impl Validate for CognitiveContextFrame {
         self.concept.validate_contract()?;
         self.gap.validate_contract()?;
         self.prediction.validate_contract()?;
+        if let Some(projection) = &self.cognitive_projection {
+            projection.validate_contract()?;
+        }
         self.budget.validate_contract()?;
         if self.peripheral.summaries.len() > usize::from(self.budget.peripheral_capacity)
             || self.focal.identities.len() > usize::from(self.budget.focal_capacity)

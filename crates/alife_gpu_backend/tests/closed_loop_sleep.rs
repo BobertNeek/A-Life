@@ -4,10 +4,12 @@
 mod support;
 
 use alife_core::{
-    BrainGenome, Confidence, ConsolidationIntent, DecisionSnapshot, DevelopmentState,
-    EndocrineDelta, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
-    HomeostaticDelta, NeuralActionSelection, NormalizedScalar, PhysicalActionOutcome,
-    PhysicalContactKind, PostActionOutcome, PreActionSnapshot, SignedValence, Tick, Vec3f,
+    AlphaMask, BiochemistryState, BodyEventDelta, BrainCapacityClass, BrainGenome, Confidence,
+    ConsolidationIntent, DecisionSnapshot, DevelopmentState, ExperiencePatch, ExperienceSequenceId,
+    JointMotorCondition, JointPhysicalOutcome, MeasuredPhysiologyTransition, NeuralActionSelection,
+    NormalizedScalar, OutcomeCreditPacket, PhenotypeCompiler, PhysicalActionOutcome,
+    PhysicalContactKind, PlasticityGenomeParameters, PostActionOutcome, PreActionSnapshot,
+    PredictionTargetReceipt, SemanticStateVector, SignedValence, Tick, Vec3f,
 };
 use alife_gpu_backend::{
     GpuClosedLoopBackend, GpuConsolidationRequestRecord, GpuReplayEventRecord,
@@ -16,18 +18,34 @@ use alife_gpu_backend::{
 
 fn sealed_reward(
     handle: alife_gpu_backend::GpuBrainHandle,
+    brain: &alife_core::BrainPhenotype,
+    physiology: &alife_core::CreaturePhenotype,
     frame: &alife_core::PerceptionFrame,
     tick: &alife_gpu_backend::GpuClosedLoopTick,
     sequence_raw: u64,
-    reward: f32,
-) -> ExperiencePatch {
+    body_event: BodyEventDelta,
+) -> (ExperiencePatch, alife_core::NeuralReceptorFrame) {
     let sequence_id = ExperienceSequenceId(sequence_raw);
-    let genome = BrainGenome::scaffold(13, handle.class_id());
-    let development = DevelopmentState::new(
-        genome.id,
-        frame.tick(),
-        NormalizedScalar::new(0.35).unwrap(),
-    );
+    assert_eq!(handle.organism_id(), frame.organism_id());
+    assert_eq!(handle.class_id(), brain.brain_class_id());
+    assert_eq!(handle.phenotype_hash(), brain.phenotype_hash());
+
+    let capacity = BrainCapacityClass::n512();
+    assert_eq!(capacity.id(), handle.class_id());
+    let parameters =
+        PlasticityGenomeParameters::try_new_v1(0.95, 1.0, 0.0, 0.25, 1.0, -2.0, 2.0, 0.5, 4.0, 0.5)
+            .unwrap();
+    let mut genome = BrainGenome::scaffold(42, handle.class_id())
+        .with_plasticity_parameters(parameters)
+        .unwrap();
+    genome.alpha_mask = AlphaMask::default_for_projection(NormalizedScalar::new(1.0).unwrap());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+    let compiled =
+        PhenotypeCompiler::compile(&genome, &capacity, &development, brain.sensor_profile())
+            .unwrap();
+    assert_eq!(compiled.phenotype_hash(), brain.phenotype_hash());
+
     let selection = NeuralActionSelection {
         candidate_index: tick.selection.candidate_index,
         logit: tick.selection.logit,
@@ -40,6 +58,36 @@ fn sealed_reward(
             handle.organism_id(),
             Confidence::new(selection.confidence.raw()).unwrap(),
         )
+        .unwrap();
+    let selected_action_id = command.action_id;
+    let prompted = frame
+        .sensory()
+        .language_context
+        .heard_tokens
+        .iter()
+        .flatten()
+        .any(|token| token.source_kind == alife_core::UtteranceSourceKind::Player);
+    let bundle = alife_core::factorized_motor_bundle_for_candidates(
+        handle.organism_id(),
+        sequence_id,
+        frame.tick(),
+        frame,
+        tick.factorized_motor_candidates,
+        &brain
+            .candidate_decoder()
+            .factorized_motor_channels(brain)
+            .unwrap(),
+        &command,
+        selection.candidate_index,
+        tick.speech_payload.as_ref(),
+        prompted,
+    )
+    .unwrap();
+    tick.pending_eligibility
+        .identity()
+        .joint_selection()
+        .unwrap()
+        .validate_bundle(&bundle)
         .unwrap();
     let pre_action = PreActionSnapshot::from_neural_frame(
         sequence_id,
@@ -61,38 +109,197 @@ fn sealed_reward(
         command,
     )
     .unwrap();
+    let before = BiochemistryState::new(physiology, frame.tick()).unwrap();
+    let receptors = before.neural_receptor_frame(physiology).unwrap();
+    assert!(!receptors.activations.is_empty());
+    let outcome_tick = Tick::new(frame.tick().raw() + 1);
+    let after = before
+        .advance(outcome_tick, body_event, physiology)
+        .unwrap();
+    let measured = MeasuredPhysiologyTransition::new(before, after).unwrap();
+    assert_ne!(
+        measured.homeostatic_delta,
+        alife_core::HomeostaticDelta::zero()
+    );
+    let physical = PhysicalActionOutcome {
+        contact: PhysicalContactKind::None,
+        target_entity: None,
+        displacement: Vec3f::ZERO,
+        collision_normal: None,
+        energy_cost: NormalizedScalar::ZERO,
+    };
+    let work = alife_core::CognitiveWorkReceipt::zero();
     let outcome = PostActionOutcome::new(
         handle.organism_id(),
         sequence_id,
-        Tick::new(frame.tick().raw() + 1),
+        outcome_tick,
         true,
-        PhysicalActionOutcome {
-            contact: PhysicalContactKind::None,
-            target_entity: None,
-            displacement: Vec3f::ZERO,
-            collision_normal: None,
-            energy_cost: NormalizedScalar::new(0.0).unwrap(),
-        },
-        HomeostaticDelta {
-            drives: alife_core::DriveDelta::zero(),
-            hormones: EndocrineDelta::zero(),
-        },
-        SignedValence::new(reward).unwrap(),
-        NormalizedScalar::new(0.0).unwrap(),
-        NormalizedScalar::new(0.0).unwrap(),
-        SignedValence::new(0.0).unwrap(),
-        NormalizedScalar::new(0.0).unwrap(),
+        physical,
+        measured.homeostatic_delta,
+        SignedValence::ZERO,
+        NormalizedScalar::ZERO,
+        NormalizedScalar::new(measured.aversive_harm()).unwrap(),
+        measured.energy_delta,
+        NormalizedScalar::ZERO,
+    )
+    .unwrap()
+    .with_measured_physiology(measured)
+    .unwrap()
+    .with_v11_joint(
+        JointPhysicalOutcome::new(physical, Vec::new()).unwrap(),
+        work,
     )
     .unwrap();
-    ExperiencePatchBuilder::new(sequence_id)
-        .record_pre_action(pre_action)
+    let target = PredictionTargetReceipt::for_successor(
+        handle.organism_id(),
+        sequence_id,
+        selected_action_id,
+        frame.tick(),
+        frame.frame_digest().0,
+        SemanticStateVector::new(vec![0.5, 0.25]).unwrap(),
+        JointMotorCondition::from_bundle(&bundle).unwrap(),
+        SemanticStateVector::new(vec![0.4, 0.3]).unwrap(),
+    )
+    .unwrap();
+    let patch = ExperiencePatch::new_v11_with_decision(
+        pre_action,
+        decision,
+        bundle,
+        outcome,
+        target,
+        work,
+        alife_core::CognitiveContextFrame::empty(handle.organism_id(), sequence_id, frame.tick())
+            .unwrap(),
+    )
+    .unwrap();
+    let credit = OutcomeCreditPacket::from_sealed_patch(&patch)
         .unwrap()
-        .record_decision(decision)
-        .unwrap()
-        .record_outcome(outcome)
-        .unwrap()
-        .seal()
-        .unwrap()
+        .with_biochemical_receptors(&receptors)
+        .unwrap();
+    assert!(credit.modulator().homeostatic_improvement() > 0.0);
+    (patch, receptors)
+}
+
+fn install_full_recorded_pressures(
+    backend: &mut GpuClosedLoopBackend,
+    rows: &[(
+        alife_gpu_backend::GpuBrainHandle,
+        &alife_core::PerceptionFrame,
+    )],
+    snapshot_tick: Tick,
+    dispatch_generation: u64,
+) {
+    let completed_dispatches = backend.runtime_counters_for_test().0;
+    let expected_resident_dispatch = if completed_dispatches == 0 {
+        dispatch_generation
+    } else {
+        dispatch_generation - 1
+    };
+    let logical_heap_used = backend.admission_receipt().logical_committed_bytes;
+    let logical_heap_capacity = backend.runtime_budget().logical_neural_heap_budget_bytes;
+    let pressures = rows
+        .iter()
+        .map(|(handle, final_frame)| {
+            let activity = backend.snapshot_activity_state(*handle).unwrap();
+            let checkpoint = backend
+                .snapshot_brain(*handle, snapshot_tick)
+                .unwrap()
+                .into_parts();
+            assert_eq!(
+                checkpoint.logical_dispatch_generation, expected_resident_dispatch,
+                "pressure fixture must use the resident logical dispatch identity"
+            );
+            let prior = activity.pressure;
+            alife_core::GpuPressureSample::try_new(
+                backend.activity_policy(),
+                alife_core::GpuPressureSampleInput {
+                    identity: alife_core::BrainDispatchIdentity {
+                        organism_id_raw: handle.organism_id().raw(),
+                        tick: final_frame.tick().raw(),
+                        class_id_raw: handle.class_id().raw(),
+                        handle_slot: handle.slot(),
+                        handle_generation: handle.generation(),
+                        sequence_cursor: activity.next_sequence_cursor,
+                        dispatch_generation,
+                        frame_digest: final_frame.frame_digest().0,
+                    },
+                    source_dispatch_generation: prior
+                        .map_or(0, |pressure| pressure.dispatch_generation),
+                    source_frame_digest: prior.map_or([0; 4], |pressure| pressure.frame_digest),
+                    completed_gpu_time_ns: 0,
+                    queue_depth: 0,
+                    logical_heap_used,
+                    logical_heap_capacity,
+                    brain_atp_remaining_q16: activity.brain_atp_q16,
+                    brain_atp_capacity_q16: alife_core::BRAIN_ATP_Q16_MAX,
+                },
+            )
+            .unwrap()
+        })
+        .collect();
+    backend.install_recorded_pressure_replay(pressures).unwrap();
+}
+
+fn paired_chemistry_tick(
+    backend: &mut GpuClosedLoopBackend,
+    handles: [alife_gpu_backend::GpuBrainHandle; 2],
+    brain: &alife_core::BrainPhenotype,
+    physiologies: [&alife_core::CreaturePhenotype; 2],
+    sources: [&alife_core::PerceptionFrame; 2],
+) -> Result<
+    [(
+        alife_core::PerceptionFrame,
+        alife_gpu_backend::GpuClosedLoopTick,
+    ); 2],
+    alife_core::ScaffoldContractError,
+> {
+    let final_frames = [
+        support::empty_recall(sources[0]).0,
+        support::empty_recall(sources[1]).0,
+    ];
+    let dispatch_generation = backend.runtime_counters_for_test().0 + 1;
+    install_full_recorded_pressures(
+        backend,
+        &[
+            (handles[0], &final_frames[0]),
+            (handles[1], &final_frames[1]),
+        ],
+        final_frames[0].tick(),
+        dispatch_generation,
+    );
+    let mut ticks = support::tick_chemistry_batch(
+        backend,
+        &[
+            (handles[0], brain, physiologies[0], sources[0]),
+            (handles[1], brain, physiologies[1], sources[1]),
+        ],
+    )?;
+    if ticks.len() != 2 {
+        return Err(alife_core::ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    let first = ticks.remove(0);
+    let second = ticks.remove(0);
+    let result = [first, second];
+    for (index, (frame, tick)) in result.iter().enumerate() {
+        assert_eq!(frame.frame_digest(), final_frames[index].frame_digest());
+        assert_eq!(tick.pressure.dispatch_generation, dispatch_generation);
+        assert_eq!(
+            tick.pressure.frame_digest,
+            final_frames[index].frame_digest().0
+        );
+        assert_eq!(tick.throttle.level, alife_core::NeuralThrottleLevel::Full);
+        assert_eq!(tick.pressure.completed_gpu_time_ns, 0);
+        assert_eq!(tick.pressure.queue_depth, 0);
+    }
+    assert_eq!(
+        result[0].1.throttle.microsteps,
+        result[1].1.throttle.microsteps
+    );
+    assert_eq!(
+        result[0].1.throttle.enabled_route_ids,
+        result[1].1.throttle.enabled_route_ids
+    );
+    Ok(result)
 }
 
 fn learned_backend(
@@ -109,19 +316,29 @@ fn learned_backend(
     let handle = backend
         .insert_brain(alife_core::OrganismId(organism_raw), phenotype.clone())
         .unwrap();
-    let frame = support::perception_frame_for_profile_at_tick(
+    let source = support::perception_frame_for_profile_at_tick(
         organism_raw,
         2_000,
         alife_core::SensorProfile::PrivilegedAffordanceV1,
         true,
         2,
     );
-    let tick = backend
-        .tick_batch(&[(handle, frame.clone())])
-        .unwrap()
-        .remove(0);
-    let patch = sealed_reward(handle, &frame, &tick, 1, 0.8);
-    let receptors = support::test_receptor_frame(&patch);
+    let physiology = support::test_physiology(organism_raw, &phenotype).unwrap();
+    let (frame, tick) =
+        support::tick_with_receptors(&mut backend, handle, &phenotype, &physiology, &source)
+            .unwrap();
+    let (patch, receptors) = sealed_reward(
+        handle,
+        &phenotype,
+        &physiology,
+        &frame,
+        &tick,
+        1,
+        BodyEventDelta {
+            nutrition: 1.0,
+            ..BodyEventDelta::zero()
+        },
+    );
     let receipt = backend
         .apply_sealed_outcome(handle, &patch, &receptors)
         .unwrap();
@@ -405,29 +622,56 @@ fn two_same_class_sleep_jobs_do_not_cross_write_slots() {
         .insert_brain(alife_core::OrganismId(5_005), phenotype.clone())
         .unwrap();
     let handle_b = backend
-        .insert_brain(alife_core::OrganismId(5_006), phenotype)
+        .insert_brain(alife_core::OrganismId(5_006), phenotype.clone())
         .unwrap();
-    let frame_a = support::perception_frame_for_profile_at_tick(
+    let source_a = support::perception_frame_for_profile_at_tick(
         5_005,
         3_000,
         alife_core::SensorProfile::PrivilegedAffordanceV1,
         true,
         2,
     );
-    let frame_b = support::perception_frame_for_profile_at_tick(
+    let source_b = support::perception_frame_for_profile_at_tick(
         5_006,
         3_000,
         alife_core::SensorProfile::PrivilegedAffordanceV1,
         true,
         2,
     );
-    let ticks = backend
-        .tick_batch(&[(handle_a, frame_a.clone()), (handle_b, frame_b.clone())])
-        .unwrap();
-    let patch_a = sealed_reward(handle_a, &frame_a, &ticks[0], 1, 0.8);
-    let patch_b = sealed_reward(handle_b, &frame_b, &ticks[1], 1, 0.8);
-    let receptors_a = support::test_receptor_frame(&patch_a);
-    let receptors_b = support::test_receptor_frame(&patch_b);
+    let physiology_a = support::test_physiology(5_005, &phenotype).unwrap();
+    let physiology_b = support::test_physiology(5_006, &phenotype).unwrap();
+    let [(frame_a, tick_a), (frame_b, tick_b)] = paired_chemistry_tick(
+        &mut backend,
+        [handle_a, handle_b],
+        &phenotype,
+        [&physiology_a, &physiology_b],
+        [&source_a, &source_b],
+    )
+    .unwrap();
+    let (patch_a, receptors_a) = sealed_reward(
+        handle_a,
+        &phenotype,
+        &physiology_a,
+        &frame_a,
+        &tick_a,
+        1,
+        BodyEventDelta {
+            nutrition: 1.0,
+            ..BodyEventDelta::zero()
+        },
+    );
+    let (patch_b, receptors_b) = sealed_reward(
+        handle_b,
+        &phenotype,
+        &physiology_b,
+        &frame_b,
+        &tick_b,
+        1,
+        BodyEventDelta {
+            nutrition: 1.0,
+            ..BodyEventDelta::zero()
+        },
+    );
     backend
         .apply_sealed_outcome_batch(&[
             (handle_a, &patch_a, &receptors_a),
@@ -468,10 +712,11 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
             .unwrap();
     let handles =
         organisms.map(|organism| backend.insert_brain(organism, phenotype.clone()).unwrap());
+    let physiology_fixture = support::test_physiology(5_008, &phenotype).unwrap();
 
     for exposure in 0_u64..8 {
         let tick_raw = 5_000 + exposure * 2;
-        let frames = organisms.map(|organism| {
+        let sources = organisms.map(|organism| {
             support::perception_frame_for_profile_at_tick(
                 organism.raw(),
                 tick_raw,
@@ -480,24 +725,42 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
                 2,
             )
         });
-        let ticks = backend
-            .tick_batch(&[
-                (handles[0], frames[0].clone()),
-                (handles[1], frames[1].clone()),
-            ])
-            .unwrap();
-        let patches = [
-            sealed_reward(handles[0], &frames[0], &ticks[0], exposure + 1, 0.8),
-            sealed_reward(handles[1], &frames[1], &ticks[1], exposure + 1, 0.8),
-        ];
-        let receptors = [
-            support::test_receptor_frame(&patches[0]),
-            support::test_receptor_frame(&patches[1]),
-        ];
+        let [(frame_a, tick_a), (frame_b, tick_b)] = paired_chemistry_tick(
+            &mut backend,
+            handles,
+            &phenotype,
+            [&physiology_fixture, &physiology_fixture],
+            [&sources[0], &sources[1]],
+        )
+        .unwrap();
+        let (patch_a, receptors_a) = sealed_reward(
+            handles[0],
+            &phenotype,
+            &physiology_fixture,
+            &frame_a,
+            &tick_a,
+            exposure + 1,
+            BodyEventDelta {
+                nutrition: 1.0,
+                ..BodyEventDelta::zero()
+            },
+        );
+        let (patch_b, receptors_b) = sealed_reward(
+            handles[1],
+            &phenotype,
+            &physiology_fixture,
+            &frame_b,
+            &tick_b,
+            exposure + 1,
+            BodyEventDelta {
+                nutrition: 1.0,
+                ..BodyEventDelta::zero()
+            },
+        );
         backend
             .apply_sealed_outcome_batch(&[
-                (handles[0], &patches[0], &receptors[0]),
-                (handles[1], &patches[1], &receptors[1]),
+                (handles[0], &patch_a, &receptors_a),
+                (handles[1], &patch_b, &receptors_b),
             ])
             .unwrap();
     }
@@ -541,7 +804,7 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
 
     let mut max_post_wake_delta = 0.0_f32;
     for offset in 0..POST_WAKE_PROBE_TICKS {
-        let frames = organisms.map(|organism| {
+        let sources = organisms.map(|organism| {
             support::perception_frame_for_profile_at_tick(
                 organism.raw(),
                 5_100 + offset,
@@ -550,15 +813,17 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
                 2,
             )
         });
-        let ticks = backend
-            .tick_batch(&[
-                (handles[0], frames[0].clone()),
-                (handles[1], frames[1].clone()),
-            ])
-            .unwrap();
-        max_post_wake_delta =
-            max_post_wake_delta.max((ticks[0].selection.logit - ticks[1].selection.logit).abs());
-        for tick in &ticks {
+        let ticks = paired_chemistry_tick(
+            &mut backend,
+            handles,
+            &phenotype,
+            [&physiology_fixture, &physiology_fixture],
+            [&sources[0], &sources[1]],
+        )
+        .unwrap();
+        max_post_wake_delta = max_post_wake_delta
+            .max((ticks[0].1.selection.logit - ticks[1].1.selection.logit).abs());
+        for (_, tick) in &ticks {
             backend
                 .discard_pending_eligibility(tick.handle, tick.pending_eligibility.identity())
                 .unwrap();
@@ -575,15 +840,26 @@ fn gpu_test_brain_sleep_delegate_runs_the_full_request_transaction() {
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
     let mut brain =
         support::GpuTestBrain::from_phenotype(alife_core::OrganismId(5_007), phenotype).unwrap();
-    let frame = support::perception_frame_for_profile_at_tick(
+    let source = support::perception_frame_for_profile_at_tick(
         5_007,
         4_000,
         alife_core::SensorProfile::PrivilegedAffordanceV1,
         true,
         2,
     );
-    let tick = brain.tick(&frame).unwrap();
-    let patch = sealed_reward(brain.handle, &frame, &tick, 1, 0.8);
+    let (frame, tick) = brain.tick_with_frame(&source).unwrap();
+    let (patch, _) = sealed_reward(
+        brain.handle,
+        brain.brain_phenotype(),
+        brain.physiology(),
+        &frame,
+        &tick,
+        1,
+        BodyEventDelta {
+            nutrition: 1.0,
+            ..BodyEventDelta::zero()
+        },
+    );
     brain.apply_sealed_outcome(&patch).unwrap();
 
     let receipt = brain

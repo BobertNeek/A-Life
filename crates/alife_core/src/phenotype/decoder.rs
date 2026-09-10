@@ -161,7 +161,10 @@ impl CandidateDecoderPlan {
             });
         if self.feature_count != execution.candidate_feature_count()
             || u32::from(self.flattened_input_lane_count) != expected_stride
-            || self.flattened_input_lane_count != phenotype.budgets().global.decoder_input_lanes
+            || phenotype.cognitive_channel_plan().map_or(
+                self.flattened_input_lane_count != phenotype.budgets().global.decoder_input_lanes,
+                |plan| plan.input_lane_end() != phenotype.budgets().global.decoder_input_lanes,
+            )
             || self.flattened_input_lane_count > execution.max_decoder_input_lanes()
             || self.decoder_synapse_count() > phenotype.budgets().global.action_decoder_synapses
         {
@@ -386,7 +389,9 @@ impl AuxiliaryDecoderPlan {
         if self.schema_version != AUXILIARY_DECODER_SCHEMA_VERSION
             || !matches!(
                 self.head,
-                DecoderHeadKind::SpeechPayload | DecoderHeadKind::MemoryContext
+                DecoderHeadKind::SpeechPayload
+                    | DecoderHeadKind::MemoryContext
+                    | DecoderHeadKind::CognitiveContext
             )
             || self.input_width == 0
             || self.output_width == 0

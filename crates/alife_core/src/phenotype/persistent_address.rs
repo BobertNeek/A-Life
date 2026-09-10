@@ -23,6 +23,7 @@ pub enum PersistentProjectionRole {
     Recurrent = 0,
     ActionAndSpeechDecoder = 1,
     MemoryDecoder = 2,
+    CognitiveDecoder = 3,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -353,6 +354,11 @@ fn projection_role(
                 if coordinate.head() == DecoderHeadKind::MemoryContext =>
             {
                 PersistentProjectionRole::MemoryDecoder
+            }
+            CompiledSynapseKind::Decoder(coordinate)
+                if coordinate.head() == DecoderHeadKind::CognitiveContext =>
+            {
+                PersistentProjectionRole::CognitiveDecoder
             }
             _ => return Err(ScaffoldContractError::PhenotypeCompile),
         };

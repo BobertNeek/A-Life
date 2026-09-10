@@ -57,10 +57,23 @@ fn joint_non_global_target_tampering_rejects_before_learning_and_preserves_pendi
         template.grounded_object_slots().to_vec(),
     )
     .unwrap();
+    // Only the transaction guard is under test. These are declared physiology
+    // fixtures, not evidence of useful behavior or reward supplied to training.
+    let body_phenotype = CreatureGenome::early_mammal_founder(
+        42,
+        FoundationGeneticIdentity::new(22, 1, 1, capacity.id()).unwrap(),
+    )
+    .unwrap()
+    .express()
+    .unwrap();
     let mut backend =
         GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()).unwrap();
     let handle = backend.insert_brain(organism, phenotype.clone()).unwrap();
-    let (frame, gpu_tick) = support::tick_with_receptors(&mut backend, handle, &frame);
+    let before = BiochemistryState::new(&body_phenotype, frame.tick()).unwrap();
+    let receptors = before.neural_receptor_frame(&body_phenotype).unwrap();
+    let (frame, gpu_tick) =
+        support::tick_with_receptors(&mut backend, handle, &phenotype, &body_phenotype, &frame)
+            .unwrap();
     let sequence = ExperienceSequenceId(1);
     let command = frame.candidates()[usize::from(gpu_tick.selection.candidate_index)]
         .to_command(organism, gpu_tick.selection.confidence)
@@ -110,16 +123,6 @@ fn joint_non_global_target_tampering_rejects_before_learning_and_preserves_pendi
         command,
     )
     .unwrap();
-    // Only the transaction guard is under test. These are declared physiology
-    // fixtures, not evidence of useful behavior or reward supplied to training.
-    let body_phenotype = CreatureGenome::early_mammal_founder(
-        42,
-        FoundationGeneticIdentity::new(22, 1, 1, capacity.id()).unwrap(),
-    )
-    .unwrap()
-    .express()
-    .unwrap();
-    let before = BiochemistryState::new(&body_phenotype, frame.tick()).unwrap();
     let outcome_tick = Tick::new(frame.tick().raw() + 1);
     let after = before
         .advance(outcome_tick, BodyEventDelta::zero(), &body_phenotype)
@@ -202,7 +205,6 @@ fn joint_non_global_target_tampering_rejects_before_learning_and_preserves_pendi
         mismatch.field,
         GpuLearningEvidenceMismatchField::JointActionSelection
     );
-    let receptors = support::test_receptor_frame(&original);
     assert!(backend
         .apply_sealed_outcome(handle, &tampered, &receptors)
         .is_err());

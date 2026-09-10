@@ -2,16 +2,18 @@
 
 mod support;
 
+#[cfg(feature = "gpu-tests")]
+use alife_core::{
+    BiochemistryState, BodyEventDelta, BrainGenome, DecisionSnapshot, DevelopmentState,
+    EndocrineDelta, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
+    HomeostaticDelta, JointMotorCondition, JointPhysicalOutcome, MeasuredPhysiologyTransition,
+    NeuralActionSelection, NormalizedScalar, OutcomeCreditPacket, PhenotypeCompiler,
+    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, PreActionSnapshot,
+    PredictionTargetReceipt, SemanticStateVector, SignedValence, Tick, Vec3f,
+};
 use alife_core::{
     BrainCapacityClass, Confidence, DecoderHeadKind, MemoryBank, MemoryBankConfig,
     PerceptionFrameDraft, SensorProfile,
-};
-#[cfg(feature = "gpu-tests")]
-use alife_core::{
-    BrainGenome, DecisionSnapshot, DevelopmentState, EndocrineDelta, ExperiencePatch,
-    ExperiencePatchBuilder, ExperienceSequenceId, HomeostaticDelta, NeuralActionSelection,
-    NormalizedScalar, PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome,
-    PreActionSnapshot, SignedValence, Tick, Vec3f,
 };
 use alife_gpu_backend::{
     GpuBrainSlotExtensionRecord, GpuBufferAccess, GpuCandidateMemoryRecord,
@@ -131,25 +133,65 @@ fn painful_memory_patch(
 #[cfg(feature = "gpu-tests")]
 fn painful_patch_for_gpu_tick(
     handle: alife_gpu_backend::GpuBrainHandle,
+    brain: &alife_core::BrainPhenotype,
+    genome: &BrainGenome,
+    development: &DevelopmentState,
+    physiology: &alife_core::CreaturePhenotype,
     frame: &alife_core::PerceptionFrame,
     recall: &alife_core::FinalizedMemoryRecall,
     tick: &GpuClosedLoopTick,
     sequence: ExperienceSequenceId,
-) -> ExperiencePatch {
-    let genome = BrainGenome::scaffold(0xC600_1002, handle.class_id());
-    let development = DevelopmentState::new(
-        genome.id,
-        frame.tick(),
-        NormalizedScalar::new(0.35).unwrap(),
-    );
+) -> (ExperiencePatch, alife_core::NeuralReceptorFrame) {
+    assert_eq!(handle.organism_id(), frame.organism_id());
+    assert_eq!(handle.class_id(), brain.brain_class_id());
+    assert_eq!(handle.phenotype_hash(), brain.phenotype_hash());
+    assert_eq!(genome.id, development.genome_id);
+    let capacity = BrainCapacityClass::n512();
+    assert_eq!(capacity.id(), handle.class_id());
+    let compiled =
+        PhenotypeCompiler::compile(genome, &capacity, development, brain.sensor_profile()).unwrap();
+    assert_eq!(compiled.phenotype_hash(), brain.phenotype_hash());
     let candidate = &frame.candidates()[usize::from(tick.selection.candidate_index)];
+    let command = candidate
+        .to_command(frame.organism_id(), tick.selection.confidence)
+        .unwrap();
+    let selected_action_id = command.action_id;
+    let prompted = frame
+        .sensory()
+        .language_context
+        .heard_tokens
+        .iter()
+        .flatten()
+        .any(|token| token.source_kind == alife_core::UtteranceSourceKind::Player);
+    let bundle = alife_core::factorized_motor_bundle_for_candidates(
+        handle.organism_id(),
+        sequence,
+        frame.tick(),
+        frame,
+        tick.factorized_motor_candidates,
+        &brain
+            .candidate_decoder()
+            .factorized_motor_channels(brain)
+            .unwrap(),
+        &command,
+        tick.selection.candidate_index,
+        tick.speech_payload.as_ref(),
+        prompted,
+    )
+    .unwrap();
+    tick.pending_eligibility
+        .identity()
+        .joint_selection()
+        .unwrap()
+        .validate_bundle(&bundle)
+        .unwrap();
     let pre_action = PreActionSnapshot::from_neural_frame(
         sequence,
         handle.class_id(),
         handle.phenotype_hash(),
         genome.id,
         genome.schema_version,
-        development,
+        development.clone(),
         frame.clone(),
     )
     .unwrap();
@@ -160,50 +202,86 @@ fn painful_patch_for_gpu_tick(
         tick.active_activation_side,
         frame,
         tick.selection,
-        candidate
-            .to_command(frame.organism_id(), tick.selection.confidence)
-            .unwrap(),
+        command,
     )
     .unwrap()
     .with_finalized_memory_recall(frame, recall, tick.selection.candidate_index)
     .unwrap();
+    let before = BiochemistryState::new(physiology, frame.tick()).unwrap();
+    let receptors = support::physiology_receptor_frame(physiology, frame.tick()).unwrap();
+    assert_eq!(receptors, before.neural_receptor_frame(physiology).unwrap());
+    assert!(!receptors.activations.is_empty());
+    let outcome_tick = Tick::new(frame.tick().raw() + 1);
+    let after = before
+        .advance(
+            outcome_tick,
+            BodyEventDelta {
+                damage: 0.8,
+                energy: -0.2,
+                ..BodyEventDelta::zero()
+            },
+            physiology,
+        )
+        .unwrap();
+    let measured = MeasuredPhysiologyTransition::new(before, after).unwrap();
+    assert_ne!(measured.homeostatic_delta, HomeostaticDelta::zero());
+    let physical = PhysicalActionOutcome {
+        contact: PhysicalContactKind::None,
+        target_entity: None,
+        displacement: Vec3f::ZERO,
+        collision_normal: None,
+        energy_cost: NormalizedScalar::ZERO,
+    };
+    let work = alife_core::CognitiveWorkReceipt::zero();
     let outcome = PostActionOutcome::new(
         frame.organism_id(),
         sequence,
-        Tick::new(frame.tick().raw() + 1),
+        outcome_tick,
         false,
-        PhysicalActionOutcome {
-            contact: PhysicalContactKind::None,
-            target_entity: None,
-            displacement: Vec3f::ZERO,
-            collision_normal: None,
-            energy_cost: NormalizedScalar::new(0.1).unwrap(),
-        },
-        HomeostaticDelta {
-            drives: alife_core::DriveDelta {
-                fear: 0.7,
-                pain: 0.9,
-                brain_atp: -0.2,
-                ..alife_core::DriveDelta::zero()
-            },
-            hormones: EndocrineDelta::zero(),
-        },
-        SignedValence::new(-0.8).unwrap(),
-        NormalizedScalar::new(0.0).unwrap(),
-        NormalizedScalar::new(0.9).unwrap(),
-        SignedValence::new(-0.2).unwrap(),
-        NormalizedScalar::new(0.7).unwrap(),
+        physical,
+        measured.homeostatic_delta,
+        SignedValence::ZERO,
+        NormalizedScalar::ZERO,
+        NormalizedScalar::new(measured.aversive_harm()).unwrap(),
+        measured.energy_delta,
+        NormalizedScalar::ZERO,
+    )
+    .unwrap()
+    .with_measured_physiology(measured)
+    .unwrap()
+    .with_v11_joint(
+        JointPhysicalOutcome::new(physical, Vec::new()).unwrap(),
+        work,
     )
     .unwrap();
-    ExperiencePatchBuilder::new(sequence)
-        .record_pre_action(pre_action)
+    let target = PredictionTargetReceipt::for_successor(
+        handle.organism_id(),
+        sequence,
+        selected_action_id,
+        frame.tick(),
+        frame.frame_digest().0,
+        SemanticStateVector::new(vec![0.5, 0.25]).unwrap(),
+        JointMotorCondition::from_bundle(&bundle).unwrap(),
+        SemanticStateVector::new(vec![0.4, 0.3]).unwrap(),
+    )
+    .unwrap();
+    let patch = ExperiencePatch::new_v11_with_decision(
+        pre_action,
+        decision,
+        bundle,
+        outcome,
+        target,
+        work,
+        alife_core::CognitiveContextFrame::empty(handle.organism_id(), sequence, frame.tick())
+            .unwrap(),
+    )
+    .unwrap();
+    let credit = OutcomeCreditPacket::from_sealed_patch(&patch)
         .unwrap()
-        .record_decision(decision)
-        .unwrap()
-        .record_outcome(outcome)
-        .unwrap()
-        .seal()
-        .unwrap()
+        .with_biochemical_receptors(&receptors)
+        .unwrap();
+    assert!(credit.modulator().homeostatic_improvement() < 0.0);
+    (patch, receptors)
 }
 
 #[cfg(feature = "gpu-tests")]
@@ -761,13 +839,15 @@ fn required_runtime_dispatches_finalized_memory_and_returns_its_exact_binding() 
     ))
     .unwrap();
     let handle = backend
-        .insert_brain(frame.organism_id(), phenotype)
+        .insert_brain(frame.organism_id(), phenotype.clone())
         .unwrap();
+    let physiology = support::test_physiology(0xC600_0006, &phenotype).unwrap();
     let upload = backend
         .prepare_memory_context_upload(handle, &frame, &recall)
-        .unwrap()
-        .bind_neural_receptor_effects(support::test_receptor_effects(frame.tick()))
         .unwrap();
+    let upload =
+        support::bind_chemistry_receptor_effects(upload, &phenotype, &physiology, frame.tick())
+            .unwrap();
     let input = GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &upload).unwrap();
     let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![input]).unwrap();
     let ticks = backend.tick_memory_batch(&batch).unwrap();
@@ -806,13 +886,15 @@ fn evidence_logit_snapshot_is_bound_to_the_pending_frame() {
     ))
     .unwrap();
     let handle = backend
-        .insert_brain(frame.organism_id(), phenotype)
+        .insert_brain(frame.organism_id(), phenotype.clone())
         .unwrap();
+    let physiology = support::test_physiology(0xC600_0010, &phenotype).unwrap();
     let upload = backend
         .prepare_memory_context_upload(handle, &frame, &recall)
-        .unwrap()
-        .bind_neural_receptor_effects(support::test_receptor_effects(frame.tick()))
         .unwrap();
+    let upload =
+        support::bind_chemistry_receptor_effects(upload, &phenotype, &physiology, frame.tick())
+            .unwrap();
     let input = GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &upload).unwrap();
     let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![input]).unwrap();
     let tick = backend.tick_memory_batch(&batch).unwrap().remove(0);
@@ -918,12 +1000,17 @@ fn memory_decoder_eligibility_matches_a_real_gpu_finite_difference() {
 #[cfg(feature = "gpu-tests")]
 #[test]
 fn sealed_outcome_changes_the_selected_memory_decoder_fast_weights_immediately() {
-    let phenotype = support::phenotype_for_capacity_at_maturation(
-        BrainCapacityClass::n512(),
-        0xC600_0008,
-        0.35,
+    let capacity = BrainCapacityClass::n512();
+    let genome = BrainGenome::scaffold(0xC600_0008, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+    let phenotype = PhenotypeCompiler::compile(
+        &genome,
+        &capacity,
+        &development,
         SensorProfile::GroundedObjectSlotsV1,
-    );
+    )
+    .unwrap();
     let (frame, recall) = conditioned_memory_frame_with_candidate_count(816, &phenotype, 1);
     let upload = GpuPhenotypeUpload::try_from(&phenotype).unwrap();
     let mut backend = GpuClosedLoopBackend::new_required(support::scaling::bounded_profile(
@@ -936,15 +1023,21 @@ fn sealed_outcome_changes_the_selected_memory_decoder_fast_weights_immediately()
     let handle = backend
         .insert_brain(frame.organism_id(), phenotype.clone())
         .unwrap();
+    let physiology = support::test_physiology(0xC600_0008, &phenotype).unwrap();
     let before = backend
         .snapshot_brain(handle, Tick::new(frame.tick().raw() - 1))
         .unwrap()
         .into_parts();
     let memory_upload = backend
         .prepare_memory_context_upload(handle, &frame, &recall)
-        .unwrap()
-        .bind_neural_receptor_effects(support::test_receptor_effects(frame.tick()))
         .unwrap();
+    let memory_upload = support::bind_chemistry_receptor_effects(
+        memory_upload,
+        &phenotype,
+        &physiology,
+        frame.tick(),
+    )
+    .unwrap();
     let input = GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &memory_upload).unwrap();
     let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![input]).unwrap();
     let tick = backend.tick_memory_batch(&batch).unwrap().remove(0);
@@ -987,9 +1080,17 @@ fn sealed_outcome_changes_the_selected_memory_decoder_fast_weights_immediately()
         })
         .count();
     assert!(staged_memory_rows > 0);
-    let patch =
-        painful_patch_for_gpu_tick(handle, &frame, &recall, &tick, ExperienceSequenceId(9_002));
-    let receptors = support::test_receptor_frame(&patch);
+    let (patch, receptors) = painful_patch_for_gpu_tick(
+        handle,
+        &phenotype,
+        &genome,
+        &development,
+        &physiology,
+        &frame,
+        &recall,
+        &tick,
+        ExperienceSequenceId(9_002),
+    );
     let learning = backend
         .apply_sealed_outcome(handle, &patch, &receptors)
         .unwrap();

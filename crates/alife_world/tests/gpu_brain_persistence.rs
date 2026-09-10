@@ -32,6 +32,104 @@ fn asset(label: &str) -> GpuBrainAssetRef {
 }
 
 #[test]
+fn r06_exact_cognitive_checkpoint_preserves_acquired_predictor_and_rejects_legacy() {
+    use alife_core::{
+        CognitiveContextFrame, CognitiveWorkReceipt, DendriticBranchSet,
+        GroundedSuccessorPredictor, JointMotorCondition, MotorChannel, MotorChannelFactor,
+        PredictionTargetReceipt, SemanticStateVector, StructuralPlasticityConfig,
+        StructuralPlasticityState, Vec3f,
+    };
+    use alife_world::persistence::{
+        ExactCognitiveCheckpointState, V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
+    };
+    let organism = OrganismId(71);
+    let tick = Tick::new(9);
+    let condition = JointMotorCondition::new(vec![MotorChannelFactor {
+        channel: MotorChannel::Vocal,
+        primitive: ActionId(7),
+        intensity: 0.8,
+        duration_ticks: 1,
+        direction: Vec3f::ZERO,
+        stand_off_distance: 0.0,
+        confidence: 0.9,
+        target: Some(alife_core::ActionTarget::new(
+            Some(alife_core::WorldEntityId(91)),
+            None,
+        )),
+        payload: vec![3, 17],
+        coordination_group: 0,
+    }])
+    .unwrap();
+    let target = PredictionTargetReceipt::for_successor(
+        organism,
+        ExperienceSequenceId(1),
+        ActionId(7),
+        tick,
+        [1, 2, 3, 4],
+        SemanticStateVector::new(vec![0.5, 0.25]).unwrap(),
+        condition,
+        SemanticStateVector::new(vec![0.1, 0.9]).unwrap(),
+    )
+    .unwrap();
+    let mut predictor = GroundedSuccessorPredictor::default();
+    for _ in 0..8 {
+        predictor.observe(&target).unwrap();
+    }
+    let prediction = predictor
+        .predict(target.source_state(), target.motor_condition())
+        .unwrap();
+    let mut context =
+        CognitiveContextFrame::empty(organism, ExperienceSequenceId(1), tick).unwrap();
+    context.prediction.source_digest = target.source_digest;
+    context.prediction.semantic_state_abi = target.source_state.abi_version;
+    context.prediction.source_state = Some(target.source_state.clone());
+    context.prediction.motor_condition_magnitude =
+        alife_core::NormalizedScalar::new(target.motor_condition_magnitude).unwrap();
+    context.prediction.category_coverage = Some(prediction.category_coverage);
+    let checkpoint = ExactCognitiveCheckpointState {
+        schema_version: V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
+        organism_id: organism,
+        checkpoint_tick: tick,
+        cognitive_context: context,
+        predictor,
+        selected_motor_bundle: None,
+        cognitive_work: CognitiveWorkReceipt::zero(),
+        sleep_state: SleepState::awake_at(tick),
+        last_sleep_work: None,
+        dendritic_branches: DendriticBranchSet::new(Vec::new()).unwrap(),
+        structural_plasticity: StructuralPlasticityState::new(
+            512,
+            StructuralPlasticityConfig::default(),
+        )
+        .unwrap(),
+        structural_edit_receipts: Vec::new(),
+        last_sleep_report: None,
+    };
+    let encoded = checkpoint.encode().unwrap();
+    let restored = ExactCognitiveCheckpointState::decode(&encoded).unwrap();
+    assert_eq!(restored, checkpoint);
+    assert_eq!(
+        restored
+            .predictor
+            .predict(target.source_state(), target.motor_condition())
+            .unwrap(),
+        prediction
+    );
+    let mut legacy = serde_json::to_value(&checkpoint).unwrap();
+    legacy["predictor"] = serde_json::json!({"semantic_state_abi":1,"semantic_state_count":2,
+        "motor_condition_abi":1,"input_feature_count":285,"learning_rate":0.25,
+        "weights":[0.125],"last_update":null});
+    let retained_legacy_bytes = serde_json::to_vec(&legacy).unwrap();
+    let untouched = retained_legacy_bytes.clone();
+    assert!(ExactCognitiveCheckpointState::decode(&retained_legacy_bytes).is_err());
+    assert_eq!(retained_legacy_bytes, untouched);
+    assert_eq!(
+        ExactCognitiveCheckpointState::decode(&encoded).unwrap(),
+        checkpoint
+    );
+}
+
+#[test]
 fn live_topology_selector_is_fail_closed_across_v5_and_v6() {
     let mut save = save_for_sleep(sleep_state(SleepPhase::Awake, ConsolidationState::None));
     save.validate().unwrap();

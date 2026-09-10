@@ -1082,7 +1082,15 @@ impl FoundationWeightAsset {
         } else {
             self.manifest.validate_against(phenotype)?;
         }
-        if self.weights.len() != phenotype.synapses().len()
+        let expected_weight_count = match phenotype.foundation_abi() {
+            crate::FoundationAbiSelection::Nano512ActionCreditCandidateV2(candidate)
+                if candidate.cognitive_channel_extension().is_some() => self
+                    .weights
+                    .len()
+                    .checked_add(crate::COGNITIVE_CHANNEL_TOTAL_SYNAPSES as usize),
+            _ => Some(self.weights.len()),
+        };
+        if expected_weight_count != Some(phenotype.synapses().len())
             || self.weights.iter().any(|weight| !weight.is_finite())
         {
             return Err(ScaffoldContractError::PhenotypeCompile);

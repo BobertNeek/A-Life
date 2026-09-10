@@ -521,8 +521,16 @@ pub fn select_focal_targets(
     };
     let work_units = u64::try_from(peripheral_summaries.len())
         .unwrap_or(u64::MAX)
-        .saturating_add(u64::try_from(ranked.len()).unwrap_or(u64::MAX).saturating_mul(2))
-        .saturating_add(u64::try_from(selected.len()).unwrap_or(u64::MAX).saturating_mul(3))
+        .saturating_add(
+            u64::try_from(ranked.len())
+                .unwrap_or(u64::MAX)
+                .saturating_mul(2),
+        )
+        .saturating_add(
+            u64::try_from(selected.len())
+                .unwrap_or(u64::MAX)
+                .saturating_mul(3),
+        )
         .saturating_add(switches.saturating_mul(7));
     let budget_receipt = AttentionBudgetReceipt::new(
         u16::try_from(peripheral_summaries.len())
@@ -530,14 +538,17 @@ pub fn select_focal_targets(
         policy.focal_capacity,
         policy.protected_minimum,
         policy.requested_focal_count,
-        u8::try_from(selected.len())
-            .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
+        u8::try_from(selected.len()).map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
         work_units,
     )?;
     let retained_ticks = if previous_hysteresis.previous_identity == first_identity {
         previous_hysteresis.retained_ticks.saturating_add(1)
     } else {
-        if first_identity.is_some() { 1 } else { 0 }
+        if first_identity.is_some() {
+            1
+        } else {
+            0
+        }
     };
     AttentionFrame::new(
         organism_id,

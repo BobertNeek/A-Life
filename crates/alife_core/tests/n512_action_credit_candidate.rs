@@ -442,3 +442,85 @@ fn signed_choice_readouts_change_only_memory_credit_and_preserve_legacy_identity
         }
     }
 }
+
+#[test]
+fn cognitive_channel_extension_is_explicit_and_appends_all_eight_families() {
+    let asset = candidate();
+    let source_identity = FoundationGeneticIdentity::new(
+        FoundationId::N512_READOUT_CANDIDATE_V1.raw(),
+        1,
+        FoundationCompatibilityFamilyId::N512_FOUNDATION.raw(),
+        BrainCapacityClass::N512_ID,
+    )
+    .unwrap();
+    let extension = CognitiveChannelExtensionV1::try_new_v1(
+        source_identity,
+        ActionCandidateCreditProfileV1::SignedChoiceReadouts,
+    )
+    .unwrap();
+    let legacy = Nano512ActionCreditCandidateV2::new(
+        &asset,
+        ActionCandidateCreditProfileV1::SignedChoiceReadouts,
+    )
+    .unwrap();
+    assert!(legacy.cognitive_channel_extension().is_none());
+    let configured =
+        Nano512ActionCreditCandidateV2::new_with_cognitive_extension(&asset, extension).unwrap();
+    assert_eq!(configured.cognitive_channel_extension(), Some(&extension));
+    let (legacy_phenotype, _) =
+        PhenotypeCompiler::compile_nano512_action_credit_candidate(&legacy).unwrap();
+    let (phenotype, inputs) =
+        PhenotypeCompiler::compile_nano512_action_credit_candidate(&configured).unwrap();
+    assert!(inputs.cognitive_channel_extension().is_some());
+    let plan = phenotype.cognitive_channel_plan().unwrap();
+    assert_eq!(plan.input_lane_start(), COGNITIVE_CHANNEL_LANE_START);
+    assert_eq!(plan.input_lane_count(), COGNITIVE_CHANNEL_LANE_COUNT);
+    assert_eq!(
+        plan.decoder_synapse_count(),
+        COGNITIVE_CHANNEL_TOTAL_SYNAPSES
+    );
+    assert_eq!(plan.family_count(), COGNITIVE_CHANNEL_FAMILY_COUNT);
+    assert_eq!(
+        phenotype.synapses().len(),
+        legacy_phenotype.synapses().len() + COGNITIVE_CHANNEL_TOTAL_SYNAPSES as usize
+    );
+    let cognitive = phenotype
+        .synapses()
+        .iter()
+        .skip(legacy_phenotype.synapses().len())
+        .collect::<Vec<_>>();
+    assert_eq!(cognitive.len(), COGNITIVE_CHANNEL_TOTAL_SYNAPSES as usize);
+    assert!(cognitive.iter().all(|synapse| {
+        matches!(synapse.kind(), CompiledSynapseKind::Decoder(coordinate)
+            if coordinate.head() == DecoderHeadKind::CognitiveContext
+                && (COGNITIVE_CHANNEL_LANE_START
+                    ..COGNITIVE_CHANNEL_LANE_END)
+                    .contains(&coordinate.input_lane()))
+    }));
+    for family in 0_u8..8 {
+        assert_eq!(
+            cognitive
+                .iter()
+                .filter(|synapse| matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.family().raw() == family))
+                .count(),
+            COGNITIVE_CHANNEL_LANE_COUNT as usize
+        );
+    }
+    assert!(phenotype
+        .replay_capture_plan()
+        .global_synapse_ids()
+        .iter()
+        .any(|id| *id >= legacy_phenotype.synapses().len() as u32));
+    for family in 0_u8..COGNITIVE_CHANNEL_FAMILY_COUNT {
+        assert!(phenotype
+            .replay_capture_plan()
+            .global_synapse_ids()
+            .iter()
+            .any(|id| {
+                let row = &phenotype.synapses()[*id as usize];
+                matches!(row.kind(), CompiledSynapseKind::Decoder(c)
+                    if c.head() == DecoderHeadKind::CognitiveContext
+                        && c.family().raw() == family)
+            }));
+    }
+}

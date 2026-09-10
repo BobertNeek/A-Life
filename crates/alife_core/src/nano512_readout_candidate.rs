@@ -11,6 +11,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 pub struct Nano512ActionCreditCandidateV2 {
     source: Nano512ReadoutCandidateV1,
     action_profile: crate::ActionCandidateCreditProfileV1,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cognitive_channel_extension: Option<crate::CognitiveChannelExtensionV1>,
 }
 
 impl Nano512ActionCreditCandidateV2 {
@@ -21,7 +23,21 @@ impl Nano512ActionCreditCandidateV2 {
         Ok(Self {
             source: Nano512ReadoutCandidateV1::new(asset)?,
             action_profile,
+            cognitive_channel_extension: None,
         })
+    }
+
+    pub fn new_with_cognitive_extension(
+        asset: &FoundationWeightAsset,
+        extension: crate::CognitiveChannelExtensionV1,
+    ) -> Result<Self, ScaffoldContractError> {
+        let value = Self {
+            source: Nano512ReadoutCandidateV1::new(asset)?,
+            action_profile: extension.action_candidate_credit_profile(),
+            cognitive_channel_extension: Some(extension),
+        };
+        value.validate_cognitive_extension()?;
+        Ok(value)
     }
     pub fn asset(&self) -> Result<FoundationWeightAsset, ScaffoldContractError> {
         self.source.asset()
@@ -31,6 +47,21 @@ impl Nano512ActionCreditCandidateV2 {
     }
     pub const fn action_profile(&self) -> crate::ActionCandidateCreditProfileV1 {
         self.action_profile
+    }
+    pub const fn cognitive_channel_extension(&self) -> Option<&crate::CognitiveChannelExtensionV1> {
+        self.cognitive_channel_extension.as_ref()
+    }
+
+    pub(crate) fn validate_cognitive_extension(&self) -> Result<(), ScaffoldContractError> {
+        if let Some(extension) = self.cognitive_channel_extension {
+            extension.validate_contract()?;
+            if extension.source_identity() != self.source.genetic_identity()
+                || extension.action_candidate_credit_profile() != self.action_profile
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        }
+        Ok(())
     }
 }
 

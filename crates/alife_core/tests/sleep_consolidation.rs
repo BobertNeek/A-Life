@@ -708,7 +708,8 @@ fn biologically_due_sleep_commits_replayed_memory_prediction_and_concept_state()
         direction: Vec3f::new(1.0, 0.0, 0.0),
         stand_off_distance: 0.0,
         confidence: 0.9,
-        payload_len: 0,
+        target: None,
+        payload: Vec::new(),
         coordination_group: 0,
     }])
     .unwrap();
@@ -831,7 +832,8 @@ fn sleep_receipt_accepts_multiple_replay_events_merged_into_one_memory() {
                     direction: Vec3f::new(1.0, 0.0, 0.0),
                     stand_off_distance: 0.0,
                     confidence: 0.9,
-                    payload_len: 0,
+                    target: None,
+                    payload: Vec::new(),
                     coordination_group: 0,
                 }])
                 .unwrap(),

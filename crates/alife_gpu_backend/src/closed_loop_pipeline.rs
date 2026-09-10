@@ -4960,6 +4960,7 @@ mod lifecycle_tests {
             selector_diagnostic_requests: vec![Vec::new()],
             selector_diagnostic_family_synapse_counts: vec![vec![1]],
             memory_context_bindings: vec![None],
+            joint_motor_modes: vec![0],
         };
 
         assert_eq!(batch.authority_nonce_for_test(), 7);

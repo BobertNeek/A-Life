@@ -40,7 +40,7 @@ use std::{
 
 use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkCounters};
-use alife_core::predictive::GroundedSuccessorPredictor;
+use alife_core::predictive::{GroundedSuccessorPredictor, SuccessorPrediction};
 use alife_core::sleep::{SleepReplayEvidence, SleepWorkReceipt};
 use alife_core::{
     finalized_memory_attention_evidence, select_focal_targets, ActionKind,
@@ -2332,6 +2332,7 @@ struct PreparedLiveSelection {
     pre_action: PreActionSnapshot,
     decision: DecisionSnapshot,
     motor_bundle: MotorCommandBundle,
+    frozen_prediction: Option<SuccessorPrediction>,
     speech_payload: Option<alife_core::SpeechMotorPayload>,
     speech_prompted: bool,
     neural_receptors: NeuralReceptorFrame,
@@ -2350,6 +2351,7 @@ struct PreparedSealInput {
     pre_action: PreActionSnapshot,
     decision: DecisionSnapshot,
     motor_bundle: MotorCommandBundle,
+    frozen_prediction: Option<SuccessorPrediction>,
     speech_payload: Option<alife_core::SpeechMotorPayload>,
     speech_prompted: bool,
 }
@@ -3944,20 +3946,10 @@ fn apply_predecision_attention_evidence(
     receptors: NeuralReceptorEffects,
 ) -> Result<(), ScaffoldContractError> {
     receptors.validate_contract()?;
-    let concept_evidence = context
-        .concept
-        .active_concepts
-        .iter()
-        .map(|concept| concept.activation.raw() * concept.utility.raw())
-        .fold(0.0, f32::max);
-    let gap_evidence = context.gap.gap_voltage.raw().max(
-        context
-            .gap
-            .active_gaps
-            .iter()
-            .map(|gap| gap.voltage.raw())
-            .fold(0.0, f32::max),
-    );
+    // Concept and gap evidence stays bound to the candidate/object that
+    // produced it. A global maximum would broadcast one object's evidence to
+    // every peripheral summary and create false associations.
+    context.validate_contract()?;
     for summary in summaries {
         summary.salience.drive =
             NormalizedScalar::new((body_need * receptors.interoceptive_gain).clamp(0.0, 1.0))?;
@@ -3967,10 +3959,11 @@ fn apply_predecision_attention_evidence(
                 * receptors.attention_gain)
                 .clamp(0.0, 1.0),
         )?;
-        summary.salience.concept =
-            NormalizedScalar::new((concept_evidence * receptors.projection_gain).clamp(0.0, 1.0))?;
+        summary.salience.concept = NormalizedScalar::new(
+            (summary.salience.concept.raw() * receptors.projection_gain).clamp(0.0, 1.0),
+        )?;
         summary.salience.gap_voltage = NormalizedScalar::new(
-            (gap_evidence - receptors.local_threshold_shift).clamp(0.0, 1.0),
+            (summary.salience.gap_voltage.raw() - receptors.local_threshold_shift).clamp(0.0, 1.0),
         )?;
         summary.salience.novelty = NormalizedScalar::new(
             summary
@@ -4068,6 +4061,191 @@ fn cognitive_context_with_attention(
     Ok(context)
 }
 
+fn cognitive_context_with_projection(
+    mut context: CognitiveContextFrame,
+    projection: alife_core::cognitive_context::CognitiveProjectionFrame,
+) -> Result<CognitiveContextFrame, ScaffoldContractError> {
+    context.cognitive_projection = Some(projection);
+    context.validate_contract()?;
+    Ok(context)
+}
+
+fn tracked_object_id_for_candidate(
+    draft: &PerceptionFrameDraft,
+    candidate: &alife_core::ActionCandidate,
+) -> Result<Option<alife_core::TrackedObjectId>, ScaffoldContractError> {
+    match candidate.observation {
+        CandidateObservationRef::None => Ok(None),
+        CandidateObservationRef::ObjectSlot(slot_index) => {
+            let slot = draft
+                .grounded_object_slots()
+                .get(usize::from(slot_index))
+                .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
+            if slot.slot_index != slot_index {
+                return Err(ScaffoldContractError::InvalidPerceptionFrame);
+            }
+            slot.tracked_object_id.validate()?;
+            Ok(Some(slot.tracked_object_id))
+        }
+    }
+}
+
+fn target_prior_residual(
+    candidate: &alife_core::CandidateMemoryContextV1,
+) -> Result<f32, ScaffoldContractError> {
+    let mean_abs_latent = candidate
+        .target_latent
+        .iter()
+        .map(|value| value.abs())
+        .sum::<f32>()
+        / candidate.target_latent.len() as f32;
+    let residual = candidate.target_confidence.raw() * mean_abs_latent;
+    if residual.is_finite() {
+        Ok(residual.clamp(0.0, 1.0))
+    } else {
+        Err(ScaffoldContractError::NonFiniteFloat)
+    }
+}
+
+fn target_bound_topology_scores(
+    tracked_object_id: Option<alife_core::TrackedObjectId>,
+    topology: &TopologySidecar,
+) -> Result<(NormalizedScalar, NormalizedScalar), ScaffoldContractError> {
+    let Some(tracked_object_id) = tracked_object_id else {
+        return Ok((NormalizedScalar(0.0), NormalizedScalar(0.0)));
+    };
+    tracked_object_id.validate()?;
+    let concept_ids = topology
+        .map()
+        .concepts()
+        .iter()
+        .filter(|concept| concept.bindings.objects.contains(&tracked_object_id))
+        .map(|concept| concept.id)
+        .collect::<Vec<_>>();
+    let concept_match = topology
+        .map()
+        .concepts()
+        .iter()
+        .filter(|concept| concept.bindings.objects.contains(&tracked_object_id))
+        .map(|concept| concept.confidence.raw() * concept.salience.raw())
+        .fold(0.0, f32::max);
+    let gap_match = topology
+        .map()
+        .unresolved_gaps()
+        .iter()
+        .filter(|gap| {
+            matches!(
+                gap.status,
+                alife_core::GapResolutionStatus::Open
+                    | alife_core::GapResolutionStatus::BiasingCuriosity
+            )
+        })
+        .filter(|gap| {
+            gap.source_concepts
+                .iter()
+                .any(|concept_id| concept_ids.contains(concept_id))
+        })
+        .map(|gap| gap.curiosity_voltage.raw() * gap.salience.raw())
+        .fold(0.0, f32::max);
+    Ok((
+        NormalizedScalar::new(concept_match.clamp(0.0, 1.0))?,
+        NormalizedScalar::new(gap_match.clamp(0.0, 1.0))?,
+    ))
+}
+
+fn cognitive_projection_for_draft(
+    draft: &PerceptionFrameDraft,
+    recall: &PreparedMemoryRecall,
+    sequence_id: ExperienceSequenceId,
+    predictor: &GroundedSuccessorPredictor,
+    topology: &TopologySidecar,
+) -> Result<alife_core::cognitive_context::CognitiveProjectionFrame, ScaffoldContractError> {
+    draft.validate_contract()?;
+    recall.validate_for_draft(draft)?;
+    sequence_id.validate()?;
+    let source_state = grounded_semantic_state_from_draft(draft)?;
+    let source_digest = draft.base_digest().0;
+    let memory_candidates = &recall.context().candidates;
+    if memory_candidates.len() != draft.candidates().len() {
+        return Err(ScaffoldContractError::InvalidMemoryQuery);
+    }
+
+    let forecast_available = predictor.has_acquired_state();
+    let mut candidates = Vec::with_capacity(draft.candidates().len());
+    for (index, candidate) in draft.candidates().iter().enumerate() {
+        let expected_index =
+            u16::try_from(index).map_err(|_| ScaffoldContractError::InvalidActionCandidate)?;
+        if candidate.candidate_index != expected_index
+            || memory_candidates[index].candidate_index != expected_index
+        {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        let tracked_object_id = tracked_object_id_for_candidate(draft, candidate)?;
+        let (concept_match, gap_match) = target_bound_topology_scores(tracked_object_id, topology)?;
+        let prior_residual = NormalizedScalar::new(
+            target_prior_residual(&memory_candidates[index])?.clamp(0.0, 1.0),
+        )?;
+        let command = candidate.to_command(draft.organism_id(), candidate.sensor_confidence)?;
+        let hypothetical_bundle =
+            alife_core::arbitrate_gpu_selected_command_into_factorized_bundle(
+                draft.organism_id(),
+                sequence_id,
+                draft.tick(),
+                Vec::new(),
+                &command,
+                None,
+                false,
+            )?;
+        let motor_condition = JointMotorCondition::from_bundle(&hypothetical_bundle)?;
+        let mut prediction = predictor.predict(&source_state, &motor_condition)?;
+        prediction.source_digest = source_digest;
+        candidates.push(alife_core::cognitive_context::CognitiveCandidateInput {
+            candidate_index: expected_index,
+            candidate_feature_digest: candidate.feature_digest()?,
+            tracked_object_id,
+            prediction,
+            forecast_available,
+            concept_match,
+            gap_match,
+            prior_residual,
+        });
+    }
+
+    let mut tracked_objects = BTreeSet::new();
+    for candidate in draft.candidates() {
+        if let Some(tracked_object_id) = tracked_object_id_for_candidate(draft, candidate)? {
+            tracked_objects.insert(tracked_object_id);
+        }
+    }
+    let mut objects = Vec::with_capacity(tracked_objects.len());
+    for tracked_object_id in tracked_objects {
+        let (concept_match, gap_match) =
+            target_bound_topology_scores(Some(tracked_object_id), topology)?;
+        let mut prior_residual = 0.0;
+        for (index, candidate) in draft.candidates().iter().enumerate() {
+            if tracked_object_id_for_candidate(draft, candidate)? == Some(tracked_object_id) {
+                prior_residual =
+                    prior_residual.max(target_prior_residual(&memory_candidates[index])?);
+            }
+        }
+        objects.push(alife_core::cognitive_context::CognitiveObjectEvidence {
+            tracked_object_id,
+            concept_match,
+            gap_match,
+            prior_residual: NormalizedScalar::new(prior_residual.clamp(0.0, 1.0))?,
+        });
+    }
+
+    let projection = alife_core::cognitive_context::CognitiveProjectionFrame {
+        schema_version: 1,
+        base_frame_digest: draft.base_digest(),
+        candidates,
+        objects,
+    };
+    projection.validate_contract()?;
+    Ok(projection)
+}
+
 fn bounded_successor_scalar(value: f32) -> Result<f32, ScaffoldContractError> {
     if !value.is_finite() {
         return Err(ScaffoldContractError::NonFiniteFloat);
@@ -4090,6 +4268,17 @@ fn grounded_semantic_state_from_frame(
         body.pose.translation,
         body.velocity.linear,
         frame.homeostasis(),
+    )
+}
+
+fn grounded_semantic_state_from_draft(
+    draft: &PerceptionFrameDraft,
+) -> Result<SemanticStateVector, ScaffoldContractError> {
+    let body = draft.body();
+    grounded_semantic_state(
+        body.pose.translation,
+        body.velocity.linear,
+        draft.homeostasis(),
     )
 }
 
@@ -4164,6 +4353,7 @@ fn apply_prediction_evidence(
     context: &mut CognitiveContextFrame,
     target: &PredictionTargetReceipt,
     errors: &[f32],
+    category_coverage: alife_core::predictive::PredictionCategoryCoverage,
 ) -> Result<f32, ScaffoldContractError> {
     let bounded_errors = errors
         .iter()
@@ -4182,29 +4372,10 @@ fn apply_prediction_evidence(
         .copied()
         .map(NormalizedScalar::new)
         .collect::<Result<Vec<_>, _>>()?;
-    context.prediction.action_sensitivity =
-        NormalizedScalar::new(target.action_sensitivity_score.clamp(0.0, 1.0))?;
+    context.prediction.motor_condition_magnitude =
+        NormalizedScalar::new(target.motor_condition_magnitude.clamp(0.0, 1.0))?;
+    context.prediction.category_coverage = Some(category_coverage);
 
-    let uncertainty = NormalizedScalar::new(mean_absolute_error)?;
-    for summary in &mut context.attention.peripheral_summaries {
-        summary.salience.uncertainty =
-            NormalizedScalar::new(summary.salience.uncertainty.raw().max(mean_absolute_error))?;
-        summary.salience.gap_voltage =
-            NormalizedScalar::new(summary.salience.gap_voltage.raw().max(mean_absolute_error))?;
-    }
-    for salience in &mut context.attention.salience_components {
-        salience.uncertainty = uncertainty;
-        salience.gap_voltage =
-            NormalizedScalar::new(salience.gap_voltage.raw().max(mean_absolute_error))?;
-    }
-    context.peripheral.summaries = context.attention.peripheral_summaries.clone();
-    context.focal.salience = context.attention.salience_components.clone();
-    context.gap.gap_voltage =
-        NormalizedScalar::new(context.gap.gap_voltage.raw().max(mean_absolute_error))?;
-    for gap in &mut context.gap.active_gaps {
-        gap.voltage = NormalizedScalar::new(gap.voltage.raw().max(mean_absolute_error))?;
-        gap.uncertainty = NormalizedScalar::new(gap.uncertainty.raw().max(mean_absolute_error))?;
-    }
     context.validate_contract()?;
     Ok(mean_absolute_error)
 }
@@ -4377,6 +4548,7 @@ fn seal_prepared_selection_core(
         pre_action,
         decision,
         motor_bundle,
+        frozen_prediction,
         speech_payload: _speech_payload,
         speech_prompted: _speech_prompted,
     } = prepared;
@@ -4451,11 +4623,17 @@ fn seal_prepared_selection_core(
         motor_condition,
         target_state,
     )?;
-    let prediction_update = resident.predictor.observe(&prediction_target)?;
+    let prediction_update = match frozen_prediction {
+        Some(forecast) => resident
+            .predictor
+            .observe_frozen(&prediction_target, &forecast)?,
+        None => resident.predictor.observe(&prediction_target)?,
+    };
     let grounded_prediction_error = apply_prediction_evidence(
         &mut cognitive_context,
         &prediction_target,
         &prediction_update.error,
+        prediction_update.prediction.category_coverage,
     )?;
     let cognitive_work = cognitive_work_receipt(
         &cognitive_context,
@@ -8464,6 +8642,17 @@ impl GpuLiveBrainRuntime {
             &memory_recall,
             gpu_tick.selection.candidate_index,
         )?;
+        let source_state = grounded_semantic_state_from_frame(&frame)?;
+        let motor_condition = JointMotorCondition::from_bundle(&motor_bundle)?;
+        let resident = self
+            .residents
+            .get(&organism_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let mut prediction = resident
+            .predictor
+            .predict(&source_state, &motor_condition)?;
+        prediction.source_digest = frame.frame_digest().0;
+        let frozen_prediction = Some(prediction);
         let outcome_tick = Tick::new(frame.tick().raw().saturating_add(1));
         Ok(PreparedLiveSelection {
             handle,
@@ -8479,6 +8668,7 @@ impl GpuLiveBrainRuntime {
             pre_action,
             decision,
             motor_bundle,
+            frozen_prediction,
             speech_payload: gpu_tick.speech_payload,
             speech_prompted,
             neural_receptors,
@@ -8504,6 +8694,7 @@ impl GpuLiveBrainRuntime {
             pre_action,
             decision,
             motor_bundle,
+            frozen_prediction,
             speech_payload,
             speech_prompted,
             neural_receptors,
@@ -8533,6 +8724,7 @@ impl GpuLiveBrainRuntime {
                 pre_action,
                 decision,
                 motor_bundle,
+                frozen_prediction,
                 speech_payload,
                 speech_prompted,
             },
@@ -9901,6 +10093,14 @@ mod tests {
             let context =
                 cognitive_context_for_recall(organism_id, sequence_id, &routed_recall, &topology)?;
             let context = cognitive_context_with_attention(context, attention)?;
+            let cognitive_projection = cognitive_projection_for_draft(
+                &routed_draft,
+                &routed_recall,
+                sequence_id,
+                &runtime.residents[&organism_id.raw()].predictor,
+                &topology,
+            )?;
+            let context = cognitive_context_with_projection(context, cognitive_projection)?;
             let prepared = routed_recall.with_cognitive_context(context)?;
             let (frame, memory_recall) = prepared.finalize(routed_draft)?;
             memory_recall.validate_for_frame(&frame)?;
@@ -9922,6 +10122,40 @@ mod tests {
             changed_recall.cognitive_context().unwrap().focal.identities,
             changed_attention.focal_targets
         );
+        for (frame, memory_recall) in [
+            (&base_frame, &base_recall),
+            (&changed_frame, &changed_recall),
+        ] {
+            let projection = memory_recall
+                .cognitive_context()
+                .unwrap()
+                .cognitive_projection
+                .as_ref()
+                .unwrap();
+            assert_eq!(projection.schema_version, 1);
+            assert_eq!(projection.base_frame_digest, frame.base_digest());
+            assert_eq!(projection.candidates.len(), frame.candidates().len());
+            assert!(projection.candidates.iter().zip(frame.candidates()).all(
+                |(projected, candidate)| {
+                    projected.candidate_index == candidate.candidate_index
+                        && projected.candidate_feature_digest == candidate.feature_digest().unwrap()
+                        && projected.prediction.source_digest == frame.base_digest().0
+                        && projected.prediction.source_state.len() == 13
+                        && projected.forecast_available
+                            == runtime.residents[&organism_id.raw()]
+                                .predictor
+                                .has_acquired_state()
+                        && projected.tracked_object_id
+                            == match candidate.observation {
+                                CandidateObservationRef::None => None,
+                                CandidateObservationRef::ObjectSlot(slot_index) => Some(
+                                    frame.grounded_object_slots()[usize::from(slot_index)]
+                                        .tracked_object_id,
+                                ),
+                            }
+                }
+            ));
+        }
         assert_ne!(
             base_recall.cognitive_context_digest().unwrap(),
             changed_recall.cognitive_context_digest().unwrap()
@@ -12465,6 +12699,7 @@ mod tests {
                     .unwrap()],
                 )
                 .unwrap(),
+                frozen_prediction: None,
                 speech_payload: None,
                 speech_prompted: false,
             },

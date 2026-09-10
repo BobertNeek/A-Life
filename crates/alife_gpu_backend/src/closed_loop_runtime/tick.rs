@@ -55,6 +55,16 @@ impl GpuClosedLoopBackend {
                 .push(index);
         }
 
+        // Preserve the existing whole-batch identity/error precedence, then reject
+        // missing organism chemistry before consuming pressure or dispatch state.
+        if batch.iter().any(|input| {
+            input
+                .memory_upload
+                .is_none_or(|upload| upload.neural_receptor_effects.is_none())
+        }) {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+
         let dispatch_generation = NonZeroU64::new(self.next_dispatch_generation)
             .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
         let next_dispatch_generation = self

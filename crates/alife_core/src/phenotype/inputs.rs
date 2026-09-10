@@ -30,6 +30,8 @@ pub struct PhenotypeCompilerInputs {
     sensor_profile: SensorProfile,
     foundation_abi_selection: FoundationAbiSelection,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    cognitive_channel_extension: Option<crate::CognitiveChannelExtensionV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     foundation_weight_application: Option<FoundationWeightApplication>,
     capacity_class_id: BrainClassId,
     capacity_digest: [u64; 4],
@@ -87,6 +89,25 @@ impl PhenotypeCompilerInputs {
         )
     }
 
+    pub(crate) fn try_new_with_foundation_selection_and_cognitive_extension(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        foundation_abi_selection: FoundationAbiSelection,
+        cognitive_channel_extension: crate::CognitiveChannelExtensionV1,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_foundation_selection_and_application_and_cognitive_extension(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            foundation_abi_selection,
+            None,
+            Some(cognitive_channel_extension),
+        )
+    }
+
     fn try_new_with_foundation_selection_and_application(
         genome: BrainGenome,
         capacity: &BrainCapacityClass,
@@ -94,6 +115,26 @@ impl PhenotypeCompilerInputs {
         sensor_profile: SensorProfile,
         foundation_abi_selection: FoundationAbiSelection,
         foundation_weight_application: Option<FoundationWeightApplication>,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_foundation_selection_and_application_and_cognitive_extension(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            foundation_abi_selection,
+            foundation_weight_application,
+            None,
+        )
+    }
+
+    fn try_new_with_foundation_selection_and_application_and_cognitive_extension(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        foundation_abi_selection: FoundationAbiSelection,
+        foundation_weight_application: Option<FoundationWeightApplication>,
+        cognitive_channel_extension: Option<crate::CognitiveChannelExtensionV1>,
     ) -> Result<Self, ScaffoldContractError> {
         capacity.validate_contract()?;
         genome.validate_contract()?;
@@ -110,6 +151,7 @@ impl PhenotypeCompilerInputs {
             development,
             sensor_profile,
             foundation_abi_selection,
+            cognitive_channel_extension,
             foundation_weight_application,
             capacity_class_id: capacity.id(),
             capacity_digest: capacity.canonical_digest(),
@@ -184,6 +226,9 @@ impl PhenotypeCompilerInputs {
     pub const fn foundation_abi(&self) -> &FoundationAbiSelection {
         &self.foundation_abi_selection
     }
+    pub const fn cognitive_channel_extension(&self) -> Option<&crate::CognitiveChannelExtensionV1> {
+        self.cognitive_channel_extension.as_ref()
+    }
     pub const fn foundation_weight_application(&self) -> Option<FoundationWeightApplication> {
         self.foundation_weight_application
     }
@@ -214,6 +259,21 @@ impl PhenotypeCompilerInputs {
         self.development.validate_contract()?;
         self.foundation_abi_selection
             .validate_against(capacity, self.sensor_profile)?;
+        if let Some(extension) = self.cognitive_channel_extension {
+            extension.validate_contract()?;
+            let selected_extension = match &self.foundation_abi_selection {
+                FoundationAbiSelection::Nano512ActionCreditCandidateV2(candidate) => {
+                    candidate.cognitive_channel_extension()
+                }
+                _ => None,
+            };
+            if self.foundation_abi_selection.capacity_class_id()
+                != crate::BrainCapacityClass::N512_ID
+                || selected_extension != Some(&extension)
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        }
         validate_weight_application(
             &self.foundation_abi_selection,
             self.foundation_weight_application,
@@ -238,6 +298,10 @@ impl PhenotypeCompilerInputs {
         encode_development(&mut d, &self.development)?;
         d.write_u16(self.sensor_profile.raw());
         self.foundation_abi_selection.write_canonical(&mut d);
+        if let Some(extension) = self.cognitive_channel_extension {
+            d.write_some();
+            extension.write_canonical(&mut d);
+        }
         if let Some(FoundationWeightApplication::Nano512FounderOverlayV1 { seed }) =
             self.foundation_weight_application
         {
@@ -270,6 +334,8 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             sensor_profile: SensorProfile,
             foundation_abi_selection: FoundationAbiSelection,
             #[serde(default)]
+            cognitive_channel_extension: Option<crate::CognitiveChannelExtensionV1>,
+            #[serde(default)]
             foundation_weight_application: Option<FoundationWeightApplication>,
             capacity_class_id: BrainClassId,
             capacity_digest: [u64; 4],
@@ -282,6 +348,7 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             development: w.development,
             sensor_profile: w.sensor_profile,
             foundation_abi_selection: w.foundation_abi_selection,
+            cognitive_channel_extension: w.cognitive_channel_extension,
             foundation_weight_application: w.foundation_weight_application,
             capacity_class_id: w.capacity_class_id,
             capacity_digest: w.capacity_digest,

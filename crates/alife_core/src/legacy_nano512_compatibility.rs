@@ -132,6 +132,7 @@ impl FoundationAbiSelection {
         match self {
             Self::Nano512ActionCreditCandidateV2(candidate) => {
                 candidate.asset()?;
+                candidate.validate_cognitive_extension()?;
                 if capacity.id() != BrainCapacityClass::N512_ID
                     || candidate.source().sensor_profile() != sensor_profile
                 {
@@ -265,6 +266,10 @@ impl FoundationAbiSelection {
                     digest.write_u8(*byte);
                 }
                 digest.write_u8(candidate.action_profile().raw());
+                if let Some(extension) = candidate.cognitive_channel_extension() {
+                    digest.write_some();
+                    extension.write_canonical(digest);
+                }
             }
             Self::Nano512ReadoutCandidateV1(candidate) => {
                 digest.write_u8(4);

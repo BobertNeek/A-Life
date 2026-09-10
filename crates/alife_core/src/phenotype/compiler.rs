@@ -34,13 +34,27 @@ impl PhenotypeCompiler {
             .genome()
             .clone()
             .with_plasticity_parameters(parameters)?;
-        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
-            genome,
-            &BrainCapacityClass::n512(),
-            source_inputs.development().clone(),
-            candidate.source().sensor_profile(),
-            crate::FoundationAbiSelection::Nano512ActionCreditCandidateV2(candidate.clone()),
-        )?;
+        let selection =
+            crate::FoundationAbiSelection::Nano512ActionCreditCandidateV2(candidate.clone());
+        let inputs = match candidate.cognitive_channel_extension() {
+            Some(extension) => {
+                PhenotypeCompilerInputs::try_new_with_foundation_selection_and_cognitive_extension(
+                    genome,
+                    &BrainCapacityClass::n512(),
+                    source_inputs.development().clone(),
+                    candidate.source().sensor_profile(),
+                    selection,
+                    *extension,
+                )?
+            }
+            None => PhenotypeCompilerInputs::try_new_with_foundation_selection(
+                genome,
+                &BrainCapacityClass::n512(),
+                source_inputs.development().clone(),
+                candidate.source().sensor_profile(),
+                selection,
+            )?,
+        };
         Ok((baseline.with_action_credit_candidate(&inputs)?, inputs))
     }
 

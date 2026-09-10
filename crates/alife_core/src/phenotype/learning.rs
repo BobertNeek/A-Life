@@ -487,8 +487,13 @@ pub(super) fn compile_learning_plans(
             let profile = match (synapse.kind(), parameters.action_candidate_credit_profile()) {
                 (CompiledSynapseKind::Decoder(c), Some(profile))
                     if c.head() == super::DecoderHeadKind::ActionCandidate
-                        || (profile == crate::ActionCandidateCreditProfileV1::SignedChoiceReadouts
-                            && c.head() == super::DecoderHeadKind::MemoryContext) =>
+                        || (profile
+                            == crate::ActionCandidateCreditProfileV1::SignedChoiceReadouts
+                            && matches!(
+                                c.head(),
+                                super::DecoderHeadKind::MemoryContext
+                                    | super::DecoderHeadKind::CognitiveContext
+                            )) =>
                 {
                     profile.receptor_profile()
                 }
@@ -609,6 +614,14 @@ fn replay_capture_group(kind: CompiledSynapseKind, route_index: u16) -> ReplayCa
             ReplayCaptureGroup {
                 class_priority: 0,
                 logical_group: u16::from(coordinate.family().raw()),
+            }
+        }
+        CompiledSynapseKind::Decoder(coordinate)
+            if coordinate.head() == super::DecoderHeadKind::CognitiveContext =>
+        {
+            ReplayCaptureGroup {
+                class_priority: 0,
+                logical_group: 8_u16.saturating_add(u16::from(coordinate.family().raw())),
             }
         }
         CompiledSynapseKind::Decoder(coordinate) => ReplayCaptureGroup {
