@@ -9977,12 +9977,13 @@ mod tests {
     fn v11_attention_causally_changes_finalized_upload_and_holds_top_k_primary() {
         let organism_id = OrganismId(1);
         let seed = 77_111;
-        let world = HeadlessScenarioBuilder::new(seed)
+        let mut world = HeadlessScenarioBuilder::new(seed)
             .agent("agent", organism_id, Vec3f::ZERO)
             .food("food-a", Vec3f::new(1.0, 0.0, 0.0), 0.8)
             .food("food-b", Vec3f::new(-1.0, 0.0, 0.0), 0.8)
             .build()
             .unwrap();
+        register_sealing_test_organism(&mut world, organism_id);
         let mut runtime = GpuLiveBrainRuntime::new_profiled(
             GpuClosedLoopBackend::new_required(
                 alife_gpu_backend::GpuRuntimeProfile::production_v1(),

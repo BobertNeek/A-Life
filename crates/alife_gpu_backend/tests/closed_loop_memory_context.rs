@@ -469,7 +469,7 @@ fn memory_wgsl_struct_lane_order_matches_the_host_abi() {
             "brain_slot_index",
             "decoder_learning_input_offset",
             "perception_header_index",
-            "reserved",
+            "neural_receptor_effects_offset",
         ]
     );
     assert_eq!(size, 64);
@@ -524,7 +524,7 @@ fn decoder_eligibility_uses_the_exact_derivative_for_each_known_head() {
         .contains("metadata.decoder_head == DECODER_HEAD_MEMORY_CONTEXT"));
     assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("metadata.input_lane >= CANDIDATE_FEATURE_COUNT"));
     assert!(CLOSED_LOOP_ELIGIBILITY_WGSL
-        .contains("local = bitcast<f32>(frame_payload_words[feature_index]);"));
+        .contains("local += bitcast<f32>(frame_payload_words[feature_index]);"));
     assert!(CLOSED_LOOP_ELIGIBILITY_WGSL
         .contains("metadata.decoder_head == DECODER_HEAD_SPEECH_PAYLOAD"));
     assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("ELIGIBILITY_DIAGNOSTIC_UNKNOWN_DECODER_HEAD"));
