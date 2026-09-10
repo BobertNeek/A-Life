@@ -153,7 +153,9 @@ impl N2048CurriculumV1 {
                     CompiledSynapseKind::Decoder(coordinate) => match coordinate.head() {
                         DecoderHeadKind::ActionCandidate => spec.train_action_decoder,
                         DecoderHeadKind::SpeechPayload => spec.train_speech_decoder,
-                        DecoderHeadKind::MemoryContext => spec.train_memory_decoder,
+                        DecoderHeadKind::MemoryContext | DecoderHeadKind::CognitiveContext => {
+                            spec.train_memory_decoder
+                        }
                     },
                 };
                 selected.then_some(index as u32)

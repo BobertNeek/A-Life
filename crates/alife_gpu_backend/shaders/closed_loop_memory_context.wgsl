@@ -7,6 +7,9 @@ const MEMORY_TARGET_WIDTH:u32 = 8u;
 const MEMORY_VALUE_WIDTH:u32 = 4u;
 const MEMORY_CHANNEL_WIDTH:u32 = MEMORY_TARGET_WIDTH + MEMORY_VALUE_WIDTH;
 const MEMORY_CONTEXT_DIAGNOSTIC_LANE:u32 = 2u;
+const COGNITIVE_PROJECTION_SCHEMA_VERSION:u32 = 1u;
+const COGNITIVE_LANE_START:u32 = 36u;
+const COGNITIVE_LANE_COUNT:u32 = 18u;
 
 fn finite_memory_value(value:f32) -> bool {
   return value == value && abs(value) <= 3.402823466e+38;
@@ -106,5 +109,66 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
   }
   let logit_index = brain.candidate_logit_offset + gid.x;
   let base_logit = load_state_f32(logit_index);
-  store_state_f32(logit_index, base_logit + clamp(delta, -plan.max_candidate_gain, plan.max_candidate_gain));
+  var cognitive_delta = 0.0;
+  let cognitive_base = header.memory_context_offset
+    + header.candidate_count * MEMORY_RECORD_WORDS;
+  let cognitive = load_cognitive_projection(cognitive_base + gid.x * 24u);
+  if (cognitive.schema_version == COGNITIVE_PROJECTION_SCHEMA_VERSION) {
+    if (cognitive.candidate_index != gid.x
+        || cognitive.forecast_available > 1u
+        || cognitive.reserved != 0u
+        || cognitive.reserved_tail[0] != 0u
+        || cognitive.reserved_tail[1] != 0u) {
+      atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
+      return;
+    }
+    for (var channel=0u; channel<COGNITIVE_LANE_COUNT; channel++) {
+      let sample = cognitive.values[channel];
+      if (!finite_memory_value(sample)) {
+        atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
+        return;
+      }
+      frame_payload_words[
+        header.decoder_learning_input_offset + gid.x * plan.decoder_input_stride
+          + COGNITIVE_LANE_START + channel
+      ] = bitcast<u32>(sample);
+    }
+    var cognitive_rows = 0u;
+    let decoder_count = brain.synapse_count - brain.recurrent_synapse_count;
+    for (var decoder_local=0u; decoder_local<decoder_count; decoder_local++) {
+      let metadata = load_decoder_eligibility_metadata(decoder_metadata_offset + decoder_local * 8u);
+      if (metadata.decoder_head == 4u
+          && metadata.family == candidate.family
+          && metadata.input_lane >= COGNITIVE_LANE_START
+          && metadata.input_lane < COGNITIVE_LANE_START + COGNITIVE_LANE_COUNT) {
+        if (metadata.global_synapse_id < brain.recurrent_synapse_count
+            || metadata.global_synapse_id >= brain.synapse_count) {
+          atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
+          return;
+        }
+        let sample = cognitive.values[metadata.input_lane - COGNITIVE_LANE_START];
+        let genetic = bitcast<f32>(immutable_weight_words[brain.genetic_weight_offset + metadata.global_synapse_id]);
+        let alpha = bitcast<f32>(immutable_weight_words[brain.alpha_offset + metadata.global_synapse_id]);
+        let lifetime = load_state_f32(weight_bases.lifetime + metadata.global_synapse_id);
+        let fast = load_state_f32(weight_bases.fast + metadata.global_synapse_id);
+        cognitive_delta += sample * (genetic + lifetime + alpha * fast);
+        cognitive_rows += 1u;
+      }
+    }
+    if (cognitive_rows != 0u && cognitive_rows != COGNITIVE_LANE_COUNT) {
+      atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
+      return;
+    }
+    if (!finite_memory_value(cognitive_delta)) {
+      atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
+      return;
+    }
+  } else if (cognitive.schema_version != 0u) {
+    atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
+    return;
+  }
+  store_state_f32(logit_index,
+    base_logit
+      + clamp(delta, -plan.max_candidate_gain, plan.max_candidate_gain)
+      + clamp(cognitive_delta, -plan.max_candidate_gain, plan.max_candidate_gain));
 }

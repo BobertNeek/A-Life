@@ -10,6 +10,7 @@ use crate::{GpuBrainSlot, GpuClosedLoopError};
 
 pub const GPU_MEMORY_CONTEXT_HEADER_WORDS: usize = 16;
 pub const GPU_CANDIDATE_MEMORY_RECORD_WORDS: usize = 16;
+pub const GPU_COGNITIVE_PROJECTION_RECORD_WORDS: usize = 24;
 pub const GPU_MEMORY_CHANNEL_PLAN_WORDS: usize = 8;
 pub const GPU_NEURAL_RECEPTOR_EFFECTS_WORDS: usize = 16;
 
@@ -56,6 +57,7 @@ pub struct GpuMemoryContextDispatchReceipt {
 pub struct GpuMemoryContextUpload {
     pub header: GpuMemoryContextHeader,
     pub records: Vec<GpuCandidateMemoryRecord>,
+    pub cognitive_records: Vec<GpuCognitiveProjectionRecord>,
     pub base_frame_digest: PerceptionBaseDigest,
     pub context_digest: PerceptionContextDigest,
     pub final_frame_digest: PerceptionFrameDigest,
@@ -150,6 +152,7 @@ impl GpuMemoryContextUpload {
             || self.perception_binding.context_digest != self.context_digest
             || self.perception_binding.final_frame_digest != self.final_frame_digest
             || self.records.len() != frame.candidates().len()
+            || self.cognitive_records.len() != frame.candidates().len()
             || self.neural_receptor_effects.is_none()
             || self.neural_receptor_effects.is_some_and(|effects| {
                 effects.source_tick != frame.tick() || effects.validate_contract().is_err()
@@ -176,6 +179,14 @@ impl GpuMemoryContextUpload {
             reencoded.push(row.family_confidence);
             reencoded.push((row.source_counts_packed & 0xffff) as f32);
             reencoded.push((row.source_counts_packed >> 16) as f32);
+        }
+        for (index, row) in self.cognitive_records.iter().enumerate() {
+            if row.candidate_index
+                != u32::try_from(index).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+                || row.values.iter().any(|value| !value.is_finite())
+            {
+                return Err(GpuClosedLoopError::NonFinitePayload);
+            }
         }
         if reencoded != frame.context().values() {
             return Err(GpuClosedLoopError::MalformedUpload);
@@ -269,6 +280,71 @@ impl GpuMemoryContextUpload {
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
+        let cognitive_records = recall
+            .cognitive_context()
+            .and_then(|context| context.cognitive_projection.as_ref())
+            .filter(|_| slot.decoder_input_stride() >= 54)
+            .map(|projection| {
+                if projection.base_frame_digest != frame.base_digest()
+                    || projection.candidates.len() != frame.candidates().len()
+                {
+                    return Err(GpuClosedLoopError::MalformedUpload);
+                }
+                projection
+                    .candidates
+                    .iter()
+                    .enumerate()
+                    .map(|(index, candidate)| {
+                        let expected_index = u32::try_from(index)
+                            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+                        if u32::from(candidate.candidate_index) != expected_index
+                            || candidate.prediction.predicted_successor.len() > 13
+                        {
+                            return Err(GpuClosedLoopError::MalformedUpload);
+                        }
+                        let mut values = [0.0_f32; 18];
+                        for (dst, value) in values
+                            .iter_mut()
+                            .take(13)
+                            .zip(candidate.prediction.predicted_successor.iter().copied())
+                        {
+                            *dst = value;
+                        }
+                        values[13] = candidate.concept_match.raw();
+                        values[14] = candidate.gap_match.raw();
+                        values[15] = candidate.prior_residual.raw();
+                        values[16] = if candidate.forecast_available {
+                            1.0
+                        } else {
+                            0.0
+                        };
+                        if values.iter().any(|value| !value.is_finite()) {
+                            return Err(GpuClosedLoopError::NonFinitePayload);
+                        }
+                        Ok(GpuCognitiveProjectionRecord {
+                            schema_version: 1,
+                            candidate_index: expected_index,
+                            forecast_available: candidate.forecast_available as u32,
+                            reserved: 0,
+                            values,
+                            reserved_tail: [0; 2],
+                        })
+                    })
+                    .collect::<Result<Vec<_>, GpuClosedLoopError>>()
+            })
+            .transpose()?
+            .unwrap_or_else(|| {
+                (0..frame.candidates().len())
+                    .map(|index| GpuCognitiveProjectionRecord {
+                        schema_version: 0,
+                        candidate_index: index as u32,
+                        forecast_available: 0,
+                        reserved: 0,
+                        values: [0.0; 18],
+                        reserved_tail: [0; 2],
+                    })
+                    .collect()
+            });
         let mut reencoded = Vec::with_capacity(records.len() * 16);
         for row in &records {
             reencoded.extend_from_slice(&row.target_latent);
@@ -302,6 +378,7 @@ impl GpuMemoryContextUpload {
                 neural_receptor_effects_offset: 0,
             },
             records,
+            cognitive_records,
             base_frame_digest: frame.base_digest(),
             context_digest: frame.context().canonical_digest(),
             final_frame_digest: frame.frame_digest(),
@@ -322,6 +399,32 @@ pub struct GpuCandidateMemoryRecord {
     pub source_counts_packed: u32,
     pub target_latent: [f32; 8],
     pub family_value: [f32; 4],
+}
+
+/// Candidate-local cognitive projection lanes consumed by the production GPU
+/// context pass. Schema zero is an explicit absent projection.
+#[repr(C, align(16))]
+#[derive(Debug, Clone, Copy, PartialEq, Pod, Zeroable)]
+pub struct GpuCognitiveProjectionRecord {
+    pub schema_version: u32,
+    pub candidate_index: u32,
+    pub forecast_available: u32,
+    pub reserved: u32,
+    pub values: [f32; 18],
+    pub reserved_tail: [u32; 2],
+}
+
+impl GpuCognitiveProjectionRecord {
+    pub fn words(&self) -> &[u32; GPU_COGNITIVE_PROJECTION_RECORD_WORDS] {
+        bytemuck::cast_ref(self)
+    }
+
+    pub fn from_words(words: &[u32]) -> Result<Self, GpuClosedLoopError> {
+        if words.len() != GPU_COGNITIVE_PROJECTION_RECORD_WORDS {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        Ok(bytemuck::pod_read_unaligned(bytemuck::cast_slice(words)))
+    }
 }
 
 impl GpuCandidateMemoryRecord {

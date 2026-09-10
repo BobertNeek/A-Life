@@ -4,6 +4,7 @@ const SYNAPSE_KIND_RECURRENT:u32 = 1u;
 const DECODER_HEAD_ACTION_CANDIDATE:u32 = 1u;
 const DECODER_HEAD_MEMORY_CONTEXT:u32 = 2u;
 const DECODER_HEAD_SPEECH_PAYLOAD:u32 = 3u;
+const DECODER_HEAD_COGNITIVE_CONTEXT:u32 = 4u;
 const CANDIDATE_FEATURE_COUNT:u32 = 24u;
 const PENDING_ELIGIBILITY_WORDS:u32 = 36u;
 const ELIGIBILITY_DIAGNOSTIC_LANE:u32 = 2u;
@@ -212,7 +213,8 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
   let staging_index = staging_bases.decoder + metadata.eligibility_local_index;
   var local = 0.0;
   if (metadata.decoder_head == DECODER_HEAD_ACTION_CANDIDATE
-      || metadata.decoder_head == DECODER_HEAD_MEMORY_CONTEXT) {
+      || metadata.decoder_head == DECODER_HEAD_MEMORY_CONTEXT
+      || metadata.decoder_head == DECODER_HEAD_COGNITIVE_CONTEXT) {
     let extension = load_slot_extension(brain);
     let packed = vec2<u32>(load_state_u32(extension.reserved0 + 2u), load_state_u32(extension.reserved0 + 3u));
     let joint_mode = (packed.y & 0xffff0000u) == JOINT_SELECTION_V1_MARKER;

@@ -18,7 +18,8 @@ use bytemuck::Zeroable;
 
 use crate::{
     phenotype_hash_from_gpu_words, split_u64x2, GpuActivityDispatchHeader, GpuBrainSlot,
-    GpuCandidateMemoryRecord, GpuCandidateRecord, GpuClassBucketBuffers, GpuClosedLoopError,
+    GpuCandidateMemoryRecord, GpuCognitiveProjectionRecord, GpuCandidateRecord,
+    GpuClassBucketBuffers, GpuClosedLoopError,
     GpuEligibilityDiscardRecord, GpuFastPlasticityCommitRecord, GpuFixedClassArenaBuffers,
     GpuLearningHeader, GpuMemoryContextDispatchReceipt, GpuMemoryContextHeader,
     GpuMemoryContextUpload, GpuNeuralReceptorEffectsRecord, GpuOutcomeCreditRecord,
@@ -884,10 +885,19 @@ impl GpuActiveBatchUpload {
             let memory_binding = if let Some(memory) = &mut memory_upload {
                 let memory_context_offset = u32::try_from(frame_payload_words.len())
                     .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
-                let neural_receptor_effects_offset = memory_context_offset
+                let cognitive_projection_offset = memory_context_offset
                     .checked_add(
                         u32::try_from(memory_record_words)
                             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
+                    )
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+                let neural_receptor_effects_offset = cognitive_projection_offset
+                    .checked_add(
+                        u32::try_from(
+                            memory.cognitive_records.len()
+                                * crate::GPU_COGNITIVE_PROJECTION_RECORD_WORDS,
+                        )
+                        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
                     )
                     .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
                 let receipt = memory.rebase_for_batch(
@@ -900,6 +910,9 @@ impl GpuActiveBatchUpload {
                     neural_receptor_effects_offset,
                 )?;
                 for record in &memory.records {
+                    frame_payload_words.extend_from_slice(record.words());
+                }
+                for record in &memory.cognitive_records {
                     frame_payload_words.extend_from_slice(record.words());
                 }
                 let receptor_record = GpuNeuralReceptorEffectsRecord::try_from_effects(
@@ -4585,12 +4598,44 @@ fn validate_dispatch(
                         return Err(GpuClosedLoopError::NonFinitePayload);
                     }
                 }
+                let cognitive_record_start = memory_record_end;
+                let cognitive_record_words = usize::try_from(memory_header.candidate_count)
+                    .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+                    .checked_mul(crate::GPU_COGNITIVE_PROJECTION_RECORD_WORDS)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+                let cognitive_record_end = cognitive_record_start
+                    .checked_add(cognitive_record_words)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+                if cognitive_record_end > batch.frame_payload_words.len() {
+                    return Err(GpuClosedLoopError::MalformedUpload);
+                }
+                for candidate_index in 0..memory_header.candidate_count {
+                    let record_start = cognitive_record_start
+                        + usize::try_from(candidate_index)
+                            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+                            * crate::GPU_COGNITIVE_PROJECTION_RECORD_WORDS;
+                    let record = GpuCognitiveProjectionRecord::from_words(
+                        &batch.frame_payload_words
+                            [record_start..record_start + crate::GPU_COGNITIVE_PROJECTION_RECORD_WORDS],
+                    )?;
+                    if record.candidate_index != candidate_index
+                        || record.reserved != 0
+                        || record.reserved_tail != [0; 2]
+                        || record.values.iter().any(|value| !value.is_finite())
+                        || (record.schema_version == 0
+                            && (record.forecast_available != 0
+                                || record.values.iter().any(|value| *value != 0.0)))
+                        || (record.schema_version != 0 && record.schema_version != 1)
+                    {
+                        return Err(GpuClosedLoopError::MalformedUpload);
+                    }
+                }
                 let receptor_start = usize::try_from(memory_header.neural_receptor_effects_offset)
                     .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
                 let receptor_end = receptor_start
                     .checked_add(crate::GPU_NEURAL_RECEPTOR_EFFECTS_WORDS)
                     .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
-                if receptor_start != memory_record_end
+                if receptor_start != cognitive_record_end
                     || receptor_end > batch.frame_payload_words.len()
                 {
                     return Err(GpuClosedLoopError::MalformedUpload);

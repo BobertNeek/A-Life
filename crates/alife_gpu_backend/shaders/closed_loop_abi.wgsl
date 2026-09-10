@@ -75,6 +75,10 @@ struct GpuCandidateMemoryRecord {
   @align(16) candidate_index:u32, target_confidence:f32, family_confidence:f32, source_counts_packed:u32,
   target_latent:array<f32,8>, family_value:array<f32,4>,
 }
+struct GpuCognitiveProjectionRecord {
+  @align(16) schema_version:u32, candidate_index:u32, forecast_available:u32, reserved:u32,
+  values:array<f32,18>, reserved_tail:array<u32,2>,
+}
 struct GpuMemoryContextHeader {
   @align(16) schema_version:u32, class_id:u32, slot:u32, slot_generation:u32,
   tick_lo:u32, tick_hi:u32, candidate_count:u32, memory_context_offset:u32,
@@ -244,6 +248,23 @@ fn load_candidate_memory(base:u32) -> GpuCandidateMemoryRecord {
       bitcast<f32>(frame_payload_words[base+12u]),bitcast<f32>(frame_payload_words[base+13u]),
       bitcast<f32>(frame_payload_words[base+14u]),bitcast<f32>(frame_payload_words[base+15u])
     )
+  );
+}
+fn load_cognitive_projection(base:u32) -> GpuCognitiveProjectionRecord {
+  return GpuCognitiveProjectionRecord(
+    frame_payload_words[base],frame_payload_words[base+1u],frame_payload_words[base+2u],frame_payload_words[base+3u],
+    array<f32,18>(
+      bitcast<f32>(frame_payload_words[base+4u]),bitcast<f32>(frame_payload_words[base+5u]),
+      bitcast<f32>(frame_payload_words[base+6u]),bitcast<f32>(frame_payload_words[base+7u]),
+      bitcast<f32>(frame_payload_words[base+8u]),bitcast<f32>(frame_payload_words[base+9u]),
+      bitcast<f32>(frame_payload_words[base+10u]),bitcast<f32>(frame_payload_words[base+11u]),
+      bitcast<f32>(frame_payload_words[base+12u]),bitcast<f32>(frame_payload_words[base+13u]),
+      bitcast<f32>(frame_payload_words[base+14u]),bitcast<f32>(frame_payload_words[base+15u]),
+      bitcast<f32>(frame_payload_words[base+16u]),bitcast<f32>(frame_payload_words[base+17u]),
+      bitcast<f32>(frame_payload_words[base+18u]),bitcast<f32>(frame_payload_words[base+19u]),
+      bitcast<f32>(frame_payload_words[base+20u]),bitcast<f32>(frame_payload_words[base+21u])
+    ),
+    array<u32,2>(frame_payload_words[base+22u],frame_payload_words[base+23u])
   );
 }
 fn load_memory_channel_plan(base:u32) -> GpuMemoryChannelPlan {

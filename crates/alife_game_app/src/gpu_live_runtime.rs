@@ -4221,7 +4221,7 @@ fn cognitive_projection_for_draft(
     for tracked_object_id in tracked_objects {
         let (concept_match, gap_match) =
             target_bound_topology_scores(Some(tracked_object_id), topology)?;
-        let mut prior_residual = 0.0;
+        let mut prior_residual: f32 = 0.0;
         for (index, candidate) in draft.candidates().iter().enumerate() {
             if tracked_object_id_for_candidate(draft, candidate)? == Some(tracked_object_id) {
                 prior_residual =
