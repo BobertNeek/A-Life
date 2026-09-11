@@ -29,9 +29,10 @@ architecture, user instructions, or dated evidence reports.
 
 
 
-| Luna max / N007 | Mixed reaction conservation | codex/recovered-n007-20260910 | Setup pending | Implement assigned packet | None | 2026-09-11 01:50Z |
-| Luna max / N010 | Ambient mating opportunity | codex/recovered-n010-20260910 | Setup pending | Implement assigned packet | None | 2026-09-11 01:50Z |
-| Luna max / N017 | Finalized statistics mutation | codex/recovered-n017-20260910 | Setup pending | Implement assigned packet | None | 2026-09-11 01:50Z |
+| Luna max / N007 | Material sub-balance | codex/recovered-n007-20260910 | Correction requested | Sort regression species IDs | None | 2026-09-11 02:09Z |
+| Luna max / N010 | Ambient mating opportunity | codex/recovered-n010-20260910 | Correction requested | Replace per-actor all-pairs scan with partner scan | None | 2026-09-11 02:09Z |
+
+| Luna max / N015 | Grounded communication metric | codex/recovered-n015-20260910 | Setup pending | Implement packet preserving N017 | None | 2026-09-11 02:09Z |
 
 ## Handoffs and requests
 
@@ -56,3 +57,4 @@ architecture, user instructions, or dated evidence reports.
 | 2026-09-11 | Bob review / N003 | Elapsed capped organ upkeep accepted; static only | 06307185 |
 | 2026-09-11 | Bob review / N019 | Corrected reach/lifetime contact evidence accepted; static only | 61fd9947 + 4e84084a |
 | 2026-09-11 | Bob review / N012 | Already fixed by N013; independently traced current path; no duplicate changes | b11a1ed9 |
+| 2026-09-11 | Bob review / N017 | Finalized guard and atomic staged observation accepted; static only | d86ebe50 |
