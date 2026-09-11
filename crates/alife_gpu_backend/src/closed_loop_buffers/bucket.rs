@@ -1443,7 +1443,8 @@ fn validate_learning_slot_layout(
             .get(global as usize)
             .ok_or(GpuClosedLoopError::MalformedUpload)?;
         if row.global_synapse_id != global
-            || !(1..=3).contains(&row.decoder_head)
+            || !(1..=4).contains(&row.decoder_head)
+            || (row.decoder_head == 4 && !(36..54).contains(&row.input_lane))
             || row.family >= 8
             || row.receptor_index != synapse.receptor_index
             || row.eligibility_local_index != local

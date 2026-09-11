@@ -4621,6 +4621,10 @@ fn validate_dispatch(
                     if record.candidate_index != candidate_index
                         || record.reserved != 0
                         || record.reserved_tail != [0; 2]
+                        || record.forecast_available > 1
+                        || (record.schema_version == 1
+                            && learning.decoder_input_stride
+                                < u32::from(alife_core::COGNITIVE_CHANNEL_LANE_END))
                         || record.values.iter().any(|value| !value.is_finite())
                         || (record.schema_version == 0
                             && (record.forecast_available != 0

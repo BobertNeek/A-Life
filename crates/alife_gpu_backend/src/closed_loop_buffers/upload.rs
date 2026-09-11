@@ -510,8 +510,8 @@ impl GpuPhenotypeUpload {
             motor_start: phenotype.candidate_decoder().motor_start(),
             motor_width: phenotype.candidate_decoder().motor_width() as u32,
             feature_count: phenotype.candidate_decoder().feature_count() as u32,
-            flattened_input_lane_count: phenotype.candidate_decoder().flattened_input_lane_count()
-                as u32,
+            // Include auxiliary cognitive lanes in the shared learning row.
+            flattened_input_lane_count: u32::from(phenotype.budgets().global.decoder_input_lanes),
             family_offset: decoder_family_base,
             family_count: phenotype.candidate_decoder().families().len() as u32,
             decoder_synapse_count: phenotype.candidate_decoder().decoder_synapse_count(),

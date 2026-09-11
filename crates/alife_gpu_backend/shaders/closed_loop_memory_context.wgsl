@@ -42,10 +42,14 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
   let memory_weight_map_offset = load_state_u32(extension_base + 14u);
   if (memory_plan_offset == 0xffffffffu || memory_weight_map_offset == 0xffffffffu) { return; }
   let plan = load_memory_channel_plan(memory_plan_offset);
+  let decoder = load_decoder_plan(brain.decoder_plan_offset);
+  let input_stride = decoder.flattened_input_lane_count;
   let valid_plan = plan.schema_version == MEMORY_SCHEMA_VERSION
     && plan.target_latent_lane_start == 24u
     && plan.family_value_lane_start == 32u
     && plan.decoder_input_stride == 36u
+    && input_stride >= plan.decoder_input_stride
+    && input_stride <= 64u
     && plan.memory_decoder_synapse_count >= MEMORY_FAMILY_COUNT * MEMORY_CHANNEL_WIDTH
     && plan.memory_decoder_synapse_count % MEMORY_FAMILY_COUNT == 0u
     && finite_memory_value(plan.max_candidate_gain)
@@ -71,7 +75,7 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
     samples[channel] = sample;
     let input_lane = plan.target_latent_lane_start + channel;
     frame_payload_words[
-      header.decoder_learning_input_offset + gid.x * plan.decoder_input_stride + input_lane
+      header.decoder_learning_input_offset + gid.x * input_stride + input_lane
     ] = bitcast<u32>(sample);
   }
   let direct_weight_banks = load_weight_bank_pair_direct(brain);
@@ -114,7 +118,8 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
     + header.candidate_count * MEMORY_RECORD_WORDS;
   let cognitive = load_cognitive_projection(cognitive_base + gid.x * 24u);
   if (cognitive.schema_version == COGNITIVE_PROJECTION_SCHEMA_VERSION) {
-    if (cognitive.candidate_index != gid.x
+    if (input_stride < COGNITIVE_LANE_START + COGNITIVE_LANE_COUNT
+        || cognitive.candidate_index != gid.x
         || cognitive.forecast_available > 1u
         || cognitive.reserved != 0u
         || cognitive.reserved_tail[0] != 0u
@@ -129,7 +134,7 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
         return;
       }
       frame_payload_words[
-        header.decoder_learning_input_offset + gid.x * plan.decoder_input_stride
+        header.decoder_learning_input_offset + gid.x * input_stride
           + COGNITIVE_LANE_START + channel
       ] = bitcast<u32>(sample);
     }
