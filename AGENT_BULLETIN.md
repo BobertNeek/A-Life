@@ -25,8 +25,11 @@ architecture, user instructions, or dated evidence reports.
 
 | Agent / task | Scope | Branch or worktree | Status | Next action | Blocker | Updated (UTC) |
 | --- | --- | --- | --- | --- | --- | --- |
-| _No active work recorded._ |  |  |  |  |  |  |
+| Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 00:28Z |
 
+| Luna max / N001 | Body constructor projections | codex/recovered-n001-20260910 | Running | Return commit for Bob review | None | 2026-09-11 00:36Z |
+| Luna max / N018 | Preserve Idle primitive | codex/recovered-n018-20260910 | Running | Return commit for Bob review | None | 2026-09-11 00:36Z |
+| Luna max / N013 | Bound optional patch history | codex/recovered-n013-20260910 | Running | Return commit for Bob review | None | 2026-09-11 00:36Z |
 ## Handoffs and requests
 
 | From | To | Request | Evidence or files | Status | Updated (UTC) |
@@ -37,7 +40,7 @@ architecture, user instructions, or dated evidence reports.
 
 | Date (UTC) | Agent | Decision or notice | Related files |
 | --- | --- | --- | --- |
-| _No active notices._ |  |  |  |
+| 2026-09-11 | Bob | Supervisor alone updates this board and integrates accepted commits. No Cargo/build/GPU commands. Preserve founder n512_candidate_live.rs WIP. | .worktrees/initial-founder-training-20260907/docs/superpowers/plans/2026-09-10-recovered-review/README.md |
 
 ## Completed work
 
