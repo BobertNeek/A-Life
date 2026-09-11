@@ -119,7 +119,8 @@
       "hostId": "local",
       "title": "Repair N004 — zero elapsed reactions",
       "cursor": "cc03e582-7bd4-43a1-ba8f-e272e8564a87:4",
-      "executionStatus": "committed_awaiting_final_handoff"
+      "executionStatus": "correction_requested",
+      "reviewStatus": "correction_requested"
     },
     {
       "id": "N005",
@@ -533,6 +534,12 @@
       "workerCommit": "475624e4c74b78c8a4aa0029193b5f1ac83122b4",
       "integrationCommit": "5548be00181ffddea80b289ff19b59d1f2f15f3f",
       "evidence": "Manually read entire production and fixture/regression diff, observation/metric paths and candidate validation. Removed hearing-plus-speaking inference only. Exposure/narration remain; explicit grounded event still updates peer metric. Finalized/atomic N017 staging retained. Regression uses valid canonical Vocalize/Other/None candidate and checks Unknown before explicit event. Committed whitespace check/clean verified. Rust compile/tests/runtime UNVERIFIED."
+    },
+    {
+      "id": "N004",
+      "status": "CORRECTION_REQUESTED",
+      "workerCommit": "7b34a0c3dd811819015ad5c45e42f37fb0d09cbc",
+      "evidence": "One-line zero-duration production fix is sound. Regression nutrition=1.0 can saturate bounded ATP product and mask old-code reaction. Requested smaller controlled pulse or graph fixture plus explicit remaining reactant and product-headroom assertions. No integration yet; no builds/tests."
     }
   ],
   "gitApprovalOwner": "supervisor; user explicitly delegated routine approvals. Perform scoped Git through permitted supervisor tools; workers final-handoff blocked operations, no elevated approval prompts or sandbox changes."
