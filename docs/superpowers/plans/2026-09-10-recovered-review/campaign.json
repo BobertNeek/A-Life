@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 1,
+  "supervisorThread": "01a08dd9-7042-7240-b781-2441edde7e81",
+  "integrationWorktree": "D:\\A life\\.worktrees\\initial-founder-training-20260907",
+  "integrationBranch": "initial-founder-training-20260907",
+  "baseline": "8c2149654540f01ff353b16634699cc4e7c9b644",
+  "planCommit": "bb1ac71fe5f10aabe53682e9006cd5d7dc06083d",
+  "board": "D:\\A life\\AGENT_BULLETIN.md",
+  "maxActive": 3,
+  "model": "gpt-5.6-luna",
+  "reasoning": "max",
+  "noCargo": true,
+  "protectedWip": {
+    "path": "crates/alife_game_app/tests/n512_candidate_live.rs",
+    "sha256": "8C5A8B9D74A4C7DBFD2A448F556DADD27E95FED6BC405C1FE71DD72FD9A5661A"
+  },
+  "tasks": [
+    {
+      "id": "N001",
+      "lane": "body",
+      "dependencies": [],
+      "files": [
+        "crates/alife_core/src/biochemistry.rs"
+      ],
+      "status": "running",
+      "threadId": "01a08dde-a7a5-7373-84a3-32c44ed71ead",
+      "hostId": "local"
+    },
+    {
+      "id": "N002",
+      "lane": "body",
+      "dependencies": [
+        "N001"
+      ],
+      "files": [
+        "crates/alife_core/src/biochemistry.rs",
+        "crates/alife_world/src/organism.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N003",
+      "lane": "body",
+      "dependencies": [
+        "N002"
+      ],
+      "files": [
+        "crates/alife_core/src/biochemistry.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N007",
+      "lane": "graph",
+      "dependencies": [],
+      "files": [
+        "crates/alife_core/src/biochemical_graph.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N008",
+      "lane": "graph",
+      "dependencies": [
+        "N007"
+      ],
+      "files": [
+        "crates/alife_core/src/biochemical_graph.rs",
+        "crates/alife_core/src/biochemistry.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N004",
+      "lane": "graph",
+      "dependencies": [
+        "N008"
+      ],
+      "files": [
+        "crates/alife_core/src/biochemical_graph.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N005",
+      "lane": "graph",
+      "dependencies": [
+        "N004"
+      ],
+      "files": [
+        "crates/alife_core/src/biochemical_graph.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N009",
+      "lane": "graph",
+      "dependencies": [
+        "N005"
+      ],
+      "files": [
+        "crates/alife_core/src/biochemical_graph.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N018",
+      "lane": "world",
+      "dependencies": [],
+      "files": [
+        "crates/alife_world/src/headless.rs"
+      ],
+      "status": "running",
+      "threadId": "01a08dde-a7d2-7e22-bd1c-0731bf35b79c",
+      "hostId": "local"
+    },
+    {
+      "id": "N019",
+      "lane": "world",
+      "dependencies": [
+        "N018"
+      ],
+      "files": [
+        "crates/alife_world/src/headless.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N010",
+      "lane": "world",
+      "dependencies": [
+        "N019"
+      ],
+      "files": [
+        "crates/alife_world/src/headless.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N011",
+      "lane": "world",
+      "dependencies": [
+        "N010"
+      ],
+      "files": [
+        "crates/alife_world/src/headless.rs",
+        "crates/alife_core/src/biochemistry.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N020",
+      "lane": "world",
+      "dependencies": [
+        "N019",
+        "N011"
+      ],
+      "files": [
+        "crates/alife_world/src/headless.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N022",
+      "lane": "world",
+      "dependencies": [
+        "N020"
+      ],
+      "files": [
+        "crates/alife_world/src/headless.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N023",
+      "lane": "world",
+      "dependencies": [
+        "N022"
+      ],
+      "files": [
+        "crates/alife_world/src/headless.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N021",
+      "lane": "world",
+      "dependencies": [
+        "N023"
+      ],
+      "files": [
+        "crates/alife_world/src/headless.rs",
+        "crates/alife_core/src/experience.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N013",
+      "lane": "runtime",
+      "dependencies": [],
+      "files": [
+        "crates/alife_game_app/src/gpu_live_runtime.rs"
+      ],
+      "status": "running",
+      "threadId": "01a08dde-a6e7-7022-8857-09e72217948c",
+      "hostId": "local"
+    },
+    {
+      "id": "N012",
+      "lane": "runtime",
+      "dependencies": [
+        "N013"
+      ],
+      "files": [
+        "crates/alife_game_app/src/gpu_live_runtime.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N014",
+      "lane": "runtime",
+      "dependencies": [
+        "N012"
+      ],
+      "files": [
+        "crates/alife_game_app/src/gpu_live_runtime.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N017",
+      "lane": "evaluation",
+      "dependencies": [],
+      "files": [
+        "crates/alife_core/src/evaluation.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N015",
+      "lane": "evaluation",
+      "dependencies": [
+        "N017"
+      ],
+      "files": [
+        "crates/alife_core/src/evaluation.rs"
+      ],
+      "status": "queued"
+    },
+    {
+      "id": "N016",
+      "lane": "evaluation",
+      "dependencies": [
+        "N015"
+      ],
+      "files": [
+        "crates/alife_core/src/evaluation.rs"
+      ],
+      "status": "queued"
+    }
+  ],
+  "triage": [
+    {
+      "id": "N006",
+      "goal": "Trace admitted time jumps and v2 AOA-TIME-004 fidelity policy. Determine whether the capped integration requires an explicit approximation receipt or already meets a documented contract. Do not uncap loops or treat a permitted approximation as a confirmed defect.",
+      "files": "crates/alife_core/src/biochemistry.rs; crates/alife_core/src/biochemical_graph.rs",
+      "status": "queued"
+    },
+    {
+      "id": "C001",
+      "goal": "Establish intended aggregation of receptors targeting one locus. Trace phenotype constraints and constructors. Last-writer behavior alone is not proof of a defect.",
+      "files": "crates/alife_core/src/biochemical_graph.rs",
+      "status": "queued"
+    },
+    {
+      "id": "C002",
+      "goal": "Trace owning-state construction, restore, digest and validation. Produce a reachable graph-tick/homeostasis inconsistency before proposing a repair.",
+      "files": "crates/alife_core/src/biochemistry.rs; crates/alife_core/src/biochemical_graph.rs",
+      "status": "queued"
+    },
+    {
+      "id": "C003",
+      "goal": "Trace the complete public embodiment replacement chain and prove whether a lower source tick can be admitted. Check monotonic semantics against v2.",
+      "files": "crates/alife_world/src/organism.rs",
+      "status": "queued"
+    },
+    {
+      "id": "C004",
+      "goal": "Trace EnergyStability naming, persisted schema, downstream readers and intended metric. Distinguish mean energy from temporal stability. Do not silently repurpose persisted measurements.",
+      "files": "crates/alife_core/src/evaluation.rs; crates/alife_tools/src/era1_evolution.rs",
+      "status": "queued"
+    },
+    {
+      "id": "C005",
+      "goal": "After N013, trace organism retirement/removal and recent patch ownership. Prove whether departed organisms remain in last_sealed_patches, and identify a safe cleanup point after required observation/archive.",
+      "files": "crates/alife_game_app/src/gpu_live_runtime.rs",
+      "status": "queued"
+    }
+  ],
+  "reviews": []
+}
