@@ -266,13 +266,14 @@
       "files": [
         "crates/alife_world/src/headless.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "assignedBase": "83e176156f1411415990710e380b8b8c356ec0da",
       "threadId": "01a08ec0-33aa-7202-a132-d04653f331e0",
-      "cursor": "3981ec89-8c0d-43cb-8f3c-daad5bc14c5d:3",
+      "cursor": "3981ec89-8c0d-43cb-8f3c-daad5bc14c5d:4",
       "title": "Repair N022 — current interval velocities",
       "hostId": "local",
-      "reviewStatus": "correction_requested"
+      "reviewStatus": "ACCEPTED_STATIC",
+      "integrationCommit": "3acbbc1c4e8b59cb49a4a29e2eb88d6f7fe21607"
     },
     {
       "id": "N023",
@@ -283,7 +284,11 @@
       "files": [
         "crates/alife_world/src/headless.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "assignedBase": "3acbbc1c4e8b59cb49a4a29e2eb88d6f7fe21607",
+      "threadId": "01a08ef8-c558-7e71-be8f-caca31857cd4",
+      "hostId": "local",
+      "cursor": "6bfc24e4-6a2a-4972-a119-2842597188be:1"
     },
     {
       "id": "N021",
@@ -414,37 +419,48 @@
       "id": "C001",
       "goal": "Establish intended aggregation of receptors targeting one locus. Trace phenotype constraints and constructors. Last-writer behavior alone is not proof of a defect.",
       "files": "crates/alife_core/src/biochemical_graph.rs",
-      "status": "running",
+      "status": "unresolved",
       "assignedBase": "54c44d669b30d67b608492be02bb28cd4011b320",
       "clientThreadId": "client-new-thread:1bac5463-41fe-48fc-a073-7a17a4ed9429",
       "threadId": "01a08ed6-e127-7980-9143-6d8b4b367864",
-      "cursor": "60c3843b-92ba-4c84-9251-45dc0cf44c45:1",
+      "cursor": "60c3843b-92ba-4c84-9251-45dc0cf44c45:2",
       "title": "Triage C001 — receptor aggregation semantics",
-      "hostId": "local"
+      "hostId": "local",
+      "disposition": "Ordering effect established; intended body/endocrine reduction unspecified. Neural additive reduction alone is insufficient proof. No speculative behavior change."
     },
     {
       "id": "C002",
       "goal": "Trace owning-state construction, restore, digest and validation. Produce a reachable graph-tick/homeostasis inconsistency before proposing a repair.",
       "files": "crates/alife_core/src/biochemistry.rs; crates/alife_core/src/biochemical_graph.rs",
-      "status": "queued"
+      "status": "running",
+      "assignedBase": "3acbbc1c4e8b59cb49a4a29e2eb88d6f7fe21607",
+      "threadId": "01a08ef8-c590-7991-a610-351bec998c15",
+      "hostId": "local",
+      "cursor": "46079739-0fde-41a5-886a-5a2817105aae:1"
     },
     {
       "id": "C003",
       "goal": "Trace the complete public embodiment replacement chain and prove whether a lower source tick can be admitted. Check monotonic semantics against v2.",
       "files": "crates/alife_world/src/organism.rs",
-      "status": "running",
+      "status": "integrated",
       "assignedBase": "54c44d669b30d67b608492be02bb28cd4011b320",
       "clientThreadId": "client-new-thread:fc293bc4-2400-478c-bbaf-062dafbd1069",
       "threadId": "01a08ed6-e16c-7df1-9ba6-f248646adaf0",
-      "cursor": "f5db570e-1f21-41ad-9244-7b3e4f332cac:1",
+      "cursor": "f5db570e-1f21-41ad-9244-7b3e4f332cac:3",
       "title": "Triage C003 — embodiment tick regression",
-      "hostId": "local"
+      "hostId": "local",
+      "phase": "repair",
+      "scopeApproval": "Confirmed lower-tick replacement. Authorize only organism.rs and one v2_organism_state_graph.rs regression; preserve identity/revision/future tick gates and rejection atomicity.",
+      "integrationCommit": "a9173383",
+      "reviewStatus": "ACCEPTED_STATIC"
     },
     {
       "id": "C004",
       "goal": "Trace EnergyStability naming, persisted schema, downstream readers and intended metric. Distinguish mean energy from temporal stability. Do not silently repurpose persisted measurements.",
       "files": "crates/alife_core/src/evaluation.rs; crates/alife_tools/src/era1_evolution.rs",
-      "status": "queued"
+      "status": "dispatching",
+      "assignedBase": "a9173383",
+      "clientThreadId": "client-new-thread:cce37c59-c301-456c-9190-f2fa1d2f045b"
     },
     {
       "id": "C005",
@@ -688,6 +704,30 @@
       "status": "CORRECTION_REQUESTED",
       "workerCommit": "462d0231e29091fad8f347c79aaec262a72eeb25",
       "evidence": "Full diff/regression read. Actor velocity updated per action and final bundle aggregate, but N020 held objects retain previous movement velocity after carrier stationary/blocked. Requested same helper assign actor and carried velocities without moving positions, and extend existing regression."
+    },
+    {
+      "id": "N022",
+      "status": "ACCEPTED_STATIC",
+      "workerCommit": "5bf065bafab4737c34df2103c4d739c566704fec",
+      "integrationCommit": "3acbbc1c4e8b59cb49a4a29e2eb88d6f7fe21607",
+      "evidence": "Read original full diff and amended correction. finish_action assigns interval velocity; final bundle aggregate restores locomotion after later channels. Helper assigns carried velocities without moving positions. Read extended grab/move/stationary sensing and bundle tests and mutable action callers. Amended commit has original baseline parent, so only final commit integrated. Whitespace passed; Rust compile/tests/runtime UNVERIFIED."
+    },
+    {
+      "id": "C001",
+      "status": "UNRESOLVED_STATIC",
+      "evidence": "Supervisor read drive/endocrine setters, neural reducer and controlling BIO-007/010/014/016/019. Last-writer order dependence is established, but no contract establishes shared saturated-additive semantics across neural and body/endocrine loci. Worker confirmation relied on analogy, not intended semantics. No repair justified without design evidence; preserved as unresolved lead."
+    },
+    {
+      "id": "C003",
+      "status": "CONFIRMED_SCOPE_ASSIGNED",
+      "evidence": "Read organism.rs:742-778 and embodiment.rs:285-305. Replacement checks entity/next revision/upper tick, lacks lower bound that calibration enforces. Lower source tick on next revision admitted. Authorized minimal monotonic guard and one regression."
+    },
+    {
+      "id": "C003",
+      "status": "ACCEPTED_STATIC",
+      "workerCommit": "6bfcdf472bc1bbe67914b1eb3dcafcd8a7a55456",
+      "integrationCommit": "a9173383",
+      "evidence": "Read complete diff, existing replacement transaction, core calibration and Tick validator, reference revision and fixture. Lower tick rejected before mutation; existing identity/revision/future bounds retained. Same-tick valid revision succeeds; stale candidate uses correct next revision and asserts unchanged record. Whitespace passed. Rust tests/compile/runtime UNVERIFIED."
     }
   ],
   "gitApprovalOwner": "supervisor; user explicitly delegated routine approvals. Perform scoped Git through permitted supervisor tools; workers final-handoff blocked operations, no elevated approval prompts or sandbox changes."
