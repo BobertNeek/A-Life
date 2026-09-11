@@ -5,6 +5,7 @@ use alife_core::{
     Vec3f, WorldEntityId,
 };
 use alife_world::{
+    persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
     HeadlessActionIds, HeadlessBrainHarness, HeadlessScenarioBuilder, HeadlessWorld,
     HeadlessWorldCommand, WorldEditorSpawnSpec, WorldObjectKind,
 };
@@ -344,6 +345,70 @@ fn action_execution_supports_approach_flee_grab_and_vocalize() {
         .unwrap();
     assert!(vocalized.execution.succeeded);
     assert_eq!(vocalized.observation.reward_valence.raw(), 0.0);
+}
+
+#[test]
+fn carried_object_follows_carrier_across_move_and_save_restore() {
+    let mut world = HeadlessScenarioBuilder::new(12_020)
+        .agent("agent", organism(), pos(0.0, 0.0))
+        .food("berry", pos(0.5, 0.25), 0.6)
+        .build()
+        .unwrap();
+    let agent = world.entity_id("agent").unwrap();
+    let berry = world.entity_id("berry").unwrap();
+
+    let grabbed = world
+        .apply_command(&command(
+            HeadlessActionIds::GRAB,
+            ActionKind::Hold,
+            Some(berry),
+            None,
+        ))
+        .unwrap();
+    assert!(grabbed.execution.succeeded);
+
+    world
+        .apply_command(&command(
+            ActionKind::Move.canonical_id(),
+            ActionKind::Move,
+            None,
+            Some(pos(1.0, 0.0)),
+        ))
+        .unwrap();
+    assert_eq!(world.entity(agent).unwrap().position, pos(1.0, 0.0));
+    assert_eq!(world.entity(berry).unwrap().position, pos(1.5, 0.25));
+    assert_eq!(world.entity(berry).unwrap().carried_by, Some(organism()));
+    assert_eq!(
+        world.entity(berry).unwrap().grounded_physical.velocity,
+        pos(1.0, 0.0)
+    );
+
+    let save = PortableSaveFile::from_headless_world(
+        "n020-carried-object",
+        &world,
+        RuntimeConfig::deterministic_default(world.seed(), BrainScaleTier::Nano512),
+        AssetManifest::empty(),
+        Vec::new(),
+    )
+    .unwrap();
+    let mut restored = PortableSaveFile::from_json_str(&save.to_json_string_pretty().unwrap())
+        .unwrap()
+        .restore_headless_world()
+        .unwrap();
+    assert_eq!(restored.entity(berry).unwrap().position, pos(1.5, 0.25));
+    assert_eq!(restored.entity(berry).unwrap().carried_by, Some(organism()));
+
+    restored
+        .apply_command(&command(
+            ActionKind::Move.canonical_id(),
+            ActionKind::Move,
+            None,
+            Some(pos(2.0, 0.0)),
+        ))
+        .unwrap();
+    assert_eq!(restored.entity(agent).unwrap().position, pos(2.0, 0.0));
+    assert_eq!(restored.entity(berry).unwrap().position, pos(2.5, 0.25));
+    assert_eq!(restored.entity(berry).unwrap().carried_by, Some(organism()));
 }
 
 #[test]

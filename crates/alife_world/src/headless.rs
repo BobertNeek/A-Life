@@ -1368,6 +1368,7 @@ impl HeadlessWorld {
             .objects
             .remove(&object.id.raw())
             .ok_or(ScaffoldContractError::InvalidId)?;
+        candidate.detach_carried_objects(organism_id);
         candidate.labels.remove(&final_object.label);
         candidate
             .last_touched_entities
@@ -1564,6 +1565,9 @@ impl HeadlessWorld {
         {
             self.last_action_result = None;
         }
+        if let Some(organism_id) = object.organism_id {
+            self.detach_carried_objects(organism_id);
+        }
         Ok(object)
     }
 
@@ -1633,6 +1637,9 @@ impl HeadlessWorld {
         {
             self.last_action_result = None;
         }
+        if let Some(organism_id) = object.organism_id {
+            self.detach_carried_objects(organism_id);
+        }
         self.rebuild_ecology_metrics();
         Ok(object)
     }
@@ -1644,14 +1651,45 @@ impl HeadlessWorld {
     ) -> Result<(), ScaffoldContractError> {
         id.validate()?;
         position.validate()?;
+        let (start, carrier) = self
+            .objects
+            .get(&id.raw())
+            .map(|object| (object.position, object.organism_id))
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let displacement = subtract(position, start);
         let object = self
             .objects
             .get_mut(&id.raw())
             .ok_or(ScaffoldContractError::InvalidId)?;
-        object.grounded_physical.velocity = subtract(position, object.position);
+        object.grounded_physical.velocity = displacement;
         object.position = position;
+        if let Some(carrier) = carrier {
+            self.move_carried_objects(carrier, displacement);
+        }
         self.rebuild_ecology_metrics();
         Ok(())
+    }
+
+    fn move_carried_objects(&mut self, carrier: OrganismId, displacement: Vec3f) {
+        for object in self.objects.values_mut() {
+            if object.carried_by != Some(carrier) {
+                continue;
+            }
+            object.position = Vec3f::new(
+                object.position.x + displacement.x,
+                object.position.y + displacement.y,
+                object.position.z + displacement.z,
+            );
+            object.grounded_physical.velocity = displacement;
+        }
+    }
+
+    fn detach_carried_objects(&mut self, carrier: OrganismId) {
+        for object in self.objects.values_mut() {
+            if object.carried_by == Some(carrier) {
+                object.carried_by = None;
+            }
+        }
     }
 
     pub(crate) fn persistence_parts(&self) -> HeadlessWorldPersistenceParts {
@@ -3160,6 +3198,7 @@ impl HeadlessWorld {
             agent.position = destination;
             agent.grounded_physical.velocity = displacement;
         }
+        self.move_carried_objects(command.organism_id, displacement);
         let zone_hazard = self
             .ecology
             .zone_at(destination)
