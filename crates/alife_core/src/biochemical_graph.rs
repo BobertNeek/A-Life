@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     BodyEventDelta, BodyState, DriveSnapshot, EndocrineProfile, EndocrineSnapshot,
-    HomeostaticSnapshot, ScaffoldContractError, Tick, Validate,
+    HomeostaticSnapshot, ScaffoldContractError, Tick, Validate, MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
 };
 
 pub const BIOCHEMICAL_GRAPH_SCHEMA_VERSION: u16 = 3;
@@ -759,7 +759,8 @@ impl BiochemicalGraphState {
             .clamp(species.minimum, species.maximum);
         }
         for emitter in &phenotype.emitters {
-            if crossed_cadence(self.tick, next_tick, emitter.cadence_ticks) {
+            let cadence_crossings = crossed_cadence(self.tick, next_tick, emitter.cadence_ticks);
+            if cadence_crossings > 0 {
                 let source = source_value(emitter.source, body, event);
                 let source = if emitter.inverted {
                     1.0 - source
@@ -776,13 +777,15 @@ impl BiochemicalGraphState {
                         }
                     }
                 };
+                let release_count = emitter_release_count(emitter.source, cadence_crossings);
                 apply_delta(
                     phenotype,
                     &mut next,
                     emitter.target,
                     response
                         * emitter.gain
-                        * developmental_expression.max(emitter.developmental_expression_floor),
+                        * developmental_expression.max(emitter.developmental_expression_floor)
+                        * release_count as f32,
                 )?;
             }
         }
@@ -1173,9 +1176,26 @@ fn source_value(source: BiochemicalSourceLocus, body: BodyState, event: BodyEven
     .clamp(0.0, 1.0)
 }
 
-fn crossed_cadence(from: Tick, to: Tick, cadence: u32) -> bool {
+fn crossed_cadence(from: Tick, to: Tick, cadence: u32) -> u32 {
     let cadence = u64::from(cadence);
-    to.raw() / cadence > from.raw() / cadence
+    let crossed = to.raw() / cadence - from.raw() / cadence;
+    u32::try_from(crossed.min(u64::from(MAX_BIOCHEMISTRY_CATCH_UP_STEPS)))
+        .unwrap_or(MAX_BIOCHEMISTRY_CATCH_UP_STEPS)
+}
+
+// Event-backed loci are one-shot/source-reset inputs for this advance. Basal
+// and persistent body-state loci can be replayed for each missed boundary.
+fn emitter_release_count(source: BiochemicalSourceLocus, cadence_crossings: u32) -> u32 {
+    match source {
+        BiochemicalSourceLocus::Damage
+        | BiochemicalSourceLocus::Nutrition
+        | BiochemicalSourceLocus::SocialContact
+        | BiochemicalSourceLocus::SleepRecovery
+        | BiochemicalSourceLocus::MatingOpportunity => 1,
+        BiochemicalSourceLocus::Basal
+        | BiochemicalSourceLocus::EnergyDeficit
+        | BiochemicalSourceLocus::TemperatureStress => cadence_crossings,
+    }
 }
 
 fn set_drive(drives: &mut DriveSnapshot, channel: DriveChannel, signal: f32) {
