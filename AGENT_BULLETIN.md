@@ -28,7 +28,7 @@ architecture, user instructions, or dated evidence reports.
 | Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
 | Luna max / N011 | Parental cadence readiness | codex/recovered-n011-20260910 | Running | Continue bounded packet | None; Bob owns routine Git operations | 2026-09-11 03:40Z |
 | Luna max / N016 | Grounded avoidance rates | codex/recovered-n016-20260910 | Running | Continue bounded packet | None; Bob owns routine Git operations | 2026-09-11 03:40Z |
-| Luna max / N004 | Zero elapsed reactions | codex/recovered-n004-20260910 | Committed; final handoff pending | Supervisor review | None; Bob owns routine Git operations | 2026-09-11 03:40Z |
+| Luna max / N004 | Zero elapsed reactions | codex/recovered-n004-20260910 | Correction requested | Ensure regression retains substrate and product capacity | None; Bob owns routine Git operations | 2026-09-11 03:42Z |
 
 ## Handoffs and requests
 
