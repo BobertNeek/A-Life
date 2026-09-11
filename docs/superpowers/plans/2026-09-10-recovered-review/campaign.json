@@ -119,10 +119,19 @@
       "files": [
         "crates/alife_world/src/headless.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "threadId": "01a08dde-a7d2-7e22-bd1c-0731bf35b79c",
       "hostId": "local",
-      "reviewStatus": "correction_requested"
+      "reviewStatus": "ACCEPTED_STATIC",
+      "workerCommits": [
+        "a65a9da9472bd2673ad4beda9b1f0e59189e0469",
+        "43264709bc17721cf3e4ad27d6019b3e8ef835e2"
+      ],
+      "integrationCommits": [
+        "9da8091e",
+        "c3e61cfc305673751cacca52c8ddd85170f47028"
+      ],
+      "cursor": "db85122d-9f4e-4f9c-9301-095e7c99672b:9"
     },
     {
       "id": "N019",
@@ -133,7 +142,8 @@
       "files": [
         "crates/alife_world/src/headless.rs"
       ],
-      "status": "queued"
+      "status": "setup_pending",
+      "title": "Repair N019 — physical reach and ownership"
     },
     {
       "id": "N010",
@@ -327,6 +337,15 @@
       "status": "CORRECTION_REQUESTED",
       "id": "N013",
       "workerCommit": "a6e5715af1d9feb8e4d76c2715ad3ee4a0e9ca69"
+    },
+    {
+      "status": "ACCEPTED_STATIC",
+      "id": "N018",
+      "evidence": "Read full production/test diff and measured_motor_channel_observation/adapter callers. Returned invalid channel receipt assertion. Follow-up now asserts returned bundle identity and retains executed command/body/biology parity checks. Both commits integrated; diff whitespace check passed. Rust tests and compile UNRUN.",
+      "integrationCommits": [
+        "9da8091e",
+        "c3e61cfc"
+      ]
     }
   ]
 }
