@@ -89,13 +89,17 @@
       ],
       "files": [
         "crates/alife_core/src/biochemical_graph.rs",
-        "crates/alife_core/src/biochemistry.rs"
+        "crates/alife_core/src/biochemistry.rs",
+        "crates/alife_world/src/organism.rs",
+        "crates/alife_game_app/src/curated_founder_materializer.rs",
+        "crates/alife_game_app/src/curated_founder_staging.rs"
       ],
       "status": "running",
       "title": "Repair N008 — chemical range validation",
       "threadId": "01a08e3b-54b0-7c70-b35a-0f266510029e",
       "hostId": "local",
-      "cursor": "40e9d605-4cd3-474a-9220-74dff9b9178b:1"
+      "cursor": "40e9d605-4cd3-474a-9220-74dff9b9178b:1",
+      "scopeApproval": "Supervisor verified phenotype-owning admission/restore callers; exactly three caller files added for N008 contextual validation. No active ownership conflict."
     },
     {
       "id": "N004",
