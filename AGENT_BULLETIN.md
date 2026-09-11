@@ -26,8 +26,8 @@ architecture, user instructions, or dated evidence reports.
 | Agent / task | Scope | Branch or worktree | Status | Next action | Blocker | Updated (UTC) |
 | --- | --- | --- | --- | --- | --- | --- |
 | Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
-| Luna max / N010 | Ambient mating opportunity | codex/recovered-n010-20260910 | Correction requested | Replace per-actor all-pairs scan with partner scan | None | 2026-09-11 02:09Z |
-| Luna max / N015 | Grounded communication metric | codex/recovered-n015-20260910 | Running | Implement packet preserving N017 | None | 2026-09-11 02:14Z |
+| Luna max / N011 | Parental cadence readiness | codex/recovered-n011-20260910 | Running | Preserve current eligibility and bounded freshness | None | 2026-09-11 03:17Z |
+| Luna max / N016 | Grounded avoidance rates | codex/recovered-n016-20260910 | Running | Preserve incident accounting and Unknown without opportunities | None | 2026-09-11 03:17Z |
 | Luna max / N004 | Zero elapsed reactions | codex/recovered-n004-20260910 | Running | Implement one-file packet; preserve reaction solver | None | 2026-09-11 02:21Z |
 
 ## Handoffs and requests
@@ -56,3 +56,5 @@ architecture, user instructions, or dated evidence reports.
 | 2026-09-11 | Bob review / N017 | Finalized guard and atomic staged observation accepted; static only | d86ebe50 |
 | 2026-09-11 | Bob review / N007 | Material-only validation accepted after correcting test ordering; static only | 87a045e7 + 378b447b |
 | 2026-09-11 | Bob review / N008 | Generic and contextual chemical ranges accepted after full caller review; static only | 4b908941 |
+| 2026-09-11 | Bob review / N010 | Shared eligibility and actor partner scan accepted after correction; static only | 71393bf7 + f9cc324e |
+| 2026-09-11 | Bob review / N015 | Removed ungrounded communication inference; source and regression reviewed; static only | 5548be00 |
