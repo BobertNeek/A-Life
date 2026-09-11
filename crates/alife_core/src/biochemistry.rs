@@ -631,7 +631,7 @@ impl BiochemistryState {
             reproduction,
             cadence,
         };
-        value.validate_contract()?;
+        value.validate_against(phenotype)?;
         Ok(value)
     }
 
@@ -662,7 +662,7 @@ impl BiochemistryState {
         neural: Option<&NeuralEmissionFrame>,
         phenotype: &CreaturePhenotype,
     ) -> Result<Self, ScaffoldContractError> {
-        self.validate_contract()?;
+        self.validate_against(phenotype)?;
         event.validate_contract()?;
         phenotype.brain_genome.validate_contract()?;
         if phenotype.source_genome_id != self.source_genome_id {
@@ -749,8 +749,20 @@ impl BiochemistryState {
             reproduction,
             cadence: self.cadence,
         };
-        value.validate_contract()?;
+        value.validate_against(phenotype)?;
         Ok(value)
+    }
+
+    pub fn validate_against(
+        &self,
+        phenotype: &CreaturePhenotype,
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_contract()?;
+        if self.source_genome_id != phenotype.source_genome_id {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        self.graph_state
+            .validate_against(&phenotype.chemistry.biochemical)
     }
 
     pub const fn graph_state(&self) -> &BiochemicalGraphState {

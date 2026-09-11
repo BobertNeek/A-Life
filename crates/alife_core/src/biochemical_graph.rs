@@ -932,7 +932,7 @@ impl Validate for BiochemicalGraphState {
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
-        validate_unit_values(&self.concentrations[..usize::from(self.active_species)])
+        validate_nonnegative_values(&self.concentrations[..usize::from(self.active_species)])
     }
 }
 
@@ -1236,6 +1236,15 @@ fn validate_finite_values(values: &[f32]) -> Result<(), ScaffoldContractError> {
 fn validate_unit_values(values: &[f32]) -> Result<(), ScaffoldContractError> {
     validate_finite_values(values)?;
     if values.iter().any(|value| !(0.0..=1.0).contains(value)) {
+        Err(ScaffoldContractError::ScalarOutOfRange)
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_nonnegative_values(values: &[f32]) -> Result<(), ScaffoldContractError> {
+    validate_finite_values(values)?;
+    if values.iter().any(|value| *value < 0.0) {
         Err(ScaffoldContractError::ScalarOutOfRange)
     } else {
         Ok(())

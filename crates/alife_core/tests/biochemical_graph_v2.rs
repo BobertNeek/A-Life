@@ -94,3 +94,39 @@ fn drive_frame_is_a_tick_bound_derivation_of_the_graph() {
         phenotype.chemistry.biochemical.species().len() as u32
     );
 }
+
+#[test]
+fn non_unit_species_ranges_survive_advance_and_restore_validation() {
+    let mut wire = serde_json::to_value(founder_phenotype()).unwrap();
+    let nutrient = wire["chemistry"]["biochemical"]["species"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|row| row["id"].as_u64() == Some(19))
+        .unwrap();
+    nutrient["minimum"] = serde_json::json!(1.0);
+    nutrient["baseline"] = serde_json::json!(2.0);
+    nutrient["maximum"] = serde_json::json!(3.0);
+    let phenotype: alife_core::CreaturePhenotype = serde_json::from_value(wire).unwrap();
+
+    let state = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+    state.validate_contract().unwrap();
+    state.validate_against(&phenotype).unwrap();
+    let next = state
+        .advance(Tick(1), BodyEventDelta::zero(), &phenotype)
+        .unwrap();
+    next.validate_against(&phenotype).unwrap();
+
+    let restored: BiochemistryState =
+        serde_json::from_slice(&serde_json::to_vec(&next).unwrap()).unwrap();
+    restored.validate_contract().unwrap();
+    restored.validate_against(&phenotype).unwrap();
+    let concentration = restored
+        .graph_state()
+        .concentration(
+            &phenotype.chemistry.biochemical,
+            alife_core::ChemicalSpeciesId(19),
+        )
+        .unwrap();
+    assert!(concentration > 1.0);
+}

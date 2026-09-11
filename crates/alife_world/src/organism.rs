@@ -559,7 +559,7 @@ impl WorldOrganismRecord {
             return Err(ScaffoldContractError::InvalidId);
         }
 
-        self.biochemistry.validate_contract()?;
+        self.biochemistry.validate_against(&self.phenotype)?;
         self.cognitive_work.validate_contract()?;
         if !self.cognitive_energy_debit.is_finite() || self.cognitive_energy_debit < 0.0 {
             return Err(ScaffoldContractError::ScalarOutOfRange);

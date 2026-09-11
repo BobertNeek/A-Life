@@ -135,7 +135,7 @@ pub(crate) fn materialize_curated_founder_bundle(
                 "fresh founder biochemistry",
             ));
         }
-        biochemistry.validate_contract()?;
+        biochemistry.validate_against(&phenotype)?;
 
         entries.push(CuratedFounderBundleEntry {
             plan_entry: *plan_entry,
@@ -148,7 +148,7 @@ pub(crate) fn materialize_curated_founder_bundle(
 
     for entry in &entries {
         entry.genome.validate_contract()?;
-        entry.biochemistry.validate_contract()?;
+        entry.biochemistry.validate_against(&entry.phenotype)?;
         entry.projection.validate()?;
     }
 
