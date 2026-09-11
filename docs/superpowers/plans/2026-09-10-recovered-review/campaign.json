@@ -41,12 +41,13 @@
         "crates/alife_core/src/biochemistry.rs",
         "crates/alife_world/src/organism.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "clientThreadId": "client-new-thread:9583d4a2-bc1e-4bbd-9219-b8b75e4d61e9",
       "title": "Repair N002 — organ energy debit",
       "threadId": "01a08dfa-d8ce-7611-9cda-65616f03d5fb",
       "hostId": "local",
-      "cursor": "584688e0-5d8b-4cea-82c4-4fc2359e4ae0:2"
+      "cursor": "584688e0-5d8b-4cea-82c4-4fc2359e4ae0:3",
+      "integrationCommit": "c16707045ce0b6a50ed0ce6add880ed20071141a"
     },
     {
       "id": "N003",
@@ -57,7 +58,9 @@
       "files": [
         "crates/alife_core/src/biochemistry.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "threadId": "01a08e14-cbfa-71e2-8b47-0973b852d839",
+      "hostId": "local"
     },
     {
       "id": "N007",
@@ -147,7 +150,8 @@
       "title": "Repair N019 — physical reach and ownership",
       "threadId": "01a08dfd-283e-7d70-89c4-a4c47c17ecd7",
       "hostId": "local",
-      "cursor": "d9d24179-3d58-423d-bd70-973374edd64d:1"
+      "cursor": "d9d24179-3d58-423d-bd70-973374edd64d:2",
+      "reviewStatus": "correction_requested"
     },
     {
       "id": "N010",
@@ -225,11 +229,15 @@
       "files": [
         "crates/alife_game_app/src/gpu_live_runtime.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "threadId": "01a08dde-a6e7-7022-8857-09e72217948c",
       "hostId": "local",
-      "reviewStatus": "correction_requested",
-      "cursor": "e2fc0e9b-bc92-468b-958b-3f61152d3eae:10"
+      "reviewStatus": "ACCEPTED_STATIC",
+      "cursor": "e2fc0e9b-bc92-468b-958b-3f61152d3eae:15",
+      "integrationCommits": [
+        "f91dd9d7",
+        "b11a1ed9c2fa42ba8e32ecb8e2cf2dbb8d972f45"
+      ]
     },
     {
       "id": "N012",
@@ -240,7 +248,8 @@
       "files": [
         "crates/alife_game_app/src/gpu_live_runtime.rs"
       ],
-      "status": "queued"
+      "status": "setup_pending",
+      "title": "Verify N012 — passive patch counting"
     },
     {
       "id": "N014",
@@ -350,6 +359,32 @@
       "integrationCommits": [
         "9da8091e",
         "c3e61cfc"
+      ]
+    },
+    {
+      "id": "N002",
+      "workerCommit": "da6cfd48f72ddf4d3acb244ed0641dad47538cdf",
+      "status": "ACCEPTED_STATIC",
+      "evidence": "Full diff/callers reviewed: zero reserve debit no-op, proportional local reduction, canonical projection, complete record rollback. Regression heterogeneity checked against OrganKind and apply_event. Whitespace check passed. Compile/tests/runtime UNRUN.",
+      "integrationCommit": "c16707045ce0b6a50ed0ce6add880ed20071141a"
+    },
+    {
+      "id": "N019",
+      "workerCommit": "5977130725224bb18d8ac4d31bd2f3f619b82682",
+      "status": "CORRECTION_REQUESTED",
+      "evidence": "Failed remote Grab still emits Blocked plus touched target. Inspect still accepts consumed/dead targets through existence-only require_target. Worker asked to remove fabricated contact and gate lifetime, extending same regression."
+    },
+    {
+      "id": "N013",
+      "evidence": "Read both diffs, sleep/checkpoint lookup, retry commit, retirement, staged rollback and backend closed_loop_runtime.rs:4482-4491. Backend successful learning advances exactly one replay ring slot per receipt. Host successful commits/retries retain last event_capacity patches per organism; restored references remain available. Bounded window contents snapshot for rollback; latest archive/telemetry redirected; departed latest cleaned. Passive observation now recent-only, likely N012 already fixed. Static whitespace check passed; compilation/runtime/memory soak unverified.",
+      "status": "ACCEPTED_STATIC",
+      "workerCommits": [
+        "a6e5715",
+        "52c824bbdb26c1c269de380fe43b924377ab9644"
+      ],
+      "integrationCommits": [
+        "f91dd9d7",
+        "b11a1ed9"
       ]
     }
   ]
