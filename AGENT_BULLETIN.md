@@ -25,11 +25,11 @@ architecture, user instructions, or dated evidence reports.
 
 | Agent / task | Scope | Branch or worktree | Status | Next action | Blocker | Updated (UTC) |
 | --- | --- | --- | --- | --- | --- | --- |
-| Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 00:28Z |
+| Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
+| Luna max / N018 | Preserve Idle primitive | codex/recovered-n018-20260910 | Correction requested | Remove invalid empty-receipt test indexing | None | 2026-09-11 01:01Z |
+| Luna max / N013 | Bound optional patch history | codex/recovered-n013-20260910 | Correction requested | Preserve every required replay patch and latest consumers | None | 2026-09-11 01:01Z |
+| Luna max / N002 | Organ-local cognitive debit | codex/recovered-n002-20260910 | Setup pending | Implement packet from accepted N001 base | None | 2026-09-11 01:01Z |
 
-| Luna max / N001 | Body constructor projections | codex/recovered-n001-20260910 | Running | Return commit for Bob review | None | 2026-09-11 00:36Z |
-| Luna max / N018 | Preserve Idle primitive | codex/recovered-n018-20260910 | Running | Return commit for Bob review | None | 2026-09-11 00:36Z |
-| Luna max / N013 | Bound optional patch history | codex/recovered-n013-20260910 | Running | Return commit for Bob review | None | 2026-09-11 00:36Z |
 ## Handoffs and requests
 
 | From | To | Request | Evidence or files | Status | Updated (UTC) |
@@ -46,4 +46,4 @@ architecture, user instructions, or dated evidence reports.
 
 | Date (UTC) | Agent / task | Result | Commit or evidence |
 | --- | --- | --- | --- |
-| _No completed work recorded._ |  |  |  |
+| 2026-09-11 | Bob review / N001 | Integrated after full manual diff and caller review; static check only; Rust unrun | 6e3dd8ed |
