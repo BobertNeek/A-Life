@@ -26,9 +26,9 @@ architecture, user instructions, or dated evidence reports.
 | Agent / task | Scope | Branch or worktree | Status | Next action | Blocker | Updated (UTC) |
 | --- | --- | --- | --- | --- | --- | --- |
 | Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
-| Luna max / N011 | Parental cadence readiness | codex/recovered-n011-20260910 | Running | Preserve current eligibility and bounded freshness | None | 2026-09-11 03:17Z |
-| Luna max / N016 | Grounded avoidance rates | codex/recovered-n016-20260910 | Running | Preserve incident accounting and Unknown without opportunities | None | 2026-09-11 03:17Z |
-| Luna max / N004 | Zero elapsed reactions | codex/recovered-n004-20260910 | Running | Implement one-file packet; preserve reaction solver | None | 2026-09-11 02:21Z |
+| Luna max / N011 | Parental cadence readiness | codex/recovered-n011-20260910 | Waiting on approval | Await pending Git permission approval | Shared Git metadata outside worker sandbox | 2026-09-11 03:33Z |
+| Luna max / N016 | Grounded avoidance rates | codex/recovered-n016-20260910 | Waiting on approval | Await pending Git permission approval | Shared Git metadata outside worker sandbox | 2026-09-11 03:33Z |
+| Luna max / N004 | Zero elapsed reactions | codex/recovered-n004-20260910 | Waiting on approval | Await pending Git permission approval | Shared Git metadata outside worker sandbox | 2026-09-11 03:33Z |
 
 ## Handoffs and requests
 
