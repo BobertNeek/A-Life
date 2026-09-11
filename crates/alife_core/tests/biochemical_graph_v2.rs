@@ -243,6 +243,25 @@ fn drive_frame_is_a_tick_bound_derivation_of_the_graph() {
 }
 
 #[test]
+fn biochemistry_validation_requires_graph_and_owner_ticks_to_match() {
+    let phenotype = founder_phenotype();
+    let state = BiochemistryState::new(&phenotype, Tick(1)).unwrap();
+    state.validate_contract().unwrap();
+
+    for (label, graph_tick) in [("older", Tick::ZERO), ("newer", Tick(2))] {
+        let mut wire = serde_json::to_value(state).unwrap();
+        wire["graph_state"]["tick"] = json!(graph_tick.raw());
+        let restored: BiochemistryState = serde_json::from_value(wire).unwrap();
+
+        assert_eq!(
+            restored.validate_contract(),
+            Err(alife_core::ScaffoldContractError::NonMonotonicTick),
+            "{label} graph tick must be rejected"
+        );
+    }
+}
+
+#[test]
 fn non_unit_species_ranges_survive_advance_and_restore_validation() {
     let mut wire = serde_json::to_value(founder_phenotype()).unwrap();
     let nutrient = wire["chemistry"]["biochemical"]["species"]
