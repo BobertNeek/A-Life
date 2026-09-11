@@ -385,6 +385,10 @@ impl PassiveLifeStatistics {
         if patch.header().organism_id != self.organism_id {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
+        if self.death_tick.is_some() {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        let mut staged = self.clone();
         let heard = patch
             .pre_action()
             .perception()
@@ -394,27 +398,27 @@ impl PassiveLifeStatistics {
             .iter()
             .flatten()
             .count() as u64;
-        self.heard_token_exposures = self
+        staged.heard_token_exposures = staged
             .heard_token_exposures
             .checked_add(heard)
             .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
         let outcome = patch.outcome();
         if outcome.physical.contact == PhysicalContactKind::Consumed {
             let harmful = outcome.pain_delta.raw() > 0.0 || outcome.reward_valence.raw() < 0.0;
-            self.observe(PassiveLifeEvent::FoodOutcome {
+            staged.observe(PassiveLifeEvent::FoodOutcome {
                 beneficial: !harmful,
             })?;
             if harmful {
-                self.observe(PassiveLifeEvent::PoisonEncounter { avoided: false })?;
+                staged.observe(PassiveLifeEvent::PoisonEncounter { avoided: false })?;
             }
         }
         if outcome.pain_delta.raw() > 0.0
             || outcome.physical.contact == PhysicalContactKind::Collision
         {
-            self.observe(PassiveLifeEvent::HazardEncounter { avoided: false })?;
+            staged.observe(PassiveLifeEvent::HazardEncounter { avoided: false })?;
         }
         if patch.decision().selected_action.kind == ActionKind::Vocalize {
-            self.observe(PassiveLifeEvent::NarrationUtterance)?;
+            staged.observe(PassiveLifeEvent::NarrationUtterance)?;
         }
         if patch.decision().selected_action.kind == ActionKind::Vocalize
             && patch
@@ -427,10 +431,11 @@ impl PassiveLifeStatistics {
                 .flatten()
                 .any(|token| token.source_kind == UtteranceSourceKind::Creature)
         {
-            self.observe(PassiveLifeEvent::PeerCommunication {
+            staged.observe(PassiveLifeEvent::PeerCommunication {
                 successful: outcome.success,
             })?;
         }
+        *self = staged;
         Ok(())
     }
 
