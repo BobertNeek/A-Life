@@ -2741,43 +2741,46 @@ impl HeadlessWorld {
                     Ok(target) => target,
                     Err(_) => return self.invalid_target(*command, command.target_entity),
                 };
-                let profile = self
+                let agent_position = self
+                    .objects
+                    .get(&agent_id.raw())
+                    .ok_or(ScaffoldContractError::InvalidId)?
+                    .position;
+                let (in_reach, hazard_pain) = self
                     .objects
                     .get(&target.raw())
-                    .filter(|object| object.kind == WorldObjectKind::Hazard)
-                    .map_or_else(OutcomeProfile::inspect, |object| {
-                        OutcomeProfile::hazard(object.hazard_pain)
-                    });
+                    .map(|object| {
+                        (
+                            distance(agent_position, object.position) <= EAT_RADIUS,
+                            (object.kind == WorldObjectKind::Hazard).then_some(object.hazard_pain),
+                        )
+                    })
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                let profile = if in_reach {
+                    hazard_pain.map_or_else(OutcomeProfile::inspect, OutcomeProfile::hazard)
+                } else {
+                    OutcomeProfile::inspect()
+                };
+                let contact = if in_reach {
+                    PhysicalContactKind::Touch
+                } else {
+                    PhysicalContactKind::None
+                };
+                let touched = if in_reach { vec![target] } else { Vec::new() };
                 self.finish_action(
                     *command,
                     true,
                     None,
-                    physical(PhysicalContactKind::Touch, Some(target), Vec3f::ZERO, 0.02)?,
+                    physical(contact, Some(target), Vec3f::ZERO, 0.02)?,
                     profile,
-                    vec![target],
+                    touched,
                 )
             }
             HeadlessAction::Eat => self.execute_eat(*command),
             HeadlessAction::Move => self.execute_move(*command, agent_id, MoveIntent::Absolute),
             HeadlessAction::Approach => self.execute_move(*command, agent_id, MoveIntent::Approach),
             HeadlessAction::Flee => self.execute_move(*command, agent_id, MoveIntent::Flee),
-            HeadlessAction::Grab => {
-                let target = match self.require_target(command) {
-                    Ok(target) => target,
-                    Err(_) => return self.invalid_target(*command, command.target_entity),
-                };
-                if let Some(object) = self.objects.get_mut(&target.raw()) {
-                    object.carried_by = Some(command.organism_id);
-                }
-                self.finish_action(
-                    *command,
-                    true,
-                    None,
-                    physical(PhysicalContactKind::Touch, Some(target), Vec3f::ZERO, 0.06)?,
-                    OutcomeProfile::grab(),
-                    vec![target],
-                )
-            }
+            HeadlessAction::Grab => self.execute_grab(*command, agent_id),
             HeadlessAction::Vocalize => {
                 let token = self.emit_vocalization_token(command.organism_id)?;
                 self.finish_action(
@@ -2790,6 +2793,91 @@ impl HeadlessWorld {
                 )
             }
         }
+    }
+
+    fn execute_grab(
+        &mut self,
+        command: ActionCommand,
+        agent_id: WorldEntityId,
+    ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+        let target = match self.require_target(&command) {
+            Ok(target) => target,
+            Err(_) => return self.invalid_target(command, command.target_entity),
+        };
+        let agent_position = self
+            .objects
+            .get(&agent_id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .position;
+        let (target_position, target_kind, target_organism, target_carried_by, target_consumed) =
+            self.objects
+                .get(&target.raw())
+                .map(|object| {
+                    (
+                        object.position,
+                        object.kind,
+                        object.organism_id,
+                        object.carried_by,
+                        object.consumed,
+                    )
+                })
+                .ok_or(ScaffoldContractError::InvalidId)?;
+        let has_manipulation_effector =
+            self.organism_registry
+                .get(command.organism_id)
+                .is_none_or(|record| {
+                    record
+                        .embodiment()
+                        .effector_gain(EffectorCapability::Manipulation)
+                        > 0.0
+                });
+        let target_is_live = !target_consumed
+            && target_organism.is_none_or(|organism_id| {
+                self.organism_registry
+                    .get(organism_id)
+                    .is_none_or(|record| record.lifecycle().is_alive())
+            });
+        let target_is_mobile = matches!(
+            target_kind,
+            WorldObjectKind::Food | WorldObjectKind::Hazard | WorldObjectKind::Token
+        );
+        let target_is_self = target == agent_id || target_organism == Some(command.organism_id);
+        let owned_by_other = target_carried_by.is_some_and(|owner| owner != command.organism_id);
+        let within_reach = distance(agent_position, target_position) <= EAT_RADIUS;
+        if !has_manipulation_effector
+            || !target_is_live
+            || !target_is_mobile
+            || target_is_self
+            || owned_by_other
+            || !within_reach
+        {
+            return self.finish_action(
+                command,
+                false,
+                Some(ReferenceActionFailure::MissingAffordance),
+                physical(
+                    PhysicalContactKind::Blocked,
+                    Some(target),
+                    Vec3f::ZERO,
+                    0.06,
+                )?,
+                OutcomeProfile::missing_affordance(),
+                vec![target],
+            );
+        }
+        let object = self
+            .objects
+            .get_mut(&target.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        object.carried_by = Some(command.organism_id);
+        self.finish_action(
+            command,
+            true,
+            None,
+            physical(PhysicalContactKind::Touch, Some(target), Vec3f::ZERO, 0.06)?,
+            OutcomeProfile::grab(),
+            vec![target],
+        )
     }
 
     fn emit_vocalization_token(
@@ -4897,6 +4985,87 @@ mod task_6_factorized_motor_tests {
         )
         .unwrap();
         (world, agent, food, bundle)
+    }
+
+    #[test]
+    fn n019_rejects_remote_or_unowned_grab_and_remote_inspect_contact() {
+        let mut world = HeadlessScenarioBuilder::new(36_002)
+            .agent("agent", ORGANISM_ID, Vec3f::ZERO)
+            .food("near-food", Vec3f::new(0.5, 0.0, 0.0), 0.6)
+            .hazard("far-hazard", Vec3f::new(3.0, 0.0, 0.0), 0.8)
+            .obstacle("fixed-obstacle", Vec3f::new(0.5, 1.0, 0.0), 0.5)
+            .build()
+            .unwrap();
+        let agent = world.entity_id("agent").unwrap();
+        let near_food = world.entity_id("near-food").unwrap();
+        let far_hazard = world.entity_id("far-hazard").unwrap();
+        let fixed_obstacle = world.entity_id("fixed-obstacle").unwrap();
+
+        let remote_grab = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            HeadlessActionIds::GRAB,
+            ActionKind::Hold,
+            Some(far_hazard),
+            None,
+        )
+        .unwrap();
+        let remote_grab_result = world.apply_command(&remote_grab).unwrap();
+        assert!(!remote_grab_result.execution.succeeded);
+        assert_eq!(world.entity(far_hazard).unwrap().carried_by, None);
+
+        let remote_inspect = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            ActionKind::Inspect.canonical_id(),
+            ActionKind::Inspect,
+            Some(far_hazard),
+            None,
+        )
+        .unwrap();
+        let remote_inspect_result = world.apply_command(&remote_inspect).unwrap();
+        assert!(remote_inspect_result.execution.succeeded);
+        assert_eq!(
+            remote_inspect_result.execution.physical.contact,
+            PhysicalContactKind::None
+        );
+        assert_eq!(remote_inspect_result.observation.pain_delta.raw(), 0.0);
+        assert_eq!(remote_inspect_result.body_event.damage, 0.0);
+        assert!(world.last_touched_entities.is_empty());
+
+        let nearby_grab = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            HeadlessActionIds::GRAB,
+            ActionKind::Hold,
+            Some(near_food),
+            None,
+        )
+        .unwrap();
+        let nearby_grab_result = world.apply_command(&nearby_grab).unwrap();
+        assert!(nearby_grab_result.execution.succeeded);
+        assert_eq!(
+            world.entity(near_food).unwrap().carried_by,
+            Some(ORGANISM_ID)
+        );
+
+        world.objects.get_mut(&near_food.raw()).unwrap().carried_by = Some(OrganismId(99));
+        let ownership_result = world.apply_command(&nearby_grab).unwrap();
+        assert!(!ownership_result.execution.succeeded);
+        assert_eq!(
+            world.entity(near_food).unwrap().carried_by,
+            Some(OrganismId(99))
+        );
+
+        let fixed_grab = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            HeadlessActionIds::GRAB,
+            ActionKind::Hold,
+            Some(fixed_obstacle),
+            None,
+        )
+        .unwrap();
+        let fixed_grab_result = world.apply_command(&fixed_grab).unwrap();
+        assert!(!fixed_grab_result.execution.succeeded);
+        assert_eq!(world.entity(fixed_obstacle).unwrap().carried_by, None);
+        assert_eq!(world.entity(agent).unwrap().organism_id, Some(ORGANISM_ID));
     }
 
     fn posture_bundle(primitive: ActionId, target: Option<WorldEntityId>) -> MotorCommandBundle {
