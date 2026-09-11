@@ -2746,16 +2746,32 @@ impl HeadlessWorld {
                     .get(&agent_id.raw())
                     .ok_or(ScaffoldContractError::InvalidId)?
                     .position;
-                let (in_reach, hazard_pain) = self
+                let (in_reach, target_is_live, hazard_pain) = self
                     .objects
                     .get(&target.raw())
                     .map(|object| {
                         (
                             distance(agent_position, object.position) <= EAT_RADIUS,
+                            !object.consumed
+                                && object.organism_id.is_none_or(|organism_id| {
+                                    self.organism_registry
+                                        .get(organism_id)
+                                        .is_none_or(|record| record.lifecycle().is_alive())
+                                }),
                             (object.kind == WorldObjectKind::Hazard).then_some(object.hazard_pain),
                         )
                     })
                     .ok_or(ScaffoldContractError::InvalidId)?;
+                if !target_is_live {
+                    return self.finish_action(
+                        *command,
+                        false,
+                        Some(ReferenceActionFailure::MissingAffordance),
+                        physical(PhysicalContactKind::None, Some(target), Vec3f::ZERO, 0.02)?,
+                        OutcomeProfile::missing_affordance(),
+                        Vec::new(),
+                    );
+                }
                 let profile = if in_reach {
                     hazard_pain.map_or_else(OutcomeProfile::inspect, OutcomeProfile::hazard)
                 } else {
@@ -2855,14 +2871,9 @@ impl HeadlessWorld {
                 command,
                 false,
                 Some(ReferenceActionFailure::MissingAffordance),
-                physical(
-                    PhysicalContactKind::Blocked,
-                    Some(target),
-                    Vec3f::ZERO,
-                    0.06,
-                )?,
+                physical(PhysicalContactKind::None, Some(target), Vec3f::ZERO, 0.06)?,
                 OutcomeProfile::missing_affordance(),
-                vec![target],
+                Vec::new(),
             );
         }
         let object = self
@@ -5011,6 +5022,12 @@ mod task_6_factorized_motor_tests {
         .unwrap();
         let remote_grab_result = world.apply_command(&remote_grab).unwrap();
         assert!(!remote_grab_result.execution.succeeded);
+        assert_eq!(
+            remote_grab_result.execution.physical.contact,
+            PhysicalContactKind::None
+        );
+        assert!(remote_grab_result.touched_entities.is_empty());
+        assert!(world.last_touched_entities.is_empty());
         assert_eq!(world.entity(far_hazard).unwrap().carried_by, None);
 
         let remote_inspect = HeadlessWorldCommand::structured(
@@ -5029,6 +5046,30 @@ mod task_6_factorized_motor_tests {
         );
         assert_eq!(remote_inspect_result.observation.pain_delta.raw(), 0.0);
         assert_eq!(remote_inspect_result.body_event.damage, 0.0);
+        assert!(world.last_touched_entities.is_empty());
+
+        {
+            let consumed_hazard = world.objects.get_mut(&far_hazard.raw()).unwrap();
+            consumed_hazard.position = Vec3f::new(0.5, 0.0, 0.0);
+            consumed_hazard.consumed = true;
+        }
+        let consumed_inspect = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            ActionKind::Inspect.canonical_id(),
+            ActionKind::Inspect,
+            Some(far_hazard),
+            None,
+        )
+        .unwrap();
+        let consumed_inspect_result = world.apply_command(&consumed_inspect).unwrap();
+        assert!(!consumed_inspect_result.execution.succeeded);
+        assert_eq!(
+            consumed_inspect_result.execution.physical.contact,
+            PhysicalContactKind::None
+        );
+        assert_eq!(consumed_inspect_result.observation.pain_delta.raw(), 0.0);
+        assert_eq!(consumed_inspect_result.body_event.damage, 0.0);
+        assert!(consumed_inspect_result.touched_entities.is_empty());
         assert!(world.last_touched_entities.is_empty());
 
         let nearby_grab = HeadlessWorldCommand::structured(
