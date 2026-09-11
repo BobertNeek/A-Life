@@ -10,6 +10,7 @@ use std::{
     rc::Rc,
 };
 
+use alife_core::experience::ChannelPhysicalOutcome;
 use alife_core::{
     ActionCommand, ActionId, ActionKind, AffordanceBits, BiochemistryState, BodyEventDelta,
     BodySnapshot, BrainTickInput, BrainTickOutput, CanonicalDigestBuilder, ChannelCommand,
@@ -216,6 +217,7 @@ pub struct HeadlessActionBiologyReceipt {
 pub struct HeadlessMotorChannelReceipt {
     pub command: ChannelCommand,
     pub observation: MeasuredChannelObservation,
+    pub physical: PhysicalActionOutcome,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2484,6 +2486,7 @@ impl HeadlessWorld {
 
         let mut touched = BTreeSet::new();
         let mut channel_observations = Vec::new();
+        let mut channel_outcomes = Vec::new();
         let mut channel_receipts = Vec::new();
         for (channel, result) in &executed {
             for entity in &result.touched_entities {
@@ -2492,13 +2495,15 @@ impl HeadlessWorld {
             let Some(channel) = channel else {
                 continue;
             };
-            if let Some(observation) = measured_motor_channel_observation(channel, result)? {
-                channel_observations.push(observation);
-                channel_receipts.push(HeadlessMotorChannelReceipt {
-                    command: channel.clone(),
-                    observation,
-                });
-            }
+            let observation = measured_motor_channel_observation(channel, result)?;
+            let physical = result.execution.physical;
+            channel_observations.push(observation);
+            channel_outcomes.push(ChannelPhysicalOutcome::new(channel.channel, physical)?);
+            channel_receipts.push(HeadlessMotorChannelReceipt {
+                command: channel.clone(),
+                observation,
+                physical,
+            });
         }
         if let Some((hazard_id, _)) = hazard_contact {
             touched.insert(hazard_id.raw());
@@ -2508,7 +2513,8 @@ impl HeadlessWorld {
 
         let physical = aggregate_motor_physical_outcome(&executed)?;
         self.commit_current_interval_velocity(bundle.organism_id, physical.displacement)?;
-        let joint = JointPhysicalOutcome::new(physical, channel_observations)?;
+        let joint = JointPhysicalOutcome::new(physical, channel_observations)?
+            .with_channel_outcomes(channel_outcomes)?;
         let succeeded = executed
             .iter()
             .all(|(_, result)| result.execution.succeeded);
@@ -4575,18 +4581,19 @@ fn merge_hazard_contact_body_event(total: BodyEventDelta, hazard_pain: f32) -> B
 fn measured_motor_channel_observation(
     command: &ChannelCommand,
     result: &HeadlessActionResult,
-) -> Result<Option<MeasuredChannelObservation>, ScaffoldContractError> {
-    if command.channel != MotorChannel::Locomotion {
-        return Ok(None);
-    }
+) -> Result<MeasuredChannelObservation, ScaffoldContractError> {
     let displacement = result.execution.physical.displacement;
-    let measured_intensity = (distance(Vec3f::ZERO, displacement) / MOVE_STEP).clamp(0.0, 1.0);
-    Ok(Some(MeasuredChannelObservation::new(
+    let measured_intensity = if command.channel == MotorChannel::Locomotion {
+        (distance(Vec3f::ZERO, displacement) / MOVE_STEP).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    MeasuredChannelObservation::new(
         command.channel,
         result.execution.succeeded,
         NormalizedScalar::new(measured_intensity)?,
         displacement,
-    )?))
+    )
 }
 
 fn aggregate_motor_physical_outcome(
@@ -5748,8 +5755,8 @@ mod task_6_factorized_motor_tests {
         assert_eq!(receipt.outcome_tick, Tick::new(1));
         assert!(receipt.succeeded);
         assert_eq!(receipt.joint.joint_reward(), None);
-        assert_eq!(receipt.joint.channel_observations.len(), 1);
-        assert_eq!(receipt.channel_receipts.len(), 1);
+        assert_eq!(receipt.joint.channel_observations.len(), 2);
+        assert_eq!(receipt.channel_receipts.len(), 2);
         assert_eq!(
             receipt.channel_receipts[0].command.channel,
             MotorChannel::Locomotion
@@ -5926,6 +5933,57 @@ mod task_6_factorized_motor_tests {
             Some(&before_record)
         );
         assert_eq!(failing_world.tick(), Tick::ZERO);
+    }
+
+    #[test]
+    fn factorized_joint_outcome_retains_independent_contact_and_transfer_identities() {
+        let (mut world, agent, food, bundle) = prepared_world();
+        let blocker = world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "blocker".to_string(),
+                kind: WorldObjectKind::Obstacle,
+                organism_id: None,
+                position: Vec3f::new(0.5, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.0,
+                radius: 0.1,
+                token_id: None,
+            })
+            .unwrap();
+
+        let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+
+        assert!(!receipt.succeeded);
+        assert_eq!(
+            receipt.joint.execution.contact,
+            PhysicalContactKind::Blocked
+        );
+        assert_eq!(receipt.joint.execution.target_entity, Some(blocker));
+        assert_eq!(receipt.channel_receipts.len(), 2);
+        assert_eq!(receipt.joint.channel_outcomes.len(), 2);
+        let locomotion = receipt
+            .joint
+            .channel_outcomes
+            .iter()
+            .find(|outcome| outcome.channel == MotorChannel::Locomotion)
+            .unwrap();
+        assert_eq!(locomotion.physical.contact, PhysicalContactKind::Blocked);
+        assert_eq!(locomotion.physical.target_entity, Some(blocker));
+        let manipulation = receipt
+            .joint
+            .channel_outcomes
+            .iter()
+            .find(|outcome| outcome.channel == MotorChannel::Manipulation)
+            .unwrap();
+        assert_eq!(manipulation.physical.contact, PhysicalContactKind::Consumed);
+        assert_eq!(manipulation.physical.target_entity, Some(food));
+        assert!(world.entity(food).unwrap().is_consumed());
+
+        let roundtrip = serde_json::from_value::<JointPhysicalOutcome>(
+            serde_json::to_value(&receipt.joint).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(roundtrip, receipt.joint);
     }
 
     #[test]
