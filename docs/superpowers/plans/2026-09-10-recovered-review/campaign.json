@@ -132,12 +132,13 @@
       "files": [
         "crates/alife_core/src/biochemical_graph.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "assignedBase": "c6bc35cdc68ab25bb3ec0642ae7c095e7ccffd92",
       "threadId": "01a08e9c-c856-74d2-a0b7-5408b6c9797d",
-      "cursor": "22ed8440-4d5e-482f-a582-803ec11ea2e4:1",
+      "cursor": "22ed8440-4d5e-482f-a582-803ec11ea2e4:3",
       "title": "Repair N005 — emitter cadence catch-up",
-      "hostId": "local"
+      "hostId": "local",
+      "integrationCommit": "120c71dfc2640c1b3a019b06466cbb42c040b356"
     },
     {
       "id": "N009",
@@ -148,7 +149,12 @@
       "files": [
         "crates/alife_core/src/biochemical_graph.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "assignedBase": "120c71dfc2640c1b3a019b06466cbb42c040b356",
+      "threadId": "01a08eae-e71d-7d40-a3b8-80a9030a2edb",
+      "cursor": "8418a45a-716d-41b1-be18-6e500df152c4:1",
+      "hostId": "local",
+      "title": "Repair N009 — neuroemitter work accounting"
     },
     {
       "id": "N018",
@@ -243,9 +249,10 @@
       "status": "running",
       "assignedBase": "c6bc35cdc68ab25bb3ec0642ae7c095e7ccffd92",
       "threadId": "01a08e9d-3f1b-7a51-9cce-74294af70305",
-      "cursor": "1ee177b9-4004-493e-a5bc-62c676756027:1",
+      "cursor": "1ee177b9-4004-493e-a5bc-62c676756027:2",
       "title": "Repair N020 — carried object motion",
-      "hostId": "local"
+      "hostId": "local",
+      "reviewStatus": "correction_requested"
     },
     {
       "id": "N022",
@@ -320,14 +327,16 @@
         "N012"
       ],
       "files": [
-        "crates/alife_game_app/src/gpu_live_runtime.rs"
+        "crates/alife_game_app/src/gpu_live_runtime.rs",
+        "crates/alife_core/src/evaluation.rs"
       ],
       "status": "running",
       "assignedBase": "c6bc35cdc68ab25bb3ec0642ae7c095e7ccffd92",
       "threadId": "01a08e9d-3f18-7e60-bc57-964e3cd10959",
-      "cursor": "640b8bda-9f44-455b-b92b-04af5fc20f3e:1",
+      "cursor": "640b8bda-9f44-455b-b92b-04af5fc20f3e:2",
       "title": "Repair N014 — truthful environment exposure",
-      "hostId": "local"
+      "hostId": "local",
+      "scopeApproval": "Core evaluation unknown-regime contract authorized, optional one life_evaluation regression. Preserve serialized six known bins and existing records, derive unknown count, checked known sum <= survival. Review compatibility."
     },
     {
       "id": "N017",
@@ -587,6 +596,19 @@
       "workerCommit": "762b2990fc747d9d84261b04345a2789e0d3cbf1",
       "integrationCommit": "c6bc35cdc68ab25bb3ec0642ae7c095e7ccffd92",
       "evidence": "Full production/test diff read; traced explicit encounter observations, sample rounding and metric consumers. Injury-only patches no longer add avoidance samples; measured food failure retained; patch outcomes unchanged. Unknown before explicit opportunities, true/false samples yield 32768 with two exposures. N015 narration and N017 staging preserved. Supervisor committed allowlist; whitespace passed/clean. Compile/tests/runtime UNVERIFIED."
+    },
+    {
+      "id": "N005",
+      "status": "ACCEPTED_STATIC",
+      "workerCommit": "86365f6e1a06cad43c96d866347fd8fba36dba0f",
+      "integrationCommit": "120c71dfc2640c1b3a019b06466cbb42c040b356",
+      "evidence": "Read full production/fixture diff and cadence/source/validation callers. Crossings use exported 64 cap after monotonic/nonzero cadence validation. Basal/body-state releases scale crossings; event inputs remain once. Test uses unsaturated, nondecaying graph and one event across partition. Existing N004 and reaction solver unchanged. Worker clean and committed whitespace passed; Rust compile/tests/runtime UNVERIFIED."
+    },
+    {
+      "id": "N020",
+      "status": "CORRECTION_REQUESTED",
+      "workerCommit": "ad42d150df5130cf8353522701a1df8c084e4a3f",
+      "evidence": "Full movement/detach and save-restore regression diff read. Removal/retirement detach exists but terminal mark_dead leaves held ownership until retirement. Requested detach immediately after successful mark_dead within current candidate transaction."
     }
   ],
   "gitApprovalOwner": "supervisor; user explicitly delegated routine approvals. Perform scoped Git through permitted supervisor tools; workers final-handoff blocked operations, no elevated approval prompts or sandbox changes."
