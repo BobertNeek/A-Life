@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+use alife_core::experience::ChannelPhysicalOutcome;
 use alife_core::{
     ActionCandidate, ActionId, ActionKind, ActionTarget, BiochemistryState, BodyEventDelta,
     BodySnapshot, BrainClassSpec, BrainGenome, BrainScaleTier, CandidateActionFamily,
@@ -82,6 +83,26 @@ fn joint_outcome() -> JointPhysicalOutcome {
     .unwrap()
 }
 
+fn v12_joint_outcome() -> JointPhysicalOutcome {
+    let joint = joint_outcome();
+    joint
+        .with_channel_outcomes(vec![
+            ChannelPhysicalOutcome::new(MotorChannel::Locomotion, joint.execution).unwrap(),
+            ChannelPhysicalOutcome::new(
+                MotorChannel::Vocal,
+                PhysicalActionOutcome {
+                    contact: PhysicalContactKind::None,
+                    target_entity: None,
+                    displacement: Vec3f::ZERO,
+                    collision_normal: None,
+                    energy_cost: NormalizedScalar::new(0.02).unwrap(),
+                },
+            )
+            .unwrap(),
+        ])
+        .unwrap()
+}
+
 fn measured_physiology() -> MeasuredPhysiologyTransition {
     let spec = BrainClassSpec::for_tier(BrainScaleTier::Standard2048);
     let phenotype = CreatureGenome::early_mammal_founder(
@@ -116,6 +137,27 @@ fn measured_outcome(joint: JointPhysicalOutcome) -> PostActionOutcome {
     .with_measured_physiology(measured_physiology())
     .unwrap()
     .with_v11_joint(joint, work())
+    .unwrap()
+}
+
+fn measured_v12_outcome(joint: JointPhysicalOutcome) -> PostActionOutcome {
+    PostActionOutcome::new(
+        organism(),
+        sequence(),
+        Tick::new(12),
+        false,
+        joint.execution,
+        HomeostaticDelta::zero(),
+        SignedValence::new(-0.25).unwrap(),
+        NormalizedScalar::new(0.4).unwrap(),
+        NormalizedScalar::new(0.3).unwrap(),
+        SignedValence::new(-0.2).unwrap(),
+        NormalizedScalar::new(0.6).unwrap(),
+    )
+    .unwrap()
+    .with_measured_physiology(measured_physiology())
+    .unwrap()
+    .with_v12_joint(joint, work())
     .unwrap()
 }
 
@@ -539,4 +581,70 @@ fn v11_patch_binds_exact_prediction_and_work_receipts_and_reads_legacy_explicitl
         ExperiencePatch::ABI_VERSION,
         ExperiencePatch::V11_ABI_VERSION
     );
+}
+
+#[test]
+fn v12_sealed_patch_preserves_channel_identities_and_rejects_v11_relabeling() {
+    let v11_patch = ExperiencePatch::new_v11(
+        legacy_pre_action(Tick::new(10)),
+        bundle(),
+        measured_outcome(joint_outcome()),
+        prediction(),
+        work(),
+        context(),
+    )
+    .unwrap();
+    let v11_digest = v11_patch.causal_digest().unwrap();
+    let v11_roundtrip: ExperiencePatch =
+        serde_json::from_value(serde_json::to_value(&v11_patch).unwrap()).unwrap();
+    assert_eq!(v11_roundtrip.causal_digest().unwrap(), v11_digest);
+
+    let v12_joint = v12_joint_outcome();
+    let v12_patch = ExperiencePatch::new_v12(
+        legacy_pre_action(Tick::new(10)),
+        bundle(),
+        measured_v12_outcome(v12_joint.clone()),
+        prediction(),
+        work(),
+        context(),
+    )
+    .unwrap();
+    let v12_digest = v12_patch.causal_digest().unwrap();
+    assert_eq!(
+        v12_patch.header().abi_version,
+        ExperiencePatch::V12_ABI_VERSION
+    );
+    assert_ne!(v12_digest, v11_digest);
+
+    let decoded: ExperiencePatch =
+        serde_json::from_value(serde_json::to_value(&v12_patch).unwrap()).unwrap();
+    assert_eq!(decoded.header(), v12_patch.header());
+    assert_eq!(decoded.selected_bundle(), v12_patch.selected_bundle());
+    assert_eq!(decoded.prediction_target(), v12_patch.prediction_target());
+    assert_eq!(decoded.cognitive_work(), v12_patch.cognitive_work());
+    assert_eq!(decoded.outcome(), v12_patch.outcome());
+    assert_eq!(decoded.causal_digest().unwrap(), v12_digest);
+    assert_eq!(decoded.header().organism_id, organism());
+    assert_eq!(decoded.header().sequence_id, sequence());
+    assert_eq!(decoded.header().world_tick, Tick::new(10));
+    assert_eq!(decoded.outcome().outcome_tick, Tick::new(12));
+    assert_eq!(
+        decoded
+            .outcome()
+            .joint
+            .as_ref()
+            .unwrap()
+            .channel_outcomes
+            .iter()
+            .map(|outcome| outcome.channel)
+            .collect::<Vec<_>>(),
+        vec![MotorChannel::Locomotion, MotorChannel::Vocal]
+    );
+
+    let mut relabeled = serde_json::to_value(&v12_patch).unwrap();
+    for path in ["header", "pre_action", "decision", "outcome"] {
+        relabeled[path]["abi_version"] = serde_json::json!(ExperiencePatch::V11_ABI_VERSION);
+    }
+    let relabeled: ExperiencePatch = serde_json::from_value(relabeled).unwrap();
+    assert!(relabeled.validate_contract().is_err());
 }

@@ -4684,11 +4684,11 @@ fn seal_prepared_selection_core(
     )?
     .with_measured_physiology(physiology)?;
     outcome.contradiction_observed = !succeeded;
-    outcome = outcome.with_v11_joint(motor_receipt.joint, cognitive_work)?;
+    outcome = outcome.with_v12_joint(motor_receipt.joint, cognitive_work)?;
     let selected_action_kind = decision.selected_action.kind;
     let selected_action_id = decision.selected_action.action_id;
     let target_entity = decision.selected_action.target_entity;
-    let patch = ExperiencePatch::new_v11_with_decision(
+    let patch = ExperiencePatch::new_v12_with_decision(
         pre_action,
         decision,
         motor_bundle,
@@ -12792,7 +12792,7 @@ mod tests {
         assert!(measured.after.body.energy < expected_receipt.biology_after.body.energy);
         assert_eq!(
             sealed.patch.header().abi_version,
-            ExperiencePatch::V11_ABI_VERSION
+            ExperiencePatch::V12_ABI_VERSION
         );
         assert!(sealed.patch.prediction_target().is_some());
         assert_eq!(
