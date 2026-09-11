@@ -282,6 +282,54 @@ fn finalized_statistics_reject_idle_and_food_hazard_patches_atomically() {
 }
 
 #[test]
+fn sealed_harm_does_not_measure_avoidance_without_explicit_opportunities() {
+    let patch = finalized_patch(
+        PhysicalContactKind::Consumed,
+        -0.25,
+        0.2,
+        ActionKind::Interact,
+    );
+    let mut statistics = PassiveLifeStatistics::new(OrganismId(7), Tick::ZERO).unwrap();
+
+    statistics.observe_sealed_patch(&patch).unwrap();
+
+    assert_eq!(
+        statistics.metric(PassiveMetricKind::FoodSuccess),
+        MetricReading::Measured {
+            value_q16: 0,
+            exposures: 1,
+        }
+    );
+    for metric in [
+        PassiveMetricKind::PoisonAvoidance,
+        PassiveMetricKind::HazardAvoidance,
+    ] {
+        assert_eq!(statistics.metric(metric), MetricReading::Unknown);
+    }
+
+    for event in [
+        PassiveLifeEvent::PoisonEncounter { avoided: true },
+        PassiveLifeEvent::PoisonEncounter { avoided: false },
+        PassiveLifeEvent::HazardEncounter { avoided: true },
+        PassiveLifeEvent::HazardEncounter { avoided: false },
+    ] {
+        statistics.observe(event).unwrap();
+    }
+    for metric in [
+        PassiveMetricKind::PoisonAvoidance,
+        PassiveMetricKind::HazardAvoidance,
+    ] {
+        assert_eq!(
+            statistics.metric(metric),
+            MetricReading::Measured {
+                value_q16: 32_768,
+                exposures: 2,
+            }
+        );
+    }
+}
+
+#[test]
 fn heard_creature_vocalization_does_not_measure_peer_communication() {
     let patch = finalized_patch(PhysicalContactKind::Touch, 0.0, 0.0, ActionKind::Vocalize);
     let mut statistics = PassiveLifeStatistics::new(OrganismId(7), Tick::ZERO).unwrap();
