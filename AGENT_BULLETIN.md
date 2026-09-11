@@ -26,9 +26,9 @@ architecture, user instructions, or dated evidence reports.
 | Agent / task | Scope | Branch or worktree | Status | Next action | Blocker | Updated (UTC) |
 | --- | --- | --- | --- | --- | --- | --- |
 | Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
-| Luna max / N011 | Parental cadence readiness | codex/recovered-n011-20260910 | Waiting on approval | Await pending Git permission approval | Shared Git metadata outside worker sandbox | 2026-09-11 03:33Z |
-| Luna max / N016 | Grounded avoidance rates | codex/recovered-n016-20260910 | Waiting on approval | Await pending Git permission approval | Shared Git metadata outside worker sandbox | 2026-09-11 03:33Z |
-| Luna max / N004 | Zero elapsed reactions | codex/recovered-n004-20260910 | Waiting on approval | Await pending Git permission approval | Shared Git metadata outside worker sandbox | 2026-09-11 03:33Z |
+| Luna max / N011 | Parental cadence readiness | codex/recovered-n011-20260910 | Running | Continue bounded packet | None; Bob owns routine Git operations | 2026-09-11 03:40Z |
+| Luna max / N016 | Grounded avoidance rates | codex/recovered-n016-20260910 | Running | Continue bounded packet | None; Bob owns routine Git operations | 2026-09-11 03:40Z |
+| Luna max / N004 | Zero elapsed reactions | codex/recovered-n004-20260910 | Committed; final handoff pending | Supervisor review | None; Bob owns routine Git operations | 2026-09-11 03:40Z |
 
 ## Handoffs and requests
 
@@ -41,6 +41,8 @@ architecture, user instructions, or dated evidence reports.
 | Date (UTC) | Agent | Decision or notice | Related files |
 | --- | --- | --- | --- |
 | 2026-09-11 | Bob | Supervisor alone updates this board and integrates accepted commits. No Cargo/build/GPU commands. Preserve founder n512_candidate_live.rs WIP. | .worktrees/initial-founder-training-20260907/docs/superpowers/plans/2026-09-10-recovered-review/README.md |
+
+Routine Git approvals belong to Bob. Workers hand off sandbox-blocked Git operations in their final response. Bob performs scoped Git through permitted supervisor tools; sandbox settings remain unchanged.
 
 ## Completed work
 
