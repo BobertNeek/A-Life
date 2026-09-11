@@ -5724,7 +5724,15 @@ mod task_6_factorized_motor_tests {
                 .biology_after
                 .biochemical_work()
                 .neural_emitter_evaluations,
-            1
+            world
+                .organism_registry()
+                .get(ORGANISM_ID)
+                .unwrap()
+                .phenotype()
+                .chemistry
+                .biochemical
+                .neuroemitters()
+                .len() as u32
         );
         // A newborn's biochemical-expression gate is closed. The neural
         // emitter is evaluated and receipted, but cannot yet alter chemistry.
