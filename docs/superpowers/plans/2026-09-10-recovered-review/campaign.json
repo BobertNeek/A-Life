@@ -58,9 +58,11 @@
       "files": [
         "crates/alife_core/src/biochemistry.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "threadId": "01a08e14-cbfa-71e2-8b47-0973b852d839",
-      "hostId": "local"
+      "cursor": "24c5f92f-f37e-42fd-ae41-e9ba68dd80fe:2",
+      "hostId": "local",
+      "integrationCommit": "06307185"
     },
     {
       "id": "N007",
@@ -69,7 +71,10 @@
       "files": [
         "crates/alife_core/src/biochemical_graph.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "threadId": "01a08e27-a036-7bb3-aab0-f1034609e3c6",
+      "hostId": "local",
+      "cursor": "e5673a9b-5e03-4f67-8d38-7ded01d62a52:1"
     },
     {
       "id": "N008",
@@ -146,12 +151,16 @@
       "files": [
         "crates/alife_world/src/headless.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "title": "Repair N019 — physical reach and ownership",
       "threadId": "01a08dfd-283e-7d70-89c4-a4c47c17ecd7",
       "hostId": "local",
-      "cursor": "d9d24179-3d58-423d-bd70-973374edd64d:2",
-      "reviewStatus": "correction_requested"
+      "cursor": "d9d24179-3d58-423d-bd70-973374edd64d:3",
+      "reviewStatus": "ACCEPTED_STATIC",
+      "integrationCommits": [
+        "61fd9947",
+        "4e84084a825e864de800181eee42614ed33599e6"
+      ]
     },
     {
       "id": "N010",
@@ -162,7 +171,10 @@
       "files": [
         "crates/alife_world/src/headless.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "threadId": "01a08e27-a0fa-78b1-8819-0b2a667428a1",
+      "hostId": "local",
+      "cursor": "bba54db6-cb32-4ef7-afcb-2bdb11d6a920:1"
     },
     {
       "id": "N011",
@@ -248,9 +260,10 @@
       "files": [
         "crates/alife_game_app/src/gpu_live_runtime.rs"
       ],
-      "status": "running",
+      "status": "already_fixed",
       "title": "Verify N012 — passive patch counting",
       "threadId": "01a08e16-a1df-7a11-bfe4-f0da08a08a3c",
+      "cursor": "c829889e-3269-4f97-a73a-4f5eec127b79:2",
       "hostId": "local"
     },
     {
@@ -271,7 +284,10 @@
       "files": [
         "crates/alife_core/src/evaluation.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "threadId": "01a08e27-e55c-7ef1-ba1b-84bf6e8788bc",
+      "hostId": "local",
+      "cursor": "2bd7334f-248d-4ee6-ada9-d358866df1c0:1"
     },
     {
       "id": "N015",
@@ -388,6 +404,31 @@
         "f91dd9d7",
         "b11a1ed9"
       ]
+    },
+    {
+      "status": "ACCEPTED_STATIC",
+      "workerCommit": "92010246c46c0aaed251995b37261ea88f0a7621",
+      "id": "N003",
+      "evidence": "Full diff read. Previous/next ticks feed capped crossed_boundaries, called after monotonic/period validation. Periodic upkeep scales crossings, instant events remain once. Inspected 5-to-7 partition/same-tick regression. git show --check passed; native tests UNRUN.",
+      "integrationCommit": "06307185"
+    },
+    {
+      "status": "ACCEPTED_STATIC",
+      "integrationCommits": [
+        "61fd9947",
+        "4e84084a"
+      ],
+      "id": "N019",
+      "workerCommits": [
+        "5977130",
+        "aba4d122f1433ce64d7ebc5fe2a46b48555691da"
+      ],
+      "evidence": "Full original and correction diffs read. Rejected Grab reports no physical contact/touched entity, ownership/mobility/reach/effector/lifetime checks precede assignment. Inspect lifetime gate precedes contact/damage; remote valid inspection stays visual. Existing transaction rollback retained. Expanded same regression inspected. Whitespace checks pass; compile/runtime UNVERIFIED."
+    },
+    {
+      "status": "ALREADY_FIXED_STATIC",
+      "id": "N012",
+      "evidence": "Independently read current gpu_live_runtime.rs:8465 onward, 9020-9043 and staged_tick.rs:124-152,820-835. Latest map updated independent of retention; observer uses exact tick-pair recent records only; one scheduled handle per map entry. Fixed by accepted N013. No duplicate patch/test needed; runtime UNVERIFIED."
     }
   ]
 }
