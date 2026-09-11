@@ -71,10 +71,15 @@
       "files": [
         "crates/alife_core/src/biochemical_graph.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "threadId": "01a08e27-a036-7bb3-aab0-f1034609e3c6",
       "hostId": "local",
-      "cursor": "e5673a9b-5e03-4f67-8d38-7ded01d62a52:1"
+      "cursor": "e5673a9b-5e03-4f67-8d38-7ded01d62a52:3",
+      "reviewStatus": "ACCEPTED_STATIC",
+      "integrationCommits": [
+        "87a045e7",
+        "378b447b954d20fb1ac1f7e379c4213096e80097"
+      ]
     },
     {
       "id": "N008",
@@ -86,7 +91,11 @@
         "crates/alife_core/src/biochemical_graph.rs",
         "crates/alife_core/src/biochemistry.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "title": "Repair N008 — chemical range validation",
+      "threadId": "01a08e3b-54b0-7c70-b35a-0f266510029e",
+      "hostId": "local",
+      "cursor": "40e9d605-4cd3-474a-9220-74dff9b9178b:1"
     },
     {
       "id": "N004",
@@ -174,7 +183,8 @@
       "status": "running",
       "threadId": "01a08e27-a0fa-78b1-8819-0b2a667428a1",
       "hostId": "local",
-      "cursor": "bba54db6-cb32-4ef7-afcb-2bdb11d6a920:1"
+      "cursor": "bba54db6-cb32-4ef7-afcb-2bdb11d6a920:2",
+      "reviewStatus": "correction_requested"
     },
     {
       "id": "N011",
@@ -284,10 +294,11 @@
       "files": [
         "crates/alife_core/src/evaluation.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "threadId": "01a08e27-e55c-7ef1-ba1b-84bf6e8788bc",
       "hostId": "local",
-      "cursor": "2bd7334f-248d-4ee6-ada9-d358866df1c0:1"
+      "cursor": "2bd7334f-248d-4ee6-ada9-d358866df1c0:2",
+      "integrationCommit": "d86ebe50dd77f311415a91ed11c74f1184489251"
     },
     {
       "id": "N015",
@@ -298,7 +309,11 @@
       "files": [
         "crates/alife_core/src/evaluation.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "title": "Repair N015 — grounded communication metrics",
+      "threadId": "01a08e39-c302-7250-b308-cf044bddcd38",
+      "hostId": "local",
+      "cursor": "222e2a54-27f0-4832-8812-08572cbd6d98:1"
     },
     {
       "id": "N016",
@@ -429,6 +444,38 @@
       "status": "ALREADY_FIXED_STATIC",
       "id": "N012",
       "evidence": "Independently read current gpu_live_runtime.rs:8465 onward, 9020-9043 and staged_tick.rs:124-152,820-835. Latest map updated independent of retention; observer uses exact tick-pair recent records only; one scheduled handle per map entry. Fixed by accepted N013. No duplicate patch/test needed; runtime UNVERIFIED."
+    },
+    {
+      "workerCommit": "475855b1b2e2a2ea1057f5ba328826a1464184a1",
+      "evidence": "Production f64 material-only totals look correct. Test species IDs 1,2,5,3,4 violate strictly increasing IDs before reaction validation. Worker asked to reorder fixture only.",
+      "id": "N007",
+      "status": "CORRECTION_REQUESTED"
+    },
+    {
+      "workerCommit": "29e5c53eeb9b860937d7eaac3eae6a8461217a30",
+      "evidence": "Motor path scans all population pairs for each actor, creating O(N^3) work per tick. Worker asked to share pair predicate, keep ordinary all-pairs pass, and query only acting-organism partners with short circuit and preserved ordering/authority.",
+      "id": "N010",
+      "status": "CORRECTION_REQUESTED"
+    },
+    {
+      "evidence": "Read entire production diff and full patch fixture/regression. Identity/lifecycle guards before mutation; all fallible heard/food/hazard/narration/peer updates apply to cloned state then one publication. Existing fixed-size schema unchanged. Committed diff whitespace check passed. Compilation/test/runtime UNVERIFIED.",
+      "workerCommit": "38c05a48ce9b055944865c45aaba1cd3113f9299",
+      "integrationCommit": "d86ebe50dd77f311415a91ed11c74f1184489251",
+      "id": "N017",
+      "status": "ACCEPTED_STATIC"
+    },
+    {
+      "status": "ACCEPTED_STATIC",
+      "workerCommits": [
+        "475855b1",
+        "f7dcf926acd5de3d0485f74d34732faac154ae4b"
+      ],
+      "evidence": "Manually read production and both regression diffs. Material-only f64 totals compared with existing 1e-6 tolerance after typed term/species validation; R04 solver untouched. Corrected fixture now strictly sorted IDs, covering balanced/unbalanced mixed, regulatory-only and catalyst/control. Diff whitespace checks passed. Rust/native/runtime unverified.",
+      "integrationCommits": [
+        "87a045e7",
+        "378b447b"
+      ],
+      "id": "N007"
     }
   ]
 }
