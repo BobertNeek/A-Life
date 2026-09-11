@@ -155,6 +155,7 @@ struct StagedSleepAuthority {
     memories: BTreeMap<u64, MemorySidecarState>,
     topologies: BTreeMap<u64, TopologySidecar>,
     restored_replay_patches: Vec<ExperiencePatch>,
+    sealed_patches: Option<Vec<ExperiencePatch>>,
     sealed_patches_len: usize,
     last_sealed_patches: Vec<ExperiencePatch>,
     sealed_patch_count: usize,
@@ -172,8 +173,11 @@ impl StagedSleepAuthority {
             memories: runtime.memories.clone(),
             topologies: runtime.topologies.clone(),
             restored_replay_patches: runtime.restored_replay_patches.clone(),
-            // Optional lifetime history is append-only during a tick. Retain
-            // its boundary, never clone an individual's complete history.
+            // Diagnostic full history is append-only. Production retains a
+            // bounded replay window that can evict entries during a tick, so
+            // snapshot its contents for exact rollback.
+            sealed_patches: (!runtime.retain_sealed_patch_history)
+                .then(|| runtime.sealed_patches.clone()),
             sealed_patches_len: runtime.sealed_patches.len(),
             last_sealed_patches: runtime.last_sealed_patches.clone(),
             sealed_patch_count: runtime.sealed_patch_count,
@@ -193,7 +197,11 @@ impl StagedSleepAuthority {
         runtime.memories = self.memories;
         runtime.topologies = self.topologies;
         runtime.restored_replay_patches = self.restored_replay_patches;
-        runtime.sealed_patches.truncate(self.sealed_patches_len);
+        if let Some(sealed_patches) = self.sealed_patches {
+            runtime.sealed_patches = sealed_patches;
+        } else {
+            runtime.sealed_patches.truncate(self.sealed_patches_len);
+        }
         runtime.last_sealed_patches = self.last_sealed_patches;
         runtime.sealed_patch_count = self.sealed_patch_count;
         runtime.retained_learning = self.retained_learning;
@@ -6755,6 +6763,11 @@ impl GpuLiveBrainRuntime {
             self.memories.insert(raw, memory);
             self.topologies.insert(raw, topology);
         }
+        if !self.retain_sealed_patch_history {
+            self.retain_bounded_replay_patches(&[]);
+        }
+        self.last_sealed_patches
+            .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
         let resident_set_after = self.handles.keys().copied().collect::<BTreeSet<_>>();
         self.sleep_journal_capacity.admit_population(population)?;
         if resident_set_after != resident_set_before {
@@ -6858,10 +6871,7 @@ impl GpuLiveBrainRuntime {
                 })
                 .transpose()?;
             let final_experience_sequence = self
-                .sealed_patches
-                .iter()
-                .rev()
-                .find(|patch| patch.header().organism_id == organism_id)
+                .latest_sealed_patch_for(organism_id)
                 .map(|patch| patch.header().sequence_id);
             let resident = self
                 .residents
@@ -6917,6 +6927,11 @@ impl GpuLiveBrainRuntime {
         let (final_record, _) = self.world.retire_dead_organism(organism_id)?;
         self.presentation_retirements
             .insert(final_record.world_entity_id().raw());
+        if !self.retain_sealed_patch_history {
+            self.retain_bounded_replay_patches(&[]);
+        }
+        self.last_sealed_patches
+            .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
         Ok(receipt)
     }
 
@@ -7099,6 +7114,9 @@ impl GpuLiveBrainRuntime {
                 self.post_irreversible_gpu_commit_fail_stop_armed = true;
                 self.retained_learning.remove(&raw);
                 self.last_learning_receipts.push(receipt);
+                if !self.retain_sealed_patch_history {
+                    self.retain_bounded_replay_patches(std::slice::from_ref(&recovery_patch));
+                }
                 Ok(false)
             }
             Err(error) => self.record_retained_retry_failure(
@@ -7604,6 +7622,47 @@ impl GpuLiveBrainRuntime {
 
     pub fn sealed_patches(&self) -> &[ExperiencePatch] {
         &self.sealed_patches
+    }
+
+    /// Retains the host replay patch window. Production keeps only patches
+    /// that can still correspond to the backend's bounded replay ring, while
+    /// diagnostic profiles retain the full sealed history.
+    fn retain_bounded_replay_patches(&mut self, additions: &[ExperiencePatch]) {
+        let mut candidates = std::mem::take(&mut self.sealed_patches);
+        candidates.extend(additions.iter().cloned());
+        let mut retained_count_by_organism = BTreeMap::<u64, usize>::new();
+        let mut retained = Vec::with_capacity(candidates.len());
+        for patch in candidates.into_iter().rev() {
+            let raw = patch.header().organism_id.raw();
+            let Some(resident) = self.residents.get(&raw) else {
+                continue;
+            };
+            let capacity = resident.phenotype.replay_capture_plan().event_capacity() as usize;
+            let count = retained_count_by_organism.entry(raw).or_default();
+            if *count < capacity {
+                *count += 1;
+                retained.push(patch);
+            }
+        }
+        retained.reverse();
+        self.sealed_patches = retained;
+    }
+
+    /// Returns the canonical latest sealed patch for one live organism.
+    fn latest_sealed_patch_for(&self, organism_id: OrganismId) -> Option<&ExperiencePatch> {
+        self.last_sealed_patches
+            .iter()
+            .find(|patch| patch.header().organism_id == organism_id)
+    }
+
+    /// Returns the canonical latest sealed patch across the live population.
+    fn latest_sealed_patch(&self) -> Option<&ExperiencePatch> {
+        self.last_sealed_patches.iter().max_by_key(|patch| {
+            (
+                patch.header().world_tick.raw(),
+                patch.header().sequence_id.raw(),
+            )
+        })
     }
 
     pub(crate) const fn sealed_patch_count(&self) -> usize {
@@ -8192,7 +8251,7 @@ impl GpuLiveBrainRuntime {
                     gpu_consolidation_overlay_label(&saved.sleep.consolidation).to_string();
             }
         }
-        if let Some(patch) = self.sealed_patches.last() {
+        if let Some(patch) = self.latest_sealed_patch() {
             if let Ok(evidence) = patch.decision().neural_evidence() {
                 telemetry.selected_candidate = Some(evidence.candidate_index);
                 telemetry.selected_logit = Some(evidence.logit);
@@ -8403,21 +8462,10 @@ impl GpuLiveBrainRuntime {
                 (receipt.organism_id_raw, throttled)
             })
             .collect::<BTreeMap<_, _>>();
-        let (residents, retained, recent) = (
-            &mut self.residents,
-            &self.sealed_patches,
-            &self.last_sealed_patches,
-        );
-        for patch in retained
-            .iter()
-            .rev()
-            .take(residents.len())
-            .chain(recent)
-            .filter(|patch| {
-                patch.header().world_tick == tick_before
-                    && patch.outcome().outcome_tick == tick_after
-            })
-        {
+        let (residents, recent) = (&mut self.residents, &self.last_sealed_patches);
+        for patch in recent.iter().filter(|patch| {
+            patch.header().world_tick == tick_before && patch.outcome().outcome_tick == tick_after
+        }) {
             let raw = patch.header().organism_id.raw();
             let displacement = patch.outcome().physical.displacement;
             let distance = (displacement.x * displacement.x
@@ -8819,6 +8867,7 @@ impl GpuLiveBrainRuntime {
                 None
             }
         };
+        let learning_committed = learning.is_some();
         if let Some(ref receipts) = learning {
             let learning_readback = receipts
                 .len()
@@ -8971,6 +9020,8 @@ impl GpuLiveBrainRuntime {
         if self.retain_sealed_patch_history {
             self.sealed_patches
                 .extend(committed_patches.iter().cloned());
+        } else if learning_committed {
+            self.retain_bounded_replay_patches(&committed_patches);
         }
         let mut last_patch_index_by_organism = self
             .last_sealed_patches
