@@ -306,7 +306,8 @@
       "assignedBase": "af2c66eaea4e077fa97aab0e9668ae67314045b2",
       "threadId": "01a08f0c-4378-7632-822a-e4d6b6328e4c",
       "hostId": "local",
-      "cursor": "90ce716a-2375-4c92-a0d9-cfd393e941b8:1"
+      "cursor": "90ce716a-2375-4c92-a0d9-cfd393e941b8:2",
+      "reviewStatus": "CORRECTION_REQUESTED"
     },
     {
       "id": "N013",
@@ -438,13 +439,15 @@
       "id": "C002",
       "goal": "Trace owning-state construction, restore, digest and validation. Produce a reachable graph-tick/homeostasis inconsistency before proposing a repair.",
       "files": "crates/alife_core/src/biochemistry.rs; crates/alife_core/src/biochemical_graph.rs",
-      "status": "running",
+      "status": "integrated",
       "assignedBase": "3acbbc1c4e8b59cb49a4a29e2eb88d6f7fe21607",
       "threadId": "01a08ef8-c590-7991-a610-351bec998c15",
       "hostId": "local",
-      "cursor": "46079739-0fde-41a5-886a-5a2817105aae:2",
+      "cursor": "46079739-0fde-41a5-886a-5a2817105aae:3",
       "phase": "repair",
-      "scopeApproval": "biochemistry.rs graph/owner tick equality plus one biochemical_graph_v2.rs serde regression, valid and older/newer graph ticks. No persistence/schema change."
+      "scopeApproval": "biochemistry.rs graph/owner tick equality plus one biochemical_graph_v2.rs serde regression, valid and older/newer graph ticks. No persistence/schema change.",
+      "integrationCommit": "84a2d8c3",
+      "reviewStatus": "ACCEPTED_STATIC"
     },
     {
       "id": "C003",
@@ -757,6 +760,19 @@
       "id": "C004",
       "status": "UNRESOLVED_STATIC",
       "evidence": "Read BoundedMean accumulation/reading, EnergyStability metric and ecological/stability objective consumers. Mean-vs-variability naming mismatch confirmed; worker states controlling architecture has no exact temporal formula. Proposed versioned accumulator/migration would invent unspecified behavior and exceed justified repair. Preserve persisted mean values, retain unresolved design question."
+    },
+    {
+      "id": "C002",
+      "status": "ACCEPTED_STATIC",
+      "workerCommit": "ed208c56974500af7d62cde339fd1fcacc3d0a1d",
+      "integrationCommit": "84a2d8c3",
+      "evidence": "Full diff and constructor/graph derivation/owner validation reviewed. Equality gate parallels homeostasis check. BiochemistryState is Copy; serde regression mutates nested graph tick for older/newer cases and aligned construction validates. Existing imports/fixture checked. Whitespace passed; Rust tests/compile/runtime UNVERIFIED."
+    },
+    {
+      "id": "N021",
+      "status": "CORRECTION_REQUESTED",
+      "workerCommit": "42998fc63e6e355b0e6e115864ec80123711cc0f",
+      "evidence": "Full diff read. Serialized outcome field and digest extension added without prerequisite scope report. Requested narrow actual codec/version/old-digest compatibility analysis and sealed-patch regression, reach witness, and avoid fabricated zero non-locomotion measurement. No integration."
     }
   ],
   "gitApprovalOwner": "supervisor; user explicitly delegated routine approvals. Perform scoped Git through permitted supervisor tools; workers final-handoff blocked operations, no elevated approval prompts or sandbox changes."
