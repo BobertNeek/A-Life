@@ -41,7 +41,7 @@ use crate::ecology::{
 };
 use crate::habitat::{
     HabitatActor, HabitatAuthority, HabitatAuthorityError, HabitatBreedingKind,
-    HabitatBreedingRequest,
+    HabitatBreedingRequest, HabitatId,
 };
 use crate::organism::{OrganismRegistryError, WorldOrganismRecord, WorldOrganismRegistry};
 use crate::presentation::{
@@ -373,6 +373,22 @@ pub(crate) struct HeadlessWorldPersistenceParts {
 
 const HEADLESS_MATING_RADIUS: f32 = 1.0;
 
+#[derive(Debug, Clone, Copy)]
+struct EligibleMatingPair {
+    maternal_id: OrganismId,
+    paternal_id: OrganismId,
+    maternal_position: Vec3f,
+    paternal_position: Vec3f,
+    habitat_id: HabitatId,
+}
+
+#[derive(Debug)]
+struct MatingOpportunityReport {
+    alive_organism_ids: Vec<OrganismId>,
+    eligible_pairs: Vec<EligibleMatingPair>,
+    mating_organism_ids: BTreeSet<u64>,
+}
+
 impl HeadlessWorld {
     pub fn new(seed: u64) -> Self {
         Self {
@@ -571,83 +587,11 @@ impl HeadlessWorld {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
-        let mut alive_organism_ids = candidate
-            .organism_registry
-            .iter()
-            .filter(|record| record.lifecycle().is_alive())
-            .map(|record| record.organism_id())
-            .collect::<Vec<_>>();
-        alive_organism_ids.sort_unstable_by_key(|organism_id| organism_id.raw());
-
-        let mut eligible_pairs = Vec::new();
-        let mut mating_organism_ids = BTreeSet::new();
-        for (maternal_index, maternal_id) in alive_organism_ids.iter().enumerate() {
-            let maternal = candidate
-                .organism_registry
-                .get(*maternal_id)
-                .ok_or(ScaffoldContractError::InvalidId)?;
-            let maternal_object = candidate
-                .objects
-                .get(&maternal.world_entity_id().raw())
-                .ok_or(ScaffoldContractError::InvalidId)?;
-            for paternal_id in alive_organism_ids.iter().skip(maternal_index + 1) {
-                let paternal = candidate
-                    .organism_registry
-                    .get(*paternal_id)
-                    .ok_or(ScaffoldContractError::InvalidId)?;
-                let paternal_object = candidate
-                    .objects
-                    .get(&paternal.world_entity_id().raw())
-                    .ok_or(ScaffoldContractError::InvalidId)?;
-                if distance(maternal_object.position, paternal_object.position)
-                    > HEADLESS_MATING_RADIUS
-                {
-                    continue;
-                }
-                let maternal_expressed_brain_class = maternal.genome().expressed_brain_class()?;
-                let paternal_expressed_brain_class = paternal.genome().expressed_brain_class()?;
-                if maternal.genome().id == paternal.genome().id
-                    || maternal.genome().foundation.compatibility_family_id
-                        != paternal.genome().foundation.compatibility_family_id
-                    || maternal.genome().foundation.brain_class_id
-                        != paternal.genome().foundation.brain_class_id
-                    || maternal_expressed_brain_class != paternal_expressed_brain_class
-                    || maternal_expressed_brain_class != maternal.genome().foundation.brain_class_id
-                    || paternal_expressed_brain_class != paternal.genome().foundation.brain_class_id
-                {
-                    continue;
-                }
-                let Some(maternal_membership) = candidate.habitats.membership(*maternal_id) else {
-                    // Habitat membership gates reproduction, but it is not a
-                    // prerequisite for an otherwise valid world organism.
-                    continue;
-                };
-                let habitat_id = maternal_membership.habitat_id;
-                if candidate
-                    .habitats
-                    .authorize_breeding(HabitatBreedingRequest {
-                        habitat_id,
-                        first_parent: *maternal_id,
-                        second_parent: *paternal_id,
-                        kind: HabitatBreedingKind::CreatureChosen,
-                        actor: HabitatActor::Organism(*maternal_id),
-                        tick: next_tick,
-                    })
-                    .is_err()
-                {
-                    continue;
-                }
-                mating_organism_ids.insert(maternal_id.raw());
-                mating_organism_ids.insert(paternal_id.raw());
-                eligible_pairs.push((
-                    *maternal_id,
-                    *paternal_id,
-                    maternal_object.position,
-                    paternal_object.position,
-                    habitat_id,
-                ));
-            }
-        }
+        let MatingOpportunityReport {
+            alive_organism_ids,
+            eligible_pairs,
+            mating_organism_ids,
+        } = candidate.collect_mating_opportunities(next_tick)?;
 
         #[cfg(test)]
         let mut advanced_organism = false;
@@ -736,11 +680,11 @@ impl HeadlessWorld {
             for pair in eligible_pairs {
                 let maternal = candidate
                     .organism_registry
-                    .get(pair.0)
+                    .get(pair.maternal_id)
                     .ok_or(ScaffoldContractError::InvalidId)?;
                 let paternal = candidate
                     .organism_registry
-                    .get(pair.1)
+                    .get(pair.paternal_id)
                     .ok_or(ScaffoldContractError::InvalidId)?;
                 let maternal_age = maternal.age_at(next_tick)?;
                 let paternal_age = paternal.age_at(next_tick)?;
@@ -762,9 +706,12 @@ impl HeadlessWorld {
         // its habitat membership. The transaction still publishes atomically.
         candidate.tick = next_tick;
 
-        if let Some((maternal_id, paternal_id, maternal_position, paternal_position, habitat_id)) =
-            conception_pair
-        {
+        if let Some(pair) = conception_pair {
+            let maternal_id = pair.maternal_id;
+            let paternal_id = pair.paternal_id;
+            let maternal_position = pair.maternal_position;
+            let paternal_position = pair.paternal_position;
+            let habitat_id = pair.habitat_id;
             let mut conception_seed = candidate.seed
                 ^ next_tick.raw().rotate_left(17)
                 ^ maternal_id.raw().rotate_left(31)
@@ -832,6 +779,95 @@ impl HeadlessWorld {
         candidate.speech.retire_expired(candidate.tick);
         let _ = candidate.advance_ecology_at_current_tick();
         Ok(next_tick)
+    }
+
+    fn collect_mating_opportunities(
+        &self,
+        next_tick: Tick,
+    ) -> Result<MatingOpportunityReport, ScaffoldContractError> {
+        let mut alive_organism_ids = self
+            .organism_registry
+            .iter()
+            .filter(|record| record.lifecycle().is_alive())
+            .map(|record| record.organism_id())
+            .collect::<Vec<_>>();
+        alive_organism_ids.sort_unstable_by_key(|organism_id| organism_id.raw());
+
+        let mut eligible_pairs = Vec::new();
+        let mut mating_organism_ids = BTreeSet::new();
+        for (maternal_index, maternal_id) in alive_organism_ids.iter().enumerate() {
+            let maternal = self
+                .organism_registry
+                .get(*maternal_id)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            let maternal_object = self
+                .objects
+                .get(&maternal.world_entity_id().raw())
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            for paternal_id in alive_organism_ids.iter().skip(maternal_index + 1) {
+                let paternal = self
+                    .organism_registry
+                    .get(*paternal_id)
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                let paternal_object = self
+                    .objects
+                    .get(&paternal.world_entity_id().raw())
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                if distance(maternal_object.position, paternal_object.position)
+                    > HEADLESS_MATING_RADIUS
+                {
+                    continue;
+                }
+                let maternal_expressed_brain_class = maternal.genome().expressed_brain_class()?;
+                let paternal_expressed_brain_class = paternal.genome().expressed_brain_class()?;
+                if maternal.genome().id == paternal.genome().id
+                    || maternal.genome().foundation.compatibility_family_id
+                        != paternal.genome().foundation.compatibility_family_id
+                    || maternal.genome().foundation.brain_class_id
+                        != paternal.genome().foundation.brain_class_id
+                    || maternal_expressed_brain_class != paternal_expressed_brain_class
+                    || maternal_expressed_brain_class != maternal.genome().foundation.brain_class_id
+                    || paternal_expressed_brain_class != paternal.genome().foundation.brain_class_id
+                {
+                    continue;
+                }
+                let Some(maternal_membership) = self.habitats.membership(*maternal_id) else {
+                    // Habitat membership gates reproduction, but it is not a
+                    // prerequisite for an otherwise valid world organism.
+                    continue;
+                };
+                let habitat_id = maternal_membership.habitat_id;
+                if self
+                    .habitats
+                    .authorize_breeding(HabitatBreedingRequest {
+                        habitat_id,
+                        first_parent: *maternal_id,
+                        second_parent: *paternal_id,
+                        kind: HabitatBreedingKind::CreatureChosen,
+                        actor: HabitatActor::Organism(*maternal_id),
+                        tick: next_tick,
+                    })
+                    .is_err()
+                {
+                    continue;
+                }
+                mating_organism_ids.insert(maternal_id.raw());
+                mating_organism_ids.insert(paternal_id.raw());
+                eligible_pairs.push(EligibleMatingPair {
+                    maternal_id: *maternal_id,
+                    paternal_id: *paternal_id,
+                    maternal_position: maternal_object.position,
+                    paternal_position: paternal_object.position,
+                    habitat_id,
+                });
+            }
+        }
+
+        Ok(MatingOpportunityReport {
+            alive_organism_ids,
+            eligible_pairs,
+            mating_organism_ids,
+        })
     }
 
     pub fn advance_tick(&mut self) -> Tick {
@@ -2296,9 +2332,22 @@ impl HeadlessWorld {
             .position;
         let hazard_contact =
             initial_hazard_contact.or_else(|| self.hazard_contact_at(final_position));
-        let body_event = hazard_contact.map_or(action_body_event, |(_, pain)| {
+        let action_and_hazard_event = hazard_contact.map_or(action_body_event, |(_, pain)| {
             merge_hazard_contact_body_event(action_body_event, pain)
         });
+        let mating_opportunities = self.collect_mating_opportunities(outcome_tick)?;
+        let ambient_event = if mating_opportunities
+            .mating_organism_ids
+            .contains(&bundle.organism_id.raw())
+        {
+            BodyEventDelta {
+                mating_opportunity: 1.0,
+                ..BodyEventDelta::zero()
+            }
+        } else {
+            BodyEventDelta::zero()
+        };
+        let body_event = combine_body_event(ambient_event, action_and_hazard_event);
         body_event.validate_contract()?;
         if let Some(neural) = neural {
             self.organism_registry
