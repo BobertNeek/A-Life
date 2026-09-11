@@ -133,14 +133,16 @@ impl BodyState {
             },
             exposed_locus: kind as u16 + 1,
         });
-        Self {
+        let mut value = Self {
             organs,
             energy,
             health: 1.0,
             injury: 0.0,
             temperature_stress: 0.0,
             sleeping: false,
-        }
+        };
+        value.refresh_compatibility_projections();
+        value
     }
 
     fn apply_event(
@@ -285,7 +287,7 @@ impl BodyState {
             energetic_cost: 0.1,
             exposed_locus: kind as u16 + 1,
         });
-        let value = Self {
+        let mut value = Self {
             organs,
             energy,
             health,
@@ -293,6 +295,7 @@ impl BodyState {
             temperature_stress,
             sleeping,
         };
+        value.refresh_compatibility_projections();
         value.validate_contract()?;
         Ok(value)
     }

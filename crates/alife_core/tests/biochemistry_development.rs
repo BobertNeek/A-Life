@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use alife_core::{
-    BiochemistryState, BodyEventDelta, BrainCapacityClass, CreatureGenome,
+    BiochemistryState, BodyEventDelta, BodyState, BrainCapacityClass, CreatureGenome,
     FoundationGeneticIdentity, Tick, Validate,
 };
 
@@ -315,5 +315,31 @@ fn neural_receptor_frame_has_no_hidden_action_authority() {
     );
     for forbidden in ["action", "candidate", "target", "reward", "command"] {
         assert!(!keys.iter().any(|key| key.contains(forbidden)));
+    }
+}
+
+#[test]
+fn body_compatibility_projections_validate_for_newborns_and_legacy_migrations() {
+    for efficiency in [0.0_f32, 0.2, 0.8, 1.0] {
+        let mut phenotype = phenotype();
+        phenotype.body.metabolic_efficiency = efficiency;
+
+        let state = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+        state.validate_contract().unwrap();
+    }
+
+    for (energy, health, injury, temperature_stress, sleeping) in [
+        (0.9_f32, 1.0, 0.0, 0.0, false),
+        (0.2_f32, 0.7, 0.3, 0.4, true),
+    ] {
+        let body =
+            BodyState::migrate_legacy_v1(energy, health, injury, temperature_stress, sleeping)
+                .unwrap();
+        body.validate_contract().unwrap();
+
+        let round_trip: BodyState =
+            serde_json::from_slice(&serde_json::to_vec(&body).unwrap()).unwrap();
+        assert_eq!(round_trip, body);
+        round_trip.validate_contract().unwrap();
     }
 }
