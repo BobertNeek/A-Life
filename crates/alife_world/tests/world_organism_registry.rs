@@ -1,7 +1,8 @@
 use alife_core::{
-    Blake3Digest, BodyEventDelta, BrainCapacityClass, CreatureGenome,
-    FoundationGeneticIdentity, GenomeId, LineageId, OrganismId, ScaffoldContractError, Tick,
-    WorldEntityId,
+    cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkReceipt},
+    Blake3Digest, BodyEventDelta, BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity,
+    GenomeId, LineageId, OrganKind, OrganismId, ScaffoldContractError, Tick, WorldEntityId,
+    ORGAN_KIND_COUNT,
 };
 use alife_world::{
     OrganismLifecycle, OrganismRegistryError, WorldOrganismRecord, WorldOrganismRegistry,
@@ -143,6 +144,53 @@ fn biology_advance_keeps_identity_together_and_revalidates_the_record() {
     assert_eq!(organism.biochemistry().source_genome_id, genome_id);
     assert_eq!(organism.biochemistry().tick, Tick(12));
     assert!(organism.biochemistry().body.energy < previous_energy);
+    assert!(organism.validate_contract().is_ok());
+}
+
+fn organ_energies(organism: &WorldOrganismRecord) -> [f32; ORGAN_KIND_COUNT] {
+    OrganKind::ALL.map(|kind| organism.biochemistry().body.organ(kind).energy)
+}
+
+#[test]
+fn cognitive_energy_debit_preserves_local_reserves_and_zero_is_a_noop() {
+    let mut organism = record(1, 101);
+    organism
+        .advance_biology(
+            Tick(1),
+            BodyEventDelta {
+                energy: -0.20,
+                ..BodyEventDelta::zero()
+            },
+        )
+        .unwrap();
+    let policy = CognitiveWorkCostPolicy::enabled(0.001).unwrap();
+    let before_zero_debit = organ_energies(&organism);
+
+    assert_eq!(
+        organism
+            .account_cognitive_work(CognitiveWorkReceipt::zero(), policy)
+            .unwrap(),
+        0.0
+    );
+    assert_eq!(organ_energies(&organism), before_zero_debit);
+
+    let before_positive_debit = organ_energies(&organism);
+    let before_projected_energy = organism.biochemistry().body.energy;
+    let receipt =
+        CognitiveWorkReceipt::from_counters(100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0).unwrap();
+    let applied_debit = organism.account_cognitive_work(receipt, policy).unwrap();
+    let after_positive_debit = organ_energies(&organism);
+
+    assert!((applied_debit - 0.10).abs() < 1e-6);
+    assert!(
+        (before_projected_energy - organism.biochemistry().body.energy - applied_debit).abs()
+            < 1e-5
+    );
+    assert!(before_positive_debit
+        .iter()
+        .zip(after_positive_debit.iter())
+        .all(|(before, after)| after < before));
+    assert_ne!(after_positive_debit[0], after_positive_debit[1]);
     assert!(organism.validate_contract().is_ok());
 }
 

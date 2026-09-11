@@ -235,6 +235,34 @@ impl BodyState {
         Ok(())
     }
 
+    /// Debit the current body-energy projection from local organ reserves in
+    /// proportion to each organ's reserve. This preserves local heterogeneity
+    /// while reducing the compatibility mean by the applied debit.
+    pub fn debit_energy_pro_rata(
+        &mut self,
+        requested_debit: f32,
+    ) -> Result<f32, ScaffoldContractError> {
+        validate_finite(requested_debit)?;
+        if requested_debit < 0.0 {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        self.validate_contract()?;
+
+        let applied_debit = requested_debit.min(self.energy);
+        if applied_debit == 0.0 {
+            return Ok(0.0);
+        }
+
+        let total_energy = self.organs.iter().map(|organ| organ.energy).sum::<f32>();
+        let total_debit = applied_debit * ORGAN_KIND_COUNT as f32;
+        let scale = (1.0 - total_debit / total_energy).max(0.0);
+        for organ in &mut self.organs {
+            organ.energy = clamp01(organ.energy * scale);
+        }
+        self.refresh_compatibility_projections();
+        Ok(applied_debit)
+    }
+
     pub fn set_health(&mut self, health: f32) -> Result<(), ScaffoldContractError> {
         if !health.is_finite() || !(0.0..=1.0).contains(&health) {
             return Err(ScaffoldContractError::ScalarOutOfRange);
