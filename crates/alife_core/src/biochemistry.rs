@@ -833,6 +833,7 @@ impl Validate for BiochemistryState {
         self.reproduction.validate_contract()?;
         self.cadence.validate_contract()?;
         if self.homeostasis.tick != self.tick
+            || self.graph_state.tick() != self.tick
             || self.development.age_ticks.raw() > self.tick.raw()
             || self.development.last_update_tick.raw() > self.tick.raw()
             || self.reproduction.last_update_tick.raw() > self.development.age_ticks.raw()
