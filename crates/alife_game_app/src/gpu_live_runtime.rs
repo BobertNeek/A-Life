@@ -8487,7 +8487,7 @@ impl GpuLiveBrainRuntime {
                 .life_statistics
                 .observe(PassiveLifeEvent::SurvivalTick {
                     tick: tick_after,
-                    regime: EnvironmentalRegime::Temperate,
+                    regime: EnvironmentalRegime::Unknown,
                     energy_q16: unit_f32_to_q16(resident.homeostasis.drives.brain_atp),
                     movement_distance_q16: movement_by_organism.get(&raw).copied().unwrap_or(0),
                     gpu_dispatched,
