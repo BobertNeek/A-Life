@@ -26,14 +26,9 @@ architecture, user instructions, or dated evidence reports.
 | Agent / task | Scope | Branch or worktree | Status | Next action | Blocker | Updated (UTC) |
 | --- | --- | --- | --- | --- | --- | --- |
 | Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
-
-
-
 | Luna max / N010 | Ambient mating opportunity | codex/recovered-n010-20260910 | Correction requested | Replace per-actor all-pairs scan with partner scan | None | 2026-09-11 02:09Z |
-
-| Luna max / N015 | Grounded communication metric | codex/recovered-n015-20260910 | Setup pending | Implement packet preserving N017 | None | 2026-09-11 02:09Z |
-
-| Luna max / N008 | Chemical range contracts | codex/recovered-n008-20260910 | Setup pending | Preserve structural and phenotype-bound checks | None | 2026-09-11 02:11Z |
+| Luna max / N015 | Grounded communication metric | codex/recovered-n015-20260910 | Running | Implement packet preserving N017 | None | 2026-09-11 02:14Z |
+| Luna max / N008 | Chemical ranges plus three owner/admission caller files | codex/recovered-n008-20260910 | Running; scope approved | Wire contextual validation; see campaign.json exact allowlist | None | 2026-09-11 02:14Z |
 
 ## Handoffs and requests
 
