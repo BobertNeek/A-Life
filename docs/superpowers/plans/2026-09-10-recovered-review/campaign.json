@@ -269,7 +269,7 @@
       "status": "running",
       "assignedBase": "83e176156f1411415990710e380b8b8c356ec0da",
       "threadId": "01a08ec0-33aa-7202-a132-d04653f331e0",
-      "cursor": "3981ec89-8c0d-43cb-8f3c-daad5bc14c5d:1",
+      "cursor": "3981ec89-8c0d-43cb-8f3c-daad5bc14c5d:2",
       "title": "Repair N022 — current interval velocities",
       "hostId": "local"
     },
@@ -402,10 +402,10 @@
       "id": "N006",
       "goal": "Trace admitted time jumps and v2 AOA-TIME-004 fidelity policy. Determine whether the capped integration requires an explicit approximation receipt or already meets a documented contract. Do not uncap loops or treat a permitted approximation as a confirmed defect.",
       "files": "crates/alife_core/src/biochemistry.rs; crates/alife_core/src/biochemical_graph.rs",
-      "status": "running",
+      "status": "not_a_defect",
       "assignedBase": "83e176156f1411415990710e380b8b8c356ec0da",
       "threadId": "01a08ec0-340f-7ea3-9221-db4d1eb8862c",
-      "cursor": "4ba01928-2911-4ce0-bdc2-20aa87cab107:1",
+      "cursor": "4ba01928-2911-4ce0-bdc2-20aa87cab107:2",
       "title": "Triage N006 — bounded time fidelity",
       "hostId": "local"
     },
@@ -413,7 +413,9 @@
       "id": "C001",
       "goal": "Establish intended aggregation of receptors targeting one locus. Trace phenotype constraints and constructors. Last-writer behavior alone is not proof of a defect.",
       "files": "crates/alife_core/src/biochemical_graph.rs",
-      "status": "queued"
+      "status": "dispatching",
+      "assignedBase": "54c44d669b30d67b608492be02bb28cd4011b320",
+      "clientThreadId": "client-new-thread:1bac5463-41fe-48fc-a073-7a17a4ed9429"
     },
     {
       "id": "C002",
@@ -425,7 +427,9 @@
       "id": "C003",
       "goal": "Trace the complete public embodiment replacement chain and prove whether a lower source tick can be admitted. Check monotonic semantics against v2.",
       "files": "crates/alife_world/src/organism.rs",
-      "status": "queued"
+      "status": "dispatching",
+      "assignedBase": "54c44d669b30d67b608492be02bb28cd4011b320",
+      "clientThreadId": "client-new-thread:fc293bc4-2400-478c-bbaf-062dafbd1069"
     },
     {
       "id": "C004",
@@ -437,12 +441,12 @@
       "id": "C005",
       "goal": "After N013, trace organism retirement/removal and recent patch ownership. Prove whether departed organisms remain in last_sealed_patches, and identify a safe cleanup point after required observation/archive.",
       "files": "crates/alife_game_app/src/gpu_live_runtime.rs",
-      "status": "running",
+      "status": "already_fixed",
       "assignedBase": "83e176156f1411415990710e380b8b8c356ec0da",
       "threadId": "01a08ec0-bc74-7130-9aa6-a73190ab5669",
       "title": "Triage C005 — departed patch retention",
       "hostId": "local",
-      "cursor": "05ba9081-03d9-408a-9edf-c6731262edda:1"
+      "cursor": "05ba9081-03d9-408a-9edf-c6731262edda:2"
     }
   ],
   "reviews": [
@@ -659,6 +663,16 @@
         "83e17615"
       ],
       "evidence": "Full diff and frame validator/callers reviewed. Count tracks bounded configured emitter loop when frame exists, zero without frame. Independent counts fixture valid including duplicate inputs. Supervisor additionally corrected exactly one stale headless world assertion to phenotype neuroemitter length; production world unchanged. Whitespace passed. Native tests/compile/runtime UNVERIFIED."
+    },
+    {
+      "id": "N006",
+      "status": "NOT_A_DEFECT_STATIC",
+      "evidence": "Independently read controlling v2 Time section 236-250, core cadence cap/validation and advance, world one-tick scheduling and public low-level advance, persistence direct restoration. AOA-TIME-004 explicitly permits capped substeps as an alternative to analytic integration/receipts. Existing 64 cap therefore is not itself a defect. This is not proof of numerical fidelity for arbitrary large low-level jumps; no runtime evidence or repair claimed."
+    },
+    {
+      "id": "C005",
+      "status": "ALREADY_FIXED_STATIC",
+      "evidence": "Independently read gpu_live_runtime.rs:6766-6770 and 6873-6934, staged_tick.rs:835-841. Recent patches prune after reconcile and successful retirement. Final patch sequence archived before ownership removal; scheduled passive observation precedes reconciliation. Already handled by accepted N013. No duplicate patch/test; runtime unverified."
     }
   ],
   "gitApprovalOwner": "supervisor; user explicitly delegated routine approvals. Perform scoped Git through permitted supervisor tools; workers final-handoff blocked operations, no elevated approval prompts or sandbox changes."
