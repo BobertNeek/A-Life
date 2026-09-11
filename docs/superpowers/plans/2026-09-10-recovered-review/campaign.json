@@ -41,9 +41,11 @@
         "crates/alife_core/src/biochemistry.rs",
         "crates/alife_world/src/organism.rs"
       ],
-      "status": "setup_pending",
+      "status": "running",
       "clientThreadId": "client-new-thread:9583d4a2-bc1e-4bbd-9219-b8b75e4d61e9",
-      "title": "Repair N002 — organ energy debit"
+      "title": "Repair N002 — organ energy debit",
+      "threadId": "01a08dfa-d8ce-7611-9cda-65616f03d5fb",
+      "hostId": "local"
     },
     {
       "id": "N003",
