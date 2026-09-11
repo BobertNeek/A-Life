@@ -750,6 +750,7 @@ impl WorldOrganismRecord {
             .revision()
             .checked_add(1)
             .ok_or(ScaffoldContractError::InvalidId)?;
+        Tick::validate_monotonic(self.embodiment.source_tick(), candidate.source_tick())?;
         if candidate.entity_id() != self.world_entity_id
             || candidate.revision() != expected_revision
             || candidate.source_tick().raw() > self.biochemistry.tick.raw()
