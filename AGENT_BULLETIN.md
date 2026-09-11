@@ -25,8 +25,7 @@ architecture, user instructions, or dated evidence reports.
 
 | Agent / task | Scope | Branch or worktree | Status | Next action | Blocker | Updated (UTC) |
 | --- | --- | --- | --- | --- | --- | --- |
-| Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
-| Luna max / N021 | Versioned joint physical outcomes | codex/recovered-n021-20260910 | V12 scope authorized | Preserve old ABI/digests; ground measurements | Bob owns routine Git | 2026-09-11 06:33Z |
+| Bob / recovered review supervisor | 28 packets | initial-founder-training-20260907 | Closed with two design questions | C001 receptor reduction; C004 energy stability definition | Compile/runtime unverified | 2026-09-11 07:06Z |
 
 ## Handoffs and requests
 
@@ -76,3 +75,5 @@ Routine Git approvals belong to Bob. Workers hand off sandbox-blocked Git operat
 | 2026-09-11 | Bob triage / C004 | UNRESOLVED: mean energy mislabeled stability; temporal formula unspecified; persisted values preserved | campaign.json source review |
 
 | 2026-09-11 | Bob review / C002 | Graph-owner tick equality accepted; static only | 84a2d8c3 |
+
+| 2026-09-11 | Bob review / N021 | V12 event persistence accepted after compatibility and test correction; static only | 1313e615 + e9d134c0 + 8f0996b4 |
