@@ -85,9 +85,10 @@ fn joint_outcome() -> JointPhysicalOutcome {
 
 fn v12_joint_outcome() -> JointPhysicalOutcome {
     let joint = joint_outcome();
+    let execution = joint.execution;
     joint
         .with_channel_outcomes(vec![
-            ChannelPhysicalOutcome::new(MotorChannel::Locomotion, joint.execution).unwrap(),
+            ChannelPhysicalOutcome::new(MotorChannel::Locomotion, execution).unwrap(),
             ChannelPhysicalOutcome::new(
                 MotorChannel::Vocal,
                 PhysicalActionOutcome {
