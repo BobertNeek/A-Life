@@ -26,8 +26,7 @@ architecture, user instructions, or dated evidence reports.
 | Agent / task | Scope | Branch or worktree | Status | Next action | Blocker | Updated (UTC) |
 | --- | --- | --- | --- | --- | --- | --- |
 | Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
-| Luna max / N021 | Joint physical outcomes | codex/recovered-n021-20260910 | Dispatching | Preserve independent measured events | Bob owns routine Git | 2026-09-11 05:59Z |
-| Luna max / C002 | Chemistry tick consistency | codex/recovered-c002-20260910 | Repair authorized | Tick equality guard and one regression | Bob owns routine Git | 2026-09-11 05:59Z |
+| Luna max / N021 | Joint physical outcomes | codex/recovered-n021-20260910 | Compatibility review requested | Report minimum codec scope and grounded regression | Bob owns routine Git | 2026-09-11 06:16Z |
 
 ## Handoffs and requests
 
@@ -75,3 +74,5 @@ Routine Git approvals belong to Bob. Workers hand off sandbox-blocked Git operat
 
 | 2026-09-11 | Bob review / N023 | Swept obstacle collision accepted; static only | af2c66ea |
 | 2026-09-11 | Bob triage / C004 | UNRESOLVED: mean energy mislabeled stability; temporal formula unspecified; persisted values preserved | campaign.json source review |
+
+| 2026-09-11 | Bob review / C002 | Graph-owner tick equality accepted; static only | 84a2d8c3 |
