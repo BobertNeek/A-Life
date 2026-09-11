@@ -149,6 +149,27 @@ impl WorldObject {
             && !self.consumed
             && distance(self.position, position) <= self.radius.max(HEADLESS_CONTACT_RADIUS)
     }
+
+    fn blocks_segment(&self, start: Vec3f, end: Vec3f) -> bool {
+        let segment = subtract(end, start);
+        let segment_length_squared =
+            segment.x * segment.x + segment.y * segment.y + segment.z * segment.z;
+        let closest_point = if segment_length_squared == 0.0 {
+            start
+        } else {
+            let from_start = subtract(self.position, start);
+            let projection =
+                (from_start.x * segment.x + from_start.y * segment.y + from_start.z * segment.z)
+                    / segment_length_squared;
+            let clamped_projection = projection.clamp(0.0, 1.0);
+            Vec3f::new(
+                start.x + segment.x * clamped_projection,
+                start.y + segment.y * clamped_projection,
+                start.z + segment.z * clamped_projection,
+            )
+        };
+        self.blocks_position(closest_point)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -3163,7 +3184,7 @@ impl HeadlessWorld {
             return self.invalid_target(command, command.target_entity);
         };
         destination.validate()?;
-        if let Some(blocker) = self.blocking_object_at(destination) {
+        if let Some(blocker) = self.blocking_object_between(start, destination) {
             return self.finish_action(
                 command,
                 false,
@@ -3464,10 +3485,10 @@ impl HeadlessWorld {
         visible
     }
 
-    fn blocking_object_at(&self, position: Vec3f) -> Option<WorldEntityId> {
+    fn blocking_object_between(&self, start: Vec3f, end: Vec3f) -> Option<WorldEntityId> {
         self.objects.iter().find_map(|(id, object)| {
             object
-                .blocks_position(position)
+                .blocks_segment(start, end)
                 .then_some(WorldEntityId(*id))
         })
     }

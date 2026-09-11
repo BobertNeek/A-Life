@@ -203,6 +203,71 @@ fn action_execution_supports_move_inspect_eat_rest_and_idle() {
 }
 
 #[test]
+fn movement_sweeps_obstacles_between_clear_endpoints() {
+    let move_to = |world: &mut HeadlessWorld, target: Vec3f| {
+        world
+            .apply_command(&command(
+                ActionKind::Move.canonical_id(),
+                ActionKind::Move,
+                None,
+                Some(target),
+            ))
+            .unwrap()
+    };
+
+    let crossing_start = Vec3f::new(-0.5, 0.0, 0.95);
+    let mut crossing = HeadlessScenarioBuilder::new(124)
+        .agent("agent", organism(), crossing_start)
+        .obstacle("blocker", Vec3f::ZERO, 1.0)
+        .build()
+        .unwrap();
+    let crossing_result = move_to(&mut crossing, Vec3f::new(0.5, 0.0, 0.95));
+    assert!(!crossing_result.execution.succeeded);
+    assert_eq!(
+        crossing_result.execution.failure,
+        Some(ReferenceActionFailure::Blocked)
+    );
+    assert_eq!(
+        crossing
+            .entity(crossing.entity_id("agent").unwrap())
+            .unwrap()
+            .position,
+        crossing_start
+    );
+
+    let mut endpoint_blocked = HeadlessScenarioBuilder::new(125)
+        .agent("agent", organism(), Vec3f::ZERO)
+        .obstacle("blocker", pos(1.0, 0.0), 0.5)
+        .build()
+        .unwrap();
+    let endpoint_result = move_to(&mut endpoint_blocked, pos(1.0, 0.0));
+    assert!(!endpoint_result.execution.succeeded);
+    assert_eq!(
+        endpoint_result.execution.failure,
+        Some(ReferenceActionFailure::Blocked)
+    );
+
+    let mut clear = HeadlessScenarioBuilder::new(126)
+        .agent("agent", organism(), Vec3f::ZERO)
+        .obstacle("blocker", pos(0.0, 2.0), 0.5)
+        .build()
+        .unwrap();
+    let clear_result = move_to(&mut clear, pos(1.0, 0.0));
+    assert!(clear_result.execution.succeeded);
+    assert_eq!(
+        clear_result.execution.physical.contact,
+        PhysicalContactKind::Moved
+    );
+    assert_eq!(
+        clear
+            .entity(clear.entity_id("agent").unwrap())
+            .unwrap()
+            .position,
+        pos(1.0, 0.0)
+    );
+}
+
+#[test]
 fn missing_affordance_and_invalid_target_failures_are_distinct() {
     let mut world = world_with_food_and_hazard();
     let stone = world.entity_id("stone").unwrap();
