@@ -233,6 +233,13 @@ fn unexposed_passive_metrics_are_unknown_and_updates_are_constant_state() {
     statistics.validate_contract().unwrap();
 
     let encoded = serde_json::to_vec(&statistics).unwrap();
+    let wire = serde_json::to_value(&statistics).unwrap();
+    assert!(wire.get("energy_stability").is_some());
+    assert!(wire.get("mean_brain_atp").is_none());
+    assert_eq!(
+        serde_json::to_value(PassiveMetricKind::MeanBrainAtp).unwrap(),
+        serde_json::json!("EnergyStability")
+    );
     let restored: PassiveLifeStatistics = serde_json::from_slice(&encoded).unwrap();
     assert_eq!(restored, statistics);
 }

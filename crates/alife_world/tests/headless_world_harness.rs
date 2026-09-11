@@ -350,7 +350,14 @@ fn ingesting_one_edible_poison_applies_nutrition_and_pain_together() {
 
 #[test]
 fn action_execution_supports_approach_flee_grab_and_vocalize() {
-    let mut world = world_with_food_and_hazard();
+    // Keep this action-dispatch path clear. The shared fixture's stone intersects
+    // the flee segment; obstacle rejection has its own movement-sweep test.
+    let mut world = HeadlessScenarioBuilder::new(123)
+        .agent("agent", organism(), pos(0.0, 0.0))
+        .food("berry", pos(1.0, 0.0), 0.6)
+        .hazard("thorn", pos(0.0, 1.0), 0.7)
+        .build()
+        .unwrap();
     let berry = world.entity_id("berry").unwrap();
     let thorn = world.entity_id("thorn").unwrap();
 

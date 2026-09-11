@@ -329,7 +329,7 @@ fn mixed_reactions_validate_material_balance_without_restricting_regulatory_term
     ];
 
     for (name, reaction, expected_valid) in cases {
-        let graph: BiochemicalPhenotype = serde_json::from_value(json!({
+        let graph = serde_json::from_value::<BiochemicalPhenotype>(json!({
             "schema_version": BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
             "species_budget": species.len(),
             "reaction_budget": 1,
@@ -338,8 +338,11 @@ fn mixed_reactions_validate_material_balance_without_restricting_regulatory_term
             "emitters": [],
             "receptors": [],
             "neuroemitters": [],
-        }))
-        .unwrap();
-        assert_eq!(graph.validate_contract().is_ok(), expected_valid, "{name}");
+        }));
+        // Loading compiles the immutable graph and rejects invalid chemistry there.
+        assert_eq!(graph.is_ok(), expected_valid, "{name}");
+        if let Ok(graph) = graph {
+            graph.validate_contract().unwrap();
+        }
     }
 }

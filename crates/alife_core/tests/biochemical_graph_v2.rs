@@ -296,3 +296,47 @@ fn non_unit_species_ranges_survive_advance_and_restore_validation() {
         .unwrap();
     assert!(concentration > 1.0);
 }
+
+#[test]
+fn grouped_receptors_use_inherited_baselines_and_responses_after_reload() {
+    for target in [
+        json!({"Drive":"Hunger"}),
+        json!({"Endocrine":"Cortisol"}),
+        json!({"Neural":"Sleep"}),
+    ] {
+        for digital in [false, true] {
+            let receptors = vec![
+                json!({"source":1,"target":target,"threshold":0.25,"gain":1.0,"nominal":0.2,"digital":digital}),
+                json!({"source":1,"target":target,"threshold":0.5,"gain":0.5,"nominal":0.4}),
+                json!({"source":1,"target":target,"threshold":0.5,"gain":-0.5,"nominal":0.3}),
+            ];
+            let mut wire = json!({"schema_version":BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
+                "species_budget":1,"reaction_budget":0,
+                "species":[{"id":1,"kind":"Regulatory","compartment":"Circulation","baseline":0.75,
+                    "decay_retention":1.0,"minimum":0.0,"maximum":1.0}],
+                "reactions":[],"emitters":[],"neuroemitters":[],"receptors":receptors});
+            let expected = if digital { 0.7375 } else { 0.4875 };
+            for _ in 0..2 {
+                let graph: BiochemicalPhenotype = serde_json::from_value(wire.clone()).unwrap();
+                let encoded = serde_json::to_value(&graph).unwrap();
+                assert!(encoded.get("compiled").is_none());
+                let reloaded: BiochemicalPhenotype = serde_json::from_value(encoded).unwrap();
+                assert_eq!(graph, reloaded);
+                let state = BiochemicalGraphState::new(&reloaded, Tick::ZERO, 1.0).unwrap();
+                let home = state.derive_homeostasis(&reloaded).unwrap();
+                let actual = if target.get("Drive").is_some() {
+                    home.drives.hunger
+                } else if target.get("Endocrine").is_some() {
+                    home.hormones.cortisol
+                } else {
+                    state
+                        .neural_receptor_frame(&reloaded)
+                        .unwrap()
+                        .activation_for(alife_core::NeuralReceptorClass::Sleep)
+                };
+                assert!((actual - expected).abs() < 1e-6, "{target}: {actual}");
+                wire["receptors"].as_array_mut().unwrap().reverse();
+            }
+        }
+    }
+}

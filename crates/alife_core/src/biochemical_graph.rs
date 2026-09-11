@@ -1,6 +1,7 @@
 //! Bounded sparse biochemical graph and typed neural coupling contracts.
 
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 use crate::{
     BodyEventDelta, BodyState, DriveSnapshot, EndocrineProfile, EndocrineSnapshot,
@@ -242,6 +243,8 @@ pub enum BiochemicalTargetLocus {
     Neural(NeuralReceptorClass),
     Development(u8),
     Autonomic(u8),
+    OrganEnergyUse,
+    OrganRepair,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -250,12 +253,23 @@ pub struct BiochemicalReceptor {
     pub target: BiochemicalTargetLocus,
     pub threshold: f32,
     pub gain: f32,
+    #[serde(default, skip_serializing_if = "zero_expression_floor")]
+    pub nominal: f32,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub digital: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl Validate for BiochemicalReceptor {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         self.source.validate()?;
-        validate_finite_values(&[self.threshold, self.gain])?;
+        validate_finite_values(&[self.threshold, self.gain, self.nominal])?;
+        if !(0.0..=1.0).contains(&self.nominal) {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
         if !(0.0..=1.0).contains(&self.threshold) || !(-2.0..=2.0).contains(&self.gain) {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
@@ -412,7 +426,24 @@ impl Validate for NeuralReceptorFrame {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "BiochemicalPhenotypeWire")]
 pub struct BiochemicalPhenotype {
+    schema_version: u16,
+    species_budget: usize,
+    reaction_budget: usize,
+    species: Vec<ChemicalSpecies>,
+    reactions: Vec<SparseReaction>,
+    emitters: Vec<BiochemicalEmitter>,
+    receptors: Vec<BiochemicalReceptor>,
+    neuroemitters: Vec<Neuroemitter>,
+    #[serde(skip)]
+    compiled: Arc<CompiledBiochemistry>,
+}
+
+// Only genetic source data crosses persistence boundaries. Rebuild derived indexes
+// once on load; private source fields cannot invalidate them during simulation.
+#[derive(Deserialize)]
+struct BiochemicalPhenotypeWire {
     schema_version: u16,
     species_budget: usize,
     reaction_budget: usize,
@@ -423,7 +454,123 @@ pub struct BiochemicalPhenotype {
     neuroemitters: Vec<Neuroemitter>,
 }
 
+impl TryFrom<BiochemicalPhenotypeWire> for BiochemicalPhenotype {
+    type Error = ScaffoldContractError;
+    fn try_from(wire: BiochemicalPhenotypeWire) -> Result<Self, Self::Error> {
+        let mut value = Self {
+            schema_version: wire.schema_version,
+            species_budget: wire.species_budget,
+            reaction_budget: wire.reaction_budget,
+            species: wire.species,
+            reactions: wire.reactions,
+            emitters: wire.emitters,
+            receptors: wire.receptors,
+            neuroemitters: wire.neuroemitters,
+            compiled: Arc::default(),
+        };
+        value.compile()?;
+        Ok(value)
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+struct CompiledBiochemistry {
+    reactions: Vec<Vec<ReactionParticipant>>,
+    rate_controls: Vec<Option<usize>>,
+    emitter_targets: Vec<usize>,
+    neuroemitter_targets: Vec<usize>,
+    receptor_groups: Vec<ReceptorGroup>,
+    organ_energy_group: Option<usize>,
+    organ_repair_group: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ReactionParticipant {
+    index: usize,
+    gross: f64,
+    net: f64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct ReceptorGroup {
+    target: BiochemicalTargetLocus,
+    // receptor index and resolved concentration index
+    inputs: Vec<(usize, usize)>,
+}
+
 impl BiochemicalPhenotype {
+    fn compile(&mut self) -> Result<(), ScaffoldContractError> {
+        self.validate_contract()?;
+        let mut compiled = CompiledBiochemistry::default();
+        for reaction in &self.reactions {
+            let mut participants: Vec<ReactionParticipant> = Vec::with_capacity(4);
+            for (terms, sign) in [(&reaction.reactants, -1.0), (&reaction.products, 1.0)] {
+                for term in terms {
+                    let index = self
+                        .species_index(term.species)
+                        .ok_or(ScaffoldContractError::InvalidId)?;
+                    let slot = match participants.iter().position(|row| row.index == index) {
+                        Some(slot) => slot,
+                        None => {
+                            participants.push(ReactionParticipant {
+                                index,
+                                gross: 0.0,
+                                net: 0.0,
+                            });
+                            participants.len() - 1
+                        }
+                    };
+                    participants[slot].net += sign * f64::from(term.amount);
+                    if sign < 0.0 {
+                        participants[slot].gross += f64::from(term.amount);
+                    }
+                }
+            }
+            participants.sort_by_key(|row| row.index);
+            compiled.reactions.push(participants);
+            compiled.rate_controls.push(
+                reaction
+                    .rate_control
+                    .map(|id| self.species_index(id).unwrap()),
+            );
+        }
+        compiled.emitter_targets = self
+            .emitters
+            .iter()
+            .map(|row| self.species_index(row.target).unwrap())
+            .collect();
+        compiled.neuroemitter_targets = self
+            .neuroemitters
+            .iter()
+            .map(|row| self.species_index(row.target).unwrap())
+            .collect();
+        for (index, receptor) in self.receptors.iter().enumerate() {
+            let slot = match compiled
+                .receptor_groups
+                .iter()
+                .position(|group| group.target == receptor.target)
+            {
+                Some(slot) => slot,
+                None => {
+                    compiled.receptor_groups.push(ReceptorGroup {
+                        target: receptor.target,
+                        inputs: Vec::new(),
+                    });
+                    compiled.receptor_groups.len() - 1
+                }
+            };
+            compiled.receptor_groups[slot]
+                .inputs
+                .push((index, self.species_index(receptor.source).unwrap()));
+            match receptor.target {
+                BiochemicalTargetLocus::OrganEnergyUse => compiled.organ_energy_group = Some(slot),
+                BiochemicalTargetLocus::OrganRepair => compiled.organ_repair_group = Some(slot),
+                _ => {}
+            }
+        }
+        self.compiled = Arc::new(compiled);
+        Ok(())
+    }
     pub fn species(&self) -> &[ChemicalSpecies] {
         &self.species
     }
@@ -463,7 +610,7 @@ impl BiochemicalPhenotype {
             .get_mut(reaction_index)
             .ok_or(ScaffoldContractError::InvalidGeneticBounds)?;
         reaction.rate = rate;
-        value.validate_contract()?;
+        value.compile()?;
         Ok(value)
     }
 
@@ -478,7 +625,7 @@ impl BiochemicalPhenotype {
             .get_mut(emitter_index)
             .ok_or(ScaffoldContractError::InvalidGeneticBounds)?;
         emitter.developmental_expression_floor = floor;
-        value.validate_contract()?;
+        value.compile()?;
         Ok(value)
     }
 
@@ -575,6 +722,22 @@ impl BiochemicalPhenotype {
             neural_receptor(ACETYLCHOLINE, NeuralReceptorClass::AttentionGate, 1.0),
             neural_receptor(SLEEP_PRESSURE, NeuralReceptorClass::Sleep, 1.0),
             neural_receptor(SEROTONIN, NeuralReceptorClass::Consolidation, 1.0),
+            BiochemicalReceptor {
+                source: BRAIN_ATP,
+                target: BiochemicalTargetLocus::OrganEnergyUse,
+                threshold: 0.0,
+                gain: 0.75,
+                nominal: 0.25,
+                digital: false,
+            },
+            BiochemicalReceptor {
+                source: PAIN,
+                target: BiochemicalTargetLocus::OrganRepair,
+                threshold: 0.0,
+                gain: 0.02,
+                nominal: 0.0,
+                digital: false,
+            },
         ];
         receptors.sort_by_key(|row| (target_order(row.target), row.source));
         let neuroemitters = vec![
@@ -609,7 +772,7 @@ impl BiochemicalPhenotype {
                 gain: 0.15,
             },
         ];
-        let value = Self {
+        let mut value = Self {
             schema_version: BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
             species_budget: MAX_ACTIVE_CHEMICAL_SPECIES,
             reaction_budget: MAX_ACTIVE_REACTIONS,
@@ -618,8 +781,9 @@ impl BiochemicalPhenotype {
             emitters,
             receptors,
             neuroemitters,
+            compiled: Arc::default(),
         };
-        value.validate_contract()?;
+        value.compile()?;
         Ok(value)
     }
 
@@ -755,10 +919,18 @@ impl BiochemicalGraphState {
             let expressed_baseline = species.expressed_baseline(developmental_expression);
             next.concentrations[index] = (expressed_baseline
                 + (self.concentrations[index] - expressed_baseline)
-                    * species.decay_retention.powf(elapsed))
+                    * if elapsed == 1.0 {
+                        species.decay_retention
+                    } else {
+                        species.decay_retention.powf(elapsed)
+                    })
             .clamp(species.minimum, species.maximum);
         }
-        for emitter in &phenotype.emitters {
+        for (emitter, target_index) in phenotype
+            .emitters
+            .iter()
+            .zip(&phenotype.compiled.emitter_targets)
+        {
             let cadence_crossings = crossed_cadence(self.tick, next_tick, emitter.cadence_ticks);
             if cadence_crossings > 0 {
                 let source = source_value(emitter.source, body, event);
@@ -781,7 +953,7 @@ impl BiochemicalGraphState {
                 apply_delta(
                     phenotype,
                     &mut next,
-                    emitter.target,
+                    *target_index,
                     response
                         * emitter.gain
                         * developmental_expression.max(emitter.developmental_expression_floor)
@@ -790,7 +962,11 @@ impl BiochemicalGraphState {
             }
         }
         let neural_evaluations = if let Some(frame) = neural {
-            for neuroemitter in &phenotype.neuroemitters {
+            for (neuroemitter, target_index) in phenotype
+                .neuroemitters
+                .iter()
+                .zip(&phenotype.compiled.neuroemitter_targets)
+            {
                 let activity = frame
                     .emissions
                     .iter()
@@ -801,7 +977,7 @@ impl BiochemicalGraphState {
                 apply_delta(
                     phenotype,
                     &mut next,
-                    neuroemitter.target,
+                    *target_index,
                     response * neuroemitter.gain * developmental_expression,
                 )?;
             }
@@ -809,11 +985,13 @@ impl BiochemicalGraphState {
         } else {
             0
         };
-        for reaction in &phenotype.reactions {
+        for (index, reaction) in phenotype.reactions.iter().enumerate() {
             apply_reaction(
                 phenotype,
                 &mut next,
                 reaction,
+                &phenotype.compiled.reactions[index],
+                phenotype.compiled.rate_controls[index],
                 elapsed * developmental_expression,
             )?;
         }
@@ -859,9 +1037,15 @@ impl BiochemicalGraphState {
             sleep_pressure: 0.0,
             extension: [0.0; crate::ENDOCRINE_EXTENSION_SLOTS],
         };
-        for receptor in &phenotype.receptors {
-            let signal = receptor_signal(self, phenotype, *receptor)?;
-            match receptor.target {
+        for group in &phenotype.compiled.receptor_groups {
+            if !matches!(
+                group.target,
+                BiochemicalTargetLocus::Drive(_) | BiochemicalTargetLocus::Endocrine(_)
+            ) {
+                continue;
+            }
+            let signal = receptor_group_signal(self, phenotype, group);
+            match group.target {
                 BiochemicalTargetLocus::Drive(channel) => set_drive(&mut drives, channel, signal),
                 BiochemicalTargetLocus::Endocrine(channel) => {
                     set_endocrine(&mut hormones, channel, signal)
@@ -872,22 +1056,36 @@ impl BiochemicalGraphState {
         HomeostaticSnapshot::new(self.tick, drives, hormones)
     }
 
+    pub fn organ_regulation(
+        &self,
+        phenotype: &BiochemicalPhenotype,
+    ) -> Result<(Option<f32>, Option<f32>), ScaffoldContractError> {
+        self.validate_against(phenotype)?;
+        let evaluate = |index: Option<usize>| {
+            index.map(|index| {
+                receptor_group_signal(self, phenotype, &phenotype.compiled.receptor_groups[index])
+            })
+        };
+        Ok((
+            evaluate(phenotype.compiled.organ_energy_group),
+            evaluate(phenotype.compiled.organ_repair_group),
+        ))
+    }
+
     pub fn neural_receptor_frame(
         &self,
         phenotype: &BiochemicalPhenotype,
     ) -> Result<NeuralReceptorFrame, ScaffoldContractError> {
         self.validate_against(phenotype)?;
         let mut activations = Vec::<NeuralReceptorActivation>::new();
-        for receptor in &phenotype.receptors {
-            let BiochemicalTargetLocus::Neural(class) = receptor.target else {
+        for group in &phenotype.compiled.receptor_groups {
+            let BiochemicalTargetLocus::Neural(class) = group.target else {
                 continue;
             };
-            let signal = receptor_signal(self, phenotype, *receptor)?;
-            if let Some(existing) = activations.iter_mut().find(|row| row.class == class) {
-                existing.signal = (existing.signal + signal).clamp(0.0, 1.0);
-            } else {
-                activations.push(NeuralReceptorActivation { class, signal });
-            }
+            activations.push(NeuralReceptorActivation {
+                class,
+                signal: receptor_group_signal(self, phenotype, group),
+            });
         }
         activations.sort_by_key(|row| row.class);
         let frame = NeuralReceptorFrame {
@@ -904,7 +1102,6 @@ impl BiochemicalGraphState {
         &self,
         phenotype: &BiochemicalPhenotype,
     ) -> Result<(), ScaffoldContractError> {
-        phenotype.validate_contract()?;
         if self.schema_version != BIOCHEMICAL_GRAPH_SCHEMA_VERSION
             || usize::from(self.active_species) != phenotype.species.len()
         {
@@ -977,53 +1174,18 @@ fn apply_reaction(
     phenotype: &BiochemicalPhenotype,
     state: &mut BiochemicalGraphState,
     reaction: &SparseReaction,
+    participants: &[ReactionParticipant],
+    rate_control: Option<usize>,
     elapsed: f32,
 ) -> Result<(), ScaffoldContractError> {
-    let original_concentrations = state.concentrations;
-    let mut net_coefficients = [0.0_f64; MAX_ACTIVE_CHEMICAL_SPECIES];
-    let mut gross_reactant_coefficients = [0.0_f64; MAX_ACTIVE_CHEMICAL_SPECIES];
-
-    for term in &reaction.reactants {
-        let index = phenotype
-            .species_index(term.species)
-            .ok_or(ScaffoldContractError::InvalidId)?;
-        let coefficient = f64::from(term.amount);
-        gross_reactant_coefficients[index] += coefficient;
-        net_coefficients[index] -= coefficient;
-        if !gross_reactant_coefficients[index].is_finite() || !net_coefficients[index].is_finite() {
-            return Err(ScaffoldContractError::NonFiniteFloat);
-        }
-    }
-    for term in &reaction.products {
-        let index = phenotype
-            .species_index(term.species)
-            .ok_or(ScaffoldContractError::InvalidId)?;
-        net_coefficients[index] += f64::from(term.amount);
-        if !net_coefficients[index].is_finite() {
-            return Err(ScaffoldContractError::NonFiniteFloat);
-        }
-    }
-
-    let active_species = usize::from(state.active_species);
-    if !net_coefficients[..active_species]
-        .iter()
-        .any(|coefficient| *coefficient != 0.0)
-    {
+    if participants.iter().all(|row| row.net == 0.0) {
         return Ok(());
     }
-
     let mut available = f64::INFINITY;
-    for (index, gross_coefficient) in gross_reactant_coefficients
-        .iter()
-        .enumerate()
-        .take(active_species)
-    {
-        if *gross_coefficient <= 0.0 {
-            continue;
-        }
-        let row = phenotype.species[index];
-        let concentration = f64::from(original_concentrations[index]);
-        let resource = if net_coefficients[index] < 0.0 {
+    for participant in participants.iter().filter(|row| row.gross > 0.0) {
+        let row = phenotype.species[participant.index];
+        let concentration = f64::from(state.concentrations[participant.index]);
+        let resource = if participant.net < 0.0 {
             concentration - f64::from(row.minimum)
         } else {
             concentration
@@ -1034,24 +1196,11 @@ fn apply_reaction(
         if resource < 0.0 {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
-        let candidate = resource / *gross_coefficient;
-        if !candidate.is_finite() {
-            return Err(ScaffoldContractError::NonFiniteFloat);
-        }
-        available = available.min(candidate);
+        available = available.min(resource / participant.gross);
     }
-    if !available.is_finite() {
-        return Err(ScaffoldContractError::NonFiniteFloat);
-    }
-
-    let control = reaction
-        .rate_control
-        .map(|id| state.concentration(phenotype, id))
-        .transpose()?
+    let control = rate_control
+        .map(|index| state.concentrations[index])
         .unwrap_or(1.0);
-    if !control.is_finite() {
-        return Err(ScaffoldContractError::NonFiniteFloat);
-    }
     let mut extent = f64::from(reaction.rate) * f64::from(elapsed) * f64::from(control) * available;
     if !extent.is_finite() {
         return Err(ScaffoldContractError::NonFiniteFloat);
@@ -1060,26 +1209,22 @@ fn apply_reaction(
     if extent == 0.0 {
         return Ok(());
     }
-
-    for index in 0..active_species {
-        let coefficient = net_coefficients[index];
+    for participant in participants {
+        let index = participant.index;
         let row = phenotype.species[index];
-        let (room, divisor) = if coefficient < 0.0 {
+        let (room, divisor) = if participant.net < 0.0 {
             (
-                f64::from(original_concentrations[index]) - f64::from(row.minimum),
-                -coefficient,
+                f64::from(state.concentrations[index]) - f64::from(row.minimum),
+                -participant.net,
             )
-        } else if coefficient > 0.0 {
+        } else if participant.net > 0.0 {
             (
-                f64::from(row.maximum) - f64::from(original_concentrations[index]),
-                coefficient,
+                f64::from(row.maximum) - f64::from(state.concentrations[index]),
+                participant.net,
             )
         } else {
             continue;
         };
-        if !room.is_finite() || !divisor.is_finite() {
-            return Err(ScaffoldContractError::NonFiniteFloat);
-        }
         if room < 0.0 {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
@@ -1088,78 +1233,86 @@ fn apply_reaction(
             return Err(ScaffoldContractError::NonFiniteFloat);
         }
         extent = extent.min(candidate);
-        if !extent.is_finite() {
-            return Err(ScaffoldContractError::NonFiniteFloat);
-        }
     }
     if extent == 0.0 {
         return Ok(());
     }
-
-    let mut updated_concentrations = original_concentrations;
-    for index in 0..active_species {
-        let coefficient = net_coefficients[index];
-        if coefficient == 0.0 {
-            continue;
-        }
+    // At most four participants. Validate all results before publishing any of them.
+    let mut updates = [(0usize, 0.0f32); 4];
+    let mut count = 0;
+    for participant in participants.iter().filter(|row| row.net != 0.0) {
+        let index = participant.index;
         let row = phenotype.species[index];
-        let delta = extent * coefficient;
-        let candidate = f64::from(original_concentrations[index]) + delta;
-        if !delta.is_finite() || !candidate.is_finite() {
-            return Err(ScaffoldContractError::NonFiniteFloat);
-        }
-        let minimum = f64::from(row.minimum);
-        let maximum = f64::from(row.maximum);
-        if candidate < minimum - CONCENTRATION_ROUNDING_TOLERANCE
-            || candidate > maximum + CONCENTRATION_ROUNDING_TOLERANCE
-        {
-            return Err(ScaffoldContractError::ScalarOutOfRange);
-        }
-        let mut candidate = candidate as f32;
+        let candidate = f64::from(state.concentrations[index]) + extent * participant.net;
         if !candidate.is_finite() {
             return Err(ScaffoldContractError::NonFiniteFloat);
         }
-        if candidate < row.minimum {
-            if minimum - f64::from(candidate) > CONCENTRATION_ROUNDING_TOLERANCE {
-                return Err(ScaffoldContractError::ScalarOutOfRange);
-            }
-            candidate = row.minimum;
-        } else if candidate > row.maximum {
-            if f64::from(candidate) - maximum > CONCENTRATION_ROUNDING_TOLERANCE {
-                return Err(ScaffoldContractError::ScalarOutOfRange);
-            }
-            candidate = row.maximum;
+        if candidate < f64::from(row.minimum) - CONCENTRATION_ROUNDING_TOLERANCE
+            || candidate > f64::from(row.maximum) + CONCENTRATION_ROUNDING_TOLERANCE
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
         }
-        updated_concentrations[index] = candidate;
+        let value = candidate as f32;
+        if !value.is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        updates[count] = (index, value.clamp(row.minimum, row.maximum));
+        count += 1;
     }
-    state.concentrations = updated_concentrations;
+    for &(index, value) in &updates[..count] {
+        state.concentrations[index] = value;
+    }
     Ok(())
 }
 
 fn apply_delta(
     phenotype: &BiochemicalPhenotype,
     state: &mut BiochemicalGraphState,
-    id: ChemicalSpeciesId,
+    index: usize,
     delta: f32,
 ) -> Result<(), ScaffoldContractError> {
-    let index = phenotype
-        .species_index(id)
-        .ok_or(ScaffoldContractError::InvalidId)?;
     let row = phenotype.species[index];
     state.concentrations[index] =
         (state.concentrations[index] + delta).clamp(row.minimum, row.maximum);
     Ok(())
 }
 
-fn receptor_signal(
+fn receptor_group_signal(
     state: &BiochemicalGraphState,
     phenotype: &BiochemicalPhenotype,
-    receptor: BiochemicalReceptor,
-) -> Result<f32, ScaffoldContractError> {
-    Ok(
-        ((state.concentration(phenotype, receptor.source)? - receptor.threshold) * receptor.gain)
-            .clamp(0.0, 1.0),
-    )
+    group: &ReceptorGroup,
+) -> f32 {
+    let (mut nominal, mut positive, mut negative) = (0.0, 0.0, 0.0);
+    let (mut positives, mut negatives) = (0, 0);
+    for &(receptor_index, species_index) in &group.inputs {
+        let receptor = phenotype.receptors[receptor_index];
+        nominal += receptor.nominal;
+        let excess = (state.concentrations[species_index] - receptor.threshold).max(0.0);
+        let response = if receptor.digital {
+            if excess > 0.0 {
+                receptor.gain.abs()
+            } else {
+                0.0
+            }
+        } else {
+            excess * receptor.gain.abs()
+        };
+        if receptor.gain.is_sign_negative() {
+            negative += response;
+            negatives += 1;
+        } else {
+            positive += response;
+            positives += 1;
+        }
+    }
+    let mut result = nominal / group.inputs.len() as f32;
+    if positives > 0 {
+        result = (result + positive / positives as f32).clamp(0.0, 1.0);
+    }
+    if negatives > 0 {
+        result = (result - negative / negatives as f32).clamp(0.0, 1.0);
+    }
+    result
 }
 
 fn source_value(source: BiochemicalSourceLocus, body: BodyState, event: BodyEventDelta) -> f32 {
@@ -1317,6 +1470,8 @@ const fn drive_receptor(source: ChemicalSpeciesId, channel: DriveChannel) -> Bio
         target: BiochemicalTargetLocus::Drive(channel),
         threshold: 0.0,
         gain: 1.0,
+        nominal: 0.0,
+        digital: false,
     }
 }
 
@@ -1329,6 +1484,8 @@ const fn endocrine_receptor(
         target: BiochemicalTargetLocus::Endocrine(channel),
         threshold: 0.0,
         gain: 1.0,
+        nominal: 0.0,
+        digital: false,
     }
 }
 
@@ -1342,6 +1499,8 @@ const fn neural_receptor(
         target: BiochemicalTargetLocus::Neural(class),
         threshold: 0.0,
         gain,
+        nominal: 0.0,
+        digital: false,
     }
 }
 
@@ -1352,6 +1511,8 @@ const fn target_order(target: BiochemicalTargetLocus) -> u8 {
         BiochemicalTargetLocus::Neural(_) => 2,
         BiochemicalTargetLocus::Development(_) => 3,
         BiochemicalTargetLocus::Autonomic(_) => 4,
+        BiochemicalTargetLocus::OrganEnergyUse => 5,
+        BiochemicalTargetLocus::OrganRepair => 6,
     }
 }
 

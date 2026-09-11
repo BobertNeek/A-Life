@@ -63,7 +63,11 @@ pub enum PassiveMetricKind {
     FoodSuccess = 2,
     PoisonAvoidance = 3,
     HazardAvoidance = 4,
-    EnergyStability = 5,
+    /// Mean brain ATP availability across survival ticks.
+    ///
+    /// The legacy wire name remains `EnergyStability` for compatibility.
+    #[serde(rename = "EnergyStability")]
+    MeanBrainAtp = 5,
     Movement = 6,
     Reproduction = 7,
     SleepRetention = 8,
@@ -85,7 +89,7 @@ impl PassiveMetricKind {
         Self::FoodSuccess,
         Self::PoisonAvoidance,
         Self::HazardAvoidance,
-        Self::EnergyStability,
+        Self::MeanBrainAtp,
         Self::Movement,
         Self::Reproduction,
         Self::SleepRetention,
@@ -213,7 +217,11 @@ pub struct PassiveLifeStatistics {
     food_success: BoundedMean,
     poison_avoidance: BoundedMean,
     hazard_avoidance: BoundedMean,
-    energy_stability: BoundedMean,
+    /// Mean brain ATP availability across survival ticks.
+    ///
+    /// The legacy wire name remains `energy_stability` for compatibility.
+    #[serde(rename = "energy_stability")]
+    mean_brain_atp: BoundedMean,
     movement: BoundedMean,
     reproduction: BoundedMean,
     sleep_retention: BoundedMean,
@@ -247,7 +255,7 @@ impl PassiveLifeStatistics {
             food_success: BoundedMean::default(),
             poison_avoidance: BoundedMean::default(),
             hazard_avoidance: BoundedMean::default(),
-            energy_stability: BoundedMean::default(),
+            mean_brain_atp: BoundedMean::default(),
             movement: BoundedMean::default(),
             reproduction: BoundedMean::default(),
             sleep_retention: BoundedMean::default(),
@@ -337,7 +345,7 @@ impl PassiveLifeStatistics {
                         .checked_add(1)
                         .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
                 }
-                self.energy_stability.observe(energy_q16)?;
+                self.mean_brain_atp.observe(energy_q16)?;
                 self.movement.observe(movement_distance_q16)?;
                 self.gpu_dispatches = self
                     .gpu_dispatches
@@ -481,7 +489,7 @@ impl PassiveLifeStatistics {
             PassiveMetricKind::FoodSuccess => self.food_success.reading(),
             PassiveMetricKind::PoisonAvoidance => self.poison_avoidance.reading(),
             PassiveMetricKind::HazardAvoidance => self.hazard_avoidance.reading(),
-            PassiveMetricKind::EnergyStability => self.energy_stability.reading(),
+            PassiveMetricKind::MeanBrainAtp => self.mean_brain_atp.reading(),
             PassiveMetricKind::Movement => self.movement.reading(),
             PassiveMetricKind::Reproduction => self.reproduction.reading(),
             PassiveMetricKind::SleepRetention => self.sleep_retention.reading(),
@@ -547,7 +555,7 @@ impl Validate for PassiveLifeStatistics {
             self.food_success,
             self.poison_avoidance,
             self.hazard_avoidance,
-            self.energy_stability,
+            self.mean_brain_atp,
             self.movement,
             self.reproduction,
             self.sleep_retention,
