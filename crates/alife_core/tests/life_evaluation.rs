@@ -1,7 +1,165 @@
 use alife_core::{
-    ActiveChallengeKind, EnvironmentalRegime, MetricReading, OrganismId, PassiveLifeEvent,
-    PassiveLifeStatistics, PassiveMetricKind, Tick, ACTIVE_CHALLENGE_COUNT,
+    heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
+    ActionProposal, ActionTarget, ActiveChallengeKind, BodySnapshot, BrainClassSpec, BrainGenome,
+    BrainScaleTier, CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef,
+    Confidence, DevelopmentState, DurationTicks, EnvironmentalRegime, ExperiencePatch,
+    ExperiencePatchBuilder, ExperienceSequenceId, HeardToken, HomeostaticDelta,
+    HomeostaticSnapshot, LobeKind, MetricReading, NormalizedScalar, OrganismId, PassiveLifeEvent,
+    PassiveLifeStatistics, PassiveMetricKind, PerceptionFrame, PhysicalActionOutcome,
+    PhysicalContactKind, Pose, PostActionOutcome, SensorProfile, SensorProfileProvenance,
+    SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence, Tick, UtteranceId,
+    UtteranceSourceKind, Velocity, WeightSplitContract, WorldEntityId, ACTIVE_CHALLENGE_COUNT,
 };
+
+fn finalized_patch(contact: PhysicalContactKind, reward: f32, pain: f32) -> ExperiencePatch {
+    let organism_id = OrganismId(7);
+    let sequence_id = ExperienceSequenceId(99);
+    let tick = Tick::new(10);
+    let spec = BrainClassSpec::for_tier(BrainScaleTier::Standard2048);
+    let genome = BrainGenome::scaffold(42, spec.id);
+    let development = DevelopmentState::new(
+        genome.id,
+        Tick::new(120),
+        NormalizedScalar::new(0.35).unwrap(),
+    )
+    .with_enabled_lobes([
+        LobeKind::PerceptualIntegration,
+        LobeKind::TemporalPredictive,
+        LobeKind::ActionPlanning,
+    ]);
+    let weight_split = WeightSplitContract::for_brain_class(
+        spec.id,
+        spec.max_active_synapses,
+        spec.max_active_microtiles,
+        genome.genetic_prior_seed,
+    )
+    .unwrap();
+    let mut sensory = SensorySnapshot::new(
+        organism_id,
+        tick,
+        alife_core::Vec3f::ZERO,
+        SensoryChannels::default(),
+        Default::default(),
+    )
+    .unwrap();
+    sensory.language_context.heard_tokens[0] = Some(HeardToken {
+        utterance_id: UtteranceId::new(70).unwrap(),
+        sequence_position: 0,
+        source_kind: UtteranceSourceKind::Creature,
+        speaker_id: Some(OrganismId(8)),
+        addressee: None,
+        source_entity: Some(WorldEntityId(70)),
+        token_id: 101,
+        source_position: alife_core::Vec3f::new(0.5, 0.0, 1.0),
+        confidence: Confidence::new(0.8).unwrap(),
+        teacher_channel: None,
+    });
+    let perception = PerceptionFrame::new(
+        organism_id,
+        tick,
+        SensorProfile::PrivilegedAffordanceV1,
+        sensory,
+        BodySnapshot {
+            pose: Pose::IDENTITY,
+            velocity: Velocity::ZERO,
+        },
+        HomeostaticSnapshot::baseline(tick),
+        vec![ActionCandidate::new(
+            0,
+            ActionId(300),
+            ActionKind::Interact,
+            CandidateActionFamily::Contact,
+            CandidateObservationRef::None,
+            ActionTarget::new(
+                Some(WorldEntityId(1)),
+                Some(alife_core::Vec3f::new(0.0, 0.0, 1.0)),
+            ),
+            CandidateFeatureVector::zero(),
+            Confidence::new(0.8).unwrap(),
+            NormalizedScalar::new(0.0).unwrap(),
+            DurationTicks::new(4),
+            DurationTicks::new(4),
+        )
+        .unwrap()],
+        SensorProfileProvenance::new(
+            SensorProfile::PrivilegedAffordanceV1,
+            SensoryAbiVersion::CURRENT,
+            tick,
+        )
+        .unwrap(),
+        Vec::new(),
+    )
+    .unwrap();
+    let pre_action = alife_core::PreActionSnapshot::from_heuristic_frame(
+        sequence_id,
+        perception,
+        spec.clone(),
+        genome.clone(),
+        development,
+        weight_split,
+        alife_core::MemoryExpectancySnapshot::neutral(),
+    )
+    .unwrap();
+    let proposal = ActionProposal::new(
+        ActionId(300),
+        ActionKind::Interact,
+        0.75,
+        Confidence::new(0.8).unwrap(),
+        None,
+        0b101,
+        ActionTarget::new(
+            Some(WorldEntityId(1)),
+            Some(alife_core::Vec3f::new(0.0, 0.0, 1.0)),
+        ),
+        NormalizedScalar::new(0.5).unwrap(),
+    )
+    .unwrap();
+    let action_decision = heuristic_baseline_arbitrate(
+        organism_id,
+        std::slice::from_ref(&proposal),
+        ActionArbitrationConfig {
+            default_duration_ticks: DurationTicks::new(4),
+            ..ActionArbitrationConfig::default()
+        },
+    )
+    .unwrap();
+    let decision = alife_core::DecisionSnapshot::from_action_decision(
+        sequence_id,
+        tick,
+        vec![proposal],
+        action_decision,
+    )
+    .unwrap();
+    let outcome = PostActionOutcome::new(
+        organism_id,
+        sequence_id,
+        Tick::new(11),
+        true,
+        PhysicalActionOutcome {
+            contact,
+            target_entity: Some(WorldEntityId(1)),
+            displacement: alife_core::Vec3f::ZERO,
+            collision_normal: None,
+            energy_cost: NormalizedScalar::new(0.1).unwrap(),
+        },
+        HomeostaticDelta::zero(),
+        SignedValence::new(reward).unwrap(),
+        NormalizedScalar::new(0.0).unwrap(),
+        NormalizedScalar::new(pain).unwrap(),
+        SignedValence::ZERO,
+        NormalizedScalar::new(0.0).unwrap(),
+    )
+    .unwrap();
+    ExperiencePatchBuilder::new(sequence_id)
+        .record_pre_action(pre_action)
+        .unwrap()
+        .record_decision(decision)
+        .unwrap()
+        .record_outcome(outcome)
+        .unwrap()
+        .seal()
+        .unwrap()
+}
 
 #[test]
 fn unexposed_passive_metrics_are_unknown_and_updates_are_constant_state() {
@@ -88,4 +246,23 @@ fn narration_frequency_and_dialect_divergence_are_recorded_without_history() {
             exposures: 1,
         }
     );
+}
+
+#[test]
+fn finalized_statistics_reject_idle_and_food_hazard_patches_atomically() {
+    for (contact, reward, pain) in [
+        (PhysicalContactKind::Touch, 0.0, 0.0),
+        (PhysicalContactKind::Consumed, -0.25, 0.2),
+    ] {
+        let patch = finalized_patch(contact, reward, pain);
+        let mut statistics = PassiveLifeStatistics::new(OrganismId(7), Tick::ZERO).unwrap();
+        statistics.finalize(Tick::new(12), "completed").unwrap();
+        let before = statistics.clone();
+
+        assert_eq!(
+            statistics.observe_sealed_patch(&patch),
+            Err(alife_core::ScaffoldContractError::InvalidId)
+        );
+        assert_eq!(statistics, before);
+    }
 }
