@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "automationId": "supervise-recovered-a-life-fixes",
+  "validation": "Static source review only; no Cargo, compilation or runtime tests",
   "supervisorThread": "01a08dd9-7042-7240-b781-2441edde7e81",
   "integrationWorktree": "D:\\A life\\.worktrees\\initial-founder-training-20260907",
   "integrationBranch": "initial-founder-training-20260907",
