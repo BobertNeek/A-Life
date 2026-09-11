@@ -27,10 +27,11 @@ architecture, user instructions, or dated evidence reports.
 | --- | --- | --- | --- | --- | --- | --- |
 | Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
 
-| Luna max / N019 | Reach and lifetime | codex/recovered-n019-20260910 | Correction requested | Remove remote touched evidence; gate Inspect lifetime | None | 2026-09-11 01:31Z |
 
-| Luna max / N003 | Elapsed organ upkeep | codex/recovered-n003-20260910 | Running | Implement packet | None | 2026-09-11 01:31Z |
-| Luna max / N012 | Passive patch counting | codex/recovered-n012-20260910 | Setup pending | Verify likely fix in accepted N013 | None | 2026-09-11 01:31Z |
+
+| Luna max / N007 | Mixed reaction conservation | codex/recovered-n007-20260910 | Setup pending | Implement assigned packet | None | 2026-09-11 01:50Z |
+| Luna max / N010 | Ambient mating opportunity | codex/recovered-n010-20260910 | Setup pending | Implement assigned packet | None | 2026-09-11 01:50Z |
+| Luna max / N017 | Finalized statistics mutation | codex/recovered-n017-20260910 | Setup pending | Implement assigned packet | None | 2026-09-11 01:50Z |
 
 ## Handoffs and requests
 
@@ -52,3 +53,6 @@ architecture, user instructions, or dated evidence reports.
 | 2026-09-11 | Bob review / N018 | Corrected failed test assumption before accepting primitive mapping; static only | 9da8091e + c3e61cfc |
 | 2026-09-11 | Bob review / N002 | Pro-rata organ debit accepted after full diff and rollback review; static only | c1670704 |
 | 2026-09-11 | Bob review / N013 | Bounded replay retention accepted after backend ring/caller/rollback review; static only | f91dd9d7 + b11a1ed9 |
+| 2026-09-11 | Bob review / N003 | Elapsed capped organ upkeep accepted; static only | 06307185 |
+| 2026-09-11 | Bob review / N019 | Corrected reach/lifetime contact evidence accepted; static only | 61fd9947 + 4e84084a |
+| 2026-09-11 | Bob review / N012 | Already fixed by N013; independently traced current path; no duplicate changes | b11a1ed9 |
