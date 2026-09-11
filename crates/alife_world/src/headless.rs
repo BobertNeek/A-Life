@@ -2486,6 +2486,7 @@ impl HeadlessWorld {
         self.last_action_result = executed.last().map(|(_, result)| result.clone());
 
         let physical = aggregate_motor_physical_outcome(&executed)?;
+        self.commit_current_interval_velocity(bundle.organism_id, physical.displacement)?;
         let joint = JointPhysicalOutcome::new(physical, channel_observations)?;
         let succeeded = executed
             .iter()
@@ -3197,7 +3198,6 @@ impl HeadlessWorld {
         let displacement = subtract(destination, start);
         if let Some(agent) = self.objects.get_mut(&agent_id.raw()) {
             agent.position = destination;
-            agent.grounded_physical.velocity = displacement;
         }
         self.move_carried_objects(command.organism_id, displacement);
         let zone_hazard = self
@@ -3265,7 +3265,7 @@ impl HeadlessWorld {
     }
 
     fn finish_action(
-        &self,
+        &mut self,
         command: ActionCommand,
         succeeded: bool,
         failure: Option<ReferenceActionFailure>,
@@ -3273,6 +3273,7 @@ impl HeadlessWorld {
         profile: OutcomeProfile,
         touched_entities: Vec<WorldEntityId>,
     ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+        self.commit_current_interval_velocity(command.organism_id, physical.displacement)?;
         let execution = if succeeded {
             ReferenceActionExecution::succeeded(physical)?
         } else {
@@ -3316,7 +3317,7 @@ impl HeadlessWorld {
     }
 
     fn invalid_target(
-        &self,
+        &mut self,
         command: ActionCommand,
         target: Option<WorldEntityId>,
     ) -> Result<HeadlessActionResult, ScaffoldContractError> {
@@ -3328,6 +3329,25 @@ impl HeadlessWorld {
             OutcomeProfile::invalid_target(),
             target.into_iter().collect(),
         )
+    }
+
+    fn commit_current_interval_velocity(
+        &mut self,
+        organism_id: OrganismId,
+        displacement: Vec3f,
+    ) -> Result<(), ScaffoldContractError> {
+        let agent_id = self.agent_entity_id(organism_id)?;
+        self.objects
+            .get_mut(&agent_id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .grounded_physical
+            .velocity = displacement;
+        for object in self.objects.values_mut() {
+            if object.carried_by == Some(organism_id) {
+                object.grounded_physical.velocity = displacement;
+            }
+        }
+        Ok(())
     }
 
     fn agent_entity_id(
@@ -5270,6 +5290,226 @@ mod task_6_factorized_motor_tests {
             vec![command],
         )
         .unwrap()
+    }
+
+    #[test]
+    fn n022_commits_interval_motion_for_stationary_blocked_and_factorized_actions() {
+        let relative_velocity = |world: &mut HeadlessWorld, target: WorldEntityId| {
+            let snapshot = world
+                .physical_observation_snapshot(ORGANISM_ID, Tick::ZERO)
+                .unwrap();
+            let frame =
+                GroundedSensorExtractor::extract(&snapshot, &mut world.tracked_objects).unwrap();
+            let slot_index = frame
+                .transports()
+                .iter()
+                .position(|transport| transport.transport_entity == target)
+                .unwrap();
+            frame.slots()[slot_index].relative_velocity
+        };
+
+        for (label, stationary) in [
+            ("idle", HeadlessWorldCommand::idle(ORGANISM_ID).unwrap()),
+            ("rest", HeadlessWorldCommand::rest(ORGANISM_ID).unwrap()),
+        ] {
+            let mut world = HeadlessScenarioBuilder::new(36_003)
+                .agent("agent", ORGANISM_ID, Vec3f::ZERO)
+                .food("neighbor", Vec3f::new(0.5, 0.0, 0.0), 0.6)
+                .build()
+                .unwrap();
+            let agent = world.entity_id("agent").unwrap();
+            let neighbor = world.entity_id("neighbor").unwrap();
+            let grab = HeadlessWorldCommand::structured(
+                ORGANISM_ID,
+                HeadlessActionIds::GRAB,
+                ActionKind::Hold,
+                Some(neighbor),
+                None,
+            )
+            .unwrap();
+            assert!(
+                world.apply_command(&grab).unwrap().execution.succeeded,
+                "{label}"
+            );
+            let move_command = HeadlessWorldCommand::structured(
+                ORGANISM_ID,
+                ActionKind::Move.canonical_id(),
+                ActionKind::Move,
+                None,
+                Some(Vec3f::new(1.0, 0.0, 0.0)),
+            )
+            .unwrap();
+
+            assert!(
+                world
+                    .apply_command(&move_command)
+                    .unwrap()
+                    .execution
+                    .succeeded
+            );
+            assert_eq!(
+                world.entity(agent).unwrap().grounded_physical.velocity,
+                Vec3f::new(1.0, 0.0, 0.0),
+                "{label}"
+            );
+            assert_eq!(
+                world.entity(neighbor).unwrap().position,
+                Vec3f::new(1.5, 0.0, 0.0),
+                "{label}"
+            );
+            assert_eq!(
+                world.entity(neighbor).unwrap().grounded_physical.velocity,
+                Vec3f::new(1.0, 0.0, 0.0),
+                "{label}"
+            );
+            assert_eq!(
+                relative_velocity(&mut world, neighbor),
+                [0.0, 0.0, 0.0],
+                "{label}"
+            );
+
+            let result = world.apply_command(&stationary).unwrap();
+            assert!(result.execution.succeeded, "{label}");
+            assert_eq!(
+                result.execution.physical.displacement,
+                Vec3f::ZERO,
+                "{label}"
+            );
+            assert_eq!(
+                world.entity(agent).unwrap().grounded_physical.velocity,
+                Vec3f::ZERO,
+                "{label}"
+            );
+            assert_eq!(
+                world.entity(neighbor).unwrap().grounded_physical.velocity,
+                Vec3f::ZERO,
+                "{label}"
+            );
+            assert_eq!(
+                relative_velocity(&mut world, neighbor),
+                [0.0, 0.0, 0.0],
+                "{label}"
+            );
+        }
+
+        let mut blocked_world = HeadlessScenarioBuilder::new(36_004)
+            .agent("agent", ORGANISM_ID, Vec3f::ZERO)
+            .food("neighbor", Vec3f::new(0.5, 0.0, 0.0), 0.6)
+            .obstacle("blocker", Vec3f::new(2.0, 0.0, 0.0), 0.5)
+            .build()
+            .unwrap();
+        let blocked_agent = blocked_world.entity_id("agent").unwrap();
+        let blocked_neighbor = blocked_world.entity_id("neighbor").unwrap();
+        let move_to_one = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            ActionKind::Move.canonical_id(),
+            ActionKind::Move,
+            None,
+            Some(Vec3f::new(1.0, 0.0, 0.0)),
+        )
+        .unwrap();
+        blocked_world.apply_command(&move_to_one).unwrap();
+        let blocked = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            ActionKind::Move.canonical_id(),
+            ActionKind::Move,
+            None,
+            Some(Vec3f::new(3.0, 0.0, 0.0)),
+        )
+        .unwrap();
+        let blocked_result = blocked_world.apply_command(&blocked).unwrap();
+        assert!(!blocked_result.execution.succeeded);
+        assert_eq!(
+            blocked_result.execution.failure,
+            Some(ReferenceActionFailure::Blocked)
+        );
+        assert_eq!(
+            blocked_world
+                .entity(blocked_agent)
+                .unwrap()
+                .grounded_physical
+                .velocity,
+            Vec3f::ZERO
+        );
+        assert_eq!(
+            relative_velocity(&mut blocked_world, blocked_neighbor),
+            [0.0, 0.0, 0.0]
+        );
+
+        let (mut bundle_world, agent, food, _) = prepared_world();
+        let grab = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            HeadlessActionIds::GRAB,
+            ActionKind::Hold,
+            Some(food),
+            None,
+        )
+        .unwrap();
+        assert!(
+            bundle_world
+                .apply_command(&grab)
+                .unwrap()
+                .execution
+                .succeeded
+        );
+        let locomotion = ChannelCommand::new(
+            MotorChannel::Locomotion,
+            HeadlessActionIds::APPROACH,
+            Some(alife_core::ActionTarget::new(Some(food), None)),
+            Vec3f::new(1.0, 0.0, 0.0),
+            Intensity::new(1.0).unwrap(),
+            alife_core::DurationTicks::new(1),
+            0.0,
+            Confidence::new(0.9).unwrap(),
+            0,
+        )
+        .unwrap();
+        let posture = ChannelCommand::new(
+            MotorChannel::Posture,
+            ActionKind::Idle.canonical_id(),
+            None,
+            Vec3f::ZERO,
+            Intensity::new(1.0).unwrap(),
+            alife_core::DurationTicks::new(1),
+            0.0,
+            Confidence::new(0.9).unwrap(),
+            0,
+        )
+        .unwrap();
+        let bundle = MotorCommandBundle::new(
+            ORGANISM_ID,
+            alife_core::ExperienceSequenceId::new(4).unwrap(),
+            Tick::ZERO,
+            vec![locomotion, posture],
+        )
+        .unwrap();
+        let receipt = bundle_world
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+        assert_eq!(
+            receipt.joint.execution.displacement,
+            Vec3f::new(1.0, 0.0, 0.0)
+        );
+        assert_eq!(
+            bundle_world
+                .entity(agent)
+                .unwrap()
+                .grounded_physical
+                .velocity,
+            Vec3f::new(1.0, 0.0, 0.0)
+        );
+        assert_eq!(
+            bundle_world.entity(food).unwrap().position,
+            Vec3f::new(2.0, 0.0, 0.0)
+        );
+        assert_eq!(
+            bundle_world
+                .entity(food)
+                .unwrap()
+                .grounded_physical
+                .velocity,
+            Vec3f::new(1.0, 0.0, 0.0)
+        );
     }
 
     #[test]
