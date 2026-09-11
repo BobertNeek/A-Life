@@ -303,9 +303,9 @@ fn mixed_reactions_validate_material_balance_without_restricting_regulatory_term
     let species = vec![
         material(1, 0.0),
         material(2, 0.0),
-        material(5, 0.0),
         regulatory(3),
         regulatory(4),
+        material(5, 0.0),
     ];
     let mut catalyst_with_control = reaction(&[(1, 1.0), (5, 1.0)], &[(2, 1.0), (5, 1.0)], 1.0);
     catalyst_with_control["rate_control"] = json!(3);
