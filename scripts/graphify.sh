@@ -34,6 +34,9 @@ command="${1:-update}"
 shift || true
 
 case "${command}" in
+  hook-check)
+    "${graphify_bin}" check-update . "$@"
+    ;;
   update)
     "${graphify_bin}" update . "$@"
     ;;

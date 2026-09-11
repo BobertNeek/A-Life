@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/graphify.sh hook-check"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/graphify.ps1 hook-check"
           }
         ]
       }
