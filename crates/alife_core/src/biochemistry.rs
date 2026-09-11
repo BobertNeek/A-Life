@@ -147,9 +147,11 @@ impl BodyState {
 
     fn apply_event(
         self,
+        previous_tick: Tick,
         next_tick: Tick,
         event: BodyEventDelta,
         phenotype: &CreaturePhenotype,
+        max_catch_up_steps: u32,
     ) -> Self {
         let injury_gain = event.damage * (1.0 - phenotype.body.injury_resistance);
         let recovery = event.sleep_recovery;
@@ -163,9 +165,12 @@ impl BodyState {
         );
         let mut organs = self.organs;
         for organ in &mut organs {
-            let cadence_due = next_tick
-                .raw()
-                .is_multiple_of(u64::from(organ.cadence_ticks));
+            let cadence_steps = crossed_boundaries(
+                previous_tick,
+                next_tick,
+                organ.cadence_ticks,
+                max_catch_up_steps,
+            );
             let local_damage = match organ.kind {
                 OrganKind::Circulatory | OrganKind::Locomotor => injury_gain,
                 OrganKind::NeuralSupport => injury_gain * 0.35,
@@ -186,17 +191,13 @@ impl BodyState {
                 }
                 _ => event.nutrition * phenotype.body.metabolic_efficiency * 0.15,
             };
-            let cadence_cost = if cadence_due {
-                organ.energetic_cost * 0.01
-            } else {
-                0.0
-            };
+            let periodic_upkeep = organ.energetic_cost * 0.01 * cadence_steps as f32;
             organ.energy = clamp01(
                 organ.energy
                     + event_share
                     + nutrition_gain
                     + recovery * organ.repair_capacity * 0.2
-                    - cadence_cost,
+                    - periodic_upkeep,
             );
             organ.temperature_stress = if organ.kind == OrganKind::Thermoregulatory {
                 temperature_stress
@@ -695,7 +696,13 @@ impl BiochemistryState {
             energy: signed_clamp(event.energy + upkeep.energy),
             ..event
         };
-        let body = self.body.apply_event(next_tick, event, phenotype);
+        let body = self.body.apply_event(
+            self.tick,
+            next_tick,
+            event,
+            phenotype,
+            self.cadence.max_catch_up_steps,
+        );
         body.validate_contract()?;
         let development = if development_steps > 0 {
             DevelopmentReadiness::derive(

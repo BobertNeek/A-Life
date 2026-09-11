@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use alife_core::{
     BiochemistryState, BodyEventDelta, BodyState, BrainCapacityClass, CreatureGenome,
-    FoundationGeneticIdentity, Tick, Validate,
+    FoundationGeneticIdentity, OrganKind, Tick, Validate,
 };
 
 fn phenotype() -> alife_core::CreaturePhenotype {
@@ -129,6 +129,39 @@ fn metabolic_development_and_reproduction_update_only_on_their_boundaries() {
     assert_eq!(
         reproduction.reproduction.last_update_tick,
         Tick(tick.raw() + 120)
+    );
+}
+
+#[test]
+fn organ_upkeep_follows_elapsed_cadence_crossings() {
+    let phenotype = phenotype();
+    let event = BodyEventDelta::zero();
+    let start = BiochemistryState::new(&phenotype, Tick(5)).unwrap();
+    let jumped = start.advance(Tick(7), event, &phenotype).unwrap();
+    let partitioned = start
+        .advance(Tick(6), event, &phenotype)
+        .unwrap()
+        .advance(Tick(7), event, &phenotype)
+        .unwrap();
+
+    assert_eq!(
+        jumped.body.organ(OrganKind::Locomotor).energy.to_bits(),
+        partitioned
+            .body
+            .organ(OrganKind::Locomotor)
+            .energy
+            .to_bits()
+    );
+
+    let at_boundary = start.advance(Tick(6), event, &phenotype).unwrap();
+    let repeated = at_boundary.advance(Tick(6), event, &phenotype).unwrap();
+    assert_eq!(
+        repeated.body.organ(OrganKind::Locomotor).energy.to_bits(),
+        at_boundary
+            .body
+            .organ(OrganKind::Locomotor)
+            .energy
+            .to_bits()
     );
 }
 
