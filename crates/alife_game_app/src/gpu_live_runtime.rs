@@ -1725,7 +1725,9 @@ impl GpuLiveRuntimeConstructionOptions {
             homeostatic_parameters: HomeostaticParameters::reference(),
             schedule_sleep: true,
             observe_sidecars: true,
-            retain_sealed_patch_history: true,
+            // Full patch history is diagnostic-only. Production keeps the
+            // bounded latest-per-organism view and backend replay state.
+            retain_sealed_patch_history: false,
             cognitive_work_cost_policy: CognitiveWorkCostPolicy {
                 enabled: true,
                 energy_per_work_unit: LIVE_COGNITIVE_ENERGY_PER_WORK_UNIT,
@@ -5959,7 +5961,9 @@ impl GpuLiveBrainRuntime {
             restored_replay_patches: Vec::new(),
             last_sealed_patches: Vec::new(),
             observe_sidecars: true,
-            retain_sealed_patch_history: true,
+            // Restore the bounded production policy. Pending replay remains
+            // in restored_replay_patches and the backend-owned replay batch.
+            retain_sealed_patch_history: false,
             last_learning_receipts: Vec::new(),
             last_gpu_authority_receipts: Vec::new(),
             last_activity_work_receipts: Vec::new(),
