@@ -26,9 +26,9 @@ architecture, user instructions, or dated evidence reports.
 | Agent / task | Scope | Branch or worktree | Status | Next action | Blocker | Updated (UTC) |
 | --- | --- | --- | --- | --- | --- | --- |
 | Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
-| Luna max / N011 | Parental cadence readiness | codex/recovered-n011-20260910 | Running | Continue bounded packet | None; Bob owns routine Git operations | 2026-09-11 03:40Z |
-| Luna max / N016 | Grounded avoidance rates | codex/recovered-n016-20260910 | Running | Continue bounded packet | None; Bob owns routine Git operations | 2026-09-11 03:40Z |
-| Luna max / N004 | Zero elapsed reactions | codex/recovered-n004-20260910 | Correction requested | Ensure regression retains substrate and product capacity | None; Bob owns routine Git operations | 2026-09-11 03:42Z |
+| Luna max / N020 | Carried object motion | codex/recovered-n020-20260910 | Running | Implement bounded packet | Bob owns routine Git | 2026-09-11 03:58Z |
+| Luna max / N014 | Truthful environment exposure | codex/recovered-n014-20260910 | Running | Implement bounded packet | Bob owns routine Git | 2026-09-11 03:58Z |
+| Luna max / N005 | Emitter cadence catch-up | codex/recovered-n005-20260910 | Running | Implement bounded packet | Bob owns routine Git | 2026-09-11 03:58Z |
 
 ## Handoffs and requests
 
@@ -60,3 +60,6 @@ Routine Git approvals belong to Bob. Workers hand off sandbox-blocked Git operat
 | 2026-09-11 | Bob review / N008 | Generic and contextual chemical ranges accepted after full caller review; static only | 4b908941 |
 | 2026-09-11 | Bob review / N010 | Shared eligibility and actor partner scan accepted after correction; static only | 71393bf7 + f9cc324e |
 | 2026-09-11 | Bob review / N015 | Removed ungrounded communication inference; source and regression reviewed; static only | 5548be00 |
+| 2026-09-11 | Bob review / N004 | Corrected causal regression accepted; static only | e1092f0b + cb97e0fd |
+| 2026-09-11 | Bob review / N011 | Bounded readiness and current pair checks accepted; static only | 3e3b1754 |
+| 2026-09-11 | Bob review / N016 | Grounded avoidance denominator accepted; static only | c6bc35cd |
