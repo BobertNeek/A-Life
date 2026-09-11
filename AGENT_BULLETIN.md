@@ -26,10 +26,11 @@ architecture, user instructions, or dated evidence reports.
 | Agent / task | Scope | Branch or worktree | Status | Next action | Blocker | Updated (UTC) |
 | --- | --- | --- | --- | --- | --- | --- |
 | Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
-| Luna max / N013 | Bound optional patch history | codex/recovered-n013-20260910 | Correction requested | Preserve every required replay patch and latest consumers | None | 2026-09-11 01:01Z |
-| Luna max / N002 | Organ-local cognitive debit | codex/recovered-n002-20260910 | Running | Implement accepted packet | None | 2026-09-11 01:03Z |
 
-| Luna max / N019 | Reach and ownership | codex/recovered-n019-20260910 | Setup pending | Implement from corrected N018 base | None | 2026-09-11 01:03Z |
+| Luna max / N019 | Reach and lifetime | codex/recovered-n019-20260910 | Correction requested | Remove remote touched evidence; gate Inspect lifetime | None | 2026-09-11 01:31Z |
+
+| Luna max / N003 | Elapsed organ upkeep | codex/recovered-n003-20260910 | Running | Implement packet | None | 2026-09-11 01:31Z |
+| Luna max / N012 | Passive patch counting | codex/recovered-n012-20260910 | Setup pending | Verify likely fix in accepted N013 | None | 2026-09-11 01:31Z |
 
 ## Handoffs and requests
 
@@ -49,3 +50,5 @@ architecture, user instructions, or dated evidence reports.
 | --- | --- | --- | --- |
 | 2026-09-11 | Bob review / N001 | Integrated after full manual diff and caller review; static check only; Rust unrun | 6e3dd8ed |
 | 2026-09-11 | Bob review / N018 | Corrected failed test assumption before accepting primitive mapping; static only | 9da8091e + c3e61cfc |
+| 2026-09-11 | Bob review / N002 | Pro-rata organ debit accepted after full diff and rollback review; static only | c1670704 |
+| 2026-09-11 | Bob review / N013 | Bounded replay retention accepted after backend ring/caller/rollback review; static only | f91dd9d7 + b11a1ed9 |
