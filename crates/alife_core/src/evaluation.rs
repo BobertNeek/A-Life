@@ -408,15 +408,10 @@ impl PassiveLifeStatistics {
             staged.observe(PassiveLifeEvent::FoodOutcome {
                 beneficial: !harmful,
             })?;
-            if harmful {
-                staged.observe(PassiveLifeEvent::PoisonEncounter { avoided: false })?;
-            }
         }
-        if outcome.pain_delta.raw() > 0.0
-            || outcome.physical.contact == PhysicalContactKind::Collision
-        {
-            staged.observe(PassiveLifeEvent::HazardEncounter { avoided: false })?;
-        }
+        // A harmful consumed outcome remains a measured food failure. Injury or
+        // contact alone does not establish an avoidable encounter opportunity.
+        // Explicit grounded encounter outcomes enter through `observe`.
         if patch.decision().selected_action.kind == ActionKind::Vocalize {
             staged.observe(PassiveLifeEvent::NarrationUtterance)?;
         }
