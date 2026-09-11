@@ -1,6 +1,7 @@
 use alife_core::{
-    BiochemistryState, BodyEventDelta, BrainCapacityClass, FoundationGeneticIdentity,
-    NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame, Tick, Validate,
+    BiochemistryState, BodyEventDelta, BrainCapacityClass, ChemicalSpeciesId,
+    FoundationGeneticIdentity, NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame, Tick,
+    Validate,
 };
 
 fn founder_phenotype() -> alife_core::CreaturePhenotype {
@@ -77,12 +78,23 @@ fn same_tick_without_event_does_not_advance_reactions() {
         .advance(
             Tick(tick.raw() + 1),
             BodyEventDelta {
-                nutrition: 1.0,
+                nutrition: 0.1,
                 ..BodyEventDelta::zero()
             },
             &phenotype,
         )
         .unwrap();
+    let graph = &phenotype.chemistry.biochemical;
+    let nutrient = active
+        .graph_state()
+        .concentration(graph, ChemicalSpeciesId(19))
+        .unwrap();
+    let brain_atp = active
+        .graph_state()
+        .concentration(graph, ChemicalSpeciesId(7))
+        .unwrap();
+    assert!(nutrient > 0.0);
+    assert!(brain_atp + 0.5 * nutrient < 1.0);
 
     let same_tick = active
         .advance(active.tick, BodyEventDelta::zero(), &phenotype)
