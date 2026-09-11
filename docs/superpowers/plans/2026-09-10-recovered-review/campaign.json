@@ -94,12 +94,14 @@
         "crates/alife_game_app/src/curated_founder_materializer.rs",
         "crates/alife_game_app/src/curated_founder_staging.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "title": "Repair N008 — chemical range validation",
       "threadId": "01a08e3b-54b0-7c70-b35a-0f266510029e",
       "hostId": "local",
-      "cursor": "40e9d605-4cd3-474a-9220-74dff9b9178b:1",
-      "scopeApproval": "Supervisor verified phenotype-owning admission/restore callers; exactly three caller files added for N008 contextual validation. No active ownership conflict."
+      "cursor": "40e9d605-4cd3-474a-9220-74dff9b9178b:2",
+      "scopeApproval": "Supervisor verified phenotype-owning admission/restore callers; exactly three caller files added for N008 contextual validation. No active ownership conflict.",
+      "workerCommit": "4d5d4c0c2c2cfd59f131fbfdc1e48c9299063e28",
+      "integrationCommit": "4b9089413b55a7fa5cc42e7d09a47988ba417020"
     },
     {
       "id": "N004",
@@ -110,7 +112,13 @@
       "files": [
         "crates/alife_core/src/biochemical_graph.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "clientThreadId": "client-new-thread:1994bb7e-2483-47fa-a17e-2c28ab7a7981",
+      "assignedBase": "4b9089413b55a7fa5cc42e7d09a47988ba417020",
+      "threadId": "01a08e44-8eba-7ba1-a328-1afeafc593fe",
+      "hostId": "local",
+      "title": "Repair N004 — zero elapsed reactions",
+      "cursor": "cc03e582-7bd4-43a1-ba8f-e272e8564a87:1"
     },
     {
       "id": "N005",
@@ -480,6 +488,13 @@
         "378b447b"
       ],
       "id": "N007"
+    },
+    {
+      "id": "N008",
+      "status": "ACCEPTED_STATIC",
+      "workerCommit": "4d5d4c0c2c2cfd59f131fbfdc1e48c9299063e28",
+      "integrationCommit": "4b9089413b55a7fa5cc42e7d09a47988ba417020",
+      "evidence": "Read complete six-file diff, generic/contextual graph validation, constructor/advance, organism identity and both founder admission paths. Generic state remains finite/nonnegative; contextual ranges enforce declared bounds. Fixture uses material nutrient 19 with legal 1..3 range and baseline 2 through advance/serialization. Existing identity/error gates retained. Diff whitespace passed; worker clean; protected WIP hash matched. Rust tests/compile/runtime UNVERIFIED."
     }
   ]
 }
