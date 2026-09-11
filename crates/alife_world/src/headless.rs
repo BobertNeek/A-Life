@@ -4231,16 +4231,26 @@ fn legacy_action_for_motor_channel(
             ActionKind::Vocalize,
             alife_core::ActionTarget::new(None, None),
         ),
+        MotorChannel::Posture if command.primitive == ActionKind::Idle.canonical_id() => (
+            ActionKind::Idle.canonical_id(),
+            ActionKind::Idle,
+            alife_core::ActionTarget::NONE,
+        ),
+        MotorChannel::Posture if command.primitive == ActionKind::Rest.canonical_id() => (
+            ActionKind::Rest.canonical_id(),
+            ActionKind::Rest,
+            alife_core::ActionTarget::NONE,
+        ),
         MotorChannel::Posture if command.primitive == ActionKind::Inspect.canonical_id() => (
             ActionKind::Inspect.canonical_id(),
             ActionKind::Inspect,
             command.target.unwrap_or(alife_core::ActionTarget::NONE),
         ),
-        MotorChannel::Posture => (
-            ActionKind::Rest.canonical_id(),
-            ActionKind::Rest,
-            alife_core::ActionTarget::new(None, None),
-        ),
+        MotorChannel::Posture => {
+            return Err(HeadlessMotorTransactionError::UnsupportedChannel(
+                command.channel,
+            ));
+        }
         MotorChannel::Orientation | MotorChannel::SpeciesSpecific(_) => {
             return Err(HeadlessMotorTransactionError::UnsupportedChannel(
                 command.channel,
@@ -5043,6 +5053,72 @@ mod task_6_factorized_motor_tests {
         assert_eq!(result.command.target_entity, None);
         assert!(receipt.succeeded);
         assert_eq!(result.execution.physical.contact, PhysicalContactKind::None);
+    }
+
+    #[test]
+    fn factorized_posture_preserves_direct_idle_rest_and_inspect_semantics() {
+        for (kind, expected_action_id, needs_target, expected_sleep_recovery) in [
+            (ActionKind::Idle, ActionId(1), false, 0.0),
+            (ActionKind::Rest, ActionId(3), false, 1.0),
+            (ActionKind::Inspect, ActionId(4), true, 0.0),
+        ] {
+            let (mut factorized_world, factorized_agent, food, _) = prepared_world();
+            let mut direct_world = factorized_world.clone();
+            let direct_target = needs_target.then_some(food);
+            let direct_command = HeadlessWorldCommand::structured(
+                ORGANISM_ID,
+                expected_action_id,
+                kind,
+                direct_target,
+                None,
+            )
+            .unwrap();
+            let direct_receipt = direct_world
+                .apply_registered_command(&direct_command, factorized_agent, Tick::new(1))
+                .unwrap();
+            let factorized_bundle = posture_bundle(expected_action_id, direct_target);
+            let factorized_receipt = factorized_world
+                .apply_registered_motor_bundle(&factorized_bundle, factorized_agent)
+                .unwrap();
+            let factorized_result = factorized_world.last_action_result.as_ref().unwrap();
+
+            assert_eq!(direct_receipt.action_result.command.kind, kind, "{kind:?}");
+            assert_eq!(factorized_result.command.kind, kind, "{kind:?}");
+            assert_eq!(
+                factorized_receipt.channel_receipts[0].command.primitive, expected_action_id,
+                "{kind:?}"
+            );
+            assert_eq!(
+                factorized_result.command.action_id, expected_action_id,
+                "{kind:?}"
+            );
+            assert_eq!(
+                direct_receipt.action_result.command.target_entity,
+                factorized_result.command.target_entity,
+                "{kind:?}"
+            );
+            assert_eq!(
+                direct_receipt.action_result.body_event, factorized_receipt.body_event,
+                "{kind:?}"
+            );
+            assert_eq!(
+                direct_receipt.biology_after, factorized_receipt.biology_after,
+                "{kind:?}"
+            );
+            assert_eq!(
+                factorized_receipt.body_event.sleep_recovery, expected_sleep_recovery,
+                "{kind:?}"
+            );
+        }
+
+        let (mut world, agent, _, _) = prepared_world();
+        let unsupported = posture_bundle(ActionId(999), None);
+        assert_eq!(
+            world.apply_registered_motor_bundle(&unsupported, agent),
+            Err(HeadlessMotorTransactionError::UnsupportedChannel(
+                MotorChannel::Posture,
+            ))
+        );
     }
 
     #[test]
