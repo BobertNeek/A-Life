@@ -26,9 +26,9 @@ architecture, user instructions, or dated evidence reports.
 | Agent / task | Scope | Branch or worktree | Status | Next action | Blocker | Updated (UTC) |
 | --- | --- | --- | --- | --- | --- | --- |
 | Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
-| Luna max / N022 | Current interval velocities | codex/recovered-n022-20260910 | Correction requested | Include carried object velocity when stationary | Bob owns routine Git | 2026-09-11 05:19Z |
-| Luna max / C003 | Embodiment tick triage | codex/recovered-c003-20260910 | Running | Read-only packet | Bob owns routine Git | 2026-09-11 05:19Z |
-| Luna max / C001 | Receptor aggregation triage | codex/recovered-c001-20260910 | Running | Read-only packet | Bob owns routine Git | 2026-09-11 05:19Z |
+| Luna max / N023 | Swept obstacle collision | codex/recovered-n023-20260910 | Running | Narrow fix and regression | Bob owns routine Git | 2026-09-11 05:44Z |
+| Luna max / C004 | Energy metric semantics | codex/recovered-c004-20260910 | Dispatching | Read-only triage | Bob owns routine Git | 2026-09-11 05:44Z |
+| Luna max / C002 | Chemistry snapshot consistency | codex/recovered-c002-20260910 | Running | Read-only triage | Bob owns routine Git | 2026-09-11 05:44Z |
 
 ## Handoffs and requests
 
@@ -69,3 +69,7 @@ Routine Git approvals belong to Bob. Workers hand off sandbox-blocked Git operat
 | 2026-09-11 | Bob review / N009 | Correct emitter count and stale world assertion accepted; static only | b22347b4 + 83e17615 |
 | 2026-09-11 | Bob triage / N006 | NOT_A_DEFECT: controlling policy permits capped catch-up; no runtime fidelity claim | campaign.json source review |
 | 2026-09-11 | Bob triage / C005 | ALREADY_FIXED by N013; archive/observation before cleanup traced | b11a1ed9 |
+
+| 2026-09-11 | Bob review / N022 | Current actor and carried velocities accepted after correction; static only | 3acbbc1c |
+| 2026-09-11 | Bob review / C003 | Monotonic embodiment replacement accepted; static only | a9173383 |
+| 2026-09-11 | Bob triage / C001 | UNRESOLVED: ordering effect established, intended receptor reduction unspecified; no speculative fix | campaign.json source review |
