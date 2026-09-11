@@ -118,7 +118,9 @@
       "threadId": "01a08e44-8eba-7ba1-a328-1afeafc593fe",
       "hostId": "local",
       "title": "Repair N004 — zero elapsed reactions",
-      "cursor": "cc03e582-7bd4-43a1-ba8f-e272e8564a87:2"
+      "cursor": "cc03e582-7bd4-43a1-ba8f-e272e8564a87:3",
+      "executionStatus": "waitingOnApproval",
+      "blocker": "Commit awaiting sandbox Git approval"
     },
     {
       "id": "N005",
@@ -215,9 +217,11 @@
       "status": "running",
       "assignedBase": "5548be00181ffddea80b289ff19b59d1f2f15f3f",
       "threadId": "01a08e77-81f4-7f92-b4b9-c36c27418e4d",
-      "cursor": "937ac1f6-5075-4d67-bd7d-c632b0b3478b:1",
+      "cursor": "937ac1f6-5075-4d67-bd7d-c632b0b3478b:2",
       "title": "Repair N011 — parental cadence readiness",
-      "hostId": "local"
+      "hostId": "local",
+      "executionStatus": "waitingOnApproval",
+      "blocker": "Branch creation awaiting sandbox Git approval"
     },
     {
       "id": "N020",
@@ -349,9 +353,11 @@
       "status": "running",
       "assignedBase": "5548be00181ffddea80b289ff19b59d1f2f15f3f",
       "threadId": "01a08e77-b5d4-74c2-a7f3-6ad05fc4a9cc",
-      "cursor": "1380ce93-eb00-4275-bb25-289f314aab32:1",
+      "cursor": "1380ce93-eb00-4275-bb25-289f314aab32:2",
       "title": "Repair N016 — grounded avoidance rates",
-      "hostId": "local"
+      "hostId": "local",
+      "executionStatus": "waitingOnApproval",
+      "blocker": "Branch creation awaiting sandbox Git approval"
     }
   ],
   "triage": [
