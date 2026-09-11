@@ -1,8 +1,9 @@
 use alife_core::{
-    BiochemistryState, BodyEventDelta, BrainCapacityClass, ChemicalSpeciesId,
-    FoundationGeneticIdentity, NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame, Tick,
-    Validate,
+    BiochemicalGraphState, BiochemicalPhenotype, BiochemistryState, BodyEventDelta,
+    BrainCapacityClass, ChemicalSpeciesId, FoundationGeneticIdentity, NeuralEmission,
+    NeuralEmissionClass, NeuralEmissionFrame, Tick, Validate, BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
 };
+use serde_json::json;
 
 fn founder_phenotype() -> alife_core::CreaturePhenotype {
     alife_core::CreatureGenome::early_mammal_founder(
@@ -101,6 +102,78 @@ fn same_tick_without_event_does_not_advance_reactions() {
         .unwrap();
 
     assert_eq!(same_tick.graph_state(), active.graph_state());
+}
+
+#[test]
+fn emitter_catch_up_replays_persistent_sources_but_not_instantaneous_events() {
+    for (source, event, expected) in [
+        ("Basal", BodyEventDelta::zero(), 0.20),
+        (
+            "Nutrition",
+            BodyEventDelta {
+                nutrition: 0.5,
+                ..BodyEventDelta::zero()
+            },
+            0.05,
+        ),
+    ] {
+        let graph: BiochemicalPhenotype = serde_json::from_value(json!({
+            "schema_version": BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
+            "species_budget": 1,
+            "reaction_budget": 0,
+            "species": [{
+                "id": 1,
+                "kind": "Regulatory",
+                "compartment": "Circulation",
+                "baseline": 0.0,
+                "decay_retention": 1.0,
+                "minimum": 0.0,
+                "maximum": 1.0,
+            }],
+            "reactions": [],
+            "emitters": [{
+                "source": source,
+                "target": 1,
+                "cadence_ticks": 1,
+                "threshold": 0.0,
+                "gain": 0.1,
+                "response": "Analogue",
+                "inverted": false,
+                "developmental_expression_floor": 0.0,
+            }],
+            "receptors": [],
+            "neuroemitters": [],
+        }))
+        .unwrap();
+        let body = BiochemistryState::new(&founder_phenotype(), Tick::ZERO)
+            .unwrap()
+            .body;
+        let initial = BiochemicalGraphState::new(&graph, Tick::ZERO, 1.0).unwrap();
+        let (first, _) = initial
+            .advance(Tick(1), body, event, None, &graph, 1.0)
+            .unwrap();
+        let (partitioned, _) = first
+            .advance(Tick(2), body, BodyEventDelta::zero(), None, &graph, 1.0)
+            .unwrap();
+        let (jumped, _) = initial
+            .advance(Tick(2), body, event, None, &graph, 1.0)
+            .unwrap();
+
+        assert!(
+            (partitioned
+                .concentration(&graph, ChemicalSpeciesId(1))
+                .unwrap()
+                - expected)
+                .abs()
+                < 1e-6
+        );
+        assert_eq!(
+            jumped.concentration(&graph, ChemicalSpeciesId(1)).unwrap(),
+            partitioned
+                .concentration(&graph, ChemicalSpeciesId(1))
+                .unwrap()
+        );
+    }
 }
 
 #[test]
