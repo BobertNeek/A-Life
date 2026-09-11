@@ -656,6 +656,7 @@ impl HeadlessWorld {
                     .organism_registry
                     .mark_dead(organism_id, next_tick)
                     .map_err(map_organism_registry_error)?;
+                candidate.detach_carried_objects(organism_id);
             }
 
             #[cfg(test)]
