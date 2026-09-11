@@ -26,7 +26,7 @@ architecture, user instructions, or dated evidence reports.
 | Agent / task | Scope | Branch or worktree | Status | Next action | Blocker | Updated (UTC) |
 | --- | --- | --- | --- | --- | --- | --- |
 | Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
-| Luna max / N021 | Joint physical outcomes | codex/recovered-n021-20260910 | Compatibility review requested | Report minimum codec scope and grounded regression | Bob owns routine Git | 2026-09-11 06:16Z |
+| Luna max / N021 | Versioned joint physical outcomes | codex/recovered-n021-20260910 | V12 scope authorized | Preserve old ABI/digests; ground measurements | Bob owns routine Git | 2026-09-11 06:33Z |
 
 ## Handoffs and requests
 
