@@ -678,6 +678,14 @@ impl HeadlessWorld {
         let mut conception_pair = None;
         if alive_count < living_capacity {
             for pair in eligible_pairs {
+                let Some(pair) = candidate.eligible_mating_pair(
+                    pair.maternal_id,
+                    pair.paternal_id,
+                    next_tick,
+                )?
+                else {
+                    continue;
+                };
                 let maternal = candidate
                     .organism_registry
                     .get(pair.maternal_id)
@@ -690,10 +698,16 @@ impl HeadlessWorld {
                 let paternal_age = paternal.age_at(next_tick)?;
                 if maternal.lifecycle().is_alive()
                     && paternal.lifecycle().is_alive()
-                    && maternal.biochemistry().reproduction.ready
-                    && paternal.biochemistry().reproduction.ready
-                    && maternal.biochemistry().reproduction.last_update_tick == maternal_age
-                    && paternal.biochemistry().reproduction.last_update_tick == paternal_age
+                    && maternal.biochemistry().is_reproduction_ready_at(
+                        next_tick,
+                        maternal_age,
+                        maternal.phenotype(),
+                    )
+                    && paternal.biochemistry().is_reproduction_ready_at(
+                        next_tick,
+                        paternal_age,
+                        paternal.phenotype(),
+                    )
                 {
                     conception_pair = Some(pair);
                     break;
@@ -6676,6 +6690,20 @@ mod task_4_3a2_tests {
         paternal_position: Vec3f,
         paternal_compatibility_family_id: u64,
     ) -> (HeadlessWorld, Tick) {
+        prepared_world_with_birth_ticks(
+            paternal_position,
+            paternal_compatibility_family_id,
+            Tick::ZERO,
+            Tick::ZERO,
+        )
+    }
+
+    fn prepared_world_with_birth_ticks(
+        paternal_position: Vec3f,
+        paternal_compatibility_family_id: u64,
+        maternal_birth_tick: Tick,
+        paternal_birth_tick: Tick,
+    ) -> (HeadlessWorld, Tick) {
         let maternal_genome = founder(0xE10_43A1, COMPATIBILITY_FAMILY_ID);
         let paternal_genome = founder(0xE10_43B3, paternal_compatibility_family_id);
         let maternal_phenotype = maternal_genome.express().unwrap();
@@ -6690,13 +6718,13 @@ mod task_4_3a2_tests {
         let maternal_biology = alife_core::BiochemistryState::new_with_age(
             &maternal_phenotype,
             current_tick,
-            current_tick,
+            Tick(current_tick.raw() - maternal_birth_tick.raw()),
         )
         .unwrap();
         let paternal_biology = alife_core::BiochemistryState::new_with_age(
             &paternal_phenotype,
             current_tick,
-            current_tick,
+            Tick(current_tick.raw() - paternal_birth_tick.raw()),
         )
         .unwrap();
         let mut world = HeadlessScenarioBuilder::new(43_002)
@@ -6715,7 +6743,7 @@ mod task_4_3a2_tests {
                     maternal_genome,
                     maternal_phenotype,
                     maternal_biology,
-                    Tick::ZERO,
+                    maternal_birth_tick,
                 )
                 .unwrap(),
             )
@@ -6728,7 +6756,7 @@ mod task_4_3a2_tests {
                     paternal_genome,
                     paternal_phenotype,
                     paternal_biology,
-                    Tick::ZERO,
+                    paternal_birth_tick,
                 )
                 .unwrap(),
             )
@@ -6834,6 +6862,46 @@ mod task_4_3a2_tests {
             forward.canonical_signature_digest().unwrap(),
             replay.canonical_signature_digest().unwrap()
         );
+    }
+
+    #[test]
+    fn nearby_ready_parents_born_one_tick_apart_conceive_after_offset_refreshes() {
+        let (mut world, first_boundary) = prepared_world_with_birth_ticks(
+            Vec3f::new(0.5, 0.0, 0.0),
+            COMPATIBILITY_FAMILY_ID,
+            Tick::ZERO,
+            Tick(1),
+        );
+        let reproduction_period =
+            u64::from(alife_core::BiochemistryCadence::early_mammal().reproduction_ticks);
+        let expected_child_id = OrganismId(world.next_organism_id);
+
+        assert_eq!(world.try_advance_tick().unwrap(), first_boundary);
+        assert_eq!(world.organism_registry().iter().count(), 2);
+        assert_eq!(
+            world
+                .organism_registry()
+                .get(MATERNAL_ID)
+                .unwrap()
+                .biochemistry()
+                .reproduction
+                .last_update_tick,
+            Tick(first_boundary.raw())
+        );
+        assert_eq!(
+            world
+                .organism_registry()
+                .get(PATERNAL_ID)
+                .unwrap()
+                .biochemistry()
+                .reproduction
+                .last_update_tick,
+            Tick(first_boundary.raw() - reproduction_period)
+        );
+
+        let second_boundary = Tick(first_boundary.raw() + 1);
+        assert_eq!(world.try_advance_tick().unwrap(), second_boundary);
+        assert!(world.organism_registry().get(expected_child_id).is_some());
     }
 
     #[test]

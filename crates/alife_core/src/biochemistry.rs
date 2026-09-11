@@ -535,6 +535,25 @@ pub struct ReproductionReadiness {
 }
 
 impl ReproductionReadiness {
+    fn physiological_flags(
+        body: BodyState,
+        homeostasis: &HomeostaticSnapshot,
+        phenotype: &CreaturePhenotype,
+    ) -> (bool, bool, bool) {
+        let healthy_enough = body.health >= 0.55 && body.injury <= 0.45;
+        let energy_sufficient = body.energy >= 0.35 && homeostasis.drives.brain_atp >= 0.25;
+        let hormone_ready = homeostasis.drives.reproductive_drive
+            >= phenotype.chemistry.reproductive_threshold
+            && homeostasis.hormones.developmental_hormone >= 0.20;
+        (healthy_enough, energy_sufficient, hormone_ready)
+    }
+
+    fn is_fresh_at_age(&self, age: Tick, reproduction_ticks: u32) -> bool {
+        reproduction_ticks > 0
+            && age.raw() >= self.last_update_tick.raw()
+            && age.raw() - self.last_update_tick.raw() < u64::from(reproduction_ticks)
+    }
+
     fn derive(
         last_update_tick: Tick,
         body: BodyState,
@@ -543,11 +562,8 @@ impl ReproductionReadiness {
         mating_opportunity: f32,
         phenotype: &CreaturePhenotype,
     ) -> Result<Self, ScaffoldContractError> {
-        let healthy_enough = body.health >= 0.55 && body.injury <= 0.45;
-        let energy_sufficient = body.energy >= 0.35 && homeostasis.drives.brain_atp >= 0.25;
-        let hormone_ready = homeostasis.drives.reproductive_drive
-            >= phenotype.chemistry.reproductive_threshold
-            && homeostasis.hormones.developmental_hormone >= 0.20;
+        let (healthy_enough, energy_sufficient, hormone_ready) =
+            Self::physiological_flags(body, homeostasis, phenotype);
         let ready = development.puberty_reached
             && healthy_enough
             && energy_sufficient
@@ -751,6 +767,31 @@ impl BiochemistryState {
         };
         value.validate_against(phenotype)?;
         Ok(value)
+    }
+
+    /// Checks cached readiness against the current biology and its bounded
+    /// reproduction-cadence interval.
+    pub fn is_reproduction_ready_at(
+        &self,
+        current_tick: Tick,
+        current_age: Tick,
+        phenotype: &CreaturePhenotype,
+    ) -> bool {
+        let (healthy_enough, energy_sufficient, hormone_ready) =
+            ReproductionReadiness::physiological_flags(self.body, &self.homeostasis, phenotype);
+        self.tick == current_tick
+            && self.homeostasis.tick == current_tick
+            && self.development.age_ticks == current_age
+            && self
+                .reproduction
+                .is_fresh_at_age(current_age, self.cadence.reproduction_ticks)
+            && self.reproduction.ready
+            && self.reproduction.mating_opportunity >= 0.50
+            && self.development.puberty_reached
+            && healthy_enough
+            && energy_sufficient
+            && hormone_ready
+            && phenotype.reproduction.fertility > 0.0
     }
 
     pub fn validate_against(
