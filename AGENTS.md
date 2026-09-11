@@ -1,128 +1,85 @@
-# AGENTS.md - A-Life Root Instructions
+# A-Life agent instructions
 
 Before code or architecture edits, read the relevant sections of
 `docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md`.
-Use `docs/architecture/requirement_registry.csv` when grading or tracing
-requirements.
+Use `docs/architecture/requirement_registry.csv` to trace requirements.
 
-This file controls repository-wide agent behavior. Child `AGENTS.md` files in
-`docs/` and each crate add local rules for that subtree. When rules conflict,
-prefer the more specific local file unless it violates the project-wide
-v2.0 controlling architecture.
+These instructions apply repository-wide. Child `AGENTS.md` files add local
+rules. Prefer the more specific rule unless it conflicts with v2.0.
 
 ## Architecture authority
 
-- A-Life v2.0 is the single normative architecture and controls every conflict.
-- All earlier architecture specifications, recovery designs, plans, and
-  compliance matrices are superseded historical material. They may explain
-  lineage but cannot amend, narrow, or override v2.0.
-- Preserve the v2.0 categories exactly: LOCKED GOAL, LOCKED CAPABILITY, LOCKED
+- A-Life v2.0 is the single normative architecture. Earlier specifications,
+  recovery designs, plans, and compliance matrices are historical material.
+- Preserve the v2.0 categories: LOCKED GOAL, LOCKED CAPABILITY, LOCKED
   INVARIANT, LOCKED INTERFACE, REFERENCE MECHANISM, TUNABLE DEFAULT, DEFERRED
-  CAPABILITY, and RESEARCH. Apply the conflict precedence stated in v2.0.
-- Current Rust types, engines, processor placement, GPU layouts, brain-size
-  classes, N2048 assumptions, constants, adapters, tests, fixtures, and other
+  CAPABILITY, and RESEARCH. Follow its conflict precedence.
+- Current types, engines, GPU layouts, brain sizes, constants, and other
   implementation choices are not architecture unless v2.0 explicitly locks
   their semantics.
-- Record codebase pass/fail status only in dated compliance reports that cite
-  stable `AOA-*` requirement IDs. Never write current compliance into the
-  permanent architecture.
-- When implementation and v2.0 differ, report the implementation gap. Do not
-  reinterpret the implementation as architecture or start an unrequested
-  repair pass.
+- Record compliance in dated reports citing stable `AOA-*` requirement IDs,
+  not in the controlling architecture.
+- Report gaps between implementation and v2.0. Do not redefine the target to
+  match the code or start an unrequested repair.
+
+## Working style
+
+- Clear requests authorize execution within scope. Use the shortest practical
+  path and apply only the procedures relevant to the task.
+- Prefer native commands and existing tools. Skip plans, prototypes, helpers,
+  and abstractions when doing and checking the work is simpler.
+- Inspect enough to identify the target and cause, then act. Try a reversible
+  fix when it can cheaply resolve the problem.
+- Preserve unrelated work, credentials, and irreplaceable data. Before
+  destructive work, verify the exact target and provide a practical rollback.
+- Keep changes focused and readable. Add dependencies only for a current need.
+- Verify with the smallest check that can reveal failure. Run required checks
+  for the touched system and state what the evidence proves. Do not repeat
+  passing checks unless something relevant changes.
+- For long or uncertain work, check results early. Report bottlenecks and
+  change course when repeated attempts fail.
+- For substantive visual work, compare rendered output with the approved
+  reference. Small visual fixes need only a focused screenshot check.
+- Update affected documentation. Stage only intended changes and complete the
+  authorized Git workflow. Stop when the requested result works.
 
 ## Current implementation guardrails
 
-These rules protect the present codebase during ordinary work. They are
-non-normative implementation constraints, do not amend v2.0, and may change
-only through separately authorized migration work.
+These constraints protect the current implementation. They do not amend v2.0.
+Changes to them require an authorized task that covers the affected behavior.
 
-- Rust + Bevy + wgpu/WebGPU + WGSL only.
-- No Unity.
 - No HLSL production shaders.
-- No fixed global 2048-neuron brain assumption.
-- `Standard2048` is a reference tier only.
-- Use scalable brain classes and sparse class-bucketed storage.
-- Internal SLM is a private subconscious semantic prior.
-- External teacher LLM teaches through ordinary perception.
-- Production neural execution is GPU-authoritative WGSL; do not add a live CPU
+- No fixed global 2048-neuron assumption. `Standard2048` is a reference tier.
+  Use scalable brain classes and sparse class-bucketed storage.
+- The internal SLM is a private subconscious semantic prior. External teachers
+  teach through ordinary perception.
+- Production neural execution is GPU-authoritative WGSL. Do not add a live CPU
   shadow, parity gate, or automatic CPU neural fallback.
-- Keep pure CPU neural helpers test-only or developer-only.
-- World code enumerates unscored candidates and remains authoritative for
-  legality and outcomes.
-- Promote only N512, N1024, and N2048 until larger tiers pass the documented
+- Promote only N512, N1024, and N2048 until larger tiers pass their documented
   causal and performance gates.
-- Derive each promoted class only from the complete ADR-026 A/B/C/D,
-  benchmark, clean-Git, and exact global-gate matrix on one Vulkan adapter;
-  configuration is never promotion authority.
-- N2048 is the first trained foundation; N4096 remains research-only.
-- Language token IDs are stable logical codes, never neuron indices or packed
-  GPU offsets.
-- Player, creature, and teacher speech enters as spatial perception; neural
+- Player, creature, and teacher speech enters as spatial perception. Neural
   `Vocalize` payload selection remains GPU-authoritative.
-- Archive every creature before GPU insertion and archive death before GPU
-  retirement.
-- Keep docs and local AGENTS.md files updated after meaningful changes.
-- Prefer Graphify queries for architecture questions when installed and a graph
-  exists.
-- On Windows, never assume `bash` means Git Bash. Plain `bash` may invoke WSL
-  and fail if WSL virtualization is unavailable. Use `scripts/check.ps1`,
-  `scripts/check_core_boundaries.ps1`, and `scripts/docs_check.ps1`, or the
-  explicit Git Bash path.
-- Future post-R24 productization work should use `docs/productization_s_plans/`
-  and must not create P37/G25/S12 automatically.
 
-## Execution discipline
+## Windows commands
 
-- Before substantial work, state the source of truth, hard constraints,
-  explicitly rejected approaches, required deliverable, and evidence that will
-  prove success. Resolve contradictions before investing in implementation.
-- Separate discovery, production implementation, scaling, and hardening into
-  explicit phases. Do not expand an unapproved experiment or harden a design
-  whose user-facing result has not been accepted.
-- Prove one representative end-to-end vertical slice through the real
-  production path as early as possible. A fixture, mockup, isolated component,
-  or generated concept may guide work, but it is not evidence that the actual
-  product works.
-- Put an early evidence checkpoint on long or uncertain work. If the promised
-  artifact is not available by that checkpoint, report the concrete bottleneck
-  and change the approach instead of silently extending the same loop.
-- For subjective or visual work, capture real product output after the first
-  slice, compare it with the approved reference and acceptance criteria, and
-  fix the largest visible discrepancy before adding breadth.
-- Gate multiplication. Validate a small representative set before producing
-  many variants, migrating all callers, generating a large corpus, or applying
-  a pattern across the repository.
-- Match validation cost to the phase. Use the fastest relevant targeted checks
-  during iteration, then run the complete required validation suite once the
-  result is stable. Never present a targeted, fixture-only, or partial pass as
-  final validation.
-- Treat expensive build and asset-generation pipelines as incremental systems:
-  cache unchanged inputs, bind outputs to source digests, rebuild only affected
-  stages, preserve atomic jobs, and inspect process and receipt state before
-  retrying. A short wait timeout is not proof of failure or completion.
-- Use subagents only for independent, bounded work with explicit inputs,
-  outputs, acceptance criteria, and a clear speed or quality advantage. Keep
-  tightly coupled implementation and rapid visual iteration in one context
-  when coordination would dominate the work.
-- After repeated failures or non-improving iterations, stop and diagnose the
-  root cause. Replace the approach when its assumptions are wrong rather than
-  stacking patches onto a failing direction.
-- Define completion as both a concrete artifact and reproducible evidence from
-  the real system. Optimize feedback latency while iterating, but do not skip
-  the final correctness, boundary, integration, or release gates.
+Use `scripts/check.ps1`, `scripts/check_core_boundaries.ps1`, and
+`scripts/docs_check.ps1` for the relevant checks. If calling Bash directly,
+use the explicit Git Bash path. Plain `bash` may invoke unavailable WSL.
 
-## graphify
+## Graphify
 
-Graphify is optional project tooling. It is installed project-scoped through
-`.codex/` when available and may write an ignored `graphify-out/` directory.
-Do not make Graphify a prerequisite for `cargo build`, `cargo check`, or
-`cargo test`.
+Graphify is optional and must not be a prerequisite for Cargo commands.
+On Windows, use `scripts/graphify.ps1` to find the installed executable even
+when it is absent from PATH.
 
-When the user types `/graphify`, invoke the `skill` tool with `skill: "graphify"` before doing anything else.
-
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `scripts/graphify.sh update` or `graphify update .` to keep the graph current when Graphify is installed.
+- Run `scripts/graphify.ps1 update --no-cluster` to build or refresh the code
+  graph. This performs structural extraction without an LLM.
+- Once `graphify-out/graph.json` exists, use
+  `scripts/graphify.ps1 query "<question>"`, `path "<A>" "<B>"`, or
+  `explain "<concept>"` for focused questions.
+- Use `graphify-out/wiki/index.md` for broad navigation when available. Read
+  `graphify-out/GRAPH_REPORT.md` only when focused queries are insufficient.
+- Generated files under `graphify-out/` are ignored. Check source files
+  directly when graph results are stale or incomplete.
+- After code changes, refresh an existing graph when the tooling is available.
+- When the user requests `/graphify`, follow the available Graphify skill.
