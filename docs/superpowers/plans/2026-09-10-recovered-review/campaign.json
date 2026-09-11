@@ -112,15 +112,16 @@
       "files": [
         "crates/alife_core/src/biochemical_graph.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "clientThreadId": "client-new-thread:1994bb7e-2483-47fa-a17e-2c28ab7a7981",
       "assignedBase": "4b9089413b55a7fa5cc42e7d09a47988ba417020",
       "threadId": "01a08e44-8eba-7ba1-a328-1afeafc593fe",
       "hostId": "local",
       "title": "Repair N004 — zero elapsed reactions",
-      "cursor": "cc03e582-7bd4-43a1-ba8f-e272e8564a87:4",
-      "executionStatus": "correction_requested",
-      "reviewStatus": "correction_requested"
+      "cursor": "cc03e582-7bd4-43a1-ba8f-e272e8564a87:5",
+      "executionStatus": "complete",
+      "reviewStatus": "ACCEPTED_STATIC",
+      "integrationCommit": "cb97e0fdde4e67c342ea3e1b4e13d4a2b8bb1e3f"
     },
     {
       "id": "N005",
@@ -131,7 +132,12 @@
       "files": [
         "crates/alife_core/src/biochemical_graph.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "assignedBase": "c6bc35cdc68ab25bb3ec0642ae7c095e7ccffd92",
+      "threadId": "01a08e9c-c856-74d2-a0b7-5408b6c9797d",
+      "cursor": "22ed8440-4d5e-482f-a582-803ec11ea2e4:1",
+      "title": "Repair N005 — emitter cadence catch-up",
+      "hostId": "local"
     },
     {
       "id": "N009",
@@ -214,13 +220,15 @@
         "crates/alife_world/src/headless.rs",
         "crates/alife_core/src/biochemistry.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "assignedBase": "5548be00181ffddea80b289ff19b59d1f2f15f3f",
       "threadId": "01a08e77-81f4-7f92-b4b9-c36c27418e4d",
-      "cursor": "937ac1f6-5075-4d67-bd7d-c632b0b3478b:3",
+      "cursor": "937ac1f6-5075-4d67-bd7d-c632b0b3478b:4",
       "title": "Repair N011 — parental cadence readiness",
       "hostId": "local",
-      "executionStatus": "running"
+      "executionStatus": "complete",
+      "reviewStatus": "ACCEPTED_STATIC",
+      "integrationCommit": "3e3b175481020f45be6b492aeb42ad936acf44e3"
     },
     {
       "id": "N020",
@@ -232,7 +240,12 @@
       "files": [
         "crates/alife_world/src/headless.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "assignedBase": "c6bc35cdc68ab25bb3ec0642ae7c095e7ccffd92",
+      "threadId": "01a08e9d-3f1b-7a51-9cce-74294af70305",
+      "cursor": "1ee177b9-4004-493e-a5bc-62c676756027:1",
+      "title": "Repair N020 — carried object motion",
+      "hostId": "local"
     },
     {
       "id": "N022",
@@ -309,7 +322,12 @@
       "files": [
         "crates/alife_game_app/src/gpu_live_runtime.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "assignedBase": "c6bc35cdc68ab25bb3ec0642ae7c095e7ccffd92",
+      "threadId": "01a08e9d-3f18-7e60-bc57-964e3cd10959",
+      "cursor": "640b8bda-9f44-455b-b92b-04af5fc20f3e:1",
+      "title": "Repair N014 — truthful environment exposure",
+      "hostId": "local"
     },
     {
       "id": "N017",
@@ -349,13 +367,15 @@
       "files": [
         "crates/alife_core/src/evaluation.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "assignedBase": "5548be00181ffddea80b289ff19b59d1f2f15f3f",
       "threadId": "01a08e77-b5d4-74c2-a7f3-6ad05fc4a9cc",
-      "cursor": "1380ce93-eb00-4275-bb25-289f314aab32:3",
+      "cursor": "1380ce93-eb00-4275-bb25-289f314aab32:4",
       "title": "Repair N016 — grounded avoidance rates",
       "hostId": "local",
-      "executionStatus": "running"
+      "executionStatus": "complete",
+      "reviewStatus": "ACCEPTED_STATIC",
+      "integrationCommit": "c6bc35cdc68ab25bb3ec0642ae7c095e7ccffd92"
     }
   ],
   "triage": [
@@ -540,6 +560,33 @@
       "status": "CORRECTION_REQUESTED",
       "workerCommit": "7b34a0c3dd811819015ad5c45e42f37fb0d09cbc",
       "evidence": "One-line zero-duration production fix is sound. Regression nutrition=1.0 can saturate bounded ATP product and mask old-code reaction. Requested smaller controlled pulse or graph fixture plus explicit remaining reactant and product-headroom assertions. No integration yet; no builds/tests."
+    },
+    {
+      "id": "N004",
+      "status": "ACCEPTED_STATIC",
+      "workerCommits": [
+        "7b34a0c3",
+        "2775db95"
+      ],
+      "integrationCommits": [
+        "e1092f0b",
+        "cb97e0fd"
+      ],
+      "evidence": "Read full production and corrected regression diffs, advance caller, zero-extent solver early return, cadence/source rules and species IDs. Small pulse plus residual nutrient/product-headroom assertions avoid saturation masking. Explicit emission and conservation remain unchanged. Supervisor committed correction; worker clean and whitespace passed. Native tests/compile/runtime UNVERIFIED."
+    },
+    {
+      "id": "N011",
+      "status": "ACCEPTED_STATIC",
+      "workerCommit": "661a3bb7564a486f052c856f46e119011b143e8d",
+      "integrationCommit": "3e3b175481020f45be6b492aeb42ad936acf44e3",
+      "evidence": "Full two-file diff and fixture/callers read. Cached readiness age bounded by configured cadence and no future stamp; current biology/homeostasis/age and physiological flags rechecked. Shared pair authority rechecked after advancement; lifecycle guard retained. Regression offsets parent birth by one tick and crosses their staggered boundaries. Supervisor committed allowlist; whitespace passed/worker clean. Compile/tests/runtime UNVERIFIED."
+    },
+    {
+      "id": "N016",
+      "status": "ACCEPTED_STATIC",
+      "workerCommit": "762b2990fc747d9d84261b04345a2789e0d3cbf1",
+      "integrationCommit": "c6bc35cdc68ab25bb3ec0642ae7c095e7ccffd92",
+      "evidence": "Full production/test diff read; traced explicit encounter observations, sample rounding and metric consumers. Injury-only patches no longer add avoidance samples; measured food failure retained; patch outcomes unchanged. Unknown before explicit opportunities, true/false samples yield 32768 with two exposures. N015 narration and N017 staging preserved. Supervisor committed allowlist; whitespace passed/clean. Compile/tests/runtime UNVERIFIED."
     }
   ],
   "gitApprovalOwner": "supervisor; user explicitly delegated routine approvals. Perform scoped Git through permitted supervisor tools; workers final-handoff blocked operations, no elevated approval prompts or sandbox changes."
