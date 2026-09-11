@@ -149,12 +149,14 @@
       "files": [
         "crates/alife_core/src/biochemical_graph.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "assignedBase": "120c71dfc2640c1b3a019b06466cbb42c040b356",
       "threadId": "01a08eae-e71d-7d40-a3b8-80a9030a2edb",
-      "cursor": "8418a45a-716d-41b1-be18-6e500df152c4:1",
+      "cursor": "8418a45a-716d-41b1-be18-6e500df152c4:2",
       "hostId": "local",
-      "title": "Repair N009 — neuroemitter work accounting"
+      "title": "Repair N009 — neuroemitter work accounting",
+      "reviewStatus": "ACCEPTED_STATIC",
+      "integrationCommit": "83e176156f1411415990710e380b8b8c356ec0da"
     },
     {
       "id": "N018",
@@ -246,13 +248,14 @@
       "files": [
         "crates/alife_world/src/headless.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "assignedBase": "c6bc35cdc68ab25bb3ec0642ae7c095e7ccffd92",
       "threadId": "01a08e9d-3f1b-7a51-9cce-74294af70305",
-      "cursor": "1ee177b9-4004-493e-a5bc-62c676756027:2",
+      "cursor": "1ee177b9-4004-493e-a5bc-62c676756027:3",
       "title": "Repair N020 — carried object motion",
       "hostId": "local",
-      "reviewStatus": "correction_requested"
+      "reviewStatus": "ACCEPTED_STATIC",
+      "integrationCommit": "eff576d8282db734e07a42260f9f794e3e80c220"
     },
     {
       "id": "N022",
@@ -263,7 +266,12 @@
       "files": [
         "crates/alife_world/src/headless.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "assignedBase": "83e176156f1411415990710e380b8b8c356ec0da",
+      "threadId": "01a08ec0-33aa-7202-a132-d04653f331e0",
+      "cursor": "3981ec89-8c0d-43cb-8f3c-daad5bc14c5d:1",
+      "title": "Repair N022 — current interval velocities",
+      "hostId": "local"
     },
     {
       "id": "N023",
@@ -330,13 +338,15 @@
         "crates/alife_game_app/src/gpu_live_runtime.rs",
         "crates/alife_core/src/evaluation.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "assignedBase": "c6bc35cdc68ab25bb3ec0642ae7c095e7ccffd92",
       "threadId": "01a08e9d-3f18-7e60-bc57-964e3cd10959",
-      "cursor": "640b8bda-9f44-455b-b92b-04af5fc20f3e:2",
+      "cursor": "640b8bda-9f44-455b-b92b-04af5fc20f3e:3",
       "title": "Repair N014 — truthful environment exposure",
       "hostId": "local",
-      "scopeApproval": "Core evaluation unknown-regime contract authorized, optional one life_evaluation regression. Preserve serialized six known bins and existing records, derive unknown count, checked known sum <= survival. Review compatibility."
+      "scopeApproval": "Core evaluation unknown-regime contract authorized, optional one life_evaluation regression. Preserve serialized six known bins and existing records, derive unknown count, checked known sum <= survival. Review compatibility.",
+      "reviewStatus": "ACCEPTED_STATIC",
+      "integrationCommit": "2fd32c60ec81b55ff9c85fa597217cef3a5296e1"
     },
     {
       "id": "N017",
@@ -392,7 +402,12 @@
       "id": "N006",
       "goal": "Trace admitted time jumps and v2 AOA-TIME-004 fidelity policy. Determine whether the capped integration requires an explicit approximation receipt or already meets a documented contract. Do not uncap loops or treat a permitted approximation as a confirmed defect.",
       "files": "crates/alife_core/src/biochemistry.rs; crates/alife_core/src/biochemical_graph.rs",
-      "status": "queued"
+      "status": "running",
+      "assignedBase": "83e176156f1411415990710e380b8b8c356ec0da",
+      "threadId": "01a08ec0-340f-7ea3-9221-db4d1eb8862c",
+      "cursor": "4ba01928-2911-4ce0-bdc2-20aa87cab107:1",
+      "title": "Triage N006 — bounded time fidelity",
+      "hostId": "local"
     },
     {
       "id": "C001",
@@ -422,7 +437,12 @@
       "id": "C005",
       "goal": "After N013, trace organism retirement/removal and recent patch ownership. Prove whether departed organisms remain in last_sealed_patches, and identify a safe cleanup point after required observation/archive.",
       "files": "crates/alife_game_app/src/gpu_live_runtime.rs",
-      "status": "queued"
+      "status": "running",
+      "assignedBase": "83e176156f1411415990710e380b8b8c356ec0da",
+      "threadId": "01a08ec0-bc74-7130-9aa6-a73190ab5669",
+      "title": "Triage C005 — departed patch retention",
+      "hostId": "local",
+      "cursor": "05ba9081-03d9-408a-9edf-c6731262edda:1"
     }
   ],
   "reviews": [
@@ -609,6 +629,36 @@
       "status": "CORRECTION_REQUESTED",
       "workerCommit": "ad42d150df5130cf8353522701a1df8c084e4a3f",
       "evidence": "Full movement/detach and save-restore regression diff read. Removal/retirement detach exists but terminal mark_dead leaves held ownership until retirement. Requested detach immediately after successful mark_dead within current candidate transaction."
+    },
+    {
+      "id": "N020",
+      "status": "ACCEPTED_STATIC",
+      "workerCommits": [
+        "ad42d150",
+        "aceac9e3"
+      ],
+      "integrationCommits": [
+        "729ad9c1",
+        "eff576d8"
+      ],
+      "evidence": "Full initial/correction diffs and movement, editor, death/removal, save/restore paths reviewed. Held transforms retain offset and owner across move/restore; terminal mark_dead now detaches within candidate transaction before retirement. Existing removal paths also detach. One fixture inspected. Whitespace check passed; Rust compile/tests/runtime UNVERIFIED."
+    },
+    {
+      "id": "N014",
+      "status": "ACCEPTED_STATIC",
+      "workerCommit": "cfc8a47e",
+      "integrationCommit": "2fd32c60",
+      "evidence": "Full three-file diff and enum/metric consumers reviewed. Unknown skips six known bins; checked unknown count derives survival minus known sum; validation forbids known sum exceeding survival. Survival/GPU and N016/N015 preserved. Six-bin serialized layout and historical values unchanged; updated reader accepts old records, old equality-enforcing readers can reject new unknown records (no downgrade guarantee). Current roundtrip fixture inspected. Whitespace passed; compile/runtime UNVERIFIED."
+    },
+    {
+      "id": "N009",
+      "status": "ACCEPTED_STATIC",
+      "workerCommit": "c8008840",
+      "integrationCommits": [
+        "b22347b4",
+        "83e17615"
+      ],
+      "evidence": "Full diff and frame validator/callers reviewed. Count tracks bounded configured emitter loop when frame exists, zero without frame. Independent counts fixture valid including duplicate inputs. Supervisor additionally corrected exactly one stale headless world assertion to phenotype neuroemitter length; production world unchanged. Whitespace passed. Native tests/compile/runtime UNVERIFIED."
     }
   ],
   "gitApprovalOwner": "supervisor; user explicitly delegated routine approvals. Perform scoped Git through permitted supervisor tools; workers final-handoff blocked operations, no elevated approval prompts or sandbox changes."
