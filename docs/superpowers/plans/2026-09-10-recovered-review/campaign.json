@@ -306,8 +306,9 @@
       "assignedBase": "af2c66eaea4e077fa97aab0e9668ae67314045b2",
       "threadId": "01a08f0c-4378-7632-822a-e4d6b6328e4c",
       "hostId": "local",
-      "cursor": "90ce716a-2375-4c92-a0d9-cfd393e941b8:2",
-      "reviewStatus": "CORRECTION_REQUESTED"
+      "cursor": "90ce716a-2375-4c92-a0d9-cfd393e941b8:3",
+      "reviewStatus": "CORRECTION_REQUESTED",
+      "scopeApproval": "V12 experience ABI required after actual JSON/restore validation trace. Add gpu_live_runtime.rs production constructor/stale assertion and one v11_cognitive_contracts.rs sealed/legacy compatibility regression. Preserve V4/V11 versions/digests; no global schema shift. Remove fabricated nonlocomotion intensity."
     },
     {
       "id": "N013",
@@ -773,6 +774,11 @@
       "status": "CORRECTION_REQUESTED",
       "workerCommit": "42998fc63e6e355b0e6e115864ec80123711cc0f",
       "evidence": "Full diff read. Serialized outcome field and digest extension added without prerequisite scope report. Requested narrow actual codec/version/old-digest compatibility analysis and sealed-patch regression, reach witness, and avoid fabricated zero non-locomotion measurement. No integration."
+    },
+    {
+      "id": "N021",
+      "status": "EXPANDED_SCOPE_AUTHORIZED",
+      "evidence": "Read current experience ABI gates, new_v11 constructor, sealed patch validation, production seal caller and runtime replay restore validation. Existing old readers ignore extra fields under unchanged ABI. Distinct V12 authorized; actual old restore validation will reject unknown version. Raw old decoders cannot be retrofitted. Exact source/test expansion recorded in scopeApproval."
     }
   ],
   "gitApprovalOwner": "supervisor; user explicitly delegated routine approvals. Perform scoped Git through permitted supervisor tools; workers final-handoff blocked operations, no elevated approval prompts or sandbox changes."
