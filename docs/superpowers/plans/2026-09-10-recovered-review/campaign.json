@@ -458,9 +458,12 @@
       "id": "C004",
       "goal": "Trace EnergyStability naming, persisted schema, downstream readers and intended metric. Distinguish mean energy from temporal stability. Do not silently repurpose persisted measurements.",
       "files": "crates/alife_core/src/evaluation.rs; crates/alife_tools/src/era1_evolution.rs",
-      "status": "dispatching",
+      "status": "running",
       "assignedBase": "a9173383",
-      "clientThreadId": "client-new-thread:cce37c59-c301-456c-9190-f2fa1d2f045b"
+      "clientThreadId": "client-new-thread:cce37c59-c301-456c-9190-f2fa1d2f045b",
+      "threadId": "01a08efb-c658-74a1-88fe-4d46f996a327",
+      "hostId": "local",
+      "cursor": "0140141b-b53e-4a27-9829-8ad082d4d6bc:1"
     },
     {
       "id": "C005",
