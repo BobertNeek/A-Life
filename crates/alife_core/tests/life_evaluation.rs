@@ -11,12 +11,32 @@ use alife_core::{
     UtteranceSourceKind, Velocity, WeightSplitContract, WorldEntityId, ACTIVE_CHALLENGE_COUNT,
 };
 
-fn finalized_patch(contact: PhysicalContactKind, reward: f32, pain: f32) -> ExperiencePatch {
+fn finalized_patch(
+    contact: PhysicalContactKind,
+    reward: f32,
+    pain: f32,
+    action_kind: ActionKind,
+) -> ExperiencePatch {
     let organism_id = OrganismId(7);
     let sequence_id = ExperienceSequenceId(99);
     let tick = Tick::new(10);
     let spec = BrainClassSpec::for_tier(BrainScaleTier::Standard2048);
     let genome = BrainGenome::scaffold(42, spec.id);
+    let (action_id, candidate_family, target) = match action_kind {
+        ActionKind::Vocalize => (
+            ActionKind::Vocalize.canonical_id(),
+            CandidateActionFamily::Other,
+            ActionTarget::NONE,
+        ),
+        _ => (
+            ActionId(300),
+            CandidateActionFamily::Contact,
+            ActionTarget::new(
+                Some(WorldEntityId(1)),
+                Some(alife_core::Vec3f::new(0.0, 0.0, 1.0)),
+            ),
+        ),
+    };
     let development = DevelopmentState::new(
         genome.id,
         Tick::new(120),
@@ -66,14 +86,11 @@ fn finalized_patch(contact: PhysicalContactKind, reward: f32, pain: f32) -> Expe
         HomeostaticSnapshot::baseline(tick),
         vec![ActionCandidate::new(
             0,
-            ActionId(300),
-            ActionKind::Interact,
-            CandidateActionFamily::Contact,
+            action_id,
+            action_kind,
+            candidate_family,
             CandidateObservationRef::None,
-            ActionTarget::new(
-                Some(WorldEntityId(1)),
-                Some(alife_core::Vec3f::new(0.0, 0.0, 1.0)),
-            ),
+            target,
             CandidateFeatureVector::zero(),
             Confidence::new(0.8).unwrap(),
             NormalizedScalar::new(0.0).unwrap(),
@@ -101,16 +118,13 @@ fn finalized_patch(contact: PhysicalContactKind, reward: f32, pain: f32) -> Expe
     )
     .unwrap();
     let proposal = ActionProposal::new(
-        ActionId(300),
-        ActionKind::Interact,
+        action_id,
+        action_kind,
         0.75,
         Confidence::new(0.8).unwrap(),
         None,
         0b101,
-        ActionTarget::new(
-            Some(WorldEntityId(1)),
-            Some(alife_core::Vec3f::new(0.0, 0.0, 1.0)),
-        ),
+        target,
         NormalizedScalar::new(0.5).unwrap(),
     )
     .unwrap();
@@ -254,7 +268,7 @@ fn finalized_statistics_reject_idle_and_food_hazard_patches_atomically() {
         (PhysicalContactKind::Touch, 0.0, 0.0),
         (PhysicalContactKind::Consumed, -0.25, 0.2),
     ] {
-        let patch = finalized_patch(contact, reward, pain);
+        let patch = finalized_patch(contact, reward, pain, ActionKind::Interact);
         let mut statistics = PassiveLifeStatistics::new(OrganismId(7), Tick::ZERO).unwrap();
         statistics.finalize(Tick::new(12), "completed").unwrap();
         let before = statistics.clone();
@@ -265,4 +279,34 @@ fn finalized_statistics_reject_idle_and_food_hazard_patches_atomically() {
         );
         assert_eq!(statistics, before);
     }
+}
+
+#[test]
+fn heard_creature_vocalization_does_not_measure_peer_communication() {
+    let patch = finalized_patch(PhysicalContactKind::Touch, 0.0, 0.0, ActionKind::Vocalize);
+    let mut statistics = PassiveLifeStatistics::new(OrganismId(7), Tick::ZERO).unwrap();
+
+    statistics.observe_sealed_patch(&patch).unwrap();
+
+    assert_eq!(statistics.heard_token_exposures(), 1);
+    assert_eq!(statistics.narration_utterances(), 1);
+    assert_eq!(
+        statistics.metric(PassiveMetricKind::PeerCommunication),
+        MetricReading::Unknown
+    );
+    assert_eq!(
+        statistics.metric(PassiveMetricKind::UnaidedComprehension),
+        MetricReading::Unknown
+    );
+
+    statistics
+        .observe(PassiveLifeEvent::PeerCommunication { successful: true })
+        .unwrap();
+    assert_eq!(
+        statistics.metric(PassiveMetricKind::PeerCommunication),
+        MetricReading::Measured {
+            value_q16: 65_535,
+            exposures: 1,
+        }
+    );
 }
