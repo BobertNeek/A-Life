@@ -198,6 +198,16 @@ fn unexposed_passive_metrics_are_unknown_and_updates_are_constant_state() {
         })
         .unwrap();
     statistics
+        .observe(PassiveLifeEvent::SurvivalTick {
+            tick: Tick(12),
+            regime: EnvironmentalRegime::Unknown,
+            energy_q16: 49_152,
+            movement_distance_q16: 32_768,
+            gpu_dispatched: true,
+            gpu_throttled: false,
+        })
+        .unwrap();
+    statistics
         .observe(PassiveLifeEvent::FoodOutcome { beneficial: true })
         .unwrap();
     statistics
@@ -207,8 +217,9 @@ fn unexposed_passive_metrics_are_unknown_and_updates_are_constant_state() {
         })
         .unwrap();
 
-    assert_eq!(statistics.survival_ticks(), 1);
+    assert_eq!(statistics.survival_ticks(), 2);
     assert_eq!(statistics.environmental_regime_ticks()[0], 1);
+    assert_eq!(statistics.unknown_environmental_regime_ticks().unwrap(), 1);
     assert_eq!(
         statistics.metric(PassiveMetricKind::FoodSuccess),
         MetricReading::Measured {
@@ -216,9 +227,9 @@ fn unexposed_passive_metrics_are_unknown_and_updates_are_constant_state() {
             exposures: 1,
         }
     );
-    assert_eq!(statistics.gpu_dispatches(), 1);
+    assert_eq!(statistics.gpu_dispatches(), 2);
     assert_eq!(statistics.gpu_throttled_dispatches(), 0);
-    statistics.finalize(Tick(12), "starvation").unwrap();
+    statistics.finalize(Tick(13), "starvation").unwrap();
     statistics.validate_contract().unwrap();
 
     let encoded = serde_json::to_vec(&statistics).unwrap();

@@ -37,11 +37,22 @@ pub enum EnvironmentalRegime {
     Hazardous = 3,
     Social = 4,
     Novel = 5,
+    /// No authoritative regime classification was available for the exposure.
+    /// This deliberately does not occupy a serialized statistics bin.
+    Unknown = 6,
 }
 
 impl EnvironmentalRegime {
-    const fn index(self) -> usize {
-        self as usize
+    const fn index(self) -> Option<usize> {
+        match self {
+            Self::Temperate => Some(0),
+            Self::Scarcity => Some(1),
+            Self::Abundance => Some(2),
+            Self::Hazardous => Some(3),
+            Self::Social => Some(4),
+            Self::Novel => Some(5),
+            Self::Unknown => None,
+        }
     }
 }
 
@@ -264,6 +275,17 @@ impl PassiveLifeStatistics {
         &self.environmental_regime_ticks
     }
 
+    pub fn unknown_environmental_regime_ticks(&self) -> Result<u64, ScaffoldContractError> {
+        let known_ticks = self
+            .environmental_regime_ticks
+            .iter()
+            .try_fold(0_u64, |sum, value| sum.checked_add(*value))
+            .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+        self.survival_ticks
+            .checked_sub(known_ticks)
+            .ok_or(ScaffoldContractError::ScalarOutOfRange)
+    }
+
     pub const fn gpu_dispatches(&self) -> u64 {
         self.gpu_dispatches
     }
@@ -309,10 +331,12 @@ impl PassiveLifeStatistics {
                     .survival_ticks
                     .checked_add(1)
                     .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
-                let regime_ticks = &mut self.environmental_regime_ticks[regime.index()];
-                *regime_ticks = regime_ticks
-                    .checked_add(1)
-                    .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+                if let Some(index) = regime.index() {
+                    let regime_ticks = &mut self.environmental_regime_ticks[index];
+                    *regime_ticks = regime_ticks
+                        .checked_add(1)
+                        .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+                }
                 self.energy_stability.observe(energy_q16)?;
                 self.movement.observe(movement_distance_q16)?;
                 self.gpu_dispatches = self
@@ -502,7 +526,7 @@ impl Validate for PassiveLifeStatistics {
             .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
         if self.schema_version != PASSIVE_LIFE_STATISTICS_SCHEMA_VERSION
             || self.last_tick.raw() < self.birth_tick.raw()
-            || regime_ticks != self.survival_ticks
+            || regime_ticks > self.survival_ticks
             || self.gpu_throttled_dispatches > self.gpu_dispatches
         {
             return Err(ScaffoldContractError::ScalarOutOfRange);
