@@ -302,13 +302,14 @@
         "crates/alife_world/src/headless.rs",
         "crates/alife_core/src/experience.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "assignedBase": "af2c66eaea4e077fa97aab0e9668ae67314045b2",
       "threadId": "01a08f0c-4378-7632-822a-e4d6b6328e4c",
       "hostId": "local",
-      "cursor": "90ce716a-2375-4c92-a0d9-cfd393e941b8:3",
-      "reviewStatus": "CORRECTION_REQUESTED",
-      "scopeApproval": "V12 experience ABI required after actual JSON/restore validation trace. Add gpu_live_runtime.rs production constructor/stale assertion and one v11_cognitive_contracts.rs sealed/legacy compatibility regression. Preserve V4/V11 versions/digests; no global schema shift. Remove fabricated nonlocomotion intensity."
+      "cursor": "90ce716a-2375-4c92-a0d9-cfd393e941b8:4",
+      "reviewStatus": "ACCEPTED_STATIC",
+      "scopeApproval": "V12 experience ABI required after actual JSON/restore validation trace. Add gpu_live_runtime.rs production constructor/stale assertion and one v11_cognitive_contracts.rs sealed/legacy compatibility regression. Preserve V4/V11 versions/digests; no global schema shift. Remove fabricated nonlocomotion intensity.",
+      "integrationCommit": "8f0996b48343e5e4cff43e4c43dac1a38d5b8cc1"
     },
     {
       "id": "N013",
@@ -779,7 +780,24 @@
       "id": "N021",
       "status": "EXPANDED_SCOPE_AUTHORIZED",
       "evidence": "Read current experience ABI gates, new_v11 constructor, sealed patch validation, production seal caller and runtime replay restore validation. Existing old readers ignore extra fields under unchanged ABI. Distinct V12 authorized; actual old restore validation will reject unknown version. Raw old decoders cannot be retrofitted. Exact source/test expansion recorded in scopeApproval."
+    },
+    {
+      "id": "N021",
+      "status": "ACCEPTED_STATIC",
+      "workerCommits": [
+        "42998fc6",
+        "fbed5a66",
+        "830cd36b"
+      ],
+      "integrationCommits": [
+        "1313e615",
+        "e9d134c0",
+        "8f0996b4"
+      ],
+      "evidence": "Read complete initial and correction diffs, all version gates/constructors/binding validation, production seal and runtime restore callers. Distinct V12/domain binds bounded per-channel physical outcomes; V4/V11 numbers and empty-outcome digest paths preserved. Old supported restore validates unknown ABI and rejects; raw old deserialization remains permissive. Optional measured receipt avoids fabricated nonlocomotion intensity. World collision+consumption reach fixture and core sealed JSON/digest/relabel regression inspected. Supervisor corrected receiver use-after-move in test helper; rustfmt and whitespace passed. Rust compilation/tests/runtime UNVERIFIED."
     }
   ],
-  "gitApprovalOwner": "supervisor; user explicitly delegated routine approvals. Perform scoped Git through permitted supervisor tools; workers final-handoff blocked operations, no elevated approval prompts or sandbox changes."
+  "gitApprovalOwner": "supervisor; user explicitly delegated routine approvals. Perform scoped Git through permitted supervisor tools; workers final-handoff blocked operations, no elevated approval prompts or sandbox changes.",
+  "campaignStatus": "closed_with_unresolved_design_questions",
+  "finalSummary": "already_fixed=2; integrated=23; not_a_defect=1; unresolved=2; static review only; compile/runtime UNVERIFIED"
 }
