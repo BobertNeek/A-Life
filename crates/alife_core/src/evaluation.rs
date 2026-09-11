@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ActionKind, ExperiencePatch, OrganismId, PhysicalContactKind, ScaffoldContractError, Tick,
-    UtteranceSourceKind, Validate,
+    Validate,
 };
 
 pub const PASSIVE_LIFE_STATISTICS_SCHEMA_VERSION: u16 = 1;
@@ -420,21 +420,9 @@ impl PassiveLifeStatistics {
         if patch.decision().selected_action.kind == ActionKind::Vocalize {
             staged.observe(PassiveLifeEvent::NarrationUtterance)?;
         }
-        if patch.decision().selected_action.kind == ActionKind::Vocalize
-            && patch
-                .pre_action()
-                .perception()
-                .sensory()
-                .language_context
-                .heard_tokens
-                .iter()
-                .flatten()
-                .any(|token| token.source_kind == UtteranceSourceKind::Creature)
-        {
-            staged.observe(PassiveLifeEvent::PeerCommunication {
-                successful: outcome.success,
-            })?;
-        }
+        // Hearing and speaking are exposure and narration observations only.
+        // Receiver-grounded peer communication is recorded explicitly through
+        // `PassiveLifeEvent::PeerCommunication` once measured evidence exists.
         *self = staged;
         Ok(())
     }
