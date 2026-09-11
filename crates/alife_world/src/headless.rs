@@ -216,7 +216,7 @@ pub struct HeadlessActionBiologyReceipt {
 #[derive(Debug, Clone, PartialEq)]
 pub struct HeadlessMotorChannelReceipt {
     pub command: ChannelCommand,
-    pub observation: MeasuredChannelObservation,
+    pub observation: Option<MeasuredChannelObservation>,
     pub physical: PhysicalActionOutcome,
 }
 
@@ -2497,7 +2497,9 @@ impl HeadlessWorld {
             };
             let observation = measured_motor_channel_observation(channel, result)?;
             let physical = result.execution.physical;
-            channel_observations.push(observation);
+            if let Some(observation) = observation {
+                channel_observations.push(observation);
+            }
             channel_outcomes.push(ChannelPhysicalOutcome::new(channel.channel, physical)?);
             channel_receipts.push(HeadlessMotorChannelReceipt {
                 command: channel.clone(),
@@ -4581,19 +4583,18 @@ fn merge_hazard_contact_body_event(total: BodyEventDelta, hazard_pain: f32) -> B
 fn measured_motor_channel_observation(
     command: &ChannelCommand,
     result: &HeadlessActionResult,
-) -> Result<MeasuredChannelObservation, ScaffoldContractError> {
+) -> Result<Option<MeasuredChannelObservation>, ScaffoldContractError> {
+    if command.channel != MotorChannel::Locomotion {
+        return Ok(None);
+    }
     let displacement = result.execution.physical.displacement;
-    let measured_intensity = if command.channel == MotorChannel::Locomotion {
-        (distance(Vec3f::ZERO, displacement) / MOVE_STEP).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    MeasuredChannelObservation::new(
+    let measured_intensity = (distance(Vec3f::ZERO, displacement) / MOVE_STEP).clamp(0.0, 1.0);
+    Ok(Some(MeasuredChannelObservation::new(
         command.channel,
         result.execution.succeeded,
         NormalizedScalar::new(measured_intensity)?,
         displacement,
-    )
+    )?))
 }
 
 fn aggregate_motor_physical_outcome(
@@ -5755,7 +5756,7 @@ mod task_6_factorized_motor_tests {
         assert_eq!(receipt.outcome_tick, Tick::new(1));
         assert!(receipt.succeeded);
         assert_eq!(receipt.joint.joint_reward(), None);
-        assert_eq!(receipt.joint.channel_observations.len(), 2);
+        assert_eq!(receipt.joint.channel_observations.len(), 1);
         assert_eq!(receipt.channel_receipts.len(), 2);
         assert_eq!(
             receipt.channel_receipts[0].command.channel,

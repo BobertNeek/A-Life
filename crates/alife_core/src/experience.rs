@@ -25,6 +25,10 @@ use crate::{
 /// experience ABI. The central version registry remains owned by migration
 /// work, so this source task keeps the new boundary explicit here.
 pub const V11_EXPERIENCE_ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION + 1;
+pub const V12_EXPERIENCE_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION + 1;
+
+const V12_EXPERIENCE_PATCH_DIGEST_DOMAIN: &[u8] = b"ALIFE-V12-EXPERIENCE-PATCH";
+const V12_CHANNEL_OUTCOMES_DIGEST_DOMAIN: &[u8] = b"ALIFE-V12-JOINT-CHANNEL-PHYSICAL-OUTCOMES";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExperiencePatchPhase {
@@ -47,6 +51,7 @@ pub struct ExperiencePatchHeader {
 impl ExperiencePatchHeader {
     pub const ABI_VERSION: u16 = SchemaVersions::CURRENT.experience.0;
     pub const V11_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION;
+    pub const V12_ABI_VERSION: u16 = V12_EXPERIENCE_ABI_VERSION;
 
     pub fn new(
         organism_id: OrganismId,
@@ -100,6 +105,25 @@ impl ExperiencePatchHeader {
         header.validate_contract()?;
         Ok(header)
     }
+
+    pub fn for_v12_phase(
+        organism_id: OrganismId,
+        sequence_id: ExperienceSequenceId,
+        world_tick: Tick,
+        sensor_profile: SensorProfileProvenance,
+        phase: ExperiencePatchPhase,
+    ) -> Result<Self, ScaffoldContractError> {
+        let header = Self {
+            abi_version: Self::V12_ABI_VERSION,
+            organism_id,
+            sequence_id,
+            world_tick,
+            sensor_profile,
+            phase,
+        };
+        header.validate_contract()?;
+        Ok(header)
+    }
 }
 
 impl Validate for ExperiencePatchHeader {
@@ -116,7 +140,10 @@ impl Validate for ExperiencePatchHeader {
 }
 
 fn validate_experience_abi(actual: u16) -> Result<(), ScaffoldContractError> {
-    if actual == ExperiencePatchHeader::ABI_VERSION || actual == V11_EXPERIENCE_ABI_VERSION {
+    if actual == ExperiencePatchHeader::ABI_VERSION
+        || actual == V11_EXPERIENCE_ABI_VERSION
+        || actual == V12_EXPERIENCE_ABI_VERSION
+    {
         Ok(())
     } else {
         ensure_current_version(SchemaKind::Experience, actual)
@@ -125,6 +152,14 @@ fn validate_experience_abi(actual: u16) -> Result<(), ScaffoldContractError> {
 
 fn is_v11_abi(actual: u16) -> bool {
     actual == V11_EXPERIENCE_ABI_VERSION
+}
+
+fn is_v12_abi(actual: u16) -> bool {
+    actual == V12_EXPERIENCE_ABI_VERSION
+}
+
+fn is_v11_or_v12_abi(actual: u16) -> bool {
+    is_v11_abi(actual) || is_v12_abi(actual)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -253,6 +288,7 @@ pub struct PreActionSnapshot {
 impl PreActionSnapshot {
     pub const ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION;
     pub const V11_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION;
+    pub const V12_ABI_VERSION: u16 = V12_EXPERIENCE_ABI_VERSION;
 
     #[allow(clippy::too_many_arguments)]
     pub fn from_neural_frame(
@@ -358,13 +394,30 @@ impl PreActionSnapshot {
     }
 
     pub fn with_v11_context(
-        mut self,
+        self,
         cognitive_context: CognitiveContextFrame,
         prediction_target: PredictionTargetReceipt,
     ) -> Result<Self, ScaffoldContractError> {
+        self.with_versioned_context(cognitive_context, prediction_target, Self::V11_ABI_VERSION)
+    }
+
+    pub fn with_v12_context(
+        self,
+        cognitive_context: CognitiveContextFrame,
+        prediction_target: PredictionTargetReceipt,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.with_versioned_context(cognitive_context, prediction_target, Self::V12_ABI_VERSION)
+    }
+
+    fn with_versioned_context(
+        mut self,
+        cognitive_context: CognitiveContextFrame,
+        prediction_target: PredictionTargetReceipt,
+        abi_version: u16,
+    ) -> Result<Self, ScaffoldContractError> {
         cognitive_context.validate_contract()?;
         prediction_target.validate_contract()?;
-        self.abi_version = V11_EXPERIENCE_ABI_VERSION;
+        self.abi_version = abi_version;
         self.cognitive_context = Some(cognitive_context);
         self.prediction_target = Some(prediction_target);
         self.validate_contract()?;
@@ -450,7 +503,7 @@ impl Validate for PreActionSnapshot {
             (Some(context), Some(prediction)) => {
                 context.validate_contract()?;
                 prediction.validate_contract()?;
-                if self.abi_version != V11_EXPERIENCE_ABI_VERSION
+                if !is_v11_or_v12_abi(self.abi_version)
                     || context.organism_id != self.organism_id
                     || context.sequence_id != self.sequence_id
                     || context.world_tick != self.tick
@@ -599,6 +652,7 @@ impl<'de> Deserialize<'de> for DecisionSnapshot {
 impl DecisionSnapshot {
     pub const ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION;
     pub const V11_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION;
+    pub const V12_ABI_VERSION: u16 = V12_EXPERIENCE_ABI_VERSION;
 
     pub fn from_action_decision(
         sequence_id: ExperienceSequenceId,
@@ -742,6 +796,19 @@ impl DecisionSnapshot {
             prediction_target: Some(prediction_target),
             cognitive_work: Some(cognitive_work),
         };
+        snapshot.validate_contract()?;
+        Ok(snapshot)
+    }
+
+    pub fn from_v12_bundle(
+        sequence_id: ExperienceSequenceId,
+        bundle: MotorCommandBundle,
+        prediction_target: PredictionTargetReceipt,
+        cognitive_work: CognitiveWorkReceipt,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut snapshot =
+            Self::from_v11_bundle(sequence_id, bundle, prediction_target, cognitive_work)?;
+        snapshot.abi_version = Self::V12_ABI_VERSION;
         snapshot.validate_contract()?;
         Ok(snapshot)
     }
@@ -914,7 +981,7 @@ impl Validate for DecisionSnapshot {
         }
         Confidence::new(self.confidence.raw())?;
         match (
-            self.abi_version == V11_EXPERIENCE_ABI_VERSION,
+            is_v11_or_v12_abi(self.abi_version),
             &self.selected_bundle,
             &self.prediction_target,
             &self.cognitive_work,
@@ -1331,6 +1398,7 @@ pub struct PostActionOutcome {
 impl PostActionOutcome {
     pub const ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION;
     pub const V11_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION;
+    pub const V12_ABI_VERSION: u16 = V12_EXPERIENCE_ABI_VERSION;
 
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -1378,7 +1446,25 @@ impl PostActionOutcome {
     ) -> Result<Self, ScaffoldContractError> {
         joint.validate_contract()?;
         cognitive_work.validate_contract()?;
+        if !joint.channel_outcomes.is_empty() {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
         self.abi_version = V11_EXPERIENCE_ABI_VERSION;
+        self.physical = joint.execution;
+        self.joint = Some(joint);
+        self.cognitive_work = Some(cognitive_work);
+        self.validate_contract()?;
+        Ok(self)
+    }
+
+    pub fn with_v12_joint(
+        mut self,
+        joint: JointPhysicalOutcome,
+        cognitive_work: CognitiveWorkReceipt,
+    ) -> Result<Self, ScaffoldContractError> {
+        joint.validate_contract()?;
+        cognitive_work.validate_contract()?;
+        self.abi_version = V12_EXPERIENCE_ABI_VERSION;
         self.physical = joint.execution;
         self.joint = Some(joint);
         self.cognitive_work = Some(cognitive_work);
@@ -1434,11 +1520,16 @@ impl Validate for PostActionOutcome {
         }
         match (&self.joint, &self.cognitive_work) {
             (Some(joint), Some(work)) => {
-                if self.abi_version != V11_EXPERIENCE_ABI_VERSION {
+                if !is_v11_or_v12_abi(self.abi_version) {
                     return Err(ScaffoldContractError::InvalidDecisionEvidence);
                 }
                 joint.validate_contract()?;
                 work.validate_contract()?;
+                if self.abi_version == V11_EXPERIENCE_ABI_VERSION
+                    && !joint.channel_outcomes.is_empty()
+                {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
                 if joint.execution != self.physical {
                     return Err(ScaffoldContractError::InvalidDecisionEvidence);
                 }
@@ -1606,6 +1697,7 @@ pub struct ExperiencePatch {
 impl ExperiencePatch {
     pub const ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION;
     pub const V11_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION;
+    pub const V12_ABI_VERSION: u16 = V12_EXPERIENCE_ABI_VERSION;
 
     pub fn new_v11(
         pre_action: PreActionSnapshot,
@@ -1624,6 +1716,31 @@ impl ExperiencePatch {
             cognitive_work.clone(),
         )?;
         Self::new_v11_from_parts(
+            pre_action,
+            decision,
+            outcome,
+            prediction_target,
+            cognitive_work,
+        )
+    }
+
+    pub fn new_v12(
+        pre_action: PreActionSnapshot,
+        bundle: MotorCommandBundle,
+        outcome: PostActionOutcome,
+        prediction_target: PredictionTargetReceipt,
+        cognitive_work: CognitiveWorkReceipt,
+        cognitive_context: CognitiveContextFrame,
+    ) -> Result<Self, ScaffoldContractError> {
+        let pre_action =
+            pre_action.with_v12_context(cognitive_context, prediction_target.clone())?;
+        let decision = DecisionSnapshot::from_v12_bundle(
+            pre_action.sequence_id,
+            bundle,
+            prediction_target.clone(),
+            cognitive_work.clone(),
+        )?;
+        Self::new_v12_from_parts(
             pre_action,
             decision,
             outcome,
@@ -1656,12 +1773,71 @@ impl ExperiencePatch {
         )
     }
 
+    pub fn new_v12_with_decision(
+        pre_action: PreActionSnapshot,
+        mut decision: DecisionSnapshot,
+        bundle: MotorCommandBundle,
+        outcome: PostActionOutcome,
+        prediction_target: PredictionTargetReceipt,
+        cognitive_work: CognitiveWorkReceipt,
+        cognitive_context: CognitiveContextFrame,
+    ) -> Result<Self, ScaffoldContractError> {
+        let pre_action =
+            pre_action.with_v12_context(cognitive_context, prediction_target.clone())?;
+        decision.abi_version = V12_EXPERIENCE_ABI_VERSION;
+        decision.selected_bundle = Some(bundle);
+        decision.prediction_target = Some(prediction_target.clone());
+        decision.cognitive_work = Some(cognitive_work.clone());
+        Self::new_v12_from_parts(
+            pre_action,
+            decision,
+            outcome,
+            prediction_target,
+            cognitive_work,
+        )
+    }
+
     fn new_v11_from_parts(
         pre_action: PreActionSnapshot,
         decision: DecisionSnapshot,
         outcome: PostActionOutcome,
         prediction_target: PredictionTargetReceipt,
         cognitive_work: CognitiveWorkReceipt,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::new_versioned_from_parts(
+            pre_action,
+            decision,
+            outcome,
+            prediction_target,
+            cognitive_work,
+            Self::V11_ABI_VERSION,
+        )
+    }
+
+    fn new_v12_from_parts(
+        pre_action: PreActionSnapshot,
+        decision: DecisionSnapshot,
+        outcome: PostActionOutcome,
+        prediction_target: PredictionTargetReceipt,
+        cognitive_work: CognitiveWorkReceipt,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::new_versioned_from_parts(
+            pre_action,
+            decision,
+            outcome,
+            prediction_target,
+            cognitive_work,
+            Self::V12_ABI_VERSION,
+        )
+    }
+
+    fn new_versioned_from_parts(
+        pre_action: PreActionSnapshot,
+        decision: DecisionSnapshot,
+        outcome: PostActionOutcome,
+        prediction_target: PredictionTargetReceipt,
+        cognitive_work: CognitiveWorkReceipt,
+        abi_version: u16,
     ) -> Result<Self, ScaffoldContractError> {
         outcome.validate_contract()?;
         if outcome.organism_id != pre_action.organism_id
@@ -1683,14 +1859,25 @@ impl ExperiencePatch {
         if outcome.cognitive_work.as_ref() != Some(&work) {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
-        let patch = Self {
-            header: ExperiencePatchHeader::for_v11_phase(
+        let header = match abi_version {
+            Self::V11_ABI_VERSION => ExperiencePatchHeader::for_v11_phase(
                 pre_action.organism_id,
                 pre_action.sequence_id,
                 pre_action.tick,
                 pre_action.perception().profile_provenance(),
                 ExperiencePatchPhase::Sealed,
             )?,
+            Self::V12_ABI_VERSION => ExperiencePatchHeader::for_v12_phase(
+                pre_action.organism_id,
+                pre_action.sequence_id,
+                pre_action.tick,
+                pre_action.perception().profile_provenance(),
+                ExperiencePatchPhase::Sealed,
+            )?,
+            _ => return Err(ScaffoldContractError::InvalidDecisionEvidence),
+        };
+        let patch = Self {
+            header,
             pre_action,
             decision,
             outcome,
@@ -1731,7 +1918,12 @@ impl ExperiencePatch {
 
     pub fn causal_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
         self.validate_contract()?;
-        let mut builder = CanonicalDigestBuilder::new(b"ALIFE-V11-EXPERIENCE-PATCH");
+        let digest_domain = if is_v12_abi(self.header.abi_version) {
+            V12_EXPERIENCE_PATCH_DIGEST_DOMAIN
+        } else {
+            b"ALIFE-V11-EXPERIENCE-PATCH"
+        };
+        let mut builder = CanonicalDigestBuilder::new(digest_domain);
         builder.write_u16(self.header.abi_version);
         builder.write_u64(self.header.organism_id.raw());
         builder.write_u64(self.header.sequence_id.raw());
@@ -1805,7 +1997,7 @@ impl Validate for ExperiencePatch {
         Tick::validate_monotonic(self.pre_action.tick, self.decision.decision_tick)?;
         Tick::validate_monotonic(self.decision.decision_tick, self.outcome.outcome_tick)?;
         validate_decision_binding(&self.pre_action, &self.decision)?;
-        if is_v11_abi(self.header.abi_version) {
+        if is_v11_or_v12_abi(self.header.abi_version) {
             let prediction = self
                 .prediction_target
                 .as_ref()
@@ -1814,9 +2006,9 @@ impl Validate for ExperiencePatch {
                 .cognitive_work
                 .as_ref()
                 .ok_or(ScaffoldContractError::MissingPhaseData)?;
-            if self.pre_action.abi_version != V11_EXPERIENCE_ABI_VERSION
-                || self.decision.abi_version != V11_EXPERIENCE_ABI_VERSION
-                || self.outcome.abi_version != V11_EXPERIENCE_ABI_VERSION
+            if self.pre_action.abi_version != self.header.abi_version
+                || self.decision.abi_version != self.header.abi_version
+                || self.outcome.abi_version != self.header.abi_version
                 || self.decision.prediction_target.as_ref() != Some(prediction)
                 || self.decision.cognitive_work.as_ref() != Some(work)
                 || self.pre_action.prediction_target.as_ref() != Some(prediction)
@@ -1840,11 +2032,43 @@ impl Validate for ExperiencePatch {
             {
                 return Err(ScaffoldContractError::InvalidDecisionEvidence);
             }
+            validate_joint_channel_outcomes_against_bundle(
+                self.outcome
+                    .joint
+                    .as_ref()
+                    .ok_or(ScaffoldContractError::MissingPhaseData)?,
+                bundle,
+            )?;
         } else if self.prediction_target.is_some() || self.cognitive_work.is_some() {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
         Ok(())
     }
+}
+
+fn validate_joint_channel_outcomes_against_bundle(
+    joint: &JointPhysicalOutcome,
+    bundle: &MotorCommandBundle,
+) -> Result<(), ScaffoldContractError> {
+    if joint.channel_outcomes.is_empty() {
+        return Ok(());
+    }
+    let mut expected = bundle
+        .channels
+        .iter()
+        .map(|command| command.channel.canonical_key())
+        .collect::<Vec<_>>();
+    let mut actual = joint
+        .channel_outcomes
+        .iter()
+        .map(|outcome| outcome.channel.canonical_key())
+        .collect::<Vec<_>>();
+    expected.sort_unstable();
+    actual.sort_unstable();
+    if actual != expected {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -2448,6 +2672,10 @@ fn write_joint_channel_observations(
         builder.write_f32(observation.displacement.z)?;
     }
     if !joint.channel_outcomes.is_empty() {
+        builder.write_sequence_len(V12_CHANNEL_OUTCOMES_DIGEST_DOMAIN.len());
+        for byte in V12_CHANNEL_OUTCOMES_DIGEST_DOMAIN {
+            builder.write_u8(*byte);
+        }
         builder.write_sequence_len(joint.channel_outcomes.len());
         for outcome in &joint.channel_outcomes {
             builder.write_u16(outcome.channel.canonical_key());
