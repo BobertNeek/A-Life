@@ -805,7 +805,7 @@ impl BiochemicalGraphState {
                     response * neuroemitter.gain * developmental_expression,
                 )?;
             }
-            frame.emissions.len() as u32
+            phenotype.neuroemitters.len() as u32
         } else {
             0
         };
