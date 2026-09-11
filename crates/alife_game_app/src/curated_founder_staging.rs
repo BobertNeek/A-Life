@@ -1532,6 +1532,13 @@ fn validate_curated_founder_apply_inputs(
                 field: "apply fresh birth state or tick",
             });
         }
+        entry
+            .biochemistry
+            .validate_against(&entry.phenotype)
+            .map_err(|source| CuratedFounderStagingError::Contract {
+                field: "apply bundle biochemistry",
+                source,
+            })?;
         if intent.foundation != stage.receipt.foundation
             || intent.foundation_content_digest != stage.receipt.foundation_content_digest
             || intent.sensor_profile != stage.receipt.sensor_profile
@@ -1664,6 +1671,13 @@ fn validate_bundle_entry(
             field: "per-entry biochemistry identity or tick",
         });
     }
+    entry
+        .biochemistry
+        .validate_against(&entry.phenotype)
+        .map_err(|source| CuratedFounderStagingError::Contract {
+            field: "bundle biochemistry",
+            source,
+        })?;
     entry
         .projection
         .validate()
