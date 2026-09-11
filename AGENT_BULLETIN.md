@@ -26,9 +26,9 @@ architecture, user instructions, or dated evidence reports.
 | Agent / task | Scope | Branch or worktree | Status | Next action | Blocker | Updated (UTC) |
 | --- | --- | --- | --- | --- | --- | --- |
 | Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
-| Luna max / N020 | Carried object motion | codex/recovered-n020-20260910 | Correction requested | Detach at terminal death before retirement | Bob owns routine Git | 2026-09-11 04:17Z |
-| Luna max / N014 | Runtime and core evaluation unknown regime | codex/recovered-n014-20260910 | Scope approved | Preserve six bins and derive unknown exposure | Bob owns routine Git | 2026-09-11 04:17Z |
-| Luna max / N009 | Neuroemitter accounting | codex/recovered-n009-20260910 | Running | Implement bounded packet | Bob owns routine Git | 2026-09-11 04:17Z |
+| Luna max / N022 | Current interval velocities | codex/recovered-n022-20260910 | Running | Follow bounded packet | Bob owns routine Git | 2026-09-11 04:36Z |
+| Luna max / C005 | Departed patch retention triage | codex/recovered-c005-20260910 | Running | Follow bounded packet | Bob owns routine Git | 2026-09-11 04:36Z |
+| Luna max / N006 | Bounded time fidelity triage | codex/recovered-n006-20260910 | Running | Follow bounded packet | Bob owns routine Git | 2026-09-11 04:36Z |
 
 ## Handoffs and requests
 
@@ -64,3 +64,6 @@ Routine Git approvals belong to Bob. Workers hand off sandbox-blocked Git operat
 | 2026-09-11 | Bob review / N011 | Bounded readiness and current pair checks accepted; static only | 3e3b1754 |
 | 2026-09-11 | Bob review / N016 | Grounded avoidance denominator accepted; static only | c6bc35cd |
 | 2026-09-11 | Bob review / N005 | Bounded persistent emission catch-up and one-shot events accepted; static only | 120c71df |
+| 2026-09-11 | Bob review / N020 | Motion/restore plus terminal detachment accepted; static only | 729ad9c1 + eff576d8 |
+| 2026-09-11 | Bob review / N014 | Unknown exposure accepted; old reader downgrade unsupported; static only | 2fd32c60 |
+| 2026-09-11 | Bob review / N009 | Correct emitter count and stale world assertion accepted; static only | b22347b4 + 83e17615 |
