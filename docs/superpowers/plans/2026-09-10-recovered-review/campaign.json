@@ -24,9 +24,12 @@
       "files": [
         "crates/alife_core/src/biochemistry.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "threadId": "01a08dde-a7a5-7373-84a3-32c44ed71ead",
-      "hostId": "local"
+      "hostId": "local",
+      "workerCommit": "a4005b300bff37405cefec384ba4829b6e196c89",
+      "integrationCommit": "6e3dd8ed699354086d22a7e9c684e390e9b0105c",
+      "cursor": "2975a549-e136-4504-8085-141dc8179e82:12"
     },
     {
       "id": "N002",
@@ -38,7 +41,9 @@
         "crates/alife_core/src/biochemistry.rs",
         "crates/alife_world/src/organism.rs"
       ],
-      "status": "queued"
+      "status": "setup_pending",
+      "clientThreadId": "client-new-thread:9583d4a2-bc1e-4bbd-9219-b8b75e4d61e9",
+      "title": "Repair N002 — organ energy debit"
     },
     {
       "id": "N003",
@@ -114,7 +119,8 @@
       ],
       "status": "running",
       "threadId": "01a08dde-a7d2-7e22-bd1c-0731bf35b79c",
-      "hostId": "local"
+      "hostId": "local",
+      "reviewStatus": "correction_requested"
     },
     {
       "id": "N019",
@@ -205,7 +211,8 @@
       ],
       "status": "running",
       "threadId": "01a08dde-a6e7-7022-8857-09e72217948c",
-      "hostId": "local"
+      "hostId": "local",
+      "reviewStatus": "correction_requested"
     },
     {
       "id": "N012",
@@ -299,5 +306,25 @@
       "status": "queued"
     }
   ],
-  "reviews": []
+  "reviews": [
+    {
+      "integrationCommit": "6e3dd8ed699354086d22a7e9c684e390e9b0105c",
+      "status": "ACCEPTED_STATIC",
+      "evidence": "Manually read full commit and baseline/new_with_age/migration_v2 callers. Canonical projections preserve organ values and bit validator. One table regression inspected. git show --check passed. Compile/runtime UNVERIFIED.",
+      "id": "N001",
+      "workerCommit": "a4005b300bff37405cefec384ba4829b6e196c89"
+    },
+    {
+      "evidence": "Production mapping accepted provisionally. New test indexes channel_receipts[0] for Posture, but measured_motor_channel_observation returns None. Worker instructed to fix test only before integration.",
+      "status": "CORRECTION_REQUESTED",
+      "id": "N018",
+      "workerCommit": "a65a9da9472bd2673ad4beda9b1f0e59189e0469"
+    },
+    {
+      "evidence": "Rejected toggle-only fix. Sleep/checkpoint resolve every backend replay sequence from restored/latest/history host patches. Fresh restored vector is empty; latest retains one. Older replay references would become MissingPhaseData. Death final sequence and telemetry also read history-only. Worker must retain bounded required replay references and preserve latest consumers.",
+      "status": "CORRECTION_REQUESTED",
+      "id": "N013",
+      "workerCommit": "a6e5715af1d9feb8e4d76c2715ad3ee4a0e9ca69"
+    }
+  ]
 }
