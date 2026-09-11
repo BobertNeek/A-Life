@@ -45,7 +45,8 @@
       "clientThreadId": "client-new-thread:9583d4a2-bc1e-4bbd-9219-b8b75e4d61e9",
       "title": "Repair N002 — organ energy debit",
       "threadId": "01a08dfa-d8ce-7611-9cda-65616f03d5fb",
-      "hostId": "local"
+      "hostId": "local",
+      "cursor": "584688e0-5d8b-4cea-82c4-4fc2359e4ae0:2"
     },
     {
       "id": "N003",
@@ -142,8 +143,11 @@
       "files": [
         "crates/alife_world/src/headless.rs"
       ],
-      "status": "setup_pending",
-      "title": "Repair N019 — physical reach and ownership"
+      "status": "running",
+      "title": "Repair N019 — physical reach and ownership",
+      "threadId": "01a08dfd-283e-7d70-89c4-a4c47c17ecd7",
+      "hostId": "local",
+      "cursor": "d9d24179-3d58-423d-bd70-973374edd64d:1"
     },
     {
       "id": "N010",
@@ -224,7 +228,8 @@
       "status": "running",
       "threadId": "01a08dde-a6e7-7022-8857-09e72217948c",
       "hostId": "local",
-      "reviewStatus": "correction_requested"
+      "reviewStatus": "correction_requested",
+      "cursor": "e2fc0e9b-bc92-468b-958b-3f61152d3eae:10"
     },
     {
       "id": "N012",
