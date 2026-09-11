@@ -118,7 +118,7 @@
       "threadId": "01a08e44-8eba-7ba1-a328-1afeafc593fe",
       "hostId": "local",
       "title": "Repair N004 — zero elapsed reactions",
-      "cursor": "cc03e582-7bd4-43a1-ba8f-e272e8564a87:1"
+      "cursor": "cc03e582-7bd4-43a1-ba8f-e272e8564a87:2"
     },
     {
       "id": "N005",
@@ -192,11 +192,15 @@
       "files": [
         "crates/alife_world/src/headless.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "threadId": "01a08e27-a0fa-78b1-8819-0b2a667428a1",
       "hostId": "local",
-      "cursor": "bba54db6-cb32-4ef7-afcb-2bdb11d6a920:2",
-      "reviewStatus": "correction_requested"
+      "cursor": "bba54db6-cb32-4ef7-afcb-2bdb11d6a920:4",
+      "reviewStatus": "ACCEPTED_STATIC",
+      "integrationCommits": [
+        "71393bf7",
+        "f9cc324e3257b675d0cfa8ce2f7c5656517cf4c1"
+      ]
     },
     {
       "id": "N011",
@@ -208,7 +212,12 @@
         "crates/alife_world/src/headless.rs",
         "crates/alife_core/src/biochemistry.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "assignedBase": "5548be00181ffddea80b289ff19b59d1f2f15f3f",
+      "threadId": "01a08e77-81f4-7f92-b4b9-c36c27418e4d",
+      "cursor": "937ac1f6-5075-4d67-bd7d-c632b0b3478b:1",
+      "title": "Repair N011 — parental cadence readiness",
+      "hostId": "local"
     },
     {
       "id": "N020",
@@ -321,11 +330,12 @@
       "files": [
         "crates/alife_core/src/evaluation.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "title": "Repair N015 — grounded communication metrics",
       "threadId": "01a08e39-c302-7250-b308-cf044bddcd38",
       "hostId": "local",
-      "cursor": "222e2a54-27f0-4832-8812-08572cbd6d98:1"
+      "cursor": "222e2a54-27f0-4832-8812-08572cbd6d98:2",
+      "integrationCommit": "5548be00181ffddea80b289ff19b59d1f2f15f3f"
     },
     {
       "id": "N016",
@@ -336,7 +346,12 @@
       "files": [
         "crates/alife_core/src/evaluation.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "assignedBase": "5548be00181ffddea80b289ff19b59d1f2f15f3f",
+      "threadId": "01a08e77-b5d4-74c2-a7f3-6ad05fc4a9cc",
+      "cursor": "1380ce93-eb00-4275-bb25-289f314aab32:1",
+      "title": "Repair N016 — grounded avoidance rates",
+      "hostId": "local"
     }
   ],
   "triage": [
@@ -495,6 +510,26 @@
       "workerCommit": "4d5d4c0c2c2cfd59f131fbfdc1e48c9299063e28",
       "integrationCommit": "4b9089413b55a7fa5cc42e7d09a47988ba417020",
       "evidence": "Read complete six-file diff, generic/contextual graph validation, constructor/advance, organism identity and both founder admission paths. Generic state remains finite/nonnegative; contextual ranges enforce declared bounds. Fixture uses material nutrient 19 with legal 1..3 range and baseline 2 through advance/serialization. Existing identity/error gates retained. Diff whitespace passed; worker clean; protected WIP hash matched. Rust tests/compile/runtime UNVERIFIED."
+    },
+    {
+      "id": "N010",
+      "status": "ACCEPTED_STATIC",
+      "workerCommits": [
+        "29e5c53e",
+        "d154e602e50e3ba4d964e625ca23febd50c0cc4e"
+      ],
+      "integrationCommits": [
+        "71393bf7",
+        "f9cc324e"
+      ],
+      "evidence": "Manually read combined diff and ordinary/motor callers, habitat authorization and event merge. Pair predicate retains sorted maternal/paternal IDs and current habitat constraints. Motor scans actor partners with early exit rather than all pairs; per-call sorting remains. Ambient/action/hazard merge precedes exactly one biology advance; rollback wrappers preserved. Committed whitespace check and worker clean verified. Compile/tests/runtime UNVERIFIED."
+    },
+    {
+      "id": "N015",
+      "status": "ACCEPTED_STATIC",
+      "workerCommit": "475624e4c74b78c8a4aa0029193b5f1ac83122b4",
+      "integrationCommit": "5548be00181ffddea80b289ff19b59d1f2f15f3f",
+      "evidence": "Manually read entire production and fixture/regression diff, observation/metric paths and candidate validation. Removed hearing-plus-speaking inference only. Exposure/narration remain; explicit grounded event still updates peer metric. Finalized/atomic N017 staging retained. Regression uses valid canonical Vocalize/Other/None candidate and checks Unknown before explicit event. Committed whitespace check/clean verified. Rust compile/tests/runtime UNVERIFIED."
     }
   ]
 }
