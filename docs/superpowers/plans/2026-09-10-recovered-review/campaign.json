@@ -284,11 +284,13 @@
       "files": [
         "crates/alife_world/src/headless.rs"
       ],
-      "status": "running",
+      "status": "integrated",
       "assignedBase": "3acbbc1c4e8b59cb49a4a29e2eb88d6f7fe21607",
       "threadId": "01a08ef8-c558-7e71-be8f-caca31857cd4",
       "hostId": "local",
-      "cursor": "6bfc24e4-6a2a-4972-a119-2842597188be:1"
+      "cursor": "6bfc24e4-6a2a-4972-a119-2842597188be:2",
+      "integrationCommit": "af2c66ea",
+      "reviewStatus": "ACCEPTED_STATIC"
     },
     {
       "id": "N021",
@@ -300,7 +302,11 @@
         "crates/alife_world/src/headless.rs",
         "crates/alife_core/src/experience.rs"
       ],
-      "status": "queued"
+      "status": "running",
+      "assignedBase": "af2c66eaea4e077fa97aab0e9668ae67314045b2",
+      "threadId": "01a08f0c-4378-7632-822a-e4d6b6328e4c",
+      "hostId": "local",
+      "cursor": "90ce716a-2375-4c92-a0d9-cfd393e941b8:1"
     },
     {
       "id": "N013",
@@ -436,7 +442,9 @@
       "assignedBase": "3acbbc1c4e8b59cb49a4a29e2eb88d6f7fe21607",
       "threadId": "01a08ef8-c590-7991-a610-351bec998c15",
       "hostId": "local",
-      "cursor": "46079739-0fde-41a5-886a-5a2817105aae:1"
+      "cursor": "46079739-0fde-41a5-886a-5a2817105aae:2",
+      "phase": "repair",
+      "scopeApproval": "biochemistry.rs graph/owner tick equality plus one biochemical_graph_v2.rs serde regression, valid and older/newer graph ticks. No persistence/schema change."
     },
     {
       "id": "C003",
@@ -458,12 +466,13 @@
       "id": "C004",
       "goal": "Trace EnergyStability naming, persisted schema, downstream readers and intended metric. Distinguish mean energy from temporal stability. Do not silently repurpose persisted measurements.",
       "files": "crates/alife_core/src/evaluation.rs; crates/alife_tools/src/era1_evolution.rs",
-      "status": "running",
+      "status": "unresolved",
       "assignedBase": "a9173383",
       "clientThreadId": "client-new-thread:cce37c59-c301-456c-9190-f2fa1d2f045b",
       "threadId": "01a08efb-c658-74a1-88fe-4d46f996a327",
       "hostId": "local",
-      "cursor": "0140141b-b53e-4a27-9829-8ad082d4d6bc:1"
+      "cursor": "0140141b-b53e-4a27-9829-8ad082d4d6bc:2",
+      "disposition": "Mean energy is labeled EnergyStability; no controlling temporal formula specified. Do not invent temporal metric or migrate persisted values without intended semantics."
     },
     {
       "id": "C005",
@@ -731,6 +740,23 @@
       "workerCommit": "6bfcdf472bc1bbe67914b1eb3dcafcd8a7a55456",
       "integrationCommit": "a9173383",
       "evidence": "Read complete diff, existing replacement transaction, core calibration and Tick validator, reference revision and fixture. Lower tick rejected before mutation; existing identity/revision/future bounds retained. Same-tick valid revision succeeds; stale candidate uses correct next revision and asserts unchanged record. Whitespace passed. Rust tests/compile/runtime UNVERIFIED."
+    },
+    {
+      "id": "N023",
+      "status": "ACCEPTED_STATIC",
+      "workerCommit": "5ee7c4db011a4c722f04cabb18b661824ae950ed",
+      "integrationCommit": "af2c66ea",
+      "evidence": "Read full production/regression diff and execute_move, geometry/blocker rules, command fixture and MOVE_STEP. Closest point tests bounded movement segment, including zero-length; existing obstacle radius/contact policy retained. Crossing fixture starts/ends outside radius1 but crosses interior, clear and blocked-endpoint cases inspected. N020 movement and N022 finish velocity unchanged. Whitespace passed; Rust tests/compile/runtime UNVERIFIED."
+    },
+    {
+      "id": "C002",
+      "status": "CONFIRMED_SCOPE_ASSIGNED",
+      "evidence": "Read owner validation, graph validation and neural frame source tick, owning organism digest and persistence record validation. Graph tick lacks equality gate although homeostasis already enforces owner tick. Authorized minimum core validation and one serde regression."
+    },
+    {
+      "id": "C004",
+      "status": "UNRESOLVED_STATIC",
+      "evidence": "Read BoundedMean accumulation/reading, EnergyStability metric and ecological/stability objective consumers. Mean-vs-variability naming mismatch confirmed; worker states controlling architecture has no exact temporal formula. Proposed versioned accumulator/migration would invent unspecified behavior and exceed justified repair. Preserve persisted mean values, retain unresolved design question."
     }
   ],
   "gitApprovalOwner": "supervisor; user explicitly delegated routine approvals. Perform scoped Git through permitted supervisor tools; workers final-handoff blocked operations, no elevated approval prompts or sandbox changes."
