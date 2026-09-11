@@ -248,8 +248,10 @@
       "files": [
         "crates/alife_game_app/src/gpu_live_runtime.rs"
       ],
-      "status": "setup_pending",
-      "title": "Verify N012 — passive patch counting"
+      "status": "running",
+      "title": "Verify N012 — passive patch counting",
+      "threadId": "01a08e16-a1df-7a11-bfe4-f0da08a08a3c",
+      "hostId": "local"
     },
     {
       "id": "N014",
