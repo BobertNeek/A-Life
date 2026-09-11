@@ -269,9 +269,10 @@
       "status": "running",
       "assignedBase": "83e176156f1411415990710e380b8b8c356ec0da",
       "threadId": "01a08ec0-33aa-7202-a132-d04653f331e0",
-      "cursor": "3981ec89-8c0d-43cb-8f3c-daad5bc14c5d:2",
+      "cursor": "3981ec89-8c0d-43cb-8f3c-daad5bc14c5d:3",
       "title": "Repair N022 — current interval velocities",
-      "hostId": "local"
+      "hostId": "local",
+      "reviewStatus": "correction_requested"
     },
     {
       "id": "N023",
@@ -413,9 +414,13 @@
       "id": "C001",
       "goal": "Establish intended aggregation of receptors targeting one locus. Trace phenotype constraints and constructors. Last-writer behavior alone is not proof of a defect.",
       "files": "crates/alife_core/src/biochemical_graph.rs",
-      "status": "dispatching",
+      "status": "running",
       "assignedBase": "54c44d669b30d67b608492be02bb28cd4011b320",
-      "clientThreadId": "client-new-thread:1bac5463-41fe-48fc-a073-7a17a4ed9429"
+      "clientThreadId": "client-new-thread:1bac5463-41fe-48fc-a073-7a17a4ed9429",
+      "threadId": "01a08ed6-e127-7980-9143-6d8b4b367864",
+      "cursor": "60c3843b-92ba-4c84-9251-45dc0cf44c45:1",
+      "title": "Triage C001 — receptor aggregation semantics",
+      "hostId": "local"
     },
     {
       "id": "C002",
@@ -427,9 +432,13 @@
       "id": "C003",
       "goal": "Trace the complete public embodiment replacement chain and prove whether a lower source tick can be admitted. Check monotonic semantics against v2.",
       "files": "crates/alife_world/src/organism.rs",
-      "status": "dispatching",
+      "status": "running",
       "assignedBase": "54c44d669b30d67b608492be02bb28cd4011b320",
-      "clientThreadId": "client-new-thread:fc293bc4-2400-478c-bbaf-062dafbd1069"
+      "clientThreadId": "client-new-thread:fc293bc4-2400-478c-bbaf-062dafbd1069",
+      "threadId": "01a08ed6-e16c-7df1-9ba6-f248646adaf0",
+      "cursor": "f5db570e-1f21-41ad-9244-7b3e4f332cac:1",
+      "title": "Triage C003 — embodiment tick regression",
+      "hostId": "local"
     },
     {
       "id": "C004",
@@ -673,6 +682,12 @@
       "id": "C005",
       "status": "ALREADY_FIXED_STATIC",
       "evidence": "Independently read gpu_live_runtime.rs:6766-6770 and 6873-6934, staged_tick.rs:835-841. Recent patches prune after reconcile and successful retirement. Final patch sequence archived before ownership removal; scheduled passive observation precedes reconciliation. Already handled by accepted N013. No duplicate patch/test; runtime unverified."
+    },
+    {
+      "id": "N022",
+      "status": "CORRECTION_REQUESTED",
+      "workerCommit": "462d0231e29091fad8f347c79aaec262a72eeb25",
+      "evidence": "Full diff/regression read. Actor velocity updated per action and final bundle aggregate, but N020 held objects retain previous movement velocity after carrier stationary/blocked. Requested same helper assign actor and carried velocities without moving positions, and extend existing regression."
     }
   ],
   "gitApprovalOwner": "supervisor; user explicitly delegated routine approvals. Perform scoped Git through permitted supervisor tools; workers final-handoff blocked operations, no elevated approval prompts or sandbox changes."
