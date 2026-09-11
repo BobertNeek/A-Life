@@ -1031,10 +1031,35 @@ impl Validate for PhysicalActionOutcome {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ChannelPhysicalOutcome {
+    pub channel: MotorChannel,
+    pub physical: PhysicalActionOutcome,
+}
+
+impl ChannelPhysicalOutcome {
+    pub fn new(
+        channel: MotorChannel,
+        physical: PhysicalActionOutcome,
+    ) -> Result<Self, ScaffoldContractError> {
+        let outcome = Self { channel, physical };
+        outcome.validate_contract()?;
+        Ok(outcome)
+    }
+}
+
+impl Validate for ChannelPhysicalOutcome {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.physical.validate_contract()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct JointPhysicalOutcome {
     pub execution: PhysicalActionOutcome,
     pub channel_observations: Vec<MeasuredChannelObservation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub channel_outcomes: Vec<ChannelPhysicalOutcome>,
 }
 
 impl JointPhysicalOutcome {
@@ -1045,9 +1070,19 @@ impl JointPhysicalOutcome {
         let outcome = Self {
             execution,
             channel_observations,
+            channel_outcomes: Vec::new(),
         };
         outcome.validate_contract()?;
         Ok(outcome)
+    }
+
+    pub fn with_channel_outcomes(
+        mut self,
+        channel_outcomes: Vec<ChannelPhysicalOutcome>,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.channel_outcomes = channel_outcomes;
+        self.validate_contract()?;
+        Ok(self)
     }
 
     pub const fn joint_reward(&self) -> Option<SignedValence> {
@@ -1058,11 +1093,16 @@ impl JointPhysicalOutcome {
 impl Validate for JointPhysicalOutcome {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         self.execution.validate_contract()?;
-        if self.channel_observations.len() > crate::MAX_MOTOR_CHANNELS {
+        if self.channel_observations.len() > crate::MAX_MOTOR_CHANNELS
+            || self.channel_outcomes.len() > crate::MAX_MOTOR_CHANNELS
+        {
             return Err(ScaffoldContractError::InvalidActionDecision);
         }
         for observation in &self.channel_observations {
             observation.validate_contract()?;
+        }
+        for outcome in &self.channel_outcomes {
+            outcome.validate_contract()?;
         }
         let mut channels = self
             .channel_observations
@@ -1071,6 +1111,15 @@ impl Validate for JointPhysicalOutcome {
             .collect::<Vec<_>>();
         channels.sort();
         if channels.windows(2).any(|pair| pair[0] == pair[1]) {
+            return Err(ScaffoldContractError::InvalidActionDecision);
+        }
+        let mut outcome_channels = self
+            .channel_outcomes
+            .iter()
+            .map(|outcome| outcome.channel.canonical_key())
+            .collect::<Vec<_>>();
+        outcome_channels.sort_unstable();
+        if outcome_channels.windows(2).any(|pair| pair[0] == pair[1]) {
             return Err(ScaffoldContractError::InvalidActionDecision);
         }
         Ok(())
@@ -2397,6 +2446,13 @@ fn write_joint_channel_observations(
         builder.write_f32(observation.displacement.x)?;
         builder.write_f32(observation.displacement.y)?;
         builder.write_f32(observation.displacement.z)?;
+    }
+    if !joint.channel_outcomes.is_empty() {
+        builder.write_sequence_len(joint.channel_outcomes.len());
+        for outcome in &joint.channel_outcomes {
+            builder.write_u16(outcome.channel.canonical_key());
+            write_physical_outcome(builder, outcome.physical)?;
+        }
     }
     Ok(())
 }
