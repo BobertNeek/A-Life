@@ -26,9 +26,9 @@ architecture, user instructions, or dated evidence reports.
 | Agent / task | Scope | Branch or worktree | Status | Next action | Blocker | Updated (UTC) |
 | --- | --- | --- | --- | --- | --- | --- |
 | Bob / recovered review supervisor | N001-N023 repair plans; C001-C005 triage | initial-founder-training-20260907 | Dispatching Luna max in isolated worktrees | Review every worker diff before integration; no Cargo | None | 2026-09-11 01:01Z |
-| Luna max / N022 | Current interval velocities | codex/recovered-n022-20260910 | Running | Follow bounded packet | Bob owns routine Git | 2026-09-11 04:36Z |
-| Luna max / C005 | Departed patch retention triage | codex/recovered-c005-20260910 | Running | Follow bounded packet | Bob owns routine Git | 2026-09-11 04:36Z |
-| Luna max / N006 | Bounded time fidelity triage | codex/recovered-n006-20260910 | Running | Follow bounded packet | Bob owns routine Git | 2026-09-11 04:36Z |
+| Luna max / N022 | Current interval velocities | codex/recovered-n022-20260910 | Correction requested | Include carried object velocity when stationary | Bob owns routine Git | 2026-09-11 05:19Z |
+| Luna max / C003 | Embodiment tick triage | codex/recovered-c003-20260910 | Running | Read-only packet | Bob owns routine Git | 2026-09-11 05:19Z |
+| Luna max / C001 | Receptor aggregation triage | codex/recovered-c001-20260910 | Running | Read-only packet | Bob owns routine Git | 2026-09-11 05:19Z |
 
 ## Handoffs and requests
 
@@ -67,3 +67,5 @@ Routine Git approvals belong to Bob. Workers hand off sandbox-blocked Git operat
 | 2026-09-11 | Bob review / N020 | Motion/restore plus terminal detachment accepted; static only | 729ad9c1 + eff576d8 |
 | 2026-09-11 | Bob review / N014 | Unknown exposure accepted; old reader downgrade unsupported; static only | 2fd32c60 |
 | 2026-09-11 | Bob review / N009 | Correct emitter count and stale world assertion accepted; static only | b22347b4 + 83e17615 |
+| 2026-09-11 | Bob triage / N006 | NOT_A_DEFECT: controlling policy permits capped catch-up; no runtime fidelity claim | campaign.json source review |
+| 2026-09-11 | Bob triage / C005 | ALREADY_FIXED by N013; archive/observation before cleanup traced | b11a1ed9 |
