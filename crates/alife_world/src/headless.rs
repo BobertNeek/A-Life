@@ -5085,7 +5085,7 @@ mod task_6_factorized_motor_tests {
             assert_eq!(direct_receipt.action_result.command.kind, kind, "{kind:?}");
             assert_eq!(factorized_result.command.kind, kind, "{kind:?}");
             assert_eq!(
-                factorized_receipt.channel_receipts[0].command.primitive, expected_action_id,
+                factorized_receipt.bundle.channels[0].primitive, expected_action_id,
                 "{kind:?}"
             );
             assert_eq!(
