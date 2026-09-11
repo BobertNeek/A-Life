@@ -811,7 +811,7 @@ impl BiochemicalGraphState {
                 phenotype,
                 &mut next,
                 reaction,
-                elapsed.max(1.0) * developmental_expression,
+                elapsed * developmental_expression,
             )?;
         }
         next.validate_against(phenotype)?;

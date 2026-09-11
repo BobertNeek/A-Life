@@ -69,6 +69,29 @@ fn neural_emission_changes_authoritative_chemistry_and_targeted_receptors() {
 }
 
 #[test]
+fn same_tick_without_event_does_not_advance_reactions() {
+    let phenotype = founder_phenotype();
+    let tick = mature_tick(&phenotype);
+    let state = BiochemistryState::new(&phenotype, tick).unwrap();
+    let active = state
+        .advance(
+            Tick(tick.raw() + 1),
+            BodyEventDelta {
+                nutrition: 1.0,
+                ..BodyEventDelta::zero()
+            },
+            &phenotype,
+        )
+        .unwrap();
+
+    let same_tick = active
+        .advance(active.tick, BodyEventDelta::zero(), &phenotype)
+        .unwrap();
+
+    assert_eq!(same_tick.graph_state(), active.graph_state());
+}
+
+#[test]
 fn drive_frame_is_a_tick_bound_derivation_of_the_graph() {
     let phenotype = founder_phenotype();
     let tick = mature_tick(&phenotype);
