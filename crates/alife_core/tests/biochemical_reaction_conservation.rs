@@ -297,3 +297,49 @@ fn full_product_provides_no_feasible_reaction_space() {
     assert_eq!(concentration(&graph, &next, 2).to_bits(), 1.0_f32.to_bits());
     assert_limits(&graph, &next);
 }
+
+#[test]
+fn mixed_reactions_validate_material_balance_without_restricting_regulatory_terms() {
+    let species = vec![
+        material(1, 0.0),
+        material(2, 0.0),
+        material(5, 0.0),
+        regulatory(3),
+        regulatory(4),
+    ];
+    let mut catalyst_with_control = reaction(&[(1, 1.0), (5, 1.0)], &[(2, 1.0), (5, 1.0)], 1.0);
+    catalyst_with_control["rate_control"] = json!(3);
+    let cases = [
+        (
+            "balanced mixed",
+            reaction(&[(1, 1.0), (3, 1.0)], &[(2, 1.0), (4, 1.0)], 1.0),
+            true,
+        ),
+        (
+            "unbalanced mixed",
+            reaction(&[(1, 1.0), (3, 1.0)], &[(2, 2.0), (4, 1.0)], 1.0),
+            false,
+        ),
+        (
+            "regulatory only",
+            reaction(&[(3, 1.0)], &[(4, 2.0)], 1.0),
+            true,
+        ),
+        ("catalyst with control", catalyst_with_control, true),
+    ];
+
+    for (name, reaction, expected_valid) in cases {
+        let graph: BiochemicalPhenotype = serde_json::from_value(json!({
+            "schema_version": BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
+            "species_budget": species.len(),
+            "reaction_budget": 1,
+            "species": species.clone(),
+            "reactions": [reaction],
+            "emitters": [],
+            "receptors": [],
+            "neuroemitters": [],
+        }))
+        .unwrap();
+        assert_eq!(graph.validate_contract().is_ok(), expected_valid, "{name}");
+    }
+}

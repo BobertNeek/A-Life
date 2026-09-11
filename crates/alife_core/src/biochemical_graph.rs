@@ -946,28 +946,26 @@ fn validate_reaction_species(
     if let Some(control) = reaction.rate_control {
         require_species(phenotype, control)?;
     }
-    let material_reactants = reaction.reactants.iter().all(|term| {
-        species(phenotype, term.species)
-            .is_some_and(|row| row.kind == ChemicalSpeciesKind::Material)
-    });
-    let material_products = reaction.products.iter().all(|term| {
-        species(phenotype, term.species)
-            .is_some_and(|row| row.kind == ChemicalSpeciesKind::Material)
-    });
-    if material_reactants || material_products {
-        let input = reaction
-            .reactants
-            .iter()
-            .map(|term| term.amount)
-            .sum::<f32>();
-        let output = reaction
-            .products
-            .iter()
-            .map(|term| term.amount)
-            .sum::<f32>();
-        if !material_reactants || !material_products || (input - output).abs() > 1.0e-6 {
-            return Err(ScaffoldContractError::ScalarOutOfRange);
-        }
+    let material_reactant_total = reaction
+        .reactants
+        .iter()
+        .filter(|term| {
+            species(phenotype, term.species)
+                .is_some_and(|row| row.kind == ChemicalSpeciesKind::Material)
+        })
+        .map(|term| f64::from(term.amount))
+        .sum::<f64>();
+    let material_product_total = reaction
+        .products
+        .iter()
+        .filter(|term| {
+            species(phenotype, term.species)
+                .is_some_and(|row| row.kind == ChemicalSpeciesKind::Material)
+        })
+        .map(|term| f64::from(term.amount))
+        .sum::<f64>();
+    if (material_reactant_total - material_product_total).abs() > CONCENTRATION_ROUNDING_TOLERANCE {
+        return Err(ScaffoldContractError::ScalarOutOfRange);
     }
     Ok(())
 }
