@@ -612,25 +612,28 @@ impl WorldOrganismRecord {
         let original_state_graph = self.state_graph.clone();
         let original_work = self.cognitive_work;
         let original_debit = self.cognitive_energy_debit;
-        let applied_debit = requested_debit.min(self.biochemistry.body.energy);
 
-        let result = (|| -> Result<(), ScaffoldContractError> {
-            self.biochemistry
+        let result = (|| -> Result<f32, ScaffoldContractError> {
+            let applied_debit = self
+                .biochemistry
                 .body
-                .set_energy(self.biochemistry.body.energy - applied_debit)?;
+                .debit_energy_pro_rata(requested_debit)?;
             self.advance_body_state_ref()?;
             self.cognitive_work = receipt;
             self.cognitive_energy_debit = applied_debit;
-            self.validate_contract()
+            self.validate_contract()?;
+            Ok(applied_debit)
         })();
-        if let Err(error) = result {
-            self.biochemistry = original_biochemistry;
-            self.state_graph = original_state_graph;
-            self.cognitive_work = original_work;
-            self.cognitive_energy_debit = original_debit;
-            return Err(error.into());
+        match result {
+            Ok(applied_debit) => Ok(applied_debit),
+            Err(error) => {
+                self.biochemistry = original_biochemistry;
+                self.state_graph = original_state_graph;
+                self.cognitive_work = original_work;
+                self.cognitive_energy_debit = original_debit;
+                Err(error.into())
+            }
         }
-        Ok(applied_debit)
     }
 
     pub fn advance_biology(
