@@ -67,7 +67,46 @@ fn neural_emission_changes_authoritative_chemistry_and_targeted_receptors() {
 
     assert_ne!(next.graph_state(), state.graph_state());
     assert!(after > before);
-    assert_eq!(next.biochemical_work().neural_emitter_evaluations, 1);
+    assert_eq!(
+        next.biochemical_work().neural_emitter_evaluations,
+        phenotype.chemistry.biochemical.neuroemitters().len() as u32
+    );
+}
+
+#[test]
+fn neural_emitter_work_counts_configured_emitters_not_input_emissions() {
+    for (configured_emitters, input_emissions) in [(0usize, 1usize), (1, 3), (3, 1)] {
+        let mut wire = serde_json::to_value(founder_phenotype()).unwrap();
+        let neuroemitters = wire["chemistry"]["biochemical"]["neuroemitters"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .take(configured_emitters)
+            .cloned()
+            .collect::<Vec<_>>();
+        wire["chemistry"]["biochemical"]["neuroemitters"] = json!(neuroemitters);
+        let phenotype: alife_core::CreaturePhenotype = serde_json::from_value(wire).unwrap();
+        let tick = mature_tick(&phenotype);
+        let state = BiochemistryState::new(&phenotype, tick).unwrap();
+        let emission =
+            NeuralEmission::new(NeuralEmissionClass::PredictionResidual, 0.9, 0.8).unwrap();
+        let frame = NeuralEmissionFrame::new(tick, 1, vec![emission; input_emissions]).unwrap();
+
+        let next = state
+            .advance_with_neural_emission(
+                Tick(tick.raw() + 1),
+                Tick(tick.raw() + 1),
+                BodyEventDelta::zero(),
+                Some(&frame),
+                &phenotype,
+            )
+            .unwrap();
+
+        assert_eq!(
+            next.biochemical_work().neural_emitter_evaluations,
+            configured_emitters as u32
+        );
+    }
 }
 
 #[test]
