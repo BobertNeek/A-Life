@@ -1,5 +1,6 @@
 //! In-engine screenshots, also usable when Windows desktop capture is unavailable.
 use super::*;
+use std::io::Write;
 
 #[derive(Default)]
 pub(super) struct CaptureSession {
@@ -7,6 +8,9 @@ pub(super) struct CaptureSession {
     directory: Option<PathBuf>,
     next_at: f64,
     count: u32,
+    action_trace: Option<fs::File>,
+    traced_tick: Option<u64>,
+    traced_frames: u32,
 }
 
 pub(super) fn capture_player_view(
@@ -22,8 +26,58 @@ pub(super) fn capture_player_view(
 ) {
     if !session.initialized {
         session.directory = std::env::var_os("ALIFE_GRAPHICS_CAPTURE_DIR").map(PathBuf::from);
+        if let Some(path) = std::env::var_os("ALIFE_ACTION_TRACE_PATH") {
+            match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+            {
+                Ok(file) => session.action_trace = Some(file),
+                Err(error) => eprintln!("Action trace could not open: {error}"),
+            }
+        }
         session.next_at = 2.0;
         session.initialized = true;
+    }
+    // Passive, bounded debug evidence. No extra neural readback or simulation changes.
+    if session.action_trace.is_some() && session.traced_frames < 10_000 {
+        if let Some(frame) = frame.as_ref() {
+            let tick = frame.current.authoritative_world_tick.raw();
+            if session.traced_tick != Some(tick) {
+                let rows = frame.current.tick_summaries.iter().map(|s| {
+                    let object = frame.current.objects().find(|o| o.organism_id == Some(s.organism_id));
+                    let organism = object.and_then(|o| frame.current.organism(o.id));
+                    let target = s.target_entity.and_then(|id| frame.current.object(id));
+                    serde_json::json!({
+                        "organism_id": s.organism_id.raw(),
+                        "tick_before": s.world_tick_before.raw(), "tick_after": s.world_tick_after.raw(),
+                        "status": format!("{:?}", s.status),
+                        "action": s.selected_action_kind.map(|v| format!("{v:?}")),
+                        "action_id": s.selected_action_id.map(|v| v.raw()),
+                        "target_id": s.target_entity.map(|v| v.raw()),
+                        "target_kind": target.map(|o| format!("{:?}", o.kind)),
+                        "target_position": target.map(|o| [o.position.x, o.position.y, o.position.z]),
+                        "position": object.map(|o| [o.position.x, o.position.y, o.position.z]),
+                        "sleep_phase": organism.map(|o| format!("{:?}", o.sleep_phase)),
+                        "sealed": s.patch_sealed, "success": s.patch_success,
+                        "contact": s.physical_contact.map(|v| format!("{v:?}")),
+                        "failure": s.action_failure.as_ref().map(|v| format!("{v:?}")),
+                    })
+                }).collect::<Vec<_>>();
+                let receipt = serde_json::json!({
+                    "world_tick": tick, "elapsed_seconds": time.elapsed_secs_f64(), "actions": rows,
+                    "food": frame.current.objects().filter(|o| o.kind == WorldObjectKind::Food).map(|o| serde_json::json!({
+                        "id": o.id.raw(), "position": [o.position.x, o.position.y, o.position.z], "consumed": o.consumed,
+                    })).collect::<Vec<_>>(),
+                });
+                if let Err(error) = writeln!(session.action_trace.as_mut().unwrap(), "{receipt}") {
+                    eprintln!("Action trace stopped: {error}");
+                    session.action_trace = None;
+                }
+                session.traced_tick = Some(tick);
+                session.traced_frames += 1;
+            }
+        }
     }
     let automatic = session.directory.is_some()
         && session.count < 96

@@ -12,6 +12,14 @@ off by default; `--developer-overlay` enables it at launch. M/G/H and the overla
 shortcuts operate only in debug mode. Live FPS appears in the debug bar and uses
 real frame time, including while paused. R restores the player view.
 
+For a bounded behavior check, set `ALIFE_ACTION_TRACE_PATH` to a new JSONL file
+in an existing directory. It records up to 10,000 distinct presented world ticks,
+including actions, targets, outcomes, sleep state, positions, and food state.
+It never overwrites an existing file and stays off when unset. Check tick gaps
+before treating the trace as complete; multiple simulation ticks can occur
+between rendered frames. This uses existing presentation data, with no extra
+neural readback.
+
 ## Production path
 
 The launcher uses an optimized release build by default. The first build compiles
