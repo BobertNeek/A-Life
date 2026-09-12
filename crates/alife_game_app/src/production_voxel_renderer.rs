@@ -1502,6 +1502,8 @@ struct Fvr07ProductionPolishSummary {
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct Fvr05ProductionUxStateResource {
     pub settings: Fvr05ProductionUxSettings,
+    pub debug_mode: bool,
+    pub show_help: bool,
     pub ui_settings_path: PathBuf,
     pub source_save_path: PathBuf,
     pub asset_root: PathBuf,
@@ -1536,6 +1538,8 @@ impl Fvr05ProductionUxStateResource {
         }
         Self {
             settings,
+            debug_mode: summary.developer_overlay,
+            show_help: false,
             ui_settings_path: summary.ui_settings_path.clone(),
             source_save_path: summary.save_path.clone(),
             asset_root: summary.asset_root.clone(),
@@ -1573,7 +1577,9 @@ impl Fvr05ProductionUxStateResource {
     }
 
     fn active_overlay(&self, kind: Fvr05ProductionOverlayKind) -> bool {
-        self.settings.show_overlays && self.settings.enabled_overlays.contains(&kind)
+        self.debug_mode
+            && self.settings.show_overlays
+            && self.settings.enabled_overlays.contains(&kind)
     }
 
     fn toggle_overlay(&mut self, kind: Fvr05ProductionOverlayKind) {
@@ -5332,7 +5338,8 @@ fn spawn_v0_player_experience_ui(app: &mut App) {
     ));
     app.world_mut().spawn((
         Name::new("A-Life V0 selected creature panel"),
-        Text::new("Select a creature"),
+        Visibility::Hidden,
+        Text::new(""),
         TextFont {
             font_size: 14.0,
             ..default()
@@ -5352,7 +5359,7 @@ fn spawn_v0_player_experience_ui(app: &mut App) {
     ));
     app.world_mut().spawn((
         Name::new("A-Life V0 player control strip"),
-        Text::new("LMB Select  |  R Recover view"),
+        Text::new("F1 Help"),
         TextFont {
             font_size: 13.0,
             ..default()
@@ -5360,8 +5367,8 @@ fn spawn_v0_player_experience_ui(app: &mut App) {
         TextColor(Color::srgb(0.89, 0.88, 0.74)),
         Node {
             position_type: PositionType::Absolute,
-            left: Val::Px(92.0),
-            right: Val::Px(92.0),
+            left: Val::Px(18.0),
+            max_width: Val::Percent(95.0),
             bottom: Val::Px(18.0),
             padding: bevy::ui::UiRect::axes(Val::Px(16.0), Val::Px(10.0)),
             ..default()
@@ -5379,15 +5386,14 @@ fn sync_v0_player_status_chip(
     if !scene.is_changed() && !ux.is_changed() {
         return;
     }
-    let state = if ux.settings.paused {
-        "PAUSED"
+    let playback = if ux.settings.paused {
+        " | Paused".to_string()
+    } else if ux.settings.simulation_speed != 1.0 {
+        format!(" | {:.0}x", ux.settings.simulation_speed)
     } else {
-        "LIVING"
+        String::new()
     };
-    let text = format!(
-        "A-LIFE  |  {}  |  {} CREATURES",
-        state, scene.creature_render_count
-    );
+    let text = format!("{} creatures{playback}", scene.creature_render_count);
     for mut chip in &mut chips {
         chip.0 = text.clone();
     }
@@ -5396,118 +5402,69 @@ fn sync_v0_player_status_chip(
 fn sync_v0_player_creature_panel(
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
-    follow: Res<Fvr04ProductionCreatureFollowResource>,
-    mut panels: bevy::prelude::Query<&mut Text, With<V0PlayerCreaturePanel>>,
+    ux: Res<Fvr05ProductionUxStateResource>,
+    mut panels: bevy::prelude::Query<(&mut Text, &mut Visibility), With<V0PlayerCreaturePanel>>,
 ) {
-    if !selection.is_changed() && !creatures.is_changed() && !follow.is_changed() {
+    if !selection.is_changed() && !creatures.is_changed() && !ux.is_changed() {
         return;
     }
-    let text = selection
+    let sample = selection
         .selected
         .filter(|selected| selected.kind == StableVoxelRefKind::Creature)
         .and_then(|selected| selected.stable_id)
-        .and_then(|stable_id| creatures.sample_for_stable_id(stable_id))
-        .map(|sample| v0_selected_creature_text(sample, follow.enabled))
-        .unwrap_or_else(|| {
-            "CREATURES\nNo creature selected\n\nHome finds a creature.\nPage Up / Down selects another.\nLMB selects a creature or terrain."
-                .to_string()
-        });
-    for mut panel in &mut panels {
-        panel.0 = text.clone();
+        .and_then(|stable_id| creatures.sample_for_stable_id(stable_id));
+    for (mut panel, mut visibility) in &mut panels {
+        *visibility = if sample.is_some() && !ux.debug_mode {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+        if let Some(sample) = sample {
+            panel.0 = v0_selected_creature_text(sample);
+        }
     }
 }
 
 fn sync_v0_player_control_strip(
     ux: Res<Fvr05ProductionUxStateResource>,
-    follow: Res<Fvr04ProductionCreatureFollowResource>,
     mut strips: bevy::prelude::Query<&mut Text, With<V0PlayerControlStrip>>,
 ) {
-    if !ux.is_changed() && !follow.is_changed() {
+    if !ux.is_changed() {
         return;
     }
-    let playback = if ux.settings.paused {
-        "Paused"
+    let mut text = if ux.show_help {
+        "F1 Close help | Space Pause | 1/2/3 Speed | S Save | L Load\nClick Select | E Place food on selected ground | Enter Speak | Y Lineage\nArrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
     } else {
-        "Running"
+        "F1 Help".to_string()
     };
-    let follow_state = if follow.enabled {
-        "Following"
+    if ux.debug_mode {
+        text.push_str(" | F3 Exit debug");
+    }
+    if ux.last_error.is_some() {
+        text.push_str("\nAction failed. F3 for details.");
     } else {
-        "Free camera"
-    };
-    let text = format!(
-        "{} {:.1}x | {} | Space/P Pause | N Step | 1/2/3 Speed | S Save | L Load\nArrows/Edges Pan | Home Snap | F Follow | PgUp/PgDn Creature | LMB Select | E Food | R Starting view\n{}{}",
-        playback, ux.settings.simulation_speed, follow_state, ux.last_action,
-        ux.last_error.as_ref().map(|error| format!(" | {error}")).unwrap_or_default()
-    );
+        #[cfg(feature = "gpu-runtime")]
+        match ux.last_manual_checkpoint_status.as_ref() {
+            Some(crate::GpuManualCheckpointStatus::Queued { .. }) => text.push_str(" | Saving..."),
+            Some(crate::GpuManualCheckpointStatus::Complete { .. }) => text.push_str(" | Saved"),
+            _ => {}
+        }
+    }
     for mut strip in &mut strips {
         strip.0 = text.clone();
     }
 }
 
-fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample, following: bool) -> String {
+fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample) -> String {
     let display_name = v0_player_creature_name(&sample.display_label, sample.stable_id.raw());
-    let brain = match (sample.brain_class_id, sample.brain_neuron_count) {
-        (Some(class_id), Some(count)) => format!("class {class_id}, {count} neurons"),
-        (None, Some(count)) => format!("{count} neurons"),
-        _ => "brain unavailable".to_string(),
-    };
-    let learning = match sample.lifetime_learning_enabled {
-        Some(true) => "active",
-        Some(false) => "inactive",
-        None => "unavailable",
-    };
-    let memories = sample
-        .memory_record_count
-        .map(|count| count.to_string())
-        .unwrap_or_else(|| "unavailable".to_string());
-    let fast_memories = sample
-        .fast_memory_count
-        .map(|count| count.to_string())
-        .unwrap_or_else(|| "unavailable".to_string());
-    let lifetime_memories = sample
-        .lifetime_memory_count
-        .map(|count| count.to_string())
-        .unwrap_or_else(|| "unavailable".to_string());
-    let concepts = sample
-        .concept_count
-        .map(|count| count.to_string())
-        .unwrap_or_else(|| "unavailable".to_string());
-    let gaps = sample
-        .unresolved_gap_count
-        .map(|count| count.to_string())
-        .unwrap_or_else(|| "unavailable".to_string());
-    let last_sleep = sample
-        .last_consolidated_tick
-        .map(|tick| format!("Last sleep learning: tick {tick}"))
-        .unwrap_or_else(|| "Last sleep learning: none yet".to_string());
-    let consolidation = sample
-        .consolidation_state_raw
-        .map(|state| format!("state {state}"))
-        .unwrap_or_else(|| "state unavailable".to_string());
-    let follow_state = if following { "FOLLOWING" } else { "SELECTED" };
     format!(
-        "{display_name}  |  {brain}\n{follow_state}  |  {}  |  {}\n\nNEEDS\nHunger   {} {:>3}%\nFatigue  {} {:>3}%\nSafety   {} {:>3}%\nSleep    {} {:>3}%\n\nSOCIAL\nReadiness {} {:>3}%\n\nLEARNING\n{}  |  memories {} (fast {} lifetime {})  |  concepts {}\nOpen curiosity gaps: {}\n{}\nConsolidation: {}",
+        "{display_name}\n{} | {}\n\nHunger  {}\nEnergy  {}\nSafety  {}\nSleepiness  {}",
         sample.animation.label(),
         sample.expression.label(),
         v0_need_bar(sample.hunger),
-        v0_percent(sample.hunger),
-        v0_need_bar(sample.fatigue),
-        v0_percent(sample.fatigue),
+        v0_need_bar(1.0 - sample.fatigue),
         v0_need_bar(1.0 - sample.fear),
-        v0_percent(1.0 - sample.fear),
         v0_need_bar(sample.sleep_pressure),
-        v0_percent(sample.sleep_pressure),
-        v0_need_bar(sample.social),
-        v0_percent(sample.social),
-        learning,
-        memories,
-        fast_memories,
-        lifetime_memories,
-        concepts,
-        gaps,
-        last_sleep,
-        consolidation,
     )
 }
 
@@ -5530,16 +5487,12 @@ fn v0_player_creature_name(label: &str, stable_id: u64) -> String {
     if words.is_empty() {
         words.push("Creature".to_string());
     }
-    format!("{}  #{}", words.join(" "), stable_id)
+    words.join(" ")
 }
 
 fn v0_need_bar(value: f32) -> String {
     let filled = (value.clamp(0.0, 1.0) * 8.0).round() as usize;
     format!("[{}{}]", "=".repeat(filled), "-".repeat(8 - filled))
-}
-
-fn v0_percent(value: f32) -> u32 {
-    (value.clamp(0.0, 1.0) * 100.0).round() as u32
 }
 
 fn handle_fvr03_mouse_selection(
@@ -5655,14 +5608,13 @@ fn sync_fvr05_panel_visibility(
         bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionRightInspectorPanel>>,
         bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionBottomOverlayToolbar>>,
         bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionFooterStatusBar>>,
-        bevy::prelude::Query<&mut Visibility, With<V0PlayerCreaturePanel>>,
     )>,
 ) {
     if !ux.is_changed() {
         return;
     }
-    let menu_chrome = ux.settings.show_menu || ux.settings.show_settings;
-    let overlay_chrome = ux.settings.show_overlays;
+    let menu_chrome = ux.debug_mode && (ux.settings.show_menu || ux.settings.show_settings);
+    let overlay_chrome = ux.debug_mode && ux.settings.show_overlays;
     let menu_visibility = if menu_chrome {
         Visibility::Visible
     } else {
@@ -5692,13 +5644,6 @@ fn sync_fvr05_panel_visibility(
     }
     for mut visibility in &mut panels.p4() {
         *visibility = footer_visibility;
-    }
-    for mut visibility in &mut panels.p5() {
-        *visibility = if menu_chrome {
-            Visibility::Hidden
-        } else {
-            Visibility::Visible
-        };
     }
 }
 
@@ -5819,7 +5764,11 @@ fn sync_fvr05_left_control_panel(
         .unwrap_or_default();
     let text = format!(
         "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1/2/3 speed\n[ ] adjust speed\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\nShift+1-3, 4-9, B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nLIVE / STARTUP ESTIMATES\nlive creatures {}\nstartup chunks loaded {}\nstartup chunks resident {}\nstartup tiles sampled {}\nstartup mesher {} quads {} face reduction {:.2}x\nconfigured remesh budget {} snapshot dirty {} estimated cached {} deferred {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
-        if ux.settings.paused { "paused" } else { "running" },
+        if ux.settings.paused {
+            "paused"
+        } else {
+            "running"
+        },
         ux.settings.follow_selection,
         ux.settings.pause_on_focus_loss,
         ux.settings.show_overlays,
@@ -6632,6 +6581,7 @@ fn request_fvr03_recorded_screenshot(
             }
         }
         if let Some(ux) = ux.as_mut() {
+            ux.debug_mode = false;
             ux.settings.show_menu = false;
             ux.settings.show_settings = false;
             ux.settings.show_overlays = false;
@@ -6682,6 +6632,7 @@ fn request_fvr03_recorded_screenshot(
     }
     if let Some(ux) = ux.as_mut() {
         let show_developer_surfaces = capture.fvr05_capture_index < 4 || capture.developer_overlay;
+        ux.debug_mode = show_developer_surfaces;
         ux.settings.show_menu = show_developer_surfaces;
         ux.settings.show_settings = show_developer_surfaces;
         ux.settings.show_overlays = show_developer_surfaces;

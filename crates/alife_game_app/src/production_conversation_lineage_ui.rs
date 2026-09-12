@@ -1079,6 +1079,7 @@ fn spawn_ui(app: &mut App, layout: LineageLabLayout) {
         },
         BackgroundColor(Color::srgba(0.015, 0.026, 0.018, 0.76)),
         GlobalZIndex(70),
+        Visibility::Hidden,
         ProductionSpeechControlsPanel,
     ));
     app.world_mut().spawn((
@@ -1138,7 +1139,7 @@ fn spawn_ui(app: &mut App, layout: LineageLabLayout) {
         app,
         root,
         LineageLabTextRole::Header,
-        "LINEAGE LIBRARY  /  ERA 0 SELECTION LABORATORY",
+        "LINEAGE LIBRARY",
         layout.critical_font_size + 8.0,
         Node {
             position_type: PositionType::Absolute,
@@ -1152,7 +1153,7 @@ fn spawn_ui(app: &mut App, layout: LineageLabLayout) {
 
     let filters = spawn_lab_section(app, root, layout, LineageLabSectionKind::Filters);
     for (role, text) in [
-        (LineageLabTextRole::FilterTitle, "SOURCE / DATA FILTERS"),
+        (LineageLabTextRole::FilterTitle, "FIND CREATURES"),
         (LineageLabTextRole::FilterSource, "Source: All runs"),
         (LineageLabTextRole::FilterData, "Data: all evidence"),
         (LineageLabTextRole::FilterSort, "Sort: Overall evidence"),
@@ -1875,6 +1876,9 @@ pub(crate) fn handle_production_conversation_lineage_input(
     mut speech_worker: NonSendMut<ProductionSpeechTranslationWorker>,
     mut state: ResMut<ProductionConversationLineageUiState>,
 ) {
+    if state.developer_overlay != ux.debug_mode {
+        state.developer_overlay = ux.debug_mode;
+    }
     if !state.input_open && !state.lineage_open && keyboard.get_just_pressed().next().is_none() {
         return;
     }
@@ -1960,10 +1964,10 @@ fn handle_speech_setting_keys(
     if keyboard.just_pressed(KeyCode::F8) {
         state.rendered_translation_visible = !state.rendered_translation_visible;
     }
-    if keyboard.just_pressed(KeyCode::F10) {
+    if state.developer_overlay && keyboard.just_pressed(KeyCode::F10) {
         state.raw_tokens_visible = !state.raw_tokens_visible;
     }
-    if keyboard.just_pressed(KeyCode::F11) {
+    if state.developer_overlay && keyboard.just_pressed(KeyCode::F11) {
         state.slm_off = !state.slm_off;
     }
 }
@@ -2174,13 +2178,13 @@ fn refresh_creature_speech_receipt(
                     state.last_creature_speaker = utterance.speaker_id;
                     state.last_creature_receipt = Some(receipt);
                     state.status = format!(
-                            "Creature SLM worker failed to start ({error}); used bounded unaided translation"
-                        );
+                        "Creature SLM worker failed to start ({error}); used bounded unaided translation"
+                    );
                 }
                 Err(fallback) => {
                     state.status = format!(
-                            "Creature SLM translation could not start ({error}); bounded fallback failed: {fallback}"
-                        );
+                        "Creature SLM translation could not start ({error}); bounded fallback failed: {fallback}"
+                    );
                 }
             },
         }
@@ -2654,7 +2658,7 @@ fn sync_production_conversation_lineage_ui(
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
     mut panels: ParamSet<(
         bevy::prelude::Query<(&mut Text, &mut Visibility), With<ProductionSpeechEntryPanel>>,
-        bevy::prelude::Query<&mut Text, With<ProductionSpeechControlsPanel>>,
+        bevy::prelude::Query<(&mut Text, &mut Visibility), With<ProductionSpeechControlsPanel>>,
         bevy::prelude::Query<(&mut Text, &mut Visibility), With<ProductionSpeechDeveloperPanel>>,
         bevy::prelude::Query<
             (&mut Text2d, &mut Transform, &mut Visibility),
@@ -2689,7 +2693,21 @@ fn sync_production_conversation_lineage_ui(
             *visibility = next_visibility;
         }
     }
-    for mut text in &mut panels.p1() {
+    for (mut text, mut visibility) in &mut panels.p1() {
+        if !state.developer_overlay {
+            // Keep failed speech visible without exposing worker/runtime details.
+            let needs_attention = ["failed", "unavailable", "busy"]
+                .iter()
+                .any(|word| state.status.contains(word));
+            *visibility = if needs_attention && !state.lineage_open {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            };
+            text.0 = "Speech needs attention. F3 for details.".to_string();
+            continue;
+        }
+        *visibility = Visibility::Visible;
         let next_text = format!(
             "Enter speak | Y Lineage Library | F6 creature text:{} | F7 narration:{} | F8 rendered text:{} | F10 raw:{} | F11 SLM:{}\n{}",
             if state.muted { "off" } else { "on" },
@@ -2887,9 +2905,9 @@ fn sync_production_lineage_laboratory_ui(
         *visibility = Visibility::Inherited;
         text.0 = match *role {
             LineageLabTextRole::Header => {
-                "LINEAGE LIBRARY  /  ERA 0 SELECTION LABORATORY".to_string()
+                "LINEAGE LIBRARY".to_string()
             }
-            LineageLabTextRole::FilterTitle => "SOURCE / DATA FILTERS".to_string(),
+            LineageLabTextRole::FilterTitle => "FIND CREATURES".to_string(),
             LineageLabTextRole::FilterSource => format!(
                 "Source run [S]\n{}",
                 state.lineage_source_filter.label()
@@ -2958,13 +2976,13 @@ fn sync_production_lineage_laboratory_ui(
                 },
             ),
             LineageLabTextRole::HabitatTitle => habitat_view.as_ref().map_or_else(
-                || "HABITAT LABORATORY  /  SELECT A WORLD CREATURE".to_string(),
+                || "HABITAT  /  SELECT A CREATURE".to_string(),
                 |result| match result {
                     Ok(view) => format!(
-                        "HABITAT LABORATORY  /  {}  /  {:?}",
+                        "HABITAT  /  {}  /  {:?}",
                         view.focus.label, view.focus.mode
                     ),
-                    Err(_) => "HABITAT LABORATORY  /  DATA UNAVAILABLE".to_string(),
+                    Err(_) => "HABITAT  /  UNAVAILABLE".to_string(),
                 },
             ),
             LineageLabTextRole::HabitatMembership => habitat_view.as_ref().map_or_else(

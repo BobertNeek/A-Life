@@ -53,6 +53,13 @@ pub(super) fn handle_fvr05_production_ux_input(
     {
         return;
     }
+    if keyboard.just_pressed(KeyCode::F1) {
+        ux.show_help = !ux.show_help;
+    }
+    if keyboard.just_pressed(KeyCode::F3) {
+        ux.debug_mode = !ux.debug_mode;
+        ux.settings.show_menu = ux.debug_mode;
+    }
     if keyboard.just_pressed(KeyCode::Space) || keyboard.just_pressed(KeyCode::KeyP) {
         #[cfg(feature = "gpu-runtime")]
         if let Some(schedule) = schedule.as_deref_mut() {
@@ -71,22 +78,22 @@ pub(super) fn handle_fvr05_production_ux_input(
             "Resumed production simulation".to_string()
         };
     }
-    if keyboard.just_pressed(KeyCode::Tab) {
+    if ux.debug_mode && keyboard.just_pressed(KeyCode::Tab) {
         ux.settings.active_inspector_tab = ux.settings.active_inspector_tab.next();
         ux.last_action = format!(
             "Inspector tab: {}",
             ux.settings.active_inspector_tab.label()
         );
     }
-    if keyboard.just_pressed(KeyCode::KeyM) {
+    if ux.debug_mode && keyboard.just_pressed(KeyCode::KeyM) {
         ux.settings.show_menu = !ux.settings.show_menu;
         ux.last_action = format!("Main menu visible: {}", ux.settings.show_menu);
     }
-    if keyboard.just_pressed(KeyCode::KeyG) {
+    if ux.debug_mode && keyboard.just_pressed(KeyCode::KeyG) {
         ux.settings.show_settings = !ux.settings.show_settings;
         ux.last_action = format!("Settings visible: {}", ux.settings.show_settings);
     }
-    if keyboard.just_pressed(KeyCode::KeyH) {
+    if ux.debug_mode && keyboard.just_pressed(KeyCode::KeyH) {
         ux.settings.show_overlays = !ux.settings.show_overlays;
         ux.last_action = format!("Overlays visible: {}", ux.settings.show_overlays);
     }
@@ -193,7 +200,7 @@ pub(super) fn handle_fvr05_production_ux_input(
             ux.persist_ui_settings();
         }
     }
-    if keyboard.just_pressed(KeyCode::KeyN) {
+    if ux.debug_mode && keyboard.just_pressed(KeyCode::KeyN) {
         #[cfg(feature = "gpu-runtime")]
         if let Some(schedule) = schedule.as_deref_mut() {
             schedule.queue_step();
@@ -228,7 +235,7 @@ pub(super) fn handle_fvr05_production_ux_input(
             ux.last_action = "Load unavailable without GPU runtime".to_string();
         }
     }
-    if keyboard.just_pressed(KeyCode::KeyQ) {
+    if ux.debug_mode && keyboard.just_pressed(KeyCode::KeyQ) {
         ux.settings.preferred_profile_for_next_launch =
             fvr05_next_profile(ux.settings.preferred_profile_for_next_launch);
         ux.last_action = format!(
@@ -238,6 +245,7 @@ pub(super) fn handle_fvr05_production_ux_input(
     }
     if keyboard.just_pressed(KeyCode::KeyR) {
         follow.enabled = false;
+        ux.debug_mode = false;
         ux.settings.show_menu = false;
         ux.settings.show_settings = false;
         ux.settings.show_overlays = false;
@@ -251,7 +259,7 @@ pub(super) fn handle_fvr05_production_ux_input(
             .any(|key| keyboard.just_pressed(key));
     #[cfg(not(feature = "gpu-runtime"))]
     let scheduler_speed_key = false;
-    if !scheduler_speed_key {
+    if ux.debug_mode && !scheduler_speed_key {
         if let Some(kind) = fvr05_overlay_key_pressed(&keyboard) {
             ux.toggle_overlay(kind);
         }

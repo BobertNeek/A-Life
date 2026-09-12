@@ -3,6 +3,14 @@
 `alife_game_app` owns the application shell, launch policy, runtime scheduling,
 controls, diagnostics, and voxel presentation for A-Life.
 
+## Player controls
+
+Normal play shows a small population/pause indicator and the selected creature's
+needs. F1 opens the controls. F3 toggles debug mode, which contains performance,
+brain and memory details, speech diagnostics, and world overlays. Debug mode is
+off by default; `--developer-overlay` enables it at launch. M/G/H and the overlay
+shortcuts operate only in debug mode. R restores the player view.
+
 ## Production path
 
 Launch the current player-facing frontend on Windows:
