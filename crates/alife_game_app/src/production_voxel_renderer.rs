@@ -5764,6 +5764,9 @@ fn sync_fvr05_left_control_panel(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     mut panels: bevy::prelude::Query<&mut Text, With<Fvr05ProductionLeftControlPanel>>,
 ) {
+    if !ux.debug_mode || !(ux.settings.show_menu || ux.settings.show_settings) {
+        return;
+    }
     if !ux.is_changed() && !scene.is_changed() {
         return;
     }
@@ -5837,6 +5840,9 @@ fn sync_fvr05_right_inspector_panel(
     authority: Option<Res<crate::bevy_shell::ProductionGpuBrainAuthorityResource>>,
     mut panels: bevy::prelude::Query<&mut Text, With<Fvr05ProductionRightInspectorPanel>>,
 ) {
+    if !ux.debug_mode || !(ux.settings.show_menu || ux.settings.show_settings) {
+        return;
+    }
     if !ux.is_changed()
         && !scene.is_changed()
         && !selection.is_changed()
@@ -5903,6 +5909,9 @@ fn sync_fvr05_bottom_overlay_toolbar(
     ux: Res<Fvr05ProductionUxStateResource>,
     mut panels: bevy::prelude::Query<&mut Text, With<Fvr05ProductionBottomOverlayToolbar>>,
 ) {
+    if !ux.debug_mode || !ux.settings.show_overlays {
+        return;
+    }
     if !ux.is_changed() {
         return;
     }
@@ -5933,6 +5942,11 @@ fn sync_fvr05_footer_status_bar(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     mut bars: bevy::prelude::Query<&mut Text, With<Fvr05ProductionFooterStatusBar>>,
 ) {
+    if !ux.debug_mode
+        || !(ux.settings.show_menu || ux.settings.show_settings || ux.settings.show_overlays)
+    {
+        return;
+    }
     if !ux.is_changed() && !scene.is_changed() {
         return;
     }

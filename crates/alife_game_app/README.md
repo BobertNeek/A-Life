@@ -14,6 +14,12 @@ real frame time, including while paused. R restores the player view.
 
 ## Production path
 
+The launcher uses an optimized release build by default. The first build compiles
+the engine dependencies; subsequent launches reuse them. Pass `-BuildProfile dev`
+for quick unoptimized iteration. `-Manifest PATH` selects a compatible saved
+environment. Hidden debug panels skip text construction and
+inspector work, then refresh from current state when reopened.
+
 Launch the current player-facing frontend on Windows:
 
 ```powershell

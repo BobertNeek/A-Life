@@ -1,4 +1,7 @@
 param(
+    [ValidateSet("dev", "release")]
+    [string]$BuildProfile = "release",
+    [string]$Manifest = "",
     [switch]$DryRun,
     [switch]$PreviewCommand,
     [ValidateRange(0, 120)]
@@ -19,7 +22,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-$FeatureList = "bevy-app gpu-runtime production-assets vfx-hanabi"
+$FeatureList = "production-voxel-frontend"
 # Use -DryRun to execute the application's real preflight without opening a window.
 # Use -PreviewCommand to print the Cargo command without executing it.
 
@@ -40,6 +43,10 @@ $AppArgs = @(
     "--brain-policy", $BrainPolicy,
     "--graphics-backend", $GraphicsBackend
 )
+
+if ($Manifest) {
+    $AppArgs += @("--manifest", $Manifest)
+}
 
 if ($Population -gt 0) {
     $AppArgs += @("--population", "$Population")
@@ -68,6 +75,7 @@ if ($RecordPerformance) {
 $CargoArgs = @(
     "run",
     "-p", "alife_game_app",
+    "--profile", $BuildProfile,
     "--features", $FeatureList,
     "--bin", "alife_game_app",
     "--"
@@ -76,6 +84,7 @@ $CargoArgs = @(
 $CommandPreview = "cargo " + (($CargoArgs | ForEach-Object { Format-CommandArgument $_ }) -join " ")
 
 Write-Host "A-Life Voxel Frontend"
+Write-Host "Build: $BuildProfile"
 Write-Host "Profile: $Profile"
 Write-Host "Minimum profile: MinimumSettings30x30"
 Write-Host "Features: $FeatureList"
