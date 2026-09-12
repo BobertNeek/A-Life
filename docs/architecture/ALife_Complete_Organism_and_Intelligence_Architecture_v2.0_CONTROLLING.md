@@ -1,7 +1,7 @@
 ---
 title: "A-Life Complete Organism and Intelligence Architecture"
-subtitle: "Version 2.0 CONTROLLING - Permanent Controlling Source of Truth and Compliance Standard"
-date: "24 August 2026"
+subtitle: "Version 2.0.1 CONTROLLING - Permanent Controlling Source of Truth and Compliance Standard"
+date: "11 September 2026"
 lang: en-CA
 ---
 
@@ -90,7 +90,7 @@ lang: en-CA
 
 # Document status
 
-**Status:** CONTROLLING. This document is the permanent controlling A-Life architecture. Ratification changed only its status and publication name; all stable requirement IDs and normative requirements remain unchanged.
+**Status:** CONTROLLING. This document is the permanent controlling A-Life architecture. Revision 2.0.1, authorized on 11 September 2026, simplifies breeder-directed assimilation in section 32. Stable requirement IDs are retained; the updated requirements also appear in requirement_registry.csv.
 
 **Authority:** This document is intended to supersede every earlier A-Life architecture, brain, runtime, biochemical, genetic, memory, teacher, evolution, and integration specification. Earlier documents remain historical design lineage only. They may explain how the project arrived here, but they do not override this document.
 
@@ -115,7 +115,7 @@ These systems communicate through explicit interfaces. None may silently duplica
 
 The founder species begins with nine conserved developmental brain homologues, minimum functional floors, proportional allocation of remaining neurons, and a deliberately pretrained germline neural foundation. Region function is induced by inputs, outputs, dynamics, chemistry, plasticity, development, and experience - not by handwritten lobe algorithms. Evolution may create bounded derived regions by duplication, subdivision, reserve recruitment, specialization, fusion, and pruning.
 
-Individual learning, cultural inheritance, and genetic inheritance remain separate. Personal episodic and semantic memory is never inherited. Generalized neural skills may become heritable only through sanitized, compressed, newborn-compatible germline-prior assets. Communities may train cohorts, assimilate shared transferable competence into new breed revisions, and distribute culture as separate curricula taught through grounded interaction.
+Individual learning, cultural inheritance, and ordinary genetic inheritance remain separate. Explicit personal episodic, semantic, and social records are not inherited. Players may promote a capable individual or cohort into an immutable breed foundation that retains compatible learned abilities while starting descendants with fresh personal records. Limited incidental personal associations in retained weights are acceptable under section 32; perfect removal is not a release gate. Communities may also distribute culture as separate curricula taught through grounded interaction.
 
 A mature creature's cognitive core can be scaled upward without destroying its learned abilities and can later be transplanted into another game, software environment, or embodied robot through explicit sensory, motor, and viability adapters.
 
@@ -647,7 +647,7 @@ Semantic memory stores concepts and relations inferred during this individual's 
 
 ### 17.3 Distributed skill
 
-Procedural skill and generalized representations may also reside in neural weights and structure. They are somatic unless explicitly distilled through assimilation.
+Procedural skill and generalized representations may also reside in neural weights and structure. They are somatic unless explicitly promoted through assimilation under section 32.
 
 **[AOA-MEM-001 | LOCKED CAPABILITY]** The organism supports delayed episodic recall, context-sensitive retrieval, memory confidence, source/provenance, and forgetting or compression.
 
@@ -1016,19 +1016,23 @@ Rare, low-bandwidth lineage adaptation converts repeated useful patterns into co
 
 ### 32.2 Breeder-directed assimilation
 
-Players or researchers select a cohort, identify shared competence, sanitize and redistill it, and publish a new immutable breed revision.
+Players may select one capable creature, name a breed, and publish its compatible genome and learned neural foundation as a new immutable breed revision. Cohort comparison and redistillation remain optional advanced methods. Promotion is an explicit, occasional operation, not extra work on every simulation tick or ordinary birth. The source creature remains unchanged.
+
+The first playable version retains compatible skill-bearing weights, general concepts, language competence, and useful learning dispositions where existing representations allow. It starts a new individual with fresh identity, body, chemistry, and transient neural state. Explicit episodes, personal semantic facts, individual/place references, relationships, eligibility traces, and pending learning transactions are cleared. General knowledge need not be erased merely because it is stored in a semantic memory system. When general and personal entries cannot be separated cheaply, clear that explicit store and retain abilities through weights; do not require a new memory classifier or distillation pipeline.
+
+Playable care, teaching, capable founders, and retained skills take priority over absolute biological fidelity. The care loop comes first; breed promotion follows as a small reuse of foundation and archive paths. Future embodied intelligence and investigation of subjective experience remain research aims, not claims of demonstrated qualia or release gates.
 
 **[AOA-ASSIM-001 | LOCKED CAPABILITY]** Natural assimilation can gradually alter developmental growth, receptor expression, connectivity affinities, plasticity, regional allocation, and small reusable motifs.
 
 **[AOA-ASSIM-002 | LOCKED INVARIANT]** Natural assimilation is rare, lineage-level, information-budgeted, and does not publish a large new prior at every birth.
 
-**[AOA-ASSIM-003 | LOCKED CAPABILITY]** Breeder assimilation accepts a selected cohort and target competence, compares individuals, and extracts shared generalized organization.
+**[AOA-ASSIM-003 | LOCKED CAPABILITY]** Breeder assimilation accepts one selected individual or a cohort and publishes compatible acquired abilities as a named breed foundation. Cohort comparison is optional.
 
-**[AOA-ASSIM-004 | LOCKED INVARIANT]** One exceptional individual alone is not normally sufficient to define a new heritable prior without additional evidence, redistillation, or explicit expert override and provenance.
+**[AOA-ASSIM-004 | LOCKED INVARIANT]** Single-individual breed promotion is an ordinary player operation and requires no expert override. It preserves the source creature and records the source, retained foundation, and reset policy.
 
-**[AOA-ASSIM-005 | LOCKED CAPABILITY]** Assimilation uses cohort consensus, anonymization, compression bottlenecks, developmental redistillation, fresh-environment checks, and personal-memory leakage probes.
+**[AOA-ASSIM-005 | LOCKED CAPABILITY]** The first playable promotion path checks compatible foundation loading, fresh explicit personal records, and retention of a useful skill in a fresh situation. Cohort consensus, compression bottlenecks, developmental redistillation, and exhaustive leakage probes are optional advanced methods, not prerequisites.
 
-**[AOA-ASSIM-006 | LOCKED INVARIANT]** Assimilation excludes autobiographical episodes, individual identities, exact coordinates, private facts, current chemistry, current activation, pending eligibility, and body-specific calibration.
+**[AOA-ASSIM-006 | LOCKED INVARIANT]** Promotion excludes explicit autobiographical episodes, personal semantic facts, individual and place references, relationships, current chemistry, current activation, pending eligibility, and adult body-specific calibration. Limited incidental personal associations in retained neural weights are acceptable; zero leakage is not required.
 
 **[AOA-ASSIM-007 | LOCKED CAPABILITY]** Assimilation may preserve generalized regional weights, motifs, assembly templates, connectivity affinities, receptor/plasticity profiles, and learning priors.
 
