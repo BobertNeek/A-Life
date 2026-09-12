@@ -210,7 +210,7 @@ fn place(
         .height(position)
         .unwrap_or(sample.height)
         - 0.015;
-    world.spawn((
+    let mut entity = world.spawn((
         Name::new(format!("Approved landscape {name}")),
         SceneRoot(scene.clone()),
         Transform::from_translation(position)
@@ -224,5 +224,39 @@ fn place(
             no_renderer_authority_over_actions_or_cognition: true,
         },
     ));
+    if name.starts_with("Oak_") {
+        entity.insert(Canopy);
+    }
     1
+}
+
+#[derive(Component)]
+pub(super) struct Canopy;
+
+/// Keep creatures readable when a decorative tree crosses the camera's sight line.
+pub(super) fn reveal_creatures(
+    cameras: Query<&Transform, With<Fvr03ProductionVoxelCamera>>,
+    creatures: Query<&Transform, With<ProductionCreatureAssemblyRoot>>,
+    mut trees: Query<(&Transform, &mut Visibility), With<Canopy>>,
+) {
+    let Ok(camera) = cameras.single() else {
+        return;
+    };
+    for (tree, mut visibility) in &mut trees {
+        let center = tree.translation + Vec3::Y * (6.5 * tree.scale.y);
+        // Bounds of the approved Oak GLB canopies, in their local coordinates.
+        let radius = 4.5 * tree.scale.x;
+        let obscures = creatures.iter().any(|creature| {
+            let sight = creature.translation + Vec3::Y * 0.8 - camera.translation;
+            let t = (center - camera.translation).dot(sight) / sight.length_squared().max(0.001);
+            t > 0.0
+                && t < 1.0
+                && (center - camera.translation - sight * t).length_squared() < radius * radius
+        });
+        *visibility = if obscures {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
+    }
 }

@@ -34,8 +34,8 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                             continue;
                         }
                         let tile = VoxelTileCoord::new(
-                            object.position.x.round() as i32,
-                            object.position.z.round() as i32,
+                            object.position.x.floor() as i32,
+                            object.position.y.floor() as i32,
                         );
                         let surface_height = scene
                             .tile_summaries_by_tile
@@ -174,8 +174,8 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                 let mut newborns = Vec::with_capacity(pending_newborns.len());
                 for object in pending_newborns {
                     let tile = VoxelTileCoord::new(
-                        object.position.x.round() as i32,
-                        object.position.z.round() as i32,
+                        object.position.x.floor() as i32,
+                        object.position.y.floor() as i32,
                     );
                     let chunk = tile_summaries
                         .get(&tile)

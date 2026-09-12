@@ -9,6 +9,7 @@ pub(super) fn handle_fvr05_production_ux_input(
     >,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     mut follow: ResMut<Fvr04ProductionCreatureFollowResource>,
+    #[cfg(feature = "gpu-runtime")] mut frame: ResMut<LiveBrainPresentationFrameResource>,
     mut ux: ResMut<Fvr05ProductionUxStateResource>,
     #[cfg(feature = "gpu-runtime")] mut gpu_runtime: Option<
         bevy::prelude::NonSendMut<crate::bevy_shell::ProductionGpuBrainRuntimeResource>,
@@ -146,24 +147,18 @@ pub(super) fn handle_fvr05_production_ux_input(
     }
     if keyboard.just_pressed(KeyCode::KeyE) {
         #[cfg(feature = "gpu-runtime")]
-        let selected_tile = selection.selected.and_then(|selected| {
-            (selected.kind == StableVoxelRefKind::Tile && selected.is_stable())
-                .then_some(selected.tile)
-                .flatten()
-        });
+        let selected_tile = selection
+            .selected
+            .and_then(|selected| (selected.is_stable()).then_some(selected.tile).flatten());
         #[cfg(feature = "gpu-runtime")]
         match (gpu_runtime.as_mut(), selected_tile) {
             (Some(runtime), Some(tile)) => {
-                let position = Vec3f::new(tile.x as f32 + 0.5, 0.0, tile.z as f32 + 0.5);
+                let position = Vec3f::new(tile.x as f32 + 0.5, tile.z as f32 + 0.5, 0.0);
                 match runtime.runtime.place_player_food(position) {
-                    Ok(receipt) => {
+                    Ok(_receipt) => {
+                        frame.refresh_world_objects(runtime.runtime.world());
                         ux.last_error = None;
-                        ux.last_action = format!(
-                            "Placed canonical food {} at tile x={} z={}",
-                            receipt.world_entity_id.raw(),
-                            tile.x,
-                            tile.z
-                        );
+                        ux.last_action = "Food placed".to_string();
                     }
                     Err(error) => {
                         ux.last_error = Some(error.to_string());

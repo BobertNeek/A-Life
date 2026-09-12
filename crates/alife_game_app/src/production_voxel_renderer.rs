@@ -79,6 +79,7 @@ mod graphics_capture;
 mod hearthling;
 mod landscape;
 mod live_creature_projection;
+mod live_food_projection;
 #[cfg(feature = "gpu-runtime")]
 mod performance_receipt;
 #[cfg(feature = "gpu-runtime")]
@@ -2120,7 +2121,10 @@ pub fn spawn_fvr03_production_voxel_scene(
     );
     app.add_systems(
         Update,
-        project_live_world_to_fvr04_creature_roots
+        (
+            project_live_world_to_fvr04_creature_roots,
+            live_food_projection::sync_food,
+        )
             .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
     )
     .add_systems(
@@ -2145,6 +2149,7 @@ pub fn spawn_fvr03_production_voxel_scene(
             animate_fvr04_creatures,
             animate_fvr04_creature_parts,
             hearthling::animate,
+            landscape::reveal_creatures,
             creature_grounding::ground_creatures
                 .after(hearthling::animate)
                 .after(animate_fvr04_creatures)
@@ -2372,11 +2377,8 @@ fn fvr04_creature_visual_records_from_save(
                     organism_id.raw()
                 ),
             })?;
-        let position = Vec3f::new(
-            anchor.tile.x as f32 + 0.5,
-            object.position.y,
-            anchor.tile.z as f32 + 0.5,
-        );
+        let position = object.position;
+        let tile = VoxelTileCoord::new(position.x.floor() as i32, position.y.floor() as i32);
         let visual = creature_visual_snapshot_from_parts_with_appearance(
             organism_id,
             anchor.stable_id,
@@ -2392,10 +2394,10 @@ fn fvr04_creature_visual_records_from_save(
             stable_ref: StableVoxelObjectRef {
                 kind: StableVoxelRefKind::Creature,
                 stable_id: Some(anchor.stable_id),
-                chunk: anchor.chunk,
-                tile: Some(anchor.tile),
+                chunk: VoxelChunkCoord::for_tile(16, tile),
+                tile: Some(tile),
             },
-            tile: anchor.tile,
+            tile,
             display_label: object.label.clone(),
             brain_class_id: Some(creature.brain_class.default_class_id().raw()),
             brain_neuron_count: creature.brain_class.neuron_count(),
@@ -2797,11 +2799,7 @@ fn prepare_fvr04_creature_batch(
                 base_scale.to_array(),
                 bevy::math::Mat3::IDENTITY.to_cols_array(),
             );
-            let base_translation = Vec3::new(
-                creature.tile.x as f32 + 0.5,
-                base_height,
-                creature.tile.z as f32 + 0.5,
-            );
+            let base_translation = Vec3::new(visual.position.x, base_height, visual.position.y);
             let root_transform = Transform::from_translation(base_translation)
                 .with_rotation(Quat::from_rotation_y(std::f32::consts::PI))
                 .with_scale(base_scale);
@@ -4641,8 +4639,9 @@ fn project_authoritative_creature_root_transform(
         return false;
     }
 
-    let x = object.position.x.round() + 0.5;
-    let z = object.position.z.round() + 0.5;
+    // The simulation moves in XY; Bevy uses XZ for the ground plane.
+    let x = object.position.x;
+    let z = object.position.y;
     if transform.translation.x != x {
         transform.translation.x = x;
     }
@@ -4865,13 +4864,10 @@ fn live_agent_ground_position(
     let object = frame.current.object(stable_id)?;
     (object.kind == WorldObjectKind::Agent).then(|| {
         let tile = VoxelTileCoord::new(
-            object.position.x.round() as i32,
-            object.position.z.round() as i32,
+            object.position.x.floor() as i32,
+            object.position.y.floor() as i32,
         );
-        (
-            tile,
-            Vec3::new(tile.x as f32 + 0.5, 0.0, tile.z as f32 + 0.5),
-        )
+        (tile, Vec3::new(object.position.x, 0.0, object.position.y))
     })
 }
 
@@ -5649,7 +5645,11 @@ fn sync_fvr05_panel_visibility(
         Visibility::Hidden
     };
     for mut visibility in &mut panels.p0() {
-        *visibility = menu_visibility;
+        *visibility = if ux.debug_mode {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
     for mut visibility in &mut panels.p1() {
         *visibility = menu_visibility;
@@ -5716,11 +5716,33 @@ fn sync_fvr05_overlay_visibility(
     }
 }
 
+#[derive(Default)]
+struct DebugFrameRate {
+    seconds: f64,
+    frames: u32,
+    fps: f64,
+}
+
 fn sync_fvr05_top_runtime_bar(
     ux: Res<Fvr05ProductionUxStateResource>,
+    time: Res<Time<bevy::time::Real>>,
+    mut rate: Local<DebugFrameRate>,
     mut bars: bevy::prelude::Query<&mut Text, With<Fvr05ProductionTopRuntimeBar>>,
 ) {
-    if !ux.is_changed() {
+    if !ux.debug_mode {
+        *rate = DebugFrameRate::default();
+        return;
+    }
+    // Real frame time keeps this live while the simulation is paused or sped up.
+    rate.seconds += time.delta_secs_f64();
+    rate.frames += 1;
+    let sampled = rate.seconds >= 0.5;
+    if sampled {
+        rate.fps = f64::from(rate.frames) / rate.seconds;
+        rate.seconds = 0.0;
+        rate.frames = 0;
+    }
+    if !ux.is_changed() && !sampled {
         return;
     }
     let status = if ux.settings.paused {
@@ -5728,22 +5750,9 @@ fn sync_fvr05_top_runtime_bar(
     } else {
         "Running"
     };
-    let runtime_save_path = PathBuf::from(&ux.settings.runtime_save_path);
-    let save_name = runtime_save_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("runtime_save.json")
-        .to_string();
     let text = format!(
-        "A-Life | Profile: {} | Backend: {} | GPU: {} | Runtime: {} | Target FPS: {} | Frame budget: {:.1} ms | {} | Save: {}",
-        ux.profile_id.label(),
-        ux.graphics_backend,
-        ux.adapter_name,
-        ux.selected_backend,
-        ux.profile_budget.target_fps,
-        ux.profile_budget.target_frame_ms,
-        status,
-        save_name
+        "A-Life | FPS: {:.1} | GPU: {} | {}",
+        rate.fps, ux.adapter_name, status,
     );
     for mut bar in &mut bars {
         bar.0 = text.clone();
@@ -7704,14 +7713,14 @@ mod tests {
     }
 
     #[test]
-    fn authoritative_projection_maps_stable_agent_to_voxel_center_and_preserves_root_state() {
+    fn authoritative_projection_preserves_fractional_xy_motion_and_root_state() {
         let stable_id = WorldEntityId(41);
         let organism_id = OrganismId(7);
         let frame = presentation_frame(
             WorldObjectKind::Agent,
             stable_id,
             Some(organism_id),
-            Vec3f::new(1.6, 99.0, -2.6),
+            Vec3f::new(1.6, -2.6, 99.0),
         );
         let rotation = Quat::from_rotation_x(0.4);
         let scale = Vec3::new(2.0, 3.0, 4.0);
@@ -7727,7 +7736,20 @@ mod tests {
             &mut transform,
             &frame,
         ));
-        assert_eq!(transform.translation, Vec3::new(2.5, 1.75, -2.5));
+        assert_eq!(transform.translation, Vec3::new(1.6, 1.75, -2.6));
+        let moved = presentation_frame(
+            WorldObjectKind::Agent,
+            stable_id,
+            Some(organism_id),
+            Vec3f::new(1.6, -2.5, 99.0),
+        );
+        assert!(project_authoritative_creature_root_transform(
+            stable_id,
+            organism_id,
+            &mut transform,
+            &moved,
+        ));
+        assert_eq!(transform.translation, Vec3::new(1.6, 1.75, -2.5));
         assert_eq!(transform.rotation, rotation);
         assert_eq!(transform.scale, scale);
     }

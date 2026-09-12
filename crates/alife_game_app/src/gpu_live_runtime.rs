@@ -3365,16 +3365,11 @@ impl PlayerResourcePlacementRequest {
     }
 
     fn validate(self) -> Result<(), ScaffoldContractError> {
-        if self.schema_version != PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION || self.position.y != 0.0
+        if self.schema_version != PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION || self.position.z != 0.0
         {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
-        WorldEditCommand::place_food(
-            "player-food-validation",
-            self.position,
-            PLAYER_FOOD_NUTRITION,
-        )
-        .validate(WorldEditorConfig::default())
+        self.position.validate().map(|_| ())
     }
 }
 
@@ -7752,46 +7747,7 @@ impl GpuLiveBrainRuntime {
         &mut self,
         position: Vec3f,
     ) -> Result<PlayerResourcePlacementReceipt, GameAppShellError> {
-        let request = PlayerResourcePlacementRequest::new(position);
-        request.validate()?;
-
-        let config = WorldEditorConfig::default();
-        if self.world.object_count() >= config.max_objects {
-            return Err(ScaffoldContractError::ScalarOutOfRange.into());
-        }
-        let label = format!(
-            "player-food-t{}-x{:08x}-z{:08x}",
-            self.world.tick().raw(),
-            position.x.to_bits(),
-            position.z.to_bits()
-        );
-        let command = WorldEditCommand::place_food(&label, position, PLAYER_FOOD_NUTRITION);
-        command.validate(config)?;
-
-        let mut candidate = self.world.clone();
-        let world_entity_id = candidate.editor_spawn_object(WorldEditorSpawnSpec {
-            label: label.clone(),
-            kind: WorldObjectKind::Food,
-            organism_id: None,
-            position,
-            nutrition: PLAYER_FOOD_NUTRITION,
-            hazard_pain: 0.0,
-            radius: PLAYER_FOOD_RADIUS,
-            token_id: None,
-        })?;
-        candidate.validate_organism_bindings()?;
-        let world_signature = candidate.canonical_signature_digest()?;
-        self.world = candidate;
-
-        Ok(PlayerResourcePlacementReceipt {
-            schema_version: PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION,
-            world_entity_id,
-            label,
-            position,
-            nutrition: PLAYER_FOOD_NUTRITION,
-            radius: PLAYER_FOOD_RADIUS,
-            world_signature,
-        })
+        place_food_in_world(&mut self.world, position)
     }
 
     pub fn residency_summary(&self) -> GpuLiveResidencySummary {
@@ -9793,6 +9749,54 @@ pub(crate) fn compile_gpu_birth_components(
     Err(ScaffoldContractError::UnsupportedProductionBrainClass)
 }
 
+fn place_food_in_world(
+    world: &mut HeadlessWorld,
+    position: Vec3f,
+) -> Result<PlayerResourcePlacementReceipt, GameAppShellError> {
+    let request = PlayerResourcePlacementRequest::new(position);
+    request.validate()?;
+
+    let config = WorldEditorConfig {
+        world_bound: 512.0,
+        ..WorldEditorConfig::default()
+    };
+    if world.object_count() >= config.max_objects {
+        return Err(ScaffoldContractError::ScalarOutOfRange.into());
+    }
+    // Repeated placement at the same tick and tile must still have a fresh identity.
+    let label = (0..=config.max_objects)
+        .map(|suffix| format!("player-food-t{}-{suffix}", world.tick().raw()))
+        .find(|label| world.entity_id(label).is_none())
+        .ok_or(ScaffoldContractError::InvalidId)?;
+    let command = WorldEditCommand::place_food(&label, position, PLAYER_FOOD_NUTRITION);
+    command.validate(config)?;
+
+    let mut candidate = world.clone();
+    let world_entity_id = candidate.editor_spawn_object(WorldEditorSpawnSpec {
+        label: label.clone(),
+        kind: WorldObjectKind::Food,
+        organism_id: None,
+        position,
+        nutrition: PLAYER_FOOD_NUTRITION,
+        hazard_pain: 0.0,
+        radius: PLAYER_FOOD_RADIUS,
+        token_id: None,
+    })?;
+    candidate.validate_organism_bindings()?;
+    let world_signature = candidate.canonical_signature_digest()?;
+    *world = candidate;
+
+    Ok(PlayerResourcePlacementReceipt {
+        schema_version: PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION,
+        world_entity_id,
+        label,
+        position,
+        nutrition: PLAYER_FOOD_NUTRITION,
+        radius: PLAYER_FOOD_RADIUS,
+        world_signature,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -9821,6 +9825,22 @@ mod tests {
         persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
         HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldCommand, WorldOrganismRecord,
     };
+
+    #[test]
+    fn player_food_repeated_placement_uses_xy_ground_and_distinct_ids() {
+        let mut world = HeadlessScenarioBuilder::new(7).build().unwrap();
+        let position = Vec3f::new(2.5, -3.5, 0.0);
+        let first = place_food_in_world(&mut world, position).unwrap();
+        let second = place_food_in_world(&mut world, position).unwrap();
+        assert_ne!(first.world_entity_id, second.world_entity_id);
+        assert_eq!(world.object_count(), 2);
+        assert!(world.object_snapshots().iter().all(|food| {
+            food.position == position && food.kind == WorldObjectKind::Food && !food.consumed
+        }));
+        let before = world.canonical_signature_digest().unwrap();
+        assert!(place_food_in_world(&mut world, Vec3f::new(2.5, 0.0, 1.0)).is_err());
+        assert_eq!(world.canonical_signature_digest().unwrap(), before);
+    }
 
     #[test]
     fn deferred_checkpoint_publication_does_not_block_ordinary_ticks() {

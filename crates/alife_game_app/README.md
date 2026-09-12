@@ -9,7 +9,8 @@ Normal play shows a small population/pause indicator and the selected creature's
 needs. F1 opens the controls. F3 toggles debug mode, which contains performance,
 brain and memory details, speech diagnostics, and world overlays. Debug mode is
 off by default; `--developer-overlay` enables it at launch. M/G/H and the overlay
-shortcuts operate only in debug mode. R restores the player view.
+shortcuts operate only in debug mode. Live FPS appears in the debug bar and uses
+real frame time, including while paused. R restores the player view.
 
 ## Production path
 
@@ -40,9 +41,20 @@ running. Help, pause/resume, ground selection, and debug controls also worked.
 Results were checked through in-engine captures because Windows capture failed.
 Normal play now reports simulation failure instead of hiding it in debug mode.
 
-The full care loop remains unaccepted. Food placement and its presentation need
-further work, including the mapping from simulation coordinates to rendered
-ground. Speech is untested. The retained September 8 learned save still fails
+The renderer maps simulation XY to Bevy XZ without snapping movement to tiles.
+E places food on selected ground, including a selected creature's tile. Food
+appears from authoritative world objects even while paused and disappears on
+consumption. Decorative oak trees hide when their canopy blocks a creature from
+the camera. Repeated placements receive distinct identities. Placement uses the
+editor's supported 512-unit bound instead of its old 12-unit demo default.
+
+The September 12 focused checks passed for XY movement, repeated placement, and
+food visual removal. Recorded single-creature play verified placement while
+paused, starting-food consumption, and save/reload of placed food. The full care
+loop remains unaccepted. Without continuous capture, the development build showed
+roughly 9–11 FPS running versus 37 paused on the RTX 3050. The main-thread tick
+path synchronously waits for GPU readback; its share of frame cost still needs
+measurement. Speech is untested. The retained September 8 learned save still fails
 cognitive-snapshot decoding (`motor_condition_magnitude` is missing).
 
 Build its local package with:

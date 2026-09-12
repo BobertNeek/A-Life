@@ -200,6 +200,15 @@ impl LiveBrainPresentationFrameResource {
         Ok(())
     }
 
+    /// Refresh placed resources immediately, including while paused. Neural evidence stays intact.
+    pub(crate) fn refresh_world_objects(&mut self, world: &HeadlessWorld) {
+        self.current.world_objects_by_id = world
+            .object_snapshots()
+            .into_iter()
+            .map(|object| (object.id.raw(), object))
+            .collect();
+    }
+
     pub fn try_publish_successful_tick(
         &mut self,
         tick_summaries: Vec<LiveBrainTickSummary>,

@@ -17,6 +17,7 @@ pub(super) fn capture_player_view(
     roots: bevy::prelude::Query<(&Fvr04ProductionCreatureVisualMarker, &Transform)>,
     players: bevy::prelude::Query<&bevy::prelude::AnimationPlayer>,
     surface: Res<creature_grounding::RenderedTerrainSurface>,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
     mut commands: Commands,
 ) {
     if !session.initialized {
@@ -49,12 +50,17 @@ pub(super) fn capture_player_view(
     };
     let receipt = serde_json::json!({
         "paused": ux.settings.paused, "elapsed_seconds": time.elapsed_secs_f64(),
+        "world_tick": frame.as_ref().map(|f| f.current.authoritative_world_tick.raw()),
+        "food": frame.as_ref().map(|f| f.current.objects().filter(|o| o.kind == WorldObjectKind::Food).map(|o| serde_json::json!({
+            "id":o.id.raw(), "position":[o.position.x,o.position.y,o.position.z], "consumed":o.consumed,
+        })).collect::<Vec<_>>()),
         "animation_players": players.iter().count(),
         "clip_times": players.iter().map(|p| p.playing_animations().map(|(_,a)| a.seek_time()).collect::<Vec<_>>()).collect::<Vec<_>>(),
         "creatures": roots.iter().map(|(v,t)| serde_json::json!({
             "stable_id":v.stable_id.raw(), "state":format!("{:?}",v.animation),
             "position":t.translation.to_array(), "rotation":t.rotation.to_array(),
             "ground_height":surface.height(t.translation),
+            "world_position":frame.as_ref().and_then(|f| f.current.object(v.stable_id)).map(|o| [o.position.x,o.position.y,o.position.z]),
         })).collect::<Vec<_>>()
     });
     let _ = fs::write(directory.join(format!("{name}.json")), receipt.to_string());
