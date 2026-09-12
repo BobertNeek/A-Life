@@ -1,6 +1,6 @@
 ---
 title: "A-Life Complete Organism and Intelligence Architecture"
-subtitle: "Version 2.0.1 CONTROLLING - Permanent Controlling Source of Truth and Compliance Standard"
+subtitle: "Version 2.0.2 CONTROLLING - Permanent Controlling Source of Truth and Compliance Standard"
 date: "11 September 2026"
 lang: en-CA
 ---
@@ -90,7 +90,7 @@ lang: en-CA
 
 # Document status
 
-**Status:** CONTROLLING. This document is the permanent controlling A-Life architecture. Revision 2.0.1, authorized on 11 September 2026, simplifies breeder-directed assimilation in section 32. Stable requirement IDs are retained; the updated requirements also appear in requirement_registry.csv.
+**Status:** CONTROLLING. This document is the permanent controlling A-Life architecture. Revision 2.0.2, authorized on 11 September 2026, prioritizes playable outcomes, makes prescribed methods replaceable, and defers advanced research and portability work. It retains revision 2.0.1's practical breed promotion. Stable requirement IDs are retained; updated categories and requirements also appear in requirement_registry.csv.
 
 **Authority:** This document is intended to supersede every earlier A-Life architecture, brain, runtime, biochemical, genetic, memory, teacher, evolution, and integration specification. Earlier documents remain historical design lineage only. They may explain how the project arrived here, but they do not override this document.
 
@@ -132,10 +132,10 @@ Each normative statement has a stable ID and one category:
 | Category | Meaning |
 |---|---|
 | **LOCKED GOAL** | Optimization objective or project purpose. Implementations are judged by whether they advance it. |
-| **LOCKED CAPABILITY** | Observable ability the system must possess. The mechanism may change. |
+| **LOCKED CAPABILITY** | Observable target ability. The mechanism may change; release scope determines when it is required. |
 | **LOCKED INVARIANT** | Rule no compliant implementation may violate. |
 | **LOCKED INTERFACE** | Semantic boundary between subsystems. Concrete data structures may change while meaning remains stable. |
-| **REFERENCE MECHANISM** | Favoured current design that may be replaced by evidence-backed alternatives satisfying the same locked requirements. |
+| **REFERENCE MECHANISM** | Suggested method, not an implementation obligation. Use a simpler method when it satisfies the required outcome. |
 | **TUNABLE DEFAULT** | Initial numeric or policy value expected to change through profiling, training, evolution, or experimentation. |
 | **DEFERRED CAPABILITY** | Required destination that is not necessarily an immediate implementation gate. |
 | **RESEARCH** | Promising optional mechanism not required for compliance. |
@@ -144,13 +144,13 @@ When requirements conflict, precedence is:
 
 1. locked invariants;
 2. locked interfaces;
-3. locked capabilities;
-4. locked goals;
+3. locked goals and explicit release scope;
+4. locked capabilities within that scope;
 5. reference mechanisms;
 6. tunable defaults;
 7. deferred and research items.
 
-A lower-precedence item may never be used to narrow or reinterpret a higher-precedence item. Implementation inconvenience does not amend architecture.
+Save integrity, individual continuity, bounded computation, and genuinely causal learning remain firm. Within those boundaries, playable outcomes govern scope and implementation choices. A long-term capability is not automatically a first-release gate. Deferral must be reported honestly; it does not count as implementing the deferred ability.
 
 **[AOA-ADM-001 | LOCKED INVARIANT]** This document is self-contained. A compliant implementation or reviewer must not need an earlier architecture document to determine intended subsystem behaviour.
 
@@ -166,6 +166,42 @@ A lower-precedence item may never be used to narrow or reinterpret a higher-prec
 
 **[AOA-ADM-007 | LOCKED INVARIANT]** Current languages, engines, libraries, processor placement, GPU layouts, brain-size classes, constants, adapters, and test fixtures are implementation mechanisms unless this document explicitly locks their semantics.
 
+### 1.1 Playable-release scope and proportional work
+
+Judge the playable game through ordinary player actions, not completion of this
+entire capability catalogue:
+
+- A creature can reach food, eat, rest, and recover through its body and chemistry.
+  Its needs and responses are legible to the player.
+- Teaching changes later unprompted behavior usefully, and learning is retained.
+- Saving and loading preserve the individual and its acquired state.
+- Breeding produces viable, distinct offspring with meaningful inherited variation.
+- The small breed-promotion path in section 32 preserves useful abilities and starts
+  fresh personal records without requiring a distillation project.
+- The supported population runs within a stated practical performance budget.
+
+First establish the care, learning, and save/load loop. Then complete breeding and
+practical breed promotion for the breeding-focused release. A first-playable
+milestone does not require every release item at once. Claims of research-scale
+intelligence or superiority to C3 require separate evidence, not extra gates on
+unrelated gameplay repairs.
+
+Training methods, memory layouts, growth algorithms, and concrete interface types
+are replaceable implementation choices. Preserve useful semantics without requiring
+a new abstraction, schema, receipt, or subsystem for every distinction. Working
+systems need no rewrite merely because a reference design changes.
+
+Use the smallest existing check capable of revealing a relevant failure. Focused
+behavior and save/load checks can establish a small gameplay change. Full ablations,
+population studies, long soaks, and comprehensive compliance matrices belong to
+milestones or specific research claims. Reuse valid evidence until relevant code or
+configuration changes. Diagnostics do not authorize continual test-infrastructure
+expansion.
+
+Robot transplantation, mature-brain enlargement, automatic natural assimilation,
+cohort distillation, and shared-SLM infrastructure do not block the playable game.
+When used, they still obey applicable identity, integrity, and authority boundaries.
+
 ## 2. Project objectives
 
 **[AOA-GOAL-001 | LOCKED GOAL]** Develop artificial animals capable of increasingly general lifelong learning, grounded prediction, memory, concept formation, social learning, planning, communication, and transfer.
@@ -178,7 +214,7 @@ A lower-precedence item may never be used to narrow or reinterpret a higher-prec
 
 **[AOA-GOAL-005 | LOCKED GOAL]** Use biologically inspired mechanisms when they improve intelligence, efficiency, robustness, evolvability, individuality, or game value; biological resemblance is never an end in itself.
 
-**[AOA-GOAL-006 | LOCKED GOAL]** Support extraction, enlargement, transplantation, and reuse of mature cognitive cores in other games, software environments, and embodied robots.
+**[AOA-GOAL-006 | DEFERRED CAPABILITY]** Support extraction, enlargement, transplantation, and reuse of mature cognitive cores in other games, software environments, and embodied robots as a long-term capability, not a playable-release prerequisite.
 
 **[AOA-GOAL-007 | LOCKED GOAL]** Keep the architecture inspectable and falsifiable so that apparent intelligence can be attributed to the creature rather than hidden host code, teachers, SLMs, or benchmark leakage.
 
@@ -356,7 +392,7 @@ Development is not a one-time constructor. It is an explicit state machine or co
 
 **[AOA-DEV-004 | LOCKED INVARIANT]** Biochemical signals may gate or modulate development, but biochemistry does not directly rewrite cognitive policy. It triggers genetically defined developmental responses.
 
-**[AOA-DEV-005 | LOCKED CAPABILITY]** Natural developmental brain growth and deliberate mature-brain augmentation use the same function-preserving graph-migration substrate with different policies.
+**[AOA-DEV-005 | REFERENCE MECHANISM]** Developmental brain growth and mature-brain augmentation may share a migration substrate where reuse is useful. A common engine is not required.
 
 **[AOA-DEV-006 | LOCKED CAPABILITY]** Critical periods may alter plasticity, structural growth, receptor expression, teacher responsiveness, or region recruitment without making mature learning impossible by default.
 
@@ -506,7 +542,7 @@ The adaptive brain receives grounded sensory and interoceptive evidence, remembe
 
 **[AOA-BRAIN-001 | LOCKED INVARIANT]** Adaptive neural compute is reserved for functions that materially benefit from learning, prediction, memory, context, generalization, arbitration, communication, or flexible control.
 
-**[AOA-BRAIN-002 | LOCKED CAPABILITY]** The brain supports sparse recurrent dynamics, nonlinear dendritic computation, local plasticity, predictive learning, attention, memory interfaces, semantic topology, factorized action selection, and structural plasticity.
+**[AOA-BRAIN-002 | LOCKED CAPABILITY]** The brain supports recurrent processing, local plasticity, predictive learning, attention, memory, concept relationships, coordinated action selection, and adaptation. Concrete neural mechanisms are replaceable when they preserve these capabilities within the compute budget.
 
 **[AOA-BRAIN-003 | LOCKED INVARIANT]** No region name dispatches a handwritten cognitive algorithm. Region function emerges from connectivity, ports, dynamics, chemistry, plasticity, development, training, and experience.
 
@@ -534,7 +570,7 @@ where \(\alpha\) is susceptibility or mixing, not a fourth additive memory.
 
 **[AOA-BRAIN-009 | LOCKED CAPABILITY]** Neurons or projections may use different intrinsic time constants, update cadences, receptor profiles, plasticity classes, and metabolic costs.
 
-**[AOA-BRAIN-010 | LOCKED CAPABILITY]** Selected neurons support nonlinear within-neuron conjunction computation through bounded dendritic branches or an evidence-backed equivalent.
+**[AOA-BRAIN-010 | REFERENCE MECHANISM]** Bounded dendritic branches are one way to learn nonlinear conjunctions. Use them when they improve capability or efficiency; simpler neural methods are permitted.
 
 **[AOA-BRAIN-011 | LOCKED INVARIANT]** Dendritic execution is indexed by target or another sparse equivalent. It may not scan every branch for every neuron.
 
@@ -823,7 +859,7 @@ cognitive goal and factorized intention
 
 **[AOA-EMB-003 | LOCKED INVARIANT]** The embodiment adapter may not infer or choose semantic goals on behalf of the cognitive core.
 
-**[AOA-EMB-004 | LOCKED CAPABILITY]** A transplanted brain can discover a new embodiment through exploration, prediction, teacher guidance, and safe calibration rather than requiring hardcoded assumptions such as two legs or a forward camera.
+**[AOA-EMB-004 | DEFERRED CAPABILITY]** A transplanted brain can discover a new embodiment through exploration, prediction, teacher guidance, and safe calibration rather than requiring hardcoded assumptions such as two legs or a forward camera.
 
 **[AOA-EMB-005 | LOCKED INTERFACE]** Sensor and motor port descriptors are stable, typed, capability-oriented, versioned, and discoverable by the organism.
 
@@ -878,29 +914,29 @@ A trained individual may grow naturally during development or be deliberately en
 
 *Figure 6. Quiescent migration from one graph epoch to another with acclimation, continuity verification, and rollback.*
 
-The old brain dynamics are embedded in the expanded brain. If the old recurrent update is \(F\), the new update is \(F'\), the embedding is \(P\), and the reduction map is \(R\), then the continuity target is:
+One optional reference approach embeds old brain dynamics in the expanded brain. These equations guide that approach, not every implementation. If the old recurrent update is \(F\), the new update is \(F'\), the embedding is \(P\), and the reduction map is \(R\), then the continuity target is:
 
 ```text
 R·P = I;    F'(P·x, u) ≈ P·F(x, u)
 ```
 
-For a locally linear regime, the recurrent Jacobians should satisfy \(J'P \approx PJ\). New transverse modes begin stable, silent, or contractive.
+For that reference approach in a locally linear regime, the recurrent Jacobians should satisfy \(J'P \approx PJ\). New transverse modes begin stable, silent, or contractive.
 
-**[AOA-GROW-001 | LOCKED CAPABILITY]** Both gradual developmental growth and deliberate mature augmentation use one function-preserving migration engine with mode-specific scheduling and safety policy.
+**[AOA-GROW-001 | DEFERRED CAPABILITY]** A trained brain can be deliberately enlarged while retaining useful competence and individual continuity. Developmental growth and mature augmentation need not use one common engine.
 
 **[AOA-GROW-002 | LOCKED INVARIANT]** Expansion occurs at a quiescent cognitive transaction boundary after pending action credit, weight-bank transactions, and replay state are committed or explicitly discarded.
 
 **[AOA-GROW-003 | LOCKED INVARIANT]** Existing trained neurons, routes, memory anchors, concepts, predictor state, and learned dynamics remain the anchored core. Expansion does not randomly rebuild the old brain.
 
-**[AOA-GROW-004 | LOCKED CAPABILITY]** Allowed reference morphisms include silent neuron addition, neuron duplication with conserved contribution, common-mode-preserving recurrent blocks, zero-gain routes, dormant dendrites, residual identity paths, and self-distillation into new capacity.
+**[AOA-GROW-004 | REFERENCE MECHANISM]** Candidate growth methods include silent neuron addition, neuron duplication, zero-gain routes, dormant dendrites, residual paths, and self-distillation. None is individually mandatory.
 
-**[AOA-GROW-005 | LOCKED INVARIANT]** Neuron duplication preserves aggregate downstream drive and recurrent common modes while newly introduced difference modes begin stable or contractive.
+**[AOA-GROW-005 | REFERENCE MECHANISM]** When duplicating neurons, preserving aggregate downstream drive and starting new modes stable or contractive is a useful way to protect learned behavior.
 
-**[AOA-GROW-006 | LOCKED CAPABILITY]** Additional capacity is recruited gradually through prediction of old regional state, residual-error learning, local self-distillation, and staged release of plasticity.
+**[AOA-GROW-006 | REFERENCE MECHANISM]** Additional capacity may be recruited through prediction of old regional state, residual-error learning, self-distillation, or staged plasticity. Choose a method proportionate to the growth being implemented.
 
-**[AOA-GROW-007 | LOCKED INVARIANT]** The enlarged brain must approximate the original brain's immediate behaviour and representative internal trajectories before new capacity is allowed to change policy substantially.
+**[AOA-GROW-007 | LOCKED INVARIANT]** Enlargement preserves individual continuity and established useful skills before new capacity changes behavior substantially. Exact internal trajectories are not required when focused behavioral and state-integrity checks are sufficient.
 
-**[AOA-GROW-008 | LOCKED CAPABILITY]** Every growth operation produces a pre-migration checkpoint, logical/physical map, graph-epoch manifest, added-neuron provenance, continuity receipt, and rollback path.
+**[AOA-GROW-008 | LOCKED CAPABILITY]** When growth changes persisted brain structure, retain enough prior state and mapping information to restore or roll back safely. Reuse existing checkpoint and provenance formats; separate receipt types for every growth operation are not required.
 
 **[AOA-GROW-009 | LOCKED INVARIANT]** Somatic augmentation does not alter offspring until explicit genetic assimilation creates a new germline prior or developmental allele.
 
@@ -922,7 +958,7 @@ Privileged offline training may use gradients, labels, demonstrations, large tea
 
 **[AOA-FOUND-004 | LOCKED INVARIANT]** Founder training varies worlds, object identities, curricula, embodiments, and sensor mappings enough to reduce benchmark or world memorization.
 
-**[AOA-FOUND-005 | LOCKED CAPABILITY]** Training uses a nested outer loop that optimizes initial priors and how the creature learns during legal inner lifetimes.
+**[AOA-FOUND-005 | REFERENCE MECHANISM]** Nested meta-training is one option for improving initial priors and lifetime learning. Select the least costly method that produces capable, adaptable founders without hidden runtime assistance.
 
 **[AOA-FOUND-006 | LOCKED INVARIANT]** Inner lifetimes inside meta-training use the same causal organism step, local plasticity, memory, chemistry, motor, sleep, and structural mechanisms available after deployment.
 
@@ -932,7 +968,7 @@ Privileged offline training may use gradients, labels, demonstrations, large tea
 
 ## 28. Shared semantic-prior service
 
-The shared SLM supplies compressed general semantic relationships that small creature brains would otherwise spend excessive compute rediscovering. It is external infrastructure, not one of the biological systems and not the creature's executive system.
+An optional shared SLM supplies compressed general semantic relationships that small creature brains would otherwise spend excessive compute rediscovering. It is external infrastructure, not one of the biological systems and not the creature's executive system.
 
 **[AOA-SLM-001 | LOCKED INTERFACE]** Semantic-prior requests contain bounded language or symbol context, a small set of active grounded concepts, model/interface version, and budget metadata.
 
@@ -942,11 +978,11 @@ The shared SLM supplies compressed general semantic relationships that small cre
 
 **[AOA-SLM-004 | LOCKED INVARIANT]** A semantic hint is nonauthoritative. The creature must ground, accept, reject, revise, or ignore it through its own cognition and experience.
 
-**[AOA-SLM-005 | LOCKED CAPABILITY]** One shared service supports many organisms through caching, batching, event-triggering, and explicit token/latency budgets.
+**[AOA-SLM-005 | REFERENCE MECHANISM]** If a semantic-prior service is used, share it across organisms and bound its cost through suitable caching, batching, or event-triggering. Shipping such a service is not required for the playable game.
 
 **[AOA-SLM-006 | LOCKED CAPABILITY]** A mature creature retains substantial nonlinguistic intelligence and grounded competence when the semantic-prior service is disabled.
 
-**[AOA-SLM-007 | LOCKED CAPABILITY]** Breed genetics may evolve how much capacity and attention are allocated to semantic-prior integration without inheriting or duplicating the external model weights.
+**[AOA-SLM-007 | DEFERRED CAPABILITY]** Breed genetics may evolve how much capacity and attention are allocated to semantic-prior integration without inheriting or duplicating the external model weights.
 
 ## 29. Teacher system
 
@@ -1022,7 +1058,7 @@ The first playable version retains compatible skill-bearing weights, general con
 
 Playable care, teaching, capable founders, and retained skills take priority over absolute biological fidelity. The care loop comes first; breed promotion follows as a small reuse of foundation and archive paths. Future embodied intelligence and investigation of subjective experience remain research aims, not claims of demonstrated qualia or release gates.
 
-**[AOA-ASSIM-001 | LOCKED CAPABILITY]** Natural assimilation can gradually alter developmental growth, receptor expression, connectivity affinities, plasticity, regional allocation, and small reusable motifs.
+**[AOA-ASSIM-001 | DEFERRED CAPABILITY]** Natural assimilation can gradually alter developmental growth, receptor expression, connectivity affinities, plasticity, regional allocation, and reusable motifs. It is separate from practical player-directed breed promotion in section 32.2.
 
 **[AOA-ASSIM-002 | LOCKED INVARIANT]** Natural assimilation is rare, lineage-level, information-budgeted, and does not publish a large new prior at every birth.
 
