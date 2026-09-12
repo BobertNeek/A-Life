@@ -371,18 +371,13 @@ impl GpuSleepScheduler {
     ) -> Result<Option<SleepTransition>, ScaffoldContractError> {
         let phase = self.controller.state().phase;
         if phase == SleepPhase::Awake {
-            if input.energy <= 0.20 {
-                self.controller
-                    .force_sleep(tick, SleepTrigger::RecoveryProtocol)
-                    .map(Some)
-            } else {
-                self.controller
-                    .evaluate_homeostasis(&input.homeostasis, parameters, tick)
-            }
+            // Food restores body reserves; sleep restores fatigue and neural readiness.
+            // A hungry organism must remain able to wake and seek food.
+            self.controller
+                .evaluate_homeostasis(&input.homeostasis, parameters, tick)
         } else if phase == SleepPhase::Waking {
             let config = self.controller.config();
-            let wake_ready = input.energy >= 0.35
-                && input.homeostasis.drives.fatigue < config.fatigue_threshold.raw()
+            let wake_ready = input.homeostasis.drives.fatigue < config.fatigue_threshold.raw()
                 && input.homeostasis.hormones.sleep_pressure
                     < config.sleep_pressure_threshold.raw();
             if wake_ready {

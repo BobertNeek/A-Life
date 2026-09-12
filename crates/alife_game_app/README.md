@@ -20,6 +20,10 @@ before treating the trace as complete; multiple simulation ticks can occur
 between rendered frames. This uses existing presentation data, with no extra
 neural readback.
 
+Sleep readiness follows fatigue, sleep pressure, and neural recovery. Low food
+reserves alone do not force sleep or prevent waking, so a hungry creature can
+resume feeding after consolidation.
+
 ## Production path
 
 The launcher uses an optimized release build by default. The first build compiles

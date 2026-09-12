@@ -362,6 +362,10 @@ fn newborn_record(organism_id: u64) -> WorldOrganismRecord {
 }
 
 fn awake_record(organism_id: u64) -> WorldOrganismRecord {
+    awake_record_with_energy(organism_id, 1.0)
+}
+
+fn awake_record_with_energy(organism_id: u64, energy: f32) -> WorldOrganismRecord {
     let genome = CreatureGenome::early_mammal_founder(
         0xE12_0000 + organism_id,
         FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
@@ -371,7 +375,7 @@ fn awake_record(organism_id: u64) -> WorldOrganismRecord {
     let adult_tick = Tick::new(u64::from(phenotype.development.maturation_duration_ticks));
     let mut biochemistry =
         BiochemistryState::new_with_age(&phenotype, adult_tick, adult_tick).unwrap();
-    biochemistry.body.set_energy(1.0).unwrap();
+    biochemistry.body.set_energy(energy).unwrap();
     WorldOrganismRecord::new(
         OrganismId(organism_id),
         WorldEntityId(200 + organism_id),
@@ -381,6 +385,50 @@ fn awake_record(organism_id: u64) -> WorldOrganismRecord {
         Tick::ZERO,
     )
     .unwrap()
+}
+
+#[test]
+fn hungry_creature_wakes_after_recovery_and_stays_available_to_feed() {
+    let mut organism = awake_record_with_energy(14, 0.1);
+    let start = organism
+        .authoritative_sleep_input()
+        .unwrap()
+        .biological_tick
+        .raw();
+    let config = SleepConsolidationConfig {
+        forced_recovery_min_duration: alife_core::DurationTicks::new(1),
+        waking_duration: alife_core::DurationTicks::new(1),
+        ..SleepConsolidationConfig::reference()
+    };
+    let mut scheduler = GpuSleepScheduler::new(config).unwrap();
+    let mut driver = RecordingConsolidationDriver::with_phase_data(OrganismId(14), false);
+    scheduler.force_recovery_sleep(Tick::new(start)).unwrap();
+    let mut awake_ticks = 0;
+    for raw in start + 1..=start + 24 {
+        let event = scheduler
+            .scheduled_tick_with_organism(
+                &mut organism,
+                HomeostaticParameters::reference(),
+                Tick::new(raw),
+                &mut driver,
+                false,
+            )
+            .unwrap();
+        assert!(organism.authoritative_sleep_input().unwrap().energy < 0.20);
+        if event.phase == SleepPhase::Awake {
+            awake_ticks += 1;
+        } else {
+            assert_eq!(
+                awake_ticks, 0,
+                "hunger must not immediately force sleep again"
+            );
+        }
+    }
+    assert!(
+        awake_ticks >= 2,
+        "completed recovery must let a hungry creature wake and feed"
+    );
+    assert_eq!(driver.intents().len(), 1);
 }
 
 #[test]
