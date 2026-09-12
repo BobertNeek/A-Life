@@ -18,15 +18,15 @@ use bytemuck::Zeroable;
 
 use crate::{
     phenotype_hash_from_gpu_words, split_u64x2, GpuActivityDispatchHeader, GpuBrainSlot,
-    GpuCandidateMemoryRecord, GpuCognitiveProjectionRecord, GpuCandidateRecord,
-    GpuClassBucketBuffers, GpuClosedLoopError,
-    GpuEligibilityDiscardRecord, GpuFastPlasticityCommitRecord, GpuFixedClassArenaBuffers,
-    GpuLearningHeader, GpuMemoryContextDispatchReceipt, GpuMemoryContextHeader,
-    GpuMemoryContextUpload, GpuNeuralReceptorEffectsRecord, GpuOutcomeCreditRecord,
-    GpuPendingEligibilityRecord, GpuPerceptionHeader, GpuPerceptionUpload, GpuSelectionRecord,
-    GpuSpeechPayloadRecord, CLOSED_LOOP_ELIGIBILITY_WGSL, CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
-    GPU_CLOSED_LOOP_TICK_READBACK_BYTES, GPU_FAST_PLASTICITY_COMMIT_BYTES,
-    GPU_FAST_PLASTICITY_COMMIT_WORDS, GPU_LEARNING_HEADER_WORDS, GPU_OUTCOME_CREDIT_WORDS,
+    GpuCandidateMemoryRecord, GpuCandidateRecord, GpuClassBucketBuffers, GpuClosedLoopError,
+    GpuCognitiveProjectionRecord, GpuEligibilityDiscardRecord, GpuFastPlasticityCommitRecord,
+    GpuFixedClassArenaBuffers, GpuLearningHeader, GpuMemoryContextDispatchReceipt,
+    GpuMemoryContextHeader, GpuMemoryContextUpload, GpuNeuralReceptorEffectsRecord,
+    GpuOutcomeCreditRecord, GpuPendingEligibilityRecord, GpuPerceptionHeader, GpuPerceptionUpload,
+    GpuSelectionRecord, GpuSpeechPayloadRecord, CLOSED_LOOP_ELIGIBILITY_WGSL,
+    CLOSED_LOOP_MEMORY_CONTEXT_WGSL, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
+    GPU_FAST_PLASTICITY_COMMIT_BYTES, GPU_FAST_PLASTICITY_COMMIT_WORDS, GPU_LEARNING_HEADER_WORDS,
+    GPU_OUTCOME_CREDIT_WORDS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -817,12 +817,24 @@ impl GpuActiveBatchUpload {
             } else {
                 0
             };
+            let cognitive_record_words = memory_upload
+                .as_ref()
+                .map(|memory| {
+                    memory
+                        .cognitive_records
+                        .len()
+                        .checked_mul(crate::GPU_COGNITIVE_PROJECTION_RECORD_WORDS)
+                        .ok_or(GpuClosedLoopError::ArithmeticOverflow)
+                })
+                .transpose()?
+                .unwrap_or(0);
             let payload_end = frame_payload_words
                 .len()
                 .checked_add(upload.frame_payload_words.len())
                 .and_then(|value| value.checked_add(candidate_digest_words))
                 .and_then(|value| value.checked_add(crate::GPU_PENDING_ELIGIBILITY_WORDS))
                 .and_then(|value| value.checked_add(memory_record_words))
+                .and_then(|value| value.checked_add(cognitive_record_words))
                 .and_then(|value| value.checked_add(neural_receptor_effects_words))
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
             if payload_end > GPU_REQUIRED_MAX_BUFFER_WORDS
@@ -893,11 +905,8 @@ impl GpuActiveBatchUpload {
                     .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
                 let neural_receptor_effects_offset = cognitive_projection_offset
                     .checked_add(
-                        u32::try_from(
-                            memory.cognitive_records.len()
-                                * crate::GPU_COGNITIVE_PROJECTION_RECORD_WORDS,
-                        )
-                        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
+                        u32::try_from(cognitive_record_words)
+                            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
                     )
                     .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
                 let receipt = memory.rebase_for_batch(
@@ -4615,8 +4624,8 @@ fn validate_dispatch(
                             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
                             * crate::GPU_COGNITIVE_PROJECTION_RECORD_WORDS;
                     let record = GpuCognitiveProjectionRecord::from_words(
-                        &batch.frame_payload_words
-                            [record_start..record_start + crate::GPU_COGNITIVE_PROJECTION_RECORD_WORDS],
+                        &batch.frame_payload_words[record_start
+                            ..record_start + crate::GPU_COGNITIVE_PROJECTION_RECORD_WORDS],
                     )?;
                     if record.candidate_index != candidate_index
                         || record.reserved != 0

@@ -5393,7 +5393,12 @@ fn sync_v0_player_status_chip(
     } else {
         String::new()
     };
-    let text = format!("{} creatures{playback}", scene.creature_render_count);
+    let noun = if scene.creature_render_count == 1 {
+        "creature"
+    } else {
+        "creatures"
+    };
+    let text = format!("{} {noun}{playback}", scene.creature_render_count);
     for mut chip in &mut chips {
         chip.0 = text.clone();
     }
@@ -5427,9 +5432,14 @@ fn sync_v0_player_creature_panel(
 
 fn sync_v0_player_control_strip(
     ux: Res<Fvr05ProductionUxStateResource>,
+    #[cfg(feature = "gpu-runtime")] authority: Option<Res<ProductionGpuBrainAuthorityResource>>,
     mut strips: bevy::prelude::Query<&mut Text, With<V0PlayerControlStrip>>,
 ) {
-    if !ux.is_changed() {
+    #[cfg(feature = "gpu-runtime")]
+    let authority_changed = authority.as_ref().is_some_and(|state| state.is_changed());
+    #[cfg(not(feature = "gpu-runtime"))]
+    let authority_changed = false;
+    if !ux.is_changed() && !authority_changed {
         return;
     }
     let mut text = if ux.show_help {
@@ -5440,7 +5450,15 @@ fn sync_v0_player_control_strip(
     if ux.debug_mode {
         text.push_str(" | F3 Exit debug");
     }
-    if ux.last_error.is_some() {
+    #[cfg(feature = "gpu-runtime")]
+    let simulation_failed = authority.as_ref().is_some_and(|state| {
+        !state.telemetry.authoritative && state.telemetry.unavailable_reason.is_some()
+    });
+    #[cfg(not(feature = "gpu-runtime"))]
+    let simulation_failed = false;
+    if simulation_failed {
+        text.push_str("\nSimulation stopped. F3 for details.");
+    } else if ux.last_error.is_some() {
         text.push_str("\nAction failed. F3 for details.");
     } else {
         #[cfg(feature = "gpu-runtime")]

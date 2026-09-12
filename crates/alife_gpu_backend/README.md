@@ -8,6 +8,10 @@ readback receipts. The world owns legality and measured outcomes. Production
 neural execution has no live CPU shadow, parity-gated handoff, or automatic CPU
 neural fallback.
 
+Active upload sizing includes perception, candidate digests, eligibility,
+episodic memory, cognitive records, and neural receptor effects. Cognitive
+records must be counted before capacity checks and final payload validation.
+
 ## Historical P25 diagnostic
 
 The retired P25 static-forward parity implementation, shader, timing report,

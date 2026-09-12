@@ -771,7 +771,10 @@ impl GpuLiveBrainRuntime {
                         &prepared.memory_upload,
                     )
                 })
-                .collect::<Result<Vec<_>, _>>()?;
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| GameAppShellError::InvalidProductionFrontend {
+                    message: format!("neural input preparation failed: {error}"),
+                })?;
             let memory_batch = GpuClosedLoopMemoryBatchInput::try_new(memory_inputs)?;
             let inference_rows = u64::try_from(batch.len()).unwrap_or(u64::MAX);
             let inference_started = Instant::now();
@@ -782,7 +785,12 @@ impl GpuLiveBrainRuntime {
                 &batch,
             )?;
             #[cfg(not(all(test, feature = "gpu-tests")))]
-            let gpu_ticks = self.backend.tick_memory_batch(&memory_batch)?;
+            let gpu_ticks = self
+                .backend
+                .tick_memory_batch(&memory_batch)
+                .map_err(|error| GameAppShellError::InvalidProductionFrontend {
+                    message: format!("neural execution failed: {error}"),
+                })?;
             self.performance_metrics.inference_batches =
                 self.performance_metrics.inference_batches.saturating_add(1);
             self.performance_metrics.inference_rows = self
@@ -800,7 +808,10 @@ impl GpuLiveBrainRuntime {
             }
             self.record_gpu_tick_metrics(&gpu_ticks)?;
             let rows = batch.into_iter().zip(gpu_ticks).collect();
-            self.process_selection_batch_in_staged_tick(rows)?
+            self.process_selection_batch_in_staged_tick(rows)
+                .map_err(|error| GameAppShellError::InvalidProductionFrontend {
+                    message: format!("selected action processing failed: {error}"),
+                })?
         };
         for summary in awake_summaries {
             summaries_by_organism.insert(summary.organism_id.raw(), summary);

@@ -19,6 +19,32 @@ Launch the current player-facing frontend on Windows:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
 ```
 
+The bundled default save currently fails migration because it lacks the genetic
+biochemical graph. New Game also needs a compatible environment manifest for
+its configuration and assets. With one available, build and run:
+
+```powershell
+cargo build -p alife_game_app --features production-voxel-frontend --bin alife_game_app
+.\target\debug\alife_game_app.exe production-voxel --manifest <compatible-environment-manifest.json> --new-game --seed 96002 --population 1 --graphics-backend vulkan --require-gpu
+```
+
+New Game accepts 1–8 creatures, including a single-creature care test. Windows MSVC builds reserve a 16 MiB
+main-thread stack for loading the production world. Dev builds omit debug
+symbols for `wgpu-hal` and this crate to avoid observed Rust 1.96/LLVM 22 Windows
+code-generation crashes; debug assertions remain enabled.
+
+The 2026-09-12 playtest found and repaired an omitted cognitive-record size in
+GPU upload preparation. The single-creature Vulkan run then executed neural
+actions, moved, saved at tick 49, reloaded through the game control, and continued
+running. Help, pause/resume, ground selection, and debug controls also worked.
+Results were checked through in-engine captures because Windows capture failed.
+Normal play now reports simulation failure instead of hiding it in debug mode.
+
+The full care loop remains unaccepted. Food placement and its presentation need
+further work, including the mapping from simulation coordinates to rendered
+ground. Speech is untested. The retained September 8 learned save still fails
+cognitive-snapshot decoding (`motor_condition_magnitude` is missing).
+
 Build its local package with:
 
 ```powershell

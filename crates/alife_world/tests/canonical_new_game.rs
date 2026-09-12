@@ -19,7 +19,7 @@ fn canonical_new_game_creates_exact_requested_population() {
     let foundation =
         FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
 
-    for population in [4, 6, 8] {
+    for population in [1, 4, 6, 8] {
         let game = create_canonical_new_game(
             &CanonicalNewGameConfig::phase3(240_824, population).unwrap(),
             &foundation,
@@ -38,7 +38,7 @@ fn canonical_new_game_creates_exact_requested_population() {
 
 #[test]
 fn canonical_new_game_rejects_population_outside_phase3_bounds() {
-    assert!(CanonicalNewGameConfig::phase3(1, 3).is_err());
+    assert!(CanonicalNewGameConfig::phase3(1, 0).is_err());
     assert!(CanonicalNewGameConfig::phase3(1, 9).is_err());
     assert!(CanonicalNewGameConfig::phase3(0, 6).is_err());
 }

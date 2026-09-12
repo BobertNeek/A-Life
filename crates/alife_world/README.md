@@ -2,6 +2,9 @@
 
 Bevy-independent world and ecology contracts.
 
+Canonical New Game accepts 1–8 founders. A single founder supports a focused
+creature-care playtest; the default population remains six.
+
 This crate should define authoritative world-side legality, sensory extraction interfaces, organism/world concepts, and future headless harness boundaries. It may depend on `alife_core` but should not become the Bevy ECS adapter.
 
 Habitat authority stores one deterministic habitat membership per creature and

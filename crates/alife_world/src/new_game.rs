@@ -12,7 +12,7 @@ use crate::{
 
 pub const PHASE3_NEW_GAME_SCHEMA_VERSION: u16 = 1;
 pub const PHASE3_DEFAULT_POPULATION: u16 = 6;
-pub const PHASE3_MIN_POPULATION: u16 = 4;
+pub const PHASE3_MIN_POPULATION: u16 = 1;
 pub const PHASE3_MAX_POPULATION: u16 = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

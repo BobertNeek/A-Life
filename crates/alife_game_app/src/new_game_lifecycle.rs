@@ -215,6 +215,16 @@ fn create_canonical_new_game_runtime_inner(
 fn validate_stage_request(
     request: &CanonicalNewGameLaunchRequest,
 ) -> Result<(), GameAppShellError> {
+    if !(alife_world::PHASE3_MIN_POPULATION..=alife_world::PHASE3_MAX_POPULATION)
+        .contains(&request.population)
+    {
+        return Err(invalid_launch(&format!(
+            "New Game requires {} to {} creatures; requested {}",
+            alife_world::PHASE3_MIN_POPULATION,
+            alife_world::PHASE3_MAX_POPULATION,
+            request.population,
+        )));
+    }
     request.config.validate()?;
     if request.save_path.as_os_str().is_empty() || request.asset_root.as_os_str().is_empty() {
         return Err(invalid_launch("save path and asset root are required"));
