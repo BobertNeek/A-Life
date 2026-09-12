@@ -6920,6 +6920,13 @@ impl GpuLiveBrainRuntime {
         self.retained_learning.remove(&raw);
         self.pending_recovery_sleep_edges.remove(&raw);
         let (final_record, _) = self.world.retire_dead_organism(organism_id)?;
+        // Archive completion supersedes unpublished live sleep transitions.
+        // Workers already publishing an older checkpoint retain their inputs.
+        self.pending_sleep_journal_entries
+            .retain(|entry| entry.organism_id != organism_id);
+        self.pending_exact_sleep_journal_entries
+            .retain(|entry| entry.organism_id != organism_id);
+        self.sleep_journal_neural_authorities.remove(&raw);
         self.presentation_retirements
             .insert(final_record.world_entity_id().raw());
         if !self.retain_sealed_patch_history {

@@ -149,7 +149,20 @@ fn organism_allocator_round_trip_preserves_retired_high_id_and_legacy_derives_ma
     dead.link_life_manifest(Blake3Digest::from_bytes([2; 32]))
         .unwrap();
     current.register_organism_record(dead).unwrap();
+    let mut habitats = current.habitat_authority().clone();
+    habitats
+        .register_creature(
+            OrganismId(900),
+            alife_world::HabitatId::DEFAULT_WILD,
+            Tick::ZERO,
+        )
+        .unwrap();
+    current.replace_habitat_authority(habitats).unwrap();
     current.retire_dead_organism(OrganismId(900)).unwrap();
+    assert!(current
+        .habitat_authority()
+        .membership(OrganismId(900))
+        .is_none());
 
     let current_save = save(&current);
     assert_eq!(current_save.world.next_organism_id, 901);

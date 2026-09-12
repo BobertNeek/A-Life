@@ -1393,6 +1393,7 @@ impl HeadlessWorld {
             .remove(&object.id.raw())
             .ok_or(ScaffoldContractError::InvalidId)?;
         candidate.detach_carried_objects(organism_id);
+        candidate.habitats.retire_creature(organism_id);
         candidate.labels.remove(&final_object.label);
         candidate
             .last_touched_entities

@@ -483,6 +483,11 @@ impl GpuLiveBrainRuntime {
         replacement: &mut PortableSaveFile,
     ) -> Result<(), GameAppShellError> {
         let live_ids = self.handles.keys().copied().collect::<BTreeSet<_>>();
+        replacement.creatures.retain(|creature| {
+            !self
+                .archive_retirement_receipts
+                .contains_key(&creature.organism_id.raw())
+        });
         for raw in live_ids {
             if replacement
                 .creatures

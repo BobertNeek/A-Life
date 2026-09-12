@@ -777,6 +777,52 @@ fn n2048_to_n4096_growth_is_same_adapter_equivalent_and_atomic() {
 }
 
 #[test]
+fn empty_population_checkpoint_preserves_identity_without_gpu_copies() {
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
+    let handle = backend
+        .insert_brain(
+            alife_core::OrganismId(5_107),
+            support::controlled_learning_n512_phenotype(1.0),
+        )
+        .unwrap();
+    // Empty requests cannot silently omit an existing resident.
+    assert!(backend
+        .submit_exact_population_capture(Tick::new(100), 1, &[])
+        .is_err());
+    backend.remove_brain(handle).unwrap();
+    let mut ticket = backend
+        .submit_exact_population_capture(Tick::new(100), 1, &[])
+        .unwrap();
+    assert_eq!(ticket.gpu_copy_submissions(), 0);
+    assert_eq!(ticket.map_operations(), 0);
+    assert_eq!(ticket.staging_bytes(), 0);
+    let GpuExactPopulationCapturePollV1::Ready(capture) =
+        backend.poll_exact_population_capture(&mut ticket).unwrap()
+    else {
+        panic!("empty capture must complete immediately");
+    };
+    assert_eq!(capture.checkpoint_tick(), Tick::new(100));
+    assert_eq!(capture.capture_transaction_generation(), 1);
+    assert!(capture.rows().is_empty());
+    assert_eq!(
+        backend
+            .exact_population_capture_metrics()
+            .gpu_copy_submissions,
+        0
+    );
+    assert_eq!(backend.exact_population_capture_metrics().map_operations, 0);
+    assert!(backend.poll_exact_population_capture(&mut ticket).is_err());
+    assert!(backend
+        .submit_exact_population_capture(Tick::new(101), 1, &[])
+        .is_err());
+    assert!(backend
+        .submit_exact_population_capture(Tick::new(101), 2, &[])
+        .is_ok());
+}
+
+#[test]
 fn exact_population_capture_is_one_nonblocking_identity_bound_gpu_transaction() {
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
     let organisms = [alife_core::OrganismId(5_105), alife_core::OrganismId(5_106)];

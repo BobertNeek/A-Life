@@ -628,6 +628,15 @@ impl GpuLiveBrainRuntime {
                         Vec::with_capacity(journal_commit.authorities.len());
                     for (organism_id_raw, _) in &journal_commit.authorities {
                         let Some(handle) = self.handles.get(organism_id_raw).copied() else {
+                            // The worker owns an immutable pre-death checkpoint.
+                            // Its durable journal needs no live cache refresh
+                            // after this organism has been archived and retired.
+                            if self
+                                .archive_retirement_receipts
+                                .contains_key(organism_id_raw)
+                            {
+                                continue;
+                            }
                             self.exact_checkpoint_coordinator.fail_stop();
                             self.exact_checkpoint_work =
                                 ExactPopulationCheckpointRuntimeWorkV1::Failed;

@@ -47,6 +47,47 @@ fn tag_for_reserve(authority: &mut HabitatAuthority, organism_id: OrganismId) {
 }
 
 #[test]
+fn retired_ledger_gaps_preserve_surviving_receipt_ids() {
+    let mut authority = HabitatAuthority::new(habitats()).unwrap();
+    for id in [organism(11), organism(12)] {
+        authority
+            .register_creature(id, habitat(1), Tick::ZERO)
+            .unwrap();
+        tag_for_reserve(&mut authority, id);
+        authority
+            .transfer(HabitatTransferRequest {
+                organism_id: id,
+                expected_prior_habitat_id: habitat(1),
+                new_habitat_id: habitat(2),
+                tick: Tick::new(10),
+                provenance: complete_provenance(),
+            })
+            .unwrap();
+    }
+    let mut snapshot: HabitatAuthoritySnapshot =
+        serde_json::from_value(serde_json::to_value(&authority).unwrap()).unwrap();
+    snapshot
+        .memberships
+        .retain(|row| row.organism_id != organism(11));
+    snapshot.tags.retain(|row| row.organism_id != organism(11));
+    snapshot
+        .transfers
+        .retain(|row| row.organism_id != organism(11));
+    let restored = HabitatAuthority::restore(snapshot.clone(), &[organism(12)]).unwrap();
+    assert_eq!(restored.tags()[0].sequence, 2);
+    assert_eq!(restored.transfers()[0].sequence, 2);
+    assert_eq!(
+        restored
+            .membership(organism(12))
+            .unwrap()
+            .last_transfer_sequence,
+        Some(2)
+    );
+    snapshot.next_tag_sequence = 2;
+    assert!(HabitatAuthority::restore(snapshot, &[organism(12)]).is_err());
+}
+
+#[test]
 fn one_world_contains_all_modes_and_exactly_one_membership_per_creature() {
     let mut authority = HabitatAuthority::new(habitats()).unwrap();
     authority

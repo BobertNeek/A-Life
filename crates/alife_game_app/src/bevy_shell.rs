@@ -234,13 +234,18 @@ impl LiveBrainPresentationFrameResource {
         require_cognitive_snapshots: bool,
     ) -> Result<(), LiveBrainPresentationFrameError> {
         let authoritative_world_tick = world.tick();
-        if tick_summaries.is_empty()
+        if (tick_summaries.is_empty()
+            && world
+                .organism_registry()
+                .iter()
+                .any(|record| record.lifecycle().is_alive()))
             || tick_summaries.iter().any(|summary| {
                 summary.tick_after != authoritative_world_tick
                     || summary.world_tick_after != authoritative_world_tick
             })
         {
-            // Render-only frames retain the last frame whose summaries were
+            // Empty habitats can publish ecology ticks and the final retirement.
+            // Render-only frames with live creatures retain the last frame whose summaries were
             // produced by the same authoritative world tick. Never rotate a
             // moved snapshot with an empty or stale summary batch.
             return Ok(());
@@ -1353,6 +1358,30 @@ mod live_presentation_regression_tests {
             frames.try_publish_successful_tick(vec![summary.clone(), summary], &world),
             Err(LiveBrainPresentationFrameError::DuplicateTickSummaryOrganismId(resident,)),
         );
+
+        // The final resident can die during this tick and be archived/retired
+        // before publication. No live summaries remain, but the scene must clear.
+        let mut dead = world.organism_registry().get(resident).unwrap().clone();
+        dead.mark_dead(world.tick()).unwrap();
+        world.replace_organism_registry_exact([dead]).unwrap();
+        world
+            .link_birth_manifest(resident, alife_core::Blake3Digest::from_bytes([1; 32]))
+            .unwrap();
+        world
+            .link_life_manifest(resident, alife_core::Blake3Digest::from_bytes([2; 32]))
+            .unwrap();
+        world.retire_dead_organism(resident).unwrap();
+        frames
+            .try_publish_successful_tick_with_cognitive(Vec::new(), Vec::new(), &world)
+            .unwrap();
+        assert_eq!(frames.current.authoritative_world_tick, world.tick());
+        assert_eq!(frames.current.organism_count(), 0);
+        assert!(frames.current.object(resident_entity).is_none());
+        world.advance_tick();
+        frames
+            .try_publish_successful_tick_with_cognitive(Vec::new(), Vec::new(), &world)
+            .unwrap();
+        assert_eq!(frames.current.authoritative_world_tick, world.tick());
     }
 }
 

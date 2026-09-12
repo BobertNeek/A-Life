@@ -51,9 +51,16 @@ impl GpuLiveBrainRuntime {
             self.last_sleep_memory_compaction_preparation_count = 0;
         }
         if self.handles.is_empty() {
-            return Err(GameAppShellError::VisibleWorldMismatch {
-                message: "GPU neural policy requires at least one live organism",
-            });
+            if matches!(
+                self.exact_checkpoint_work,
+                ExactPopulationCheckpointRuntimeWorkV1::AwaitingJournal { .. }
+            ) {
+                self.finalize_awaiting_exact_checkpoint(&[])?;
+            }
+            // Retirement has already archived and removed the final resident.
+            // An empty habitat still advances ecology without neural dispatch.
+            self.world.try_advance_tick()?;
+            return Ok(Vec::new());
         }
 
         let tick_before = self.world.tick();
@@ -850,6 +857,11 @@ impl GpuLiveBrainRuntime {
             .saturating_add(elapsed_ns(passive_observation_started));
         let population_reconcile_started = Instant::now();
         self.reconcile_population()?;
+        // Reconciliation archives deaths and removes their GPU handles. Their
+        // final summaries and sleep transitions must not enter the live frame
+        // or attempt a later checkpoint lookup through a retired handle.
+        summaries_by_organism.retain(|raw, _| self.handles.contains_key(raw));
+        sleep_journal_entries.retain(|entry| self.handles.contains_key(&entry.organism_id.raw()));
         self.performance_metrics.population_reconcile_wall_ns = self
             .performance_metrics
             .population_reconcile_wall_ns

@@ -272,11 +272,15 @@ pub struct GpuExactPopulationCaptureTicketV1 {
 
 impl GpuExactPopulationCaptureTicketV1 {
     pub const fn gpu_copy_submissions(&self) -> u64 {
-        1
+        if self.staging_bytes == 0 {
+            0
+        } else {
+            1
+        }
     }
 
     pub const fn map_operations(&self) -> u64 {
-        1
+        self.gpu_copy_submissions()
     }
 
     pub const fn staging_bytes(&self) -> u64 {
@@ -322,7 +326,6 @@ impl GpuClosedLoopBackend {
         self.ensure_ready()?;
         if capture_transaction_generation == 0
             || capture_transaction_generation != self.next_exact_population_capture_generation
-            || handles.is_empty()
             || handles
                 .windows(2)
                 .any(|pair| pair[0].organism_id().raw() >= pair[1].organism_id().raw())
@@ -352,6 +355,26 @@ impl GpuClosedLoopBackend {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
         let population_set_digest = population_set_digest(handles);
+
+        // The exact resident set can be empty after the final death. Preserve
+        // the normal transaction identity without allocating or mapping a GPU
+        // buffer when there is no neural state to capture.
+        if handles.is_empty() {
+            let (_, receiver) = mpsc::channel();
+            self.next_exact_population_capture_generation = next_capture_transaction_generation;
+            return Ok(GpuExactPopulationCaptureTicketV1 {
+                backend_instance_id: self.backend_instance_id,
+                capture_transaction_generation,
+                population_set_digest,
+                checkpoint_tick,
+                staging: None,
+                receiver,
+                rows: Vec::new(),
+                staging_bytes: 0,
+                completed: false,
+                failure: None,
+            });
+        }
 
         let mut destination_cursor = 0_u64;
         let mut rows = Vec::with_capacity(handles.len());
@@ -551,6 +574,23 @@ impl GpuClosedLoopBackend {
             .exact_population_capture_metrics
             .poll_calls
             .saturating_add(1);
+        if ticket.rows.is_empty() {
+            ticket.completed = true;
+            self.exact_population_capture_metrics.completed_captures = self
+                .exact_population_capture_metrics
+                .completed_captures
+                .saturating_add(1);
+            return Ok(GpuExactPopulationCapturePollV1::Ready(
+                GpuExactPopulationCaptureV1 {
+                    schema_version: GPU_EXACT_POPULATION_CAPTURE_SCHEMA_VERSION,
+                    capture_transaction_generation: ticket.capture_transaction_generation,
+                    population_set_digest: ticket.population_set_digest,
+                    checkpoint_tick: ticket.checkpoint_tick,
+                    rows: Vec::new(),
+                    bytes_copied: 0,
+                },
+            ));
+        }
         if self.device.poll(wgpu::PollType::Poll).is_err() {
             return Ok(self.fail_exact_population_capture(
                 ticket,

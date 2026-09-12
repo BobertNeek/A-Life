@@ -24,6 +24,13 @@ Sleep readiness follows fatigue, sleep pressure, and neural recovery. Low food
 reserves alone do not force sleep or prevent waking, so a hungry creature can
 resume feeding after consolidation.
 
+Deaths finish the existing archive transaction before GPU and visual retirement.
+Retired creatures no longer contribute live action or sleep-journal rows. An
+empty habitat continues advancing its world and clears the final creature view.
+Its exact checkpoint excludes archived creatures and needs no GPU buffer copy.
+Retirement removes habitat membership and its ledger rows while preserving
+surviving receipt IDs.
+
 ## Production path
 
 The launcher uses an optimized release build by default. The first build compiles
