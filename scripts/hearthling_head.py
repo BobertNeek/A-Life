@@ -5,13 +5,21 @@ from mathutils import Vector
 from mathutils.geometry import delaunay_2d_cdt
 
 
+def head_width(z):
+    nz=(z-2.045)/(.34 if z>=2.045 else .31)
+    fur=.028*math.exp(-((z-1.98)/.032)**2)+.026*math.exp(-((z-1.91)/.032)**2)
+    return .45*(1-.02*max(0,-nz))+fur
+
+
 def head_radius(x,z):
     nz=(z-2.045)/(.34 if z>=2.045 else .31)
-    return (x/(.45*(1-.15*max(0,-nz))))**2+nz*nz
+    return (x/head_width(z))**2+nz*nz
 
 
 def head_y(x,z,eye_y,eye_z,eye_radius):
     y=.025-.345*math.sqrt(max(0,1-head_radius(x,z)))
+    # The muzzle and supporting cheeks are part of the same facial surface.
+    y-=.112*math.exp(-(x/.235)**4-((z-1.887)/.119)**4)
     for sign in [-1,1]:
         dx=x-sign*.192; dz=z-eye_z
         height=.077 if dz>=0 else .061
@@ -33,7 +41,8 @@ def make_head(body, mesh, cream, eye_y, eye_z, eye_radius):
 
     def outline(a):
         s=math.sin(a)
-        return (.45*math.cos(a)*(1-.15*max(0,-s)), 2.045+(.34 if s>=0 else .31)*s)
+        z=2.045+(.34 if s>=0 else .31)*s
+        return (head_width(z)*math.cos(a),z)
 
     def add_loop(coords):
         ids=list(range(len(points),len(points)+len(coords)))
@@ -120,7 +129,7 @@ def make_head(body, mesh, cream, eye_y, eye_z, eye_radius):
         previous=current
     bm.faces.new(previous)
     transition=[v for v in bm.verts if v.co.z>1.55]
-    for _ in range(3):
+    for _ in range(8):
         bmesh.ops.smooth_vert(bm,verts=transition,factor=.35,
                              use_axis_x=True,use_axis_y=True,use_axis_z=True)
     bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces))

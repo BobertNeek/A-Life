@@ -1,12 +1,14 @@
-Hearthling, rebuilt eyes and face, revision 4
-===========================================
+Hearthling, balanced face and proportions, revision 5
+===================================================
 
 `hearthling-source.blend` retains the revision-2 sculpt and expressive idle rig.
 The exporter applies `scripts/refine_hearthling_face.py` with
 `scripts/hearthling_head.py` and `scripts/hearthling_eyes.py`: one continuous head
 surface with eye openings, spherical green eyes, and rotating upper/lower lids.
-The globes retain their shape during blinks. The old separate oval eye surrounds
-are removed. The compact muzzle, cheek clumps, forelock, and lifted ears remain.
+The globes retain their shape during blinks. The muzzle, cheeks, and subtle fur
+contour now share the head surface. The separate muzzle and cheek pieces are
+removed. A shorter tapered neck and ears reduced by 14 percent balance the head.
+The forelock and existing body/limb animations remain.
 `hearthling.blend` is the editable refined model with grounded walk and seated sleep clips. The shipping
 `hearthling.glb` contains one skin and three named animations.
 
