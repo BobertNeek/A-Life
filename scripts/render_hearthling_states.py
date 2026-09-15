@@ -49,16 +49,21 @@ for name, position, frame in [('face-front', (0,-6,1.82), 1),
     if name in ['face-front','face-blink']:
         deps=bpy.context.evaluated_depsgraph_get()
         for side in ['L','R']:
-            globe=bpy.data.objects['Hearthling_Eyeball_'+side].evaluated_get(deps)
-            center=sum((globe.matrix_world @ Vector(p) for p in globe.bound_box),Vector())/8
-            hit,_,_,_,ob,_=scene.ray_cast(deps,camera.location,(center-camera.location).normalized())
-            expected='Hearthling_UpperEyelid_'+side if name=='face-blink' else 'Hearthling_Eyeball_'+side
-            assert hit and ob.name==expected, (name,side,ob.name if hit else 'no hit')
+            merged=bpy.data.objects['Hearthling_Runtime'].evaluated_get(deps)
+            eye_indices={i for p in merged.data.polygons
+                if 'spherical eyes' in merged.data.materials[p.material_index].name for i in p.vertices}
+            points=[merged.matrix_world@merged.data.vertices[i].co for i in eye_indices]
+            points=[p for p in points if (p.x<0)==(side=='L')]
+            center=Vector([(min(p[k] for p in points)+max(p[k] for p in points))/2 for k in range(3)])
+            hit,_,_,face,ob,_=scene.ray_cast(deps,camera.location,(center-camera.location).normalized())
+            def is_eye(ob,face):
+                return 'spherical eyes' in ob.data.materials[ob.data.polygons[face].material_index].name
+            assert hit and is_eye(ob,face)==(name=='face-front'), (name,side,'incorrect eye occlusion')
             if name=='face-blink':
                 for dx in [-.085,0,.085]:
                     for dz in [-.040,0,.040]:
                         point=center+Vector((dx,0,dz))
-                        hit,_,_,_,ob,_=scene.ray_cast(deps,camera.location,(point-camera.location).normalized())
-                        assert hit and not ob.name.startswith('Hearthling_Eyeball'), (name,side,dx,dz,'exposed globe')
+                        hit,_,_,face,ob,_=scene.ray_cast(deps,camera.location,(point-camera.location).normalized())
+                        assert hit and not is_eye(ob,face), (name,side,dx,dz,'exposed globe')
         print(name,'eye visibility PASS',flush=True)
 print('SHIPPING_GLB_RENDER_CHECK_COMPLETE', flush=True)

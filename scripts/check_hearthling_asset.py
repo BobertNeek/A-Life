@@ -33,5 +33,21 @@ for animation in gltf['animations']:
 triangles = sum(gltf['accessors'][p['indices']]['count'] // 3
                 for m in gltf['meshes'] for p in m['primitives'])
 assert triangles <= 32768, triangles
+assert len(gltf['meshes']) == 1, 'Run optimize_hearthling_runtime.py after the character export'
+assert sum(len(m['primitives']) for m in gltf['meshes']) <= 6, 'Shared-material draw budget exceeded'
+def colors(primitive):
+    a=gltf['accessors'][primitive['attributes']['COLOR_0']];v=gltf['bufferViews'][a['bufferView']]
+    fmt,div={5126:('4f',1),5123:('4H',65535),5121:('4B',255)}[a['componentType']]
+    offset=28+length+v.get('byteOffset',0)+a.get('byteOffset',0)
+    stride=v.get('byteStride',struct.calcsize('<'+fmt))
+    return [tuple(x/div for x in struct.unpack_from('<'+fmt,data,offset+i*stride)) for i in range(a['count'])]
+for p in gltf['meshes'][0]['primitives']:
+    name=gltf['materials'][p['material']]['name']
+    if name=='Hearthling | spherical eyes':
+        values=colors(p)
+        assert any(g>r*1.2 and g>b*1.2 for r,g,b,a in values), 'Iris green was lost'
+        assert any(max(r,g,b)<0.05 for r,g,b,a in values), 'Dark pupils were lost'
+    if name=='Hearthling | vertex-colored coat':
+        assert any(r>g*1.2 and r>b*1.2 for r,g,b,a in colors(p)), 'Coat paint was lost'
 assert any('JOINTS_0' in p['attributes'] for m in gltf['meshes'] for p in m['primitives'])
 print(f'PASS: {path.name}: one skin, {len(gltf["meshes"])} meshes, {triangles} triangles, {sorted(names)}')

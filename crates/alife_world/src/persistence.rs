@@ -1077,6 +1077,8 @@ pub struct WorldObjectSaveState {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct WorldSaveState {
     pub seed: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terrain: Option<crate::TerrainBinding>,
     pub tick: Tick,
     pub next_entity_id: u64,
     pub next_organism_id: u64,
@@ -1229,6 +1231,8 @@ impl<'de> Deserialize<'de> for WorldSaveState {
         #[derive(Deserialize)]
         struct Wire {
             seed: u64,
+            #[serde(default)]
+            terrain: Option<crate::TerrainBinding>,
             tick: Tick,
             next_entity_id: u64,
             #[serde(default)]
@@ -1317,6 +1321,7 @@ impl<'de> Deserialize<'de> for WorldSaveState {
         let habitat_authority_was_missing = wire.habitats.is_none();
         let state = Self {
             seed: wire.seed,
+            terrain: wire.terrain,
             tick: wire.tick,
             next_entity_id: wire.next_entity_id,
             next_organism_id,
@@ -2084,6 +2089,7 @@ impl WorldSaveState {
         }
         Self {
             seed: parts.seed,
+            terrain: parts.terrain,
             tick: parts.tick,
             next_entity_id: parts.next_entity_id,
             next_organism_id: parts.next_organism_id,
@@ -2179,6 +2185,9 @@ impl WorldSaveState {
                 message: "world seed must be nonzero",
             });
         }
+        if let Some(terrain) = self.terrain {
+            terrain.validate()?;
+        }
         let mut ids = BTreeSet::new();
         let mut labels = BTreeSet::new();
         let mut max_id = 0_u64;
@@ -2268,6 +2277,7 @@ impl WorldSaveState {
         self.validate()?;
         let parts = HeadlessWorldPersistenceParts {
             seed: self.seed,
+            terrain: self.terrain,
             tick: self.tick,
             next_entity_id: self.next_entity_id,
             next_organism_id: self.next_organism_id,
@@ -2589,4 +2599,32 @@ fn _asset_index(manifest: &AssetManifest) -> BTreeMap<&str, &AssetManifestEntry>
         .iter()
         .map(|entry| (entry.asset_id.as_str(), entry))
         .collect()
+}
+
+#[cfg(test)]
+mod highlands_persistence_tests {
+    use super::*;
+    #[test]
+    fn highlands_binding_roundtrips_and_rejects_incompatible_geometry() {
+        let mut world = crate::HeadlessScenarioBuilder::new(71).build().unwrap();
+        world.enable_highlands_for_new_game().unwrap();
+        let saved = WorldSaveState::from_parts(world.persistence_parts());
+        let mut restored: WorldSaveState =
+            serde_json::from_slice(&serde_json::to_vec(&saved).unwrap()).unwrap();
+        assert_eq!(
+            restored.restore().unwrap().terrain_binding(),
+            world.terrain_binding()
+        );
+        restored.terrain.as_mut().unwrap().digest ^= 1;
+        assert!(restored.restore().is_err());
+    }
+    #[test]
+    fn highlands_absent_binding_preserves_legacy_save_geometry() {
+        let world = crate::HeadlessScenarioBuilder::new(72).build().unwrap();
+        let mut value =
+            serde_json::to_value(WorldSaveState::from_parts(world.persistence_parts())).unwrap();
+        value.as_object_mut().unwrap().remove("terrain");
+        let restored: WorldSaveState = serde_json::from_value(value).unwrap();
+        assert_eq!(restored.restore().unwrap().terrain_binding(), None);
+    }
 }

@@ -1,10 +1,14 @@
 //! Approved Blender character, projected onto existing organism identities.
 use super::*;
-use bevy::{
-    camera::visibility::NoFrustumCulling, gltf::Gltf, prelude::*, scene::SceneInstanceReady,
-};
+use bevy::{camera::primitives::Aabb, gltf::Gltf, prelude::*, scene::SceneInstanceReady};
 
 const PATH: &str = "creatures/hearthling/hearthling.glb";
+
+#[derive(Resource, Default)]
+struct SharedHearthlingAssets {
+    graph: Option<(Handle<AnimationGraph>, Vec<AnimationNodeIndex>)>,
+    coats: BTreeMap<(bevy::asset::AssetId<StandardMaterial>, usize), Handle<StandardMaterial>>,
+}
 
 #[derive(Component)]
 pub(super) struct HearthlingVisual {
@@ -21,6 +25,7 @@ pub(super) struct HearthlingPlayer {
 }
 
 pub(super) fn spawn(world: &mut World, root: Entity, appearance: CreatureAppearanceGenome) {
+    world.init_resource::<SharedHearthlingAssets>();
     // Headless preflight/continuity apps retain organism roots without loading scenes.
     let Some(server) = world.get_resource::<AssetServer>() else {
         return;
@@ -86,6 +91,7 @@ fn ready(
     )>,
     gltfs: Res<Assets<Gltf>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
+    mut shared: ResMut<SharedHearthlingAssets>,
     mut players: Query<&mut AnimationPlayer>,
     mesh_materials: Query<&MeshMaterial3d<StandardMaterial>>,
     names: Query<&Name>,
@@ -101,15 +107,20 @@ fn ready(
     let Some(gltf) = gltfs.get(&source.0) else {
         return;
     };
-    let (graph, clips) = AnimationGraph::from_clips(
-        [
-            "Hearthling_CuriousIdle",
-            "Hearthling_Walk",
-            "Hearthling_Sleep",
-        ]
-        .map(|name| gltf.named_animations[name].clone()),
-    );
-    let graph = graphs.add(graph);
+    let (graph, clips) = shared
+        .graph
+        .get_or_insert_with(|| {
+            let (graph, clips) = AnimationGraph::from_clips(
+                [
+                    "Hearthling_CuriousIdle",
+                    "Hearthling_Walk",
+                    "Hearthling_Sleep",
+                ]
+                .map(|name| gltf.named_animations[name].clone()),
+            );
+            (graphs.add(graph), clips)
+        })
+        .clone();
     let state = clip(marker.animation);
     // Tint only the coat. Eyes, nose, tongue and cream muzzle keep authored colors.
     let tints = [
@@ -120,14 +131,14 @@ fn ready(
         [0.86, 1.13, 0.83],
         [1.16, 1.03, 0.78],
     ];
-    let tint = tints[usize::from(visual.appearance.palette_family) % tints.len()];
+    let palette = usize::from(visual.appearance.palette_family) % tints.len();
+    let tint = tints[palette];
     let coat_materials = [
         "Hearthling | vertex-colored coat",
         "Hearthling | warm ochre",
         "Hearthling | brows and tuft shadows",
     ]
     .map(|name| gltf.named_materials[name].id());
-    let mut coat_handles = BTreeMap::new();
     let mut mesh_count = 0;
     for entity in children.iter_descendants(event.entity) {
         if let Ok(name) = names.get(entity) {
@@ -160,29 +171,38 @@ fn ready(
         }
         if let Ok(handle) = mesh_materials.get(entity) {
             mesh_count += 1;
-            commands.entity(entity).insert(NoFrustumCulling);
+            // Covers every authored pose and inherited ear/tail scale. Static bind-pose
+            // bounds can clip animated extremities; disabling culling costs every draw.
+            commands
+                .entity(entity)
+                .insert(Aabb::from_min_max(Vec3::splat(-6.0), Vec3::splat(6.0)));
             if coat_materials.contains(&handle.0.id()) {
-                let replacement = coat_handles.entry(handle.0.id()).or_insert_with(|| {
-                    let mut material = materials
-                        .get(&handle.0)
-                        .expect("loaded glTF material")
-                        .clone();
-                    let color = material.base_color.to_linear();
-                    material.base_color = Color::linear_rgba(
-                        color.red * tint[0],
-                        color.green * tint[1],
-                        color.blue * tint[2],
-                        color.alpha,
-                    );
-                    materials.add(material)
-                });
+                let replacement =
+                    shared
+                        .coats
+                        .entry((handle.0.id(), palette))
+                        .or_insert_with(|| {
+                            let mut material = materials
+                                .get(&handle.0)
+                                .expect("loaded glTF material")
+                                .clone();
+                            let color = material.base_color.to_linear();
+                            material.base_color = Color::linear_rgba(
+                                color.red * tint[0],
+                                color.green * tint[1],
+                                color.blue * tint[2],
+                                color.alpha,
+                            );
+                            materials.add(material)
+                        });
                 commands
                     .entity(entity)
                     .insert(MeshMaterial3d(replacement.clone()));
             }
         }
     }
-    let shared_meshes = gltf.meshes.len();
+    // Bevy creates a Mesh handle for each material primitive inside a glTF mesh.
+    let shared_meshes = mesh_count;
     commands.queue(move |world: &mut World| {
         if let Some(mut receipt) = world.get_resource_mut::<Fvr04ProductionCreatureSceneResource>()
         {

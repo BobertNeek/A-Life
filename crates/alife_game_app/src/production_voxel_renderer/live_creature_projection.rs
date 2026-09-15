@@ -3,6 +3,7 @@
 use super::*;
 
 pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
+    let highlands = world.contains_resource::<highlands::HighlandsActive>();
     if !world.contains_resource::<LiveBrainPresentationFrameResource>() {
         return;
     }
@@ -37,11 +38,15 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                             object.position.x.round() as i32,
                             object.position.z.round() as i32,
                         );
-                        let surface_height = scene
-                            .tile_summaries_by_tile
-                            .get(&tile)
-                            .map(|summary| summary.height_units)
-                            .unwrap_or(visual.surface_height);
+                        let surface_height = if highlands {
+                            object.position.y
+                        } else {
+                            scene
+                                .tile_summaries_by_tile
+                                .get(&tile)
+                                .map(|summary| summary.height_units)
+                                .unwrap_or(visual.surface_height)
+                        };
                         let mut projected = *transform;
                         if !project_authoritative_creature_root_transform(
                             root.stable_id,

@@ -17,6 +17,9 @@ pub(super) fn capture_player_view(
     roots: bevy::prelude::Query<(&Fvr04ProductionCreatureVisualMarker, &Transform)>,
     players: bevy::prelude::Query<&bevy::prelude::AnimationPlayer>,
     surface: Res<creature_grounding::RenderedTerrainSurface>,
+    highlands: Option<Res<highlands::HighlandsActive>>,
+    meshes: Res<Assets<Mesh>>,
+    visible_meshes: Query<(&Mesh3d, &ViewVisibility)>,
     mut commands: Commands,
 ) {
     if !session.initialized {
@@ -48,6 +51,10 @@ pub(super) fn capture_player_view(
         format!("view-{stamp}")
     };
     let receipt = serde_json::json!({
+        "terrain_binding": highlands.as_ref().map(|_| alife_world::TerrainBinding::highlands()),
+        "visible_mesh_primitives": visible_meshes.iter().filter(|(_,v)| v.get()).count(),
+        "visible_mesh_triangles_before_batching": visible_meshes.iter().filter(|(_,v)| v.get())
+            .filter_map(|(m,_)| meshes.get(&m.0)).map(|m| m.indices().map_or(m.count_vertices(),|i| i.len())/3).sum::<usize>(),
         "paused": ux.settings.paused, "elapsed_seconds": time.elapsed_secs_f64(),
         "animation_players": players.iter().count(),
         "clip_times": players.iter().map(|p| p.playing_animations().map(|(_,a)| a.seek_time()).collect::<Vec<_>>()).collect::<Vec<_>>(),

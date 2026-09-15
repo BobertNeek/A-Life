@@ -8,6 +8,7 @@ data['entries'] = [e for e in data['entries'] if not e['asset_id'].startswith('a
 paths = [ROOT / 'crates/alife_game_app/assets/creatures/hearthling/hearthling.glb']
 paths += sorted((ROOT / 'crates/alife_game_app/assets/landscape').glob('*.glb'))
 paths += sorted((ROOT / 'crates/alife_game_app/assets/landscape/highlands').glob('*.glb'))
+paths += [ROOT / 'crates/alife_game_app/assets/landscape/highlands/props.json']
 paths += [ROOT / 'crates/alife_game_app/assets/landscape/ground-detail.png']
 for path in paths:
     payload = path.read_bytes()
@@ -34,6 +35,8 @@ for path in paths:
         entry['generator'].update(
             config_path='scripts/build_highlands.py' if path.parent.name=='highlands' else 'scripts/export_landscape.py',
             date='2026-09-15',seed='mountainous-open-world-v2',tool='Blender-5.2.1-LTS')
+        if path.name in {'terrain-chunks.glb','props.json'}:
+            entry['generator']['config_path']='scripts/export_highlands_runtime.py'
     data['entries'].append(entry)
 manifest.write_text(json.dumps(data, indent=2) + '\n')
 print('Registered', len(paths), 'approved production assets')

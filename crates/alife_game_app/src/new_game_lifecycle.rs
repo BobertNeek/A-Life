@@ -55,10 +55,11 @@ pub fn stage_phase3_new_game(
 
     let foundation =
         FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1)?;
-    let game = create_canonical_new_game(
+    let mut game = create_canonical_new_game(
         &CanonicalNewGameConfig::phase3(request.world_seed, request.population)?,
         &foundation,
     )?;
+    game.world.enable_highlands_for_new_game()?;
     if game.world.organism_registry().len() != usize::from(request.population)
         || game.creatures.len() != usize::from(request.population)
         || game.receipt.founders.len() != usize::from(request.population)

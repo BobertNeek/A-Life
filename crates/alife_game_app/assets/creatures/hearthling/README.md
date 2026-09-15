@@ -22,6 +22,13 @@ budget is 32,768 triangles, including separate curved eyelids and orbital rims.
 `hearthling.blend` is the editable refined model with grounded walk and seated sleep clips. The shipping
 `hearthling.glb` contains one skin and three named animations.
 
+The export finishes with `scripts/optimize_hearthling_runtime.py`. It consolidates
+the 28 authored mesh objects (29 material primitives) into one skinned mesh with six material primitives,
+preserving all 32,417 triangles, UVs, fur normals, weights, and animation clips.
+The authoring blend retains the separate editable pieces. Runtime instances share
+the animation graph and palette materials. Conservative animated bounds permit
+frustum culling without cropping the ears or tail.
+
 From the repository root, run Blender 5.2.1 LTS with `--background --python-exit-code 1 --python
 scripts/export_hearthling.py`, then `python scripts/register_approved_art.py`
 and `python scripts/check_hearthling_asset.py`.

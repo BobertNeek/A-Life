@@ -110,3 +110,5 @@ bpy.ops.export_scene.gltf(filepath=str(HERE / 'hearthling.glb'), export_format='
     export_force_sampling=True, export_skins=True, export_cameras=False, export_lights=False)
 bpy.ops.wm.save_as_mainfile(filepath=str(HERE / 'hearthling.blend'))
 print('HEARTHLING_GAME_EXPORT_COMPLETE', flush=True)
+import runpy
+runpy.run_path(str(ROOT / 'scripts/optimize_hearthling_runtime.py'))

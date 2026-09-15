@@ -4118,7 +4118,7 @@
     {
       "asset_id": "approved-hearthling",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:b8c3121138ba254a",
+      "digest": "fnv1a64:6ed7b62a43532a78",
       "external": false,
       "final_art": false,
       "generated": true,
@@ -4133,7 +4133,7 @@
       "local_path": "crates/alife_game_app/assets/creatures/hearthling/hearthling.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 4576660,
+      "size_bytes": 4528880,
       "source": "generated:approved-blender-model",
       "usage_category": "creatures"
     },
@@ -4398,6 +4398,50 @@
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
       "size_bytes": 10117696,
+      "source": "generated:approved-blender-model",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-terrain-chunks",
+      "author": "A-Life approved Blender art",
+      "digest": "fnv1a64:2a14ce0427c76b0d",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/export_highlands_runtime.py",
+        "date": "2026-09-15",
+        "seed": "mountainous-open-world-v2",
+        "tool": "Blender-5.2.1-LTS"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "LICENSE",
+      "local_path": "crates/alife_game_app/assets/landscape/highlands/terrain-chunks.glb",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 9364724,
+      "source": "generated:approved-blender-model",
+      "usage_category": "environment-dressing"
+    },
+    {
+      "asset_id": "approved-props",
+      "author": "A-Life approved Blender art",
+      "digest": "fnv1a64:6057637161b5d95e",
+      "external": false,
+      "final_art": false,
+      "generated": true,
+      "generator": {
+        "config_path": "scripts/export_highlands_runtime.py",
+        "date": "2026-09-15",
+        "seed": "mountainous-open-world-v2",
+        "tool": "Blender-5.2.1-LTS"
+      },
+      "license": "A-Life-Generated-Source",
+      "license_ref": "LICENSE",
+      "local_path": "crates/alife_game_app/assets/landscape/highlands/props.json",
+      "placeholder": false,
+      "replacement_policy": "edit-blender-source-and-refresh-manifest",
+      "size_bytes": 497885,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     },
