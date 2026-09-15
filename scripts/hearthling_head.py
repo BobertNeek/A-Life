@@ -4,6 +4,11 @@ import bmesh
 from mathutils import Vector
 from mathutils.geometry import delaunay_2d_cdt
 
+EYE_X = .192
+EYE_WIDTH = .112
+EYE_UPPER = .094
+EYE_LOWER = .083
+
 
 def head_width(z):
     nz=(z-2.045)/(.34 if z>=2.045 else .31)
@@ -19,11 +24,14 @@ def head_radius(x,z):
 def head_y(x,z,eye_y,eye_z,eye_radius):
     y=.025-.345*math.sqrt(max(0,1-head_radius(x,z)))
     # The muzzle and supporting cheeks are part of the same facial surface.
-    y-=.112*math.exp(-(x/.235)**4-((z-1.887)/.119)**4)
+    y-=.063*math.exp(-(x/.195)**4-((z-1.892)/.101)**4)
+    # Two soft whisker lobes and a small chin form an animal muzzle in profile.
+    y-=.073*sum(math.exp(-((x-s*.074)/.078)**2-((z-1.912)/.062)**2) for s in [-1,1])
+    y-=.025*math.exp(-(x/.11)**2-((z-1.813)/.046)**2)
     for sign in [-1,1]:
-        dx=x-sign*.192; dz=z-eye_z
-        height=.077 if dz>=0 else .061
-        rho=math.sqrt((dx/.112)**2+(dz/height)**2)
+        dx=x-sign*EYE_X; dz=z-eye_z
+        height=EYE_UPPER if dz>=0 else EYE_LOWER
+        rho=math.sqrt((dx/EYE_WIDTH)**2+(dz/height)**2)
         radial=dx*dx+dz*dz
         if rho<1.75:
             bx=dx/max(1,rho); bz=dz/max(1,rho)
@@ -53,12 +61,12 @@ def make_head(body, mesh, cream, eye_y, eye_z, eye_radius):
     add_loop([outline(2*math.pi*i/count) for i in range(count)])
     for sign in [-1,1]:
         for scale in [1,1.3,1.6]:
-            add_loop([(sign*.192+.112*scale*math.cos(2*math.pi*i/48),
-                       eye_z+(.077 if math.sin(2*math.pi*i/48)>=0 else .061)*scale*math.sin(2*math.pi*i/48)) for i in range(48)])
+            add_loop([(sign*EYE_X+EYE_WIDTH*scale*math.cos(2*math.pi*i/48),
+                       eye_z+(EYE_UPPER if math.sin(2*math.pi*i/48)>=0 else EYE_LOWER)*scale*math.sin(2*math.pi*i/48)) for i in range(48)])
 
     def in_eye(x,z,margin=1):
-        dz=z-eye_z; h=.077 if dz>=0 else .061
-        return any(((x-sign*.192)/(.112*margin))**2+(dz/(h*margin))**2<1 for sign in [-1,1])
+        dz=z-eye_z; h=EYE_UPPER if dz>=0 else EYE_LOWER
+        return any(((x-sign*EYE_X)/(EYE_WIDTH*margin))**2+(dz/(h*margin))**2<1 for sign in [-1,1])
 
     for ix in range(46):
         for iz in range(34):
@@ -93,12 +101,13 @@ def make_head(body, mesh, cream, eye_y, eye_z, eye_radius):
     for j in range(count): faces.append((previous[j],pole,previous[(j+1)%count]))
     head=mesh('Hearthling_Head',verts,faces,body.data.materials[0])
     colors=head.data.color_attributes.new(name='CoatColor',type='FLOAT_COLOR',domain='POINT')
-    gold=(.64,.31,.055,1)
+    gold=(.69,.245,.036,1)
     for v in head.data.vertices:
         x,y,z=v.co
-        lower=(x/.39)**2+((z-1.91)/.19)**2
-        eye=min(((x-sign*.192)/.18)**2+((z-2.075)/.185)**2 for sign in [-1,1])
-        w=max(0,min(1,(1.45-min(lower,eye))/.60))*max(0,min(1,(-y+.04)/.18))
+        lower=(x/.39)**2+((z-1.91)/.16)**2
+        eye=min(((x-sign*EYE_X)/.152)**2+((z-2.075)/.16)**2 for sign in [-1,1])
+        blaze=(x/.041)**2+((z-2.23)/.15)**2
+        w=max(0,min(1,(1.30-min(lower,eye,blaze))/.35))*max(0,min(1,(-y+.04)/.18))
         colors.data[v.index].color=tuple(gold[i]*(1-w)+cream.diffuse_color[i]*w for i in range(4))
 
     # Retain the existing torso/neck and its weights; the new head covers this cut.

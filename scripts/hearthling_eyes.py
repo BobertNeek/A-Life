@@ -2,13 +2,14 @@
 import math
 import bpy
 import bmesh
+from hearthling_head import EYE_X, EYE_WIDTH, EYE_UPPER, EYE_LOWER
 
 
 EYE_Y = -.170
 EYE_Z = 2.075
 RADIUS = .133
-UPPER_ANGLE = .68
-LOWER_ANGLE = -.53
+UPPER_ANGLE = 1.07
+LOWER_ANGLE = -1.02
 
 
 def build_eyes(rig, body, mesh, tube, cream, dark):
@@ -31,21 +32,21 @@ def build_eyes(rig, body, mesh, tube, cream, dark):
     for sign, side in [(-1, 'L'), (1, 'R')]:
         for part in ['upper', 'lower']:
             bone = rig.data.edit_bones.new('lid_' + part + '.' + side)
-            bone.head = (sign*.192, EYE_Y, EYE_Z)
-            bone.tail = (sign*.192, EYE_Y, EYE_Z+.1)
+            bone.head = (sign*EYE_X, EYE_Y, EYE_Z)
+            bone.tail = (sign*EYE_X, EYE_Y, EYE_Z+.1)
             bone.parent = rig.data.edit_bones['head']
     bpy.ops.object.mode_set(mode='OBJECT')
 
     from hearthling_head import make_head, head_y
     head=make_head(body,mesh,cream,EYE_Y,EYE_Z,RADIUS)
     for sign, side in [(-1, 'L'), (1, 'R')]:
-        x=sign*.192
+        x=sign*EYE_X
         verts = []; faces = []; colors = []
-        pupil_angle = math.asin(.050/RADIUS)
-        iris_angle = math.asin(.086/RADIUS)
+        pupil_angle = math.asin(.067/RADIUS)
+        iris_angle = math.asin(.097/RADIUS)
         # Extra rings at material boundaries keep a crisp limbal ring and pupil.
         angles = [0, .12, .24, pupil_angle-.008, pupil_angle+.008,
-                  .48, .55, iris_angle-.025, iris_angle, iris_angle+.014,
+                  .54, .60, iris_angle-.025, iris_angle, iris_angle+.014,
                   .82, 1.0, 1.2, 1.4, 1.6, 1.85, 2.1, 2.4, 2.7, math.pi]
         segments = 48
         for theta in angles:
@@ -78,42 +79,45 @@ def build_eyes(rig, body, mesh, tube, cream, dark):
         bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces))
         bm.to_mesh(globe.data); bm.free(); globe.data.update()
 
-        # A restrained upper lid edge; both ends stay attached to the corners.
-        points=[]; ws=[]
+        # Rigid curved shells retain clearance from the globe throughout a blink.
+        # Blending a head surface between two rotations cuts through the sphere.
+        for part,latitude,offset,radius in [('Upper',.40,-.37,RADIUS+.005),('Lower',-.35,.32,RADIUS+.004)]:
+            vs=[]; fs=[]; segments=32
+            for ring in range(6):
+                t=ring/5; lat=latitude+(math.copysign(math.pi/2,latitude)-latitude)*t
+                for j in range(segments):
+                    a=2*math.pi*j/segments
+                    dy=-radius*math.cos(lat)*math.sin(a); dz=radius*math.sin(lat)
+                    vs.append((x+radius*math.cos(lat)*math.cos(a),
+                               EYE_Y+dy*math.cos(offset)-dz*math.sin(offset),
+                               EYE_Z+dy*math.sin(offset)+dz*math.cos(offset)))
+                if ring:
+                    for j in range(segments):
+                        a=(ring-1)*segments+j; b=(ring-1)*segments+(j+1)%segments
+                        fs.append((a,b,b+segments,a+segments))
+            lid=mesh('Hearthling_'+part+'Eyelid_'+side,vs,fs,cream,'lid_'+part.lower()+'.'+side)
+            bm=bmesh.new(); bm.from_mesh(lid.data)
+            bmesh.ops.remove_doubles(bm,verts=list(bm.verts),dist=.000001)
+            bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces))
+            bm.to_mesh(lid.data); bm.free()
+            for poly in lid.data.polygons: poly.use_smooth=True
+        points=[]
         for i in range(33):
-            a=math.pi*i/32; dx=.112*math.cos(a); dz=.077*math.sin(a)
-            dy=head_y(x+dx,EYE_Z+dz,EYE_Y,EYE_Z,RADIUS)-EYE_Y-.001
-            points.append((x+dx,EYE_Y+dy,EYE_Z+dz))
-            ws.append(min(1,math.atan2(dz,-dy)/UPPER_ANGLE))
-        lash=tube('Hearthling_LidEdge_'+side,points,[.0015+.002*math.sin(math.pi*i/32) for i in range(33)],dark,sides=8)
-        group=lash.vertex_groups.new(name='lid_upper.'+side)
-        for i,w in enumerate(ws):
-            ids=list(range(i*8,(i+1)*8))
-            lash.vertex_groups['head'].add(ids,1-w,'REPLACE')
-            group.add(ids,w,'REPLACE')
-    # Blend the lid rotations into the surrounding continuous head surface.
-    for side in ['L','R']:
-        for part in ['upper','lower']:
-            name='lid_'+part+'.'+side
-            if name not in head.vertex_groups: head.vertex_groups.new(name=name)
-    for v in head.data.vertices:
-        if v.co.z<=1.79: continue
-        for group in head.vertex_groups: group.remove([v.index])
-        influence=0
-        for sign,side in [(-1,'L'),(1,'R')]:
-            dx=v.co.x-sign*.192; dz=v.co.z-EYE_Z
-            height=.077 if dz>=0 else .061
-            radius=math.sqrt((dx/.112)**2+(dz/height)**2)
-            radial_weight=max(0,min(1,1-(radius-1)/.65))**1.5
-            depth_weight=max(0,min(1,(EYE_Y-v.co.y)/.06))
-            part='upper' if dz>=0 else 'lower'
-            angle=UPPER_ANGLE if dz>=0 else -LOWER_ANGLE
-            phi=abs(math.atan2(dz,max(.001,EYE_Y-v.co.y)))
-            w=min(1,phi/angle)*radial_weight*depth_weight
-            if w>0:
-                head.vertex_groups['lid_'+part+'.'+side].add([v.index],w,'REPLACE')
-                influence+=w
-        head.vertex_groups['head'].add([v.index],max(0,1-influence),'REPLACE')
+            a=math.pi*i/32; radius=RADIUS+.006
+            dy=-radius*math.cos(.40)*math.sin(a); dz=radius*math.sin(.40)
+            points.append((x+radius*math.cos(.40)*math.cos(a),
+                           EYE_Y+dy*math.cos(-.37)-dz*math.sin(-.37),
+                           EYE_Z+dy*math.sin(-.37)+dz*math.cos(-.37)))
+        tube('Hearthling_LidEdge_'+side,points,[.0015+.002*math.sin(math.pi*i/32) for i in range(33)],dark,'lid_upper.'+side,sides=8)
+    weight_head_lids(head)
+    bpy.context.view_layer.update()
+
+
+def weight_head_lids(head):
+    # Facial skin stays on the skull; independent lids move behind its openings.
+    for group in list(head.vertex_groups): head.vertex_groups.remove(group)
+    group=head.vertex_groups.new(name='head')
+    group.add(list(range(len(head.data.vertices))),1,'REPLACE')
     for poly in head.data.polygons: poly.use_smooth=True
     bpy.context.view_layer.update()
 

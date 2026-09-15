@@ -1,4 +1,4 @@
-"""Blender 5.1: export the approved rig with grounded idle, walk and sleep clips.
+"""Blender 5.2 LTS: export the reference rig with grounded idle, walk and sleep clips.
 Run: blender --background --python scripts/export_hearthling.py
 """
 import bpy
@@ -14,6 +14,10 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from refine_hearthling_face import refine_face
 from hearthling_eyes import animate_lids
 refine_face()
+from refine_hearthling_reference_proportions import refine_reference_proportions
+refine_reference_proportions()
+from bake_hearthling_fur import bake_fur
+bake_fur()
 rig = bpy.data.objects['Hearthling_Rig']
 scene = bpy.context.scene
 p = rig.pose.bones
@@ -95,6 +99,10 @@ for name in ['Hearthling_CuriousIdle', 'Hearthling_Walk', 'Hearthling_Sleep']:
     track.mute = True
 rig.animation_data.action = idle
 scene.frame_start = 1; scene.frame_end = 73; scene.frame_set(1)
+collection=bpy.data.collections.get('Hearthling_Character') or bpy.data.collections.new('Hearthling_Character')
+if collection.name not in scene.collection.children: scene.collection.children.link(collection)
+for ob in models+[rig]:
+    if ob.name not in collection.objects: collection.objects.link(ob)
 bpy.ops.object.select_all(action='DESELECT')
 for ob in models + [rig]: ob.select_set(True)
 bpy.ops.export_scene.gltf(filepath=str(HERE / 'hearthling.glb'), export_format='GLB',

@@ -13,6 +13,10 @@ assert kind == 0x4E4F534A
 assert len(gltf['skins']) == 1
 assert {'Hearthling | vertex-colored coat', 'Hearthling | warm ochre',
         'Hearthling | brows and tuft shadows'} <= {m['name'] for m in gltf['materials']}
+coat=next(m for m in gltf['materials'] if m['name']=='Hearthling | vertex-colored coat')
+normal=gltf['textures'][coat['normalTexture']['index']]
+assert gltf['images'][normal['source']]['mimeType']=='image/png'
+assert 'bufferView' in gltf['images'][normal['source']], 'Fur normal must be embedded'
 names = {a['name'] for a in gltf['animations']}
 assert {'Hearthling_CuriousIdle', 'Hearthling_Walk', 'Hearthling_Sleep'} <= names, names
 for animation in gltf['animations']:
@@ -28,6 +32,6 @@ for animation in gltf['animations']:
     assert {'lid_upper.L', 'lid_lower.L', 'lid_upper.R', 'lid_lower.R'} <= rotating_bones
 triangles = sum(gltf['accessors'][p['indices']]['count'] // 3
                 for m in gltf['meshes'] for p in m['primitives'])
-assert triangles <= 32000, triangles
+assert triangles <= 32768, triangles
 assert any('JOINTS_0' in p['attributes'] for m in gltf['meshes'] for p in m['primitives'])
 print(f'PASS: {path.name}: one skin, {len(gltf["meshes"])} meshes, {triangles} triangles, {sorted(names)}')

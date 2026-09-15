@@ -4118,22 +4118,22 @@
     {
       "asset_id": "approved-hearthling",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:6cdb8de906b03103",
+      "digest": "fnv1a64:b8c3121138ba254a",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
         "config_path": "scripts/export_hearthling.py",
         "date": "2026-09-15",
-        "seed": "balanced-face-hearthling-v5",
-        "tool": "Blender-5.1"
+        "seed": "bipedal-fox-reference-hearthling-v7",
+        "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
       "local_path": "crates/alife_game_app/assets/creatures/hearthling/hearthling.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 927904,
+      "size_bytes": 4576660,
       "source": "generated:approved-blender-model",
       "usage_category": "creatures"
     },

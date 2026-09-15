@@ -15,9 +15,13 @@ def refine_face():
     rig.data.pose_position = 'REST'
     bpy.context.view_layer.update()
     gold = bpy.data.materials['Hearthling | warm ochre']
+    gold.diffuse_color = (.69,.245,.036,1)
+    gold.node_tree.nodes.get('Principled BSDF').inputs['Base Color'].default_value = gold.diffuse_color
     brow_material = bpy.data.materials['Hearthling | brows and tuft shadows']
+    brow_material.diffuse_color=(.22,.067,.020,1)
+    brow_material.node_tree.nodes.get('Principled BSDF').inputs['Base Color'].default_value=brow_material.diffuse_color
     cream = bpy.data.materials['Hearthling | cream']
-    cream.diffuse_color = (.93, .80, .56, 1)
+    cream.diffuse_color = (.94, .84, .66, 1)
     cream.node_tree.nodes.get('Principled BSDF').inputs['Base Color'].default_value = cream.diffuse_color
     dark = bpy.data.materials['Hearthling | mouth and nose']
     prefixes = ('Hearthling_Muzzle','Hearthling_Nose','Hearthling_Eye','Hearthling_Iris',
@@ -93,16 +97,17 @@ def refine_face():
         return head_y(x,z,EYE_Y,EYE_Z,RADIUS)-.002
 
     # Small rounded triangular animal nose, not a sharp upside-down pyramid.
-    nose=ellipsoid('Hearthling_Nose',(0,-.423,1.946),(.058,.031,.030),dark,segments=20,rings=12)
+    nose_y=muzzle_y(0,1.946)-.013
+    nose=ellipsoid('Hearthling_Nose',(0,nose_y,1.946),(.064,.035,.032),dark,segments=20,rings=12)
     for v in nose.data.vertices:
         factor=.52+.48*max(0,min(1,(v.co.z-1.913)/.066))
         v.co.x *= factor
     lip=[]
     for i in range(21):
-        u=-1+2*i/20; x=u*.105; z=1.880+.016*u*u-.005*math.sin(math.pi*abs(u))
+        u=-1+2*i/20; x=u*.125; z=1.880+.022*u*u-.009*math.sin(math.pi*abs(u))
         lip.append((x,muzzle_y(x,z),z))
     tube('Hearthling_ClosedSmile',lip,[.0018+.0027*math.sin(math.pi*i/20) for i in range(21)],dark)
-    tube('Hearthling_NoseToLip',[(0,-.445,1.923),(0,muzzle_y(0,1.906),1.906),(0,muzzle_y(0,1.880),1.880)], [.0025,.0025,.002],dark)
+    tube('Hearthling_NoseToLip',[(0,nose_y-.025,1.923),(0,muzzle_y(0,1.906),1.906),(0,muzzle_y(0,1.880),1.880)], [.0025,.0025,.002],dark)
 
     # Eye pivots follow the new compact facial layout; existing blink scales remain valid.
     bpy.ops.object.select_all(action='DESELECT'); rig.select_set(True); bpy.context.view_layer.objects.active=rig
@@ -113,8 +118,8 @@ def refine_face():
         bone.head+=delta; bone.tail+=delta
         ear=rig.data.edit_bones['ear.'+side]
         pivot=ear.head.copy()
-        rotation=(Matrix.Translation(pivot) @ Matrix.Rotation(-sign*math.radians(22),4,'Y')
-                  @ Matrix.Scale(.86,4) @ Matrix.Translation(-pivot))
+        rotation=(Matrix.Translation(pivot) @ Matrix.Rotation(-sign*math.radians(42),4,'Y')
+                  @ Matrix.Scale(.93,4) @ Matrix.Translation(-pivot))
         ear.transform(rotation)
         bpy.data.objects['Hearthling_Ear_'+side].data.transform(rotation)
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -128,39 +133,10 @@ def refine_face():
     for sign,side in [(-1,'L'),(1,'R')]:
         x=sign*.192
         # Low brow follows the forehead instead of hovering over it.
-        points=[(x+u*.108,surface_y(x+u*.108,2.246+.018*(1-u*u))-.002,2.246+.018*(1-u*u)) for u in [-1,-.75,-.5,-.25,0,.25,.5,.75,1]]
-        tube('Hearthling_Brow_'+side,points,[.001,.007,.011,.014,.015,.013,.009,.005,.001],brow_material)
-    # Broad swept forelock with tapered ends; no cone-shaped forehead spikes.
-    for i,(a,b,c,d) in enumerate([
-        ((-.10,-.045,2.33),(-.075,-.13,2.39),(.065,-.20,2.37),(.10,-.26,2.29)),
-        ((.01,-.055,2.32),(.095,-.13,2.37),(.14,-.22,2.31),(.08,-.285,2.25)),
-        ((-.13,-.095,2.31),(-.16,-.17,2.36),(-.11,-.25,2.30),(-.14,-.285,2.25)),
-    ]):
-        # Cubic Bezier gives a continuous curl and broad, soft volume.
-        points=[]; radii=[]
-        for j in range(13):
-            t=j/12
-            points.append(tuple((1-t)**3*Vector(a)+3*(1-t)**2*t*Vector(b)+3*(1-t)*t*t*Vector(c)+t**3*Vector(d)))
-            radii.append(.068*(1-t)**.65+.001)
-        tube('Hearthling_Tuft_'+str(i),points,radii,gold,sides=12)
-    # Bring the head toward the shoulders without changing the eye construction.
-    delta=Vector((0,0,-.075))
-    face_names=('Hearthling_Head','Hearthling_Eyeball','Hearthling_LidEdge',
-                'Hearthling_Brow','Hearthling_Tuft_','Hearthling_Nose',
-                'Hearthling_ClosedSmile','Hearthling_Ear_')
-    for ob in bpy.context.scene.objects:
-        if ob.type=='MESH' and ob.name.startswith(face_names):
-            for v in ob.data.vertices: v.co+=delta
-    for v in body.data.vertices:
-        t=max(0,min(1,(v.co.z-1.55)/.20))
-        v.co+=delta*t*t*(3-2*t)
-    bpy.ops.object.select_all(action='DESELECT')
-    rig.select_set(True); bpy.context.view_layer.objects.active=rig
-    bpy.ops.object.mode_set(mode='EDIT')
-    head_bone=rig.data.edit_bones['head']
-    for bone in [head_bone]+list(head_bone.children_recursive):
-        bone.head+=delta; bone.tail+=delta
-    bpy.ops.object.mode_set(mode='OBJECT')
-    rig['face_revision']=5
+        points=[(x+u*.108,surface_y(x+u*.108,2.238+.045*(1-u*u))-.003,2.238+.045*(1-u*u)) for u in [-1,-.75,-.5,-.25,0,.25,.5,.75,1]]
+        tube('Hearthling_Brow_'+side,points,[.001,.009,.015,.018,.020,.018,.013,.007,.001],brow_material)
+    from hearthling_reference_sculpt import refine_reference_anatomy
+    refine_reference_anatomy(rig,body,mesh)
+    rig['face_revision']=6
     rig.data.pose_position = 'POSE'
     bpy.context.view_layer.update()
