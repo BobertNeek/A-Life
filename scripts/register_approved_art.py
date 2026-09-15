@@ -7,7 +7,7 @@ data = json.loads(manifest.read_text())
 data['entries'] = [e for e in data['entries'] if not e['asset_id'].startswith('approved-')]
 paths = [ROOT / 'crates/alife_game_app/assets/creatures/hearthling/hearthling.glb']
 paths += sorted((ROOT / 'crates/alife_game_app/assets/landscape').glob('*.glb'))
-paths += sorted((ROOT / 'crates/alife_game_app/assets/landscape/highlands').glob('*.glb'))
+paths += [ROOT / 'crates/alife_game_app/assets/landscape/highlands/terrain-chunks.glb']
 paths += [ROOT / 'crates/alife_game_app/assets/landscape/highlands/props.json']
 paths += [ROOT / 'crates/alife_game_app/assets/landscape/ground-detail.png']
 for path in paths:

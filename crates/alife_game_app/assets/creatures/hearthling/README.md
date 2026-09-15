@@ -26,6 +26,7 @@ The export finishes with `scripts/optimize_hearthling_runtime.py`. It consolidat
 the 28 authored mesh objects (29 material primitives) into one skinned mesh with six material primitives,
 preserving all 32,417 triangles, UVs, fur normals, weights, and animation clips.
 The authoring blend retains the separate editable pieces. Runtime instances share
+the fur normal at 1024px (the editable source retains its 2048px bake),
 the animation graph and palette materials. Conservative animated bounds permit
 frustum culling without cropping the ears or tail.
 

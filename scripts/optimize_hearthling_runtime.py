@@ -6,6 +6,9 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 HERE=ROOT/'crates/alife_game_app/assets/creatures/hearthling'
 bpy.ops.wm.open_mainfile(filepath=str(HERE/'hearthling.blend'))
+normal=bpy.data.images['Hearthling_FurNormal']
+normal.scale(1024,1024)
+normal.pack()
 rig=bpy.data.objects['Hearthling_Rig']
 models=[o for o in bpy.context.scene.objects if o.type=='MESH' and o.name.startswith('Hearthling')]
 print('BEFORE',json.dumps([{ 'name':o.name,'modifiers':[m.type for m in o.modifiers]} for o in models]),flush=True)

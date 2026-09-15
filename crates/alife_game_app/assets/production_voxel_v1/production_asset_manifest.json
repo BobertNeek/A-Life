@@ -4118,7 +4118,7 @@
     {
       "asset_id": "approved-hearthling",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:6ed7b62a43532a78",
+      "digest": "fnv1a64:30f43a680cfb4264",
       "external": false,
       "final_art": false,
       "generated": true,
@@ -4133,7 +4133,7 @@
       "local_path": "crates/alife_game_app/assets/creatures/hearthling/hearthling.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 4528880,
+      "size_bytes": 2488260,
       "source": "generated:approved-blender-model",
       "usage_category": "creatures"
     },
@@ -4376,28 +4376,6 @@
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
       "size_bytes": 46976,
-      "source": "generated:approved-blender-model",
-      "usage_category": "environment-dressing"
-    },
-    {
-      "asset_id": "approved-mountain-valley",
-      "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:aff4cd4329f8d69d",
-      "external": false,
-      "final_art": false,
-      "generated": true,
-      "generator": {
-        "config_path": "scripts/build_highlands.py",
-        "date": "2026-09-15",
-        "seed": "mountainous-open-world-v2",
-        "tool": "Blender-5.2.1-LTS"
-      },
-      "license": "A-Life-Generated-Source",
-      "license_ref": "LICENSE",
-      "local_path": "crates/alife_game_app/assets/landscape/highlands/Mountain_Valley.glb",
-      "placeholder": false,
-      "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 10117696,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     },

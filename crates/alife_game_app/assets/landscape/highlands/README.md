@@ -27,6 +27,8 @@ level are 303,520 / 84,560 / 25,480. Props share mesh and material handles for
 Bevy batching; grass draws within 45 m, ferns/flowers 38 m, rocks/shrubs 210 m,
 and trees 360 m. Small vegetation does not cast shadows. The full authoring scene
 `Mountain_Valley.glb` is retained for review and is not loaded into gameplay.
+The runtime pack has a 12 MiB individual-asset cap and a 32 MiB total cap;
+authoring scenes are excluded from this manifest.
 
 Export with Blender 5.2.1 LTS, then run `python scripts/check_highlands_runtime.py`
 and `python scripts/register_approved_art.py`. The check compares every exported
