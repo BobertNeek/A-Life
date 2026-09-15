@@ -35,8 +35,16 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                             continue;
                         }
                         let tile = VoxelTileCoord::new(
-                            object.position.x.round() as i32,
-                            object.position.z.round() as i32,
+                            if highlands {
+                                object.position.x.floor() as i32
+                            } else {
+                                object.position.x.round() as i32
+                            },
+                            if highlands {
+                                object.position.z.floor() as i32
+                            } else {
+                                object.position.z.round() as i32
+                            },
                         );
                         let surface_height = if highlands {
                             object.position.y
@@ -184,8 +192,16 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                 let mut newborns = Vec::with_capacity(pending_newborns.len());
                 for object in pending_newborns {
                     let tile = VoxelTileCoord::new(
-                        object.position.x.round() as i32,
-                        object.position.z.round() as i32,
+                        if highlands {
+                            object.position.x.floor() as i32
+                        } else {
+                            object.position.x.round() as i32
+                        },
+                        if highlands {
+                            object.position.z.floor() as i32
+                        } else {
+                            object.position.z.round() as i32
+                        },
                     );
                     let chunk = tile_summaries
                         .get(&tile)
