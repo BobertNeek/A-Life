@@ -1,13 +1,19 @@
-Approved Hearthling, revision 2
-==============================
+Hearthling, reference-refined revision 3
+======================================
 
-`hearthling-source.blend` is the approved sculpt and expressive idle rig.
-`hearthling.blend` adds grounded walk and seated sleep clips. The shipping
+`hearthling-source.blend` retains the revision-2 sculpt and expressive idle rig.
+The exporter applies `scripts/refine_hearthling_face.py`: a compact animal muzzle,
+green inset eyes with skinned eyelids, soft cheek clumps, swept forelock, narrower
+chin, and lifted ears based on the supplied September 14 character references.
+`hearthling.blend` is the editable refined model with grounded walk and seated sleep clips. The shipping
 `hearthling.glb` contains one skin, 36 meshes, and three named animations.
 
 From the repository root, run Blender 5.1 with `--background --python
 scripts/export_hearthling.py`, then `python scripts/register_approved_art.py`
 and `python scripts/check_hearthling_asset.py`.
+Run Blender with `--background --python scripts/render_hearthling_states.py`
+to reimport the shipping GLB and check grounding/render idle, walk, sleep, and blink.
+This verifies the exported asset; it does not launch or verify the game runtime.
 
 The production renderer selects clips from the existing organism state.
 Pause freezes animation. Coat, mass, ear/head proportions and tail size derive

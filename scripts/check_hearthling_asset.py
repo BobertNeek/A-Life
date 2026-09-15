@@ -27,4 +27,4 @@ triangles = sum(gltf['accessors'][p['indices']]['count'] // 3
                 for m in gltf['meshes'] for p in m['primitives'])
 assert triangles <= 32000, triangles
 assert any('JOINTS_0' in p['attributes'] for m in gltf['meshes'] for p in m['primitives'])
-print(f'PASS: {path.name}: one skin, {len(gltf["meshes"])} meshes, {sorted(names)}')
+print(f'PASS: {path.name}: one skin, {len(gltf["meshes"])} meshes, {triangles} triangles, {sorted(names)}')

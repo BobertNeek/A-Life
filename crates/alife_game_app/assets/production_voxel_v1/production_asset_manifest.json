@@ -4118,14 +4118,14 @@
     {
       "asset_id": "approved-hearthling",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:e7623fef7ca8e1de",
+      "digest": "fnv1a64:ea5d3a44cb9b8bc7",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
         "config_path": "scripts/export_hearthling.py",
-        "date": "2026-09-07",
-        "seed": "approved-creatures-modern-black-and-white",
+        "date": "2026-09-14",
+        "seed": "reference-refined-hearthling-v3",
         "tool": "Blender-5.1"
       },
       "license": "A-Life-Generated-Source",
@@ -4133,7 +4133,7 @@
       "local_path": "crates/alife_game_app/assets/creatures/hearthling/hearthling.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 1036484,
+      "size_bytes": 1144012,
       "source": "generated:approved-blender-model",
       "usage_category": "creatures"
     },

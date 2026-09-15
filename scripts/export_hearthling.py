@@ -3,12 +3,16 @@ Run: blender --background --python scripts/export_hearthling.py
 """
 import bpy
 import math
+import sys
 from pathlib import Path
 from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[1]
 HERE = ROOT / 'crates/alife_game_app/assets/creatures/hearthling'
 bpy.ops.wm.open_mainfile(filepath=str(HERE / 'hearthling-source.blend'))
+sys.path.insert(0, str(ROOT / 'scripts'))
+from refine_hearthling_face import refine_face
+refine_face()
 rig = bpy.data.objects['Hearthling_Rig']
 scene = bpy.context.scene
 p = rig.pose.bones
