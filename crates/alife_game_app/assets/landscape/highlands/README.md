@@ -34,3 +34,18 @@ Export with Blender 5.2.1 LTS, then run `python scripts/check_highlands_runtime.
 and `python scripts/register_approved_art.py`. The check compares every exported
 terrain vertex against the collision bake and verifies upward triangle winding,
 LOD budgets, and reusable prop transforms.
+
+Verification on source `0161fb546a329c6974a5339b2be611f5c4a32bc2`:
+37 world tests passed; 96 in-game captures contained 576 creature samples with
+zero horizontal projection error and 0.025–0.043 m foot clearance. The shipping
+character loaded with all three clips and its painted eyes/coat intact.
+
+A 60-second release run on an NVIDIA RTX 3050, Vulkan, 1920x1080,
+MinSpecComfort1080p, eight founders (the current New Game maximum), averaged
+41.47 FPS. Median frame time was 8.26 ms; p95 was 174.98 ms, with 144 frames over
+100 ms. The worst 270.48 ms frame spent 261.52 ms inside the live GPU tick;
+rendering/presentation and uninstrumented residual was 8.37 ms. Simulation
+achieved 13.55 of the configured 20 ticks/second. Thus the graphics pass is
+integrated, but the existing GPU runtime still causes significant stalls.
+This is not a larger-population performance result or a smooth-gameplay claim.
+The full receipt is `target/artifacts/phase31-performance/phase31-before-release-population-8.json`.
