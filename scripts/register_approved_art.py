@@ -22,8 +22,8 @@ for path in paths:
         replacement_policy='edit-blender-source-and-refresh-manifest',
         generator=dict(config_path=('scripts/export_hearthling.py' if 'hearthling' in path.name else
             'crates/alife_game_app/assets/landscape/landscape.blend'),
-            date='2026-09-14' if 'hearthling' in path.name else '2026-09-07',
-            seed='reference-refined-hearthling-v3' if 'hearthling' in path.name else
+            date='2026-09-15' if 'hearthling' in path.name else '2026-09-07',
+            seed='continuous-face-hearthling-v4' if 'hearthling' in path.name else
                 'approved-creatures-modern-black-and-white', tool='Blender-5.1'))
     if path.suffix == '.png':
         entry.update(author='A-Life generated art with OpenAI image generation', source='generated:ground-detail-prompt')

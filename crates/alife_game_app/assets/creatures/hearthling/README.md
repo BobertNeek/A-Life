@@ -1,18 +1,22 @@
-Hearthling, reference-refined revision 3
-======================================
+Hearthling, rebuilt eyes and face, revision 4
+===========================================
 
 `hearthling-source.blend` retains the revision-2 sculpt and expressive idle rig.
-The exporter applies `scripts/refine_hearthling_face.py`: a compact animal muzzle,
-green inset eyes with skinned eyelids, soft cheek clumps, swept forelock, narrower
-chin, and lifted ears based on the supplied September 14 character references.
+The exporter applies `scripts/refine_hearthling_face.py` with
+`scripts/hearthling_head.py` and `scripts/hearthling_eyes.py`: one continuous head
+surface with eye openings, spherical green eyes, and rotating upper/lower lids.
+The globes retain their shape during blinks. The old separate oval eye surrounds
+are removed. The compact muzzle, cheek clumps, forelock, and lifted ears remain.
 `hearthling.blend` is the editable refined model with grounded walk and seated sleep clips. The shipping
-`hearthling.glb` contains one skin, 36 meshes, and three named animations.
+`hearthling.glb` contains one skin and three named animations.
 
 From the repository root, run Blender 5.1 with `--background --python
 scripts/export_hearthling.py`, then `python scripts/register_approved_art.py`
 and `python scripts/check_hearthling_asset.py`.
 Run Blender with `--background --python scripts/render_hearthling_states.py`
 to reimport the shipping GLB and check grounding/render idle, walk, sleep, and blink.
+The front camera also verifies that the eyes are visible when open and occluded
+by the head's lids when closed. A half-blink render checks the transition.
 This verifies the exported asset; it does not launch or verify the game runtime.
 
 The production renderer selects clips from the existing organism state.

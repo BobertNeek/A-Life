@@ -12,6 +12,7 @@ HERE = ROOT / 'crates/alife_game_app/assets/creatures/hearthling'
 bpy.ops.wm.open_mainfile(filepath=str(HERE / 'hearthling-source.blend'))
 sys.path.insert(0, str(ROOT / 'scripts'))
 from refine_hearthling_face import refine_face
+from hearthling_eyes import animate_lids
 refine_face()
 rig = bpy.data.objects['Hearthling_Rig']
 scene = bpy.context.scene
@@ -36,6 +37,8 @@ def ground(frame):
 
 # Root local Y follows Blender world Z. Keep the approved foot contact through the loop.
 for f in range(1, 74):
+    scene.frame_set(f)
+    animate_lids(rig, f)
     ground(f)
 
 for kind in ['Walk', 'Sleep']:
@@ -75,6 +78,7 @@ for kind in ['Walk', 'Sleep']:
                 ctrl.location += ctrl.bone.matrix_local.to_3x3().inverted() @ Vector((0, -.18, 0))
             for i in range(5):
                 p[f'tail.{i:02d}'].rotation_euler.z += .18
+        animate_lids(rig, frame)
         for b in p:
             b.keyframe_insert('location', frame=frame, group=b.name)
             b.keyframe_insert('rotation_euler', frame=frame, group=b.name)

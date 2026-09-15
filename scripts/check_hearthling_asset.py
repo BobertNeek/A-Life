@@ -23,6 +23,9 @@ for animation in gltf['animations']:
     # The renderer applies inherited proportions after the clip's scale samples.
     # Missing channels would allow those multipliers to accumulate while paused.
     assert {'head', 'ear.L', 'ear.R', 'tail.00'} <= scaled_bones
+    rotating_bones = {gltf['nodes'][c['target']['node']].get('name')
+                      for c in animation['channels'] if c['target']['path'] == 'rotation'}
+    assert {'lid_upper.L', 'lid_lower.L', 'lid_upper.R', 'lid_lower.R'} <= rotating_bones
 triangles = sum(gltf['accessors'][p['indices']]['count'] // 3
                 for m in gltf['meshes'] for p in m['primitives'])
 assert triangles <= 32000, triangles

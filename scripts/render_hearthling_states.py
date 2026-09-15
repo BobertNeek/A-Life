@@ -38,11 +38,21 @@ rig.animation_data.action = next(a for a in bpy.data.actions if a.name.startswit
 scene.render.resolution_x = scene.render.resolution_y = 900
 for name, position, frame in [('face-front', (0,-6,2.14), 1),
                               ('face-three-quarter', (2.8,-6,2.55), 1),
+                              ('face-half-blink', (0,-6,2.14), 26),
                               ('face-blink', (0,-6,2.14), 28)]:
     scene.frame_set(frame)
     camera.location = position
     camera.rotation_euler = (Vector((0,0,2.04))-camera.location).to_track_quat('-Z','Y').to_euler()
     camera.data.ortho_scale = 1.85
+    if name in ['face-front','face-blink']:
+        deps=bpy.context.evaluated_depsgraph_get()
+        for side in ['L','R']:
+            globe=bpy.data.objects['Hearthling_Eyeball_'+side].evaluated_get(deps)
+            center=sum((globe.matrix_world @ Vector(p) for p in globe.bound_box),Vector())/8
+            hit,_,_,_,ob,_=scene.ray_cast(deps,camera.location,(center-camera.location).normalized())
+            expected='Hearthling_Head' if name=='face-blink' else 'Hearthling_Eyeball_'+side
+            assert hit and ob.name==expected, (name,side,ob.name if hit else 'no hit')
+        print(name,'eye visibility PASS',flush=True)
     scene.render.filepath = str(OUT / (name + '.png'))
     bpy.ops.render.render(write_still=True)
 print('SHIPPING_GLB_RENDER_CHECK_COMPLETE', flush=True)
