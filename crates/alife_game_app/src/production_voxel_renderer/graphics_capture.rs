@@ -1,5 +1,6 @@
 //! In-engine screenshots, also usable when Windows desktop capture is unavailable.
 use super::*;
+use bevy::prelude::{Query, ViewVisibility};
 
 #[derive(Default)]
 pub(super) struct CaptureSession {
