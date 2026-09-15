@@ -56,6 +56,11 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                         ) {
                             continue;
                         }
+                        if highlands {
+                            // Tile snapping can visually push a blocked creature into a rock.
+                            projected.translation.x = object.position.x;
+                            projected.translation.z = object.position.z;
+                        }
                         projected.translation.y = grounded_root_height(
                             surface_height,
                             0.04,

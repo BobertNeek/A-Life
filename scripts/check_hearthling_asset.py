@@ -42,6 +42,10 @@ def colors(primitive):
     stride=v.get('byteStride',struct.calcsize('<'+fmt))
     return [tuple(x/div for x in struct.unpack_from('<'+fmt,data,offset+i*stride)) for i in range(a['count'])]
 for p in gltf['meshes'][0]['primitives']:
+    for texture in [gltf['materials'][p['material']].get('normalTexture')]:
+        if texture:
+            uv=texture.get('texCoord',0)
+            assert uv>=0 and f'TEXCOORD_{uv}' in p['attributes'], 'Invalid texture coordinate binding'
     name=gltf['materials'][p['material']]['name']
     if name=='Hearthling | spherical eyes':
         values=colors(p)

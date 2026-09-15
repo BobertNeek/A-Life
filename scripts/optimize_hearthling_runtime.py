@@ -17,6 +17,11 @@ for ob in models:
     bpy.ops.object.select_all(action='DESELECT');ob.select_set(True);bpy.context.view_layer.objects.active=ob
     for modifier in list(ob.modifiers):
         if modifier.type!='ARMATURE':bpy.ops.object.modifier_apply(modifier=modifier.name)
+    uv=ob.data.uv_layers.active or ob.data.uv_layers.new(name='RuntimeUV')
+    uv.name='RuntimeUV'
+    for old in list(ob.data.uv_layers):
+        if old.name!='RuntimeUV':ob.data.uv_layers.remove(old)
+    ob.data.uv_layers.active=uv;uv.active_render=True
     # glTF/Bevy use COLOR_0. Merge the authored coat/eye channels into one
     # per-corner stream before joining, including white for constant materials.
     attr=ob.data.color_attributes.new(name='RuntimeColor',type='FLOAT_COLOR',domain='CORNER')
@@ -32,11 +37,17 @@ for ob in models:
 for mat in {mat for ob in models for mat in ob.data.materials if mat and mat.use_nodes}:
     for node in mat.node_tree.nodes:
         if node.type=='VERTEX_COLOR':node.layer_name='RuntimeColor'
+        if node.type=='NORMAL_MAP':node.uv_map='RuntimeUV'
+    coord=mat.node_tree.nodes.new('ShaderNodeUVMap');coord.uv_map='RuntimeUV'
+    for node in mat.node_tree.nodes:
+        if node.type=='TEX_IMAGE':mat.node_tree.links.new(coord.outputs['UV'],node.inputs['Vector'])
 bpy.ops.object.select_all(action='DESELECT')
 for ob in models:ob.select_set(True)
 bpy.context.view_layer.objects.active=models[0]
 bpy.ops.object.join()
 mesh=bpy.context.object;mesh.name='Hearthling_Runtime'
+mesh.data.uv_layers.active=mesh.data.uv_layers['RuntimeUV']
+mesh.data.uv_layers.active.active_render=True
 # Join deduplicates material slots; glTF emits one draw primitive per material.
 assert len([m for m in mesh.modifiers if m.type=='ARMATURE'])==1
 bpy.ops.object.select_all(action='DESELECT');mesh.select_set(True);rig.select_set(True)

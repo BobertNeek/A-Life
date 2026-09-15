@@ -19,6 +19,7 @@ pub(super) fn capture_player_view(
     players: bevy::prelude::Query<&bevy::prelude::AnimationPlayer>,
     surface: Res<creature_grounding::RenderedTerrainSurface>,
     highlands: Option<Res<highlands::HighlandsActive>>,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
     meshes: Res<Assets<Mesh>>,
     visible_meshes: Query<(&Mesh3d, &ViewVisibility)>,
     mut commands: Commands,
@@ -62,6 +63,8 @@ pub(super) fn capture_player_view(
         "creatures": roots.iter().map(|(v,t)| serde_json::json!({
             "stable_id":v.stable_id.raw(), "state":format!("{:?}",v.animation),
             "position":t.translation.to_array(), "rotation":t.rotation.to_array(),
+            "authoritative_position":frame.as_ref().and_then(|f|f.current.object(v.stable_id))
+                .map(|o|[o.position.x,o.position.y,o.position.z]),
             "ground_height":surface.height(t.translation),
         })).collect::<Vec<_>>()
     });
