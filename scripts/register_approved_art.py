@@ -7,6 +7,7 @@ data = json.loads(manifest.read_text())
 data['entries'] = [e for e in data['entries'] if not e['asset_id'].startswith('approved-')]
 paths = [ROOT / 'crates/alife_game_app/assets/creatures/hearthling/hearthling.glb']
 paths += sorted((ROOT / 'crates/alife_game_app/assets/landscape').glob('*.glb'))
+paths += sorted((ROOT / 'crates/alife_game_app/assets/landscape/highlands').glob('*.glb'))
 paths += [ROOT / 'crates/alife_game_app/assets/landscape/ground-detail.png']
 for path in paths:
     payload = path.read_bytes()
@@ -29,6 +30,10 @@ for path in paths:
         entry.update(author='A-Life generated art with OpenAI image generation', source='generated:ground-detail-prompt')
         entry['generator'].update(config_path='crates/alife_game_app/assets/landscape/ground-detail-prompt.txt',
             tool='OpenAI-image-generation')
+    elif 'hearthling' not in path.name:
+        entry['generator'].update(
+            config_path='scripts/build_highlands.py' if path.parent.name=='highlands' else 'scripts/export_landscape.py',
+            date='2026-09-15',seed='mountainous-open-world-v2',tool='Blender-5.2.1-LTS')
     data['entries'].append(entry)
 manifest.write_text(json.dumps(data, indent=2) + '\n')
 print('Registered', len(paths), 'approved production assets')
