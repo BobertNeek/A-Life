@@ -268,6 +268,35 @@ def shrink_pupils():
             v.co=center+Vector((radius*math.sin(t)*math.cos(phi),-radius*math.cos(t),radius*math.sin(t)*math.sin(phi)))
         eye.data.update()
     rig['pupil_radius_scale']=.85
+    reveal_eye_whites()
+
+
+def reveal_eye_whites():
+    """Reduce current pupil/iris radii by 30%/25%; retain the globe and lids."""
+    rig=bpy.data.objects['Hearthling_Rig']
+    assert not rig.get('iris_radius_scale'), 'Iris reduction already applied'
+    assert abs(rig.get('pupil_radius_scale',0)-.85)<1e-6
+    radius=EYE_R*rig['eye_globe_scale']
+    old_pupil=math.asin(.063*.85/.133)
+    new_pupil=math.asin(.063*.85*.70/.133)
+    old_iris=math.asin(.102/.133)
+    new_iris=math.asin(.102*.75/.133)
+    for sign,side in [(-1,'L'),(1,'R')]:
+        center=Vector((sign*EYE_X,EYE_Y,EYE_Z))
+        eye=bpy.data.objects['Hearthling_Eyeball_'+side]
+        for v in eye.data.vertices:
+            d=v.co-center; theta=math.acos(max(-1,min(1,-d.y/radius)))
+            phi=math.atan2(d.z,d.x)
+            if theta<=old_pupil:
+                t=theta*new_pupil/old_pupil
+            elif theta<=old_iris:
+                t=new_pupil+(theta-old_pupil)*(new_iris-new_pupil)/(old_iris-old_pupil)
+            else:
+                t=new_iris+(theta-old_iris)*(math.pi-new_iris)/(math.pi-old_iris)
+            v.co=center+Vector((radius*math.sin(t)*math.cos(phi),-radius*math.cos(t),radius*math.sin(t)*math.sin(phi)))
+        eye.data.update()
+    rig['pupil_radius_scale']=.85*.70
+    rig['iris_radius_scale']=.75
 
 
 def paint_reference_face():

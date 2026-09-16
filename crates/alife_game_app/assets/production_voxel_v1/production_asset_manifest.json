@@ -4118,14 +4118,14 @@
     {
       "asset_id": "approved-hearthling",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:682d66a6ec1c20c1",
+      "digest": "fnv1a64:73e0314e5194e07e",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
         "config_path": "scripts/export_hearthling.py",
         "date": "2026-09-15",
-        "seed": "bipedal-fox-reference-hearthling-v8-almond-eyes",
+        "seed": "bipedal-fox-reference-hearthling-v8-iris-whites",
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
