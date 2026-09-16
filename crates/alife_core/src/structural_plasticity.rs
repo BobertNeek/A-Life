@@ -1,14 +1,14 @@
-//! Bounded core-side structural plasticity.
+//! Bounded core-side structural plasticity used by the neural runtime.
 //!
-//! This module owns a small sparse adjacency overlay until the runtime and GPU
-//! layers join it. Growth is driven by bounded local evidence, not by a scan
-//! over absent neuron pairs. Accepted edges are consumed by `compute`, so the
-//! slice exercises real later computation rather than a descriptor-only hook.
+//! Growth is driven by bounded local evidence, not by a scan over absent neuron
+//! pairs. Accepted edges are consumed by `compute` and persisted with the exact
+//! cognitive checkpoint.
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::{Deserialize, Serialize};
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer, Serialize};
 
 pub const MAX_CANDIDATES_PER_REGION: usize = 8;
 pub const MAX_REGIONS_PER_STATE: usize = 16;
@@ -124,13 +124,43 @@ struct SparseConnection {
     age: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct StructuralPlasticityState {
     neuron_count: u32,
     config: StructuralPlasticityConfig,
     candidates: BTreeMap<u16, Vec<StructuralCandidate>>,
     connections: BTreeMap<u32, Vec<SparseConnection>>,
     last_candidate_comparisons: u32,
+}
+
+impl<'de> Deserialize<'de> for StructuralPlasticityState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            neuron_count: u32,
+            config: StructuralPlasticityConfig,
+            candidates: BTreeMap<u16, Vec<StructuralCandidate>>,
+            connections: BTreeMap<u32, Vec<SparseConnection>>,
+            last_candidate_comparisons: u32,
+        }
+
+        let wire = Wire::deserialize(deserializer)?;
+        let state = Self {
+            neuron_count: wire.neuron_count,
+            config: wire.config,
+            candidates: wire.candidates,
+            connections: wire.connections,
+            last_candidate_comparisons: wire.last_candidate_comparisons,
+        };
+        state
+            .validate_contract()
+            .map_err(|error| D::Error::custom(format_args!("{error:?}")))?;
+        Ok(state)
+    }
 }
 
 impl StructuralPlasticityState {
@@ -149,6 +179,71 @@ impl StructuralPlasticityState {
             connections: BTreeMap::new(),
             last_candidate_comparisons: 0,
         })
+    }
+
+    pub fn validate_contract(&self) -> Result<(), StructuralPlasticityError> {
+        if self.neuron_count == 0 {
+            return Err(StructuralPlasticityError::NodeOutOfRange);
+        }
+        self.config.validate()?;
+        if self.candidates.len() > usize::from(self.config.max_regions)
+            || self.connection_count() > usize::from(self.config.max_structural_edges)
+            || self.last_candidate_comparisons
+                > (MAX_EVIDENCE_PER_PHASE * MAX_CANDIDATES_PER_REGION) as u32
+        {
+            return Err(StructuralPlasticityError::StructuralBudgetExhausted);
+        }
+
+        for (region, candidates) in &self.candidates {
+            if candidates.is_empty()
+                || candidates.len() > usize::from(self.config.max_candidates_per_region)
+            {
+                return Err(StructuralPlasticityError::StructuralBudgetExhausted);
+            }
+            let mut identities = BTreeSet::new();
+            for candidate in candidates {
+                if candidate.region != *region
+                    || candidate.source >= self.neuron_count
+                    || candidate.target >= self.neuron_count
+                    || candidate.source == candidate.target
+                    || (candidate.coactivation == 0 && candidate.eligibility == 0)
+                    || candidate.score != candidate_score(*candidate)
+                    || candidate.score < self.config.min_candidate_score
+                    || !identities.insert((candidate.source, candidate.target))
+                {
+                    return Err(StructuralPlasticityError::NodeOutOfRange);
+                }
+            }
+            if candidates
+                .windows(2)
+                .any(|pair| candidate_order(&pair[0], &pair[1]) == Ordering::Greater)
+            {
+                return Err(StructuralPlasticityError::InvalidConfig);
+            }
+        }
+
+        for (target, edges) in &self.connections {
+            if *target >= self.neuron_count || edges.is_empty() {
+                return Err(StructuralPlasticityError::NodeOutOfRange);
+            }
+            for edge in edges {
+                if edge.target != *target
+                    || edge.source >= self.neuron_count
+                    || edge.source == edge.target
+                    || !edge.weight.is_finite()
+                    || edge.weight.to_bits() != score_to_weight(edge.score).to_bits()
+                {
+                    return Err(StructuralPlasticityError::NodeOutOfRange);
+                }
+            }
+            if edges
+                .windows(2)
+                .any(|pair| pair[0].source >= pair[1].source)
+            {
+                return Err(StructuralPlasticityError::DuplicateConnection);
+            }
+        }
+        Ok(())
     }
 
     pub fn discover_candidates(
@@ -187,9 +282,7 @@ impl StructuralPlasticityState {
 
         let mut comparisons = 0_u32;
         for item in ordered {
-            if item.source == item.target
-                || (item.coactivation == 0 && item.eligibility == 0)
-            {
+            if item.source == item.target || (item.coactivation == 0 && item.eligibility == 0) {
                 continue;
             }
             let score = item
@@ -202,10 +295,9 @@ impl StructuralPlasticityState {
 
             let candidates = self.candidates.entry(item.region).or_default();
             comparisons = comparisons.saturating_add(candidates.len() as u32);
-            if let Some(candidate) = candidates
-                .iter_mut()
-                .find(|candidate| candidate.source == item.source && candidate.target == item.target)
-            {
+            if let Some(candidate) = candidates.iter_mut().find(|candidate| {
+                candidate.source == item.source && candidate.target == item.target
+            }) {
                 candidate.coactivation = candidate.coactivation.saturating_add(item.coactivation);
                 candidate.eligibility = candidate.eligibility.saturating_add(item.eligibility);
                 candidate.concept_gap_support = candidate
@@ -490,5 +582,27 @@ mod tests {
         assert_eq!(pruning.pruned_edges, 1);
         assert_eq!(plasticity.connection_count(), 0);
         assert_eq!(plasticity.compute(&input).unwrap()[2], 0.0);
+    }
+
+    #[test]
+    fn deserialization_rejects_connections_outside_the_declared_neural_shape() {
+        let mut state =
+            StructuralPlasticityState::new(4, StructuralPlasticityConfig::default()).unwrap();
+        state
+            .discover_candidates(&[CoactivationEvidence {
+                region: 0,
+                source: 1,
+                target: 2,
+                coactivation: 2,
+                eligibility: 1,
+                concept_gap_support: 0,
+            }])
+            .unwrap();
+        state.apply_structural_phase().unwrap();
+
+        let mut malformed = serde_json::to_value(state).unwrap();
+        malformed["neuron_count"] = serde_json::json!(2);
+
+        assert!(serde_json::from_value::<StructuralPlasticityState>(malformed).is_err());
     }
 }

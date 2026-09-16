@@ -19,13 +19,14 @@ use bytemuck::Zeroable;
 use crate::{
     phenotype_hash_from_gpu_words, split_u64x2, GpuActivityDispatchHeader, GpuBrainSlot,
     GpuCandidateMemoryRecord, GpuCandidateRecord, GpuClassBucketBuffers, GpuClosedLoopError,
-    GpuEligibilityDiscardRecord, GpuFastPlasticityCommitRecord, GpuFixedClassArenaBuffers,
-    GpuLearningHeader, GpuMemoryContextDispatchReceipt, GpuMemoryContextHeader,
-    GpuMemoryContextUpload, GpuNeuralReceptorEffectsRecord, GpuOutcomeCreditRecord,
-    GpuPendingEligibilityRecord, GpuPerceptionHeader, GpuPerceptionUpload, GpuSelectionRecord,
-    GpuSpeechPayloadRecord, CLOSED_LOOP_ELIGIBILITY_WGSL, CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
-    GPU_CLOSED_LOOP_TICK_READBACK_BYTES, GPU_FAST_PLASTICITY_COMMIT_BYTES,
-    GPU_FAST_PLASTICITY_COMMIT_WORDS, GPU_LEARNING_HEADER_WORDS, GPU_OUTCOME_CREDIT_WORDS,
+    GpuCognitiveProjectionRecord, GpuEligibilityDiscardRecord, GpuFastPlasticityCommitRecord,
+    GpuFixedClassArenaBuffers, GpuLearningHeader, GpuMemoryContextDispatchReceipt,
+    GpuMemoryContextHeader, GpuMemoryContextUpload, GpuNeuralReceptorEffectsRecord,
+    GpuOutcomeCreditRecord, GpuPendingEligibilityRecord, GpuPerceptionHeader, GpuPerceptionUpload,
+    GpuSelectionRecord, GpuSpeechPayloadRecord, CLOSED_LOOP_ELIGIBILITY_WGSL,
+    CLOSED_LOOP_MEMORY_CONTEXT_WGSL, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
+    GPU_FAST_PLASTICITY_COMMIT_BYTES, GPU_FAST_PLASTICITY_COMMIT_WORDS, GPU_LEARNING_HEADER_WORDS,
+    GPU_OUTCOME_CREDIT_WORDS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -685,6 +686,7 @@ struct GpuBatchEntryView<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuActiveBatchUpload {
+    joint_motor_modes: Vec<u32>,
     headers: Vec<GpuPerceptionHeader>,
     learning_headers: Vec<GpuLearningHeader>,
     activity_headers: Vec<GpuActivityDispatchHeader>,
@@ -815,12 +817,24 @@ impl GpuActiveBatchUpload {
             } else {
                 0
             };
+            let cognitive_record_words = memory_upload
+                .as_ref()
+                .map(|memory| {
+                    memory
+                        .cognitive_records
+                        .len()
+                        .checked_mul(crate::GPU_COGNITIVE_PROJECTION_RECORD_WORDS)
+                        .ok_or(GpuClosedLoopError::ArithmeticOverflow)
+                })
+                .transpose()?
+                .unwrap_or(0);
             let payload_end = frame_payload_words
                 .len()
                 .checked_add(upload.frame_payload_words.len())
                 .and_then(|value| value.checked_add(candidate_digest_words))
                 .and_then(|value| value.checked_add(crate::GPU_PENDING_ELIGIBILITY_WORDS))
                 .and_then(|value| value.checked_add(memory_record_words))
+                .and_then(|value| value.checked_add(cognitive_record_words))
                 .and_then(|value| value.checked_add(neural_receptor_effects_words))
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
             if payload_end > GPU_REQUIRED_MAX_BUFFER_WORDS
@@ -883,9 +897,15 @@ impl GpuActiveBatchUpload {
             let memory_binding = if let Some(memory) = &mut memory_upload {
                 let memory_context_offset = u32::try_from(frame_payload_words.len())
                     .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
-                let neural_receptor_effects_offset = memory_context_offset
+                let cognitive_projection_offset = memory_context_offset
                     .checked_add(
                         u32::try_from(memory_record_words)
+                            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
+                    )
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+                let neural_receptor_effects_offset = cognitive_projection_offset
+                    .checked_add(
+                        u32::try_from(cognitive_record_words)
                             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
                     )
                     .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
@@ -899,6 +919,9 @@ impl GpuActiveBatchUpload {
                     neural_receptor_effects_offset,
                 )?;
                 for record in &memory.records {
+                    frame_payload_words.extend_from_slice(record.words());
+                }
+                for record in &memory.cognitive_records {
                     frame_payload_words.extend_from_slice(record.words());
                 }
                 let receptor_record = GpuNeuralReceptorEffectsRecord::try_from_effects(
@@ -1027,6 +1050,10 @@ impl GpuActiveBatchUpload {
 
         Ok(Self {
             headers,
+            joint_motor_modes: entries
+                .iter()
+                .map(|entry| entry.slot.record().reserved[0])
+                .collect(),
             learning_headers,
             activity_headers,
             pending_templates,
@@ -1748,6 +1775,14 @@ impl GpuClosedLoopKernelSet {
     }
 }
 
+#[cfg(feature = "gpu-tests")]
+pub(crate) struct FastPlasticityFaultsForTest {
+    pub slot: u32,
+    pub generation: u32,
+    pub before_apply: Vec<(u32, u32)>,
+    pub before_replay: Vec<(u32, u32)>,
+}
+
 pub struct GpuClosedLoopPipelines {
     kernels: Arc<GpuClosedLoopKernelSet>,
     bind_group: wgpu::BindGroup,
@@ -1764,6 +1799,8 @@ pub struct GpuClosedLoopPipelines {
     force_all_invalid_slot: Option<(u32, u32)>,
     #[cfg(feature = "gpu-tests")]
     force_pending_identity_mismatch_slot: Option<(u32, u32)>,
+    #[cfg(feature = "gpu-tests")]
+    pub(crate) fast_plasticity_faults_for_test: Option<FastPlasticityFaultsForTest>,
 }
 
 impl GpuClosedLoopPipelines {
@@ -1829,6 +1866,8 @@ impl GpuClosedLoopPipelines {
             force_all_invalid_slot: None,
             #[cfg(feature = "gpu-tests")]
             force_pending_identity_mismatch_slot: None,
+            #[cfg(feature = "gpu-tests")]
+            fast_plasticity_faults_for_test: None,
         })
     }
 
@@ -2259,6 +2298,8 @@ impl GpuClosedLoopPipelines {
         entries: &[GpuFastPlasticityBatchEntry<'_>],
         timestamp: GpuTimestampQueryResources<'_>,
     ) -> Result<GpuTimedFastPlasticityResult, GpuClosedLoopError> {
+        #[cfg(feature = "gpu-tests")]
+        let faults = self.fast_plasticity_faults_for_test.take();
         self.last_fast_plasticity_malformed = None;
         self.authority.ensure_healthy()?;
         if self.authority.pending.is_some()
@@ -2553,6 +2594,50 @@ impl GpuClosedLoopPipelines {
         {
             return Err(GpuClosedLoopError::CapacityExceeded);
         }
+        #[cfg(feature = "gpu-tests")]
+        let fault_buffer = if let Some(faults) = &faults {
+            let entry = entries
+                .iter()
+                .find(|entry| {
+                    entry.slot.record().slot == faults.slot
+                        && entry.slot.record().slot_generation == faults.generation
+                })
+                .ok_or(GpuClosedLoopError::StaleOrForeignHandle)?;
+            let ranges = entry.slot.word_ranges();
+            for (offset, _) in faults.before_apply.iter().chain(&faults.before_replay) {
+                let end = offset
+                    .checked_add(1)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+                if ![
+                    &ranges.recurrent_eligibility_words,
+                    &ranges.recurrent_eligibility_bank_1_words,
+                    &ranges.decoder_eligibility_words,
+                    &ranges.decoder_eligibility_bank_1_words,
+                    &ranges.replay_span_words,
+                ]
+                .iter()
+                .any(|range| *offset >= range.start && end <= range.end)
+                {
+                    return Err(GpuClosedLoopError::MalformedUpload);
+                }
+            }
+            let values = faults
+                .before_apply
+                .iter()
+                .chain(&faults.before_replay)
+                .map(|(_, value)| *value)
+                .collect::<Vec<_>>();
+            use wgpu::util::DeviceExt;
+            Some(
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("closed-loop-test-plasticity-faults"),
+                    contents: bytemuck::cast_slice(&values),
+                    usage: wgpu::BufferUsages::COPY_SRC,
+                }),
+            )
+        } else {
+            None
+        };
         let neural = buffers.neural_buffers();
         queue.write_buffer(neural[4], 0, bytemuck::cast_slice(&dispatch_words));
         queue.write_buffer(neural[5], 0, bytemuck::cast_slice(&frame_words));
@@ -2591,6 +2676,27 @@ impl GpuClosedLoopPipelines {
                 1,
             ),
         ] {
+            #[cfg(feature = "gpu-tests")]
+            if let (Some(faults), Some(source)) = (&faults, &fault_buffer) {
+                let writes = match label {
+                    "closed-loop-apply-fast-plasticity-pass" => Some((0, &faults.before_apply)),
+                    "closed-loop-capture-fast-plasticity-replay-pass" => {
+                        Some((faults.before_apply.len(), &faults.before_replay))
+                    }
+                    _ => None,
+                };
+                if let Some((base, writes)) = writes {
+                    for (index, (offset, _)) in writes.iter().enumerate() {
+                        encoder.copy_buffer_to_buffer(
+                            source,
+                            ((base + index) as u64) * 4,
+                            neural[6],
+                            u64::from(*offset) * 4,
+                            4,
+                        );
+                    }
+                }
+            }
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some(label),
                 timestamp_writes: None,
@@ -3426,9 +3532,22 @@ impl GpuClosedLoopPipelines {
         let mut records = Vec::with_capacity(batch.row_count());
         let mut speech_payloads = Vec::with_capacity(batch.row_count());
         let mut factorized_motor_candidates = Vec::with_capacity(batch.row_count());
-        for row in words.chunks_exact(row_words) {
+        for (index, row) in words.chunks_exact(row_words).enumerate() {
             records.push(GpuSelectionRecord::from_words(&row[..selection_words])?);
             let speech_record = GpuSpeechPayloadRecord::from_words(&row[selection_words..])?;
+            let mode = *batch
+                .joint_motor_modes
+                .get(index)
+                .ok_or(GpuClosedLoopError::MalformedUpload)?;
+            let successful = records[index].status == 3;
+            let expected_marker = if mode != 0 && successful {
+                crate::GPU_JOINT_SELECTION_V1_MARKER
+            } else {
+                0
+            };
+            if speech_record.reserved[1] & 0xffff_0000 != expected_marker {
+                return Err(GpuClosedLoopError::SubmissionFailed);
+            }
             factorized_motor_candidates.push(speech_record.factorized_motor_candidates());
             speech_payloads.push(decode_speech_payload_record(speech_record)?);
         }
@@ -3451,7 +3570,12 @@ impl GpuClosedLoopPipelines {
             }
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
-        if !self.validate_speech_payloads(batch, &records, &speech_payloads) {
+        if !self.validate_speech_payloads(
+            batch,
+            &records,
+            &speech_payloads,
+            &factorized_motor_candidates,
+        ) {
             if let Some(diagnostic) = diagnostic.as_deref_mut() {
                 diagnostic.substage = Some(GpuDecodeMappedRecordsSubstage::SpeechValidation);
             }
@@ -3946,25 +4070,43 @@ impl GpuClosedLoopPipelines {
         batch: &GpuActiveBatchUpload,
         selections: &[GpuSelectionRecord],
         payloads: &[Option<SpeechMotorPayload>],
+        motor_candidates: &[[u16; crate::GPU_MOTOR_CHANNEL_SLOT_COUNT]],
     ) -> bool {
         selections.len() == payloads.len()
             && selections.len() == batch.headers.len()
-            && selections.iter().zip(payloads).zip(&batch.headers).all(
-                |((selection, payload), header)| {
+            && selections.len() == motor_candidates.len()
+            && selections.len() == batch.joint_motor_modes.len()
+            && selections
+                .iter()
+                .zip(payloads)
+                .zip(&batch.headers)
+                .enumerate()
+                .all(|(row, ((selection, payload), header))| {
                     if selection.status != 3 || selection.candidate_index >= header.candidate_count
                     {
                         return payload.is_none();
                     }
+                    if payload.is_none() {
+                        return true;
+                    }
+                    let candidate_index = if batch.joint_motor_modes[row] != 0 {
+                        let Some(index) = motor_candidates[row][3].checked_sub(1) else {
+                            return false;
+                        };
+                        u32::from(index)
+                    } else {
+                        selection.candidate_index
+                    };
+                    if candidate_index >= header.candidate_count {
+                        return false;
+                    }
                     let base = header.candidate_offset as usize
-                        + selection.candidate_index as usize * GPU_CANDIDATE_RECORD_WORDS;
+                        + candidate_index as usize * GPU_CANDIDATE_RECORD_WORDS;
                     GpuCandidateRecord::from_words(
                         &batch.dispatch_header_words[base..base + GPU_CANDIDATE_RECORD_WORDS],
                     )
-                    .is_ok_and(|candidate| {
-                        candidate.kind == u32::from(ActionKind::Vocalize.raw()) || payload.is_none()
-                    })
-                },
-            )
+                    .is_ok_and(|candidate| candidate.kind == u32::from(ActionKind::Vocalize.raw()))
+                })
     }
 
     fn validate_factorized_motor_candidates(
@@ -4465,12 +4607,48 @@ fn validate_dispatch(
                         return Err(GpuClosedLoopError::NonFinitePayload);
                     }
                 }
+                let cognitive_record_start = memory_record_end;
+                let cognitive_record_words = usize::try_from(memory_header.candidate_count)
+                    .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+                    .checked_mul(crate::GPU_COGNITIVE_PROJECTION_RECORD_WORDS)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+                let cognitive_record_end = cognitive_record_start
+                    .checked_add(cognitive_record_words)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+                if cognitive_record_end > batch.frame_payload_words.len() {
+                    return Err(GpuClosedLoopError::MalformedUpload);
+                }
+                for candidate_index in 0..memory_header.candidate_count {
+                    let record_start = cognitive_record_start
+                        + usize::try_from(candidate_index)
+                            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+                            * crate::GPU_COGNITIVE_PROJECTION_RECORD_WORDS;
+                    let record = GpuCognitiveProjectionRecord::from_words(
+                        &batch.frame_payload_words[record_start
+                            ..record_start + crate::GPU_COGNITIVE_PROJECTION_RECORD_WORDS],
+                    )?;
+                    if record.candidate_index != candidate_index
+                        || record.reserved != 0
+                        || record.reserved_tail != [0; 2]
+                        || record.forecast_available > 1
+                        || (record.schema_version == 1
+                            && learning.decoder_input_stride
+                                < u32::from(alife_core::COGNITIVE_CHANNEL_LANE_END))
+                        || record.values.iter().any(|value| !value.is_finite())
+                        || (record.schema_version == 0
+                            && (record.forecast_available != 0
+                                || record.values.iter().any(|value| *value != 0.0)))
+                        || (record.schema_version != 0 && record.schema_version != 1)
+                    {
+                        return Err(GpuClosedLoopError::MalformedUpload);
+                    }
+                }
                 let receptor_start = usize::try_from(memory_header.neural_receptor_effects_offset)
                     .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
                 let receptor_end = receptor_start
                     .checked_add(crate::GPU_NEURAL_RECEPTOR_EFFECTS_WORDS)
                     .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
-                if receptor_start != memory_record_end
+                if receptor_start != cognitive_record_end
                     || receptor_end > batch.frame_payload_words.len()
                 {
                     return Err(GpuClosedLoopError::MalformedUpload);
@@ -4840,6 +5018,7 @@ mod lifecycle_tests {
             selector_diagnostic_requests: vec![Vec::new()],
             selector_diagnostic_family_synapse_counts: vec![vec![1]],
             memory_context_bindings: vec![None],
+            joint_motor_modes: vec![0],
         };
 
         assert_eq!(batch.authority_nonce_for_test(), 7);

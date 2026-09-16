@@ -4,8 +4,9 @@ use alife_core::{
 };
 use alife_world::{
     persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
-    HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldSignatureDigest, WorldEditorSpawnSpec,
-    WorldObject, WorldObjectKind, WorldOrganismRecord,
+    HabitatAuthority, HabitatId, HeadlessScenarioBuilder, HeadlessWorld,
+    HeadlessWorldSignatureDigest, WorldEditorSpawnSpec, WorldObject, WorldObjectKind,
+    WorldOrganismRecord,
 };
 
 #[derive(Debug, PartialEq)]
@@ -70,6 +71,26 @@ fn world_with_two_agents_and_food() -> (HeadlessWorld, WorldEntityId, WorldEntit
     (world, agent_a, agent_b, food)
 }
 
+fn world_with_six_agents() -> HeadlessWorld {
+    let mut world = HeadlessScenarioBuilder::new(3_106)
+        .agent("agent-1", OrganismId(1), Vec3f::ZERO)
+        .agent("agent-2", OrganismId(2), Vec3f::new(1.0, 0.0, 0.0))
+        .agent("agent-3", OrganismId(3), Vec3f::new(2.0, 0.0, 0.0))
+        .agent("agent-4", OrganismId(4), Vec3f::new(3.0, 0.0, 0.0))
+        .agent("agent-5", OrganismId(5), Vec3f::new(4.0, 0.0, 0.0))
+        .agent("agent-6", OrganismId(6), Vec3f::new(5.0, 0.0, 0.0))
+        .build()
+        .unwrap();
+    let records = (1..=6)
+        .map(|organism_id| {
+            let world_entity_id = world.entity_id(&format!("agent-{organism_id}")).unwrap();
+            record(organism_id, world_entity_id.raw())
+        })
+        .collect::<Vec<_>>();
+    world.replace_organism_registry_exact(records).unwrap();
+    world
+}
+
 fn registry_receipt(
     world: &HeadlessWorld,
 ) -> Vec<(
@@ -130,7 +151,7 @@ fn world_with_agent_without_organism_id() -> HeadlessWorld {
     save.restore_headless_world().unwrap()
 }
 
-fn world_with_non_agent_organism_id() -> (HeadlessWorld, WorldEntityId, WorldEntityId) {
+fn save_with_non_agent_organism_id() -> PortableSaveFile {
     let (world, _, _) = world_with_agent_and_food();
     let save = PortableSaveFile::from_headless_world(
         "task-3-2b3b1-food-id",
@@ -147,11 +168,7 @@ fn world_with_non_agent_organism_id() -> (HeadlessWorld, WorldEntityId, WorldEnt
         .find(|object| object["label"] == "food")
         .unwrap();
     food["organism_id"] = serde_json::json!(99);
-    let save = PortableSaveFile::from_json_str(&serde_json::to_string(&value).unwrap()).unwrap();
-    let world = save.restore_headless_world().unwrap();
-    let agent = world.entity_id("agent").unwrap();
-    let food = world.entity_id("food").unwrap();
-    (world, agent, food)
+    PortableSaveFile::from_json_str(&serde_json::to_string(&value).unwrap()).unwrap()
 }
 
 fn world_with_duplicate_agent_organism_id() -> HeadlessWorld {
@@ -332,19 +349,10 @@ fn replace_registry_rejects_duplicate_agent_organism_identity_atomically() {
 }
 
 #[test]
-fn replace_registry_excludes_non_agent_organism_ids_from_reverse_cohort() {
-    let (mut world, agent, food) = world_with_non_agent_organism_id();
-
-    world
-        .replace_organism_registry_exact([record(7, agent.raw())].into_iter())
-        .unwrap();
-
-    assert_eq!(
-        world.entity(food).unwrap().organism_id,
-        Some(OrganismId(99))
-    );
-    assert_eq!(world.organism_registry().len(), 1);
-    world.validate_organism_bindings().unwrap();
+fn persistence_rejects_non_agent_organism_identity() {
+    assert!(save_with_non_agent_organism_id()
+        .restore_headless_world()
+        .is_err());
 }
 
 #[test]
@@ -376,6 +384,51 @@ fn replace_registry_accepts_valid_biology_lifecycle_archive_state() {
             death_tick: Tick(1)
         }
     );
+}
+
+#[test]
+fn replace_one_organism_record_is_atomic_and_binding_exact() {
+    let mut world = world_with_six_agents();
+    let organism_id = OrganismId(3);
+    let original = world.organism_registry().get(organism_id).unwrap().clone();
+    let mut replacement = original.clone();
+    replacement
+        .seal_cognitive_subsystems(Tick::ZERO, [1; 4], [2; 4])
+        .unwrap();
+
+    world
+        .replace_organism_record_exact(replacement.clone())
+        .unwrap();
+
+    assert_eq!(world.organism_registry().len(), 6);
+    assert_eq!(
+        world.organism_registry().get(organism_id),
+        Some(&replacement)
+    );
+    assert_eq!(
+        world
+            .organism_registry()
+            .get_by_world_entity_id(replacement.world_entity_id()),
+        Some(&replacement)
+    );
+    let after_valid_replacement = receipt(&world);
+
+    let changed_organism = record(99, replacement.world_entity_id().raw());
+    assert!(world
+        .replace_organism_record_exact(changed_organism)
+        .is_err());
+    assert_unchanged(&world, &after_valid_replacement);
+
+    let changed_world_entity = record(organism_id.raw(), original.world_entity_id().raw() + 1);
+    assert!(world
+        .replace_organism_record_exact(changed_world_entity)
+        .is_err());
+    assert_unchanged(&world, &after_valid_replacement);
+
+    assert!(world
+        .replace_organism_record_exact(malformed_record(replacement))
+        .is_err());
+    assert_unchanged(&world, &after_valid_replacement);
 }
 
 #[test]
@@ -443,6 +496,36 @@ fn registered_agent_cannot_be_removed_through_world_or_editor_paths() {
         Some(&before_record)
     );
     world.validate_organism_bindings().unwrap();
+}
+
+#[test]
+fn habitat_replacement_rejects_memberships_outside_the_world_registry() {
+    let mut world = world_with_six_agents();
+    let mut authority = HabitatAuthority::default();
+    authority
+        .register_creature(OrganismId(99), HabitatId::DEFAULT_WILD, Tick::ZERO)
+        .unwrap();
+
+    assert!(world.replace_habitat_authority(authority).is_err());
+    assert!(world.habitat_authority().memberships().is_empty());
+}
+
+#[test]
+fn habitat_replacement_rejects_memberships_from_a_future_world_tick() {
+    let mut world = world_with_six_agents();
+    let mut authority = HabitatAuthority::default();
+    for organism_id in 1..=6 {
+        authority
+            .register_creature(
+                OrganismId(organism_id),
+                HabitatId::DEFAULT_WILD,
+                Tick::new(1),
+            )
+            .unwrap();
+    }
+
+    assert!(world.replace_habitat_authority(authority).is_err());
+    assert!(world.habitat_authority().memberships().is_empty());
 }
 
 #[test]

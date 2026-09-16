@@ -1,4 +1,4 @@
-use std::{env, error::Error, fs, path::PathBuf};
+use std::{env, error::Error, ffi::OsString, fs, io, path::PathBuf};
 
 use alife_core::{
     BrainCapacityClass, BrainGenome, DevelopmentState, FoundationWeightAsset, NormalizedScalar,
@@ -11,13 +11,18 @@ use alife_training::{
 
 const MAX_ATTEMPTS_PER_STAGE: u32 = 128;
 const OPTIMIZER_STEPS_PER_ATTEMPT: u32 = 8;
+const DEFAULT_OUTPUT: &str = "target/artifacts/n2048-v1-grounded-trained.alife-foundation";
+
+#[derive(Debug, PartialEq, Eq)]
+struct TrainingOptions {
+    output: PathBuf,
+    retrain_language: bool,
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut args = env::args_os().skip(1);
-    let output = args.next().map(PathBuf::from).unwrap_or_else(|| {
-        PathBuf::from("target/artifacts/n2048-v1-grounded-trained.alife-foundation")
-    });
-    let retrain_language = args.any(|arg| arg == "--retrain-language");
+    let options = parse_args(env::args_os().skip(1))?;
+    let output = options.output;
+    let retrain_language = options.retrain_language;
     let capacity = BrainCapacityClass::n2048();
     let genome = BrainGenome::scaffold(N2048_FOUNDATION_TRAINING_SEED, capacity.id());
     let development = DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0)?);
@@ -113,6 +118,30 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn parse_args(args: impl IntoIterator<Item = OsString>) -> Result<TrainingOptions, io::Error> {
+    let mut output = None;
+    let mut retrain_language = false;
+    for arg in args {
+        if arg.to_str() == Some("--retrain-language") {
+            retrain_language = true;
+        } else if arg.to_string_lossy().starts_with("--") {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("unknown option: {}", arg.to_string_lossy()),
+            ));
+        } else if output.replace(PathBuf::from(arg)).is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "only one output path may be supplied",
+            ));
+        }
+    }
+    Ok(TrainingOptions {
+        output: output.unwrap_or_else(|| PathBuf::from(DEFAULT_OUTPUT)),
+        retrain_language,
+    })
+}
+
 fn hex(bytes: &[u8; 32]) -> String {
     let mut result = String::with_capacity(64);
     for byte in bytes {
@@ -120,4 +149,29 @@ fn hex(bytes: &[u8; 32]) -> String {
         write!(&mut result, "{byte:02x}").expect("writing to a String cannot fail");
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retrain_flag_does_not_become_the_output_path() {
+        let options = parse_args([OsString::from("--retrain-language")]).unwrap();
+        assert_eq!(options.output, PathBuf::from(DEFAULT_OUTPUT));
+        assert!(options.retrain_language);
+    }
+
+    #[test]
+    fn output_and_retrain_flag_are_order_independent() {
+        let expected = PathBuf::from("candidate.alife-foundation");
+        for args in [
+            ["candidate.alife-foundation", "--retrain-language"],
+            ["--retrain-language", "candidate.alife-foundation"],
+        ] {
+            let options = parse_args(args.map(OsString::from)).unwrap();
+            assert_eq!(options.output, expected);
+            assert!(options.retrain_language);
+        }
+    }
 }

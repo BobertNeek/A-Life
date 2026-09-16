@@ -4,8 +4,8 @@ use alife_core::{
 };
 use alife_gpu_backend::{
     GpuActiveTileMaskConfig, GpuFixedPointPolicy, GpuReadbackClass, GpuReadbackPolicy,
-    GpuRoutingMaskPlan, GpuStaticForwardPlan, GpuSupertileIndex, GpuSupertileMaskWords,
-    GpuUploadBuffers, P27_SUPERTILE_MICROTILES, P27_WGSL_SUPERTILE_ROUTING,
+    GpuRoutingMaskPlan, GpuSupertileIndex, GpuSupertileMaskWords, GpuUploadBuffers,
+    P27_SUPERTILE_MICROTILES, P27_WGSL_SUPERTILE_ROUTING,
 };
 
 fn weights(
@@ -46,13 +46,6 @@ fn two_tile_schema() -> NeuralProjectionSchema {
     ));
     schema.rebuild_supertile_masks();
     schema
-}
-
-fn activation_vec(first: f32, second_tile_source: f32) -> Vec<f32> {
-    let mut values = vec![0.0; 512];
-    values[0] = first;
-    values[16] = second_tile_source;
-    values
 }
 
 #[test]
@@ -107,86 +100,6 @@ fn mask_packing_and_unpacking_splits_low_and_high_words() {
         mask.contains_local_bit(64),
         Err(ScaffoldContractError::InvalidSparseProjectionSchema)
     );
-}
-
-#[test]
-fn all_zero_cull_skips_all_tiles_and_keeps_output_zero() {
-    let policy = GpuFixedPointPolicy::reference();
-    let mut schema = two_tile_schema();
-    schema.projections[0].supertile_masks[0].active_microtile_mask = 0;
-    let upload = GpuUploadBuffers::from_cpu_schema(&schema, policy).unwrap();
-    let plan = GpuStaticForwardPlan::from_upload(&upload, policy).unwrap();
-    let activation_q = plan
-        .quantize_activations(&activation_vec(0.75, 0.5))
-        .unwrap();
-    let result = plan.execute_cpu_diagnostic(&activation_q).unwrap();
-    let counters = plan.routing_counters();
-
-    assert_eq!(result.diagnostics.active_tiles, 0);
-    assert_eq!(result.diagnostics.mask_skipped_tiles, 2);
-    assert_eq!(result.diagnostics.active_synapses, 0);
-    assert!(result.activations_q.iter().all(|value| *value == 0));
-    assert_eq!(counters.skipped_supertiles, 1);
-    assert_eq!(counters.skipped_microtiles, 2);
-}
-
-#[test]
-fn active_tile_mask_passes_through_to_unculled_reference() {
-    let policy = GpuFixedPointPolicy::reference();
-    let schema = two_tile_schema();
-    let mut unmasked = schema.clone();
-    unmasked.projections[0].supertile_masks.clear();
-    let masked_upload = GpuUploadBuffers::from_cpu_schema(&schema, policy).unwrap();
-    let unmasked_upload = GpuUploadBuffers::from_cpu_schema(&unmasked, policy).unwrap();
-    let masked_plan = GpuStaticForwardPlan::from_upload(&masked_upload, policy).unwrap();
-    let unmasked_plan = GpuStaticForwardPlan::from_upload(&unmasked_upload, policy).unwrap();
-    let activation_q = masked_plan
-        .quantize_activations(&activation_vec(0.75, 0.5))
-        .unwrap();
-
-    let masked_result = masked_plan.execute_cpu_diagnostic(&activation_q).unwrap();
-    let unmasked_result = unmasked_plan.execute_cpu_diagnostic(&activation_q).unwrap();
-
-    assert_eq!(masked_result.activations_q, unmasked_result.activations_q);
-    assert_eq!(masked_result.diagnostics.active_tiles, 2);
-    assert_eq!(masked_result.diagnostics.mask_skipped_tiles, 0);
-}
-
-#[test]
-fn masked_and_unmasked_outputs_match_when_skipped_region_is_inactive_zero() {
-    let policy = GpuFixedPointPolicy::reference();
-    let mut schema = two_tile_schema();
-    schema.projections[0].tiles[1] = ProjectionTile::new_coo(
-        0,
-        SparseTileCoord::new(1, 1).unwrap(),
-        CooTile::new(vec![
-            CooEntry::new(0, 0, weights(0.5, 0.0, 1.0, 0.0, 0.1)).unwrap()
-        ])
-        .unwrap(),
-    );
-    schema.rebuild_supertile_masks();
-    schema.projections[0].supertile_masks[0].active_microtile_mask = 1;
-    let mut unmasked = schema.clone();
-    unmasked.projections[0].supertile_masks.clear();
-    let masked_plan = GpuStaticForwardPlan::from_upload(
-        &GpuUploadBuffers::from_cpu_schema(&schema, policy).unwrap(),
-        policy,
-    )
-    .unwrap();
-    let unmasked_plan = GpuStaticForwardPlan::from_upload(
-        &GpuUploadBuffers::from_cpu_schema(&unmasked, policy).unwrap(),
-        policy,
-    )
-    .unwrap();
-    let activation_q = masked_plan
-        .quantize_activations(&activation_vec(0.75, 0.0))
-        .unwrap();
-
-    let masked_result = masked_plan.execute_cpu_diagnostic(&activation_q).unwrap();
-    let unmasked_result = unmasked_plan.execute_cpu_diagnostic(&activation_q).unwrap();
-
-    assert_eq!(masked_result.activations_q, unmasked_result.activations_q);
-    assert_eq!(masked_result.diagnostics.mask_skipped_tiles, 1);
 }
 
 #[test]
@@ -261,30 +174,6 @@ fn active_mask_derivation_respects_fixture_budget_and_is_deterministic() {
     assert_eq!(first.active_masks, second.active_masks);
     assert_eq!(first.active_tiles, 1);
     assert_eq!(first.skipped_microtiles, 1);
-}
-
-#[test]
-fn static_forward_can_consume_p27_masks_without_output_drift() {
-    let policy = GpuFixedPointPolicy::reference();
-    let mut upload = GpuUploadBuffers::from_cpu_schema(&two_tile_schema(), policy).unwrap();
-    let spec = BrainClassSpec::for_tier(BrainScaleTier::Nano512);
-    let routing = GpuRoutingMaskPlan::from_upload_and_brain_class(
-        &upload,
-        &spec,
-        GpuActiveTileMaskConfig::for_deterministic_fixture(0, true),
-    )
-    .unwrap();
-    upload.supertile_masks = routing.active_masks.clone();
-    let plan = GpuStaticForwardPlan::from_upload(&upload, policy).unwrap();
-    let activation_q = plan
-        .quantize_activations(&activation_vec(0.75, 0.5))
-        .unwrap();
-    let result = plan.execute_cpu_diagnostic(&activation_q).unwrap();
-
-    assert_eq!(result.diagnostics.active_tiles, 2);
-    assert_eq!(result.diagnostics.mask_skipped_tiles, 0);
-    assert_ne!(result.activations_q[0], 0);
-    assert_ne!(result.activations_q[16], 0);
 }
 
 #[test]

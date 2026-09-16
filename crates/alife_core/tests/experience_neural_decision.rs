@@ -37,9 +37,9 @@ fn genome(spec: &BrainClassSpec) -> BrainGenome {
 fn development(genome: &BrainGenome, tick: Tick) -> DevelopmentState {
     DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.35).unwrap()).with_enabled_lobes(
         [
-            LobeKind::SensoryGrounding,
-            LobeKind::CoreAssociation,
-            LobeKind::MotorArbitration,
+            LobeKind::PerceptualIntegration,
+            LobeKind::TemporalPredictive,
+            LobeKind::ActionPlanning,
         ],
     )
 }
@@ -774,7 +774,7 @@ fn legacy_v1_patch_deserializes_as_explicit_heuristic_baseline_evidence() {
     let value = serde_json::to_value(legacy_patch_v1()).unwrap();
     let migrated: ExperiencePatch = serde_json::from_value(value).unwrap();
 
-    assert_eq!(migrated.header().abi_version, 3);
+    assert_eq!(migrated.header().abi_version, 4);
     assert_eq!(
         migrated.header().sensor_profile,
         migrated.pre_action().perception().profile_provenance()

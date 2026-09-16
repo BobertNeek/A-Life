@@ -187,6 +187,48 @@ fn selection_lab_is_deterministic_and_keeps_weight_assets_birth_only() {
 }
 
 #[test]
+fn selection_rejects_nonfinite_fitness_and_empty_initializer_identity() {
+    let spec = standard_spec();
+    let parent = BrainGenome::scaffold(201, spec.id);
+    let mut invalid_fitness = FitnessSummary::synthetic(0.5).unwrap();
+    invalid_fitness.composite_score = f32::NAN;
+    let candidates = vec![SelectionCandidate::new(parent, invalid_fitness)];
+    let config = EvolutionLabConfig {
+        seed: 0xA11F_3305,
+        generation: 1,
+        survivor_count: 1,
+        offspring_count: 1,
+        mutation_intensity: NormalizedScalar(0.5),
+        birth_weight_initializer: None,
+    };
+    assert!(run_selection_generation(&candidates, &spec, config).is_err());
+
+    let candidates = vec![
+        SelectionCandidate::new(
+            BrainGenome::scaffold(202, spec.id),
+            FitnessSummary::synthetic(0.5).unwrap(),
+        ),
+        SelectionCandidate::new(
+            BrainGenome::scaffold(203, spec.id),
+            FitnessSummary::synthetic(0.6).unwrap(),
+        ),
+    ];
+    let config = EvolutionLabConfig {
+        seed: 0xA11F_3306,
+        generation: 1,
+        survivor_count: 2,
+        offspring_count: 1,
+        mutation_intensity: NormalizedScalar(0.5),
+        birth_weight_initializer: Some(BirthWeightInitializerRef {
+            asset_id: String::new(),
+            asset_schema_version: 1,
+            birth_only: true,
+        }),
+    };
+    assert!(run_selection_generation(&candidates, &spec, config).is_err());
+}
+
+#[test]
 fn tiny_generation_smoke_binary_writes_json_report() {
     let out = std::env::temp_dir().join(format!("alife_p33_smoke_{}.json", std::process::id()));
     let bin = std::env::var("CARGO_BIN_EXE_p33_genome_lab")

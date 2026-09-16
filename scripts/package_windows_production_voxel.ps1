@@ -14,7 +14,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-$ProductionFeatures = "bevy-app gpu-runtime voxel-backend production-assets vfx-hanabi"
+$ProductionFeatures = "bevy-app gpu-runtime production-assets vfx-hanabi"
 
 function Resolve-InWorkspacePath {
     param([string]$Path)
@@ -22,6 +22,36 @@ function Resolve-InWorkspacePath {
         return [System.IO.Path]::GetFullPath($Path)
     }
     return [System.IO.Path]::GetFullPath((Join-Path $Root $Path))
+}
+
+function Assert-NoReparseAncestor {
+    param(
+        [string]$FullPath,
+        [string]$WorkspaceRoot
+    )
+
+    $Current = $FullPath
+    while (-not [string]::IsNullOrWhiteSpace($Current)) {
+        if (Test-Path -LiteralPath $Current) {
+            $Item = Get-Item -LiteralPath $Current -Force
+            if (($Item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "Refusing to use a reparse-point package path: $Current"
+            }
+        }
+        if ([System.String]::Equals(
+                $Current,
+                $WorkspaceRoot,
+                [System.StringComparison]::OrdinalIgnoreCase
+            )) {
+            return
+        }
+        $Parent = Split-Path -Parent $Current
+        if ([string]::IsNullOrWhiteSpace($Parent) -or $Parent -eq $Current) {
+            break
+        }
+        $Current = $Parent
+    }
+    throw "Package path is not rooted in the workspace: $FullPath"
 }
 
 function Assert-TargetArtifactPath {
@@ -32,19 +62,28 @@ function Assert-TargetArtifactPath {
         [System.IO.Path]::DirectorySeparatorChar,
         [System.IO.Path]::AltDirectorySeparatorChar
     ) + [System.IO.Path]::DirectorySeparatorChar
-    $IsAllowedRoot = [System.String]::Equals(
-        $FullPath,
-        $AllowedRoot,
-        [System.StringComparison]::OrdinalIgnoreCase
-    )
     $IsAllowedChild = $FullPath.StartsWith(
         $AllowedRootWithSeparator,
         [System.StringComparison]::OrdinalIgnoreCase
     )
-    if (-not ($IsAllowedRoot -or $IsAllowedChild)) {
+    if (-not $IsAllowedChild) {
         throw "Refusing to write outside target/artifacts: $FullPath"
     }
+    Assert-NoReparseAncestor -FullPath $FullPath -WorkspaceRoot ([System.IO.Path]::GetFullPath($Root))
     return $FullPath
+}
+
+function Assert-PackageName {
+    param([string]$Name)
+
+    if ([string]::IsNullOrWhiteSpace($Name) -or $Name -in @('.', '..')) {
+        throw "PackageName must be a non-empty directory name."
+    }
+    if ($Name.IndexOfAny([System.IO.Path]::GetInvalidFileNameChars()) -ge 0 `
+        -or $Name.Contains([System.IO.Path]::DirectorySeparatorChar) `
+        -or $Name.Contains([System.IO.Path]::AltDirectorySeparatorChar)) {
+        throw "PackageName must be one directory name, not a path: $Name"
+    }
 }
 
 function Copy-PackageFile {
@@ -75,7 +114,9 @@ function Copy-PackageDirectory {
     $Parent = Split-Path -Parent $Destination
     New-Item -ItemType Directory -Force -Path $Parent | Out-Null
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-    Copy-Item -Path (Join-Path $Source "*") -Destination $Destination -Recurse -Force
+    foreach ($Child in Get-ChildItem -LiteralPath $Source -Force) {
+        Copy-Item -LiteralPath $Child.FullName -Destination $Destination -Recurse -Force
+    }
 }
 
 function Write-ProductionOnlyEnvironmentManifest {
@@ -96,6 +137,7 @@ function Write-ProductionOnlyEnvironmentManifest {
     [System.IO.File]::WriteAllText($EnvironmentPath, $Json + [Environment]::NewLine, $Utf8NoBom)
 }
 
+Assert-PackageName $PackageName
 $PackageRoot = Assert-TargetArtifactPath (Join-Path $OutputRoot $PackageName)
 $ZipPath = Assert-TargetArtifactPath ((Join-Path $OutputRoot "$PackageName.zip"))
 $ReleaseExe = Join-Path $Root "target/release/alife_game_app.exe"
@@ -120,7 +162,6 @@ $BuildCommand = @(
 $CopyFiles = @(
     "LICENSE",
     "scripts/run_production_voxel_frontend.ps1",
-    "scripts/run_windows_production_voxel_package.ps1",
     "crates/alife_game_app/environment_manifest.json",
     "crates/alife_game_app/app_bundle_manifest.json",
     "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json",
@@ -132,6 +173,8 @@ $CopyFiles = @(
 
 $CopyDirectories = @(
     "crates/alife_game_app/assets/production_voxel_v1",
+    "crates/alife_game_app/assets/creatures",
+    "crates/alife_game_app/assets/landscape",
     "crates/alife_gpu_backend/shaders"
 )
 

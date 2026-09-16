@@ -93,25 +93,6 @@ pub fn remap_creature_face_landmarks(
         .collect()
 }
 
-/// Renderer-only fallback until Task 7 passes source landmarks into eye spawning.
-#[deprecated(note = "Task 7 must use creature_face_style_from_landmarks")]
-pub fn creature_face_style(appearance: CreatureAppearanceGenome) -> CreatureFaceStyle {
-    let inherited = f32::from(appearance.ear_muzzle_trait) / 255.0;
-    let species = f32::from(appearance.species_archetype)
-        / f32::from(alife_world::CREATURE_APPEARANCE_SPECIES_COUNT.saturating_sub(1));
-    let eye_size = 0.70 + inherited * 0.10;
-    CreatureFaceStyle {
-        eye_spacing: 0.080 + inherited * 0.012 + species * 0.006,
-        eye_height: 0.225 + species * 0.035 + inherited * 0.012,
-        eye_forward: 0.255 + inherited * 0.025,
-        sclera_scale: [eye_size, eye_size * 1.08, 0.42],
-        iris_scale: [eye_size * 0.62, eye_size * 0.68, 0.25],
-        pupil_scale: [eye_size * 0.26, eye_size * 0.36, 0.13],
-        sclera_rgba: [0.91, 0.86, 0.74, 1.0],
-        pupil_rgba: [0.08, 0.045, 0.03, 1.0],
-    }
-}
-
 pub fn creature_face_style_from_landmarks(
     appearance: CreatureAppearanceGenome,
     landmarks: &BTreeMap<GeneForgeLandmarkId, [f32; 3]>,

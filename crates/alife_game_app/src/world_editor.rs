@@ -166,21 +166,18 @@ impl WorldEditCommand {
                 for value in [*nutrition, *hazard_pain] {
                     NormalizedScalar::new(value)?;
                 }
-                match kind {
-                    WorldObjectKind::Agent => {
-                        let organism_id = organism_id.ok_or(ScaffoldContractError::InvalidId)?;
-                        organism_id.validate()?;
+                if *kind == WorldObjectKind::Agent {
+                    let organism_id = organism_id.ok_or(ScaffoldContractError::InvalidId)?;
+                    organism_id.validate()?;
+                } else if organism_id.is_some() {
+                    return Err(ScaffoldContractError::InvalidId);
+                }
+                if *kind == WorldObjectKind::Token {
+                    if token_id.is_none() {
+                        return Err(ScaffoldContractError::InvalidId);
                     }
-                    WorldObjectKind::Token => {
-                        if token_id.is_none() {
-                            return Err(ScaffoldContractError::InvalidId);
-                        }
-                    }
-                    _ => {
-                        if organism_id.is_some() {
-                            return Err(ScaffoldContractError::InvalidId);
-                        }
-                    }
+                } else if token_id.is_some() {
+                    return Err(ScaffoldContractError::InvalidId);
                 }
             }
             Self::Remove { stable_id } => {
@@ -278,7 +275,7 @@ impl WorldEditorSession {
             self.rejected_edits = self.rejected_edits.saturating_add(1);
             return Err(ScaffoldContractError::ScalarOutOfRange.into());
         }
-        self.undo_stack.push(self.world.clone());
+        let world_before = self.world.clone();
         let label = command.kind_label().to_string();
         let result = match command {
             WorldEditCommand::Place {
@@ -290,44 +287,51 @@ impl WorldEditorSession {
                 hazard_pain,
                 radius,
                 token_id,
-            } => Some(self.world.editor_spawn_object(WorldEditorSpawnSpec {
-                label,
-                kind,
-                organism_id,
-                position,
-                nutrition,
-                hazard_pain,
-                radius,
-                token_id,
-            })?),
+            } => self
+                .world
+                .editor_spawn_object(WorldEditorSpawnSpec {
+                    label,
+                    kind,
+                    organism_id,
+                    position,
+                    nutrition,
+                    hazard_pain,
+                    radius,
+                    token_id,
+                })
+                .map(Some),
             WorldEditCommand::Remove { stable_id } => {
-                self.world.editor_remove_object(stable_id)?;
-                None
+                self.world.editor_remove_object(stable_id).map(|_| None)
             }
             WorldEditCommand::Move {
                 stable_id,
                 position,
-            } => {
-                self.world.editor_move_object(stable_id, position)?;
-                Some(stable_id)
-            }
+            } => self
+                .world
+                .editor_move_object(stable_id, position)
+                .map(|_| Some(stable_id)),
             WorldEditCommand::SetFoodResourceRate {
                 food_id,
                 home_zone,
                 regrow_after_ticks,
                 decay_after_ticks,
-            } => {
-                self.world.track_resource_lifecycle(
-                    food_id,
-                    home_zone,
-                    regrow_after_ticks,
-                    decay_after_ticks,
-                )?;
-                Some(food_id)
-            }
+            } => self
+                .world
+                .track_resource_lifecycle(food_id, home_zone, regrow_after_ticks, decay_after_ticks)
+                .map(|_| Some(food_id)),
         };
-        self.edits_applied.push(label);
-        Ok(result)
+        match result {
+            Ok(result) => {
+                self.undo_stack.push(world_before);
+                self.edits_applied.push(label);
+                Ok(result)
+            }
+            Err(error) => {
+                self.world = world_before;
+                self.rejected_edits = self.rejected_edits.saturating_add(1);
+                Err(error.into())
+            }
+        }
     }
 
     pub fn undo_last(&mut self) -> Result<(), GameAppShellError> {
@@ -730,4 +734,46 @@ pub fn run_player_sandbox_editor_smoke(
     };
     summary.validate()?;
     Ok(summary)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_world_edit_preserves_world_and_undo_history() {
+        let world = HeadlessScenarioBuilder::new(73)
+            .food("existing-food", Vec3f::ZERO, 0.5)
+            .build()
+            .unwrap();
+        let signature_before = world.stable_signature();
+        let mut session = WorldEditorSession::new(world, WorldEditorConfig::default()).unwrap();
+        session.enter_editor();
+
+        let result = session.apply_edit(WorldEditCommand::Move {
+            stable_id: WorldEntityId(99_999),
+            position: Vec3f::new(1.0, 0.0, 0.0),
+        });
+
+        assert!(result.is_err());
+        assert_eq!(session.world().stable_signature(), signature_before);
+        assert!(session.undo_stack.is_empty());
+        assert_eq!(session.rejected_edits, 1);
+    }
+
+    #[test]
+    fn place_rejects_fields_owned_by_another_object_kind() {
+        let command = WorldEditCommand::Place {
+            label: "malformed-food".to_string(),
+            kind: WorldObjectKind::Food,
+            organism_id: None,
+            position: Vec3f::ZERO,
+            nutrition: 0.5,
+            hazard_pain: 0.0,
+            radius: 0.5,
+            token_id: Some(7),
+        };
+
+        assert!(command.validate(WorldEditorConfig::default()).is_err());
+    }
 }

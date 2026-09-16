@@ -235,13 +235,20 @@ fn operational_failure_writes_a_schema_valid_typed_partial_report_before_errorin
 }
 
 #[test]
-fn committed_report_recomputes_current_source_and_causal_evidence() {
+fn committed_historical_report_recomputes_bound_source_and_causal_evidence() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("reports")
         .join("ei0_exit_gate_report.json");
     let report: Ei0ExitGateReport =
         serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
 
+    assert!(report
+        .lifecycle
+        .as_ref()
+        .unwrap()
+        .population_genomes
+        .iter()
+        .all(|genome| genome.is_historical_v1()));
     validate_committed_ei0_exit_gate_report(&report).unwrap();
     let binding = report.artifact_binding.as_ref().unwrap();
     assert_eq!(binding.adapter_name, "NVIDIA GeForce RTX 3050");

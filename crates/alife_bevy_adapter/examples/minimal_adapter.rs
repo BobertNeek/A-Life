@@ -1,5 +1,5 @@
 use alife_bevy_adapter::{
-    ActionSink, AffordanceTags, AlifeBevyAdapterPlugin, CreatureBody, SensoryEmitter,
+    ActionSink, AffordanceTags, AlifeReferenceAdapterPlugin, CreatureBody, SensoryEmitter,
 };
 use alife_core::{AffordanceBits, OrganismId, WorldEntityId};
 use bevy::prelude::{App, MinimalPlugins, Transform, Vec3};
@@ -7,7 +7,7 @@ use bevy::prelude::{App, MinimalPlugins, Transform, Vec3};
 fn main() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
-        .add_plugins(AlifeBevyAdapterPlugin);
+        .add_plugins(AlifeReferenceAdapterPlugin);
 
     app.world_mut().spawn((
         CreatureBody::new(OrganismId(1), WorldEntityId(1)).expect("valid creature body"),

@@ -389,11 +389,7 @@ impl Era1TrialRunEvidence {
         )?;
         if self.learning_assessment != expected_assessment
             || self.receipt.score
-                != score_for_partition(
-                    self.receipt.ability,
-                    self.receipt.partition,
-                    &expected_assessment,
-                )
+                != score_for_partition(self.receipt.partition, &expected_assessment)
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
@@ -972,7 +968,10 @@ impl Era1TrialRunner {
                     .session
                     .sealed_outcome_credit_mismatch_receipt(handle, &patch)?
                 {
-                    return Err(Era1TrialRunError::LearningEvidenceMismatch(receipt));
+                    return Err(map_learning_apply_failure(
+                        ScaffoldContractError::LearningEvidenceMismatch,
+                        Some(receipt),
+                    ));
                 }
                 self.session
                     .discard_pending_eligibility(handle, pending_identity)?;
@@ -1056,7 +1055,7 @@ impl Era1TrialRunner {
             ability: request.ability,
             control: request.control,
             partition: request.partition,
-            score: score_for_partition(request.ability, request.partition, &learning_assessment),
+            score: score_for_partition(request.partition, &learning_assessment),
             phenotype_hash: handle.phenotype_hash(),
             foundation_id: foundation.foundation_id,
             foundation_version: u32::from(foundation.version),
@@ -1211,13 +1210,17 @@ fn derive_causal_behavior(
             }
             successes[index] = match ability {
                 Era1Ability::FlexibleForaging => {
-                    step.phase == Era1TrialPhase::Acquisition
-                        && step.selected_family == CandidateActionFamily::Ingest
+                    matches!(
+                        step.phase,
+                        Era1TrialPhase::Acquisition | Era1TrialPhase::Probe
+                    ) && step.selected_family == CandidateActionFamily::Ingest
                         && step.target_kind == Some(WorldObjectKind::Food)
                 }
                 Era1Ability::HazardAvoidance => {
-                    step.phase == Era1TrialPhase::Acquisition
-                        && step.selected_family == CandidateActionFamily::Avoid
+                    matches!(
+                        step.phase,
+                        Era1TrialPhase::Acquisition | Era1TrialPhase::Probe
+                    ) && step.selected_family == CandidateActionFamily::Avoid
                         && step.target_kind == Some(WorldObjectKind::Hazard)
                 }
                 Era1Ability::SpatialMemory | Era1Ability::DelayedChoice => {
@@ -1381,16 +1384,9 @@ fn measured_q16(reading: MetricReading) -> Result<u32, ScaffoldContractError> {
 }
 
 fn score_for_partition(
-    ability: Era1Ability,
     partition: Era1EvidencePartition,
     assessment: &Era1LearningAssessment,
 ) -> MetricReading {
-    if matches!(
-        ability,
-        Era1Ability::FlexibleForaging | Era1Ability::HazardAvoidance
-    ) {
-        return assessment.late_acquisition;
-    }
     match partition {
         Era1EvidencePartition::Acquisition => assessment.late_acquisition,
         Era1EvidencePartition::DelayedProbe
@@ -1400,6 +1396,18 @@ fn score_for_partition(
         | Era1EvidencePartition::SocialTransfer
         | Era1EvidencePartition::ReproducedOffspring => assessment.probe,
     }
+}
+
+fn map_learning_apply_failure(
+    error: ScaffoldContractError,
+    mismatch_receipt: Option<GpuLearningEvidenceMismatchReceipt>,
+) -> Era1TrialRunError {
+    if matches!(error, ScaffoldContractError::LearningEvidenceMismatch) {
+        if let Some(receipt) = mismatch_receipt {
+            return Era1TrialRunError::LearningEvidenceMismatch(receipt);
+        }
+    }
+    Era1TrialRunError::Contract(error)
 }
 
 fn remove_peer_agents(
@@ -1971,6 +1979,55 @@ mod selector_diagnostic_receipt_tests {
 mod learning_error_receipt_tests {
     use super::*;
     use alife_gpu_backend::GpuLearningEvidenceMismatchField;
+
+    fn partition_assessment() -> Era1LearningAssessment {
+        Era1LearningAssessment {
+            early_acquisition: MetricReading::Measured {
+                value_q16: 1,
+                exposures: 1,
+            },
+            late_acquisition: MetricReading::Measured {
+                value_q16: 2,
+                exposures: 1,
+            },
+            delay: MetricReading::Measured {
+                value_q16: 3,
+                exposures: 1,
+            },
+            probe: MetricReading::Measured {
+                value_q16: 4,
+                exposures: 1,
+            },
+            acquisition_improvement_q16: 1,
+            probe_change_from_early_q16: 3,
+            demonstrated: true,
+            grounding_receipts: Vec::new(),
+            causal_proof: Era1AbilityCausalProof {
+                ability: Era1Ability::FlexibleForaging,
+                world_family: Era1WorldFamily::ForagingHazardMaze,
+                phase_step_counts: [1, 1, 1],
+                required_context_proven: true,
+                successful_behavior_ticks: vec![Tick::new(1)],
+            },
+        }
+    }
+
+    #[test]
+    fn transfer_and_offspring_partitions_score_probe_behavior() {
+        let assessment = partition_assessment();
+        assert_eq!(
+            score_for_partition(Era1EvidencePartition::Acquisition, &assessment),
+            assessment.late_acquisition
+        );
+        assert_eq!(
+            score_for_partition(Era1EvidencePartition::HeldOutTransfer, &assessment),
+            assessment.probe
+        );
+        assert_eq!(
+            score_for_partition(Era1EvidencePartition::ReproducedOffspring, &assessment),
+            assessment.probe
+        );
+    }
 
     #[test]
     fn learning_apply_failure_preserves_existing_mismatch_receipt() {

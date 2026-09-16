@@ -1,6 +1,6 @@
 {
   "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_head_impostor_anatomy.png",
-  "assembly_preparation_population": "canonical-only",
+  "assembly_preparation_population": "canonical-plus-cross-torso",
   "assembly_preparation_schema": "alife.geneforge_assembly_preparation.v2",
   "assembly_preparation_schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
   "assembly_preparations": [
@@ -952,7 +952,1832 @@
     "handedness": "right",
     "up": "+Y"
   },
-  "cross_torso_preparations": [],
+  "cross_torso_preparations": [
+    {
+      "asset_id": "grendel-head",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.03879387304186821,
+            0.9532913565635681,
+            0.6571295857429504
+          ],
+          "prepared_anchor": [
+            -0.022719812081100032,
+            0.9420619336328362,
+            0.6531894556851654
+          ],
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            -0.0008381908502579965,
+            0.0,
+            1.04,
+            0.0,
+            0.33212247933698125,
+            0.0,
+            0.0,
+            1.04,
+            -0.3679357299637265,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "head",
+          "socket": "neck",
+          "source_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ],
+          "target_anchor": [
+            0.0,
+            1.2947742592655889,
+            0.3053839174597661
+          ],
+          "transformed_source_anchor": [
+            0.0,
+            1.2947742592655889,
+            0.3053839174597661
+          ]
+        }
+      ],
+      "bridge_kind": "head-join-cover",
+      "bridge_sockets": [
+        "neck"
+      ],
+      "family_id": 2,
+      "family_label": "mossknuckle",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.04,
+          1.04,
+          1.04
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.03879387304186821,
+                0.9532913565635681,
+                0.6571295857429504
+              ],
+              "prepared_anchor": [
+                -0.022719812081100032,
+                0.9420619336328362,
+                0.6531894556851654
+              ],
+              "prepared_matrix": [
+                1.04,
+                0.0,
+                0.0,
+                -0.0008381908502579965,
+                0.0,
+                1.04,
+                0.0,
+                0.33212247933698125,
+                0.0,
+                0.0,
+                1.04,
+                -0.3679357299637265,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "head",
+              "socket": "neck",
+              "source_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ],
+              "target_anchor": [
+                0.0,
+                1.2947742592655889,
+                0.3053839174597661
+              ],
+              "transformed_source_anchor": [
+                0.0,
+                1.2947742592655889,
+                0.3053839174597661
+              ]
+            }
+          ],
+          "bridge_kind": "head-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              1.04,
+              1.04
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "neck-ruff",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            -0.0008381908502579965,
+            0.0,
+            1.04,
+            0.0,
+            0.33212247933698125,
+            0.0,
+            0.0,
+            1.04,
+            -0.3679357299637265,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "head",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0.002,
+            0
+          ],
+          "socket": "neck",
+          "socket_evidence": [],
+          "source_asset_id": "grendel-head",
+          "source_family_id": 2,
+          "target_torso_asset_id": "norn-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "neck-ruff",
+      "lod": "impostor",
+      "logical_slot": "head",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "cross-torso",
+      "prepared_matrix": [
+        1.04,
+        0.0,
+        0.0,
+        -0.0008381908502579965,
+        0.0,
+        1.04,
+        0.0,
+        0.33212247933698125,
+        0.0,
+        0.0,
+        1.04,
+        -0.3679357299637265,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        -0.0008381908502579965,
+        0.33212247933698125,
+        -0.3679357299637265
+      ],
+      "seam_offset": [
+        0,
+        0.002,
+        0
+      ],
+      "source_asset_id": "grendel-head",
+      "target_torso_asset_id": "norn-torso",
+      "transform_mode": "slot-transform"
+    },
+    {
+      "asset_id": "grendel-head",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.03879387304186821,
+            0.9532913565635681,
+            0.6571295857429504
+          ],
+          "prepared_anchor": [
+            -0.022719812081100032,
+            0.9420619336328362,
+            0.6531894556851654
+          ],
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            -3.223810962530761e-05,
+            0.0,
+            1.04,
+            0.0,
+            -0.03502506845879261,
+            0.0,
+            0.0,
+            1.04,
+            -0.025896909516288202,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "head",
+          "socket": "neck",
+          "source_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ],
+          "target_anchor": [
+            0.0008059527406326889,
+            0.927626711469815,
+            0.6474227379072044
+          ],
+          "transformed_source_anchor": [
+            0.0008059527406326889,
+            0.927626711469815,
+            0.6474227379072044
+          ]
+        }
+      ],
+      "bridge_kind": "head-join-cover",
+      "bridge_sockets": [
+        "neck"
+      ],
+      "family_id": 2,
+      "family_label": "mossknuckle",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.04,
+          1.04,
+          1.04
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.03879387304186821,
+                0.9532913565635681,
+                0.6571295857429504
+              ],
+              "prepared_anchor": [
+                -0.022719812081100032,
+                0.9420619336328362,
+                0.6531894556851654
+              ],
+              "prepared_matrix": [
+                1.04,
+                0.0,
+                0.0,
+                -3.223810962530761e-05,
+                0.0,
+                1.04,
+                0.0,
+                -0.03502506845879261,
+                0.0,
+                0.0,
+                1.04,
+                -0.025896909516288202,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "head",
+              "socket": "neck",
+              "source_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ],
+              "target_anchor": [
+                0.0008059527406326889,
+                0.927626711469815,
+                0.6474227379072044
+              ],
+              "transformed_source_anchor": [
+                0.0008059527406326889,
+                0.927626711469815,
+                0.6474227379072044
+              ]
+            }
+          ],
+          "bridge_kind": "head-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              1.04,
+              1.04
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "neck-ruff",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            -3.223810962530761e-05,
+            0.0,
+            1.04,
+            0.0,
+            -0.03502506845879261,
+            0.0,
+            0.0,
+            1.04,
+            -0.025896909516288202,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "head",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0.002,
+            0
+          ],
+          "socket": "neck",
+          "socket_evidence": [],
+          "source_asset_id": "grendel-head",
+          "source_family_id": 2,
+          "target_torso_asset_id": "grendel-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "neck-ruff",
+      "lod": "impostor",
+      "logical_slot": "head",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "cross-torso",
+      "prepared_matrix": [
+        1.04,
+        0.0,
+        0.0,
+        -3.223810962530761e-05,
+        0.0,
+        1.04,
+        0.0,
+        -0.03502506845879261,
+        0.0,
+        0.0,
+        1.04,
+        -0.025896909516288202,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        -3.223810962530761e-05,
+        -0.03502506845879261,
+        -0.025896909516288202
+      ],
+      "seam_offset": [
+        0,
+        0.002,
+        0
+      ],
+      "source_asset_id": "grendel-head",
+      "target_torso_asset_id": "grendel-torso",
+      "transform_mode": "slot-transform"
+    },
+    {
+      "asset_id": "grendel-head",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.03879387304186821,
+            0.9532913565635681,
+            0.6571295857429504
+          ],
+          "prepared_anchor": [
+            -0.022719812081100032,
+            0.9420619336328362,
+            0.6531894556851654
+          ],
+          "prepared_matrix": [
+            1.08,
+            0.0,
+            0.0,
+            -0.021586404663139616,
+            0.0,
+            1.08,
+            0.0,
+            0.5716943154158315,
+            0.0,
+            0.0,
+            1.08,
+            -0.7122658326783421,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 5.204170427930421e-17,
+          "runtime_group": "head",
+          "socket": "neck",
+          "source_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ],
+          "target_anchor": [
+            -0.020715975703256312,
+            1.5713711638032317,
+            -0.013049275738561347
+          ],
+          "transformed_source_anchor": [
+            -0.020715975703256312,
+            1.5713711638032317,
+            -0.013049275738561295
+          ]
+        }
+      ],
+      "bridge_kind": "head-join-cover",
+      "bridge_sockets": [
+        "neck"
+      ],
+      "family_id": 5,
+      "family_label": "reefburrower",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.08,
+          1.08,
+          1.08
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.03879387304186821,
+                0.9532913565635681,
+                0.6571295857429504
+              ],
+              "prepared_anchor": [
+                -0.022719812081100032,
+                0.9420619336328362,
+                0.6531894556851654
+              ],
+              "prepared_matrix": [
+                1.08,
+                0.0,
+                0.0,
+                -0.021586404663139616,
+                0.0,
+                1.08,
+                0.0,
+                0.5716943154158315,
+                0.0,
+                0.0,
+                1.08,
+                -0.7122658326783421,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 5.204170427930421e-17,
+              "runtime_group": "head",
+              "socket": "neck",
+              "source_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ],
+              "target_anchor": [
+                -0.020715975703256312,
+                1.5713711638032317,
+                -0.013049275738561347
+              ],
+              "transformed_source_anchor": [
+                -0.020715975703256312,
+                1.5713711638032317,
+                -0.013049275738561295
+              ]
+            }
+          ],
+          "bridge_kind": "head-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.08,
+              1.08,
+              1.08
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "neck-ruff",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.08,
+            0.0,
+            0.0,
+            -0.021586404663139616,
+            0.0,
+            1.08,
+            0.0,
+            0.5716943154158315,
+            0.0,
+            0.0,
+            1.08,
+            -0.7122658326783421,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 5.204170427930421e-17,
+          "runtime_group": "head",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0.002,
+            0
+          ],
+          "socket": "neck",
+          "socket_evidence": [],
+          "source_asset_id": "grendel-head",
+          "source_family_id": 5,
+          "target_torso_asset_id": "ettin-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "neck-ruff",
+      "lod": "impostor",
+      "logical_slot": "head",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 5.204170427930421e-17,
+      "preparation_kind": "cross-torso",
+      "prepared_matrix": [
+        1.08,
+        0.0,
+        0.0,
+        -0.021586404663139616,
+        0.0,
+        1.08,
+        0.0,
+        0.5716943154158315,
+        0.0,
+        0.0,
+        1.08,
+        -0.7122658326783421,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        -0.021586404663139616,
+        0.5716943154158315,
+        -0.7122658326783421
+      ],
+      "seam_offset": [
+        0,
+        0.002,
+        0
+      ],
+      "source_asset_id": "grendel-head",
+      "target_torso_asset_id": "ettin-torso",
+      "transform_mode": "slot-transform"
+    },
+    {
+      "asset_id": "grendel-head",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.03879387304186821,
+            0.9532913565635681,
+            0.6571295857429504
+          ],
+          "prepared_anchor": [
+            -0.022719812081100032,
+            0.9420619336328362,
+            0.6531894556851654
+          ],
+          "prepared_matrix": [
+            1.08,
+            0.0,
+            0.0,
+            -6.447621925061522e-05,
+            0.0,
+            1.08,
+            0.0,
+            -0.07205013691758522,
+            0.0,
+            0.0,
+            1.08,
+            -0.051793819032576405,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "head",
+          "socket": "neck",
+          "source_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ],
+          "target_anchor": [
+            0.0008059527406326889,
+            0.927626711469815,
+            0.6474227379072044
+          ],
+          "transformed_source_anchor": [
+            0.0008059527406326889,
+            0.927626711469815,
+            0.6474227379072044
+          ]
+        }
+      ],
+      "bridge_kind": "head-join-cover",
+      "bridge_sockets": [
+        "neck"
+      ],
+      "family_id": 5,
+      "family_label": "reefburrower",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.08,
+          1.08,
+          1.08
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.03879387304186821,
+                0.9532913565635681,
+                0.6571295857429504
+              ],
+              "prepared_anchor": [
+                -0.022719812081100032,
+                0.9420619336328362,
+                0.6531894556851654
+              ],
+              "prepared_matrix": [
+                1.08,
+                0.0,
+                0.0,
+                -6.447621925061522e-05,
+                0.0,
+                1.08,
+                0.0,
+                -0.07205013691758522,
+                0.0,
+                0.0,
+                1.08,
+                -0.051793819032576405,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "head",
+              "socket": "neck",
+              "source_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ],
+              "target_anchor": [
+                0.0008059527406326889,
+                0.927626711469815,
+                0.6474227379072044
+              ],
+              "transformed_source_anchor": [
+                0.0008059527406326889,
+                0.927626711469815,
+                0.6474227379072044
+              ]
+            }
+          ],
+          "bridge_kind": "head-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.08,
+              1.08,
+              1.08
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "neck-ruff",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.08,
+            0.0,
+            0.0,
+            -6.447621925061522e-05,
+            0.0,
+            1.08,
+            0.0,
+            -0.07205013691758522,
+            0.0,
+            0.0,
+            1.08,
+            -0.051793819032576405,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "head",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0.002,
+            0
+          ],
+          "socket": "neck",
+          "socket_evidence": [],
+          "source_asset_id": "grendel-head",
+          "source_family_id": 5,
+          "target_torso_asset_id": "grendel-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "neck-ruff",
+      "lod": "impostor",
+      "logical_slot": "head",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "cross-torso",
+      "prepared_matrix": [
+        1.08,
+        0.0,
+        0.0,
+        -6.447621925061522e-05,
+        0.0,
+        1.08,
+        0.0,
+        -0.07205013691758522,
+        0.0,
+        0.0,
+        1.08,
+        -0.051793819032576405,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        -6.447621925061522e-05,
+        -0.07205013691758522,
+        -0.051793819032576405
+      ],
+      "seam_offset": [
+        0,
+        0.002,
+        0
+      ],
+      "source_asset_id": "grendel-head",
+      "target_torso_asset_id": "grendel-torso",
+      "transform_mode": "slot-transform"
+    },
+    {
+      "asset_id": "grendel-head",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.03879387304186821,
+            0.9532913565635681,
+            0.6571295857429504
+          ],
+          "prepared_anchor": [
+            -0.022719812081100032,
+            0.9420619336328362,
+            0.6531894556851654
+          ],
+          "prepared_matrix": [
+            1.05,
+            0.0,
+            0.0,
+            -0.0008462503776643234,
+            0.0,
+            1.05,
+            0.0,
+            0.32286621222228307,
+            0.0,
+            0.0,
+            1.05,
+            -0.37440995734279847,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "head",
+          "socket": "neck",
+          "source_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ],
+          "target_anchor": [
+            0.0,
+            1.2947742592655889,
+            0.3053839174597661
+          ],
+          "transformed_source_anchor": [
+            0.0,
+            1.2947742592655889,
+            0.3053839174597661
+          ]
+        }
+      ],
+      "bridge_kind": "head-join-cover",
+      "bridge_sockets": [
+        "neck"
+      ],
+      "family_id": 8,
+      "family_label": "slateprowler",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.05,
+          1.05,
+          1.05
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.03879387304186821,
+                0.9532913565635681,
+                0.6571295857429504
+              ],
+              "prepared_anchor": [
+                -0.022719812081100032,
+                0.9420619336328362,
+                0.6531894556851654
+              ],
+              "prepared_matrix": [
+                1.05,
+                0.0,
+                0.0,
+                -0.0008462503776643234,
+                0.0,
+                1.05,
+                0.0,
+                0.32286621222228307,
+                0.0,
+                0.0,
+                1.05,
+                -0.37440995734279847,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "head",
+              "socket": "neck",
+              "source_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ],
+              "target_anchor": [
+                0.0,
+                1.2947742592655889,
+                0.3053839174597661
+              ],
+              "transformed_source_anchor": [
+                0.0,
+                1.2947742592655889,
+                0.3053839174597661
+              ]
+            }
+          ],
+          "bridge_kind": "head-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.05,
+              1.05,
+              1.05
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "neck-ruff",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.05,
+            0.0,
+            0.0,
+            -0.0008462503776643234,
+            0.0,
+            1.05,
+            0.0,
+            0.32286621222228307,
+            0.0,
+            0.0,
+            1.05,
+            -0.37440995734279847,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "head",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0.002,
+            0
+          ],
+          "socket": "neck",
+          "socket_evidence": [],
+          "source_asset_id": "grendel-head",
+          "source_family_id": 8,
+          "target_torso_asset_id": "norn-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "neck-ruff",
+      "lod": "impostor",
+      "logical_slot": "head",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "cross-torso",
+      "prepared_matrix": [
+        1.05,
+        0.0,
+        0.0,
+        -0.0008462503776643234,
+        0.0,
+        1.05,
+        0.0,
+        0.32286621222228307,
+        0.0,
+        0.0,
+        1.05,
+        -0.37440995734279847,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        -0.0008462503776643234,
+        0.32286621222228307,
+        -0.37440995734279847
+      ],
+      "seam_offset": [
+        0,
+        0.002,
+        0
+      ],
+      "source_asset_id": "grendel-head",
+      "target_torso_asset_id": "norn-torso",
+      "transform_mode": "slot-transform"
+    },
+    {
+      "asset_id": "grendel-head",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.03879387304186821,
+            0.9532913565635681,
+            0.6571295857429504
+          ],
+          "prepared_anchor": [
+            -0.022719812081100032,
+            0.9420619336328362,
+            0.6531894556851654
+          ],
+          "prepared_matrix": [
+            1.05,
+            0.0,
+            0.0,
+            -0.021562226080920635,
+            0.0,
+            1.05,
+            0.0,
+            0.5994631167599259,
+            0.0,
+            0.0,
+            1.05,
+            -0.6928431505411259,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 5.204170427930421e-17,
+          "runtime_group": "head",
+          "socket": "neck",
+          "source_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ],
+          "target_anchor": [
+            -0.020715975703256312,
+            1.5713711638032317,
+            -0.013049275738561347
+          ],
+          "transformed_source_anchor": [
+            -0.020715975703256312,
+            1.5713711638032317,
+            -0.013049275738561295
+          ]
+        }
+      ],
+      "bridge_kind": "head-join-cover",
+      "bridge_sockets": [
+        "neck"
+      ],
+      "family_id": 8,
+      "family_label": "slateprowler",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.05,
+          1.05,
+          1.05
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.03879387304186821,
+                0.9532913565635681,
+                0.6571295857429504
+              ],
+              "prepared_anchor": [
+                -0.022719812081100032,
+                0.9420619336328362,
+                0.6531894556851654
+              ],
+              "prepared_matrix": [
+                1.05,
+                0.0,
+                0.0,
+                -0.021562226080920635,
+                0.0,
+                1.05,
+                0.0,
+                0.5994631167599259,
+                0.0,
+                0.0,
+                1.05,
+                -0.6928431505411259,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 5.204170427930421e-17,
+              "runtime_group": "head",
+              "socket": "neck",
+              "source_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ],
+              "target_anchor": [
+                -0.020715975703256312,
+                1.5713711638032317,
+                -0.013049275738561347
+              ],
+              "transformed_source_anchor": [
+                -0.020715975703256312,
+                1.5713711638032317,
+                -0.013049275738561295
+              ]
+            }
+          ],
+          "bridge_kind": "head-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.05,
+              1.05,
+              1.05
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "neck-ruff",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.05,
+            0.0,
+            0.0,
+            -0.021562226080920635,
+            0.0,
+            1.05,
+            0.0,
+            0.5994631167599259,
+            0.0,
+            0.0,
+            1.05,
+            -0.6928431505411259,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 5.204170427930421e-17,
+          "runtime_group": "head",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0.002,
+            0
+          ],
+          "socket": "neck",
+          "socket_evidence": [],
+          "source_asset_id": "grendel-head",
+          "source_family_id": 8,
+          "target_torso_asset_id": "ettin-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "neck-ruff",
+      "lod": "impostor",
+      "logical_slot": "head",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 5.204170427930421e-17,
+      "preparation_kind": "cross-torso",
+      "prepared_matrix": [
+        1.05,
+        0.0,
+        0.0,
+        -0.021562226080920635,
+        0.0,
+        1.05,
+        0.0,
+        0.5994631167599259,
+        0.0,
+        0.0,
+        1.05,
+        -0.6928431505411259,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        -0.021562226080920635,
+        0.5994631167599259,
+        -0.6928431505411259
+      ],
+      "seam_offset": [
+        0,
+        0.002,
+        0
+      ],
+      "source_asset_id": "grendel-head",
+      "target_torso_asset_id": "ettin-torso",
+      "transform_mode": "slot-transform"
+    },
+    {
+      "asset_id": "grendel-head",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.03879387304186821,
+            0.9532913565635681,
+            0.6571295857429504
+          ],
+          "prepared_anchor": [
+            -0.022719812081100032,
+            0.9420619336328362,
+            0.6531894556851654
+          ],
+          "prepared_matrix": [
+            0.96,
+            0.0,
+            0.0,
+            -0.021489690334263692,
+            0.0,
+            0.96,
+            0.0,
+            0.6827695207922093,
+            0.0,
+            0.0,
+            0.96,
+            -0.6345751041294775,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 5.204170427930421e-17,
+          "runtime_group": "head",
+          "socket": "neck",
+          "source_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ],
+          "target_anchor": [
+            -0.020715975703256312,
+            1.5713711638032317,
+            -0.013049275738561347
+          ],
+          "transformed_source_anchor": [
+            -0.020715975703256312,
+            1.5713711638032317,
+            -0.013049275738561295
+          ]
+        }
+      ],
+      "bridge_kind": "head-join-cover",
+      "bridge_sockets": [
+        "neck"
+      ],
+      "family_id": 11,
+      "family_label": "amberlongstep",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          0.96,
+          0.96,
+          0.96
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.03879387304186821,
+                0.9532913565635681,
+                0.6571295857429504
+              ],
+              "prepared_anchor": [
+                -0.022719812081100032,
+                0.9420619336328362,
+                0.6531894556851654
+              ],
+              "prepared_matrix": [
+                0.96,
+                0.0,
+                0.0,
+                -0.021489690334263692,
+                0.0,
+                0.96,
+                0.0,
+                0.6827695207922093,
+                0.0,
+                0.0,
+                0.96,
+                -0.6345751041294775,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 5.204170427930421e-17,
+              "runtime_group": "head",
+              "socket": "neck",
+              "source_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ],
+              "target_anchor": [
+                -0.020715975703256312,
+                1.5713711638032317,
+                -0.013049275738561347
+              ],
+              "transformed_source_anchor": [
+                -0.020715975703256312,
+                1.5713711638032317,
+                -0.013049275738561295
+              ]
+            }
+          ],
+          "bridge_kind": "head-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              0.96,
+              0.96,
+              0.96
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "neck-ruff",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            0.96,
+            0.0,
+            0.0,
+            -0.021489690334263692,
+            0.0,
+            0.96,
+            0.0,
+            0.6827695207922093,
+            0.0,
+            0.0,
+            0.96,
+            -0.6345751041294775,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 5.204170427930421e-17,
+          "runtime_group": "head",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0.002,
+            0
+          ],
+          "socket": "neck",
+          "socket_evidence": [],
+          "source_asset_id": "grendel-head",
+          "source_family_id": 11,
+          "target_torso_asset_id": "ettin-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "neck-ruff",
+      "lod": "impostor",
+      "logical_slot": "head",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 5.204170427930421e-17,
+      "preparation_kind": "cross-torso",
+      "prepared_matrix": [
+        0.96,
+        0.0,
+        0.0,
+        -0.021489690334263692,
+        0.0,
+        0.96,
+        0.0,
+        0.6827695207922093,
+        0.0,
+        0.0,
+        0.96,
+        -0.6345751041294775,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        -0.021489690334263692,
+        0.6827695207922093,
+        -0.6345751041294775
+      ],
+      "seam_offset": [
+        0,
+        0.002,
+        0
+      ],
+      "source_asset_id": "grendel-head",
+      "target_torso_asset_id": "ettin-torso",
+      "transform_mode": "slot-transform"
+    },
+    {
+      "asset_id": "grendel-head",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.03879387304186821,
+            0.9532913565635681,
+            0.6571295857429504
+          ],
+          "prepared_anchor": [
+            -0.022719812081100032,
+            0.9420619336328362,
+            0.6531894556851654
+          ],
+          "prepared_matrix": [
+            0.96,
+            0.0,
+            0.0,
+            3.223810962530761e-05,
+            0.0,
+            0.96,
+            0.0,
+            0.03902506845879261,
+            0.0,
+            0.0,
+            0.96,
+            0.025896909516288202,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "head",
+          "socket": "neck",
+          "source_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ],
+          "target_anchor": [
+            0.0008059527406326889,
+            0.927626711469815,
+            0.6474227379072044
+          ],
+          "transformed_source_anchor": [
+            0.0008059527406326889,
+            0.927626711469815,
+            0.6474227379072044
+          ]
+        }
+      ],
+      "bridge_kind": "head-join-cover",
+      "bridge_sockets": [
+        "neck"
+      ],
+      "family_id": 11,
+      "family_label": "amberlongstep",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          0.96,
+          0.96,
+          0.96
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.03879387304186821,
+                0.9532913565635681,
+                0.6571295857429504
+              ],
+              "prepared_anchor": [
+                -0.022719812081100032,
+                0.9420619336328362,
+                0.6531894556851654
+              ],
+              "prepared_matrix": [
+                0.96,
+                0.0,
+                0.0,
+                3.223810962530761e-05,
+                0.0,
+                0.96,
+                0.0,
+                0.03902506845879261,
+                0.0,
+                0.0,
+                0.96,
+                0.025896909516288202,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "head",
+              "socket": "neck",
+              "source_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ],
+              "target_anchor": [
+                0.0008059527406326889,
+                0.927626711469815,
+                0.6474227379072044
+              ],
+              "transformed_source_anchor": [
+                0.0008059527406326889,
+                0.927626711469815,
+                0.6474227379072044
+              ]
+            }
+          ],
+          "bridge_kind": "head-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              0.96,
+              0.96,
+              0.96
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "neck-ruff",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            0.96,
+            0.0,
+            0.0,
+            3.223810962530761e-05,
+            0.0,
+            0.96,
+            0.0,
+            0.03902506845879261,
+            0.0,
+            0.0,
+            0.96,
+            0.025896909516288202,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "head",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0.002,
+            0
+          ],
+          "socket": "neck",
+          "socket_evidence": [],
+          "source_asset_id": "grendel-head",
+          "source_family_id": 11,
+          "target_torso_asset_id": "grendel-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "neck-ruff",
+      "lod": "impostor",
+      "logical_slot": "head",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "cross-torso",
+      "prepared_matrix": [
+        0.96,
+        0.0,
+        0.0,
+        3.223810962530761e-05,
+        0.0,
+        0.96,
+        0.0,
+        0.03902506845879261,
+        0.0,
+        0.0,
+        0.96,
+        0.025896909516288202,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        3.223810962530761e-05,
+        0.03902506845879261,
+        0.025896909516288202
+      ],
+      "seam_offset": [
+        0,
+        0.002,
+        0
+      ],
+      "source_asset_id": "grendel-head",
+      "target_torso_asset_id": "grendel-torso",
+      "transform_mode": "slot-transform"
+    }
+  ],
   "donor": "grendel",
   "expected_groups": [
     "head",

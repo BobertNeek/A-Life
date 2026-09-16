@@ -169,6 +169,9 @@ impl CreaturePartAssetLibrary {
         image_assets: &mut Assets<Image>,
         material_assets: &mut Assets<StandardMaterial>,
     ) -> Result<CreatureCoatAssetHandles, CreaturePartAssetError> {
+        if let Some(update) = self.coat_cache.acquire_existing(recipe.coat_key) {
+            return self.handles_for_coat_update(update);
+        }
         let input_for = |slot: CreaturePartSlot| {
             let part = recipe
                 .parts
@@ -256,7 +259,7 @@ impl CreaturePartAssetLibrary {
         self.next_coat_asset_id = self.next_coat_asset_id.saturating_add(2);
         let update = self.coat_cache.acquire(key, candidate);
 
-        for evicted in update.evicted {
+        for evicted in &update.evicted {
             if let Some(handle) = self.coat_images.remove(&evicted.image_id) {
                 image_assets.remove(handle.id());
             }
@@ -273,6 +276,13 @@ impl CreaturePartAssetLibrary {
             material_assets.remove(material.id());
         }
 
+        self.handles_for_coat_update(update)
+    }
+
+    fn handles_for_coat_update(
+        &self,
+        update: crate::CreatureCoatCacheUpdate,
+    ) -> Result<CreatureCoatAssetHandles, CreaturePartAssetError> {
         let image = self
             .coat_images
             .get(&update.selected.image_id)

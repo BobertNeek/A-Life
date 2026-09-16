@@ -5,6 +5,8 @@ use bevy::{
     prelude::{App, Assets, Color, Handle, Res, ResMut, Resource, StandardMaterial, Time, Update},
 };
 
+use crate::Fvr05ProductionUxStateResource;
+
 #[derive(Debug, Clone, Resource)]
 pub(crate) struct Fvr11AnimatedWaterMaterial {
     pub handle: Handle<StandardMaterial>,
@@ -24,10 +26,19 @@ pub(crate) fn install_animated_water_material(app: &mut App, handle: Handle<Stan
 
 fn animate_water_material(
     time: Res<Time>,
+    ux: Option<Res<Fvr05ProductionUxStateResource>>,
     mut water: ResMut<Fvr11AnimatedWaterMaterial>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    water.phase = (water.phase + time.delta_secs() * 0.32) % std::f32::consts::TAU;
+    let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
+    let speed = ux
+        .as_ref()
+        .map(|ux| ux.settings.simulation_speed)
+        .unwrap_or(1.0);
+    water.phase = advance_water_phase(water.phase, time.delta_secs(), speed, paused);
+    if paused {
+        return;
+    }
     let motion = water_motion_at_phase(water.phase);
     if let Some(material) = materials.get_mut(&water.handle) {
         material.uv_transform = Affine2::from_translation(motion.uv_translation);
@@ -38,6 +49,13 @@ fn animate_water_material(
             0.78,
         );
     }
+}
+
+fn advance_water_phase(current: f32, delta_seconds: f32, speed: f32, paused: bool) -> f32 {
+    if paused {
+        return current;
+    }
+    (current + delta_seconds.max(0.0) * speed.max(0.0) * 0.32) % std::f32::consts::TAU
 }
 
 fn water_motion_at_phase(phase: f32) -> WaterMotion {
@@ -64,5 +82,14 @@ mod tests {
             assert!(sample.uv_translation.y.abs() <= 0.002_1);
             assert!((0.98..=1.02).contains(&sample.tint_scale));
         }
+    }
+
+    #[test]
+    fn water_phase_obeys_simulation_pause_and_speed() {
+        let running = advance_water_phase(0.5, 0.25, 2.0, false);
+        assert!((running - 0.66).abs() <= f32::EPSILON);
+
+        let paused = advance_water_phase(running, 10.0, 5.0, true);
+        assert_eq!(paused, running);
     }
 }

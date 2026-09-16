@@ -663,7 +663,7 @@ pub fn recompute_era1_selection_profile_from_receipt(
             ecology_score(PassiveMetricKind::FoodSuccess),
             ecology_score(PassiveMetricKind::PoisonAvoidance),
             ecology_score(PassiveMetricKind::HazardAvoidance),
-            ecology_score(PassiveMetricKind::EnergyStability),
+            ecology_score(PassiveMetricKind::MeanBrainAtp),
             ecology_score(PassiveMetricKind::Reproduction),
         ]),
         cognitive: average_estimates(&[
@@ -694,7 +694,7 @@ pub fn recompute_era1_selection_profile_from_receipt(
         stability: average_estimates(&[
             trial_score(Era1Ability::RewardReversal),
             trial_score(Era1Ability::PostSleepRetention),
-            ecology_score(PassiveMetricKind::EnergyStability),
+            ecology_score(PassiveMetricKind::MeanBrainAtp),
             ecology_score(PassiveMetricKind::SleepRetention),
             ecology_score(PassiveMetricKind::ReversalRecovery),
         ]),

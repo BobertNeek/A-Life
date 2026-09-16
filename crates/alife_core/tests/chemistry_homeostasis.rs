@@ -22,7 +22,7 @@ fn homeostatic_snapshots_are_versioned_through_the_central_schema_registry() {
         stale.validate_contract(),
         Err(ScaffoldContractError::IncompatibleAbi {
             kind: SchemaKind::Chemistry,
-            expected: 1,
+            expected: 3,
             actual: 999
         })
     ));

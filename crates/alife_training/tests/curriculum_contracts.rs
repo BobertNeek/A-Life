@@ -3,8 +3,8 @@ use alife_core::{
     PhenotypeCompiler, SensorProfile, Tick,
 };
 use alife_training::{
-    wilson_lower_bound_85, CurriculumSplit, FoundationCurriculumStage, N2048CurriculumV1,
-    StageEvaluation, StageGatePolicy,
+    wilson_lower_bound_85, CurriculumSplit, FoundationCurriculumStage, LanguageStageMetrics,
+    N2048CurriculumV1, StageEvaluation, StageGatePolicy,
 };
 
 fn phenotype() -> alife_core::BrainPhenotype {
@@ -90,4 +90,34 @@ fn stage_gate_enforces_real_episode_count_confidence_and_regression_limits() {
     assert!(policy.validate(&regression).is_err());
     let changed_frozen = StageEvaluation::try_new(256, 250, 0.2, 0.0, false, None).unwrap();
     assert!(policy.validate(&changed_frozen).is_err());
+}
+
+#[test]
+fn stage_gate_rejects_non_finite_language_metrics_and_policy_limits() {
+    let invalid_language = LanguageStageMetrics {
+        paired_exposures: 256,
+        grounding_accuracy: f32::NAN,
+        false_grounding_rate: 0.0,
+        literal_narration_agreement: 1.0,
+        unseen_surface_transfer: true,
+    };
+    assert!(StageEvaluation::try_new(256, 256, 0.0, 0.0, true, Some(invalid_language),).is_err());
+
+    let passing = StageEvaluation::try_new(256, 256, 0.0, 0.0, true, None).unwrap();
+    for policy in [
+        StageGatePolicy {
+            minimum_lower_confidence_success: f32::NAN,
+            maximum_locked_stage_regression: 0.02,
+        },
+        StageGatePolicy {
+            minimum_lower_confidence_success: 0.90,
+            maximum_locked_stage_regression: f32::INFINITY,
+        },
+        StageGatePolicy {
+            minimum_lower_confidence_success: 1.01,
+            maximum_locked_stage_regression: 0.02,
+        },
+    ] {
+        assert!(policy.validate(&passing).is_err());
+    }
 }

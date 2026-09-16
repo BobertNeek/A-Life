@@ -18,7 +18,7 @@ blake3.workspace = true
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 flate2 = "=1.1.9"
 serde.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }
 thiserror.workspace = true
 zstd.workspace = true
 

@@ -4,6 +4,8 @@
 
 A-Life is a Rust workspace targeting Windows, Bevy 0.18, wgpu 29, Vulkan, and WGSL. Install a current Rust toolchain and Git for Windows. Repository PowerShell wrappers call Git Bash for shell gates and avoid accidental WSL use.
 
+Run `bash scripts/setup.sh` to check the Rust, Git, Python, production-asset, Vulkan-tool, Blender, and optional Graphify environment. It reports optional tool gaps without pretending to install them.
+
 Read root `AGENTS.md` and the nearest subtree `AGENTS.md` before changing code or documentation.
 
 ## Launch and package
@@ -11,20 +13,43 @@ Read root `AGENTS.md` and the nearest subtree `AGENTS.md` before changing code o
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -PreviewCommand
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_production_voxel.ps1
 ```
 
-The default profile is `MinSpecComfort1080p`. `MinimumSettings30x30` is a graphics floor, not permission for CPU neural fallback.
+`-DryRun` executes application preflight without opening a window. `-PreviewCommand` only prints the Cargo command. The default profile is `MinSpecComfort1080p`. `MinimumSettings30x30` is a graphics floor, not permission for CPU neural fallback.
+
+Camera controls: hold the arrow keys or move the pointer within 16 pixels of a
+game-window edge to pan. Panning releases creature follow. Home snaps to the
+selected creature, or finds the first creature when none is selected.
+Page Up and Page Down select and follow the previous or next creature. F toggles
+follow, and R returns to the starting view. Camera movement loads a bounded
+terrain region around the view without moving creatures or advancing simulation
+time. World shortcuts are suspended while typing in the conversation panel.
+
+Creature pose transitions blend over time. Ground contact uses the posed mesh
+bounds and rendered terrain heights, including the current placeholder sleep
+pose. The planned graphics redesign will replace that pose and the creature art.
+The shipped assembly metadata covers inherited parts on all supported torso
+types. Creature display capacity follows the graphics profile budget, so births
+can appear beyond the initial population.
+Runtime checkpoints are separated by world identity and graphics profile.
+Matching older profile-wide checkpoints are copied to the world's checkpoint
+path, retaining the original. Resume accepts population changes within the
+selected profile's capacity.
 
 ## Standard checks
 
 Run the smallest check that can falsify the changed behavior.
 
 ```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1 --quick
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_core_boundaries.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
 ```
+
+`check.ps1 --quick` runs only Git whitespace, static dependency/source boundaries, and documentation assertions. The default full check adds formatting, workspace check, workspace tests, and Clippy.
 
 Use a focused `cargo test -p <crate> <filter>` when a Rust behavior changes. Do not launch a second Cargo build while another shared-target build is active.
 
@@ -42,32 +67,26 @@ cargo test --workspace --all-features --all-targets
 These commands are examples, not evidence by themselves. Record outputs under
 ignored `target/artifacts/` paths when a gate requires a durable receipt.
 
-## Headless playground and content checks
+## Focused content and persistence checks
 
-The retained headless playground exercises reference, persistence, school, and
-semantic boundaries without claiming production neural authority:
+Use the narrow validators for content and portable persistence:
 
 ```powershell
-cargo run -p alife_tools --bin p35_playground -- run-headless crates/alife_world/tests/fixtures/p34
-cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/tests/fixtures/p34 examples/p35/playground_manifest.json
+cargo run -p alife_tools --bin p34_persistence -- validate-save crates/alife_world/tests/fixtures/p34/tiny_save.json crates/alife_world/tests/fixtures/p34
 cargo run -p alife_tools --bin g16_content_authoring -- validate-pack content/fixtures/g16/content_pack_manifest.json
-cargo run -p alife_game_app --bin alife_game_app -- save-load-ux-smoke crates/alife_world/tests/fixtures/p34
-cargo run -p alife_game_app --bin alife_game_app -- longrun-balance-smoke
-cargo run -p alife_game_app --bin alife_game_app -- product-qa-smoke
-cargo run -p alife_game_app --bin alife_game_app -- release-candidate-smoke
+cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets
 cargo test -p alife_game_app --test app_shell g19_manual_extended_balance_run -- --ignored --nocapture
 cargo test -p alife_world --test headless_soak fast_headless_soak_preserves_release_gate_invariants
 ```
 
 Validate the committed content pack with `validate-pack` before using it in a
 tutorial or package. Optional GPU demonstrations remain manual.
-For the legacy P35 GPU diagnostic, compile with `--gpu-runtime` and select the
-static backend explicitly with `ALIFE_GPU_RUNTIME_BACKEND=static`.
-
+`scripts/build_geneforge_creature_parts.py` is the supported GeneForge command.
+It launches `scripts/geneforge_blender_worker.py` inside Blender; do not invoke
+the worker directly.
 The platform wrappers are:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_headless_playground.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_production_voxel.ps1
 ```
@@ -94,10 +113,12 @@ Rules:
 - never start a competing GPU corpus while one healthy run owns the target.
 
 The formula-derived performance ledger used by its focused test lives at
-`crates/alife_tools/tests/fixtures/P04_5_performance_contract.md`. The external
-tester form packaged by the legacy alpha helper lives at
-`examples/ca43/TESTER_FEEDBACK_TEMPLATE.md`. These are operational inputs, not
-project documentation authorities.
+`crates/alife_tools/tests/fixtures/P04_5_performance_contract.md`.
+
+Retired Alpha, True 2.5D, milestone smoke, and release-report helpers live under
+`archive/legacy_true25d`, `archive/legacy_app_milestones`, and `archive/legacy_pass2`. They are historical
+references. They are not Cargo targets, supported commands, package inputs, or
+active documentation authorities.
 
 ## Architecture boundaries
 
@@ -122,6 +143,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1
 Check relative links and scan for stale claims such as production CPU fallback, EI1 promotion, N4096 production support, or a completed live GPU-to-voxel bridge.
 
 ## Repository hygiene
+
+Production graphics load the approved Hearthling GLB and landscape props from
+`crates/alife_game_app/assets/creatures/hearthling` and `assets/landscape`.
+The character includes idle, walk, and seated sleep clips. Existing organism
+state selects animation, pause freezes it, and the appearance genome supplies
+coat, mass, ear/head, and tail variation. The source Blender files and export
+commands are documented in the Hearthling asset README. After any art export,
+run `python scripts/register_approved_art.py` to refresh the manifest digests.
+Terrain remains a projection of the existing streamed world, with shared hill
+corners and blended ground colors. The full Blender sample landscape is a
+reference scene and is not substituted for the simulated world.
+Mouse wheel zooms the creature view. F12 saves the current game view under
+`target/artifacts/player-captures`. For bounded visual verification, setting
+`ALIFE_GRAPHICS_CAPTURE_DIR` captures at most 96 frames and read-only animation
+and grounding receipts while the ordinary game continues.
 
 - Keep one worktree per active isolated task; remove it after its commits are merged and any uncommitted instruction edits are backed up.
 - Keep durable reports in tracked report paths. Keep generated Cargo, graph, screenshot, log, and raw corpus output under ignored targets.

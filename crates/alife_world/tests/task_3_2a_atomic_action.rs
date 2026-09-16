@@ -1,10 +1,13 @@
 use alife_core::{
     ActionCommand, ActionId, ActionKind, ActionTarget, BiochemistryState, BodyEventDelta,
-    BrainCapacityClass, Confidence, CreatureGenome, DurationTicks, FoundationGeneticIdentity,
-    Intensity, OrganismId, SpeechActKind, SpeechMotorPayload, Tick, Vec3f, WorldEntityId,
+    BrainCapacityClass, ChannelCommand, Confidence, CreatureGenome, DurationTicks,
+    ExperienceSequenceId, FoundationGeneticIdentity, Intensity, MotorChannel, MotorCommandBundle,
+    OrganismId, PhysicalContactKind, SpeechActKind, SpeechMotorPayload, Tick, Validate, Vec3f,
+    WorldEntityId,
 };
 use alife_world::{
-    HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldCommand, WorldOrganismRecord,
+    HeadlessActionIds, HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldCommand,
+    WorldEditorSpawnSpec, WorldObjectKind, WorldOrganismRecord,
 };
 
 const ORGANISM_ID: OrganismId = OrganismId(7);
@@ -211,6 +214,148 @@ fn registered_hazard_contact_reports_measured_damage() {
     assert_eq!(receipt.action_result.body_event.sleep_recovery, 0.0);
     assert_eq!(receipt.action_result.body_event.mating_opportunity, 0.0);
     assert_eq!(receipt.biology_after.tick, Tick(1));
+}
+
+#[test]
+fn stored_object_radius_bounds_grounded_contact_and_movement_collision() {
+    let world_for_radius = |radius| {
+        let mut world = HeadlessScenarioBuilder::new(32_030)
+            .agent("agent", ORGANISM_ID, Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let agent = world.entity_id("agent").unwrap();
+        let hazard = world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "radius-hazard".to_string(),
+                kind: WorldObjectKind::Hazard,
+                organism_id: None,
+                position: Vec3f::new(1.0, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.2,
+                radius,
+                token_id: None,
+            })
+            .unwrap();
+        register(&mut world, agent);
+        (world, agent, hazard)
+    };
+
+    let (mut noncontact, noncontact_agent, noncontact_hazard) = world_for_radius(0.5);
+    let noncontact_receipt = noncontact
+        .apply_registered_command(
+            &move_command(Vec3f::new(0.4, 0.0, 0.0)),
+            noncontact_agent,
+            Tick(1),
+        )
+        .unwrap();
+    assert_eq!(
+        noncontact_receipt.action_result.execution.physical.contact,
+        alife_core::PhysicalContactKind::Moved
+    );
+    assert!(
+        !noncontact
+            .physical_observation_snapshot(ORGANISM_ID, Tick(1))
+            .unwrap()
+            .visible
+            .iter()
+            .find(|object| object.transport_entity == noncontact_hazard)
+            .unwrap()
+            .contact
+    );
+
+    let (mut contact, contact_agent, contact_hazard) = world_for_radius(0.8);
+    let contact_receipt = contact
+        .apply_registered_command(
+            &move_command(Vec3f::new(0.4, 0.0, 0.0)),
+            contact_agent,
+            Tick(1),
+        )
+        .unwrap();
+    assert_eq!(
+        contact_receipt.action_result.execution.physical.contact,
+        alife_core::PhysicalContactKind::Collision
+    );
+    assert!(
+        contact
+            .physical_observation_snapshot(ORGANISM_ID, Tick(1))
+            .unwrap()
+            .visible
+            .iter()
+            .find(|object| object.transport_entity == contact_hazard)
+            .unwrap()
+            .contact
+    );
+}
+
+#[test]
+fn incidental_hazard_contact_preserves_factorized_action_outcome() {
+    let mut world = HeadlessScenarioBuilder::new(32_031)
+        .agent("agent", ORGANISM_ID, Vec3f::ZERO)
+        .food("food", Vec3f::ZERO, 0.6)
+        .hazard("hazard", Vec3f::ZERO, 0.2)
+        .build()
+        .unwrap();
+    let agent = world.entity_id("agent").unwrap();
+    let food = world.entity_id("food").unwrap();
+    register(&mut world, agent);
+    let channel = ChannelCommand::new(
+        MotorChannel::Manipulation,
+        HeadlessActionIds::EAT,
+        Some(ActionTarget::new(Some(food), None)),
+        Vec3f::ZERO,
+        Intensity::new(1.0).unwrap(),
+        DurationTicks::new(1),
+        0.0,
+        Confidence::new(1.0).unwrap(),
+        0,
+    )
+    .unwrap();
+    let bundle = MotorCommandBundle::new(
+        ORGANISM_ID,
+        ExperienceSequenceId::new(1).unwrap(),
+        Tick::ZERO,
+        vec![channel],
+    )
+    .unwrap();
+
+    let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+
+    assert!(receipt.succeeded);
+    assert_eq!(
+        receipt.joint.execution.contact,
+        PhysicalContactKind::Consumed
+    );
+    assert_eq!(receipt.joint.execution.target_entity, Some(food));
+    assert_eq!(receipt.body_event.damage, 0.2);
+    assert_eq!(receipt.body_event.nutrition, 0.6);
+}
+
+#[test]
+fn cognitive_energy_setter_preserves_routed_body_projection() {
+    let genome = CreatureGenome::early_mammal_founder(
+        0xE10_3200,
+        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+    )
+    .unwrap();
+    let phenotype = genome.express().unwrap();
+    let mut biology = BiochemistryState::new(&phenotype, Tick::ZERO)
+        .unwrap()
+        .advance(
+            Tick(1),
+            BodyEventDelta {
+                damage: 0.2,
+                ..BodyEventDelta::zero()
+            },
+            &phenotype,
+        )
+        .unwrap();
+
+    biology
+        .body
+        .set_energy((biology.body.energy - 0.123_456_7).max(0.0))
+        .unwrap();
+
+    biology.body.validate_contract().unwrap();
 }
 
 #[test]

@@ -2,9 +2,9 @@
 
 The roadmap is ordered by causal dependency. A later phase does not compensate for an earlier missing authority link.
 
-## 1. Live GPU-to-voxel projection
+## 1. Prove live GPU-to-voxel projection
 
-Build a read-only presentation adapter keyed by stable organism and world entity IDs.
+The read-only presentation adapter keyed by stable organism and world entity IDs is implemented. Refresh its source-bound Vulkan and rendered evidence.
 
 Exit gate:
 

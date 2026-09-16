@@ -5,11 +5,14 @@ mod session;
 mod sleep_scheduler;
 
 pub use checkpoint_assets::{
-    current_backend_provenance, merge_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite,
+    current_backend_provenance, merge_gpu_checkpoint_manifest_entries,
+    retain_current_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite,
     GpuBrainSidecarCapture, GpuCheckpointAssetStore, GpuDurableFounderWrite,
-    GpuDurableSaveManifest, GpuLoadedSaveManifest, GpuSaveManifestCasOutcome,
-    GpuSaveManifestDigest, RestoredGpuBrainCheckpoint, RestoredRetainedLearning,
-    RetainedLearningCapture,
+    GpuDurableSaveManifest, GpuExactCheckpointTransactionContextV1, GpuLoadedSaveManifest,
+    GpuSaveManifestCasOutcome, GpuSaveManifestDigest, GpuSleepJournalPublicationReceipt,
+    GpuSleepJournalPublicationTiming, GpuSleepTransactionJournalEntryV2,
+    GpuSleepTransactionJournalV2, RestoredGpuBrainCheckpoint, RestoredRetainedLearning,
+    RetainedLearningCapture, GPU_SLEEP_TRANSACTION_JOURNAL_MAX_ENTRIES,
 };
 pub use session::*;
 pub use sleep_scheduler::*;
@@ -28,6 +31,14 @@ pub enum GpuRuntimeError {
         "GPU checkpoint manifest compare-and-swap conflict: expected {expected}, found {actual}"
     )]
     GpuCheckpointManifestConflict { expected: String, actual: String },
+    #[error(
+        "GPU checkpoint authority generation {committed_generation} committed but post-commit validation failed; last known-good generation was {last_known_good_generation}: {message}"
+    )]
+    GpuCheckpointAuthorityPostCommitValidation {
+        committed_generation: u64,
+        last_known_good_generation: u64,
+        message: String,
+    },
     #[error("invalid GPU checkpoint boundary: {message}")]
     InvalidProductionFrontend { message: String },
 }

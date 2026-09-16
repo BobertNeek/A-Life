@@ -107,106 +107,107 @@ impl LanguageNursery {
         speaker: NurserySpeaker,
         lesson: &LanguageNurseryLesson,
     ) -> Result<LanguageNurseryExposure, ScaffoldContractError> {
+        let expected_token =
+            (lesson.object_kind == WorldObjectKind::Token).then_some(u32::from(lesson.token.raw()));
         let target_entity = if let Some(existing) = self.world.entity_id(&lesson.object_label) {
-            existing
+            let object = self
+                .world
+                .entity(existing)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            if object.kind != lesson.object_kind
+                || object.organism_id.is_some()
+                || object.token_id != expected_token
+            {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+            if object.is_consumed() {
+                self.world.editor_remove_object(existing)?;
+                self.spawn_lesson_target(lesson, expected_token)?
+            } else {
+                self.world
+                    .editor_move_object(existing, lesson.object_position)?;
+                existing
+            }
         } else {
-            self.world.editor_spawn_object(WorldEditorSpawnSpec {
-                label: lesson.object_label.clone(),
-                kind: lesson.object_kind,
-                organism_id: None,
-                position: lesson.object_position,
-                nutrition: if lesson.object_kind == WorldObjectKind::Food {
-                    1.0
-                } else {
-                    0.0
-                },
-                hazard_pain: if lesson.object_kind == WorldObjectKind::Hazard {
-                    1.0
-                } else {
-                    0.0
-                },
-                radius: 0.5,
-                token_id: (lesson.object_kind == WorldObjectKind::Token)
-                    .then_some(u32::from(lesson.token.raw())),
-            })?
+            self.spawn_lesson_target(lesson, expected_token)?
         };
         let tokens = vec![lesson.token];
-        let utterance = match speaker {
-            NurserySpeaker::Player { source_position } => {
-                self.world
-                    .emit_player_tokens(Some(self.subject), source_position, tokens)?
-            }
-            NurserySpeaker::Teacher { source_position } => {
-                let teacher_entity = if let Some(existing) = self.world.entity_id("nursery-teacher")
-                {
-                    self.world.editor_move_object(existing, source_position)?;
-                    existing
-                } else {
-                    let mut raw = self
-                        .subject
-                        .raw()
-                        .checked_add(1)
-                        .ok_or(ScaffoldContractError::InvalidId)?;
-                    while self
-                        .world
-                        .organism_entity_ids()
-                        .iter()
-                        .any(|(candidate, _)| candidate.raw() == raw)
-                    {
-                        raw = raw.checked_add(1).ok_or(ScaffoldContractError::InvalidId)?;
-                    }
-                    self.world.spawn_social_agent(
-                        "nursery-teacher",
-                        OrganismId(raw),
-                        source_position,
-                        0.75,
-                    )?
-                };
-                self.world.grounded_teacher_actor(teacher_entity)?.speak(
-                    &mut self.world,
-                    Some(self.subject),
-                    tokens,
-                    TeacherPerceptionChannel::Hearing,
-                )?
-            }
-            NurserySpeaker::Peer {
-                organism_id,
-                source_position,
-            } => {
-                if !self
-                    .world
-                    .organism_entity_ids()
-                    .iter()
-                    .any(|(candidate, _)| *candidate == organism_id)
-                {
-                    self.world.spawn_social_agent(
-                        &format!("nursery-peer-{}", organism_id.raw()),
-                        organism_id,
-                        source_position,
-                        0.5,
-                    )?;
-                }
-                let utterance_id = alife_core::UtteranceId::new(
+        let utterance =
+            match speaker {
+                NurserySpeaker::Player { source_position } => {
                     self.world
-                        .audible_utterances()
-                        .iter()
-                        .map(|utterance| utterance.utterance_id.raw())
-                        .max()
-                        .unwrap_or(0)
-                        .saturating_add(1),
-                )?;
-                self.world.emit_creature_utterance(
-                    utterance_id,
-                    organism_id,
-                    Some(self.subject),
-                    SpeechMotorPayload::try_new(
-                        SpeechActKind::Declare,
+                        .emit_player_tokens(Some(self.subject), source_position, tokens)?
+                }
+                NurserySpeaker::Teacher { source_position } => {
+                    let teacher_entity =
+                        if let Some(existing) = self.world.entity_id("nursery-teacher") {
+                            self.world.editor_move_object(existing, source_position)?;
+                            existing
+                        } else {
+                            let mut raw = self
+                                .subject
+                                .raw()
+                                .checked_add(1)
+                                .ok_or(ScaffoldContractError::InvalidId)?;
+                            while self
+                                .world
+                                .organism_entity_ids()
+                                .iter()
+                                .any(|(candidate, _)| candidate.raw() == raw)
+                            {
+                                raw = raw.checked_add(1).ok_or(ScaffoldContractError::InvalidId)?;
+                            }
+                            self.world.spawn_social_agent(
+                                "nursery-teacher",
+                                OrganismId(raw),
+                                source_position,
+                                0.75,
+                            )?
+                        };
+                    self.world.grounded_teacher_actor(teacher_entity)?.speak(
+                        &mut self.world,
+                        Some(self.subject),
                         tokens,
-                        Confidence::new(1.0)?,
-                    )?,
-                )?
-            }
-        };
+                        TeacherPerceptionChannel::Hearing,
+                    )?
+                }
+                NurserySpeaker::Peer {
+                    organism_id,
+                    source_position,
+                } => {
+                    if let Some(existing) = self.world.organism_entity_ids().into_iter().find_map(
+                        |(candidate, entity)| (candidate == organism_id).then_some(entity),
+                    ) {
+                        self.world.editor_move_object(existing, source_position)?;
+                    } else {
+                        self.world.spawn_social_agent(
+                            &format!("nursery-peer-{}", organism_id.raw()),
+                            organism_id,
+                            source_position,
+                            0.5,
+                        )?;
+                    }
+                    let utterance_id = alife_core::UtteranceId::new(
+                        self.world
+                            .audible_utterances()
+                            .iter()
+                            .map(|utterance| utterance.utterance_id.raw())
+                            .max()
+                            .unwrap_or(0)
+                            .saturating_add(1),
+                    )?;
+                    self.world.emit_creature_utterance(
+                        utterance_id,
+                        organism_id,
+                        Some(self.subject),
+                        SpeechMotorPayload::try_new(
+                            SpeechActKind::Declare,
+                            tokens,
+                            Confidence::new(1.0)?,
+                        )?,
+                    )?
+                }
+            };
         let tick = self.world.tick();
         let perception = self.world.perception_frame_draft(
             self.subject,
@@ -236,6 +237,31 @@ impl LanguageNursery {
             can_issue_actions: false,
             can_write_rewards: false,
             can_inject_hidden_concepts: false,
+        })
+    }
+
+    fn spawn_lesson_target(
+        &mut self,
+        lesson: &LanguageNurseryLesson,
+        token_id: Option<u32>,
+    ) -> Result<WorldEntityId, ScaffoldContractError> {
+        self.world.editor_spawn_object(WorldEditorSpawnSpec {
+            label: lesson.object_label.clone(),
+            kind: lesson.object_kind,
+            organism_id: None,
+            position: lesson.object_position,
+            nutrition: if lesson.object_kind == WorldObjectKind::Food {
+                1.0
+            } else {
+                0.0
+            },
+            hazard_pain: if lesson.object_kind == WorldObjectKind::Hazard {
+                1.0
+            } else {
+                0.0
+            },
+            radius: 0.5,
+            token_id,
         })
     }
 

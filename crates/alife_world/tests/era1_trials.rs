@@ -268,6 +268,21 @@ fn phase_transitions_are_exact_and_apply_real_world_changes() {
 }
 
 #[test]
+fn failed_multi_object_transition_preserves_the_complete_world() {
+    let manifest = manifest(Era1WorldFamily::ForagingHazardMaze, false);
+    let mut world = build_era1_trial_world(&manifest).unwrap();
+    while world.tick().raw() < ERA1_ACQUISITION_END_TICK {
+        world.advance_tick();
+    }
+    let missing = world.entity_id("era1-wall-c").unwrap();
+    world.editor_remove_object(missing).unwrap();
+    let before = world.canonical_signature_digest().unwrap();
+
+    assert!(apply_era1_world_transition(&manifest, manifest.transitions()[0], &mut world).is_err());
+    assert_eq!(world.canonical_signature_digest().unwrap(), before);
+}
+
+#[test]
 fn familiar_and_novel_individuals_are_distinct_and_track_stably() {
     let manifest = manifest(Era1WorldFamily::FamiliarNovelIndividual, false);
     let mut world = build_era1_trial_world(&manifest).unwrap();

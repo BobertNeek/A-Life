@@ -36,6 +36,13 @@ Rules:
 - Never equate a language token ID with a neuron or packed GPU offset.
 - Genetic birth must not inherit lifetime weights, memories, learned lexicon
   bindings, eligibility, or transient state.
+- Material chemical reserves initialize and relax toward their inherited basal
+  concentrations. Regulatory baselines retain developmental expression scaling;
+  loading stored concentrations must not reinitialize either kind.
+- Nano512 readout candidates use a separate foundation identity and canonical
+  asset bytes. Their first admission supports only the fixed legacy source
+  graph and ActionCandidate genetic weights. Preserve old builtin admission
+  and exact compiler-input reconstruction; this is not default promotion.
 - Runtime GPU kernels do not belong here.
 - `foundation.rs`, `language.rs`, and `phenotype/persistent_address.rs` own the
   frozen N2048 layout/route/plasticity ABI, `LanguageCodebookV1`, and the

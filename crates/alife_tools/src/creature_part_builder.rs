@@ -1531,18 +1531,22 @@ fn validate_staged_obj(
                 }
                 for reference in refs {
                     let parts = reference.split('/').collect::<Vec<_>>();
-                    if parts.len() != 3
-                        || !valid_positive_obj_index(parts[0], positions.len())
-                        || !valid_positive_obj_index(parts[1], uvs.len())
-                        || !valid_positive_obj_index(parts[2], normals.len())
-                    {
+                    if parts.len() != 3 {
                         return Err(CreaturePartBuilderError::Staging(format!(
                             "OBJ index is invalid at {}:{line_number}",
                             path.display()
                         )));
                     }
-                    let position_index = parts[0].parse::<usize>().unwrap() - 1;
-                    let normal_index = parts[2].parse::<usize>().unwrap() - 1;
+                    let (Some(position_index), Some(_), Some(normal_index)) = (
+                        positive_obj_index(parts[0], positions.len()),
+                        positive_obj_index(parts[1], uvs.len()),
+                        positive_obj_index(parts[2], normals.len()),
+                    ) else {
+                        return Err(CreaturePartBuilderError::Staging(format!(
+                            "OBJ index is invalid at {}:{line_number}",
+                            path.display()
+                        )));
+                    };
                     if position_normals
                         .insert(position_index, normal_index)
                         .is_some_and(|previous| previous != normal_index)
@@ -1585,10 +1589,12 @@ fn validate_staged_obj(
     })
 }
 
-fn valid_positive_obj_index(value: &str, count: usize) -> bool {
+fn positive_obj_index(value: &str, count: usize) -> Option<usize> {
     value
         .parse::<usize>()
-        .is_ok_and(|index| index > 0 && index <= count)
+        .ok()
+        .filter(|index| *index > 0 && *index <= count)
+        .map(|index| index - 1)
 }
 
 fn validate_staged_socket_manifest(

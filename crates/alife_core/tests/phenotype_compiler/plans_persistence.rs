@@ -59,7 +59,7 @@ fn inherited_decoder_priors_favor_safe_ingestion_and_target_pain_avoidance() {
             .target_latent_lane_start() as u16;
         let motor = phenotype
             .lobe_layout()
-            .region(LobeKind::MotorArbitration)
+            .region(LobeKind::ActionPlanning)
             .unwrap();
         assert!(phenotype
             .neuron_dynamics()
@@ -300,11 +300,11 @@ fn recurrent_and_decoder_coordinates_are_sorted_unique_and_in_range() {
                 let channel = decoder.memory_channel().unwrap();
                 let episodic = phenotype
                     .lobe_layout()
-                    .region(LobeKind::EpisodicMemory)
+                    .region(LobeKind::MemoryInterface)
                     .unwrap();
                 let core = phenotype
                     .lobe_layout()
-                    .region(LobeKind::CoreAssociation)
+                    .region(LobeKind::TemporalPredictive)
                     .unwrap();
                 assert!(input_lane >= channel.target_latent_lane_start() as u16);
                 assert!(input_lane < channel.decoder_input_stride() as u16);
@@ -314,6 +314,9 @@ fn recurrent_and_decoder_coordinates_are_sorted_unique_and_in_range() {
             }
             DecoderHeadKind::SpeechPayload => {
                 panic!("procedural N512 must not compile a speech decoder")
+            }
+            DecoderHeadKind::CognitiveContext => {
+                panic!("procedural N512 must not compile a cognitive decoder")
             }
         }
     }
@@ -382,6 +385,7 @@ fn projections_routes_and_global_budgets_are_exact_partitions() {
                         action_decoder += 1
                     }
                     DecoderHeadKind::MemoryContext => memory_decoder += 1,
+                    DecoderHeadKind::CognitiveContext => action_decoder += 1,
                 },
             }
         }
@@ -543,7 +547,7 @@ fn sensor_gene_mutation_and_maturation_gate_change_the_real_encoder_deterministi
     let hearing_gene = SensorChannelGene {
         kind: SensorChannelKind::Hearing,
         receptor_count: 8,
-        target_lobe: LobeKind::AuditorySpeech,
+        target_lobe: LobeKind::SocialCommunication,
         enabled_at_maturation: 50,
     };
     mutated_genome.sensor_layout.channels.push(hearing_gene);
@@ -644,8 +648,8 @@ fn decoder_covers_all_families_in_raw_order_with_exact_spans_and_coordinates() {
             projection.synapse_range() == (recurrent_end, action_end - recurrent_end)
         })
         .unwrap();
-    assert_eq!(decoder_projection.source_lobe(), LobeKind::MotorArbitration);
-    assert_eq!(decoder_projection.target_lobe(), LobeKind::MotorArbitration);
+    assert_eq!(decoder_projection.source_lobe(), LobeKind::ActionPlanning);
+    assert_eq!(decoder_projection.target_lobe(), LobeKind::ActionPlanning);
     assert_eq!(
         decoder_projection.projection_type(),
         alife_core::ProjectionType::MotorProposal,
@@ -669,8 +673,11 @@ fn decoder_covers_all_families_in_raw_order_with_exact_spans_and_coordinates() {
         .iter()
         .find(|projection| projection.synapse_range() == (action_end, memory_end - action_end))
         .unwrap();
-    assert_eq!(memory_projection.source_lobe(), LobeKind::EpisodicMemory);
-    assert_eq!(memory_projection.target_lobe(), LobeKind::CoreAssociation);
+    assert_eq!(memory_projection.source_lobe(), LobeKind::MemoryInterface);
+    assert_eq!(
+        memory_projection.target_lobe(),
+        LobeKind::TemporalPredictive
+    );
     assert_eq!(
         memory_projection.projection_type(),
         alife_core::ProjectionType::Feedback,
@@ -722,11 +729,11 @@ fn decoder_covers_all_families_in_raw_order_with_exact_spans_and_coordinates() {
     assert_eq!(cursor, action_end);
     let episodic = phenotype
         .lobe_layout()
-        .region(LobeKind::EpisodicMemory)
+        .region(LobeKind::MemoryInterface)
         .unwrap();
     let core = phenotype
         .lobe_layout()
-        .region(LobeKind::CoreAssociation)
+        .region(LobeKind::TemporalPredictive)
         .unwrap();
     let mut memory_coordinates = BTreeSet::new();
     for synapse in &phenotype.synapses()[action_end as usize..memory_end as usize] {
@@ -845,6 +852,9 @@ fn decoder_serialized_identity_contains_no_raw_entity_id_lane() {
                 DecoderHeadKind::MemoryContext => memory_coordinate_count += 1,
                 DecoderHeadKind::SpeechPayload => {
                     panic!("procedural N512 must not serialize a speech coordinate")
+                }
+                DecoderHeadKind::CognitiveContext => {
+                    panic!("procedural N512 must not serialize a cognitive coordinate")
                 }
             }
         }
@@ -1025,7 +1035,7 @@ fn shared_sensor_lane_ranges_allocate_unique_vision_and_glyph_coordinates() {
     genome.sensor_layout.channels.push(SensorChannelGene {
         kind: SensorChannelKind::GlyphVision,
         receptor_count: 16,
-        target_lobe: LobeKind::SensoryGrounding,
+        target_lobe: LobeKind::PerceptualIntegration,
         enabled_at_maturation: 0,
     });
     let development =
@@ -1055,7 +1065,7 @@ fn shared_sensor_lane_ranges_allocate_unique_smell_and_taste_coordinates() {
         genome.sensor_layout.channels.push(SensorChannelGene {
             kind,
             receptor_count: 8,
-            target_lobe: LobeKind::SensoryGrounding,
+            target_lobe: LobeKind::PerceptualIntegration,
             enabled_at_maturation: 0,
         });
     }

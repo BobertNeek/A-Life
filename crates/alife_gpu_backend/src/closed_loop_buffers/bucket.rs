@@ -11,9 +11,12 @@ use alife_core::{
 };
 use bytemuck::Zeroable;
 
-use crate::closed_loop_v11::AddLifetimeSynapse;
 #[cfg(feature = "gpu-tests")]
 use crate::closed_loop_v11::GpuV11MutableStateProbe;
+use crate::closed_loop_v11::{
+    AddLifetimeSynapse, GpuLiveTopologyCheckpointV1, GpuV11Checkpoint,
+    GPU_LIVE_TOPOLOGY_CHECKPOINT_SCHEMA_VERSION,
+};
 
 use super::{
     GpuBrainSlotExtensionRecord, GpuBrainSlotRecord, GpuClosedLoopError,
@@ -26,6 +29,8 @@ use super::{
 };
 
 const GPU_PENDING_ELIGIBILITY_RECORD_WORDS: u32 = 36;
+const GPU_REPLAY_EVENT_RECORD_WORDS: u32 =
+    (std::mem::size_of::<super::GpuReplayEventRecord>() / 4) as u32;
 
 fn dendritic_branch_capacity(neuron_count: u32) -> Result<u32, GpuClosedLoopError> {
     neuron_count
@@ -571,7 +576,7 @@ impl GpuClassBucketPlan {
             selection_offset: ranges.selection_words.start,
             neuron_homeostasis_offset: ranges.homeostasis_words.start,
             extension_record_offset: ranges.extension_words.start,
-            reserved: [0; 3],
+            reserved: [upload.joint_motor_mode, 0, 0],
         };
         record.validate_slice_a()?;
         let brain = GpuBrainSlot {
@@ -1438,7 +1443,8 @@ fn validate_learning_slot_layout(
             .get(global as usize)
             .ok_or(GpuClosedLoopError::MalformedUpload)?;
         if row.global_synapse_id != global
-            || !(1..=3).contains(&row.decoder_head)
+            || !(1..=4).contains(&row.decoder_head)
+            || (row.decoder_head == 4 && !(36..54).contains(&row.input_lane))
             || row.family >= 8
             || row.receptor_index != synapse.receptor_index
             || row.eligibility_local_index != local
@@ -1521,12 +1527,7 @@ fn validate_learning_slot_layout(
         immutable_plan_base,
         ranges.sleep_parameter_words.start,
     )?;
-    if sleep.schema_version
-        != u32::from(
-            alife_core::SchemaVersions::CURRENT
-                .sleep_consolidation
-                .raw(),
-        )
+    if sleep.schema_version != crate::GPU_SLEEP_PARAMETER_SCHEMA_VERSION
         || ![
             sleep.staging_rate,
             sleep.weight_limit,
@@ -2108,7 +2109,7 @@ impl GpuFixedClassArenaPlan {
             &mut cursor,
             execution
                 .max_replay_events()
-                .checked_mul(24)
+                .checked_mul(GPU_REPLAY_EVENT_RECORD_WORDS)
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
         )?;
         let replay_sample_words =
@@ -2213,7 +2214,7 @@ impl GpuFixedClassArenaPlan {
         let sleep_frame_words = 44_u64
             .checked_add(
                 u64::from(execution.max_replay_events())
-                    .checked_mul(24)
+                    .checked_mul(u64::from(GPU_REPLAY_EVENT_RECORD_WORDS))
                     .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
             )
             .and_then(|value| value.checked_add(u64::from(MAX_REPLAY_CAPTURE_SYNAPSES) * 4))
@@ -2847,7 +2848,7 @@ impl GpuFixedClassArenaPlan {
             selection_offset: ranges.layout.selection_words.start,
             neuron_homeostasis_offset: ranges.layout.homeostasis_words.start,
             extension_record_offset: ranges.layout.extension_words.start,
-            reserved: [0; 3],
+            reserved: [upload.joint_motor_mode, 0, 0],
         };
         record.validate_slice_a()?;
         validate_learning_slot_layout(
@@ -2941,6 +2942,227 @@ impl GpuFixedSlotUpload {
     }
     pub(crate) const fn brain_slot(&self) -> &GpuBrainSlot {
         &self.brain_slot
+    }
+
+    pub(crate) fn live_topology_checkpoint(
+        &self,
+        phenotype_hash: alife_core::PhenotypeHash,
+        v11_checkpoint: GpuV11Checkpoint,
+    ) -> Result<GpuLiveTopologyCheckpointV1, GpuClosedLoopError> {
+        let record = self.brain_slot.record();
+        let counts = self.brain_slot.typed_counts();
+        let plan_base = self.ranges.immutable_plan_words.start;
+        let weight_base = self.ranges.immutable_weight_words.start;
+        let recurrent = usize::try_from(record.recurrent_synapse_count)
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        let total = usize::try_from(record.synapse_count)
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        let decoder = total
+            .checked_sub(recurrent)
+            .ok_or(GpuClosedLoopError::MalformedUpload)?;
+        let synapse_metadata_words = recurrent
+            .checked_add(decoder)
+            .and_then(|count| {
+                count.checked_mul(std::mem::size_of::<GpuSynapseLearningMetadata>() / 4)
+            })
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let decoder_metadata_words = decoder
+            .checked_mul(std::mem::size_of::<GpuDecoderEligibilityMetadata>() / 4)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let decoder_families = read_pod_prefix::<GpuDecoderFamilyRecord>(
+            &self.immutable_plan_words,
+            plan_base,
+            &self.ranges.layout.decoder_family_words,
+            counts.decoder_families,
+        )?;
+        let decoder_weight_indices = read_pod_prefix::<GpuDecoderWeightIndexRecord>(
+            &self.immutable_plan_words,
+            plan_base,
+            &self.ranges.layout.decoder_weight_index_words,
+            counts.decoder_weight_indices,
+        )?;
+        let mut checkpoint = GpuLiveTopologyCheckpointV1 {
+            schema_version: GPU_LIVE_TOPOLOGY_CHECKPOINT_SCHEMA_VERSION,
+            phenotype_hash,
+            neuron_count: record.neuron_count,
+            total_synapse_count: record.synapse_count,
+            recurrent_synapse_count: record.recurrent_synapse_count,
+            decoder_synapse_count: u32::try_from(decoder)
+                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
+            target_offsets: active_words_copy(
+                &self.immutable_plan_words,
+                plan_base,
+                &self.ranges.layout.target_offset_words,
+                usize::try_from(record.neuron_count)
+                    .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+                    .checked_add(1)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+            )?,
+            source_indices: active_words_copy(
+                &self.immutable_plan_words,
+                plan_base,
+                &self.ranges.layout.source_index_words,
+                recurrent,
+            )?,
+            route_indices: active_words_copy(
+                &self.immutable_plan_words,
+                plan_base,
+                &self.ranges.layout.route_index_words,
+                recurrent,
+            )?,
+            genetic_weight_bits: active_words_copy(
+                &self.immutable_weight_words,
+                weight_base,
+                &self.ranges.layout.genetic_weight_words,
+                total,
+            )?,
+            alpha_bits: active_words_copy(
+                &self.immutable_weight_words,
+                weight_base,
+                &self.ranges.layout.alpha_words,
+                total,
+            )?,
+            synapse_learning_metadata_words: active_words_copy(
+                &self.immutable_plan_words,
+                plan_base,
+                &self.ranges.layout.synapse_learning_metadata_words,
+                synapse_metadata_words,
+            )?,
+            decoder_eligibility_metadata_words: active_words_copy(
+                &self.immutable_plan_words,
+                plan_base,
+                &self.ranges.layout.decoder_eligibility_metadata_words,
+                decoder_metadata_words,
+            )?,
+            decoder_synapse_starts: decoder_families
+                .iter()
+                .map(|family| family.decoder_synapse_start)
+                .collect(),
+            decoder_weight_global_synapse_ids: decoder_weight_indices
+                .iter()
+                .map(|index| index.global_synapse_id)
+                .collect(),
+            memory_weight_indices: active_words_copy(
+                &self.immutable_plan_words,
+                plan_base,
+                &self.ranges.layout.memory_weight_index_words,
+                counts.memory_weight_indices,
+            )?,
+            v11_checkpoint,
+            canonical_digest: [0; 4],
+        };
+        checkpoint.canonical_digest = checkpoint
+            .recompute_canonical_digest()
+            .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
+        Ok(checkpoint)
+    }
+
+    pub(crate) fn with_live_topology_checkpoint(
+        mut self,
+        checkpoint: &GpuLiveTopologyCheckpointV1,
+    ) -> Result<Self, GpuClosedLoopError> {
+        if self.brain_slot.record.neuron_count != checkpoint.neuron_count
+            || self.brain_slot.record.synapse_count != checkpoint.total_synapse_count
+            || self.brain_slot.record.recurrent_synapse_count != checkpoint.recurrent_synapse_count
+            || self.brain_slot.counts.decoder_families != checkpoint.decoder_synapse_starts.len()
+            || self.brain_slot.counts.decoder_weight_indices
+                != checkpoint.decoder_weight_global_synapse_ids.len()
+            || self.brain_slot.counts.memory_weight_indices
+                != checkpoint.memory_weight_indices.len()
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        let plan_base = self.ranges.immutable_plan_words.start;
+        let weight_base = self.ranges.immutable_weight_words.start;
+        let mut plan = self.immutable_plan_words.clone();
+        for (range, words) in [
+            (
+                &self.ranges.layout.target_offset_words,
+                &checkpoint.target_offsets,
+            ),
+            (
+                &self.ranges.layout.source_index_words,
+                &checkpoint.source_indices,
+            ),
+            (
+                &self.ranges.layout.route_index_words,
+                &checkpoint.route_indices,
+            ),
+            (
+                &self.ranges.layout.synapse_learning_metadata_words,
+                &checkpoint.synapse_learning_metadata_words,
+            ),
+            (
+                &self.ranges.layout.decoder_eligibility_metadata_words,
+                &checkpoint.decoder_eligibility_metadata_words,
+            ),
+            (
+                &self.ranges.layout.memory_weight_index_words,
+                &checkpoint.memory_weight_indices,
+            ),
+        ] {
+            store_words_at(&mut plan, plan_base, range.start, words)?;
+        }
+        let mut families = read_pod_prefix::<GpuDecoderFamilyRecord>(
+            &plan,
+            plan_base,
+            &self.ranges.layout.decoder_family_words,
+            self.brain_slot.counts.decoder_families,
+        )?;
+        for (family, start) in families.iter_mut().zip(&checkpoint.decoder_synapse_starts) {
+            family.decoder_synapse_start = *start;
+        }
+        store_pod_slice_at(
+            &mut plan,
+            plan_base,
+            self.ranges.layout.decoder_family_words.start,
+            &families,
+        )?;
+        let mut decoder_indices = read_pod_prefix::<GpuDecoderWeightIndexRecord>(
+            &plan,
+            plan_base,
+            &self.ranges.layout.decoder_weight_index_words,
+            self.brain_slot.counts.decoder_weight_indices,
+        )?;
+        for (row, global_synapse_id) in decoder_indices
+            .iter_mut()
+            .zip(&checkpoint.decoder_weight_global_synapse_ids)
+        {
+            row.global_synapse_id = *global_synapse_id;
+        }
+        store_pod_slice_at(
+            &mut plan,
+            plan_base,
+            self.ranges.layout.decoder_weight_index_words.start,
+            &decoder_indices,
+        )?;
+        let mut weights = self.immutable_weight_words.clone();
+        store_words_at(
+            &mut weights,
+            weight_base,
+            self.ranges.layout.genetic_weight_words.start,
+            &checkpoint.genetic_weight_bits,
+        )?;
+        store_words_at(
+            &mut weights,
+            weight_base,
+            self.ranges.layout.alpha_words.start,
+            &checkpoint.alpha_bits,
+        )?;
+        validate_learning_slot_layout(
+            &self.brain_slot.record,
+            &self.brain_slot.counts,
+            &self.ranges.layout,
+            &plan,
+            plan_base,
+            &weights,
+            weight_base,
+            &self.mutable_state_words,
+            self.ranges.mutable_state_words.start,
+        )?;
+        self.immutable_plan_words = plan;
+        self.immutable_weight_words = weights;
+        Ok(self)
     }
 
     pub(crate) fn with_dendritic_branches(
@@ -3353,11 +3575,17 @@ impl GpuFixedSlotUpload {
             base,
             self.ranges.layout.extension_words.start,
         )?;
-        let fresh_replay_spans = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
+        let mut fresh_replay_spans = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
             &self.mutable_state_words,
             base,
             &self.ranges.layout.replay_span_words,
             self.brain_slot.counts.replay_capture_synapses,
+        )?;
+        let live_replay_spans = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
+            &live_words,
+            base,
+            &previous.ranges.layout.replay_span_words,
+            previous.brain_slot.counts.replay_capture_synapses,
         )?;
         let old_edges = recurrent_edge_identities(previous)?;
         let new_edges = recurrent_edge_identities(&self)?;
@@ -3384,6 +3612,18 @@ impl GpuFixedSlotUpload {
         }
         for local in 0..decoder_count {
             old_global_for_new[new_recurrent + local] = Some(old_recurrent + local);
+        }
+        let live_replay_sample_counts = live_replay_spans
+            .into_iter()
+            .map(|span| (span.local_synapse_id, span.sample_count))
+            .collect::<BTreeMap<_, _>>();
+        for span in &mut fresh_replay_spans {
+            span.sample_count = usize::try_from(span.local_synapse_id)
+                .ok()
+                .and_then(|new_index| old_global_for_new.get(new_index).copied().flatten())
+                .and_then(|old_index| u32::try_from(old_index).ok())
+                .and_then(|old_index| live_replay_sample_counts.get(&old_index).copied())
+                .unwrap_or(0);
         }
 
         let live_source = live_words.clone();
@@ -3986,6 +4226,93 @@ impl GpuFixedClassArenaBuffers {
         drop(mapped);
         readback.unmap();
         Ok(words)
+    }
+
+    pub(crate) fn snapshot_fixed_slot_upload(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        brain_slot: GpuBrainSlot,
+        ranges: GpuFixedSlotRanges,
+    ) -> Result<(GpuFixedSlotUpload, u64, u64, u64), GpuClosedLoopError> {
+        self.validate_ranges(&ranges)?;
+        let plan_byte_count =
+            u64::from(ranges.immutable_plan_words.end - ranges.immutable_plan_words.start)
+                .checked_mul(4)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let weight_byte_count =
+            u64::from(ranges.immutable_weight_words.end - ranges.immutable_weight_words.start)
+                .checked_mul(4)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let byte_count = plan_byte_count
+            .checked_add(weight_byte_count)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let readback = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("closed-loop-live-topology-readback"),
+            size: byte_count,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("closed-loop-live-topology-readback-encoder"),
+        });
+        encoder.copy_buffer_to_buffer(
+            &self.immutable_plan_words,
+            u64::from(ranges.immutable_plan_words.start) * 4,
+            &readback,
+            0,
+            plan_byte_count,
+        );
+        encoder.copy_buffer_to_buffer(
+            &self.immutable_weight_words,
+            u64::from(ranges.immutable_weight_words.start) * 4,
+            &readback,
+            plan_byte_count,
+            weight_byte_count,
+        );
+        queue.submit(Some(encoder.finish()));
+        let (sender, receiver) = mpsc::channel();
+        readback
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, move |result| {
+                let _ = sender.send(result);
+            });
+        let poll_started = std::time::Instant::now();
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .map_err(|_| GpuClosedLoopError::SubmissionFailed)?;
+        let poll_wait_ns = u64::try_from(poll_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        let receive_started = std::time::Instant::now();
+        receiver
+            .recv()
+            .map_err(|_| GpuClosedLoopError::SubmissionFailed)?
+            .map_err(|_| GpuClosedLoopError::SubmissionFailed)?;
+        let receive_wait_ns =
+            u64::try_from(receive_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        let mapped = readback.slice(..).get_mapped_range();
+        let words = bytemuck::cast_slice::<u8, u32>(&mapped);
+        let plan_word_count = usize::try_from(plan_byte_count / 4)
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        let (immutable_plan_words, immutable_weight_words) = words.split_at(plan_word_count);
+        let immutable_plan_words = immutable_plan_words.to_vec();
+        let immutable_weight_words = immutable_weight_words.to_vec();
+        drop(mapped);
+        readback.unmap();
+        let mutable_word_count =
+            usize::try_from(ranges.mutable_state_words.end - ranges.mutable_state_words.start)
+                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        Ok((
+            GpuFixedSlotUpload::from_existing_slot(
+                brain_slot,
+                ranges,
+                immutable_plan_words,
+                immutable_weight_words,
+                vec![0; mutable_word_count],
+            ),
+            byte_count,
+            poll_wait_ns,
+            receive_wait_ns,
+        ))
     }
 
     #[cfg(feature = "gpu-tests")]

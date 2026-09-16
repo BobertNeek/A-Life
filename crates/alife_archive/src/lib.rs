@@ -11,11 +11,13 @@ use std::{
     collections::{HashMap, HashSet},
     fmt,
     fs::{self, OpenOptions},
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant},
 };
+
+mod legacy_lineage_display;
 
 use alife_core::{
     ArchiveAssetKind, ArchiveAssetRef, ArchiveCheckpointDisposition, ArchiveCheckpointRef,
@@ -35,11 +37,74 @@ pub const DEFAULT_MAX_TEMPORARY_PER_RUN: u32 = 64;
 pub const DEFAULT_MAX_AUTOMATIC_PER_RUN: u32 = 24;
 pub const MAX_COMPOSITE_BIRTH_BATCH_ITEMS: usize = 256;
 pub const MAX_COMPOSITE_BIRTH_BATCH_BYTES: u64 = 32 * 1024 * 1024;
+pub const MAX_CHECKPOINT_DECODED_BYTES: u64 = 512 * 1024 * 1024;
+pub const MAX_CHECKPOINT_COMPRESSED_BYTES: u64 = 1024 * 1024 * 1024;
+pub const MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES: u64 = 256 * 1024;
+
+const CHECKPOINT_ZSTD_WINDOW_LOG_MAX: u32 = 21;
 
 const COMPOSITE_BIRTH_STAGE_LEASE_FILE: &str = ".composite-birth-stage-lease";
 const COMPOSITE_BIRTH_PUBLICATION_LEASE_FILE: &str = ".composite-birth-publication-lease";
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CheckpointDecodePlan {
+    output_capacity: usize,
+    decoded_bytes: u64,
+    compressed_bytes: u64,
+}
+
+#[derive(Debug)]
+pub(crate) struct CheckpointDecodeBudget {
+    max_decoded_work_bytes: u64,
+    max_compressed_work_bytes: u64,
+    decoded_work_bytes: u64,
+    compressed_work_bytes: u64,
+}
+
+impl CheckpointDecodeBudget {
+    pub(crate) fn new(max_decoded_work_bytes: u64, max_compressed_work_bytes: u64) -> Self {
+        Self {
+            max_decoded_work_bytes,
+            max_compressed_work_bytes,
+            decoded_work_bytes: 0,
+            compressed_work_bytes: 0,
+        }
+    }
+
+    pub(crate) fn charge(&mut self, plan: CheckpointDecodePlan) -> Result<(), ArchiveError> {
+        let decoded_work_bytes = self
+            .decoded_work_bytes
+            .checked_add(plan.decoded_bytes)
+            .ok_or_else(|| {
+                ArchiveError::Integrity(
+                    "nested checkpoint decoded work byte count overflow".to_string(),
+                )
+            })?;
+        if decoded_work_bytes > self.max_decoded_work_bytes {
+            return Err(ArchiveError::Integrity(
+                "nested checkpoint decoded work limit exceeded".to_string(),
+            ));
+        }
+        let compressed_work_bytes = self
+            .compressed_work_bytes
+            .checked_add(plan.compressed_bytes)
+            .ok_or_else(|| {
+                ArchiveError::Integrity(
+                    "nested checkpoint compressed work byte count overflow".to_string(),
+                )
+            })?;
+        if compressed_work_bytes > self.max_compressed_work_bytes {
+            return Err(ArchiveError::Integrity(
+                "nested checkpoint compressed work limit exceeded".to_string(),
+            ));
+        }
+        self.decoded_work_bytes = decoded_work_bytes;
+        self.compressed_work_bytes = compressed_work_bytes;
+        Ok(())
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ArchiveError {
@@ -53,6 +118,175 @@ pub enum ArchiveError {
     Contract(#[from] ScaffoldContractError),
     #[error("archive integrity error: {0}")]
     Integrity(String),
+}
+
+pub(crate) fn checkpoint_decode_plan(
+    reference: &ArchiveCheckpointRef,
+) -> Result<CheckpointDecodePlan, ArchiveError> {
+    reference.validate_contract()?;
+    if reference.total_uncompressed_bytes > MAX_CHECKPOINT_DECODED_BYTES {
+        return Err(ArchiveError::Integrity(
+            "checkpoint decoded byte limit exceeded".to_string(),
+        ));
+    }
+    if reference.total_compressed_bytes > MAX_CHECKPOINT_COMPRESSED_BYTES {
+        return Err(ArchiveError::Integrity(
+            "checkpoint compressed byte limit exceeded".to_string(),
+        ));
+    }
+
+    let mut decoded_bytes = 0_u64;
+    let mut compressed_bytes = 0_u64;
+    for page in &reference.pages {
+        page.validate_contract()?;
+        let page_compressed_bytes = u64::from(page.compressed_bytes);
+        if page_compressed_bytes > MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES {
+            return Err(ArchiveError::Integrity(
+                "checkpoint page compressed byte limit exceeded".to_string(),
+            ));
+        }
+        usize::try_from(page.uncompressed_bytes).map_err(|_| {
+            ArchiveError::Integrity("checkpoint page byte count does not fit usize".to_string())
+        })?;
+        usize::try_from(page.compressed_bytes).map_err(|_| {
+            ArchiveError::Integrity("checkpoint page byte count does not fit usize".to_string())
+        })?;
+        decoded_bytes = decoded_bytes
+            .checked_add(u64::from(page.uncompressed_bytes))
+            .ok_or_else(|| {
+                ArchiveError::Integrity("checkpoint decoded byte count overflow".to_string())
+            })?;
+        compressed_bytes = compressed_bytes
+            .checked_add(page_compressed_bytes)
+            .ok_or_else(|| {
+                ArchiveError::Integrity("checkpoint compressed byte count overflow".to_string())
+            })?;
+    }
+    if decoded_bytes != reference.total_uncompressed_bytes
+        || compressed_bytes != reference.total_compressed_bytes
+    {
+        return Err(ArchiveError::Integrity(
+            "checkpoint page totals do not match checkpoint reference".to_string(),
+        ));
+    }
+
+    let output_capacity = usize::try_from(decoded_bytes).map_err(|_| {
+        ArchiveError::Integrity("checkpoint byte count does not fit usize".to_string())
+    })?;
+    Ok(CheckpointDecodePlan {
+        output_capacity,
+        decoded_bytes,
+        compressed_bytes,
+    })
+}
+
+pub(crate) fn allocate_checkpoint_output(
+    plan: CheckpointDecodePlan,
+) -> Result<Vec<u8>, ArchiveError> {
+    let mut output = Vec::new();
+    output.try_reserve_exact(plan.output_capacity).map_err(|error| {
+        ArchiveError::Integrity(format!("checkpoint output allocation failed: {error}"))
+    })?;
+    Ok(output)
+}
+
+pub(crate) fn decode_checkpoint_page_bounded(
+    compressed: &[u8],
+    page: &ArchivePageRef,
+) -> Result<Vec<u8>, ArchiveError> {
+    page.validate_contract()?;
+    let compressed_bytes = usize::try_from(page.compressed_bytes).map_err(|_| {
+        ArchiveError::Integrity("checkpoint page byte count does not fit usize".to_string())
+    })?;
+    if u64::from(page.compressed_bytes) > MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES {
+        return Err(ArchiveError::Integrity(
+            "checkpoint page compressed byte limit exceeded".to_string(),
+        ));
+    }
+    if compressed.len() != compressed_bytes || digest_bytes(compressed) != page.digest {
+        return Err(ArchiveError::Integrity(
+            "learned checkpoint page digest mismatch".to_string(),
+        ));
+    }
+
+    let uncompressed_bytes = usize::try_from(page.uncompressed_bytes).map_err(|_| {
+        ArchiveError::Integrity("checkpoint page byte count does not fit usize".to_string())
+    })?;
+    let read_limit = uncompressed_bytes.checked_add(1).ok_or_else(|| {
+        ArchiveError::Integrity("checkpoint page byte count overflow".to_string())
+    })?;
+    let mut decoder = zstd::stream::read::Decoder::new(compressed)?;
+    decoder.window_log_max(CHECKPOINT_ZSTD_WINDOW_LOG_MAX)?;
+    let mut decoded = Vec::new();
+    decoded.try_reserve_exact(read_limit).map_err(|error| {
+        ArchiveError::Integrity(format!("checkpoint page allocation failed: {error}"))
+    })?;
+    decoder
+        .by_ref()
+        .take(u64::try_from(read_limit).map_err(|_| {
+            ArchiveError::Integrity("checkpoint page byte count does not fit u64".to_string())
+        })?)
+        .read_to_end(&mut decoded)?;
+    if decoded.len() != uncompressed_bytes {
+        return Err(ArchiveError::Integrity(
+            "learned checkpoint page length mismatch".to_string(),
+        ));
+    }
+    Ok(decoded)
+}
+
+fn read_checkpoint_page_bounded(
+    path: &Path,
+    page: &ArchivePageRef,
+) -> Result<Vec<u8>, ArchiveError> {
+    let compressed_bytes = usize::try_from(page.compressed_bytes).map_err(|_| {
+        ArchiveError::Integrity("checkpoint page byte count does not fit usize".to_string())
+    })?;
+    if u64::from(page.compressed_bytes) > MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES {
+        return Err(ArchiveError::Integrity(
+            "checkpoint page compressed byte limit exceeded".to_string(),
+        ));
+    }
+    let file = OpenOptions::new().read(true).open(path)?;
+    if file.metadata()?.len() != u64::from(page.compressed_bytes) {
+        return Err(ArchiveError::Integrity(
+            "learned checkpoint page digest mismatch".to_string(),
+        ));
+    }
+    let read_limit = u64::from(page.compressed_bytes)
+        .checked_add(1)
+        .ok_or_else(|| {
+            ArchiveError::Integrity("checkpoint page byte count overflow".to_string())
+        })?;
+    let mut compressed = Vec::new();
+    compressed
+        .try_reserve_exact(compressed_bytes.checked_add(1).ok_or_else(|| {
+            ArchiveError::Integrity("checkpoint page byte count overflow".to_string())
+        })?)
+        .map_err(|error| {
+            ArchiveError::Integrity(format!("checkpoint page allocation failed: {error}"))
+        })?;
+    file.take(read_limit).read_to_end(&mut compressed)?;
+    decode_checkpoint_page_bounded(&compressed, page)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineageGenomeDisplayAbi {
+    CanonicalV2,
+    LegacyNano512FounderV1,
+}
+
+impl LineageGenomeDisplayAbi {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::CanonicalV2 => "Canonical v2",
+            Self::LegacyNano512FounderV1 => "Legacy Nano512 founder v1 (display only)",
+        }
+    }
+
+    pub const fn runtime_admissible(self) -> bool {
+        matches!(self, Self::CanonicalV2)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -393,7 +627,7 @@ impl LineageLibrary {
         &mut self,
         input: GeneticArchiveInput<'_>,
     ) -> Result<Blake3Digest, ArchiveError> {
-        self.archive_birth_internal(input, None)
+        self.archive_birth_internal(input)
     }
 
     pub fn archive_composite_birth(
@@ -771,7 +1005,7 @@ impl LineageLibrary {
         combine_composite_batch_failure(operation, rollback_error, cleanup_error)
     }
 
-    fn archive_digest_is_referenced(&self, digest: Blake3Digest) -> Result<bool, ArchiveError> {
+    fn indexed_archive_digests(&self) -> Result<HashSet<Blake3Digest>, ArchiveError> {
         let mut statement = self.connection.prepare("SELECT digest FROM manifests")?;
         let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
         let manifest_digests = rows
@@ -780,34 +1014,28 @@ impl LineageLibrary {
             .map(|text| parse_digest_hex(&text))
             .collect::<Result<Vec<_>, _>>()?;
         drop(statement);
+        let archive_root = canonical_archive_root(&self.config.root)?;
+        let mut referenced = HashSet::new();
         for manifest_digest in manifest_digests {
-            if manifest_digest == digest {
-                return Ok(true);
-            }
-            let manifest = self.load_manifest(manifest_digest)?;
+            referenced.insert(manifest_digest);
+            let (_, manifest) = self.load_manifest_with_bytes(&archive_root, manifest_digest)?;
             let genetic = &manifest.genetic;
-            if genetic.genome_asset.digest == digest
-                || genetic
-                    .composite_genome_asset
-                    .as_ref()
-                    .is_some_and(|asset| asset.digest == digest)
-                || genetic
-                    .foundation_asset
-                    .as_ref()
-                    .is_some_and(|asset| asset.digest == digest)
-                || manifest.life.as_ref().is_some_and(|life| {
-                    life.statistics_asset.digest == digest
-                        || matches!(
-                            &life.checkpoint,
-                            ArchiveCheckpointDisposition::Stored(reference)
-                                if reference.digest == digest
-                        )
-                })
-            {
-                return Ok(true);
+            referenced.insert(genetic.genome_asset.digest);
+            if let Some(asset) = &genetic.composite_genome_asset {
+                referenced.insert(asset.digest);
+            }
+            if let Some(asset) = &genetic.foundation_asset {
+                referenced.insert(asset.digest);
+            }
+            if let Some(life) = &manifest.life {
+                referenced.insert(life.statistics_asset.digest);
+                if let ArchiveCheckpointDisposition::Stored(checkpoint) = &life.checkpoint {
+                    referenced.insert(checkpoint.digest);
+                    referenced.extend(checkpoint.pages.iter().map(|page| page.digest));
+                }
             }
         }
-        Ok(false)
+        Ok(referenced)
     }
 
     fn prepare_composite_birth_item(
@@ -1142,7 +1370,7 @@ impl LineageLibrary {
         &self,
         manifest: &CreatureArchiveManifest,
     ) -> Result<(), ArchiveError> {
-        let _ = self.load_brain_genome(manifest)?;
+        let _ = self.lineage_genome_display_abi(manifest)?;
         if manifest.genetic.composite_genome_asset.is_some() {
             let _ = self.load_creature_genome(manifest)?;
         }
@@ -1201,18 +1429,15 @@ impl LineageLibrary {
     fn archive_birth_internal(
         &mut self,
         input: GeneticArchiveInput<'_>,
-        composite_genome: Option<&CreatureGenome>,
     ) -> Result<Blake3Digest, ArchiveError> {
         validate_run_id(input.source_run_id)?;
         input.organism_id.validate()?;
         input.genome.validate_contract()?;
+        let capacity = BrainCapacityClass::production_for_id(input.genome.brain_class_id)?;
+        input.phenotype.validate_against(&capacity)?;
+        validate_genetic_foundation_asset(input.phenotype, input.foundation_asset_bytes)?;
         let genome_bytes = serde_json::to_vec(input.genome)?;
         let genome_asset = self.write_asset(ArchiveAssetKind::Genome, &genome_bytes)?;
-        let composite_genome_asset = composite_genome
-            .map(|genome| serde_json::to_vec(genome))
-            .transpose()?
-            .map(|bytes| self.write_asset(ArchiveAssetKind::CompositeGenome, &bytes))
-            .transpose()?;
         let foundation_asset = input
             .foundation_asset_bytes
             .map(|bytes| self.write_asset(ArchiveAssetKind::Foundation, bytes))
@@ -1238,7 +1463,7 @@ impl LineageLibrary {
                 language_codebook_id: language.id(),
                 language_codebook_digest: language.canonical_digest(),
                 genome_asset,
-                composite_genome_asset,
+                composite_genome_asset: None,
                 foundation_asset,
             },
             previous_manifest_digest: None,
@@ -1263,6 +1488,15 @@ impl LineageLibrary {
         if birth.life.is_some() || birth.previous_manifest_digest.is_some() {
             return Err(ArchiveError::Integrity(
                 "life archive must extend an immutable birth manifest".to_string(),
+            ));
+        }
+        let statistics = serde_json::from_slice::<PassiveLifeStatistics>(input.statistics_bytes)?;
+        statistics.validate_contract()?;
+        if statistics.organism_id() != birth.genetic.organism_id
+            || statistics.death_tick() != Some(input.death_tick)
+        {
+            return Err(ArchiveError::Integrity(
+                "life statistics identity does not match the birth manifest".to_string(),
             ));
         }
         let statistics_asset =
@@ -1337,40 +1571,19 @@ impl LineageLibrary {
         &self,
         reference: &ArchiveCheckpointRef,
     ) -> Result<Vec<u8>, ArchiveError> {
-        reference.validate_contract()?;
+        let plan = checkpoint_decode_plan(reference)?;
         let archive_root = canonical_archive_root(&self.config.root)?;
         let root = archive_root
             .join("checkpoints")
             .join(digest_hex(reference.digest));
-        let output_capacity =
-            usize::try_from(reference.total_uncompressed_bytes).map_err(|_| {
-                ArchiveError::Integrity("checkpoint byte count does not fit usize".to_string())
-            })?;
-        let mut output = Vec::with_capacity(output_capacity);
+        let mut output = allocate_checkpoint_output(plan)?;
         for (index, page) in reference.pages.iter().enumerate() {
             let path = root.join(format!("{index:08}-{}.zst", digest_hex(page.digest)));
             let checked_path = checked_archive_path(&archive_root, &path)?;
-            let compressed = fs::read(&checked_path.canonical_path)?;
-            let compressed_bytes = usize::try_from(page.compressed_bytes).map_err(|_| {
-                ArchiveError::Integrity("checkpoint page byte count does not fit usize".to_string())
-            })?;
-            let uncompressed_bytes = usize::try_from(page.uncompressed_bytes).map_err(|_| {
-                ArchiveError::Integrity("checkpoint page byte count does not fit usize".to_string())
-            })?;
-            if compressed.len() != compressed_bytes || digest_bytes(&compressed) != page.digest {
-                return Err(ArchiveError::Integrity(
-                    "learned checkpoint page digest mismatch".to_string(),
-                ));
-            }
-            let decoded = zstd::stream::decode_all(compressed.as_slice())?;
-            if decoded.len() != uncompressed_bytes {
-                return Err(ArchiveError::Integrity(
-                    "learned checkpoint page length mismatch".to_string(),
-                ));
-            }
+            let decoded = read_checkpoint_page_bounded(&checked_path.canonical_path, page)?;
             output.extend_from_slice(&decoded);
         }
-        if output.len() != output_capacity || digest_bytes(&output) != reference.digest {
+        if output.len() != plan.output_capacity || digest_bytes(&output) != reference.digest {
             return Err(ArchiveError::Integrity(
                 "learned checkpoint digest mismatch".to_string(),
             ));
@@ -1419,6 +1632,13 @@ impl LineageLibrary {
             ));
         }
         let bytes = self.read_archive_asset(reference)?;
+        let schema_version = lineage_genome_schema_version(&bytes)?;
+        if schema_version != BrainGenome::SCHEMA_VERSION {
+            return Err(ArchiveError::Integrity(format!(
+                "lineage genome schema {schema_version} is display-only and cannot be admitted as canonical v2 schema {}",
+                BrainGenome::SCHEMA_VERSION
+            )));
+        }
         let genome = serde_json::from_slice::<BrainGenome>(&bytes)?;
         genome.validate_contract()?;
         if genome.id != manifest.genetic.genome_id
@@ -1429,6 +1649,82 @@ impl LineageLibrary {
             ));
         }
         Ok(genome)
+    }
+
+    pub fn lineage_genome_display_abi(
+        &self,
+        manifest: &CreatureArchiveManifest,
+    ) -> Result<LineageGenomeDisplayAbi, ArchiveError> {
+        manifest.validate_contract()?;
+        let reference = &manifest.genetic.genome_asset;
+        if reference.kind != ArchiveAssetKind::Genome {
+            return Err(ArchiveError::Integrity(
+                "genetic manifest references the wrong asset kind".to_string(),
+            ));
+        }
+        let bytes = self.read_archive_asset(reference)?;
+        match lineage_genome_schema_version(&bytes)? {
+            version if version == BrainGenome::SCHEMA_VERSION => {
+                let _ = self.load_brain_genome(manifest)?;
+                Ok(LineageGenomeDisplayAbi::CanonicalV2)
+            }
+            1 => {
+                self.validate_legacy_nano512_founder_display(manifest, &bytes)?;
+                Ok(LineageGenomeDisplayAbi::LegacyNano512FounderV1)
+            }
+            version => Err(ArchiveError::Integrity(format!(
+                "unsupported lineage genome display schema {version}"
+            ))),
+        }
+    }
+
+    fn validate_legacy_nano512_founder_display(
+        &self,
+        manifest: &CreatureArchiveManifest,
+        genome_bytes: &[u8],
+    ) -> Result<(), ArchiveError> {
+        let genetic = &manifest.genetic;
+        if genetic.brain_class_id != BrainCapacityClass::N512_ID
+            || genetic.composite_genome_asset.is_some()
+        {
+            return Err(ArchiveError::Integrity(
+                "legacy lineage display requires a genetic-only Nano512 founder".to_string(),
+            ));
+        }
+        let foundation_reference = genetic.foundation_asset.as_ref().ok_or_else(|| {
+            ArchiveError::Integrity(
+                "legacy Nano512 lineage display requires an exact foundation asset".to_string(),
+            )
+        })?;
+        if foundation_reference.kind != ArchiveAssetKind::Foundation {
+            return Err(ArchiveError::Integrity(
+                "legacy Nano512 lineage display foundation has the wrong asset kind".to_string(),
+            ));
+        }
+        let foundation_bytes = self.read_archive_asset(foundation_reference)?;
+        let expected_foundation =
+            FoundationWeightAsset::builtin_nano512_v1(genetic.sensor_profile)?;
+        let expected_foundation_bytes = expected_foundation.encode_canonical()?;
+        let expected_manifest = expected_foundation.manifest();
+        if foundation_bytes != expected_foundation_bytes
+            || genetic.foundation_id != Some(expected_manifest.foundation_id())
+            || genetic.foundation_version != Some(expected_manifest.foundation_version())
+            || genetic.compatibility_family_id != Some(expected_manifest.compatibility_family_id())
+            || genetic.foundation_payload_digest != Some(expected_foundation.digest())
+        {
+            return Err(ArchiveError::Integrity(
+                "legacy Nano512 lineage display provenance does not match the exact builtin asset"
+                    .to_string(),
+            ));
+        }
+
+        legacy_lineage_display::validate_legacy_nano512_genome_v1(
+            genome_bytes,
+            manifest.genetic.genome_id.raw(),
+            manifest.genetic.brain_class_id.raw(),
+            manifest.genetic.lineage_id.map(LineageId::raw),
+        )
+        .map_err(ArchiveError::Integrity)
     }
 
     pub fn load_creature_genome(
@@ -1481,7 +1777,8 @@ impl LineageLibrary {
     pub fn life_manifest_digests(&self) -> Result<Vec<Blake3Digest>, ArchiveError> {
         let mut statement = self.connection.prepare(
             "SELECT digest FROM manifests WHERE is_life=1 \
-             ORDER BY source_run_id, organism_id, rowid",
+             ORDER BY source_run_id,length(organism_id),organism_id,\
+                      length(death_tick),death_tick,digest",
         )?;
         let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
         rows.map(|row| parse_digest_hex(&row?)).collect()
@@ -1492,8 +1789,9 @@ impl LineageLibrary {
     /// through their immutable genetic archive.
     pub fn latest_manifest_digests(&self) -> Result<Vec<Blake3Digest>, ArchiveError> {
         let mut statement = self.connection.prepare(
-            "SELECT digest,source_run_id,organism_id,is_life,rowid FROM manifests \
-             ORDER BY source_run_id,organism_id,is_life DESC,rowid DESC",
+            "SELECT digest,source_run_id,organism_id FROM manifests \
+             ORDER BY source_run_id,length(organism_id),organism_id,is_life DESC,\
+                      length(COALESCE(death_tick,'')) DESC,death_tick DESC,digest DESC",
         )?;
         let rows = statement.query_map([], |row| {
             Ok((
@@ -1514,14 +1812,14 @@ impl LineageLibrary {
     }
 
     pub fn rebuild_index(&mut self) -> Result<(), ArchiveError> {
-        let transaction = self.connection.transaction()?;
-        transaction.execute("DELETE FROM checkpoints", [])?;
-        transaction.execute("DELETE FROM manifests", [])?;
         let mut manifests = fs::read_dir(self.config.root.join("manifests"))?
-            .filter_map(Result::ok)
-            .filter(|entry| entry.path().extension().and_then(|ext| ext.to_str()) == Some("json"))
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, std::io::Error>>()?;
+        manifests
+            .retain(|entry| entry.path().extension().and_then(|ext| ext.to_str()) == Some("json"));
         manifests.sort_by_key(|entry| entry.file_name());
+        let transaction = self.connection.transaction()?;
+        transaction.execute("DELETE FROM checkpoint_manifests", [])?;
+        transaction.execute("DELETE FROM manifests", [])?;
         for entry in manifests {
             let path = entry.path();
             let bytes = fs::read(&path)?;
@@ -1537,6 +1835,7 @@ impl LineageLibrary {
             }
             let manifest = serde_json::from_slice::<CreatureArchiveManifest>(&bytes)?;
             manifest.validate_contract()?;
+            validate_run_id(&manifest.genetic.source_run_id)?;
             index_manifest_transaction(&transaction, digest, &manifest)?;
         }
         transaction.commit()?;
@@ -1558,7 +1857,8 @@ impl LineageLibrary {
         organism_id.validate()?;
         let mut statement = self.connection.prepare(
             "SELECT digest FROM manifests WHERE source_run_id=?1 AND organism_id=?2 \
-             ORDER BY is_life DESC, rowid DESC LIMIT 1",
+             ORDER BY is_life DESC,length(COALESCE(death_tick,'')) DESC,\
+                      death_tick DESC,digest DESC LIMIT 1",
         )?;
         let mut rows = statement.query(params![source_run_id, organism_id.raw().to_string()])?;
         rows.next()?
@@ -1625,6 +1925,14 @@ impl LineageLibrary {
                 "learned checkpoint cannot be empty".to_string(),
             ));
         }
+        let total_uncompressed_bytes = u64::try_from(bytes.len()).map_err(|_| {
+            ArchiveError::Integrity("checkpoint byte count does not fit u64".to_string())
+        })?;
+        if total_uncompressed_bytes > MAX_CHECKPOINT_DECODED_BYTES {
+            return Err(ArchiveError::Integrity(
+                "checkpoint decoded byte limit exceeded".to_string(),
+            ));
+        }
         let count_limit = match retention {
             ArchiveCheckpointRetention::TemporaryPeak => Some(self.config.max_temporary_per_run),
             ArchiveCheckpointRetention::AutomaticPermanent => {
@@ -1634,7 +1942,8 @@ impl LineageLibrary {
         };
         if let Some(limit) = count_limit {
             let count: u32 = self.connection.query_row(
-                "SELECT COUNT(*) FROM checkpoints WHERE source_run_id=?1 AND retention=?2",
+                "SELECT COUNT(*) FROM checkpoint_manifests \
+                 WHERE source_run_id=?1 AND retention=?2",
                 params![source_run_id, retention_slug(retention)],
                 |row| row.get(0),
             )?;
@@ -1651,35 +1960,66 @@ impl LineageLibrary {
             let compressed = zstd::stream::encode_all(page, 3)?;
             let page_ref = ArchivePageRef {
                 digest: digest_bytes(&compressed),
-                compressed_bytes: compressed.len() as u32,
-                uncompressed_bytes: page.len() as u32,
+                compressed_bytes: u32::try_from(compressed.len()).map_err(|_| {
+                    ArchiveError::Integrity(
+                        "checkpoint page byte count does not fit u32".to_string(),
+                    )
+                })?,
+                uncompressed_bytes: u32::try_from(page.len()).map_err(|_| {
+                    ArchiveError::Integrity(
+                        "checkpoint page byte count does not fit u32".to_string(),
+                    )
+                })?,
             };
             compressed_pages.push(compressed);
             page_refs.push(page_ref);
         }
         let total_compressed_bytes = page_refs
             .iter()
-            .map(|page| u64::from(page.compressed_bytes))
-            .sum::<u64>();
+            .try_fold(0_u64, |total, page| {
+                total
+                    .checked_add(u64::from(page.compressed_bytes))
+                    .ok_or_else(|| {
+                        ArchiveError::Integrity(
+                            "checkpoint compressed byte count overflow".to_string(),
+                        )
+                    })
+            })?;
+        let digest = digest_bytes(bytes);
+        let reference = ArchiveCheckpointRef {
+            digest,
+            retention,
+            total_uncompressed_bytes,
+            total_compressed_bytes,
+            pages: page_refs,
+        };
+        checkpoint_decode_plan(&reference)?;
+        let destination = self
+            .config
+            .root
+            .join("checkpoints")
+            .join(digest_hex(digest));
         if retention != ArchiveCheckpointRetention::Pinned {
             let used: u64 = self.connection.query_row(
-                "SELECT COALESCE(SUM(compressed_bytes),0) FROM checkpoints",
+                "SELECT COALESCE(SUM(compressed_bytes),0) FROM (\
+                   SELECT digest,MAX(compressed_bytes) AS compressed_bytes \
+                   FROM checkpoint_manifests GROUP BY digest\
+                 )",
                 [],
                 |row| row.get(0),
             )?;
-            if used.saturating_add(total_compressed_bytes) > self.config.full_state_quota_bytes {
+            let additional_bytes = if destination.exists() {
+                0
+            } else {
+                total_compressed_bytes
+            };
+            if used.saturating_add(additional_bytes) > self.config.full_state_quota_bytes {
                 return Ok(ArchiveCheckpointDisposition::DowngradedToGeneticOnly {
                     reason: "full-state quota reached".to_string(),
                 });
             }
         }
 
-        let digest = digest_bytes(bytes);
-        let destination = self
-            .config
-            .root
-            .join("checkpoints")
-            .join(digest_hex(digest));
         if !destination.exists() {
             let staged = self.config.root.join("staging").join(format!(
                 "checkpoint-{}-{}-{}",
@@ -1689,7 +2029,7 @@ impl LineageLibrary {
             ));
             fs::create_dir(&staged)?;
             for (index, (reference, compressed)) in
-                page_refs.iter().zip(&compressed_pages).enumerate()
+                reference.pages.iter().zip(&compressed_pages).enumerate()
             {
                 let path = staged.join(format!("{index:08}-{}.zst", digest_hex(reference.digest)));
                 fs::write(path, compressed)?;
@@ -1713,14 +2053,6 @@ impl LineageLibrary {
                 }
             }
         }
-        let reference = ArchiveCheckpointRef {
-            digest,
-            retention,
-            total_uncompressed_bytes: bytes.len() as u64,
-            total_compressed_bytes,
-            pages: page_refs,
-        };
-        reference.validate_contract()?;
         Ok(ArchiveCheckpointDisposition::Stored(reference))
     }
 
@@ -1786,15 +2118,20 @@ fn collect_target_observations(
         .collect::<Vec<_>>();
     let sorted_indexed = sorted_indexed_observations(indexed_by_digest);
 
-    for (index, (source_run_id, organism_id)) in target_keys.iter().enumerate() {
-        targets[index].indexed_manifests = sorted_indexed
-            .iter()
-            .filter(|observation| {
-                observation.manifest.genetic.source_run_id == *source_run_id
-                    && observation.manifest.genetic.organism_id == *organism_id
-            })
-            .cloned()
-            .collect();
+    let mut indexed_targets = HashMap::<_, Vec<_>>::new();
+    for observation in sorted_indexed {
+        indexed_targets
+            .entry((
+                observation.manifest.genetic.source_run_id.clone(),
+                observation.manifest.genetic.organism_id,
+            ))
+            .or_default()
+            .push(observation);
+    }
+    for target in &mut targets {
+        target.indexed_manifests = indexed_targets
+            .remove(&(target.source_run_id.clone(), target.organism_id))
+            .unwrap_or_default();
     }
 
     for existing in existing_manifest_files {
@@ -2356,6 +2693,7 @@ fn revalidate_archive_deletion_target(
     archive_root: &Path,
     candidate: &Path,
 ) -> Result<Option<PathBuf>, ArchiveError> {
+    validate_archive_deletion_target_lexically(archive_root, candidate)?;
     let live_root = canonical_archive_root(archive_root)?;
     if live_root != archive_root {
         return Err(ArchiveError::Integrity(
@@ -2380,6 +2718,25 @@ fn revalidate_archive_deletion_target(
         )));
     }
     Ok(Some(checked.canonical_path))
+}
+
+fn validate_archive_deletion_target_lexically(
+    archive_root: &Path,
+    candidate: &Path,
+) -> Result<(), ArchiveError> {
+    let relative = candidate.strip_prefix(archive_root).map_err(|_| {
+        ArchiveError::Integrity("archive path escapes the canonical archive root".to_string())
+    })?;
+    if relative.as_os_str().is_empty()
+        || relative
+            .components()
+            .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err(ArchiveError::Integrity(
+            "archive path contains unsafe components".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn remove_tree_without_following(archive_root: &Path, target: &Path) -> Result<(), ArchiveError> {
@@ -2438,6 +2795,15 @@ fn cleanup_failed_composite_batch(
     created_directories: &[PathBuf],
 ) -> Result<(), ArchiveError> {
     let mut failures = Vec::new();
+    let referenced_digests = match library.indexed_archive_digests() {
+        Ok(digests) => Some(digests),
+        Err(error) => {
+            failures.push(format!(
+                "could not inspect committed archive references: {error}"
+            ));
+            None
+        }
+    };
     for final_file in new_final_files.iter().rev() {
         let path = match revalidate_archive_deletion_target(archive_root, &final_file.path) {
             Ok(Some(path)) => path,
@@ -2473,16 +2839,11 @@ fn cleanup_failed_composite_batch(
             failures.push(format!("preserved changed final path {}", path.display()));
             continue;
         }
-        match library.archive_digest_is_referenced(final_file.digest) {
-            Ok(true) => continue,
-            Ok(false) => {}
-            Err(error) => {
-                failures.push(format!(
-                    "could not prove ownership of {}: {error}",
-                    final_file.path.display()
-                ));
-                continue;
-            }
+        let Some(referenced_digests) = &referenced_digests else {
+            continue;
+        };
+        if referenced_digests.contains(&final_file.digest) {
+            continue;
         }
         let delete_path = match revalidate_archive_deletion_target(archive_root, &path) {
             Ok(Some(path)) => path,
@@ -2906,9 +3267,56 @@ fn validate_foundation_identity(
     Ok(())
 }
 
+fn validate_genetic_foundation_asset(
+    phenotype: &BrainPhenotype,
+    foundation_asset_bytes: Option<&[u8]>,
+) -> Result<(), ArchiveError> {
+    let abi = phenotype.foundation_abi();
+    match (foundation_asset_bytes, abi.foundation_payload_digest()) {
+        (None, None) => Ok(()),
+        (Some(bytes), Some(expected_digest)) => {
+            let foundation = FoundationWeightAsset::decode_canonical(bytes)?;
+            if foundation.encode_canonical()? != bytes {
+                return Err(ArchiveError::Integrity(
+                    "genetic birth foundation bytes are not canonical".to_string(),
+                ));
+            }
+            foundation.validate_against(phenotype)?;
+            let manifest = foundation.manifest();
+            if abi.foundation_id() != Some(manifest.foundation_id())
+                || abi.foundation_version() != Some(manifest.foundation_version())
+                || abi.compatibility_family_id() != Some(manifest.compatibility_family_id())
+                || foundation.digest() != expected_digest
+            {
+                return Err(ArchiveError::Integrity(
+                    "genetic birth foundation provenance does not match phenotype ABI".to_string(),
+                ));
+            }
+            Ok(())
+        }
+        _ => Err(ArchiveError::Integrity(
+            "genetic birth foundation bytes do not match phenotype ABI".to_string(),
+        )),
+    }
+}
+
 fn checked_byte_len(length: usize) -> Result<u64, ArchiveError> {
     u64::try_from(length)
         .map_err(|_| ArchiveError::Integrity("archive byte count does not fit u64".to_string()))
+}
+
+fn lineage_genome_schema_version(bytes: &[u8]) -> Result<u16, ArchiveError> {
+    let value: serde_json::Value = serde_json::from_slice(bytes)?;
+    value
+        .get("schema_version")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|version| u16::try_from(version).ok())
+        .filter(|version| *version != 0)
+        .ok_or_else(|| {
+            ArchiveError::Integrity(
+                "lineage genome display record has no supported schema version".to_string(),
+            )
+        })
 }
 
 fn ensure_prepared_byte_capacity(current: u64, length: usize) -> Result<u64, ArchiveError> {
@@ -2957,6 +3365,24 @@ fn archive_reparse_point_flags(is_symlink: bool, file_attributes: u32) -> bool {
 
 #[cfg(test)]
 mod archive_path_tests {
+    fn checkpoint_reference(
+        pages: Vec<super::ArchivePageRef>,
+    ) -> super::ArchiveCheckpointRef {
+        super::ArchiveCheckpointRef {
+            digest: super::Blake3Digest::from_bytes([1; 32]),
+            retention: super::ArchiveCheckpointRetention::Pinned,
+            total_uncompressed_bytes: pages
+                .iter()
+                .map(|page| u64::from(page.uncompressed_bytes))
+                .sum(),
+            total_compressed_bytes: pages
+                .iter()
+                .map(|page| u64::from(page.compressed_bytes))
+                .sum(),
+            pages,
+        }
+    }
+
     #[test]
     fn reparse_metadata_predicate_rejects_link_bits_without_link_creation() {
         assert!(super::archive_reparse_point_flags(false, 0x400));
@@ -2966,17 +3392,11 @@ mod archive_path_tests {
 
     #[test]
     fn deletion_target_predicate_rejects_lexical_escape_without_link_creation() {
-        let root = std::env::temp_dir().join(format!(
-            "alife-archive-delete-predicate-{}",
-            super::TEMP_SEQUENCE.fetch_add(1, super::Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        let canonical_root = super::canonical_archive_root(&root).unwrap();
-        let escaped = canonical_root.join("assets").join("..").join("outside");
+        let archive_root = std::path::Path::new("archive");
+        let escaped = std::path::Path::new("archive/assets/../outside");
         let error =
-            super::revalidate_archive_deletion_target(&canonical_root, &escaped).unwrap_err();
+            super::validate_archive_deletion_target_lexically(archive_root, escaped).unwrap_err();
         assert!(error.to_string().contains("unsafe components"));
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -3047,6 +3467,92 @@ mod archive_path_tests {
         let text = error.to_string();
         assert!(text.contains("original operation failure"));
         assert!(text.contains(&residual.display().to_string()));
+    }
+
+    #[test]
+    fn checkpoint_page_decode_stops_at_declared_length_plus_one() {
+        let expanded = vec![0x5a; super::ARCHIVE_PAGE_BYTES + 1];
+        let compressed = zstd::stream::encode_all(expanded.as_slice(), 3).unwrap();
+        let page = super::ArchivePageRef {
+            digest: super::digest_bytes(&compressed),
+            compressed_bytes: u32::try_from(compressed.len()).unwrap(),
+            uncompressed_bytes: u32::try_from(super::ARCHIVE_PAGE_BYTES).unwrap(),
+        };
+
+        let error = super::decode_checkpoint_page_bounded(&compressed, &page).unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("learned checkpoint page length mismatch"));
+    }
+
+    #[test]
+    fn checkpoint_decode_plan_rejects_oversized_totals_before_reservation() {
+        let decoded_page = super::ArchivePageRef {
+            digest: super::Blake3Digest::from_bytes([2; 32]),
+            compressed_bytes: 1,
+            uncompressed_bytes: u32::try_from(super::ARCHIVE_PAGE_BYTES).unwrap(),
+        };
+        let decoded_page_count = usize::try_from(
+            super::MAX_CHECKPOINT_DECODED_BYTES
+                / u64::try_from(super::ARCHIVE_PAGE_BYTES).unwrap()
+                + 1,
+        )
+        .unwrap();
+        let decoded = checkpoint_reference(vec![decoded_page; decoded_page_count]);
+        let decoded_error = super::checkpoint_decode_plan(&decoded).unwrap_err();
+        assert!(decoded_error
+            .to_string()
+            .contains("checkpoint decoded byte limit"));
+
+        let compressed_page = super::ArchivePageRef {
+            digest: super::Blake3Digest::from_bytes([3; 32]),
+            compressed_bytes: u32::try_from(super::MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES).unwrap(),
+            uncompressed_bytes: 1,
+        };
+        let compressed_page_count = usize::try_from(
+            super::MAX_CHECKPOINT_COMPRESSED_BYTES
+                / super::MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES
+                + 1,
+        )
+        .unwrap();
+        let compressed =
+            checkpoint_reference(vec![compressed_page; compressed_page_count]);
+        let compressed_error = super::checkpoint_decode_plan(&compressed).unwrap_err();
+        assert!(compressed_error
+            .to_string()
+            .contains("checkpoint compressed byte limit"));
+    }
+
+    #[test]
+    fn current_writer_multi_page_checkpoint_round_trip_preserves_bytes() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-archive-checkpoint-roundtrip-{}",
+            super::TEMP_SEQUENCE.fetch_add(1, super::Ordering::Relaxed)
+        ));
+        let library = super::LineageLibrary::open(super::LineageLibraryConfig::profile_default(
+            &root,
+        ))
+        .unwrap();
+        let bytes = (0..(super::ARCHIVE_PAGE_BYTES * 2 + 137))
+            .map(|index| (index % 251) as u8)
+            .collect::<Vec<_>>();
+        let stored = library
+            .store_checkpoint(
+                "bounded-decode-roundtrip",
+                &bytes,
+                super::ArchiveCheckpointRetention::Pinned,
+            )
+            .unwrap();
+        let reference = match stored {
+            super::ArchiveCheckpointDisposition::Stored(reference) => reference,
+            other => panic!("expected stored checkpoint, got {other:?}"),
+        };
+
+        assert_eq!(library.read_checkpoint(&reference).unwrap(), bytes);
+
+        drop(library);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
 
@@ -3252,13 +3758,16 @@ fn open_index(path: &Path) -> Result<Connection, ArchiveError> {
            is_life INTEGER NOT NULL,
            death_tick TEXT
          );
-         CREATE TABLE IF NOT EXISTS checkpoints(
-           digest TEXT PRIMARY KEY,
+         CREATE TABLE IF NOT EXISTS checkpoint_manifests(
+           digest TEXT NOT NULL,
            source_run_id TEXT NOT NULL,
            retention TEXT NOT NULL,
            compressed_bytes INTEGER NOT NULL,
-           manifest_digest TEXT NOT NULL
-         );",
+           manifest_digest TEXT NOT NULL,
+           PRIMARY KEY(digest,manifest_digest)
+         );
+         CREATE INDEX IF NOT EXISTS checkpoint_manifests_by_run_retention
+           ON checkpoint_manifests(source_run_id,retention);",
     )?;
     Ok(connection)
 }
@@ -3289,7 +3798,7 @@ fn index_manifest_transaction(
     }) = &manifest.life
     {
         transaction.execute(
-            "INSERT OR REPLACE INTO checkpoints(digest,source_run_id,retention,compressed_bytes,manifest_digest) \
+            "INSERT OR REPLACE INTO checkpoint_manifests(digest,source_run_id,retention,compressed_bytes,manifest_digest) \
              VALUES(?1,?2,?3,?4,?5)",
             params![
                 digest_hex(reference.digest),
@@ -3307,11 +3816,11 @@ fn write_content_addressed(
     staging_root: &Path,
     destination: &Path,
     bytes: &[u8],
-) -> Result<(), ArchiveError> {
+) -> Result<bool, ArchiveError> {
     let canonical_staging = canonical_content_staging_root(staging_root)?;
     if destination.exists() {
         if fs::read(destination)? == bytes {
-            return Ok(());
+            return Ok(false);
         }
         return Err(ArchiveError::Integrity(format!(
             "content-addressed collision at {}",
@@ -3335,10 +3844,10 @@ fn write_content_addressed(
     file.sync_all()?;
     drop(file);
     match fs::rename(&staged, destination) {
-        Ok(()) => Ok(()),
+        Ok(()) => Ok(true),
         Err(_) if destination.exists() && fs::read(destination)? == bytes => {
             remove_exact_content_staging_file(&canonical_staging, &staged, bytes)?;
-            Ok(())
+            Ok(false)
         }
         Err(error) => {
             let _ = remove_exact_content_staging_file(&canonical_staging, &staged, bytes);
@@ -3370,6 +3879,7 @@ fn write_archive_content_addressed(
         &checked_destination.canonical_path,
         bytes,
     )
+    .map(|_| ())
 }
 
 fn canonical_content_staging_root(staging_root: &Path) -> Result<PathBuf, ArchiveError> {

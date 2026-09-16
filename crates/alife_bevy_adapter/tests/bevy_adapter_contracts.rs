@@ -1,13 +1,14 @@
 use alife_bevy_adapter::{
     bevy_quat_to_core, bevy_transform_to_core_pose, bevy_vec3_to_core, core_pose_to_bevy_transform,
-    core_vec3_to_bevy, execute_action_command, gather_sensory_from_observed, ActionAdapterContext,
-    AdapterScheduleTrace, AdapterWorldTick, AlifeBevyAdapterPlugin, AlifeBevyAdapterSet,
-    BevyActionFailure, BevyActionKind, BevyEntityMap, ObservedBevyEntity, TargetAdapterState,
-    ACTION_APPROACH, ACTION_EAT, ACTION_FLEE,
+    core_vec3_to_bevy, execute_action_command, gather_sensory_from_observed,
+    gather_sensory_from_observed_with_profile, ActionAdapterContext, AdapterScheduleTrace,
+    AdapterWorldTick, AlifeBevyAdapterPlugin, AlifeBevyAdapterSet, AlifeReferenceAdapterPlugin,
+    BevyActionFailure, BevyActionKind, BevyEntityMap, ObservedBevyEntity, ObserverSensoryProfile,
+    TargetAdapterState, ACTION_APPROACH, ACTION_EAT, ACTION_FLEE,
 };
 use alife_core::{
     ActionCommand, ActionId, ActionKind, ActionTarget, AffordanceBits, Confidence, DurationTicks,
-    Intensity, OrganismId, PhysicalContactKind, ReferenceActionFailure, Tick, Vec3f, WorldEntityId,
+    Intensity, OrganismId, Tick, Vec3f, WorldEntityId,
 };
 use bevy::prelude::{App, Entity, MinimalPlugins, Quat, Transform, Vec3};
 
@@ -163,18 +164,54 @@ fn sensory_conversion_maps_affordances_tokens_and_social_context_by_stable_id() 
 }
 
 #[test]
+fn observer_ranges_control_sensing_and_sound_does_not_leak_visual_affordances() {
+    let mut app = App::new();
+    let source_entity = spawn_entity(&mut app);
+    let mut source = ObservedBevyEntity::new(
+        source_entity,
+        target_id(2),
+        Vec3::new(4.0, 0.0, 0.0),
+        AffordanceBits::FOOD,
+    )
+    .with_token(7);
+    source.audible_radius_meters = 8.0;
+
+    let snapshot = gather_sensory_from_observed_with_profile(
+        organism(),
+        Tick::ZERO,
+        target_id(1),
+        Vec3::ZERO,
+        ObserverSensoryProfile {
+            vision_radius_meters: 2.0,
+            hearing_radius_meters: 6.0,
+        },
+        &[source],
+    )
+    .unwrap();
+
+    assert_eq!(snapshot.channels.visual_affordance[0], 0.0);
+    assert!(!snapshot
+        .channels
+        .nearby_affordances
+        .contains(AffordanceBits::FOOD));
+    assert_eq!(
+        snapshot.context_streams.vocal_tokens[0].unwrap().token_id,
+        7
+    );
+}
+
+#[test]
 fn action_adapter_translates_move_approach_flee_and_rest() {
     let mut app = App::new();
     let actor = spawn_entity(&mut app);
     let target = spawn_entity(&mut app);
-    let context = ActionAdapterContext::new(actor, target_id(1), Vec3::ZERO).with_target(
-        TargetAdapterState::new(
+    let context = ActionAdapterContext::new(actor, organism(), target_id(1), Vec3::ZERO)
+        .with_target(TargetAdapterState::new(
             target,
             target_id(2),
             Vec3::new(4.0, 0.0, 0.0),
             AffordanceBits::FOOD,
-        ),
-    );
+        ));
 
     let moved = execute_action_command(
         &command(
@@ -224,14 +261,13 @@ fn action_adapter_returns_core_failures_for_missing_targets_and_affordances() {
     let mut app = App::new();
     let actor = spawn_entity(&mut app);
     let target = spawn_entity(&mut app);
-    let context = ActionAdapterContext::new(actor, target_id(1), Vec3::ZERO).with_target(
-        TargetAdapterState::new(
+    let context = ActionAdapterContext::new(actor, organism(), target_id(1), Vec3::ZERO)
+        .with_target(TargetAdapterState::new(
             target,
             target_id(2),
             Vec3::new(1.0, 0.0, 0.0),
             AffordanceBits::RESOURCE,
-        ),
-    );
+        ));
 
     let missing = execute_action_command(
         &command(
@@ -247,14 +283,6 @@ fn action_adapter_returns_core_failures_for_missing_targets_and_affordances() {
         missing.failure,
         Some(BevyActionFailure::MissingTarget(target_id(999)))
     );
-    assert_eq!(
-        missing.execution.failure,
-        Some(ReferenceActionFailure::ActionRejected)
-    );
-    assert_eq!(
-        missing.execution.physical.contact,
-        PhysicalContactKind::Blocked
-    );
 
     let missing_food = execute_action_command(
         &command(ACTION_EAT, ActionKind::Interact, Some(target_id(2)), None),
@@ -268,17 +296,26 @@ fn action_adapter_returns_core_failures_for_missing_targets_and_affordances() {
             required: AffordanceBits::FOOD,
         })
     );
-    assert_eq!(
-        missing_food.execution.failure,
-        Some(ReferenceActionFailure::MissingAffordance)
-    );
 }
 
 #[test]
-fn plugin_registers_ordered_causal_system_sets() {
+fn production_plugin_installs_identity_mapping_without_a_second_tick_loop() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
         .add_plugins(AlifeBevyAdapterPlugin);
+
+    app.update();
+
+    assert!(app.world().contains_resource::<BevyEntityMap>());
+    assert!(!app.world().contains_resource::<AdapterWorldTick>());
+    assert!(!app.world().contains_resource::<AdapterScheduleTrace>());
+}
+
+#[test]
+fn reference_plugin_registers_only_derived_adapter_stages() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins)
+        .add_plugins(AlifeReferenceAdapterPlugin);
 
     app.update();
 
@@ -287,16 +324,13 @@ fn plugin_registers_ordered_causal_system_sets() {
         trace.stages(),
         &[
             AlifeBevyAdapterSet::GatherSensory,
-            AlifeBevyAdapterSet::CpuBrainTick,
-            AlifeBevyAdapterSet::ExecuteAction,
-            AlifeBevyAdapterSet::MeasureOutcome,
-            AlifeBevyAdapterSet::SealPatch,
+            AlifeBevyAdapterSet::PlanAction,
         ]
     );
 
     assert_eq!(
         app.world().resource::<AdapterWorldTick>().current(),
-        Tick::new(1)
+        Tick::ZERO
     );
 }
 

@@ -248,8 +248,11 @@ fn portable_save_round_trip_binds_creature_summary_to_world_record() {
         (
             "homeostasis disagreement",
             Box::new(|value| {
+                let hunger = value["creatures"][0]["mind"]["homeostasis"]["drives"]["hunger"]
+                    .as_f64()
+                    .unwrap();
                 value["creatures"][0]["mind"]["homeostasis"]["drives"]["hunger"] =
-                    serde_json::json!(0.0);
+                    serde_json::json!(if hunger == 0.0 { 0.5 } else { 0.0 });
             }),
         ),
         (

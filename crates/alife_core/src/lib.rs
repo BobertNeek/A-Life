@@ -13,6 +13,8 @@ pub mod brain_class;
 pub mod canonical_digest;
 pub mod checkpoint;
 pub mod chemistry;
+#[path = "newphenotype/cognitive_channel.rs"]
+pub mod cognitive_channel;
 pub mod cognitive_context;
 pub mod cognitive_work;
 pub mod dendritic;
@@ -24,12 +26,29 @@ pub mod evaluation;
 pub mod evidence_digest;
 pub mod evolutionary_genetics;
 pub mod experience;
+mod factorized_selection;
 pub mod foundation;
 pub mod genome;
 pub mod grounding;
 pub mod ids;
 pub mod language;
 pub mod learning;
+mod legacy_nano512_compatibility;
+mod nano512_readout_candidate;
+pub use cognitive_channel::{
+    CognitiveChannelExtensionV1, CognitiveChannelPlanV1,
+    COGNITIVE_CHANNEL_EXTENSION_SCHEMA_VERSION, COGNITIVE_CHANNEL_FAMILY_COUNT,
+    COGNITIVE_CHANNEL_LANE_COUNT, COGNITIVE_CHANNEL_LANE_END, COGNITIVE_CHANNEL_LANE_START,
+    COGNITIVE_CHANNEL_REPLAY_CAPTURE_LIMIT, COGNITIVE_CHANNEL_TOTAL_SYNAPSES,
+    COGNITIVE_CONTEXT_DECODER_HEAD_RAW, COGNITIVE_DECODER_ROLE_RAW,
+};
+pub use factorized_selection::{
+    arbitrate_gpu_selected_command_into_factorized_bundle, channel_command_for_action,
+    factorized_motor_bundle_for_candidates, factorized_motor_channel_order,
+    normalized_motor_bundle_digest, JointActionSelectionV1, VOCAL_CHANNEL_PAYLOAD_MAGIC_V1,
+};
+pub use genome::ActionCandidateCreditProfileV1;
+pub use nano512_readout_candidate::{Nano512ActionCreditCandidateV2, Nano512ReadoutCandidateV1};
 pub mod lineage;
 pub mod lobe;
 pub mod math;
@@ -211,6 +230,12 @@ pub use learning::{
     LearningSequenceGuard, NeuromodulatorSample, NeuromodulatoryFrame, OutcomeCreditPacket,
     OutcomeCreditReplayKey, PlasticityReceptorProfile, NEUROMODULATORY_LANE_COUNT,
 };
+pub use legacy_nano512_compatibility::{
+    FoundationAbiSelection, LegacyFoundationAbiId, LegacyNano512CompatibilityAbiDescriptor,
+    LegacyNano512CompatibilityAdmission, LegacyNano512CompatibilityReceipt,
+    MigratedN2048FoundationV1Descriptor, ProductionRuntimeAbiId, ProductionRuntimePath,
+    LEGACY_NANO512_V1_COORDINATE_SEED,
+};
 pub use lineage::LineageExportManifest;
 pub use lobe::{
     ActivationPolicy, LegacyLobeKindV1, LobeEssentiality, LobeKind, LobeLayout, LobeRegion,
@@ -284,23 +309,24 @@ pub use phenotype::{
     AuxiliaryDecoderPlan, BrainCapacityClass, BrainExecutionBudget, BrainPhenotype,
     CandidateDecoderFamilyPlan, CandidateDecoderPlan, CompiledBudgets, CompiledProjection,
     CompiledSynapse, CompiledSynapseKind, DecoderHeadKind, DecoderSynapseCoordinate,
-    GlobalPhenotypeBudgetReceipt, MemoryChannelPlan, N4096ResearchLayoutV1,
-    N512FounderFoundationProjection, N512FounderProjectionReceipt, N512FrozenAbiRecipe,
-    NeuronDynamics, PersistentAddressMap, PersistentDecoderAddress, PersistentDecoderAddressEntry,
-    PersistentNeuronAddress, PersistentNeuronAddressEntry, PersistentProjectionAddress,
-    PersistentProjectionAddressEntry, PersistentProjectionRole, PersistentSynapseAddress,
-    PersistentSynapseAddressEntry, PhenotypeCompiler, PhenotypeCompilerInputs,
-    PhenotypeGrowthMigration, PhenotypeGrowthReceipt, PhenotypeHash, PlasticityReceptorPlan,
-    ReplayCapturePlan, RouteBudgetReceipt, SensorEncoderAssignment, SensorEncoderPlan,
-    SensorEncoderSourceGroup, SleepConsolidationPlan, MAX_REPLAY_CAPTURE_SYNAPSES,
-    REQUIRED_GPU_FEATURE_MASK,
+    FoundationWeightApplication, GlobalPhenotypeBudgetReceipt, MemoryChannelPlan,
+    N4096ResearchLayoutV1, N512FounderFoundationProjection, N512FounderProjectionReceipt,
+    N512FrozenAbiRecipe, NeuronDynamics, PersistentAddressMap, PersistentDecoderAddress,
+    PersistentDecoderAddressEntry, PersistentNeuronAddress, PersistentNeuronAddressEntry,
+    PersistentProjectionAddress, PersistentProjectionAddressEntry, PersistentProjectionRole,
+    PersistentSynapseAddress, PersistentSynapseAddressEntry, PhenotypeCompiler,
+    PhenotypeCompilerInputs, PhenotypeGrowthMigration, PhenotypeGrowthReceipt, PhenotypeHash,
+    PlasticityReceptorPlan, ReplayCapturePlan, RouteBudgetReceipt, SensorEncoderAssignment,
+    SensorEncoderPlan, SensorEncoderSourceGroup, SleepConsolidationPlan,
+    MAX_REPLAY_CAPTURE_SYNAPSES, REQUIRED_GPU_FEATURE_MASK,
 };
 pub use predictive::{
-    GroundedSuccessorPredictor, JointMotorCondition, MotorChannelFactor, PredictionTargetFamily,
-    PredictionTargetReceipt, SemanticStateVector, JOINT_MOTOR_CONDITION_ABI_V1,
-    JOINT_MOTOR_CONDITION_SCHEMA_VERSION, MAX_SEMANTIC_STATE_VALUES, MAX_SUCCESSOR_FEATURES,
-    PREDICTION_TARGET_SCHEMA_VERSION, SEMANTIC_STATE_VECTOR_ABI_V1,
-    SEMANTIC_STATE_VECTOR_SCHEMA_VERSION, SUCCESSOR_FEATURE_ABI_V1,
+    GroundedSuccessorPredictor, JointMotorCondition, MotorChannelFactor,
+    PredictionCategoryCoverage, PredictionTargetFamily, PredictionTargetReceipt,
+    SemanticStateVector, GROUNDED_PREDICTOR_ABI_VERSION, JOINT_MOTOR_CONDITION_ABI_V1,
+    JOINT_MOTOR_CONDITION_ABI_V2, JOINT_MOTOR_CONDITION_SCHEMA_VERSION, MAX_PREDICTOR_CATEGORIES,
+    MAX_SEMANTIC_STATE_VALUES, MAX_SUCCESSOR_FEATURES, PREDICTION_TARGET_SCHEMA_VERSION,
+    SEMANTIC_STATE_VECTOR_ABI_V1, SEMANTIC_STATE_VECTOR_SCHEMA_VERSION, SUCCESSOR_FEATURE_ABI_V1,
 };
 pub use reference_brain::{
     BrainTickDiagnostics, BrainTickInput, BrainTickOutput, BrainTickStatus, CreatureActionState,

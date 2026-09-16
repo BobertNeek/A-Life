@@ -108,6 +108,19 @@ pub trait GpuSleepConsolidationDriver {
     ) -> Result<Option<SleepWorkReceipt>, ScaffoldContractError> {
         Ok(None)
     }
+
+    /// Reports whether this cycle has replay-backed phase data for bounded
+    /// memory, predictor, concept, and structural sleep work.
+    ///
+    /// Empty newborn replay is an explicit no-work state. Nonempty replay
+    /// remains subject to the complete fail-closed transaction contract.
+    fn has_bounded_sleep_phase_data(
+        &mut self,
+        _organism_id: OrganismId,
+        _state: SleepState,
+    ) -> Result<bool, ScaffoldContractError> {
+        Ok(true)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -235,9 +248,10 @@ impl GpuSleepScheduler {
     /// Schedules sleep from the world-owned biological record.
     ///
     /// The world record advances biology once for the requested tick. The
-    /// existing GPU progress path still runs first, then the due bounded core
-    /// transaction is consumed as one work receipt and sealed back into the
-    /// organism for persistence and presentation.
+    /// first due bounded transaction runs before the consolidation driver binds
+    /// its replay identity. Later in-flight work cannot mutate structural replay
+    /// inputs. Each completed bounded transaction is consumed as one work
+    /// receipt and sealed back into the organism for persistence and presentation.
     pub fn scheduled_tick_with_organism<D: GpuSleepConsolidationDriver>(
         &mut self,
         organism: &mut WorldOrganismRecord,
@@ -269,29 +283,28 @@ impl GpuSleepScheduler {
         }
 
         let transition = self.advance_authoritative(&input, parameters, tick)?;
+
+        let state_before_progress = self.controller.state();
+        let mut due_work = SleepWorkDue::empty();
+        let mut work_units = 0;
+        if state_before_progress.phase == SleepPhase::Consolidating
+            && state_before_progress.consolidation == ConsolidationState::None
+            && driver.has_bounded_sleep_phase_data(input.organism_id, state_before_progress)?
+        {
+            due_work = self.sleep_work_due_before_pending(state_before_progress, tick);
+            work_units = self.run_due_sleep_work(
+                driver,
+                input.organism_id,
+                state_before_progress,
+                &input.homeostasis,
+                tick,
+                due_work,
+            )?;
+        }
+
         self.progress_driver(input.organism_id, driver)?;
 
         let state = self.controller.state();
-        let due_work = self.sleep_work_due(state, tick);
-        let work_units = if due_work.is_empty() {
-            0
-        } else {
-            let work_homeostasis =
-                Self::homeostasis_for_due_work(&input.homeostasis, self.controller.config());
-            let receipt = driver
-                .run_bounded_sleep_transaction(
-                    input.organism_id,
-                    state,
-                    &work_homeostasis,
-                    tick,
-                    due_work,
-                )?
-                .ok_or(ScaffoldContractError::MissingPhaseData)?;
-            receipt.validate_contract()?;
-            self.commit_sleep_work(state.active_cycle_id, tick, due_work);
-            receipt.work_units
-        };
-
         if state.phase == SleepPhase::Awake {
             self.last_emitted_intent_cycle = None;
             self.reset_sleep_work_schedule();
@@ -325,6 +338,31 @@ impl GpuSleepScheduler {
         effective
     }
 
+    fn run_due_sleep_work<D: GpuSleepConsolidationDriver>(
+        &mut self,
+        driver: &mut D,
+        organism_id: OrganismId,
+        state: SleepState,
+        homeostasis: &HomeostaticSnapshot,
+        tick: Tick,
+        due_work: SleepWorkDue,
+    ) -> Result<u64, ScaffoldContractError> {
+        if due_work.is_empty() {
+            return Ok(0);
+        }
+        let work_homeostasis =
+            Self::homeostasis_for_due_work(homeostasis, self.controller.config());
+        let receipt = driver
+            .run_bounded_sleep_transaction(organism_id, state, &work_homeostasis, tick, due_work)?
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        receipt.validate_contract()?;
+        if receipt.tick != tick {
+            return Err(ScaffoldContractError::NonMonotonicTick);
+        }
+        self.commit_sleep_work(state.active_cycle_id, tick, due_work);
+        Ok(receipt.work_units)
+    }
+
     fn advance_authoritative(
         &mut self,
         input: &OrganismSleepInput,
@@ -333,18 +371,13 @@ impl GpuSleepScheduler {
     ) -> Result<Option<SleepTransition>, ScaffoldContractError> {
         let phase = self.controller.state().phase;
         if phase == SleepPhase::Awake {
-            if input.energy <= 0.20 {
-                self.controller
-                    .force_sleep(tick, SleepTrigger::RecoveryProtocol)
-                    .map(Some)
-            } else {
-                self.controller
-                    .evaluate_homeostasis(&input.homeostasis, parameters, tick)
-            }
+            // Food restores body reserves; sleep restores fatigue and neural readiness.
+            // A hungry organism must remain able to wake and seek food.
+            self.controller
+                .evaluate_homeostasis(&input.homeostasis, parameters, tick)
         } else if phase == SleepPhase::Waking {
             let config = self.controller.config();
-            let wake_ready = input.energy >= 0.35
-                && input.homeostasis.drives.fatigue < config.fatigue_threshold.raw()
+            let wake_ready = input.homeostasis.drives.fatigue < config.fatigue_threshold.raw()
                 && input.homeostasis.hormones.sleep_pressure
                     < config.sleep_pressure_threshold.raw();
             if wake_ready {
@@ -389,14 +422,17 @@ impl GpuSleepScheduler {
         Ok(())
     }
 
-    fn sleep_work_due(&self, state: SleepState, tick: Tick) -> SleepWorkDue {
+    fn sleep_work_due_before_pending(&self, state: SleepState, tick: Tick) -> SleepWorkDue {
         if state.phase != SleepPhase::Consolidating
-            || state.consolidation == ConsolidationState::None
+            || state.consolidation != ConsolidationState::None
         {
             return SleepWorkDue::empty();
         }
+        self.sleep_work_due_for_cycle(state.active_cycle_id, tick)
+    }
 
-        let previous = if self.last_sleep_work_cycle == Some(state.active_cycle_id) {
+    fn sleep_work_due_for_cycle(&self, cycle_id: u64, tick: Tick) -> SleepWorkDue {
+        let previous = if self.last_sleep_work_cycle == Some(cycle_id) {
             self.last_sleep_work_ticks
         } else {
             [None; 5]

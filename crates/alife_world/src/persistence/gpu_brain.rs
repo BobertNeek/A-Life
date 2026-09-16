@@ -9,13 +9,14 @@ use alife_core::{
     ActionId, AttentionFrame, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId,
     CandidateActionFamily, CandidateFeatureDigest, CanonicalDigestBuilder, CognitiveContextFrame,
     CognitiveWorkReceipt, ConsolidationState, DendriticBranchSet, LanguageGroundingLedger,
-    MemoryCompactionCheckpoint, MemoryCompactionPhase, MemorySidecarState, MotorCommandBundle,
-    OrganismId, OutcomeCreditReplayKey, PassiveLifeStatistics, PerceptionFrameDigest,
-    PhenotypeHash, PortableTopologySidecarAssetV1, ReplayEligibilitySample, ReplaySynapseSpan,
-    ScaffoldContractError, SensorProfileIdentity, SleepConsolidationReport, SleepReplayEvent,
-    SleepState, StructuralEditBatch, StructuralPlasticityState, Tick, TopologyCounts,
-    TopologySidecar, Validate, MAX_CANDIDATES_PER_REGION, MAX_REGIONS_PER_STATE,
-    MAX_REPLAY_CAPTURE_SYNAPSES, MAX_STRUCTURAL_EDGES,
+    LegacyNano512CompatibilityReceipt, MemoryCompactionCheckpoint, MemoryCompactionPhase,
+    MemorySidecarState, MotorCommandBundle, OrganismId, OutcomeCreditReplayKey,
+    PassiveLifeStatistics, PerceptionFrameDigest, PhenotypeHash, PortableTopologySidecarAssetV1,
+    ReplayEligibilitySample, ReplaySynapseSpan, ScaffoldContractError, SensorProfileIdentity,
+    SleepConsolidationReport, SleepReplayEvent, SleepState, StructuralEditBatch,
+    StructuralPlasticityState, Tick, TopologyCounts, TopologySidecar, Validate,
+    MAX_CANDIDATES_PER_REGION, MAX_REGIONS_PER_STATE, MAX_REPLAY_CAPTURE_SYNAPSES,
+    MAX_STRUCTURAL_EDGES,
 };
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 
@@ -26,7 +27,8 @@ use super::{
     AssetManifest, PersistenceError, PortableAssetDigest,
 };
 
-pub const GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION: u16 = 4;
+pub const GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION: u16 = 6;
+pub const GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION: u16 = 5;
 pub const GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION: u16 = 2;
 pub const MEMORY_SIDECAR_SAVE_SCHEMA_VERSION: u16 = 1;
 pub const TOPOLOGY_SIDECAR_SAVE_SCHEMA_VERSION: u16 = 1;
@@ -833,6 +835,8 @@ impl PortableReplayJournalV1 {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PendingEligibilityCheckpoint {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub joint_selection: Option<alife_core::JointActionSelectionV1>,
     pub dispatch_generation: u64,
     pub originating_tick: Tick,
     pub frame_digest: PerceptionFrameDigest,
@@ -846,6 +850,14 @@ pub struct PendingEligibilityCheckpoint {
 }
 
 impl PendingEligibilityCheckpoint {
+    pub fn with_joint_selection(
+        mut self,
+        joint: Option<alife_core::JointActionSelectionV1>,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.joint_selection = joint;
+        self.validate_contract()?;
+        Ok(self)
+    }
     #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         dispatch_generation: u64,
@@ -861,6 +873,7 @@ impl PendingEligibilityCheckpoint {
     ) -> Result<Self, ScaffoldContractError> {
         let value = Self {
             dispatch_generation,
+            joint_selection: None,
             originating_tick,
             frame_digest,
             active_activation_side,
@@ -877,6 +890,20 @@ impl PendingEligibilityCheckpoint {
 
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         self.action_id.validate()?;
+        if usize::from(self.candidate_index) >= alife_core::MAX_ACTION_CANDIDATES {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
+        if let Some(joint) = self.joint_selection {
+            joint.validate()?;
+            if !joint.candidate_slots().contains(
+                &(self
+                    .candidate_index
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?),
+            ) {
+                return Err(ScaffoldContractError::LearningEvidenceMismatch);
+            }
+        }
         let expected_staging = self.active_eligibility_generation.checked_add(1);
         if self.dispatch_generation == 0
             || self.frame_digest == PerceptionFrameDigest([0; 4])
@@ -941,6 +968,11 @@ pub struct GpuBrainSaveState {
     pub sensor_profile: SensorProfileIdentity,
     pub immutable_phenotype: GpuBrainAssetRef,
     pub phenotype_compiler_inputs: GpuBrainAssetRef,
+    /// Required by schema v6. Schema v5 is accepted only through the strict
+    /// canonical-topology compatibility check in the restore boundary.
+    #[serde(default)]
+    pub live_structural_topology: Option<GpuBrainAssetRef>,
+    pub legacy_nano512_compatibility_receipt: Option<LegacyNano512CompatibilityReceipt>,
     pub active_weight_generation: u64,
     pub active_weight_bank: u8,
     pub active_eligibility_bank: u8,
@@ -977,12 +1009,22 @@ pub struct GpuBrainSaveState {
 
 impl GpuBrainSaveState {
     pub fn validate(&self) -> Result<(), PersistenceError> {
-        if self.schema_version != GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION {
+        if !matches!(
+            self.schema_version,
+            GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION | GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION
+        ) {
             return Err(PersistenceError::SchemaVersion {
-                schema: "alife.gpu_brain_save_state.v4",
+                schema: "alife.gpu_brain_save_state.v6",
                 expected: GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
                 actual: self.schema_version,
             });
+        }
+        if (self.schema_version == GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION)
+            != self.live_structural_topology.is_some()
+        {
+            return Err(PersistenceError::Contract(
+                ScaffoldContractError::InvalidSparseProjectionSchema,
+            ));
         }
         self.organism_id.validate()?;
         BrainCapacityClass::production_for_id(self.capacity_class_id)?;
@@ -1034,6 +1076,9 @@ impl GpuBrainSaveState {
             asset.validate()?;
         }
         if let Some(asset) = &self.exact_cognitive_state {
+            asset.validate()?;
+        }
+        if let Some(asset) = &self.live_structural_topology {
             asset.validate()?;
         }
         self.sleep_assets.validate_refs()?;
@@ -1151,13 +1196,8 @@ impl GpuBrainSaveState {
         Ok(promoted)
     }
 
-    /// Verifies that every bulk checkpoint reference is present exactly once
-    /// in the enclosing portable-save manifest and binds the same digest.
-    pub fn validate_asset_manifest(
-        &self,
-        manifest: &AssetManifest,
-    ) -> Result<(), PersistenceError> {
-        self.validate()?;
+    /// Returns every bulk asset referenced by this exact GPU brain state.
+    pub fn asset_references(&self) -> Vec<&GpuBrainAssetRef> {
         let mut refs = vec![
             &self.immutable_phenotype,
             &self.phenotype_compiler_inputs,
@@ -1170,6 +1210,7 @@ impl GpuBrainSaveState {
         ];
         refs.extend(self.pending_experience_transaction.iter());
         refs.extend(self.exact_cognitive_state.iter());
+        refs.extend(self.live_structural_topology.iter());
         refs.push(&self.memory.compaction.active_bank_asset);
         refs.extend(self.memory.compaction.staged_bank_asset.iter());
         refs.push(&self.topology.summary_asset);
@@ -1191,8 +1232,18 @@ impl GpuBrainSaveState {
         refs.extend(self.sleep_assets.eligibility_staging.iter());
         refs.extend(self.sleep_assets.replay_journal_staging.iter());
         refs.push(&self.throttle_replay.sequence_asset);
+        refs
+    }
 
-        for asset in refs {
+    /// Verifies that every bulk checkpoint reference is present exactly once
+    /// in the enclosing portable-save manifest and binds the same digest.
+    pub fn validate_asset_manifest(
+        &self,
+        manifest: &AssetManifest,
+    ) -> Result<(), PersistenceError> {
+        self.validate()?;
+
+        for asset in self.asset_references() {
             let mut matches = manifest
                 .entries
                 .iter()
@@ -1277,6 +1328,9 @@ struct GpuBrainSaveStateWire {
     sensor_profile: SensorProfileIdentity,
     immutable_phenotype: GpuBrainAssetRef,
     phenotype_compiler_inputs: GpuBrainAssetRef,
+    #[serde(default)]
+    live_structural_topology: Option<GpuBrainAssetRef>,
+    legacy_nano512_compatibility_receipt: Option<LegacyNano512CompatibilityReceipt>,
     active_weight_generation: u64,
     active_weight_bank: u8,
     active_eligibility_bank: u8,
@@ -1323,6 +1377,8 @@ impl From<GpuBrainSaveStateWire> for GpuBrainSaveState {
             sensor_profile: wire.sensor_profile,
             immutable_phenotype: wire.immutable_phenotype,
             phenotype_compiler_inputs: wire.phenotype_compiler_inputs,
+            live_structural_topology: wire.live_structural_topology,
+            legacy_nano512_compatibility_receipt: wire.legacy_nano512_compatibility_receipt,
             active_weight_generation: wire.active_weight_generation,
             active_weight_bank: wire.active_weight_bank,
             active_eligibility_bank: wire.active_eligibility_bank,

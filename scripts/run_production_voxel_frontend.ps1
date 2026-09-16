@@ -1,5 +1,9 @@
 param(
+    [ValidateSet("dev", "release")]
+    [string]$BuildProfile = "release",
+    [string]$Manifest = "",
     [switch]$DryRun,
+    [switch]$PreviewCommand,
     [ValidateRange(0, 120)]
     [int]$SmokeSeconds = 0,
     [ValidateSet("MinimumSettings30x30", "MinSpecComfort1080p", "Balanced1080p", "HighSpecScaleUp", "ResearchScale")]
@@ -18,8 +22,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-$FeatureList = "bevy-app gpu-runtime voxel-backend production-assets vfx-hanabi"
-# Usage: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
+$FeatureList = "production-voxel-frontend"
+# Use -DryRun to execute the application's real preflight without opening a window.
+# Use -PreviewCommand to print the Cargo command without executing it.
 
 function Format-CommandArgument {
     param([string]$Value)
@@ -38,6 +43,10 @@ $AppArgs = @(
     "--brain-policy", $BrainPolicy,
     "--graphics-backend", $GraphicsBackend
 )
+
+if ($Manifest) {
+    $AppArgs += @("--manifest", $Manifest)
+}
 
 if ($Population -gt 0) {
     $AppArgs += @("--population", "$Population")
@@ -66,6 +75,7 @@ if ($RecordPerformance) {
 $CargoArgs = @(
     "run",
     "-p", "alife_game_app",
+    "--profile", $BuildProfile,
     "--features", $FeatureList,
     "--bin", "alife_game_app",
     "--"
@@ -74,6 +84,7 @@ $CargoArgs = @(
 $CommandPreview = "cargo " + (($CargoArgs | ForEach-Object { Format-CommandArgument $_ }) -join " ")
 
 Write-Host "A-Life Voxel Frontend"
+Write-Host "Build: $BuildProfile"
 Write-Host "Profile: $Profile"
 Write-Host "Minimum profile: MinimumSettings30x30"
 Write-Host "Features: $FeatureList"
@@ -81,8 +92,8 @@ Write-Host "Save directory policy: fixture saves stay under the selected environ
 Write-Host "Brain policy: $BrainPolicy; GPU failure stops learned actions."
 Write-Host "Command: $CommandPreview"
 
-if ($DryRun) {
-    Write-Host "Dry run only; production-voxel command was not executed."
+if ($PreviewCommand) {
+    Write-Host "Command preview only; production-voxel command was not executed."
     exit 0
 }
 

@@ -15,10 +15,9 @@ mod replay;
 pub use replay::*;
 
 use crate::{
-    predictive::GroundedSuccessorPredictor,
-    require_current_version, validate_finite, CanonicalDigestBuilder, ChemistryModulation,
-    Confidence, DurationTicks, HomeostaticParameters, HomeostaticSnapshot, LobeKind, MemoryBank,
-    MemoryId, NeuralProjectionSchema, NormalizedScalar,
+    predictive::GroundedSuccessorPredictor, require_current_version, validate_finite,
+    CanonicalDigestBuilder, ChemistryModulation, Confidence, DurationTicks, HomeostaticParameters,
+    HomeostaticSnapshot, LobeKind, MemoryBank, MemoryId, NeuralProjectionSchema, NormalizedScalar,
     ProjectionRoutingRef, RecoveryTrigger, ScaffoldContractError, SchemaKind, SchemaVersions,
     SparseTilePayload, SynapseWeightSplit, Tick, TopologicalMap, TopologySidecar, Validate,
 };
@@ -832,8 +831,12 @@ impl Validate for SleepWorkReceipt {
         require_current_version(SchemaKind::SleepConsolidation, self.schema_version)?;
         NormalizedScalar::new(self.fatigue.raw())?;
         NormalizedScalar::new(self.sleep_pressure.raw())?;
+        let mut unique_promoted_memory_ids = BTreeSet::new();
         for memory_id in &self.promoted_memory_ids {
             memory_id.validate()?;
+            if !unique_promoted_memory_ids.insert(memory_id.raw()) {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+            }
         }
         match self.status {
             SleepWorkStatus::SkippedLowPressure => {
@@ -852,7 +855,8 @@ impl Validate for SleepWorkReceipt {
                 if self.replay_digest == [0; 4]
                     || self.replay_event_count == 0
                     || self.replay_eligibility_sample_count == 0
-                    || self.promoted_memory_ids.len() != self.replay_event_count as usize
+                    || self.promoted_memory_ids.is_empty()
+                    || self.promoted_memory_ids.len() > self.replay_event_count as usize
                     || self.predictor_update_count != self.replay_event_count
                     || self.concept.is_none()
                     || self.work_units == 0
@@ -1076,7 +1080,8 @@ impl SleepConsolidator {
                 event.action_id,
                 event.family,
                 event.originating_tick,
-            )? else {
+            )?
+            else {
                 continue;
             };
             eligible_event_indices.insert(event_index);
@@ -1107,18 +1112,15 @@ impl SleepConsolidator {
         let concept = self.consolidate_topology_sidecar(&mut next_topology, 1)?;
         let replay_event_count = u32::try_from(eligible_events.len())
             .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?;
-        let replay_eligibility_sample_count =
-            u32::try_from(
-                evidence
-                    .batch
-                    .eligibility_samples
-                    .iter()
-                    .filter(|sample| {
-                        eligible_event_indices.contains(&usize::from(sample.event_index))
-                    })
-                    .count(),
-            )
-                .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?;
+        let replay_eligibility_sample_count = u32::try_from(
+            evidence
+                .batch
+                .eligibility_samples
+                .iter()
+                .filter(|sample| eligible_event_indices.contains(&usize::from(sample.event_index)))
+                .count(),
+        )
+        .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?;
         let work_units = u64::from(replay_event_count)
             .saturating_add(u64::from(replay_eligibility_sample_count))
             .saturating_add(u64::try_from(promoted_memory_ids.len()).unwrap_or(u64::MAX))

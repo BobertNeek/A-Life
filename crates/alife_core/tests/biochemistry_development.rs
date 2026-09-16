@@ -3,8 +3,8 @@
 use std::collections::BTreeSet;
 
 use alife_core::{
-    BiochemistryState, BodyEventDelta, BrainCapacityClass, CreatureGenome,
-    FoundationGeneticIdentity, Tick, Validate,
+    BiochemistryState, BodyEventDelta, BodyState, BrainCapacityClass, CreatureGenome,
+    FoundationGeneticIdentity, OrganKind, Tick, Validate,
 };
 
 fn phenotype() -> alife_core::CreaturePhenotype {
@@ -17,13 +17,19 @@ fn phenotype() -> alife_core::CreaturePhenotype {
     .unwrap()
 }
 
+fn mature_tick(phenotype: &alife_core::CreaturePhenotype) -> Tick {
+    let maturation = u64::from(phenotype.development.maturation_duration_ticks);
+    Tick(((maturation + 119) / 120) * 120)
+}
+
 #[test]
 fn body_damage_and_energy_loss_change_drives_hormones_and_neural_modulation() {
     let phenotype = phenotype();
-    let state = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+    let tick = mature_tick(&phenotype);
+    let state = BiochemistryState::new(&phenotype, tick).unwrap();
     let next = state
         .advance(
-            Tick(12),
+            Tick(tick.raw() + 12),
             BodyEventDelta {
                 energy: -0.30,
                 damage: 0.40,
@@ -48,12 +54,13 @@ fn body_damage_and_energy_loss_change_drives_hormones_and_neural_modulation() {
 }
 
 #[test]
-fn fast_hormones_respond_before_slower_cadence_boundaries() {
+fn fast_hormones_respond_before_development_and_reproduction_boundaries() {
     let phenotype = phenotype();
-    let state = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+    let tick = mature_tick(&phenotype);
+    let state = BiochemistryState::new(&phenotype, tick).unwrap();
     let next = state
         .advance(
-            Tick(1),
+            Tick(tick.raw() + 1),
             BodyEventDelta {
                 damage: 0.30,
                 ..BodyEventDelta::zero()
@@ -64,58 +71,108 @@ fn fast_hormones_respond_before_slower_cadence_boundaries() {
 
     assert!(next.homeostasis.hormones.cortisol > state.homeostasis.hormones.cortisol);
     assert_eq!(
-        next.homeostasis.drives.fatigue,
-        state.homeostasis.drives.fatigue
+        next.development.last_update_tick,
+        state.development.last_update_tick
     );
-    assert_eq!(next.development.last_update_tick, Tick::ZERO);
-    assert_eq!(next.reproduction.last_update_tick, Tick::ZERO);
+    assert_eq!(
+        next.reproduction.last_update_tick,
+        state.reproduction.last_update_tick
+    );
 }
 
 #[test]
 fn metabolic_development_and_reproduction_update_only_on_their_boundaries() {
     let phenotype = phenotype();
-    let state = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+    let tick = mature_tick(&phenotype);
+    let state = BiochemistryState::new(&phenotype, tick).unwrap();
     let before_metabolism = state
-        .advance(
-            Tick(5),
-            BodyEventDelta {
-                energy: -0.40,
-                ..BodyEventDelta::zero()
-            },
-            &phenotype,
-        )
+        .advance(Tick(tick.raw() + 5), BodyEventDelta::zero(), &phenotype)
         .unwrap();
     assert_eq!(
-        before_metabolism.homeostasis.drives.fatigue,
-        state.homeostasis.drives.fatigue
+        before_metabolism.development.last_update_tick,
+        state.development.last_update_tick
+    );
+    assert_eq!(
+        before_metabolism.reproduction.last_update_tick,
+        state.reproduction.last_update_tick
     );
 
     let metabolism = before_metabolism
-        .advance(Tick(6), BodyEventDelta::zero(), &phenotype)
+        .advance(Tick(tick.raw() + 6), BodyEventDelta::zero(), &phenotype)
         .unwrap();
-    assert!(metabolism.homeostasis.drives.fatigue > state.homeostasis.drives.fatigue);
-    assert_eq!(metabolism.development.last_update_tick, Tick::ZERO);
-    assert_eq!(metabolism.reproduction.last_update_tick, Tick::ZERO);
+    assert!(metabolism.body.energy < before_metabolism.body.energy);
+    assert!(metabolism.homeostasis.drives.fatigue > before_metabolism.homeostasis.drives.fatigue);
+    assert_eq!(
+        metabolism.development.last_update_tick,
+        state.development.last_update_tick
+    );
+    assert_eq!(
+        metabolism.reproduction.last_update_tick,
+        state.reproduction.last_update_tick
+    );
 
     let development = metabolism
-        .advance(Tick(60), BodyEventDelta::zero(), &phenotype)
+        .advance(Tick(tick.raw() + 60), BodyEventDelta::zero(), &phenotype)
         .unwrap();
-    assert_eq!(development.development.last_update_tick, Tick(60));
-    assert_eq!(development.reproduction.last_update_tick, Tick::ZERO);
+    assert_eq!(
+        development.development.last_update_tick,
+        Tick(tick.raw() + 60)
+    );
+    assert_eq!(
+        development.reproduction.last_update_tick,
+        state.reproduction.last_update_tick
+    );
 
     let reproduction = development
-        .advance(Tick(120), BodyEventDelta::zero(), &phenotype)
+        .advance(Tick(tick.raw() + 120), BodyEventDelta::zero(), &phenotype)
         .unwrap();
-    assert_eq!(reproduction.reproduction.last_update_tick, Tick(120));
+    assert_eq!(
+        reproduction.reproduction.last_update_tick,
+        Tick(tick.raw() + 120)
+    );
+}
+
+#[test]
+fn organ_upkeep_follows_elapsed_cadence_crossings() {
+    let phenotype = phenotype();
+    let event = BodyEventDelta::zero();
+    let start = BiochemistryState::new(&phenotype, Tick(5)).unwrap();
+    let jumped = start.advance(Tick(7), event, &phenotype).unwrap();
+    let partitioned = start
+        .advance(Tick(6), event, &phenotype)
+        .unwrap()
+        .advance(Tick(7), event, &phenotype)
+        .unwrap();
+
+    assert_eq!(
+        jumped.body.organ(OrganKind::Locomotor).energy.to_bits(),
+        partitioned
+            .body
+            .organ(OrganKind::Locomotor)
+            .energy
+            .to_bits()
+    );
+
+    let at_boundary = start.advance(Tick(6), event, &phenotype).unwrap();
+    let repeated = at_boundary.advance(Tick(6), event, &phenotype).unwrap();
+    assert_eq!(
+        repeated.body.organ(OrganKind::Locomotor).energy.to_bits(),
+        at_boundary
+            .body
+            .organ(OrganKind::Locomotor)
+            .energy
+            .to_bits()
+    );
 }
 
 #[test]
 fn sleep_recovery_lowers_fatigue_and_sleep_pressure() {
     let phenotype = phenotype();
-    let strained = BiochemistryState::new(&phenotype, Tick::ZERO)
+    let tick = mature_tick(&phenotype);
+    let strained = BiochemistryState::new(&phenotype, tick)
         .unwrap()
         .advance(
-            Tick(12),
+            Tick(tick.raw() + 12),
             BodyEventDelta {
                 energy: -0.80,
                 damage: 0.20,
@@ -126,7 +183,7 @@ fn sleep_recovery_lowers_fatigue_and_sleep_pressure() {
         .unwrap();
     let recovered = strained
         .advance(
-            Tick(13),
+            Tick(tick.raw() + 13),
             BodyEventDelta {
                 sleep_recovery: 0.80,
                 ..BodyEventDelta::zero()
@@ -175,7 +232,17 @@ fn puberty_health_and_mating_opportunity_gate_reproduction() {
     assert!(adult.reproduction.puberty_reached);
     assert!(adult.reproduction.ready);
 
-    let injured = adult
+    let injured_once = adult
+        .advance(
+            Tick(4_081),
+            BodyEventDelta {
+                damage: 1.0,
+                ..BodyEventDelta::zero()
+            },
+            &phenotype,
+        )
+        .unwrap();
+    let injured = injured_once
         .advance(
             Tick(4_200),
             BodyEventDelta {
@@ -281,5 +348,31 @@ fn neural_receptor_frame_has_no_hidden_action_authority() {
     );
     for forbidden in ["action", "candidate", "target", "reward", "command"] {
         assert!(!keys.iter().any(|key| key.contains(forbidden)));
+    }
+}
+
+#[test]
+fn body_compatibility_projections_validate_for_newborns_and_legacy_migrations() {
+    for efficiency in [0.0_f32, 0.2, 0.8, 1.0] {
+        let mut phenotype = phenotype();
+        phenotype.body.metabolic_efficiency = efficiency;
+
+        let state = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+        state.validate_contract().unwrap();
+    }
+
+    for (energy, health, injury, temperature_stress, sleeping) in [
+        (0.9_f32, 1.0, 0.0, 0.0, false),
+        (0.2_f32, 0.7, 0.3, 0.4, true),
+    ] {
+        let body =
+            BodyState::migrate_legacy_v1(energy, health, injury, temperature_stress, sleeping)
+                .unwrap();
+        body.validate_contract().unwrap();
+
+        let round_trip: BodyState =
+            serde_json::from_slice(&serde_json::to_vec(&body).unwrap()).unwrap();
+        assert_eq!(round_trip, body);
+        round_trip.validate_contract().unwrap();
     }
 }

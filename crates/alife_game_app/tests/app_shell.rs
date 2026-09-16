@@ -4,9 +4,56 @@ use alife_core::PolicyBackend;
 use alife_game_app::{
     load_geneforge_creature_part_catalog, resolve_creature_part_display_sources,
     run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, AppShellLaunchConfig,
-    GpuBrainAuthorityTelemetry, GraphicalBrainPolicyMode, GraphicalPlaygroundLaunchConfig,
+    DoubleBufferedGraphicalScheduler, GpuBrainAuthorityTelemetry, GraphicalBrainPolicyMode,
     LifecycleSaveState, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
+    RuntimePlaybackState,
 };
+
+#[test]
+fn checkpoint_wait_preserves_only_unspent_planned_scheduler_debt() {
+    let mut scheduler = DoubleBufferedGraphicalScheduler::default();
+    let plan = scheduler
+        .observe_render_frame(1.0, RuntimePlaybackState::Running, 1)
+        .unwrap();
+    let after_plan = scheduler.accumulator_micros;
+    let completed_before = scheduler.ticks_executed;
+    let unspent = plan.ticks_to_run - 1;
+
+    scheduler.preserve_unspent_planned_ticks(unspent).unwrap();
+
+    let restored = scheduler
+        .config
+        .fixed_tick_micros()
+        .saturating_mul(u64::from(unspent));
+    assert_eq!(
+        scheduler.accumulator_micros,
+        after_plan
+            .saturating_add(restored)
+            .min(scheduler.config.max_accumulator_micros)
+    );
+    assert_eq!(scheduler.ticks_executed, completed_before);
+}
+
+#[test]
+fn production_catch_up_pacing_preserves_unspent_bounded_debt() {
+    let mut scheduler = DoubleBufferedGraphicalScheduler::default();
+    let plan = scheduler
+        .observe_render_frame(1.0, RuntimePlaybackState::Running, 1)
+        .unwrap();
+    let after_plan = scheduler.accumulator_micros;
+
+    let (ticks_to_run, deferred) = scheduler.pace_planned_ticks(plan.ticks_to_run, 1).unwrap();
+
+    assert_eq!(ticks_to_run, 1);
+    assert_eq!(deferred, 3);
+    assert_eq!(
+        scheduler.accumulator_micros,
+        after_plan
+            .saturating_add(scheduler.config.fixed_tick_micros() * u64::from(deferred))
+            .min(scheduler.config.max_accumulator_micros)
+    );
+    assert_eq!(scheduler.ticks_executed, 0);
+}
 
 fn p34_fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../alife_world/tests/fixtures/p34")
@@ -23,10 +70,18 @@ fn headless_smoke_requires_an_explicit_heuristic_baseline() {
 
 #[test]
 fn graphical_product_default_is_gpu_required() {
-    let launch = GraphicalPlaygroundLaunchConfig::interactive(p34_fixture_root());
-    assert_eq!(launch.brain_policy, PolicyBackend::NeuralClosedLoopGpu);
+    let launch = ProductionVoxelLaunchConfig::from_manifest(
+        alife_game_app::default_environment_manifest_path(),
+        None,
+        ProductionFrontendProfileId::MinSpecComfort1080p,
+    )
+    .unwrap();
+    assert_eq!(
+        launch.app_launch.brain_policy,
+        PolicyBackend::NeuralClosedLoopGpu
+    );
     assert_eq!(launch.gpu_mode, GraphicalBrainPolicyMode::GpuRequired);
-    assert!(launch.brain_policy.requires_gpu());
+    assert!(launch.app_launch.brain_policy.requires_gpu());
 }
 
 #[test]

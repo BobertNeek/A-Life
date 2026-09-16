@@ -44,11 +44,17 @@ fn compile_inner(
     let genome = inputs.genome();
     let development = inputs.development();
     validate_supported_inputs(genome, capacity)?;
-    let layout = super::layout_compile::compile_layout(
-        genome,
-        development,
-        capacity.execution().max_neurons(),
-    )?;
+    let layout = if inputs.legacy_foundation_compatibility_abi().is_some() {
+        crate::legacy_nano512_compatibility::legacy_nano512_runtime_layout()?
+    } else if capacity.id() == BrainCapacityClass::N2048_ID {
+        crate::N2048FoundationLayoutV1::lobe_layout()
+    } else {
+        super::layout_compile::compile_layout(
+            genome,
+            development,
+            capacity.execution().max_neurons(),
+        )?
+    };
     let encoder =
         super::io_compile::compile_encoder(genome, development, &layout, inputs.sensor_profile())?;
     let (mut projections, mut synapses, mut receipts) =
@@ -64,6 +70,77 @@ fn compile_inner(
     projections.extend(decoders.projections);
     synapses.extend(decoders.synapses);
     receipts.extend(decoders.receipts);
+    if inputs.cognitive_channel_extension().is_some() {
+        let route_index = u16::try_from(projections.len()).map_err(|_| compile_error())?;
+        let start = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
+        let episodic = layout
+            .region(crate::LobeKind::MemoryInterface)
+            .filter(|region| {
+                region.enabled && region.len >= u32::from(crate::COGNITIVE_CHANNEL_LANE_COUNT)
+            })
+            .ok_or_else(compile_error)?;
+        let core = layout
+            .region(crate::LobeKind::TemporalPredictive)
+            .filter(|region| {
+                region.enabled && region.len >= u32::from(crate::COGNITIVE_CHANNEL_FAMILY_COUNT)
+            })
+            .ok_or_else(compile_error)?;
+        let mut cognitive_synapses =
+            Vec::with_capacity(crate::COGNITIVE_CHANNEL_TOTAL_SYNAPSES as usize);
+        for raw in 0_u8..crate::COGNITIVE_CHANNEL_FAMILY_COUNT {
+            let family = crate::CandidateActionFamily::try_from_raw(raw)?;
+            for lane in crate::COGNITIVE_CHANNEL_LANE_START..crate::COGNITIVE_CHANNEL_LANE_END {
+                let motor_index = u16::from(raw);
+                let source = episodic.start
+                    + u32::from(lane - crate::COGNITIVE_CHANNEL_LANE_START) % episodic.len;
+                let target = core.start + u32::from(motor_index);
+                cognitive_synapses.push(super::CompiledSynapse::new(
+                    source,
+                    target,
+                    super::io_compile::genetic_weight(
+                        genome.genetic_prior_seed,
+                        route_index,
+                        source,
+                        target,
+                    ),
+                    super::topology_compile::inherited_memory_decoder_alpha(genome),
+                    route_index,
+                    super::CompiledSynapseKind::Decoder(super::DecoderSynapseCoordinate::new(
+                        super::DecoderHeadKind::CognitiveContext,
+                        family,
+                        lane,
+                        motor_index,
+                    )),
+                ));
+            }
+        }
+        synapses.extend(cognitive_synapses);
+        let count = crate::COGNITIVE_CHANNEL_TOTAL_SYNAPSES;
+        projections.push(super::CompiledProjection::new(
+            route_index,
+            crate::LobeKind::MemoryInterface,
+            crate::LobeKind::TemporalPredictive,
+            crate::ProjectionType::Feedback,
+            crate::ActiveTilePolicy::EssentialReservation,
+            crate::UpdateCadence::Hot60Hz,
+            crate::BiologicalPriority::Essential,
+            0,
+            start,
+            count,
+            0,
+        ));
+        receipts.push(super::RouteBudgetReceipt {
+            route_index,
+            active_tiles: 0,
+            recurrent_synapses: 0,
+            action_decoder_synapses: 0,
+            memory_decoder_synapses: count,
+            immutable_payload_words: count,
+            tile_ceiling: 0,
+            synapse_ceiling: count,
+            payload_word_ceiling: count,
+        });
+    }
     super::topology_compile::validate_alpha_matches(genome, &projections, &synapses, &layout)?;
     let learning = super::learning::compile_learning_plans(
         genome,
@@ -109,7 +186,11 @@ fn compile_inner(
             candidate_capacity: execution.max_candidates(),
             object_slot_capacity: execution.max_object_slots(),
             memory_context_capacity: execution.max_memory_context_records(),
-            decoder_input_lanes: decoders.candidate.flattened_input_lane_count(),
+            decoder_input_lanes: if inputs.cognitive_channel_extension().is_some() {
+                crate::COGNITIVE_CHANNEL_LANE_END
+            } else {
+                decoders.candidate.flattened_input_lane_count()
+            },
             replay_event_capacity: execution.max_replay_events(),
             replay_eligibility_sample_capacity: execution.max_replay_eligibility_samples(),
             replay_capture_synapse_count: u32::try_from(learning.replay.global_synapse_ids().len())
@@ -137,50 +218,91 @@ fn compile_inner(
         _ => 4,
     };
     if let Some(foundation) = foundation {
-        let coordinate_plan = BrainPhenotype::try_new(
-            inputs,
-            capacity,
-            execution.max_neurons(),
-            microstep_count,
-            layout.clone(),
-            projections.clone(),
-            synapses.clone(),
-            dynamics.clone(),
-            encoder.clone(),
-            decoders.candidate.clone(),
-            decoders.speech.clone(),
-            decoders.memory.clone(),
-            learning.receptors.clone(),
-            learning.replay.clone(),
-            learning.sleep,
-            learning.digest,
-            budgets.clone(),
-        )?;
-        foundation.validate_against(&coordinate_plan)?;
-        for (global_index, (synapse, weight)) in
-            synapses.iter_mut().zip(foundation.weights()).enumerate()
-        {
-            let projection = projections
-                .get(usize::from(synapse.route_index()))
-                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-            let delta = genome_weight_delta(
-                overlay_seed.unwrap_or(genome.genetic_prior_seed),
-                global_index as u32,
-            );
-            let mut composed = *weight + delta;
-            match projection.projection_type() {
-                crate::ProjectionType::LateralInhibition if composed >= 0.0 => {
-                    composed = -0.000_1;
-                }
-                crate::ProjectionType::Homeostatic | crate::ProjectionType::MotorProposal
-                    if composed < 0.0 =>
-                {
-                    composed = 0.000_1;
-                }
-                _ => {}
+        if let Some(descriptor) = inputs.legacy_foundation_compatibility_abi() {
+            if descriptor.source_weight_asset() != foundation.asset_ref()
+                || foundation.weights().len() != synapses.len()
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
             }
-            synapse.set_genetic_weight(composed);
+            for (global_index, (synapse, weight)) in
+                synapses.iter_mut().zip(foundation.weights()).enumerate()
+            {
+                let Some(overlay_seed) = overlay_seed else {
+                    synapse.set_genetic_weight(*weight);
+                    continue;
+                };
+                let projection = projections
+                    .get(usize::from(synapse.route_index()))
+                    .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+                let delta = genome_weight_delta(overlay_seed, global_index as u32);
+                let mut composed = *weight + delta;
+                match projection.projection_type() {
+                    crate::ProjectionType::LateralInhibition if composed >= 0.0 => {
+                        composed = -0.000_1;
+                    }
+                    crate::ProjectionType::Homeostatic | crate::ProjectionType::MotorProposal
+                        if composed < 0.0 =>
+                    {
+                        composed = 0.000_1;
+                    }
+                    _ => {}
+                }
+                synapse.set_genetic_weight(composed);
+            }
+        } else {
+            let coordinate_plan = BrainPhenotype::try_new(
+                inputs,
+                capacity,
+                execution.max_neurons(),
+                microstep_count,
+                layout.clone(),
+                projections.clone(),
+                synapses.clone(),
+                dynamics.clone(),
+                encoder.clone(),
+                decoders.candidate.clone(),
+                decoders.speech.clone(),
+                decoders.memory.clone(),
+                learning.receptors.clone(),
+                learning.replay.clone(),
+                learning.sleep,
+                learning.digest,
+                budgets.clone(),
+            )?;
+            if let Some(descriptor) = inputs.migrated_n2048_foundation_v1() {
+                descriptor.validate_source_asset(foundation)?;
+            } else {
+                foundation.validate_against(&coordinate_plan)?;
+            }
+            for (global_index, (synapse, weight)) in
+                synapses.iter_mut().zip(foundation.weights()).enumerate()
+            {
+                let projection = projections
+                    .get(usize::from(synapse.route_index()))
+                    .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+                let delta = genome_weight_delta(
+                    overlay_seed.unwrap_or(genome.genetic_prior_seed),
+                    global_index as u32,
+                );
+                let mut composed = *weight + delta;
+                match projection.projection_type() {
+                    crate::ProjectionType::LateralInhibition if composed >= 0.0 => {
+                        composed = -0.000_1;
+                    }
+                    crate::ProjectionType::Homeostatic | crate::ProjectionType::MotorProposal
+                        if composed < 0.0 =>
+                    {
+                        composed = 0.000_1;
+                    }
+                    _ => {}
+                }
+                synapse.set_genetic_weight(composed);
+            }
         }
+    } else if inputs.legacy_foundation_compatibility_abi().is_some()
+        || inputs.migrated_n2048_foundation_v1().is_some()
+    {
+        return Err(ScaffoldContractError::PhenotypeCompile);
     }
 
     BrainPhenotype::try_new(

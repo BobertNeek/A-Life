@@ -5,8 +5,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
     genome::CognitiveArchitectureGenomeParameters, Blake3Digest, BrainCapacityClass, BrainClassId,
-    CanonicalDigestBuilder, FoundationAbiBinding, LanguageCodebookV1, LobeLayout, PhenotypeHash,
-    ScaffoldContractError, SensorProfile,
+    CanonicalDigestBuilder, FoundationAbiSelection, LanguageCodebookV1,
+    LegacyNano512CompatibilityAbiDescriptor, LobeLayout, PhenotypeHash, ScaffoldContractError,
+    SensorProfile,
 };
 
 use super::abi_validation::{
@@ -15,13 +16,13 @@ use super::abi_validation::{
 };
 use super::{
     AuxiliaryDecoderPlan, CandidateDecoderPlan, CompiledBudgets, CompiledProjection,
-    CompiledSynapse, CompiledSynapseKind, DecoderHeadKind, NeuronDynamics, PersistentAddressMap,
-    PhenotypeCompilerInputs, PlasticityReceptorPlan, ReplayCapturePlan, SensorEncoderPlan,
-    SleepConsolidationPlan,
+    CompiledSynapse, CompiledSynapseKind, DecoderHeadKind, DecoderSynapseCoordinate,
+    NeuronDynamics, PersistentAddressMap, PhenotypeCompilerInputs, PlasticityReceptorPlan,
+    ReplayCapturePlan, SensorEncoderPlan, SleepConsolidationPlan,
 };
 
-const PHENOTYPE_SCHEMA_VERSION: u16 = 4;
-const PHENOTYPE_DOMAIN: &[u8] = b"alife.brain.phenotype.v4";
+const PHENOTYPE_SCHEMA_VERSION: u16 = 5;
+const PHENOTYPE_DOMAIN: &[u8] = b"alife.brain.phenotype.v5";
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct CognitiveArchitecturePlan {
@@ -117,7 +118,7 @@ pub struct BrainPhenotype {
     neuron_count: u32,
     microstep_count: u8,
     sensor_profile: SensorProfile,
-    foundation_abi: FoundationAbiBinding,
+    foundation_abi_selection: FoundationAbiSelection,
     language_codebook: LanguageCodebookV1,
     cognitive_architecture: CognitiveArchitecturePlan,
     lobe_layout: LobeLayout,
@@ -128,6 +129,10 @@ pub struct BrainPhenotype {
     decoder: CandidateDecoderPlan,
     speech_decoder: Option<AuxiliaryDecoderPlan>,
     memory_decoder: Option<AuxiliaryDecoderPlan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cognitive_decoder: Option<AuxiliaryDecoderPlan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cognitive_channel_plan: Option<crate::CognitiveChannelPlanV1>,
     plasticity_receptors: Vec<PlasticityReceptorPlan>,
     replay_capture_plan: ReplayCapturePlan,
     sleep_consolidation_plan: SleepConsolidationPlan,
@@ -140,6 +145,151 @@ pub struct BrainPhenotype {
 }
 
 impl BrainPhenotype {
+    pub(super) fn with_action_credit_candidate(
+        mut self,
+        inputs: &PhenotypeCompilerInputs,
+    ) -> Result<Self, ScaffoldContractError> {
+        if let Some(extension) = inputs.cognitive_channel_extension() {
+            extension.validate_contract()?;
+            let route_index = u16::try_from(self.projections.len())
+                .map_err(|_| ScaffoldContractError::PhenotypeCompile)?;
+            let start = u32::try_from(self.synapses.len())
+                .map_err(|_| ScaffoldContractError::PhenotypeCompile)?;
+            let episodic = self
+                .lobe_layout
+                .region(crate::LobeKind::MemoryInterface)
+                .filter(|region| {
+                    region.enabled && region.len >= u32::from(crate::COGNITIVE_CHANNEL_LANE_COUNT)
+                })
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            let core = self
+                .lobe_layout
+                .region(crate::LobeKind::TemporalPredictive)
+                .filter(|region| {
+                    region.enabled && region.len >= u32::from(crate::COGNITIVE_CHANNEL_FAMILY_COUNT)
+                })
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            for raw in 0_u8..crate::COGNITIVE_CHANNEL_FAMILY_COUNT {
+                let family = crate::CandidateActionFamily::try_from_raw(raw)?;
+                for lane in crate::COGNITIVE_CHANNEL_LANE_START..crate::COGNITIVE_CHANNEL_LANE_END {
+                    let motor_index = u16::from(raw);
+                    self.synapses.push(CompiledSynapse::new(
+                        episodic.start
+                            + u32::from(lane - crate::COGNITIVE_CHANNEL_LANE_START) % episodic.len,
+                        core.start + u32::from(motor_index),
+                        super::io_compile::genetic_weight(
+                            inputs.genome().genetic_prior_seed,
+                            route_index,
+                            episodic.start
+                                + u32::from(lane - crate::COGNITIVE_CHANNEL_LANE_START)
+                                    % episodic.len,
+                            core.start + u32::from(motor_index),
+                        ),
+                        super::topology_compile::inherited_memory_decoder_alpha(inputs.genome()),
+                        route_index,
+                        CompiledSynapseKind::Decoder(DecoderSynapseCoordinate::new(
+                            DecoderHeadKind::CognitiveContext,
+                            family,
+                            lane,
+                            motor_index,
+                        )),
+                    ));
+                }
+            }
+            let count = crate::COGNITIVE_CHANNEL_TOTAL_SYNAPSES;
+            self.projections.push(CompiledProjection::new(
+                route_index,
+                crate::LobeKind::MemoryInterface,
+                crate::LobeKind::TemporalPredictive,
+                crate::ProjectionType::Feedback,
+                crate::ActiveTilePolicy::EssentialReservation,
+                crate::UpdateCadence::Hot5To15Hz,
+                crate::BiologicalPriority::High,
+                0,
+                start,
+                count,
+                0,
+            ));
+            let receipt = super::RouteBudgetReceipt {
+                route_index,
+                active_tiles: 0,
+                recurrent_synapses: 0,
+                action_decoder_synapses: 0,
+                memory_decoder_synapses: count,
+                immutable_payload_words: count,
+                tile_ceiling: 0,
+                synapse_ceiling: count,
+                payload_word_ceiling: count,
+            };
+            self.budgets.routes.push(receipt);
+            self.budgets.global.memory_decoder_synapses = self
+                .budgets
+                .global
+                .memory_decoder_synapses
+                .checked_add(count)
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            self.budgets.global.total_synapses = self
+                .budgets
+                .global
+                .total_synapses
+                .checked_add(count)
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            self.budgets.global.immutable_payload_words = self.budgets.global.total_synapses;
+            self.budgets.global.decoder_input_lanes = crate::COGNITIVE_CHANNEL_LANE_END;
+            let plan = crate::CognitiveChannelPlanV1::try_new_v1(start)?;
+            self.cognitive_decoder = Some(AuxiliaryDecoderPlan::try_new(
+                DecoderHeadKind::CognitiveContext,
+                crate::COGNITIVE_CHANNEL_LANE_COUNT,
+                crate::COGNITIVE_CHANNEL_FAMILY_COUNT as u16,
+                start,
+                count,
+            )?);
+            self.cognitive_channel_plan = Some(plan);
+        }
+        let learning = super::learning::compile_learning_plans(
+            inputs.genome(),
+            inputs.development(),
+            &BrainCapacityClass::n512(),
+            &self.projections,
+            &mut self.synapses,
+        )?;
+        self.plasticity_receptors = learning.receptors;
+        self.replay_capture_plan = learning.replay;
+        self.budgets.global.replay_capture_synapse_count =
+            u32::try_from(self.replay_capture_plan.global_synapse_ids().len())
+                .map_err(|_| ScaffoldContractError::PhenotypeCompile)?;
+        self.sleep_consolidation_plan = learning.sleep;
+        self.plasticity_plan_digest = learning.digest;
+        self.foundation_abi_selection = inputs.foundation_abi_selection().clone();
+        self.compiler_inputs_digest = inputs.canonical_digest();
+        self.persistent_address_map =
+            PersistentAddressMap::compile(&self.lobe_layout, &self.projections, &self.synapses)?;
+        (self.route_abi_digest, self.plasticity_abi_digest) = compute_abi_digests(
+            &BrainCapacityClass::n512(),
+            &self.projections,
+            &self.synapses,
+        );
+        self.phenotype_hash = self.recompute_phenotype_hash()?;
+        Ok(self)
+    }
+
+    pub(super) fn with_nano512_readout_candidate(
+        mut self,
+        inputs: &PhenotypeCompilerInputs,
+        asset: &crate::FoundationWeightAsset,
+    ) -> Result<Self, ScaffoldContractError> {
+        if self.synapses.len() != asset.weights().len() {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        self.foundation_abi_selection = inputs.foundation_abi_selection().clone();
+        self.compiler_inputs_digest = inputs.canonical_digest();
+        for (synapse, weight) in self.synapses.iter_mut().zip(asset.weights()) {
+            synapse.set_genetic_weight(*weight);
+        }
+        self.phenotype_hash = self.recompute_phenotype_hash()?;
+        Ok(self)
+    }
+
     pub const fn schema_version(&self) -> u16 {
         self.schema_version
     }
@@ -164,8 +314,22 @@ impl BrainPhenotype {
     pub const fn lobe_layout(&self) -> &LobeLayout {
         &self.lobe_layout
     }
-    pub const fn foundation_abi(&self) -> &FoundationAbiBinding {
-        &self.foundation_abi
+    pub const fn foundation_abi_selection(&self) -> &FoundationAbiSelection {
+        &self.foundation_abi_selection
+    }
+    pub const fn foundation_abi(&self) -> &FoundationAbiSelection {
+        &self.foundation_abi_selection
+    }
+    pub const fn legacy_foundation_compatibility_abi(
+        &self,
+    ) -> Option<&LegacyNano512CompatibilityAbiDescriptor> {
+        self.foundation_abi_selection
+            .legacy_nano512_compatibility_v1()
+    }
+    pub const fn migrated_n2048_foundation_v1(
+        &self,
+    ) -> Option<&crate::MigratedN2048FoundationV1Descriptor> {
+        self.foundation_abi_selection.migrated_n2048_foundation_v1()
     }
     pub const fn language_codebook(&self) -> &LanguageCodebookV1 {
         &self.language_codebook
@@ -196,6 +360,12 @@ impl BrainPhenotype {
     }
     pub fn memory_decoder(&self) -> Option<&AuxiliaryDecoderPlan> {
         self.memory_decoder.as_ref()
+    }
+    pub fn cognitive_decoder(&self) -> Option<&AuxiliaryDecoderPlan> {
+        self.cognitive_decoder.as_ref()
+    }
+    pub fn cognitive_channel_plan(&self) -> Option<&crate::CognitiveChannelPlanV1> {
+        self.cognitive_channel_plan.as_ref()
     }
     pub fn plasticity_receptors(&self) -> &[PlasticityReceptorPlan] {
         &self.plasticity_receptors
@@ -247,8 +417,34 @@ impl BrainPhenotype {
             PersistentAddressMap::compile(&lobe_layout, &projections, &synapses)?;
         let (route_abi_digest, plasticity_abi_digest) =
             compute_abi_digests(capacity, &projections, &synapses);
-        let foundation_abi = inputs.foundation_abi().clone();
-        let language_codebook = foundation_abi.language_codebook().clone();
+        let foundation_abi_selection = inputs.foundation_abi_selection().clone();
+        let cognitive_channel_plan = inputs
+            .cognitive_channel_extension()
+            .map(|_| {
+                crate::CognitiveChannelPlanV1::try_new_v1(
+                    u32::try_from(
+                        synapses
+                            .len()
+                            .checked_sub(crate::COGNITIVE_CHANNEL_TOTAL_SYNAPSES as usize)
+                            .ok_or(ScaffoldContractError::PhenotypeCompile)?,
+                    )
+                    .map_err(|_| ScaffoldContractError::PhenotypeCompile)?,
+                )
+            })
+            .transpose()?;
+        let cognitive_decoder = cognitive_channel_plan
+            .as_ref()
+            .map(|plan| {
+                AuxiliaryDecoderPlan::try_new(
+                    DecoderHeadKind::CognitiveContext,
+                    crate::COGNITIVE_CHANNEL_LANE_COUNT,
+                    crate::COGNITIVE_CHANNEL_FAMILY_COUNT as u16,
+                    plan.decoder_synapse_start(),
+                    plan.decoder_synapse_count(),
+                )
+            })
+            .transpose()?;
+        let language_codebook = foundation_abi_selection.language_codebook();
         let cognitive_architecture =
             CognitiveArchitecturePlan::compile(inputs.genome().cognitive_architecture(), capacity)?;
         let mut value = Self {
@@ -258,7 +454,7 @@ impl BrainPhenotype {
             neuron_count,
             microstep_count,
             sensor_profile: inputs.sensor_profile(),
-            foundation_abi,
+            foundation_abi_selection,
             language_codebook,
             cognitive_architecture,
             lobe_layout,
@@ -269,6 +465,8 @@ impl BrainPhenotype {
             decoder,
             speech_decoder,
             memory_decoder,
+            cognitive_decoder,
+            cognitive_channel_plan,
             plasticity_receptors,
             replay_capture_plan,
             sleep_consolidation_plan,
@@ -298,9 +496,7 @@ impl BrainPhenotype {
         d.write_u32(self.neuron_count);
         d.write_u8(self.microstep_count);
         d.write_u16(self.sensor_profile.raw());
-        d.write_u16(self.foundation_abi.capacity_class_id().raw());
-        d.write_u64(self.foundation_abi.layout_id().0);
-        write_blake3(&mut d, self.foundation_abi.layout_digest());
+        self.foundation_abi_selection.write_canonical(&mut d);
         d.write_u32(self.language_codebook.id().0);
         write_blake3(&mut d, self.language_codebook.canonical_digest());
         d.write_sequence_len(self.lobe_layout.regions.len());
@@ -383,6 +579,12 @@ impl BrainPhenotype {
             }
             None => d.write_none(),
         }
+        if let Some(plan) = &self.cognitive_channel_plan {
+            d.write_some();
+            for word in plan.canonical_digest() {
+                d.write_u64(word);
+            }
+        }
         for word in self.plasticity_plan_digest {
             d.write_u64(word);
         }
@@ -398,7 +600,8 @@ impl BrainPhenotype {
         capacity: &BrainCapacityClass,
     ) -> Result<(), ScaffoldContractError> {
         capacity.validate_contract()?;
-        self.foundation_abi.validate_against(capacity)?;
+        self.foundation_abi_selection
+            .validate_against(capacity, self.sensor_profile)?;
         self.language_codebook.validate_contract()?;
         let execution = capacity.execution();
         if self.schema_version != PHENOTYPE_SCHEMA_VERSION
@@ -416,7 +619,7 @@ impl BrainPhenotype {
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
-        if self.language_codebook != *self.foundation_abi.language_codebook() {
+        if self.language_codebook != self.foundation_abi_selection.language_codebook() {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
         self.cognitive_architecture.validate_against(capacity)?;
@@ -497,6 +700,13 @@ impl BrainPhenotype {
                 {
                     return Err(ScaffoldContractError::PhenotypeCompile)
                 }
+                ProjectionKind::CognitiveDecoder
+                    if projection.source_lobe() != crate::LobeKind::MemoryInterface
+                        || projection.target_lobe() != crate::LobeKind::TemporalPredictive
+                        || projection.projection_type() != crate::ProjectionType::Feedback =>
+                {
+                    return Err(ScaffoldContractError::PhenotypeCompile)
+                }
                 _ => {}
             }
             let mut touched_tiles = std::collections::BTreeSet::new();
@@ -561,6 +771,11 @@ impl BrainPhenotype {
                                     .checked_add(1)
                                     .ok_or(ScaffoldContractError::PhenotypeCompile)?
                             }
+                            DecoderHeadKind::CognitiveContext => {
+                                memory_decoder = memory_decoder
+                                    .checked_add(1)
+                                    .ok_or(ScaffoldContractError::PhenotypeCompile)?
+                            }
                             DecoderHeadKind::MemoryContext => {
                                 memory_decoder = memory_decoder
                                     .checked_add(1)
@@ -618,6 +833,9 @@ impl BrainPhenotype {
         if let Some(plan) = &self.memory_decoder {
             plan.validate_against(self)?;
         }
+        if let Some(plan) = &self.cognitive_channel_plan {
+            plan.validate_contract()?;
+        }
         let candidate_count = self.decoder.decoder_synapse_count();
         let speech_count = self
             .speech_decoder
@@ -644,9 +862,15 @@ impl BrainPhenotype {
         )?;
         let n2048 = capacity.id() == BrainCapacityClass::N2048_ID;
         let n4096 = capacity.id() == BrainCapacityClass::N4096_RESEARCH_ID;
+        let cognitive_count = self
+            .cognitive_decoder
+            .as_ref()
+            .map_or(0, AuxiliaryDecoderPlan::decoder_synapse_count);
         if candidate_count.checked_add(speech_count)
             != Some(self.budgets.global.action_decoder_synapses)
-            || memory_count != self.budgets.global.memory_decoder_synapses
+            || memory_count
+                .checked_add(cognitive_count)
+                != Some(self.budgets.global.memory_decoder_synapses)
             || !memory_channel_valid
             || (n2048
                 && (candidate_count
@@ -661,6 +885,11 @@ impl BrainPhenotype {
                         != crate::N2048FoundationLayoutV1::SPEECH_DECODER_SYNAPSE_COUNT
                     || memory_count != 8_192))
             || (!n2048 && !n4096 && self.speech_decoder.is_some())
+            || (self.cognitive_decoder.is_some() != self.cognitive_channel_plan.is_some())
+            || self
+                .cognitive_decoder
+                .as_ref()
+                .is_some_and(|plan| plan.validate_against(self).is_err())
             || self.route_abi_digest != route_abi_digest
             || self.plasticity_abi_digest != plasticity_abi_digest
             || self.plasticity_plan_digest != plasticity_plan_digest
@@ -675,6 +904,37 @@ impl BrainPhenotype {
             || self.recompute_phenotype_hash()? != self.phenotype_hash
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        if let Some(descriptor) = self
+            .foundation_abi_selection
+            .legacy_nano512_compatibility_v1()
+        {
+            descriptor.validate_for_phenotype(self)?;
+        }
+        if let Some(descriptor) = self.foundation_abi_selection.migrated_n2048_foundation_v1() {
+            descriptor.validate_for_phenotype(self)?;
+        }
+        if let FoundationAbiSelection::Nano512ActionCreditCandidateV2(candidate) =
+            &self.foundation_abi_selection
+        {
+            let (expected, _) =
+                super::PhenotypeCompiler::compile_nano512_action_credit_candidate_unchecked(
+                    candidate,
+                )?;
+            if self != &expected {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        }
+        if let FoundationAbiSelection::Nano512ReadoutCandidateV1(candidate) =
+            &self.foundation_abi_selection
+        {
+            let (expected, _) =
+                super::PhenotypeCompiler::compile_nano512_readout_candidate_unchecked(
+                    &candidate.asset()?,
+                )?;
+            if self != &expected {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
         }
         Ok(())
     }
@@ -699,7 +959,7 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             neuron_count: u32,
             microstep_count: u8,
             sensor_profile: SensorProfile,
-            foundation_abi: FoundationAbiBinding,
+            foundation_abi_selection: FoundationAbiSelection,
             language_codebook: LanguageCodebookV1,
             cognitive_architecture: CognitiveArchitecturePlan,
             lobe_layout: LobeLayout,
@@ -710,6 +970,10 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             decoder: CandidateDecoderPlan,
             speech_decoder: Option<AuxiliaryDecoderPlan>,
             memory_decoder: Option<AuxiliaryDecoderPlan>,
+            #[serde(default)]
+            cognitive_decoder: Option<AuxiliaryDecoderPlan>,
+            #[serde(default)]
+            cognitive_channel_plan: Option<crate::CognitiveChannelPlanV1>,
             plasticity_receptors: Vec<PlasticityReceptorPlan>,
             replay_capture_plan: ReplayCapturePlan,
             sleep_consolidation_plan: SleepConsolidationPlan,
@@ -728,7 +992,7 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             neuron_count: w.neuron_count,
             microstep_count: w.microstep_count,
             sensor_profile: w.sensor_profile,
-            foundation_abi: w.foundation_abi,
+            foundation_abi_selection: w.foundation_abi_selection,
             language_codebook: w.language_codebook,
             cognitive_architecture: w.cognitive_architecture,
             lobe_layout: w.lobe_layout,
@@ -739,6 +1003,8 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             decoder: w.decoder,
             speech_decoder: w.speech_decoder,
             memory_decoder: w.memory_decoder,
+            cognitive_decoder: w.cognitive_decoder,
+            cognitive_channel_plan: w.cognitive_channel_plan,
             plasticity_receptors: w.plasticity_receptors,
             replay_capture_plan: w.replay_capture_plan,
             sleep_consolidation_plan: w.sleep_consolidation_plan,

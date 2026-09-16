@@ -7,13 +7,15 @@ use std::{
 };
 
 use alife_archive::{GeneticArchiveInput, LineageLibrary, LineageLibraryConfig};
+use alife_core::predictive::GroundedSuccessorPredictor;
 use alife_core::{
-    BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus, Confidence,
-    ConsolidationState, DevelopmentState, DriveSnapshot, EndocrineSnapshot, FounderMode,
-    FounderSelection, HomeostaticSnapshot, MemoryBankConfig, MemorySidecarState, NormalizedScalar,
-    OrganismId, PhenotypeCompiler, PhenotypeCompilerInputs, PolicyBackend, ScaffoldContractError,
-    SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SleepPhase, SleepState, SleepTrigger,
-    Tick, TopologicalMapConfig, TopologySidecar, Validate, Vec3f,
+    BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus, CoactivationEvidence,
+    CognitiveContextFrame, CognitiveWorkReceipt, Confidence, ConsolidationIntent,
+    ConsolidationState, DevelopmentState, DriveSnapshot, EndocrineSnapshot, ExperienceSequenceId,
+    FounderMode, FounderSelection, HomeostaticSnapshot, MemoryBankConfig, MemorySidecarState,
+    NormalizedScalar, OrganismId, PhenotypeCompiler, PhenotypeCompilerInputs, PolicyBackend,
+    ScaffoldContractError, SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SleepPhase,
+    SleepState, SleepTrigger, Tick, TopologicalMapConfig, TopologySidecar, Validate, Vec3f,
     SLEEP_CONSOLIDATION_SCHEMA_VERSION,
 };
 use alife_game_app::{
@@ -21,9 +23,14 @@ use alife_game_app::{
     GameAppShellError, GpuBrainSidecarCapture, GpuCheckpointAssetStore, GpuDurableSaveManifest,
     GpuLiveBrainRuntime,
 };
-use alife_gpu_backend::GpuClosedLoopBackend;
-use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
-use alife_world::persistence::{AssetManifest, GpuBrainSaveState, PortableSaveFile};
+use alife_gpu_backend::{GpuClosedLoopBackend, GpuExactPopulationCapturePollV1};
+use alife_runtime::{
+    GpuAuthoritativeSession, GpuExactCheckpointTransactionContextV1, GpuSessionConsumerKind,
+};
+use alife_world::persistence::{
+    AssetManifest, ExactCognitiveCheckpointState, GpuBrainSaveState, PortableSaveFile,
+    GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION, V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
+};
 use alife_world::{HeadlessScenarioBuilder, TrackedObjectRegistry};
 
 fn unique_asset_root(label: &str) -> PathBuf {
@@ -58,6 +65,199 @@ fn durable_gpu_state(root: &std::path::Path) -> GpuBrainSaveState {
         .find(|creature| creature.organism_id == OrganismId(1))
         .and_then(|creature| creature.gpu_brain)
         .expect("durable GPU checkpoint for organism 1")
+}
+
+#[test]
+fn exact_population_capture_codec_matches_synchronous_completed_sleep_assets() {
+    let asset_root = unique_asset_root("exact-population-completed-codec");
+    fs::create_dir_all(&asset_root).unwrap();
+    let store = GpuCheckpointAssetStore::new(&asset_root).unwrap();
+    let capacity = BrainCapacityClass::production_for_id(BrainCapacityClass::N512_ID).unwrap();
+    let genome = BrainGenome::scaffold(50_019, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+    let inputs = PhenotypeCompilerInputs::try_new(
+        genome,
+        &capacity,
+        development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+    let phenotype = PhenotypeCompiler::compile_validated(&inputs, &capacity).unwrap();
+    let organism_id = OrganismId(50_019);
+    let checkpoint_tick = Tick::new(6_001);
+    let sensor_profile = SensorProfileIdentity {
+        profile_id: SensorProfile::PrivilegedAffordanceV1.into(),
+        profile_schema_version: 1,
+        sensory_abi_version: SensoryAbiVersion::CURRENT.raw(),
+    };
+    let memory = MemorySidecarState::new_profiled(
+        organism_id,
+        sensor_profile,
+        MemoryBankConfig::new(64, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap(),
+    )
+    .unwrap();
+    let topology =
+        TopologySidecar::new_profiled(organism_id, sensor_profile, TopologicalMapConfig::default())
+            .unwrap();
+    let tracked_objects = TrackedObjectRegistry::new(50_019, 1_024)
+        .unwrap()
+        .save_state(organism_id)
+        .unwrap();
+    let language_grounding = alife_core::LanguageGroundingLedger::default();
+    let life_statistics =
+        alife_core::PassiveLifeStatistics::new(organism_id, checkpoint_tick).unwrap();
+    let mut source = GpuAuthoritativeSession::new(
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
+        GpuSessionConsumerKind::Challenge,
+    );
+    let handle = source.insert_brain(organism_id, phenotype.clone()).unwrap();
+    let replay = source.build_sleep_replay_batch(handle).unwrap();
+    assert!(replay.events.is_empty());
+    let request = source
+        .prepare_sleep_consolidation(handle, ConsolidationIntent { cycle_id: 1 }, &replay)
+        .unwrap();
+    let job = source
+        .submit_sleep_consolidation(handle, &request, &replay)
+        .unwrap();
+    let staged = source
+        .poll_sleep_consolidation(handle, job)
+        .unwrap()
+        .unwrap();
+    let sleep = SleepState {
+        schema_version: SLEEP_CONSOLIDATION_SCHEMA_VERSION,
+        phase: SleepPhase::Consolidating,
+        phase_started_tick: checkpoint_tick,
+        entered_sleep_tick: Some(checkpoint_tick),
+        cycles_completed: 0,
+        last_trigger: Some(SleepTrigger::FatigueThreshold),
+        active_cycle_id: 1,
+        last_consolidated_cycle_id: 0,
+        consolidation: ConsolidationState::Completed {
+            request,
+            staged: staged.staged,
+        },
+    };
+    sleep.validate_contract().unwrap();
+
+    let context =
+        GpuExactCheckpointTransactionContextV1::capture(source.backend(), &capacity).unwrap();
+    let mut ticket = source
+        .submit_exact_population_capture(checkpoint_tick, 1, &[handle])
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let capture = loop {
+        match source.poll_exact_population_capture(&mut ticket).unwrap() {
+            GpuExactPopulationCapturePollV1::Pending if std::time::Instant::now() < deadline => {
+                std::thread::yield_now();
+            }
+            GpuExactPopulationCapturePollV1::Pending => {
+                panic!("Completed codec capture exceeded the bounded poll deadline")
+            }
+            GpuExactPopulationCapturePollV1::Ready(capture) => break capture,
+            GpuExactPopulationCapturePollV1::Failed(failure) => {
+                panic!("Completed codec capture failed: {failure:?}")
+            }
+        }
+    };
+    let row = capture.rows().first().unwrap();
+    assert_eq!(row.completed_sleep().unwrap().request, request);
+    let sidecars = || GpuBrainSidecarCapture {
+        sensor_profile,
+        memory: &memory,
+        topology: &topology,
+        tracked_objects: tracked_objects.clone(),
+        language_grounding: &language_grounding,
+        life_statistics: &life_statistics,
+        legacy_nano512_compatibility_receipt: None,
+        retained_learning: None,
+    };
+    let mut captured_write = store
+        .capture_brain_from_exact_population_capture(
+            handle,
+            &phenotype,
+            &inputs,
+            sleep,
+            checkpoint_tick,
+            None,
+            &[],
+            sidecars(),
+            row,
+            &context,
+        )
+        .unwrap();
+    let mut synchronous_write = store
+        .capture_brain_with_runtime_replay_state(
+            &mut source,
+            handle,
+            &phenotype,
+            &inputs,
+            sleep,
+            checkpoint_tick,
+            None,
+            &[],
+            sidecars(),
+        )
+        .unwrap();
+    let exact_state = |v11: alife_gpu_backend::GpuV11Checkpoint| ExactCognitiveCheckpointState {
+        schema_version: V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
+        organism_id,
+        checkpoint_tick,
+        cognitive_context: CognitiveContextFrame::empty(
+            organism_id,
+            ExperienceSequenceId(1),
+            checkpoint_tick,
+        )
+        .unwrap(),
+        predictor: GroundedSuccessorPredictor::default(),
+        selected_motor_bundle: None,
+        cognitive_work: CognitiveWorkReceipt::zero(),
+        sleep_state: sleep,
+        last_sleep_work: None,
+        dendritic_branches: v11.dendritic_branches,
+        structural_plasticity: v11.structural,
+        structural_edit_receipts: Vec::new(),
+        last_sleep_report: None,
+    };
+    let captured_exact = exact_state(row.identity().v11.clone());
+    let synchronous_exact = exact_state(source.checkpoint_v11(handle).unwrap());
+    captured_write
+        .attach_exact_cognitive_state(&store, &captured_exact)
+        .unwrap();
+    synchronous_write
+        .attach_exact_cognitive_state(&store, &synchronous_exact)
+        .unwrap();
+
+    assert_eq!(captured_exact, synchronous_exact);
+    assert_eq!(captured_write, synchronous_write);
+    assert!(captured_write
+        .save_state
+        .sleep_assets
+        .replay_batch
+        .is_some());
+    assert!(captured_write
+        .save_state
+        .sleep_assets
+        .lifetime_staging
+        .is_some());
+    assert!(captured_write
+        .save_state
+        .sleep_assets
+        .fast_staging
+        .is_some());
+    assert!(captured_write
+        .save_state
+        .sleep_assets
+        .eligibility_staging
+        .is_some());
+    assert!(captured_write
+        .save_state
+        .sleep_assets
+        .replay_journal_staging
+        .is_some());
+
+    fs::remove_dir_all(asset_root).unwrap();
 }
 
 #[test]
@@ -104,6 +304,124 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
         GpuSessionConsumerKind::Challenge,
     );
     let handle = source.insert_brain(organism_id, phenotype.clone()).unwrap();
+    let canonical_v11 = source.checkpoint_v11(handle).unwrap();
+    assert_eq!(canonical_v11.structural.connection_count(), 0);
+    assert!(canonical_v11.sparse_spans.is_empty());
+    let mut canonical_write = store
+        .capture_brain(
+            &mut source,
+            handle,
+            &phenotype,
+            &inputs,
+            SleepState::awake_at(Tick::ZERO),
+            Tick::ZERO,
+            None,
+            GpuBrainSidecarCapture {
+                sensor_profile,
+                memory: &memory,
+                topology: &topology,
+                tracked_objects: tracked_objects.clone(),
+                language_grounding: &language_grounding,
+                life_statistics: &life_statistics,
+                legacy_nano512_compatibility_receipt: None,
+                retained_learning: None,
+            },
+        )
+        .unwrap();
+    let canonical_exact = ExactCognitiveCheckpointState {
+        schema_version: V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
+        organism_id,
+        checkpoint_tick: Tick::ZERO,
+        cognitive_context: CognitiveContextFrame::empty(
+            organism_id,
+            ExperienceSequenceId(1),
+            Tick::ZERO,
+        )
+        .unwrap(),
+        predictor: GroundedSuccessorPredictor::default(),
+        selected_motor_bundle: None,
+        cognitive_work: CognitiveWorkReceipt::zero(),
+        sleep_state: SleepState::awake_at(Tick::ZERO),
+        last_sleep_work: None,
+        dendritic_branches: canonical_v11.dendritic_branches,
+        structural_plasticity: canonical_v11.structural,
+        structural_edit_receipts: Vec::new(),
+        last_sleep_report: None,
+    };
+    canonical_write
+        .attach_exact_cognitive_state(&store, &canonical_exact)
+        .unwrap();
+    let mut canonical_manifest = AssetManifest::empty();
+    merge_gpu_checkpoint_manifest_entries(
+        &mut canonical_manifest,
+        canonical_write.manifest_entries.clone(),
+    )
+    .unwrap();
+    canonical_manifest.validate_with_root(&asset_root).unwrap();
+
+    let mut missing_exact_v5 = canonical_write.save_state.clone();
+    missing_exact_v5.schema_version = GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION;
+    missing_exact_v5.live_structural_topology = None;
+    missing_exact_v5.exact_cognitive_state = None;
+    let mut missing_exact_target = GpuAuthoritativeSession::new(
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
+        GpuSessionConsumerKind::Challenge,
+    );
+    assert!(
+        store
+            .restore_brain(
+                &mut missing_exact_target,
+                &canonical_manifest,
+                &missing_exact_v5,
+            )
+            .is_err(),
+        "shape-valid v5 without exact cognitive topology authority must fail closed"
+    );
+
+    let mut explicit_canonical_v5 = canonical_write.save_state.clone();
+    explicit_canonical_v5.schema_version = GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION;
+    explicit_canonical_v5.live_structural_topology = None;
+    let mut canonical_v5_target = GpuAuthoritativeSession::new(
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
+        GpuSessionConsumerKind::Challenge,
+    );
+    store
+        .restore_brain(
+            &mut canonical_v5_target,
+            &canonical_manifest,
+            &explicit_canonical_v5,
+        )
+        .expect("explicitly canonical v5 exact cognitive state remains readable");
+
+    let structural_target = phenotype.candidate_decoder().motor_start();
+    let structural_source = (structural_target + 1) % phenotype.neuron_count();
+    let structural_work = source
+        .apply_v11_structural_phase(
+            handle,
+            &[CoactivationEvidence {
+                region: 0,
+                source: structural_source,
+                target: structural_target,
+                coactivation: 100,
+                eligibility: 0,
+                concept_gap_support: 0,
+            }],
+        )
+        .unwrap();
+    assert_eq!(structural_work.structural.accepted_edges, 1);
+    let source_topology = source.checkpoint_v11(handle).unwrap();
+    assert_eq!(source_topology.sparse_spans.len(), 1);
+    let source_snapshot = source.snapshot_brain(handle, Tick::ZERO).unwrap();
+    assert_eq!(
+        source_snapshot
+            .clone()
+            .into_parts()
+            .lifetime_bank_0_bits
+            .len(),
+        phenotype.budgets().global.total_synapses as usize + 1
+    );
     let write = store
         .capture_brain(
             &mut source,
@@ -120,6 +438,7 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
                 tracked_objects,
                 language_grounding: &language_grounding,
                 life_statistics: &life_statistics,
+                legacy_nano512_compatibility_receipt: None,
                 retained_learning: None,
             },
         )
@@ -132,6 +451,15 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
         GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
             .expect("required Vulkan adapter"),
         GpuSessionConsumerKind::Challenge,
+    );
+    let mut forged_legacy = write.save_state.clone();
+    forged_legacy.schema_version = GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION;
+    forged_legacy.live_structural_topology = None;
+    assert!(
+        store
+            .restore_brain(&mut target, &manifest, &forged_legacy)
+            .is_err(),
+        "a structurally divergent v6 checkpoint must not become implicit v5 state"
     );
     let restored = store
         .restore_brain(&mut target, &manifest, &write.save_state)
@@ -146,6 +474,14 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
     assert_eq!(
         restored_snapshot.canonical_digest(),
         write.checkpoint_digest
+    );
+    assert_eq!(
+        restored_snapshot.canonical_digest(),
+        source_snapshot.canonical_digest()
+    );
+    assert_eq!(
+        target.checkpoint_v11(restored.receipt.handle).unwrap(),
+        source_topology
     );
 
     fs::remove_dir_all(asset_root).unwrap();

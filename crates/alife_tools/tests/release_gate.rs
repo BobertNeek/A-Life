@@ -46,8 +46,8 @@ fn status_records_honest_gpu_product_and_scale_limits() {
     let status = read_workspace_file("docs/STATUS.md");
 
     for required in [
-        "active voxel renderer remains a save-derived projection",
-        "Pause currently stops procedural animation, not the GPU tick",
+        "renderer seeds its records from the selected save",
+        "Pause controls GPU scheduler playback in the integrated production path. Fresh real-input proof remains pending.",
         "Its promotion verdict is `Blocked`",
         "N4096 is research-only",
         "Not ready.",
@@ -113,7 +113,7 @@ fn current_docs_and_fixture_artifacts_stay_small_and_discoverable() {
         "crates/alife_world/tests/fixtures/p34/tiny_save.json",
         "crates/alife_world/tests/fixtures/p34/tiny_config.json",
         "crates/alife_world/tests/fixtures/p34/tiny_asset_manifest.json",
-        "examples/p35/playground_manifest.json",
+        "archive/legacy_true25d/examples/playground_manifest.json",
     ] {
         let path = root.join(required);
         assert!(path.is_file(), "missing release-gate artifact {required}");

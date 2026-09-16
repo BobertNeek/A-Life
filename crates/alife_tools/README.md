@@ -204,19 +204,5 @@ cargo run -p alife_tools --bin p34_persistence -- validate-manifest \
   crates/alife_world/tests/fixtures/p34
 ```
 
-## Playground/example smoke (`p35_playground`)
-
-P35 provides a headless-first playground CLI for demonstrating the integrated
-contracts without requiring graphics or GPU hardware in normal CI.
-
-```bash
-cargo run -p alife_tools --bin p35_playground -- run-headless \
-  crates/alife_world/tests/fixtures/p34
-
-cargo run -p alife_tools --bin p35_playground -- run-all \
-  crates/alife_world/tests/fixtures/p34 \
-  examples/p35/playground_manifest.json
-```
-
-Optional graphics and GPU demos remain manual. Current commands and evidence
-rules live in `docs/DEVELOPMENT.md` and `docs/EVIDENCE.md`.
+Current production launch commands and evidence rules live in
+`docs/DEVELOPMENT.md` and `docs/EVIDENCE.md`.

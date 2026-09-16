@@ -599,7 +599,7 @@ fn sensor_lanes(kind: SensorChannelKind) -> (SensorEncoderSourceGroup, u16, u16)
     }
 }
 
-fn genetic_weight(seed: u64, route: u16, source: u32, target: u32) -> f32 {
+pub(super) fn genetic_weight(seed: u64, route: u16, source: u32, target: u32) -> f32 {
     let bits =
         splitmix64(seed ^ (u64::from(route) << 48) ^ (u64::from(source) << 16) ^ u64::from(target));
     0.02 + ((bits >> 40) as f32 / ((1_u32 << 24) - 1) as f32) * 0.23

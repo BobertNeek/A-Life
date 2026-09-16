@@ -581,11 +581,13 @@ fn benchmark_tiers_cover_required_population_counts_and_manual_upper_tiers() {
 #[test]
 fn compute_budget_policy_keeps_essential_lobes_and_decimates_nonessential_first() {
     let policy = ComputeBudgetPolicy::for_tier(BrainScaleTier::Standard2048).unwrap();
-    assert!(policy.essential_lobes.contains(&LobeKind::SensoryGrounding));
-    assert!(policy.essential_lobes.contains(&LobeKind::MotorArbitration));
+    assert!(policy
+        .essential_lobes
+        .contains(&LobeKind::PerceptualIntegration));
+    assert!(policy.essential_lobes.contains(&LobeKind::ActionPlanning));
     assert!(policy
         .nonessential_lobes
-        .contains(&LobeKind::LexiconConcept));
+        .contains(&LobeKind::MultimodalAssociation));
     assert!(policy.throttling.nonessential_decimation_threshold > 0.0);
     assert!(
         policy.throttling.nonessential_decimation_threshold

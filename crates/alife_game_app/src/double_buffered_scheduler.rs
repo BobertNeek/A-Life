@@ -58,6 +58,17 @@ impl DoubleBufferedSchedulerConfig {
                 message: "CA13 scheduler config values must be nonzero",
             });
         }
+        let tick_micros = self.fixed_tick_micros();
+        if tick_micros == 0 || self.max_accumulator_micros < tick_micros {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA13 scheduler accumulator must hold at least one fixed tick",
+            });
+        }
+        if self.max_accumulator_micros / tick_micros > u64::from(u32::MAX) {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA13 scheduler accumulator tick capacity must fit u32",
+            });
+        }
         Ok(())
     }
 
@@ -165,21 +176,20 @@ impl DoubleBufferedGraphicalScheduler {
         let speed = speed_multiplier.clamp(1, S02_MAX_RUN_TICKS_PER_UPDATE);
         let frame_micros = (delta_seconds * 1_000_000.0).round() as u64;
         let added = frame_micros.saturating_mul(speed as u64);
-        self.accumulator_micros = self
-            .accumulator_micros
-            .saturating_add(added)
-            .min(self.config.max_accumulator_micros);
+        let tick_micros = self.config.fixed_tick_micros();
+        let uncapped_accumulator = self.accumulator_micros.saturating_add(added);
+        self.accumulator_micros = uncapped_accumulator.min(self.config.max_accumulator_micros);
+        let total_due = uncapped_accumulator / tick_micros;
 
-        let tick_micros = self.config.fixed_tick_micros().max(1);
         let due = (self.accumulator_micros / tick_micros) as u32;
         let ticks_to_run = due.min(self.config.max_catch_up_ticks_per_frame);
-        let catch_up_capped = due > ticks_to_run;
+        let dropped = total_due.saturating_sub(u64::from(ticks_to_run));
+        let catch_up_capped = dropped > 0;
+        self.catch_up_ticks_dropped = self.catch_up_ticks_dropped.saturating_add(dropped);
         self.accumulator_micros = self
             .accumulator_micros
             .saturating_sub(tick_micros.saturating_mul(ticks_to_run as u64));
         if catch_up_capped {
-            let remaining_due = self.accumulator_micros / tick_micros;
-            self.catch_up_ticks_dropped = self.catch_up_ticks_dropped.saturating_add(remaining_due);
             self.accumulator_micros = tick_micros.saturating_sub(1);
         }
         self.render_alpha_milli =
@@ -199,6 +209,33 @@ impl DoubleBufferedGraphicalScheduler {
             self.back_buffer = self.back_buffer.swapped();
         }
         self.validate()
+    }
+
+    pub fn preserve_unspent_planned_ticks(&mut self, count: u32) -> Result<(), GameAppShellError> {
+        let tick_micros = self.config.fixed_tick_micros().max(1);
+        self.accumulator_micros = self
+            .accumulator_micros
+            .saturating_add(tick_micros.saturating_mul(u64::from(count)))
+            .min(self.config.max_accumulator_micros);
+        self.render_alpha_milli =
+            ((self.accumulator_micros.saturating_mul(1000)) / tick_micros).min(999) as u16;
+        self.validate()
+    }
+
+    pub fn pace_planned_ticks(
+        &mut self,
+        planned_ticks: u32,
+        max_ticks_this_frame: u32,
+    ) -> Result<(u32, u32), GameAppShellError> {
+        if max_ticks_this_frame == 0 {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA13 paced tick allowance must be nonzero",
+            });
+        }
+        let ticks_to_run = planned_ticks.min(max_ticks_this_frame);
+        let deferred = planned_ticks.saturating_sub(ticks_to_run);
+        self.preserve_unspent_planned_ticks(deferred)?;
+        Ok((ticks_to_run, deferred))
     }
 
     pub fn render_alpha(&self) -> f32 {
@@ -245,77 +282,40 @@ impl DoubleBufferedGraphicalScheduler {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DoubleBufferedSchedulerSmokeSummary {
-    pub scheduler: DoubleBufferedGraphicalScheduler,
-    pub paused_ticks: u32,
-    pub sub_tick_due: u32,
-    pub fixed_tick_due: u32,
-    pub step_ticks: u32,
-    pub catch_up_ticks: u32,
-    pub frame_driven_drift_prevented: bool,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-impl DoubleBufferedSchedulerSmokeSummary {
-    pub fn validate(&self) -> Result<(), GameAppShellError> {
-        self.scheduler.validate()?;
-        if self.paused_ticks != 0
-            || self.sub_tick_due != 0
-            || self.fixed_tick_due != 1
-            || self.step_ticks != 1
-            || self.catch_up_ticks > CA13_MAX_CATCH_UP_TICKS_PER_FRAME
-            || !self.frame_driven_drift_prevented
-        {
-            return Err(GameAppShellError::VisibleWorldMismatch {
-                message: "CA13 scheduler smoke must prove fixed cadence, pause, step, and catch-up bounds",
-            });
-        }
-        Ok(())
+    #[test]
+    fn long_frame_accounts_for_ticks_discarded_by_accumulator_bound() {
+        let mut scheduler = DoubleBufferedGraphicalScheduler::default();
+
+        let plan = scheduler
+            .observe_render_frame(1.0, RuntimePlaybackState::Running, 1)
+            .unwrap();
+
+        assert_eq!(plan.ticks_to_run, 4);
+        assert!(plan.catch_up_capped);
+        assert_eq!(scheduler.catch_up_ticks_dropped, 16);
     }
-}
 
-pub fn run_double_buffered_scheduler_smoke(
-    launch: &AppShellLaunchConfig,
-) -> Result<DoubleBufferedSchedulerSmokeSummary, GameAppShellError> {
-    let mut live = LiveBrainLoop::from_p34_launch(launch)?;
-    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+    #[test]
+    fn config_rejects_an_accumulator_shorter_than_one_tick() {
+        let config = DoubleBufferedSchedulerConfig {
+            max_accumulator_micros: 49_999,
+            ..DoubleBufferedSchedulerConfig::default()
+        };
 
-    let paused = panel.scheduler.observe_render_frame(
-        1.0,
-        RuntimePlaybackState::Paused,
-        panel.run_speed_ticks,
-    )?;
-    let sub_tick = panel.scheduler.observe_render_frame(
-        0.016,
-        RuntimePlaybackState::Running,
-        panel.run_speed_ticks,
-    )?;
-    let fixed_tick = panel.scheduler.observe_render_frame(
-        0.034,
-        RuntimePlaybackState::Running,
-        panel.run_speed_ticks,
-    )?;
-    let tick_summaries = panel.apply_command(
-        &mut live,
-        RuntimeControlCommand::RunForTicks(fixed_tick.ticks_to_run),
-    )?;
-    let before_step = panel.mind_tick;
-    let step_summaries = panel.apply_command(&mut live, RuntimeControlCommand::StepOnce)?;
-    let catch_up = panel.scheduler.observe_render_frame(
-        1.0,
-        RuntimePlaybackState::Running,
-        panel.run_speed_ticks,
-    )?;
-    let summary = DoubleBufferedSchedulerSmokeSummary {
-        scheduler: panel.scheduler.clone(),
-        paused_ticks: paused.ticks_to_run,
-        sub_tick_due: sub_tick.ticks_to_run,
-        fixed_tick_due: fixed_tick.ticks_to_run,
-        step_ticks: step_summaries.len() as u32,
-        catch_up_ticks: catch_up.ticks_to_run,
-        frame_driven_drift_prevented: tick_summaries.len() == 1
-            && panel.mind_tick == before_step + 1,
-    };
-    summary.validate()?;
-    Ok(summary)
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn config_rejects_a_tick_rate_above_microsecond_resolution() {
+        let config = DoubleBufferedSchedulerConfig {
+            fixed_tick_hz: 1_000_001,
+            ..DoubleBufferedSchedulerConfig::default()
+        };
+
+        assert!(config.validate().is_err());
+    }
 }

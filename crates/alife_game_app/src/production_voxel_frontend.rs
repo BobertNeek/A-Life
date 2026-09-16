@@ -8,13 +8,13 @@ use std::fs;
 
 use crate::prelude::*;
 use crate::*;
-#[cfg(test)]
+#[cfg(all(test, feature = "gpu-runtime"))]
 use alife_core::{FoundationWeightAsset, SensorProfile};
 use alife_world::{HabitatAuthority, HabitatAuthoritySnapshot, HabitatMembership, HabitatMode};
 
 pub const PRODUCTION_VOXEL_COMMAND: &str = "production-voxel";
 pub const PRODUCTION_VOXEL_WINDOW_TITLE: &str = "A-Life Voxel Frontend";
-pub const PRODUCTION_VOXEL_RENDERER_PROFILE: &str = "voxel-backend";
+pub const PRODUCTION_VOXEL_RENDERER_PROFILE: &str = "internal-layered-grid";
 pub const PRODUCTION_VOXEL_SCENARIO_ID: &str = "production-voxel";
 pub const FVR01_RUNTIME_DIAGNOSTIC_LOG: &str =
     "target/artifacts/fvr01_production_voxel/runtime_prereq.log";
@@ -193,7 +193,7 @@ impl Fvr05ProductionUxSettings {
             camera_mode: "orthographic-isometric".to_string(),
             paused: false,
             simulation_speed: 1.0,
-            follow_selection: false,
+            follow_selection: true,
             show_menu: false,
             show_settings: false,
             show_overlays: false,
@@ -201,7 +201,11 @@ impl Fvr05ProductionUxSettings {
             selected_stable_id: None,
             source_save_path: launch.app_launch.save_path.display().to_string(),
             runtime_save_path: artifact_dir
-                .join(format!("{profile}_runtime_save.json"))
+                .join(fvr05_world_runtime_save_name(
+                    profile,
+                    &save_metadata.save_id,
+                    save_metadata.deterministic_seed,
+                ))
                 .display()
                 .to_string(),
             created_world_save_path: artifact_dir
@@ -291,6 +295,11 @@ impl Fvr05ProductionUxSettings {
             .map(|overlay| overlay.label())
             .collect()
     }
+}
+
+fn fvr05_world_runtime_save_name(profile: &str, save_id: &str, seed: u64) -> String {
+    let identity = blake3::hash(save_id.as_bytes()).to_hex();
+    format!("{profile}_{seed}_{}_runtime_save.json", &identity[..16])
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -651,21 +660,27 @@ pub struct ProductionFrontendProfileBudget {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProductionWorldSource {
+    LoadExisting,
+    NewGame { seed: u64 },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProductionVoxelLaunchConfig {
     pub manifest_path: PathBuf,
     pub scenario_id: Option<String>,
     pub app_launch: AppShellLaunchConfig,
     pub profile_id: ProductionFrontendProfileId,
+    pub world_source: ProductionWorldSource,
     pub population: Option<u16>,
     pub resolution: (u32, u32),
-    pub gpu_mode: GraphicalGpuRuntimeMode,
+    pub gpu_mode: GraphicalBrainPolicyMode,
     pub require_gpu: bool,
     pub graphics_backend: String,
     pub smoke_seconds: Option<u32>,
     pub dry_run: bool,
     pub record_performance: bool,
     pub developer_overlay: bool,
-    pub legacy_alias: bool,
     pub ui_settings_path: Option<PathBuf>,
 }
 
@@ -689,6 +704,7 @@ impl ProductionVoxelLaunchConfig {
             scenario_id: Some(selection.entry.id),
             app_launch,
             profile_id,
+            world_source: ProductionWorldSource::LoadExisting,
             population: None,
             resolution: budget.output_resolution,
             gpu_mode: GraphicalBrainPolicyMode::GpuRequired,
@@ -698,14 +714,38 @@ impl ProductionVoxelLaunchConfig {
             dry_run: false,
             record_performance: false,
             developer_overlay: false,
-            legacy_alias: false,
             ui_settings_path: None,
         })
     }
 
     pub fn effective_population(&self) -> u16 {
-        self.population
-            .unwrap_or_else(|| self.profile_id.budget().default_population)
+        self.population.unwrap_or_else(|| match self.world_source {
+            ProductionWorldSource::LoadExisting => self.profile_id.budget().default_population,
+            ProductionWorldSource::NewGame { .. } => alife_world::PHASE3_DEFAULT_POPULATION,
+        })
+    }
+
+    pub(crate) fn canonical_new_game_save_path(&self) -> Result<PathBuf, GameAppShellError> {
+        let ProductionWorldSource::NewGame { seed } = self.world_source else {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "canonical New Game save path requires the NewGame world source"
+                    .to_string(),
+            });
+        };
+        if seed == 0 {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "canonical New Game seed must be nonzero".to_string(),
+            });
+        }
+        let directory = match self.ui_settings_path.as_ref() {
+            Some(path) => path.parent().map(Path::to_path_buf).ok_or_else(|| {
+                GameAppShellError::InvalidProductionFrontend {
+                    message: "production UI settings path requires a parent directory".to_string(),
+                }
+            })?,
+            None => fvr08_launch_artifact_dir(self, FVR05_PRODUCTION_UX_SETTINGS_DIR),
+        };
+        Ok(directory.join(format!("phase3-new-game-{seed}.json")))
     }
 
     pub fn effective_graphics_backend(&self) -> Result<String, GameAppShellError> {
@@ -876,7 +916,6 @@ pub struct ProductionVoxelLaunchSummary {
     pub save_metadata: ProductionSaveMetadata,
     pub real_save_loaded: bool,
     pub mock_data_source: bool,
-    pub legacy_alias: bool,
     pub dry_run: bool,
     pub record_performance: bool,
     pub developer_overlay: bool,
@@ -1038,7 +1077,6 @@ fn fvr06_gpu_runtime_save_state(
         },
         shader_abi_versions: GpuRuntimeShaderAbiVersions {
             shader_manifest: vec![
-                "p25_static_forward:v1".to_string(),
                 "closed_loop_plasticity:v1".to_string(),
                 "p27_supertile_routing:v1".to_string(),
                 "p28_recompaction_autophagy:contract-v1".to_string(),
@@ -1175,8 +1213,8 @@ pub fn run_production_voxel_frontend_preflight(
         });
     }
 
-    let config = RuntimeConfig::from_json_file(&launch.app_launch.config_path)?;
-    config.validate()?;
+    let launch_config = RuntimeConfig::from_json_file(&launch.app_launch.config_path)?;
+    launch_config.validate()?;
     let manifest = AssetManifest::from_json_file(&launch.app_launch.asset_manifest_path)?;
     manifest.validate_with_root(&launch.app_launch.asset_root)?;
     let production_asset_manifest_path =
@@ -1185,15 +1223,27 @@ pub fn run_production_voxel_frontend_preflight(
     trace.transition(ProductionAppState::LoadAssets)?;
 
     let save = PortableSaveFile::from_json_file(&launch.app_launch.save_path)?;
-    let production_save = production_voxel_save_with_population(
-        &save,
-        &launch.app_launch.asset_root,
-        launch.profile_id,
-        population,
-    )?;
-    let gpu_runtime_state =
-        fvr06_gpu_runtime_save_state(launch, &runtime, &config, &production_save)?;
-    let production_save = production_save.with_gpu_runtime_state(gpu_runtime_state.clone())?;
+    let (config, production_save, gpu_runtime_state) = match launch.world_source {
+        ProductionWorldSource::LoadExisting => {
+            let production_save = production_voxel_save_with_population(
+                &save,
+                &launch.app_launch.asset_root,
+                launch.profile_id,
+                population,
+            )?;
+            let gpu_runtime_state =
+                fvr06_gpu_runtime_save_state(launch, &runtime, &launch_config, &production_save)?;
+            let production_save =
+                production_save.with_gpu_runtime_state(gpu_runtime_state.clone())?;
+            (launch_config, production_save, gpu_runtime_state)
+        }
+        ProductionWorldSource::NewGame { seed } => {
+            validate_exact_canonical_new_game_save(&save, seed, population)?;
+            let config = save.config.clone();
+            let gpu_runtime_state = fvr06_gpu_runtime_save_state(launch, &runtime, &config, &save)?;
+            (config, save, gpu_runtime_state)
+        }
+    };
     production_save.validate_with_asset_root(&launch.app_launch.asset_root)?;
     let gpu_gameplay_receipt = fvr06_production_gpu_gameplay_receipt(launch, &production_save)?;
     let voxel_evidence = production_voxel_backend_evidence(&production_save)?;
@@ -1305,7 +1355,6 @@ pub fn run_production_voxel_frontend_preflight(
         save_metadata,
         real_save_loaded: true,
         mock_data_source: false,
-        legacy_alias: launch.legacy_alias,
         dry_run: launch.dry_run,
         record_performance: launch.record_performance,
         developer_overlay: launch.developer_overlay,
@@ -1322,6 +1371,51 @@ pub fn validate_production_voxel_save(
     launch: &ProductionVoxelLaunchConfig,
 ) -> Result<ProductionVoxelLaunchSummary, GameAppShellError> {
     run_production_voxel_frontend_dry_run(launch)
+}
+
+fn validate_exact_canonical_new_game_save(
+    save: &PortableSaveFile,
+    requested_seed: u64,
+    requested_population: u16,
+) -> Result<(), GameAppShellError> {
+    let population = usize::from(requested_population);
+    let organism_count = save
+        .world
+        .organism_records
+        .as_ref()
+        .map(Vec::len)
+        .unwrap_or_default();
+    let agent_count = save
+        .world
+        .objects
+        .iter()
+        .filter(|object| object.kind == WorldObjectKind::Agent)
+        .count();
+    let resident_checkpoints_complete = save.creatures.iter().all(|creature| {
+        creature.gpu_brain.as_ref().is_some_and(|brain| {
+            // Current founders carry exact state. A legacy migration receipt
+            // applies only to imported legacy checkpoints, not new organisms.
+            brain.exact_cognitive_state.is_some()
+        })
+    });
+    if requested_seed == 0
+        || save.deterministic_seed != requested_seed
+        || save.config.deterministic_seed != requested_seed
+        || save.config.brain_class != alife_core::BrainScaleTier::Nano512
+        || !save.config.features.gpu_backend_enabled
+        || population == 0
+        || organism_count != population
+        || agent_count != population
+        || save.creatures.len() != population
+        || !resident_checkpoints_complete
+    {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message:
+                "canonical New Game exact save failed seed, population, or GPU admission validation"
+                    .to_string(),
+        });
+    }
+    Ok(())
 }
 
 pub(crate) fn production_voxel_save_with_population(
@@ -1581,6 +1675,7 @@ mod tests {
             scenario_id: Some(PRODUCTION_VOXEL_SCENARIO_ID.to_string()),
             app_launch,
             profile_id: ProductionFrontendProfileId::MinSpecComfort1080p,
+            world_source: ProductionWorldSource::LoadExisting,
             population: Some(30),
             resolution: (1920, 1080),
             gpu_mode: GraphicalBrainPolicyMode::GpuRequired,
@@ -1590,7 +1685,6 @@ mod tests {
             dry_run: true,
             record_performance: false,
             developer_overlay: false,
-            legacy_alias: false,
             ui_settings_path: None,
         }
     }
@@ -2005,11 +2099,23 @@ mod tests {
     #[test]
     fn fvr05_population_restore_has_complete_organism_bindings() {
         let root = gpu_alpha_fixture_root();
+        let mut config =
+            RuntimeConfig::deterministic_default(4242, alife_core::BrainScaleTier::Nano512);
+        config.features.gpu_backend_enabled = true;
+        let staged = stage_phase3_new_game(CanonicalNewGameLaunchRequest {
+            world_seed: 4242,
+            population: 4,
+            save_path: root.join("fvr05-current-canonical-not-written.json"),
+            asset_root: root.clone(),
+            config,
+            assets: AssetManifest::empty(),
+        })
+        .unwrap();
         let production = production_voxel_save_with_population(
-            &gpu_alpha_save(),
+            &staged.save,
             &root,
             ProductionFrontendProfileId::MinimumSettings30x30,
-            3,
+            4,
         )
         .unwrap();
         let restored = production.restore_headless_world().unwrap();
@@ -2035,21 +2141,23 @@ mod tests {
 
         assert_eq!(agent_ids, creature_ids);
         assert_eq!(record_ids, creature_ids);
-        assert_eq!(restored.organism_registry().len(), 3);
+        assert_eq!(restored.organism_registry().len(), 4);
         restored.validate_organism_bindings().unwrap();
+        // The default lane still proves the CPU-owned population bindings above.
+        // Exact production compiler parity belongs to the explicit GPU runtime lane.
+        #[cfg(feature = "gpu-runtime")]
         for record in restored.organism_registry().iter() {
             let age = record.age_at(restored.tick()).unwrap();
             let development = record.phenotype().development_state_at(age).unwrap();
             let compiled = if record.phenotype().brain_genome.brain_class_id
                 == alife_core::BrainCapacityClass::N512_ID
             {
-                let foundation = FoundationWeightAsset::builtin_nano512_v1(
-                    SensorProfile::PrivilegedAffordanceV1,
-                )
-                .unwrap();
+                let foundation =
+                    FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1)
+                        .unwrap();
                 let projection = alife_core::N512FounderFoundationProjection::compile(
                     record.phenotype(),
-                    SensorProfile::PrivilegedAffordanceV1,
+                    SensorProfile::GroundedObjectSlotsV1,
                     &foundation,
                 )
                 .unwrap_or_else(|error| {
@@ -2064,7 +2172,7 @@ mod tests {
                         .frozen_abi()
                         .coordinate_development_state()
                         .clone(),
-                    SensorProfile::PrivilegedAffordanceV1,
+                    SensorProfile::GroundedObjectSlotsV1,
                 )
                 .unwrap_or_else(|error| {
                     panic!(
@@ -2077,7 +2185,7 @@ mod tests {
                 crate::gpu_live_runtime::compile_gpu_components_from_genome(
                     record.phenotype().brain_genome.clone(),
                     development,
-                    SensorProfile::PrivilegedAffordanceV1,
+                    SensorProfile::GroundedObjectSlotsV1,
                 )
                 .unwrap_or_else(|error| {
                     panic!(

@@ -238,6 +238,7 @@ fn assert_rejected(root: &Path, expected: &str) {
 }
 
 #[test]
+#[ignore = "requires generated Geneforge staging; run scripts/test_geneforge_creature_recipes.py"]
 fn fixture_and_real_staged_outputs_pass_the_complete_visual_contract() {
     let fixture = fixture_staging();
     assert!(
@@ -269,6 +270,7 @@ fn fixture_and_real_staged_outputs_pass_the_complete_visual_contract() {
 }
 
 #[test]
+#[ignore = "requires generated Geneforge staging; run scripts/test_geneforge_creature_recipes.py"]
 fn staged_validator_exposes_task_5c_group_accounting_and_stable_hash_contract() {
     let validation = validate_geneforge_staging(&fixture_staging(), &fixture_recipe()).unwrap();
     assert_eq!(validation.canonical_slot_records, 180);
@@ -287,6 +289,7 @@ fn staged_validator_exposes_task_5c_group_accounting_and_stable_hash_contract() 
 }
 
 #[test]
+#[ignore = "requires generated Geneforge staging; run scripts/test_geneforge_creature_recipes.py"]
 fn staged_validator_accepts_only_complete_canonical_or_augmented_populations() {
     let canonical = workspace_path("target/artifacts/creature_parts/geneforge-staging");
     let canonical_validation =
@@ -330,6 +333,7 @@ fn staged_validator_accepts_only_complete_canonical_or_augmented_populations() {
 }
 
 #[test]
+#[ignore = "requires generated Geneforge staging; run scripts/test_geneforge_creature_recipes.py"]
 fn staged_validator_rejects_task_5c_identity_count_and_stable_hash_mutations() {
     for (name, field, replacement) in [
         ("family", "source_family_id", serde_json::json!(99)),
@@ -417,6 +421,7 @@ fn staged_validator_rejects_task_5c_identity_count_and_stable_hash_mutations() {
 }
 
 #[test]
+#[ignore = "requires generated Geneforge staging; run scripts/test_geneforge_creature_recipes.py"]
 fn staged_validator_rejects_obj_uv_normal_and_digest_corruption() {
     let source = fixture_staging();
 
@@ -481,6 +486,7 @@ fn mutate_socket_matching(
 }
 
 #[test]
+#[ignore = "requires generated Geneforge staging; run scripts/test_geneforge_creature_recipes.py"]
 fn staged_validator_rejects_bounds_sockets_landmarks_grounding_and_detachment() {
     let source = fixture_staging();
 
@@ -526,6 +532,7 @@ fn staged_validator_rejects_bounds_sockets_landmarks_grounding_and_detachment() 
 }
 
 #[test]
+#[ignore = "requires generated Geneforge staging; run scripts/test_geneforge_creature_recipes.py"]
 fn staged_validator_rejects_missing_masks_and_budget_overrun() {
     let source = fixture_staging();
 
@@ -554,6 +561,7 @@ fn staged_validator_rejects_missing_masks_and_budget_overrun() {
 }
 
 #[test]
+#[ignore = "requires generated Geneforge staging; run scripts/test_geneforge_creature_recipes.py"]
 fn staged_validator_rejects_anatomy_corruption_path_and_digest_drift() {
     let source = fixture_staging();
 
@@ -638,6 +646,7 @@ fn staged_validator_rejects_anatomy_corruption_path_and_digest_drift() {
 }
 
 #[test]
+#[ignore = "requires generated Geneforge staging; run scripts/test_geneforge_creature_recipes.py"]
 fn staged_validator_rejects_component_loss_and_asset_independent_mask_colors() {
     let source = fixture_staging();
 
@@ -710,6 +719,7 @@ fn staged_validator_rejects_component_loss_and_asset_independent_mask_colors() {
 }
 
 #[test]
+#[ignore = "requires generated Geneforge staging; run scripts/test_geneforge_creature_recipes.py"]
 fn staged_validator_binds_external_recipe_sources_importer_and_assembly_metadata() {
     let source = fixture_staging();
 
@@ -822,6 +832,7 @@ fn staged_validator_binds_external_recipe_sources_importer_and_assembly_metadata
 }
 
 #[test]
+#[ignore = "requires generated Geneforge staging; run scripts/test_geneforge_creature_recipes.py"]
 fn staged_validator_binds_each_receipt_source_to_its_exact_donor_outputs() {
     assert_receipt_source_mutation_rejected("source-stale-count", |receipt| {
         receipt["sources"][0]["asset_count"] = serde_json::json!(999);
@@ -854,6 +865,7 @@ fn staged_validator_binds_each_receipt_source_to_its_exact_donor_outputs() {
 }
 
 #[test]
+#[ignore = "requires generated Geneforge staging; run scripts/test_geneforge_creature_recipes.py"]
 fn staged_validator_requires_native_rgba8_and_filter_zero_png_rows() {
     for (name, color_type, filter) in [
         ("semantic-rgb", 2_u8, 0_u8),
@@ -908,6 +920,7 @@ fn png_validation_uses_the_locked_flate2_decoder_instead_of_handwritten_deflate(
 }
 
 #[test]
+#[ignore = "requires generated Geneforge staging; run scripts/test_geneforge_creature_recipes.py"]
 fn staged_validator_rejects_symlink_or_reparse_output_escape() {
     let root = mutation_root("symlink-output-escape");
     copy_tree(&fixture_staging(), &root);

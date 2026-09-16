@@ -799,12 +799,19 @@ fn legacy_gpu_selections_migrate_to_neural_without_runtime_switching() {
 
 #[test]
 fn legacy_policy_nested_in_portable_save_migrates_without_runtime_switching() {
+    let current_save = PortableSaveFile::from_headless_world(
+        "legacy-nested-policy",
+        &fixture_world(),
+        RuntimeConfig::deterministic_default(4242, BrainScaleTier::Nano512),
+        fixture_manifest(),
+        vec![fixture_creature()],
+    )
+    .unwrap();
     for (requested, expected) in [
         ("CpuReference", PolicyBackend::HeuristicBaseline),
         ("GpuFull", PolicyBackend::NeuralClosedLoopGpu),
     ] {
-        let mut value: serde_json::Value =
-            serde_json::from_str(include_str!("fixtures/p34/tiny_save.json")).unwrap();
+        let mut value = serde_json::to_value(&current_save).unwrap();
         let config = value
             .get_mut("config")
             .and_then(serde_json::Value::as_object_mut)
@@ -922,10 +929,17 @@ fn learning_values_and_genetic_lifetime_boundaries_validate() {
 }
 
 #[test]
-fn committed_p34_fixture_files_load_and_validate() {
+fn committed_legacy_p34_save_fails_closed_without_authoritative_v3_state() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/p34");
-    let save = PortableSaveFile::from_json_file(root.join("tiny_save.json")).unwrap();
-    save.validate_with_asset_root(&root).unwrap();
+    let error = PortableSaveFile::from_json_file(root.join("tiny_save.json")).unwrap_err();
+    assert!(matches!(
+        error,
+        PersistenceError::ArchitectureMigration(
+            alife_core::ArchitectureMigrationError::MissingAuthoritativeState {
+                field: "genetic_biochemical_graph"
+            }
+        )
+    ));
     let config = RuntimeConfig::from_json_file(root.join("tiny_config.json")).unwrap();
     config.validate().unwrap();
     assert_eq!(

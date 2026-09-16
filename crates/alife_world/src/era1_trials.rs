@@ -311,6 +311,17 @@ pub fn apply_era1_world_transition(
         return Err(ScaffoldContractError::InvalidDecisionEvidence);
     }
 
+    let mut candidate = world.clone();
+    apply_era1_world_transition_inner(manifest, transition, &mut candidate)?;
+    *world = candidate;
+    Ok(())
+}
+
+fn apply_era1_world_transition_inner(
+    manifest: &Era1TrialManifest,
+    transition: Era1WorldTransition,
+    world: &mut HeadlessWorld,
+) -> Result<(), ScaffoldContractError> {
     match (manifest.family, transition.to) {
         (Era1WorldFamily::ForagingHazardMaze, Era1TrialPhase::Delay) => {
             move_label_preserving_physical(world, OBJECT_A_LABEL, position(manifest, 2.0, 1.0))?;

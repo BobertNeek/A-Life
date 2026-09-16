@@ -1,6 +1,12 @@
 const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 4u;
+const JOINT_SELECTION_V1_MARKER:u32 = 0x4a310000u;
+fn valid_joint_motor_mode(mode:u32) -> bool {
+  let mask = mode & 255u;
+  return mode == 0u || ((mode & 0xffffff00u) == JOINT_SELECTION_V1_MARKER
+    && (mask == 1u || mask == 5u || mask == 13u || mask == 29u));
+}
 const GPU_SELECTION_RECORD_WORDS:u32 = 16u;
-const GPU_LEARNING_SCHEMA_VERSION:u32 = 1u;
+const GPU_LEARNING_SCHEMA_VERSION:u32 = 3u;
 const GPU_SLEEP_SCHEMA_VERSION:u32 = 1u;
 const SELECTOR_RECEIPT_RECORD_WORDS:u32 = 29u;
 
@@ -68,6 +74,10 @@ struct GpuDecoderWeightIndexRecord {
 struct GpuCandidateMemoryRecord {
   @align(16) candidate_index:u32, target_confidence:f32, family_confidence:f32, source_counts_packed:u32,
   target_latent:array<f32,8>, family_value:array<f32,4>,
+}
+struct GpuCognitiveProjectionRecord {
+  @align(16) schema_version:u32, candidate_index:u32, forecast_available:u32, reserved:u32,
+  values:array<f32,18>, reserved_tail:array<u32,2>,
 }
 struct GpuMemoryContextHeader {
   @align(16) schema_version:u32, class_id:u32, slot:u32, slot_generation:u32,
@@ -178,6 +188,12 @@ struct GpuReplaySynapseSpanRecord {
 }
 struct GpuWeightBankBases { lifetime:u32, fast:u32, }
 struct GpuEligibilityBankBases { recurrent:u32, decoder:u32, }
+struct GpuWeightBankPair {
+  active_bases:GpuWeightBankBases, staging_bases:GpuWeightBankBases,
+}
+struct GpuEligibilityBankPair {
+  active_bases:GpuEligibilityBankBases, staging_bases:GpuEligibilityBankBases,
+}
 
 @group(0) @binding(0) var<storage, read> brain_slots: array<GpuBrainSlotRecord>;
 @group(0) @binding(1) var<storage, read> phenotype_identities: array<GpuPhenotypeIdentityRecord>;
@@ -232,6 +248,23 @@ fn load_candidate_memory(base:u32) -> GpuCandidateMemoryRecord {
       bitcast<f32>(frame_payload_words[base+12u]),bitcast<f32>(frame_payload_words[base+13u]),
       bitcast<f32>(frame_payload_words[base+14u]),bitcast<f32>(frame_payload_words[base+15u])
     )
+  );
+}
+fn load_cognitive_projection(base:u32) -> GpuCognitiveProjectionRecord {
+  return GpuCognitiveProjectionRecord(
+    frame_payload_words[base],frame_payload_words[base+1u],frame_payload_words[base+2u],frame_payload_words[base+3u],
+    array<f32,18>(
+      bitcast<f32>(frame_payload_words[base+4u]),bitcast<f32>(frame_payload_words[base+5u]),
+      bitcast<f32>(frame_payload_words[base+6u]),bitcast<f32>(frame_payload_words[base+7u]),
+      bitcast<f32>(frame_payload_words[base+8u]),bitcast<f32>(frame_payload_words[base+9u]),
+      bitcast<f32>(frame_payload_words[base+10u]),bitcast<f32>(frame_payload_words[base+11u]),
+      bitcast<f32>(frame_payload_words[base+12u]),bitcast<f32>(frame_payload_words[base+13u]),
+      bitcast<f32>(frame_payload_words[base+14u]),bitcast<f32>(frame_payload_words[base+15u]),
+      bitcast<f32>(frame_payload_words[base+16u]),bitcast<f32>(frame_payload_words[base+17u]),
+      bitcast<f32>(frame_payload_words[base+18u]),bitcast<f32>(frame_payload_words[base+19u]),
+      bitcast<f32>(frame_payload_words[base+20u]),bitcast<f32>(frame_payload_words[base+21u])
+    ),
+    array<u32,2>(frame_payload_words[base+22u],frame_payload_words[base+23u])
   );
 }
 fn load_memory_channel_plan(base:u32) -> GpuMemoryChannelPlan {
@@ -423,6 +456,52 @@ fn inactive_eligibility_bases(
     select(brain.decoder_eligibility_offset, extension.decoder_eligibility_bank_1_offset, bank_1)
   );
 }
+
+// Parallel waking kernels need only the bank selectors and bank-one offsets.
+// Loading the complete 20-word extension and 24-word learning records in every
+// invocation turns four addresses into 44 atomic heap reads. Transaction
+// prepasses still use the complete records for validation; these helpers only
+// consume the already-validated address fields in later ordered passes.
+fn load_weight_bank_pair_direct(brain:GpuBrainSlotRecord) -> GpuWeightBankPair {
+  let extension_base = brain.extension_record_offset;
+  let fast_bank_1 = load_state_u32(extension_base + 10u);
+  let lifetime_bank_1 = load_state_u32(extension_base + 11u);
+  let learning_base = load_state_u32(extension_base + 15u);
+  let bank_1_active = load_state_u32(learning_base + 1u) == 1u;
+  return GpuWeightBankPair(
+    GpuWeightBankBases(
+      select(brain.lifetime_weight_offset, lifetime_bank_1, bank_1_active),
+      select(brain.fast_weight_offset, fast_bank_1, bank_1_active)
+    ),
+    GpuWeightBankBases(
+      select(brain.lifetime_weight_offset, lifetime_bank_1, !bank_1_active),
+      select(brain.fast_weight_offset, fast_bank_1, !bank_1_active)
+    )
+  );
+}
+
+fn direct_active_weight_bases(brain:GpuBrainSlotRecord) -> GpuWeightBankBases {
+  let banks = load_weight_bank_pair_direct(brain);
+  return banks.active_bases;
+}
+
+fn load_eligibility_bank_pair_direct(brain:GpuBrainSlotRecord) -> GpuEligibilityBankPair {
+  let extension_base = brain.extension_record_offset;
+  let recurrent_bank_1 = load_state_u32(extension_base + 8u);
+  let decoder_bank_1 = load_state_u32(extension_base + 9u);
+  let learning_base = load_state_u32(extension_base + 15u);
+  let bank_1_active = load_state_u32(learning_base + 2u) == 1u;
+  return GpuEligibilityBankPair(
+    GpuEligibilityBankBases(
+      select(brain.recurrent_eligibility_offset, recurrent_bank_1, bank_1_active),
+      select(brain.decoder_eligibility_offset, decoder_bank_1, bank_1_active)
+    ),
+    GpuEligibilityBankBases(
+      select(brain.recurrent_eligibility_offset, recurrent_bank_1, !bank_1_active),
+      select(brain.decoder_eligibility_offset, decoder_bank_1, !bank_1_active)
+    )
+  );
+}
 fn sparse_selector_request_spans_valid(header:GpuPerceptionHeader) -> bool {
   if (header.reserved == 0u) { return true; }
   let frame_word_count = arrayLength(&frame_payload_words);
@@ -467,7 +546,7 @@ fn validate_slice_a_slot(slot_index:u32, header:GpuPerceptionHeader) -> bool {
     && header.active_activation_side <= 1u
     && slot.extension_record_offset != 0xffffffffu
     && state_span_within(slot.extension_record_offset, 20u)
-    && slot.reserved[0] == 0u && slot.reserved[1] == 0u && slot.reserved[2] == 0u
+    && valid_joint_motor_mode(slot.reserved[0]) && slot.reserved[1] == 0u && slot.reserved[2] == 0u
     && (header.dispatch_generation_lo != 0u || header.dispatch_generation_hi != 0u)
     && selector_span_valid;
   if (!valid) { return false; }

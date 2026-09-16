@@ -349,7 +349,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
         println!("{}", production_asset_validation_receipt()?);
         return Ok(());
     }
-    if command != PRODUCTION_VOXEL_COMMAND && command != "graphical-playground" {
+    if command != PRODUCTION_VOXEL_COMMAND {
         return Err(format!("unknown command: {command}\n{}", help()));
     }
     if rest
@@ -359,15 +359,14 @@ fn run(args: Vec<String>) -> Result<(), String> {
         println!("{}", help());
         return Ok(());
     }
-    let legacy_alias = command == "graphical-playground";
-    let launch = parse_launch(rest, legacy_alias)?;
+    let launch = parse_launch(rest)?;
     let summary = if launch.dry_run {
         run_production_voxel_frontend_dry_run(&launch).map_err(|error| error.to_string())?
     } else {
         run_graphical(&launch)?
     };
     println!(
-        "A-Life production voxel profile={} population={} backend={} adapter={} authoritative={} signature={}",
+        "A-Life production voxel profile={} population={} backend={} adapter={} gpu_prereq_ready={} signature={}",
         summary.profile_id.label(),
         summary.effective_population,
         summary.diagnostics.selected_backend,
@@ -375,9 +374,6 @@ fn run(args: Vec<String>) -> Result<(), String> {
         summary.diagnostics.authoritative,
         summary.signature_line(),
     );
-    if legacy_alias {
-        println!("legacy_alias=true routed_to={PRODUCTION_VOXEL_COMMAND}");
-    }
     Ok(())
 }
 
@@ -417,10 +413,7 @@ fn production_asset_validation_receipt() -> Result<String, String> {
     ))
 }
 
-fn parse_launch(
-    args: &[String],
-    legacy_alias: bool,
-) -> Result<ProductionVoxelLaunchConfig, String> {
+fn parse_launch(args: &[String]) -> Result<ProductionVoxelLaunchConfig, String> {
     let mut manifest = default_environment_manifest_path();
     let mut scenario = None::<String>;
     let mut profile = ProductionFrontendProfileId::default();
@@ -433,6 +426,8 @@ fn parse_launch(
     let mut require_gpu = false;
     let mut developer_overlay = false;
     let mut ui_settings_path = None;
+    let mut new_game = false;
+    let mut seed = None;
     let mut index = 0;
     while index < args.len() {
         match args[index].as_str() {
@@ -454,6 +449,18 @@ fn parse_launch(
                     value(args, index, "--population")?
                         .parse()
                         .map_err(|_| "--population must be an unsigned integer".to_string())?,
+                );
+                index += 2;
+            }
+            "--new-game" => {
+                new_game = true;
+                index += 1;
+            }
+            "--seed" => {
+                seed = Some(
+                    value(args, index, "--seed")?
+                        .parse::<u64>()
+                        .map_err(|_| "--seed must be an unsigned integer".to_string())?,
                 );
                 index += 2;
             }
@@ -499,18 +506,19 @@ fn parse_launch(
                 developer_overlay = true;
                 index += 1;
             }
-            "--view-mode" if legacy_alias => {
-                index += 2;
-            }
-            unknown if legacy_alias && !unknown.starts_with("--") => {
-                index += 1;
-            }
             unknown => return Err(format!("unknown production option: {unknown}")),
         }
     }
     let mut launch =
         ProductionVoxelLaunchConfig::from_manifest(&manifest, scenario.as_deref(), profile)
             .map_err(|error| error.to_string())?;
+    launch.world_source = match (new_game, seed) {
+        (true, Some(seed)) if seed != 0 => alife_game_app::ProductionWorldSource::NewGame { seed },
+        (true, Some(_)) => return Err("--seed must be nonzero".to_string()),
+        (true, None) => return Err("--new-game requires --seed".to_string()),
+        (false, Some(_)) => return Err("--seed requires --new-game".to_string()),
+        (false, None) => alife_game_app::ProductionWorldSource::LoadExisting,
+    };
     launch.population = population;
     if let Some(resolution) = resolution {
         launch.resolution = resolution;
@@ -521,7 +529,6 @@ fn parse_launch(
     launch.record_performance = record_performance;
     launch.require_gpu = require_gpu;
     launch.developer_overlay = developer_overlay;
-    launch.legacy_alias = legacy_alias;
     launch.ui_settings_path = ui_settings_path;
     Ok(launch)
 }
@@ -975,13 +982,26 @@ fn run_graphical(
 
 fn help() -> String {
     format!(
-        "{PRODUCTION_VOXEL_COMMAND} [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --seed N --output PATH\n{GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks 64|10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1\n{GPU_CLOSED_LOOP_SOAK_COMMAND} --class n512|n1024|n2048 --ticks 10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|b|c|d --input PATH\n{GPU_CLOSED_LOOP_PROMOTION_COMMAND} --slice-a PATH (x3) --slice-b PATH (x3) --slice-c PATH (x6) --slice-d PATH (x6) --benchmark PATH --gates PATH --output PATH\n{GPU_CLOSED_LOOP_GATE_SEAL_COMMAND} --capture PATH --gate-script PATH --adapter-evidence PATH --output PATH\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
+        "{PRODUCTION_VOXEL_COMMAND} [--manifest PATH] [--scenario ID] [--new-game --seed N] [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--ui-settings PATH] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --seed N --output PATH\n{GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks 64|10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1\n{GPU_CLOSED_LOOP_SOAK_COMMAND} --class n512|n1024|n2048 --ticks 10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|b|c|d --input PATH\n{GPU_CLOSED_LOOP_PROMOTION_COMMAND} --slice-a PATH (x3) --slice-b PATH (x3) --slice-c PATH (x6) --slice-d PATH (x6) --benchmark PATH --gates PATH --output PATH\n{GPU_CLOSED_LOOP_GATE_SEAL_COMMAND} --capture PATH --gate-script PATH --adapter-evidence PATH --output PATH\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn production_cli_parses_canonical_new_game() {
+        let args = ["--new-game", "--population", "6", "--seed", "240824"].map(str::to_string);
+
+        let launch = parse_launch(&args).unwrap();
+
+        assert!(matches!(
+            launch.world_source,
+            alife_game_app::ProductionWorldSource::NewGame { seed: 240_824 }
+        ));
+        assert_eq!(launch.effective_population(), 6);
+    }
 
     #[test]
     fn production_asset_validation_command_remains_available() {
@@ -1184,7 +1204,7 @@ mod tests {
         assert!(parse_gpu_memory_grounding(&output_override).is_err());
     }
 
-    #[cfg(feature = "gpu-runtime")]
+    #[cfg(feature = "gpu-tests")]
     #[test]
     fn parse_gpu_closed_loop_soak_cli_requires_exact_slice_d_contract() {
         let args = [

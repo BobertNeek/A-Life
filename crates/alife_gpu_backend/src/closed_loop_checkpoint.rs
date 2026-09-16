@@ -6,29 +6,419 @@
 use std::mem::size_of;
 
 use alife_core::{
-    compute_gpu_sleep_output_weight_digest, ActionId, BoundedReplayBatch, BrainPhenotype,
-    CandidateActionFamily, CandidateFeatureDigest, CanonicalDigestBuilder, ConsolidationIntent,
-    ConsolidationStagedOutput, GpuConsolidationRequest, LearningSequenceGuard, OrganismId,
-    OutcomeCreditReplayKey, PerceptionFrameDigest, PhenotypeGrowthMigration, PhenotypeHash,
-    ScaffoldContractError, SchemaVersions, Tick, Validate,
+    compute_gpu_sleep_output_weight_digest, ActionId, BoundedReplayBatch, BrainCapacityClass,
+    BrainPhenotype, CandidateActionFamily, CandidateFeatureDigest, CanonicalDigestBuilder,
+    ConsolidationIntent, ConsolidationStagedOutput, GpuConsolidationRequest, LearningSequenceGuard,
+    OrganismId, OutcomeCreditReplayKey, PerceptionFrameDigest, PhenotypeGrowthMigration,
+    PhenotypeHash, ScaffoldContractError, SchemaVersions, Tick, Validate,
 };
 use bytemuck::Zeroable;
 
 use crate::{
     build_sleep_upload, eligibility_reset_digest, map_gpu_contract_error,
     pack_candidate_index_and_family, replay_reset_digest, reset_word_count, sleep_commit_key,
-    GpuBrainHandle, GpuClosedLoopBackend, GpuPendingEligibilityRecord, GpuReplayEventRecord,
+    GpuBrainHandle, GpuClosedLoopBackend, GpuExactPopulationCaptureRowV1,
+    GpuLiveTopologyCheckpointV1, GpuPendingEligibilityRecord, GpuReplayEventRecord,
     GpuReplaySynapseSpanRecord, GpuSleepCompletionRecord, GpuSleepJobState, GpuSleepStagingReceipt,
-    GpuSlotLearningStateRecord, PendingEligibilityIdentity, PendingEligibilityReceipt,
+    GpuSlotLearningStateRecord, GpuV11Checkpoint, PendingEligibilityIdentity,
+    PendingEligibilityReceipt,
 };
 
 pub const GPU_BRAIN_CHECKPOINT_SCHEMA_VERSION: u16 = 1;
+pub const GPU_COMPACT_CHECKPOINT_AUTHORITY_SCHEMA_VERSION: u16 = 1;
 
 const CHECKPOINT_DIGEST_DOMAIN: &[u8] = b"alife.gpu.brain-checkpoint.v1";
 const COMPLETED_STAGING_DIGEST_DOMAIN: &[u8] = b"alife.gpu.completed-sleep-staging.v1";
 const REPLAY_EVENT_WORDS: usize = size_of::<GpuReplayEventRecord>() / 4;
 const LEARNING_STATE_WORDS: usize = size_of::<GpuSlotLearningStateRecord>() / 4;
 const SLEEP_DIAGNOSTIC_Q12: f32 = 4096.0;
+
+#[derive(Debug, Clone, Copy)]
+struct ResidentLearningStateIdentity {
+    active_weight_generation: u64,
+    active_weight_bank: u8,
+    active_eligibility_generation: u64,
+    inactive_eligibility_generation: u64,
+    active_eligibility_bank: u8,
+    replay_journal_generation: u64,
+    replay_journal_cursor: u32,
+    replay_journal_event_count: u32,
+    transaction_generation: u64,
+}
+
+fn learning_state_identity_matches(
+    state: &GpuSlotLearningStateRecord,
+    expected: ResidentLearningStateIdentity,
+) -> bool {
+    join_pair([
+        state.active_weight_generation_lo,
+        state.active_weight_generation_hi,
+    ]) == expected.active_weight_generation
+        && state.active_weight_bank == u32::from(expected.active_weight_bank)
+        && join_pair([
+            state.active_eligibility_generation_lo,
+            state.active_eligibility_generation_hi,
+        ]) == expected.active_eligibility_generation
+        && join_pair([
+            state.inactive_eligibility_generation_lo,
+            state.inactive_eligibility_generation_hi,
+        ]) == expected.inactive_eligibility_generation
+        && state.active_eligibility_bank == u32::from(expected.active_eligibility_bank)
+        && join_pair([state.replay_generation_lo, state.replay_generation_hi])
+            == expected.replay_journal_generation
+        && state.replay_cursor == expected.replay_journal_cursor
+        && state.replay_event_count == expected.replay_journal_event_count
+        && join_pair([
+            state.transaction_generation_lo,
+            state.transaction_generation_hi,
+        ]) == expected.transaction_generation
+}
+
+#[cfg(test)]
+fn learning_state_record_for_test(
+    identity: ResidentLearningStateIdentity,
+) -> GpuSlotLearningStateRecord {
+    let mut state = GpuSlotLearningStateRecord::zeroed();
+    [
+        state.active_weight_generation_lo,
+        state.active_weight_generation_hi,
+    ] = split_pair(identity.active_weight_generation);
+    state.active_weight_bank = u32::from(identity.active_weight_bank);
+    [
+        state.active_eligibility_generation_lo,
+        state.active_eligibility_generation_hi,
+    ] = split_pair(identity.active_eligibility_generation);
+    [
+        state.inactive_eligibility_generation_lo,
+        state.inactive_eligibility_generation_hi,
+    ] = split_pair(identity.inactive_eligibility_generation);
+    state.active_eligibility_bank = u32::from(identity.active_eligibility_bank);
+    [state.replay_generation_lo, state.replay_generation_hi] =
+        split_pair(identity.replay_journal_generation);
+    state.replay_cursor = identity.replay_journal_cursor;
+    state.replay_event_count = identity.replay_journal_event_count;
+    [
+        state.transaction_generation_lo,
+        state.transaction_generation_hi,
+    ] = split_pair(identity.transaction_generation);
+    state
+}
+
+/// Decodes one immutable row produced by the nonblocking population capture.
+/// No live backend state is consulted after submission.
+pub fn decode_exact_population_capture_row(
+    row: &GpuExactPopulationCaptureRowV1,
+    checkpoint_tick: Tick,
+    capacity: &BrainCapacityClass,
+) -> Result<(GpuLiveTopologyCheckpointV1, GpuBrainCheckpointSnapshot), ScaffoldContractError> {
+    let identity = row.identity();
+    if row.brain_slot.record().slot != identity.slot
+        || row.brain_slot.record().slot_generation != identity.slot_generation
+        || row.brain_slot.record().class_id != u32::from(identity.class_id.raw())
+        || row.brain_slot.identity().phenotype_hash
+            != split_checkpoint_digest(identity.phenotype_hash.0)
+    {
+        return Err(ScaffoldContractError::BrainOwnershipMismatch);
+    }
+    let upload = row.fixed_slot_upload()?;
+    let topology = upload
+        .live_topology_checkpoint(identity.phenotype_hash, identity.v11.clone())
+        .map_err(map_gpu_contract_error)?;
+    topology.validate_for_capacity(capacity)?;
+    let words = bytemuck::try_cast_slice::<u8, u32>(row.mutable_state_bytes())
+        .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+    let base = row.ranges.mutable_state_words.start;
+    let state: GpuSlotLearningStateRecord =
+        record_from_range(words, base, &row.ranges.layout.learning_state_words)?;
+    let active_weight_generation = join_pair([
+        state.active_weight_generation_lo,
+        state.active_weight_generation_hi,
+    ]);
+    let active_eligibility_generation = join_pair([
+        state.active_eligibility_generation_lo,
+        state.active_eligibility_generation_hi,
+    ]);
+    let inactive_eligibility_generation = join_pair([
+        state.inactive_eligibility_generation_lo,
+        state.inactive_eligibility_generation_hi,
+    ]);
+    let replay_generation = join_pair([state.replay_generation_lo, state.replay_generation_hi]);
+    let transaction_generation = join_pair([
+        state.transaction_generation_lo,
+        state.transaction_generation_hi,
+    ]);
+    if state.schema_version != u32::from(SchemaVersions::CURRENT.learning.raw())
+        || state.active_weight_bank != u32::from(identity.active_weight_bank)
+        || state.active_eligibility_bank != u32::from(identity.active_eligibility_bank)
+        || active_weight_generation != identity.active_weight_generation
+        || active_eligibility_generation != identity.active_eligibility_generation
+        || inactive_eligibility_generation != identity.inactive_eligibility_generation
+        || replay_generation != identity.replay_journal_generation
+        || state.replay_cursor != identity.replay_journal_cursor
+        || state.replay_event_count != identity.replay_journal_event_count
+        || transaction_generation != identity.transaction_generation
+        || state.replay_event_capacity == 0
+        || state.replay_event_capacity > 65_536
+        || state.replay_span_count == 0
+        || state.replay_sample_capacity
+            != state
+                .replay_event_capacity
+                .checked_mul(state.replay_span_count)
+                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?
+    {
+        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+    }
+    let pending = match (
+        row.pending_eligibility,
+        row.pending_eligibility_record,
+        state.pending_valid,
+    ) {
+        (Some(receipt), Some(record), 1) => {
+            let gpu_record: GpuPendingEligibilityRecord =
+                record_from_range(words, base, &row.ranges.layout.pending_eligibility_words)?;
+            if gpu_record != record
+                || PendingEligibilityReceipt::from_gpu_record(
+                    gpu_record,
+                    identity.slot,
+                    identity.organism_id,
+                    identity.phenotype_hash,
+                )?
+                .with_joint_selection(receipt.identity().joint_selection())?
+                    != receipt
+            {
+                return Err(ScaffoldContractError::LearningEvidenceMismatch);
+            }
+            validate_pending_joint_payload(
+                receipt,
+                words,
+                base,
+                &row.ranges.layout.speech_payload_words,
+            )?;
+            Some(pending_parts_from_receipt(receipt)?)
+        }
+        (None, None, 0) => None,
+        _ => return Err(ScaffoldContractError::LearningEvidenceMismatch),
+    };
+    let neuron_count = row.brain_slot.record().neuron_count as usize;
+    let recurrent_count = row.brain_slot.record().recurrent_synapse_count as usize;
+    let synapse_count = row.brain_slot.record().synapse_count as usize;
+    let decoder_count = synapse_count
+        .checked_sub(recurrent_count)
+        .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+    let parts = GpuBrainCheckpointParts {
+        schema_version: GPU_BRAIN_CHECKPOINT_SCHEMA_VERSION,
+        organism_id: identity.organism_id,
+        phenotype_hash: identity.phenotype_hash,
+        checkpoint_tick,
+        active_activation_side: identity.active_activation_side,
+        logical_dispatch_generation: identity.logical_dispatch_generation,
+        activation_a_bits: exact_bits(
+            words,
+            base,
+            &row.ranges.layout.activation_a_words,
+            neuron_count,
+        )?,
+        activation_b_bits: exact_bits(
+            words,
+            base,
+            &row.ranges.layout.activation_b_words,
+            neuron_count,
+        )?,
+        neuron_homeostasis_bits: exact_bits(
+            words,
+            base,
+            &row.ranges.layout.homeostasis_words,
+            neuron_count * 2,
+        )?,
+        active_weight_generation,
+        active_weight_bank: state.active_weight_bank as u8,
+        lifetime_bank_0_bits: exact_bits(
+            words,
+            base,
+            &row.ranges.layout.lifetime_weight_words,
+            synapse_count,
+        )?,
+        lifetime_bank_1_bits: exact_bits(
+            words,
+            base,
+            &row.ranges.layout.lifetime_weight_bank_1_words,
+            synapse_count,
+        )?,
+        fast_bank_0_bits: exact_bits(
+            words,
+            base,
+            &row.ranges.layout.fast_weight_words,
+            synapse_count,
+        )?,
+        fast_bank_1_bits: exact_bits(
+            words,
+            base,
+            &row.ranges.layout.fast_weight_bank_1_words,
+            synapse_count,
+        )?,
+        active_eligibility_generation,
+        inactive_eligibility_generation,
+        active_eligibility_bank: state.active_eligibility_bank as u8,
+        learning_transaction_generation: transaction_generation,
+        recurrent_eligibility_bank_0_bits: exact_bits(
+            words,
+            base,
+            &row.ranges.layout.recurrent_eligibility_words,
+            recurrent_count,
+        )?,
+        recurrent_eligibility_bank_1_bits: exact_bits(
+            words,
+            base,
+            &row.ranges.layout.recurrent_eligibility_bank_1_words,
+            recurrent_count,
+        )?,
+        decoder_eligibility_bank_0_bits: exact_bits(
+            words,
+            base,
+            &row.ranges.layout.decoder_eligibility_words,
+            decoder_count,
+        )?,
+        decoder_eligibility_bank_1_bits: exact_bits(
+            words,
+            base,
+            &row.ranges.layout.decoder_eligibility_bank_1_words,
+            decoder_count,
+        )?,
+        replay_journal_generation: replay_generation,
+        replay_journal_cursor: state.replay_cursor,
+        replay_journal_event_count: state.replay_event_count,
+        replay_events: records_from_range(
+            words,
+            base,
+            &row.ranges.layout.replay_event_words,
+            state.replay_event_capacity as usize,
+        )?,
+        replay_spans: records_from_range(
+            words,
+            base,
+            &row.ranges.layout.replay_span_words,
+            state.replay_span_count as usize,
+        )?,
+        replay_samples: exact_bits(
+            words,
+            base,
+            &row.ranges.layout.replay_sample_words,
+            state.replay_sample_capacity as usize,
+        )?,
+        last_learning_replay_key: row.last_learning_replay_key,
+        pending_eligibility: pending,
+    };
+    Ok((topology, GpuBrainCheckpointSnapshot::try_from_parts(parts)?))
+}
+
+pub fn decode_exact_population_sleep_replay(
+    row: &GpuExactPopulationCaptureRowV1,
+    checkpoint_tick: Tick,
+    capacity: &BrainCapacityClass,
+) -> Result<BoundedReplayBatch, ScaffoldContractError> {
+    let (_, snapshot) = decode_exact_population_capture_row(row, checkpoint_tick, capacity)?;
+    let parts = snapshot.into_parts();
+    crate::closed_loop_sleep::replay_batch_from_checkpoint_parts(
+        &parts,
+        row.brain_slot.record().synapse_count,
+    )
+}
+
+pub fn decode_exact_population_completed_sleep_staging(
+    row: &GpuExactPopulationCaptureRowV1,
+    checkpoint_tick: Tick,
+    capacity: &BrainCapacityClass,
+    request: &GpuConsolidationRequest,
+    staged: &ConsolidationStagedOutput,
+) -> Result<GpuCompletedSleepStagingParts, ScaffoldContractError> {
+    request.validate_contract()?;
+    let captured_job = row
+        .completed_sleep()
+        .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+    if captured_job.request != *request
+        || captured_job.receipt.handle.organism_id() != row.identity().organism_id
+        || captured_job.receipt.staged != *staged
+        || captured_job.restored_completed
+    {
+        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+    }
+    let (_, snapshot) = decode_exact_population_capture_row(row, checkpoint_tick, capacity)?;
+    let parts = snapshot.into_parts();
+    let words = bytemuck::try_cast_slice::<u8, u32>(row.mutable_state_bytes())
+        .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+    let base = row.ranges.mutable_state_words.start;
+    let state: GpuSlotLearningStateRecord =
+        record_from_range(words, base, &row.ranges.layout.learning_state_words)?;
+    let completion: GpuSleepCompletionRecord =
+        record_from_absolute_start(words, base, row.ranges.layout.diagnostic_words.start)?;
+    if completion.schema_version != 1
+        || completion.slot != row.identity().slot
+        || completion.slot_generation != row.identity().slot_generation
+        || completion.status != 1
+        || join_pair(completion.input_generation) != request.input_generation
+        || join_pair(completion.output_generation) != staged.output_generation
+        || completion.output_weight_bank != u32::from(staged.output_weight_bank)
+        || completion.replay_span_count != state.replay_span_count
+        || join_pair(completion.job_id) != staged.job_id.raw()
+        || completion.reserved != [0; 2]
+    {
+        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+    }
+    let replay_spans = parts
+        .replay_spans
+        .iter()
+        .map(|span| GpuReplaySynapseSpanRecord {
+            local_synapse_id: span.local_synapse_id,
+            sample_start: span.sample_start,
+            sample_count: 0,
+            reserved: 0,
+        })
+        .collect::<Vec<_>>();
+    let staging = GpuCompletedSleepStagingInputParts {
+        output_weight_generation: staged.output_generation,
+        output_weight_bank: staged.output_weight_bank,
+        lifetime_bank_0_bits: parts.lifetime_bank_0_bits,
+        lifetime_bank_1_bits: parts.lifetime_bank_1_bits,
+        fast_bank_0_bits: parts.fast_bank_0_bits,
+        fast_bank_1_bits: parts.fast_bank_1_bits,
+        eligibility_reset_generation: staged.eligibility_reset_generation,
+        output_eligibility_bank: staged.output_eligibility_bank,
+        recurrent_eligibility_bank_0_bits: vec![0; parts.recurrent_eligibility_bank_0_bits.len()],
+        recurrent_eligibility_bank_1_bits: vec![0; parts.recurrent_eligibility_bank_1_bits.len()],
+        decoder_eligibility_bank_0_bits: vec![0; parts.decoder_eligibility_bank_0_bits.len()],
+        decoder_eligibility_bank_1_bits: vec![0; parts.decoder_eligibility_bank_1_bits.len()],
+        replay_journal_generation: staged.replay_journal_generation,
+        replay_journal_cursor: staged.replay_journal_cursor,
+        replay_journal_event_count: staged.replay_journal_event_count,
+        replay_events: vec![GpuReplayEventRecord::zeroed(); parts.replay_events.len()],
+        replay_spans,
+        replay_samples: vec![0; parts.replay_samples.len()],
+    };
+    validate_completed_staging_against(
+        captured_job.receipt.handle,
+        request,
+        staged,
+        &staging,
+        row.brain_slot.record().synapse_count as usize,
+        row.brain_slot.record().recurrent_synapse_count as usize,
+        (row.brain_slot.record().synapse_count - row.brain_slot.record().recurrent_synapse_count)
+            as usize,
+    )?;
+    GpuCompletedSleepStagingParts::try_from_parts(staging)
+}
+
+const fn split_checkpoint_digest(values: [u64; 4]) -> [u32; 8] {
+    [
+        values[0] as u32,
+        (values[0] >> 32) as u32,
+        values[1] as u32,
+        (values[1] >> 32) as u32,
+        values[2] as u32,
+        (values[2] >> 32) as u32,
+        values[3] as u32,
+        (values[3] >> 32) as u32,
+    ]
+}
 
 /// Bounded post-dispatch readback used only by causal evidence collection.
 ///
@@ -47,6 +437,7 @@ pub struct GpuCandidateLogitEvidenceSnapshot {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PendingEligibilityRestoreParts {
+    joint_selection: Option<alife_core::JointActionSelectionV1>,
     dispatch_generation: u64,
     originating_tick: Tick,
     frame_digest: PerceptionFrameDigest,
@@ -59,7 +450,102 @@ pub struct PendingEligibilityRestoreParts {
     staging_eligibility_generation: u64,
 }
 
+/// Versioned scalar identity for reusing an already-published exact neural
+/// checkpoint. It binds every mutable GPU bank/generation/side plus the exact
+/// pending-learning and V11 topology authority, without reading neural buffers.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GpuCompactCheckpointAuthorityV1 {
+    schema_version: u16,
+    active_activation_side: u8,
+    logical_dispatch_generation: u64,
+    active_weight_generation: u64,
+    active_weight_bank: u8,
+    active_eligibility_generation: u64,
+    inactive_eligibility_generation: u64,
+    active_eligibility_bank: u8,
+    replay_journal_generation: u64,
+    replay_journal_cursor: u32,
+    replay_journal_event_count: u32,
+    transaction_generation: u64,
+    last_learning_replay_key: Option<OutcomeCreditReplayKey>,
+    pending_eligibility: Option<PendingEligibilityRestoreParts>,
+    v11: GpuV11Checkpoint,
+}
+
+impl GpuCompactCheckpointAuthorityV1 {
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_new(
+        active_activation_side: u8,
+        logical_dispatch_generation: u64,
+        active_weight_generation: u64,
+        active_weight_bank: u8,
+        active_eligibility_generation: u64,
+        inactive_eligibility_generation: u64,
+        active_eligibility_bank: u8,
+        replay_journal_generation: u64,
+        replay_journal_cursor: u32,
+        replay_journal_event_count: u32,
+        transaction_generation: u64,
+        last_learning_replay_key: Option<OutcomeCreditReplayKey>,
+        pending_eligibility: Option<PendingEligibilityRestoreParts>,
+        v11: GpuV11Checkpoint,
+    ) -> Result<Self, ScaffoldContractError> {
+        if active_activation_side > 1
+            || logical_dispatch_generation == 0
+            || active_weight_generation == 0
+            || active_weight_bank > 1
+            || active_eligibility_generation == 0
+            || (inactive_eligibility_generation != 0
+                && active_eligibility_generation.checked_add(1)
+                    != Some(inactive_eligibility_generation))
+            || active_eligibility_bank > 1
+            || replay_journal_generation == 0
+            || transaction_generation == 0
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        Ok(Self {
+            schema_version: GPU_COMPACT_CHECKPOINT_AUTHORITY_SCHEMA_VERSION,
+            active_activation_side,
+            logical_dispatch_generation,
+            active_weight_generation,
+            active_weight_bank,
+            active_eligibility_generation,
+            inactive_eligibility_generation,
+            active_eligibility_bank,
+            replay_journal_generation,
+            replay_journal_cursor,
+            replay_journal_event_count,
+            transaction_generation,
+            last_learning_replay_key,
+            pending_eligibility,
+            v11,
+        })
+    }
+}
+
 impl PendingEligibilityRestoreParts {
+    pub const fn joint_selection(self) -> Option<alife_core::JointActionSelectionV1> {
+        self.joint_selection
+    }
+    pub fn with_joint_selection(
+        mut self,
+        joint: Option<alife_core::JointActionSelectionV1>,
+    ) -> Result<Self, ScaffoldContractError> {
+        if let Some(proof) = joint {
+            proof.validate()?;
+            if !proof.candidate_slots().contains(
+                &(self
+                    .candidate_index
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?),
+            ) {
+                return Err(ScaffoldContractError::LearningEvidenceMismatch);
+            }
+        }
+        self.joint_selection = joint;
+        Ok(self)
+    }
     #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         dispatch_generation: u64,
@@ -74,7 +560,8 @@ impl PendingEligibilityRestoreParts {
         staging_eligibility_generation: u64,
     ) -> Result<Self, ScaffoldContractError> {
         action_id.validate()?;
-        if dispatch_generation == 0
+        if usize::from(candidate_index) >= alife_core::MAX_ACTION_CANDIDATES
+            || dispatch_generation == 0
             || frame_digest == PerceptionFrameDigest([0; 4])
             || active_activation_side > 1
             || candidate_feature_digest == CandidateFeatureDigest([0; 2])
@@ -85,6 +572,7 @@ impl PendingEligibilityRestoreParts {
         }
         Ok(Self {
             dispatch_generation,
+            joint_selection: None,
             originating_tick,
             frame_digest,
             active_activation_side,
@@ -148,6 +636,10 @@ impl PendingEligibilityRestoreParts {
         write_digest2(digest, self.candidate_feature_digest.0);
         digest.write_u64(self.active_eligibility_generation);
         digest.write_u64(self.staging_eligibility_generation);
+        if let Some(joint) = self.joint_selection {
+            digest.write_bytes(b"alife.pending-joint-action.v1");
+            joint.write_canonical(digest);
+        }
     }
 }
 
@@ -1119,7 +1611,8 @@ fn pending_parts_from_receipt(
         identity.candidate_feature_digest(),
         identity.active_eligibility_generation(),
         identity.staging_eligibility_generation(),
-    )
+    )?
+    .with_joint_selection(identity.joint_selection())
 }
 
 fn restored_pending_record(
@@ -1148,10 +1641,79 @@ fn restored_pending_record(
         handle.organism_id(),
         handle.phenotype_hash(),
     )?;
+    let receipt = receipt.with_joint_selection(pending.joint_selection())?;
     Ok((record, receipt))
 }
 
 impl GpuClosedLoopBackend {
+    /// Captures the exact backend-owned scalar authority used to validate a
+    /// journal-only sleep transition. This reads host metadata only.
+    pub fn compact_checkpoint_authority(
+        &mut self,
+        handle: GpuBrainHandle,
+    ) -> Result<GpuCompactCheckpointAuthorityV1, ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let bucket = self
+            .class_buckets
+            .get(&handle.class_id().raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .bucket_for_handle(handle)?;
+        let resident = bucket.slots[handle.slot() as usize]
+            .as_ref()
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let active_activation_side = bucket
+            .pipelines
+            .slot_active_side(handle.slot(), handle.generation())
+            .map_err(map_gpu_contract_error)?;
+        let pending_eligibility = resident
+            .pending_eligibility
+            .map(pending_parts_from_receipt)
+            .transpose()?;
+        GpuCompactCheckpointAuthorityV1::try_new(
+            active_activation_side,
+            resident.logical_dispatch_generation,
+            resident.active_weight_generation,
+            resident.active_weight_bank,
+            resident.active_eligibility_generation,
+            resident.inactive_eligibility_generation,
+            resident.active_eligibility_bank,
+            resident.replay_journal_generation,
+            resident.replay_journal_cursor,
+            resident.replay_journal_event_count,
+            resident.transaction_generation,
+            resident.learning_sequence_guard.last_committed(),
+            pending_eligibility,
+            resident.v11.checkpoint(),
+        )
+    }
+
+    /// Validates that compact persistence still names the exact backend-owned
+    /// neural authority captured by the last bulk checkpoint. This reads only
+    /// resident host metadata and never maps a GPU buffer.
+    pub fn validate_compact_checkpoint_authority(
+        &mut self,
+        handle: GpuBrainHandle,
+        expected: &GpuCompactCheckpointAuthorityV1,
+    ) -> Result<(), ScaffoldContractError> {
+        let current = self.compact_checkpoint_authority(handle)?;
+        let bucket = self
+            .class_buckets
+            .get(&handle.class_id().raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .bucket_for_handle(handle)?;
+        let resident = bucket.slots[handle.slot() as usize]
+            .as_ref()
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        if current != *expected
+            || resident.pending_eligibility.is_some()
+                != resident.pending_eligibility_record.is_some()
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        Ok(())
+    }
+
     /// Reads the bounded candidate-logit row for an exact pending GPU
     /// transaction. This is an offline evidence/checkpoint boundary, never a
     /// gameplay arbitration path.
@@ -1246,7 +1808,7 @@ impl GpuClosedLoopBackend {
     ) -> Result<GpuBrainCheckpointSnapshot, ScaffoldContractError> {
         self.ensure_ready()?;
         self.validate_handle_backend(handle)?;
-        let (brain_slot, ranges, resident_state, active_side) = {
+        let (brain_slot, ranges, resident_state, learning_identity, active_side) = {
             let bucket = self
                 .class_buckets
                 .get(&handle.class_id().raw())
@@ -1263,17 +1825,22 @@ impl GpuClosedLoopBackend {
                 resident.brain_slot.clone(),
                 resident.ranges.clone(),
                 (
-                    resident.active_weight_generation,
-                    resident.active_weight_bank,
-                    resident.active_eligibility_generation,
-                    resident.active_eligibility_bank,
-                    resident.replay_journal_generation,
-                    resident.transaction_generation,
                     resident.logical_dispatch_generation,
                     resident.learning_sequence_guard.last_committed(),
                     resident.pending_eligibility,
                     resident.pending_eligibility_record,
                 ),
+                ResidentLearningStateIdentity {
+                    active_weight_generation: resident.active_weight_generation,
+                    active_weight_bank: resident.active_weight_bank,
+                    active_eligibility_generation: resident.active_eligibility_generation,
+                    inactive_eligibility_generation: resident.inactive_eligibility_generation,
+                    active_eligibility_bank: resident.active_eligibility_bank,
+                    replay_journal_generation: resident.replay_journal_generation,
+                    replay_journal_cursor: resident.replay_journal_cursor,
+                    replay_journal_event_count: resident.replay_journal_event_count,
+                    transaction_generation: resident.transaction_generation,
+                },
                 side,
             )
         };
@@ -1301,12 +1868,7 @@ impl GpuClosedLoopBackend {
         if state.schema_version != u32::from(SchemaVersions::CURRENT.learning.raw())
             || state.active_weight_bank > 1
             || state.active_eligibility_bank > 1
-            || active_weight_generation != resident_state.0
-            || state.active_weight_bank != u32::from(resident_state.1)
-            || active_eligibility_generation != resident_state.2
-            || state.active_eligibility_bank != u32::from(resident_state.3)
-            || replay_generation != resident_state.4
-            || transaction_generation != resident_state.5
+            || !learning_state_identity_matches(&state, learning_identity)
             || state.replay_event_capacity == 0
             || state.replay_event_capacity > 65_536
             || state.replay_span_count == 0
@@ -1318,7 +1880,7 @@ impl GpuClosedLoopBackend {
         {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
         }
-        let pending = match (resident_state.8, resident_state.9, state.pending_valid) {
+        let pending = match (resident_state.2, resident_state.3, state.pending_valid) {
             (Some(receipt), Some(record), 1) => {
                 let gpu_record: GpuPendingEligibilityRecord =
                     record_from_range(&words, base, &ranges.layout.pending_eligibility_words)?;
@@ -1328,10 +1890,18 @@ impl GpuClosedLoopBackend {
                         handle.slot(),
                         handle.organism_id(),
                         handle.phenotype_hash(),
-                    )? != receipt
+                    )?
+                    .with_joint_selection(receipt.identity().joint_selection())?
+                        != receipt
                 {
                     return Err(ScaffoldContractError::LearningEvidenceMismatch);
                 }
+                validate_pending_joint_payload(
+                    receipt,
+                    &words,
+                    base,
+                    &ranges.layout.speech_payload_words,
+                )?;
                 Some(pending_parts_from_receipt(receipt)?)
             }
             (None, None, 0) => None,
@@ -1349,7 +1919,7 @@ impl GpuClosedLoopBackend {
             phenotype_hash: handle.phenotype_hash(),
             checkpoint_tick,
             active_activation_side: active_side,
-            logical_dispatch_generation: resident_state.6,
+            logical_dispatch_generation: resident_state.0,
             activation_a_bits: exact_bits(
                 &words,
                 base,
@@ -1443,7 +2013,7 @@ impl GpuClosedLoopBackend {
                 &ranges.layout.replay_sample_words,
                 state.replay_sample_capacity as usize,
             )?,
-            last_learning_replay_key: resident_state.7,
+            last_learning_replay_key: resident_state.1,
             pending_eligibility: pending,
         };
         GpuBrainCheckpointSnapshot::try_from_parts(parts)
@@ -1468,6 +2038,40 @@ impl GpuClosedLoopBackend {
         }
         let handle = self.insert_brain(organism_id, phenotype)?;
         let restore = self.restore_brain_inner(handle, parts, checkpoint_digest);
+        if restore.is_err() {
+            let _ = self.remove_brain(handle);
+        }
+        restore
+    }
+
+    /// Restores lifetime structural topology before applying the matching
+    /// mutable neural banks. Any failure removes the partially admitted slot.
+    pub fn restore_brain_with_live_topology(
+        &mut self,
+        organism_id: OrganismId,
+        phenotype: BrainPhenotype,
+        topology: GpuLiveTopologyCheckpointV1,
+        request: GpuBrainRestoreRequest,
+    ) -> Result<GpuBrainRestoreReceipt, ScaffoldContractError> {
+        self.ensure_ready()?;
+        let snapshot = request.into_snapshot();
+        snapshot.validate()?;
+        let checkpoint_digest = snapshot.canonical_digest();
+        let parts = snapshot.into_parts();
+        if organism_id != parts.organism_id
+            || phenotype.phenotype_hash() != parts.phenotype_hash
+            || phenotype.neuron_count() as usize != parts.activation_a_bits.len()
+            || topology.neuron_count != phenotype.neuron_count()
+            || topology.phenotype_hash != phenotype.phenotype_hash()
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())?;
+        topology.validate_for_capacity(&capacity)?;
+        let handle = self.insert_brain(organism_id, phenotype)?;
+        let restore = self
+            .restore_live_topology_checkpoint(handle, &topology)
+            .and_then(|()| self.restore_brain_inner(handle, parts, checkpoint_digest));
         if restore.is_err() {
             let _ = self.remove_brain(handle);
         }
@@ -1627,6 +2231,22 @@ impl GpuClosedLoopBackend {
             }
             None => (GpuPendingEligibilityRecord::zeroed(), None),
         };
+        let joint_words = pending_receipt
+            .and_then(|receipt| receipt.identity().joint_selection())
+            .map(|joint| crate::pack_joint_motor_candidates(joint.candidate_slots()))
+            .unwrap_or([0; 2]);
+        let restored_speech_words = [0, 0, joint_words[0], joint_words[1]];
+        let restored_learning_sequence_guard = LearningSequenceGuard::restore_validated(
+            handle.organism_id(),
+            handle.phenotype_hash(),
+            parts.last_learning_replay_key,
+        )?;
+        let next_dispatch_generation = self.next_dispatch_generation.max(
+            parts
+                .logical_dispatch_generation
+                .checked_add(1)
+                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?,
+        );
         let mut state = initialized_state;
         state.active_weight_bank = u32::from(parts.active_weight_bank);
         state.active_eligibility_bank = u32::from(parts.active_eligibility_bank);
@@ -1715,6 +2335,10 @@ impl GpuClosedLoopBackend {
                 &ranges.layout.replay_sample_words,
                 parts.replay_samples.as_slice(),
             ),
+            (
+                &ranges.layout.speech_payload_words,
+                restored_speech_words.as_slice(),
+            ),
             (&ranges.layout.learning_state_words, state.words()),
             (
                 &ranges.layout.pending_eligibility_words,
@@ -1722,6 +2346,18 @@ impl GpuClosedLoopBackend {
             ),
         ] {
             write_exact_prefix(&self.queue, buffer, range, words)?;
+        }
+        let submission = self.queue.submit(std::iter::empty());
+        if self
+            .device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            })
+            .is_err()
+        {
+            self.mark_device_lost();
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
         {
             let bucket = self
@@ -1743,31 +2379,18 @@ impl GpuClosedLoopBackend {
             resident.active_weight_generation = parts.active_weight_generation;
             resident.active_weight_bank = parts.active_weight_bank;
             resident.active_eligibility_generation = parts.active_eligibility_generation;
+            resident.inactive_eligibility_generation = parts.inactive_eligibility_generation;
             resident.active_eligibility_bank = parts.active_eligibility_bank;
             resident.replay_journal_generation = parts.replay_journal_generation;
+            resident.replay_journal_cursor = parts.replay_journal_cursor;
+            resident.replay_journal_event_count = parts.replay_journal_event_count;
             resident.transaction_generation = parts.learning_transaction_generation;
             resident.logical_dispatch_generation = parts.logical_dispatch_generation;
-            resident.learning_sequence_guard = LearningSequenceGuard::restore_validated(
-                handle.organism_id(),
-                handle.phenotype_hash(),
-                parts.last_learning_replay_key,
-            )?;
+            resident.learning_sequence_guard = restored_learning_sequence_guard;
             resident.pending_eligibility = pending_receipt;
             resident.pending_eligibility_record = pending_receipt.map(|_| pending_record);
         }
-        self.next_dispatch_generation = self.next_dispatch_generation.max(
-            parts
-                .logical_dispatch_generation
-                .checked_add(1)
-                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?,
-        );
-        let submission = self.queue.submit(std::iter::empty());
-        self.device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(submission),
-                timeout: None,
-            })
-            .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?;
+        self.next_dispatch_generation = next_dispatch_generation;
         Ok(GpuBrainRestoreReceipt {
             handle,
             pending_eligibility: pending_receipt,
@@ -2290,3 +2913,54 @@ fn write_words_at_offset(
 
 const _: () = assert!(LEARNING_STATE_WORDS == 24);
 const _: () = assert!(REPLAY_EVENT_WORDS == 28);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn learning_state_identity_includes_inactive_generation_and_replay_position() {
+        let expected = ResidentLearningStateIdentity {
+            active_weight_generation: 3,
+            active_weight_bank: 1,
+            active_eligibility_generation: 5,
+            inactive_eligibility_generation: 6,
+            active_eligibility_bank: 0,
+            replay_journal_generation: 7,
+            replay_journal_cursor: 8,
+            replay_journal_event_count: 9,
+            transaction_generation: 10,
+        };
+        let mut state = learning_state_record_for_test(expected);
+        assert!(learning_state_identity_matches(&state, expected));
+
+        state.inactive_eligibility_generation_lo += 1;
+        assert!(!learning_state_identity_matches(&state, expected));
+        state = learning_state_record_for_test(expected);
+        state.replay_cursor += 1;
+        assert!(!learning_state_identity_matches(&state, expected));
+        state = learning_state_record_for_test(expected);
+        state.replay_event_count += 1;
+        assert!(!learning_state_identity_matches(&state, expected));
+    }
+}
+
+fn validate_pending_joint_payload(
+    receipt: PendingEligibilityReceipt,
+    words: &[u32],
+    base: u32,
+    range: &std::ops::Range<u32>,
+) -> Result<(), ScaffoldContractError> {
+    let payload = local_slice(words, base, range)?;
+    let packed = payload
+        .get(2..4)
+        .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
+    if let Some(joint) = receipt.identity().joint_selection() {
+        if packed != crate::pack_joint_motor_candidates(joint.candidate_slots()) {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
+    } else if packed[1] & 0xffff_0000 == crate::GPU_JOINT_SELECTION_V1_MARKER {
+        return Err(ScaffoldContractError::LearningEvidenceMismatch);
+    }
+    Ok(())
+}

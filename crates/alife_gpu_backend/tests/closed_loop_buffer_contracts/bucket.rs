@@ -197,10 +197,10 @@ fn every_slice_a_mutable_pool_has_the_exact_word_length_and_offset() {
     assert_eq!(ranges.encoded_input_words.len(), neuron_count);
     assert_eq!(ranges.candidate_logit_words.len(), MAX_ACTION_CANDIDATES);
     assert_eq!(ranges.diagnostic_words.len(), 4);
-    assert_eq!(ranges.selection_words.len(), 12);
+    assert_eq!(ranges.selection_words.len(), 16);
     assert_eq!(
         (ranges.diagnostic_words.len() + ranges.selection_words.len()) * 4,
-        64
+        80
     );
     assert_pairwise_disjoint(&mutable_ranges(ranges));
 
@@ -407,6 +407,7 @@ fn plan_ranges(ranges: &alife_gpu_backend::GpuSlotWordRanges) -> Vec<Range<u32>>
         ranges.decoder_eligibility_metadata_words.clone(),
         ranges.replay_plan_identity_words.clone(),
         ranges.sleep_parameter_words.clone(),
+        ranges.dendritic_branch_words.clone(),
     ]
 }
 
@@ -428,6 +429,7 @@ fn mutable_ranges(ranges: &alife_gpu_backend::GpuSlotWordRanges) -> Vec<Range<u3
         ranges.candidate_logit_words.clone(),
         ranges.diagnostic_words.clone(),
         ranges.selection_words.clone(),
+        ranges.speech_payload_words.clone(),
         ranges.extension_words.clone(),
         ranges.learning_state_words.clone(),
         ranges.pending_eligibility_words.clone(),

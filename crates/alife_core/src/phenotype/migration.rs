@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    ActivationFunction, BrainGenome, CandidateActionFamily, LobeKind, LobeLayout,
+    ActivationFunction, BrainGenome, CandidateActionFamily, LobeKind, LobeLayout, LobeRegion,
     ScaffoldContractError, CANDIDATE_FEATURE_COUNT,
 };
 
@@ -29,7 +29,31 @@ impl N4096ResearchLayoutV1 {
     pub const MEMORY_DECODER_SYNAPSE_COUNT: u32 = 8_192;
 
     pub fn lobe_layout() -> Result<LobeLayout, ScaffoldContractError> {
-        LobeLayout::reference_for_neuron_count(Self::NEURON_COUNT)
+        // Growth doubles each frozen N2048 v2 lobe. This preserves every
+        // persistent source address and gives each old neuron one dormant peer.
+        let regions_and_lengths = [
+            (LobeKind::PerceptualIntegration, 512),
+            (LobeKind::InteroceptiveMotivational, 256),
+            (LobeKind::SocialCommunication, 512),
+            (LobeKind::MultimodalAssociation, 512),
+            (LobeKind::TemporalPredictive, 896),
+            (LobeKind::MemoryInterface, 512),
+            (LobeKind::WorkingContextExecutive, 256),
+            (LobeKind::ActionPlanning, 448),
+            (LobeKind::FlexibleReserve, 192),
+        ];
+        let mut cursor = 0_u32;
+        let mut regions = Vec::with_capacity(LobeKind::ALL.len());
+        for (kind, len) in regions_and_lengths {
+            regions.push(LobeRegion::enabled(kind, cursor, len));
+            cursor += len;
+        }
+        if cursor != Self::NEURON_COUNT {
+            return Err(ScaffoldContractError::LobeTotalMismatch);
+        }
+        let layout = LobeLayout { regions };
+        layout.validate_for_neuron_count(Self::NEURON_COUNT)?;
+        Ok(layout)
     }
 }
 
@@ -85,24 +109,35 @@ impl PhenotypeGrowthMigration {
             source.sensor_profile(),
         )?;
 
-        let source_to_target_neurons = source
-            .persistent_address_map()
-            .neurons()
-            .iter()
-            .map(|entry| {
-                packed_neuron_for_address(
-                    &target_layout,
-                    entry.address().lobe,
-                    entry.address().ordinal,
-                )
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        // Persistent-address entries are ordered canonically by address, not
+        // by packed neuron index. Build the receipt as an actual packed-index
+        // lookup table so physical lobe order cannot silently rebind neurons.
+        let mut source_to_target_neurons = vec![u32::MAX; source.neuron_count() as usize];
+        for entry in source.persistent_address_map().neurons() {
+            let source_index = entry.packed_index() as usize;
+            let target_index = packed_neuron_for_address(
+                &target_layout,
+                entry.address().lobe,
+                entry.address().ordinal,
+            )?;
+            let mapped = source_to_target_neurons
+                .get_mut(source_index)
+                .ok_or_else(compile_error)?;
+            if *mapped != u32::MAX {
+                return Err(compile_error());
+            }
+            *mapped = target_index;
+        }
+        if source_to_target_neurons.contains(&u32::MAX) {
+            return Err(compile_error());
+        }
         let mut source_to_target_synapses = vec![u32::MAX; source.synapses().len()];
         let mut projections = Vec::with_capacity(source.projections().len());
         let mut synapses = Vec::with_capacity(65_536);
         let mut receipts = Vec::with_capacity(source.projections().len());
 
-        for projection in source.projections().iter().take(16) {
+        let recurrent_route_count = crate::N2048FoundationLayoutV1::route_specs().len();
+        for projection in source.projections().iter().take(recurrent_route_count) {
             let route = projection.route_index();
             let start = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
             let (source_start, source_len) = projection.synapse_range();
@@ -173,7 +208,10 @@ impl PhenotypeGrowthMigration {
             receipts.push(route_receipt(route, active_tiles, len, 0, 0));
         }
 
-        let action_projection = source.projections().get(16).ok_or_else(compile_error)?;
+        let action_projection = source
+            .projections()
+            .get(recurrent_route_count)
+            .ok_or_else(compile_error)?;
         let action_route = action_projection.route_index();
         let action_start = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
         let target_motor = target_layout
@@ -299,7 +337,14 @@ impl PhenotypeGrowthMigration {
         ));
         receipts.push(route_receipt(action_route, 0, 0, action_len, 0));
 
-        let memory_projection = source.projections().get(17).ok_or_else(compile_error)?;
+        let memory_projection = source
+            .projections()
+            .get(
+                recurrent_route_count
+                    .checked_add(1)
+                    .ok_or_else(compile_error)?,
+            )
+            .ok_or_else(compile_error)?;
         let memory_route = memory_projection.route_index();
         let memory_start = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
         let source_episodic_len = source

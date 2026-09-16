@@ -10,6 +10,59 @@ use alife_world::{
 
 const ORGANISM: OrganismId = OrganismId(1);
 
+fn assert_grounded_horizontal_bearing(offset: Vec3f, expected: [f32; 2]) {
+    let observer = Vec3f::new(1.0, 0.25, -2.0);
+    let target = Vec3f::new(
+        observer.x + offset.x,
+        observer.y + offset.y,
+        observer.z + offset.z,
+    );
+    let mut world = HeadlessScenarioBuilder::new(4_309)
+        .agent("agent", ORGANISM, observer)
+        .food("object", target, 0.6)
+        .build()
+        .unwrap();
+    let frame = grounded_draft(&mut world, Tick::new(5));
+    let slot = frame.grounded_object_slots()[0];
+    for (actual, expected) in slot.bearing.into_iter().zip(expected) {
+        assert!(
+            actual.is_finite() && (actual - expected).abs() < 1e-6,
+            "offset={offset:?}, bearing={:?}, expected lane={expected}",
+            slot.bearing
+        );
+    }
+    let candidate = frame
+        .candidates()
+        .iter()
+        .find(|c| c.family == CandidateActionFamily::Ingest)
+        .unwrap();
+    assert_eq!(&candidate.features.0[..2], &slot.bearing);
+}
+
+#[test]
+fn grounded_horizontal_bearing_distinguishes_xz_cardinals_and_diagonals() {
+    for (offset, expected) in [
+        (Vec3f::new(0.0, 0.0, 1.0), [1.0, 0.0]),
+        (Vec3f::new(0.0, 0.0, -1.0), [-1.0, 0.0]),
+        (Vec3f::new(1.0, 0.0, 0.0), [0.0, 1.0]),
+        (Vec3f::new(-1.0, 0.0, 0.0), [0.0, -1.0]),
+        (Vec3f::new(3.0, 0.0, 4.0), [0.8, 0.6]),
+        (Vec3f::new(-3.0, 0.0, 4.0), [0.8, -0.6]),
+        (Vec3f::new(3.0, 0.0, -4.0), [-0.8, 0.6]),
+        (Vec3f::new(-3.0, 0.0, -4.0), [-0.8, -0.6]),
+    ] {
+        assert_grounded_horizontal_bearing(offset, expected);
+    }
+}
+
+#[test]
+fn grounded_horizontal_bearing_ignores_height_and_has_finite_zero_xz_fallback() {
+    for height in [2.0, -2.0, 0.0] {
+        assert_grounded_horizontal_bearing(Vec3f::new(0.0, height, 0.0), [0.0, 1.0]);
+        assert_grounded_horizontal_bearing(Vec3f::new(3.0, height, 4.0), [0.8, 0.6]);
+    }
+}
+
 fn cyan_bitter() -> GroundedPhysicalProperties {
     GroundedPhysicalProperties {
         velocity: Vec3f::ZERO,
@@ -165,7 +218,7 @@ fn sixteen_slots_yield_five_complete_family_groups_and_never_a_partial_group() {
         builder = builder
             .food(
                 &label,
-                Vec3f::new(angle.cos() * 4.0, angle.sin() * 4.0, 0.0),
+                Vec3f::new(angle.cos() * 4.0, 0.0, angle.sin() * 4.0),
                 0.5,
             )
             .grounded_physical(&label, cyan_bitter());

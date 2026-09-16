@@ -231,10 +231,10 @@ fn perception_digest_golden_vectors_are_stable() {
     assert_eq!(
         draft.base_digest(),
         PerceptionBaseDigest([
-            0xa536_86af_bdc3_60f9,
-            0xf9d1_213d_bebd_c2fa,
-            0xe4e8_24ec_7d6f_da40,
-            0x142b_8309_b05a_5799,
+            0x6b11_4ec9_966f_5670,
+            0x05d3_72a0_66cc_da9a,
+            0x1b72_20b0_62c7_b2b1,
+            0x9aef_45ff_ca30_0f6c,
         ])
     );
 
@@ -260,10 +260,10 @@ fn perception_digest_golden_vectors_are_stable() {
     assert_eq!(
         frame.frame_digest(),
         PerceptionFrameDigest([
-            0xdc56_7e80_f842_ed7a,
-            0x5f57_f9df_8703_345d,
-            0x0fe8_5463_c661_8bbb,
-            0xe3f0_e2d4_86c2_eb59,
+            0x29f7_96eb_9d18_6eaf,
+            0x0973_6f1a_3718_1ebc,
+            0x2a95_7e94_21ef_c249,
+            0x6b22_7390_0d3a_daa6,
         ])
     );
 }

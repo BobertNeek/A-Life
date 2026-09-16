@@ -1,15 +1,192 @@
 //! Canonical no-action scheduler cycle before the GPU consolidation driver is wired.
+use alife_core::sleep::{SleepWorkReceipt, SleepWorkStatus};
 use alife_core::{
-    ConsolidationDriverEvent, ConsolidationIntent, ConsolidationJobId, ConsolidationStagedOutput,
+    BiochemistryState, BrainCapacityClass, ConsolidationDriverEvent, ConsolidationIntent,
+    ConsolidationJobId, ConsolidationStagedOutput, CreatureGenome, FoundationGeneticIdentity,
     GpuConsolidationRequest, HomeostaticParameters, HomeostaticSnapshot, NormalizedScalar,
-    PhenotypeHash, SleepConsolidationConfig, SleepPhase, Tick,
-    GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
+    OrganismId, PhenotypeHash, ScaffoldContractError, SleepConsolidationConfig, SleepPhase,
+    SleepState, Tick, Validate, WorldEntityId, GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
+    SLEEP_CONSOLIDATION_SCHEMA_VERSION,
 };
-use alife_runtime::{GpuSleepConsolidationDriver, GpuSleepScheduler};
+use alife_runtime::{GpuSleepConsolidationDriver, GpuSleepScheduler, SleepWorkDue};
+use alife_world::WorldOrganismRecord;
 
-#[derive(Default)]
 struct RecordingConsolidationDriver {
     intents: Vec<ConsolidationIntent>,
+    expected_organism_id: OrganismId,
+    has_phase_data: bool,
+    phase_data_queries: u32,
+    bounded_calls: u32,
+    persisted_replay_event_count: Option<u32>,
+}
+
+struct StructuralBeforePendingDriver {
+    calls: Vec<&'static str>,
+    replay_digest: [u64; 4],
+}
+
+struct OneShotSleepWorkDriver {
+    bounded_calls: u32,
+    replay_digest: [u64; 4],
+}
+
+struct StaleSleepWorkReceiptDriver;
+
+impl OneShotSleepWorkDriver {
+    fn new() -> Self {
+        Self {
+            bounded_calls: 0,
+            replay_digest: [101, 102, 103, 104],
+        }
+    }
+}
+
+impl GpuSleepConsolidationDriver for OneShotSleepWorkDriver {
+    fn progress(
+        &mut self,
+        _organism_id: OrganismId,
+        state: SleepState,
+        intent: Option<ConsolidationIntent>,
+    ) -> Result<Option<ConsolidationDriverEvent>, ScaffoldContractError> {
+        if let Some(intent) = intent {
+            return Ok(Some(ConsolidationDriverEvent::ReplayAssetPersisted {
+                intent,
+                replay_digest: self.replay_digest,
+                replay_event_count: 1,
+                replay_eligibility_sample_count: 1,
+            }));
+        }
+        if let alife_core::ConsolidationState::Pending {
+            intent,
+            replay_digest,
+            replay_event_count,
+            replay_eligibility_sample_count,
+        } = state.consolidation
+        {
+            let mut request = GpuConsolidationRequest {
+                schema_version: GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
+                request_flags: 0,
+                cycle_id: intent.cycle_id,
+                phenotype_hash: PhenotypeHash([21, 22, 23, 24]),
+                input_generation: 1,
+                expected_output_generation: 2,
+                input_digest: [31, 32, 33, 34],
+                replay_digest,
+                max_replay_events: replay_event_count,
+                max_replay_eligibility_samples: replay_eligibility_sample_count,
+                request_digest: [0; 4],
+            };
+            request.request_digest = request.recompute_request_digest()?;
+            return Ok(Some(ConsolidationDriverEvent::Prepared { request }));
+        }
+        Ok(None)
+    }
+
+    fn run_bounded_sleep_transaction(
+        &mut self,
+        _organism_id: OrganismId,
+        _state: SleepState,
+        _homeostasis: &HomeostaticSnapshot,
+        tick: Tick,
+        _due_work: SleepWorkDue,
+    ) -> Result<Option<SleepWorkReceipt>, ScaffoldContractError> {
+        self.bounded_calls += 1;
+        Ok(Some(StructuralBeforePendingDriver::skipped_receipt(tick)))
+    }
+}
+
+impl StructuralBeforePendingDriver {
+    fn new() -> Self {
+        Self {
+            calls: Vec::new(),
+            replay_digest: [1, 2, 3, 4],
+        }
+    }
+
+    fn skipped_receipt(tick: Tick) -> SleepWorkReceipt {
+        let mut receipt = SleepWorkReceipt {
+            schema_version: SLEEP_CONSOLIDATION_SCHEMA_VERSION,
+            tick,
+            status: SleepWorkStatus::SkippedLowPressure,
+            fatigue: NormalizedScalar::new(0.0).unwrap(),
+            sleep_pressure: NormalizedScalar::new(0.0).unwrap(),
+            replay_digest: [0; 4],
+            replay_event_count: 0,
+            replay_eligibility_sample_count: 0,
+            promoted_memory_ids: Vec::new(),
+            predictor_update_count: 0,
+            concept: None,
+            work_units: 0,
+            canonical_digest: [0; 4],
+        };
+        receipt.canonical_digest = receipt.recompute_canonical_digest().unwrap();
+        receipt.validate_contract().unwrap();
+        receipt
+    }
+}
+
+impl GpuSleepConsolidationDriver for StructuralBeforePendingDriver {
+    fn progress(
+        &mut self,
+        _organism_id: OrganismId,
+        _state: SleepState,
+        intent: Option<ConsolidationIntent>,
+    ) -> Result<Option<ConsolidationDriverEvent>, ScaffoldContractError> {
+        let Some(intent) = intent else {
+            return Ok(None);
+        };
+        self.calls.push("ReplayAssetPersisted");
+        Ok(Some(ConsolidationDriverEvent::ReplayAssetPersisted {
+            intent,
+            replay_digest: self.replay_digest,
+            replay_event_count: 1,
+            replay_eligibility_sample_count: 1,
+        }))
+    }
+
+    fn run_bounded_sleep_transaction(
+        &mut self,
+        _organism_id: OrganismId,
+        _state: SleepState,
+        _homeostasis: &HomeostaticSnapshot,
+        tick: Tick,
+        due_work: SleepWorkDue,
+    ) -> Result<Option<SleepWorkReceipt>, ScaffoldContractError> {
+        assert!(due_work.contains(SleepWorkDue::STRUCTURAL_GROWTH_PRUNING));
+        self.calls.push("bounded-structural-work");
+        self.replay_digest = [11, 12, 13, 14];
+        Ok(Some(Self::skipped_receipt(tick)))
+    }
+}
+
+impl GpuSleepConsolidationDriver for StaleSleepWorkReceiptDriver {
+    fn progress(
+        &mut self,
+        _organism_id: OrganismId,
+        _state: SleepState,
+        _intent: Option<ConsolidationIntent>,
+    ) -> Result<Option<ConsolidationDriverEvent>, ScaffoldContractError> {
+        Ok(None)
+    }
+
+    fn run_bounded_sleep_transaction(
+        &mut self,
+        _organism_id: OrganismId,
+        _state: SleepState,
+        _homeostasis: &HomeostaticSnapshot,
+        _tick: Tick,
+        _due_work: SleepWorkDue,
+    ) -> Result<Option<SleepWorkReceipt>, ScaffoldContractError> {
+        Ok(Some(StructuralBeforePendingDriver::skipped_receipt(
+            Tick::ZERO,
+        )))
+    }
+}
+
+impl Default for RecordingConsolidationDriver {
+    fn default() -> Self {
+        Self::with_phase_data(OrganismId(1), true)
+    }
 }
 
 #[derive(Default)]
@@ -41,6 +218,17 @@ impl GpuSleepConsolidationDriver for FailFirstIntentDriver {
 }
 
 impl RecordingConsolidationDriver {
+    fn with_phase_data(expected_organism_id: OrganismId, has_phase_data: bool) -> Self {
+        Self {
+            intents: Vec::new(),
+            expected_organism_id,
+            has_phase_data,
+            phase_data_queries: 0,
+            bounded_calls: 0,
+            persisted_replay_event_count: None,
+        }
+    }
+
     fn intents(&self) -> &[ConsolidationIntent] {
         &self.intents
     }
@@ -53,14 +241,16 @@ impl GpuSleepConsolidationDriver for RecordingConsolidationDriver {
         state: alife_core::SleepState,
         intent: Option<ConsolidationIntent>,
     ) -> Result<Option<ConsolidationDriverEvent>, alife_core::ScaffoldContractError> {
-        assert_eq!(organism_id, alife_core::OrganismId(1));
+        assert_eq!(organism_id, self.expected_organism_id);
         if let Some(intent) = intent {
             self.intents.push(intent);
+            let replay_event_count = u32::from(self.has_phase_data);
+            self.persisted_replay_event_count = Some(replay_event_count);
             return Ok(Some(ConsolidationDriverEvent::ReplayAssetPersisted {
                 intent,
                 replay_digest: [11, 12, 13, 14],
-                replay_event_count: 1,
-                replay_eligibility_sample_count: 1,
+                replay_event_count,
+                replay_eligibility_sample_count: replay_event_count,
             }));
         }
         let event = match state.consolidation {
@@ -123,6 +313,27 @@ impl GpuSleepConsolidationDriver for RecordingConsolidationDriver {
         };
         Ok(Some(event))
     }
+
+    fn run_bounded_sleep_transaction(
+        &mut self,
+        _organism_id: OrganismId,
+        _state: SleepState,
+        _homeostasis: &HomeostaticSnapshot,
+        _tick: Tick,
+        _due_work: SleepWorkDue,
+    ) -> Result<Option<SleepWorkReceipt>, ScaffoldContractError> {
+        self.bounded_calls += 1;
+        Ok(None)
+    }
+
+    fn has_bounded_sleep_phase_data(
+        &mut self,
+        _organism_id: OrganismId,
+        _state: SleepState,
+    ) -> Result<bool, ScaffoldContractError> {
+        self.phase_data_queries += 1;
+        Ok(self.has_phase_data)
+    }
 }
 
 fn fatigued_homeostasis(tick: Tick) -> HomeostaticSnapshot {
@@ -131,6 +342,222 @@ fn fatigued_homeostasis(tick: Tick) -> HomeostaticSnapshot {
     let mut hormones = alife_core::EndocrineSnapshot::baseline();
     hormones.sleep_pressure = 0.99;
     HomeostaticSnapshot::new(tick, drives, hormones).unwrap()
+}
+
+fn newborn_record(organism_id: u64) -> WorldOrganismRecord {
+    let genome = CreatureGenome::early_mammal_founder(
+        0xE11_0000 + organism_id,
+        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+    )
+    .unwrap();
+    let phenotype = genome.express().unwrap();
+    WorldOrganismRecord::newborn(
+        OrganismId(organism_id),
+        WorldEntityId(100 + organism_id),
+        genome,
+        phenotype,
+        Tick::ZERO,
+    )
+    .unwrap()
+}
+
+fn awake_record(organism_id: u64) -> WorldOrganismRecord {
+    awake_record_with_energy(organism_id, 1.0)
+}
+
+fn awake_record_with_energy(organism_id: u64, energy: f32) -> WorldOrganismRecord {
+    let genome = CreatureGenome::early_mammal_founder(
+        0xE12_0000 + organism_id,
+        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+    )
+    .unwrap();
+    let phenotype = genome.express().unwrap();
+    let adult_tick = Tick::new(u64::from(phenotype.development.maturation_duration_ticks));
+    let mut biochemistry =
+        BiochemistryState::new_with_age(&phenotype, adult_tick, adult_tick).unwrap();
+    biochemistry.body.set_energy(energy).unwrap();
+    WorldOrganismRecord::new(
+        OrganismId(organism_id),
+        WorldEntityId(200 + organism_id),
+        genome,
+        phenotype,
+        biochemistry,
+        Tick::ZERO,
+    )
+    .unwrap()
+}
+
+#[test]
+fn hungry_creature_wakes_after_recovery_and_stays_available_to_feed() {
+    let mut organism = awake_record_with_energy(14, 0.1);
+    let start = organism
+        .authoritative_sleep_input()
+        .unwrap()
+        .biological_tick
+        .raw();
+    let config = SleepConsolidationConfig {
+        forced_recovery_min_duration: alife_core::DurationTicks::new(1),
+        waking_duration: alife_core::DurationTicks::new(1),
+        ..SleepConsolidationConfig::reference()
+    };
+    let mut scheduler = GpuSleepScheduler::new(config).unwrap();
+    let mut driver = RecordingConsolidationDriver::with_phase_data(OrganismId(14), false);
+    scheduler.force_recovery_sleep(Tick::new(start)).unwrap();
+    let mut awake_ticks = 0;
+    for raw in start + 1..=start + 24 {
+        let event = scheduler
+            .scheduled_tick_with_organism(
+                &mut organism,
+                HomeostaticParameters::reference(),
+                Tick::new(raw),
+                &mut driver,
+                false,
+            )
+            .unwrap();
+        assert!(organism.authoritative_sleep_input().unwrap().energy < 0.20);
+        if event.phase == SleepPhase::Awake {
+            awake_ticks += 1;
+        } else {
+            assert_eq!(
+                awake_ticks, 0,
+                "hunger must not immediately force sleep again"
+            );
+        }
+    }
+    assert!(
+        awake_ticks >= 2,
+        "completed recovery must let a hungry creature wake and feed"
+    );
+    assert_eq!(driver.intents().len(), 1);
+}
+
+#[test]
+fn ordinary_awake_tick_skips_sleep_phase_data_query() {
+    let mut scheduler = GpuSleepScheduler::new(SleepConsolidationConfig::reference()).unwrap();
+    let mut organism = awake_record(14);
+    let mut driver = RecordingConsolidationDriver::with_phase_data(OrganismId(14), true);
+    let before = organism.authoritative_sleep_input().unwrap();
+    assert!(before.energy > 0.20);
+    assert!(before.homeostasis.drives.brain_atp > 0.05);
+
+    let event = scheduler
+        .scheduled_tick_with_organism(
+            &mut organism,
+            HomeostaticParameters::reference(),
+            Tick::new(before.biological_tick.raw() + 1),
+            &mut driver,
+            false,
+        )
+        .unwrap();
+
+    assert!(organism.authoritative_sleep_input().unwrap().energy > 0.20);
+    assert_eq!(event.phase, SleepPhase::Awake);
+    assert_eq!(driver.phase_data_queries, 0);
+}
+
+#[test]
+fn bounded_structural_work_precedes_first_pending_replay_identity() {
+    let config = SleepConsolidationConfig {
+        entering_duration: alife_core::DurationTicks::new(1),
+        ..SleepConsolidationConfig::reference()
+    };
+    let mut scheduler = GpuSleepScheduler::new(config).unwrap();
+    let mut organism = newborn_record(13);
+    let mut driver = StructuralBeforePendingDriver::new();
+    scheduler.force_recovery_sleep(Tick::ZERO).unwrap();
+
+    let mut event = None;
+    for raw_tick in 1..=64 {
+        let next = scheduler
+            .scheduled_tick_with_organism(
+                &mut organism,
+                HomeostaticParameters::reference(),
+                Tick::new(raw_tick),
+                &mut driver,
+                false,
+            )
+            .unwrap();
+        event = Some(next);
+        if !driver.calls.is_empty() {
+            break;
+        }
+    }
+    let event = event.unwrap();
+
+    assert_eq!(
+        driver.calls,
+        vec!["bounded-structural-work", "ReplayAssetPersisted"]
+    );
+    assert!(event
+        .phase_receipt
+        .due_work
+        .contains(SleepWorkDue::STRUCTURAL_GROWTH_PRUNING));
+    assert!(matches!(
+        scheduler.state().consolidation,
+        alife_core::ConsolidationState::Pending {
+            replay_digest: [11, 12, 13, 14],
+            ..
+        }
+    ));
+}
+
+#[test]
+fn bounded_sleep_sidecars_run_once_before_replay_identity_is_sealed() {
+    let config = SleepConsolidationConfig {
+        entering_duration: alife_core::DurationTicks::new(1),
+        ..SleepConsolidationConfig::reference()
+    };
+    let mut scheduler = GpuSleepScheduler::new(config).unwrap();
+    let mut organism = newborn_record(15);
+    let mut driver = OneShotSleepWorkDriver::new();
+    scheduler.force_recovery_sleep(Tick::ZERO).unwrap();
+
+    for raw_tick in 1..=16 {
+        scheduler
+            .scheduled_tick_with_organism(
+                &mut organism,
+                HomeostaticParameters::reference(),
+                Tick::new(raw_tick),
+                &mut driver,
+                false,
+            )
+            .unwrap();
+    }
+
+    assert_eq!(driver.bounded_calls, 1);
+    assert!(matches!(
+        scheduler.state().consolidation,
+        alife_core::ConsolidationState::Prepared { .. }
+    ));
+}
+
+#[test]
+fn stale_sleep_work_receipt_is_rejected_before_the_phase_is_sealed() {
+    let config = SleepConsolidationConfig {
+        entering_duration: alife_core::DurationTicks::new(1),
+        ..SleepConsolidationConfig::reference()
+    };
+    let mut scheduler = GpuSleepScheduler::new(config).unwrap();
+    let mut organism = newborn_record(16);
+    let mut driver = StaleSleepWorkReceiptDriver;
+    scheduler.force_recovery_sleep(Tick::ZERO).unwrap();
+    let mut result = Ok(());
+
+    for raw_tick in 1..=64 {
+        if let Err(error) = scheduler.scheduled_tick_with_organism(
+            &mut organism,
+            HomeostaticParameters::reference(),
+            Tick::new(raw_tick),
+            &mut driver,
+            false,
+        ) {
+            result = Err(error);
+            break;
+        }
+    }
+
+    assert_eq!(result, Err(ScaffoldContractError::NonMonotonicTick));
+    assert_eq!(organism.sleep_work_units(), 0);
 }
 
 #[test]
@@ -231,4 +658,73 @@ fn failed_initial_driver_call_does_not_strand_the_sleep_cycle() {
         scheduler.state().consolidation,
         alife_core::ConsolidationState::Pending { .. }
     ));
+}
+
+#[test]
+fn empty_replay_is_zero_work_but_nonempty_missing_phase_data_stays_fail_closed() {
+    let config = SleepConsolidationConfig {
+        entering_duration: alife_core::DurationTicks::new(1),
+        waking_duration: alife_core::DurationTicks::new(1),
+        ..SleepConsolidationConfig::reference()
+    };
+    let mut empty_scheduler = GpuSleepScheduler::new(config).unwrap();
+    let mut empty_organism = newborn_record(11);
+    let mut empty_driver = RecordingConsolidationDriver::with_phase_data(OrganismId(11), false);
+    empty_scheduler.force_recovery_sleep(Tick::ZERO).unwrap();
+    let mut empty_events = Vec::new();
+
+    for raw_tick in 1..=64 {
+        let event = empty_scheduler
+            .scheduled_tick_with_organism(
+                &mut empty_organism,
+                HomeostaticParameters::reference(),
+                Tick::new(raw_tick),
+                &mut empty_driver,
+                false,
+            )
+            .unwrap();
+        let completed_cycle = event.phase == SleepPhase::Awake && event.cycle_id > 0;
+        empty_events.push(event);
+        if completed_cycle {
+            break;
+        }
+    }
+
+    assert_eq!(empty_driver.persisted_replay_event_count, Some(0));
+    assert_eq!(empty_driver.bounded_calls, 0);
+    assert!(empty_events.iter().all(|event| {
+        event.sleep_work_units == 0
+            && event.phase_receipt.work_units == 0
+            && event.phase_receipt.due_work.is_empty()
+    }));
+    assert_eq!(empty_events.last().unwrap().phase, SleepPhase::Awake);
+
+    let mut nonempty_scheduler = GpuSleepScheduler::new(config).unwrap();
+    let mut nonempty_organism = newborn_record(12);
+    let mut nonempty_driver = RecordingConsolidationDriver::with_phase_data(OrganismId(12), true);
+    nonempty_scheduler.force_recovery_sleep(Tick::ZERO).unwrap();
+    let mut result = Ok(None);
+    for raw_tick in 1..=64 {
+        match nonempty_scheduler.scheduled_tick_with_organism(
+            &mut nonempty_organism,
+            HomeostaticParameters::reference(),
+            Tick::new(raw_tick),
+            &mut nonempty_driver,
+            false,
+        ) {
+            Ok(event) => result = Ok(Some(event)),
+            Err(error) => {
+                result = Err(error);
+                break;
+            }
+        }
+    }
+
+    assert_eq!(result, Err(ScaffoldContractError::MissingPhaseData));
+    assert_eq!(nonempty_driver.persisted_replay_event_count, None);
+    assert_eq!(nonempty_driver.bounded_calls, 1);
+    assert_eq!(
+        nonempty_scheduler.state().consolidation,
+        alife_core::ConsolidationState::None
+    );
 }

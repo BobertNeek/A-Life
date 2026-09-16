@@ -7,19 +7,20 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    path::PathBuf,
-    time::Instant,
+    io::Read,
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 
 use alife_bevy_adapter::BevyEntityMap;
-use alife_core::{OrganismId, Vec3f, WorldEntityId};
+use alife_core::{OrganismId, Tick, Vec3f, WorldEntityId};
+use alife_world::CreatureAppearanceGenome;
 use alife_world::{
     persistence::{CreatureSaveState, GpuRuntimeSaveState, PortableSaveFile},
-    CreatureAppearanceGenome, CreatureWorldAnchor, PersistentVoxelWorldBackend,
-    PersistentVoxelWorldSnapshot, PresentationOutcomeSnapshot, ProceduralTerrainMaterial,
-    ProceduralTileCoord, ProceduralWorldConfig, StableVoxelObjectRef, StableVoxelRefKind,
-    VoxelChunkCoord, VoxelTileCoord, WorldObjectKind, WorldOrganismPresentationRow,
-    CREATURE_APPEARANCE_SPECIES_COUNT,
+    CreatureWorldAnchor, PersistentVoxelWorldBackend, PersistentVoxelWorldSnapshot,
+    PresentationOutcomeSnapshot, ProceduralTerrainMaterial, ProceduralTileCoord,
+    ProceduralWorldConfig, StableVoxelObjectRef, StableVoxelRefKind, VoxelChunkCoord,
+    VoxelTileCoord, WorldObjectKind, WorldOrganismPresentationRow,
     FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
 };
 use bevy::{
@@ -30,50 +31,62 @@ use bevy::{
     math::primitives::InfinitePlane3d,
     mesh::Indices,
     prelude::{
-        default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, Capsule3d, ChildOf,
-        Children, Color, Commands, Component, Cuboid, DetectChanges, DirectionalLight, Entity,
-        EulerRot, GlobalTransform, Handle, Image, KeyCode, Mat4, Mesh, Mesh3d, MeshMaterial3d,
-        Meshable, MessageReader, MessageWriter, MouseButton, Name, Node, NonSendMut, ParamSet,
-        PositionType, Projection, Quat, Res, ResMut, Resource, Sphere, StandardMaterial, Text,
-        Text2d, TextColor, TextFont, Time, Torus, Transform, Update, Val, Vec3, Visibility, Window,
-        With, Without, World,
+        default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, ChildOf, Children,
+        Color, Commands, Component, Cuboid, DetectChanges, DirectionalLight, Entity, EulerRot,
+        GlobalTransform, Handle, Image, KeyCode, Local, Mat4, Mesh, Mesh3d, MeshMaterial3d,
+        MessageReader, MessageWriter, MouseButton, Name, Node, NonSend, NonSendMut, ParamSet,
+        PositionType, Projection, Quat, Res, ResMut, Resource, StandardMaterial, Text, Text2d,
+        TextColor, TextFont, Time, Torus, Transform, Update, Val, Vec3, ViewVisibility, Visibility,
+        Window, With, Without, World,
     },
     render::{
         render_resource::PrimitiveTopology,
         view::screenshot::{save_to_disk, Screenshot},
     },
-    window::PrimaryWindow,
+    window::{PrimaryWindow, WindowFocused},
 };
 
-use crate::bevy_shell::{
-    LiveBrainPresentationFrame, LiveBrainPresentationFrameResource,
-};
-use crate::LiveBrainTickSummary;
+use crate::bevy_shell::{LiveBrainPresentationFrame, LiveBrainPresentationFrameResource};
 #[cfg(feature = "gpu-runtime")]
 use crate::bevy_shell::{
     ProductionCuratedFounderResetCommand, ProductionCuratedFounderResetResultResource,
-    ProductionGpuBrainRuntimeResource, ProductionGpuBrainTickScheduleResource,
+    ProductionGpuBrainAuthorityResource, ProductionGpuBrainRuntimeResource,
+    ProductionGpuBrainTickScheduleResource,
 };
 #[cfg(feature = "gpu-runtime")]
 use crate::gpu_live_runtime::CuratedFounderResetRuntimePort;
-#[cfg(feature = "gpu-runtime")]
-use crate::RuntimePlaybackState;
 use crate::terrain_mesh::{build_production_terrain_meshes, TerrainMeshBuild};
-use crate::terrain_lighting::spawn_production_terrain_lighting;
+use crate::LiveBrainTickSummary;
 #[cfg(feature = "gpu-runtime")]
 use crate::ProductionConversationLineageUiState;
+#[cfg(feature = "gpu-runtime")]
+use crate::RuntimePlaybackState;
 #[cfg(test)]
 use crate::SocketFrame;
 use crate::{
     creature_face_style_from_landmarks, creature_part_pose, creature_root_pose,
-    creature_surface_detail_recipe, grounded_root_height,
-    load_geneforge_assembly_preparation_index, load_geneforge_creature_part_catalog,
-    remap_creature_face_landmarks, resolve_geneforge_creature_assembly, CreatureCoatKey,
-    CreatureAssemblyPartRecipe, CreatureAssemblyRecipe, CreatureCoatAssetHandles,
-    CreatureDetailMaterialRole, CreatureDetailMeshKind, CreatureFaceStyle, CreaturePartAssetLibrary,
-    CreaturePartLodId, CreaturePartSlot, CreatureSurfaceDetailSpec, CreatureVisualBounds,
-    GeneForgeAssemblyPreparationIndex, GeneForgeCreaturePartCatalog, JoinCoverPrimitive,
+    grounded_root_height, load_geneforge_assembly_preparation_index,
+    load_geneforge_creature_part_catalog, remap_creature_face_landmarks,
+    resolve_geneforge_creature_assembly, CreatureAssemblyRecipe, CreatureCoatAssetHandles,
+    CreatureCoatKey, CreaturePartAssetLibrary, CreaturePartLodId, CreaturePartSlot,
+    CreatureVisualBounds, GeneForgeAssemblyPreparationIndex, GeneForgeCreaturePartCatalog,
 };
+
+mod camera_navigation;
+mod camera_terrain;
+mod creature_grounding;
+mod graphics_capture;
+mod hearthling;
+mod landscape;
+mod live_creature_projection;
+mod live_food_projection;
+#[cfg(feature = "gpu-runtime")]
+mod performance_receipt;
+#[cfg(feature = "gpu-runtime")]
+mod phase31_performance_health;
+#[cfg(feature = "gpu-runtime")]
+mod phase31_slow_frame_ranking;
+mod ux_input;
 use crate::{
     creature_visual_snapshot_from_parts_with_appearance,
     production_terrain::{ProductionTerrainSample, ProductionTerrainSampleMap},
@@ -91,57 +104,63 @@ use crate::{
         ProductionTerrainDressingSpawn, TerrainDressingLibrary, TerrainDressingTile,
     },
     terrain_lighting::{
-        production_camera_extent, production_camera_transform, spawn_production_terrain_camera,
+        production_camera_extent, production_camera_transform, production_shadow_cascade_count,
+        production_shadow_maximum_distance, spawn_production_terrain_camera,
     },
     terrain_materials::{create_production_terrain_material_library, TerrainMaterialLibrary},
     terrain_water::install_animated_water_material,
 };
+use live_creature_projection::project_live_world_to_fvr04_creature_roots;
+#[cfg(feature = "gpu-runtime")]
+use performance_receipt::write_phase31_performance_receipt;
+#[cfg(feature = "gpu-runtime")]
+use phase31_performance_health::validate_phase31_performance_authority;
+#[cfg(feature = "gpu-runtime")]
+use phase31_slow_frame_ranking::{
+    retain_ranked_slow_frame, RankedSlowFrame, PHASE31_SLOW_FRAME_THRESHOLD_NS,
+};
+use ux_input::handle_fvr05_production_ux_input;
 
-pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA: &str = "alife.fvr03.production_voxel_renderer.v1";
-pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA_VERSION: u16 = 1;
-pub const FVR03_RENDERER_BACKEND_ID: &str = "bevy_voxel_world+fvr03_chunk_mesh";
+pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA: &str = "alife.fvr03.production_voxel_renderer.v3";
+pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA_VERSION: u16 = 3;
 pub const FVR03_PERFORMANCE_ARTIFACT_DIR: &str = "target/artifacts/fvr03";
 pub const FVR04_PRODUCTION_CREATURE_RENDERER_SCHEMA: &str =
     "alife.fvr04.production_creature_renderer.v1";
 pub const FVR04_PRODUCTION_CREATURE_RENDERER_SCHEMA_VERSION: u16 = 1;
-pub const FVR04_RENDERER_BACKEND_ID: &str =
-    "bevy_voxel_world+fvr03_chunk_mesh+fvr04_creature_interaction";
-pub const FVR09_RENDERER_BACKEND_ID: &str =
-    "bevy_voxel_world+fvr09_binary_greedy_chunk_mesh+fvr09_cute_biped_creatures";
 pub const FVR10_RENDERER_BACKEND_ID: &str =
-    "bevy_voxel_world+fvr10_vertex_color_chunk_mesh+fvr10_readable_cute_biped_creatures";
+    "fvr10-layered-grid-terrain+modular-heritable-creatures";
 pub const FVR09_NATURAL_MATERIAL_PALETTE_VERSION: &str = "fvr09-natural-materials-v1";
 pub const FVR09_CUTE_BIPED_VISUAL_PROFILE: &str = "fvr09-cute-biped-v1";
 pub const FVR09_CUTE_BIPED_MATERIAL_VERSION: &str = "fvr09-soft-biped-materials-v1";
 pub const FVR10_VISIBLE_SURFACE_VARIATION_VERSION: &str = "fvr10-visible-surface-variation-v1";
-pub const FVR10_CUTE_BIPED_VISUAL_PROFILE: &str = "modular-heritable-part-assembly-v1";
-pub const FVR10_CUTE_BIPED_MATERIAL_VERSION: &str = "modular-textured-part-material-v1";
+pub const FVR10_CUTE_BIPED_VISUAL_PROFILE: &str = "approved-hearthling-skinned-v2";
+pub const FVR10_CUTE_BIPED_MATERIAL_VERSION: &str = "approved-blender-vertex-color-v2";
 pub const FVR10_SURFACE_DETAIL_VERSION: &str = "fvr10-screenshot-visible-surface-detail-v2";
+/// Dynamic overlay geometry still comes from the scene snapshot. See `docs/STATUS.md`.
+pub const FVR05_DYNAMIC_OVERLAYS_TRACK_LIVE_STATE: bool = false;
+/// VFX positions follow live creatures, but effect selection is not event-driven yet.
+pub const FVR07_VFX_TRIGGERS_TRACK_LIVE_STATE: bool = false;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Fvr09MesherMode {
-    BinaryGreedyQuads,
+    LayeredGridQuads,
 }
 
 impl Fvr09MesherMode {
     pub const fn label(self) -> &'static str {
         match self {
-            Self::BinaryGreedyQuads => "binary-greedy-quads",
+            Self::LayeredGridQuads => "layered-grid-quads",
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Fvr09GreedyMeshStats {
+pub struct Fvr09TerrainMeshStats {
     pub mode: Fvr09MesherMode,
-    pub chunk_local_occupancy_masks: bool,
-    pub six_direction_face_masks: bool,
-    pub material_aware_merging: bool,
-    pub neighbor_border_seams_checked: bool,
     pub visible_voxels: usize,
     pub naive_visible_faces: usize,
     pub emitted_quads: usize,
-    pub merge_ratio: f32,
+    pub face_reduction_ratio: f32,
     pub remesh_time_micros: u128,
     pub dirty_chunks: usize,
     pub cached_chunks: usize,
@@ -181,7 +200,6 @@ pub enum Fvr03ProductionVoxelMaterialKind {
     Sand,
     Creature,
     Selection,
-    ChunkBoundary,
 }
 
 impl Fvr03ProductionVoxelMaterialKind {
@@ -197,7 +215,6 @@ impl Fvr03ProductionVoxelMaterialKind {
             Self::Sand => "sand",
             Self::Creature => "creature",
             Self::Selection => "selection",
-            Self::ChunkBoundary => "chunk-boundary",
         }
     }
 
@@ -267,7 +284,6 @@ pub struct Fvr03ProductionVoxelRendererSettings {
     pub production_dressing_cap: usize,
     pub production_vfx_marker_cap: usize,
     pub production_vfx_budget_state: &'static str,
-    pub show_chunk_boundaries: bool,
     pub minimum_floor: bool,
     pub min_spec_comfort_default: bool,
     pub research_scale: bool,
@@ -325,12 +341,6 @@ impl Fvr03ProductionVoxelRendererSettings {
             production_dressing_cap,
             production_vfx_marker_cap,
             production_vfx_budget_state: budget.vfx_budget,
-            show_chunk_boundaries: !matches!(
-                profile_id,
-                ProductionFrontendProfileId::MinSpecComfort1080p
-                    | ProductionFrontendProfileId::HighSpecScaleUp
-                    | ProductionFrontendProfileId::ResearchScale
-            ),
             minimum_floor: budget.hard_floor,
             min_spec_comfort_default: budget.comfort_default,
             research_scale: budget.research_mode,
@@ -446,16 +456,6 @@ impl Fvr03ProductionVoxelRendererSettings {
                 natural_variation_seed: "fvr10-selection-hover",
                 debug_primary_color: false,
             },
-            Fvr03ProductionVoxelMaterialEntry {
-                kind: Fvr03ProductionVoxelMaterialKind::ChunkBoundary,
-                label: "chunk-boundary",
-                rgba: [0.04, 0.05, 0.05, 0.52],
-                roughness: 0.80,
-                top_texture: "debug-chunk-boundary",
-                side_texture: "debug-chunk-boundary",
-                natural_variation_seed: "fvr10-debug-chunk-boundary",
-                debug_primary_color: true,
-            },
         ]
     }
 }
@@ -485,7 +485,6 @@ pub struct Fvr04ProductionCreatureRendererSettings {
     pub lod: Fvr04CreatureLod,
     pub selected_hover_label_only: bool,
     pub max_world_labels: u16,
-    pub spawn_affordance_cues: bool,
     pub shared_mesh_material_buckets: bool,
     pub expression_buffer_channels: u8,
 }
@@ -512,7 +511,7 @@ impl Fvr04ProductionCreatureRendererSettings {
         Self {
             profile_id,
             requested_population,
-            max_visible_creatures: requested_population.min(budget.maximum_profile_population),
+            max_visible_creatures: budget.maximum_profile_population,
             lod,
             selected_hover_label_only: matches!(
                 profile_id,
@@ -521,11 +520,6 @@ impl Fvr04ProductionCreatureRendererSettings {
                     | ProductionFrontendProfileId::ResearchScale
             ),
             max_world_labels,
-            spawn_affordance_cues: matches!(
-                profile_id,
-                ProductionFrontendProfileId::MinimumSettings30x30
-                    | ProductionFrontendProfileId::Balanced1080p
-            ) && requested_population <= 100,
             shared_mesh_material_buckets: true,
             expression_buffer_channels: 8,
         }
@@ -646,8 +640,7 @@ pub struct Fvr03ProductionVoxelSceneResource {
     pub population: u16,
     pub renderer_profile: String,
     pub backend_id: &'static str,
-    pub uses_bevy_voxel_world_backend: bool,
-    pub uses_internal_chunk_mesh_for_fvr02_contract: bool,
+    pub uses_internal_voxel_terrain_mesh: bool,
     pub visible_chunk_count: usize,
     pub resident_chunk_count: usize,
     pub tile_mesh_count: usize,
@@ -676,7 +669,7 @@ pub struct Fvr03ProductionVoxelSceneResource {
     pub production_vfx_budget_state: &'static str,
     pub production_visuals_display_only: bool,
     pub production_vfx_uses_hanabi_gpu_particles: bool,
-    pub mesh_stats: Fvr09GreedyMeshStats,
+    pub mesh_stats: Fvr09TerrainMeshStats,
     visible_tiles: BTreeSet<VoxelTileCoord>,
     visible_chunks: BTreeSet<VoxelChunkCoord>,
     tile_summaries_by_tile: BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
@@ -692,7 +685,12 @@ impl Fvr03ProductionVoxelSceneResource {
     }
 
     pub fn contains_tile(&self, tile: VoxelTileCoord) -> bool {
+        // Terrain meshes cover whole chunks even when their samples use a
+        // two/four-tile stride. Unsampled tiles must still accept player input.
         self.visible_tiles.contains(&tile)
+            || self
+                .visible_chunks
+                .contains(&VoxelChunkCoord::for_tile(16, tile))
     }
 
     pub fn contains_chunk(&self, chunk: VoxelChunkCoord) -> bool {
@@ -799,7 +797,7 @@ impl Fvr03ProductionVoxelSceneResource {
             .collect::<Vec<_>>()
             .join(" ");
         format!(
-            "World / Ecology\nchunks visible {} resident {} dirty {}\ntiles sampled {} | creatures {}\nmesher {} | quads {} | merge {:.2}x | remesh {}/frame dirty {} cached {} skipped {}\nmaterial atlas {}\nresource avg {:.2} | hazard avg {:.2}\nmaterials {}\nproduction polish: dressing {} vfx {} gpu_emitters {} budget {} display_only {}\ncore authority: world/action legality only",
+            "World / Ecology\nstartup chunks visible {} resident {} dirty {}\nstartup tiles sampled {} | live creatures {}\nstartup mesher {} | quads {} | face reduction {:.2}x | configured remesh budget {}/frame, snapshot dirty {} estimated cached {} deferred {}\nmaterial atlas {}\nresource avg {:.2} | hazard avg {:.2}\nmaterials {}\nproduction polish: dressing {} vfx {} gpu_emitters {} budget {} display_only {}\ncore authority: world/action legality only",
             self.visible_chunk_count,
             self.resident_chunk_count,
             self.dirty_chunk_count,
@@ -807,7 +805,7 @@ impl Fvr03ProductionVoxelSceneResource {
             self.creature_render_count,
             self.mesh_stats.mode.label(),
             self.mesh_stats.emitted_quads,
-            self.mesh_stats.merge_ratio,
+            self.mesh_stats.face_reduction_ratio,
             self.mesh_stats.remesh_budget_chunks_per_frame,
             self.mesh_stats.dirty_chunks,
             self.mesh_stats.cached_chunks,
@@ -854,24 +852,182 @@ pub struct Fvr03ProductionVoxelScreenshotResource {
     pub developer_overlay: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Component)]
-pub struct Fvr03ProductionVoxelChunk {
-    pub coord: VoxelChunkCoord,
-    pub signature: String,
-    pub lod_level: u8,
-    pub dirty_generation: u64,
-    pub sampled_tiles: usize,
+const PHASE31_PERFORMANCE_SCHEMA: &str = "alife.phase31.performance-baseline.v4";
+const PHASE31_PERFORMANCE_SCHEMA_VERSION: u16 = 4;
+const PHASE31_WARMUP_DURATION: Duration = Duration::from_secs(5);
+const PHASE31_MEASUREMENT_DURATION: Duration = Duration::from_secs(60);
+const PHASE31_PERSISTENCE_DRAIN_TIMEOUT: Duration = Duration::from_secs(20);
+const PHASE31_PERFORMANCE_ARTIFACT_DIR: &str = "target/artifacts/phase31-performance";
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Debug, Clone, Copy, Default, serde::Serialize)]
+struct Phase31FrameUpdateCpu {
+    input_ns: u64,
+    live_gpu_tick_ns: u64,
+    authoritative_projection_ns: u64,
+    procedural_animation_ns: u64,
+    ui_root_readers_ns: u64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
-pub struct Fvr03ProductionVoxelTerrainTile {
-    pub tile: VoxelTileCoord,
-    pub chunk: VoxelChunkCoord,
-    pub material: Fvr03ProductionVoxelMaterialKind,
-    pub height_units: f32,
-    pub resource_bias: f32,
-    pub hazard_pressure: f32,
-    pub stable_ref: StableVoxelObjectRef,
+#[cfg(feature = "gpu-runtime")]
+impl Phase31FrameUpdateCpu {
+    fn total_ns(self) -> u64 {
+        self.input_ns
+            .saturating_add(self.live_gpu_tick_ns)
+            .saturating_add(self.authoritative_projection_ns)
+            .saturating_add(self.procedural_animation_ns)
+            .saturating_add(self.ui_root_readers_ns)
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Debug, Clone, Copy, Default)]
+struct Phase31FrameSnapshot {
+    runtime: crate::gpu_live_runtime::GpuLivePerformanceMetrics,
+    scheduler: crate::bevy_shell::ProductionGpuTickPerformanceCounters,
+    checkpoint: crate::gpu_live_runtime::ExactCheckpointPerformanceState,
+    world_tick: u64,
+    world_objects: u64,
+    organisms: u64,
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Debug, Clone, Default, serde::Serialize)]
+struct Phase31SlowFrameSample {
+    frame_index: u64,
+    frame_duration_ns: u64,
+    world_tick_before: u64,
+    world_tick_after: u64,
+    world_ticks_completed: u64,
+    world_objects_before: u64,
+    world_objects_after: u64,
+    organisms_before: u64,
+    organisms_after: u64,
+    checkpoint_before: crate::gpu_live_runtime::ExactCheckpointPerformanceState,
+    checkpoint_after: crate::gpu_live_runtime::ExactCheckpointPerformanceState,
+    scheduler_attempts: u64,
+    scheduler_completed_ticks: u64,
+    checkpoint_publication_waits: u64,
+    checkpoint_failed_waits: u64,
+    deferred_catch_up_ticks: u64,
+    catch_up_ticks_dropped: u64,
+    scheduler_debt_micros_before: u64,
+    scheduler_debt_micros_after: u64,
+    update_cpu: Phase31FrameUpdateCpu,
+    renderer_present_and_uninstrumented_residual_ns: u64,
+    runtime: crate::gpu_live_runtime::GpuLivePerformanceMetrics,
+}
+
+#[cfg(feature = "gpu-runtime")]
+impl RankedSlowFrame for Phase31SlowFrameSample {
+    fn frame_duration_ns(&self) -> u64 {
+        self.frame_duration_ns
+    }
+
+    fn frame_index(&self) -> u64 {
+        self.frame_index
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Debug, Resource)]
+pub(crate) struct Phase31PerformanceMetricsResource {
+    profile: String,
+    population: u16,
+    resolution: [u32; 2],
+    backend: String,
+    adapter: String,
+    launched_at: Instant,
+    last_frame_at: Instant,
+    measurement_started_at: Option<Instant>,
+    measurement_completed_at: Option<Instant>,
+    measurement_start_world_tick: Option<u64>,
+    runtime_baseline: Option<crate::gpu_live_runtime::GpuLivePerformanceMetrics>,
+    scheduler_baseline: Option<crate::bevy_shell::ProductionGpuTickPerformanceCounters>,
+    stage_mark: Option<Instant>,
+    frame_snapshot: Option<Phase31FrameSnapshot>,
+    current_frame_update_cpu: Phase31FrameUpdateCpu,
+    frame_ns: Vec<u64>,
+    slow_frame_count: u64,
+    slow_frames: Vec<Phase31SlowFrameSample>,
+    input_cpu_ns: u64,
+    live_gpu_tick_cpu_ns: u64,
+    authoritative_projection_cpu_ns: u64,
+    procedural_animation_cpu_ns: u64,
+    ui_root_readers_cpu_ns: u64,
+    ui_updates: u64,
+    gpu_samples: Vec<alife_gpu_backend::GpuNeuralTimingSample>,
+    artifact_path: Option<PathBuf>,
+    write_error: Option<String>,
+}
+
+#[cfg(feature = "gpu-runtime")]
+impl Phase31PerformanceMetricsResource {
+    fn new(summary: &ProductionVoxelLaunchSummary) -> Self {
+        let now = Instant::now();
+        Self {
+            profile: summary.profile_id.label().to_string(),
+            population: summary.effective_population,
+            resolution: [summary.resolution.0, summary.resolution.1],
+            backend: summary.diagnostics.selected_backend.clone(),
+            adapter: summary
+                .diagnostics
+                .adapter_name
+                .clone()
+                .unwrap_or_else(|| "unavailable".to_string()),
+            launched_at: now,
+            last_frame_at: now,
+            measurement_started_at: None,
+            measurement_completed_at: None,
+            measurement_start_world_tick: None,
+            runtime_baseline: None,
+            scheduler_baseline: None,
+            stage_mark: None,
+            frame_snapshot: None,
+            current_frame_update_cpu: Phase31FrameUpdateCpu::default(),
+            frame_ns: Vec::new(),
+            slow_frame_count: 0,
+            slow_frames: Vec::new(),
+            input_cpu_ns: 0,
+            live_gpu_tick_cpu_ns: 0,
+            authoritative_projection_cpu_ns: 0,
+            procedural_animation_cpu_ns: 0,
+            ui_root_readers_cpu_ns: 0,
+            ui_updates: 0,
+            gpu_samples: Vec::new(),
+            artifact_path: None,
+            write_error: None,
+        }
+    }
+
+    pub(crate) fn measuring(&self) -> bool {
+        self.measurement_started_at.is_some_and(|started| {
+            started.elapsed() < PHASE31_MEASUREMENT_DURATION
+                && self.artifact_path.is_none()
+                && self.write_error.is_none()
+        })
+    }
+
+    pub(crate) fn draining(&self) -> bool {
+        self.measurement_started_at.is_some_and(|started| {
+            started.elapsed() >= PHASE31_MEASUREMENT_DURATION
+                && self.artifact_path.is_none()
+                && self.write_error.is_none()
+        })
+    }
+
+    fn take_stage_elapsed_ns(&mut self) -> u64 {
+        let now = Instant::now();
+        self.stage_mark.replace(now).map_or(0, |started| {
+            u64::try_from(now.duration_since(started).as_nanos()).unwrap_or(u64::MAX)
+        })
+    }
+
+    pub(crate) fn record_gpu_sample(&mut self, sample: alife_gpu_backend::GpuNeuralTimingSample) {
+        if self.measuring() {
+            self.gpu_samples.push(sample);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
@@ -907,6 +1063,9 @@ pub struct ProductionCreatureAssemblyRoot {
     pub organism_id: OrganismId,
     pub display_only: bool,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
+pub(crate) struct ProductionCreatureCoatKey(pub CreatureCoatKey);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
 struct Fvr04ProductionRuntimeSceneRoot;
@@ -994,9 +1153,6 @@ pub struct Fvr04ProductionCreatureAffordanceCue {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
-pub struct Fvr04ProductionCreatureInspectorPanel;
-
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct Fvr03ProductionVoxelTerrainBatch {
     pub material: Fvr03ProductionVoxelMaterialKind,
     pub tile_count: usize,
@@ -1073,6 +1229,7 @@ impl Fvr07ProductionVfxKind {
         }
     }
 
+    #[cfg(not(feature = "vfx-hanabi"))]
     const fn pulse_speed(self) -> f32 {
         match self {
             Self::PheromoneTrail => 1.4,
@@ -1086,6 +1243,7 @@ impl Fvr07ProductionVfxKind {
         }
     }
 
+    #[cfg(not(feature = "vfx-hanabi"))]
     const fn bob_height(self) -> f32 {
         match self {
             Self::DangerHazardParticles => 0.16,
@@ -1109,6 +1267,7 @@ pub struct Fvr07ProductionGpuVfxMarker {
     pub kind: Fvr07ProductionVfxKind,
     pub tile: Option<VoxelTileCoord>,
     pub stable_id: Option<alife_core::WorldEntityId>,
+    pub follows_creature: bool,
     pub display_only: bool,
     pub no_renderer_authority_over_actions_or_cognition: bool,
     pub budget_state: &'static str,
@@ -1121,6 +1280,8 @@ pub struct Fvr07ProductionGpuVfxMarker {
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct Fvr07ProductionHanabiVfxEmitter {
     pub kind: Fvr07ProductionVfxKind,
+    pub stable_id: Option<alife_core::WorldEntityId>,
+    pub follows_creature: bool,
     pub display_only: bool,
     pub no_renderer_authority_over_actions_or_cognition: bool,
     pub budget_state: &'static str,
@@ -1151,7 +1312,7 @@ pub struct V0PlayerCreaturePanel;
 pub struct V0PlayerControlStrip;
 
 struct Fvr11TerrainSpawnReceipt {
-    mesh_stats: Fvr09GreedyMeshStats,
+    mesh_stats: Fvr09TerrainMeshStats,
     top_layer_count: usize,
     cliff_layer_count: usize,
     transition_edge_count: usize,
@@ -1201,36 +1362,33 @@ struct Fvr04CreatureVisualRecord {
 }
 
 #[derive(Debug, Resource)]
-struct Fvr04CreatureSpawnContext {
+pub(crate) struct Fvr04CreatureSpawnContext {
     settings: Fvr04ProductionCreatureRendererSettings,
     catalog: GeneForgeCreaturePartCatalog,
     preparations: GeneForgeAssemblyPreparationIndex,
     assets_root: PathBuf,
     creature_part_assets: CreaturePartAssetLibrary,
-    cue_mesh: Handle<Mesh>,
-    eye_sclera_mesh: Handle<Mesh>,
-    eye_iris_mesh: Handle<Mesh>,
-    eye_pupil_mesh: Handle<Mesh>,
-    eye_highlight_mesh: Handle<Mesh>,
-    eye_sclera_material: Handle<StandardMaterial>,
-    eye_pupil_material: Handle<StandardMaterial>,
-    eye_highlight_material: Handle<StandardMaterial>,
-    face_material: Handle<StandardMaterial>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl Fvr04CreatureSpawnContext {
+    pub(crate) fn release_coat(&mut self, key: CreatureCoatKey) {
+        let _ = self.creature_part_assets.release_coat(key);
+    }
+}
+
+#[derive(Debug, Clone)]
 struct Fvr04RuntimeSceneState {
+    backend: PersistentVoxelWorldBackend,
     snapshot: PersistentVoxelWorldSnapshot,
     creatures: Vec<Fvr04CreatureVisualRecord>,
 }
 
 #[derive(Resource)]
 struct Fvr04RuntimeSceneAssets {
-    voxel_materials: BTreeMap<Fvr03ProductionVoxelMaterialKind, Handle<StandardMaterial>>,
+    selection_material: Handle<StandardMaterial>,
     terrain_materials: TerrainMaterialLibrary,
-    boundary_mesh: Handle<Mesh>,
     dressing_library: TerrainDressingLibrary,
-    vfx_unit_mesh: Handle<Mesh>,
+    vfx_unit_mesh: Option<Handle<Mesh>>,
     vfx_materials: BTreeMap<Fvr07ProductionVfxKind, Handle<StandardMaterial>>,
     overlay_materials: BTreeMap<Fvr05ProductionOverlayKind, Handle<StandardMaterial>>,
     selection_mesh: Handle<Mesh>,
@@ -1240,6 +1398,11 @@ struct Fvr04OverlaySpawnPlan {
     kind: Fvr05ProductionOverlayKind,
     cells: Vec<Fvr05OverlayCell>,
     visible: bool,
+}
+
+#[derive(Resource)]
+struct Fvr05OverlayGeometryCache {
+    cells_by_kind: BTreeMap<Fvr05ProductionOverlayKind, Vec<Fvr05OverlayCell>>,
 }
 
 struct Fvr04RuntimeSceneCandidate {
@@ -1257,47 +1420,17 @@ struct Fvr04RuntimeSceneCandidate {
     vfx_spawns: Vec<Fvr07VfxSpawn>,
 }
 
-struct Fvr04PreparedCreaturePart {
-    recipe: CreatureAssemblyPartRecipe,
-    mesh: Handle<Mesh>,
-    transform: Transform,
-}
-
-struct Fvr04PreparedJoinCover {
-    parent_slot: CreaturePartSlot,
-    primitive: JoinCoverPrimitive,
-    mesh: Handle<Mesh>,
-    transform: Transform,
-}
-
 struct Fvr04PreparedCreature {
     record: Fvr04CreatureVisualRecord,
     recipe: CreatureAssemblyRecipe,
     coat: CreatureCoatAssetHandles,
-    parts: Vec<Fvr04PreparedCreaturePart>,
-    covers: Vec<Fvr04PreparedJoinCover>,
-    local_bounds: CreatureVisualBounds,
     root_transform: Transform,
     root_visual: Fvr04ProductionCreatureVisualMarker,
-    face_style: Option<CreatureFaceStyle>,
-    details: Vec<CreatureSurfaceDetailSpec>,
-    detail_materials: Option<Fvr10CreatureDetailMaterials>,
 }
 
 struct Fvr04PreparedCreatureBatch {
     settings: Fvr04ProductionCreatureRendererSettings,
     creatures: Vec<Fvr04PreparedCreature>,
-    cover_mesh_count: usize,
-    detail_meshes: Fvr10CreatureDetailMeshes,
-    cue_mesh: Handle<Mesh>,
-    eye_sclera_mesh: Handle<Mesh>,
-    eye_iris_mesh: Handle<Mesh>,
-    eye_pupil_mesh: Handle<Mesh>,
-    eye_highlight_mesh: Handle<Mesh>,
-    eye_sclera_material: Handle<StandardMaterial>,
-    eye_pupil_material: Handle<StandardMaterial>,
-    eye_highlight_material: Handle<StandardMaterial>,
-    face_material: Handle<StandardMaterial>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1306,10 +1439,13 @@ struct Fvr04PreparedContactShadow {
     translation: Vec3,
     scale: f32,
     source_kind: &'static str,
+    stable_id: Option<alife_core::WorldEntityId>,
 }
 
 struct Fvr04PreparedLighting {
     directional_shadows: bool,
+    shadow_cascades: usize,
+    shadow_maximum_distance: f32,
     contact_shadow_mesh: Option<Handle<Mesh>>,
     contact_shadow_material: Option<Handle<StandardMaterial>>,
     contact_shadows: Vec<Fvr04PreparedContactShadow>,
@@ -1347,6 +1483,7 @@ struct Fvr07VfxSpawn {
     kind: Fvr07ProductionVfxKind,
     tile: Option<VoxelTileCoord>,
     stable_id: Option<alife_core::WorldEntityId>,
+    follows_creature: bool,
     translation: Vec3,
     scale: Vec3,
     color: [f32; 4],
@@ -1366,6 +1503,8 @@ struct Fvr07ProductionPolishSummary {
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct Fvr05ProductionUxStateResource {
     pub settings: Fvr05ProductionUxSettings,
+    pub debug_mode: bool,
+    pub show_help: bool,
     pub ui_settings_path: PathBuf,
     pub source_save_path: PathBuf,
     pub asset_root: PathBuf,
@@ -1385,6 +1524,8 @@ pub struct Fvr05ProductionUxStateResource {
     pub gpu_runtime_state: GpuRuntimeSaveState,
     pub last_action: String,
     pub last_error: Option<String>,
+    #[cfg(feature = "gpu-runtime")]
+    last_manual_checkpoint_status: Option<crate::GpuManualCheckpointStatus>,
 }
 
 impl Fvr05ProductionUxStateResource {
@@ -1398,6 +1539,8 @@ impl Fvr05ProductionUxStateResource {
         }
         Self {
             settings,
+            debug_mode: summary.developer_overlay,
+            show_help: false,
             ui_settings_path: summary.ui_settings_path.clone(),
             source_save_path: summary.save_path.clone(),
             asset_root: summary.asset_root.clone(),
@@ -1429,11 +1572,15 @@ impl Fvr05ProductionUxStateResource {
             gpu_runtime_state: summary.gpu_runtime_state.clone(),
             last_action: "Ready: production voxel world loaded from validated save".to_string(),
             last_error: summary.ui_settings_load_error.clone(),
+            #[cfg(feature = "gpu-runtime")]
+            last_manual_checkpoint_status: None,
         }
     }
 
     fn active_overlay(&self, kind: Fvr05ProductionOverlayKind) -> bool {
-        self.settings.show_overlays && self.settings.enabled_overlays.contains(&kind)
+        self.debug_mode
+            && self.settings.show_overlays
+            && self.settings.enabled_overlays.contains(&kind)
     }
 
     fn toggle_overlay(&mut self, kind: Fvr05ProductionOverlayKind) {
@@ -1511,45 +1658,53 @@ impl Fvr05ProductionUxStateResource {
         } else {
             PathBuf::from(&self.settings.runtime_save_path)
         };
-        let result = (|| -> Result<(PathBuf, GpuRuntimeSaveState), GameAppShellError> {
-            let checkpointed = runtime.capture_portable_checkpoint()?;
-            let mut descriptor = self.gpu_runtime_state.clone();
-            descriptor.last_safe_checkpoint.save_id = checkpointed.save_id.clone();
-            descriptor.last_safe_checkpoint.world_tick = checkpointed.world.tick;
-            descriptor.last_safe_checkpoint.sealed_patch_boundary = true;
-            descriptor.last_safe_checkpoint.checkpoint_label = format!(
-                "{}:GpuAuthoritative:checkpoint-tick={}",
-                self.profile_id.label(),
-                checkpointed.world.tick.raw()
-            );
-            let checkpointed = checkpointed.with_gpu_runtime_state(descriptor.clone())?;
-            crate::GpuDurableSaveManifest::publish_snapshot(
-                &target_path,
-                &self.asset_root,
-                &checkpointed,
-            )?;
-            Ok((target_path.clone(), descriptor))
-        })();
-        match result {
-            Ok((path, descriptor)) => {
-                self.gpu_runtime_state = descriptor;
+        match runtime.request_manual_checkpoint(target_path.clone()) {
+            Ok(_) => {
                 self.last_error = None;
                 self.last_action = if create_world {
-                    format!(
-                        "Created exact GPU-checkpoint world save: {}",
-                        path.display()
-                    )
+                    format!("Queued exact GPU world save: {}", target_path.display())
                 } else {
-                    format!(
-                        "Saved exact GPU-checkpoint runtime state: {}",
-                        path.display()
-                    )
+                    format!("Queued exact GPU runtime save: {}", target_path.display())
                 };
             }
             Err(error) => {
                 self.last_error = Some(error.to_string());
                 self.last_action = "GPU checkpoint save failed; prior save retained".to_string();
             }
+        }
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    fn observe_gpu_runtime_save_status(&mut self, status: &crate::GpuManualCheckpointStatus) {
+        match status {
+            crate::GpuManualCheckpointStatus::Complete {
+                destination,
+                checkpoint_tick,
+            } => {
+                self.gpu_runtime_state.last_safe_checkpoint.world_tick = *checkpoint_tick;
+                self.gpu_runtime_state.last_safe_checkpoint.checkpoint_label = format!(
+                    "{}:GpuAuthoritative:checkpoint-tick={}",
+                    self.profile_id.label(),
+                    checkpoint_tick.raw()
+                );
+                self.last_error = None;
+                self.last_action = format!(
+                    "Saved exact GPU checkpoint asynchronously: {}",
+                    destination.display()
+                );
+            }
+            crate::GpuManualCheckpointStatus::Failed {
+                destination,
+                message,
+            } => {
+                self.last_error = Some(message.clone());
+                self.last_action = format!(
+                    "GPU checkpoint save failed; prior save retained: {}",
+                    destination.display()
+                );
+            }
+            crate::GpuManualCheckpointStatus::Idle
+            | crate::GpuManualCheckpointStatus::Queued { .. } => {}
         }
     }
 
@@ -1566,6 +1721,16 @@ impl Fvr05ProductionUxStateResource {
             }
         }
     }
+}
+
+#[cfg(all(feature = "gpu-runtime", feature = "gpu-tests"))]
+pub fn production_archive_birth_manifest_for_test(
+    app: &mut App,
+    organism_id: OrganismId,
+) -> Option<alife_core::Blake3Digest> {
+    app.world_mut()
+        .get_non_send_resource_mut::<ProductionGpuBrainRuntimeResource>()
+        .and_then(|runtime| runtime.runtime.archive_birth_manifest(organism_id))
 }
 
 fn configure_production_voxel_presentation_schedule(app: &mut App) {
@@ -1602,6 +1767,16 @@ fn despawn_production_entity_hierarchy(world: &mut World, entity: Entity) {
 
 #[cfg(feature = "gpu-runtime")]
 fn despawn_fvr04_runtime_scene(world: &mut World) {
+    let coat_keys = {
+        let mut query = world
+            .query_filtered::<&ProductionCreatureCoatKey, With<ProductionCreatureAssemblyRoot>>();
+        query.iter(world).map(|key| key.0).collect::<Vec<_>>()
+    };
+    if let Some(mut context) = world.get_resource_mut::<Fvr04CreatureSpawnContext>() {
+        for key in coat_keys {
+            context.release_coat(key);
+        }
+    }
     let roots = production_entities_with::<Fvr04ProductionRuntimeSceneRoot>(world);
     for root in roots {
         if let Some(mut map) = world.get_resource_mut::<BevyEntityMap>() {
@@ -1609,17 +1784,12 @@ fn despawn_fvr04_runtime_scene(world: &mut World) {
         }
         despawn_production_entity_hierarchy(world, root);
     }
-    let mut labels = world.query_filtered::<(&mut Text2d, &mut Visibility), With<
-        Fvr04ProductionCreatureWorldLabel,
-    >>();
+    let mut labels = world
+        .query_filtered::<(&mut Text2d, &mut Visibility), With<Fvr04ProductionCreatureWorldLabel>>(
+        );
     for (mut text, mut visibility) in labels.iter_mut(world) {
         text.0 = "creature".to_string();
         *visibility = Visibility::Hidden;
-    }
-    let mut inspectors =
-        world.query_filtered::<&mut Text, With<Fvr04ProductionCreatureInspectorPanel>>();
-    for mut text in inspectors.iter_mut(world) {
-        text.0 = "Creature\nselection: none".to_string();
     }
 }
 
@@ -1659,10 +1829,7 @@ fn clear_production_load_focus(world: &mut World) {
 }
 
 #[cfg(feature = "gpu-runtime")]
-fn report_production_runtime_load_failure(
-    world: &mut World,
-    message: String,
-) {
+fn report_production_runtime_load_failure(world: &mut World, message: String) {
     if let Some(mut ux) = world.get_resource_mut::<Fvr05ProductionUxStateResource>() {
         ux.last_error = Some(message);
         ux.last_action = "Load failed; current world left unchanged".to_string();
@@ -1674,10 +1841,11 @@ fn build_production_load_presentation_frame(
     save: &PortableSaveFile,
 ) -> Result<LiveBrainPresentationFrameResource, GameAppShellError> {
     let candidate_world = save.restore_headless_world()?;
-    LiveBrainPresentationFrameResource::from_authoritative_world(&candidate_world)
-        .map_err(|error| GameAppShellError::InvalidProductionFrontend {
+    LiveBrainPresentationFrameResource::from_authoritative_world(&candidate_world).map_err(
+        |error| GameAppShellError::InvalidProductionFrontend {
             message: format!("FVR04 presentation frame restore failed: {error:?}"),
-        })
+        },
+    )
 }
 
 #[cfg(feature = "gpu-runtime")]
@@ -1697,8 +1865,8 @@ fn apply_production_runtime_load(world: &mut World) {
             })?
             .clone();
         let save_path = PathBuf::from(&current_ux.settings.runtime_save_path);
-        let durable = crate::GpuDurableSaveManifest::open(&save_path, &current_ux.asset_root)?;
-        let loaded = durable.load()?;
+        let (durable, loaded) =
+            crate::GpuDurableSaveManifest::open_loaded(&save_path, &current_ux.asset_root)?;
         let candidate_runtime_state = load_fvr04_runtime_state_from_save(
             &loaded.save,
             &current_ux.asset_root,
@@ -1719,11 +1887,11 @@ fn apply_production_runtime_load(world: &mut World) {
             candidate_runtime_state,
             renderer_settings,
             &candidate_settings,
-            world.get_resource::<Fvr04CreatureSpawnContext>().ok_or_else(|| {
-                GameAppShellError::InvalidProductionFrontend {
+            world
+                .get_resource::<Fvr04CreatureSpawnContext>()
+                .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
                     message: "FVR04 spawn context missing during runtime load".to_string(),
-                }
-            })?,
+                })?,
         )?;
         let prepared_scene = world.resource_scope(|world, mut context| {
             prepare_fvr04_runtime_scene(world, candidate_scene, &mut context)
@@ -1753,7 +1921,7 @@ fn apply_production_runtime_load(world: &mut World) {
             }
         }
         let staging_backend = {
-            let mut live_runtime = world
+            let live_runtime = world
                 .get_non_send_resource_mut::<ProductionGpuBrainRuntimeResource>()
                 .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
                     message: "production GPU runtime missing during runtime load".to_string(),
@@ -1770,10 +1938,7 @@ fn apply_production_runtime_load(world: &mut World) {
         } else {
             RuntimePlaybackState::Running
         };
-        let speed_ticks = candidate_settings
-            .simulation_speed
-            .round()
-            .clamp(1.0, 5.0) as u32;
+        let speed_ticks = candidate_settings.simulation_speed.round().clamp(1.0, 5.0) as u32;
 
         {
             let mut live_runtime = world
@@ -1803,16 +1968,16 @@ fn apply_production_runtime_load(world: &mut World) {
         let assets = world
             .remove_resource::<Fvr04RuntimeSceneAssets>()
             .expect("FVR04 scene assets passed precommit validation");
-        let (scene, creature_scene) = spawn_fvr04_runtime_scene_candidate(
-            world,
-            prepared_scene,
-            &assets,
-        );
+        let (scene, creature_scene) =
+            spawn_fvr04_runtime_scene_candidate(world, prepared_scene, &assets);
         world.insert_resource(assets);
         install_fvr04_runtime_scene_resources(world, scene, creature_scene);
         clear_production_load_focus(world);
         if let Some(mut ux) = world.get_resource_mut::<Fvr05ProductionUxStateResource>() {
-            ux.last_action = format!("Loaded authoritative production runtime: {}", save_path.display());
+            ux.last_action = format!(
+                "Loaded authoritative production runtime: {}",
+                save_path.display()
+            );
             ux.last_error = None;
         }
         Ok(())
@@ -1870,33 +2035,7 @@ pub fn spawn_fvr03_production_voxel_scene(
         summary.effective_population,
     );
     let runtime_state = load_fvr04_runtime_state(summary)?;
-    let snapshot = runtime_state.snapshot.clone();
-    let visible_chunks = snapshot
-        .visible_chunks
-        .iter()
-        .map(|chunk| chunk.coord)
-        .collect::<BTreeSet<_>>();
-    let procedural_config = procedural_config_from_snapshot(&snapshot);
-
-    #[cfg(feature = "voxel-backend")]
-    {
-        let voxel_config = Fvr03BevyVoxelWorldConfig {
-            seed: snapshot.world_seed,
-            procedural_config,
-            visible_chunks: visible_chunks.clone(),
-            settings: settings.clone(),
-        };
-        app.add_plugins(bevy_voxel_world::prelude::VoxelWorldPlugin::<
-            Fvr03BevyVoxelWorldConfig,
-        >::minimal());
-        app.insert_resource(voxel_config);
-    }
-
-    let scene_assets = create_fvr04_runtime_scene_assets(
-        app,
-        &settings,
-        snapshot.profile_budget.chunk_tile_size,
-    );
+    let scene_assets = create_fvr04_runtime_scene_assets(app, &settings);
     let creature_part_catalog = load_geneforge_creature_part_catalog().map_err(|error| {
         GameAppShellError::InvalidProductionFrontend {
             message: error.to_string(),
@@ -1908,7 +2047,7 @@ pub fn spawn_fvr03_production_voxel_scene(
             .map_err(|error| GameAppShellError::InvalidProductionFrontend {
                 message: error.to_string(),
             })?;
-    let mut creature_part_assets = {
+    let creature_part_assets = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
         let active_lod = match creature_settings.lod {
             Fvr04CreatureLod::FullVoxel => CreaturePartLodId::Full,
@@ -1926,97 +2065,12 @@ pub fn spawn_fvr03_production_voxel_scene(
             message: error.to_string(),
         })?
     };
-    let creature_cue_mesh = {
-        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(Cuboid::new(0.08, 0.08, 0.08))
-    };
-    let creature_eye_sclera_mesh = {
-        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(
-            Sphere::new(0.085)
-                .mesh()
-                .ico(2)
-                .expect("valid creature eye sclera"),
-        )
-    };
-    let creature_eye_iris_mesh = {
-        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(
-            Sphere::new(0.085)
-                .mesh()
-                .ico(2)
-                .expect("valid creature iris"),
-        )
-    };
-    let creature_eye_pupil_mesh = {
-        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(
-            Sphere::new(0.085)
-                .mesh()
-                .ico(1)
-                .expect("valid creature pupil"),
-        )
-    };
-    let creature_eye_highlight_mesh = {
-        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(
-            Sphere::new(0.010)
-                .mesh()
-                .ico(1)
-                .expect("valid creature eye highlight"),
-        )
-    };
-    let (
-        creature_eye_sclera_material,
-        creature_eye_pupil_material,
-        creature_eye_highlight_material,
-        creature_face_material,
-    ) = {
-        let mut materials = app.world_mut().resource_mut::<Assets<StandardMaterial>>();
-        let sclera = materials.add(StandardMaterial {
-            base_color: Color::srgb(0.91, 0.86, 0.74),
-            perceptual_roughness: 0.52,
-            reflectance: 0.34,
-            unlit: false,
-            ..default()
-        });
-        let pupil = materials.add(StandardMaterial {
-            base_color: Color::srgb(0.08, 0.045, 0.03),
-            perceptual_roughness: 0.38,
-            reflectance: 0.42,
-            unlit: false,
-            ..default()
-        });
-        let highlight = materials.add(StandardMaterial {
-            base_color: Color::srgb(1.0, 0.98, 0.90),
-            perceptual_roughness: 0.24,
-            reflectance: 0.50,
-            unlit: false,
-            ..default()
-        });
-        let face = materials.add(StandardMaterial {
-            base_color: Color::srgb(0.70, 0.28, 0.25),
-            perceptual_roughness: 0.68,
-            unlit: false,
-            ..default()
-        });
-        (sclera, pupil, highlight, face)
-    };
     let mut creature_spawn_context = Fvr04CreatureSpawnContext {
         settings: creature_settings,
         catalog: creature_part_catalog,
         preparations: creature_preparations,
         assets_root: creature_assets_root,
         creature_part_assets,
-        cue_mesh: creature_cue_mesh,
-        eye_sclera_mesh: creature_eye_sclera_mesh,
-        eye_iris_mesh: creature_eye_iris_mesh,
-        eye_pupil_mesh: creature_eye_pupil_mesh,
-        eye_highlight_mesh: creature_eye_highlight_mesh,
-        eye_sclera_material: creature_eye_sclera_material,
-        eye_pupil_material: creature_eye_pupil_material,
-        eye_highlight_material: creature_eye_highlight_material,
-        face_material: creature_face_material,
     };
     let candidate = prepare_fvr04_runtime_scene_candidate(
         runtime_state,
@@ -2024,24 +2078,13 @@ pub fn spawn_fvr03_production_voxel_scene(
         &summary.ui_settings,
         &creature_spawn_context,
     )?;
-    let selected = fvr04_runtime_scene_selection(&candidate.runtime_state, &candidate.visible_tiles);
-    let tile_heights = candidate
-        .tile_summaries_by_tile
-        .iter()
-        .map(|(tile, summary)| (*tile, summary.height_units))
-        .collect::<BTreeMap<_, _>>();
-    let prepared = prepare_fvr04_runtime_scene(
-        app.world_mut(),
-        candidate,
-        &mut creature_spawn_context,
-    )?;
-    let (mut scene, creature_scene) = spawn_fvr04_runtime_scene_candidate(
-        app.world_mut(),
-        prepared,
-        &scene_assets,
-    );
+    let selected =
+        fvr04_runtime_scene_selection(&candidate.runtime_state, &candidate.visible_tiles);
+    let prepared =
+        prepare_fvr04_runtime_scene(app.world_mut(), candidate, &mut creature_spawn_context)?;
+    let (mut scene, creature_scene) =
+        spawn_fvr04_runtime_scene_candidate(app.world_mut(), prepared, &scene_assets);
     spawn_production_terrain_camera(app, &settings);
-    spawn_production_terrain_lighting(app, &settings, &tile_heights);
 
     if summary.record_performance {
         scene.performance_artifact_path = Some(write_fvr03_performance_artifact(&scene, None)?);
@@ -2056,19 +2099,32 @@ pub fn spawn_fvr03_production_voxel_scene(
         selected,
     });
     app.insert_resource(Fvr04ProductionCreatureFollowResource {
-        enabled: false,
+        enabled: summary.ui_settings.follow_selection,
         target_stable_id: selected.and_then(|selection| {
             (selection.kind == StableVoxelRefKind::Creature)
                 .then_some(selection.stable_id)
-            .flatten()
+                .flatten()
         }),
     });
     #[cfg(feature = "gpu-runtime")]
     app.insert_resource(ProductionRuntimeLoadRequest::default());
     configure_production_voxel_presentation_schedule(app);
     app.add_systems(
+        bevy::prelude::PostUpdate,
+        hearthling::apply_inherited_proportions
+            .after(bevy::app::AnimationSystems)
+            .before(bevy::transform::TransformSystems::Propagate),
+    );
+    app.add_systems(
+        bevy::prelude::PostUpdate,
+        graphics_capture::capture_player_view.after(bevy::transform::TransformSystems::Propagate),
+    );
+    app.add_systems(
         Update,
-        project_live_world_to_fvr04_creature_roots
+        (
+            project_live_world_to_fvr04_creature_roots,
+            live_food_projection::sync_food,
+        )
             .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
     )
     .add_systems(
@@ -2076,7 +2132,13 @@ pub fn spawn_fvr03_production_voxel_scene(
         (
             handle_fvr03_mouse_selection,
             handle_fvr03_camera_mode_input,
+            camera_navigation::zoom_camera,
             handle_fvr04_camera_follow_input,
+            camera_navigation::pan_camera
+                .after(handle_fvr03_camera_mode_input)
+                .after(handle_fvr04_camera_follow_input)
+                .before(handle_fvr05_production_ux_input),
+            handle_pause_on_focus_loss.before(handle_fvr05_production_ux_input),
             handle_fvr05_production_ux_input,
         )
             .in_set(ProductionVoxelPresentationSet::Input),
@@ -2086,7 +2148,12 @@ pub fn spawn_fvr03_production_voxel_scene(
         (
             animate_fvr04_creatures,
             animate_fvr04_creature_parts,
-            animate_fvr07_production_vfx,
+            hearthling::animate,
+            landscape::reveal_creatures,
+            creature_grounding::ground_creatures
+                .after(hearthling::animate)
+                .after(animate_fvr04_creatures)
+                .after(animate_fvr04_creature_parts),
         )
             .in_set(ProductionVoxelPresentationSet::ProceduralAnimation),
     )
@@ -2094,9 +2161,10 @@ pub fn spawn_fvr03_production_voxel_scene(
         Update,
         (
             sync_fvr04_selection_marker,
+            sync_fvr11_creature_contact_shadows,
             sync_fvr04_camera_follow,
+            camera_terrain::stream_camera_terrain.after(sync_fvr04_camera_follow),
             sync_fvr04_creature_label,
-            sync_fvr04_creature_inspector_panel,
             sync_fvr05_panel_visibility,
             sync_fvr05_overlay_visibility,
             sync_fvr05_top_runtime_bar,
@@ -2115,6 +2183,22 @@ pub fn spawn_fvr03_production_voxel_scene(
             sync_v0_player_control_strip,
         )
             .in_set(ProductionVoxelPresentationSet::RootReaders),
+    );
+    #[cfg(not(feature = "vfx-hanabi"))]
+    app.add_systems(
+        Update,
+        sync_fvr07_attached_fallback_vfx
+            .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
+    )
+    .add_systems(
+        Update,
+        animate_fvr07_production_vfx.in_set(ProductionVoxelPresentationSet::ProceduralAnimation),
+    );
+    #[cfg(feature = "vfx-hanabi")]
+    app.add_systems(
+        Update,
+        sync_fvr07_attached_hanabi_vfx
+            .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
     );
     #[cfg(feature = "gpu-runtime")]
     app.add_systems(
@@ -2136,6 +2220,44 @@ pub fn spawn_fvr03_production_voxel_scene(
             .before(ProductionVoxelPresentationSet::LiveGpuTick),
     );
     if summary.record_performance && !summary.dry_run {
+        #[cfg(feature = "gpu-runtime")]
+        {
+            app.insert_resource(Phase31PerformanceMetricsResource::new(summary))
+                .add_systems(
+                    Update,
+                    phase31_performance_frame_begin.before(ProductionVoxelPresentationSet::Input),
+                )
+                .add_systems(
+                    Update,
+                    phase31_performance_after_input
+                        .after(ProductionVoxelPresentationSet::Input)
+                        .before(ProductionVoxelPresentationSet::LiveGpuTick),
+                )
+                .add_systems(
+                    Update,
+                    phase31_performance_after_live_gpu_tick
+                        .after(ProductionVoxelPresentationSet::LiveGpuTick)
+                        .before(ProductionVoxelPresentationSet::AuthoritativeProjection),
+                )
+                .add_systems(
+                    Update,
+                    phase31_performance_after_authoritative_projection
+                        .after(ProductionVoxelPresentationSet::AuthoritativeProjection)
+                        .before(ProductionVoxelPresentationSet::ProceduralAnimation),
+                )
+                .add_systems(
+                    Update,
+                    phase31_performance_after_procedural_animation
+                        .after(ProductionVoxelPresentationSet::ProceduralAnimation)
+                        .before(ProductionVoxelPresentationSet::RootReaders),
+                )
+                .add_systems(
+                    Update,
+                    phase31_performance_after_ui
+                        .after(ProductionVoxelPresentationSet::RootReaders)
+                        .before(request_fvr03_recorded_screenshot),
+                );
+        }
         let screenshot_path = PathBuf::from(FVR03_PERFORMANCE_ARTIFACT_DIR).join(format!(
             "{}_runtime_screenshot.png",
             summary.profile_id.label()
@@ -2157,8 +2279,6 @@ pub fn spawn_fvr03_production_voxel_scene(
         })
         .add_systems(Update, request_fvr03_recorded_screenshot);
     }
-    spawn_fvr03_diagnostics_ui(app, summary, &settings);
-    spawn_fvr04_creature_inspector_panel(app);
     spawn_fvr05_production_ux_ui(app);
     spawn_v0_player_experience_ui(app);
     spawn_fvr04_creature_world_label(app, selected);
@@ -2183,12 +2303,8 @@ fn load_fvr04_runtime_state_from_save(
     profile_id: ProductionFrontendProfileId,
     population: u16,
 ) -> Result<Fvr04RuntimeSceneState, GameAppShellError> {
-    let production_save = production_voxel_save_with_population(
-        save,
-        asset_root,
-        profile_id,
-        population,
-    )?;
+    let production_save =
+        production_voxel_save_with_population(save, asset_root, profile_id, population)?;
     let backend_state = production_save.require_voxel_backend()?.clone();
     let backend = PersistentVoxelWorldBackend::from_save_state(backend_state.clone())?;
     let anchors = backend_state
@@ -2212,6 +2328,7 @@ fn load_fvr04_runtime_state_from_save(
     }
     let creatures = fvr04_creature_visual_records_from_save(&production_save, &snapshot)?;
     Ok(Fvr04RuntimeSceneState {
+        backend,
         snapshot,
         creatures,
     })
@@ -2260,11 +2377,8 @@ fn fvr04_creature_visual_records_from_save(
                     organism_id.raw()
                 ),
             })?;
-        let position = Vec3f::new(
-            anchor.tile.x as f32 + 0.5,
-            object.position.y,
-            anchor.tile.z as f32 + 0.5,
-        );
+        let position = object.position;
+        let tile = VoxelTileCoord::new(position.x.floor() as i32, position.y.floor() as i32);
         let visual = creature_visual_snapshot_from_parts_with_appearance(
             organism_id,
             anchor.stable_id,
@@ -2280,10 +2394,10 @@ fn fvr04_creature_visual_records_from_save(
             stable_ref: StableVoxelObjectRef {
                 kind: StableVoxelRefKind::Creature,
                 stable_id: Some(anchor.stable_id),
-                chunk: anchor.chunk,
-                tile: Some(anchor.tile),
+                chunk: VoxelChunkCoord::for_tile(16, tile),
+                tile: Some(tile),
             },
-            tile: anchor.tile,
+            tile,
             display_label: object.label.clone(),
             brain_class_id: Some(creature.brain_class.default_class_id().raw()),
             brain_neuron_count: creature.brain_class.neuron_count(),
@@ -2574,22 +2688,6 @@ fn fvr04_scene_preflight_error(message: impl Into<String>) -> GameAppShellError 
     }
 }
 
-fn validate_fvr04_prepared_child_slot(
-    stable_id: WorldEntityId,
-    role: &str,
-    slot: CreaturePartSlot,
-    available_slots: &BTreeSet<CreaturePartSlot>,
-) -> Result<(), GameAppShellError> {
-    if available_slots.contains(&slot) {
-        Ok(())
-    } else {
-        Err(fvr04_scene_preflight_error(format!(
-            "FVR04 saved creature {} {role} references missing parent slot {slot:?}",
-            stable_id.raw()
-        )))
-    }
-}
-
 fn prepare_fvr04_creature_batch(
     world: &mut World,
     creatures: &[Fvr04CreatureVisualRecord],
@@ -2602,276 +2700,142 @@ fn prepare_fvr04_creature_batch(
         Fvr04CreatureLod::CompactVoxel => CreaturePartLodId::Compact,
         Fvr04CreatureLod::ImpostorVoxel => CreaturePartLodId::Impostor,
     };
-    let cover_meshes = {
-        let mut meshes = world.resource_mut::<Assets<Mesh>>();
-        BTreeMap::from([
-            (JoinCoverPrimitive::Ruff, meshes.add(Cuboid::new(0.30, 0.07, 0.22))),
-            (
-                JoinCoverPrimitive::ShoulderTuft,
-                meshes.add(Cuboid::new(0.14, 0.12, 0.16)),
-            ),
-            (
-                JoinCoverPrimitive::HipFur,
-                meshes.add(Cuboid::new(0.16, 0.10, 0.16)),
-            ),
-            (
-                JoinCoverPrimitive::TailRuff,
-                meshes.add(Cuboid::new(0.20, 0.12, 0.14)),
-            ),
-            (JoinCoverPrimitive::Cuff, meshes.add(Cuboid::new(0.14, 0.08, 0.14))),
-        ])
-    };
-    let detail_meshes = fvr10_creature_detail_meshes(world);
     let mut prepared = Vec::new();
-    for (index, creature) in creatures
-        .iter()
-        .take(usize::from(settings.max_visible_creatures))
-        .enumerate()
-    {
-        let visual = &creature.visual;
-        let coat_key = CreatureCoatKey::new(
-            visual.appearance.part_sources,
-            visual.appearance.palette_family,
-            visual.appearance.fur_pattern,
-            visual.appearance.marking_density,
-        );
-        let recipe = resolve_geneforge_creature_assembly(
-            visual.appearance.part_sources,
-            lod,
-            coat_key,
-            &context.catalog,
-            &context.preparations,
-        )
-        .map_err(|error| {
-            fvr04_scene_preflight_error(format!(
-                "FVR04 saved creature {} assembly preparation failed: {error}",
-                visual.stable_id.raw()
-            ))
-        })?;
-        if recipe.parts.is_empty() {
-            return Err(fvr04_scene_preflight_error(format!(
-                "FVR04 saved creature {} has no visible assembly parts",
-                visual.stable_id.raw()
-            )));
-        }
-        let available_slots = recipe.parts.keys().copied().collect::<BTreeSet<_>>();
-        let mut parts = Vec::with_capacity(recipe.parts.len());
-        let mut local_bounds = None::<CreatureVisualBounds>;
-        for part in recipe.parts.values() {
-            let key = part.mesh_key();
-            let bounds = context.creature_part_assets.bounds(key.clone()).ok_or_else(|| {
-                fvr04_scene_preflight_error(format!(
-                    "FVR04 saved creature {} part {:?} has no finite bounds",
-                    visual.stable_id.raw(),
-                    part.slot
-                ))
-            })?;
-            let mesh = context.creature_part_assets.mesh(key).ok_or_else(|| {
-                fvr04_scene_preflight_error(format!(
-                    "FVR04 saved creature {} part {:?} mesh is not loaded",
-                    visual.stable_id.raw(),
-                    part.slot
-                ))
-            })?;
-            let transform = geneforge_authored_transform_to_bevy(part.authored_transform);
-            let transformed = transform_creature_visual_bounds(bounds, transform);
-            if let Some(current) = &mut local_bounds {
-                current.include(transformed);
-            } else {
-                local_bounds = Some(transformed);
-            }
-            parts.push(Fvr04PreparedCreaturePart {
-                recipe: part.clone(),
-                mesh,
-                transform,
-            });
-        }
-        let local_bounds = local_bounds.ok_or_else(|| {
-            fvr04_scene_preflight_error(format!(
-                "FVR04 saved creature {} produced no visible bounds",
-                visual.stable_id.raw()
-            ))
-        })?;
-        let coat = world.resource_scope(|world, mut images: bevy::prelude::Mut<Assets<Image>>| {
-            world.resource_scope(
-                |_world, mut materials: bevy::prelude::Mut<Assets<StandardMaterial>>| {
-                    context.creature_part_assets.acquire_geneforge_coat(
-                        &context.assets_root,
-                        &context.catalog,
-                        &recipe,
-                        &mut images,
-                        &mut materials,
-                    )
-                },
+    let preparation_result = (|| -> Result<(), GameAppShellError> {
+        for (index, creature) in creatures
+            .iter()
+            .take(usize::from(settings.max_visible_creatures))
+            .enumerate()
+        {
+            let visual = &creature.visual;
+            let coat_key = CreatureCoatKey::new(
+                visual.appearance.part_sources,
+                visual.appearance.palette_family,
+                visual.appearance.fur_pattern,
+                visual.appearance.marking_density,
+            );
+            let recipe = resolve_geneforge_creature_assembly(
+                visual.appearance.part_sources,
+                lod,
+                coat_key,
+                &context.catalog,
+                &context.preparations,
             )
-        })
-        .map_err(|error| {
-            fvr04_scene_preflight_error(format!(
-                "FVR04 saved creature {} coat preparation failed: {error}",
-                visual.stable_id.raw()
-            ))
-        })?;
-        let mut covers = Vec::with_capacity(recipe.join_covers.len());
-        for cover in &recipe.join_covers {
-            validate_fvr04_prepared_child_slot(
-                visual.stable_id,
-                "join cover",
-                cover.slot,
-                &available_slots,
-            )?;
-            let primitive = geneforge_join_cover_primitive(&cover.cover_kind).ok_or_else(|| {
+            .map_err(|error| {
                 fvr04_scene_preflight_error(format!(
-                    "FVR04 saved creature {} has unknown join cover {}",
-                    visual.stable_id.raw(),
-                    cover.cover_kind
-                ))
-            })?;
-            let mesh = cover_meshes.get(&primitive).cloned().ok_or_else(|| {
-                fvr04_scene_preflight_error(format!(
-                    "FVR04 saved creature {} has no prepared mesh for join cover {primitive:?}",
+                    "FVR04 saved creature {} assembly preparation failed: {error}",
                     visual.stable_id.raw()
                 ))
             })?;
-            covers.push(Fvr04PreparedJoinCover {
-                parent_slot: cover.slot,
-                primitive,
-                mesh,
-                transform: Transform::from_scale(Vec3::splat(0.72 + cover.overlap_depth)),
-            });
-        }
-        let (face_style, details, detail_materials) =
-            if matches!(settings.lod, Fvr04CreatureLod::ImpostorVoxel) {
-                (None, Vec::new(), None)
-            } else {
-                validate_fvr04_prepared_child_slot(
-                    visual.stable_id,
-                    "face",
-                    CreaturePartSlot::Head,
-                    &available_slots,
-                )?;
-                let head = recipe.parts.get(&CreaturePartSlot::Head).ok_or_else(|| {
-                    fvr04_scene_preflight_error(format!(
-                        "FVR04 saved creature {} has no prepared head",
-                        visual.stable_id.raw()
-                    ))
-                })?;
-                let head_asset = context.catalog.asset(&head.asset_id).ok_or_else(|| {
-                    fvr04_scene_preflight_error(format!(
-                        "FVR04 saved creature {} head asset is missing",
-                        visual.stable_id.raw()
-                    ))
-                })?;
-                let emitted_bounds = context
+            if recipe.parts.is_empty() {
+                return Err(fvr04_scene_preflight_error(format!(
+                    "FVR04 saved creature {} has no visible assembly parts",
+                    visual.stable_id.raw()
+                )));
+            }
+            let mut local_bounds = None::<CreatureVisualBounds>;
+            for part in recipe.parts.values() {
+                let key = part.mesh_key();
+                let bounds = context
                     .creature_part_assets
-                    .bounds(head.mesh_key())
+                    .bounds(key.clone())
                     .ok_or_else(|| {
                         fvr04_scene_preflight_error(format!(
-                            "FVR04 saved creature {} head bounds are missing",
-                            visual.stable_id.raw()
+                            "FVR04 saved creature {} part {:?} has no finite bounds",
+                            visual.stable_id.raw(),
+                            part.slot
                         ))
                     })?;
-                let landmarks = remap_creature_face_landmarks(
-                    head_asset.canonical_bounds,
-                    emitted_bounds,
-                    &head.landmarks,
-                )
-                .map_err(|error| {
+                context.creature_part_assets.mesh(key).ok_or_else(|| {
                     fvr04_scene_preflight_error(format!(
-                        "FVR04 saved creature {} face landmark preparation failed: {error}",
-                        visual.stable_id.raw()
+                        "FVR04 saved creature {} part {:?} mesh is not loaded",
+                        visual.stable_id.raw(),
+                        part.slot
                     ))
                 })?;
-                let face_style = creature_face_style_from_landmarks(
-                    visual.appearance,
-                    &landmarks,
-                )
-                .map_err(|error| {
-                    fvr04_scene_preflight_error(format!(
-                        "FVR04 saved creature {} face preparation failed: {error}",
-                        visual.stable_id.raw()
-                    ))
-                })?;
-                let details = creature_surface_detail_recipe(visual.appearance, match settings.lod {
-                    Fvr04CreatureLod::FullVoxel => 1.0,
-                    Fvr04CreatureLod::CompactVoxel => 0.92,
-                    Fvr04CreatureLod::ImpostorVoxel => 0.72,
-                });
-                for detail in &details {
-                    validate_fvr04_prepared_child_slot(
-                        visual.stable_id,
-                        detail.role,
-                        detail.anchor_slot,
-                        &available_slots,
-                    )?;
+                let transform = geneforge_authored_transform_to_bevy(part.authored_transform);
+                let transformed = transform_creature_visual_bounds(bounds, transform);
+                if let Some(current) = &mut local_bounds {
+                    current.include(transformed);
+                } else {
+                    local_bounds = Some(transformed);
                 }
-                (
-                    Some(face_style),
-                    details,
-                    Some(fvr10_creature_detail_materials(world, visual)),
-                )
-            };
-        let surface_height = tile_summaries
-            .get(&creature.tile)
-            .map(|tile| tile.height_units)
-            .unwrap_or(0.44);
-        let base_scale = fvr04_creature_scale(visual, settings.lod);
-        let base_height = grounded_root_height(
-            surface_height,
-            0.04,
-            local_bounds,
-            base_scale.to_array(),
-            bevy::math::Mat3::IDENTITY.to_cols_array(),
-        );
-        let base_translation = Vec3::new(
-            creature.tile.x as f32 + 0.5,
-            base_height,
-            creature.tile.z as f32 + 0.5,
-        );
-        let root_transform = Transform::from_translation(base_translation)
-            .with_rotation(Quat::from_rotation_y(std::f32::consts::PI))
-            .with_scale(base_scale);
-        let phase = (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11;
-        prepared.push(Fvr04PreparedCreature {
-            record: creature.clone(),
-            recipe,
-            coat,
-            parts,
-            covers,
-            local_bounds,
-            root_transform,
-            root_visual: Fvr04ProductionCreatureVisualMarker {
-                stable_id: visual.stable_id,
-                organism_id: visual.organism_id,
-                tile: creature.tile,
-                expression: visual.expression,
-                animation: visual.animation,
-                lod: settings.lod,
-                base_translation,
-                local_offset: Vec3::ZERO,
-                base_scale,
-                local_bounds,
+            }
+            let local_bounds = local_bounds.ok_or_else(|| {
+                fvr04_scene_preflight_error(format!(
+                    "FVR04 saved creature {} produced no visible bounds",
+                    visual.stable_id.raw()
+                ))
+            })?;
+            let coat = world
+                .resource_scope(|world, mut images: bevy::prelude::Mut<Assets<Image>>| {
+                    world.resource_scope(
+                        |_world, mut materials: bevy::prelude::Mut<Assets<StandardMaterial>>| {
+                            context.creature_part_assets.acquire_geneforge_coat(
+                                &context.assets_root,
+                                &context.catalog,
+                                &recipe,
+                                &mut images,
+                                &mut materials,
+                            )
+                        },
+                    )
+                })
+                .map_err(|error| {
+                    fvr04_scene_preflight_error(format!(
+                        "FVR04 saved creature {} coat preparation failed: {error}",
+                        visual.stable_id.raw()
+                    ))
+                })?;
+            let surface_height = tile_summaries
+                .get(&creature.tile)
+                .map(|tile| tile.height_units)
+                .unwrap_or(0.44);
+            let base_scale = fvr04_creature_scale(visual, settings.lod);
+            let base_height = grounded_root_height(
                 surface_height,
-                phase,
-            },
-            face_style,
-            details,
-            detail_materials,
-        });
+                0.04,
+                local_bounds,
+                base_scale.to_array(),
+                bevy::math::Mat3::IDENTITY.to_cols_array(),
+            );
+            let base_translation = Vec3::new(visual.position.x, base_height, visual.position.y);
+            let root_transform = Transform::from_translation(base_translation)
+                .with_rotation(Quat::from_rotation_y(std::f32::consts::PI))
+                .with_scale(base_scale);
+            let phase = (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11;
+            prepared.push(Fvr04PreparedCreature {
+                record: creature.clone(),
+                recipe,
+                coat,
+                root_transform,
+                root_visual: Fvr04ProductionCreatureVisualMarker {
+                    stable_id: visual.stable_id,
+                    organism_id: visual.organism_id,
+                    tile: creature.tile,
+                    expression: visual.expression,
+                    animation: visual.animation,
+                    lod: settings.lod,
+                    base_translation,
+                    local_offset: Vec3::ZERO,
+                    base_scale,
+                    local_bounds,
+                    surface_height,
+                    phase,
+                },
+            });
+        }
+        Ok(())
+    })();
+    if let Err(error) = preparation_result {
+        for creature in &prepared {
+            context.release_coat(creature.coat.selected_key);
+        }
+        return Err(error);
     }
     Ok(Fvr04PreparedCreatureBatch {
         settings,
         creatures: prepared,
-        cover_mesh_count: cover_meshes.len(),
-        detail_meshes,
-        cue_mesh: context.cue_mesh.clone(),
-        eye_sclera_mesh: context.eye_sclera_mesh.clone(),
-        eye_iris_mesh: context.eye_iris_mesh.clone(),
-        eye_pupil_mesh: context.eye_pupil_mesh.clone(),
-        eye_highlight_mesh: context.eye_highlight_mesh.clone(),
-        eye_sclera_material: context.eye_sclera_material.clone(),
-        eye_pupil_material: context.eye_pupil_material.clone(),
-        eye_highlight_material: context.eye_highlight_material.clone(),
-        face_material: context.face_material.clone(),
     })
 }
 
@@ -2880,10 +2844,14 @@ fn prepare_fvr04_lighting(
     candidate: &Fvr04RuntimeSceneCandidate,
     creatures: &Fvr04PreparedCreatureBatch,
 ) -> Fvr04PreparedLighting {
-    let directional_shadows = !candidate.settings.minimum_floor;
+    let shadow_cascades = production_shadow_cascade_count(&candidate.settings);
+    let directional_shadows = shadow_cascades > 0;
+    let shadow_maximum_distance = production_shadow_maximum_distance(&candidate.settings);
     if directional_shadows {
         return Fvr04PreparedLighting {
             directional_shadows,
+            shadow_cascades,
+            shadow_maximum_distance,
             contact_shadow_mesh: None,
             contact_shadow_material: None,
             contact_shadows: Vec::new(),
@@ -2892,16 +2860,17 @@ fn prepare_fvr04_lighting(
     let contact_shadow_mesh = world
         .resource_mut::<Assets<Mesh>>()
         .add(fvr04_contact_shadow_mesh());
-    let contact_shadow_material = world
-        .resource_mut::<Assets<StandardMaterial>>()
-        .add(StandardMaterial {
-            base_color: Color::srgba(0.055, 0.075, 0.038, 0.24),
-            alpha_mode: AlphaMode::Blend,
-            perceptual_roughness: 1.0,
-            cull_mode: None,
-            unlit: true,
-            ..default()
-        });
+    let contact_shadow_material =
+        world
+            .resource_mut::<Assets<StandardMaterial>>()
+            .add(StandardMaterial {
+                base_color: Color::srgba(0.055, 0.075, 0.038, 0.24),
+                alpha_mode: AlphaMode::Blend,
+                perceptual_roughness: 1.0,
+                cull_mode: None,
+                unlit: true,
+                ..default()
+            });
     let height_for = |tile: VoxelTileCoord| {
         candidate
             .tile_summaries_by_tile
@@ -2922,6 +2891,7 @@ fn prepare_fvr04_lighting(
             ),
             scale: 1.0,
             source_kind: "creature",
+            stable_id: Some(creature.record.visual.stable_id),
         })
         .collect::<Vec<_>>();
     contact_shadows.extend(
@@ -2938,10 +2908,13 @@ fn prepare_fvr04_lighting(
                 ),
                 scale: 0.78,
                 source_kind: "dressing",
+                stable_id: None,
             }),
     );
     Fvr04PreparedLighting {
         directional_shadows,
+        shadow_cascades,
+        shadow_maximum_distance,
         contact_shadow_mesh: Some(contact_shadow_mesh),
         contact_shadow_material: Some(contact_shadow_material),
         contact_shadows,
@@ -2950,25 +2923,23 @@ fn prepare_fvr04_lighting(
 
 fn spawn_fvr04_prepared_lighting(world: &mut World, lighting: Fvr04PreparedLighting) {
     let light = DirectionalLight {
-        color: Color::srgb(1.0, 0.86, 0.66),
-        illuminance: 5800.0,
+        color: Color::srgb(1.0, 0.96, 0.88),
+        illuminance: 8500.0,
         shadows_enabled: lighting.directional_shadows,
         ..default()
     };
-    let transform = Transform::from_rotation(Quat::from_euler(
-        EulerRot::XYZ,
-        -1.05,
-        0.62,
-        -0.42,
-    ));
+    let transform = Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -1.05, 0.62, -0.42));
     if lighting.directional_shadows {
         world.spawn((
-            Name::new("A-Life FVR11 warm two-cascade directional sun"),
+            Name::new(format!(
+                "A-Life FVR11 warm {}-cascade directional sun",
+                lighting.shadow_cascades
+            )),
             light,
             bevy::light::CascadeShadowConfigBuilder {
-                num_cascades: 2,
+                num_cascades: lighting.shadow_cascades,
                 minimum_distance: 0.1,
-                maximum_distance: 90.0,
+                maximum_distance: lighting.shadow_maximum_distance,
                 first_cascade_far_bound: 28.0,
                 overlap_proportion: 0.18,
             }
@@ -2999,10 +2970,12 @@ fn spawn_fvr04_prepared_lighting(world: &mut World, lighting: Fvr04PreparedLight
             Mesh3d(mesh.clone()),
             MeshMaterial3d(material.clone()),
             Transform::from_translation(shadow.translation).with_scale(Vec3::splat(shadow.scale)),
+            bevy::light::NotShadowCaster,
             bevy::picking::Pickable::IGNORE,
             crate::Fvr11ProductionContactShadow {
                 source_kind: shadow.source_kind,
                 tile: shadow.tile,
+                stable_id: shadow.stable_id,
                 display_only: true,
                 no_renderer_authority_over_world_actions_or_cognition: true,
             },
@@ -3012,7 +2985,7 @@ fn spawn_fvr04_prepared_lighting(world: &mut World, lighting: Fvr04PreparedLight
 }
 
 fn fvr04_contact_shadow_mesh() -> Mesh {
-    const SEGMENTS: u32 = 20;
+    const SEGMENTS: u32 = 12;
     const RADIUS: f32 = 0.36;
     let mut positions = Vec::with_capacity((SEGMENTS + 1) as usize);
     let mut normals = Vec::with_capacity((SEGMENTS + 1) as usize);
@@ -3063,25 +3036,23 @@ fn prepare_fvr04_runtime_scene(
 fn create_fvr04_runtime_scene_assets(
     app: &mut App,
     settings: &Fvr03ProductionVoxelRendererSettings,
-    chunk_tile_size: u16,
 ) -> Fvr04RuntimeSceneAssets {
-    let voxel_materials = create_fvr03_materials(app, &settings.material_palette());
+    let selection_material = create_fvr03_selection_material(app, &settings.material_palette());
     let terrain_materials = create_production_terrain_material_library(app);
     install_animated_water_material(app, terrain_materials.water.clone());
     let dressing_library = create_terrain_dressing_library(app);
-    let (boundary_mesh, vfx_unit_mesh, selection_mesh) = {
+    let (vfx_unit_mesh, selection_mesh) = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
         (
-            meshes.add(Cuboid::new(
-                f32::from(chunk_tile_size),
-                0.035,
-                f32::from(chunk_tile_size),
-            )),
-            meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-            meshes.add(Torus::new(0.54, 0.70)),
+            (!cfg!(feature = "vfx-hanabi")).then(|| meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+            meshes.add(Torus::new(0.66, 0.68)),
         )
     };
-    let vfx_materials = fvr07_vfx_materials(app.world_mut());
+    let vfx_materials = if cfg!(feature = "vfx-hanabi") {
+        BTreeMap::new()
+    } else {
+        fvr07_vfx_materials(app.world_mut())
+    };
     let overlay_materials = Fvr05ProductionOverlayKind::all()
         .iter()
         .copied()
@@ -3094,9 +3065,8 @@ fn create_fvr04_runtime_scene_assets(
         })
         .collect();
     Fvr04RuntimeSceneAssets {
-        voxel_materials,
+        selection_material,
         terrain_materials,
-        boundary_mesh,
         dressing_library,
         vfx_unit_mesh,
         vfx_materials,
@@ -3109,7 +3079,10 @@ fn spawn_fvr04_runtime_scene_candidate(
     world: &mut World,
     prepared: Fvr04PreparedRuntimeScene,
     assets: &Fvr04RuntimeSceneAssets,
-) -> (Fvr03ProductionVoxelSceneResource, Fvr04ProductionCreatureSceneResource) {
+) -> (
+    Fvr03ProductionVoxelSceneResource,
+    Fvr04ProductionCreatureSceneResource,
+) {
     let Fvr04PreparedRuntimeScene {
         candidate,
         creatures,
@@ -3131,57 +3104,13 @@ fn spawn_fvr04_runtime_scene_candidate(
     } = candidate;
     let snapshot = &runtime_state.snapshot;
     let selected = fvr04_runtime_scene_selection(&runtime_state, &visible_tiles);
-    for tile in tile_summaries_by_tile.values() {
-        world.spawn((
-            Name::new(format!("A-Life FVR03 voxel tile {}:{}", tile.tile.x, tile.tile.z)),
-            Transform::from_xyz(
-                tile.tile.x as f32 + 0.5,
-                tile.height_units * 0.5,
-                tile.tile.z as f32 + 0.5,
-            ),
-            Visibility::Hidden,
-            Fvr03ProductionVoxelTerrainTile {
-                tile: tile.tile,
-                chunk: tile.chunk,
-                material: tile.material,
-                height_units: tile.height_units,
-                resource_bias: tile.resource_bias,
-                hazard_pressure: tile.hazard_pressure,
-                stable_ref: tile.stable_ref,
-            },
-            Fvr04ProductionRuntimeSceneRoot,
-        ));
-    }
-    for chunk in &snapshot.visible_chunks {
-        if settings.show_chunk_boundaries {
-            spawn_fvr03_chunk_boundary(
-                world,
-                &assets.voxel_materials,
-                assets.boundary_mesh.clone(),
-                chunk.coord,
-                snapshot.profile_budget.chunk_tile_size,
-            );
-        }
-        world.spawn((
-            Name::new(format!(
-                "A-Life FVR03 resident voxel chunk {}:{}",
-                chunk.coord.x, chunk.coord.z
-            )),
-            Transform::default(),
-            Visibility::Hidden,
-            Fvr03ProductionVoxelChunk {
-                coord: chunk.coord,
-                signature: chunk.signature.0.clone(),
-                lod_level: fvr03_lod_for_chunk(chunk.coord),
-                dirty_generation: chunk.dirty_generation,
-                sampled_tiles: tile_summaries_by_tile
-                    .values()
-                    .filter(|tile| tile.chunk == chunk.coord)
-                    .count(),
-            },
-            Fvr04ProductionRuntimeSceneRoot,
-        ));
-    }
+    world.insert_resource(camera_terrain::CameraTerrainStream::new(
+        runtime_state.backend.clone(),
+        snapshot
+            .creatures
+            .first()
+            .map(|creature| creature.stable_id),
+    ));
     let terrain_receipt = spawn_fvr11_layered_terrain_meshes(
         world,
         &assets.terrain_materials,
@@ -3216,7 +3145,7 @@ fn spawn_fvr04_runtime_scene_candidate(
     if let Some(selection) = selected {
         spawn_fvr03_selection_marker(
             world,
-            &assets.voxel_materials,
+            assets.selection_material.clone(),
             assets.selection_mesh.clone(),
             selection,
         );
@@ -3230,8 +3159,7 @@ fn spawn_fvr04_runtime_scene_candidate(
         population: runtime_state.creatures.len().min(u16::MAX as usize) as u16,
         renderer_profile: PRODUCTION_VOXEL_RENDERER_PROFILE.to_string(),
         backend_id: FVR10_RENDERER_BACKEND_ID,
-        uses_bevy_voxel_world_backend: cfg!(feature = "voxel-backend"),
-        uses_internal_chunk_mesh_for_fvr02_contract: true,
+        uses_internal_voxel_terrain_mesh: true,
         visible_chunk_count: snapshot.visible_chunks.len(),
         resident_chunk_count: snapshot.visible_chunks.len(),
         tile_mesh_count,
@@ -3300,15 +3228,18 @@ fn install_fvr04_runtime_scene_resources(
     world.insert_resource(creatures);
 }
 
-fn create_fvr03_materials(
+fn create_fvr03_selection_material(
     app: &mut App,
     palette: &[Fvr03ProductionVoxelMaterialEntry],
-) -> BTreeMap<Fvr03ProductionVoxelMaterialKind, Handle<StandardMaterial>> {
-    let mut assets = app.world_mut().resource_mut::<Assets<StandardMaterial>>();
-    palette
+) -> Handle<StandardMaterial> {
+    let material = palette
         .iter()
-        .map(|entry| (entry.kind, assets.add(entry.standard_material())))
-        .collect()
+        .find(|entry| entry.kind == Fvr03ProductionVoxelMaterialKind::Selection)
+        .expect("FVR03 selection material exists")
+        .standard_material();
+    app.world_mut()
+        .resource_mut::<Assets<StandardMaterial>>()
+        .add(material)
 }
 
 fn prepare_fvr03_chunk_tiles(
@@ -3394,7 +3325,26 @@ fn spawn_fvr11_layered_terrain_meshes(
     tile_mesh_count: usize,
 ) -> Fvr11TerrainSpawnReceipt {
     let started = Instant::now();
+    world.insert_resource(creature_grounding::RenderedTerrainSurface::from_meshes(
+        build
+            .layers
+            .iter()
+            .filter(|layer| {
+                matches!(
+                    layer.role,
+                    Fvr11TerrainSurfaceRole::Top | Fvr11TerrainSurfaceRole::Water
+                )
+            })
+            .map(|layer| &layer.mesh),
+        f32::from(settings.tile_stride.max(1)),
+    ));
     let terrain_stats = build.stats.clone();
+    landscape::spawn(
+        world,
+        terrain_samples,
+        snapshot,
+        f32::from(settings.tile_stride.max(1)),
+    );
     let top_layer_count = build
         .layers
         .iter()
@@ -3472,7 +3422,7 @@ fn spawn_fvr11_layered_terrain_meshes(
         .saturating_add(terrain_stats.transition_edges)
         .saturating_add(terrain_stats.water_quads)
         .clamp(1, naive_visible_faces.max(1));
-    let merge_ratio = if emitted_quads == 0 {
+    let face_reduction_ratio = if emitted_quads == 0 {
         0.0
     } else {
         naive_visible_faces as f32 / emitted_quads as f32
@@ -3487,16 +3437,12 @@ fn spawn_fvr11_layered_terrain_meshes(
         .collect::<BTreeSet<_>>()
         .len();
     Fvr11TerrainSpawnReceipt {
-        mesh_stats: Fvr09GreedyMeshStats {
-            mode: Fvr09MesherMode::BinaryGreedyQuads,
-            chunk_local_occupancy_masks: true,
-            six_direction_face_masks: true,
-            material_aware_merging: true,
-            neighbor_border_seams_checked: true,
+        mesh_stats: Fvr09TerrainMeshStats {
+            mode: Fvr09MesherMode::LayeredGridQuads,
             visible_voxels,
             naive_visible_faces,
             emitted_quads,
-            merge_ratio,
+            face_reduction_ratio,
             remesh_time_micros: started.elapsed().as_micros(),
             dirty_chunks,
             cached_chunks,
@@ -3521,34 +3467,49 @@ fn spawn_fvr05_overlay_batches(
     plans: Vec<Fvr04OverlaySpawnPlan>,
     materials: &BTreeMap<Fvr05ProductionOverlayKind, Handle<StandardMaterial>>,
 ) {
+    let mut cells_by_kind = BTreeMap::new();
     for plan in plans {
-        let Fvr04OverlaySpawnPlan { kind, cells, visible } = plan;
-        if cells.is_empty() {
-            continue;
+        let Fvr04OverlaySpawnPlan {
+            kind,
+            cells,
+            visible,
+        } = plan;
+        if visible && !cells.is_empty() {
+            spawn_fvr05_overlay_batch(world, kind, &cells, materials, Visibility::Visible);
         }
-        let mesh = fvr05_batched_overlay_mesh(&cells);
-        let mesh_handle = world.resource_mut::<Assets<Mesh>>().add(mesh);
-        let material_handle = materials
-            .get(&kind)
-            .expect("prepared FVR05 overlay material exists")
-            .clone();
-        world.spawn((
-            Name::new(format!("A-Life FVR05 overlay {}", kind.label())),
-            Mesh3d(mesh_handle),
-            MeshMaterial3d(material_handle),
-            Transform::default(),
-            if visible {
-                Visibility::Visible
-            } else {
-                Visibility::Hidden
-            },
-            Fvr05ProductionOverlayBatch {
-                kind,
-                cell_count: cells.len(),
-            },
-            Fvr04ProductionRuntimeSceneRoot,
-        ));
+        cells_by_kind.insert(kind, cells);
     }
+    world.insert_resource(Fvr05OverlayGeometryCache { cells_by_kind });
+}
+
+fn spawn_fvr05_overlay_batch(
+    world: &mut World,
+    kind: Fvr05ProductionOverlayKind,
+    cells: &[Fvr05OverlayCell],
+    materials: &BTreeMap<Fvr05ProductionOverlayKind, Handle<StandardMaterial>>,
+    visibility: Visibility,
+) {
+    if cells.is_empty() {
+        return;
+    }
+    let mesh = fvr05_batched_overlay_mesh(cells);
+    let mesh_handle = world.resource_mut::<Assets<Mesh>>().add(mesh);
+    let material_handle = materials
+        .get(&kind)
+        .expect("prepared FVR05 overlay material exists")
+        .clone();
+    world.spawn((
+        Name::new(format!("A-Life FVR05 overlay {}", kind.label())),
+        Mesh3d(mesh_handle),
+        MeshMaterial3d(material_handle),
+        Transform::default(),
+        visibility,
+        Fvr05ProductionOverlayBatch {
+            kind,
+            cell_count: cells.len(),
+        },
+        Fvr04ProductionRuntimeSceneRoot,
+    ));
 }
 
 fn fvr05_overlay_cells(
@@ -3725,15 +3686,9 @@ fn spawn_fvr07_production_visual_polish(
     dressing_spawns: Vec<ProductionTerrainDressingSpawn>,
     vfx_spawns: Vec<Fvr07VfxSpawn>,
     dressing_library: &TerrainDressingLibrary,
-    unit_mesh: &Handle<Mesh>,
+    unit_mesh: &Option<Handle<Mesh>>,
     vfx_materials: &BTreeMap<Fvr07ProductionVfxKind, Handle<StandardMaterial>>,
 ) -> Fvr07ProductionPolishSummary {
-    let vfx_marker_visibility = if cfg!(feature = "vfx-hanabi") {
-        Visibility::Hidden
-    } else {
-        Visibility::Inherited
-    };
-
     for spawn in &dressing_spawns {
         let material = dressing_library.material(spawn.kind);
         let mesh = dressing_library.mesh(spawn.kind);
@@ -3761,41 +3716,46 @@ fn spawn_fvr07_production_visual_polish(
         ));
     }
 
-    for spawn in &vfx_spawns {
-        let Some(material) = vfx_materials.get(&spawn.kind).cloned() else {
-            continue;
-        };
-        let mut transform = Transform::from_translation(spawn.translation);
-        transform.scale = spawn.scale;
-        world.spawn((
-            Name::new(format!(
-                "A-Life FVR07 display-only VFX {}",
-                spawn.kind.label()
-            )),
-            Mesh3d(unit_mesh.clone()),
-            MeshMaterial3d(material),
-            transform,
-            vfx_marker_visibility,
-            Fvr07ProductionGpuVfxMarker {
-                kind: spawn.kind,
-                tile: spawn.tile,
-                stable_id: spawn.stable_id,
-                display_only: true,
-                no_renderer_authority_over_actions_or_cognition: true,
-                budget_state: settings.production_vfx_budget_state,
-                base_translation: spawn.translation,
-                base_scale: spawn.scale,
-                phase: spawn.phase,
-            },
-            Fvr04ProductionRuntimeSceneRoot,
-        ));
-    }
+    let vfx_marker_count = unit_mesh.as_ref().map_or(0, |unit_mesh| {
+        let mut count = 0;
+        for spawn in &vfx_spawns {
+            let Some(material) = vfx_materials.get(&spawn.kind).cloned() else {
+                continue;
+            };
+            let mut transform = Transform::from_translation(spawn.translation);
+            transform.scale = spawn.scale;
+            world.spawn((
+                Name::new(format!(
+                    "A-Life FVR07 display-only VFX {}",
+                    spawn.kind.label()
+                )),
+                Mesh3d(unit_mesh.clone()),
+                MeshMaterial3d(material),
+                transform,
+                bevy::light::NotShadowCaster,
+                Fvr07ProductionGpuVfxMarker {
+                    kind: spawn.kind,
+                    tile: spawn.tile,
+                    stable_id: spawn.stable_id,
+                    follows_creature: spawn.follows_creature,
+                    display_only: true,
+                    no_renderer_authority_over_actions_or_cognition: true,
+                    budget_state: settings.production_vfx_budget_state,
+                    base_translation: spawn.translation,
+                    base_scale: spawn.scale,
+                    phase: spawn.phase,
+                },
+                Fvr04ProductionRuntimeSceneRoot,
+            ));
+            count += 1;
+        }
+        count
+    });
 
-    let gpu_vfx_emitter_count =
-        spawn_fvr07_hanabi_gpu_vfx_emitters(world, settings, &vfx_spawns);
+    let gpu_vfx_emitter_count = spawn_fvr07_hanabi_gpu_vfx_emitters(world, settings, &vfx_spawns);
     Fvr07ProductionPolishSummary {
         dressing_count: dressing_spawns.len(),
-        vfx_marker_count: vfx_spawns.len(),
+        vfx_marker_count,
         gpu_vfx_emitter_count,
         vfx_budget_state: settings.production_vfx_budget_state,
         display_only: true,
@@ -4009,6 +3969,7 @@ fn fvr07_push_tile_vfx(
         kind,
         tile: Some(tile.tile),
         stable_id: tile.stable_ref.stable_id,
+        follows_creature: false,
         translation: Vec3::new(
             tile.tile.x as f32 + 0.5,
             tile.height_units + fvr07_vfx_y_offset(kind),
@@ -4034,6 +3995,7 @@ fn fvr07_push_creature_vfx(
         kind,
         tile: Some(creature.tile),
         stable_id: Some(creature.visual.stable_id),
+        follows_creature: true,
         translation: Vec3::new(
             creature.tile.x as f32 + 0.5,
             2.08,
@@ -4162,44 +4124,48 @@ fn spawn_fvr07_hanabi_gpu_vfx_emitters(
 
     let budget = fvr07_hanabi_budget(settings.profile_id);
     let mut emitted = 0_usize;
+    let mut effects_by_kind: BTreeMap<Fvr07ProductionVfxKind, Handle<EffectAsset>> =
+        BTreeMap::new();
     for spawn in vfx_spawns.iter().take(budget.emitter_cap) {
-        let writer = ExprWriter::new();
-        let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
-        let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, writer.lit(1.85).expr());
-        let init_pos = SetPositionSphereModifier {
-            center: writer.lit(Vec3::ZERO).expr(),
-            radius: writer.lit(0.32).expr(),
-            dimension: ShapeDimension::Surface,
-        };
-        let init_vel = SetVelocitySphereModifier {
-            center: writer.lit(Vec3::ZERO).expr(),
-            speed: writer.lit(0.38).expr(),
-        };
-        let mut gradient = bevy_hanabi::Gradient::new();
-        gradient.add_key(
-            0.0,
-            bevy::prelude::Vec4::new(
-                spawn.color[0],
-                spawn.color[1],
-                spawn.color[2],
-                spawn.color[3] * budget.alpha_scale,
-            ),
-        );
-        gradient.add_key(
-            0.72,
-            bevy::prelude::Vec4::new(
-                spawn.color[0],
-                spawn.color[1],
-                spawn.color[2],
-                spawn.color[3] * budget.alpha_scale * 0.62,
-            ),
-        );
-        gradient.add_key(1.0, bevy::prelude::Vec4::splat(0.0));
-        let size_gradient =
-            bevy_hanabi::Gradient::constant(bevy::prelude::Vec3::splat(budget.particle_size));
-        let effect = {
-            let mut effects = world.resource_mut::<Assets<EffectAsset>>();
-            effects.add(
+        let effect = if let Some(effect) = effects_by_kind.get(&spawn.kind) {
+            effect.clone()
+        } else {
+            let writer = ExprWriter::new();
+            let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
+            let init_lifetime =
+                SetAttributeModifier::new(Attribute::LIFETIME, writer.lit(1.85).expr());
+            let init_pos = SetPositionSphereModifier {
+                center: writer.lit(Vec3::ZERO).expr(),
+                radius: writer.lit(0.32).expr(),
+                dimension: ShapeDimension::Surface,
+            };
+            let init_vel = SetVelocitySphereModifier {
+                center: writer.lit(Vec3::ZERO).expr(),
+                speed: writer.lit(0.38).expr(),
+            };
+            let mut gradient = bevy_hanabi::Gradient::new();
+            gradient.add_key(
+                0.0,
+                bevy::prelude::Vec4::new(
+                    spawn.color[0],
+                    spawn.color[1],
+                    spawn.color[2],
+                    spawn.color[3] * budget.alpha_scale,
+                ),
+            );
+            gradient.add_key(
+                0.72,
+                bevy::prelude::Vec4::new(
+                    spawn.color[0],
+                    spawn.color[1],
+                    spawn.color[2],
+                    spawn.color[3] * budget.alpha_scale * 0.62,
+                ),
+            );
+            gradient.add_key(1.0, bevy::prelude::Vec4::splat(0.0));
+            let size_gradient =
+                bevy_hanabi::Gradient::constant(bevy::prelude::Vec3::splat(budget.particle_size));
+            let effect = world.resource_mut::<Assets<EffectAsset>>().add(
                 EffectAsset::new(
                     budget.capacity,
                     SpawnerSettings::rate(budget.rate.into()),
@@ -4215,7 +4181,9 @@ fn spawn_fvr07_hanabi_gpu_vfx_emitters(
                     gradient: size_gradient,
                     screen_space_size: false,
                 }),
-            )
+            );
+            effects_by_kind.insert(spawn.kind, effect.clone());
+            effect
         };
         world.spawn((
             Name::new(format!(
@@ -4226,6 +4194,8 @@ fn spawn_fvr07_hanabi_gpu_vfx_emitters(
             Transform::from_translation(spawn.translation),
             Fvr07ProductionHanabiVfxEmitter {
                 kind: spawn.kind,
+                stable_id: spawn.stable_id,
+                follows_creature: spawn.follows_creature,
                 display_only: true,
                 no_renderer_authority_over_actions_or_cognition: true,
                 budget_state: settings.production_vfx_budget_state,
@@ -4410,34 +4380,6 @@ fn fvr03_append_cuboid(
     }
 }
 
-fn spawn_fvr03_chunk_boundary(
-    world: &mut World,
-    materials: &BTreeMap<Fvr03ProductionVoxelMaterialKind, Handle<StandardMaterial>>,
-    mesh: Handle<Mesh>,
-    coord: VoxelChunkCoord,
-    chunk_tile_size: u16,
-) {
-    let size = f32::from(chunk_tile_size);
-    let material = materials
-        .get(&Fvr03ProductionVoxelMaterialKind::ChunkBoundary)
-        .expect("FVR03 chunk boundary material exists")
-        .clone();
-    world.spawn((
-        Name::new(format!(
-            "A-Life FVR03 chunk boundary {}:{}",
-            coord.x, coord.z
-        )),
-        Mesh3d(mesh),
-        MeshMaterial3d(material),
-        Transform::from_xyz(
-            coord.x as f32 * size + size * 0.5,
-            -0.02,
-            coord.z as f32 * size + size * 0.5,
-        ),
-        Fvr04ProductionRuntimeSceneRoot,
-    ));
-}
-
 fn fvr04_creature_root_bundle(
     stable_id: WorldEntityId,
     organism_id: OrganismId,
@@ -4480,26 +4422,14 @@ fn spawn_fvr04_prepared_creature_batch(
     let Fvr04PreparedCreatureBatch {
         settings,
         creatures,
-        cover_mesh_count,
-        detail_meshes,
-        cue_mesh,
-        eye_sclera_mesh,
-        eye_iris_mesh,
-        eye_pupil_mesh,
-        eye_highlight_mesh,
-        eye_sclera_material,
-        eye_pupil_material,
-        eye_highlight_material,
-        face_material,
     } = prepared;
     let mut expression_buffer = Vec::with_capacity(creatures.len());
     let mut stable_lookup_by_raw_id = BTreeMap::new();
     let mut part_families = BTreeSet::new();
     let mut species_archetypes = BTreeSet::new();
-    let mut scene_mesh_handles = BTreeSet::new();
+    let scene_mesh_handles = BTreeSet::<bevy::asset::AssetId<Mesh>>::new();
     let mut scene_material_handles = BTreeSet::new();
-    let mut part_entity_count = 0_usize;
-    let mut join_cover_count = 0_usize;
+    let part_entity_count = 0_usize;
     let mut mixed_assembly_count = 0_usize;
 
     for creature in creatures {
@@ -4522,7 +4452,7 @@ fn spawn_fvr04_prepared_creature_batch(
                 creature.root_visual,
                 Fvr09CuteBipedCreatureMarker {
                     stable_id: visual.stable_id,
-                    visual_profile: "modular-heritable-part-assembly-v1",
+                    visual_profile: "approved-hearthling-skinned-v2",
                     two_legs: true,
                     visible_face: true,
                     eye_markers: 2,
@@ -4542,201 +4472,25 @@ fn spawn_fvr04_prepared_creature_batch(
             ))
             .id();
         world
+            .entity_mut(root)
+            .insert(ProductionCreatureCoatKey(creature.coat.selected_key));
+        world
             .resource_mut::<BevyEntityMap>()
             .bind(root, visual.stable_id)
             .expect("validated creature root stable ID must bind");
         let coat_material = creature.coat.material;
         scene_material_handles.insert(coat_material.id());
-        let mut part_entities = BTreeMap::new();
-        for part in creature.parts {
-            scene_mesh_handles.insert(part.mesh.id());
-            let part_entity = world
-                .spawn((
-                    Name::new(format!(
-                        "A-Life creature part {} {:?}",
-                        visual.stable_id.raw(),
-                        part.recipe.slot
-                    )),
-                    Mesh3d(part.mesh),
-                    MeshMaterial3d(coat_material.clone()),
-                    part.transform,
-                    ChildOf(root),
-                    ProductionCreaturePartMarker {
-                        stable_id: visual.stable_id,
-                        family: part.recipe.source_family,
-                        asset_id: part.recipe.asset_id.clone(),
-                        slot: part.recipe.slot,
-                        runtime_group: part.recipe.runtime_group.clone(),
-                        authored_matrix: part.recipe.authored_transform,
-                        animation: visual.animation,
-                    },
-                    ProductionCreaturePartRestTransform(part.transform),
-                ))
-                .id();
-            part_entities.insert(part.recipe.slot, part_entity);
-            part_entity_count += 1;
-        }
-        for cover in creature.covers {
-            let Some(parent) = part_entities.get(&cover.parent_slot).copied() else {
-                continue;
-            };
-            world.spawn((
-                Name::new(format!(
-                    "A-Life creature join cover {} {}",
-                    visual.stable_id.raw(),
-                    cover.primitive.label()
-                )),
-                Mesh3d(cover.mesh),
-                MeshMaterial3d(coat_material.clone()),
-                cover.transform,
-                ChildOf(parent),
-                ProductionCreatureJoinCoverMarker {
-                    stable_id: visual.stable_id,
-                    cover_kind: cover.primitive.label(),
-                    display_only: true,
-                },
-            ));
-            join_cover_count += 1;
-        }
-        if let (Some(face_style), Some(detail_materials), Some(head)) = (
-            creature.face_style,
-            creature.detail_materials.as_ref(),
-            part_entities.get(&CreaturePartSlot::Head).copied(),
-        ) {
-            let face_origin = Vec3::new(0.0, face_style.eye_height, face_style.eye_forward);
-            for (feature, offset, scale, mesh, material) in [
-                (
-                    "left-eye-sclera",
-                    Vec3::new(-face_style.eye_spacing, 0.0, 0.0),
-                    Vec3::from_array(face_style.sclera_scale),
-                    eye_sclera_mesh.clone(),
-                    eye_sclera_material.clone(),
-                ),
-                (
-                    "right-eye-sclera",
-                    Vec3::new(face_style.eye_spacing, 0.0, 0.0),
-                    Vec3::from_array(face_style.sclera_scale),
-                    eye_sclera_mesh.clone(),
-                    eye_sclera_material.clone(),
-                ),
-                (
-                    "left-eye-iris",
-                    Vec3::new(-face_style.eye_spacing, -0.002, -0.042),
-                    Vec3::from_array(face_style.iris_scale),
-                    eye_iris_mesh.clone(),
-                    detail_materials.accent.clone(),
-                ),
-                (
-                    "right-eye-iris",
-                    Vec3::new(face_style.eye_spacing, -0.002, -0.042),
-                    Vec3::from_array(face_style.iris_scale),
-                    eye_iris_mesh.clone(),
-                    detail_materials.accent.clone(),
-                ),
-                (
-                    "left-eye-pupil",
-                    Vec3::new(-face_style.eye_spacing, -0.004, -0.064),
-                    Vec3::from_array(face_style.pupil_scale),
-                    eye_pupil_mesh.clone(),
-                    eye_pupil_material.clone(),
-                ),
-                (
-                    "right-eye-pupil",
-                    Vec3::new(face_style.eye_spacing, -0.004, -0.064),
-                    Vec3::from_array(face_style.pupil_scale),
-                    eye_pupil_mesh.clone(),
-                    eye_pupil_material.clone(),
-                ),
-                (
-                    "left-eye-glint",
-                    Vec3::new(-face_style.eye_spacing - 0.014, 0.024, -0.078),
-                    Vec3::ONE,
-                    eye_highlight_mesh.clone(),
-                    eye_highlight_material.clone(),
-                ),
-                (
-                    "right-eye-glint",
-                    Vec3::new(face_style.eye_spacing - 0.014, 0.024, -0.078),
-                    Vec3::ONE,
-                    eye_highlight_mesh.clone(),
-                    eye_highlight_material.clone(),
-                ),
-                (
-                    "left-eye-lid",
-                    Vec3::new(-face_style.eye_spacing, 0.035, -0.070),
-                    Vec3::new(0.72, 0.16, 0.24),
-                    eye_iris_mesh.clone(),
-                    coat_material.clone(),
-                ),
-                (
-                    "right-eye-lid",
-                    Vec3::new(face_style.eye_spacing, 0.035, -0.070),
-                    Vec3::new(0.72, 0.16, 0.24),
-                    eye_iris_mesh.clone(),
-                    coat_material.clone(),
-                ),
-            ] {
-                world.spawn((
-                    Name::new(format!(
-                        "A-Life creature {} stable {}",
-                        feature,
-                        visual.stable_id.raw()
-                    )),
-                    Mesh3d(mesh),
-                    MeshMaterial3d(material),
-                    Transform::from_translation(face_origin + offset).with_scale(scale),
-                    ChildOf(head),
-                    Fvr09CreatureFaceFeatureMarker {
-                        stable_id: visual.stable_id,
-                        feature,
-                    },
-                ));
-            }
-            for detail in creature.details {
-                let Some(parent) = part_entities.get(&detail.anchor_slot).copied() else {
-                    continue;
-                };
-                world.spawn((
-                    Name::new(format!(
-                        "A-Life FVR10 caveman furry creature detail {} stable {}",
-                        detail.role,
-                        visual.stable_id.raw()
-                    )),
-                    Mesh3d(detail_meshes.get(detail.mesh)),
-                    MeshMaterial3d(detail_materials.get(detail.material)),
-                    Transform::from_translation(Vec3::from_array(detail.local_offset))
-                        .with_scale(Vec3::from_array(detail.local_scale)),
-                    Visibility::Inherited,
-                    ChildOf(parent),
-                    Fvr10CreatureSurfaceDetailMarker {
-                        stable_id: visual.stable_id,
-                        species_archetype: visual.appearance.species_archetype,
-                        detail_role: detail.role,
-                        anchor_slot: detail.anchor_slot,
-                        display_only: true,
-                        no_renderer_authority_over_actions_or_cognition: true,
-                        high_contrast_marking: true,
-                        heritable: true,
-                    },
-                ));
-            }
-        }
-        if settings.spawn_affordance_cues {
-            world.spawn((
-                Name::new(format!(
-                    "A-Life creature cue stable {}",
-                    visual.stable_id.raw()
-                )),
-                Mesh3d(cue_mesh.clone()),
-                MeshMaterial3d(face_material.clone()),
-                Transform::from_xyz(0.0, 1.08, 0.0),
-                Visibility::Hidden,
-                ChildOf(root),
-                Fvr04ProductionCreatureAffordanceCue {
-                    stable_id: visual.stable_id,
-                    expression: visual.expression,
-                },
-            ));
+        hearthling::spawn(world, root, visual.appearance);
+        if let Some(mut entity) = world.get_entity_mut(root).ok() {
+            let scale = hearthling::scale(visual.appearance);
+            let mut marker = entity
+                .get_mut::<Fvr04ProductionCreatureVisualMarker>()
+                .unwrap();
+            marker.base_scale = scale;
+            marker.local_bounds = CreatureVisualBounds::new([-0.85, 0.0, -0.45], [0.85, 2.61, 0.9]);
+            let mut transform = entity.get_mut::<Transform>().unwrap();
+            transform.scale = scale;
+            transform.rotation = Quat::IDENTITY;
         }
         stable_lookup_by_raw_id.insert(visual.stable_id.raw(), expression_buffer.len());
         expression_buffer.push(Fvr04CreatureExpressionSample {
@@ -4773,455 +4527,17 @@ fn spawn_fvr04_prepared_creature_batch(
         requested_population: settings.requested_population,
         rendered_creature_count: expression_buffer.len(),
         material_bucket_count: scene_material_handles.len(),
-        mesh_pool_count: scene_mesh_handles.len() + cover_mesh_count,
+        mesh_pool_count: scene_mesh_handles.len(),
         lod: settings.lod,
         stable_lookup_by_raw_id,
         no_renderer_authority_over_actions_or_cognition: true,
         expression_buffer_is_read_only_projection: true,
-        visual_profile: "modular-heritable-part-assembly-v1",
-        mesh_material_version: "modular-textured-part-material-v1",
+        visual_profile: "approved-hearthling-skinned-v2",
+        mesh_material_version: "approved-blender-vertex-color-v2",
         species_archetype_count: species_archetypes.len(),
         creature_root_count: expression_buffer.len(),
         creature_part_entity_count: part_entity_count,
-        creature_join_cover_count: join_cover_count,
-        creature_part_family_count: part_families.len(),
-        creature_mixed_assembly_count: mixed_assembly_count,
-        creature_shared_mesh_handle_count: scene_mesh_handles.len(),
-        production_visuals_display_only: true,
-        expression_buffer,
-    }
-}
-
-fn spawn_fvr04_creature_batch(
-    world: &mut World,
-    creatures: Vec<Fvr04CreatureVisualRecord>,
-    tile_summaries: &BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
-    context: &mut Fvr04CreatureSpawnContext,
-) -> Fvr04ProductionCreatureSceneResource {
-    let settings = &context.settings;
-    let catalog = &context.catalog;
-    let preparations = &context.preparations;
-    let assets_root = context.assets_root.as_path();
-    let assets = &mut context.creature_part_assets;
-    let cue_mesh = context.cue_mesh.clone();
-    let eye_sclera_mesh = context.eye_sclera_mesh.clone();
-    let eye_iris_mesh = context.eye_iris_mesh.clone();
-    let eye_pupil_mesh = context.eye_pupil_mesh.clone();
-    let eye_highlight_mesh = context.eye_highlight_mesh.clone();
-    let eye_sclera_material = context.eye_sclera_material.clone();
-    let eye_pupil_material = context.eye_pupil_material.clone();
-    let eye_highlight_material = context.eye_highlight_material.clone();
-    let face_material = context.face_material.clone();
-    let lod = match settings.lod {
-        Fvr04CreatureLod::FullVoxel => CreaturePartLodId::Full,
-        Fvr04CreatureLod::CompactVoxel => CreaturePartLodId::Compact,
-        Fvr04CreatureLod::ImpostorVoxel => CreaturePartLodId::Impostor,
-    };
-    let cover_meshes = {
-        let mut meshes = world.resource_mut::<Assets<Mesh>>();
-        BTreeMap::from([
-            (
-                JoinCoverPrimitive::Ruff,
-                meshes.add(Cuboid::new(0.30, 0.07, 0.22)),
-            ),
-            (
-                JoinCoverPrimitive::ShoulderTuft,
-                meshes.add(Cuboid::new(0.14, 0.12, 0.16)),
-            ),
-            (
-                JoinCoverPrimitive::HipFur,
-                meshes.add(Cuboid::new(0.16, 0.10, 0.16)),
-            ),
-            (
-                JoinCoverPrimitive::TailRuff,
-                meshes.add(Cuboid::new(0.20, 0.12, 0.14)),
-            ),
-            (
-                JoinCoverPrimitive::Cuff,
-                meshes.add(Cuboid::new(0.14, 0.08, 0.14)),
-            ),
-        ])
-    };
-    let detail_meshes = fvr10_creature_detail_meshes(world);
-    let mut expression_buffer = Vec::new();
-    let mut stable_lookup_by_raw_id = BTreeMap::new();
-    let mut part_families = BTreeSet::new();
-    let mut species_archetypes = BTreeSet::new();
-    let mut scene_mesh_handles = BTreeSet::new();
-    let mut scene_material_handles = BTreeSet::new();
-    let mut part_entity_count = 0_usize;
-    let mut join_cover_count = 0_usize;
-    let mut mixed_assembly_count = 0_usize;
-    let max_visible = usize::from(settings.max_visible_creatures);
-
-    for (index, creature) in creatures.iter().take(max_visible).enumerate() {
-        let visual = &creature.visual;
-        species_archetypes.insert(visual.appearance.species_archetype);
-        let coat_key = CreatureCoatKey::new(
-            visual.appearance.part_sources,
-            visual.appearance.palette_family,
-            visual.appearance.fur_pattern,
-            visual.appearance.marking_density,
-        );
-        let recipe = resolve_geneforge_creature_assembly(
-            visual.appearance.part_sources,
-            lod,
-            coat_key,
-            catalog,
-            preparations,
-        )
-        .expect("validated GeneForge catalog resolves saved appearance sources");
-        let recipe_families = recipe
-            .parts
-            .values()
-            .map(|part| part.source_family)
-            .collect::<BTreeSet<_>>();
-        mixed_assembly_count += usize::from(recipe_families.len() > 1);
-        part_families.extend(recipe_families);
-
-        let mut local_bounds = None::<CreatureVisualBounds>;
-        for part in recipe.parts.values() {
-            let key = part.mesh_key();
-            let part_bounds = assets
-                .bounds(key)
-                .expect("validated creature part mesh has finite bounds");
-            let part_transform = geneforge_authored_transform_to_bevy(part.authored_transform);
-            let transformed = transform_creature_visual_bounds(part_bounds, part_transform);
-            if let Some(bounds) = &mut local_bounds {
-                bounds.include(transformed);
-            } else {
-                local_bounds = Some(transformed);
-            }
-        }
-        let local_bounds = local_bounds.expect("resolved creature assembly has visible parts");
-        let surface_height = tile_summaries
-            .get(&creature.tile)
-            .map(|tile| tile.height_units)
-            .unwrap_or(0.44);
-
-        let base_scale = fvr04_creature_scale(visual, settings.lod);
-        let base_height = grounded_root_height(
-            surface_height,
-            0.04,
-            local_bounds,
-            base_scale.to_array(),
-            bevy::math::Mat3::IDENTITY.to_cols_array(),
-        );
-        let base_translation = Vec3::new(
-            creature.tile.x as f32 + 0.5,
-            base_height,
-            creature.tile.z as f32 + 0.5,
-        );
-        let mut transform = Transform::from_translation(base_translation);
-        transform.rotation = Quat::from_rotation_y(std::f32::consts::PI);
-        transform.scale = base_scale;
-        let phase = (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11;
-        let root_visual = Fvr04ProductionCreatureVisualMarker {
-            stable_id: visual.stable_id,
-            organism_id: visual.organism_id,
-            tile: creature.tile,
-            expression: visual.expression,
-            animation: visual.animation,
-            lod: settings.lod,
-            base_translation,
-            local_offset: Vec3::ZERO,
-            base_scale,
-            local_bounds,
-            surface_height,
-            phase,
-        };
-        let root = world.spawn(fvr04_creature_root_bundle(
-                visual.stable_id,
-                visual.organism_id,
-                creature.tile,
-                transform,
-                root_visual,
-                Fvr09CuteBipedCreatureMarker {
-                    stable_id: visual.stable_id,
-                    visual_profile: "modular-heritable-part-assembly-v1",
-                    two_legs: true,
-                    visible_face: true,
-                    eye_markers: 2,
-                    front_back_orientation: true,
-                    real_state_driven: true,
-                },
-                Fvr10CreatureSpeciesMarker {
-                    stable_id: visual.stable_id,
-                    species_archetype: visual.appearance.species_archetype,
-                    species_label: visual.appearance.species_label(),
-                    body_plan_signature: visual.appearance.body_plan_signature(),
-                    bipedal: true,
-                    caveman_furry_design: true,
-                    heritable_appearance: true,
-                },
-                recipe.display_only,
-            ))
-            .id();
-        world
-            .resource_mut::<BevyEntityMap>()
-            .bind(root, visual.stable_id)
-            .expect("validated creature root stable ID must bind");
-
-        let coat = world.resource_scope(|world, mut images: bevy::prelude::Mut<Assets<Image>>| {
-                world.resource_scope(
-                    |_world, mut materials: bevy::prelude::Mut<Assets<StandardMaterial>>| {
-                        assets.acquire_geneforge_coat(
-                            assets_root,
-                            catalog,
-                            &recipe,
-                            &mut images,
-                            &mut materials,
-                        )
-                    },
-                )
-            })
-            .expect("validated GeneForge coat inputs bake one resident material");
-        let coat_material = coat.material;
-        scene_material_handles.insert(coat_material.id());
-        let mut part_entities = BTreeMap::new();
-        for part in recipe.parts.values() {
-            let mesh = assets
-                .mesh(part.mesh_key())
-                .expect("validated creature part mesh is loaded");
-            scene_mesh_handles.insert(mesh.id());
-            let part_transform = geneforge_authored_transform_to_bevy(part.authored_transform);
-            let rest_transform = part_transform;
-            let part_entity = world.spawn((
-                    Name::new(format!(
-                        "A-Life creature part {} {:?}",
-                        visual.stable_id.raw(),
-                        part.slot
-                    )),
-                    Mesh3d(mesh),
-                    MeshMaterial3d(coat_material.clone()),
-                    part_transform,
-                    ChildOf(root),
-                    ProductionCreaturePartMarker {
-                        stable_id: visual.stable_id,
-                        family: part.source_family,
-                        asset_id: part.asset_id.clone(),
-                        slot: part.slot,
-                        runtime_group: part.runtime_group.clone(),
-                        authored_matrix: part.authored_transform,
-                        animation: visual.animation,
-                    },
-                    ProductionCreaturePartRestTransform(rest_transform),
-                ))
-                .id();
-            part_entities.insert(part.slot, part_entity);
-            part_entity_count += 1;
-        }
-
-        for cover in &recipe.join_covers {
-            let primitive = geneforge_join_cover_primitive(&cover.cover_kind)
-                .expect("validated GeneForge join-cover kind");
-            let scale = 0.72 + cover.overlap_depth;
-            let transform = Transform::from_scale(Vec3::splat(scale));
-            world.spawn((
-                Name::new(format!(
-                    "A-Life creature join cover {} {}",
-                    visual.stable_id.raw(),
-                    primitive.label()
-                )),
-                Mesh3d(cover_meshes[&primitive].clone()),
-                MeshMaterial3d(coat_material.clone()),
-                transform,
-                ChildOf(part_entities[&cover.slot]),
-                ProductionCreatureJoinCoverMarker {
-                    stable_id: visual.stable_id,
-                    cover_kind: primitive.label(),
-                    display_only: true,
-                },
-            ));
-            join_cover_count += 1;
-        }
-
-        if !matches!(settings.lod, Fvr04CreatureLod::ImpostorVoxel) {
-            let detail_materials = fvr10_creature_detail_materials(world, visual);
-            let head = recipe
-                .parts
-                .get(&CreaturePartSlot::Head)
-                .expect("resolved assembly includes a head");
-            let head_asset = catalog
-                .asset(&head.asset_id)
-                .expect("resolved GeneForge head remains in the catalog");
-            let emitted_head_bounds = assets
-                .bounds(head.mesh_key())
-                .expect("validated GeneForge head has finite emitted bounds");
-            let face_landmarks = remap_creature_face_landmarks(
-                head_asset.canonical_bounds,
-                emitted_head_bounds,
-                &head.landmarks,
-            )
-            .expect("validated GeneForge head landmarks map into emitted geometry");
-            let face_style = creature_face_style_from_landmarks(visual.appearance, &face_landmarks)
-                .expect("validated GeneForge head provides finite eye landmarks");
-            let face_origin = Vec3::new(0.0, face_style.eye_height, face_style.eye_forward);
-            for (feature, offset, scale, mesh, material) in [
-                (
-                    "left-eye-sclera",
-                    Vec3::new(-face_style.eye_spacing, 0.0, 0.0),
-                    Vec3::from_array(face_style.sclera_scale),
-                    eye_sclera_mesh.clone(),
-                    eye_sclera_material.clone(),
-                ),
-                (
-                    "right-eye-sclera",
-                    Vec3::new(face_style.eye_spacing, 0.0, 0.0),
-                    Vec3::from_array(face_style.sclera_scale),
-                    eye_sclera_mesh.clone(),
-                    eye_sclera_material.clone(),
-                ),
-                (
-                    "left-eye-iris",
-                    Vec3::new(-face_style.eye_spacing, -0.002, -0.042),
-                    Vec3::from_array(face_style.iris_scale),
-                    eye_iris_mesh.clone(),
-                    detail_materials.accent.clone(),
-                ),
-                (
-                    "right-eye-iris",
-                    Vec3::new(face_style.eye_spacing, -0.002, -0.042),
-                    Vec3::from_array(face_style.iris_scale),
-                    eye_iris_mesh.clone(),
-                    detail_materials.accent.clone(),
-                ),
-                (
-                    "left-eye-pupil",
-                    Vec3::new(-face_style.eye_spacing, -0.004, -0.064),
-                    Vec3::from_array(face_style.pupil_scale),
-                    eye_pupil_mesh.clone(),
-                    eye_pupil_material.clone(),
-                ),
-                (
-                    "right-eye-pupil",
-                    Vec3::new(face_style.eye_spacing, -0.004, -0.064),
-                    Vec3::from_array(face_style.pupil_scale),
-                    eye_pupil_mesh.clone(),
-                    eye_pupil_material.clone(),
-                ),
-                (
-                    "left-eye-glint",
-                    Vec3::new(-face_style.eye_spacing - 0.014, 0.024, -0.078),
-                    Vec3::ONE,
-                    eye_highlight_mesh.clone(),
-                    eye_highlight_material.clone(),
-                ),
-                (
-                    "right-eye-glint",
-                    Vec3::new(face_style.eye_spacing - 0.014, 0.024, -0.078),
-                    Vec3::ONE,
-                    eye_highlight_mesh.clone(),
-                    eye_highlight_material.clone(),
-                ),
-                (
-                    "left-eye-lid",
-                    Vec3::new(-face_style.eye_spacing, 0.035, -0.070),
-                    Vec3::new(0.72, 0.16, 0.24),
-                    eye_iris_mesh.clone(),
-                    coat_material.clone(),
-                ),
-                (
-                    "right-eye-lid",
-                    Vec3::new(face_style.eye_spacing, 0.035, -0.070),
-                    Vec3::new(0.72, 0.16, 0.24),
-                    eye_iris_mesh.clone(),
-                    coat_material.clone(),
-                ),
-            ] {
-                world.spawn((
-                    Name::new(format!(
-                        "A-Life creature {} stable {}",
-                        feature,
-                        visual.stable_id.raw()
-                    )),
-                    Mesh3d(mesh),
-                    MeshMaterial3d(material),
-                    Transform::from_translation(face_origin + offset).with_scale(scale),
-                    ChildOf(part_entities[&CreaturePartSlot::Head]),
-                    Fvr09CreatureFaceFeatureMarker {
-                        stable_id: visual.stable_id,
-                        feature,
-                    },
-                ));
-            }
-            fvr10_spawn_creature_surface_details(
-                world,
-                &part_entities,
-                visual,
-                settings.lod,
-                &detail_meshes,
-                &detail_materials,
-            );
-        }
-
-        if settings.spawn_affordance_cues {
-            world.spawn((
-                Name::new(format!(
-                    "A-Life creature cue stable {}",
-                    visual.stable_id.raw()
-                )),
-                Mesh3d(cue_mesh.clone()),
-                MeshMaterial3d(face_material.clone()),
-                Transform::from_xyz(0.0, 1.08, 0.0),
-                Visibility::Hidden,
-                ChildOf(root),
-                Fvr04ProductionCreatureAffordanceCue {
-                    stable_id: visual.stable_id,
-                    expression: visual.expression,
-                },
-            ));
-        }
-
-        stable_lookup_by_raw_id.insert(visual.stable_id.raw(), expression_buffer.len());
-        expression_buffer.push(Fvr04CreatureExpressionSample {
-            stable_id: visual.stable_id,
-            organism_id: visual.organism_id,
-            display_label: creature.display_label.clone(),
-            brain_class_id: creature.brain_class_id,
-            brain_neuron_count: creature.brain_neuron_count,
-            hunger: visual.cues.hunger.value,
-            fatigue: visual.cues.fatigue.value,
-            fear: visual.cues.fear.value,
-            cortisol: visual.endocrine.cortisol,
-            dopamine: visual.endocrine.dopamine,
-            reproductive_drive: creature.reproductive_drive,
-            sleep_pressure: visual.cues.sleep_pressure.value,
-            social: ((creature.social_affinity + 1.0) * 0.5).clamp(0.0, 1.0),
-            fast_memory_count: creature.fast_memory_count,
-            lifetime_memory_count: creature.lifetime_memory_count,
-            memory_record_count: creature.memory_record_count,
-            concept_count: creature.concept_count,
-            unresolved_gap_count: creature.unresolved_gap_count,
-            lifetime_learning_enabled: creature.lifetime_learning_enabled,
-            sleep_phase_raw: creature.sleep_phase_raw,
-            consolidation_state_raw: creature.consolidation_state_raw,
-            last_consolidated_tick: creature.last_consolidated_tick,
-            topology_update_count: creature.topology_update_count,
-            expression: visual.expression,
-            animation: visual.animation,
-        });
-    }
-
-    Fvr04ProductionCreatureSceneResource {
-        schema: FVR04_PRODUCTION_CREATURE_RENDERER_SCHEMA,
-        schema_version: FVR04_PRODUCTION_CREATURE_RENDERER_SCHEMA_VERSION,
-        requested_population: settings.requested_population,
-        rendered_creature_count: expression_buffer.len(),
-        material_bucket_count: scene_material_handles.len(),
-        mesh_pool_count: scene_mesh_handles.len() + cover_meshes.len(),
-        lod: settings.lod,
-        stable_lookup_by_raw_id,
-        no_renderer_authority_over_actions_or_cognition: true,
-        expression_buffer_is_read_only_projection: true,
-        visual_profile: "modular-heritable-part-assembly-v1",
-        mesh_material_version: "modular-textured-part-material-v1",
-        species_archetype_count: species_archetypes.len(),
-        creature_root_count: creatures
-            .len()
-            .min(usize::from(settings.max_visible_creatures)),
-        creature_part_entity_count: part_entity_count,
-        creature_join_cover_count: join_cover_count,
+        creature_join_cover_count: 0,
         creature_part_family_count: part_families.len(),
         creature_mixed_assembly_count: mixed_assembly_count,
         creature_shared_mesh_handle_count: scene_mesh_handles.len(),
@@ -5241,17 +4557,6 @@ fn geneforge_authored_transform_to_bevy(matrix: [f64; 16]) -> Transform {
         matrix[0], matrix[4], matrix[8], matrix[12], matrix[1], matrix[5], matrix[9], matrix[13],
         matrix[2], matrix[6], matrix[10], matrix[14], matrix[3], matrix[7], matrix[11], matrix[15],
     ]))
-}
-
-fn geneforge_join_cover_primitive(value: &str) -> Option<JoinCoverPrimitive> {
-    match value {
-        "neck-ruff" | "ruff" => Some(JoinCoverPrimitive::Ruff),
-        "shoulder-tuft" => Some(JoinCoverPrimitive::ShoulderTuft),
-        "hip-fur" => Some(JoinCoverPrimitive::HipFur),
-        "tail-ruff" => Some(JoinCoverPrimitive::TailRuff),
-        "cuff" => Some(JoinCoverPrimitive::Cuff),
-        _ => None,
-    }
 }
 
 #[cfg(test)]
@@ -5304,289 +4609,6 @@ fn socket_transform_to_bevy(
         .with_scale(socket_scale_to_bevy(socket.scale) * socket_scale_to_bevy(local_scale))
 }
 
-#[derive(Clone)]
-struct Fvr10CreatureDetailMeshes {
-    cheek_spot: Handle<Mesh>,
-    forehead_band: Handle<Mesh>,
-    muzzle_patch: Handle<Mesh>,
-    ear: Handle<Mesh>,
-    side_fin: Handle<Mesh>,
-    brow_horn: Handle<Mesh>,
-    limb_band: Handle<Mesh>,
-    hand: Handle<Mesh>,
-    foot: Handle<Mesh>,
-    tail_accent: Handle<Mesh>,
-}
-
-impl Fvr10CreatureDetailMeshes {
-    fn get(&self, kind: CreatureDetailMeshKind) -> Handle<Mesh> {
-        match kind {
-            CreatureDetailMeshKind::CheekPatch => self.cheek_spot.clone(),
-            CreatureDetailMeshKind::BrowBand => self.forehead_band.clone(),
-            CreatureDetailMeshKind::Muzzle => self.muzzle_patch.clone(),
-            CreatureDetailMeshKind::Ear => self.ear.clone(),
-            CreatureDetailMeshKind::Fin => self.side_fin.clone(),
-            CreatureDetailMeshKind::Tuft => self.brow_horn.clone(),
-            CreatureDetailMeshKind::LimbBand => self.limb_band.clone(),
-            CreatureDetailMeshKind::Hand => self.hand.clone(),
-            CreatureDetailMeshKind::Foot => self.foot.clone(),
-            CreatureDetailMeshKind::TailAccent => self.tail_accent.clone(),
-        }
-    }
-}
-
-#[derive(Clone)]
-struct Fvr10CreatureDetailMaterials {
-    belly: Handle<StandardMaterial>,
-    accent: Handle<StandardMaterial>,
-    dark: Handle<StandardMaterial>,
-    horn: Handle<StandardMaterial>,
-}
-
-impl Fvr10CreatureDetailMaterials {
-    fn get(&self, role: CreatureDetailMaterialRole) -> Handle<StandardMaterial> {
-        match role {
-            CreatureDetailMaterialRole::Belly => self.belly.clone(),
-            CreatureDetailMaterialRole::Accent => self.accent.clone(),
-            CreatureDetailMaterialRole::Dark => self.dark.clone(),
-            CreatureDetailMaterialRole::Keratin => self.horn.clone(),
-        }
-    }
-}
-
-fn fvr10_creature_detail_meshes(world: &mut World) -> Fvr10CreatureDetailMeshes {
-    let mut meshes = world.resource_mut::<Assets<Mesh>>();
-    Fvr10CreatureDetailMeshes {
-        cheek_spot: meshes.add(
-            Sphere::new(0.075)
-                .mesh()
-                .ico(1)
-                .expect("valid cheek patch sphere"),
-        ),
-        forehead_band: meshes.add(Cuboid::new(0.30, 0.075, 0.065)),
-        muzzle_patch: meshes.add(
-            Sphere::new(0.13)
-                .mesh()
-                .ico(2)
-                .expect("valid muzzle sphere"),
-        ),
-        ear: meshes.add(Sphere::new(0.105).mesh().ico(1).expect("valid ear sphere")),
-        side_fin: meshes.add(fvr10_side_fin_mesh(1.0)),
-        brow_horn: meshes.add(fvr10_brow_horn_mesh(1.0)),
-        limb_band: meshes.add(Cuboid::new(0.19, 0.060, 0.070)),
-        hand: meshes.add(Sphere::new(0.085).mesh().ico(1).expect("valid hand sphere")),
-        foot: meshes.add(Sphere::new(0.085).mesh().ico(1).expect("valid foot sphere")),
-        tail_accent: meshes.add(Capsule3d::new(0.065, 0.25)),
-    }
-}
-
-fn fvr10_creature_detail_materials(
-    world: &mut World,
-    visual: &CreatureVisualSnapshot,
-) -> Fvr10CreatureDetailMaterials {
-    let colors = fvr10_creature_color_set(visual.appearance);
-    let mut materials = world.resource_mut::<Assets<StandardMaterial>>();
-    let belly = materials.add(fvr10_creature_detail_material(colors.belly));
-    let accent_handle = materials.add(fvr10_creature_detail_material(colors.accent));
-    let dark = materials.add(fvr10_creature_detail_material(colors.dark));
-    let horn = materials.add(fvr10_creature_detail_material(colors.horn));
-    Fvr10CreatureDetailMaterials {
-        belly,
-        accent: accent_handle,
-        dark,
-        horn,
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct Fvr10CreatureColorSet {
-    accent: [f32; 4],
-    belly: [f32; 4],
-    dark: [f32; 4],
-    horn: [f32; 4],
-}
-
-fn fvr10_creature_color_set(appearance: CreatureAppearanceGenome) -> Fvr10CreatureColorSet {
-    let species =
-        (appearance.species_archetype as usize) % usize::from(CREATURE_APPEARANCE_SPECIES_COUNT);
-    let bases = [
-        [0.55, 0.28, 0.12, 1.0],
-        [0.74, 0.43, 0.12, 1.0],
-        [0.19, 0.49, 0.40, 1.0],
-        [0.27, 0.21, 0.44, 1.0],
-        [0.58, 0.50, 0.30, 1.0],
-        [0.16, 0.18, 0.21, 1.0],
-        [0.54, 0.16, 0.27, 1.0],
-        [0.30, 0.47, 0.14, 1.0],
-        [0.70, 0.58, 0.30, 1.0],
-        [0.47, 0.24, 0.15, 1.0],
-        [0.63, 0.55, 0.42, 1.0],
-        [0.33, 0.25, 0.19, 1.0],
-        [0.20, 0.38, 0.52, 1.0],
-        [0.74, 0.66, 0.48, 1.0],
-        [0.39, 0.30, 0.18, 1.0],
-        [0.21, 0.36, 0.32, 1.0],
-    ];
-    let accents = [
-        [0.98, 0.78, 0.24, 1.0],
-        [0.12, 0.82, 0.78, 1.0],
-        [0.95, 0.28, 0.18, 1.0],
-        [0.90, 0.74, 0.34, 1.0],
-        [0.15, 0.16, 0.18, 1.0],
-        [0.86, 0.82, 0.62, 1.0],
-        [0.48, 0.88, 0.26, 1.0],
-        [0.74, 0.38, 0.86, 1.0],
-    ];
-    let mut base = bases[species];
-    let inherited_shift = ((appearance.palette_family as f32 - 7.5) * 0.012)
-        + ((appearance.body_mass_trait as f32 % 5.0) * 0.008);
-    base[0] = (base[0] + inherited_shift).clamp(0.08, 0.82);
-    base[1] = (base[1] + inherited_shift * 0.72).clamp(0.08, 0.76);
-    base[2] = (base[2] + inherited_shift * 0.48).clamp(0.06, 0.68);
-    let accent =
-        accents[(species + appearance.fur_pattern as usize + appearance.palette_family as usize)
-            % accents.len()];
-    Fvr10CreatureColorSet {
-        accent,
-        belly: [
-            (base[0] * 0.55 + 0.24).clamp(0.12, 0.72),
-            (base[1] * 0.48 + 0.22).clamp(0.10, 0.66),
-            (base[2] * 0.38 + 0.16).clamp(0.08, 0.58),
-            1.0,
-        ],
-        dark: [
-            (base[0] * 0.18).clamp(0.03, 0.24),
-            (base[1] * 0.16).clamp(0.03, 0.22),
-            (base[2] * 0.16).clamp(0.03, 0.24),
-            1.0,
-        ],
-        horn: [
-            (accent[0] * 0.72 + 0.18).clamp(0.0, 1.0),
-            (accent[1] * 0.68 + 0.14).clamp(0.0, 1.0),
-            (accent[2] * 0.52 + 0.10).clamp(0.0, 1.0),
-            1.0,
-        ],
-    }
-}
-
-fn fvr10_creature_detail_material(rgba: [f32; 4]) -> StandardMaterial {
-    StandardMaterial {
-        base_color: Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3]),
-        perceptual_roughness: 0.68,
-        reflectance: 0.28,
-        unlit: false,
-        ..default()
-    }
-}
-
-fn fvr10_spawn_creature_surface_details(
-    world: &mut World,
-    part_entities: &BTreeMap<CreaturePartSlot, Entity>,
-    visual: &CreatureVisualSnapshot,
-    lod: Fvr04CreatureLod,
-    meshes: &Fvr10CreatureDetailMeshes,
-    materials: &Fvr10CreatureDetailMaterials,
-) {
-    let lod_scale = match lod {
-        Fvr04CreatureLod::FullVoxel => 1.0,
-        Fvr04CreatureLod::CompactVoxel => 0.92,
-        Fvr04CreatureLod::ImpostorVoxel => 0.72,
-    };
-    for detail in creature_surface_detail_recipe(visual.appearance, lod_scale) {
-        let local_offset = Vec3::from_array(detail.local_offset);
-        world.spawn((
-            Name::new(format!(
-                "A-Life FVR10 caveman furry creature detail {} stable {}",
-                detail.role,
-                visual.stable_id.raw()
-            )),
-            Mesh3d(meshes.get(detail.mesh)),
-            MeshMaterial3d(materials.get(detail.material)),
-            Transform::from_translation(local_offset)
-                .with_scale(Vec3::from_array(detail.local_scale)),
-            Visibility::Inherited,
-            ChildOf(part_entities[&detail.anchor_slot]),
-            Fvr10CreatureSurfaceDetailMarker {
-                stable_id: visual.stable_id,
-                species_archetype: visual.appearance.species_archetype,
-                detail_role: detail.role,
-                anchor_slot: detail.anchor_slot,
-                display_only: true,
-                no_renderer_authority_over_actions_or_cognition: true,
-                high_contrast_marking: true,
-                heritable: true,
-            },
-        ));
-    }
-}
-
-fn fvr10_side_fin_mesh(scale: f32) -> Mesh {
-    let mut mesh = Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    );
-    let sx = 0.22 * scale;
-    let sy = 0.18 * scale;
-    let sz = 0.055 * scale;
-    let positions = vec![
-        [-sx, -sy, -sz],
-        [sx, 0.0, -sz],
-        [-sx, sy, -sz],
-        [-sx, -sy, sz],
-        [sx, 0.0, sz],
-        [-sx, sy, sz],
-    ];
-    let normals = vec![
-        [0.0, 0.0, -1.0],
-        [0.0, 0.0, -1.0],
-        [0.0, 0.0, -1.0],
-        [0.0, 0.0, 1.0],
-        [0.0, 0.0, 1.0],
-        [0.0, 0.0, 1.0],
-    ];
-    let uvs = vec![
-        [0.0, 0.0],
-        [1.0, 0.5],
-        [0.0, 1.0],
-        [0.0, 0.0],
-        [1.0, 0.5],
-        [0.0, 1.0],
-    ];
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.insert_indices(Indices::U32(vec![
-        0, 1, 2, 3, 5, 4, 0, 3, 4, 0, 4, 1, 2, 1, 4, 2, 4, 5,
-    ]));
-    mesh
-}
-
-fn fvr10_brow_horn_mesh(scale: f32) -> Mesh {
-    let mut mesh = Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    );
-    let sx = 0.11 * scale;
-    let sy = 0.12 * scale;
-    let sz = 0.16 * scale;
-    let positions = vec![
-        [-sx, -sy, -sz],
-        [sx, -sy, -sz],
-        [0.0, sy, sz],
-        [-sx, -sy, sz * 0.15],
-        [sx, -sy, sz * 0.15],
-    ];
-    let normals = vec![[0.0, 0.0, 1.0]; 5];
-    let uvs = vec![[0.0, 0.0], [1.0, 0.0], [0.5, 1.0], [0.0, 0.5], [1.0, 0.5]];
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.insert_indices(Indices::U32(vec![
-        0, 1, 2, 3, 2, 4, 0, 2, 3, 1, 4, 2, 0, 3, 4, 0, 4, 1,
-    ]));
-    mesh
-}
-
 fn fvr04_creature_scale(visual: &CreatureVisualSnapshot, lod: Fvr04CreatureLod) -> Vec3 {
     let fatigue_squash = 1.0 - visual.cues.fatigue.value * 0.18;
     let fear_narrow = 1.0 - visual.cues.fear.value * 0.10;
@@ -5617,142 +4639,22 @@ fn project_authoritative_creature_root_transform(
         return false;
     }
 
-    transform.translation.x = object.position.x.round() + 0.5;
-    transform.translation.z = object.position.z.round() + 0.5;
+    // The simulation moves in XY; Bevy uses XZ for the ground plane.
+    let x = object.position.x;
+    let z = object.position.y;
+    if transform.translation.x != x {
+        transform.translation.x = x;
+    }
+    if transform.translation.z != z {
+        transform.translation.z = z;
+    }
     true
-}
-
-fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
-    let Some(frame) = world
-        .get_resource::<LiveBrainPresentationFrameResource>()
-        .cloned()
-    else {
-        return;
-    };
-
-    #[cfg(feature = "gpu-runtime")]
-    let mut root_identities = BTreeSet::new();
-    #[cfg(feature = "gpu-runtime")]
-    {
-        let mut roots = world.query::<(
-            &ProductionCreatureAssemblyRoot,
-            &Fvr04ProductionCreatureVisualMarker,
-        )>();
-        for (root, visual) in roots.iter(world) {
-            root_identities.insert((root.stable_id.raw(), visual.organism_id.raw()));
-        }
-    }
-
-    let mut roots = world.query::<(
-        &ProductionCreatureAssemblyRoot,
-        &Fvr04ProductionCreatureVisualMarker,
-        &mut Transform,
-    )>();
-    for (root, visual, mut transform) in roots.iter_mut(world) {
-        project_authoritative_creature_root_transform(
-            root.stable_id,
-            visual.organism_id,
-            &mut transform,
-            &frame.current,
-        );
-    }
-
-    #[cfg(feature = "gpu-runtime")]
-    {
-        let Some(authoritative_world) = world
-            .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
-            .map(|runtime| runtime.runtime.world_snapshot())
-        else {
-            return;
-        };
-        let tile_summaries = world
-            .get_resource::<Fvr03ProductionVoxelSceneResource>()
-            .map(|scene| scene.tile_summaries_by_tile.clone())
-            .unwrap_or_default();
-        let mut newborns = Vec::new();
-        for object in frame.current.object_snapshots() {
-            if object.kind != WorldObjectKind::Agent {
-                continue;
-            }
-            let Some(organism_id) = object.organism_id else {
-                continue;
-            };
-            let identity = (object.id.raw(), organism_id.raw());
-            if root_identities.contains(&identity) {
-                continue;
-            }
-            let tile = VoxelTileCoord::new(
-                object.position.x.round() as i32,
-                object.position.z.round() as i32,
-            );
-            let chunk = tile_summaries
-                .get(&tile)
-                .map(|summary| summary.chunk)
-                .unwrap_or_else(|| VoxelChunkCoord::new(0, 0));
-            if let Some(record) = fvr04_live_creature_visual_record(
-                &frame.current,
-                &authoritative_world,
-                &object,
-                tile,
-                chunk,
-            ) {
-                newborns.push(record);
-            }
-        }
-        let max_visible = world
-            .get_resource::<Fvr04CreatureSpawnContext>()
-            .map(|context| usize::from(context.settings.max_visible_creatures))
-            .unwrap_or(0);
-        newborns.truncate(max_visible);
-        if newborns.is_empty() {
-            return;
-        }
-
-        let prepared = {
-            let Some(mut context) = world.remove_resource::<Fvr04CreatureSpawnContext>() else {
-                return;
-            };
-            let result = prepare_fvr04_creature_batch(
-                world,
-                &newborns,
-                &tile_summaries,
-                &mut context,
-            );
-            world.insert_resource(context);
-            let Ok(prepared) = result else {
-                return;
-            };
-            prepared
-        };
-        let added_scene = spawn_fvr04_prepared_creature_batch(world, prepared);
-        let added_count = added_scene.rendered_creature_count;
-        if let Some(mut scene) = world.get_resource_mut::<Fvr04ProductionCreatureSceneResource>() {
-            append_fvr04_creature_scene_resource(&mut scene, added_scene);
-        }
-        if let Some(mut scene) = world.get_resource_mut::<Fvr03ProductionVoxelSceneResource>() {
-            scene.creature_render_count = scene.creature_render_count.saturating_add(added_count);
-            scene.creature_root_count = scene.creature_root_count.saturating_add(added_count);
-            for newborn in newborns.into_iter().take(added_count) {
-                scene
-                    .creature_refs_by_tile
-                    .insert(newborn.tile, newborn.stable_ref);
-                scene.selection_positions_by_raw_id.insert(
-                    newborn.visual.stable_id.raw(),
-                    Vec3::new(
-                        newborn.tile.x as f32 + 0.5,
-                        1.52,
-                        newborn.tile.z as f32 + 0.5,
-                    ),
-                );
-            }
-        }
-    }
 }
 
 #[cfg(feature = "gpu-runtime")]
 fn fvr04_live_creature_visual_record(
     frame: &LiveBrainPresentationFrame,
-    world: &alife_world::HeadlessWorld,
+    world_seed: u64,
     object: &alife_world::WorldObject,
     tile: VoxelTileCoord,
     chunk: VoxelChunkCoord,
@@ -5767,12 +4669,12 @@ fn fvr04_live_creature_visual_record(
     {
         return None;
     }
-    let (selected_action_kind, target_entity) = presentation.motor.as_ref().map_or(
-        (None, None),
-        |motor| (motor.action_kind.clone(), motor.target_entity),
-    );
-    let target_position = target_entity
-        .and_then(|target| frame.object(target).map(|object| object.position));
+    let (selected_action_kind, target_entity) =
+        presentation.motor.as_ref().map_or((None, None), |motor| {
+            (motor.action_kind.clone(), motor.target_entity)
+        });
+    let target_position =
+        target_entity.and_then(|target| frame.object(target).map(|object| object.position));
     let visual = creature_visual_snapshot_from_parts_with_appearance(
         presentation.organism_id,
         presentation.world_entity_id,
@@ -5786,7 +4688,7 @@ fn fvr04_live_creature_visual_record(
             presentation.organism_id,
             presentation.genome.id,
             presentation.organism_id.raw() as usize,
-            world.seed(),
+            world_seed,
         ),
     )
     .ok()?;
@@ -5821,8 +4723,7 @@ fn fvr04_live_creature_visual_record(
         unresolved_gap_count: cognitive.and_then(|snapshot| snapshot.unresolved_gap_count),
         lifetime_learning_enabled: cognitive.and_then(|snapshot| snapshot.learning_active),
         sleep_phase_raw: cognitive.and_then(|snapshot| snapshot.sleep_phase_raw),
-        consolidation_state_raw: cognitive
-            .and_then(|snapshot| snapshot.consolidation_state_raw),
+        consolidation_state_raw: cognitive.and_then(|snapshot| snapshot.consolidation_state_raw),
         last_consolidated_tick: cognitive.and_then(|snapshot| snapshot.last_consolidated_tick),
         topology_update_count: cognitive.and_then(|snapshot| snapshot.topology_update_count),
         visual,
@@ -5857,16 +4758,23 @@ fn append_fvr04_creature_scene_resource(
 fn animate_fvr04_creatures(
     time: Res<Time>,
     ux: Option<Res<Fvr05ProductionUxStateResource>>,
-    mut creatures: bevy::prelude::Query<(&mut Transform, &Fvr04ProductionCreatureVisualMarker)>,
+    mut animation_seconds: Local<f32>,
+    mut creatures: bevy::prelude::Query<
+        (&mut Transform, &Fvr04ProductionCreatureVisualMarker),
+        Without<hearthling::HearthlingVisual>,
+    >,
 ) {
-    if ux.as_ref().is_some_and(|ux| ux.settings.paused) {
-        return;
-    }
+    let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
     let speed = ux
         .as_ref()
         .map(|ux| ux.settings.simulation_speed)
         .unwrap_or(1.0);
-    let seconds = time.elapsed_secs() * speed;
+    let seconds =
+        advance_fvr04_animation_phase(*animation_seconds, time.delta_secs(), speed, paused);
+    *animation_seconds = seconds;
+    if paused {
+        return;
+    }
     for (mut transform, marker) in &mut creatures {
         let wave = (seconds * fvr04_animation_speed(marker.animation) + marker.phase).sin();
         let lateral = (seconds * 7.0 + marker.phase * 1.7).sin();
@@ -5878,7 +4786,8 @@ fn animate_fvr04_creatures(
             pose.rotation_xyz[2],
         );
         let rotation = Quat::from_rotation_y(std::f32::consts::PI) * pose_rotation;
-        transform.rotation = rotation;
+        let blend = 1.0 - (-8.0 * time.delta_secs().min(0.05)).exp();
+        transform.rotation = transform.rotation.slerp(rotation, blend);
         transform.scale = marker.base_scale * Vec3::from_array(pose.scale);
     }
 }
@@ -5886,21 +4795,29 @@ fn animate_fvr04_creatures(
 fn animate_fvr04_creature_parts(
     time: Res<Time>,
     ux: Option<Res<Fvr05ProductionUxStateResource>>,
+    mut animation_seconds: Local<f32>,
     mut parts: bevy::prelude::Query<(
         &mut Transform,
         &ProductionCreaturePartMarker,
         &ProductionCreaturePartRestTransform,
+        &ViewVisibility,
     )>,
 ) {
-    if ux.as_ref().is_some_and(|ux| ux.settings.paused) {
-        return;
-    }
+    let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
     let speed = ux
         .as_ref()
         .map(|ux| ux.settings.simulation_speed)
         .unwrap_or(1.0);
-    let seconds = time.elapsed_secs() * speed;
-    for (mut transform, marker, rest_transform) in &mut parts {
+    let seconds =
+        advance_fvr04_animation_phase(*animation_seconds, time.delta_secs(), speed, paused);
+    *animation_seconds = seconds;
+    if paused {
+        return;
+    }
+    for (mut transform, marker, rest_transform, view_visibility) in &mut parts {
+        if !view_visibility.get() {
+            continue;
+        }
         let phase = (marker.stable_id.raw() % 31) as f32 * 0.19;
         let wave = (seconds * 3.8 + phase).sin();
         let pose = creature_part_pose(marker.animation, marker.slot, wave);
@@ -5928,20 +4845,141 @@ fn fvr04_animation_speed(animation: CreatureAnimationState) -> f32 {
     }
 }
 
+fn advance_fvr04_animation_phase(
+    current_seconds: f32,
+    delta_seconds: f32,
+    speed: f32,
+    paused: bool,
+) -> f32 {
+    if paused {
+        return current_seconds;
+    }
+    current_seconds + delta_seconds.max(0.0) * speed.max(0.0)
+}
+
+fn live_agent_ground_position(
+    frame: &LiveBrainPresentationFrameResource,
+    stable_id: WorldEntityId,
+) -> Option<(VoxelTileCoord, Vec3)> {
+    let object = frame.current.object(stable_id)?;
+    (object.kind == WorldObjectKind::Agent).then(|| {
+        let tile = VoxelTileCoord::new(
+            object.position.x.floor() as i32,
+            object.position.y.floor() as i32,
+        );
+        (tile, Vec3::new(object.position.x, 0.0, object.position.y))
+    })
+}
+
+fn sync_fvr11_creature_contact_shadows(
+    mut commands: Commands,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    scene: Res<Fvr03ProductionVoxelSceneResource>,
+    mut shadows: bevy::prelude::Query<(
+        Entity,
+        &mut Transform,
+        &mut crate::Fvr11ProductionContactShadow,
+    )>,
+) {
+    let Some(frame) = frame.filter(|frame| frame.is_changed()) else {
+        return;
+    };
+    for (entity, mut transform, mut shadow) in &mut shadows {
+        let Some(stable_id) = shadow.stable_id else {
+            continue;
+        };
+        let Some((tile, position)) = live_agent_ground_position(&frame, stable_id) else {
+            commands.entity(entity).despawn();
+            continue;
+        };
+        shadow.tile = tile;
+        transform.translation.x = position.x;
+        transform.translation.z = position.z;
+        if let Some(summary) = scene.tile_summaries_by_tile.get(&tile) {
+            transform.translation.y = summary.height_units + 0.018;
+        }
+    }
+}
+
+#[cfg(not(feature = "vfx-hanabi"))]
+fn sync_fvr07_attached_fallback_vfx(
+    mut commands: Commands,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    mut markers: bevy::prelude::Query<(Entity, &mut Transform, &mut Fvr07ProductionGpuVfxMarker)>,
+) {
+    let Some(frame) = frame.filter(|frame| frame.is_changed()) else {
+        return;
+    };
+    for (entity, mut transform, mut marker) in &mut markers {
+        if !marker.follows_creature {
+            continue;
+        }
+        let Some(stable_id) = marker.stable_id else {
+            continue;
+        };
+        let Some((tile, position)) = live_agent_ground_position(&frame, stable_id) else {
+            commands.entity(entity).despawn();
+            continue;
+        };
+        marker.tile = Some(tile);
+        marker.base_translation.x = position.x;
+        marker.base_translation.z = position.z;
+        transform.translation.x = position.x;
+        transform.translation.z = position.z;
+    }
+}
+
+#[cfg(feature = "vfx-hanabi")]
+fn sync_fvr07_attached_hanabi_vfx(
+    mut commands: Commands,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    mut emitters: bevy::prelude::Query<(Entity, &mut Transform, &Fvr07ProductionHanabiVfxEmitter)>,
+) {
+    let Some(frame) = frame.filter(|frame| frame.is_changed()) else {
+        return;
+    };
+    for (entity, mut transform, emitter) in &mut emitters {
+        if !emitter.follows_creature {
+            continue;
+        }
+        let Some(stable_id) = emitter.stable_id else {
+            continue;
+        };
+        let Some((_, position)) = live_agent_ground_position(&frame, stable_id) else {
+            commands.entity(entity).despawn();
+            continue;
+        };
+        transform.translation.x = position.x;
+        transform.translation.z = position.z;
+    }
+}
+
+#[cfg(not(feature = "vfx-hanabi"))]
 fn animate_fvr07_production_vfx(
     time: Res<Time>,
     ux: Option<Res<Fvr05ProductionUxStateResource>>,
-    mut markers: bevy::prelude::Query<(&mut Transform, &Fvr07ProductionGpuVfxMarker)>,
+    mut animation_seconds: Local<f32>,
+    mut markers: bevy::prelude::Query<(
+        &mut Transform,
+        &Fvr07ProductionGpuVfxMarker,
+        &ViewVisibility,
+    )>,
 ) {
-    if ux.as_ref().is_some_and(|ux| ux.settings.paused) {
-        return;
-    }
+    let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
     let speed = ux
         .as_ref()
         .map(|ux| ux.settings.simulation_speed)
         .unwrap_or(1.0);
-    let seconds = time.elapsed_secs() * speed;
-    for (mut transform, marker) in &mut markers {
+    let seconds =
+        advance_fvr04_animation_phase(*animation_seconds, time.delta_secs(), speed, paused);
+    *animation_seconds = seconds;
+    if paused {
+        return;
+    }
+    for (mut transform, marker, view_visibility) in &mut markers {
+        if !view_visibility.get() {
+            continue;
+        }
         let wave = (seconds * marker.kind.pulse_speed() + marker.phase).sin();
         let pulse = 1.0 + wave * 0.10;
         transform.translation =
@@ -6129,17 +5167,13 @@ fn fvr04_sleep_phase_text(phase: alife_core::SleepPhase) -> &'static str {
 
 fn spawn_fvr03_selection_marker(
     world: &mut World,
-    materials: &BTreeMap<Fvr03ProductionVoxelMaterialKind, Handle<StandardMaterial>>,
+    material: Handle<StandardMaterial>,
     mesh: Handle<Mesh>,
     selection: StableVoxelObjectRef,
 ) {
     let Some(tile) = selection.tile else {
         return;
     };
-    let material = materials
-        .get(&Fvr03ProductionVoxelMaterialKind::Selection)
-        .expect("FVR03 selection material exists")
-        .clone();
     world.spawn((
         Name::new(format!("A-Life FVR03 selected tile {}:{}", tile.x, tile.z)),
         Mesh3d(mesh),
@@ -6168,79 +5202,6 @@ fn spawn_fvr04_creature_world_label(app: &mut App, selected: Option<StableVoxelO
             Visibility::Hidden
         },
         Fvr04ProductionCreatureWorldLabel,
-    ));
-}
-
-fn spawn_fvr04_creature_inspector_panel(app: &mut App) {
-    app.world_mut().spawn((
-        Name::new("A-Life FVR04 creature inspector panel"),
-        Text::new("Creature\nselection: none"),
-        TextFont {
-            font_size: 15.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.90, 0.96, 0.86)),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(18.0),
-            right: Val::Px(18.0),
-            max_width: Val::Px(420.0),
-            padding: bevy::ui::UiRect::all(Val::Px(12.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.014, 0.020, 0.017, 0.84)),
-        Visibility::Hidden,
-        Fvr04ProductionCreatureInspectorPanel,
-    ));
-}
-
-fn spawn_fvr03_diagnostics_ui(
-    app: &mut App,
-    summary: &ProductionVoxelLaunchSummary,
-    settings: &Fvr03ProductionVoxelRendererSettings,
-) {
-    app.world_mut().spawn((
-        Name::new("A-Life FVR03 production voxel diagnostics"),
-        Text::new(format!(
-            "A-Life Voxel Frontend\nprofile: {} | population: {}\nrenderer: {} | backend: {}\ntarget: {} FPS | chunks radius: {} | stride: {}\nmesher: {} | material atlas: {}\ncreatures: {} / {}\nruntime: {} | unavailable: {}\nsave: {}",
-            summary.profile_id.label(),
-            summary.effective_population,
-            summary.renderer_profile,
-            FVR10_RENDERER_BACKEND_ID,
-            settings.target_fps,
-            settings.draw_radius_chunks,
-            settings.tile_stride,
-            Fvr09MesherMode::BinaryGreedyQuads.label(),
-            settings.material_palette_version,
-            FVR10_CUTE_BIPED_VISUAL_PROFILE,
-            FVR10_CUTE_BIPED_MATERIAL_VERSION,
-            summary.diagnostics.selected_backend,
-            summary
-                .diagnostics
-                .unavailable_reason
-                .as_deref()
-                .unwrap_or("None"),
-            summary
-                .save_path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("unknown"),
-        )),
-        TextFont {
-            font_size: 16.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.86, 0.96, 0.90)),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(18.0),
-            left: Val::Px(18.0),
-            max_width: Val::Px(650.0),
-            padding: bevy::ui::UiRect::all(Val::Px(12.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.015, 0.026, 0.020, 0.82)),
-        Visibility::Hidden,
     ));
 }
 
@@ -6373,7 +5334,8 @@ fn spawn_v0_player_experience_ui(app: &mut App) {
     ));
     app.world_mut().spawn((
         Name::new("A-Life V0 selected creature panel"),
-        Text::new("Select a creature"),
+        Visibility::Hidden,
+        Text::new(""),
         TextFont {
             font_size: 14.0,
             ..default()
@@ -6393,7 +5355,7 @@ fn spawn_v0_player_experience_ui(app: &mut App) {
     ));
     app.world_mut().spawn((
         Name::new("A-Life V0 player control strip"),
-        Text::new("LMB Select  |  R Recover view"),
+        Text::new("F1 Help"),
         TextFont {
             font_size: 13.0,
             ..default()
@@ -6401,8 +5363,8 @@ fn spawn_v0_player_experience_ui(app: &mut App) {
         TextColor(Color::srgb(0.89, 0.88, 0.74)),
         Node {
             position_type: PositionType::Absolute,
-            left: Val::Px(92.0),
-            right: Val::Px(92.0),
+            left: Val::Px(18.0),
+            max_width: Val::Percent(95.0),
             bottom: Val::Px(18.0),
             padding: bevy::ui::UiRect::axes(Val::Px(16.0), Val::Px(10.0)),
             ..default()
@@ -6420,15 +5382,19 @@ fn sync_v0_player_status_chip(
     if !scene.is_changed() && !ux.is_changed() {
         return;
     }
-    let state = if ux.settings.paused {
-        "PAUSED"
+    let playback = if ux.settings.paused {
+        " | Paused".to_string()
+    } else if ux.settings.simulation_speed != 1.0 {
+        format!(" | {:.0}x", ux.settings.simulation_speed)
     } else {
-        "LIVING"
+        String::new()
     };
-    let text = format!(
-        "A-LIFE  |  {}  |  {} CREATURES",
-        state, scene.creature_render_count
-    );
+    let noun = if scene.creature_render_count == 1 {
+        "creature"
+    } else {
+        "creatures"
+    };
+    let text = format!("{} {noun}{playback}", scene.creature_render_count);
     for mut chip in &mut chips {
         chip.0 = text.clone();
     }
@@ -6437,117 +5403,82 @@ fn sync_v0_player_status_chip(
 fn sync_v0_player_creature_panel(
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
-    follow: Res<Fvr04ProductionCreatureFollowResource>,
-    mut panels: bevy::prelude::Query<&mut Text, With<V0PlayerCreaturePanel>>,
+    ux: Res<Fvr05ProductionUxStateResource>,
+    mut panels: bevy::prelude::Query<(&mut Text, &mut Visibility), With<V0PlayerCreaturePanel>>,
 ) {
-    if !selection.is_changed() && !creatures.is_changed() && !follow.is_changed() {
+    if !selection.is_changed() && !creatures.is_changed() && !ux.is_changed() {
         return;
     }
-    let text = selection
+    let sample = selection
         .selected
         .filter(|selected| selected.kind == StableVoxelRefKind::Creature)
         .and_then(|selected| selected.stable_id)
-        .and_then(|stable_id| creatures.sample_for_stable_id(stable_id))
-        .map(|sample| v0_selected_creature_text(sample, follow.enabled))
-        .unwrap_or_else(|| {
-            "CREATURES\nNo creature selected\n\nLMB selects a creature or terrain.\nR restores the default view."
-                .to_string()
-        });
-    for mut panel in &mut panels {
-        panel.0 = text.clone();
+        .and_then(|stable_id| creatures.sample_for_stable_id(stable_id));
+    for (mut panel, mut visibility) in &mut panels {
+        *visibility = if sample.is_some() && !ux.debug_mode {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+        if let Some(sample) = sample {
+            panel.0 = v0_selected_creature_text(sample);
+        }
     }
 }
 
 fn sync_v0_player_control_strip(
     ux: Res<Fvr05ProductionUxStateResource>,
-    follow: Res<Fvr04ProductionCreatureFollowResource>,
+    #[cfg(feature = "gpu-runtime")] authority: Option<Res<ProductionGpuBrainAuthorityResource>>,
     mut strips: bevy::prelude::Query<&mut Text, With<V0PlayerControlStrip>>,
 ) {
-    if !ux.is_changed() && !follow.is_changed() {
+    #[cfg(feature = "gpu-runtime")]
+    let authority_changed = authority.as_ref().is_some_and(|state| state.is_changed());
+    #[cfg(not(feature = "gpu-runtime"))]
+    let authority_changed = false;
+    if !ux.is_changed() && !authority_changed {
         return;
     }
-    let playback = if ux.settings.paused {
-        "Paused"
+    let mut text = if ux.show_help {
+        "F1 Close help | Space Pause | 1/2/3 Speed | S Save | L Load\nClick Select | E Place food on selected ground | Enter Speak | Y Lineage\nArrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
     } else {
-        "Running"
+        "F1 Help".to_string()
     };
-    let follow_state = if follow.enabled {
-        "Following"
+    if ux.debug_mode {
+        text.push_str(" | F3 Exit debug");
+    }
+    #[cfg(feature = "gpu-runtime")]
+    let simulation_failed = authority.as_ref().is_some_and(|state| {
+        !state.telemetry.authoritative && state.telemetry.unavailable_reason.is_some()
+    });
+    #[cfg(not(feature = "gpu-runtime"))]
+    let simulation_failed = false;
+    if simulation_failed {
+        text.push_str("\nSimulation stopped. F3 for details.");
+    } else if ux.last_error.is_some() {
+        text.push_str("\nAction failed. F3 for details.");
     } else {
-        "Free camera"
-    };
-    let text = format!(
-        "{}  {:.1}x  |  {}  |  LMB Select  O Orbit  I Isometric  F Follow  R Recover  Space/P Pause  N Step  [ ] or 1/2/3 Speed",
-        playback, ux.settings.simulation_speed, follow_state
-    );
+        #[cfg(feature = "gpu-runtime")]
+        match ux.last_manual_checkpoint_status.as_ref() {
+            Some(crate::GpuManualCheckpointStatus::Queued { .. }) => text.push_str(" | Saving..."),
+            Some(crate::GpuManualCheckpointStatus::Complete { .. }) => text.push_str(" | Saved"),
+            _ => {}
+        }
+    }
     for mut strip in &mut strips {
         strip.0 = text.clone();
     }
 }
 
-fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample, following: bool) -> String {
+fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample) -> String {
     let display_name = v0_player_creature_name(&sample.display_label, sample.stable_id.raw());
-    let brain = match (sample.brain_class_id, sample.brain_neuron_count) {
-        (Some(class_id), Some(count)) => format!("class {class_id}, {count} neurons"),
-        (None, Some(count)) => format!("{count} neurons"),
-        _ => "brain unavailable".to_string(),
-    };
-    let learning = match sample.lifetime_learning_enabled {
-        Some(true) => "active",
-        Some(false) => "inactive",
-        None => "unavailable",
-    };
-    let memories = sample
-        .memory_record_count
-        .map(|count| count.to_string())
-        .unwrap_or_else(|| "unavailable".to_string());
-    let fast_memories = sample
-        .fast_memory_count
-        .map(|count| count.to_string())
-        .unwrap_or_else(|| "unavailable".to_string());
-    let lifetime_memories = sample
-        .lifetime_memory_count
-        .map(|count| count.to_string())
-        .unwrap_or_else(|| "unavailable".to_string());
-    let concepts = sample
-        .concept_count
-        .map(|count| count.to_string())
-        .unwrap_or_else(|| "unavailable".to_string());
-    let gaps = sample
-        .unresolved_gap_count
-        .map(|count| count.to_string())
-        .unwrap_or_else(|| "unavailable".to_string());
-    let last_sleep = sample
-        .last_consolidated_tick
-        .map(|tick| format!("Last sleep learning: tick {tick}"))
-        .unwrap_or_else(|| "Last sleep learning: none yet".to_string());
-    let consolidation = sample
-        .consolidation_state_raw
-        .map(|state| format!("state {state}"))
-        .unwrap_or_else(|| "state unavailable".to_string());
-    let follow_state = if following { "FOLLOWING" } else { "SELECTED" };
     format!(
-        "{display_name}  |  {brain}\n{follow_state}  |  {}  |  {}\n\nNEEDS\nHunger   {} {:>3}%\nFatigue  {} {:>3}%\nSafety   {} {:>3}%\nSleep    {} {:>3}%\n\nSOCIAL\nReadiness {} {:>3}%\n\nLEARNING\n{}  |  memories {} (fast {} lifetime {})  |  concepts {}\nOpen curiosity gaps: {}\n{}\nConsolidation: {}",
+        "{display_name}\n{} | {}\n\nHunger  {}\nEnergy  {}\nSafety  {}\nSleepiness  {}",
         sample.animation.label(),
         sample.expression.label(),
         v0_need_bar(sample.hunger),
-        v0_percent(sample.hunger),
-        v0_need_bar(sample.fatigue),
-        v0_percent(sample.fatigue),
+        v0_need_bar(1.0 - sample.fatigue),
         v0_need_bar(1.0 - sample.fear),
-        v0_percent(1.0 - sample.fear),
         v0_need_bar(sample.sleep_pressure),
-        v0_percent(sample.sleep_pressure),
-        v0_need_bar(sample.social),
-        v0_percent(sample.social),
-        learning,
-        memories,
-        fast_memories,
-        lifetime_memories,
-        concepts,
-        gaps,
-        last_sleep,
-        consolidation,
     )
 }
 
@@ -6570,16 +5501,12 @@ fn v0_player_creature_name(label: &str, stable_id: u64) -> String {
     if words.is_empty() {
         words.push("Creature".to_string());
     }
-    format!("{}  #{}", words.join(" "), stable_id)
+    words.join(" ")
 }
 
 fn v0_need_bar(value: f32) -> String {
     let filled = (value.clamp(0.0, 1.0) * 8.0).round() as usize;
     format!("[{}{}]", "=".repeat(filled), "-".repeat(8 - filled))
-}
-
-fn v0_percent(value: f32) -> u32 {
-    (value.clamp(0.0, 1.0) * 100.0).round() as u32
 }
 
 fn handle_fvr03_mouse_selection(
@@ -6589,223 +5516,55 @@ fn handle_fvr03_mouse_selection(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     mut selection: ResMut<Fvr03ProductionVoxelSelectionResource>,
 ) {
-    let Ok(window) = windows.single() else {
-        return;
-    };
-    let Some(cursor_position) = window.cursor_position() else {
-        return;
-    };
-    let Ok((camera, camera_transform)) = cameras.single() else {
-        return;
-    };
-    let Ok(ray) = camera.viewport_to_world(camera_transform, cursor_position) else {
-        return;
-    };
-    let Some(distance) = ray.intersect_plane(Vec3::ZERO, InfinitePlane3d::default()) else {
-        return;
-    };
-    let world_position = ray.get_point(distance);
-    let Some(tile) = scene.tile_from_world_position(world_position) else {
-        return;
-    };
-    let hovered = scene.selectable_ref_at_tile(tile);
-    selection.hovered = Some(hovered);
-    if mouse.just_pressed(MouseButton::Left) {
-        selection.selected = Some(hovered);
+    let hovered = (|| {
+        let window = windows.single().ok()?;
+        let cursor_position = window.cursor_position()?;
+        let (camera, camera_transform) = cameras.single().ok()?;
+        let ray = camera
+            .viewport_to_world(camera_transform, cursor_position)
+            .ok()?;
+        let distance = ray.intersect_plane(Vec3::ZERO, InfinitePlane3d::default())?;
+        let tile = scene.tile_from_world_position(ray.get_point(distance))?;
+        Some(scene.selectable_ref_at_tile(tile))
+    })();
+    apply_fvr03_pointer_sample(
+        &mut selection,
+        hovered,
+        mouse.just_pressed(MouseButton::Left),
+    );
+}
+
+fn apply_fvr03_pointer_sample(
+    selection: &mut Fvr03ProductionVoxelSelectionResource,
+    hovered: Option<StableVoxelObjectRef>,
+    select: bool,
+) {
+    selection.hovered = hovered;
+    if select {
+        if let Some(hovered) = hovered {
+            selection.selected = Some(hovered);
+        }
     }
 }
 
-fn handle_fvr05_production_ux_input(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    #[cfg(feature = "gpu-runtime")] conversation: Option<
-        Res<crate::ProductionConversationLineageUiState>,
-    >,
-    selection: Res<Fvr03ProductionVoxelSelectionResource>,
-    mut follow: ResMut<Fvr04ProductionCreatureFollowResource>,
+fn handle_pause_on_focus_loss(
+    mut focus_events: MessageReader<WindowFocused>,
     mut ux: ResMut<Fvr05ProductionUxStateResource>,
-    #[cfg(feature = "gpu-runtime")] mut gpu_runtime: Option<
-        bevy::prelude::NonSendMut<crate::bevy_shell::ProductionGpuBrainRuntimeResource>,
-    >,
     #[cfg(feature = "gpu-runtime")] mut schedule: Option<
         ResMut<crate::bevy_shell::ProductionGpuBrainTickScheduleResource>,
     >,
-    #[cfg(feature = "gpu-runtime")] mut load_request: ResMut<ProductionRuntimeLoadRequest>,
 ) {
-    #[cfg(feature = "gpu-runtime")]
-    if conversation
-        .as_ref()
-        .is_some_and(|conversation| conversation.blocks_world_shortcuts())
-    {
+    let lost_focus = focus_events.read().any(|event| !event.focused);
+    if !lost_focus || !ux.settings.pause_on_focus_loss {
         return;
     }
-    ux.update_selection_snapshot(selection.selected, follow.enabled);
     #[cfg(feature = "gpu-runtime")]
-    if let Some(schedule) = schedule.as_deref() {
-        ux.settings.paused = schedule.is_paused();
-        ux.settings.simulation_speed = schedule.speed_ticks() as f32;
+    if let Some(schedule) = schedule.as_deref_mut() {
+        schedule.pause();
     }
-    if keyboard.just_pressed(KeyCode::Space) || keyboard.just_pressed(KeyCode::KeyP) {
-        #[cfg(feature = "gpu-runtime")]
-        if let Some(schedule) = schedule.as_deref_mut() {
-            schedule.toggle_playback();
-            ux.settings.paused = schedule.is_paused();
-        } else {
-            ux.settings.paused = !ux.settings.paused;
-        }
-        #[cfg(not(feature = "gpu-runtime"))]
-        {
-            ux.settings.paused = !ux.settings.paused;
-        }
-        ux.last_action = if ux.settings.paused {
-            "Paused production simulation".to_string()
-        } else {
-            "Resumed production simulation".to_string()
-        };
-    }
-    if keyboard.just_pressed(KeyCode::Tab) {
-        ux.settings.active_inspector_tab = ux.settings.active_inspector_tab.next();
-        ux.last_action = format!(
-            "Inspector tab: {}",
-            ux.settings.active_inspector_tab.label()
-        );
-    }
-    if keyboard.just_pressed(KeyCode::KeyM) {
-        ux.settings.show_menu = !ux.settings.show_menu;
-        ux.last_action = format!("Main menu visible: {}", ux.settings.show_menu);
-    }
-    if keyboard.just_pressed(KeyCode::KeyG) {
-        ux.settings.show_settings = !ux.settings.show_settings;
-        ux.last_action = format!("Settings visible: {}", ux.settings.show_settings);
-    }
-    if keyboard.just_pressed(KeyCode::KeyH) {
-        ux.settings.show_overlays = !ux.settings.show_overlays;
-        ux.last_action = format!("Overlays visible: {}", ux.settings.show_overlays);
-    }
-    if keyboard.just_pressed(KeyCode::BracketLeft) {
-        #[cfg(feature = "gpu-runtime")]
-        if let Some(schedule) = schedule.as_deref_mut() {
-            let speed = schedule.speed_ticks().saturating_sub(1);
-            schedule.set_running_speed(speed);
-            ux.settings.paused = schedule.is_paused();
-            ux.settings.simulation_speed = schedule.speed_ticks() as f32;
-        } else {
-            ux.settings.simulation_speed =
-                (ux.settings.simulation_speed * 0.5).clamp(0.10, 5.0);
-        }
-        #[cfg(not(feature = "gpu-runtime"))]
-        {
-            ux.settings.simulation_speed =
-                (ux.settings.simulation_speed * 0.5).clamp(0.10, 5.0);
-        }
-        ux.last_action = format!("Simulation speed {:.2}x", ux.settings.simulation_speed);
-    }
-    if keyboard.just_pressed(KeyCode::BracketRight) {
-        #[cfg(feature = "gpu-runtime")]
-        if let Some(schedule) = schedule.as_deref_mut() {
-            let speed = schedule.speed_ticks().saturating_add(1);
-            schedule.set_running_speed(speed);
-            ux.settings.paused = schedule.is_paused();
-            ux.settings.simulation_speed = schedule.speed_ticks() as f32;
-        } else {
-            ux.settings.simulation_speed =
-                (ux.settings.simulation_speed * 2.0).clamp(0.10, 5.0);
-        }
-        #[cfg(not(feature = "gpu-runtime"))]
-        {
-            ux.settings.simulation_speed =
-                (ux.settings.simulation_speed * 2.0).clamp(0.10, 5.0);
-        }
-        ux.last_action = format!("Simulation speed {:.2}x", ux.settings.simulation_speed);
-    }
-    #[cfg(feature = "gpu-runtime")]
-    for (key, speed) in [
-        (KeyCode::Digit1, 1),
-        (KeyCode::Digit2, 2),
-        (KeyCode::Digit3, 3),
-    ] {
-        if keyboard.just_pressed(key) {
-            if let Some(schedule) = schedule.as_deref_mut() {
-                schedule.set_running_speed(speed);
-                ux.settings.paused = schedule.is_paused();
-                ux.settings.simulation_speed = schedule.speed_ticks() as f32;
-                ux.last_action = format!("Simulation speed {:.0}x", ux.settings.simulation_speed);
-            }
-        }
-    }
-    if keyboard.just_pressed(KeyCode::KeyS) {
-        #[cfg(feature = "gpu-runtime")]
-        if let Some(runtime) = gpu_runtime.as_mut() {
-            ux.write_gpu_runtime_save(false, &mut runtime.runtime);
-        } else {
-            ux.write_runtime_save(false);
-        }
-        #[cfg(not(feature = "gpu-runtime"))]
-        ux.write_runtime_save(false);
-        if ux.last_error.is_none() {
-            ux.persist_ui_settings();
-        }
-    }
-    if keyboard.just_pressed(KeyCode::KeyN) {
-        #[cfg(feature = "gpu-runtime")]
-        if let Some(schedule) = schedule.as_deref_mut() {
-            schedule.queue_step();
-            ux.settings.paused = schedule.is_paused();
-            ux.settings.simulation_speed = schedule.speed_ticks() as f32;
-            ux.last_action = "Queued one production simulation step".to_string();
-        } else if let Some(runtime) = gpu_runtime.as_mut() {
-            ux.write_gpu_runtime_save(true, &mut runtime.runtime);
-        } else {
-            ux.write_runtime_save(true);
-        }
-        #[cfg(not(feature = "gpu-runtime"))]
-        ux.write_runtime_save(true);
-        #[cfg(feature = "gpu-runtime")]
-        if schedule.is_none() && ux.last_error.is_none() {
-            ux.persist_ui_settings();
-        }
-        #[cfg(not(feature = "gpu-runtime"))]
-        if ux.last_error.is_none() {
-            ux.persist_ui_settings();
-        }
-    }
-    if keyboard.just_pressed(KeyCode::KeyL) {
-        #[cfg(feature = "gpu-runtime")]
-        if load_request.queue() {
-            ux.last_error = None;
-            ux.last_action = "Queued authoritative production runtime load".to_string();
-        }
-        #[cfg(not(feature = "gpu-runtime"))]
-        {
-            ux.last_error = Some("GPU runtime unavailable; load was not queued".to_string());
-            ux.last_action = "Load unavailable without GPU runtime".to_string();
-        }
-    }
-    if keyboard.just_pressed(KeyCode::KeyQ) {
-        ux.settings.preferred_profile_for_next_launch =
-            fvr05_next_profile(ux.settings.preferred_profile_for_next_launch);
-        ux.last_action = format!(
-            "Preferred next-launch profile: {}",
-            ux.settings.preferred_profile_for_next_launch.label()
-        );
-    }
-    if keyboard.just_pressed(KeyCode::KeyR) {
-        follow.enabled = false;
-        ux.settings.show_menu = false;
-        ux.settings.show_settings = false;
-        ux.settings.show_overlays = false;
-        ux.last_action = "Recovered the player view".to_string();
-    }
-    #[cfg(feature = "gpu-runtime")]
-    let scheduler_speed_key = schedule.is_some()
-        && [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3]
-            .into_iter()
-            .any(|key| keyboard.just_pressed(key));
-    #[cfg(not(feature = "gpu-runtime"))]
-    let scheduler_speed_key = false;
-    if !scheduler_speed_key {
-        if let Some(kind) = fvr05_overlay_key_pressed(&keyboard) {
-            ux.toggle_overlay(kind);
-        }
+    if !ux.settings.paused {
+        ux.settings.paused = true;
+        ux.last_action = "Paused production simulation after focus loss".to_string();
     }
 }
 
@@ -6821,10 +5580,20 @@ fn fvr05_next_profile(profile: ProductionFrontendProfileId) -> ProductionFronten
 fn fvr05_overlay_key_pressed(
     keyboard: &ButtonInput<KeyCode>,
 ) -> Option<Fvr05ProductionOverlayKind> {
-    let mappings = [
+    let shifted_mappings = [
         (KeyCode::Digit1, Fvr05ProductionOverlayKind::Resources),
         (KeyCode::Digit2, Fvr05ProductionOverlayKind::Danger),
         (KeyCode::Digit3, Fvr05ProductionOverlayKind::Pheromones),
+    ];
+    if fvr05_overlay_modifier_pressed(keyboard) {
+        if let Some(kind) = shifted_mappings
+            .iter()
+            .find_map(|(key, kind)| keyboard.just_pressed(*key).then_some(*kind))
+        {
+            return Some(kind);
+        }
+    }
+    let mappings = [
         (KeyCode::Digit4, Fvr05ProductionOverlayKind::Energy),
         (KeyCode::Digit5, Fvr05ProductionOverlayKind::Age),
         (KeyCode::Digit6, Fvr05ProductionOverlayKind::Fertility),
@@ -6841,6 +5610,10 @@ fn fvr05_overlay_key_pressed(
         .find_map(|(key, kind)| keyboard.just_pressed(*key).then_some(*kind))
 }
 
+fn fvr05_overlay_modifier_pressed(keyboard: &ButtonInput<KeyCode>) -> bool {
+    keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight)
+}
+
 fn sync_fvr05_panel_visibility(
     ux: Res<Fvr05ProductionUxStateResource>,
     mut panels: ParamSet<(
@@ -6854,8 +5627,8 @@ fn sync_fvr05_panel_visibility(
     if !ux.is_changed() {
         return;
     }
-    let menu_chrome = ux.settings.show_menu || ux.settings.show_settings;
-    let overlay_chrome = ux.settings.show_overlays;
+    let menu_chrome = ux.debug_mode && (ux.settings.show_menu || ux.settings.show_settings);
+    let overlay_chrome = ux.debug_mode && ux.settings.show_overlays;
     let menu_visibility = if menu_chrome {
         Visibility::Visible
     } else {
@@ -6872,7 +5645,11 @@ fn sync_fvr05_panel_visibility(
         Visibility::Hidden
     };
     for mut visibility in &mut panels.p0() {
-        *visibility = menu_visibility;
+        *visibility = if ux.debug_mode {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
     for mut visibility in &mut panels.p1() {
         *visibility = menu_visibility;
@@ -6889,26 +5666,83 @@ fn sync_fvr05_panel_visibility(
 }
 
 fn sync_fvr05_overlay_visibility(
+    mut commands: Commands,
     ux: Res<Fvr05ProductionUxStateResource>,
+    cache: Res<Fvr05OverlayGeometryCache>,
+    assets: Res<Fvr04RuntimeSceneAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
     mut overlays: bevy::prelude::Query<(&Fvr05ProductionOverlayBatch, &mut Visibility)>,
 ) {
     if !ux.is_changed() {
         return;
     }
+    let mut spawned = BTreeSet::new();
     for (overlay, mut visibility) in &mut overlays {
+        spawned.insert(overlay.kind);
         *visibility = if ux.active_overlay(overlay.kind) {
             Visibility::Visible
         } else {
             Visibility::Hidden
         };
     }
+    for kind in Fvr05ProductionOverlayKind::all().iter().copied() {
+        if !ux.active_overlay(kind) || spawned.contains(&kind) {
+            continue;
+        }
+        let Some(cells) = cache.cells_by_kind.get(&kind) else {
+            continue;
+        };
+        if cells.is_empty() {
+            continue;
+        }
+        let mesh = meshes.add(fvr05_batched_overlay_mesh(cells));
+        let material = assets
+            .overlay_materials
+            .get(&kind)
+            .expect("prepared FVR05 overlay material exists")
+            .clone();
+        commands.spawn((
+            Name::new(format!("A-Life FVR05 overlay {}", kind.label())),
+            Mesh3d(mesh),
+            MeshMaterial3d(material),
+            Transform::default(),
+            Visibility::Visible,
+            Fvr05ProductionOverlayBatch {
+                kind,
+                cell_count: cells.len(),
+            },
+            Fvr04ProductionRuntimeSceneRoot,
+        ));
+    }
+}
+
+#[derive(Default)]
+struct DebugFrameRate {
+    seconds: f64,
+    frames: u32,
+    fps: f64,
 }
 
 fn sync_fvr05_top_runtime_bar(
     ux: Res<Fvr05ProductionUxStateResource>,
+    time: Res<Time<bevy::time::Real>>,
+    mut rate: Local<DebugFrameRate>,
     mut bars: bevy::prelude::Query<&mut Text, With<Fvr05ProductionTopRuntimeBar>>,
 ) {
-    if !ux.is_changed() {
+    if !ux.debug_mode {
+        *rate = DebugFrameRate::default();
+        return;
+    }
+    // Real frame time keeps this live while the simulation is paused or sped up.
+    rate.seconds += time.delta_secs_f64();
+    rate.frames += 1;
+    let sampled = rate.seconds >= 0.5;
+    if sampled {
+        rate.fps = f64::from(rate.frames) / rate.seconds;
+        rate.seconds = 0.0;
+        rate.frames = 0;
+    }
+    if !ux.is_changed() && !sampled {
         return;
     }
     let status = if ux.settings.paused {
@@ -6916,22 +5750,9 @@ fn sync_fvr05_top_runtime_bar(
     } else {
         "Running"
     };
-    let runtime_save_path = PathBuf::from(&ux.settings.runtime_save_path);
-    let save_name = runtime_save_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("runtime_save.json")
-        .to_string();
     let text = format!(
-        "A-Life | Profile: {} | Backend: {} | GPU: {} | Runtime: {} | Target FPS: {} | Frame: {:.1} ms | {} | Save: {}",
-        ux.profile_id.label(),
-        ux.graphics_backend,
-        ux.adapter_name,
-        ux.selected_backend,
-        ux.profile_budget.target_fps,
-        ux.profile_budget.target_frame_ms,
-        status,
-        save_name
+        "A-Life | FPS: {:.1} | GPU: {} | {}",
+        rate.fps, ux.adapter_name, status,
     );
     for mut bar in &mut bars {
         bar.0 = text.clone();
@@ -6943,6 +5764,9 @@ fn sync_fvr05_left_control_panel(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     mut panels: bevy::prelude::Query<&mut Text, With<Fvr05ProductionLeftControlPanel>>,
 ) {
+    if !ux.debug_mode || !(ux.settings.show_menu || ux.settings.show_settings) {
+        return;
+    }
     if !ux.is_changed() && !scene.is_changed() {
         return;
     }
@@ -6969,8 +5793,12 @@ fn sync_fvr05_left_control_panel(
         .map(|error| format!("\nERROR\n{error}\n"))
         .unwrap_or_default();
     let text = format!(
-        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1/2/3 speed\n[ ] adjust speed\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\n4-9/B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nSTATS (REAL RUNTIME)\ncreatures {}\nchunks loaded {}\nchunks resident {}\ntiles sampled {}\nmesher {} quads {} merge {:.2}x\nremesh budget {} dirty {} cached {} skipped {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
-        if ux.settings.paused { "paused" } else { "running" },
+        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1/2/3 speed\n[ ] adjust speed\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\nShift+1-3, 4-9, B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nLIVE / STARTUP ESTIMATES\nlive creatures {}\nstartup chunks loaded {}\nstartup chunks resident {}\nstartup tiles sampled {}\nstartup mesher {} quads {} face reduction {:.2}x\nconfigured remesh budget {} snapshot dirty {} estimated cached {} deferred {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
+        if ux.settings.paused {
+            "paused"
+        } else {
+            "running"
+        },
         ux.settings.follow_selection,
         ux.settings.pause_on_focus_loss,
         ux.settings.show_overlays,
@@ -6981,7 +5809,7 @@ fn sync_fvr05_left_control_panel(
         scene.tile_mesh_count,
         scene.mesh_stats.mode.label(),
         scene.mesh_stats.emitted_quads,
-        scene.mesh_stats.merge_ratio,
+        scene.mesh_stats.face_reduction_ratio,
         scene.mesh_stats.remesh_budget_chunks_per_frame,
         scene.mesh_stats.dirty_chunks,
         scene.mesh_stats.cached_chunks,
@@ -7004,6 +5832,7 @@ fn sync_fvr05_right_inspector_panel(
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    entity_map: Res<BevyEntityMap>,
     roots: bevy::prelude::Query<(
         &ProductionCreatureAssemblyRoot,
         &Fvr04ProductionCreatureVisualMarker,
@@ -7011,6 +5840,20 @@ fn sync_fvr05_right_inspector_panel(
     authority: Option<Res<crate::bevy_shell::ProductionGpuBrainAuthorityResource>>,
     mut panels: bevy::prelude::Query<&mut Text, With<Fvr05ProductionRightInspectorPanel>>,
 ) {
+    if !ux.debug_mode || !(ux.settings.show_menu || ux.settings.show_settings) {
+        return;
+    }
+    if !ux.is_changed()
+        && !scene.is_changed()
+        && !selection.is_changed()
+        && !creatures.is_changed()
+        && !frame.as_ref().is_some_and(|frame| frame.is_changed())
+        && !authority
+            .as_ref()
+            .is_some_and(|authority| authority.is_changed())
+    {
+        return;
+    }
     let tabs = Fvr05ProductionInspectorTab::all()
         .iter()
         .map(|tab| {
@@ -7025,9 +5868,10 @@ fn sync_fvr05_right_inspector_panel(
     let selected_live =
         selected_live_creature_object(selection.selected, frame.as_ref().map(|frame| &**frame));
     let live_state = selected_live.and_then(|(stable_id, organism_id, tick, position)| {
-        roots
-            .iter()
-            .any(|(root, visual)| {
+        entity_map
+            .bevy_entity(stable_id)
+            .and_then(|entity| roots.get(entity).ok())
+            .is_some_and(|(root, visual)| {
                 root.stable_id == stable_id
                     && visual.stable_id == stable_id
                     && root.stable_id == visual.stable_id
@@ -7065,6 +5909,9 @@ fn sync_fvr05_bottom_overlay_toolbar(
     ux: Res<Fvr05ProductionUxStateResource>,
     mut panels: bevy::prelude::Query<&mut Text, With<Fvr05ProductionBottomOverlayToolbar>>,
 ) {
+    if !ux.debug_mode || !ux.settings.show_overlays {
+        return;
+    }
     if !ux.is_changed() {
         return;
     }
@@ -7082,7 +5929,7 @@ fn sync_fvr05_bottom_overlay_toolbar(
     let first = labels[..labels.len().min(7)].join(" | ");
     let second = labels[labels.len().min(7)..].join(" | ");
     let text = format!(
-        "OVERLAYS\n{}\n{}\nkeys: 1 Resources 2 Danger 3 Pheromones 4 Energy 5 Age 6 Fertility 7 Territory 8 Neural 9 Residency B Backend C Chunks D LOD V Persistence",
+        "OVERLAYS\n{}\n{}\nkeys: Shift+1 Resources Shift+2 Danger Shift+3 Pheromones 4 Energy 5 Age 6 Fertility 7 Territory 8 Neural 9 Residency B Backend C Chunks D LOD V Persistence",
         first, second
     );
     for mut panel in &mut panels {
@@ -7095,15 +5942,20 @@ fn sync_fvr05_footer_status_bar(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     mut bars: bevy::prelude::Query<&mut Text, With<Fvr05ProductionFooterStatusBar>>,
 ) {
+    if !ux.debug_mode
+        || !(ux.settings.show_menu || ux.settings.show_settings || ux.settings.show_overlays)
+    {
+        return;
+    }
     if !ux.is_changed() && !scene.is_changed() {
         return;
     }
     let text = format!(
-        "Select LMB | Camera O orbit / I iso / F follow | chunks {} | LOD {} | mesher {} {:.2}x | resident bytes {} | backend {} | config {} | sim signature {}",
+        "Select LMB | Camera O orbit / I iso / F follow | startup chunks {} | LOD {} | mesher {} {:.2}x | estimated resident bytes {} | backend {} | config {} | sim signature {}",
         scene.visible_chunk_count,
         scene.creature_lod.label(),
         scene.mesh_stats.mode.label(),
-        scene.mesh_stats.merge_ratio,
+        scene.mesh_stats.face_reduction_ratio,
         scene.estimated_resident_bytes,
         ux.selected_backend,
         ux.ui_settings_path.display(),
@@ -7147,7 +5999,9 @@ fn handle_fvr03_camera_mode_input(
 
 fn sync_fvr04_selection_marker(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
+    surface: Res<creature_grounding::RenderedTerrainSurface>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
+    entity_map: Res<BevyEntityMap>,
     roots: bevy::prelude::Query<
         (&ProductionCreatureAssemblyRoot, &Transform),
         Without<Fvr03ProductionVoxelSelectionMarker>,
@@ -7159,15 +6013,19 @@ fn sync_fvr04_selection_marker(
 ) {
     let Some(selected) = selection.selected else {
         for (_, mut visibility) in &mut markers {
-            *visibility = Visibility::Hidden;
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
         }
         return;
     };
     let position = if selected.kind == StableVoxelRefKind::Creature {
         selected.stable_id.and_then(|stable_id| {
+            let entity = entity_map.bevy_entity(stable_id)?;
             roots
-                .iter()
-                .find(|(root, _)| root.stable_id == stable_id)
+                .get(entity)
+                .ok()
+                .filter(|(root, _)| root.stable_id == stable_id)
                 .map(|(_, transform)| transform.translation)
         })
     } else {
@@ -7175,31 +6033,94 @@ fn sync_fvr04_selection_marker(
     };
     let Some(position) = position else {
         for (_, mut visibility) in &mut markers {
-            *visibility = Visibility::Hidden;
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
         }
         return;
     };
     for (mut transform, mut visibility) in &mut markers {
-        transform.translation = Vec3::new(position.x, 1.45, position.z);
-        *visibility = Visibility::Visible;
+        let y = surface.height(position).unwrap_or(position.y) + 0.045;
+        let next_translation = Vec3::new(position.x, y, position.z);
+        let h = |offset| surface.height(position + offset).unwrap_or(y - 0.045);
+        let normal = Vec3::new(
+            h(Vec3::NEG_X * 0.3) - h(Vec3::X * 0.3),
+            0.6,
+            h(Vec3::NEG_Z * 0.3) - h(Vec3::Z * 0.3),
+        )
+        .normalize();
+        transform.rotation = Quat::from_rotation_arc(Vec3::Y, normal);
+        if transform.translation != next_translation {
+            transform.translation = next_translation;
+        }
+        if *visibility != Visibility::Visible {
+            *visibility = Visibility::Visible;
+        }
     }
 }
 
 fn handle_fvr04_camera_follow_input(
     keyboard: Res<ButtonInput<KeyCode>>,
-    selection: Res<Fvr03ProductionVoxelSelectionResource>,
+    mut selection: ResMut<Fvr03ProductionVoxelSelectionResource>,
     mut follow: ResMut<Fvr04ProductionCreatureFollowResource>,
+    roots: bevy::prelude::Query<(
+        &ProductionCreatureAssemblyRoot,
+        &Fvr03ProductionVoxelCreatureMarker,
+    )>,
+    #[cfg(feature = "gpu-runtime")] conversation: Option<
+        Res<crate::ProductionConversationLineageUiState>,
+    >,
 ) {
-    if !keyboard.just_pressed(KeyCode::KeyF) {
+    #[cfg(feature = "gpu-runtime")]
+    if conversation
+        .as_ref()
+        .is_some_and(|state| state.blocks_world_shortcuts())
+    {
         return;
     }
-    let selected_creature = selection.selected.and_then(|selection| {
+    let previous = keyboard.just_pressed(KeyCode::PageUp);
+    let next = keyboard.just_pressed(KeyCode::PageDown);
+    let recover = keyboard.just_pressed(KeyCode::Home);
+    if !previous && !next && !recover && !keyboard.just_pressed(KeyCode::KeyF) {
+        return;
+    }
+    let mut selected_creature = selection.selected.and_then(|selection| {
         (selection.kind == StableVoxelRefKind::Creature)
             .then_some(selection.stable_id)
             .flatten()
     });
+    if previous || next || recover || selected_creature.is_none() {
+        let mut creatures = roots
+            .iter()
+            .map(|(root, marker)| StableVoxelObjectRef {
+                kind: StableVoxelRefKind::Creature,
+                stable_id: Some(root.stable_id),
+                tile: Some(marker.tile),
+                chunk: VoxelChunkCoord::for_tile(16, marker.tile),
+            })
+            .collect::<Vec<_>>();
+        creatures.sort_unstable_by_key(|creature| creature.stable_id.map(WorldEntityId::raw));
+        if !creatures.is_empty() {
+            let current = creatures
+                .iter()
+                .position(|creature| creature.stable_id == selected_creature);
+            let index = match current {
+                Some(index) if previous => (index + creatures.len() - 1) % creatures.len(),
+                Some(index) if next => (index + 1) % creatures.len(),
+                Some(index) => index,
+                None if previous => creatures.len() - 1,
+                None => 0,
+            };
+            selection.selected = Some(creatures[index]);
+            selected_creature = creatures[index].stable_id;
+        }
+    }
     if let Some(stable_id) = selected_creature {
-        follow.enabled = follow.target_stable_id != Some(stable_id) || !follow.enabled;
+        follow.enabled = previous
+            || next
+            || recover
+            || follow.target_stable_id != Some(stable_id)
+            || !follow.enabled;
         follow.target_stable_id = Some(stable_id);
     } else {
         follow.enabled = false;
@@ -7210,12 +6131,13 @@ fn handle_fvr04_camera_follow_input(
 fn sync_fvr04_camera_follow(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     follow: Res<Fvr04ProductionCreatureFollowResource>,
+    entity_map: Res<BevyEntityMap>,
     roots: bevy::prelude::Query<
         (&ProductionCreatureAssemblyRoot, &Transform),
         Without<Fvr03ProductionVoxelCamera>,
     >,
     mut cameras: bevy::prelude::Query<
-        (&mut Transform, &mut Projection, &Fvr03ProductionVoxelCamera),
+        (&mut Transform, &Fvr03ProductionVoxelCamera),
         Without<ProductionCreatureAssemblyRoot>,
     >,
 ) {
@@ -7225,21 +6147,20 @@ fn sync_fvr04_camera_follow(
     let Some(target) = follow.target_stable_id else {
         return;
     };
-    let Some(position) = roots
-        .iter()
-        .find(|(root, _)| root.stable_id == target)
+    let Some(position) = entity_map
+        .bevy_entity(target)
+        .and_then(|entity| roots.get(entity).ok())
+        .filter(|(root, _)| root.stable_id == target)
         .map(|(_, transform)| transform.translation)
     else {
         return;
     };
-    let target = Vec3::new(position.x, 0.0, position.z);
+    let target = position;
     let extent = production_camera_extent(scene.profile_id);
-    for (mut transform, mut projection, camera) in &mut cameras {
-        *transform = fvr04_follow_camera_transform(camera.mode, extent, target);
-        if let Projection::Orthographic(orthographic) = &mut *projection {
-            orthographic.scaling_mode = ScalingMode::FixedVertical {
-                viewport_height: extent,
-            };
+    for (mut transform, camera) in &mut cameras {
+        let next_transform = fvr04_follow_camera_transform(camera.mode, extent, target);
+        if *transform != next_transform {
+            *transform = next_transform;
         }
     }
 }
@@ -7248,6 +6169,7 @@ fn sync_fvr04_creature_label(
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    entity_map: Res<BevyEntityMap>,
     roots: bevy::prelude::Query<
         (
             &ProductionCreatureAssemblyRoot,
@@ -7261,6 +6183,7 @@ fn sync_fvr04_creature_label(
         With<Fvr04ProductionCreatureWorldLabel>,
     >,
 ) {
+    let refresh_text = selection.is_changed() || creatures.is_changed();
     let target = selection
         .hovered
         .filter(|hovered| hovered.kind == StableVoxelRefKind::Creature)
@@ -7271,93 +6194,71 @@ fn sync_fvr04_creature_label(
         });
     let Some(target) = target else {
         for (_, _, mut visibility) in &mut labels {
-            *visibility = Visibility::Hidden;
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
         }
         return;
     };
     let Some(stable_id) = target.stable_id else {
         for (_, _, mut visibility) in &mut labels {
-            *visibility = Visibility::Hidden;
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
         }
         return;
     };
     let Some(sample) = creatures.sample_for_stable_id(stable_id) else {
         for (_, _, mut visibility) in &mut labels {
-            *visibility = Visibility::Hidden;
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
         }
         return;
     };
-    let Some((_, _, position)) = roots.iter().find(|(root, visual, _)| {
-        let Some(frame) = frame.as_ref().map(|frame| &**frame) else {
-            return false;
-        };
-        let Some(object) = frame.current.object(stable_id) else {
-            return false;
-        };
-        object.kind == WorldObjectKind::Agent
-            && object.organism_id == Some(visual.organism_id)
-            && root.stable_id == stable_id
-            && visual.stable_id == stable_id
-            && root.stable_id == visual.stable_id
-    }) else {
+    let Some((_, _, position)) = entity_map
+        .bevy_entity(stable_id)
+        .and_then(|entity| roots.get(entity).ok())
+        .filter(|(root, visual, _)| {
+            let Some(frame) = frame.as_ref().map(|frame| &**frame) else {
+                return false;
+            };
+            let Some(object) = frame.current.object(stable_id) else {
+                return false;
+            };
+            object.kind == WorldObjectKind::Agent
+                && object.organism_id == Some(visual.organism_id)
+                && root.stable_id == stable_id
+                && visual.stable_id == stable_id
+                && root.stable_id == visual.stable_id
+        })
+    else {
         for (_, _, mut visibility) in &mut labels {
-            *visibility = Visibility::Hidden;
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
         }
         return;
     };
-    for (mut text, mut transform, mut visibility) in &mut labels {
-        text.0 = format!(
+    let label_text = refresh_text.then(|| {
+        format!(
             "{}\n{}  |  {}",
             v0_player_creature_name(&sample.display_label, sample.stable_id.raw()),
             sample.animation.label(),
             sample.expression.label()
-        );
-        transform.translation = Vec3::new(position.translation.x, 2.35, position.translation.z);
-        *visibility = Visibility::Visible;
-    }
-}
-
-fn sync_fvr04_creature_inspector_panel(
-    selection: Res<Fvr03ProductionVoxelSelectionResource>,
-    creatures: Res<Fvr04ProductionCreatureSceneResource>,
-    follow: Res<Fvr04ProductionCreatureFollowResource>,
-    frame: Option<Res<LiveBrainPresentationFrameResource>>,
-    roots: bevy::prelude::Query<(
-        &ProductionCreatureAssemblyRoot,
-        &Fvr04ProductionCreatureVisualMarker,
-    )>,
-    mut panels: bevy::prelude::Query<&mut Text, With<Fvr04ProductionCreatureInspectorPanel>>,
-) {
-    let selected_live =
-        selected_live_creature_object(selection.selected, frame.as_ref().map(|frame| &**frame));
-    let live_state = selected_live.and_then(|(stable_id, organism_id, tick, position)| {
-        roots
-            .iter()
-            .any(|(root, visual)| {
-                root.stable_id == stable_id
-                    && visual.stable_id == stable_id
-                    && root.stable_id == visual.stable_id
-                    && visual.organism_id == organism_id
-            })
-            .then_some((tick, position))
+        )
     });
-    let suffix = if follow.enabled {
-        "follow: on"
-    } else {
-        "follow: off"
-    };
-    let text = format!(
-        "{}\n{}",
-        fvr04_live_creature_inspector_text(
-            selection.selected,
-            &creatures,
-            live_state,
-            frame.as_ref().map(|frame| &**frame),
-        ),
-        suffix
-    );
-    for mut panel in &mut panels {
-        panel.0 = text.clone();
+    for (mut text, mut transform, mut visibility) in &mut labels {
+        if let Some(label_text) = &label_text {
+            text.0.clone_from(label_text);
+        }
+        let next_translation = position.translation + Vec3::Y * 1.55;
+        if transform.translation != next_translation {
+            transform.translation = next_translation;
+        }
+        if *visibility != Visibility::Visible {
+            *visibility = Visibility::Visible;
+        }
     }
 }
 
@@ -7368,26 +6269,314 @@ fn fvr04_follow_camera_transform(
 ) -> Transform {
     let offset = match mode {
         Fvr03ProductionVoxelCameraMode::OrthographicIsometric => {
-            Vec3::new(extent * 0.56, extent * 0.82, extent * 0.58)
+            Vec3::new(extent * 0.44, extent * 0.38, extent * 0.72)
         }
         Fvr03ProductionVoxelCameraMode::Orbit => {
             Vec3::new(extent * 0.72, extent * 0.52, extent * 0.94)
         }
     };
-    Transform::from_translation(target + offset).looking_at(target, Vec3::Y)
+    let focus = target + Vec3::Y * 0.70;
+    Transform::from_translation(focus + offset).looking_at(focus, Vec3::Y)
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn phase31_frame_snapshot(
+    runtime: &ProductionGpuBrainRuntimeResource,
+    schedule: &ProductionGpuBrainTickScheduleResource,
+    presentation: &LiveBrainPresentationFrameResource,
+) -> Phase31FrameSnapshot {
+    Phase31FrameSnapshot {
+        runtime: runtime.runtime.performance_metrics(),
+        scheduler: schedule.performance_counters(),
+        checkpoint: runtime.runtime.exact_checkpoint_performance_state(),
+        world_tick: presentation.current.authoritative_world_tick.raw(),
+        world_objects: u64::try_from(presentation.current.object_count()).unwrap_or(u64::MAX),
+        organisms: u64::try_from(presentation.current.organism_count()).unwrap_or(u64::MAX),
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn phase31_performance_frame_begin(
+    mut metrics: ResMut<Phase31PerformanceMetricsResource>,
+    runtime: NonSend<ProductionGpuBrainRuntimeResource>,
+    schedule: Res<ProductionGpuBrainTickScheduleResource>,
+    presentation: Res<LiveBrainPresentationFrameResource>,
+) {
+    let now = Instant::now();
+    let end_snapshot = phase31_frame_snapshot(&runtime, &schedule, &presentation);
+    if metrics.measurement_started_at.is_none()
+        && metrics.launched_at.elapsed() >= PHASE31_WARMUP_DURATION
+        && presentation.current.authoritative_world_tick > Tick::ZERO
+    {
+        metrics.measurement_started_at = Some(now);
+        metrics.measurement_completed_at = None;
+        metrics.measurement_start_world_tick =
+            Some(presentation.current.authoritative_world_tick.raw());
+        metrics.runtime_baseline = Some(runtime.runtime.performance_metrics());
+        metrics.scheduler_baseline = Some(schedule.performance_counters());
+        metrics.last_frame_at = now;
+        metrics.frame_snapshot = Some(end_snapshot);
+    } else if metrics.measuring() {
+        let frame_ns =
+            u64::try_from(now.duration_since(metrics.last_frame_at).as_nanos()).unwrap_or(u64::MAX);
+        metrics.frame_ns.push(frame_ns);
+        if let Some(start_snapshot) = metrics.frame_snapshot.replace(end_snapshot) {
+            let runtime_delta = end_snapshot.runtime.delta_from(start_snapshot.runtime);
+            let update_cpu = std::mem::take(&mut metrics.current_frame_update_cpu);
+            if frame_ns > PHASE31_SLOW_FRAME_THRESHOLD_NS {
+                metrics.slow_frame_count = metrics.slow_frame_count.saturating_add(1);
+            }
+            let sample = Phase31SlowFrameSample {
+                frame_index: u64::try_from(metrics.frame_ns.len()).unwrap_or(u64::MAX),
+                frame_duration_ns: frame_ns,
+                world_tick_before: start_snapshot.world_tick,
+                world_tick_after: end_snapshot.world_tick,
+                world_ticks_completed: end_snapshot
+                    .world_tick
+                    .saturating_sub(start_snapshot.world_tick),
+                world_objects_before: start_snapshot.world_objects,
+                world_objects_after: end_snapshot.world_objects,
+                organisms_before: start_snapshot.organisms,
+                organisms_after: end_snapshot.organisms,
+                checkpoint_before: start_snapshot.checkpoint,
+                checkpoint_after: end_snapshot.checkpoint,
+                scheduler_attempts: end_snapshot
+                    .scheduler
+                    .scheduler_attempts
+                    .saturating_sub(start_snapshot.scheduler.scheduler_attempts),
+                scheduler_completed_ticks: end_snapshot
+                    .scheduler
+                    .completed_ticks
+                    .saturating_sub(start_snapshot.scheduler.completed_ticks),
+                checkpoint_publication_waits: end_snapshot
+                    .scheduler
+                    .checkpoint_publication_waits
+                    .saturating_sub(start_snapshot.scheduler.checkpoint_publication_waits),
+                checkpoint_failed_waits: end_snapshot
+                    .scheduler
+                    .checkpoint_failed_waits
+                    .saturating_sub(start_snapshot.scheduler.checkpoint_failed_waits),
+                deferred_catch_up_ticks: end_snapshot
+                    .scheduler
+                    .deferred_catch_up_ticks
+                    .saturating_sub(start_snapshot.scheduler.deferred_catch_up_ticks),
+                catch_up_ticks_dropped: end_snapshot
+                    .scheduler
+                    .catch_up_ticks_dropped
+                    .saturating_sub(start_snapshot.scheduler.catch_up_ticks_dropped),
+                scheduler_debt_micros_before: start_snapshot.scheduler.deferred_debt_micros,
+                scheduler_debt_micros_after: end_snapshot.scheduler.deferred_debt_micros,
+                update_cpu,
+                renderer_present_and_uninstrumented_residual_ns: frame_ns
+                    .saturating_sub(update_cpu.total_ns()),
+                runtime: runtime_delta,
+            };
+            retain_ranked_slow_frame(&mut metrics.slow_frames, sample);
+        }
+        metrics.last_frame_at = now;
+    }
+    if metrics.measurement_completed_at.is_none()
+        && metrics
+            .measurement_started_at
+            .is_some_and(|started| now.duration_since(started) >= PHASE31_MEASUREMENT_DURATION)
+    {
+        metrics.measurement_completed_at = Some(now);
+    }
+    metrics.stage_mark = metrics.measuring().then_some(now);
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn phase31_performance_after_input(mut metrics: ResMut<Phase31PerformanceMetricsResource>) {
+    if metrics.measuring() {
+        let elapsed = metrics.take_stage_elapsed_ns();
+        metrics.input_cpu_ns = metrics.input_cpu_ns.saturating_add(elapsed);
+        metrics.current_frame_update_cpu.input_ns = elapsed;
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn phase31_performance_after_live_gpu_tick(mut metrics: ResMut<Phase31PerformanceMetricsResource>) {
+    if metrics.measuring() {
+        let elapsed = metrics.take_stage_elapsed_ns();
+        metrics.live_gpu_tick_cpu_ns = metrics.live_gpu_tick_cpu_ns.saturating_add(elapsed);
+        metrics.current_frame_update_cpu.live_gpu_tick_ns = elapsed;
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn phase31_performance_after_authoritative_projection(
+    mut metrics: ResMut<Phase31PerformanceMetricsResource>,
+) {
+    if metrics.measuring() {
+        let elapsed = metrics.take_stage_elapsed_ns();
+        metrics.authoritative_projection_cpu_ns = metrics
+            .authoritative_projection_cpu_ns
+            .saturating_add(elapsed);
+        metrics.current_frame_update_cpu.authoritative_projection_ns = elapsed;
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn phase31_performance_after_procedural_animation(
+    mut metrics: ResMut<Phase31PerformanceMetricsResource>,
+) {
+    if metrics.measuring() {
+        let elapsed = metrics.take_stage_elapsed_ns();
+        metrics.procedural_animation_cpu_ns =
+            metrics.procedural_animation_cpu_ns.saturating_add(elapsed);
+        metrics.current_frame_update_cpu.procedural_animation_ns = elapsed;
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn phase31_performance_after_ui(
+    mut metrics: ResMut<Phase31PerformanceMetricsResource>,
+    runtime: NonSend<ProductionGpuBrainRuntimeResource>,
+    schedule: Res<ProductionGpuBrainTickScheduleResource>,
+    authority: Res<ProductionGpuBrainAuthorityResource>,
+    presentation: Res<LiveBrainPresentationFrameResource>,
+    mut exits: MessageWriter<AppExit>,
+) {
+    let measuring = metrics.measuring();
+    let draining = metrics.draining();
+    if !measuring && !draining {
+        return;
+    }
+    if measuring {
+        let elapsed = metrics.take_stage_elapsed_ns();
+        metrics.ui_root_readers_cpu_ns = metrics.ui_root_readers_cpu_ns.saturating_add(elapsed);
+        metrics.current_frame_update_cpu.ui_root_readers_ns = elapsed;
+        metrics.ui_updates = metrics.ui_updates.saturating_add(1);
+    }
+    let Some(started) = metrics.measurement_started_at else {
+        return;
+    };
+    if !draining {
+        return;
+    }
+    let drain_timed_out = metrics.measurement_completed_at.is_some_and(|completed| {
+        Instant::now().duration_since(completed) >= PHASE31_PERSISTENCE_DRAIN_TIMEOUT
+    });
+    if !runtime.runtime.persistence_terminal_for_shutdown() && !drain_timed_out {
+        return;
+    }
+    if drain_timed_out {
+        let diagnostics = runtime.runtime.persistence_shutdown_diagnostics();
+        eprintln!("PHASE31_PERSISTENCE_DRAIN_TIMEOUT {diagnostics}");
+        metrics.write_error = Some(diagnostics);
+        exits.write(AppExit::Error(std::num::NonZeroU8::new(1).unwrap()));
+        return;
+    }
+    let persistence_failed = runtime.runtime.persistence_failed_for_shutdown();
+    let performance_failed = schedule.performance_failed() || persistence_failed || drain_timed_out;
+    match write_phase31_performance_receipt(
+        &metrics,
+        &runtime.runtime,
+        schedule.performance_counters(),
+        presentation.current.authoritative_world_tick.raw(),
+        metrics
+            .measurement_completed_at
+            .unwrap_or_else(Instant::now)
+            .duration_since(started),
+        performance_failed,
+        authority.telemetry.authoritative,
+    ) {
+        Ok(path) => metrics.artifact_path = Some(path),
+        Err(error) => {
+            let error = error.to_string();
+            eprintln!(
+                "PHASE31_PERFORMANCE_RECEIPT_ERROR error={error}; authority_reason={:?}; scheduler={:?}; persistence={}",
+                authority.telemetry.unavailable_reason,
+                schedule.performance_counters(),
+                runtime.runtime.persistence_shutdown_diagnostics()
+            );
+            metrics.write_error = Some(error);
+            exits.write(AppExit::Error(std::num::NonZeroU8::new(1).unwrap()));
+            return;
+        }
+    }
+    if performance_failed {
+        exits.write(AppExit::Error(std::num::NonZeroU8::new(1).unwrap()));
+    } else {
+        exits.write(AppExit::Success);
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn duration_summary(samples: &[u64]) -> serde_json::Value {
+    if samples.is_empty() {
+        return serde_json::json!({
+            "count": 0,
+            "total_ns": 0,
+            "p50_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "max_ms": null,
+            "hitches_over_100ms": 0
+        });
+    }
+    let mut sorted = samples.to_vec();
+    sorted.sort_unstable();
+    let percentile = |numerator: usize| {
+        let rank = sorted
+            .len()
+            .saturating_mul(numerator)
+            .div_ceil(100)
+            .saturating_sub(1)
+            .min(sorted.len() - 1);
+        sorted[rank] as f64 / 1_000_000.0
+    };
+    serde_json::json!({
+        "count": sorted.len(),
+        "total_ns": sorted.iter().fold(0_u64, |total, value| total.saturating_add(*value)),
+        "p50_ms": percentile(50),
+        "p95_ms": percentile(95),
+        "p99_ms": percentile(99),
+        "max_ms": *sorted.last().unwrap_or(&0) as f64 / 1_000_000.0,
+        "hitches_over_100ms": sorted.iter().filter(|value| **value > 100_000_000).count()
+    })
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn gpu_timestamp_ns(ticks: u64, period_ns_q24: u64) -> u64 {
+    let scaled = u128::from(ticks).saturating_mul(u128::from(period_ns_q24));
+    u64::try_from(scaled >> 24).unwrap_or(u64::MAX)
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn file_blake3_hex(path: &Path) -> Result<String, GameAppShellError> {
+    let mut file = fs::File::open(path)?;
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = vec![0_u8; 1024 * 1024];
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hasher.finalize().to_hex().to_string())
 }
 
 fn request_fvr03_recorded_screenshot(
     mut commands: Commands,
     mut capture: ResMut<Fvr03ProductionVoxelScreenshotResource>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
+    selection: Res<Fvr03ProductionVoxelSelectionResource>,
+    presentation: Option<Res<LiveBrainPresentationFrameResource>>,
     mut ux: Option<ResMut<Fvr05ProductionUxStateResource>>,
     #[cfg(feature = "gpu-runtime")] mut conversation: Option<
         ResMut<ProductionConversationLineageUiState>,
     >,
+    #[cfg(feature = "gpu-runtime")] phase31: Option<Res<Phase31PerformanceMetricsResource>>,
     mut overlay_batches: bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionOverlayBatch>>,
     mut exits: MessageWriter<AppExit>,
 ) {
+    #[cfg(feature = "gpu-runtime")]
+    let legacy_capture_controls_lifetime =
+        fvr03_legacy_capture_controls_lifetime(phase31.is_some());
+    #[cfg(not(feature = "gpu-runtime"))]
+    let legacy_capture_controls_lifetime = true;
     capture.frame = capture.frame.saturating_add(1);
     if capture.measurement_started_at.is_none() && capture.frame >= capture.capture_after_frame {
         capture.measurement_start_frame = capture.frame;
@@ -7414,22 +6603,32 @@ fn request_fvr03_recorded_screenshot(
         }
         capture.measurement_written = true;
     }
-    if !fvr03_visual_capture_ready(capture.frame, capture.capture_after_frame) {
+    if !fvr03_visual_capture_ready(
+        capture.frame,
+        capture.capture_after_frame,
+        selection.selected,
+        presentation.as_deref(),
+    ) {
         return;
     }
     if !capture.product_screenshot_captured {
         if let Some(parent) = capture.path.parent() {
             if fs::create_dir_all(parent).is_err() {
                 capture.requested = true;
-                exits.write(AppExit::Success);
+                if legacy_capture_controls_lifetime {
+                    exits.write(AppExit::Success);
+                }
                 return;
             }
         }
         if let Some(ux) = ux.as_mut() {
+            ux.debug_mode = false;
             ux.settings.show_menu = false;
             ux.settings.show_settings = false;
             ux.settings.show_overlays = false;
-            ux.last_action = "Recorded FVR10 clean product screenshot".to_string();
+            ux.last_action =
+                "Capture-mode selection (non-input evidence); recorded clean product screenshot"
+                    .to_string();
         }
         for mut visibility in &mut overlay_batches {
             *visibility = Visibility::Hidden;
@@ -7446,7 +6645,10 @@ fn request_fvr03_recorded_screenshot(
         return;
     }
     if capture.fvr05_sequence_complete {
-        if capture.measurement_written && capture.frame >= capture.fvr05_next_capture_frame {
+        if legacy_capture_controls_lifetime
+            && capture.measurement_written
+            && capture.frame >= capture.fvr05_next_capture_frame
+        {
             capture.requested = true;
             exits.write(AppExit::Success);
         }
@@ -7463,17 +6665,23 @@ fn request_fvr03_recorded_screenshot(
     if let Some(parent) = capture.path.parent() {
         if fs::create_dir_all(parent).is_err() {
             capture.requested = true;
-            exits.write(AppExit::Success);
+            if legacy_capture_controls_lifetime {
+                exits.write(AppExit::Success);
+            }
             return;
         }
     }
     if let Some(ux) = ux.as_mut() {
         let show_developer_surfaces = capture.fvr05_capture_index < 4 || capture.developer_overlay;
+        ux.debug_mode = show_developer_surfaces;
         ux.settings.show_menu = show_developer_surfaces;
         ux.settings.show_settings = show_developer_surfaces;
         ux.settings.show_overlays = show_developer_surfaces;
         ux.settings.active_inspector_tab = tab;
-        ux.last_action = format!("Recorded FVR05 screenshot state: {}", tab.label());
+        ux.last_action = format!(
+            "Capture-mode selection (non-input evidence); recorded {} tab",
+            tab.label()
+        );
     }
     #[cfg(feature = "gpu-runtime")]
     if let Some(conversation) = conversation.as_mut() {
@@ -7494,6 +6702,10 @@ fn request_fvr03_recorded_screenshot(
     }
 }
 
+fn fvr03_legacy_capture_controls_lifetime(phase31_measurement_mode: bool) -> bool {
+    !phase31_measurement_mode
+}
+
 const FVR03_VISUAL_CAPTURE_AFTER_FRAMES: u32 = 8;
 const FVR05_SCREENSHOT_SETTLE_FRAMES: u32 = 2;
 
@@ -7501,8 +6713,38 @@ fn fvr03_screenshot_capture_frame(_settings: &Fvr03ProductionVoxelRendererSettin
     FVR03_VISUAL_CAPTURE_AFTER_FRAMES
 }
 
-const fn fvr03_visual_capture_ready(frame: u32, capture_after_frame: u32) -> bool {
-    frame >= capture_after_frame
+fn fvr03_visual_capture_ready(
+    frame: u32,
+    capture_after_frame: u32,
+    selected: Option<StableVoxelObjectRef>,
+    presentation: Option<&LiveBrainPresentationFrameResource>,
+) -> bool {
+    if frame < capture_after_frame {
+        return false;
+    }
+    let Some(selected) = selected.filter(|selected| selected.kind == StableVoxelRefKind::Creature)
+    else {
+        return false;
+    };
+    let Some(stable_id) = selected.stable_id else {
+        return false;
+    };
+    let Some(current) = presentation.map(|presentation| &presentation.current) else {
+        return false;
+    };
+    if current.authoritative_world_tick == Tick::ZERO {
+        return false;
+    }
+    let Some(organism) = current.organism(stable_id) else {
+        return false;
+    };
+    current
+        .cognitive_for_organism(organism.organism_id)
+        .is_some()
+        && current
+            .tick_summaries
+            .iter()
+            .any(|summary| summary.organism_id == organism.organism_id)
 }
 
 fn fvr05_screenshot_step(index: usize) -> Option<(&'static str, Fvr05ProductionInspectorTab)> {
@@ -7553,23 +6795,6 @@ fn fvr03_material_kind(
     }
 }
 
-#[allow(dead_code)]
-fn fvr03_voxel_material_index(material: ProceduralTerrainMaterial, tile: VoxelTileCoord) -> u8 {
-    match fvr03_material_kind(material, tile) {
-        Fvr03ProductionVoxelMaterialKind::SafeGrass => 1,
-        Fvr03ProductionVoxelMaterialKind::Soil => 2,
-        Fvr03ProductionVoxelMaterialKind::Resource => 3,
-        Fvr03ProductionVoxelMaterialKind::Hazard => 4,
-        Fvr03ProductionVoxelMaterialKind::Decay => 5,
-        Fvr03ProductionVoxelMaterialKind::Stone => 6,
-        Fvr03ProductionVoxelMaterialKind::Water => 7,
-        Fvr03ProductionVoxelMaterialKind::Sand => 8,
-        Fvr03ProductionVoxelMaterialKind::Creature
-        | Fvr03ProductionVoxelMaterialKind::Selection
-        | Fvr03ProductionVoxelMaterialKind::ChunkBoundary => 9,
-    }
-}
-
 fn fvr03_tile_height(
     material: ProceduralTerrainMaterial,
     resource_bias: f32,
@@ -7586,17 +6811,6 @@ fn fvr03_tile_height(
         ProceduralTerrainMaterial::StoneRough => 0.82 + roughness * 0.46,
     };
     base.clamp(0.16, 1.28)
-}
-
-fn fvr03_lod_for_chunk(coord: VoxelChunkCoord) -> u8 {
-    let distance = coord.x.abs().max(coord.z.abs());
-    if distance <= 2 {
-        0
-    } else if distance <= 5 {
-        1
-    } else {
-        2
-    }
 }
 
 fn fvr03_estimated_resident_bytes(tile_count: usize, chunk_count: usize) -> usize {
@@ -7633,7 +6847,7 @@ fn write_fvr03_performance_artifact(
             )
         };
     let contents = format!(
-        "{{\n  \"schema\": \"{}\",\n  \"profile\": \"{}\",\n  \"backend\": \"{}\",\n  \"target_fps\": {},\n  \"visible_chunks\": {},\n  \"resident_chunks\": {},\n  \"tile_mesh_count\": {},\n  \"mesher_mode\": \"{}\",\n  \"material_palette_version\": \"{}\",\n  \"visible_voxels\": {},\n  \"naive_visible_faces\": {},\n  \"emitted_quads\": {},\n  \"merge_ratio\": {:.3},\n  \"remesh_time_micros\": {},\n  \"dirty_chunks\": {},\n  \"cached_chunks\": {},\n  \"skipped_chunks\": {},\n  \"remesh_budget_chunks_per_frame\": {},\n  \"mesh_cache_key\": \"{}\",\n  \"creature_render_count\": {},\n  \"creature_visual_profile\": \"{}\",\n  \"creature_mesh_material_version\": \"{}\",\n  \"creature_material_bucket_count\": {},\n  \"creature_lod\": \"{}\",\n  \"creature_root_count\": {},\n  \"creature_part_entity_count\": {},\n  \"creature_join_cover_count\": {},\n  \"creature_part_family_count\": {},\n  \"creature_mixed_assembly_count\": {},\n  \"creature_shared_mesh_handle_count\": {},\n  \"production_dressing_count\": {},\n  \"production_vfx_marker_count\": {},\n  \"production_gpu_vfx_emitter_count\": {},\n  \"production_vfx_budget_state\": \"{}\",\n  \"production_visuals_display_only\": {},\n  \"production_vfx_uses_hanabi_gpu_particles\": {},\n  \"estimated_resident_bytes\": {},\n  \"measured_fps\": {},\n  \"measured_frame_count\": {},\n  \"measured_seconds\": {},\n  \"performance_claim_status\": \"{}\"\n}}\n",
+        "{{\n  \"schema\": \"{}\",\n  \"profile\": \"{}\",\n  \"backend\": \"{}\",\n  \"target_fps\": {},\n  \"visible_chunks\": {},\n  \"resident_chunks\": {},\n  \"tile_mesh_count\": {},\n  \"mesher_mode\": \"{}\",\n  \"material_palette_version\": \"{}\",\n  \"visible_voxels\": {},\n  \"naive_visible_faces\": {},\n  \"emitted_quads\": {},\n  \"face_reduction_ratio\": {:.3},\n  \"remesh_time_micros\": {},\n  \"dirty_chunks\": {},\n  \"cached_chunks\": {},\n  \"skipped_chunks\": {},\n  \"remesh_budget_chunks_per_frame\": {},\n  \"mesh_cache_key\": \"{}\",\n  \"creature_render_count\": {},\n  \"creature_visual_profile\": \"{}\",\n  \"creature_mesh_material_version\": \"{}\",\n  \"creature_material_bucket_count\": {},\n  \"creature_lod\": \"{}\",\n  \"creature_root_count\": {},\n  \"creature_part_entity_count\": {},\n  \"creature_join_cover_count\": {},\n  \"creature_part_family_count\": {},\n  \"creature_mixed_assembly_count\": {},\n  \"creature_shared_mesh_handle_count\": {},\n  \"production_dressing_count\": {},\n  \"production_vfx_marker_count\": {},\n  \"production_gpu_vfx_emitter_count\": {},\n  \"production_vfx_budget_state\": \"{}\",\n  \"production_visuals_display_only\": {},\n  \"production_vfx_uses_hanabi_gpu_particles\": {},\n  \"estimated_resident_bytes\": {},\n  \"measured_fps\": {},\n  \"measured_frame_count\": {},\n  \"measured_seconds\": {},\n  \"performance_claim_status\": \"{}\"\n}}\n",
         scene.schema,
         scene.profile_id.label(),
         scene.backend_id,
@@ -7646,7 +6860,7 @@ fn write_fvr03_performance_artifact(
         scene.mesh_stats.visible_voxels,
         scene.mesh_stats.naive_visible_faces,
         scene.mesh_stats.emitted_quads,
-        scene.mesh_stats.merge_ratio,
+        scene.mesh_stats.face_reduction_ratio,
         scene.mesh_stats.remesh_time_micros,
         scene.mesh_stats.dirty_chunks,
         scene.mesh_stats.cached_chunks,
@@ -7680,126 +6894,6 @@ fn write_fvr03_performance_artifact(
     Ok(path)
 }
 
-#[cfg(feature = "voxel-backend")]
-#[derive(Debug, Clone, Resource)]
-pub struct Fvr03BevyVoxelWorldConfig {
-    pub seed: u64,
-    pub procedural_config: ProceduralWorldConfig,
-    pub visible_chunks: BTreeSet<VoxelChunkCoord>,
-    pub settings: Fvr03ProductionVoxelRendererSettings,
-}
-
-#[cfg(feature = "voxel-backend")]
-impl Default for Fvr03BevyVoxelWorldConfig {
-    fn default() -> Self {
-        let settings = Fvr03ProductionVoxelRendererSettings::for_profile(
-            ProductionFrontendProfileId::MinimumSettings30x30,
-        );
-        Self {
-            seed: 4_242,
-            procedural_config: ProceduralWorldConfig::with_seed(4_242),
-            visible_chunks: BTreeSet::new(),
-            settings,
-        }
-    }
-}
-
-#[cfg(feature = "voxel-backend")]
-impl bevy_voxel_world::prelude::VoxelWorldConfig for Fvr03BevyVoxelWorldConfig {
-    type MaterialIndex = u8;
-    type ChunkUserBundle = ();
-
-    fn spawning_distance(&self) -> u32 {
-        u32::from(self.settings.draw_radius_chunks.max(1))
-    }
-
-    fn min_despawn_distance(&self) -> u32 {
-        u32::from(self.settings.hot_radius_chunks.max(1))
-    }
-
-    fn chunk_despawn_strategy(&self) -> bevy_voxel_world::prelude::ChunkDespawnStrategy {
-        bevy_voxel_world::prelude::ChunkDespawnStrategy::FarAway
-    }
-
-    fn chunk_spawn_strategy(&self) -> bevy_voxel_world::prelude::ChunkSpawnStrategy {
-        bevy_voxel_world::prelude::ChunkSpawnStrategy::Close
-    }
-
-    fn max_spawn_per_frame(&self) -> usize {
-        usize::from(self.settings.resident_chunk_budget).min(96)
-    }
-
-    fn spawning_rays(&self) -> usize {
-        match self.settings.profile_id {
-            ProductionFrontendProfileId::MinimumSettings30x30 => 12,
-            ProductionFrontendProfileId::MinSpecComfort1080p => 20,
-            ProductionFrontendProfileId::Balanced1080p => 28,
-            ProductionFrontendProfileId::HighSpecScaleUp => 36,
-            ProductionFrontendProfileId::ResearchScale => 20,
-        }
-    }
-
-    fn chunk_lod(
-        &self,
-        chunk_position: bevy::prelude::IVec3,
-        _previous_lod: Option<bevy_voxel_world::prelude::LodLevel>,
-        camera_position: Vec3,
-    ) -> bevy_voxel_world::prelude::LodLevel {
-        let center = Vec3::new(
-            chunk_position.x as f32 * 32.0 + 16.0,
-            chunk_position.y as f32 * 32.0 + 16.0,
-            chunk_position.z as f32 * 32.0 + 16.0,
-        );
-        let distance = camera_position.distance(center);
-        if distance < 64.0 {
-            0
-        } else if distance < 128.0 {
-            1
-        } else {
-            2
-        }
-    }
-
-    fn voxel_lookup_delegate(
-        &self,
-    ) -> bevy_voxel_world::prelude::VoxelLookupDelegate<Self::MaterialIndex> {
-        let procedural_config = self.procedural_config;
-        let visible_chunks = self.visible_chunks.clone();
-        Box::new(move |_, _, _| {
-            let visible_chunks = visible_chunks.clone();
-            Box::new(move |position, _existing| {
-                let tile = VoxelTileCoord::new(position.x, position.z);
-                let chunk =
-                    VoxelChunkCoord::for_tile(procedural_config.chunk_tile_size as u16, tile);
-                if !visible_chunks.contains(&chunk) {
-                    return bevy_voxel_world::prelude::WorldVoxel::Air;
-                }
-                let Ok(sample) = alife_world::sample_procedural_terrain_tile(
-                    procedural_config,
-                    ProceduralTileCoord::from(tile),
-                ) else {
-                    return bevy_voxel_world::prelude::WorldVoxel::Air;
-                };
-                let surface_height = fvr03_tile_height(
-                    sample.material,
-                    sample.resource_bias,
-                    sample.hazard_pressure,
-                    sample.roughness,
-                )
-                .ceil() as i32;
-                if position.y < 0 || position.y > surface_height {
-                    bevy_voxel_world::prelude::WorldVoxel::Air
-                } else {
-                    bevy_voxel_world::prelude::WorldVoxel::Solid(fvr03_voxel_material_index(
-                        sample.material,
-                        tile,
-                    ))
-                }
-            })
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -7823,6 +6917,103 @@ mod tests {
     };
     #[cfg(feature = "gpu-runtime")]
     use crate::CuratedFounderAgentInput;
+
+    #[test]
+    #[cfg(feature = "gpu-runtime")]
+    fn phase31_measurement_deadline_stops_admitting_simulation_work() {
+        let now = Instant::now();
+        let metrics = Phase31PerformanceMetricsResource {
+            profile: "test".to_string(),
+            population: 6,
+            resolution: [1920, 1080],
+            backend: "GpuAuthoritative".to_string(),
+            adapter: "test-adapter".to_string(),
+            launched_at: now,
+            last_frame_at: now,
+            measurement_started_at: Some(now - PHASE31_MEASUREMENT_DURATION),
+            measurement_completed_at: None,
+            measurement_start_world_tick: Some(1),
+            runtime_baseline: None,
+            scheduler_baseline: None,
+            stage_mark: None,
+            frame_snapshot: None,
+            current_frame_update_cpu: Phase31FrameUpdateCpu::default(),
+            frame_ns: Vec::new(),
+            slow_frame_count: 0,
+            slow_frames: Vec::new(),
+            input_cpu_ns: 0,
+            live_gpu_tick_cpu_ns: 0,
+            authoritative_projection_cpu_ns: 0,
+            procedural_animation_cpu_ns: 0,
+            ui_root_readers_cpu_ns: 0,
+            ui_updates: 0,
+            gpu_samples: Vec::new(),
+            artifact_path: None,
+            write_error: None,
+        };
+
+        assert!(
+            !metrics.measuring(),
+            "an expired measurement must stop admitting simulation work before LiveGpuTick"
+        );
+        assert!(
+            metrics.draining(),
+            "an expired measurement must enter persistence drain mode"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "gpu-runtime")]
+    fn phase31_duration_summary_reports_nearest_rank_percentiles_and_hitches() {
+        let samples = [
+            10_000_000_u64,
+            20_000_000,
+            30_000_000,
+            40_000_000,
+            120_000_000,
+        ];
+        let summary = duration_summary(&samples);
+        assert_eq!(summary["count"], 5);
+        assert_eq!(summary["p50_ms"], 30.0);
+        assert_eq!(summary["p95_ms"], 120.0);
+        assert_eq!(summary["p99_ms"], 120.0);
+        assert_eq!(summary["hitches_over_100ms"], 1);
+    }
+
+    #[test]
+    fn phase31_measurement_exclusively_owns_process_lifetime() {
+        assert!(fvr03_legacy_capture_controls_lifetime(false));
+        assert!(!fvr03_legacy_capture_controls_lifetime(true));
+    }
+
+    #[test]
+    fn presentation_animation_phase_freezes_while_paused_and_resumes_without_a_jump() {
+        let running = advance_fvr04_animation_phase(1.25, 0.5, 2.0, false);
+        assert!((running - 2.25).abs() <= f32::EPSILON);
+
+        let paused = advance_fvr04_animation_phase(running, 30.0, 5.0, true);
+        assert_eq!(paused, running);
+
+        let resumed = advance_fvr04_animation_phase(paused, 0.25, 1.0, false);
+        assert!((resumed - 2.5).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn overlay_shortcuts_reserve_plain_digits_one_to_three_for_simulation_speed() {
+        for key in [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3] {
+            let mut keyboard = ButtonInput::default();
+            keyboard.press(key);
+            assert_eq!(fvr05_overlay_key_pressed(&keyboard), None);
+        }
+
+        let mut shifted = ButtonInput::default();
+        shifted.press(KeyCode::ShiftLeft);
+        shifted.press(KeyCode::Digit1);
+        assert_eq!(
+            fvr05_overlay_key_pressed(&shifted),
+            Some(Fvr05ProductionOverlayKind::Resources)
+        );
+    }
 
     #[derive(Resource, Default)]
     struct ProjectionScheduleOrder(Vec<&'static str>);
@@ -7948,6 +7139,64 @@ mod tests {
         }
     }
 
+    #[test]
+    fn keyboard_navigation_finds_and_follows_creatures_outside_the_starting_view() {
+        let mut app = App::new();
+        app.init_resource::<ButtonInput<KeyCode>>();
+        app.insert_resource(Fvr03ProductionVoxelSelectionResource {
+            selected: None,
+            hovered: None,
+        });
+        app.insert_resource(Fvr04ProductionCreatureFollowResource {
+            enabled: false,
+            target_stable_id: None,
+        });
+        for id in [2, 1] {
+            app.world_mut().spawn((
+                ProductionCreatureAssemblyRoot {
+                    stable_id: WorldEntityId(id),
+                    organism_id: OrganismId(id),
+                    display_only: true,
+                },
+                Fvr03ProductionVoxelCreatureMarker {
+                    stable_id: WorldEntityId(id),
+                    tile: VoxelTileCoord::new(200 + id as i32, 0),
+                },
+            ));
+        }
+        app.add_systems(Update, handle_fvr04_camera_follow_input);
+        for (key, expected) in [
+            (KeyCode::Home, 1),
+            (KeyCode::PageDown, 2),
+            (KeyCode::PageDown, 1),
+            (KeyCode::PageUp, 2),
+        ] {
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(key);
+            app.world_mut().run_schedule(Update);
+            let follow = app
+                .world()
+                .resource::<Fvr04ProductionCreatureFollowResource>();
+            assert!(
+                follow.enabled,
+                "navigation must recover an off-camera creature"
+            );
+            assert_eq!(follow.target_stable_id, Some(WorldEntityId(expected)));
+            assert_eq!(
+                app.world()
+                    .resource::<Fvr03ProductionVoxelSelectionResource>()
+                    .selected
+                    .unwrap()
+                    .stable_id,
+                Some(WorldEntityId(expected))
+            );
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .reset_all();
+        }
+    }
+
     fn empty_scene() -> Fvr03ProductionVoxelSceneResource {
         Fvr03ProductionVoxelSceneResource {
             schema: FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
@@ -7957,8 +7206,7 @@ mod tests {
             population: 30,
             renderer_profile: PRODUCTION_VOXEL_RENDERER_PROFILE.to_string(),
             backend_id: FVR10_RENDERER_BACKEND_ID,
-            uses_bevy_voxel_world_backend: true,
-            uses_internal_chunk_mesh_for_fvr02_contract: true,
+            uses_internal_voxel_terrain_mesh: true,
             visible_chunk_count: 1,
             resident_chunk_count: 1,
             tile_mesh_count: 4,
@@ -7967,7 +7215,7 @@ mod tests {
             creature_lod: Fvr04CreatureLod::CompactVoxel,
             creature_root_count: 1,
             creature_part_entity_count: CreaturePartSlot::ALL.len(),
-            creature_join_cover_count: 6,
+            creature_join_cover_count: 0,
             creature_part_family_count: 1,
             creature_mixed_assembly_count: 0,
             creature_shared_mesh_handle_count: CreaturePartSlot::ALL.len(),
@@ -7987,16 +7235,12 @@ mod tests {
             production_vfx_budget_state: "conservative",
             production_visuals_display_only: true,
             production_vfx_uses_hanabi_gpu_particles: cfg!(feature = "vfx-hanabi"),
-            mesh_stats: Fvr09GreedyMeshStats {
-                mode: Fvr09MesherMode::BinaryGreedyQuads,
-                chunk_local_occupancy_masks: true,
-                six_direction_face_masks: true,
-                material_aware_merging: true,
-                neighbor_border_seams_checked: true,
+            mesh_stats: Fvr09TerrainMeshStats {
+                mode: Fvr09MesherMode::LayeredGridQuads,
                 visible_voxels: 4,
                 naive_visible_faces: 24,
                 emitted_quads: 18,
-                merge_ratio: 1.333,
+                face_reduction_ratio: 1.333,
                 remesh_time_micros: 0,
                 dirty_chunks: 0,
                 cached_chunks: 1,
@@ -8033,7 +7277,7 @@ mod tests {
         let mut world = World::new();
         world.spawn((
             ProductionCreatureAssemblyRoot {
-                stable_id: Default::default(),
+                stable_id: WorldEntityId(1),
                 organism_id: OrganismId(1),
                 display_only: true,
             },
@@ -8044,6 +7288,7 @@ mod tests {
                 kind: Fvr07ProductionVfxKind::SleepGlow,
                 tile: None,
                 stable_id: None,
+                follows_creature: false,
                 display_only: true,
                 no_renderer_authority_over_actions_or_cognition: true,
                 budget_state: "test",
@@ -8089,7 +7334,7 @@ mod tests {
         });
         world.insert_resource(Fvr04ProductionCreatureFollowResource {
             enabled: true,
-            target_stable_id: Some(Default::default()),
+            target_stable_id: Some(WorldEntityId(1)),
         });
 
         clear_production_load_focus(&mut world);
@@ -8104,6 +7349,26 @@ mod tests {
             .expect("follow resource");
         assert!(!follow.enabled);
         assert!(follow.target_stable_id.is_none());
+    }
+
+    #[test]
+    fn missing_pointer_sample_clears_hover_without_clearing_selection() {
+        let tile = VoxelTileCoord::new(0, 0);
+        let target = StableVoxelObjectRef {
+            kind: StableVoxelRefKind::Tile,
+            stable_id: None,
+            chunk: VoxelChunkCoord::for_tile(16, tile),
+            tile: Some(tile),
+        };
+        let mut selection = Fvr03ProductionVoxelSelectionResource {
+            hovered: Some(target),
+            selected: Some(target),
+        };
+
+        apply_fvr03_pointer_sample(&mut selection, None, true);
+
+        assert!(selection.hovered.is_none());
+        assert_eq!(selection.selected, Some(target));
     }
 
     #[test]
@@ -8155,12 +7420,11 @@ mod tests {
     }
 
     #[test]
-    fn visual_capture_readiness_does_not_wait_for_performance_sampling() {
-        assert!(!fvr03_visual_capture_ready(7, 8));
-        assert!(fvr03_visual_capture_ready(8, 8));
-        assert!(fvr03_visual_capture_ready(u32::MAX, 8));
+    fn visual_capture_readiness_rejects_missing_canonical_presentation() {
+        assert!(!fvr03_visual_capture_ready(7, 8, None, None));
+        assert!(!fvr03_visual_capture_ready(8, 8, None, None));
+        assert!(!fvr03_visual_capture_ready(u32::MAX, 8, None, None));
     }
-
     #[test]
     fn developer_capture_prioritizes_gpu_runtime_evidence() {
         assert_eq!(
@@ -8463,14 +7727,14 @@ mod tests {
     }
 
     #[test]
-    fn authoritative_projection_maps_stable_agent_to_voxel_center_and_preserves_root_state() {
+    fn authoritative_projection_preserves_fractional_xy_motion_and_root_state() {
         let stable_id = WorldEntityId(41);
         let organism_id = OrganismId(7);
         let frame = presentation_frame(
             WorldObjectKind::Agent,
             stable_id,
             Some(organism_id),
-            Vec3f::new(1.6, 99.0, -2.6),
+            Vec3f::new(1.6, -2.6, 99.0),
         );
         let rotation = Quat::from_rotation_x(0.4);
         let scale = Vec3::new(2.0, 3.0, 4.0);
@@ -8486,7 +7750,20 @@ mod tests {
             &mut transform,
             &frame,
         ));
-        assert_eq!(transform.translation, Vec3::new(2.5, 1.75, -2.5));
+        assert_eq!(transform.translation, Vec3::new(1.6, 1.75, -2.6));
+        let moved = presentation_frame(
+            WorldObjectKind::Agent,
+            stable_id,
+            Some(organism_id),
+            Vec3f::new(1.6, -2.5, 99.0),
+        );
+        assert!(project_authoritative_creature_root_transform(
+            stable_id,
+            organism_id,
+            &mut transform,
+            &moved,
+        ));
+        assert_eq!(transform.translation, Vec3::new(1.6, 1.75, -2.5));
         assert_eq!(transform.rotation, rotation);
         assert_eq!(transform.scale, scale);
     }

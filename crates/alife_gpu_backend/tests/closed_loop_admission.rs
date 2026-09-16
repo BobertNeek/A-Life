@@ -53,6 +53,7 @@ fn admission_is_runtime_budgeted_and_release_reclaims_exact_bytes() {
         .logical_slot_commit_bytes;
     let profile = bounded_profile(slot_bytes * 2, 512 * 1024 * 1024, 2, 2);
     let mut backend = GpuClosedLoopBackend::new_required(profile).unwrap();
+    let physiology = support::test_physiology(4_412, &phenotype).unwrap();
     let a = backend
         .insert_brain(OrganismId(1), phenotype.clone())
         .unwrap();
@@ -74,15 +75,25 @@ fn admission_is_runtime_budgeted_and_release_reclaims_exact_bytes() {
     let (stale_frame, stale_recall) = finalized_memory_frame(1, 101);
     let stale_upload = backend
         .prepare_memory_context_upload(a, &stale_frame, &stale_recall)
-        .unwrap()
-        .bind_neural_receptor_effects(support::test_receptor_effects(stale_frame.tick()))
         .unwrap();
+    let stale_upload = support::bind_chemistry_receptor_effects(
+        stale_upload,
+        &phenotype,
+        &physiology,
+        stale_frame.tick(),
+    )
+    .unwrap();
     let (live_frame, live_recall) = finalized_memory_frame(2, 101);
     let live_upload = backend
         .prepare_memory_context_upload(b, &live_frame, &live_recall)
-        .unwrap()
-        .bind_neural_receptor_effects(support::test_receptor_effects(live_frame.tick()))
         .unwrap();
+    let live_upload = support::bind_chemistry_receptor_effects(
+        live_upload,
+        &phenotype,
+        &physiology,
+        live_frame.tick(),
+    )
+    .unwrap();
 
     let before_release = backend.admission_receipt().clone();
     backend.remove_brain(a).unwrap();
@@ -277,6 +288,10 @@ fn heterogeneous_same_class_memory_batch_keeps_slot_state_disjoint() {
     );
     let profile = bounded_profile(256 * 1024 * 1024, 512 * 1024 * 1024, 2, 2);
     let mut backend = GpuClosedLoopBackend::new_required(profile).unwrap();
+    let physiologies = [
+        support::test_physiology(4_450, &phenotypes[0]).unwrap(),
+        support::test_physiology(4_451, &phenotypes[1]).unwrap(),
+    ];
     let handles = [
         backend
             .insert_brain(OrganismId(11), phenotypes[0].clone())
@@ -292,14 +307,24 @@ fn heterogeneous_same_class_memory_batch_keeps_slot_state_disjoint() {
     let (frame_b, recall_b) = finalized_memory_frame(12, 401);
     let upload_a = backend
         .prepare_memory_context_upload(handles[0], &frame_a, &recall_a)
-        .unwrap()
-        .bind_neural_receptor_effects(support::test_receptor_effects(frame_a.tick()))
         .unwrap();
+    let upload_a = support::bind_chemistry_receptor_effects(
+        upload_a,
+        &phenotypes[0],
+        &physiologies[0],
+        frame_a.tick(),
+    )
+    .unwrap();
     let upload_b = backend
         .prepare_memory_context_upload(handles[1], &frame_b, &recall_b)
-        .unwrap()
-        .bind_neural_receptor_effects(support::test_receptor_effects(frame_b.tick()))
         .unwrap();
+    let upload_b = support::bind_chemistry_receptor_effects(
+        upload_b,
+        &phenotypes[1],
+        &physiologies[1],
+        frame_b.tick(),
+    )
+    .unwrap();
     let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![
         GpuClosedLoopMemoryTickInput::try_new(handles[0], &frame_a, &upload_a).unwrap(),
         GpuClosedLoopMemoryTickInput::try_new(handles[1], &frame_b, &upload_b).unwrap(),
@@ -330,9 +355,14 @@ fn heterogeneous_same_class_memory_batch_keeps_slot_state_disjoint() {
     let (frame_a_only, recall_a_only) = finalized_memory_frame(11, 402);
     let upload_a_only = backend
         .prepare_memory_context_upload(handles[0], &frame_a_only, &recall_a_only)
-        .unwrap()
-        .bind_neural_receptor_effects(support::test_receptor_effects(frame_a_only.tick()))
         .unwrap();
+    let upload_a_only = support::bind_chemistry_receptor_effects(
+        upload_a_only,
+        &phenotypes[0],
+        &physiologies[0],
+        frame_a_only.tick(),
+    )
+    .unwrap();
     let only_a =
         GpuClosedLoopMemoryBatchInput::try_new(vec![GpuClosedLoopMemoryTickInput::try_new(
             handles[0],
@@ -366,17 +396,25 @@ fn mixed_class_memory_batch_preserves_input_identity_on_one_backend() {
     ];
     let profile = bounded_profile(512 * 1024 * 1024, 768 * 1024 * 1024, 3, 1);
     let mut backend = GpuClosedLoopBackend::new_required(profile).unwrap();
-    let handles = capacities.map(|capacity| {
+    let phenotypes = capacities.map(|capacity| {
+        populated(
+            capacity,
+            4_500 + u64::from(capacity.id().raw()),
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+    });
+    let physiologies = std::array::from_fn::<_, 3, _>(|index| {
+        support::test_physiology(
+            4_500 + u64::from(capacities[index].id().raw()),
+            &phenotypes[index],
+        )
+        .unwrap()
+    });
+    let handles = std::array::from_fn::<_, 3, _>(|index| {
+        let capacity = capacities[index];
         let organism = OrganismId(20 + u64::from(capacity.id().raw()));
         backend
-            .insert_brain(
-                organism,
-                populated(
-                    capacity,
-                    4_500 + u64::from(capacity.id().raw()),
-                    SensorProfile::GroundedObjectSlotsV1,
-                ),
-            )
+            .insert_brain(organism, phenotypes[index].clone())
             .unwrap()
     });
     assert_eq!(backend.shared_resource_counts_for_test(), (1, 1, 1));
@@ -388,19 +426,34 @@ fn mixed_class_memory_batch_preserves_input_identity_on_one_backend() {
     let (frame_2048, recall_2048) = finalized_memory_frame(handles[2].organism_id().raw(), 501);
     let upload_512 = backend
         .prepare_memory_context_upload(handles[0], &frame_512, &recall_512)
-        .unwrap()
-        .bind_neural_receptor_effects(support::test_receptor_effects(frame_512.tick()))
         .unwrap();
+    let upload_512 = support::bind_chemistry_receptor_effects(
+        upload_512,
+        &phenotypes[0],
+        &physiologies[0],
+        frame_512.tick(),
+    )
+    .unwrap();
     let upload_1024 = backend
         .prepare_memory_context_upload(handles[1], &frame_1024, &recall_1024)
-        .unwrap()
-        .bind_neural_receptor_effects(support::test_receptor_effects(frame_1024.tick()))
         .unwrap();
+    let upload_1024 = support::bind_chemistry_receptor_effects(
+        upload_1024,
+        &phenotypes[1],
+        &physiologies[1],
+        frame_1024.tick(),
+    )
+    .unwrap();
     let upload_2048 = backend
         .prepare_memory_context_upload(handles[2], &frame_2048, &recall_2048)
-        .unwrap()
-        .bind_neural_receptor_effects(support::test_receptor_effects(frame_2048.tick()))
         .unwrap();
+    let upload_2048 = support::bind_chemistry_receptor_effects(
+        upload_2048,
+        &phenotypes[2],
+        &physiologies[2],
+        frame_2048.tick(),
+    )
+    .unwrap();
     let expected_order = [handles[2], handles[0], handles[1]];
     let batch = GpuClosedLoopMemoryBatchInput::try_new(vec![
         GpuClosedLoopMemoryTickInput::try_new(handles[2], &frame_2048, &upload_2048).unwrap(),

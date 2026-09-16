@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ActionKind, ExperiencePatch, OrganismId, PhysicalContactKind, ScaffoldContractError, Tick,
-    UtteranceSourceKind, Validate,
+    Validate,
 };
 
 pub const PASSIVE_LIFE_STATISTICS_SCHEMA_VERSION: u16 = 1;
@@ -37,11 +37,22 @@ pub enum EnvironmentalRegime {
     Hazardous = 3,
     Social = 4,
     Novel = 5,
+    /// No authoritative regime classification was available for the exposure.
+    /// This deliberately does not occupy a serialized statistics bin.
+    Unknown = 6,
 }
 
 impl EnvironmentalRegime {
-    const fn index(self) -> usize {
-        self as usize
+    const fn index(self) -> Option<usize> {
+        match self {
+            Self::Temperate => Some(0),
+            Self::Scarcity => Some(1),
+            Self::Abundance => Some(2),
+            Self::Hazardous => Some(3),
+            Self::Social => Some(4),
+            Self::Novel => Some(5),
+            Self::Unknown => None,
+        }
     }
 }
 
@@ -52,7 +63,11 @@ pub enum PassiveMetricKind {
     FoodSuccess = 2,
     PoisonAvoidance = 3,
     HazardAvoidance = 4,
-    EnergyStability = 5,
+    /// Mean brain ATP availability across survival ticks.
+    ///
+    /// The legacy wire name remains `EnergyStability` for compatibility.
+    #[serde(rename = "EnergyStability")]
+    MeanBrainAtp = 5,
     Movement = 6,
     Reproduction = 7,
     SleepRetention = 8,
@@ -74,7 +89,7 @@ impl PassiveMetricKind {
         Self::FoodSuccess,
         Self::PoisonAvoidance,
         Self::HazardAvoidance,
-        Self::EnergyStability,
+        Self::MeanBrainAtp,
         Self::Movement,
         Self::Reproduction,
         Self::SleepRetention,
@@ -202,7 +217,11 @@ pub struct PassiveLifeStatistics {
     food_success: BoundedMean,
     poison_avoidance: BoundedMean,
     hazard_avoidance: BoundedMean,
-    energy_stability: BoundedMean,
+    /// Mean brain ATP availability across survival ticks.
+    ///
+    /// The legacy wire name remains `energy_stability` for compatibility.
+    #[serde(rename = "energy_stability")]
+    mean_brain_atp: BoundedMean,
     movement: BoundedMean,
     reproduction: BoundedMean,
     sleep_retention: BoundedMean,
@@ -236,7 +255,7 @@ impl PassiveLifeStatistics {
             food_success: BoundedMean::default(),
             poison_avoidance: BoundedMean::default(),
             hazard_avoidance: BoundedMean::default(),
-            energy_stability: BoundedMean::default(),
+            mean_brain_atp: BoundedMean::default(),
             movement: BoundedMean::default(),
             reproduction: BoundedMean::default(),
             sleep_retention: BoundedMean::default(),
@@ -262,6 +281,17 @@ impl PassiveLifeStatistics {
 
     pub const fn environmental_regime_ticks(&self) -> &[u64; ENVIRONMENTAL_REGIME_COUNT] {
         &self.environmental_regime_ticks
+    }
+
+    pub fn unknown_environmental_regime_ticks(&self) -> Result<u64, ScaffoldContractError> {
+        let known_ticks = self
+            .environmental_regime_ticks
+            .iter()
+            .try_fold(0_u64, |sum, value| sum.checked_add(*value))
+            .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+        self.survival_ticks
+            .checked_sub(known_ticks)
+            .ok_or(ScaffoldContractError::ScalarOutOfRange)
     }
 
     pub const fn gpu_dispatches(&self) -> u64 {
@@ -309,11 +339,13 @@ impl PassiveLifeStatistics {
                     .survival_ticks
                     .checked_add(1)
                     .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
-                let regime_ticks = &mut self.environmental_regime_ticks[regime.index()];
-                *regime_ticks = regime_ticks
-                    .checked_add(1)
-                    .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
-                self.energy_stability.observe(energy_q16)?;
+                if let Some(index) = regime.index() {
+                    let regime_ticks = &mut self.environmental_regime_ticks[index];
+                    *regime_ticks = regime_ticks
+                        .checked_add(1)
+                        .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+                }
+                self.mean_brain_atp.observe(energy_q16)?;
                 self.movement.observe(movement_distance_q16)?;
                 self.gpu_dispatches = self
                     .gpu_dispatches
@@ -385,6 +417,10 @@ impl PassiveLifeStatistics {
         if patch.header().organism_id != self.organism_id {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
+        if self.death_tick.is_some() {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        let mut staged = self.clone();
         let heard = patch
             .pre_action()
             .perception()
@@ -394,43 +430,27 @@ impl PassiveLifeStatistics {
             .iter()
             .flatten()
             .count() as u64;
-        self.heard_token_exposures = self
+        staged.heard_token_exposures = staged
             .heard_token_exposures
             .checked_add(heard)
             .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
         let outcome = patch.outcome();
         if outcome.physical.contact == PhysicalContactKind::Consumed {
             let harmful = outcome.pain_delta.raw() > 0.0 || outcome.reward_valence.raw() < 0.0;
-            self.observe(PassiveLifeEvent::FoodOutcome {
+            staged.observe(PassiveLifeEvent::FoodOutcome {
                 beneficial: !harmful,
             })?;
-            if harmful {
-                self.observe(PassiveLifeEvent::PoisonEncounter { avoided: false })?;
-            }
         }
-        if outcome.pain_delta.raw() > 0.0
-            || outcome.physical.contact == PhysicalContactKind::Collision
-        {
-            self.observe(PassiveLifeEvent::HazardEncounter { avoided: false })?;
-        }
+        // A harmful consumed outcome remains a measured food failure. Injury or
+        // contact alone does not establish an avoidable encounter opportunity.
+        // Explicit grounded encounter outcomes enter through `observe`.
         if patch.decision().selected_action.kind == ActionKind::Vocalize {
-            self.observe(PassiveLifeEvent::NarrationUtterance)?;
+            staged.observe(PassiveLifeEvent::NarrationUtterance)?;
         }
-        if patch.decision().selected_action.kind == ActionKind::Vocalize
-            && patch
-                .pre_action()
-                .perception()
-                .sensory()
-                .language_context
-                .heard_tokens
-                .iter()
-                .flatten()
-                .any(|token| token.source_kind == UtteranceSourceKind::Creature)
-        {
-            self.observe(PassiveLifeEvent::PeerCommunication {
-                successful: outcome.success,
-            })?;
-        }
+        // Hearing and speaking are exposure and narration observations only.
+        // Receiver-grounded peer communication is recorded explicitly through
+        // `PassiveLifeEvent::PeerCommunication` once measured evidence exists.
+        *self = staged;
         Ok(())
     }
 
@@ -469,7 +489,7 @@ impl PassiveLifeStatistics {
             PassiveMetricKind::FoodSuccess => self.food_success.reading(),
             PassiveMetricKind::PoisonAvoidance => self.poison_avoidance.reading(),
             PassiveMetricKind::HazardAvoidance => self.hazard_avoidance.reading(),
-            PassiveMetricKind::EnergyStability => self.energy_stability.reading(),
+            PassiveMetricKind::MeanBrainAtp => self.mean_brain_atp.reading(),
             PassiveMetricKind::Movement => self.movement.reading(),
             PassiveMetricKind::Reproduction => self.reproduction.reading(),
             PassiveMetricKind::SleepRetention => self.sleep_retention.reading(),
@@ -514,7 +534,7 @@ impl Validate for PassiveLifeStatistics {
             .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
         if self.schema_version != PASSIVE_LIFE_STATISTICS_SCHEMA_VERSION
             || self.last_tick.raw() < self.birth_tick.raw()
-            || regime_ticks != self.survival_ticks
+            || regime_ticks > self.survival_ticks
             || self.gpu_throttled_dispatches > self.gpu_dispatches
         {
             return Err(ScaffoldContractError::ScalarOutOfRange);
@@ -535,7 +555,7 @@ impl Validate for PassiveLifeStatistics {
             self.food_success,
             self.poison_avoidance,
             self.hazard_avoidance,
-            self.energy_stability,
+            self.mean_brain_atp,
             self.movement,
             self.reproduction,
             self.sleep_retention,

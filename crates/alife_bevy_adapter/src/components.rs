@@ -1,12 +1,12 @@
-//! v0 scaffold: Bevy ECS mirror components and telemetry resources.
+//! Bevy ECS components for derived adapter input and output.
 
 use alife_core::{
-    ActionCommand, ActionProposal, AffordanceBits, BrainTickOutput, CreatureMind, ExperiencePatch,
-    HomeostaticSnapshot, OrganismId, SensorySnapshot, SleepPhase, Tick, WorldEntityId,
+    ActionCommand, AffordanceBits, OrganismId, ScaffoldContractError, SensorySnapshot,
+    WorldEntityId,
 };
-use bevy::prelude::{Component, Resource};
+use bevy::prelude::Component;
 
-use crate::action::BevyActionFailure;
+use crate::action::{BevyActionFailure, BevyActionPlan};
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct CreatureBody {
@@ -33,6 +33,22 @@ impl CreatureBody {
             vision_radius_meters: crate::sensory::DEFAULT_VISION_RADIUS,
             hearing_radius_meters: crate::sensory::DEFAULT_HEARING_RADIUS,
         })
+    }
+
+    pub fn validate(self) -> Result<Self, ScaffoldContractError> {
+        self.organism_id.validate()?;
+        self.world_entity_id.validate()?;
+        for value in [
+            self.radius_meters,
+            self.movement_step_meters,
+            self.vision_radius_meters,
+            self.hearing_radius_meters,
+        ] {
+            if !value.is_finite() || value < 0.0 {
+                return Err(ScaffoldContractError::ScalarOutOfRange);
+            }
+        }
+        Ok(self)
     }
 }
 
@@ -71,6 +87,17 @@ impl AffordanceTags {
             blocks_movement: false,
         }
     }
+
+    pub fn validate(self) -> Result<Self, ScaffoldContractError> {
+        if !self.nutrition.is_finite()
+            || !self.hazard_pain.is_finite()
+            || self.nutrition < 0.0
+            || self.hazard_pain < 0.0
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        Ok(self)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
@@ -92,43 +119,45 @@ impl Default for SensoryEmitter {
     }
 }
 
+impl SensoryEmitter {
+    pub fn validate(self) -> Result<Self, ScaffoldContractError> {
+        if self.audible_token.is_some_and(|token| {
+            token == 0 || token >= u32::from(alife_core::LanguageCodebookV1::CODE_COUNT)
+        }) {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        for value in [
+            self.visual_salience_scale,
+            self.smell_salience_scale,
+            self.audible_radius_meters,
+        ] {
+            if !value.is_finite() || value < 0.0 {
+                return Err(ScaffoldContractError::ScalarOutOfRange);
+            }
+        }
+        Ok(self)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Component, Default)]
 pub struct ActionSink {
     pub pending_command: Option<ActionCommand>,
-    pub last_execution: Option<alife_core::ReferenceActionExecution>,
+    pub last_plan: Option<BevyActionPlan>,
     pub last_failure: Option<BevyActionFailure>,
-}
-
-#[derive(Debug, Clone, PartialEq, Component)]
-pub struct SleepDriveDebug {
-    pub tick: Tick,
-    pub sleep_phase: Option<SleepPhase>,
-    pub homeostasis: Option<HomeostaticSnapshot>,
-}
-
-impl Default for SleepDriveDebug {
-    fn default() -> Self {
-        Self {
-            tick: Tick::ZERO,
-            sleep_phase: None,
-            homeostasis: None,
-        }
-    }
+    pub last_contract_error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Component)]
 pub struct LatestSensorySnapshot(pub SensorySnapshot);
 
-#[derive(Debug, Clone, PartialEq, Component)]
-pub struct CoreBrainMind(pub CreatureMind);
-
-#[derive(Debug, Clone, PartialEq, Component, Default)]
-pub struct BrainTickProposals {
-    pub proposals: Vec<ActionProposal>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdapterStage {
+    GatherSensory,
+    PlanAction,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Resource)]
-pub struct PatchTelemetry {
-    pub sealed_patches: Vec<ExperiencePatch>,
-    pub brain_outputs: Vec<BrainTickOutput>,
+#[derive(Debug, Clone, PartialEq, Eq, Component)]
+pub struct AdapterContractFailure {
+    pub stage: AdapterStage,
+    pub message: String,
 }

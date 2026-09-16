@@ -1,0 +1,123 @@
+{
+  "adapter": "NVIDIA GeForce RTX 3050",
+  "backend": "GpuAuthoritative",
+  "blocking_transactions": {
+    "count": 302,
+    "inference_batch_wall_ns": 147554300,
+    "learning_batch_wall_ns": 77750500,
+    "ordinary_snapshot_map_receive_wait_ns": 122900,
+    "ordinary_snapshot_poll_wait_ns": 162928600
+  },
+  "build": {
+    "debug_assertions": false,
+    "executable_blake3": "4a819cdfc27841cd4d4e48f5ddca55e62fbca8f345128f15a833db79f3caeea0",
+    "executable_path": "D:\\A life\\.worktrees\\phase3-performance-stabilization-20260826\\target\\release\\alife_game_app.exe",
+    "mode": "release",
+    "optimized_release": true
+  },
+  "checkpoint_activity": {
+    "capture_calls": 0,
+    "capture_wall_ns": 0,
+    "full_snapshot_bytes": 0,
+    "full_snapshot_calls": 0,
+    "map_receive_wait_ns": 0,
+    "poll_wait_ns": 0
+  },
+  "cpu_stages": {
+    "authoritative_projection_ns": 2903232500,
+    "input_ns": 1155989200,
+    "live_gpu_tick_ns": 23857296300,
+    "procedural_animation_ns": 278420800,
+    "renderer_present_and_uninstrumented_residual_ns": 31000204600,
+    "ui_root_readers_ns": 805086600
+  },
+  "dispatch_batching": {
+    "inference_batches": 41,
+    "inference_rows": 220,
+    "learning_batches": 41,
+    "learning_rows": 220,
+    "mean_inference_rows_per_batch": 5.365853658536586,
+    "mean_learning_rows_per_batch": 5.365853658536586
+  },
+  "frame": {
+    "count": 4311,
+    "hitches_over_100ms": 22,
+    "max_ms": 2083.599,
+    "p50_ms": 8.1246,
+    "p95_ms": 11.0909,
+    "p99_ms": 14.1256,
+    "total_ns": 60000230000
+  },
+  "gpu_stages": {
+    "inference_ns": 63606784,
+    "plasticity_ns": 9155584,
+    "timestamp_samples": 41
+  },
+  "internal_tick_stages": {
+    "cognitive_authority_seal_ns": 2779695900,
+    "inference_transaction_ns": 147554300,
+    "learning_transaction_ns": 77750500,
+    "passive_observation_ns": 31445600,
+    "perception_sleep_preparation_ns": 5820742000,
+    "population_reconcile_ns": 580500,
+    "resident_synchronize_ns": 103725300,
+    "seal_world_body_biochemistry_ns": 1500632500,
+    "sealed_commit_total_ns": 2951363500,
+    "selection_prepare_ns": 293137500,
+    "sidecar_memory_ns": 40219100,
+    "sidecar_topology_ns": 48785500,
+    "sleep_persistence_ns": 9714134500,
+    "sleep_promotion_ns": 2425426700,
+    "tick_preamble_ns": 1417400,
+    "world_authority_advance_ns": 220098300
+  },
+  "measurement_seconds": 60.001444,
+  "ordinary_full_snapshot": {
+    "bytes": 48942080,
+    "calls": 220,
+    "calls_per_runtime_tick": 2.5,
+    "map_receive_wait_ns": 122900,
+    "poll_wait_ns": 162928600,
+    "wall_ns": 261090900
+  },
+  "population": 6,
+  "profile": "MinSpecComfort1080p",
+  "readback": {
+    "learning_bytes": 14080,
+    "learning_calls": 41,
+    "ordinary_full_snapshot_bytes": 48942080,
+    "ordinary_full_snapshot_calls": 220,
+    "selection_bytes": 17600,
+    "selection_calls": 41
+  },
+  "resolution": [
+    1920,
+    1080
+  ],
+  "schema": "alife.phase31.performance-baseline.v1",
+  "schema_version": 1,
+  "simulation": {
+    "achieved_tps": 1.4499651041731596,
+    "catch_up_ticks_dropped": 20,
+    "configured_tps": 20,
+    "runtime_tick_calls": 88,
+    "runtime_tick_wall_ns": 23261269200,
+    "scheduler_frames_observed": 22,
+    "ticks_executed": 87
+  },
+  "source_head": "7031cf27ee23613e7a8da8bb85fdb86a1a31a3f3",
+  "state_reference_hash": {
+    "calls": 220,
+    "resident_json_bytes": 351342408,
+    "topology_json_bytes": 2178308,
+    "wall_ns": 1638686900
+  },
+  "ui": {
+    "cadence_hz": 71.86493711718005,
+    "updates": 4312
+  },
+  "world_tick": {
+    "end": 109,
+    "start": 22
+  }
+}

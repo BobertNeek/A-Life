@@ -1,8 +1,8 @@
 use alife_core::{
     ActionKind, BiochemistryState, BodyEventDelta, BrainCapacityClass, ChannelCommand, Confidence,
-    CreatureGenome, DurationTicks, ExperienceSequenceId, FoundationGeneticIdentity, Intensity,
-    MotorChannel, MotorCommandBundle, OrganismId, TeacherPerceptionChannel, Tick, Vec3f,
-    WorldEntityId,
+    CreatureGenome, DurationTicks, EmbodimentState, ExperienceSequenceId,
+    FoundationGeneticIdentity, Intensity, MotorChannel, MotorCommandBundle, OrganismId,
+    TeacherPerceptionChannel, Tick, Vec3f, WorldEntityId,
 };
 use alife_world::{HeadlessScenarioBuilder, WorldOrganismRecord};
 
@@ -130,6 +130,54 @@ fn embodiment_replacement_rejects_foreign_or_skipped_revisions() {
         )
         .unwrap();
     assert!(organism.replace_embodiment_state(embodiment).is_err());
+    assert_eq!(organism, before);
+}
+
+#[test]
+fn embodiment_replacement_requires_monotonic_source_ticks() {
+    let mut organism = record();
+    organism
+        .advance_biology(Tick(2), BodyEventDelta::zero())
+        .unwrap();
+
+    let mut current = organism.embodiment().clone();
+    current
+        .replace_calibration(
+            Tick(2),
+            vec![0.1; current.sensor_calibration().len()],
+            vec![0.2; current.effector_controllability().len()],
+            vec![0.3; current.body_schema().len()],
+        )
+        .unwrap();
+    organism.replace_embodiment_state(current).unwrap();
+
+    let mut same_tick = organism.embodiment().clone();
+    same_tick
+        .replace_calibration(
+            Tick(2),
+            vec![0.2; same_tick.sensor_calibration().len()],
+            vec![0.3; same_tick.effector_controllability().len()],
+            vec![0.4; same_tick.body_schema().len()],
+        )
+        .unwrap();
+    organism.replace_embodiment_state(same_tick).unwrap();
+
+    let mut stale = EmbodimentState::reference(organism.world_entity_id(), Tick::ZERO).unwrap();
+    stale
+        .replace_calibration(Tick::ZERO, vec![0.0; 26], vec![0.0; 11], vec![0.0; 16])
+        .unwrap();
+    stale
+        .replace_calibration(Tick::ZERO, vec![0.1; 26], vec![0.1; 11], vec![0.1; 16])
+        .unwrap();
+    stale
+        .replace_calibration(Tick::ZERO, vec![0.2; 26], vec![0.2; 11], vec![0.2; 16])
+        .unwrap();
+    let before = organism.clone();
+
+    assert_eq!(
+        organism.replace_embodiment_state(stale),
+        Err(alife_core::ScaffoldContractError::NonMonotonicTick)
+    );
     assert_eq!(organism, before);
 }
 

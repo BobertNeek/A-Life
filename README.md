@@ -2,7 +2,7 @@
 
 A-Life is a Rust, Bevy, wgpu, and WGSL artificial-life research project. It is building persistent embodied organisms whose neural policy runs on the GPU and whose actions remain subject to an authoritative world.
 
-The current product boundary is narrower than the ambition: `production-voxel` starts and ticks a real GPU-authoritative headless cognition loop, while the visible voxel scene is still reconstructed from a save. Live world-to-voxel synchronization, autonomous birth and death, and a causally complete player loop remain open.
+The current product boundary is narrower than the ambition. `production-voxel` starts and ticks a GPU-authoritative cognition loop. The visible scene starts from the selected save, then projects live authoritative creature positions, adds newborns, and applies runtime retirement events. Fresh rendered lifecycle proof and the full player loop remain open.
 
 ## Run the current voxel frontend
 
@@ -18,10 +18,16 @@ Launch the frontend:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
 ```
 
-Inspect the launch without opening a window:
+Run the application's manifest, asset, save, and GPU preflight without opening a window:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
+```
+
+Print the Cargo command without executing it:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -PreviewCommand
 ```
 
 Build the local Windows package:
@@ -38,7 +44,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_prod
 - WGSL selection, learning, memory, topology, sleep, and checkpoint paths are implemented in the GPU runtime.
 - The production shell constructs and ticks that runtime.
 - The voxel UI provides camera, selection, inspector, speech, save, load, pause, speed, and overlays.
-- The renderer does not yet project live runtime transforms, births, or deaths.
+- The renderer projects tick-bound runtime transforms, births, and retirement events without owning simulation truth.
+- The production graphics path uses one layered-grid terrain renderer and one lighting authority. Overlay geometry is created on demand.
 - EI0 passed a bounded source-bound exit gate. EI1 produced a complete source-bound corpus but remains `Blocked`.
 - This is a research alpha, not a release-ready autonomous simulation.
 
@@ -69,3 +76,7 @@ the v2.0 architecture.
 - Missing evidence is `Unknown` or `Blocked`, never a pass.
 
 Use the PowerShell wrappers in `scripts/` on Windows. They route shell checks through Git Bash rather than WSL.
+
+Retired renderer assets and milestone smoke/report code are preserved under
+`archive/legacy_true25d` and `archive/legacy_app_milestones`. Nothing under
+`archive/` is compiled, packaged, or treated as current product guidance.

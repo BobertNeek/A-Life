@@ -44,16 +44,15 @@ fn auxiliary_decoder_digest(
 #[test]
 fn n2048_layout_routes_and_decoder_partitions_are_exact() {
     let expected_lobes = [
-        (LobeKind::SensoryGrounding, 0, 256),
-        (LobeKind::MetabolicDrive, 256, 128),
-        (LobeKind::AuditorySpeech, 384, 128),
-        (LobeKind::GlyphVision, 512, 128),
-        (LobeKind::LexiconConcept, 640, 256),
-        (LobeKind::CoreAssociation, 896, 448),
-        (LobeKind::EpisodicMemory, 1_344, 256),
-        (LobeKind::WorkingMemory, 1_600, 128),
-        (LobeKind::MotorArbitration, 1_728, 224),
-        (LobeKind::HomeostaticRegulation, 1_952, 96),
+        (LobeKind::PerceptualIntegration, 0, 256),
+        (LobeKind::InteroceptiveMotivational, 256, 128),
+        (LobeKind::SocialCommunication, 384, 256),
+        (LobeKind::MultimodalAssociation, 640, 256),
+        (LobeKind::TemporalPredictive, 896, 448),
+        (LobeKind::MemoryInterface, 1_344, 256),
+        (LobeKind::WorkingContextExecutive, 1_600, 128),
+        (LobeKind::ActionPlanning, 1_728, 224),
+        (LobeKind::FlexibleReserve, 1_952, 96),
     ];
     let layout = N2048FoundationLayoutV1::lobe_layout();
     for (kind, start, len) in expected_lobes {
@@ -66,38 +65,73 @@ fn n2048_layout_routes_and_decoder_partitions_are_exact() {
     assert_eq!(layout.total_neurons(), 2_048);
 
     let expected_routes = [
-        (LobeKind::SensoryGrounding, LobeKind::CoreAssociation, 3_584),
-        (LobeKind::AuditorySpeech, LobeKind::CoreAssociation, 1_536),
-        (LobeKind::GlyphVision, LobeKind::CoreAssociation, 1_536),
         (
-            LobeKind::MetabolicDrive,
-            LobeKind::HomeostaticRegulation,
+            LobeKind::PerceptualIntegration,
+            LobeKind::TemporalPredictive,
+            3_584,
+        ),
+        (
+            LobeKind::SocialCommunication,
+            LobeKind::TemporalPredictive,
+            3_072,
+        ),
+        (
+            LobeKind::InteroceptiveMotivational,
+            LobeKind::FlexibleReserve,
             1_024,
         ),
         (
-            LobeKind::HomeostaticRegulation,
-            LobeKind::CoreAssociation,
+            LobeKind::FlexibleReserve,
+            LobeKind::TemporalPredictive,
             1_024,
         ),
+        (LobeKind::FlexibleReserve, LobeKind::ActionPlanning, 768),
         (
-            LobeKind::HomeostaticRegulation,
-            LobeKind::MotorArbitration,
-            768,
+            LobeKind::TemporalPredictive,
+            LobeKind::ActionPlanning,
+            3_072,
         ),
-        (LobeKind::CoreAssociation, LobeKind::MotorArbitration, 3_072),
+        (LobeKind::ActionPlanning, LobeKind::ActionPlanning, 1_536),
         (
-            LobeKind::MotorArbitration,
-            LobeKind::MotorArbitration,
+            LobeKind::TemporalPredictive,
+            LobeKind::WorkingContextExecutive,
             1_536,
         ),
-        (LobeKind::CoreAssociation, LobeKind::WorkingMemory, 1_536),
-        (LobeKind::WorkingMemory, LobeKind::CoreAssociation, 1_536),
-        (LobeKind::CoreAssociation, LobeKind::EpisodicMemory, 1_536),
-        (LobeKind::EpisodicMemory, LobeKind::CoreAssociation, 1_536),
-        (LobeKind::CoreAssociation, LobeKind::LexiconConcept, 1_536),
-        (LobeKind::LexiconConcept, LobeKind::CoreAssociation, 1_536),
-        (LobeKind::LexiconConcept, LobeKind::WorkingMemory, 768),
-        (LobeKind::WorkingMemory, LobeKind::LexiconConcept, 512),
+        (
+            LobeKind::WorkingContextExecutive,
+            LobeKind::TemporalPredictive,
+            1_536,
+        ),
+        (
+            LobeKind::TemporalPredictive,
+            LobeKind::MemoryInterface,
+            1_536,
+        ),
+        (
+            LobeKind::MemoryInterface,
+            LobeKind::TemporalPredictive,
+            1_536,
+        ),
+        (
+            LobeKind::TemporalPredictive,
+            LobeKind::MultimodalAssociation,
+            1_536,
+        ),
+        (
+            LobeKind::MultimodalAssociation,
+            LobeKind::TemporalPredictive,
+            1_536,
+        ),
+        (
+            LobeKind::MultimodalAssociation,
+            LobeKind::WorkingContextExecutive,
+            768,
+        ),
+        (
+            LobeKind::WorkingContextExecutive,
+            LobeKind::MultimodalAssociation,
+            512,
+        ),
     ];
     let route_specs = N2048FoundationLayoutV1::route_specs();
     assert_eq!(route_specs.len(), expected_routes.len());
@@ -110,8 +144,7 @@ fn n2048_layout_routes_and_decoder_partitions_are_exact() {
     );
     let expected_policies = [
         (0, 3_584, 0),
-        (0, 1_536, 0),
-        (0, 1_536, 0),
+        (0, 3_072, 0),
         (0, 1_024, 0),
         (0, 1_024, 0),
         (0, 768, 0),
@@ -148,8 +181,8 @@ fn n2048_layout_routes_and_decoder_partitions_are_exact() {
     let core_motor = route_specs
         .iter()
         .find(|route| {
-            route.source_lobe() == LobeKind::CoreAssociation
-                && route.target_lobe() == LobeKind::MotorArbitration
+            route.source_lobe() == LobeKind::TemporalPredictive
+                && route.target_lobe() == LobeKind::ActionPlanning
         })
         .unwrap();
     assert!(
@@ -167,7 +200,7 @@ fn n2048_layout_routes_and_decoder_partitions_are_exact() {
 
     let phenotype = compile(BrainCapacityClass::n2048(), 0x2048_F00D);
     assert_eq!(phenotype.lobe_layout(), &layout);
-    assert_eq!(phenotype.projections().len(), 18);
+    assert_eq!(phenotype.projections().len(), route_specs.len() + 2);
     for (index, (spec, projection)) in route_specs
         .iter()
         .zip(phenotype.projections().iter())
@@ -178,6 +211,19 @@ fn n2048_layout_routes_and_decoder_partitions_are_exact() {
         assert_eq!(projection.target_lobe(), spec.target_lobe());
         assert_eq!(projection.synapse_range().1, spec.synapse_count());
     }
+    let (social_start, social_len) = phenotype.projections()[1].synapse_range();
+    assert_eq!(social_len, 3_072);
+    let social_rows =
+        &phenotype.synapses()[social_start as usize..(social_start + social_len) as usize];
+    assert!(social_rows[..1_536]
+        .iter()
+        .all(|row| (384..512).contains(&row.source())));
+    assert!(social_rows[1_536..]
+        .iter()
+        .all(|row| (512..640).contains(&row.source())));
+    assert!(social_rows
+        .iter()
+        .all(|row| (896..1_344).contains(&row.target()) && row.route_index() == 1));
     assert_eq!(
         (
             phenotype.budgets().global.recurrent_synapses,
@@ -392,10 +438,10 @@ fn foundation_and_language_mismatch_reject_before_phenotype_construction() {
     let canonical = serde_json::to_value(&inputs).unwrap();
 
     for pointer in [
-        "/foundation_abi/capacity_class_id",
-        "/foundation_abi/layout_id",
-        "/foundation_abi/layout_digest/0",
-        "/foundation_abi/language_codebook/canonical_digest/0",
+        "/foundation_abi_selection/contract/capacity_class_id",
+        "/foundation_abi_selection/contract/layout_id",
+        "/foundation_abi_selection/contract/layout_digest/0",
+        "/foundation_abi_selection/contract/language_codebook/canonical_digest/0",
     ] {
         let mut forged = canonical.clone();
         let target = forged
@@ -408,7 +454,7 @@ fn foundation_and_language_mismatch_reject_before_phenotype_construction() {
 }
 
 #[test]
-fn legacy_no_foundation_compiler_inputs_keep_their_v3_wire_identity() {
+fn pre_v5_compiler_inputs_are_rejected_instead_of_silently_reinterpreted() {
     let capacity = BrainCapacityClass::n1024();
     let genome = BrainGenome::scaffold(0xAB10_1024, capacity.id());
     let development =
@@ -420,20 +466,12 @@ fn legacy_no_foundation_compiler_inputs_keep_their_v3_wire_identity() {
         SensorProfile::PrivilegedAffordanceV1,
     )
     .unwrap();
-    let expected_digest = inputs.canonical_digest();
     let mut legacy = serde_json::to_value(inputs).unwrap();
-    let binding = legacy["foundation_abi"].as_object_mut().unwrap();
-    for field in [
-        "foundation_id",
-        "foundation_version",
-        "compatibility_family_id",
-        "weight_asset",
-    ] {
-        binding.remove(field);
-    }
-    let migrated: PhenotypeCompilerInputs = serde_json::from_value(legacy).unwrap();
-    assert_eq!(migrated.canonical_digest(), expected_digest);
-    assert!(migrated.foundation_abi().foundation_id().is_none());
+    let object = legacy.as_object_mut().unwrap();
+    object.insert("schema_version".to_string(), serde_json::json!(3));
+    let selection = object.remove("foundation_abi_selection").unwrap();
+    object.insert("foundation_abi".to_string(), selection["contract"].clone());
+    assert!(serde_json::from_value::<PhenotypeCompilerInputs>(legacy).is_err());
 }
 
 #[test]
@@ -453,6 +491,22 @@ fn production_n2048_birth_loads_immutable_foundation_asset_and_binds_payload_ide
     )
     .unwrap();
     let foundation = phenotype.foundation_abi();
+    assert!(foundation.canonical_v2().is_none());
+    let migration = foundation.migrated_n2048_foundation_v1().unwrap();
+    assert_eq!(
+        migration.migration_recipe_digest(),
+        [
+            0x0ed9_76a6_7662_5381,
+            0x7f63_ccf0_ce75_07df,
+            0x8a99_0a43_017d_da13,
+            0x6323_baab_7821_2ea6,
+        ],
+        "the source-to-target endpoint recipe is an immutable ABI",
+    );
+    assert_eq!(
+        migration.runtime_address_map_digest(),
+        phenotype.persistent_address_map().digest(),
+    );
     assert_eq!(foundation.capacity_class_id(), BrainCapacityClass::N2048_ID);
     assert_eq!(
         foundation.foundation_id().unwrap().raw(),
@@ -484,7 +538,7 @@ fn production_n2048_birth_loads_immutable_foundation_asset_and_binds_payload_ide
         "heritable genome deltas must remain sparse"
     );
 
-    let inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
+    let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
         genome,
         &capacity,
         development,
@@ -497,6 +551,13 @@ fn production_n2048_birth_loads_immutable_foundation_asset_and_binds_payload_ide
         phenotype,
         "checkpoint reconstruction must resolve the same immutable foundation asset",
     );
+
+    let mut forged = serde_json::to_value(&phenotype).unwrap();
+    let recipe_word = forged
+        .pointer_mut("/foundation_abi_selection/contract/migration_recipe_digest/0")
+        .unwrap();
+    *recipe_word = serde_json::json!(recipe_word.as_u64().unwrap() ^ 1);
+    assert!(serde_json::from_value::<BrainPhenotype>(forged).is_err());
 }
 
 #[test]

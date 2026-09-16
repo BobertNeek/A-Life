@@ -1060,6 +1060,8 @@ fn memory_bank_from_portable(
         last_sequence_by_organism,
         family_index: std::collections::BTreeMap::new(),
         target_index: std::collections::BTreeMap::new(),
+        family_namespace_index: std::collections::BTreeMap::new(),
+        target_namespace_index: std::collections::BTreeMap::new(),
     };
     candidate_store.validate_for_capacity(config.capacity)?;
     if candidate_store.digest(config.capacity)? != asset.active_bank_digest {

@@ -26,13 +26,6 @@
       "max_size_bytes": 8192
     },
     {
-      "asset_id": "p35-playground-manifest",
-      "kind": "playground-manifest",
-      "relative_path": "examples/p35/playground_manifest.json",
-      "required": true,
-      "max_size_bytes": 8192
-    },
-    {
       "asset_id": "g20-tutorial-script",
       "kind": "tutorial-script",
       "relative_path": "examples/g20/tutorial_food_hazard_sleep_inspection.json",

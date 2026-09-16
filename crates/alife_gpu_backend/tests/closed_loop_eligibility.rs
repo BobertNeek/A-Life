@@ -212,16 +212,16 @@ fn pending_transaction_blocks_the_next_frame_until_gpu_discard() {
         2,
     ))
     .expect("required Vulkan backend");
+    let phenotype = support::n512_phenotype(71);
+    let physiology = support::test_physiology(71, &phenotype).unwrap();
     let handle = backend
-        .insert_brain(OrganismId(1), support::n512_phenotype(71))
+        .insert_brain(OrganismId(1), phenotype.clone())
         .unwrap();
     let first_frame = support::perception_frame(1, true, 2);
-    let first = backend
-        .tick_batch(&[(handle, first_frame)])
-        .unwrap()
-        .into_iter()
-        .next()
-        .unwrap();
+    let first =
+        support::tick_with_receptors(&mut backend, handle, &phenotype, &physiology, &first_frame)
+            .unwrap()
+            .1;
     assert_eq!(
         first.compact_readback_bytes,
         GPU_CLOSED_LOOP_TICK_READBACK_BYTES
@@ -258,21 +258,17 @@ fn pending_transaction_blocks_the_next_frame_until_gpu_discard() {
     );
     assert_eq!(backend.pending_eligibility(handle).unwrap(), None);
 
-    let second = backend
-        .tick_batch(&[(
-            handle,
-            support::perception_frame_for_profile_at_tick(
-                1,
-                3,
-                alife_core::SensorProfile::PrivilegedAffordanceV1,
-                false,
-                2,
-            ),
-        )])
-        .unwrap()
-        .into_iter()
-        .next()
-        .unwrap();
+    let second_frame = support::perception_frame_for_profile_at_tick(
+        1,
+        3,
+        alife_core::SensorProfile::PrivilegedAffordanceV1,
+        false,
+        2,
+    );
+    let second =
+        support::tick_with_receptors(&mut backend, handle, &phenotype, &physiology, &second_frame)
+            .unwrap()
+            .1;
     assert_eq!(
         second
             .pending_eligibility
@@ -297,18 +293,39 @@ fn discard_rejects_a_foreign_pending_identity_without_mutating_either_transactio
         2,
     ))
     .expect("required Vulkan backend");
+    let first_phenotype = support::n512_phenotype(72);
+    let second_phenotype = support::n512_phenotype(73);
+    let first_physiology = support::test_physiology(72, &first_phenotype).unwrap();
+    let second_physiology = support::test_physiology(73, &second_phenotype).unwrap();
     let first_handle = backend
-        .insert_brain(OrganismId(1), support::n512_phenotype(72))
+        .insert_brain(OrganismId(1), first_phenotype.clone())
         .unwrap();
     let second_handle = backend
-        .insert_brain(OrganismId(2), support::n512_phenotype(73))
+        .insert_brain(OrganismId(2), second_phenotype.clone())
         .unwrap();
-    let ticks = backend
-        .tick_batch(&[
-            (first_handle, support::perception_frame(1, true, 2)),
-            (second_handle, support::perception_frame(2, false, 2)),
-        ])
-        .unwrap();
+    let first_frame = support::perception_frame(1, true, 2);
+    let second_frame = support::perception_frame(2, false, 2);
+    let ticks = support::tick_chemistry_batch(
+        &mut backend,
+        &[
+            (
+                first_handle,
+                &first_phenotype,
+                &first_physiology,
+                &first_frame,
+            ),
+            (
+                second_handle,
+                &second_phenotype,
+                &second_physiology,
+                &second_frame,
+            ),
+        ],
+    )
+    .unwrap()
+    .into_iter()
+    .map(|(_, tick)| tick)
+    .collect::<Vec<_>>();
     let first_pending = ticks[0].pending_eligibility;
     let second_pending = ticks[1].pending_eligibility;
 
@@ -344,15 +361,15 @@ fn retirement_requires_the_pending_eligibility_transaction_to_be_resolved() {
         2,
     ))
     .expect("required Vulkan backend");
+    let phenotype = support::n512_phenotype(74);
+    let physiology = support::test_physiology(74, &phenotype).unwrap();
     let handle = backend
-        .insert_brain(OrganismId(1), support::n512_phenotype(74))
+        .insert_brain(OrganismId(1), phenotype.clone())
         .unwrap();
-    let tick = backend
-        .tick_batch(&[(handle, support::perception_frame(1, true, 2))])
+    let frame = support::perception_frame(1, true, 2);
+    let tick = support::tick_with_receptors(&mut backend, handle, &phenotype, &physiology, &frame)
         .unwrap()
-        .into_iter()
-        .next()
-        .unwrap();
+        .1;
 
     assert_eq!(
         backend.remove_brain(handle).unwrap_err(),

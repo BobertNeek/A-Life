@@ -112,6 +112,7 @@ pub enum DecoderHeadKind {
     ActionCandidate = 1,
     MemoryContext = 2,
     SpeechPayload = 3,
+    CognitiveContext = 4,
 }
 
 impl DecoderHeadKind {
@@ -123,6 +124,7 @@ impl DecoderHeadKind {
             1 => Ok(Self::ActionCandidate),
             2 => Ok(Self::MemoryContext),
             3 => Ok(Self::SpeechPayload),
+            4 => Ok(Self::CognitiveContext),
             _ => Err(ScaffoldContractError::PhenotypeCompile),
         }
     }

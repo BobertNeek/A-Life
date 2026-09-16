@@ -242,21 +242,6 @@ impl PreparedMemoryRecall {
         cognitive_context: CognitiveContextFrame,
     ) -> Result<Self, ScaffoldContractError> {
         cognitive_context.validate_contract()?;
-        let digest = cognitive_context.canonical_digest()?;
-        for candidate in &mut self.context.candidates {
-            let lane = usize::from(candidate.candidate_index) % digest.len();
-            let offset = (((digest[lane] & 0xff) as f32 + 1.0) / 256.0) * 0.03125;
-            if candidate.target_source_count > 0 {
-                if let Some(value) = candidate.target_latent.first_mut() {
-                    *value = (*value + offset).clamp(-1.0, 1.0);
-                }
-            }
-            if candidate.family_source_count > 0 {
-                if let Some(value) = candidate.family_value.first_mut() {
-                    *value = (*value + offset).clamp(-1.0, 1.0);
-                }
-            }
-        }
         self.cognitive_context = Some(cognitive_context);
         self.receipt.context_digest = self
             .context
@@ -1501,17 +1486,14 @@ impl MemoryBank {
         originating_tick: Tick,
     ) -> Result<Option<MemoryId>, ScaffoldContractError> {
         if let Some(record) = self.fast_record_for_sequence(sequence_id) {
-            if record.organism_id != organism_id
-                || record.selected_action_id != Some(action_id)
-            {
+            if record.organism_id != organism_id || record.selected_action_id != Some(action_id) {
                 return Err(ScaffoldContractError::InvalidDecisionEvidence);
             }
             return Ok(Some(record.memory_id));
         }
 
         let exact_sequence = self.candidate_store.records.values().find(|record| {
-            record.source_sequence_id == sequence_id
-                && record.organism_id_raw == organism_id.raw()
+            record.source_sequence_id == sequence_id && record.organism_id_raw == organism_id.raw()
         });
         if let Some(record) = exact_sequence {
             if record.family_raw != u16::from(family.raw())

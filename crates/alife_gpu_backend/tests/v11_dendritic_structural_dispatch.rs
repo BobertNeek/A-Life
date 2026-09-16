@@ -2,10 +2,11 @@
 
 mod support;
 
+use alife_core::sleep::SleepReplayEvidence;
 use alife_core::{
-    CandidateActionFamily, CoactivationEvidence, CompiledSynapseKind, DendriticBranch,
-    DendriticBranchSet, DendriticInputRef, OrganismId, SensorProfile, StructuralPlasticityConfig,
-    StructuralPlasticityState,
+    BrainCapacityClass, CandidateActionFamily, CoactivationEvidence, CompiledSynapseKind,
+    DendriticBranch, DendriticBranchSet, DendriticInputRef, OrganismId, SensorProfile,
+    StructuralPlasticityConfig, StructuralPlasticityState,
 };
 use alife_gpu_backend::{
     GpuClosedLoopBackend, GpuClosedLoopTick, GpuRuntimeProfile, GpuV11MutableStateProbe,
@@ -41,18 +42,19 @@ fn target_indexed_dendrites_visit_only_the_target_span(
         ],
     )?])?;
 
+    let physiology = support::test_physiology(10, &phenotype)?;
     let mut backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
-    let handle = backend.insert_brain(OrganismId(10), phenotype)?;
+    let handle = backend.insert_brain(OrganismId(10), phenotype.clone())?;
     backend.set_v11_dendritic_branches(handle, branches)?;
-    let frame = support::perception_frame_for_profile_at_tick(
+    let source = support::perception_frame_for_profile_at_tick(
         10,
         80,
         SensorProfile::PrivilegedAffordanceV1,
         true,
         1,
     );
-    let mut ticks = backend.tick_batch(&[(handle, frame)])?;
-    let tick = ticks.pop().expect("one dendritic tick");
+    let (_frame, tick) =
+        support::tick_with_receptors(&mut backend, handle, &phenotype, &physiology, &source)?;
     assert_eq!(tick.v11_work.dendritic.branches_evaluated, microsteps);
     assert_eq!(tick.v11_work.dendritic.inputs_evaluated, 2 * microsteps);
     assert_eq!(tick.v11_work.dendritic.work_units, 3 * microsteps);
@@ -126,6 +128,7 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
     .unwrap();
 
     let mut backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
+    let physiology = support::test_physiology(1, &phenotype)?;
     let control = backend.insert_brain(OrganismId(1), phenotype.clone())?;
     let branch_subject = backend.insert_brain(OrganismId(2), phenotype.clone())?;
     let growth_subject = backend.insert_brain(OrganismId(3), phenotype.clone())?;
@@ -144,24 +147,46 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
         )
     };
 
-    let baseline = backend.tick_batch(&[
-        (control, frame(1, 77)),
-        (branch_subject, frame(2, 77)),
-        (growth_subject, frame(3, 77)),
-        (prune_subject, frame(4, 77)),
-    ])?;
-    for tick in &baseline {
+    let baseline_sources = [frame(1, 77), frame(2, 77), frame(3, 77), frame(4, 77)];
+    let (_, baseline_ticks): (Vec<_>, Vec<_>) = support::tick_chemistry_batch(
+        &mut backend,
+        &[
+            (control, &phenotype, &physiology, &baseline_sources[0]),
+            (
+                branch_subject,
+                &phenotype,
+                &physiology,
+                &baseline_sources[1],
+            ),
+            (
+                growth_subject,
+                &phenotype,
+                &physiology,
+                &baseline_sources[2],
+            ),
+            (prune_subject, &phenotype, &physiology, &baseline_sources[3]),
+        ],
+    )?
+    .into_iter()
+    .unzip();
+    for tick in &baseline_ticks {
         discard(&mut backend, tick)?;
     }
 
     backend.set_v11_dendritic_branches(growth_subject, branches.clone())?;
     backend.set_v11_dendritic_branches(prune_subject, branches)?;
-    let branch_ticks = backend.tick_batch(&[
-        (control, frame(1, 78)),
-        (branch_subject, frame(2, 78)),
-        (growth_subject, frame(3, 78)),
-        (prune_subject, frame(4, 78)),
-    ])?;
+    let branch_sources = [frame(1, 78), frame(2, 78), frame(3, 78), frame(4, 78)];
+    let (branch_frames, branch_ticks): (Vec<_>, Vec<_>) = support::tick_chemistry_batch(
+        &mut backend,
+        &[
+            (control, &phenotype, &physiology, &branch_sources[0]),
+            (branch_subject, &phenotype, &physiology, &branch_sources[1]),
+            (growth_subject, &phenotype, &physiology, &branch_sources[2]),
+            (prune_subject, &phenotype, &physiology, &branch_sources[3]),
+        ],
+    )?
+    .into_iter()
+    .unzip();
     assert_ne!(
         branch_ticks[0].selection.logit.to_bits(),
         branch_ticks[1].selection.logit.to_bits()
@@ -170,7 +195,7 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
     assert!(branch_ticks[1].v11_work.dendritic.inputs_evaluated >= 2);
     assert!(branch_ticks[1].v11_work.dendritic.gated_branches > 0);
     assert_eq!(
-        frame(2, 78).candidates()[branch_ticks[1].selection.candidate_index as usize].family,
+        branch_frames[1].candidates()[branch_ticks[1].selection.candidate_index as usize].family,
         CandidateActionFamily::Inspect
     );
     for tick in &branch_ticks {
@@ -235,6 +260,28 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
         growth_checkpoint.sparse_spans[0].edges[0].route,
         u32::from(structural_route)
     );
+    let topology_readback_before = backend.mutable_slot_readback_metrics();
+    let growth_live_topology = backend.checkpoint_live_topology(growth_subject)?;
+    let topology_readback_after = backend.mutable_slot_readback_metrics();
+    assert_eq!(
+        topology_readback_after.calls - topology_readback_before.calls,
+        1,
+        "live topology capture must batch immutable plan and weight ranges into one readback"
+    );
+    assert!(topology_readback_after.bytes > topology_readback_before.bytes);
+    let mut tampered_topology = growth_live_topology.clone();
+    tampered_topology.canonical_digest[0] ^= 1;
+    assert!(tampered_topology
+        .validate_for_capacity(&BrainCapacityClass::n512())
+        .is_err());
+    assert_eq!(
+        growth_live_topology.total_synapse_count,
+        phenotype.budgets().global.total_synapses + 1
+    );
+    assert_eq!(
+        growth_live_topology.recurrent_synapse_count,
+        phenotype.budgets().global.recurrent_synapses + 1
+    );
     assert_eq!(
         backend.read_v11_mutable_state_for_test(
             growth_subject,
@@ -254,6 +301,15 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
     let prune_work = backend.apply_v11_structural_phase(prune_subject, &[])?;
     assert_eq!(prune_work.structural.pruned_edges, 1);
     assert_eq!(prune_work.structural.active_edges, 0);
+    let pruned_live_topology = backend.checkpoint_live_topology(prune_subject)?;
+    assert_eq!(
+        pruned_live_topology.total_synapse_count,
+        phenotype.budgets().global.total_synapses
+    );
+    assert_eq!(
+        pruned_live_topology.recurrent_synapse_count,
+        phenotype.budgets().global.recurrent_synapses
+    );
     assert_eq!(
         backend.read_v11_mutable_state_for_test(
             prune_subject,
@@ -262,14 +318,37 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
         )?,
         learned_state
     );
-    backend.apply_v11_sleep_structural_phase(prune_subject)?;
+    let replay = backend.build_sleep_replay_batch(prune_subject)?;
+    let evidence = SleepReplayEvidence::new(replay, Vec::new())?;
+    backend.apply_v11_sleep_structural_phase(prune_subject, &evidence)?;
 
-    let structural_ticks = backend.tick_batch(&[
-        (control, frame(1, 79)),
-        (branch_subject, frame(2, 79)),
-        (growth_subject, frame(3, 79)),
-        (prune_subject, frame(4, 79)),
-    ])?;
+    let structural_sources = [frame(1, 79), frame(2, 79), frame(3, 79), frame(4, 79)];
+    let (structural_frames, structural_ticks): (Vec<_>, Vec<_>) = support::tick_chemistry_batch(
+        &mut backend,
+        &[
+            (control, &phenotype, &physiology, &structural_sources[0]),
+            (
+                branch_subject,
+                &phenotype,
+                &physiology,
+                &structural_sources[1],
+            ),
+            (
+                growth_subject,
+                &phenotype,
+                &physiology,
+                &structural_sources[2],
+            ),
+            (
+                prune_subject,
+                &phenotype,
+                &physiology,
+                &structural_sources[3],
+            ),
+        ],
+    )?
+    .into_iter()
+    .unzip();
     assert_ne!(
         structural_ticks[2].selection.logit.to_bits(),
         structural_ticks[3].selection.logit.to_bits()
@@ -280,7 +359,8 @@ fn normal_tick_joins_dendrites_growth_pruning_and_bounded_work(
     assert!(structural_ticks[2].v11_work.structural.active_edges > 0);
     assert_eq!(structural_ticks[3].v11_work.structural.active_edges, 0);
     assert_eq!(
-        frame(3, 79).candidates()[structural_ticks[2].selection.candidate_index as usize].family,
+        structural_frames[2].candidates()[structural_ticks[2].selection.candidate_index as usize]
+            .family,
         CandidateActionFamily::Inspect
     );
     for tick in &structural_ticks {

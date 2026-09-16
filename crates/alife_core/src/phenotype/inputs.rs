@@ -5,12 +5,22 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
     AlphaStoragePolicy, BrainCapacityClass, BrainClassId, BrainGenome, CanonicalDigestBuilder,
-    DevelopmentState, FoundationAbiBinding, LobeRatioPlan, ScaffoldContractError, SensorProfile,
-    Validate,
+    DevelopmentState, FoundationAbiBinding, FoundationAbiSelection,
+    LegacyNano512CompatibilityAbiDescriptor, LobeRatioPlan, MigratedN2048FoundationV1Descriptor,
+    ScaffoldContractError, SensorProfile, Validate,
 };
 
-const INPUTS_SCHEMA_VERSION: u16 = 4;
-const INPUTS_DOMAIN: &[u8] = b"alife.phenotype.compiler-inputs.v4";
+const INPUTS_SCHEMA_VERSION: u16 = 5;
+const INPUTS_DOMAIN: &[u8] = b"alife.phenotype.compiler-inputs.v5";
+
+/// An explicit non-default application of immutable foundation weights.
+///
+/// `None` preserves the existing compiler behavior: exact weights for the
+/// legacy Nano512 admission and genome-derived weights for native layouts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FoundationWeightApplication {
+    Nano512FounderOverlayV1 { seed: u64 },
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PhenotypeCompilerInputs {
@@ -18,7 +28,11 @@ pub struct PhenotypeCompilerInputs {
     genome: BrainGenome,
     development: DevelopmentState,
     sensor_profile: SensorProfile,
-    foundation_abi: FoundationAbiBinding,
+    foundation_abi_selection: FoundationAbiSelection,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cognitive_channel_extension: Option<crate::CognitiveChannelExtensionV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    foundation_weight_application: Option<FoundationWeightApplication>,
     capacity_class_id: BrainClassId,
     capacity_digest: [u64; 4],
     canonical_digest: [u64; 4],
@@ -48,10 +62,85 @@ impl PhenotypeCompilerInputs {
         sensor_profile: SensorProfile,
         foundation_abi: FoundationAbiBinding,
     ) -> Result<Self, ScaffoldContractError> {
+        foundation_abi.validate_against(capacity)?;
+        Self::try_new_with_foundation_selection(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            FoundationAbiSelection::CanonicalV2(foundation_abi),
+        )
+    }
+
+    pub fn try_new_with_foundation_selection(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        foundation_abi_selection: FoundationAbiSelection,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_foundation_selection_and_application(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            foundation_abi_selection,
+            None,
+        )
+    }
+
+    pub(crate) fn try_new_with_foundation_selection_and_cognitive_extension(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        foundation_abi_selection: FoundationAbiSelection,
+        cognitive_channel_extension: crate::CognitiveChannelExtensionV1,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_foundation_selection_and_application_and_cognitive_extension(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            foundation_abi_selection,
+            None,
+            Some(cognitive_channel_extension),
+        )
+    }
+
+    fn try_new_with_foundation_selection_and_application(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        foundation_abi_selection: FoundationAbiSelection,
+        foundation_weight_application: Option<FoundationWeightApplication>,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_foundation_selection_and_application_and_cognitive_extension(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            foundation_abi_selection,
+            foundation_weight_application,
+            None,
+        )
+    }
+
+    fn try_new_with_foundation_selection_and_application_and_cognitive_extension(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        foundation_abi_selection: FoundationAbiSelection,
+        foundation_weight_application: Option<FoundationWeightApplication>,
+        cognitive_channel_extension: Option<crate::CognitiveChannelExtensionV1>,
+    ) -> Result<Self, ScaffoldContractError> {
         capacity.validate_contract()?;
         genome.validate_contract()?;
         development.validate_contract()?;
-        foundation_abi.validate_against(capacity)?;
+        foundation_abi_selection.validate_against(capacity, sensor_profile)?;
+        validate_weight_application(&foundation_abi_selection, foundation_weight_application)?;
         if genome.brain_class_id != capacity.id() || development.genome_id != genome.id {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
@@ -61,13 +150,65 @@ impl PhenotypeCompilerInputs {
             genome,
             development,
             sensor_profile,
-            foundation_abi,
+            foundation_abi_selection,
+            cognitive_channel_extension,
+            foundation_weight_application,
             capacity_class_id: capacity.id(),
             capacity_digest: capacity.canonical_digest(),
             canonical_digest: [0; 4],
         };
         value.canonical_digest = value.recompute_digest()?;
         Ok(value)
+    }
+
+    pub(crate) fn try_new_with_legacy_foundation_compatibility_abi(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        descriptor: LegacyNano512CompatibilityAbiDescriptor,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_foundation_selection(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            FoundationAbiSelection::legacy_nano512(descriptor),
+        )
+    }
+
+    pub(crate) fn try_new_with_migrated_n2048_foundation_v1(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        descriptor: MigratedN2048FoundationV1Descriptor,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_foundation_selection(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            FoundationAbiSelection::migrated_n2048(descriptor),
+        )
+    }
+
+    pub(crate) fn try_new_with_nano512_founder_overlay(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        descriptor: LegacyNano512CompatibilityAbiDescriptor,
+        seed: u64,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_foundation_selection_and_application(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            FoundationAbiSelection::legacy_nano512(descriptor),
+            Some(FoundationWeightApplication::Nano512FounderOverlayV1 { seed }),
+        )
     }
 
     pub const fn canonical_digest(&self) -> [u64; 4] {
@@ -79,8 +220,28 @@ impl PhenotypeCompilerInputs {
     pub const fn capacity_class_id(&self) -> BrainClassId {
         self.capacity_class_id
     }
-    pub const fn foundation_abi(&self) -> &FoundationAbiBinding {
-        &self.foundation_abi
+    pub const fn foundation_abi_selection(&self) -> &FoundationAbiSelection {
+        &self.foundation_abi_selection
+    }
+    pub const fn foundation_abi(&self) -> &FoundationAbiSelection {
+        &self.foundation_abi_selection
+    }
+    pub const fn cognitive_channel_extension(&self) -> Option<&crate::CognitiveChannelExtensionV1> {
+        self.cognitive_channel_extension.as_ref()
+    }
+    pub const fn foundation_weight_application(&self) -> Option<FoundationWeightApplication> {
+        self.foundation_weight_application
+    }
+    pub const fn legacy_foundation_compatibility_abi(
+        &self,
+    ) -> Option<&LegacyNano512CompatibilityAbiDescriptor> {
+        self.foundation_abi_selection
+            .legacy_nano512_compatibility_v1()
+    }
+    pub const fn migrated_n2048_foundation_v1(
+        &self,
+    ) -> Option<&MigratedN2048FoundationV1Descriptor> {
+        self.foundation_abi_selection.migrated_n2048_foundation_v1()
     }
     pub const fn genome(&self) -> &BrainGenome {
         &self.genome
@@ -96,7 +257,27 @@ impl PhenotypeCompilerInputs {
         capacity.validate_contract()?;
         self.genome.validate_contract()?;
         self.development.validate_contract()?;
-        self.foundation_abi.validate_against(capacity)?;
+        self.foundation_abi_selection
+            .validate_against(capacity, self.sensor_profile)?;
+        if let Some(extension) = self.cognitive_channel_extension {
+            extension.validate_contract()?;
+            let selected_extension = match &self.foundation_abi_selection {
+                FoundationAbiSelection::Nano512ActionCreditCandidateV2(candidate) => {
+                    candidate.cognitive_channel_extension()
+                }
+                _ => None,
+            };
+            if self.foundation_abi_selection.capacity_class_id()
+                != crate::BrainCapacityClass::N512_ID
+                || selected_extension != Some(&extension)
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        }
+        validate_weight_application(
+            &self.foundation_abi_selection,
+            self.foundation_weight_application,
+        )?;
         if self.schema_version != INPUTS_SCHEMA_VERSION
             || self.capacity_class_id != capacity.id()
             || self.capacity_digest != capacity.canonical_digest()
@@ -116,35 +297,20 @@ impl PhenotypeCompilerInputs {
         encode_genome(&mut d, &self.genome)?;
         encode_development(&mut d, &self.development)?;
         d.write_u16(self.sensor_profile.raw());
-        d.write_u16(self.foundation_abi.capacity_class_id().raw());
-        d.write_u64(self.foundation_abi.layout_id().0);
-        for byte in self.foundation_abi.layout_digest().bytes() {
-            d.write_u8(*byte);
+        self.foundation_abi_selection.write_canonical(&mut d);
+        if let Some(extension) = self.cognitive_channel_extension {
+            d.write_some();
+            extension.write_canonical(&mut d);
         }
-        if let (Some(id), Some(version), Some(family), Some(asset)) = (
-            self.foundation_abi.foundation_id(),
-            self.foundation_abi.foundation_version(),
-            self.foundation_abi.compatibility_family_id(),
-            self.foundation_abi.foundation_weight_asset(),
-        ) {
-            // No marker is emitted for the legacy no-foundation form, preserving
-            // its v3 digest exactly. Foundation-bound inputs use a reserved tag.
-            d.write_u8(0xF1);
-            d.write_u64(id.raw());
-            d.write_u32(version.raw());
-            d.write_u64(family.raw());
-            for byte in asset.digest().bytes() {
-                d.write_u8(*byte);
-            }
-            d.write_u32(asset.weight_count());
-        }
-        d.write_u32(self.foundation_abi.language_codebook().id().0);
-        for byte in self
-            .foundation_abi
-            .language_codebook()
-            .canonical_digest()
-            .bytes()
+        if let Some(FoundationWeightApplication::Nano512FounderOverlayV1 { seed }) =
+            self.foundation_weight_application
         {
+            d.write_u8(1);
+            d.write_u64(seed);
+        }
+        let language_codebook = self.foundation_abi_selection.language_codebook();
+        d.write_u32(language_codebook.id().0);
+        for byte in language_codebook.canonical_digest().bytes() {
             d.write_u8(*byte);
         }
         d.write_u16(self.capacity_class_id.raw());
@@ -166,7 +332,11 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             genome: BrainGenome,
             development: DevelopmentState,
             sensor_profile: SensorProfile,
-            foundation_abi: FoundationAbiBinding,
+            foundation_abi_selection: FoundationAbiSelection,
+            #[serde(default)]
+            cognitive_channel_extension: Option<crate::CognitiveChannelExtensionV1>,
+            #[serde(default)]
+            foundation_weight_application: Option<FoundationWeightApplication>,
             capacity_class_id: BrainClassId,
             capacity_digest: [u64; 4],
             canonical_digest: [u64; 4],
@@ -177,7 +347,9 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             genome: w.genome,
             development: w.development,
             sensor_profile: w.sensor_profile,
-            foundation_abi: w.foundation_abi,
+            foundation_abi_selection: w.foundation_abi_selection,
+            cognitive_channel_extension: w.cognitive_channel_extension,
+            foundation_weight_application: w.foundation_weight_application,
             capacity_class_id: w.capacity_class_id,
             capacity_digest: w.capacity_digest,
             canonical_digest: w.canonical_digest,
@@ -188,6 +360,21 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             .validate_against(&capacity)
             .map_err(D::Error::custom)?;
         Ok(value)
+    }
+}
+
+fn validate_weight_application(
+    selection: &FoundationAbiSelection,
+    application: Option<FoundationWeightApplication>,
+) -> Result<(), ScaffoldContractError> {
+    match application {
+        None => Ok(()),
+        Some(FoundationWeightApplication::Nano512FounderOverlayV1 { seed })
+            if seed != 0 && selection.legacy_nano512_compatibility_v1().is_some() =>
+        {
+            Ok(())
+        }
+        Some(_) => Err(ScaffoldContractError::PhenotypeCompile),
     }
 }
 
@@ -302,6 +489,10 @@ fn encode_genome(
     d.write_f32(plasticity.sleep_staging_rate())?;
     d.write_f32(plasticity.sleep_weight_limit())?;
     d.write_f32(plasticity.sleep_fast_decay_rate())?;
+    if let Some(profile) = plasticity.action_candidate_credit_profile() {
+        d.write_utf8("alife.action-candidate-credit.v1");
+        d.write_u8(profile.raw());
+    }
     g.cognitive_architecture().write_canonical(d)?;
     d.write_sequence_len(g.sensor_layout.channels.len());
     for row in &g.sensor_layout.channels {

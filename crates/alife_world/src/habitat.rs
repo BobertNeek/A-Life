@@ -396,6 +396,15 @@ impl HabitatAuthority {
         &self.memberships
     }
 
+    pub(crate) fn retire_creature(&mut self, organism_id: OrganismId) {
+        self.memberships
+            .retain(|row| row.organism_id != organism_id);
+        self.tags.retain(|row| row.organism_id != organism_id);
+        self.transfers.retain(|row| row.organism_id != organism_id);
+        // Keep surviving receipt IDs and the next IDs unchanged. Retirement
+        // leaves gaps in these ledgers, never reuses or renumbers their IDs.
+    }
+
     pub(crate) fn is_unassigned_default(&self) -> bool {
         self.habitats.len() == 1
             && self.habitats[0].id == HabitatId::DEFAULT_WILD
@@ -998,18 +1007,14 @@ impl HabitatAuthority {
             ));
         }
         let mut tagged_creatures = BTreeSet::new();
-        for (index, tag) in self.tags.iter().enumerate() {
-            let expected_sequence = u64::try_from(index)
-                .ok()
-                .and_then(|value| value.checked_add(1))
-                .ok_or(HabitatAuthorityError::MalformedTag(
-                    "tag sequence exhausted",
-                ))?;
-            if tag.sequence != expected_sequence {
+        let mut previous_tag_sequence = 0;
+        for tag in &self.tags {
+            if tag.sequence <= previous_tag_sequence || tag.sequence >= self.next_tag_sequence {
                 return Err(HabitatAuthorityError::MalformedTag(
-                    "tag sequences must be contiguous",
+                    "tag sequences must increase below the next sequence",
                 ));
             }
+            previous_tag_sequence = tag.sequence;
             let reserve = self
                 .habitat(tag.reserve_id)
                 .ok_or(HabitatAuthorityError::UnknownHabitat(tag.reserve_id))?;
@@ -1045,17 +1050,6 @@ impl HabitatAuthority {
                 });
             }
         }
-        let expected_next_tag = u64::try_from(self.tags.len())
-            .ok()
-            .and_then(|value| value.checked_add(1))
-            .ok_or(HabitatAuthorityError::MalformedTag(
-                "tag sequence exhausted",
-            ))?;
-        if self.next_tag_sequence != expected_next_tag {
-            return Err(HabitatAuthorityError::MalformedTag(
-                "next tag sequence does not follow the ledger",
-            ));
-        }
 
         if self.next_transfer_sequence == 0 {
             return Err(HabitatAuthorityError::MalformedTransfer(
@@ -1063,20 +1057,17 @@ impl HabitatAuthority {
             ));
         }
         let mut chains: BTreeMap<u64, (HabitatId, Tick, u64, Option<Tick>)> = BTreeMap::new();
-        for (index, transfer) in self.transfers.iter().enumerate() {
-            let expected_sequence = u64::try_from(index)
-                .ok()
-                .and_then(|value| value.checked_add(1))
-                .ok_or(HabitatAuthorityError::MalformedTransfer(
-                    "transfer sequence exhausted",
-                ))?;
-            if transfer.sequence != expected_sequence
+        let mut previous_transfer_sequence = 0;
+        for transfer in &self.transfers {
+            if transfer.sequence <= previous_transfer_sequence
+                || transfer.sequence >= self.next_transfer_sequence
                 || transfer.prior_habitat_id == transfer.new_habitat_id
             {
                 return Err(HabitatAuthorityError::MalformedTransfer(
-                    "transfer sequences must be contiguous and change habitat",
+                    "transfer sequences must increase below the next sequence and change habitat",
                 ));
             }
+            previous_transfer_sequence = transfer.sequence;
             if !known.contains(&transfer.organism_id.raw()) {
                 return Err(HabitatAuthorityError::UnknownCreature(transfer.organism_id));
             }
@@ -1122,17 +1113,6 @@ impl HabitatAuthority {
                     transfer.provenance.quarantine_until(),
                 ),
             );
-        }
-        let expected_next = u64::try_from(self.transfers.len())
-            .ok()
-            .and_then(|value| value.checked_add(1))
-            .ok_or(HabitatAuthorityError::MalformedTransfer(
-                "transfer sequence exhausted",
-            ))?;
-        if self.next_transfer_sequence != expected_next {
-            return Err(HabitatAuthorityError::MalformedTransfer(
-                "next transfer sequence does not follow the ledger",
-            ));
         }
         for membership in &self.memberships {
             match chains.get(&membership.organism_id.raw()) {

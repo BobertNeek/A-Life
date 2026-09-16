@@ -4,7 +4,7 @@ fn production_runtime_contains_no_cpu_shadow_or_neural_fallback_contract() {
     for relative in [
         "src/gpu_live_runtime.rs",
         "src/live_brain_bridge.rs",
-        "src/graphical_playground.rs",
+        "src/bevy_shell.rs",
     ] {
         let source = std::fs::read_to_string(root.join(relative)).unwrap();
         assert!(

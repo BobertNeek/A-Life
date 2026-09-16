@@ -300,10 +300,11 @@ fn features_for(
 ) -> Result<CandidateFeatureVector, ScaffoldContractError> {
     debug_assert_eq!(CANDIDATE_FEATURE_RESERVED_START_LANE, 18);
     debug_assert_eq!(CANDIDATE_FEATURE_COUNT, 24);
-    let planar_length = entity.relative_position.x.hypot(entity.relative_position.y);
+    // Match the grounded profile and Y-up game space, preserving [sin, cos].
+    let planar_length = entity.relative_position.x.hypot(entity.relative_position.z);
     let (bearing_sin, bearing_cos) = if planar_length > f32::EPSILON {
         (
-            entity.relative_position.y / planar_length,
+            entity.relative_position.z / planar_length,
             entity.relative_position.x / planar_length,
         )
     } else {

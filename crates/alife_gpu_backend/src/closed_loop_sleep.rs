@@ -4,7 +4,7 @@
 //! banks, and persists compact receipts. All replay-credit and weight-update
 //! mathematics execute in WGSL.
 
-use std::ops::Range;
+use std::{ops::Range, time::Instant};
 
 use alife_core::{
     compute_gpu_sleep_commit_digest, compute_gpu_sleep_input_weight_digest,
@@ -20,10 +20,101 @@ use bytemuck::{Pod, Zeroable};
 use crate::closed_loop_buffers::GpuFixedSlotUpload;
 use crate::{
     map_gpu_contract_error, pack_replay_eligibility_sample, unpack_replay_eligibility_sample,
-    GpuBrainHandle, GpuBrainSlot, GpuClosedLoopBackend, GpuConsolidationRequestRecord,
-    GpuFixedSlotRanges, GpuReplayEventRecord, GpuReplaySynapseSpanRecord, GpuSleepHeader,
-    GpuSlotLearningStateRecord,
+    GpuBrainCheckpointParts, GpuBrainHandle, GpuBrainSlot, GpuClosedLoopBackend,
+    GpuConsolidationRequestRecord, GpuFixedSlotRanges, GpuReplayEventRecord,
+    GpuReplaySynapseSpanRecord, GpuSleepHeader, GpuSlotLearningStateRecord,
 };
+
+pub(crate) fn replay_batch_from_checkpoint_parts(
+    parts: &GpuBrainCheckpointParts,
+    synapse_count: u32,
+) -> Result<BoundedReplayBatch, ScaffoldContractError> {
+    let capacity = u32::try_from(parts.replay_events.len())
+        .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+    let event_count = parts.replay_journal_event_count;
+    if capacity == 0 || event_count > capacity || parts.replay_journal_cursor >= capacity {
+        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+    }
+    let oldest = if event_count == capacity {
+        parts.replay_journal_cursor
+    } else {
+        0
+    };
+    let physical_order = (0..event_count)
+        .map(|offset| (oldest + offset) % capacity)
+        .collect::<Vec<_>>();
+    let events = physical_order
+        .iter()
+        .map(|physical| {
+            parts
+                .replay_events
+                .get(*physical as usize)
+                .copied()
+                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)
+                .and_then(decode_replay_event)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut synapse_spans = Vec::with_capacity(parts.replay_spans.len());
+    let mut eligibility_samples = Vec::with_capacity(
+        usize::try_from(event_count)
+            .ok()
+            .and_then(|count| count.checked_mul(parts.replay_spans.len()))
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?,
+    );
+    for (capture_index, physical_span) in parts.replay_spans.iter().enumerate() {
+        let expected_physical_start = u32::try_from(capture_index)
+            .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?
+            .checked_mul(capacity)
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        if physical_span.sample_start != expected_physical_start
+            || physical_span.sample_count != event_count
+            || physical_span.reserved != 0
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        let compact_start = u32::try_from(eligibility_samples.len())
+            .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        for (logical_index, physical_event) in physical_order.iter().copied().enumerate() {
+            let index = physical_span
+                .sample_start
+                .checked_add(physical_event)
+                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+            let packed = *parts
+                .replay_samples
+                .get(index as usize)
+                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+            let (captured_physical, eligibility_q15) = unpack_replay_eligibility_sample(packed);
+            if u32::from(captured_physical) != physical_event || eligibility_q15 == i16::MIN {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+            }
+            eligibility_samples.push(ReplayEligibilitySample {
+                event_index: u16::try_from(logical_index)
+                    .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?,
+                eligibility_q15,
+            });
+        }
+        synapse_spans.push(ReplaySynapseSpan {
+            local_synapse_id: physical_span.local_synapse_id,
+            sample_start: compact_start,
+            sample_count: event_count,
+            reserved: 0,
+        });
+    }
+    let mut batch = BoundedReplayBatch {
+        schema_version: BOUNDED_REPLAY_BATCH_SCHEMA_VERSION,
+        events,
+        synapse_spans,
+        eligibility_samples,
+        canonical_digest: [0; 4],
+    };
+    batch.canonical_digest = batch.recompute_canonical_digest()?;
+    batch.validate_contract(
+        capacity,
+        u32::try_from(parts.replay_samples.len()).unwrap_or(u32::MAX),
+        synapse_count,
+    )?;
+    Ok(batch)
+}
 
 pub type GpuSleepJobId = ConsolidationJobId;
 
@@ -122,6 +213,7 @@ pub(crate) struct SleepSlotSnapshot {
     pub(crate) active_eligibility_bank: u8,
     pub(crate) active_eligibility_generation: u64,
     pub(crate) replay_journal_generation: u64,
+    pub(crate) replay_journal_event_count: u32,
     pub(crate) transaction_generation: u64,
     pub(crate) sleep_plan: alife_core::SleepConsolidationPlan,
 }
@@ -149,6 +241,15 @@ impl From<&GpuConsolidationRequest> for GpuConsolidationRequestRecord {
 }
 
 impl GpuClosedLoopBackend {
+    pub fn has_bounded_sleep_phase_data(
+        &self,
+        handle: GpuBrainHandle,
+    ) -> Result<bool, ScaffoldContractError> {
+        Ok(replay_journal_has_events(
+            self.sleep_slot_snapshot(handle)?.replay_journal_event_count,
+        ))
+    }
+
     pub fn build_sleep_replay_batch(
         &mut self,
         handle: GpuBrainHandle,
@@ -509,6 +610,7 @@ impl GpuClosedLoopBackend {
                 bucket.buffers.neural_buffers()[2],
                 snapshot.ranges.immutable_plan_words.clone(),
                 "closed-loop-sleep-synaptogenesis-plan-readback",
+                None,
             )?;
             let immutable_weight_words = read_gpu_words(
                 &self.device,
@@ -516,6 +618,7 @@ impl GpuClosedLoopBackend {
                 bucket.buffers.neural_buffers()[3],
                 snapshot.ranges.immutable_weight_words.clone(),
                 "closed-loop-sleep-synaptogenesis-weight-readback",
+                None,
             )?;
             Some(
                 GpuFixedSlotUpload::from_existing_slot(
@@ -585,7 +688,10 @@ impl GpuClosedLoopBackend {
         resident.active_weight_generation = staged.output_generation;
         resident.active_eligibility_bank = staged.output_eligibility_bank;
         resident.active_eligibility_generation = staged.eligibility_reset_generation;
+        resident.inactive_eligibility_generation = 0;
         resident.replay_journal_generation = staged.replay_journal_generation;
+        resident.replay_journal_cursor = staged.replay_journal_cursor;
+        resident.replay_journal_event_count = staged.replay_journal_event_count;
         resident.transaction_generation = join_pair([
             state.transaction_generation_lo,
             state.transaction_generation_hi,
@@ -786,6 +892,7 @@ impl GpuClosedLoopBackend {
             active_eligibility_bank: resident.active_eligibility_bank,
             active_eligibility_generation: resident.active_eligibility_generation,
             replay_journal_generation: resident.replay_journal_generation,
+            replay_journal_event_count: resident.replay_journal_event_count,
             transaction_generation: resident.transaction_generation,
             sleep_plan: resident.sleep_plan,
         })
@@ -807,6 +914,7 @@ impl GpuClosedLoopBackend {
             bucket.buffers.neural_buffers()[6],
             ranges.mutable_state_words.clone(),
             "closed-loop-sleep-mutable-readback",
+            Some(&self.mutable_slot_readback_counters),
         )
     }
 
@@ -828,6 +936,7 @@ impl GpuClosedLoopBackend {
             bucket.buffers.neural_buffers()[3],
             snapshot.ranges.layout.genetic_weight_words.clone(),
             "closed-loop-test-genetic-readback",
+            None,
         )?;
         let active_words = words
             .get(..snapshot.brain_slot.record().synapse_count as usize)
@@ -1023,6 +1132,7 @@ impl GpuClosedLoopBackend {
             bucket.buffers.neural_buffers()[2],
             snapshot.ranges.immutable_plan_words.clone(),
             "closed-loop-test-slot-plan-digest",
+            None,
         )?;
         let weight_words = read_gpu_words(
             &self.device,
@@ -1030,6 +1140,7 @@ impl GpuClosedLoopBackend {
             bucket.buffers.neural_buffers()[3],
             snapshot.ranges.immutable_weight_words.clone(),
             "closed-loop-test-slot-weight-digest",
+            None,
         )?;
         let mutable_words = self.read_slot_mutable_words(handle, &snapshot.ranges)?;
         let mut digest = CanonicalDigestBuilder::new(b"ALIFE-GPU-SLEEP-SLOT-FULL-TEST-V1");
@@ -1044,6 +1155,22 @@ impl GpuClosedLoopBackend {
             }
         }
         Ok(digest.finish256())
+    }
+}
+
+const fn replay_journal_has_events(event_count: u32) -> bool {
+    event_count > 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::replay_journal_has_events;
+
+    #[test]
+    fn replay_availability_tracks_the_host_event_count() {
+        assert!(!replay_journal_has_events(0));
+        assert!(replay_journal_has_events(1));
+        assert!(replay_journal_has_events(u32::MAX));
     }
 }
 
@@ -1560,6 +1687,7 @@ fn read_gpu_words(
     source: &wgpu::Buffer,
     words: Range<u32>,
     label: &'static str,
+    metrics: Option<&crate::closed_loop_runtime::GpuMutableSlotReadbackCounters>,
 ) -> Result<Vec<u32>, ScaffoldContractError> {
     let count = words
         .end
@@ -1584,14 +1712,22 @@ fn read_gpu_words(
         let _ = sender.send(result);
     });
     let submission = queue.submit(Some(command));
-    if device
+    let poll_started = Instant::now();
+    let poll_failed = device
         .poll(wgpu::PollType::Wait {
             submission_index: Some(submission),
             timeout: None,
         })
-        .is_err()
-        || receiver.recv().ok().and_then(Result::ok).is_none()
-    {
+        .is_err();
+    let poll_wait_ns = u64::try_from(poll_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    let receive_started = Instant::now();
+    let receive_failed = receiver.recv().ok().and_then(Result::ok).is_none();
+    let map_receive_wait_ns =
+        u64::try_from(receive_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    if let Some(metrics) = metrics {
+        metrics.record(size, poll_wait_ns, map_receive_wait_ns);
+    }
+    if poll_failed || receive_failed {
         readback.unmap();
         return Err(ScaffoldContractError::NeuralBackendUnavailable);
     }

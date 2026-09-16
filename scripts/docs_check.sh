@@ -24,7 +24,6 @@ for authority in "${authorities[@]}"; do
 done
 
 test -f crates/alife_tools/tests/fixtures/P04_5_performance_contract.md
-test -f examples/ca43/TESTER_FEEDBACK_TEMPLATE.md
 
 for obsolete in \
   docs/master_spec.md \
@@ -88,13 +87,13 @@ forbid_text() {
 
 require_text README.md 'production cognition remains GPU-authoritative' 'GPU-authoritative production statement'
 require_text README.md 'v2.0 controlling architecture' 'controlling v2.0 architecture link'
-require_text README.md 'renderer does not yet project live runtime transforms, births, or deaths' 'open presentation bridge'
+require_text README.md 'projects live authoritative creature positions, adds newborns, and applies runtime retirement events' 'live presentation bridge'
 require_text AGENTS.md 'A-Life v2.0 is the single normative architecture' 'root v2.0 authority rule'
 require_text AGENTS.md 'implementation choices are not architecture unless v2.0 explicitly locks' 'implementation is not architecture rule'
 require_text docs/architecture/README.md 'Current codebase pass/fail status' 'architecture compliance separation'
 require_text docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md '**Status:** CONTROLLING.' 'controlling publication status'
 require_text docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md 'AOA-ADM-007' 'implementation mechanism requirement'
-require_text docs/STATUS.md 'active voxel renderer remains a save-derived projection' 'honest current product boundary'
+require_text docs/STATUS.md 'Each changed presentation frame moves matching creature roots, creates missing newborn roots, and reconciles retired identities.' 'live presentation boundary'
 require_text docs/STATUS.md 'EI1 retained 2,640 source-bound descendant receipts' 'EI1 retained receipt count'
 require_text docs/STATUS.md 'Its promotion verdict is `Blocked`' 'EI1 blocked verdict'
 require_text docs/ARCHITECTURE.md 'world perception + unscored legal candidates' 'score-free world candidate boundary'
@@ -103,6 +102,10 @@ require_text docs/ROADMAP.md 'Live GPU-to-voxel projection' 'first roadmap phase
 require_text docs/ROADMAP.md 'Autonomous production lifecycle' 'lifecycle roadmap phase'
 require_text docs/DEVELOPMENT.md 'scripts/docs_check.ps1' 'Windows docs gate'
 require_text docs/DEVELOPMENT.md 'source-bound physical-adapter evidence' 'hardware evidence rule'
+require_text docs/DEVELOPMENT.md 'archive/legacy_app_milestones' 'legacy app milestone archive'
+require_text crates/alife_game_app/README.md 'validate-production-assets' 'current game-app validator'
+forbid_text crates/alife_game_app/README.md 'headless-smoke' 'removed game-app command'
+forbid_text crates/alife_game_app/README.md 'gpu-product-smoke' 'removed game-app command'
 require_text docs/EVIDENCE.md 'A report bound to an older source remains valid historical evidence for that source.' 'historical evidence scope'
 require_text docs/EVIDENCE.md 'promotion verdict `Blocked`' 'EI1 evidence verdict'
 require_text docs/REFERENCE.md 'CPU neural helpers: reference, test, or developer use only.' 'CPU helper boundary'
@@ -120,7 +123,7 @@ require_text crates/alife_world/AGENTS.md 'Death archiving completes before GPU 
 for authority in "${authorities[@]}"; do
   forbid_text "${authority}" 'EI1 promotion passed' 'false EI1 promotion claim'
   forbid_text "${authority}" 'N4096 is production' 'false N4096 production claim'
-  forbid_text "${authority}" 'GPU work, if any, is gated by CPU parity' 'obsolete CPU parity gate'
+  forbid_text "${authority}" 'GPU work, if any, is gated by CPU parity' 'obsolete CPU comparison requirement'
 done
 
 if [[ "$(($(wc -l < docs/architecture/requirement_registry.csv) - 1))" -ne 365 ]]; then

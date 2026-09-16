@@ -1,6 +1,6 @@
 use alife_core::{
     ActiveTilePolicy, BiologicalPriority, BrainClassRegistry, BrainScaleTier, LobeKind,
-    ProjectionType, RoutingMask, ScaffoldContractError, UpdateCadence,
+    ProjectionType, ScaffoldContractError, UpdateCadence,
 };
 
 #[test]
@@ -43,16 +43,15 @@ fn standard2048_lobe_topology_matches_reference_boundaries() {
     let layout = &spec.lobe_layout;
 
     let expected = [
-        (LobeKind::SensoryGrounding, 0, 256),
-        (LobeKind::MetabolicDrive, 256, 128),
-        (LobeKind::AuditorySpeech, 384, 128),
-        (LobeKind::GlyphVision, 512, 128),
-        (LobeKind::LexiconConcept, 640, 256),
-        (LobeKind::CoreAssociation, 896, 448),
-        (LobeKind::EpisodicMemory, 1344, 256),
-        (LobeKind::WorkingMemory, 1600, 128),
-        (LobeKind::MotorArbitration, 1728, 224),
-        (LobeKind::HomeostaticRegulation, 1952, 96),
+        (LobeKind::PerceptualIntegration, 0, 336),
+        (LobeKind::InteroceptiveMotivational, 336, 128),
+        (LobeKind::MultimodalAssociation, 464, 448),
+        (LobeKind::TemporalPredictive, 912, 272),
+        (LobeKind::WorkingContextExecutive, 1184, 208),
+        (LobeKind::MemoryInterface, 1392, 144),
+        (LobeKind::ActionPlanning, 1536, 208),
+        (LobeKind::SocialCommunication, 1744, 160),
+        (LobeKind::FlexibleReserve, 1904, 144),
     ];
 
     for (kind, start, len) in expected {
@@ -65,23 +64,23 @@ fn standard2048_lobe_topology_matches_reference_boundaries() {
         assert!(!kind.purpose().is_empty());
     }
 
-    assert_eq!(spec.motor_logical_nodes, 224);
+    assert_eq!(spec.motor_logical_nodes, 208);
     assert_eq!(spec.motor_physical_stride, 256);
     assert_eq!(
-        layout.lobe_by_neuron_index(1727).unwrap().kind,
-        LobeKind::WorkingMemory
+        layout.lobe_by_neuron_index(1391).unwrap().kind,
+        LobeKind::WorkingContextExecutive
     );
     assert_eq!(
-        layout.lobe_by_neuron_index(1728).unwrap().kind,
-        LobeKind::MotorArbitration
+        layout.lobe_by_neuron_index(1536).unwrap().kind,
+        LobeKind::ActionPlanning
     );
     assert_eq!(
-        layout.lobe_by_neuron_index(1951).unwrap().kind,
-        LobeKind::MotorArbitration
+        layout.lobe_by_neuron_index(1743).unwrap().kind,
+        LobeKind::ActionPlanning
     );
     assert_eq!(
-        layout.lobe_by_neuron_index(1952).unwrap().kind,
-        LobeKind::HomeostaticRegulation
+        layout.lobe_by_neuron_index(1904).unwrap().kind,
+        LobeKind::FlexibleReserve
     );
     assert!(layout.lobe_by_neuron_index(2048).is_none());
 }
@@ -114,7 +113,10 @@ fn routing_matrix_references_enabled_lobes_and_uses_budget_metadata() {
     routing.validate_for_layout(&spec.lobe_layout).unwrap();
 
     let sensory_to_association = routing
-        .route(LobeKind::SensoryGrounding, LobeKind::CoreAssociation)
+        .route(
+            LobeKind::PerceptualIntegration,
+            LobeKind::TemporalPredictive,
+        )
         .unwrap();
     assert_eq!(
         sensory_to_association.projection_type,
@@ -134,7 +136,7 @@ fn routing_matrix_references_enabled_lobes_and_uses_budget_metadata() {
     );
 
     let memory_feedback = routing
-        .route(LobeKind::EpisodicMemory, LobeKind::CoreAssociation)
+        .route(LobeKind::MemoryInterface, LobeKind::TemporalPredictive)
         .unwrap();
     assert_eq!(memory_feedback.update_cadence, UpdateCadence::Hot5To15Hz);
     assert_eq!(
@@ -154,28 +156,15 @@ fn routing_matrix_references_enabled_lobes_and_uses_budget_metadata() {
 }
 
 #[test]
-fn routing_validation_rejects_disabled_lobe_references() {
+fn routing_validation_rejects_missing_founder_lobe_references() {
     let spec = BrainClassRegistry::spec_for_tier(BrainScaleTier::Nano512).unwrap();
-    assert!(
-        !spec
-            .lobe_layout
-            .region(LobeKind::LanguageExpansion)
-            .unwrap()
-            .enabled
-    );
-
-    let mut invalid = spec.routing_matrix.clone();
-    invalid.push(RoutingMask {
-        source_lobe: LobeKind::LanguageExpansion,
-        target_lobe: LobeKind::MotorArbitration,
-        projection_type: ProjectionType::FeedForward,
-        active_tile_policy: ActiveTilePolicy::Decimated,
-        update_cadence: UpdateCadence::Hot1To5Hz,
-        priority: BiologicalPriority::NonEssential,
-    });
+    let mut invalid_layout = spec.lobe_layout.clone();
+    invalid_layout
+        .regions
+        .retain(|region| region.kind != LobeKind::SocialCommunication);
 
     assert_eq!(
-        invalid.validate_for_layout(&spec.lobe_layout),
+        spec.routing_matrix.validate_for_layout(&invalid_layout),
         Err(ScaffoldContractError::RoutingReferencesDisabledLobe)
     );
 }

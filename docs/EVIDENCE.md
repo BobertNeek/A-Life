@@ -104,4 +104,6 @@ These remain open regardless of UI completeness or historical plan status.
 - `Unknown` means the evidence does not measure the value.
 - `Missed` means a required populated evidence row was not produced.
 
+Missing hardware is `Unavailable`, not fallback success.
+
 Do not convert any of the last four states into a pass by imputation, relabelling, CPU substitution, or omission.

@@ -18,9 +18,9 @@ use alife_world::persistence::{
     PortableNeuronHomeostasisV1, PortableReplayJournalV1, RetainedLearningRecoverySaveState,
     ThrottleReplaySaveState, TopologySidecarSaveSummary,
     GPU_BACKEND_PROVENANCE_SAVE_SCHEMA_VERSION, GPU_BRAIN_HOMEOSTASIS_LANES_PER_NEURON,
-    GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION, GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
-    GPU_BRAIN_WEIGHT_LAYER_FAST, GPU_BRAIN_WEIGHT_LAYER_LIFETIME,
-    RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION,
+    GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION, GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION,
+    GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION, GPU_BRAIN_WEIGHT_LAYER_FAST,
+    GPU_BRAIN_WEIGHT_LAYER_LIFETIME, RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION,
 };
 use alife_world::TrackedObjectRegistry;
 
@@ -29,6 +29,123 @@ fn asset(label: &str) -> GpuBrainAssetRef {
         asset_id: label.to_string(),
         digest: PortableAssetDigest::for_bytes(label.as_bytes()),
     }
+}
+
+#[test]
+fn r06_exact_cognitive_checkpoint_preserves_acquired_predictor_and_rejects_legacy() {
+    use alife_core::{
+        CognitiveContextFrame, CognitiveWorkReceipt, DendriticBranchSet,
+        GroundedSuccessorPredictor, JointMotorCondition, MotorChannel, MotorChannelFactor,
+        PredictionTargetReceipt, SemanticStateVector, StructuralPlasticityConfig,
+        StructuralPlasticityState, Vec3f,
+    };
+    use alife_world::persistence::{
+        ExactCognitiveCheckpointState, V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
+    };
+    let organism = OrganismId(71);
+    let tick = Tick::new(9);
+    let condition = JointMotorCondition::new(vec![MotorChannelFactor {
+        channel: MotorChannel::Vocal,
+        primitive: ActionId(7),
+        intensity: 0.8,
+        duration_ticks: 1,
+        direction: Vec3f::ZERO,
+        stand_off_distance: 0.0,
+        confidence: 0.9,
+        target: Some(alife_core::ActionTarget::new(
+            Some(alife_core::WorldEntityId(91)),
+            None,
+        )),
+        payload: vec![3, 17],
+        coordination_group: 0,
+    }])
+    .unwrap();
+    let target = PredictionTargetReceipt::for_successor(
+        organism,
+        ExperienceSequenceId(1),
+        ActionId(7),
+        tick,
+        [1, 2, 3, 4],
+        SemanticStateVector::new(vec![0.5, 0.25]).unwrap(),
+        condition,
+        SemanticStateVector::new(vec![0.1, 0.9]).unwrap(),
+    )
+    .unwrap();
+    let mut predictor = GroundedSuccessorPredictor::default();
+    for _ in 0..8 {
+        predictor.observe(&target).unwrap();
+    }
+    let prediction = predictor
+        .predict(target.source_state(), target.motor_condition())
+        .unwrap();
+    let mut context =
+        CognitiveContextFrame::empty(organism, ExperienceSequenceId(1), tick).unwrap();
+    context.prediction.source_digest = target.source_digest;
+    context.prediction.semantic_state_abi = target.source_state.abi_version;
+    context.prediction.source_state = Some(target.source_state.clone());
+    context.prediction.motor_condition_magnitude =
+        alife_core::NormalizedScalar::new(target.motor_condition_magnitude).unwrap();
+    context.prediction.category_coverage = Some(prediction.category_coverage);
+    let checkpoint = ExactCognitiveCheckpointState {
+        schema_version: V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
+        organism_id: organism,
+        checkpoint_tick: tick,
+        cognitive_context: context,
+        predictor,
+        selected_motor_bundle: None,
+        cognitive_work: CognitiveWorkReceipt::zero(),
+        sleep_state: SleepState::awake_at(tick),
+        last_sleep_work: None,
+        dendritic_branches: DendriticBranchSet::new(Vec::new()).unwrap(),
+        structural_plasticity: StructuralPlasticityState::new(
+            512,
+            StructuralPlasticityConfig::default(),
+        )
+        .unwrap(),
+        structural_edit_receipts: Vec::new(),
+        last_sleep_report: None,
+    };
+    let encoded = checkpoint.encode().unwrap();
+    let restored = ExactCognitiveCheckpointState::decode(&encoded).unwrap();
+    assert_eq!(restored, checkpoint);
+    assert_eq!(
+        restored
+            .predictor
+            .predict(target.source_state(), target.motor_condition())
+            .unwrap(),
+        prediction
+    );
+    let mut legacy = serde_json::to_value(&checkpoint).unwrap();
+    legacy["predictor"] = serde_json::json!({"semantic_state_abi":1,"semantic_state_count":2,
+        "motor_condition_abi":1,"input_feature_count":285,"learning_rate":0.25,
+        "weights":[0.125],"last_update":null});
+    let retained_legacy_bytes = serde_json::to_vec(&legacy).unwrap();
+    let untouched = retained_legacy_bytes.clone();
+    assert!(ExactCognitiveCheckpointState::decode(&retained_legacy_bytes).is_err());
+    assert_eq!(retained_legacy_bytes, untouched);
+    assert_eq!(
+        ExactCognitiveCheckpointState::decode(&encoded).unwrap(),
+        checkpoint
+    );
+}
+
+#[test]
+fn live_topology_selector_is_fail_closed_across_v5_and_v6() {
+    let mut save = save_for_sleep(sleep_state(SleepPhase::Awake, ConsolidationState::None));
+    save.validate().unwrap();
+
+    save.schema_version = GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION;
+    assert!(
+        save.validate().is_err(),
+        "v6 must carry an explicit topology"
+    );
+
+    save.schema_version = GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION;
+    save.live_structural_topology = Some(asset("forged-live-topology"));
+    assert!(
+        save.validate().is_err(),
+        "v5 must not silently accept a topology field it cannot interpret"
+    );
 }
 
 fn backend_provenance() -> GpuBackendProvenanceSave {
@@ -148,13 +265,15 @@ fn save_for_sleep(sleep: SleepState) -> GpuBrainSaveState {
             | ConsolidationState::Completed { .. }
     );
     GpuBrainSaveState {
-        schema_version: GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
+        schema_version: GPU_BRAIN_SAVE_STATE_LEGACY_SCHEMA_VERSION,
         organism_id,
         phenotype_hash: PhenotypeHash([1, 2, 3, 4]),
         capacity_class_id: BrainCapacityClass::n512().id(),
         sensor_profile,
         immutable_phenotype: asset("immutable-phenotype"),
         phenotype_compiler_inputs: asset("compiler-inputs"),
+        live_structural_topology: None,
+        legacy_nano512_compatibility_receipt: None,
         active_weight_generation: if committed { 10 } else { 9 },
         active_weight_bank: if committed { 1 } else { 0 },
         active_eligibility_bank: 0,
@@ -177,6 +296,7 @@ fn save_for_sleep(sleep: SleepState) -> GpuBrainSaveState {
         activation_state: asset("activations"),
         neuron_homeostasis: asset("neuron-homeostasis"),
         checkpoint_tick: Tick::new(40),
+        exact_cognitive_state: None,
         last_learning_replay_key: None,
         pending_eligibility: None,
         pending_experience_transaction: None,
@@ -408,6 +528,67 @@ fn completed_sleep_promotion_moves_exact_staging_refs_into_committed_main_state(
 }
 
 #[test]
+fn gpu_checkpoint_asset_reference_enumeration_structurally_covers_every_optional_class() {
+    let mut save = save_for_sleep(sleep_state(SleepPhase::Awake, ConsolidationState::None));
+    // This fixture deliberately combines phase-specific references that cannot
+    // coexist in one valid checkpoint. The contract under test is enumeration.
+    save.live_structural_topology = Some(asset("live-topology"));
+    save.exact_cognitive_state = Some(asset("exact-cognitive"));
+    save.pending_experience_transaction = Some(asset("pending-experience"));
+    save.memory.compaction.staged_bank_asset = Some(asset("memory-staged"));
+    save.memory.retained_learning = Some(RetainedLearningRecoverySaveState {
+        schema_version: RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION,
+        organism_id_raw: save.organism_id.raw(),
+        pending: pending_eligibility(),
+        sealed_patch_asset: asset("retained-learning-sealed-patch"),
+        neural_receptor_frame_asset: asset("retained-learning-receptors"),
+        attempts: 1,
+        last_error_code: "neural-backend-unavailable".to_owned(),
+    });
+    save.sleep_assets = GpuSleepAssetState {
+        replay_batch: Some(asset("sleep-replay")),
+        lifetime_staging: Some(asset("sleep-lifetime-staging")),
+        fast_staging: Some(asset("sleep-fast-staging")),
+        eligibility_staging: Some(asset("sleep-eligibility-staging")),
+        replay_journal_staging: Some(asset("sleep-replay-journal-staging")),
+    };
+
+    let mut actual = save
+        .asset_references()
+        .into_iter()
+        .map(|asset| asset.asset_id.as_str())
+        .collect::<Vec<_>>();
+    actual.sort_unstable();
+    let mut expected = vec![
+        "activations",
+        "compiler-inputs",
+        "eligibility",
+        "exact-cognitive",
+        "fast",
+        "immutable-phenotype",
+        "lifetime",
+        "live-topology",
+        "memory-active",
+        "memory-staged",
+        "neuron-homeostasis",
+        "pending-experience",
+        "replay",
+        "retained-learning-receptors",
+        "retained-learning-sealed-patch",
+        "sleep-eligibility-staging",
+        "sleep-fast-staging",
+        "sleep-lifetime-staging",
+        "sleep-replay",
+        "sleep-replay-journal-staging",
+        "throttle-sequence",
+        "topology",
+    ];
+    expected.sort_unstable();
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn gpu_checkpoint_requires_exact_enclosing_manifest_references() {
     let save = save_for_sleep(sleep_state(SleepPhase::Awake, ConsolidationState::None));
     let refs = [
@@ -625,4 +806,17 @@ fn portable_replay_journal_preserves_bounded_ring_identity_and_empty_reset_state
     };
     reset.canonical_digest = reset.recompute_canonical_digest().unwrap();
     reset.validate().unwrap();
+}
+
+#[test]
+fn legacy_pending_json_stays_absent_and_malformed_index_is_rejected() {
+    let pending = pending_eligibility();
+    let value = serde_json::to_value(pending).unwrap();
+    assert!(value.get("joint_selection").is_none());
+    let restored: PendingEligibilityCheckpoint = serde_json::from_value(value).unwrap();
+    assert_eq!(restored, pending);
+    restored.validate_contract().unwrap();
+    let mut malformed = restored;
+    malformed.candidate_index = u16::MAX;
+    assert!(malformed.validate_contract().is_err());
 }

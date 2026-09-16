@@ -133,27 +133,30 @@ impl BodyState {
             },
             exposed_locus: kind as u16 + 1,
         });
-        Self {
+        let mut value = Self {
             organs,
             energy,
             health: 1.0,
             injury: 0.0,
             temperature_stress: 0.0,
             sleeping: false,
-        }
+        };
+        value.refresh_compatibility_projections();
+        value
     }
 
     fn apply_event(
         self,
+        previous_tick: Tick,
         next_tick: Tick,
         event: BodyEventDelta,
         phenotype: &CreaturePhenotype,
+        max_catch_up_steps: u32,
+        energy_use: Option<f32>,
+        repair_signal: Option<f32>,
     ) -> Self {
         let injury_gain = event.damage * (1.0 - phenotype.body.injury_resistance);
         let recovery = event.sleep_recovery;
-        let injury = clamp01(
-            self.injury + injury_gain - recovery * (0.10 + 0.20 * phenotype.body.injury_resistance),
-        );
         let temperature_stress = clamp01(
             self.temperature_stress
                 + event.temperature_stress * (1.0 - phenotype.body.temperature_tolerance)
@@ -161,16 +164,19 @@ impl BodyState {
         );
         let mut organs = self.organs;
         for organ in &mut organs {
-            let cadence_due = next_tick
-                .raw()
-                .is_multiple_of(u64::from(organ.cadence_ticks));
+            let cadence_steps = crossed_boundaries(
+                previous_tick,
+                next_tick,
+                organ.cadence_ticks,
+                max_catch_up_steps,
+            );
             let local_damage = match organ.kind {
                 OrganKind::Circulatory | OrganKind::Locomotor => injury_gain,
                 OrganKind::NeuralSupport => injury_gain * 0.35,
                 _ => injury_gain * 0.15,
             };
-            organ.damage = clamp01(organ.damage + local_damage - recovery * organ.repair_capacity);
-            organ.integrity = clamp01(organ.integrity - local_damage + recovery * 0.15);
+            organ.damage = clamp01(organ.damage + local_damage);
+            organ.integrity = clamp01(organ.integrity - local_damage);
             let event_share = match organ.kind {
                 OrganKind::Locomotor => event.energy * 0.35,
                 OrganKind::NeuralSupport => event.energy * 0.25,
@@ -184,18 +190,29 @@ impl BodyState {
                 }
                 _ => event.nutrition * phenotype.body.metabolic_efficiency * 0.15,
             };
-            let cadence_cost = if cadence_due {
-                organ.energetic_cost * 0.01
+            let periodic_upkeep =
+                organ.energetic_cost * 0.01 * cadence_steps as f32 * energy_use.unwrap_or(1.0);
+            // Legacy genomes without repair receptors retain their old sleep response.
+            // Chemical repair spends existing reserve; it cannot create energy by healing.
+            let sleep_energy = if repair_signal.is_none() {
+                recovery * organ.repair_capacity * 0.2
             } else {
                 0.0
             };
             organ.energy = clamp01(
-                organ.energy
-                    + event_share
-                    + nutrition_gain
-                    + recovery * organ.repair_capacity * 0.2
-                    - cadence_cost,
+                organ.energy + event_share + nutrition_gain + sleep_energy - periodic_upkeep,
             );
+            if let Some(signal) = repair_signal {
+                let repair = (signal * organ.repair_capacity * cadence_steps as f32)
+                    .min(organ.damage.max(1.0 - organ.integrity))
+                    .min(organ.energy);
+                organ.damage = clamp01(organ.damage - repair);
+                organ.integrity = clamp01(organ.integrity + repair);
+                organ.energy -= repair;
+            } else {
+                organ.damage = clamp01(organ.damage - recovery * organ.repair_capacity);
+                organ.integrity = clamp01(organ.integrity + recovery * 0.15);
+            }
             organ.temperature_stress = if organ.kind == OrganKind::Thermoregulatory {
                 temperature_stress
             } else {
@@ -206,7 +223,7 @@ impl BodyState {
             organs,
             energy: self.energy,
             health: self.health,
-            injury,
+            injury: self.injury,
             temperature_stress,
             sleeping: recovery > 0.0,
         };
@@ -229,8 +246,36 @@ impl BodyState {
         for organ in &mut self.organs {
             organ.energy = energy;
         }
-        self.energy = energy;
+        self.refresh_compatibility_projections();
         Ok(())
+    }
+
+    /// Debit the current body-energy projection from local organ reserves in
+    /// proportion to each organ's reserve. This preserves local heterogeneity
+    /// while reducing the compatibility mean by the applied debit.
+    pub fn debit_energy_pro_rata(
+        &mut self,
+        requested_debit: f32,
+    ) -> Result<f32, ScaffoldContractError> {
+        validate_finite(requested_debit)?;
+        if requested_debit < 0.0 {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        self.validate_contract()?;
+
+        let applied_debit = requested_debit.min(self.energy);
+        if applied_debit == 0.0 {
+            return Ok(0.0);
+        }
+
+        let total_energy = self.organs.iter().map(|organ| organ.energy).sum::<f32>();
+        let total_debit = applied_debit * ORGAN_KIND_COUNT as f32;
+        let scale = (1.0 - total_debit / total_energy).max(0.0);
+        for organ in &mut self.organs {
+            organ.energy = clamp01(organ.energy * scale);
+        }
+        self.refresh_compatibility_projections();
+        Ok(applied_debit)
     }
 
     pub fn set_health(&mut self, health: f32) -> Result<(), ScaffoldContractError> {
@@ -285,7 +330,7 @@ impl BodyState {
             energetic_cost: 0.1,
             exposed_locus: kind as u16 + 1,
         });
-        let value = Self {
+        let mut value = Self {
             organs,
             energy,
             health,
@@ -293,6 +338,7 @@ impl BodyState {
             temperature_stress,
             sleeping,
         };
+        value.refresh_compatibility_projections();
         value.validate_contract()?;
         Ok(value)
     }
@@ -503,6 +549,25 @@ pub struct ReproductionReadiness {
 }
 
 impl ReproductionReadiness {
+    fn physiological_flags(
+        body: BodyState,
+        homeostasis: &HomeostaticSnapshot,
+        phenotype: &CreaturePhenotype,
+    ) -> (bool, bool, bool) {
+        let healthy_enough = body.health >= 0.55 && body.injury <= 0.45;
+        let energy_sufficient = body.energy >= 0.35 && homeostasis.drives.brain_atp >= 0.25;
+        let hormone_ready = homeostasis.drives.reproductive_drive
+            >= phenotype.chemistry.reproductive_threshold
+            && homeostasis.hormones.developmental_hormone >= 0.20;
+        (healthy_enough, energy_sufficient, hormone_ready)
+    }
+
+    fn is_fresh_at_age(&self, age: Tick, reproduction_ticks: u32) -> bool {
+        reproduction_ticks > 0
+            && age.raw() >= self.last_update_tick.raw()
+            && age.raw() - self.last_update_tick.raw() < u64::from(reproduction_ticks)
+    }
+
     fn derive(
         last_update_tick: Tick,
         body: BodyState,
@@ -511,11 +576,8 @@ impl ReproductionReadiness {
         mating_opportunity: f32,
         phenotype: &CreaturePhenotype,
     ) -> Result<Self, ScaffoldContractError> {
-        let healthy_enough = body.health >= 0.55 && body.injury <= 0.45;
-        let energy_sufficient = body.energy >= 0.35 && homeostasis.drives.brain_atp >= 0.25;
-        let hormone_ready = homeostasis.drives.reproductive_drive
-            >= phenotype.chemistry.reproductive_threshold
-            && homeostasis.hormones.developmental_hormone >= 0.20;
+        let (healthy_enough, energy_sufficient, hormone_ready) =
+            Self::physiological_flags(body, homeostasis, phenotype);
         let ready = development.puberty_reached
             && healthy_enough
             && energy_sufficient
@@ -599,7 +661,7 @@ impl BiochemistryState {
             reproduction,
             cadence,
         };
-        value.validate_contract()?;
+        value.validate_against(phenotype)?;
         Ok(value)
     }
 
@@ -630,7 +692,7 @@ impl BiochemistryState {
         neural: Option<&NeuralEmissionFrame>,
         phenotype: &CreaturePhenotype,
     ) -> Result<Self, ScaffoldContractError> {
-        self.validate_contract()?;
+        self.validate_against(phenotype)?;
         event.validate_contract()?;
         phenotype.brain_genome.validate_contract()?;
         if phenotype.source_genome_id != self.source_genome_id {
@@ -658,13 +720,26 @@ impl BiochemistryState {
             self.cadence.reproduction_ticks,
             self.cadence.max_catch_up_steps,
         );
+        // Read the previous chemical state once. Body events feed the next chemistry
+        // update below, closing the feedback loop without another simulation pass.
+        let (energy_use, repair_signal) = self
+            .graph_state
+            .organ_regulation(&phenotype.chemistry.biochemical)?;
         let upkeep =
             PassiveBodyUpkeepPolicy::upkeep_event(phenotype, self.cadence, metabolic_steps);
         let event = BodyEventDelta {
-            energy: signed_clamp(event.energy + upkeep.energy),
+            energy: signed_clamp(event.energy + upkeep.energy * energy_use.unwrap_or(1.0)),
             ..event
         };
-        let body = self.body.apply_event(next_tick, event, phenotype);
+        let body = self.body.apply_event(
+            self.tick,
+            next_tick,
+            event,
+            phenotype,
+            self.cadence.max_catch_up_steps,
+            energy_use,
+            repair_signal,
+        );
         body.validate_contract()?;
         let development = if development_steps > 0 {
             DevelopmentReadiness::derive(
@@ -711,8 +786,45 @@ impl BiochemistryState {
             reproduction,
             cadence: self.cadence,
         };
-        value.validate_contract()?;
+        value.validate_against(phenotype)?;
         Ok(value)
+    }
+
+    /// Checks cached readiness against the current biology and its bounded
+    /// reproduction-cadence interval.
+    pub fn is_reproduction_ready_at(
+        &self,
+        current_tick: Tick,
+        current_age: Tick,
+        phenotype: &CreaturePhenotype,
+    ) -> bool {
+        let (healthy_enough, energy_sufficient, hormone_ready) =
+            ReproductionReadiness::physiological_flags(self.body, &self.homeostasis, phenotype);
+        self.tick == current_tick
+            && self.homeostasis.tick == current_tick
+            && self.development.age_ticks == current_age
+            && self
+                .reproduction
+                .is_fresh_at_age(current_age, self.cadence.reproduction_ticks)
+            && self.reproduction.ready
+            && self.reproduction.mating_opportunity >= 0.50
+            && self.development.puberty_reached
+            && healthy_enough
+            && energy_sufficient
+            && hormone_ready
+            && phenotype.reproduction.fertility > 0.0
+    }
+
+    pub fn validate_against(
+        &self,
+        phenotype: &CreaturePhenotype,
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_contract()?;
+        if self.source_genome_id != phenotype.source_genome_id {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        self.graph_state
+            .validate_against(&phenotype.chemistry.biochemical)
     }
 
     pub const fn graph_state(&self) -> &BiochemicalGraphState {
@@ -742,6 +854,7 @@ impl Validate for BiochemistryState {
         self.reproduction.validate_contract()?;
         self.cadence.validate_contract()?;
         if self.homeostasis.tick != self.tick
+            || self.graph_state.tick() != self.tick
             || self.development.age_ticks.raw() > self.tick.raw()
             || self.development.last_update_tick.raw() > self.tick.raw()
             || self.reproduction.last_update_tick.raw() > self.development.age_ticks.raw()
@@ -807,6 +920,75 @@ fn signed_clamp(value: f32) -> f32 {
 mod tests {
     use super::*;
     use crate::{BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity};
+
+    #[test]
+    fn inherited_chemical_controls_change_upkeep_and_pay_for_repair() {
+        let genome = CreatureGenome::early_mammal_founder(
+            0xE10_3200,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        // Alter the inherited response, not acquired hormone concentrations.
+        let mut wire = serde_json::to_value(&genome).unwrap();
+        for side in ["maternal", "paternal"] {
+            let receptors = wire["chemistry"]["graph"][side]["receptors"]
+                .as_array_mut()
+                .unwrap();
+            for receptor in receptors {
+                if receptor["target"] == "OrganRepair" {
+                    receptor["gain"] = serde_json::json!(0.0);
+                }
+            }
+        }
+        let no_repair: CreatureGenome = serde_json::from_value(wire).unwrap();
+        let no_repair = no_repair.express().unwrap();
+        let mut state = BiochemistryState::new(&phenotype, Tick(600)).unwrap();
+        state.body.set_health(0.5).unwrap();
+        state.body.set_energy(0.8).unwrap();
+        // Injury first enters chemistry, then affects the following body update.
+        let injury = BodyEventDelta {
+            damage: 0.1,
+            ..BodyEventDelta::zero()
+        };
+        let state = state.advance(Tick(601), injury, &phenotype).unwrap();
+        let repaired = state
+            .advance(Tick(613), BodyEventDelta::zero(), &phenotype)
+            .unwrap();
+        let unrepaired = state
+            .advance(Tick(613), BodyEventDelta::zero(), &no_repair)
+            .unwrap();
+        assert!(repaired.body.health > unrepaired.body.health);
+        assert!(repaired.body.energy < unrepaired.body.energy);
+        repaired.validate_against(&phenotype).unwrap();
+
+        let body = state.body;
+        let run = |energy, repair| {
+            body.apply_event(
+                Tick(601),
+                Tick(613),
+                BodyEventDelta::zero(),
+                &phenotype,
+                MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
+                Some(energy),
+                Some(repair),
+            )
+        };
+        assert!(run(0.25, 0.0).energy > run(1.0, 0.0).energy);
+        let mut exhausted = body;
+        exhausted.set_energy(0.0).unwrap();
+        let after = exhausted.apply_event(
+            Tick(601),
+            Tick(613),
+            BodyEventDelta::zero(),
+            &phenotype,
+            MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
+            Some(1.0),
+            Some(1.0),
+        );
+        assert_eq!(after.health, exhausted.health);
+        assert_eq!(after.energy, 0.0);
+    }
 
     #[test]
     fn newborn_at_late_world_tick_starts_development_at_biological_age_zero() {

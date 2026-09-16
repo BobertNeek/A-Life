@@ -559,7 +559,7 @@ impl WorldOrganismRecord {
             return Err(ScaffoldContractError::InvalidId);
         }
 
-        self.biochemistry.validate_contract()?;
+        self.biochemistry.validate_against(&self.phenotype)?;
         self.cognitive_work.validate_contract()?;
         if !self.cognitive_energy_debit.is_finite() || self.cognitive_energy_debit < 0.0 {
             return Err(ScaffoldContractError::ScalarOutOfRange);
@@ -612,22 +612,28 @@ impl WorldOrganismRecord {
         let original_state_graph = self.state_graph.clone();
         let original_work = self.cognitive_work;
         let original_debit = self.cognitive_energy_debit;
-        let applied_debit = requested_debit.min(self.biochemistry.body.energy);
 
-        self.biochemistry
-            .body
-            .set_energy(self.biochemistry.body.energy - applied_debit)?;
-        self.advance_body_state_ref()?;
-        self.cognitive_work = receipt;
-        self.cognitive_energy_debit = applied_debit;
-        if let Err(error) = self.validate_contract() {
-            self.biochemistry = original_biochemistry;
-            self.state_graph = original_state_graph;
-            self.cognitive_work = original_work;
-            self.cognitive_energy_debit = original_debit;
-            return Err(error.into());
+        let result = (|| -> Result<f32, ScaffoldContractError> {
+            let applied_debit = self
+                .biochemistry
+                .body
+                .debit_energy_pro_rata(requested_debit)?;
+            self.advance_body_state_ref()?;
+            self.cognitive_work = receipt;
+            self.cognitive_energy_debit = applied_debit;
+            self.validate_contract()?;
+            Ok(applied_debit)
+        })();
+        match result {
+            Ok(applied_debit) => Ok(applied_debit),
+            Err(error) => {
+                self.biochemistry = original_biochemistry;
+                self.state_graph = original_state_graph;
+                self.cognitive_work = original_work;
+                self.cognitive_energy_debit = original_debit;
+                Err(error.into())
+            }
         }
-        Ok(applied_debit)
     }
 
     pub fn advance_biology(
@@ -642,13 +648,14 @@ impl WorldOrganismRecord {
         let original_state_graph = self.state_graph.clone();
         self.validate_contract()?;
         let next_age = self.age_at(next_tick)?;
-        let next = self
-            .biochemistry
-            .advance_with_age(next_tick, next_age, event, &self.phenotype)
-            .map_err(OrganismRegistryError::InvalidRecord)?;
-        self.biochemistry = next;
-        self.advance_body_state_ref()?;
-        if let Err(error) = self.validate_contract() {
+        let result = (|| -> Result<(), ScaffoldContractError> {
+            self.biochemistry =
+                self.biochemistry
+                    .advance_with_age(next_tick, next_age, event, &self.phenotype)?;
+            self.advance_body_state_ref()?;
+            self.validate_contract()
+        })();
+        if let Err(error) = result {
             self.biochemistry = original_biochemistry;
             self.state_graph = original_state_graph;
             return Err(error.into());
@@ -669,12 +676,18 @@ impl WorldOrganismRecord {
         let original_state_graph = self.state_graph.clone();
         self.validate_contract()?;
         let next_age = self.age_at(next_tick)?;
-        self.biochemistry = self
-            .biochemistry
-            .advance_with_neural_emission(next_tick, next_age, event, Some(neural), &self.phenotype)
-            .map_err(OrganismRegistryError::InvalidRecord)?;
-        self.advance_body_state_ref()?;
-        if let Err(error) = self.validate_contract() {
+        let result = (|| -> Result<(), ScaffoldContractError> {
+            self.biochemistry = self.biochemistry.advance_with_neural_emission(
+                next_tick,
+                next_age,
+                event,
+                Some(neural),
+                &self.phenotype,
+            )?;
+            self.advance_body_state_ref()?;
+            self.validate_contract()
+        })();
+        if let Err(error) = result {
             self.biochemistry = original_biochemistry;
             self.state_graph = original_state_graph;
             return Err(error.into());
@@ -732,24 +745,33 @@ impl WorldOrganismRecord {
     ) -> Result<(), ScaffoldContractError> {
         self.validate_contract()?;
         candidate.validate_contract()?;
+        let expected_revision = self
+            .embodiment
+            .revision()
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        Tick::validate_monotonic(self.embodiment.source_tick(), candidate.source_tick())?;
         if candidate.entity_id() != self.world_entity_id
-            || candidate.revision() != self.embodiment.revision().saturating_add(1)
+            || candidate.revision() != expected_revision
             || candidate.source_tick().raw() > self.biochemistry.tick.raw()
         {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
         let original_embodiment = self.embodiment.clone();
         let original_graph = self.state_graph.clone();
-        self.embodiment = candidate;
-        self.state_graph.transaction_revision = self
-            .state_graph
-            .transaction_revision
-            .checked_add(1)
-            .ok_or(ScaffoldContractError::InvalidId)?;
-        self.state_graph.embodiment.revision = self.embodiment.revision();
-        self.state_graph.embodiment.causal_tick = self.embodiment.source_tick();
-        self.state_graph.embodiment.content_digest = embodiment_digest(&self.embodiment)?;
-        if let Err(error) = self.validate_contract() {
+        let result = (|| {
+            self.embodiment = candidate;
+            self.state_graph.transaction_revision = self
+                .state_graph
+                .transaction_revision
+                .checked_add(1)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            self.state_graph.embodiment.revision = self.embodiment.revision();
+            self.state_graph.embodiment.causal_tick = self.embodiment.source_tick();
+            self.state_graph.embodiment.content_digest = embodiment_digest(&self.embodiment)?;
+            self.validate_contract()
+        })();
+        if let Err(error) = result {
             self.embodiment = original_embodiment;
             self.state_graph = original_graph;
             return Err(error);
@@ -768,23 +790,26 @@ impl WorldOrganismRecord {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
         let original = self.state_graph.clone();
-        self.state_graph.transaction_revision = self
-            .state_graph
-            .transaction_revision
-            .checked_add(1)
-            .ok_or(ScaffoldContractError::InvalidId)?;
-        for (subsystem, digest) in [
-            (&mut self.state_graph.brain, brain_digest),
-            (&mut self.state_graph.memory, memory_digest),
-        ] {
-            subsystem.revision = subsystem
-                .revision
+        let result = (|| {
+            self.state_graph.transaction_revision = self
+                .state_graph
+                .transaction_revision
                 .checked_add(1)
                 .ok_or(ScaffoldContractError::InvalidId)?;
-            subsystem.causal_tick = tick;
-            subsystem.content_digest = digest;
-        }
-        if let Err(error) = self.validate_contract() {
+            for (subsystem, digest) in [
+                (&mut self.state_graph.brain, brain_digest),
+                (&mut self.state_graph.memory, memory_digest),
+            ] {
+                subsystem.revision = subsystem
+                    .revision
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                subsystem.causal_tick = tick;
+                subsystem.content_digest = digest;
+            }
+            self.validate_contract()
+        })();
+        if let Err(error) = result {
             self.state_graph = original;
             return Err(error);
         }
@@ -1028,6 +1053,28 @@ impl WorldOrganismRegistry {
         self.records_by_organism.insert(organism_id.raw(), record);
         self.organism_by_world_entity
             .insert(world_entity_id.raw(), organism_id);
+        Ok(())
+    }
+
+    pub(crate) fn replace_existing_exact(
+        &mut self,
+        replacement: WorldOrganismRecord,
+    ) -> Result<(), OrganismRegistryError> {
+        replacement.validate_contract()?;
+        let organism_id = replacement.organism_id;
+        let world_entity_id = replacement.world_entity_id;
+        let current = self
+            .records_by_organism
+            .get(&organism_id.raw())
+            .ok_or(OrganismRegistryError::UnknownOrganism(organism_id))?;
+        if current.world_entity_id != world_entity_id
+            || self.organism_by_world_entity.get(&world_entity_id.raw()) != Some(&organism_id)
+        {
+            return Err(OrganismRegistryError::IndexMismatch);
+        }
+
+        self.records_by_organism
+            .insert(organism_id.raw(), replacement);
         Ok(())
     }
 
@@ -1318,7 +1365,7 @@ mod tests {
         assert_eq!(
             result,
             Err(OrganismRegistryError::InvalidRecord(
-                ScaffoldContractError::InvalidId,
+                ScaffoldContractError::BrainOwnershipMismatch,
             ))
         );
         assert!(!closure_called);
@@ -1335,7 +1382,7 @@ mod tests {
         assert_eq!(
             result,
             Err(OrganismRegistryError::InvalidRecord(
-                ScaffoldContractError::InvalidId,
+                ScaffoldContractError::BrainOwnershipMismatch,
             ))
         );
         assert_eq!(*registry.get(organism_id).unwrap().biochemistry(), before);
@@ -1396,5 +1443,86 @@ mod tests {
             ))
         );
         assert_eq!(*registry.get(organism_id).unwrap().biochemistry(), before);
+    }
+
+    #[test]
+    fn exhausted_body_revision_rolls_back_the_complete_record() {
+        let genome = CreatureGenome::early_mammal_founder(
+            0xE10_3201,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let mut record = WorldOrganismRecord::newborn(
+            OrganismId(1),
+            WorldEntityId(101),
+            genome,
+            phenotype,
+            Tick::ZERO,
+        )
+        .unwrap();
+        record.state_graph.body_biochemistry.revision = u64::MAX;
+        let before = record.clone();
+
+        assert!(record
+            .advance_biology(Tick::new(1), BodyEventDelta::zero())
+            .is_err());
+        assert_eq!(record, before);
+    }
+
+    #[test]
+    fn exhausted_memory_revision_rolls_back_cognitive_sealing() {
+        let genome = CreatureGenome::early_mammal_founder(
+            0xE10_3202,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let mut record = WorldOrganismRecord::newborn(
+            OrganismId(2),
+            WorldEntityId(102),
+            genome,
+            phenotype,
+            Tick::ZERO,
+        )
+        .unwrap();
+        record.state_graph.memory.revision = u64::MAX;
+        let before = record.clone();
+
+        assert!(record
+            .seal_cognitive_subsystems(Tick::ZERO, [1; 4], [2; 4])
+            .is_err());
+        assert_eq!(record, before);
+    }
+
+    #[test]
+    fn exhausted_embodiment_revision_rejects_replacement_without_mutation() {
+        let genome = CreatureGenome::early_mammal_founder(
+            0xE10_3203,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let record = WorldOrganismRecord::newborn(
+            OrganismId(3),
+            WorldEntityId(103),
+            genome,
+            phenotype,
+            Tick::ZERO,
+        )
+        .unwrap();
+        let mut encoded = serde_json::to_value(record).unwrap();
+        encoded["embodiment"]["revision"] = serde_json::Value::from(u64::MAX);
+        encoded["state_graph"]["embodiment"]["revision"] = serde_json::Value::from(u64::MAX);
+        let mut record: WorldOrganismRecord = serde_json::from_value(encoded).unwrap();
+        record.state_graph.embodiment.content_digest =
+            embodiment_digest(&record.embodiment).unwrap();
+        record.validate_contract().unwrap();
+        let before = record.clone();
+
+        assert!(record
+            .replace_embodiment_state(before.embodiment.clone())
+            .is_err());
+        assert_eq!(record, before);
     }
 }

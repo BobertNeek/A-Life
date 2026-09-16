@@ -1,9 +1,11 @@
 use std::ops::{Deref, DerefMut};
 
-use alife_core::{PhenotypeGrowthMigration, ScaffoldContractError, Tick};
+use alife_core::{
+    BrainPhenotype, OrganismId, PhenotypeGrowthMigration, ScaffoldContractError, Tick,
+};
 use alife_gpu_backend::{
-    GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuClosedLoopBackend,
-    GpuCuratedResidencyCohort, GpuCuratedResidencyOutcome, GpuResearchGrowthEquivalenceReceipt,
+    GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuClosedLoopBackend, GpuCuratedResidencyCohort,
+    GpuCuratedResidencyOutcome, GpuResearchGrowthEquivalenceReceipt,
     GpuResearchGrowthHandoffOutcome,
 };
 
@@ -30,6 +32,13 @@ pub struct DurableGpuCheckpointRef {
     pub checkpoint_tick: Tick,
     pub manifest_digest: String,
     pub neural_state_digest: [u64; 4],
+}
+
+/// Proof that one exact durable reference passed monotonicity validation
+/// against the session's previously published checkpoint authority.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DurableGpuCheckpointMonotonicityPermit {
+    checkpoint: DurableGpuCheckpointRef,
 }
 
 impl DurableGpuCheckpointRef {
@@ -94,6 +103,15 @@ impl GpuSessionAuthority {
         &mut self,
         checkpoint: DurableGpuCheckpointRef,
     ) -> Result<(), ScaffoldContractError> {
+        let permit = self.prevalidate_durable_checkpoint(checkpoint)?;
+        self.install_prevalidated_durable_checkpoint(permit);
+        Ok(())
+    }
+
+    pub fn prevalidate_durable_checkpoint(
+        &self,
+        checkpoint: DurableGpuCheckpointRef,
+    ) -> Result<DurableGpuCheckpointMonotonicityPermit, ScaffoldContractError> {
         if self
             .latest_durable_checkpoint
             .as_ref()
@@ -101,12 +119,20 @@ impl GpuSessionAuthority {
         {
             return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
         }
-        self.latest_durable_checkpoint = Some(checkpoint);
-        Ok(())
+        Ok(DurableGpuCheckpointMonotonicityPermit { checkpoint })
+    }
+
+    pub fn install_prevalidated_durable_checkpoint(
+        &mut self,
+        permit: DurableGpuCheckpointMonotonicityPermit,
+    ) {
+        self.latest_durable_checkpoint = Some(permit.checkpoint);
     }
 
     pub fn fail_stop(&mut self, cause: GpuSessionFailStopCause) {
-        self.state = GpuSessionAuthorityState::FailedStop { cause };
+        if matches!(&self.state, GpuSessionAuthorityState::Ready) {
+            self.state = GpuSessionAuthorityState::FailedStop { cause };
+        }
     }
 
     pub fn ensure_neural_actions_available(&self) -> Result<(), ScaffoldContractError> {
@@ -127,6 +153,8 @@ impl GpuSessionAuthority {
 pub struct GpuAuthoritativeSession {
     backend: GpuClosedLoopBackend,
     authority: GpuSessionAuthority,
+    #[cfg(feature = "gpu-tests")]
+    forced_admission_failures_remaining: u8,
 }
 
 impl GpuAuthoritativeSession {
@@ -134,6 +162,8 @@ impl GpuAuthoritativeSession {
         Self {
             backend,
             authority: GpuSessionAuthority::new(consumer),
+            #[cfg(feature = "gpu-tests")]
+            forced_admission_failures_remaining: 0,
         }
     }
 
@@ -156,6 +186,21 @@ impl GpuAuthoritativeSession {
         self.authority.note_durable_checkpoint(checkpoint)
     }
 
+    pub fn prevalidate_durable_checkpoint(
+        &self,
+        checkpoint: DurableGpuCheckpointRef,
+    ) -> Result<DurableGpuCheckpointMonotonicityPermit, ScaffoldContractError> {
+        self.authority.prevalidate_durable_checkpoint(checkpoint)
+    }
+
+    pub fn install_prevalidated_durable_checkpoint(
+        &mut self,
+        permit: DurableGpuCheckpointMonotonicityPermit,
+    ) {
+        self.authority
+            .install_prevalidated_durable_checkpoint(permit);
+    }
+
     pub fn fail_stop(&mut self, cause: GpuSessionFailStopCause) {
         self.authority.fail_stop(cause);
     }
@@ -164,6 +209,29 @@ impl GpuAuthoritativeSession {
         if *error == ScaffoldContractError::NeuralBackendUnavailable {
             self.fail_stop(GpuSessionFailStopCause::BackendUnavailable);
         }
+    }
+
+    pub fn insert_brain(
+        &mut self,
+        organism_id: OrganismId,
+        phenotype: BrainPhenotype,
+    ) -> Result<GpuBrainHandle, ScaffoldContractError> {
+        self.ensure_neural_actions_available()?;
+        #[cfg(feature = "gpu-tests")]
+        if self.forced_admission_failures_remaining > 0 {
+            self.forced_admission_failures_remaining -= 1;
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        let result = self.backend.insert_brain(organism_id, phenotype);
+        if let Err(error) = &result {
+            self.record_contract_failure(error);
+        }
+        result
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn force_admission_failures_for_test(&mut self, failure_count: u8) {
+        self.forced_admission_failures_remaining = failure_count;
     }
 
     /// Commits an already verified sealed growth handoff. Cognitive sidecars

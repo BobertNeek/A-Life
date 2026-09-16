@@ -158,10 +158,13 @@ fn check_passes(check: VerifierCheck, evidence: &SchoolEvidence<'_>) -> bool {
             .patches
             .iter()
             .all(selected_action_came_from_arbitration),
-        VerifierCheck::SelectedByArbitration => evidence
-            .patches
-            .iter()
-            .all(selected_action_came_from_arbitration),
+        VerifierCheck::SelectedByArbitration => {
+            !evidence.patches.is_empty()
+                && evidence
+                    .patches
+                    .iter()
+                    .all(selected_action_came_from_arbitration)
+        }
         VerifierCheck::MinimumMemoryRecords(min) => evidence.memory_record_count >= min,
         VerifierCheck::MinimumTopologyConcepts(min) => {
             evidence.topology_summary.concept_count >= min

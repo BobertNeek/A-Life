@@ -134,9 +134,9 @@ fn tracked_patch(owner: u64, sequence_raw: u64, tracked_raw: u64) -> ExperienceP
     let genome = BrainGenome::scaffold(321 ^ owner, spec.id);
     let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.5).unwrap())
         .with_enabled_lobes([
-            LobeKind::SensoryGrounding,
-            LobeKind::CoreAssociation,
-            LobeKind::MotorArbitration,
+            LobeKind::PerceptualIntegration,
+            LobeKind::TemporalPredictive,
+            LobeKind::ActionPlanning,
         ]);
     let pre_action = PreActionSnapshot::from_neural_frame(
         sequence,

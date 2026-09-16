@@ -5,10 +5,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-use alife_gpu_backend::{
-    probe_local_wgpu_runtime, run_local_gpu_diagnostic_timing, GpuRuntimeBackendConfig,
-    GpuRuntimeBackendKind,
-};
+use alife_gpu_backend::{probe_local_wgpu_runtime, GpuRuntimeBackendConfig, GpuRuntimeBackendKind};
 use alife_tools::benchmark::{
     gpu_closed_loop::{
         adapter_identity_digest, canonical_performance_targets_v1, load_benchmark_manifest,
@@ -408,12 +405,6 @@ fn run_legacy_benchmark(args: &[String]) -> Result<(), Box<dyn std::error::Error
             )?;
         }
         println!("{}", gpu_path.display());
-        if args.iter().any(|arg| arg == "--measure-gpu") {
-            let timing = run_local_gpu_diagnostic_timing(3, 10)?;
-            let path = output_dir.join("local_gpu_timing_evidence.md");
-            fs::write(&path, timing.to_markdown())?;
-            println!("{}", path.display());
-        }
     }
     Ok(())
 }

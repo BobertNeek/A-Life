@@ -5,7 +5,7 @@
 //! policy authority.
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     fs,
     path::Path,
 };
@@ -165,9 +165,13 @@ impl ScoreEstimate {
     };
 
     pub fn known(value: f32, samples: u32) -> Self {
-        Self {
-            value: Some(value.clamp(0.0, 1.0)),
-            samples,
+        if !value.is_finite() || samples == 0 {
+            Self::UNKNOWN
+        } else {
+            Self {
+                value: Some(value.clamp(0.0, 1.0)),
+                samples,
+            }
         }
     }
 }
@@ -629,7 +633,11 @@ fn validate_suite(suite: &BatterySuite) -> Result<(), EvaluationError> {
             "suite id and at least one trial are required",
         ));
     }
+    let mut test_ids = BTreeSet::new();
     for trial in &suite.trials {
+        if !test_ids.insert(trial.test_id.as_str()) {
+            return Err(EvaluationError::InvalidSuite("duplicate trial test id"));
+        }
         validate_trial(trial)?;
     }
     Ok(())
@@ -656,6 +664,9 @@ fn validate_trial(trial: &BatteryTrial) -> Result<(), EvaluationError> {
         || provenance.foundation_version == 0
         || provenance.compute.adapter.trim().is_empty()
         || provenance.compute.backend.trim().is_empty()
+        || provenance.compute.dispatches == 0
+        || provenance.compute.neural_ticks == 0
+        || provenance.compute.elapsed_micros == 0
         || provenance.compute.budget_units == 0
     {
         if trial.layer == BatteryLayer::HiddenPromotion {
@@ -669,6 +680,19 @@ fn validate_trial(trial: &BatteryTrial) -> Result<(), EvaluationError> {
     provenance.lineage.genome_id.validate()?;
     for ancestor in &provenance.lineage.ancestor_genome_ids {
         ancestor.validate()?;
+    }
+    let unique_ancestors = provenance
+        .lineage
+        .ancestor_genome_ids
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>();
+    if unique_ancestors.len() != provenance.lineage.ancestor_genome_ids.len()
+        || unique_ancestors.contains(&provenance.lineage.genome_id)
+    {
+        return Err(invalid(
+            "lineage ancestry must be unique and exclude the candidate",
+        ));
     }
     if !unit_interval(provenance.lineage.population_share)
         || !unit_interval(provenance.lineage.genome_novelty)

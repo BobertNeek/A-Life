@@ -156,8 +156,7 @@ pub fn run_onboarding_help_smoke() -> Result<OnboardingHelpSummary, GameAppShell
     let summary = OnboardingHelpSummary {
         schema: G20_ONBOARDING_HELP_SCHEMA,
         schema_version: G20_ONBOARDING_HELP_SCHEMA_VERSION,
-        first_run_command:
-            "cargo run -p alife_tools --bin p35_playground -- run-headless crates/alife_world/tests/fixtures/p34",
+        first_run_command: "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun",
         controls: controls_reference(),
         troubleshooting: troubleshooting_reference(),
         tutorial_script_path: g20_tutorial_script_path(),
@@ -185,7 +184,7 @@ pub fn controls_reference() -> Vec<HelpControlReference> {
         },
         HelpControlReference {
             label: "Step",
-            action: "Advance one deterministic headless brain/world tick",
+            action: "Advance one GPU-authoritative brain/world tick while paused",
             source_plan: "G03/G05",
         },
         HelpControlReference {
@@ -205,7 +204,7 @@ pub fn controls_reference() -> Vec<HelpControlReference> {
         },
         HelpControlReference {
             label: "Save/Load",
-            action: "Use P34 stable IDs, schema validation, and asset manifest diagnostics",
+            action: "Queue or restore an exact GPU checkpoint with stable-ID and asset validation",
             source_plan: "G15",
         },
     ]
@@ -215,20 +214,18 @@ pub fn troubleshooting_reference() -> Vec<TroubleshootingReference> {
     vec![
         TroubleshootingReference {
             symptom: "GPU unavailable or unvalidated",
-            diagnostic: "The playable sim should stop learned actions on typed GPU unavailability and avoid GPU performance claims",
-            command: "cargo run -p alife_tools --bin p35_playground -- gpu-fallback",
+            diagnostic: "The production preflight reports the adapter or device failure and blocks launch when GPU authority is required",
+            command: "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun -RequireGpu",
         },
         TroubleshootingReference {
             symptom: "Graphics or Bevy feature unavailable",
             diagnostic: "Use the default headless path; graphics demos are optional/manual",
-            command:
-                "cargo run -p alife_tools --bin p35_playground -- run-headless crates/alife_world/tests/fixtures/p34",
+            command: "cargo run -p alife_tools --bin p34_persistence -- validate-save crates/alife_world/tests/fixtures/p34/tiny_save.json crates/alife_world/tests/fixtures/p34",
         },
         TroubleshootingReference {
             symptom: "Schema mismatch or missing asset",
             diagnostic: "Validate P34 fixtures and the P35 manifest before running demos",
-            command:
-                "cargo run -p alife_tools --bin p35_playground -- validate-manifest examples/p35/playground_manifest.json",
+            command: "cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets",
         },
         TroubleshootingReference {
             symptom: "Windows validation tries WSL",
@@ -238,7 +235,7 @@ pub fn troubleshooting_reference() -> Vec<TroubleshootingReference> {
         TroubleshootingReference {
             symptom: "Balance smoke looks scripted",
             diagnostic: "G19 exposes degenerate behavior notes rather than hiding metrics",
-            command: "cargo run -p alife_game_app --bin alife_game_app -- longrun-balance-smoke",
+            command: "cargo test -p alife_game_app --test app_shell g19_manual_extended_balance_run -- --ignored --nocapture",
         },
     ]
 }
