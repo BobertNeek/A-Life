@@ -1,6 +1,6 @@
 # A-Life agent instructions
 
-Before code or architecture edits, read the relevant sections of
+For changes to organism behavior, cognitive contracts, or architecture, consult the relevant sections of
 `docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md`.
 Use `docs/architecture/requirement_registry.csv` to trace requirements.
 
@@ -24,24 +24,7 @@ rules. Prefer the more specific rule unless it conflicts with v2.0.
 
 ## Working style
 
-- Clear requests authorize execution within scope. Use the shortest practical
-  path and apply only the procedures relevant to the task.
-- Prefer native commands and existing tools. Skip plans, prototypes, helpers,
-  and abstractions when doing and checking the work is simpler.
-- Inspect enough to identify the target and cause, then act. Try a reversible
-  fix when it can cheaply resolve the problem.
-- Preserve unrelated work, credentials, and irreplaceable data. Before
-  destructive work, verify the exact target and provide a practical rollback.
-- Keep changes focused and readable. Add dependencies only for a current need.
-- Verify with the smallest check that can reveal failure. Run required checks
-  for the touched system and state what the evidence proves. Do not repeat
-  passing checks unless something relevant changes.
-- For long or uncertain work, check results early. Report bottlenecks and
-  change course when repeated attempts fail.
-- For substantive visual work, compare rendered output with the approved
-  reference. Small visual fixes need only a focused screenshot check.
-- Update affected documentation. Stage only intended changes and complete the
-  authorized Git workflow. Stop when the requested result works.
+Use the global working preferences. Read only documentation relevant to the touched behavior. Update affected docs and run the relevant existing checks. Preserve unrelated work.
 
 ## Current implementation guardrails
 
@@ -81,5 +64,5 @@ when it is absent from PATH.
   `graphify-out/GRAPH_REPORT.md` only when focused queries are insufficient.
 - Generated files under `graphify-out/` are ignored. Check source files
   directly when graph results are stale or incomplete.
-- After code changes, refresh an existing graph when the tooling is available.
+- Refresh an existing graph when this task relies on graph results that the changes made stale.
 - When the user requests `/graphify`, follow the available Graphify skill.
