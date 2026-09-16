@@ -19,6 +19,24 @@ assert gltf['images'][normal['source']]['mimeType']=='image/png'
 assert 'bufferView' in gltf['images'][normal['source']], 'Fur normal must be embedded'
 names = {a['name'] for a in gltf['animations']}
 assert {'Hearthling_CuriousIdle', 'Hearthling_Walk', 'Hearthling_Sleep'} <= names, names
+# Keep the renderer's distance-to-phase calibration tied to the shipping asset.
+walk = next(a for a in gltf['animations'] if a['name'] == 'Hearthling_Walk')
+for side in ['L', 'R']:
+    channel = next(c for c in walk['channels']
+                   if gltf['nodes'][c['target']['node']].get('name') == 'foot_control.' + side
+                   and c['target']['path'] == 'translation')
+    sampler = walk['samplers'][channel['sampler']]
+    times = gltf['accessors'][sampler['input']]
+    assert abs(times['min'][0] - 1 / 24) < 1e-6
+    assert abs(times['max'][0] - times['min'][0] - 3) < 1e-6
+    accessor = gltf['accessors'][sampler['output']]
+    view = gltf['bufferViews'][accessor['bufferView']]
+    offset = 28 + length + view.get('byteOffset', 0) + accessor.get('byteOffset', 0)
+    positions = [struct.unpack_from('<3f', data, offset + i * view.get('byteStride', 12))
+                 for i in range(accessor['count'])]
+    assert abs(max(p[2] for p in positions) - min(p[2] for p in positions) - 0.48) < 1e-5
+    assert len(positions) == 73
+    assert all(abs(positions[i][2] - positions[i + 24][2]) < 1e-5 for i in range(49))
 for animation in gltf['animations']:
     assert len(animation['channels']) > 20
     assert all(gltf['accessors'][s['input']]['max'][0] > 0 for s in animation['samplers'])

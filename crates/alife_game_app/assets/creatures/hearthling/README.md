@@ -22,6 +22,15 @@ budget is 32,768 triangles, including separate curved eyelids and orbital rims.
 `hearthling.blend` is the editable refined model with grounded walk and seated sleep clips. The shipping
 `hearthling.glb` contains one skin and three named animations.
 
+The runtime samples the walk clip from horizontal ground distance: one step
+covers 0.48 model units times the creature's forward scale, and a full left/right
+cycle covers 0.96. The clip contains three one-second cycles starting at 1/24 s.
+Blocked or paused movement does not advance the feet. Simulation speed affects
+cadence through actual movement; it is not applied again to the walk clip.
+`scripts/check_hearthling_asset.py` checks the exported foot travel and timing
+against this calibration. This synchronizes stride length; the authored foot
+curve is not a foot-locking IK system.
+
 Revision 8 replaces the old head skin through
 `scripts/refine_hearthling_expression.py`. The continuous head has a short,
 broad muzzle, rounded supporting cheeks, a distinct chin and lower jaw, and
