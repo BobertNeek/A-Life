@@ -1908,7 +1908,9 @@ fn is_exact_committed_historical_baseline(
     let object = format!("HEAD:{COMMITTED_EI0_REPORT_PATH}");
     let committed_json = git_output(root, &["show", "--no-ext-diff", "--no-textconv", &object])?;
     let committed_report: Ei0ExitGateReport = serde_json::from_str(&committed_json)?;
-    if report != &committed_report {
+    // Historical genomes retain raw JSON. Compare values so Git's Windows
+    // line-ending conversion does not make an unchanged baseline look tampered.
+    if serde_json::to_value(report)? != serde_json::to_value(&committed_report)? {
         return Err(Ei0ExitGateError::Evidence(
             "historical report differs from the committed baseline artifact",
         ));
