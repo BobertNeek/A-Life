@@ -46,6 +46,9 @@ const MANAGED_HABITAT_RAW: u64 = 12;
 const FOUNDATION_ID_RAW: u64 = 0x4E32_3034_385F_5631;
 const FOUNDATION_FAMILY_RAW: u64 = 0x4E32_3034_385F_FA11;
 const SOURCE_RUN_ID: &str = "ei0-exit-gate-v3";
+const EI0_SCHEMA_3_HISTORICAL_PRODUCER_COMMIT: &str = "ab806c2c6e4910a29927cea4746f4007d75f3f15";
+const EI0_SCHEMA_3_HISTORICAL_VERSION: u16 = 3;
+const COMMITTED_EI0_REPORT_PATH: &str = "crates/alife_tools/reports/ei0_exit_gate_report.json";
 const REQUIRED_GPU_ADAPTER: &str = "NVIDIA GeForce RTX 3050";
 const REQUIRED_GPU_BACKEND_API: &str = "vulkan";
 const SOURCE_CONTRACT_PATHS: &[&str] = &[
@@ -1381,7 +1384,10 @@ fn clause(passed: bool, detail: impl Into<String>) -> Ei0ClauseEvidence {
     }
 }
 
-fn wild_birth_semantics_are_exact(birth: &Ei0BirthReceipt) -> bool {
+fn wild_birth_semantics_are_exact(
+    birth: &Ei0BirthReceipt,
+    expected_world_signature_schema: Option<u16>,
+) -> bool {
     let breeding = &birth.breeding_receipt;
     birth.breeding_kind == HabitatBreedingKind::CreatureChosen
         && breeding.kind == birth.breeding_kind
@@ -1395,7 +1401,7 @@ fn wild_birth_semantics_are_exact(birth: &Ei0BirthReceipt) -> bool {
         && birth.gpu_intent_world_tick == Some(breeding.tick)
         && birth.gpu_selected_mate == Some(breeding.second_parent)
         && birth.gpu_pre_action_world_digest.is_some_and(|digest| {
-            digest.schema_version == HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION
+            expected_world_signature_schema.is_none_or(|schema| digest.schema_version == schema)
                 && digest.words.iter().any(|word| *word != 0)
         })
         && birth.gpu_same_seed_wrong_world_rejected == Some(true)
@@ -1428,7 +1434,12 @@ fn evaluate_clauses(
                 .collect::<BTreeSet<_>>();
             lane.births.len() == 3
                 && sequences.len() == lane.births.len()
-                && lane.births.iter().all(wild_birth_semantics_are_exact)
+                && lane.births.iter().all(|birth| {
+                    wild_birth_semantics_are_exact(
+                        birth,
+                        Some(HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION),
+                    )
+                })
         });
     let managed_breed = lifecycle.creature_directed_managed_breeding_rejected
         && managed_lane.is_some_and(|lane| {
@@ -1635,6 +1646,14 @@ pub fn validate_committed_ei0_exit_gate_report(
         .ok_or(Ei0ExitGateError::Evidence(
             "committed report is missing its source binding",
         ))?;
+    let root = workspace_root();
+    let current_head = git_output(&root, &["rev-parse", "HEAD"])?;
+    let exact_historical_baseline = is_exact_committed_historical_baseline(report, binding, &root)?;
+    if binding.producing_source_commit != current_head && !exact_historical_baseline {
+        return Err(Ei0ExitGateError::Evidence(
+            "non-current report is not the exact historical baseline",
+        ));
+    }
 
     let expected_paths = SOURCE_CONTRACT_PATHS
         .iter()
@@ -1645,7 +1664,6 @@ pub fn validate_committed_ei0_exit_gate_report(
             "artifact source-contract path set changed",
         ));
     }
-    let root = workspace_root();
     if source_contract_digest_at_revision(
         &root,
         &binding.producing_source_commit,
@@ -1809,7 +1827,12 @@ pub fn validate_committed_ei0_exit_gate_report(
                 || breeding.actor != birth.actor
                 || breeding.cognition_policy != birth.cognition_policy
                 || breeding.first_parent == breeding.second_parent
-                || (lane.mode == HabitatMode::Wild && !wild_birth_semantics_are_exact(birth))
+                || (lane.mode == HabitatMode::Wild
+                    && !wild_birth_semantics_are_exact(
+                        birth,
+                        (!exact_historical_baseline)
+                            .then_some(HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION),
+                    ))
                 || phenotype_mismatch
             {
                 return Err(Ei0ExitGateError::Evidence(
@@ -1855,7 +1878,8 @@ pub fn validate_committed_ei0_exit_gate_report(
             ));
         }
     }
-    if evaluate_clauses(lifecycle, &report.gpu_tests, baseline) != report.clauses
+    if (!exact_historical_baseline
+        && evaluate_clauses(lifecycle, &report.gpu_tests, baseline) != report.clauses)
         || !report.clauses.all_passed()
         || baseline.source_backend != "HeuristicBaseline"
         || baseline.promotion_eligible
@@ -1868,6 +1892,28 @@ pub fn validate_committed_ei0_exit_gate_report(
         ));
     }
     Ok(())
+}
+
+fn is_exact_committed_historical_baseline(
+    report: &Ei0ExitGateReport,
+    binding: &Ei0ArtifactBinding,
+    root: &Path,
+) -> Result<bool, Ei0ExitGateError> {
+    if report.schema_version != EI0_SCHEMA_3_HISTORICAL_VERSION
+        || binding.producing_source_commit != EI0_SCHEMA_3_HISTORICAL_PRODUCER_COMMIT
+    {
+        return Ok(false);
+    }
+
+    let object = format!("HEAD:{COMMITTED_EI0_REPORT_PATH}");
+    let committed_json = git_output(root, &["show", "--no-ext-diff", "--no-textconv", &object])?;
+    let committed_report: Ei0ExitGateReport = serde_json::from_str(&committed_json)?;
+    if report != &committed_report {
+        return Err(Ei0ExitGateError::Evidence(
+            "historical report differs from the committed baseline artifact",
+        ));
+    }
+    Ok(true)
 }
 
 fn workspace_root() -> PathBuf {

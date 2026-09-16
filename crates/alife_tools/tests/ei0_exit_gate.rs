@@ -1,6 +1,6 @@
 #[cfg(feature = "gpu-tests")]
 use std::collections::BTreeSet;
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, process::Command};
 
 #[cfg(feature = "gpu-tests")]
 use alife_archive::{CompositeGeneticArchiveInput, LineageLibrary, LineageLibraryConfig};
@@ -16,7 +16,7 @@ use alife_tools::ei0_exit_gate::{
 };
 use alife_tools::ei0_exit_gate::{
     run_ei0_exit_gate_and_write, validate_committed_ei0_exit_gate_report, Ei0EvidenceStatus,
-    Ei0ExitGateReport,
+    Ei0ExitGateError, Ei0ExitGateReport,
 };
 use alife_world::{HabitatActor, HabitatMode, HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION};
 
@@ -254,6 +254,55 @@ fn committed_historical_report_recomputes_bound_source_and_causal_evidence() {
     assert_eq!(binding.adapter_name, "NVIDIA GeForce RTX 3050");
     assert_eq!(binding.backend_api, "vulkan");
 
+    let mut tampered_child_phenotype = report.clone();
+    let birth = tampered_child_phenotype
+        .lifecycle
+        .as_mut()
+        .unwrap()
+        .lanes
+        .iter_mut()
+        .find(|lane| lane.mode == HabitatMode::Wild)
+        .unwrap()
+        .births
+        .first_mut()
+        .unwrap();
+    birth.child_phenotype_hash.0[0] ^= 1;
+    refresh_binding_digests(&mut tampered_child_phenotype);
+    assert!(matches!(
+        validate_committed_ei0_exit_gate_report(&tampered_child_phenotype),
+        Err(Ei0ExitGateError::Evidence(
+            "historical report differs from the committed baseline artifact"
+        ))
+    ));
+
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = manifest_dir
+        .parent()
+        .and_then(std::path::Path::parent)
+        .unwrap();
+    let arbitrary_old_commit = Command::new("git")
+        .current_dir(workspace_root)
+        .args(["rev-parse", "HEAD^"])
+        .output()
+        .unwrap();
+    assert!(arbitrary_old_commit.status.success());
+    let mut arbitrary_old_report = report.clone();
+    arbitrary_old_report
+        .artifact_binding
+        .as_mut()
+        .unwrap()
+        .producing_source_commit = String::from_utf8(arbitrary_old_commit.stdout)
+        .unwrap()
+        .trim()
+        .to_string();
+    refresh_binding_digests(&mut arbitrary_old_report);
+    assert!(matches!(
+        validate_committed_ei0_exit_gate_report(&arbitrary_old_report),
+        Err(Ei0ExitGateError::Evidence(
+            "non-current report is not the exact historical baseline"
+        ))
+    ));
+
     let mut wrong_hardware = report.clone();
     wrong_hardware
         .artifact_binding
@@ -280,7 +329,10 @@ fn committed_historical_report_recomputes_bound_source_and_causal_evidence() {
         .unwrap();
     birth.gpu_selected_mate = Some(birth.breeding_receipt.first_parent);
     refresh_binding_digests(&mut wrong_mate);
-    assert!(validate_committed_ei0_exit_gate_report(&wrong_mate).is_err());
+    assert!(
+        validate_committed_ei0_exit_gate_report(&wrong_mate).is_err(),
+        "a format-stable causal mate-link tamper must be rejected"
+    );
 
     let mut wrong_tick = report.clone();
     let birth = wrong_tick
