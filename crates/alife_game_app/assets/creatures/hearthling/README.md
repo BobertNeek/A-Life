@@ -33,6 +33,11 @@ ears, tail, and animation contract remain the revision-7 bipedal design.
 The forehead includes an amber center, tapered chestnut streaks, and directional
 color grain inspired by the supplied fur reference. These are vertex colors;
 the texture count, six material primitives, and triangle count are unchanged.
+The eye globes and curved blink shells are uniformly 15% smaller around their
+existing pivots. The surrounding apertures taper toward their corners for a
+more almond-shaped outline. Pupils are another 15% smaller within the irises.
+Both refinements retain the existing topology, weights, and animation clips;
+the shipping GLB's open, half-blink, and closed-eye renders were checked again.
 
 The export finishes with `scripts/optimize_hearthling_runtime.py`. It consolidates
 the authored mesh objects into one skinned mesh with six material primitives,

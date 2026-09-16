@@ -4118,14 +4118,14 @@
     {
       "asset_id": "approved-hearthling",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:275b17ed004b0c02",
+      "digest": "fnv1a64:682d66a6ec1c20c1",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
         "config_path": "scripts/export_hearthling.py",
         "date": "2026-09-15",
-        "seed": "bipedal-fox-reference-hearthling-v8-forehead",
+        "seed": "bipedal-fox-reference-hearthling-v8-almond-eyes",
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
@@ -4133,7 +4133,7 @@
       "local_path": "crates/alife_game_app/assets/creatures/hearthling/hearthling.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 3102888,
+      "size_bytes": 3102892,
       "source": "generated:approved-blender-model",
       "usage_category": "creatures"
     },

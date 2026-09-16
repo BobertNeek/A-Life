@@ -203,9 +203,71 @@ def refine_expression():
         head.data.materials.append(gold_mat)
         for p in head.data.polygons:
             if p.center.z>1.91: p.material_index=1
+    refine_eye_proportions()
     rig['expression_revision']=8; rig.data.pose_position=previous
     bpy.context.view_layer.update()
     print('REFERENCE_EXPRESSION_REVISION_8',flush=True)
+
+
+def refine_eye_proportions():
+    """Reduce globe/lids together and taper the surrounding eye openings."""
+    rig=bpy.data.objects['Hearthling_Rig']
+    assert not rig.get('smaller_almond_eyes'), 'Eye proportions already applied'
+    previous=rig.data.pose_position; rig.data.pose_position='REST'
+    scale=.85
+
+    def orbital_map(p, force=False):
+        x,y,z=p; sign=-1 if x<0 else 1
+        center=Vector((sign*EYE_X,EYE_Y,EYE_Z))
+        d=Vector(p)-center
+        rho=math.sqrt((d.x/.128)**2+((d.z-sign*.08*d.x)/.100)**2)
+        weight=1. if force else (1-smooth((rho-1.15)/.85))*smooth((-.03-y)/.12)
+        if weight<=0: return Vector(p)
+        q=center+d*scale
+        u=min(1,abs(d.x)/.128)
+        # Flatten the arcs toward both corners without narrowing their span.
+        height=q.z-EYE_Z-sign*.08*(q.x-sign*EYE_X)
+        q.z-=height*(.055+.19*u*u)
+        radial=(q.x-sign*EYE_X)**2+(q.z-EYE_Z)**2
+        if y<EYE_Y and radial<(EYE_R*scale)**2:
+            q.y=min(q.y,EYE_Y-math.sqrt((EYE_R*scale)**2-radial)-.012)
+        return Vector(p).lerp(q,weight)
+
+    for name in ['Hearthling_Head','Hearthling_OrbitalRim_L','Hearthling_OrbitalRim_R']:
+        ob=bpy.data.objects[name]
+        for v in ob.data.vertices: v.co=orbital_map(v.co,name!='Hearthling_Head')
+        ob.data.update()
+    for sign,side in [(-1,'L'),(1,'R')]:
+        center=Vector((sign*EYE_X,EYE_Y,EYE_Z))
+        for part in ['Eyeball','UpperEyelid','LowerEyelid','LidEdge']:
+            ob=bpy.data.objects['Hearthling_'+part+'_'+side]
+            for v in ob.data.vertices: v.co=center+(v.co-center)*scale
+            ob.data.update()
+    # Uniform scaling about the existing lid pivot preserves the blink arc.
+    rig['smaller_almond_eyes']=True
+    rig['eye_globe_scale']=scale
+    shrink_pupils()
+    rig.data.pose_position=previous; bpy.context.view_layer.update()
+
+
+def shrink_pupils():
+    """Expose more iris by reducing pupil radius 15%, keeping the eye spherical."""
+    rig=bpy.data.objects['Hearthling_Rig']
+    assert not rig.get('pupil_radius_scale'), 'Pupil reduction already applied'
+    radius=EYE_R*rig.get('eye_globe_scale',1.)
+    old=math.asin(.063/.133); new=math.asin(.063*.85/.133)
+    iris=math.asin(.102/.133)
+    for sign,side in [(-1,'L'),(1,'R')]:
+        center=Vector((sign*EYE_X,EYE_Y,EYE_Z))
+        eye=bpy.data.objects['Hearthling_Eyeball_'+side]
+        for v in eye.data.vertices:
+            d=v.co-center; theta=math.acos(max(-1,min(1,-d.y/radius)))
+            if theta>=iris: continue
+            phi=math.atan2(d.z,d.x)
+            t=theta*new/old if theta<=old else new+(theta-old)*(iris-new)/(iris-old)
+            v.co=center+Vector((radius*math.sin(t)*math.cos(phi),-radius*math.cos(t),radius*math.sin(t)*math.sin(phi)))
+        eye.data.update()
+    rig['pupil_radius_scale']=.85
 
 
 def paint_reference_face():
