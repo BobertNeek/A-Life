@@ -4118,14 +4118,14 @@
     {
       "asset_id": "approved-hearthling",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:73e0314e5194e07e",
+      "digest": "fnv1a64:a0dbdb971d391486",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
         "config_path": "scripts/export_hearthling.py",
         "date": "2026-09-15",
-        "seed": "bipedal-fox-reference-hearthling-v8-iris-whites",
+        "seed": "bipedal-fox-reference-hearthling-v9-rounded-nose",
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
@@ -4133,7 +4133,7 @@
       "local_path": "crates/alife_game_app/assets/creatures/hearthling/hearthling.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 3102892,
+      "size_bytes": 3086228,
       "source": "generated:approved-blender-model",
       "usage_category": "creatures"
     },

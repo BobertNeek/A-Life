@@ -25,7 +25,7 @@ for path in paths:
         generator=dict(config_path=('scripts/export_hearthling.py' if 'hearthling' in path.name else
             'crates/alife_game_app/assets/landscape/landscape.blend'),
             date='2026-09-15' if 'hearthling' in path.name else '2026-09-07',
-            seed='bipedal-fox-reference-hearthling-v8-iris-whites' if 'hearthling' in path.name else
+            seed='bipedal-fox-reference-hearthling-v9-rounded-nose' if 'hearthling' in path.name else
                 'approved-creatures-modern-black-and-white', tool='Blender-5.2.1-LTS' if 'hearthling' in path.name else 'Blender-5.1'))
     if path.suffix == '.png':
         entry.update(author='A-Life generated art with OpenAI image generation', source='generated:ground-detail-prompt')

@@ -1,4 +1,4 @@
-Hearthling, bipedal reference sculpt, revision 8
+Hearthling, bipedal reference sculpt, revision 9
 ==============================================
 
 `hearthling-source.blend` retains the revision-2 sculpt and expressive idle rig.
@@ -40,9 +40,21 @@ pupils were reduced another 30% and the iris radius 25% to expose eye whites.
 Both refinements retain the existing topology, weights, and animation clips;
 the shipping GLB's open, half-blink, and closed-eye renders were checked again.
 
+Revision 9 applies `scripts/refine_hearthling_closeup.py`: a smooth, broader,
+rounded triangular nose with shallow paired nostril recesses and a polished
+surface, stronger upper orbital rims, and darker ear tips. The muzzle surface,
+lip volumes, recessed mouth groove and dark seam share one smile curve; the
+old pad/chin intersection is smoothed away and the nose-to-lip line reprojected.
+The approved globe, pupil, and iris dimensions are retained exactly. The nose
+reuses the old brow material slot, so it has no fur normal and adds no draw
+primitive. Added nose topology is offset by simplifying the body, leaving the
+eyelids intact, with local muzzle subdivision. Experimental separate facial fur layers were rejected
+after rendered inspection; this version does not reproduce the reference's
+dense, layered fur.
+
 The export finishes with `scripts/optimize_hearthling_runtime.py`. It consolidates
 the authored mesh objects into one skinned mesh with six material primitives,
-preserving all 32,306 triangles, UVs, fur normals, weights, and animation clips.
+32,694 triangles, UVs, fur normals, weights, and animation clips.
 The authoring blend retains the separate editable pieces. Runtime instances share
 the fur normal at 1024px (the editable source retains its 2048px bake),
 the animation graph and palette materials. Conservative animated bounds permit
@@ -78,6 +90,12 @@ Hearthlings with the refreshed production manifest and exited successfully.
 Captures and staged shape reviews are under
 `target/artifacts/face-refinement-20260915/`. This asset pass does not claim to
 resolve the separately measured GPU simulation stalls.
+
+Revision-9 verification: imported shipping renders pass open/closed eye
+occlusion and idle/walk/sleep grounding checks. Matched front, side and
+three-quarter material/clay views were inspected during mouth correction.
+A 25-second Vulkan New Game smoke loaded all six creatures and exited cleanly.
+Evidence is under `target/artifacts/reference-closeup-20260915/`.
 
 The graphics branch's renderer selects clips from the existing organism state.
 Pause freezes animation. Coat, mass, ear/head proportions and tail size derive
