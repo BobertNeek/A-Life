@@ -7,6 +7,7 @@ pub(super) struct LiveFood(WorldEntityId);
 
 pub(super) fn sync_food(
     mut commands: Commands,
+    highlands: Option<Res<highlands::HighlandsActive>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     surface: Res<creature_grounding::RenderedTerrainSurface>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -33,8 +34,14 @@ pub(super) fn sync_food(
         .map(|object| (object.id.raw(), object.position))
         .collect();
     let translation = |position: Vec3f| {
-        let ground = Vec3::new(position.x, 0.0, position.y);
-        ground + Vec3::Y * (surface.height(ground).unwrap_or(0.44) + position.z + 0.30)
+        let rendered = world_position_for_render(position, highlands.is_some());
+        let ground = Vec3::new(rendered.x, 0.0, rendered.z);
+        let height = if highlands.is_some() {
+            surface.height(ground).unwrap_or(rendered.y)
+        } else {
+            surface.height(ground).unwrap_or(0.44) + rendered.y
+        };
+        ground + Vec3::Y * (height + 0.30)
     };
     for (entity, marker, mut transform) in &mut food_entities {
         if let Some(position) = food.remove(&marker.0.raw()) {
@@ -91,43 +98,54 @@ mod tests {
 
     #[test]
     fn food_projection_tracks_placement_and_consumption_without_advancing_time() {
-        let world = alife_world::HeadlessScenarioBuilder::new(7)
-            .food("apple", Vec3f::new(2.5, -3.5, 0.0), 0.25)
-            .build()
-            .unwrap();
-        let mut app = App::new();
-        app.insert_resource(
-            LiveBrainPresentationFrameResource::from_authoritative_world(&world).unwrap(),
-        )
-        .insert_resource(creature_grounding::RenderedTerrainSurface::from_meshes(
-            std::iter::empty(),
-            1.0,
-        ))
-        .insert_resource(Assets::<Mesh>::default())
-        .insert_resource(Assets::<StandardMaterial>::default())
-        .add_systems(Update, sync_food);
-        app.update();
-        let mut query = app
-            .world_mut()
-            .query_filtered::<&Transform, With<LiveFood>>();
-        let fruit = query.single(app.world()).unwrap();
-        assert_eq!(fruit.translation.x, 2.5);
-        assert_eq!(fruit.translation.z, -3.5);
-        let mut objects = world.object_snapshots();
-        objects[0].consumed = true;
-        let consumed =
-            LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), objects).unwrap();
-        app.world_mut()
-            .resource_mut::<LiveBrainPresentationFrameResource>()
-            .current = consumed;
-        app.update();
-        assert_eq!(query.iter(app.world()).count(), 0);
-        assert_eq!(
-            app.world()
-                .resource::<LiveBrainPresentationFrameResource>()
-                .current
-                .authoritative_world_tick,
-            world.tick()
-        );
+        for highlands in [false, true] {
+            let position = if highlands {
+                Vec3f::new(2.5, 4.0, -3.5)
+            } else {
+                Vec3f::new(2.5, -3.5, 0.0)
+            };
+            let world = alife_world::HeadlessScenarioBuilder::new(7)
+                .food("apple", position, 0.25)
+                .build()
+                .unwrap();
+            let mut app = App::new();
+            app.insert_resource(
+                LiveBrainPresentationFrameResource::from_authoritative_world(&world).unwrap(),
+            )
+            .insert_resource(creature_grounding::RenderedTerrainSurface::from_meshes(
+                std::iter::empty(),
+                1.0,
+            ))
+            .insert_resource(Assets::<Mesh>::default())
+            .insert_resource(Assets::<StandardMaterial>::default())
+            .add_systems(Update, sync_food);
+            if highlands {
+                app.insert_resource(highlands::HighlandsActive);
+            }
+            app.update();
+            let mut query = app
+                .world_mut()
+                .query_filtered::<&Transform, With<LiveFood>>();
+            let fruit = query.single(app.world()).unwrap();
+            assert_eq!(fruit.translation.x, 2.5);
+            assert_eq!(fruit.translation.z, -3.5);
+            assert!((fruit.translation.y - if highlands { 4.30 } else { 0.74 }).abs() < 1e-5);
+            let mut objects = world.object_snapshots();
+            objects[0].consumed = true;
+            let consumed =
+                LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), objects).unwrap();
+            app.world_mut()
+                .resource_mut::<LiveBrainPresentationFrameResource>()
+                .current = consumed;
+            app.update();
+            assert_eq!(query.iter(app.world()).count(), 0);
+            assert_eq!(
+                app.world()
+                    .resource::<LiveBrainPresentationFrameResource>()
+                    .current
+                    .authoritative_world_tick,
+                world.tick()
+            );
+        }
     }
 }

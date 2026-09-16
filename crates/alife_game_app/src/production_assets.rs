@@ -20,9 +20,10 @@ pub const FVR07_PRODUCTION_ASSET_MANIFEST_APP_RELATIVE_PATH: &str =
     "assets/production_voxel_v1/production_asset_manifest.json";
 pub const FVR07_PRODUCTION_ASSET_PACK_ID: &str = "production-voxel-v1";
 pub const FVR07_ART_DIRECTION: &str = "stylized-voxel-alife-production-v1";
-// The approved skinned Hearthling includes three baked clips (about 1 MiB).
-pub const FVR07_MAX_COMMITTED_ASSET_BYTES: u64 = 3 * 1024 * 1024;
-pub const FVR07_MAX_TOTAL_COMMITTED_ASSET_BYTES: u64 = 12 * 1024 * 1024;
+// Runtime-only approved 3D pack: the 140-chunk, three-level landscape is 9 MiB.
+// Editable blends and the full authoring-scene GLB are not runtime manifest assets.
+pub const FVR07_MAX_COMMITTED_ASSET_BYTES: u64 = 12 * 1024 * 1024;
+pub const FVR07_MAX_TOTAL_COMMITTED_ASSET_BYTES: u64 = 32 * 1024 * 1024;
 
 pub const FVR07_REQUIRED_USAGE_CATEGORIES: [&str; 15] = [
     "voxel-material-atlas",

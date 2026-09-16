@@ -23,6 +23,9 @@ impl CameraTerrainStream {
 }
 
 pub(super) fn stream_camera_terrain(world: &mut World) {
+    if world.contains_resource::<highlands::HighlandsActive>() {
+        return;
+    }
     let Some(stream) = world.get_resource::<CameraTerrainStream>() else {
         return;
     };
@@ -60,6 +63,7 @@ pub(super) fn stream_camera_terrain(world: &mut World) {
         let settings = Fvr03ProductionVoxelRendererSettings::for_profile(scene.profile_id);
         prepare_fvr04_runtime_scene_candidate(
             Fvr04RuntimeSceneState {
+                terrain: None,
                 backend,
                 snapshot,
                 creatures: Vec::new(),

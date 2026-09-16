@@ -3,6 +3,7 @@
 use super::*;
 
 pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
+    let highlands = world.contains_resource::<highlands::HighlandsActive>();
     if !world.contains_resource::<LiveBrainPresentationFrameResource>() {
         return;
     }
@@ -35,13 +36,22 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                         }
                         let tile = VoxelTileCoord::new(
                             object.position.x.floor() as i32,
-                            object.position.y.floor() as i32,
+                            (if highlands {
+                                object.position.z
+                            } else {
+                                object.position.y
+                            })
+                            .floor() as i32,
                         );
-                        let surface_height = scene
-                            .tile_summaries_by_tile
-                            .get(&tile)
-                            .map(|summary| summary.height_units)
-                            .unwrap_or(visual.surface_height);
+                        let surface_height = if highlands {
+                            object.position.y
+                        } else {
+                            scene
+                                .tile_summaries_by_tile
+                                .get(&tile)
+                                .map(|summary| summary.height_units)
+                                .unwrap_or(visual.surface_height)
+                        };
                         let mut projected = *transform;
                         if !project_authoritative_creature_root_transform(
                             root.stable_id,
@@ -50,6 +60,11 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                             &frame.current,
                         ) {
                             continue;
+                        }
+                        if highlands {
+                            // Tile snapping can visually push a blocked creature into a rock.
+                            projected.translation.x = object.position.x;
+                            projected.translation.z = object.position.z;
                         }
                         projected.translation.y = grounded_root_height(
                             surface_height,
@@ -175,7 +190,12 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                 for object in pending_newborns {
                     let tile = VoxelTileCoord::new(
                         object.position.x.floor() as i32,
-                        object.position.y.floor() as i32,
+                        (if highlands {
+                            object.position.z
+                        } else {
+                            object.position.y
+                        })
+                        .floor() as i32,
                     );
                     let chunk = tile_summaries
                         .get(&tile)

@@ -4,6 +4,7 @@ use bevy::camera::primitives::Aabb;
 
 #[derive(Resource)]
 pub(super) struct RenderedTerrainSurface {
+    highlands: bool,
     stride: f32,
     quads: BTreeMap<VoxelTileCoord, [[f32; 3]; 4]>,
 }
@@ -25,10 +26,21 @@ impl RenderedTerrainSurface {
                 quads.insert(tile, [quad[0], quad[1], quad[2], quad[3]]);
             }
         }
-        Self { stride, quads }
+        Self {
+            stride,
+            quads,
+            highlands: false,
+        }
+    }
+
+    pub(super) fn enable_highlands(&mut self) {
+        self.highlands = true;
     }
 
     pub(super) fn height(&self, position: Vec3) -> Option<f32> {
+        if self.highlands {
+            return alife_world::highlands().height(position.x, position.z);
+        }
         let cell = |coordinate: f32| {
             ((coordinate + self.stride * 0.5 - 0.5) / self.stride).floor() as i32
                 * self.stride as i32

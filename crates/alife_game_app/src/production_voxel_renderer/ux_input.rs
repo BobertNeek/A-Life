@@ -153,7 +153,11 @@ pub(super) fn handle_fvr05_production_ux_input(
         #[cfg(feature = "gpu-runtime")]
         match (gpu_runtime.as_mut(), selected_tile) {
             (Some(runtime), Some(tile)) => {
-                let position = Vec3f::new(tile.x as f32 + 0.5, tile.z as f32 + 0.5, 0.0);
+                let position = if runtime.runtime.world().terrain_binding().is_some() {
+                    Vec3f::new(tile.x as f32 + 0.5, 0.0, tile.z as f32 + 0.5)
+                } else {
+                    Vec3f::new(tile.x as f32 + 0.5, tile.z as f32 + 0.5, 0.0)
+                };
                 match runtime.runtime.place_player_food(position) {
                     Ok(_receipt) => {
                         frame.refresh_world_objects(runtime.runtime.world());

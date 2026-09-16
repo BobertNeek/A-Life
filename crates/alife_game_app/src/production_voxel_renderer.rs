@@ -77,6 +77,7 @@ mod camera_terrain;
 mod creature_grounding;
 mod graphics_capture;
 mod hearthling;
+mod highlands;
 mod landscape;
 mod live_creature_projection;
 mod live_food_projection;
@@ -1378,6 +1379,7 @@ impl Fvr04CreatureSpawnContext {
 
 #[derive(Debug, Clone)]
 struct Fvr04RuntimeSceneState {
+    terrain: Option<alife_world::TerrainBinding>,
     backend: PersistentVoxelWorldBackend,
     snapshot: PersistentVoxelWorldSnapshot,
     creatures: Vec<Fvr04CreatureVisualRecord>,
@@ -2164,6 +2166,8 @@ pub fn spawn_fvr03_production_voxel_scene(
             sync_fvr11_creature_contact_shadows,
             sync_fvr04_camera_follow,
             camera_terrain::stream_camera_terrain.after(sync_fvr04_camera_follow),
+            highlands::constrain_camera.after(sync_fvr04_camera_follow),
+            highlands::update.after(highlands::constrain_camera),
             sync_fvr04_creature_label,
             sync_fvr05_panel_visibility,
             sync_fvr05_overlay_visibility,
@@ -2328,6 +2332,7 @@ fn load_fvr04_runtime_state_from_save(
     }
     let creatures = fvr04_creature_visual_records_from_save(&production_save, &snapshot)?;
     Ok(Fvr04RuntimeSceneState {
+        terrain: production_save.world.terrain,
         backend,
         snapshot,
         creatures,
@@ -2378,7 +2383,8 @@ fn fvr04_creature_visual_records_from_save(
                 ),
             })?;
         let position = object.position;
-        let tile = VoxelTileCoord::new(position.x.floor() as i32, position.y.floor() as i32);
+        let rendered = world_position_for_render(position, save.world.terrain.is_some());
+        let tile = VoxelTileCoord::new(rendered.x.floor() as i32, rendered.z.floor() as i32);
         let visual = creature_visual_snapshot_from_parts_with_appearance(
             organism_id,
             anchor.stable_id,
@@ -2611,11 +2617,41 @@ fn prepare_fvr04_runtime_scene_candidate(
             &mut terrain_samples,
         )?);
     }
-    let terrain_build = build_production_terrain_meshes(
-        &terrain_samples,
-        f32::from(settings.tile_stride.max(1)),
-        crate::production_terrain::TerrainAtlasLayout::PRODUCTION,
-    );
+    if runtime_state.terrain.is_some() {
+        for sample in terrain_samples.values_mut() {
+            if let Some(height) = alife_world::highlands().height(sample.center_x, sample.center_z)
+            {
+                sample.height = height;
+            }
+        }
+        for summary in tile_summaries_by_tile.values_mut() {
+            if let Some(height) =
+                alife_world::highlands().height(summary.tile.x as f32, summary.tile.z as f32)
+            {
+                summary.height_units = height;
+            }
+        }
+    }
+    let terrain_build = if runtime_state.terrain.is_some() {
+        TerrainMeshBuild {
+            layers: Vec::new(),
+            stats: crate::terrain_mesh::TerrainMeshStats {
+                source_tiles: 0,
+                top_quads: 0,
+                cliff_quads: 0,
+                transition_edges: 0,
+                water_quads: 0,
+                confetti_detail_quads: 0,
+                max_vertices_per_source_tile: 0,
+            },
+        }
+    } else {
+        build_production_terrain_meshes(
+            &terrain_samples,
+            f32::from(settings.tile_stride.max(1)),
+            crate::production_terrain::TerrainAtlasLayout::PRODUCTION,
+        )
+    };
     let selected = fvr04_runtime_scene_selection(&runtime_state, &visible_tiles);
     let overlay_spawns = Fvr05ProductionOverlayKind::all()
         .iter()
@@ -2653,19 +2689,27 @@ fn prepare_fvr04_runtime_scene_candidate(
         .iter()
         .map(|creature| creature.tile)
         .collect::<BTreeSet<_>>();
-    let dressing_spawns = plan_production_terrain_dressing(
-        &dressing_tiles,
-        &occupied_tiles,
-        settings.production_dressing_cap,
-        settings.tile_stride,
-        settings.minimum_floor,
-    );
-    let vfx_spawns = fvr07_vfx_spawns(
-        &settings,
-        &tile_summaries_by_tile,
-        &runtime_state.creatures,
-        selected,
-    );
+    let dressing_spawns = if runtime_state.terrain.is_some() {
+        Vec::new()
+    } else {
+        plan_production_terrain_dressing(
+            &dressing_tiles,
+            &occupied_tiles,
+            settings.production_dressing_cap,
+            settings.tile_stride,
+            settings.minimum_floor,
+        )
+    };
+    let vfx_spawns = if runtime_state.terrain.is_some() {
+        Vec::new()
+    } else {
+        fvr07_vfx_spawns(
+            &settings,
+            &tile_summaries_by_tile,
+            &runtime_state.creatures,
+            selected,
+        )
+    };
     Ok(Fvr04RuntimeSceneCandidate {
         runtime_state,
         settings,
@@ -3104,6 +3148,12 @@ fn spawn_fvr04_runtime_scene_candidate(
     } = candidate;
     let snapshot = &runtime_state.snapshot;
     let selected = fvr04_runtime_scene_selection(&runtime_state, &visible_tiles);
+    if runtime_state.terrain.is_some() {
+        highlands::start(world);
+    } else {
+        world.remove_resource::<highlands::HighlandsActive>();
+        highlands::stop(world);
+    }
     world.insert_resource(camera_terrain::CameraTerrainStream::new(
         runtime_state.backend.clone(),
         snapshot
@@ -3338,13 +3388,20 @@ fn spawn_fvr11_layered_terrain_meshes(
             .map(|layer| &layer.mesh),
         f32::from(settings.tile_stride.max(1)),
     ));
+    if world.contains_resource::<highlands::HighlandsActive>() {
+        world
+            .resource_mut::<creature_grounding::RenderedTerrainSurface>()
+            .enable_highlands();
+    }
     let terrain_stats = build.stats.clone();
-    landscape::spawn(
-        world,
-        terrain_samples,
-        snapshot,
-        f32::from(settings.tile_stride.max(1)),
-    );
+    if !world.contains_resource::<highlands::HighlandsActive>() {
+        landscape::spawn(
+            world,
+            terrain_samples,
+            snapshot,
+            f32::from(settings.tile_stride.max(1)),
+        );
+    }
     let top_layer_count = build
         .layers
         .iter()
@@ -4857,22 +4914,31 @@ fn advance_fvr04_animation_phase(
     current_seconds + delta_seconds.max(0.0) * speed.max(0.0)
 }
 
+// Legacy saves use X/Y ground coordinates; bound Highlands worlds are Y-up.
+fn world_position_for_render(position: Vec3f, highlands: bool) -> Vec3 {
+    if highlands {
+        Vec3::new(position.x, position.y, position.z)
+    } else {
+        Vec3::new(position.x, position.z, position.y)
+    }
+}
+
 fn live_agent_ground_position(
     frame: &LiveBrainPresentationFrameResource,
     stable_id: WorldEntityId,
+    highlands: bool,
 ) -> Option<(VoxelTileCoord, Vec3)> {
     let object = frame.current.object(stable_id)?;
     (object.kind == WorldObjectKind::Agent).then(|| {
-        let tile = VoxelTileCoord::new(
-            object.position.x.floor() as i32,
-            object.position.y.floor() as i32,
-        );
-        (tile, Vec3::new(object.position.x, 0.0, object.position.y))
+        let position = world_position_for_render(object.position, highlands);
+        let tile = VoxelTileCoord::new(position.x.floor() as i32, position.z.floor() as i32);
+        (tile, Vec3::new(position.x, 0.0, position.z))
     })
 }
 
 fn sync_fvr11_creature_contact_shadows(
     mut commands: Commands,
+    highlands: Option<Res<highlands::HighlandsActive>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     mut shadows: bevy::prelude::Query<(
@@ -4888,7 +4954,9 @@ fn sync_fvr11_creature_contact_shadows(
         let Some(stable_id) = shadow.stable_id else {
             continue;
         };
-        let Some((tile, position)) = live_agent_ground_position(&frame, stable_id) else {
+        let Some((tile, position)) =
+            live_agent_ground_position(&frame, stable_id, highlands.is_some())
+        else {
             commands.entity(entity).despawn();
             continue;
         };
@@ -4904,6 +4972,7 @@ fn sync_fvr11_creature_contact_shadows(
 #[cfg(not(feature = "vfx-hanabi"))]
 fn sync_fvr07_attached_fallback_vfx(
     mut commands: Commands,
+    highlands: Option<Res<highlands::HighlandsActive>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     mut markers: bevy::prelude::Query<(Entity, &mut Transform, &mut Fvr07ProductionGpuVfxMarker)>,
 ) {
@@ -4917,7 +4986,9 @@ fn sync_fvr07_attached_fallback_vfx(
         let Some(stable_id) = marker.stable_id else {
             continue;
         };
-        let Some((tile, position)) = live_agent_ground_position(&frame, stable_id) else {
+        let Some((tile, position)) =
+            live_agent_ground_position(&frame, stable_id, highlands.is_some())
+        else {
             commands.entity(entity).despawn();
             continue;
         };
@@ -4932,6 +5003,7 @@ fn sync_fvr07_attached_fallback_vfx(
 #[cfg(feature = "vfx-hanabi")]
 fn sync_fvr07_attached_hanabi_vfx(
     mut commands: Commands,
+    highlands: Option<Res<highlands::HighlandsActive>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     mut emitters: bevy::prelude::Query<(Entity, &mut Transform, &Fvr07ProductionHanabiVfxEmitter)>,
 ) {
@@ -4945,7 +5017,9 @@ fn sync_fvr07_attached_hanabi_vfx(
         let Some(stable_id) = emitter.stable_id else {
             continue;
         };
-        let Some((_, position)) = live_agent_ground_position(&frame, stable_id) else {
+        let Some((_, position)) =
+            live_agent_ground_position(&frame, stable_id, highlands.is_some())
+        else {
             commands.entity(entity).despawn();
             continue;
         };
@@ -5515,6 +5589,7 @@ fn handle_fvr03_mouse_selection(
     cameras: bevy::prelude::Query<(&Camera, &GlobalTransform), With<Fvr03ProductionVoxelCamera>>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     mut selection: ResMut<Fvr03ProductionVoxelSelectionResource>,
+    highland: Option<Res<highlands::HighlandsActive>>,
 ) {
     let hovered = (|| {
         let window = windows.single().ok()?;
@@ -5523,8 +5598,22 @@ fn handle_fvr03_mouse_selection(
         let ray = camera
             .viewport_to_world(camera_transform, cursor_position)
             .ok()?;
-        let distance = ray.intersect_plane(Vec3::ZERO, InfinitePlane3d::default())?;
-        let tile = scene.tile_from_world_position(ray.get_point(distance))?;
+        let position = if highland.is_some() {
+            let p = alife_world::highlands().ray_hit(
+                Vec3f::new(ray.origin.x, ray.origin.y, ray.origin.z),
+                Vec3f::new(ray.direction.x, ray.direction.y, ray.direction.z),
+                2000.0,
+            )?;
+            Vec3::new(p.x, p.y, p.z)
+        } else {
+            let distance = ray.intersect_plane(Vec3::ZERO, InfinitePlane3d::default())?;
+            ray.get_point(distance)
+        };
+        let tile = if highland.is_some() {
+            VoxelTileCoord::new(position.x.floor() as i32, position.z.floor() as i32)
+        } else {
+            scene.tile_from_world_position(position)?
+        };
         Some(scene.selectable_ref_at_tile(tile))
     })();
     apply_fvr03_pointer_sample(
