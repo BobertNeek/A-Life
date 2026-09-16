@@ -219,6 +219,25 @@ def paint_reference_face():
         forehead=(x/.150)**2+((z-1.815)/.205)**2
         dark=(1-smooth((min(eyes,forehead)-.55)/1.05))*smooth((.09-y)/.23)
         base=tuple(gold[k]*(1-dark)+russet[k]*dark for k in range(4))
+        # Amber crown and tapered russet strands follow the reference fur flow.
+        # Vertex paint adds readable variation without another texture or draw.
+        front=smooth((.035-y)/.20)
+        zone=smooth((z-1.695)/.09)*(1-smooth((abs(x)-.29)/.12))*front
+        center=math.exp(-(x/(.054+.10*smooth((z-1.73)/.27)))**2)
+        amber=(.86,.367,.070,1)
+        lift=.72*center*zone
+        base=tuple(base[k]*(1-lift)+amber[k]*lift for k in range(4))
+        strand_x=abs(x)-(.048+.76*(z-1.740))
+        feather=.006*math.sin(z*185+x*32)+.003*math.sin(z*317-x*61)
+        stripe=math.exp(-((strand_x+feather)/.032)**2)
+        stripe*=smooth((z-1.715)/.065)*(1-smooth((z-1.965)/.09))*zone*.90
+        chestnut=(.105,.024,.005,1)
+        base=tuple(base[k]*(1-stripe)+chestnut[k]*stripe for k in range(4))
+        flow=x*(1.0+1.5*smooth((z-1.72)/.30))
+        grain=math.sin(flow*167+z*17+.8*math.sin(z*42))
+        grain+=.45*math.sin(flow*269-z*29)
+        gain=1+.13*grain*zone
+        base=tuple(min(1,base[k]*gain) for k in range(3))+(1,)
         muzzle=(x/.323)**2+((z-1.431)/.143)**2
         ivory=(1-smooth((muzzle-.80)/.52))*smooth((.04-y)/.20)
         attr.data[v.index].color=tuple(base[k]*(1-ivory)+cream[k]*ivory for k in range(4))

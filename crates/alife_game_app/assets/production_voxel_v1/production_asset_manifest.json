@@ -4118,14 +4118,14 @@
     {
       "asset_id": "approved-hearthling",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:dd61be54215cda95",
+      "digest": "fnv1a64:275b17ed004b0c02",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
         "config_path": "scripts/export_hearthling.py",
         "date": "2026-09-15",
-        "seed": "bipedal-fox-reference-hearthling-v8",
+        "seed": "bipedal-fox-reference-hearthling-v8-forehead",
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",

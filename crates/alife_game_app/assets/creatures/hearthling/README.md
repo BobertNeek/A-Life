@@ -30,6 +30,9 @@ rotating blink shells. The user-approved face shape retains cream on the
 muzzle and chin, with a darker orange-brown eye and forehead mask. The body,
 ears, tail, and animation contract remain the revision-7 bipedal design.
 `paint_reference_face()` reapplies this palette without changing geometry.
+The forehead includes an amber center, tapered chestnut streaks, and directional
+color grain inspired by the supplied fur reference. These are vertex colors;
+the texture count, six material primitives, and triangle count are unchanged.
 
 The export finishes with `scripts/optimize_hearthling_runtime.py`. It consolidates
 the authored mesh objects into one skinned mesh with six material primitives,
