@@ -16,6 +16,8 @@ from hearthling_eyes import animate_lids
 refine_face()
 from refine_hearthling_reference_proportions import refine_reference_proportions
 refine_reference_proportions()
+from refine_hearthling_expression import refine_expression
+refine_expression()
 from bake_hearthling_fur import bake_fur
 bake_fur()
 rig = bpy.data.objects['Hearthling_Rig']

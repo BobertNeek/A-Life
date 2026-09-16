@@ -1,4 +1,4 @@
-Hearthling, bipedal reference sculpt, revision 7
+Hearthling, bipedal reference sculpt, revision 8
 ==============================================
 
 `hearthling-source.blend` retains the revision-2 sculpt and expressive idle rig.
@@ -22,9 +22,18 @@ budget is 32,768 triangles, including separate curved eyelids and orbital rims.
 `hearthling.blend` is the editable refined model with grounded walk and seated sleep clips. The shipping
 `hearthling.glb` contains one skin and three named animations.
 
+Revision 8 replaces the old head skin through
+`scripts/refine_hearthling_expression.py`. The continuous head has a short,
+broad muzzle, rounded supporting cheeks, a distinct chin and lower jaw, and
+smaller fur tips. Almond-shaped openings frame the existing round eyes and
+rotating blink shells. The user-approved face shape retains cream on the
+muzzle and chin, with a darker orange-brown eye and forehead mask. The body,
+ears, tail, and animation contract remain the revision-7 bipedal design.
+`paint_reference_face()` reapplies this palette without changing geometry.
+
 The export finishes with `scripts/optimize_hearthling_runtime.py`. It consolidates
-the 28 authored mesh objects (29 material primitives) into one skinned mesh with six material primitives,
-preserving all 32,417 triangles, UVs, fur normals, weights, and animation clips.
+the authored mesh objects into one skinned mesh with six material primitives,
+preserving all 32,306 triangles, UVs, fur normals, weights, and animation clips.
 The authoring blend retains the separate editable pieces. Runtime instances share
 the fur normal at 1024px (the editable source retains its 2048px bake),
 the animation graph and palette materials. Conservative animated bounds permit
@@ -46,6 +55,20 @@ authoring file's `Hearthling_Character` collection in a separate background
 process. Keep neutral front, side, back, and three-quarter views consistent.
 Revision 7 was also edited and checkpointed through Blender MCP protocol 7;
 MCP is for bounded live edits, with baking/export/review in separate processes.
+Revision 8 used matched front, side, three-quarter, clay, blink, and full-body
+checks across six shape passes, followed by a palette pass through live MCP.
+`scripts/review_hearthling_face.py -- --output <directory>` renders those
+matched views from a loaded authoring checkpoint. The optimizer explicitly
+selects `RuntimeColor` as the render color layer so both coat and iris colors
+reach glTF `COLOR_0` after consolidation.
+
+Revision-8 verification: the shipping GLB passes the 32,768-triangle/six-primitive
+budget, skin/clip/color/UV checks, imported idle/walk/sleep grounding and open/
+closed-eye occlusion checks. A 25-second Vulkan New Game smoke loaded all six
+Hearthlings with the refreshed production manifest and exited successfully.
+Captures and staged shape reviews are under
+`target/artifacts/face-refinement-20260915/`. This asset pass does not claim to
+resolve the separately measured GPU simulation stalls.
 
 The graphics branch's renderer selects clips from the existing organism state.
 Pause freezes animation. Coat, mass, ear/head proportions and tail size derive

@@ -48,6 +48,10 @@ bpy.ops.object.join()
 mesh=bpy.context.object;mesh.name='Hearthling_Runtime'
 mesh.data.uv_layers.active=mesh.data.uv_layers['RuntimeUV']
 mesh.data.uv_layers.active.active_render=True
+# glTF uses the render color layer for COLOR_0. Joining onto a mesh whose old
+# layer was removed can leave this at -1 despite a valid active edit layer.
+mesh.data.color_attributes.active_color=mesh.data.color_attributes['RuntimeColor']
+mesh.data.color_attributes.render_color_index=0
 # Join deduplicates material slots; glTF emits one draw primitive per material.
 assert len([m for m in mesh.modifiers if m.type=='ARMATURE'])==1
 bpy.ops.object.select_all(action='DESELECT');mesh.select_set(True);rig.select_set(True)
