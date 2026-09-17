@@ -250,7 +250,7 @@ fn canonical_signature_includes_future_organism_identity_state() {
 }
 
 #[test]
-fn canonical_signature_registry_is_v4_and_included_in_world_identity() {
+fn canonical_signature_registry_is_current_and_included_in_world_identity() {
     let (mut world, resident_a, resident_b) = world_with_two_agents();
     let empty = world.canonical_signature_digest().unwrap();
 
@@ -261,8 +261,14 @@ fn canonical_signature_registry_is_v4_and_included_in_world_identity() {
         .unwrap();
     let registered = world.canonical_signature_digest().unwrap();
 
-    assert_eq!(empty.schema_version, 4);
-    assert_eq!(registered.schema_version, 4);
+    assert_eq!(
+        empty.schema_version,
+        HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION
+    );
+    assert_eq!(
+        registered.schema_version,
+        HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION
+    );
     assert_ne!(empty, registered);
 }
 

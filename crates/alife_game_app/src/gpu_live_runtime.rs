@@ -10132,16 +10132,25 @@ mod tests {
             SensorProfile::GroundedObjectSlotsV1,
         )
         .unwrap();
+        let (brain_phenotype, _) = GpuLiveBrainRuntime::compile_birth(
+            &world,
+            BrainScaleTier::Nano512,
+            SensorProfile::GroundedObjectSlotsV1,
+            organism_id,
+        )
+        .unwrap();
         let canonical = world.organism_registry().get(organism_id).unwrap();
         let mut receptors = NeuralReceptorEffects::from_frame(
             &canonical
                 .biochemistry()
                 .neural_receptor_frame(canonical.phenotype())
                 .unwrap(),
-            &NeuralReceptorPhenotype::compile(canonical.phenotype()).unwrap(),
+            &NeuralReceptorPhenotype::compile(&brain_phenotype).unwrap(),
         )
         .unwrap();
         // Fix modulation so only the learned object evidence changes.
+        receptors.regional_excitability = 1.5;
+        receptors.attention_gain = 1.5;
         receptors.projection_gain = 1.0;
         receptors.local_threshold_shift = 0.0;
         let policy = AttentionSelectionPolicy {
