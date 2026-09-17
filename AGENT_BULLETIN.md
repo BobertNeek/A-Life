@@ -27,10 +27,10 @@ architecture, user instructions, or dated evidence reports.
 | --- | --- | --- | --- | --- | --- | --- |
 | Bob / recovered review supervisor | 28 packets | initial-founder-training-20260907 | Closed with two design questions | C001 receptor reduction; C004 energy stability definition | Compile/runtime unverified | 2026-09-11 07:06Z |
 
-| Bob / September review supervisor | V01, V02, V04; formatting, focused checks, one playtest | codex/review-gameplay-fixes-20260916 / D:\A life | Active | Review workers; serialize Cargo/GPU; integrate | None | 2026-09-17 00:34Z |
-| attention worker / Sol high | V01 app attention wiring and focused regression | Same checkout | Assigned | Object-linked concept/gap evidence before selection | No Cargo or commits; Bob owns integration | 2026-09-17 00:34Z |
-| contact worker / Luna high | V02 headless action rejection branches and action tests | Same checkout | Assigned | Truthful contact; preserve baby exploration | No Cargo or commits; avoid signature block | 2026-09-17 00:34Z |
-| terrain worker / Terra high | V04 canonical signature block and signature tests | Same checkout | Assigned | Bind terrain without unrelated schema changes | No Cargo or commits; avoid action methods | 2026-09-17 00:34Z |
+| Bob / September review supervisor | V01, V02, V04; formatting, focused checks, one playtest | codex/review-gameplay-fixes-20260916 / D:\A life | Verification | Manual review and 27 focused checks passed; final build/playtest and CI pending | None | 2026-09-17 01:02Z |
+| attention worker / Sol high | V01 app attention wiring and focused regression | Same checkout | Reviewed; regression passed | Included in 0f885a5a | No Cargo or commits; Bob owns integration | 2026-09-17 00:34Z |
+| contact worker / Luna high | V02 headless action rejection branches and action tests | Same checkout | Reviewed; action checks passed | Included in 4acb7668 | No Cargo or commits; avoid signature block | 2026-09-17 00:34Z |
+| terrain worker / Terra high | V04 canonical signature block and signature tests | Same checkout | Reviewed; signature and roundtrip checks passed | Included in 0f885a5a | No Cargo or commits; avoid action methods | 2026-09-17 00:34Z |
 
 ## Handoffs and requests
 

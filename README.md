@@ -12,13 +12,15 @@ Windows prerequisites:
 - Git for Windows, used by the repository's validation wrappers;
 - a Vulkan-capable adapter for GPU neural execution.
 
-Launch the frontend:
+Start a fresh game with one creature:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -NewGame -Population 1
 ```
 
-Run the application's manifest, asset, save, and GPU preflight without opening a window:
+New Game creates a current-format creature and save. The launcher chooses a fresh seed; pass `-Seed` to choose one explicitly. Existing save files are preserved. Without `-NewGame`, the selected manifest must point to a supported save; the bundled development-era `tiny_save.json` lacks current biochemical data and cannot be loaded.
+
+Check an existing save's manifest, assets, and GPU setup without opening a window (`-DryRun` does not exercise New Game):
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun

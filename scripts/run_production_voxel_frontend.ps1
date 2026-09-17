@@ -2,6 +2,8 @@ param(
     [ValidateSet("dev", "release")]
     [string]$BuildProfile = "release",
     [string]$Manifest = "",
+    [switch]$NewGame,
+    [UInt64]$Seed = 0,
     [switch]$DryRun,
     [switch]$PreviewCommand,
     [ValidateRange(0, 120)]
@@ -46,6 +48,18 @@ $AppArgs = @(
 
 if ($Manifest) {
     $AppArgs += @("--manifest", $Manifest)
+}
+
+if ($NewGame) {
+    if ($DryRun) {
+        throw "New Game needs a graphical launch; -DryRun only checks an existing save."
+    }
+    if ($Seed -eq 0) {
+        $Seed = [UInt64][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    }
+    $AppArgs += @("--new-game", "--seed", "$Seed")
+} elseif ($Seed -ne 0) {
+    throw "-Seed requires -NewGame."
 }
 
 if ($Population -gt 0) {
