@@ -4,8 +4,8 @@ use alife_archive::{ResolvedFounder, ResolvedFounderCohort};
 use alife_core::{
     BrainCapacityClass, DevelopmentState, FounderMode, LanguageGroundingLedger, MemoryBankConfig,
     MemorySidecarState, NormalizedScalar, PassiveLifeStatistics, PhenotypeCompiler,
-    PhenotypeCompilerInputs, SensorProfileIdentity, SensoryAbiVersion,
-    SleepState, Tick, TopologicalMapConfig, TopologySidecar, Validate,
+    PhenotypeCompilerInputs, SensorProfileIdentity, SensoryAbiVersion, SleepState, Tick,
+    TopologicalMapConfig, TopologySidecar, Validate,
 };
 use alife_gpu_backend::GpuClosedLoopBackend;
 use alife_runtime::{

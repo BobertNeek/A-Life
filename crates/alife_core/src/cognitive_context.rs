@@ -2,15 +2,14 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::predictive::SuccessorPrediction;
 use crate::{
     AttentionFrame, CandidateFeatureDigest, CanonicalDigestBuilder, ConceptCellId,
     ExperienceSequenceId, HysteresisState, MemoryId, NormalizedScalar, OrganismId,
     PerceptionBaseDigest, SalienceComponents, ScaffoldContractError, SemanticStateVector,
     SignedValence, StableFocusIdentity, Tick, TrackedObjectId, UnresolvedGapId, Validate,
-    MAX_ACTION_CANDIDATES, MAX_FOCAL_TARGETS, MAX_PERIPHERAL_SUMMARIES,
-    MAX_SEMANTIC_STATE_VALUES,
+    MAX_ACTION_CANDIDATES, MAX_FOCAL_TARGETS, MAX_PERIPHERAL_SUMMARIES, MAX_SEMANTIC_STATE_VALUES,
 };
-use crate::predictive::SuccessorPrediction;
 
 pub const COGNITIVE_CONTEXT_SCHEMA_VERSION: u16 = 2;
 pub const MAX_CONTEXT_MEMORY_EXPECTANCIES: usize = 32;
@@ -372,9 +371,10 @@ impl Validate for CognitiveProjectionFrame {
             }
         }
         if self.objects.len() > MAX_PERIPHERAL_SUMMARIES
-            || self.objects.windows(2).any(|pair| {
-                pair[0].tracked_object_id >= pair[1].tracked_object_id
-            })
+            || self
+                .objects
+                .windows(2)
+                .any(|pair| pair[0].tracked_object_id >= pair[1].tracked_object_id)
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
@@ -554,20 +554,35 @@ impl CognitiveContextFrame {
                 builder.write_u64(candidate.candidate_feature_digest.0[0]);
                 builder.write_u64(candidate.candidate_feature_digest.0[1]);
                 match candidate.tracked_object_id {
-                    Some(id) => { builder.write_some(); builder.write_u64(id.raw()); }
+                    Some(id) => {
+                        builder.write_some();
+                        builder.write_u64(id.raw());
+                    }
                     None => builder.write_none(),
                 }
                 builder.write_bool(candidate.forecast_available);
-                for value in [candidate.concept_match, candidate.gap_match, candidate.prior_residual] {
+                for value in [
+                    candidate.concept_match,
+                    candidate.gap_match,
+                    candidate.prior_residual,
+                ] {
                     builder.write_f32(value.raw())?;
                 }
-                for word in candidate.prediction.source_digest { builder.write_u64(word); }
-                for value in &candidate.prediction.predicted_successor { builder.write_f32(*value)?; }
+                for word in candidate.prediction.source_digest {
+                    builder.write_u64(word);
+                }
+                for value in &candidate.prediction.predicted_successor {
+                    builder.write_f32(*value)?;
+                }
             }
             builder.write_sequence_len(projection.objects.len());
             for object in &projection.objects {
                 builder.write_u64(object.tracked_object_id.raw());
-                for value in [object.concept_match, object.gap_match, object.prior_residual] {
+                for value in [
+                    object.concept_match,
+                    object.gap_match,
+                    object.prior_residual,
+                ] {
                     builder.write_f32(value.raw())?;
                 }
             }

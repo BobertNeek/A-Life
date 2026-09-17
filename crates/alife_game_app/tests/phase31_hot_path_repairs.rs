@@ -394,9 +394,7 @@ fn phase31_post_journal_authority_survives_finish_for_the_next_ordinary_edge() {
     );
     let drain_deadline = Instant::now() + Duration::from_secs(30);
     while Instant::now() < drain_deadline
-        && !fixture
-            .runtime
-            .persistence_idle_for_shutdown_for_test()
+        && !fixture.runtime.persistence_idle_for_shutdown_for_test()
     {
         fixture
             .runtime
@@ -404,9 +402,7 @@ fn phase31_post_journal_authority_survives_finish_for_the_next_ordinary_edge() {
             .unwrap();
         std::thread::park_timeout(Duration::from_millis(1));
     }
-    assert!(fixture
-        .runtime
-        .persistence_idle_for_shutdown_for_test());
+    assert!(fixture.runtime.persistence_idle_for_shutdown_for_test());
     let committed_generation =
         GpuDurableSaveManifest::open(&fixture.save_path, &fixture.asset_root)
             .unwrap()
@@ -468,11 +464,7 @@ fn phase31_shutdown_drain_finalizes_a_durable_completed_checkpoint_without_anoth
 
     let started = Instant::now();
     let deadline = started + Duration::from_secs(30);
-    while Instant::now() < deadline
-        && !fixture
-            .runtime
-            .persistence_idle_for_shutdown_for_test()
-    {
+    while Instant::now() < deadline && !fixture.runtime.persistence_idle_for_shutdown_for_test() {
         fixture
             .runtime
             .poll_persistence_for_shutdown_for_test()
@@ -481,9 +473,7 @@ fn phase31_shutdown_drain_finalizes_a_durable_completed_checkpoint_without_anoth
     }
 
     assert!(
-        fixture
-            .runtime
-            .persistence_idle_for_shutdown_for_test(),
+        fixture.runtime.persistence_idle_for_shutdown_for_test(),
         "shutdown polling must drain AwaitingJournal without admitting another simulation tick; {}",
         checkpoint_wait_diagnostics(&mut fixture.runtime, &fixture.organisms, started)
     );
@@ -501,7 +491,10 @@ fn phase31_shutdown_drain_finalizes_a_durable_completed_checkpoint_without_anoth
             .find(|creature| creature.organism_id == *organism_id)
             .and_then(|creature| creature.gpu_brain.as_ref())
             .is_some_and(|brain| {
-                matches!(brain.sleep.consolidation, ConsolidationState::Completed { .. })
+                matches!(
+                    brain.sleep.consolidation,
+                    ConsolidationState::Completed { .. }
+                )
             })
     }));
 
@@ -549,9 +542,7 @@ fn phase31_async_journal_publication_survives_later_cycles_then_drains() {
     let quiesced_tick = fixture.runtime.world_tick_for_test();
     let drain_deadline = Instant::now() + Duration::from_secs(30);
     while Instant::now() < drain_deadline
-        && !fixture
-            .runtime
-            .persistence_idle_for_shutdown_for_test()
+        && !fixture.runtime.persistence_idle_for_shutdown_for_test()
     {
         fixture
             .runtime
@@ -560,9 +551,7 @@ fn phase31_async_journal_publication_survives_later_cycles_then_drains() {
         std::thread::park_timeout(Duration::from_millis(1));
     }
     assert!(
-        fixture
-            .runtime
-            .persistence_idle_for_shutdown_for_test(),
+        fixture.runtime.persistence_idle_for_shutdown_for_test(),
         "later-cycle persistence must drain: {}",
         checkpoint_wait_diagnostics(&mut fixture.runtime, &fixture.organisms, started)
     );
@@ -575,15 +564,9 @@ fn phase31_async_journal_publication_survives_later_cycles_then_drains() {
 #[test]
 fn phase31_shutdown_poll_releases_a_stranded_exact_journal_wait() {
     let mut fixture = canonical_runtime(31_082_706, 6);
-    assert!(fixture
-        .runtime
-        .persistence_idle_for_shutdown_for_test());
-    fixture
-        .runtime
-        .force_stranded_exact_journal_wait_for_test();
-    assert!(!fixture
-        .runtime
-        .persistence_idle_for_shutdown_for_test());
+    assert!(fixture.runtime.persistence_idle_for_shutdown_for_test());
+    fixture.runtime.force_stranded_exact_journal_wait_for_test();
+    assert!(!fixture.runtime.persistence_idle_for_shutdown_for_test());
 
     fixture
         .runtime
@@ -595,20 +578,14 @@ fn phase31_shutdown_poll_releases_a_stranded_exact_journal_wait() {
         .is_some());
 
     let deadline = Instant::now() + Duration::from_secs(30);
-    while Instant::now() < deadline
-        && !fixture
-            .runtime
-            .persistence_idle_for_shutdown_for_test()
-    {
+    while Instant::now() < deadline && !fixture.runtime.persistence_idle_for_shutdown_for_test() {
         fixture
             .runtime
             .poll_persistence_for_shutdown_for_test()
             .unwrap();
         std::thread::park_timeout(Duration::from_millis(1));
     }
-    assert!(fixture
-        .runtime
-        .persistence_idle_for_shutdown_for_test());
+    assert!(fixture.runtime.persistence_idle_for_shutdown_for_test());
 
     drop(fixture.runtime);
     fs::remove_dir_all(fixture.root).unwrap();

@@ -184,9 +184,11 @@ pub(crate) fn allocate_checkpoint_output(
     plan: CheckpointDecodePlan,
 ) -> Result<Vec<u8>, ArchiveError> {
     let mut output = Vec::new();
-    output.try_reserve_exact(plan.output_capacity).map_err(|error| {
-        ArchiveError::Integrity(format!("checkpoint output allocation failed: {error}"))
-    })?;
+    output
+        .try_reserve_exact(plan.output_capacity)
+        .map_err(|error| {
+            ArchiveError::Integrity(format!("checkpoint output allocation failed: {error}"))
+        })?;
     Ok(output)
 }
 
@@ -1974,17 +1976,13 @@ impl LineageLibrary {
             compressed_pages.push(compressed);
             page_refs.push(page_ref);
         }
-        let total_compressed_bytes = page_refs
-            .iter()
-            .try_fold(0_u64, |total, page| {
-                total
-                    .checked_add(u64::from(page.compressed_bytes))
-                    .ok_or_else(|| {
-                        ArchiveError::Integrity(
-                            "checkpoint compressed byte count overflow".to_string(),
-                        )
-                    })
-            })?;
+        let total_compressed_bytes = page_refs.iter().try_fold(0_u64, |total, page| {
+            total
+                .checked_add(u64::from(page.compressed_bytes))
+                .ok_or_else(|| {
+                    ArchiveError::Integrity("checkpoint compressed byte count overflow".to_string())
+                })
+        })?;
         let digest = digest_bytes(bytes);
         let reference = ArchiveCheckpointRef {
             digest,
@@ -3365,9 +3363,7 @@ fn archive_reparse_point_flags(is_symlink: bool, file_attributes: u32) -> bool {
 
 #[cfg(test)]
 mod archive_path_tests {
-    fn checkpoint_reference(
-        pages: Vec<super::ArchivePageRef>,
-    ) -> super::ArchiveCheckpointRef {
+    fn checkpoint_reference(pages: Vec<super::ArchivePageRef>) -> super::ArchiveCheckpointRef {
         super::ArchiveCheckpointRef {
             digest: super::Blake3Digest::from_bytes([1; 32]),
             retention: super::ArchiveCheckpointRetention::Pinned,
@@ -3494,8 +3490,7 @@ mod archive_path_tests {
             uncompressed_bytes: u32::try_from(super::ARCHIVE_PAGE_BYTES).unwrap(),
         };
         let decoded_page_count = usize::try_from(
-            super::MAX_CHECKPOINT_DECODED_BYTES
-                / u64::try_from(super::ARCHIVE_PAGE_BYTES).unwrap()
+            super::MAX_CHECKPOINT_DECODED_BYTES / u64::try_from(super::ARCHIVE_PAGE_BYTES).unwrap()
                 + 1,
         )
         .unwrap();
@@ -3511,13 +3506,11 @@ mod archive_path_tests {
             uncompressed_bytes: 1,
         };
         let compressed_page_count = usize::try_from(
-            super::MAX_CHECKPOINT_COMPRESSED_BYTES
-                / super::MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES
+            super::MAX_CHECKPOINT_COMPRESSED_BYTES / super::MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES
                 + 1,
         )
         .unwrap();
-        let compressed =
-            checkpoint_reference(vec![compressed_page; compressed_page_count]);
+        let compressed = checkpoint_reference(vec![compressed_page; compressed_page_count]);
         let compressed_error = super::checkpoint_decode_plan(&compressed).unwrap_err();
         assert!(compressed_error
             .to_string()
@@ -3530,10 +3523,9 @@ mod archive_path_tests {
             "alife-archive-checkpoint-roundtrip-{}",
             super::TEMP_SEQUENCE.fetch_add(1, super::Ordering::Relaxed)
         ));
-        let library = super::LineageLibrary::open(super::LineageLibraryConfig::profile_default(
-            &root,
-        ))
-        .unwrap();
+        let library =
+            super::LineageLibrary::open(super::LineageLibraryConfig::profile_default(&root))
+                .unwrap();
         let bytes = (0..(super::ARCHIVE_PAGE_BYTES * 2 + 137))
             .map(|index| (index % 251) as u8)
             .collect::<Vec<_>>();

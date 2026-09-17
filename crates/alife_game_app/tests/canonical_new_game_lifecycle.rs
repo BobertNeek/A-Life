@@ -13,15 +13,11 @@ use alife_core::{
 };
 #[cfg(feature = "production-voxel-frontend")]
 use alife_game_app::{
-    bevy_shell::{
-        build_production_voxel_frontend_app_shell, LiveBrainPresentationFrameResource,
-    },
+    bevy_shell::{build_production_voxel_frontend_app_shell, LiveBrainPresentationFrameResource},
     default_environment_manifest_path, run_production_voxel_frontend_preflight,
     LiveBrainCausalStage, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
     ProductionWorldSource,
 };
-#[cfg(feature = "production-voxel-frontend")]
-use bevy::time::TimeUpdateStrategy;
 #[cfg(feature = "gpu-tests")]
 use alife_game_app::{
     create_canonical_new_game_runtime,
@@ -37,6 +33,8 @@ use alife_world::PortableSaveFile;
 #[cfg(feature = "gpu-tests")]
 use alife_world::WorldOrganismRecord;
 use alife_world::{AssetManifest, RuntimeConfig};
+#[cfg(feature = "production-voxel-frontend")]
+use bevy::time::TimeUpdateStrategy;
 
 fn phase3_request(population: u16) -> CanonicalNewGameLaunchRequest {
     let root = std::env::temp_dir().join(format!(
@@ -119,14 +117,19 @@ fn production_new_game_source_builds_exact_runtime_before_scene_construction() {
     let exact_after_preflight = PortableSaveFile::from_json_file(&summary.save_path).unwrap();
     assert_eq!(repeated_preflight.save_path, summary.save_path);
     assert_eq!(exact_after_preflight, exact_before_preflight);
-    assert_eq!(std::fs::read(&summary.save_path).unwrap(), bytes_before_preflight);
+    assert_eq!(
+        std::fs::read(&summary.save_path).unwrap(),
+        bytes_before_preflight
+    );
 
     let initial_tick = app
         .world()
         .resource::<LiveBrainPresentationFrameResource>()
         .current
         .authoritative_world_tick;
-    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(34)));
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+        34,
+    )));
     let expected_causal_stages = vec![
         LiveBrainCausalStage::EvaluateSleep,
         LiveBrainCausalStage::AdvanceSleep,
@@ -175,8 +178,8 @@ fn production_new_game_source_builds_exact_runtime_before_scene_construction() {
                     .cognitive_for_organism(row.organism_id)
                     .is_some_and(|cognitive| cognitive.consolidation_state_raw == Some(5))
             });
-        saw_awake_after_sleep |= saw_committed_waking
-            && all_sleep_phase(alife_core::SleepPhase::Awake.raw());
+        saw_awake_after_sleep |=
+            saw_committed_waking && all_sleep_phase(alife_core::SleepPhase::Awake.raw());
         if !frame.tick_summaries.is_empty()
             && frame
                 .tick_summaries
@@ -187,7 +190,10 @@ fn production_new_game_source_builds_exact_runtime_before_scene_construction() {
             break;
         }
     }
-    assert!(saw_automatic_sleep, "production runtime skipped automatic sleep");
+    assert!(
+        saw_automatic_sleep,
+        "production runtime skipped automatic sleep"
+    );
     assert!(
         saw_committed_waking,
         "production sleep never durably committed before waking"

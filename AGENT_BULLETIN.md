@@ -27,6 +27,11 @@ architecture, user instructions, or dated evidence reports.
 | --- | --- | --- | --- | --- | --- | --- |
 | Bob / recovered review supervisor | 28 packets | initial-founder-training-20260907 | Closed with two design questions | C001 receptor reduction; C004 energy stability definition | Compile/runtime unverified | 2026-09-11 07:06Z |
 
+| Bob / September review supervisor | V01, V02, V04; formatting, focused checks, one playtest | codex/review-gameplay-fixes-20260916 / D:\A life | Active | Review workers; serialize Cargo/GPU; integrate | None | 2026-09-17 00:34Z |
+| attention worker / Sol high | V01 app attention wiring and focused regression | Same checkout | Assigned | Object-linked concept/gap evidence before selection | No Cargo or commits; Bob owns integration | 2026-09-17 00:34Z |
+| contact worker / Luna high | V02 headless action rejection branches and action tests | Same checkout | Assigned | Truthful contact; preserve baby exploration | No Cargo or commits; avoid signature block | 2026-09-17 00:34Z |
+| terrain worker / Terra high | V04 canonical signature block and signature tests | Same checkout | Assigned | Bind terrain without unrelated schema changes | No Cargo or commits; avoid action methods | 2026-09-17 00:34Z |
+
 ## Handoffs and requests
 
 | From | To | Request | Evidence or files | Status | Updated (UTC) |
@@ -40,6 +45,8 @@ architecture, user instructions, or dated evidence reports.
 | 2026-09-11 | Bob | Supervisor alone updates this board and integrates accepted commits. No Cargo/build/GPU commands. Preserve founder n512_candidate_live.rs WIP. | .worktrees/initial-founder-training-20260907/docs/superpowers/plans/2026-09-10-recovered-review/README.md |
 
 Routine Git approvals belong to Bob. Workers hand off sandbox-blocked Git operations in their final response. Bob performs scoped Git through permitted supervisor tools; sandbox settings remain unchanged.
+
+| 2026-09-16 | Bob | Current user approval supersedes the September 11 no-Cargo notice for this campaign. Only supervisor runs builds/tests/GPU. No retraining, historical migration, or architecture expansion. Workers use bounded messages and preserve each other's edits. | Revised review V01/V02/V04 |
 
 ## Completed work
 

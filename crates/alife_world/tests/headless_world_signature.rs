@@ -6,6 +6,7 @@ use alife_core::{
 use alife_world::{
     persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
     HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord,
+    HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION,
 };
 
 fn record(organism_id: u64, world_entity_id: u64) -> WorldOrganismRecord {
@@ -76,6 +77,33 @@ fn canonical_signature_distinguishes_same_seed_wrong_and_later_worlds() {
     assert_ne!(
         original.canonical_signature_digest().unwrap(),
         later_world.canonical_signature_digest().unwrap()
+    );
+}
+
+#[test]
+fn canonical_signature_binds_optional_terrain_identity() {
+    let mut source_world = HeadlessScenarioBuilder::new(44_002).build().unwrap();
+    source_world.enable_highlands_for_new_game().unwrap();
+    let terrain_save = save(&source_world);
+    let terrain_world = terrain_save.clone().restore_headless_world().unwrap();
+    let terrain_clone = terrain_save.clone().restore_headless_world().unwrap();
+
+    let mut terrainless_save = terrain_save;
+    terrainless_save.world.terrain = None;
+    let terrainless_world = terrainless_save.restore_headless_world().unwrap();
+
+    let terrain_signature = terrain_world.canonical_signature_digest().unwrap();
+    assert_eq!(
+        terrain_signature.schema_version,
+        HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION
+    );
+    assert_eq!(
+        terrain_signature,
+        terrain_clone.canonical_signature_digest().unwrap()
+    );
+    assert_ne!(
+        terrain_signature,
+        terrainless_world.canonical_signature_digest().unwrap()
     );
 }
 

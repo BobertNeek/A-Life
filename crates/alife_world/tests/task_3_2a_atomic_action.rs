@@ -529,7 +529,19 @@ fn registered_zero_only_event_profiles_keep_unmodeled_fields_zero() {
         )
         .unwrap();
     assert!(!failed.action_result.execution.succeeded);
-    zero_only_event(failed.action_result.body_event, -0.02);
+    assert_eq!(
+        failed.action_result.execution.physical.contact,
+        PhysicalContactKind::Touch
+    );
+    assert_eq!(
+        failed.action_result.execution.physical.target_entity,
+        Some(hazard)
+    );
+    assert_eq!(failed.action_result.touched_entities, vec![hazard]);
+    assert_eq!(failed.action_result.observation.pain_delta.raw(), 0.7);
+    assert_eq!(failed.action_result.body_event.energy, -0.08);
+    assert_eq!(failed.action_result.body_event.damage, 0.7);
+    assert_eq!(failed.action_result.body_event.nutrition, 0.0);
     assert_eq!(failed.action_result.observation.reward_valence.raw(), 0.0);
 
     let mut blocked_world = HeadlessScenarioBuilder::new(32_011)

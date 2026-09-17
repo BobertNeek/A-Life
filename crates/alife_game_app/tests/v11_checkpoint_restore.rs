@@ -12,9 +12,9 @@ use alife_core::{
     CognitiveContextFrame, CognitiveWorkReceipt, DendriticBranch, DendriticBranchSet,
     DendriticInputRef, DurationTicks, ExperienceSequenceId, HysteresisState, Intensity,
     JointMotorCondition, MotorChannel, MotorChannelFactor, MotorCommandBundle, NormalizedScalar,
-    OrganismId, PredictionTargetReceipt, SemanticStateVector,
-    SleepState, SleepTrigger, StructuralPlasticityConfig, StructuralPlasticityState,
-    StableFocusIdentity, Validate, Vec3f, SLEEP_CONSOLIDATION_SCHEMA_VERSION,
+    OrganismId, PredictionTargetReceipt, SemanticStateVector, SleepState, SleepTrigger,
+    StableFocusIdentity, StructuralPlasticityConfig, StructuralPlasticityState, Validate, Vec3f,
+    SLEEP_CONSOLIDATION_SCHEMA_VERSION,
 };
 use alife_game_app::{
     merge_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite, GpuCheckpointAssetStore,
@@ -88,7 +88,9 @@ fn exact_checkpoint_manifest_restore_preserves_control_path() {
         SemanticStateVector::new(vec![0.25, 0.75]).expect("target semantic state"),
     )
     .expect("grounded prediction target");
-    predictor.observe(&target).expect("non-default predictor update");
+    predictor
+        .observe(&target)
+        .expect("non-default predictor update");
 
     let motor_command = ChannelCommand::new(
         MotorChannel::Locomotion,
@@ -110,10 +112,9 @@ fn exact_checkpoint_manifest_restore_preserves_control_path() {
     )
     .expect("non-default motor intent");
 
-    let cognitive_work = CognitiveWorkReceipt::from_counters(
-        2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37,
-    )
-    .expect("non-default cognitive work");
+    let cognitive_work =
+        CognitiveWorkReceipt::from_counters(2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37)
+            .expect("non-default cognitive work");
     let mut sleep_work = SleepWorkReceipt {
         schema_version: SLEEP_CONSOLIDATION_SCHEMA_VERSION,
         tick: checkpoint_tick,
@@ -144,21 +145,17 @@ fn exact_checkpoint_manifest_restore_preserves_control_path() {
         .validate_contract()
         .expect("non-default sleep state remains valid");
 
-    let dendritic_branches = DendriticBranchSet::new(vec![
-        DendriticBranch::new(
-            0,
-            0.5,
-            1.0,
-            vec![DendriticInputRef::new(1, 0.75).expect("dendritic input")],
-        )
-        .expect("dendritic branch"),
-    ])
-    .expect("dendritic branch set");
-    let mut structural_plasticity = StructuralPlasticityState::new(
-        512,
-        StructuralPlasticityConfig::default(),
+    let dendritic_branches = DendriticBranchSet::new(vec![DendriticBranch::new(
+        0,
+        0.5,
+        1.0,
+        vec![DendriticInputRef::new(1, 0.75).expect("dendritic input")],
     )
-    .expect("bounded structural state");
+    .expect("dendritic branch")])
+    .expect("dendritic branch set");
+    let mut structural_plasticity =
+        StructuralPlasticityState::new(512, StructuralPlasticityConfig::default())
+            .expect("bounded structural state");
     structural_plasticity
         .discover_candidates(&[CoactivationEvidence {
             region: 0,
@@ -208,7 +205,10 @@ fn exact_checkpoint_manifest_restore_preserves_control_path() {
         &serde_json::to_string(&write.save_state).expect("serialize save state"),
     )
     .expect("deserialize save state");
-    assert_eq!(roundtrip_save.exact_cognitive_state, Some(asset_ref.clone()));
+    assert_eq!(
+        roundtrip_save.exact_cognitive_state,
+        Some(asset_ref.clone())
+    );
 
     let mut manifest = AssetManifest::empty();
     merge_gpu_checkpoint_manifest_entries(&mut manifest, write.manifest_entries)

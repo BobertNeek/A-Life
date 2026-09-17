@@ -569,6 +569,7 @@ impl GpuLiveBrainRuntime {
                 let attention_context_started = measure_preparation.then(Instant::now);
                 let mut peripheral_summaries =
                     grounded_peripheral_summaries(draft.grounded_object_slots())?;
+                let topology_evidence = topology_evidence_for_draft(&draft, topology)?;
                 let body_need = resident
                     .homeostasis
                     .drives
@@ -581,6 +582,7 @@ impl GpuLiveBrainRuntime {
                     body_need,
                     &memory_evidence,
                     &baseline_context,
+                    &topology_evidence,
                     receptor_effects,
                 )?;
                 let attention = select_focal_targets(
@@ -610,7 +612,7 @@ impl GpuLiveBrainRuntime {
                     &routed_recall,
                     sequence_id,
                     &resident.predictor,
-                    topology,
+                    &topology_evidence,
                 )?;
                 let cognitive_context =
                     cognitive_context_with_projection(cognitive_context, cognitive_projection)?;

@@ -1373,22 +1373,13 @@ mod tests {
         let decode_plan = checkpoint_decode_plan(&checkpoint).unwrap();
 
         assert_eq!(
-            decode_checkpoint_from_entries(
-                &checkpoint,
-                decode_plan,
-                &entry_map,
-                &mut budget,
-            )
-            .unwrap(),
+            decode_checkpoint_from_entries(&checkpoint, decode_plan, &entry_map, &mut budget,)
+                .unwrap(),
             bytes
         );
-        let error = decode_checkpoint_from_entries(
-            &checkpoint,
-            decode_plan,
-            &entry_map,
-            &mut budget,
-        )
-        .unwrap_err();
+        let error =
+            decode_checkpoint_from_entries(&checkpoint, decode_plan, &entry_map, &mut budget)
+                .unwrap_err();
         assert!(error
             .to_string()
             .contains("nested checkpoint decoded work limit"));
@@ -1397,20 +1388,11 @@ mod tests {
             checkpoint.total_uncompressed_bytes * 2,
             checkpoint.total_compressed_bytes,
         );
-        decode_checkpoint_from_entries(
-            &checkpoint,
-            decode_plan,
-            &entry_map,
-            &mut input_budget,
-        )
-        .unwrap();
-        let error = decode_checkpoint_from_entries(
-            &checkpoint,
-            decode_plan,
-            &entry_map,
-            &mut input_budget,
-        )
-        .unwrap_err();
+        decode_checkpoint_from_entries(&checkpoint, decode_plan, &entry_map, &mut input_budget)
+            .unwrap();
+        let error =
+            decode_checkpoint_from_entries(&checkpoint, decode_plan, &entry_map, &mut input_budget)
+                .unwrap_err();
         assert!(error
             .to_string()
             .contains("nested checkpoint compressed work limit"));

@@ -66,9 +66,11 @@ const MAX_VISIBLE_ENTITIES: usize = 16;
 const VOCAL_TOKEN_ID_BASE: u32 = 400_000;
 const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
 const PROMPTED_SPEECH_COOLDOWN_TICKS: u64 = 8;
-const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v4";
+const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v5";
 /// Current schema required by every fresh headless-world signature receipt.
-pub const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 4;
+///
+/// Version 5 binds the optional authoritative terrain identity.
+pub const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 5;
 
 fn map_organism_registry_error(error: OrganismRegistryError) -> ScaffoldContractError {
     match error {
@@ -1197,6 +1199,14 @@ impl HeadlessWorld {
         digest.write_u64(self.next_organism_id);
         digest.write_u64(self.next_spawn_sequence);
         digest.write_u64(self.next_utterance_id);
+        match self.terrain {
+            Some(terrain) => {
+                digest.write_some();
+                digest.write_u16(terrain.version);
+                digest.write_u64(terrain.digest);
+            }
+            None => digest.write_none(),
+        }
 
         digest.write_sequence_len(self.objects.len());
         for object in self.objects.values() {
@@ -3189,34 +3199,46 @@ impl HeadlessWorld {
                 command,
                 false,
                 Some(ReferenceActionFailure::MissingAffordance),
-                physical(
-                    PhysicalContactKind::Blocked,
-                    Some(target),
-                    Vec3f::ZERO,
-                    0.04,
-                )?,
+                physical(PhysicalContactKind::None, Some(target), Vec3f::ZERO, 0.04)?,
                 OutcomeProfile::missing_affordance(),
-                vec![target],
+                Vec::new(),
             );
         }
-        let Some(object) = self.objects.get_mut(&target.raw()) else {
+        let Some(object) = self.objects.get(&target.raw()) else {
             return self.invalid_target(command, Some(target));
         };
         if object.kind != WorldObjectKind::Food || object.consumed {
+            let consumed = object.consumed;
+            let kind = object.kind;
+            let hazard_pain = object.hazard_pain;
+            let touched = (!consumed).then_some(target).into_iter().collect();
+            let profile = if kind == WorldObjectKind::Hazard && !consumed {
+                OutcomeProfile::hazard(hazard_pain)
+            } else {
+                OutcomeProfile::missing_affordance()
+            };
             return self.finish_action(
                 command,
                 false,
                 Some(ReferenceActionFailure::MissingAffordance),
                 physical(
-                    PhysicalContactKind::Blocked,
+                    if consumed {
+                        PhysicalContactKind::None
+                    } else {
+                        PhysicalContactKind::Touch
+                    },
                     Some(target),
                     Vec3f::ZERO,
                     0.04,
                 )?,
-                OutcomeProfile::missing_affordance(),
-                vec![target],
+                profile,
+                touched,
             );
         }
+        let object = self
+            .objects
+            .get_mut(&target.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
         let nutrition = object.nutrition;
         let pain = object.hazard_pain;
         object.consumed = true;
@@ -3446,9 +3468,9 @@ impl HeadlessWorld {
             command,
             false,
             Some(ReferenceActionFailure::ActionRejected),
-            physical(PhysicalContactKind::Blocked, target, Vec3f::ZERO, 0.03)?,
+            physical(PhysicalContactKind::None, target, Vec3f::ZERO, 0.03)?,
             OutcomeProfile::invalid_target(),
-            target.into_iter().collect(),
+            Vec::new(),
         )
     }
 
@@ -6241,6 +6263,122 @@ mod task_3_2a_tests {
             Tick::ZERO,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn eat_reports_only_physical_contact_that_the_attempt_reached() {
+        struct EatCase {
+            seed: u64,
+            label: Option<&'static str>,
+            kind: Option<WorldObjectKind>,
+            position: Vec3f,
+            expected_success: bool,
+            expected_contact: PhysicalContactKind,
+            expected_touched: bool,
+            expected_consumed: bool,
+            expected_nutrition: f32,
+            expected_damage: f32,
+        }
+
+        for case in [
+            EatCase {
+                seed: 32_041,
+                label: Some("distant-food"),
+                kind: Some(WorldObjectKind::Food),
+                position: Vec3f::new(3.0, 0.0, 0.0),
+                expected_success: false,
+                expected_contact: PhysicalContactKind::None,
+                expected_touched: false,
+                expected_consumed: false,
+                expected_nutrition: 0.0,
+                expected_damage: 0.0,
+            },
+            EatCase {
+                seed: 32_042,
+                label: None,
+                kind: None,
+                position: Vec3f::ZERO,
+                expected_success: false,
+                expected_contact: PhysicalContactKind::None,
+                expected_touched: false,
+                expected_consumed: false,
+                expected_nutrition: 0.0,
+                expected_damage: 0.0,
+            },
+            EatCase {
+                seed: 32_043,
+                label: Some("nearby-hazard"),
+                kind: Some(WorldObjectKind::Hazard),
+                position: Vec3f::new(1.0, 0.0, 0.0),
+                expected_success: false,
+                expected_contact: PhysicalContactKind::Touch,
+                expected_touched: true,
+                expected_consumed: false,
+                expected_nutrition: 0.0,
+                expected_damage: 0.7,
+            },
+            EatCase {
+                seed: 32_044,
+                label: Some("legal-food"),
+                kind: Some(WorldObjectKind::Food),
+                position: Vec3f::new(1.0, 0.0, 0.0),
+                expected_success: true,
+                expected_contact: PhysicalContactKind::Consumed,
+                expected_touched: true,
+                expected_consumed: true,
+                expected_nutrition: 0.6,
+                expected_damage: 0.0,
+            },
+        ] {
+            let mut scenario =
+                HeadlessScenarioBuilder::new(case.seed).agent("agent", ORGANISM_ID, Vec3f::ZERO);
+            if let (Some(label), Some(kind)) = (case.label, case.kind) {
+                scenario = match kind {
+                    WorldObjectKind::Food => scenario.food(label, case.position, 0.6),
+                    WorldObjectKind::Hazard => scenario.hazard(label, case.position, 0.7),
+                    _ => unreachable!("eat contact table only uses food and hazards"),
+                };
+            }
+            let mut world = scenario.build().unwrap();
+            let target = case
+                .label
+                .map(|label| world.entity_id(label).unwrap())
+                .or(Some(WorldEntityId(999)));
+            let command = HeadlessWorldCommand::structured(
+                ORGANISM_ID,
+                HeadlessActionIds::EAT,
+                ActionKind::Interact,
+                target,
+                None,
+            )
+            .unwrap();
+
+            let result = world.apply_command(&command).unwrap();
+
+            assert_eq!(result.execution.succeeded, case.expected_success);
+            assert_eq!(
+                result.execution.physical.contact,
+                case.expected_contact,
+                "{}",
+                case.label.unwrap_or("missing-target")
+            );
+            assert_eq!(result.execution.physical.target_entity, target);
+            let expected_touched = case
+                .expected_touched
+                .then_some(target.unwrap())
+                .into_iter()
+                .collect::<Vec<_>>();
+            assert_eq!(result.touched_entities, expected_touched);
+            assert_eq!(world.last_touched_entities, result.touched_entities);
+            assert_eq!(result.body_event.nutrition, case.expected_nutrition);
+            assert_eq!(result.body_event.damage, case.expected_damage);
+            if let Some(target) = case.label.map(|label| world.entity_id(label).unwrap()) {
+                assert_eq!(
+                    world.entity(target).unwrap().is_consumed(),
+                    case.expected_consumed
+                );
+            }
+        }
     }
 
     #[test]
