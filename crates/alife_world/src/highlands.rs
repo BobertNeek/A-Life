@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::OnceLock};
 
 const BYTES: &[u8] = include_bytes!("../assets/highlands-v1.bin");
-const CELL: f32 = 10.0;
+pub(crate) const CELL: f32 = 10.0;
 pub const HIGHLANDS_WATER_HEIGHT: f32 = 0.25;
 pub const HIGHLANDS_BODY_RADIUS: f32 = 0.2;
 
@@ -59,6 +59,7 @@ mod tests {
             origin_z: 0.0,
             spacing: 1.0,
             digest: 0,
+            water_level: Some(HIGHLANDS_WATER_HEIGHT),
             heights: vec![0.0, 2.0, 4.0, 10.0],
             obstacles: vec![],
             cells: HashMap::new(),
@@ -133,6 +134,7 @@ mod tests {
             origin_z: 0.0,
             spacing: 10.0,
             digest: 0,
+            water_level: Some(HIGHLANDS_WATER_HEIGHT),
             heights: vec![1.0; 4],
             obstacles: vec![[4.95, 0.0, 5.05, 10.0, 1.0, 4.0]],
             cells: HashMap::from([((0, 0), vec![0])]),
@@ -157,28 +159,32 @@ impl TerrainBinding {
             digest: highlands().digest,
         }
     }
+    /// Check the identity format. `WorldTerrain::restore` also verifies its data.
     pub fn validate(self) -> Result<(), ScaffoldContractError> {
-        if self != Self::highlands() {
+        if !matches!(self.version, 1 | 2) || self.digest == 0 {
             return Err(ScaffoldContractError::InvalidId);
         }
         Ok(())
     }
 }
 
-#[derive(Debug)]
-pub struct HighlandsSurface {
+#[derive(Debug, Clone)]
+pub struct TerrainSurface {
     pub width: usize,
     pub depth: usize,
     pub origin_x: f32,
     pub origin_z: f32,
     pub spacing: f32,
     pub digest: u64,
-    heights: Vec<f32>,
-    obstacles: Vec<[f32; 6]>,
-    cells: HashMap<(i32, i32), Vec<usize>>,
+    pub(crate) heights: Vec<f32>,
+    pub(crate) obstacles: Vec<[f32; 6]>,
+    pub(crate) cells: HashMap<(i32, i32), Vec<usize>>,
+    pub(crate) water_level: Option<f32>,
 }
 
-pub fn highlands() -> &'static HighlandsSurface {
+pub type HighlandsSurface = TerrainSurface;
+
+pub fn highlands() -> &'static TerrainSurface {
     static SURFACE: OnceLock<HighlandsSurface> = OnceLock::new();
     SURFACE.get_or_init(|| {
         assert_eq!(&BYTES[..8], b"HLAND001");
@@ -215,13 +221,14 @@ pub fn highlands() -> &'static HighlandsSurface {
             spacing: f32_at(24),
             digest,
             heights,
+            water_level: Some(HIGHLANDS_WATER_HEIGHT),
             obstacles,
             cells,
         }
     })
 }
 
-impl HighlandsSurface {
+impl TerrainSurface {
     pub fn height(&self, x: f32, z: f32) -> Option<f32> {
         self.sample(x, z).map(|p| p.0)
     }
@@ -261,36 +268,60 @@ impl HighlandsSurface {
         })
     }
     pub fn obstacle_at(&self, x: f32, z: f32, radius: f32) -> bool {
-        self.cells
-            .get(&((x / CELL).floor() as i32, (z / CELL).floor() as i32))
-            .is_some_and(|rows| {
-                rows.iter().any(|i| {
-                    let b = self.obstacles[*i];
-                    let dx = (b[0] - x).max(0.0).max(x - b[2]);
-                    let dz = (b[1] - z).max(0.0).max(z - b[3]);
-                    dx * dx + dz * dz <= radius * radius
+        // Search every cell touched by this body's clearance, not a baked radius.
+        let min_x = ((x - radius) / CELL).floor() as i32;
+        let max_x = ((x + radius) / CELL).floor() as i32;
+        let min_z = ((z - radius) / CELL).floor() as i32;
+        let max_z = ((z + radius) / CELL).floor() as i32;
+        (min_z..=max_z).any(|cz| {
+            (min_x..=max_x).any(|cx| {
+                self.cells.get(&(cx, cz)).is_some_and(|rows| {
+                    rows.iter().any(|i| {
+                        let b = self.obstacles[*i];
+                        let dx = (b[0] - x).max(0.0).max(x - b[2]);
+                        let dz = (b[1] - z).max(0.0).max(z - b[3]);
+                        dx * dx + dz * dz <= radius * radius
+                    })
                 })
             })
+        })
     }
     pub fn walkable(&self, x: f32, z: f32) -> bool {
+        self.walkable_with(x, z, crate::LocomotionLimits::default())
+    }
+    pub fn walkable_with(&self, x: f32, z: f32, limits: crate::LocomotionLimits) -> bool {
+        if limits.validate().is_err() {
+            return false;
+        }
         self.sample(x, z).is_some_and(|(h, g)| {
-            h >= HIGHLANDS_WATER_HEIGHT - 0.6
-                && g[0].hypot(g[1]) <= 0.85
-                && !self.obstacle_at(x, z, HIGHLANDS_BODY_RADIUS)
+            self.water_level
+                .is_none_or(|water| h >= water - limits.max_wading_depth)
+                && g[0].hypot(g[1]) <= limits.max_slope
+                && !self.obstacle_at(x, z, limits.body_radius)
         })
     }
     /// Sweep the full move so a fast step cannot jump across a rock or water edge.
     pub fn resolve_move(&self, start: Vec3f, end: Vec3f) -> Option<Vec3f> {
+        self.resolve_move_with(start, end, crate::LocomotionLimits::default())
+    }
+    pub fn resolve_move_with(
+        &self,
+        start: Vec3f,
+        end: Vec3f,
+        limits: crate::LocomotionLimits,
+    ) -> Option<Vec3f> {
         let distance = (end.x - start.x).hypot(end.z - start.z);
-        if !distance.is_finite() || distance > 64.0 {
+        if !distance.is_finite() || distance > 64.0 || limits.validate().is_err() {
             return None;
         }
-        let steps = (distance / 0.15).ceil().max(1.0) as usize;
+        let step = 0.15_f32.min(limits.body_radius.max(0.001));
+        let steps = (distance / step).ceil().max(1.0) as usize;
         for i in 1..=steps {
             let t = i as f32 / steps as f32;
-            if !self.walkable(
+            if !self.walkable_with(
                 start.x + (end.x - start.x) * t,
                 start.z + (end.z - start.z) * t,
+                limits,
             ) {
                 return None;
             }

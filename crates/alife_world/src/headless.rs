@@ -66,11 +66,11 @@ const MAX_VISIBLE_ENTITIES: usize = 16;
 const VOCAL_TOKEN_ID_BASE: u32 = 400_000;
 const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
 const PROMPTED_SPEECH_COOLDOWN_TICKS: u64 = 8;
-const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v5";
+const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v6";
 /// Current schema required by every fresh headless-world signature receipt.
 ///
-/// Version 5 binds the optional authoritative terrain identity.
-pub const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 5;
+/// Version 6 includes terrain identity and body locomotion limits.
+pub const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 6;
 
 fn map_organism_registry_error(error: OrganismRegistryError) -> ScaffoldContractError {
     match error {
@@ -288,7 +288,7 @@ pub struct WorldEditorSpawnSpec {
 #[derive(Debug, Clone)]
 pub struct HeadlessWorld {
     seed: u64,
-    terrain: Option<crate::TerrainBinding>,
+    terrain: Option<crate::WorldTerrain>,
     tick: Tick,
     next_entity_id: u64,
     next_organism_id: u64,
@@ -384,6 +384,7 @@ pub struct HeadlessPerceptionBatchIndex {
 pub(crate) struct HeadlessWorldPersistenceParts {
     pub seed: u64,
     pub terrain: Option<crate::TerrainBinding>,
+    pub terrain_state: Option<crate::TerrainState>,
     pub tick: Tick,
     pub next_entity_id: u64,
     pub next_organism_id: u64,
@@ -418,24 +419,42 @@ struct MatingOpportunityReport {
 
 impl HeadlessWorld {
     pub fn terrain_binding(&self) -> Option<crate::TerrainBinding> {
-        self.terrain
+        self.terrain.as_ref().map(crate::WorldTerrain::binding)
+    }
+
+    pub fn terrain(&self) -> Option<&crate::WorldTerrain> {
+        self.terrain.as_ref()
     }
 
     /// New-game placement only. Existing saves never silently change geography.
     pub fn enable_highlands_for_new_game(&mut self) -> Result<(), ScaffoldContractError> {
+        self.enable_terrain_for_new_game(
+            crate::WorldTerrain::highlands(),
+            Vec3f::new(32.0, 0.0, 70.0),
+        )
+    }
+
+    /// Convert the existing flat scenario's X/Y layout into this heightfield's
+    /// X/Z plane. Placement is transactional; movement never searches for routes.
+    pub fn enable_terrain_for_new_game(
+        &mut self,
+        terrain: crate::WorldTerrain,
+        origin: Vec3f,
+    ) -> Result<(), ScaffoldContractError> {
+        origin.validate()?;
         if self.tick != Tick::ZERO || self.terrain.is_some() {
             return Err(ScaffoldContractError::InvalidId);
         }
-        let surface = crate::highlands();
+        let surface = terrain.surface();
         let place = |p: Vec3f| -> Result<Vec3f, ScaffoldContractError> {
-            let x = 32.0 + p.x;
-            let z = 70.0 + p.y;
+            let x = origin.x + p.x;
+            let z = origin.z + p.y;
             for ring in 0..25 {
                 for direction in 0..8 {
                     let angle = direction as f32 * std::f32::consts::TAU / 8.0;
                     let x = x + angle.cos() * ring as f32 * 0.4;
                     let z = z + angle.sin() * ring as f32 * 0.4;
-                    if surface.walkable(x, z) {
+                    if terrain.walkable(x, z) {
                         return Ok(Vec3f::new(x, surface.height(x, z).unwrap(), z));
                     }
                 }
@@ -459,7 +478,7 @@ impl HeadlessWorld {
         for (zone, p) in self.ecology.zones.iter_mut().zip(zone_positions) {
             zone.center = p;
         }
-        self.terrain = Some(crate::TerrainBinding::highlands());
+        self.terrain = Some(terrain);
         self.rebuild_ecology_metrics();
         Ok(())
     }
@@ -1199,11 +1218,15 @@ impl HeadlessWorld {
         digest.write_u64(self.next_organism_id);
         digest.write_u64(self.next_spawn_sequence);
         digest.write_u64(self.next_utterance_id);
-        match self.terrain {
+        match self.terrain.as_ref() {
             Some(terrain) => {
                 digest.write_some();
-                digest.write_u16(terrain.version);
-                digest.write_u64(terrain.digest);
+                digest.write_u16(terrain.binding().version);
+                digest.write_u64(terrain.binding().digest);
+                let limits = terrain.limits();
+                write_f32_bits(&mut digest, limits.body_radius);
+                write_f32_bits(&mut digest, limits.max_slope);
+                write_f32_bits(&mut digest, limits.max_wading_depth);
             }
             None => digest.write_none(),
         }
@@ -1736,15 +1759,16 @@ impl HeadlessWorld {
     ) -> Result<(), ScaffoldContractError> {
         id.validate()?;
         position.validate()?;
-        if self.terrain.is_some() {
-            position.y = crate::highlands()
+        if let Some(terrain) = self.terrain.as_ref() {
+            position.y = terrain
+                .surface()
                 .height(position.x, position.z)
                 .ok_or(ScaffoldContractError::InvalidId)?;
             if self
                 .objects
                 .get(&id.raw())
                 .is_some_and(|o| o.kind == WorldObjectKind::Agent)
-                && !crate::highlands().walkable(position.x, position.z)
+                && !terrain.walkable(position.x, position.z)
             {
                 return Err(ScaffoldContractError::InvalidId);
             }
@@ -1820,7 +1844,8 @@ impl HeadlessWorld {
             });
         HeadlessWorldPersistenceParts {
             seed: self.seed,
-            terrain: self.terrain,
+            terrain: self.terrain_binding(),
+            terrain_state: self.terrain.as_ref().map(crate::WorldTerrain::state),
             tick: self.tick,
             next_entity_id: self.next_entity_id,
             next_organism_id,
@@ -1843,9 +1868,7 @@ impl HeadlessWorld {
     pub(crate) fn from_persistence_parts(
         parts: HeadlessWorldPersistenceParts,
     ) -> Result<Self, ScaffoldContractError> {
-        if let Some(terrain) = parts.terrain {
-            terrain.validate()?;
-        }
+        let terrain = crate::WorldTerrain::restore(parts.terrain, parts.terrain_state.as_ref())?;
         let max_present_organism_id = parts
             .objects
             .iter()
@@ -1939,7 +1962,7 @@ impl HeadlessWorld {
         }
         let world = Self {
             seed: parts.seed,
-            terrain: parts.terrain,
+            terrain,
             tick: parts.tick,
             next_entity_id: parts.next_entity_id,
             next_organism_id: parts.next_organism_id,
@@ -2903,12 +2926,13 @@ impl HeadlessWorld {
         mut spec: SpawnSpec<'_>,
     ) -> Result<WorldEntityId, ScaffoldContractError> {
         spec.position.validate()?;
-        if self.terrain.is_some() {
-            spec.position.y = crate::highlands()
+        if let Some(terrain) = self.terrain.as_ref() {
+            spec.position.y = terrain
+                .surface()
                 .height(spec.position.x, spec.position.z)
                 .ok_or(ScaffoldContractError::InvalidId)?;
             if spec.kind == WorldObjectKind::Agent
-                && !crate::highlands().walkable(spec.position.x, spec.position.z)
+                && !terrain.walkable(spec.position.x, spec.position.z)
             {
                 return Err(ScaffoldContractError::InvalidId);
             }
@@ -3293,8 +3317,8 @@ impl HeadlessWorld {
             return self.invalid_target(command, command.target_entity);
         };
         destination.validate()?;
-        if self.terrain.is_some() {
-            let Some(grounded) = crate::highlands().resolve_move(start, destination) else {
+        if let Some(terrain) = self.terrain.as_ref() {
+            let Some(grounded) = terrain.resolve_move(start, destination) else {
                 return self.finish_action(
                     command,
                     false,
@@ -3721,7 +3745,7 @@ impl HeadlessWorld {
             };
             let label = format!("{}-{}", policy.label_prefix, policy.spawned_count);
             let mut position = deterministic_zone_position(&zone, policy.spawned_count);
-            if self.terrain.is_some() {
+            if let Some(terrain) = self.terrain.as_ref() {
                 position.z = zone.center.z + position.y - zone.center.y;
                 position.y = zone.center.y;
                 // Keep a blocked sample from permanently starving this spawn policy.
@@ -3730,7 +3754,7 @@ impl HeadlessWorld {
                     .find_map(|fraction| {
                         let x = zone.center.x + (position.x - zone.center.x) * fraction;
                         let z = zone.center.z + (position.z - zone.center.z) * fraction;
-                        crate::highlands()
+                        terrain
                             .walkable(x, z)
                             .then_some(Vec3f::new(x, position.y, z))
                     });

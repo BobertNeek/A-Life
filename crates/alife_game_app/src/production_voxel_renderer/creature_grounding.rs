@@ -3,8 +3,37 @@ use super::*;
 use bevy::camera::primitives::Aabb;
 
 #[derive(Resource)]
+pub(super) struct SelectedTerrain(pub alife_world::WorldTerrain);
+
+#[cfg(test)]
+mod selected_terrain_tests {
+    use super::*;
+    #[test]
+    fn visual_grounding_uses_the_selected_world_surface() {
+        let terrain = alife_world::WorldTerrain::new(
+            alife_world::TerrainData {
+                width: 2,
+                depth: 2,
+                origin_x: 1000.0,
+                origin_z: 2000.0,
+                spacing: 10.0,
+                heights: vec![4.0, 6.0, 4.0, 6.0],
+                obstacles: vec![],
+                water_level: None,
+            },
+            Default::default(),
+        )
+        .unwrap();
+        let mut rendered = RenderedTerrainSurface::from_meshes(std::iter::empty(), 1.0);
+        rendered.set_surface(Some(terrain.surface().clone()));
+        assert_eq!(rendered.height(Vec3::new(1005.0, 0.0, 2005.0)), Some(5.0));
+        assert_eq!(rendered.height(Vec3::ZERO), None);
+    }
+}
+
+#[derive(Resource)]
 pub(super) struct RenderedTerrainSurface {
-    highlands: bool,
+    surface: Option<std::sync::Arc<alife_world::TerrainSurface>>,
     stride: f32,
     quads: BTreeMap<VoxelTileCoord, [[f32; 3]; 4]>,
 }
@@ -29,17 +58,20 @@ impl RenderedTerrainSurface {
         Self {
             stride,
             quads,
-            highlands: false,
+            surface: None,
         }
     }
 
-    pub(super) fn enable_highlands(&mut self) {
-        self.highlands = true;
+    pub(super) fn set_surface(
+        &mut self,
+        surface: Option<std::sync::Arc<alife_world::TerrainSurface>>,
+    ) {
+        self.surface = surface;
     }
 
     pub(super) fn height(&self, position: Vec3) -> Option<f32> {
-        if self.highlands {
-            return alife_world::highlands().height(position.x, position.z);
+        if let Some(surface) = self.surface.as_ref() {
+            return surface.height(position.x, position.z);
         }
         let cell = |coordinate: f32| {
             ((coordinate + self.stride * 0.5 - 0.5) / self.stride).floor() as i32

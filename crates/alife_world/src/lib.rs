@@ -28,7 +28,8 @@ pub use era1_trials::*;
 pub use grounded_sensing::*;
 pub use habitat::*;
 pub use headless::*;
-pub use highlands::{highlands, HighlandsSurface, TerrainBinding};
+pub use highlands::{highlands, HighlandsSurface, TerrainBinding, TerrainSurface};
+mod terrain;
 pub use new_game::*;
 pub use organism::*;
 pub use persistence::*;
@@ -37,6 +38,7 @@ pub use presentation::*;
 pub use procedural_chunks::*;
 pub use scenario::*;
 pub use speech::*;
+pub use terrain::{LocomotionLimits, TerrainData, TerrainState, WorldTerrain};
 pub use tracked_objects::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

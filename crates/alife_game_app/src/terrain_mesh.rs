@@ -41,6 +41,117 @@ pub(crate) struct TerrainMeshBuild {
     pub stats: TerrainMeshStats,
 }
 
+/// Display the selected authoritative heightfield using its exact diagonal.
+/// Keep meshes bounded so large custom maps retain useful frustum culling.
+pub(crate) fn build_heightfield_meshes(surface: &alife_world::TerrainSurface) -> TerrainMeshBuild {
+    let data = surface.data();
+    let mut layers = Vec::new();
+    let uv = [[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]];
+    let push = |mesh: &mut MeshAccumulator, points: [[f32; 3]; 4], tile| {
+        let normal = (Vec3::from_array(points[1]) - Vec3::from_array(points[0]))
+            .cross(Vec3::from_array(points[2]) - Vec3::from_array(points[0]))
+            .normalize_or_zero()
+            .to_array();
+        mesh.push_quad(points, [normal; 4], uv, [[1.0; 4]; 4], tile);
+    };
+    for z0 in (0..data.depth - 1).step_by(32) {
+        for x0 in (0..data.width - 1).step_by(32) {
+            let mut mesh = MeshAccumulator::default();
+            for z in z0..(z0 + 32).min(data.depth - 1) {
+                for x in x0..(x0 + 32).min(data.width - 1) {
+                    let point = |x: usize, z: usize| {
+                        [
+                            data.origin_x + x as f32 * data.spacing,
+                            data.heights[z * data.width + x],
+                            data.origin_z + z as f32 * data.spacing,
+                        ]
+                    };
+                    push(
+                        &mut mesh,
+                        [
+                            point(x, z),
+                            point(x, z + 1),
+                            point(x + 1, z + 1),
+                            point(x + 1, z),
+                        ],
+                        VoxelTileCoord::new(x as i32, z as i32),
+                    );
+                }
+            }
+            let (mesh, source_tile_count) = mesh.finish();
+            layers.push(TerrainMeshLayer {
+                role: Fvr11TerrainSurfaceRole::Top,
+                material: Fvr03ProductionVoxelMaterialKind::SafeGrass,
+                mesh,
+                source_tile_count,
+            });
+        }
+    }
+    if let Some(y) = data.water_level {
+        let mut mesh = MeshAccumulator::default();
+        let (x, z) = (data.origin_x, data.origin_z);
+        let (xx, zz) = (
+            x + (data.width - 1) as f32 * data.spacing,
+            z + (data.depth - 1) as f32 * data.spacing,
+        );
+        push(
+            &mut mesh,
+            [[x, y, z], [x, y, zz], [xx, y, zz], [xx, y, z]],
+            VoxelTileCoord::new(0, 0),
+        );
+        let (mesh, source_tile_count) = mesh.finish();
+        layers.push(TerrainMeshLayer {
+            role: Fvr11TerrainSurfaceRole::Water,
+            material: Fvr03ProductionVoxelMaterialKind::Water,
+            mesh,
+            source_tile_count,
+        });
+    }
+    if !data.obstacles.is_empty() {
+        let mut mesh = MeshAccumulator::default();
+        for (i, [x, z, xx, zz, y, yy]) in data.obstacles.iter().copied().enumerate() {
+            let a = [x, y, z];
+            let b = [x, y, zz];
+            let c = [xx, y, zz];
+            let d = [xx, y, z];
+            let e = [x, yy, z];
+            let f = [x, yy, zz];
+            let g = [xx, yy, zz];
+            let h = [xx, yy, z];
+            for face in [
+                [e, f, g, h],
+                [d, c, b, a],
+                [a, b, f, e],
+                [c, d, h, g],
+                [b, c, g, f],
+                [d, a, e, h],
+            ] {
+                push(&mut mesh, face, VoxelTileCoord::new(i as i32, 0));
+            }
+        }
+        let (mesh, source_tile_count) = mesh.finish();
+        layers.push(TerrainMeshLayer {
+            role: Fvr11TerrainSurfaceRole::Cliff,
+            material: Fvr03ProductionVoxelMaterialKind::Stone,
+            mesh,
+            source_tile_count,
+        });
+    }
+    let quads = (data.width - 1) * (data.depth - 1);
+    TerrainMeshBuild {
+        layers,
+        stats: TerrainMeshStats {
+            source_tiles: quads,
+            top_quads: quads,
+            cliff_quads: data.obstacles.len() * 6,
+            transition_edges: 0,
+            water_quads: usize::from(data.water_level.is_some()),
+            confetti_detail_quads: 0,
+            max_vertices_per_source_tile: 4,
+        },
+    }
+}
+
 #[derive(Default)]
 struct MeshAccumulator {
     positions: Vec<[f32; 3]>,
@@ -822,6 +933,45 @@ fn display_surface_height(sample: &ProductionTerrainSample) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn selected_heightfield_mesh_matches_both_physical_triangles() {
+        let surface = alife_world::TerrainSurface::from_data(alife_world::TerrainData {
+            width: 2,
+            depth: 2,
+            origin_x: 1000.0,
+            origin_z: 2000.0,
+            spacing: 1.0,
+            heights: vec![1.0, 3.0, 5.0, 11.0],
+            obstacles: vec![],
+            water_level: None,
+        })
+        .unwrap();
+        let build = build_heightfield_meshes(&surface);
+        let bevy::mesh::VertexAttributeValues::Float32x3(p) = build.layers[0]
+            .mesh
+            .attribute(Mesh::ATTRIBUTE_POSITION)
+            .unwrap()
+        else {
+            panic!("positions")
+        };
+        assert_eq!(
+            build.layers[0]
+                .mesh
+                .indices()
+                .unwrap()
+                .iter()
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2, 0, 2, 3]
+        );
+        for (u, v) in [(0.75, 0.25), (0.25, 0.75)] {
+            let y = if v >= u {
+                p[0][1] * (1.0 - v) + p[1][1] * (v - u) + p[2][1] * u
+            } else {
+                p[0][1] * (1.0 - u) + p[2][1] * v + p[3][1] * (u - v)
+            };
+            assert_eq!(Some(y), surface.height(1000.0 + u, 2000.0 + v));
+        }
+    }
     use alife_world::VoxelTileCoord;
     use bevy::{mesh::VertexAttributeValues, prelude::Mesh};
 

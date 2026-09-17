@@ -1079,6 +1079,8 @@ pub struct WorldSaveState {
     pub seed: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terrain: Option<crate::TerrainBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terrain_state: Option<crate::TerrainState>,
     pub tick: Tick,
     pub next_entity_id: u64,
     pub next_organism_id: u64,
@@ -1233,6 +1235,8 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             seed: u64,
             #[serde(default)]
             terrain: Option<crate::TerrainBinding>,
+            #[serde(default)]
+            terrain_state: Option<crate::TerrainState>,
             tick: Tick,
             next_entity_id: u64,
             #[serde(default)]
@@ -1322,6 +1326,7 @@ impl<'de> Deserialize<'de> for WorldSaveState {
         let state = Self {
             seed: wire.seed,
             terrain: wire.terrain,
+            terrain_state: wire.terrain_state,
             tick: wire.tick,
             next_entity_id: wire.next_entity_id,
             next_organism_id,
@@ -2090,6 +2095,7 @@ impl WorldSaveState {
         Self {
             seed: parts.seed,
             terrain: parts.terrain,
+            terrain_state: parts.terrain_state,
             tick: parts.tick,
             next_entity_id: parts.next_entity_id,
             next_organism_id: parts.next_organism_id,
@@ -2185,9 +2191,7 @@ impl WorldSaveState {
                 message: "world seed must be nonzero",
             });
         }
-        if let Some(terrain) = self.terrain {
-            terrain.validate()?;
-        }
+        crate::WorldTerrain::restore(self.terrain, self.terrain_state.as_ref())?;
         let mut ids = BTreeSet::new();
         let mut labels = BTreeSet::new();
         let mut max_id = 0_u64;
@@ -2278,6 +2282,7 @@ impl WorldSaveState {
         let parts = HeadlessWorldPersistenceParts {
             seed: self.seed,
             terrain: self.terrain,
+            terrain_state: self.terrain_state.clone(),
             tick: self.tick,
             next_entity_id: self.next_entity_id,
             next_organism_id: self.next_organism_id,
@@ -2604,6 +2609,92 @@ fn _asset_index(manifest: &AssetManifest) -> BTreeMap<&str, &AssetManifestEntry>
 #[cfg(test)]
 mod highlands_persistence_tests {
     use super::*;
+    #[test]
+    fn custom_terrain_save_reloads_geometry_limits_and_signature() {
+        let data = crate::TerrainData {
+            width: 2,
+            depth: 2,
+            origin_x: 1000.0,
+            origin_z: 2000.0,
+            spacing: 10.0,
+            heights: vec![7.0, 8.0, 7.0, 8.0],
+            obstacles: vec![[1005.0, 2000.0, 1005.1, 2010.0, 7.0, 10.0]],
+            water_level: Some(3.0),
+        };
+        let limits = crate::LocomotionLimits {
+            body_radius: 0.4,
+            ..Default::default()
+        };
+        let mut world = crate::HeadlessScenarioBuilder::new(71)
+            .agent("walker", OrganismId(1), Vec3f::ZERO)
+            .build()
+            .unwrap();
+        world
+            .enable_terrain_for_new_game(
+                crate::WorldTerrain::new(data.clone(), limits).unwrap(),
+                Vec3f::new(1001.0, 0.0, 2001.0),
+            )
+            .unwrap();
+        // Scenario agents without full organism records normalize the legacy
+        // organism allocator during save. Start from that canonical baseline.
+        world = HeadlessWorld::from_persistence_parts(world.persistence_parts()).unwrap();
+        let saved = WorldSaveState::from_parts(world.persistence_parts());
+        let mut decoded: WorldSaveState =
+            serde_json::from_slice(&serde_json::to_vec(&saved).unwrap()).unwrap();
+        let mut restored = decoded.restore().unwrap();
+        assert_eq!(restored.terrain_binding(), world.terrain_binding());
+        assert_eq!(restored.terrain().unwrap().surface().data(), data);
+        assert_eq!(restored.terrain().unwrap().limits(), limits);
+        assert_eq!(
+            restored.canonical_signature_digest().unwrap(),
+            world.canonical_signature_digest().unwrap()
+        );
+        let command = alife_core::ActionCommand::structured(
+            OrganismId(1),
+            alife_core::ActionKind::Move.canonical_id(),
+            alife_core::ActionKind::Move,
+            alife_core::ActionTarget::new(None, Some(Vec3f::new(1001.3, 7.13, 2001.0))),
+            alife_core::Intensity::new(1.0).unwrap(),
+            alife_core::DurationTicks::new(1),
+            alife_core::Confidence::new(0.9).unwrap(),
+            0,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            world.apply_command(&command).unwrap(),
+            restored.apply_command(&command).unwrap()
+        );
+        assert_eq!(
+            world
+                .entity(world.entity_id("walker").unwrap())
+                .unwrap()
+                .position,
+            restored
+                .entity(restored.entity_id("walker").unwrap())
+                .unwrap()
+                .position
+        );
+        let start = Vec3f::new(1004.0, 7.4, 2001.0);
+        assert!(restored
+            .terrain()
+            .unwrap()
+            .resolve_move(start, Vec3f::new(1006.0, 0.0, 2001.0))
+            .is_none());
+        decoded
+            .terrain_state
+            .as_mut()
+            .unwrap()
+            .data
+            .as_mut()
+            .unwrap()
+            .heights[0] += 1.0;
+        assert!(decoded.restore().is_err());
+        decoded.terrain = None;
+        assert!(decoded.restore().is_err());
+    }
     #[test]
     fn highlands_binding_roundtrips_and_rejects_incompatible_geometry() {
         let mut world = crate::HeadlessScenarioBuilder::new(71).build().unwrap();

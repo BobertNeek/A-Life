@@ -90,6 +90,7 @@ fn canonical_signature_binds_optional_terrain_identity() {
 
     let mut terrainless_save = terrain_save;
     terrainless_save.world.terrain = None;
+    terrainless_save.world.terrain_state = None;
     let terrainless_world = terrainless_save.restore_headless_world().unwrap();
 
     let terrain_signature = terrain_world.canonical_signature_digest().unwrap();

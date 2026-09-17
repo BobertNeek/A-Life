@@ -7,7 +7,7 @@ pub(super) struct LiveFood(WorldEntityId);
 
 pub(super) fn sync_food(
     mut commands: Commands,
-    highlands: Option<Res<highlands::HighlandsActive>>,
+    highlands: Option<Res<creature_grounding::SelectedTerrain>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     surface: Res<creature_grounding::RenderedTerrainSurface>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -120,7 +120,9 @@ mod tests {
             .insert_resource(Assets::<StandardMaterial>::default())
             .add_systems(Update, sync_food);
             if highlands {
-                app.insert_resource(highlands::HighlandsActive);
+                app.insert_resource(creature_grounding::SelectedTerrain(
+                    alife_world::WorldTerrain::highlands(),
+                ));
             }
             app.update();
             let mut query = app

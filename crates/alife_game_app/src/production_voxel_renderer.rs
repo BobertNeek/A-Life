@@ -1380,7 +1380,7 @@ impl Fvr04CreatureSpawnContext {
 
 #[derive(Debug, Clone)]
 struct Fvr04RuntimeSceneState {
-    terrain: Option<alife_world::TerrainBinding>,
+    terrain: Option<alife_world::WorldTerrain>,
     backend: PersistentVoxelWorldBackend,
     snapshot: PersistentVoxelWorldSnapshot,
     creatures: Vec<Fvr04CreatureVisualRecord>,
@@ -2333,7 +2333,10 @@ fn load_fvr04_runtime_state_from_save(
     }
     let creatures = fvr04_creature_visual_records_from_save(&production_save, &snapshot)?;
     Ok(Fvr04RuntimeSceneState {
-        terrain: production_save.world.terrain,
+        terrain: alife_world::WorldTerrain::restore(
+            production_save.world.terrain,
+            production_save.world.terrain_state.as_ref(),
+        )?,
         backend,
         snapshot,
         creatures,
@@ -2618,22 +2621,26 @@ fn prepare_fvr04_runtime_scene_candidate(
             &mut terrain_samples,
         )?);
     }
-    if runtime_state.terrain.is_some() {
+    if let Some(terrain) = runtime_state.terrain.as_ref() {
         for sample in terrain_samples.values_mut() {
-            if let Some(height) = alife_world::highlands().height(sample.center_x, sample.center_z)
-            {
+            if let Some(height) = terrain.surface().height(sample.center_x, sample.center_z) {
                 sample.height = height;
             }
         }
         for summary in tile_summaries_by_tile.values_mut() {
-            if let Some(height) =
-                alife_world::highlands().height(summary.tile.x as f32, summary.tile.z as f32)
+            if let Some(height) = terrain
+                .surface()
+                .height(summary.tile.x as f32, summary.tile.z as f32)
             {
                 summary.height_units = height;
             }
         }
     }
-    let terrain_build = if runtime_state.terrain.is_some() {
+    let terrain_build = if runtime_state
+        .terrain
+        .as_ref()
+        .is_some_and(|t| t.binding() == alife_world::TerrainBinding::highlands())
+    {
         TerrainMeshBuild {
             layers: Vec::new(),
             stats: crate::terrain_mesh::TerrainMeshStats {
@@ -2646,6 +2653,8 @@ fn prepare_fvr04_runtime_scene_candidate(
                 max_vertices_per_source_tile: 0,
             },
         }
+    } else if let Some(terrain) = runtime_state.terrain.as_ref() {
+        crate::terrain_mesh::build_heightfield_meshes(terrain.surface())
     } else {
         build_production_terrain_meshes(
             &terrain_samples,
@@ -3149,7 +3158,16 @@ fn spawn_fvr04_runtime_scene_candidate(
     } = candidate;
     let snapshot = &runtime_state.snapshot;
     let selected = fvr04_runtime_scene_selection(&runtime_state, &visible_tiles);
-    if runtime_state.terrain.is_some() {
+    if let Some(terrain) = runtime_state.terrain.as_ref() {
+        world.insert_resource(creature_grounding::SelectedTerrain(terrain.clone()));
+    } else {
+        world.remove_resource::<creature_grounding::SelectedTerrain>();
+    }
+    if runtime_state
+        .terrain
+        .as_ref()
+        .is_some_and(|t| t.binding() == alife_world::TerrainBinding::highlands())
+    {
         highlands::start(world);
     } else {
         world.remove_resource::<highlands::HighlandsActive>();
@@ -3389,13 +3407,14 @@ fn spawn_fvr11_layered_terrain_meshes(
             .map(|layer| &layer.mesh),
         f32::from(settings.tile_stride.max(1)),
     ));
-    if world.contains_resource::<highlands::HighlandsActive>() {
-        world
-            .resource_mut::<creature_grounding::RenderedTerrainSurface>()
-            .enable_highlands();
-    }
+    let selected = world
+        .get_resource::<creature_grounding::SelectedTerrain>()
+        .map(|t| t.0.surface().clone());
+    world
+        .resource_mut::<creature_grounding::RenderedTerrainSurface>()
+        .set_surface(selected);
     let terrain_stats = build.stats.clone();
-    if !world.contains_resource::<highlands::HighlandsActive>() {
+    if !world.contains_resource::<creature_grounding::SelectedTerrain>() {
         landscape::spawn(
             world,
             terrain_samples,
@@ -4939,7 +4958,7 @@ fn live_agent_ground_position(
 
 fn sync_fvr11_creature_contact_shadows(
     mut commands: Commands,
-    highlands: Option<Res<highlands::HighlandsActive>>,
+    highlands: Option<Res<creature_grounding::SelectedTerrain>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     entity_map: Res<BevyEntityMap>,
@@ -4986,7 +5005,7 @@ fn sync_fvr11_creature_contact_shadows(
 #[cfg(not(feature = "vfx-hanabi"))]
 fn sync_fvr07_attached_fallback_vfx(
     mut commands: Commands,
-    highlands: Option<Res<highlands::HighlandsActive>>,
+    highlands: Option<Res<creature_grounding::SelectedTerrain>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     mut markers: bevy::prelude::Query<(Entity, &mut Transform, &mut Fvr07ProductionGpuVfxMarker)>,
 ) {
@@ -5017,7 +5036,7 @@ fn sync_fvr07_attached_fallback_vfx(
 #[cfg(feature = "vfx-hanabi")]
 fn sync_fvr07_attached_hanabi_vfx(
     mut commands: Commands,
-    highlands: Option<Res<highlands::HighlandsActive>>,
+    highlands: Option<Res<creature_grounding::SelectedTerrain>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     mut emitters: bevy::prelude::Query<(Entity, &mut Transform, &Fvr07ProductionHanabiVfxEmitter)>,
 ) {
@@ -5603,7 +5622,7 @@ fn handle_fvr03_mouse_selection(
     cameras: bevy::prelude::Query<(&Camera, &GlobalTransform), With<Fvr03ProductionVoxelCamera>>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     mut selection: ResMut<Fvr03ProductionVoxelSelectionResource>,
-    highland: Option<Res<highlands::HighlandsActive>>,
+    highland: Option<Res<creature_grounding::SelectedTerrain>>,
 ) {
     let hovered = (|| {
         let window = windows.single().ok()?;
@@ -5612,8 +5631,8 @@ fn handle_fvr03_mouse_selection(
         let ray = camera
             .viewport_to_world(camera_transform, cursor_position)
             .ok()?;
-        let position = if highland.is_some() {
-            let p = alife_world::highlands().ray_hit(
+        let position = if let Some(terrain) = highland.as_ref() {
+            let p = terrain.0.surface().ray_hit(
                 Vec3f::new(ray.origin.x, ray.origin.y, ray.origin.z),
                 Vec3f::new(ray.direction.x, ray.direction.y, ray.direction.z),
                 2000.0,

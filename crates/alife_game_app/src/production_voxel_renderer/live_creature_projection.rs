@@ -3,7 +3,7 @@
 use super::*;
 
 pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
-    let highlands = world.contains_resource::<highlands::HighlandsActive>();
+    let highlands = world.contains_resource::<creature_grounding::SelectedTerrain>();
     if !world.contains_resource::<LiveBrainPresentationFrameResource>() {
         return;
     }
