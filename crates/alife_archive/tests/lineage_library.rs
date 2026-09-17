@@ -18,7 +18,7 @@ use alife_core::{
     N512FounderProjectionReceipt, NormalizedScalar, OrganismId, PassiveLifeEvent,
     PassiveLifeStatistics, PhenotypeCompiler, SensorProfile, Tick,
 };
-use alife_world::{persistence::PortableSaveFile, HabitatAuthority};
+use alife_world::persistence::PortableSaveFile;
 use rusqlite::{params, Connection, OpenFlags};
 
 struct CompositeFixture {
@@ -727,10 +727,8 @@ fn genetic_birth_life_checkpoint_and_rebuilt_index_are_durable() {
 fn founder_save_uses_only_the_caller_provided_staging_root() {
     let archive_root = temp_root("founder-save-archive");
     let save_root = temp_root("founder-save-root");
-    copy_tree(Path::new("../alife_world/tests/fixtures/p34"), &save_root);
-    let _ = fs::remove_dir_all(save_root.join("staging"));
+    fs::create_dir_all(save_root.join(".founder-staging")).unwrap();
     assert!(!save_root.join("staging").exists());
-    fs::create_dir(save_root.join(".founder-staging")).unwrap();
     fs::write(
         save_root.join(".founder-staging").join("caller-owned.txt"),
         b"preserve me",
@@ -761,17 +759,18 @@ fn founder_save_uses_only_the_caller_provided_staging_root() {
         )
         .unwrap();
 
-    let mut base = PortableSaveFile::from_json_file(save_root.join("tiny_save.json")).unwrap();
-    let mut world = base.restore_headless_world().unwrap();
-    world.remove_organism(OrganismId(1)).unwrap();
-    world
-        .replace_habitat_authority(HabitatAuthority::default())
-        .unwrap();
-    base.creatures.clear();
-    base.replace_headless_world_snapshot(&world).unwrap();
-    base.save_id = "founder-save-world".to_string();
-    base.gpu_runtime = None;
-
+    let world = alife_world::HeadlessWorld::new(4242);
+    let base = PortableSaveFile::from_headless_world(
+        "founder-save-world",
+        &world,
+        alife_world::RuntimeConfig::deterministic_default(
+            4242,
+            alife_core::BrainScaleTier::Nano512,
+        ),
+        alife_world::AssetManifest::empty(),
+        Vec::new(),
+    )
+    .unwrap();
     let save = library
         .create_new_save_from_founders(base, &save_root, &cohort)
         .unwrap();

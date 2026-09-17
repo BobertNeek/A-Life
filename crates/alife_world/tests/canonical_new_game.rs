@@ -1,8 +1,10 @@
 use alife_core::{
     BrainCapacityClass, FoundationGeneticIdentity, FoundationWeightAsset,
-    N512FounderFoundationProjection, SensorProfile, Validate,
+    N512FounderFoundationProjection, PhysicalContactKind, SensorProfile, Tick, Validate,
 };
-use alife_world::{create_canonical_new_game, CanonicalNewGameConfig, WorldObjectKind};
+use alife_world::{
+    create_canonical_new_game, CanonicalNewGameConfig, HeadlessWorldCommand, WorldObjectKind,
+};
 
 fn phase3_game(population: u16) -> alife_world::CanonicalNewGame {
     let foundation =
@@ -94,6 +96,39 @@ fn canonical_new_game_contains_live_ecology_not_frontend_fixtures() {
     );
     assert_eq!(game.world.ecology().resources.len(), 1);
     assert!(!game.world.ecology().zones.is_empty());
+}
+
+#[test]
+fn canonical_new_game_meadow_is_safe_until_actual_hazard_contact() {
+    let mut game = phase3_game(1);
+    let founder = &game.receipt.founders[0];
+    let hazard = game.world.entity_id("hazard-01").unwrap();
+    let command = HeadlessWorldCommand::approach(founder.organism_id, hazard).unwrap();
+
+    let meadow_step = game
+        .world
+        .apply_registered_command(&command, founder.world_entity_id, Tick(1))
+        .unwrap();
+    assert!(meadow_step.action_result.execution.succeeded);
+    assert_eq!(
+        meadow_step.action_result.execution.physical.contact,
+        PhysicalContactKind::Moved
+    );
+    assert_eq!(meadow_step.action_result.body_event.damage, 0.0);
+    assert_eq!(meadow_step.biology_after.body.health, 1.0);
+    game.world.try_advance_tick().unwrap();
+
+    let hazard_step = game
+        .world
+        .apply_registered_command(&command, founder.world_entity_id, Tick(2))
+        .unwrap();
+    assert!(hazard_step.action_result.execution.succeeded);
+    assert_eq!(
+        hazard_step.action_result.execution.physical.contact,
+        PhysicalContactKind::Collision
+    );
+    assert_eq!(hazard_step.action_result.body_event.damage, 0.12);
+    assert!(hazard_step.biology_after.body.health < hazard_step.biology_before.body.health);
 }
 
 #[test]

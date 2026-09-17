@@ -148,7 +148,7 @@ fn spawn_phase3_ecology(world: &mut HeadlessWorld) -> Result<(), ScaffoldContrac
         Vec3f::ZERO,
         12.0,
         0.8,
-        0.2,
+        0.0,
     )?)?;
 
     let food_id = world.editor_spawn_object(WorldEditorSpawnSpec {
