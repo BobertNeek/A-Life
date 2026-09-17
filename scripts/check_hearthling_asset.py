@@ -34,9 +34,16 @@ for side in ['L', 'R']:
     offset = 28 + length + view.get('byteOffset', 0) + accessor.get('byteOffset', 0)
     positions = [struct.unpack_from('<3f', data, offset + i * view.get('byteStride', 12))
                  for i in range(accessor['count'])]
-    assert abs(max(p[2] for p in positions) - min(p[2] for p in positions) - 0.48) < 1e-5
+    assert abs(max(p[2] for p in positions) - min(p[2] for p in positions) - 0.72) < 1e-5
     assert len(positions) == 73
     assert all(abs(positions[i][2] - positions[i + 24][2]) < 1e-5 for i in range(49))
+    # During stance, body advance plus local foot travel must cancel. A sinusoid
+    # can pass the range/loop checks above while visibly skating in both directions.
+    start = 0 if side == 'L' else 12
+    planted = positions[start:start + 13]
+    assert max(p[1] for p in planted) - min(p[1] for p in planted) < 1e-5
+    for i, p in enumerate(planted):
+        assert abs(p[2] + .06 * i - planted[0][2]) < 1e-5
 for animation in gltf['animations']:
     assert len(animation['channels']) > 20
     assert all(gltf['accessors'][s['input']]['max'][0] > 0 for s in animation['samplers'])

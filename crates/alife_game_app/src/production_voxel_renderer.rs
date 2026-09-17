@@ -105,8 +105,9 @@ use crate::{
         ProductionTerrainDressingSpawn, TerrainDressingLibrary, TerrainDressingTile,
     },
     terrain_lighting::{
-        production_camera_extent, production_camera_transform, production_shadow_cascade_count,
-        production_shadow_maximum_distance, spawn_production_terrain_camera,
+        production_camera_extent, production_camera_transform, production_follow_camera_transform,
+        production_shadow_cascade_count, production_shadow_maximum_distance,
+        spawn_production_terrain_camera, PRODUCTION_SHADOW_MINIMUM_DISTANCE,
     },
     terrain_materials::{create_production_terrain_material_library, TerrainMaterialLibrary},
     terrain_water::install_animated_water_material,
@@ -2982,7 +2983,7 @@ fn spawn_fvr04_prepared_lighting(world: &mut World, lighting: Fvr04PreparedLight
             light,
             bevy::light::CascadeShadowConfigBuilder {
                 num_cascades: lighting.shadow_cascades,
-                minimum_distance: 0.1,
+                minimum_distance: PRODUCTION_SHADOW_MINIMUM_DISTANCE,
                 maximum_distance: lighting.shadow_maximum_distance,
                 first_cascade_far_bound: 28.0,
                 overlap_proportion: 0.18,
@@ -4941,13 +4942,21 @@ fn sync_fvr11_creature_contact_shadows(
     highlands: Option<Res<highlands::HighlandsActive>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
+    entity_map: Res<BevyEntityMap>,
+    roots: bevy::prelude::Query<
+        &Transform,
+        (
+            With<ProductionCreatureAssemblyRoot>,
+            Without<crate::Fvr11ProductionContactShadow>,
+        ),
+    >,
     mut shadows: bevy::prelude::Query<(
         Entity,
         &mut Transform,
         &mut crate::Fvr11ProductionContactShadow,
     )>,
 ) {
-    let Some(frame) = frame.filter(|frame| frame.is_changed()) else {
+    let Some(frame) = frame else {
         return;
     };
     for (entity, mut transform, mut shadow) in &mut shadows {
@@ -4961,6 +4970,11 @@ fn sync_fvr11_creature_contact_shadows(
             continue;
         };
         shadow.tile = tile;
+        // Fallback shadows follow the displayed stride between world ticks too.
+        let position = entity_map
+            .bevy_entity(stable_id)
+            .and_then(|root| roots.get(root).ok())
+            .map_or(position, |root| root.translation);
         transform.translation.x = position.x;
         transform.translation.z = position.z;
         if let Some(summary) = scene.tile_summaries_by_tile.get(&tile) {
@@ -6247,7 +6261,7 @@ fn sync_fvr04_camera_follow(
     let target = position;
     let extent = production_camera_extent(scene.profile_id);
     for (mut transform, camera) in &mut cameras {
-        let next_transform = fvr04_follow_camera_transform(camera.mode, extent, target);
+        let next_transform = production_follow_camera_transform(camera.mode, extent, target);
         if *transform != next_transform {
             *transform = next_transform;
         }
@@ -6349,23 +6363,6 @@ fn sync_fvr04_creature_label(
             *visibility = Visibility::Visible;
         }
     }
-}
-
-fn fvr04_follow_camera_transform(
-    mode: Fvr03ProductionVoxelCameraMode,
-    extent: f32,
-    target: Vec3,
-) -> Transform {
-    let offset = match mode {
-        Fvr03ProductionVoxelCameraMode::OrthographicIsometric => {
-            Vec3::new(extent * 0.44, extent * 0.38, extent * 0.72)
-        }
-        Fvr03ProductionVoxelCameraMode::Orbit => {
-            Vec3::new(extent * 0.72, extent * 0.52, extent * 0.94)
-        }
-    };
-    let focus = target + Vec3::Y * 0.70;
-    Transform::from_translation(focus + offset).looking_at(focus, Vec3::Y)
 }
 
 #[cfg(feature = "gpu-runtime")]

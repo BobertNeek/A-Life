@@ -64,7 +64,16 @@ for kind in ['Walk', 'Sleep']:
                 wave = math.sin(phase) * sign
                 # Foot controls use world-aligned local axes on this rig.
                 ctrl = p['foot_control.' + side]
-                local = ctrl.bone.matrix_local.to_3x3().inverted() @ Vector((0, .24 * wave, .10 * max(0, wave)))
+                stride = ((frame - 1) / 24 + (0 if side == 'L' else .5)) % 1
+                if stride < .5:
+                    # Planted foot travels steadily backward as the body advances.
+                    forward, lift = .36 - 1.44 * stride, 0.0
+                else:
+                    swing = (stride - .5) * 2
+                    forward = -.36 + .72 * (swing * swing * (3 - 2 * swing))
+                    lift = .10 * math.sin(math.pi * swing)
+                # The character faces Blender -Y (glTF +Z).
+                local = ctrl.bone.matrix_local.to_3x3().inverted() @ Vector((0, -forward, lift))
                 ctrl.location += local
                 p['upper_arm.' + side].rotation_euler.x += .22 * wave
                 p['forearm.' + side].rotation_euler.x += .10 * wave

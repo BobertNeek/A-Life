@@ -4,10 +4,10 @@ use bevy::{camera::primitives::Aabb, gltf::Gltf, prelude::*, scene::SceneInstanc
 
 const PATH: &str = "creatures/hearthling/hearthling.glb";
 
-// export_hearthling.py: each foot travels from -0.24 to +0.24 model units.
-// Two steps cover 0.96 units per 24-frame cycle. The GLB contains three cycles,
+// export_hearthling.py: each foot travels from -0.36 to +0.36 model units.
+// Two steps cover 1.44 units per 24-frame cycle. The GLB contains three cycles,
 // sampled at 24 fps starting at frame 1, rather than at time zero.
-const WALK_CYCLE_DISTANCE: f32 = 0.96;
+const WALK_CYCLE_DISTANCE: f32 = 1.44;
 const WALK_CLIP_START: f32 = 1.0 / 24.0;
 const WALK_CLIP_SECONDS: f32 = 3.0;
 
@@ -244,7 +244,27 @@ pub(super) fn animate(
         &Fvr04ProductionCreatureVisualMarker,
     )>,
 ) {
-    for (mut transform, mut visual, _) in &mut transforms {
+    for (mut transform, mut visual, marker) in &mut transforms {
+        // World ticks supply targets; render frames supply the visible stride.
+        // Only the display transform is smoothed, never the organism position.
+        let target = marker.base_translation;
+        let blend = 1.0 - (-30.0 * time.delta_secs().min(0.1)).exp();
+        if !ux.settings.paused {
+            transform.translation.x =
+                visual.previous_position.x + (target.x - visual.previous_position.x) * blend;
+            transform.translation.z =
+                visual.previous_position.z + (target.z - visual.previous_position.z) * blend;
+            if Vec2::new(
+                target.x - transform.translation.x,
+                target.z - transform.translation.z,
+            )
+            .length_squared()
+                < 0.000001
+            {
+                transform.translation.x = target.x;
+                transform.translation.z = target.z;
+            }
+        }
         let delta = transform.translation - visual.previous_position;
         visual.previous_position = transform.translation;
         let distance = Vec2::new(delta.x, delta.z).length();
@@ -269,8 +289,14 @@ pub(super) fn animate(
         };
         // Actual displacement can outlast a selected Move action (or be blocked
         // despite it). Pose cadence follows the presented world displacement.
-        let next = if visual.moved {
+        let next = if ux.settings.paused {
+            model.state
+        } else if visual.moved {
             1
+        } else if marker.animation == CreatureAnimationState::Moving {
+            // A blocked Move is not a walking pose, and inter-tick frames must
+            // not restart idle while the displayed creature is still moving.
+            0
         } else {
             clip(marker.animation)
         };
@@ -313,7 +339,7 @@ mod tests {
                 ..Default::default()
             };
             let forward_scale = scale(appearance).z;
-            let seconds = advance_walk(0.48 * forward_scale, forward_scale, 0.0);
+            let seconds = advance_walk(0.72 * forward_scale, forward_scale, 0.0);
             assert!((seconds - 0.5).abs() < 1e-6);
         }
     }
