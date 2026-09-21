@@ -133,9 +133,17 @@ fn new_game_base_save_matches_every_canonical_founder() {
         configured.action_profile(),
         ActionCandidateCreditProfileV1::SignedChoiceReadouts
     );
+    let candidate_asset = configured.asset().unwrap();
+    let manifest = candidate_asset.manifest();
     assert_eq!(
         record.genome().foundation,
-        configured.source().genetic_identity()
+        alife_core::FoundationGeneticIdentity::new(
+            manifest.foundation_id().raw(),
+            manifest.foundation_version().raw() as u16,
+            manifest.compatibility_family_id().raw(),
+            manifest.capacity_class_id(),
+        )
+        .unwrap()
     );
     assert_eq!(
         configured.asset().unwrap().digest().bytes(),
