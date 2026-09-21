@@ -4902,7 +4902,9 @@ impl OutcomeProfile {
             },
             0.0,
             0.0,
-            0.08,
+            // Rest relieves fatigue through sleep_recovery below. It supplies
+            // no nutrients; basal upkeep and tissue repair still spend reserve.
+            0.0,
             0.05,
             false,
         )

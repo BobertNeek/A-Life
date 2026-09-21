@@ -100,6 +100,45 @@ fn canonical_new_game_contains_live_ecology_not_frontend_fixtures() {
 
 #[test]
 fn canonical_new_game_meadow_is_safe_until_actual_hazard_contact() {
+    // Every supported founder slot starts clear of danger, on both the flat
+    // fixture and the terrain used by ordinary New Game. Food has a clear route.
+    for elevated in [false, true] {
+        let mut nursery = phase3_game(8);
+        if elevated {
+            nursery.world.enable_highlands_for_new_game().unwrap();
+        }
+        let hazard_id = nursery.world.entity_id("hazard-01").unwrap();
+        let hazard = nursery.world.entity(hazard_id).unwrap().position;
+        let food_id = nursery.world.entity_id("food-01").unwrap();
+        let food = nursery.world.entity(food_id).unwrap().position;
+        for founder in &nursery.receipt.founders {
+            let position = nursery
+                .world
+                .entity(founder.world_entity_id)
+                .unwrap()
+                .position;
+            let separation = ((position.x - hazard.x).powi(2)
+                + (position.y - hazard.y).powi(2)
+                + (position.z - hazard.z).powi(2))
+            .sqrt();
+            assert!(separation > 6.0, "hazard encroaches on a founder spawn");
+            if let Some(terrain) = nursery.world.terrain() {
+                assert!(terrain.walkable(position.x, position.z));
+                assert!(
+                    terrain.resolve_move(position, food).is_some(),
+                    "food route blocked"
+                );
+            }
+            let idle = HeadlessWorldCommand::idle(founder.organism_id).unwrap();
+            let receipt = nursery
+                .world
+                .apply_registered_command(&idle, founder.world_entity_id, Tick(1))
+                .unwrap();
+            assert_eq!(receipt.action_result.body_event.damage, 0.0);
+            assert_eq!(receipt.biology_after.body.health, 1.0);
+        }
+    }
+
     let mut game = phase3_game(1);
     let founder = &game.receipt.founders[0];
     let hazard = game.world.entity_id("hazard-01").unwrap();
@@ -118,10 +157,21 @@ fn canonical_new_game_meadow_is_safe_until_actual_hazard_contact() {
     assert_eq!(meadow_step.biology_after.body.health, 1.0);
     game.world.try_advance_tick().unwrap();
 
-    let hazard_step = game
-        .world
-        .apply_registered_command(&command, founder.world_entity_id, Tick(2))
-        .unwrap();
+    let mut hazard_step = None;
+    for tick in 2..=32 {
+        let step = game
+            .world
+            .apply_registered_command(&command, founder.world_entity_id, Tick(tick))
+            .unwrap();
+        assert!(step.action_result.execution.succeeded);
+        if step.action_result.body_event.damage > 0.0 {
+            hazard_step = Some(step);
+            break;
+        }
+        assert_eq!(step.biology_after.body.health, 1.0);
+        game.world.try_advance_tick().unwrap();
+    }
+    let hazard_step = hazard_step.expect("the remote hazard remains reachable");
     assert!(hazard_step.action_result.execution.succeeded);
     assert_eq!(
         hazard_step.action_result.execution.physical.contact,
@@ -129,6 +179,27 @@ fn canonical_new_game_meadow_is_safe_until_actual_hazard_contact() {
     );
     assert_eq!(hazard_step.action_result.body_event.damage, 0.12);
     assert!(hazard_step.biology_after.body.health < hazard_step.biology_before.body.health);
+    game.world.try_advance_tick().unwrap();
+
+    // Contact has a real consequence, but it does not trap the creature there.
+    let food = game.world.entity_id("food-01").unwrap();
+    let retreat = HeadlessWorldCommand::approach(founder.organism_id, food).unwrap();
+    for _ in 0..3 {
+        let next_tick = Tick(game.world.tick().raw() + 1);
+        let step = game
+            .world
+            .apply_registered_command(&retreat, founder.world_entity_id, next_tick)
+            .unwrap();
+        assert!(step.action_result.execution.succeeded);
+        game.world.try_advance_tick().unwrap();
+    }
+    let idle = HeadlessWorldCommand::idle(founder.organism_id).unwrap();
+    let next_tick = Tick(game.world.tick().raw() + 1);
+    let recovered = game
+        .world
+        .apply_registered_command(&idle, founder.world_entity_id, next_tick)
+        .unwrap();
+    assert_eq!(recovered.action_result.body_event.damage, 0.0);
 }
 
 #[test]
