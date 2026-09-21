@@ -128,6 +128,7 @@ fn create_new_game_inner(
             0.0,
             0.5,
         )?;
+        calibrate_inherited_founder_biochemistry(&mut genome)?;
         if let Some(candidate) = candidate {
             genome = genome.with_nano512_action_credit_candidate(candidate.clone())?;
             enable_inherited_newborn_nociception(&mut genome)?;
@@ -173,6 +174,48 @@ fn create_new_game_inner(
             founders,
         },
     })
+}
+
+fn calibrate_inherited_founder_biochemistry(
+    genome: &mut alife_core::CreatureGenome,
+) -> Result<(), ScaffoldContractError> {
+    use alife_core::{
+        AlleleSide, BiochemicalDriveChannel, BiochemicalSourceLocus, BiochemicalTargetLocus,
+    };
+    let graph = genome.chemistry.graph.expressed();
+    let hunger = graph
+        .receptors()
+        .iter()
+        .find(|receptor| {
+            receptor.target == BiochemicalTargetLocus::Drive(BiochemicalDriveChannel::Hunger)
+        })
+        .ok_or(ScaffoldContractError::PhenotypeCompile)?
+        .source;
+    let hunger_emitter = graph
+        .emitters()
+        .iter()
+        .position(|emitter| {
+            emitter.source == BiochemicalSourceLocus::EnergyDeficit && emitter.target == hunger
+        })
+        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+    let repair_receptor = graph
+        .receptors()
+        .iter()
+        .position(|receptor| receptor.target == BiochemicalTargetLocus::OrganRepair)
+        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+    for allele in [AlleleSide::Maternal, AlleleSide::Paternal] {
+        genome.chemistry.graph = genome
+            .chemistry
+            .graph
+            .clone()
+            // At full expression: .25 baseline + .03*(1-energy)/.04 decay.
+            // Starting reserves produce ~.41 hunger, not a saturated signal.
+            .with_emitter_gain(allele, hunger_emitter, 0.03)?
+            // Repair remains reserve-paid and damage-limited after acute pain
+            // fades (including during Rest); it cannot heal without reserve.
+            .with_receptor_nominal(allele, repair_receptor, 0.02)?;
+    }
+    Ok(())
 }
 
 fn enable_inherited_newborn_nociception(
@@ -235,7 +278,7 @@ fn spawn_phase3_ecology(world: &mut HeadlessWorld) -> Result<(), ScaffoldContrac
         label: "hazard-01".to_string(),
         kind: WorldObjectKind::Hazard,
         organism_id: None,
-        position: founder_position(1),
+        position: Vec3f::new(9.0, 6.0, 0.0),
         nutrition: 0.0,
         hazard_pain: 0.12,
         radius: 0.8,

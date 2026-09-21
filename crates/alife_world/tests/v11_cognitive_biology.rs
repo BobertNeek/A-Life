@@ -86,10 +86,11 @@ fn cognitive_work_is_deterministic_and_policy_cost_reaches_authoritative_biology
 #[test]
 fn new_game_inherited_turnover_preserves_legacy_identity_and_food_reserves() {
     use alife_core::{
+        AlleleSide, BiochemicalDriveChannel, BiochemicalSourceLocus, BiochemicalTargetLocus,
         BiochemistryState, BodyEventDelta, FoundationWeightAsset, PassiveBodyUpkeepPolicy,
         SensorProfile,
     };
-    use alife_world::{create_canonical_new_game, CanonicalNewGameConfig};
+    use alife_world::{create_canonical_new_game, CanonicalNewGameConfig, HeadlessWorldCommand};
 
     // Missing fields decode to the exact old genotype/phenotype serialization.
     let legacy = record(1, 101);
@@ -106,6 +107,22 @@ fn new_game_inherited_turnover_preserves_legacy_identity_and_food_reserves() {
         legacy_phenotype_bytes
     );
     assert_eq!(restored_phenotype.body.metabolic_turnover, 1.0);
+    let hunger_gain = |genome: &CreatureGenome| {
+        let graph = genome.chemistry.graph.expressed();
+        let hunger = graph
+            .receptors()
+            .iter()
+            .find(|r| r.target == BiochemicalTargetLocus::Drive(BiochemicalDriveChannel::Hunger))
+            .unwrap()
+            .source;
+        graph
+            .emitters()
+            .iter()
+            .find(|e| e.source == BiochemicalSourceLocus::EnergyDeficit && e.target == hunger)
+            .unwrap()
+            .gain
+    };
+    assert_eq!(hunger_gain(&restored), 0.18);
 
     let foundation =
         FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
@@ -126,6 +143,8 @@ fn new_game_inherited_turnover_preserves_legacy_identity_and_food_reserves() {
     let child_rate = child.express().unwrap().body.metabolic_turnover;
     assert!((1.0 / 1024.0..=1.0).contains(&child_rate));
     assert!((0.5 * rate..2.0 * rate).contains(&child_rate));
+    assert_eq!(hunger_gain(founder.genome()), 0.03);
+    assert_eq!(hunger_gain(&child), 0.03);
     let founder_bytes = serde_json::to_vec(&founder).unwrap();
     let restored_founder: WorldOrganismRecord = serde_json::from_slice(&founder_bytes).unwrap();
     assert_eq!(
@@ -176,6 +195,112 @@ fn new_game_inherited_turnover_preserves_legacy_identity_and_food_reserves() {
     assert!(state.body.energy < initial_energy - 0.1);
     assert_eq!(state.development.age_ticks, Tick(12_000));
 
+    // Mature, unfed biology: reserve loss strengthens hunger without saturating
+    // a well provisioned founder. Regulatory chemistry retains its fast cadence.
+    let mut reserves = [0.7925, 0.2, 0.01].map(|energy| {
+        let mut body = BiochemistryState::new(&phenotype, Tick(240)).unwrap();
+        body.body.set_energy(energy).unwrap();
+        body
+    });
+    for tick in 241..=480 {
+        for body in &mut reserves {
+            *body = body
+                .advance(Tick(tick), BodyEventDelta::zero(), &phenotype)
+                .unwrap();
+        }
+    }
+    let [provisioned, low, depleted] = reserves;
+    assert!((0.3..0.55).contains(&provisioned.homeostasis.drives.hunger));
+    assert!(provisioned.homeostasis.drives.hunger < low.homeostasis.drives.hunger);
+    assert!(low.homeostasis.drives.hunger < depleted.homeostasis.drives.hunger);
+    assert!(low.homeostasis.drives.fatigue > provisioned.homeostasis.drives.fatigue);
+    assert_eq!(provisioned.body.health, 1.0);
+    assert!(
+        provisioned.body.energy < 0.7925,
+        "healthy passive biology must still spend reserve"
+    );
+    let mut rest_world = game.world.clone();
+    let rest_receipt = rest_world
+        .apply_registered_command(
+            &HeadlessWorldCommand::rest(OrganismId(1)).unwrap(),
+            game.receipt.founders[0].world_entity_id,
+            Tick(1),
+        )
+        .unwrap();
+    assert!(rest_receipt.biology_after.body.energy < rest_receipt.biology_before.body.energy);
+    let rest = low
+        .advance(Tick(481), rest_receipt.action_result.body_event, &phenotype)
+        .unwrap();
+    assert!(rest.homeostasis.drives.fatigue < low.homeostasis.drives.fatigue);
+    assert!(rest.body.energy < low.body.energy);
+    assert!(
+        low.body.energy - rest.body.energy < 0.0001,
+        "Rest effort must use inherited turnover"
+    );
+
+    // Damage stays physical (not divided by metabolic turnover). Once acute
+    // pain subsides, inherited basal repair still heals existing damage and
+    // spends exactly the additional reserve; it cannot heal an empty body.
+    let injured = provisioned
+        .advance(
+            Tick(481),
+            BodyEventDelta {
+                damage: 0.12,
+                ..BodyEventDelta::zero()
+            },
+            &phenotype,
+        )
+        .unwrap();
+    assert!((provisioned.body.health - injured.body.health - 0.03248).abs() < 0.0001);
+    let resting_injured = injured
+        .advance(
+            Tick(482),
+            BodyEventDelta {
+                sleep_recovery: 1.0,
+                ..BodyEventDelta::zero()
+            },
+            &phenotype,
+        )
+        .unwrap();
+    assert_eq!(resting_injured.homeostasis.drives.pain, 0.0);
+    let mut no_basal_repair = founder.genome().clone();
+    let repair_receptor = no_basal_repair
+        .chemistry
+        .graph
+        .expressed()
+        .receptors()
+        .iter()
+        .position(|r| r.target == BiochemicalTargetLocus::OrganRepair)
+        .unwrap();
+    for allele in [AlleleSide::Maternal, AlleleSide::Paternal] {
+        no_basal_repair.chemistry.graph = no_basal_repair
+            .chemistry
+            .graph
+            .clone()
+            .with_receptor_nominal(allele, repair_receptor, 0.0)
+            .unwrap();
+    }
+    let unrepaired = resting_injured
+        .advance(
+            Tick(494),
+            BodyEventDelta::zero(),
+            &no_basal_repair.express().unwrap(),
+        )
+        .unwrap();
+    let repaired = resting_injured
+        .advance(Tick(494), BodyEventDelta::zero(), &phenotype)
+        .unwrap();
+    let healing = repaired.body.health - unrepaired.body.health;
+    let reserve_cost = unrepaired.body.energy - repaired.body.energy;
+    assert!(healing > 0.0 && reserve_cost > 0.0);
+    assert!((healing - reserve_cost).abs() < 1e-6);
+    let mut exhausted_injured = resting_injured;
+    exhausted_injured.body.set_energy(0.0).unwrap();
+    let exhausted_after = exhausted_injured
+        .advance(Tick(494), BodyEventDelta::zero(), &phenotype)
+        .unwrap();
+    assert_eq!(exhausted_after.body.health, exhausted_injured.body.health);
+
     // Material food still replenishes reserve; starvation remains lethal.
     let fed = state
         .advance(
@@ -189,6 +314,7 @@ fn new_game_inherited_turnover_preserves_legacy_identity_and_food_reserves() {
         )
         .unwrap();
     assert!(fed.body.energy > state.body.energy + 0.1);
+    assert!(fed.homeostasis.drives.hunger < state.homeostasis.drives.hunger);
     let moving_fed = state
         .advance(
             Tick(12_001),

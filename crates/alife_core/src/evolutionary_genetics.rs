@@ -489,6 +489,38 @@ impl BiochemicalGraphChromosome {
         self.validate_contract()?;
         Ok(self)
     }
+
+    /// Changes inherited sensitivity, never live chemical concentrations.
+    pub fn with_emitter_gain(
+        mut self,
+        side: AlleleSide,
+        emitter_index: usize,
+        gain: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let homolog = match side {
+            AlleleSide::Maternal => &mut self.maternal,
+            AlleleSide::Paternal => &mut self.paternal,
+        };
+        *homolog = homolog.with_emitter_gain(emitter_index, gain)?;
+        self.validate_contract()?;
+        Ok(self)
+    }
+
+    /// Changes an inherited receptor setpoint without acquiring lifetime state.
+    pub fn with_receptor_nominal(
+        mut self,
+        side: AlleleSide,
+        receptor_index: usize,
+        nominal: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let homolog = match side {
+            AlleleSide::Maternal => &mut self.maternal,
+            AlleleSide::Paternal => &mut self.paternal,
+        };
+        *homolog = homolog.with_receptor_nominal(receptor_index, nominal)?;
+        self.validate_contract()?;
+        Ok(self)
+    }
 }
 
 impl Validate for BiochemicalGraphChromosome {

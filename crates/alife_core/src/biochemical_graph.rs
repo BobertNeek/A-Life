@@ -629,6 +629,36 @@ impl BiochemicalPhenotype {
         Ok(value)
     }
 
+    pub(crate) fn with_emitter_gain(
+        &self,
+        emitter_index: usize,
+        gain: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut value = self.clone();
+        value
+            .emitters
+            .get_mut(emitter_index)
+            .ok_or(ScaffoldContractError::InvalidGeneticBounds)?
+            .gain = gain;
+        value.compile()?;
+        Ok(value)
+    }
+
+    pub(crate) fn with_receptor_nominal(
+        &self,
+        receptor_index: usize,
+        nominal: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut value = self.clone();
+        value
+            .receptors
+            .get_mut(receptor_index)
+            .ok_or(ScaffoldContractError::InvalidGeneticBounds)?
+            .nominal = nominal;
+        value.compile()?;
+        Ok(value)
+    }
+
     pub(crate) fn early_mammal_reference(
         endocrine: EndocrineProfile,
         brain_atp_baseline: f32,
