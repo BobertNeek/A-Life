@@ -292,6 +292,13 @@ impl Validate for GeneticLineageProvenance {
 pub struct BodyChromosome {
     pub size: ContinuousLocus,
     pub metabolic_efficiency: ContinuousLocus,
+    /// Log2 reserve turnover per biological workload, bounded to [-10, 0].
+    /// Zero preserves legacy economics; logarithmic mutation stays positive.
+    #[serde(
+        default = "legacy_metabolic_turnover",
+        skip_serializing_if = "is_legacy_metabolic_turnover"
+    )]
+    pub metabolic_turnover_log2: ContinuousLocus,
     pub sensory_acuity: ContinuousLocus,
     pub movement_efficiency: ContinuousLocus,
     pub lifespan: ContinuousLocus,
@@ -303,9 +310,14 @@ pub struct BodyChromosome {
 
 impl Validate for BodyChromosome {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.metabolic_turnover_log2.lower != -10.0 || self.metabolic_turnover_log2.upper != 0.0
+        {
+            return Err(ScaffoldContractError::InvalidGeneticBounds);
+        }
         validate_loci(&[
             &self.size,
             &self.metabolic_efficiency,
+            &self.metabolic_turnover_log2,
             &self.sensory_acuity,
             &self.movement_efficiency,
             &self.lifespan,
@@ -314,6 +326,27 @@ impl Validate for BodyChromosome {
             &self.appearance_hue,
         ])
     }
+}
+
+fn legacy_metabolic_turnover() -> ContinuousLocus {
+    ContinuousLocus {
+        maternal: 0.0,
+        paternal: 0.0,
+        lower: -10.0,
+        upper: 0.0,
+        maternal_weight: 0.5,
+    }
+}
+
+fn is_legacy_metabolic_turnover(value: &ContinuousLocus) -> bool {
+    *value == legacy_metabolic_turnover()
+}
+
+fn legacy_turnover_rate() -> f32 {
+    1.0
+}
+fn is_legacy_turnover_rate(value: &f32) -> bool {
+    *value == 1.0
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -611,6 +644,11 @@ pub struct BodyPhenotype {
     pub frame: DiscreteExpression<BodyFrame>,
     pub size_scale: f32,
     pub metabolic_efficiency: f32,
+    #[serde(
+        default = "legacy_turnover_rate",
+        skip_serializing_if = "is_legacy_turnover_rate"
+    )]
+    pub metabolic_turnover: f32,
     pub sensory_acuity: f32,
     pub movement_efficiency: f32,
     pub lifespan_scale: f32,
@@ -735,6 +773,7 @@ impl CreatureGenome {
             body: BodyChromosome {
                 size: ContinuousLocus::mean(0.42, 0.48)?,
                 metabolic_efficiency: ContinuousLocus::mean(0.56, 0.61)?,
+                metabolic_turnover_log2: legacy_metabolic_turnover(),
                 sensory_acuity: ContinuousLocus::mean(0.48, 0.55)?,
                 movement_efficiency: ContinuousLocus::mean(0.50, 0.57)?,
                 lifespan: ContinuousLocus::mean(0.44, 0.51)?,
@@ -1002,6 +1041,7 @@ fn express_body(body: &BodyChromosome) -> Result<BodyPhenotype, ScaffoldContract
         frame: body.frame.expressed(),
         size_scale: body.size.expressed()?,
         metabolic_efficiency: body.metabolic_efficiency.expressed()?,
+        metabolic_turnover: body.metabolic_turnover_log2.expressed()?.exp2(),
         sensory_acuity: body.sensory_acuity.expressed()?,
         movement_efficiency: body.movement_efficiency.expressed()?,
         lifespan_scale: body.lifespan.expressed()?,
@@ -1904,6 +1944,23 @@ fn recombine_body(
             chromosome,
             8,
         ),
+        // Keep the exact legacy crossover/RNG sequence when this locus is absent.
+        metabolic_turnover_log2: if is_legacy_metabolic_turnover(&maternal.metabolic_turnover_log2)
+            && is_legacy_metabolic_turnover(&paternal.metabolic_turnover_log2)
+        {
+            legacy_metabolic_turnover()
+        } else {
+            child_continuous(
+                &maternal.metabolic_turnover_log2,
+                &paternal.metabolic_turnover_log2,
+                &mut maternal_selector,
+                &mut paternal_selector,
+                context,
+                chromosome,
+                9,
+                None,
+            )?
+        },
     };
     context.finish_chromosome(chromosome, maternal_selector, paternal_selector);
     Ok(result)

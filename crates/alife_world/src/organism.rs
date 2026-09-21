@@ -607,7 +607,8 @@ impl WorldOrganismRecord {
         }
         self.validate_contract()?;
         receipt.validate_contract()?;
-        let requested_debit = policy.energy_debit(&receipt)?;
+        let requested_debit =
+            policy.energy_debit(&receipt)? * self.phenotype.body.metabolic_turnover;
         let original_biochemistry = self.biochemistry;
         let original_state_graph = self.state_graph.clone();
         let original_work = self.cognitive_work;

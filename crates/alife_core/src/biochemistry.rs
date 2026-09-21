@@ -156,7 +156,8 @@ impl BodyState {
         repair_signal: Option<f32>,
     ) -> Self {
         let injury_gain = event.damage * (1.0 - phenotype.body.injury_resistance);
-        let recovery = event.sleep_recovery;
+        let turnover = phenotype.body.metabolic_turnover;
+        let recovery = event.sleep_recovery * turnover;
         let temperature_stress = clamp01(
             self.temperature_stress
                 + event.temperature_stress * (1.0 - phenotype.body.temperature_tolerance)
@@ -190,8 +191,11 @@ impl BodyState {
                 }
                 _ => event.nutrition * phenotype.body.metabolic_efficiency * 0.15,
             };
-            let periodic_upkeep =
-                organ.energetic_cost * 0.01 * cadence_steps as f32 * energy_use.unwrap_or(1.0);
+            let periodic_upkeep = organ.energetic_cost
+                * 0.01
+                * cadence_steps as f32
+                * energy_use.unwrap_or(1.0)
+                * turnover;
             // Legacy genomes without repair receptors retain their old sleep response.
             // Chemical repair spends existing reserve; it cannot create energy by healing.
             let sleep_energy = if repair_signal.is_none() {
@@ -203,7 +207,7 @@ impl BodyState {
                 organ.energy + event_share + nutrition_gain + sleep_energy - periodic_upkeep,
             );
             if let Some(signal) = repair_signal {
-                let repair = (signal * organ.repair_capacity * cadence_steps as f32)
+                let repair = (signal * organ.repair_capacity * cadence_steps as f32 * turnover)
                     .min(organ.damage.max(1.0 - organ.integrity))
                     .min(organ.energy);
                 organ.damage = clamp01(organ.damage - repair);
@@ -727,8 +731,14 @@ impl BiochemistryState {
             .organ_regulation(&phenotype.chemistry.biochemical)?;
         let upkeep =
             PassiveBodyUpkeepPolicy::upkeep_event(phenotype, self.cadence, metabolic_steps);
+        // Nutrition is the material food input (applied independently per organ).
+        // Signed energy is metabolic effort/recovery, including composite world
+        // events, and follows the same inherited clock as upkeep and repair.
+        let turnover = phenotype.body.metabolic_turnover;
         let event = BodyEventDelta {
-            energy: signed_clamp(event.energy + upkeep.energy * energy_use.unwrap_or(1.0)),
+            energy: signed_clamp(
+                (event.energy + upkeep.energy * energy_use.unwrap_or(1.0)) * turnover,
+            ),
             ..event
         };
         let body = self.body.apply_event(

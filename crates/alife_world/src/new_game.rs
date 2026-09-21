@@ -117,6 +117,17 @@ fn create_new_game_inner(
         let position = founder_position(slot);
         let mut genome =
             alife_core::CreatureGenome::early_mammal_founder(founder_seed, foundation_identity)?;
+        // Founder reserve economics are inherited biology, not a survival timer.
+        // The allele midpoint expresses ~1/400 legacy turnover; ordinary genetic
+        // recombination/mutation can make descendants faster or slower.
+        let turnover_log2 = (1.0_f32 / 400.0).log2();
+        genome.body.metabolic_turnover_log2 = alife_core::ContinuousLocus::with_bounds(
+            turnover_log2 - 0.1,
+            turnover_log2 + 0.1,
+            -10.0,
+            0.0,
+            0.5,
+        )?;
         if let Some(candidate) = candidate {
             genome = genome.with_nano512_action_credit_candidate(candidate.clone())?;
             enable_inherited_newborn_nociception(&mut genome)?;
