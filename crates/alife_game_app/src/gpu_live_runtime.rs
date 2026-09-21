@@ -12684,16 +12684,29 @@ mod tests {
 
     #[test]
     fn live_runtime_binds_canonical_atp_before_each_neural_dispatch() {
-        let backend = GpuClosedLoopBackend::new_required(
-            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
-        )
-        .expect("required GPU");
-        let world = HeadlessScenarioBuilder::new(9_311)
-            .agent("one", OrganismId(1), Vec3f::ZERO)
-            .build()
-            .unwrap();
+        // A bare Agent is not an admitted organism. Use the ordinary New Game
+        // route, including its registered genotype and archive dependencies.
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
+            "../../target/founder-training-evidence/canonical-atp-binding-{}",
+            std::process::id()
+        ));
+        assert!(!root.exists(), "preserve regression evidence");
+        fs::create_dir_all(root.join("assets")).unwrap();
+        let mut config =
+            alife_world::RuntimeConfig::deterministic_default(9_311, BrainScaleTier::Nano512);
+        config.features.gpu_backend_enabled = true;
         let mut runtime =
-            GpuLiveBrainRuntime::new(backend, world, 9_311, BrainScaleTier::Nano512).unwrap();
+            crate::create_canonical_new_game_runtime(crate::CanonicalNewGameLaunchRequest {
+                world_seed: 9_311,
+                population: alife_world::PHASE3_MIN_POPULATION,
+                disable_age_death: false,
+                save_path: root.join("save.json"),
+                asset_root: root.join("assets"),
+                config,
+                assets: alife_world::AssetManifest::empty(),
+            })
+            .unwrap()
+            .runtime;
         let canonical_budget = |runtime: &GpuLiveBrainRuntime| {
             let atp = runtime
                 .world
