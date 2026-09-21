@@ -101,6 +101,23 @@ reachable and visibly placed, carried, consumed, and renewed where applicable.
 Provide an opportunity to rest and recover. No hidden food-seeking script,
 forced neural action, or silent physiological refill.
 
+**Required care pacing (user update, 21 September):** calibrate ordinary
+no-food survival toward **10–30 minutes** of wall time at normal speed (1x),
+with **20 minutes** as the supervisor's working target. At 20 world ticks/second,
+these observations correspond to 12,000–36,000 ticks, targeting 24,000 ticks.
+Survival must emerge from inherited reserves, metabolism, activity, and organ
+condition, not a countdown or guaranteed grace period. This is a calibration
+requirement, not an achieved result or a prescription for a blanket cost scalar.
+Reserve tuning does not establish cognition or replace real feeding benefits.
+
+The user requires **no fixed age-only death**. Creatures still mature; aging may
+affect biological function and maintenance, leading to organ failure. Starvation,
+injury, and other world consequences can still kill them. This biological
+lifespan choice is separate from the food-reserve target. While biological aging
+is unfinished, a temporary program flag may disable age-only death while retaining
+starvation, injury, and organ-failure deaths; no inherited immortality trait or
+senescence rewrite is required now.
+
 **Exit:** a hungry creature independently reaches and eats food, its real
 body/chemistry benefits, and fatigue can lead to rest and recovery. It can cope
 with food moved to another reachable position. Preserve basic exact restore
@@ -233,6 +250,7 @@ Testing is a means to get this loop working, not a separate expansion project.
 | Plan/documentation only | Existing documentation check and whitespace/diff review. No Cargo, GPU, or game run. |
 | Small UI/copy/visual change | Focused real-input or rendered check. No new unit test unless a specific logic defect warrants one. |
 | World/action defect | One existing focused regression that exercises the causal failure; extend it only if it cannot catch the defect. |
+| Food-reserve care pacing | One accelerated deterministic biological/accounting check using production rates, plus a short live timing confirmation of normal-speed tick cadence. No 20-minute GPU soak by default; these checks do not replace the behavioral care trial or proof of real feeding benefits. |
 | GPU choice/learning/founder integration | The smallest existing real-GPU scenario for the affected path. Readbacks and counters alone cannot prove behavior. |
 | Persistence, identity, or transaction change | Smallest existing roundtrip/rollback coverage for the affected state, plus the ordinary save/reopen step when that route changed. |
 | Integrated milestone | One connected play session using the ordinary controls; combine learning, sleep, and restore observations in it. |
