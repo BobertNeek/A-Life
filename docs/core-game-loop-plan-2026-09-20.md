@@ -5,7 +5,8 @@ Date: 20 September 2026. Source reviewed: `abeb8d84`.
 This is a proposed implementation sequence, not a completion report or a new
 architecture. The [controlling architecture](architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md),
 especially sections 1.1, 29, 32, 35 and 38, remains authoritative. No game code,
-training, or runtime validation was performed while preparing this plan.
+training, or runtime validation was performed while preparing the original plan
+on 20 September. Subsequent implementation and evidence are recorded below.
 
 ## The experience
 
@@ -52,7 +53,7 @@ every gesture or its learning effect was demonstrated. Retain the approved
 Hearthling/Creatures/Black & White direction. Do not copy Docking Station assets
 or require its particular rooms, machines, or 2D presentation.
 
-## Current foundation: extend the existing game
+## Original source baseline: extend the existing game
 
 | Source finding | Required work |
 | --- | --- |
@@ -64,8 +65,32 @@ or require its particular rooms, machines, or 2D presentation.
 | World lifecycle, managed breeding, archives, and rendered births/retirements exist. | Repair the ordinary route where it fails, rather than reimplementing reproduction. |
 | Ordinary errors redirect to F3 and some effect triggers remain launch-state based. | Explain care outcomes and failures in the player view using live state. |
 
-These are source findings. The September 2 status page and older performance
-receipts are not current-build playtest results.
+These are the original 20 September source findings, before the repairs below.
+The September 2 status page and older performance receipts are not current-build
+playtest results.
+
+## Implementation status — 21 September 2026
+
+The production baseline at `decc7ebc` died at tick 164, approximately 16 seconds
+after starting. Reserve exhaustion is the working causal inference; this
+observation alone does not establish a complete cause or the intended care pace.
+
+Integrated code now grounds player speech on authoritative positions, repairs
+terrain food placement, supports selecting and moving loose food while preserving
+its identity, and shows basic controls and care outcomes in the ordinary UI.
+An explicit founder-candidate bridge, inherited log metabolic turnover, and a
+saved temporary age-death flag are also integrated. New games disable age-only
+death by default; explicit CLI enable/disable switches apply only to New Game.
+Loading preserves the saved policy, and legacy saves with no flag retain their
+previous age-death behavior. Maturation and starvation, injury, and organ-failure
+deaths remain applicable.
+
+These are implementation claims, not proof of a working care loop. Updated
+focused tests and runtime verification are pending. The repaired care path,
+candidate behavior, and biological survival pacing still need the planned
+production trial. Teaching, natural sleep, and fresh-process continuity of
+learned behavior remain unproven; the minimum verification policy below still
+applies.
 
 ## Delivery sequence
 
