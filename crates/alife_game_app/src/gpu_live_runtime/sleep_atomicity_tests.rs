@@ -322,13 +322,9 @@ fn later_organism_failure_restores_population_after_native_sleep_submit() {
 }
 
 #[test]
-fn sleep_pre_device_retry_preserves_host_state_and_charges_atp_once() {
+fn sleep_pre_device_retry_preserves_host_state_and_binds_atp_once() {
     let mut runtime = recovery_sleep_tests::fixture("atomic-retry");
     let handle = runtime.handles[&1];
-    runtime
-        .backend
-        .set_brain_atp_q16_for_test(handle, alife_core::BRAIN_ATP_Q16_MAX / 4)
-        .unwrap();
     runtime.request_recovery_sleep(OrganismId(1)).unwrap();
     for _ in 0..64 {
         if matches!(
@@ -346,7 +342,17 @@ fn sleep_pre_device_retry_preserves_host_state_and_charges_atp_once() {
     runtime.flush_sleep_journal_publication_blocking().unwrap();
     let before = HostSleepSnapshot::capture(&runtime);
     let tick = runtime.world.tick();
-    let atp_before = runtime.backend.snapshot_activity_state(handle).unwrap();
+    let canonical_atp = runtime
+        .world
+        .organism_registry()
+        .get(OrganismId(1))
+        .unwrap()
+        .biochemistry()
+        .homeostasis
+        .drives
+        .brain_atp;
+    let expected_budget =
+        (f64::from(canonical_atp) * f64::from(alife_core::BRAIN_ATP_Q16_MAX)).floor() as u32;
     let mut rejected = false;
     let result = tick_with_fault(&mut runtime, &mut |backend, handle, id, state, intent| {
         if id == OrganismId(1) {
@@ -360,14 +366,13 @@ fn sleep_pre_device_retry_preserves_host_state_and_charges_atp_once() {
     runtime.backend.ensure_neural_actions_available().unwrap();
     let charged = runtime.backend.snapshot_activity_state(handle).unwrap();
     assert_eq!(charged.last_world_atp_tick, Some(tick.raw()));
-    assert!(charged.brain_atp_q16 > atp_before.brain_atp_q16);
-    assert!(charged.brain_atp_q16 < alife_core::BRAIN_ATP_Q16_MAX);
+    assert_eq!(charged.brain_atp_q16, expected_budget);
     runtime.tick_outcome().unwrap();
     assert_eq!(runtime.world.tick().raw(), tick.raw() + 1);
     let retried = runtime.backend.snapshot_activity_state(handle).unwrap();
     assert_eq!(
         retried.brain_atp_q16, charged.brain_atp_q16,
-        "same world tick cannot receive a second debit or sleep credit"
+        "same world tick cannot rebind or refill the canonical budget"
     );
     assert_eq!(retried.last_world_atp_tick, charged.last_world_atp_tick);
     runtime.flush_sleep_journal_publication_blocking().unwrap();

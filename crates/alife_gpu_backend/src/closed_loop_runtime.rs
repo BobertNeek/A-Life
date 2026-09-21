@@ -3797,7 +3797,46 @@ impl GpuClosedLoopBackend {
         Ok(())
     }
 
-    /// Charges the exact world-owned ATP term before neural dispatch.
+    /// Binds the current canonical biochemical BrainATP signal as this world's
+    /// per-tick neural affordability budget. This is a derived projection, not
+    /// another material reserve: actual work pays body energy in the world.
+    /// Work receipts still debit this budget exactly within the tick. A repeated
+    /// binding cannot refill it after a dispatch or alter a restored boundary.
+    pub fn bind_world_brain_atp_tick(
+        &mut self,
+        handle: GpuBrainHandle,
+        world_tick: u64,
+        canonical_brain_atp: f32,
+    ) -> Result<u32, ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        if !canonical_brain_atp.is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        if !(0.0..=1.0).contains(&canonical_brain_atp) {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        let pool = self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let resident = pool.resident_mut(handle)?;
+        if let Some(last) = resident.last_world_atp_tick {
+            if last == world_tick {
+                return Ok(resident.brain_atp_q16);
+            }
+            if last.checked_add(1) != Some(world_tick) {
+                return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+            }
+        }
+        // Round available capacity down; never authorize work beyond the signal.
+        resident.brain_atp_q16 =
+            (f64::from(canonical_brain_atp) * f64::from(BRAIN_ATP_Q16_MAX)).floor() as u32;
+        resident.last_world_atp_tick = Some(world_tick);
+        Ok(resident.brain_atp_q16)
+    }
+
+    /// Applies the explicit legacy/laboratory ATP policy before neural dispatch.
     ///
     /// The monotonic tick guard makes basal cost replay-safe. Sleep recovery is
     /// a distinct credit in the same fixed-point transaction and never alters

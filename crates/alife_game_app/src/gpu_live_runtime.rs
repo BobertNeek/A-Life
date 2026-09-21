@@ -12683,7 +12683,7 @@ mod tests {
     }
 
     #[test]
-    fn live_runtime_charges_one_exact_basal_debit_before_each_neural_dispatch() {
+    fn live_runtime_binds_canonical_atp_before_each_neural_dispatch() {
         let backend = GpuClosedLoopBackend::new_required(
             alife_gpu_backend::GpuRuntimeProfile::production_v1(),
         )
@@ -12694,27 +12694,33 @@ mod tests {
             .unwrap();
         let mut runtime =
             GpuLiveBrainRuntime::new(backend, world, 9_311, BrainScaleTier::Nano512).unwrap();
+        let canonical_budget = |runtime: &GpuLiveBrainRuntime| {
+            let atp = runtime
+                .world
+                .organism_registry()
+                .get(OrganismId(1))
+                .unwrap()
+                .biochemistry()
+                .homeostasis
+                .drives
+                .brain_atp;
+            (f64::from(atp) * f64::from(alife_core::BRAIN_ATP_Q16_MAX)).floor() as u32
+        };
 
+        let first_budget = canonical_budget(&runtime);
         runtime.tick().unwrap();
         let first = runtime.last_activity_work_receipts()[0].clone();
-        assert_eq!(
-            first.atp_before_q16,
-            alife_core::BRAIN_ATP_Q16_MAX - alife_core::BRAIN_ATP_BASAL_DEBIT_Q16
-        );
+        assert_eq!(first.atp_before_q16, first_budget);
         let handle = runtime.handle_for(OrganismId(1)).unwrap();
         assert_eq!(
             runtime.backend.brain_atp_q16(handle).unwrap(),
             first.atp_after_q16
         );
 
+        let second_budget = canonical_budget(&runtime);
         runtime.tick().unwrap();
         let second = runtime.last_activity_work_receipts()[0].clone();
-        assert_eq!(
-            second.atp_before_q16,
-            first
-                .atp_after_q16
-                .saturating_sub(alife_core::BRAIN_ATP_BASAL_DEBIT_Q16)
-        );
+        assert_eq!(second.atp_before_q16, second_budget);
         assert_eq!(
             runtime.backend.brain_atp_q16(handle).unwrap(),
             second.atp_after_q16

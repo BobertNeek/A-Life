@@ -198,18 +198,31 @@ impl GpuLiveBrainRuntime {
                 .get(&raw)
                 .is_some_and(|durable| *durable == sleep_before);
             let allow_sleep_progress = !completed_waiting_for_durable_permit;
-            // Fixed continuous-wake lab protocols suppress sleep phases but
-            // keep the production work-cost ledger. Applying the existing
-            // sleep-rate recovery prevents ecology energy exhaustion from
-            // truncating their bounded neural measurement windows.
             match brain_atp_world_tick_mode(
                 phase_before,
                 self.schedule_sleep,
                 completed_waiting_for_durable_permit,
             ) {
                 BrainAtpWorldTickMode::Charge { recover } => {
-                    self.backend
-                        .charge_world_brain_atp_tick(handle, tick_before.raw(), recover)?;
+                    if self.schedule_sleep {
+                        // Chemistry owns availability. The backend projects it
+                        // into a tick-bound budget; measured cognitive work is
+                        // charged against canonical body reserve separately.
+                        self.backend.bind_world_brain_atp_tick(
+                            handle,
+                            tick_before.raw(),
+                            record.biochemistry().homeostasis.drives.brain_atp,
+                        )?;
+                    } else {
+                        // Explicit continuous-wake lab protocols retain the
+                        // old budget policy and sleep-rate recovery so bounded
+                        // neural measurements are not truncated by exhaustion.
+                        self.backend.charge_world_brain_atp_tick(
+                            handle,
+                            tick_before.raw(),
+                            recover,
+                        )?;
+                    }
                 }
                 BrainAtpWorldTickMode::DurabilityHold => {
                     self.backend
