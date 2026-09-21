@@ -3365,8 +3365,7 @@ impl PlayerResourcePlacementRequest {
     }
 
     fn validate(self) -> Result<(), ScaffoldContractError> {
-        if self.schema_version != PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION || self.position.z != 0.0
-        {
+        if self.schema_version != PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
         self.position.validate().map(|_| ())
@@ -9801,6 +9800,11 @@ fn place_food_in_world(
 ) -> Result<PlayerResourcePlacementReceipt, GameAppShellError> {
     let request = PlayerResourcePlacementRequest::new(position);
     request.validate()?;
+    // Terrain worlds are Y-up; only legacy flat worlds require Z = 0.
+    // Ground height and terrain bounds remain owned by world insertion below.
+    if world.terrain().is_none() && position.z != 0.0 {
+        return Err(ScaffoldContractError::ScalarOutOfRange.into());
+    }
 
     let config = WorldEditorConfig {
         world_bound: 512.0,
@@ -9829,6 +9833,10 @@ fn place_food_in_world(
         token_id: None,
     })?;
     candidate.validate_organism_bindings()?;
+    let placed_position = candidate
+        .entity(world_entity_id)
+        .ok_or(ScaffoldContractError::InvalidId)?
+        .position;
     let world_signature = candidate.canonical_signature_digest()?;
     *world = candidate;
 
@@ -9836,7 +9844,7 @@ fn place_food_in_world(
         schema_version: PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION,
         world_entity_id,
         label,
-        position,
+        position: placed_position,
         nutrition: PLAYER_FOOD_NUTRITION,
         radius: PLAYER_FOOD_RADIUS,
         world_signature,
@@ -9874,18 +9882,56 @@ mod tests {
 
     #[test]
     fn player_food_repeated_placement_uses_xy_ground_and_distinct_ids() {
-        let mut world = HeadlessScenarioBuilder::new(7).build().unwrap();
-        let position = Vec3f::new(2.5, -3.5, 0.0);
-        let first = place_food_in_world(&mut world, position).unwrap();
-        let second = place_food_in_world(&mut world, position).unwrap();
-        assert_ne!(first.world_entity_id, second.world_entity_id);
-        assert_eq!(world.object_count(), 2);
-        assert!(world.object_snapshots().iter().all(|food| {
-            food.position == position && food.kind == WorldObjectKind::Food && !food.consumed
-        }));
-        let before = world.canonical_signature_digest().unwrap();
-        assert!(place_food_in_world(&mut world, Vec3f::new(2.5, 0.0, 1.0)).is_err());
-        assert_eq!(world.canonical_signature_digest().unwrap(), before);
+        use alife_world::{LocomotionLimits, TerrainData, WorldTerrain};
+
+        for elevated in [false, true] {
+            let mut world = HeadlessScenarioBuilder::new(7).build().unwrap();
+            let (position, expected, invalid) = if elevated {
+                let terrain = WorldTerrain::new(
+                    TerrainData {
+                        width: 2,
+                        depth: 2,
+                        origin_x: -10.0,
+                        origin_z: -10.0,
+                        spacing: 20.0,
+                        heights: vec![7.0; 4],
+                        obstacles: vec![],
+                        water_level: None,
+                    },
+                    LocomotionLimits::default(),
+                )
+                .unwrap();
+                world
+                    .enable_terrain_for_new_game(terrain, Vec3f::ZERO)
+                    .unwrap();
+                (
+                    Vec3f::new(2.5, 0.0, -3.5),
+                    Vec3f::new(2.5, 7.0, -3.5),
+                    Vec3f::new(22.5, 0.0, -3.5),
+                )
+            } else {
+                (
+                    Vec3f::new(2.5, -3.5, 0.0),
+                    Vec3f::new(2.5, -3.5, 0.0),
+                    Vec3f::new(2.5, 0.0, 1.0),
+                )
+            };
+            let first = place_food_in_world(&mut world, position).unwrap();
+            let second = place_food_in_world(&mut world, position).unwrap();
+            assert_ne!(first.world_entity_id, second.world_entity_id);
+            assert_eq!(first.position, expected);
+            assert_eq!(second.position, expected);
+            assert_eq!(world.object_count(), 2);
+            assert!(world.object_snapshots().iter().all(|food| {
+                food.position == expected && food.kind == WorldObjectKind::Food && !food.consumed
+            }));
+            let before = world.canonical_signature_digest().unwrap();
+            assert_eq!(second.world_signature, before);
+            for rejected in [invalid, Vec3f::new(f32::NAN, 0.0, 0.0)] {
+                assert!(place_food_in_world(&mut world, rejected).is_err());
+                assert_eq!(world.canonical_signature_digest().unwrap(), before);
+            }
+        }
     }
 
     #[test]
