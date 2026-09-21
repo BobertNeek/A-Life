@@ -24,6 +24,7 @@ use crate::{GpuDurableSaveManifest, GpuLiveBrainRuntime};
 pub struct CanonicalNewGameLaunchRequest {
     pub world_seed: u64,
     pub population: u16,
+    pub disable_age_death: bool,
     pub save_path: PathBuf,
     pub asset_root: PathBuf,
     pub config: RuntimeConfig,
@@ -112,6 +113,8 @@ pub fn stage_phase3_new_game_with_founder(
         }
     };
     game.world.enable_highlands_for_new_game()?;
+    game.world
+        .set_age_death_disabled_for_new_game(request.disable_age_death)?;
     if game.world.organism_registry().len() != usize::from(request.population)
         || game.creatures.len() != usize::from(request.population)
         || game.receipt.founders.len() != usize::from(request.population)

@@ -832,6 +832,7 @@ pub fn build_production_voxel_frontend_app_shell(
                 crate::CanonicalNewGameLaunchRequest {
                     world_seed: seed,
                     population: launch.effective_population(),
+                    disable_age_death: launch.disable_age_death.unwrap_or(true),
                     save_path,
                     asset_root: launch.app_launch.asset_root.clone(),
                     config,

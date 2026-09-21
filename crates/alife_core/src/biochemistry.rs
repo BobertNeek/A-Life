@@ -433,9 +433,19 @@ impl PassiveBodyUpkeepPolicy {
     }
 
     pub fn is_terminal(body: &BodyState, age_ticks: u64, phenotype: &CreaturePhenotype) -> bool {
+        Self::is_terminal_with_age_death(body, age_ticks, phenotype, true)
+    }
+
+    /// The development override affects only the age threshold, never physiology.
+    pub fn is_terminal_with_age_death(
+        body: &BodyState,
+        age_ticks: u64,
+        phenotype: &CreaturePhenotype,
+        age_death_enabled: bool,
+    ) -> bool {
         body.health <= 0.0
             || body.energy <= 0.0
-            || age_ticks >= Self::maximum_lifespan_ticks(phenotype)
+            || (age_death_enabled && age_ticks >= Self::maximum_lifespan_ticks(phenotype))
     }
 
     pub fn body_load(phenotype: &CreaturePhenotype) -> f32 {

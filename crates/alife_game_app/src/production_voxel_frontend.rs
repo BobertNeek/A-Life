@@ -673,6 +673,9 @@ pub struct ProductionVoxelLaunchConfig {
     pub profile_id: ProductionFrontendProfileId,
     pub world_source: ProductionWorldSource,
     pub new_game_founder: crate::NewGameFounderSelection,
+    /// New Game override; None uses the current no-age-cap product default.
+    /// Existing worlds always retain their saved setting.
+    pub disable_age_death: Option<bool>,
     pub population: Option<u16>,
     pub resolution: (u32, u32),
     pub gpu_mode: GraphicalBrainPolicyMode,
@@ -707,6 +710,7 @@ impl ProductionVoxelLaunchConfig {
             profile_id,
             world_source: ProductionWorldSource::LoadExisting,
             new_game_founder: crate::NewGameFounderSelection::default(),
+            disable_age_death: None,
             population: None,
             resolution: budget.output_resolution,
             gpu_mode: GraphicalBrainPolicyMode::GpuRequired,
@@ -1176,6 +1180,14 @@ pub fn run_production_voxel_frontend_dry_run(
 pub fn run_production_voxel_frontend_preflight(
     launch: &ProductionVoxelLaunchConfig,
 ) -> Result<ProductionVoxelLaunchSummary, GameAppShellError> {
+    if matches!(launch.world_source, ProductionWorldSource::LoadExisting)
+        && launch.disable_age_death.is_some()
+    {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: "age-death overrides require New Game; loading preserves the saved world rule"
+                .to_string(),
+        });
+    }
     if matches!(launch.world_source, ProductionWorldSource::LoadExisting)
         && launch.new_game_founder != crate::NewGameFounderSelection::BuiltinNano512
     {
@@ -1687,6 +1699,7 @@ mod tests {
             profile_id: ProductionFrontendProfileId::MinSpecComfort1080p,
             world_source: ProductionWorldSource::LoadExisting,
             new_game_founder: crate::NewGameFounderSelection::default(),
+            disable_age_death: None,
             population: Some(30),
             resolution: (1920, 1080),
             gpu_mode: GraphicalBrainPolicyMode::GpuRequired,
@@ -2116,6 +2129,7 @@ mod tests {
         let staged = stage_phase3_new_game(CanonicalNewGameLaunchRequest {
             world_seed: 4242,
             population: 4,
+            disable_age_death: false,
             save_path: root.join("fvr05-current-canonical-not-written.json"),
             asset_root: root.clone(),
             config,

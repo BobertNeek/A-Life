@@ -51,6 +51,7 @@ fn canonical_runtime(seed: u64, population: u16) -> CanonicalRuntimeFixture {
     let created = create_canonical_new_game_runtime(CanonicalNewGameLaunchRequest {
         world_seed: seed,
         population,
+        disable_age_death: false,
         save_path: save_path.clone(),
         asset_root: asset_root.clone(),
         config,

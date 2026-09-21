@@ -288,6 +288,7 @@ pub struct WorldEditorSpawnSpec {
 #[derive(Debug, Clone)]
 pub struct HeadlessWorld {
     seed: u64,
+    disable_age_death: bool,
     terrain: Option<crate::WorldTerrain>,
     tick: Tick,
     next_entity_id: u64,
@@ -383,6 +384,7 @@ pub struct HeadlessPerceptionBatchIndex {
 #[derive(Debug, Clone)]
 pub(crate) struct HeadlessWorldPersistenceParts {
     pub seed: u64,
+    pub disable_age_death: bool,
     pub terrain: Option<crate::TerrainBinding>,
     pub terrain_state: Option<crate::TerrainState>,
     pub tick: Tick,
@@ -418,6 +420,22 @@ struct MatingOpportunityReport {
 }
 
 impl HeadlessWorld {
+    pub const fn age_death_disabled(&self) -> bool {
+        self.disable_age_death
+    }
+
+    /// Temporary New Game program option; biological aging still advances.
+    pub fn set_age_death_disabled_for_new_game(
+        &mut self,
+        disabled: bool,
+    ) -> Result<(), ScaffoldContractError> {
+        if self.tick != Tick::ZERO {
+            return Err(ScaffoldContractError::NonMonotonicTick);
+        }
+        self.disable_age_death = disabled;
+        Ok(())
+    }
+
     pub fn terrain_binding(&self) -> Option<crate::TerrainBinding> {
         self.terrain.as_ref().map(crate::WorldTerrain::binding)
     }
@@ -486,6 +504,7 @@ impl HeadlessWorld {
     pub fn new(seed: u64) -> Self {
         Self {
             seed,
+            disable_age_death: false,
             terrain: None,
             tick: Tick::ZERO,
             next_entity_id: DEFAULT_ENTITY_ID_START,
@@ -739,10 +758,11 @@ impl HeadlessWorld {
                     .get(organism_id)
                     .ok_or(ScaffoldContractError::InvalidId)?;
                 let age_ticks = record.age_at(next_tick)?.raw();
-                PassiveBodyUpkeepPolicy::is_terminal(
+                PassiveBodyUpkeepPolicy::is_terminal_with_age_death(
                     &record.biochemistry().body,
                     age_ticks,
                     record.phenotype(),
+                    !candidate.disable_age_death,
                 )
             };
             if terminal {
@@ -1265,6 +1285,11 @@ impl HeadlessWorld {
             digest.write_bytes(
                 &serde_json::to_vec(&tracked).map_err(|_| ScaffoldContractError::InvalidId)?,
             );
+        }
+        // Keep legacy/default signatures byte-identical; explicitly bind the
+        // opt-in rule when it changes this world's future lifecycle behavior.
+        if self.disable_age_death {
+            digest.write_bytes(b"alife.world.disable-age-death.v1");
         }
         Ok(HeadlessWorldSignatureDigest {
             schema_version: HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION,
@@ -1844,6 +1869,7 @@ impl HeadlessWorld {
             });
         HeadlessWorldPersistenceParts {
             seed: self.seed,
+            disable_age_death: self.disable_age_death,
             terrain: self.terrain_binding(),
             terrain_state: self.terrain.as_ref().map(crate::WorldTerrain::state),
             tick: self.tick,
@@ -1962,6 +1988,7 @@ impl HeadlessWorld {
         }
         let world = Self {
             seed: parts.seed,
+            disable_age_death: parts.disable_age_death,
             terrain,
             tick: parts.tick,
             next_entity_id: parts.next_entity_id,
@@ -7092,6 +7119,58 @@ mod task_3_2a_tests {
                 )
                 .unwrap()
         };
+
+        let mut age_disabled = forward.clone();
+        age_disabled.disable_age_death = true;
+        assert_ne!(
+            age_disabled.canonical_signature_digest().unwrap(),
+            forward.canonical_signature_digest().unwrap()
+        );
+        age_disabled.try_advance_tick().unwrap();
+        for (organism_id, expected_biology) in [
+            (TASK_4_1_LOW_ORGANISM, expected_low_biology),
+            (TASK_4_1_HIGH_ORGANISM, expected_high_biology),
+        ] {
+            let record = task_4_1_record_state(&age_disabled, organism_id);
+            assert!(record.lifecycle().is_alive());
+            assert_eq!(record.age_at(next_tick).unwrap(), next_tick);
+            assert_eq!(record.biochemistry(), &expected_biology);
+        }
+        // Already-sealed biology at the next tick still retires on depleted
+        // reserves or failed organs, independently of the disabled age cap.
+        let terminal_tick = Tick::new(next_tick.raw() + 1);
+        for organism_id in [TASK_4_1_LOW_ORGANISM, TASK_4_1_HIGH_ORGANISM] {
+            let record = task_4_1_record_state(&age_disabled, organism_id);
+            let mut biology = alife_core::BiochemistryState::new_with_age(
+                record.phenotype(),
+                terminal_tick,
+                record.age_at(terminal_tick).unwrap(),
+            )
+            .unwrap();
+            if organism_id == TASK_4_1_LOW_ORGANISM {
+                biology.body.set_energy(0.0).unwrap();
+                assert!(biology.body.health > 0.0);
+            } else {
+                biology.body.set_health(0.0).unwrap();
+                assert!(biology.body.energy > 0.0);
+            }
+            age_disabled
+                .organism_registry
+                .with_biology_mut(organism_id, |current| {
+                    *current = biology;
+                    Ok(())
+                })
+                .unwrap();
+        }
+        age_disabled.try_advance_tick().unwrap();
+        for organism_id in [TASK_4_1_LOW_ORGANISM, TASK_4_1_HIGH_ORGANISM] {
+            assert_eq!(
+                task_4_1_record_state(&age_disabled, organism_id)
+                    .lifecycle()
+                    .death_tick(),
+                Some(terminal_tick)
+            );
+        }
 
         let mut late_failure = forward.clone();
         let before_failure_tick = late_failure.tick();

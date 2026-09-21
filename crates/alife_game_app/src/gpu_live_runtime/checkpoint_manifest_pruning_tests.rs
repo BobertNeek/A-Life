@@ -40,6 +40,7 @@ fn fixture(label: &str) -> (PathBuf, GpuLiveBrainRuntime, AssetManifestEntry) {
         crate::create_canonical_new_game_runtime(crate::CanonicalNewGameLaunchRequest {
             world_seed: 31_117,
             population: 4,
+            disable_age_death: false,
             save_path: root.join("live.json"),
             asset_root,
             config,

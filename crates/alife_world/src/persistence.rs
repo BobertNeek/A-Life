@@ -1077,6 +1077,8 @@ pub struct WorldObjectSaveState {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct WorldSaveState {
     pub seed: u64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub disable_age_death: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terrain: Option<crate::TerrainBinding>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1234,6 +1236,8 @@ impl<'de> Deserialize<'de> for WorldSaveState {
         struct Wire {
             seed: u64,
             #[serde(default)]
+            disable_age_death: bool,
+            #[serde(default)]
             terrain: Option<crate::TerrainBinding>,
             #[serde(default)]
             terrain_state: Option<crate::TerrainState>,
@@ -1325,6 +1329,7 @@ impl<'de> Deserialize<'de> for WorldSaveState {
         let habitat_authority_was_missing = wire.habitats.is_none();
         let state = Self {
             seed: wire.seed,
+            disable_age_death: wire.disable_age_death,
             terrain: wire.terrain,
             terrain_state: wire.terrain_state,
             tick: wire.tick,
@@ -2094,6 +2099,7 @@ impl WorldSaveState {
         }
         Self {
             seed: parts.seed,
+            disable_age_death: parts.disable_age_death,
             terrain: parts.terrain,
             terrain_state: parts.terrain_state,
             tick: parts.tick,
@@ -2281,6 +2287,7 @@ impl WorldSaveState {
         self.validate()?;
         let parts = HeadlessWorldPersistenceParts {
             seed: self.seed,
+            disable_age_death: self.disable_age_death,
             terrain: self.terrain,
             terrain_state: self.terrain_state.clone(),
             tick: self.tick,

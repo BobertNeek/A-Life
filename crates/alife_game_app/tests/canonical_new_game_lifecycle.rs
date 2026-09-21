@@ -46,6 +46,7 @@ fn phase3_request(population: u16) -> CanonicalNewGameLaunchRequest {
     CanonicalNewGameLaunchRequest {
         world_seed: 240_824,
         population,
+        disable_age_death: false,
         save_path: root.join("phase3-save.json"),
         asset_root: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."),
         config,
@@ -56,6 +57,17 @@ fn phase3_request(population: u16) -> CanonicalNewGameLaunchRequest {
 #[test]
 fn new_game_base_save_matches_every_canonical_founder() {
     let staged = stage_phase3_new_game(phase3_request(6)).unwrap();
+    assert!(!staged.world.age_death_disabled());
+    let legacy_json = serde_json::to_value(&staged.save).unwrap();
+    assert!(legacy_json["world"].get("disable_age_death").is_none());
+    let legacy_decoded: alife_world::PortableSaveFile =
+        serde_json::from_value(legacy_json).unwrap();
+    let legacy_restored = legacy_decoded.restore_headless_world().unwrap();
+    assert!(!legacy_restored.age_death_disabled());
+    assert_eq!(
+        legacy_restored.canonical_signature_digest().unwrap(),
+        staged.world.canonical_signature_digest().unwrap()
+    );
 
     assert_eq!(staged.save.creatures.len(), 6);
     assert_eq!(
@@ -87,8 +99,10 @@ fn new_game_base_save_matches_every_canonical_founder() {
             FoundationId::N512_V1.raw()
         );
     }
+    let mut candidate_request = phase3_request(1);
+    candidate_request.disable_age_death = true;
     let candidate = stage_phase3_new_game_with_founder(
-        phase3_request(1),
+        candidate_request,
         NewGameFounderSelection::ScaledChoiceNociceptiveV1,
     )
     .unwrap();
@@ -96,6 +110,12 @@ fn new_game_base_save_matches_every_canonical_founder() {
     let decoded: alife_world::PortableSaveFile =
         serde_json::from_slice(&serde_json::to_vec(&candidate.save).unwrap()).unwrap();
     let restored = decoded.restore_headless_world().unwrap();
+    assert!(decoded.world.disable_age_death);
+    assert!(restored.age_death_disabled());
+    assert_eq!(
+        restored.canonical_signature_digest().unwrap(),
+        candidate.world.canonical_signature_digest().unwrap()
+    );
     let original = candidate
         .world
         .organism_registry()
@@ -176,6 +196,7 @@ fn production_new_game_source_builds_exact_runtime_before_scene_construction() {
     assert_eq!(summary.effective_population, 4);
     assert!(summary.save_path.starts_with(&root));
     let exact_before_preflight = PortableSaveFile::from_json_file(&summary.save_path).unwrap();
+    assert!(exact_before_preflight.world.disable_age_death);
     let bytes_before_preflight = std::fs::read(&summary.save_path).unwrap();
     assert_eq!(exact_before_preflight.creatures.len(), 4);
     assert!(exact_before_preflight

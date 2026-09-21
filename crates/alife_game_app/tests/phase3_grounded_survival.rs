@@ -43,6 +43,7 @@ fn new_game_request(label: &str) -> CanonicalNewGameLaunchRequest {
     CanonicalNewGameLaunchRequest {
         world_seed: 240_825,
         population: 4,
+        disable_age_death: false,
         save_path: root.join("phase3-save.json"),
         asset_root: root.join("assets"),
         config,
