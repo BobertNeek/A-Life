@@ -70,7 +70,28 @@ pub fn create_canonical_new_game(
     foundation: &FoundationWeightAsset,
 ) -> Result<CanonicalNewGame, ScaffoldContractError> {
     validate_phase3_inputs(config, foundation)?;
+    create_new_game_inner(config, foundation, None)
+}
 
+/// Explicit experimental founder: candidate cognition and inherited pain sensing
+/// from birth. This does not change builtin admission or copy acquired state.
+pub fn create_canonical_new_game_with_nociceptive_candidate(
+    config: &CanonicalNewGameConfig,
+    candidate: &alife_core::Nano512ActionCreditCandidateV2,
+) -> Result<CanonicalNewGame, ScaffoldContractError> {
+    let foundation = FoundationWeightAsset::builtin_nano512_v1(config.sensor_profile)?;
+    validate_phase3_inputs(config, &foundation)?;
+    if candidate.source().sensor_profile() != config.sensor_profile {
+        return Err(ScaffoldContractError::PhenotypeCompile);
+    }
+    create_new_game_inner(config, &foundation, Some(candidate))
+}
+
+fn create_new_game_inner(
+    config: &CanonicalNewGameConfig,
+    foundation: &FoundationWeightAsset,
+    candidate: Option<&alife_core::Nano512ActionCreditCandidateV2>,
+) -> Result<CanonicalNewGame, ScaffoldContractError> {
     let manifest = foundation.manifest();
     let foundation_identity = FoundationGeneticIdentity::new(
         manifest.foundation_id().raw(),
@@ -94,8 +115,12 @@ pub fn create_canonical_new_game(
             .ok_or(ScaffoldContractError::InvalidId)?;
         let world_label = format!("founder-{ordinal:02}");
         let position = founder_position(slot);
-        let genome =
+        let mut genome =
             alife_core::CreatureGenome::early_mammal_founder(founder_seed, foundation_identity)?;
+        if let Some(candidate) = candidate {
+            genome = genome.with_nano512_action_credit_candidate(candidate.clone())?;
+            enable_inherited_newborn_nociception(&mut genome)?;
+        }
         let phenotype = genome.express()?;
         let world_entity_id = world.spawn_social_agent(&world_label, organism_id, position, 0.0)?;
         let record = WorldOrganismRecord::newborn(
@@ -137,6 +162,38 @@ pub fn create_canonical_new_game(
             founders,
         },
     })
+}
+
+fn enable_inherited_newborn_nociception(
+    genome: &mut alife_core::CreatureGenome,
+) -> Result<(), ScaffoldContractError> {
+    use alife_core::{
+        AlleleSide, BiochemicalDriveChannel, BiochemicalSourceLocus, BiochemicalTargetLocus,
+    };
+    let graph = genome.chemistry.graph.expressed();
+    let pain = graph
+        .receptors()
+        .iter()
+        .find(|receptor| {
+            receptor.target == BiochemicalTargetLocus::Drive(BiochemicalDriveChannel::Pain)
+        })
+        .ok_or(ScaffoldContractError::PhenotypeCompile)?
+        .source;
+    let emitter = graph
+        .emitters()
+        .iter()
+        .position(|emitter| {
+            emitter.source == BiochemicalSourceLocus::Damage && emitter.target == pain
+        })
+        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+    for allele in [AlleleSide::Maternal, AlleleSide::Paternal] {
+        genome.chemistry.graph = genome
+            .chemistry
+            .graph
+            .clone()
+            .with_emitter_expression_floor(allele, emitter, 1.0)?;
+    }
+    Ok(())
 }
 
 fn spawn_phase3_ecology(world: &mut HeadlessWorld) -> Result<(), ScaffoldContractError> {

@@ -427,6 +427,7 @@ fn parse_launch(args: &[String]) -> Result<ProductionVoxelLaunchConfig, String> 
     let mut developer_overlay = false;
     let mut ui_settings_path = None;
     let mut new_game = false;
+    let mut founder = None;
     let mut seed = None;
     let mut index = 0;
     while index < args.len() {
@@ -455,6 +456,17 @@ fn parse_launch(args: &[String]) -> Result<ProductionVoxelLaunchConfig, String> 
             "--new-game" => {
                 new_game = true;
                 index += 1;
+            }
+            "--founder" => {
+                founder = Some(
+                    alife_game_app::NewGameFounderSelection::parse(value(
+                        args,
+                        index,
+                        "--founder",
+                    )?)
+                    .map_err(|error| error.to_string())?,
+                );
+                index += 2;
             }
             "--seed" => {
                 seed = Some(
@@ -512,6 +524,10 @@ fn parse_launch(args: &[String]) -> Result<ProductionVoxelLaunchConfig, String> 
     let mut launch =
         ProductionVoxelLaunchConfig::from_manifest(&manifest, scenario.as_deref(), profile)
             .map_err(|error| error.to_string())?;
+    if founder.is_some() && !new_game {
+        return Err("--founder requires --new-game".to_string());
+    }
+    launch.new_game_founder = founder.unwrap_or_default();
     launch.world_source = match (new_game, seed) {
         (true, Some(seed)) if seed != 0 => alife_game_app::ProductionWorldSource::NewGame { seed },
         (true, Some(_)) => return Err("--seed must be nonzero".to_string()),
@@ -982,7 +998,7 @@ fn run_graphical(
 
 fn help() -> String {
     format!(
-        "{PRODUCTION_VOXEL_COMMAND} [--manifest PATH] [--scenario ID] [--new-game --seed N] [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--ui-settings PATH] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --seed N --output PATH\n{GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks 64|10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1\n{GPU_CLOSED_LOOP_SOAK_COMMAND} --class n512|n1024|n2048 --ticks 10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|b|c|d --input PATH\n{GPU_CLOSED_LOOP_PROMOTION_COMMAND} --slice-a PATH (x3) --slice-b PATH (x3) --slice-c PATH (x6) --slice-d PATH (x6) --benchmark PATH --gates PATH --output PATH\n{GPU_CLOSED_LOOP_GATE_SEAL_COMMAND} --capture PATH --gate-script PATH --adapter-evidence PATH --output PATH\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
+        "{PRODUCTION_VOXEL_COMMAND} [--manifest PATH] [--scenario ID] [--new-game --seed N [--founder builtin-nano512|scaled-choice-nociceptive-v1]] [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--ui-settings PATH] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --seed N --output PATH\n{GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks 64|10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1\n{GPU_CLOSED_LOOP_SOAK_COMMAND} --class n512|n1024|n2048 --ticks 10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|b|c|d --input PATH\n{GPU_CLOSED_LOOP_PROMOTION_COMMAND} --slice-a PATH (x3) --slice-b PATH (x3) --slice-c PATH (x6) --slice-d PATH (x6) --benchmark PATH --gates PATH --output PATH\n{GPU_CLOSED_LOOP_GATE_SEAL_COMMAND} --capture PATH --gate-script PATH --adapter-evidence PATH --output PATH\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
     )
 }
 
@@ -1001,6 +1017,33 @@ mod tests {
             alife_game_app::ProductionWorldSource::NewGame { seed: 240_824 }
         ));
         assert_eq!(launch.effective_population(), 6);
+        assert_eq!(
+            launch.new_game_founder,
+            alife_game_app::NewGameFounderSelection::BuiltinNano512
+        );
+        let candidate_args = [
+            "--new-game",
+            "--population",
+            "1",
+            "--seed",
+            "240824",
+            "--founder",
+            "scaled-choice-nociceptive-v1",
+        ]
+        .map(str::to_string);
+        let candidate = parse_launch(&candidate_args).unwrap();
+        assert_eq!(
+            candidate.new_game_founder,
+            alife_game_app::NewGameFounderSelection::ScaledChoiceNociceptiveV1
+        );
+        assert!(
+            parse_launch(&["--founder", "scaled-choice-nociceptive-v1"].map(str::to_string))
+                .is_err()
+        );
+        assert!(parse_launch(
+            &["--new-game", "--seed", "240824", "--founder", "unknown"].map(str::to_string)
+        )
+        .is_err());
     }
 
     #[test]

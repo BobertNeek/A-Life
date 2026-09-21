@@ -828,15 +828,17 @@ pub fn build_production_voxel_frontend_app_shell(
                 alife_core::BrainScaleTier::Nano512,
             );
             config.features.gpu_backend_enabled = true;
-            let created =
-                crate::create_canonical_new_game_runtime(crate::CanonicalNewGameLaunchRequest {
+            let created = crate::create_canonical_new_game_runtime_with_founder(
+                crate::CanonicalNewGameLaunchRequest {
                     world_seed: seed,
                     population: launch.effective_population(),
                     save_path,
                     asset_root: launch.app_launch.asset_root.clone(),
                     config,
                     assets,
-                })?;
+                },
+                launch.new_game_founder,
+            )?;
             let exact_save = created.exact_save.clone();
             let mut admitted_launch = launch.clone();
             admitted_launch.app_launch.save_path = created.save_path;

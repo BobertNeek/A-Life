@@ -73,6 +73,79 @@ fn new_game_base_save_matches_every_canonical_founder() {
         .save
         .validate_with_asset_root(&staged.asset_root)
         .unwrap();
+
+    use alife_core::{
+        ActionCandidateCreditProfileV1, BiochemicalDriveChannel, BiochemicalSourceLocus,
+        BiochemicalTargetLocus, FoundationId, OrganismId,
+    };
+    use alife_game_app::{stage_phase3_new_game_with_founder, NewGameFounderSelection};
+    for record in staged.world.organism_registry().iter() {
+        assert!(record.genome().nano512_action_credit_candidate_v2.is_none());
+        assert!(record.genome().nano512_readout_candidate.is_none());
+        assert_eq!(
+            record.genome().foundation.foundation_id,
+            FoundationId::N512_V1.raw()
+        );
+    }
+    let candidate = stage_phase3_new_game_with_founder(
+        phase3_request(1),
+        NewGameFounderSelection::ScaledChoiceNociceptiveV1,
+    )
+    .unwrap();
+    // Exercise the actual save representation, not a separately rebuilt genome.
+    let decoded: alife_world::PortableSaveFile =
+        serde_json::from_slice(&serde_json::to_vec(&candidate.save).unwrap()).unwrap();
+    let restored = decoded.restore_headless_world().unwrap();
+    let original = candidate
+        .world
+        .organism_registry()
+        .get(OrganismId(1))
+        .unwrap();
+    let record = restored.organism_registry().get(OrganismId(1)).unwrap();
+    assert_eq!(record, original);
+    let configured = record
+        .genome()
+        .nano512_action_credit_candidate_v2
+        .as_ref()
+        .unwrap();
+    assert!(record.genome().nano512_readout_candidate.is_none());
+    assert_eq!(
+        configured.action_profile(),
+        ActionCandidateCreditProfileV1::SignedChoiceReadouts
+    );
+    assert_eq!(
+        record.genome().foundation,
+        configured.source().genetic_identity()
+    );
+    assert_eq!(
+        configured.asset().unwrap().digest().bytes(),
+        &[
+            162, 205, 184, 109, 162, 15, 136, 4, 200, 120, 232, 83, 105, 194, 153, 231, 150, 181,
+            202, 200, 230, 97, 59, 164, 174, 244, 52, 65, 167, 166, 238, 30,
+        ]
+    );
+    let graph = record.genome().chemistry.graph.expressed();
+    let pain = graph
+        .receptors()
+        .iter()
+        .find(|receptor| {
+            receptor.target == BiochemicalTargetLocus::Drive(BiochemicalDriveChannel::Pain)
+        })
+        .unwrap()
+        .source;
+    assert_eq!(
+        graph
+            .emitters()
+            .iter()
+            .find(|emitter| emitter.source == BiochemicalSourceLocus::Damage
+                && emitter.target == pain)
+            .unwrap()
+            .developmental_expression_floor,
+        1.0
+    );
+    decoded
+        .validate_with_asset_root(&candidate.asset_root)
+        .unwrap();
 }
 
 #[cfg(feature = "production-voxel-frontend")]

@@ -672,6 +672,7 @@ pub struct ProductionVoxelLaunchConfig {
     pub app_launch: AppShellLaunchConfig,
     pub profile_id: ProductionFrontendProfileId,
     pub world_source: ProductionWorldSource,
+    pub new_game_founder: crate::NewGameFounderSelection,
     pub population: Option<u16>,
     pub resolution: (u32, u32),
     pub gpu_mode: GraphicalBrainPolicyMode,
@@ -705,6 +706,7 @@ impl ProductionVoxelLaunchConfig {
             app_launch,
             profile_id,
             world_source: ProductionWorldSource::LoadExisting,
+            new_game_founder: crate::NewGameFounderSelection::default(),
             population: None,
             resolution: budget.output_resolution,
             gpu_mode: GraphicalBrainPolicyMode::GpuRequired,
@@ -1174,6 +1176,14 @@ pub fn run_production_voxel_frontend_dry_run(
 pub fn run_production_voxel_frontend_preflight(
     launch: &ProductionVoxelLaunchConfig,
 ) -> Result<ProductionVoxelLaunchSummary, GameAppShellError> {
+    if matches!(launch.world_source, ProductionWorldSource::LoadExisting)
+        && launch.new_game_founder != crate::NewGameFounderSelection::BuiltinNano512
+    {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: "founder selection requires New Game; saved individuals keep their own genome"
+                .to_string(),
+        });
+    }
     let budget = launch.profile_id.budget();
     let population = launch.effective_population();
     if population == 0 {
@@ -1676,6 +1686,7 @@ mod tests {
             app_launch,
             profile_id: ProductionFrontendProfileId::MinSpecComfort1080p,
             world_source: ProductionWorldSource::LoadExisting,
+            new_game_founder: crate::NewGameFounderSelection::default(),
             population: Some(30),
             resolution: (1920, 1080),
             gpu_mode: GraphicalBrainPolicyMode::GpuRequired,

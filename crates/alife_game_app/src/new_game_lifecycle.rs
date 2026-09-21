@@ -30,6 +30,44 @@ pub struct CanonicalNewGameLaunchRequest {
     pub assets: AssetManifest,
 }
 
+/// Explicit launch choice. Experimental candidates are never the default and
+/// loaded individuals always use their saved genome, not this selection.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum NewGameFounderSelection {
+    #[default]
+    BuiltinNano512,
+    ScaledChoiceNociceptiveV1,
+}
+
+impl NewGameFounderSelection {
+    pub fn parse(value: &str) -> Result<Self, GameAppShellError> {
+        match value {
+            "builtin-nano512" => Ok(Self::BuiltinNano512),
+            "scaled-choice-nociceptive-v1" => Ok(Self::ScaledChoiceNociceptiveV1),
+            _ => Err(invalid_launch("unknown New Game founder selection")),
+        }
+    }
+}
+
+fn scaled_choice_candidate() -> Result<alife_core::Nano512ActionCreditCandidateV2, GameAppShellError>
+{
+    let asset = FoundationWeightAsset::decode_canonical(include_bytes!(
+        "../../../assets/founders/scaled-choice-nociceptive-v1/candidate.alife-foundation"
+    ))?;
+    if asset.digest().bytes()
+        != &[
+            162, 205, 184, 109, 162, 15, 136, 4, 200, 120, 232, 83, 105, 194, 153, 231, 150, 181,
+            202, 200, 230, 97, 59, 164, 174, 244, 52, 65, 167, 166, 238, 30,
+        ]
+    {
+        return Err(invalid_launch("bundled founder candidate digest mismatch"));
+    }
+    Ok(alife_core::Nano512ActionCreditCandidateV2::new(
+        &asset,
+        alife_core::ActionCandidateCreditProfileV1::SignedChoiceReadouts,
+    )?)
+}
+
 #[derive(Debug, Clone)]
 pub struct StagedCanonicalNewGame {
     pub world: HeadlessWorld,
@@ -51,14 +89,28 @@ pub struct CanonicalNewGameLaunchResult {
 pub fn stage_phase3_new_game(
     request: CanonicalNewGameLaunchRequest,
 ) -> Result<StagedCanonicalNewGame, GameAppShellError> {
+    stage_phase3_new_game_with_founder(request, NewGameFounderSelection::default())
+}
+
+pub fn stage_phase3_new_game_with_founder(
+    request: CanonicalNewGameLaunchRequest,
+    founder: NewGameFounderSelection,
+) -> Result<StagedCanonicalNewGame, GameAppShellError> {
     validate_stage_request(&request)?;
 
-    let foundation =
-        FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1)?;
-    let mut game = create_canonical_new_game(
-        &CanonicalNewGameConfig::phase3(request.world_seed, request.population)?,
-        &foundation,
-    )?;
+    let config = CanonicalNewGameConfig::phase3(request.world_seed, request.population)?;
+    let mut game = match founder {
+        NewGameFounderSelection::BuiltinNano512 => create_canonical_new_game(
+            &config,
+            &FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1)?,
+        )?,
+        NewGameFounderSelection::ScaledChoiceNociceptiveV1 => {
+            alife_world::create_canonical_new_game_with_nociceptive_candidate(
+                &config,
+                &scaled_choice_candidate()?,
+            )?
+        }
+    };
     game.world.enable_highlands_for_new_game()?;
     if game.world.organism_registry().len() != usize::from(request.population)
         || game.creatures.len() != usize::from(request.population)
@@ -91,22 +143,31 @@ pub fn stage_phase3_new_game(
 pub fn create_canonical_new_game_runtime(
     request: CanonicalNewGameLaunchRequest,
 ) -> Result<CanonicalNewGameLaunchResult, GameAppShellError> {
-    create_canonical_new_game_runtime_inner(request, false)
+    create_canonical_new_game_runtime_with_founder(request, NewGameFounderSelection::default())
+}
+
+#[cfg(feature = "gpu-runtime")]
+pub fn create_canonical_new_game_runtime_with_founder(
+    request: CanonicalNewGameLaunchRequest,
+    founder: NewGameFounderSelection,
+) -> Result<CanonicalNewGameLaunchResult, GameAppShellError> {
+    create_canonical_new_game_runtime_inner(request, founder, false)
 }
 
 #[cfg(feature = "gpu-tests")]
 pub fn create_canonical_new_game_runtime_with_forced_late_failure_for_test(
     request: CanonicalNewGameLaunchRequest,
 ) -> Result<CanonicalNewGameLaunchResult, GameAppShellError> {
-    create_canonical_new_game_runtime_inner(request, true)
+    create_canonical_new_game_runtime_inner(request, NewGameFounderSelection::default(), true)
 }
 
 #[cfg(feature = "gpu-runtime")]
 fn create_canonical_new_game_runtime_inner(
     request: CanonicalNewGameLaunchRequest,
+    founder: NewGameFounderSelection,
     force_late_failure_for_test: bool,
 ) -> Result<CanonicalNewGameLaunchResult, GameAppShellError> {
-    let staged = stage_phase3_new_game(request)?;
+    let staged = stage_phase3_new_game_with_founder(request, founder)?;
     let staging_path = staging_save_path(&staged.save_path)?;
     let archive_root = lineage_archive_root(&staged.save_path)?;
     if staging_path.exists() || archive_root.exists() {
