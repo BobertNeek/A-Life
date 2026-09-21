@@ -48,11 +48,33 @@ pub(super) fn handle_fvr05_production_ux_input(
         }
     }
     #[cfg(feature = "gpu-runtime")]
+    if ux.pending_food_move.is_some_and(|source| {
+        !gpu_runtime.as_ref().is_some_and(|runtime| {
+            runtime
+                .runtime
+                .world()
+                .entity(source)
+                .is_some_and(|object| {
+                    object.kind == WorldObjectKind::Food
+                        && !object.consumed
+                        && object.carried_by.is_none()
+                })
+        })
+    }) {
+        ux.pending_food_move = None;
+        ux.last_error = Some("food move source unavailable".to_string());
+        ux.last_action = "Food move cancelled; source is no longer loose".to_string();
+    }
+    #[cfg(feature = "gpu-runtime")]
     if conversation
         .as_ref()
         .is_some_and(|conversation| conversation.blocks_world_shortcuts())
     {
         return;
+    }
+    if keyboard.just_pressed(KeyCode::Escape) && ux.pending_food_move.take().is_some() {
+        ux.last_error = None;
+        ux.last_action = "Food move cancelled".to_string();
     }
     if keyboard.just_pressed(KeyCode::F1) {
         ux.show_help = !ux.show_help;
@@ -93,6 +115,20 @@ pub(super) fn handle_fvr05_production_ux_input(
     if ux.debug_mode && keyboard.just_pressed(KeyCode::KeyG) {
         ux.settings.show_settings = !ux.settings.show_settings;
         ux.last_action = format!("Settings visible: {}", ux.settings.show_settings);
+    }
+    if !ux.debug_mode && keyboard.just_pressed(KeyCode::KeyG) {
+        #[cfg(feature = "gpu-runtime")]
+        if let Some(runtime) = gpu_runtime.as_mut() {
+            choose_or_move_food(&selection, &mut runtime.runtime, &mut frame, &mut ux);
+        } else {
+            ux.last_error = Some("GPU runtime unavailable".to_string());
+            ux.last_action = "Food move unavailable".to_string();
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
+        {
+            ux.last_error = Some("GPU runtime unavailable".to_string());
+            ux.last_action = "Food move unavailable".to_string();
+        }
     }
     if ux.debug_mode && keyboard.just_pressed(KeyCode::KeyH) {
         ux.settings.show_overlays = !ux.settings.show_overlays;
@@ -261,6 +297,63 @@ pub(super) fn handle_fvr05_production_ux_input(
     if ux.debug_mode && !scheduler_speed_key {
         if let Some(kind) = fvr05_overlay_key_pressed(&keyboard) {
             ux.toggle_overlay(kind);
+        }
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn choose_or_move_food(
+    selection: &Fvr03ProductionVoxelSelectionResource,
+    runtime: &mut crate::GpuLiveBrainRuntime,
+    frame: &mut LiveBrainPresentationFrameResource,
+    ux: &mut Fvr05ProductionUxStateResource,
+) {
+    let Some(source) = ux.pending_food_move else {
+        let source = selection
+            .selected
+            .filter(|selected| selected.kind == StableVoxelRefKind::Resource)
+            .and_then(|selected| selected.stable_id)
+            .filter(|id| {
+                runtime.world().entity(*id).is_some_and(|object| {
+                    object.kind == WorldObjectKind::Food
+                        && !object.consumed
+                        && object.carried_by.is_none()
+                })
+            });
+        if let Some(source) = source {
+            ux.pending_food_move = Some(source);
+            ux.last_error = None;
+            ux.last_action = "Food chosen to move".to_string();
+        } else {
+            ux.last_error = Some("select loose food to move".to_string());
+            ux.last_action = "Food move needs a source".to_string();
+        }
+        return;
+    };
+    let Some(tile) = selection
+        .selected
+        .filter(|selected| selected.kind == StableVoxelRefKind::Tile)
+        .and_then(|selected| selected.tile)
+    else {
+        ux.last_error = Some("select ground for food move".to_string());
+        ux.last_action = "Food move needs a destination".to_string();
+        return;
+    };
+    let position = if runtime.world().terrain().is_some() {
+        Vec3f::new(tile.x as f32 + 0.5, 0.0, tile.z as f32 + 0.5)
+    } else {
+        Vec3f::new(tile.x as f32 + 0.5, tile.z as f32 + 0.5, 0.0)
+    };
+    match runtime.move_player_food(source, position) {
+        Ok(_) => {
+            frame.refresh_world_objects(runtime.world());
+            ux.pending_food_move = None;
+            ux.last_error = None;
+            ux.last_action = "Food moved".to_string();
+        }
+        Err(error) => {
+            ux.last_error = Some(error.to_string());
+            ux.last_action = "Food move rejected; world left unchanged".to_string();
         }
     }
 }

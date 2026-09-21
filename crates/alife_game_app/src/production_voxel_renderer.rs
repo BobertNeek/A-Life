@@ -1527,6 +1527,8 @@ pub struct Fvr05ProductionUxStateResource {
     pub gpu_runtime_state: GpuRuntimeSaveState,
     pub last_action: String,
     pub last_error: Option<String>,
+    // Pending input only: the object remains in the authoritative world.
+    pending_food_move: Option<WorldEntityId>,
     #[cfg(feature = "gpu-runtime")]
     last_manual_checkpoint_status: Option<crate::GpuManualCheckpointStatus>,
 }
@@ -1575,6 +1577,7 @@ impl Fvr05ProductionUxStateResource {
             gpu_runtime_state: summary.gpu_runtime_state.clone(),
             last_action: "Ready: production voxel world loaded from validated save".to_string(),
             last_error: summary.ui_settings_load_error.clone(),
+            pending_food_move: None,
             #[cfg(feature = "gpu-runtime")]
             last_manual_checkpoint_status: None,
         }
@@ -1809,6 +1812,7 @@ fn clear_production_load_focus(world: &mut World) {
     if let Some(mut ux) = world.get_resource_mut::<Fvr05ProductionUxStateResource>() {
         ux.settings.selected_stable_id = None;
         ux.settings.follow_selection = false;
+        ux.pending_food_move = None;
     }
 
     let profile_id = world
@@ -2019,11 +2023,13 @@ fn dispatch_production_curated_founder_reset(
     mut commands: MessageReader<ProductionCuratedFounderResetCommand>,
     mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
     mut result: ResMut<ProductionCuratedFounderResetResultResource>,
+    mut ux: ResMut<Fvr05ProductionUxStateResource>,
 ) {
     let pending = commands.read().cloned().collect::<Vec<_>>();
     if pending.is_empty() {
         return;
     }
+    ux.pending_food_move = None;
     dispatch_production_curated_founder_reset_core(&pending, &mut runtime.runtime, &mut *result);
 }
 
@@ -2133,7 +2139,7 @@ pub fn spawn_fvr03_production_voxel_scene(
     .add_systems(
         Update,
         (
-            handle_fvr03_mouse_selection,
+            handle_fvr03_mouse_selection.before(handle_fvr05_production_ux_input),
             handle_fvr03_camera_mode_input,
             camera_navigation::zoom_camera,
             handle_fvr04_camera_follow_input,
@@ -5421,7 +5427,7 @@ fn spawn_fvr05_production_ux_ui(app: &mut App) {
 }
 
 const V0_PLAYER_CONTROL_HINTS: &str =
-    "Click Select | E Place food on selected ground | Enter Speak | Space Pause/resume | F1 Help";
+    "Click Select | E Place food | G Move food | Enter Speak | Space Pause/resume | F1 Help";
 
 fn spawn_v0_player_experience_ui(app: &mut App) {
     app.world_mut().spawn((
@@ -5549,7 +5555,7 @@ fn sync_v0_player_control_strip(
         return;
     }
     let mut text = if ux.show_help {
-        "F1 Close help | Space Pause | 1/2/3 Speed | S Save | L Load\nClick Select | E Place food on selected ground | Enter Speak | Y Lineage\nArrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
+        "F1 Close help | Space Pause | 1/2/3 Speed | S Save | L Load\nClick Select | E Place food on selected ground | G Choose food to move | Enter Speak | Y Lineage\nArrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
     } else {
         V0_PLAYER_CONTROL_HINTS.to_string()
     };
@@ -5572,6 +5578,18 @@ fn sync_v0_player_control_strip(
                 "Click a ground tile, then press E to place food."
             }
             "GPU runtime unavailable" => "Care tools are unavailable. F3 has details.",
+            "select loose food to move" => {
+                "Click loose food, then press G to choose it for moving."
+            }
+            "select ground for food move" => {
+                "Click a ground tile, then press G to move the chosen food."
+            }
+            "food move source unavailable" => {
+                "That food is no longer loose. Choose another food to move."
+            }
+            _ if ux.last_action.starts_with("Food move") => {
+                "Food wasn't moved. Choose another ground tile; F3 has details."
+            }
             _ if ux.last_action.starts_with("Food placement") => {
                 "Food wasn't placed. Try another ground tile; F3 has details."
             }
@@ -5593,6 +5611,10 @@ fn sync_v0_player_control_strip(
     } else {
         if ux.last_action == "Food placed" {
             text.push_str("\nFood placed on the selected ground.");
+        } else if ux.last_action == "Food moved" {
+            text.push_str("\nFood moved to the selected ground.");
+        } else if ux.last_action == "Food move cancelled" {
+            text.push_str("\nFood move cancelled.");
         }
         #[cfg(feature = "gpu-runtime")]
         match ux.last_manual_checkpoint_status.as_ref() {
@@ -5600,6 +5622,9 @@ fn sync_v0_player_control_strip(
             Some(crate::GpuManualCheckpointStatus::Complete { .. }) => text.push_str(" | Saved"),
             _ => {}
         }
+    }
+    if ux.pending_food_move.is_some() && !ux.debug_mode {
+        text.push_str("\nFood chosen to move: click ground, then G. Esc cancels.");
     }
     for mut strip in &mut strips {
         strip.0 = text.clone();
@@ -5653,6 +5678,8 @@ fn handle_fvr03_mouse_selection(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     mut selection: ResMut<Fvr03ProductionVoxelSelectionResource>,
     highland: Option<Res<creature_grounding::SelectedTerrain>>,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    surface: Res<creature_grounding::RenderedTerrainSurface>,
 ) {
     let hovered = (|| {
         let window = windows.single().ok()?;
@@ -5677,7 +5704,49 @@ fn handle_fvr03_mouse_selection(
         } else {
             scene.tile_from_world_position(position)?
         };
-        Some(scene.selectable_ref_at_tile(tile))
+        let selected = scene.selectable_ref_at_tile(tile);
+        // Creature selection keeps priority at its ground tile. Food picking
+        // follows current canonical objects, rather than launch-time resources.
+        if selected.kind == StableVoxelRefKind::Creature {
+            return Some(selected);
+        }
+        let food = frame.as_ref().and_then(|frame| {
+            frame
+                .current
+                .objects()
+                .filter(|object| {
+                    object.kind == WorldObjectKind::Food
+                        && !object.consumed
+                        && object.carried_by.is_none()
+                })
+                .filter_map(|object| {
+                    let rendered = world_position_for_render(object.position, highland.is_some());
+                    let ground = Vec3::new(rendered.x, 0.0, rendered.z);
+                    // Match the existing food projection's center.
+                    let height = if highland.is_some() {
+                        surface.height(ground).unwrap_or(rendered.y)
+                    } else {
+                        surface.height(ground).unwrap_or(0.44) + rendered.y
+                    };
+                    let center = ground + Vec3::Y * (height + 0.30);
+                    let along = (center - ray.origin).dot(*ray.direction);
+                    let closest = ray.origin + *ray.direction * along;
+                    (along >= 0.0
+                        && along <= (position - ray.origin).length() + 0.42
+                        && closest.distance_squared(center) <= 0.42_f32.powi(2))
+                    .then_some((along, object.id, ground))
+                })
+                .min_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.raw().cmp(&b.1.raw())))
+        });
+        Some(food.map_or(selected, |(_, stable_id, ground)| {
+            let tile = VoxelTileCoord::new(ground.x.floor() as i32, ground.z.floor() as i32);
+            StableVoxelObjectRef {
+                kind: StableVoxelRefKind::Resource,
+                stable_id: Some(stable_id),
+                chunk: VoxelChunkCoord::for_tile(16, tile),
+                tile: Some(tile),
+            }
+        }))
     })();
     apply_fvr03_pointer_sample(
         &mut selection,

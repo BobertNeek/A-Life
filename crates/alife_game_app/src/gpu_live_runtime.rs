@@ -7795,6 +7795,15 @@ impl GpuLiveBrainRuntime {
         place_food_in_world(&mut self.world, position)
     }
 
+    /// Reposition loose food without changing its identity or creature state.
+    pub fn move_player_food(
+        &mut self,
+        source: WorldEntityId,
+        position: Vec3f,
+    ) -> Result<Vec3f, GameAppShellError> {
+        move_food_in_world(&mut self.world, source, position)
+    }
+
     pub fn residency_summary(&self) -> GpuLiveResidencySummary {
         GpuLiveResidencySummary {
             handle_count: self.handles.len(),
@@ -9794,17 +9803,56 @@ pub(crate) fn compile_gpu_birth_components(
     Err(ScaffoldContractError::UnsupportedProductionBrainClass)
 }
 
-fn place_food_in_world(
-    world: &mut HeadlessWorld,
+fn validate_player_resource_position(
+    world: &HeadlessWorld,
     position: Vec3f,
-) -> Result<PlayerResourcePlacementReceipt, GameAppShellError> {
+) -> Result<(), ScaffoldContractError> {
     let request = PlayerResourcePlacementRequest::new(position);
     request.validate()?;
     // Terrain worlds are Y-up; only legacy flat worlds require Z = 0.
     // Ground height and terrain bounds remain owned by world insertion below.
     if world.terrain().is_none() && position.z != 0.0 {
-        return Err(ScaffoldContractError::ScalarOutOfRange.into());
+        return Err(ScaffoldContractError::ScalarOutOfRange);
     }
+    Ok(())
+}
+
+fn move_food_in_world(
+    world: &mut HeadlessWorld,
+    source: WorldEntityId,
+    position: Vec3f,
+) -> Result<Vec3f, GameAppShellError> {
+    validate_player_resource_position(world, position)?;
+    world
+        .entity(source)
+        .filter(|object| {
+            object.kind == WorldObjectKind::Food && !object.consumed && object.carried_by.is_none()
+        })
+        .ok_or(ScaffoldContractError::InvalidId)?;
+    WorldEditCommand::Move {
+        stable_id: source,
+        position,
+    }
+    .validate(WorldEditorConfig {
+        world_bound: 512.0,
+        ..WorldEditorConfig::default()
+    })?;
+    let mut candidate = world.clone();
+    candidate.editor_move_object(source, position)?;
+    candidate.validate_organism_bindings()?;
+    let position = candidate
+        .entity(source)
+        .ok_or(ScaffoldContractError::InvalidId)?
+        .position;
+    *world = candidate;
+    Ok(position)
+}
+
+fn place_food_in_world(
+    world: &mut HeadlessWorld,
+    position: Vec3f,
+) -> Result<PlayerResourcePlacementReceipt, GameAppShellError> {
+    validate_player_resource_position(world, position)?;
 
     let config = WorldEditorConfig {
         world_bound: 512.0,
@@ -9925,13 +9973,83 @@ mod tests {
             assert!(world.object_snapshots().iter().all(|food| {
                 food.position == expected && food.kind == WorldObjectKind::Food && !food.consumed
             }));
+            assert_eq!(
+                second.world_signature,
+                world.canonical_signature_digest().unwrap()
+            );
+            let untouched = world.entity(second.world_entity_id).unwrap().clone();
+            let food_before = world.entity(first.world_entity_id).unwrap().clone();
+            let destination = if elevated {
+                Vec3f::new(4.5, 0.0, -2.5)
+            } else {
+                Vec3f::new(4.5, -2.5, 0.0)
+            };
+            let moved = move_food_in_world(&mut world, first.world_entity_id, destination).unwrap();
+            assert_eq!(
+                moved,
+                if elevated {
+                    Vec3f::new(4.5, 7.0, -2.5)
+                } else {
+                    destination
+                }
+            );
+            let food_after = world.entity(first.world_entity_id).unwrap();
+            assert_eq!(food_after.position, moved);
+            assert_eq!(food_after.id, food_before.id);
+            assert_eq!(food_after.label, food_before.label);
+            assert_eq!(food_after.tracking_key, food_before.tracking_key);
+            assert_eq!(food_after.nutrition, food_before.nutrition);
+            assert_eq!(world.entity(second.world_entity_id).unwrap(), &untouched);
+            assert_eq!(world.tick(), Tick::ZERO);
             let before = world.canonical_signature_digest().unwrap();
-            assert_eq!(second.world_signature, before);
             for rejected in [invalid, Vec3f::new(f32::NAN, 0.0, 0.0)] {
                 assert!(place_food_in_world(&mut world, rejected).is_err());
                 assert_eq!(world.canonical_signature_digest().unwrap(), before);
+                assert!(move_food_in_world(&mut world, first.world_entity_id, rejected).is_err());
+                assert_eq!(world.canonical_signature_digest().unwrap(), before);
             }
         }
+
+        let organism = OrganismId::new(1).unwrap();
+        let mut world = HeadlessScenarioBuilder::new(8)
+            .agent("creature", organism, Vec3f::ZERO)
+            .food("food", Vec3f::new(0.5, 0.0, 0.0), 0.25)
+            .build()
+            .unwrap();
+        let food = world.entity_id("food").unwrap();
+        let creature = world.entity_id("creature").unwrap();
+        let destination = Vec3f::new(2.0, 0.0, 0.0);
+        for invalid in [creature, WorldEntityId::new(u64::MAX).unwrap()] {
+            let before = world.canonical_signature_digest().unwrap();
+            assert!(move_food_in_world(&mut world, invalid, destination).is_err());
+            assert_eq!(world.canonical_signature_digest().unwrap(), before);
+        }
+        let grab = alife_core::ActionCommand::structured(
+            organism,
+            alife_world::HeadlessActionIds::GRAB,
+            alife_core::ActionKind::Hold,
+            ActionTarget::new(Some(food), None),
+            alife_core::Intensity::new(1.0).unwrap(),
+            alife_core::DurationTicks::new(1),
+            Confidence::new(0.9).unwrap(),
+            0,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        world.apply_command(&grab).unwrap();
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(organism));
+        let before = world.canonical_signature_digest().unwrap();
+        assert!(move_food_in_world(&mut world, food, destination).is_err());
+        assert_eq!(world.canonical_signature_digest().unwrap(), before);
+        world
+            .apply_command(&HeadlessWorldCommand::eat(organism, food).unwrap())
+            .unwrap();
+        assert!(world.entity(food).unwrap().consumed);
+        let before = world.canonical_signature_digest().unwrap();
+        assert!(move_food_in_world(&mut world, food, destination).is_err());
+        assert_eq!(world.canonical_signature_digest().unwrap(), before);
     }
 
     #[test]
