@@ -85,12 +85,47 @@ Loading preserves the saved policy, and legacy saves with no flag retain their
 previous age-death behavior. Maturation and starvation, injury, and organ-failure
 deaths remain applicable.
 
-These are implementation claims, not proof of a working care loop. Updated
-focused tests and runtime verification are pending. The repaired care path,
-candidate behavior, and biological survival pacing still need the planned
-production trial. Teaching, natural sleep, and fresh-process continuity of
-learned behavior remain unproven; the minimum verification policy below still
-applies.
+The focused biological accounting check passed: 12,000 unfed active steps retain
+positive reserves, the initial depletion estimate is within 10–30 normal-speed
+minutes, and feeding restores material reserves. The existing world lifespan
+regression also passed: disabling age-only death preserves development while
+zero energy and failed organ health still cause death. Core boundary checks pass.
+
+The four focused app checks also passed: spatial speech in flat/elevated worlds,
+food placement and movement with identity/rollback checks, New Game CLI policy,
+and founder/age-policy save roundtrip. A test-only private-helper call found during
+compilation was corrected to use public asset identity fields. Six focused tests
+were run in total; no broad test suite was run.
+
+The updated Vulkan/RTX 3050 candidate trial completed with GPU-authoritative
+cognition. It remained alive through the final trace at tick 918 / 49.45 seconds
+of game elapsed time; a middle interval advanced at approximately 18.9 ticks/s.
+The last natural save at tick 887 retained one living creature, energy 0.778,
+health 0.370, and the disabled age-death setting. No food was consumed; the food
+was carried. Four Rest-labelled trace rows had blocked joint motor outcomes;
+the trace does not isolate Rest from concurrent channels, so it does not prove
+Rest itself failed. Recovery/consolidation cycles occurred. This is survival
+past the original blocker, not a completed care loop.
+
+The trial video is local at
+`target/artifacts/core-loop-candidate-20260920-212115/candidate-window.mp4`.
+Native input was unavailable because Computer Use window discovery failed after
+its documented recovery. The lower care-control strip was outside the useful
+captured region, so its visual acceptance remains unverified. No observed
+10–30-minute survival, teaching, natural restorative rest, or fresh-process
+continuity of learned behavior is claimed. The minimum verification policy below
+still applies.
+
+The next bounded diagnosis is candidate choice versus motor-channel execution.
+Source inspection confirms held food remains perceived and edible; the saved
+apple was 1.0015 units away, inside the 1.25 eating radius. No representative Eat
+choice appeared after pickup, but aggregate trace outcomes cannot isolate each
+channel. Expose the existing manipulation command/receipt in the bounded trace
+before changing legality or training. The measured health loss is explained by
+32 hazard-contact ticks, not starvation. Hunger saturation is canonical inherited
+chemical signalling, not proof of empty reserves; its calibration is a separate
+care-readability issue. Do not compensate with another reserve multiplier or
+forced feeding.
 
 ## Delivery sequence
 
