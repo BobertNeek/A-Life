@@ -1986,12 +1986,13 @@ fn send_player_speech(
         .then(|| selected_organism(selection, creatures))
         .flatten();
     let addressee = explicit_addressee.or(selected_addressee);
-    let source_position = selection
-        .selected
-        .and_then(|selected| selected.tile)
-        .map_or(Vec3f::ZERO, |tile| {
-            Vec3f::new(tile.x as f32 + 0.5, 0.0, tile.z as f32 + 0.5)
-        });
+    let source_position = match player_speech_position(selection, runtime.world()) {
+        Ok(position) => position,
+        Err(message) => {
+            state.status = format!("Speech failed: {message}");
+            return Ok(());
+        }
+    };
     let request = SpeechTranslationRequest::try_new(
         UtteranceId::new(1)?,
         addressee,
@@ -2031,6 +2032,42 @@ fn send_player_speech(
     }
     let receipt = translate_speech_unaided(&request)?;
     complete_player_speech(runtime, state, addressee, source_position, receipt, None)
+}
+
+fn player_speech_position(
+    selection: &Fvr03ProductionVoxelSelectionResource,
+    world: &HeadlessWorld,
+) -> Result<Vec3f, &'static str> {
+    let selected = selection
+        .selected
+        .ok_or("Select a creature, object, or ground tile to place the Hand before speaking.")?;
+    if matches!(
+        selected.kind,
+        StableVoxelRefKind::Creature | StableVoxelRefKind::Resource | StableVoxelRefKind::Hazard
+    ) {
+        // Selection follows this entity, even when its cached tile is stale.
+        return selected
+            .stable_id
+            .and_then(|id| world.entity(id))
+            .filter(|object| !object.consumed)
+            .map(|object| object.position)
+            .ok_or("The selected object is no longer present. Select another place for the Hand.");
+    }
+    let tile = selected
+        .tile
+        .filter(|_| selected.kind == StableVoxelRefKind::Tile)
+        .ok_or("Select a ground tile or object to place the Hand before speaking.")?;
+    let x = tile.x as f32 + 0.5;
+    let z = tile.z as f32 + 0.5;
+    match world.terrain() {
+        Some(terrain) => terrain
+            .surface()
+            .height(x, z)
+            .map(|height| Vec3f::new(x, height, z))
+            .ok_or("The selected tile is outside the terrain. Select a place inside the habitat."),
+        // Legacy flat worlds use X/Y ground coordinates and Z for height.
+        None => Ok(Vec3f::new(x, z, 0.0)),
+    }
 }
 
 fn complete_player_speech(
@@ -2704,7 +2741,11 @@ fn sync_production_conversation_lineage_ui(
             } else {
                 Visibility::Hidden
             };
-            text.0 = "Speech needs attention. F3 for details.".to_string();
+            text.0 = if state.status.starts_with("Speech failed: ") {
+                state.status.clone()
+            } else {
+                "Speech needs attention. F3 for details.".to_string()
+            };
             continue;
         }
         *visibility = Visibility::Visible;
@@ -3415,6 +3456,111 @@ mod tests {
     use bevy::prelude::{Children, Entity};
 
     use crate::curated_founder_staging::CuratedFounderSaveState;
+
+    #[test]
+    fn selected_hand_speech_reaches_nearby_listeners_in_flat_and_elevated_worlds() {
+        use alife_core::LanguageTokenId;
+        use alife_world::{
+            LocomotionLimits, StableVoxelObjectRef, TerrainData, VoxelChunkCoord, VoxelTileCoord,
+            WorldTerrain,
+        };
+
+        let near = OrganismId::new(1).unwrap();
+        let far = OrganismId::new(2).unwrap();
+        for elevated in [false, true] {
+            let mut world = HeadlessScenarioBuilder::new(913_778)
+                .agent("near", near, Vec3f::new(1.5, 20.5, 0.0))
+                .agent("far", far, Vec3f::new(15.5, 20.5, 0.0))
+                .build()
+                .unwrap();
+            if elevated {
+                let terrain = WorldTerrain::new(
+                    TerrainData {
+                        width: 3,
+                        depth: 3,
+                        origin_x: 0.0,
+                        origin_z: 0.0,
+                        spacing: 16.0,
+                        heights: vec![12.0; 9],
+                        obstacles: vec![],
+                        water_level: None,
+                    },
+                    LocomotionLimits::default(),
+                )
+                .unwrap();
+                world
+                    .enable_terrain_for_new_game(terrain, Vec3f::ZERO)
+                    .unwrap();
+            }
+            let mut selection = Fvr03ProductionVoxelSelectionResource {
+                hovered: None,
+                selected: None,
+            };
+            assert!(player_speech_position(&selection, &world).is_err());
+            let tile = StableVoxelObjectRef {
+                kind: StableVoxelRefKind::Tile,
+                stable_id: None,
+                chunk: VoxelChunkCoord::new(0, 1),
+                tile: Some(VoxelTileCoord::new(1, 20)),
+            };
+            let entity = StableVoxelObjectRef {
+                kind: StableVoxelRefKind::Creature,
+                stable_id: world.entity_id("near"),
+                // A moving selection's cached tile must not determine the source.
+                tile: Some(VoxelTileCoord::new(1000, 1000)),
+                ..tile
+            };
+            let expected_position = if elevated {
+                Vec3f::new(1.5, 12.0, 20.5)
+            } else {
+                Vec3f::new(1.5, 20.5, 0.0)
+            };
+            for selected in [tile, entity] {
+                selection.selected = Some(selected);
+                let position = player_speech_position(&selection, &world).unwrap();
+                assert_eq!(position, expected_position);
+                let mut speaking_world = world.clone();
+                speaking_world
+                    .emit_player_tokens(None, position, vec![LanguageTokenId::new(1).unwrap()])
+                    .unwrap();
+                let heard = speaking_world
+                    .sensory_report(near, speaking_world.tick())
+                    .unwrap()
+                    .core_snapshot
+                    .language_context
+                    .heard_tokens;
+                assert_eq!(heard.iter().flatten().count(), 1);
+                assert_eq!(
+                    heard.iter().flatten().next().unwrap().source_position,
+                    position
+                );
+                // Naming a distant creature still cannot bypass proximity.
+                speaking_world
+                    .emit_player_tokens(Some(far), position, vec![LanguageTokenId::new(2).unwrap()])
+                    .unwrap();
+                assert!(speaking_world
+                    .sensory_report(far, speaking_world.tick())
+                    .unwrap()
+                    .core_snapshot
+                    .language_context
+                    .heard_tokens
+                    .iter()
+                    .all(Option::is_none));
+            }
+            selection.selected = Some(StableVoxelObjectRef {
+                stable_id: Some(WorldEntityId::new(u64::MAX).unwrap()),
+                ..entity
+            });
+            assert!(player_speech_position(&selection, &world).is_err());
+            if elevated {
+                selection.selected = Some(StableVoxelObjectRef {
+                    tile: Some(VoxelTileCoord::new(1000, 1000)),
+                    ..tile
+                });
+                assert!(player_speech_position(&selection, &world).is_err());
+            }
+        }
+    }
 
     fn temp_lineage_root(label: &str) -> PathBuf {
         let nonce = SystemTime::now()
