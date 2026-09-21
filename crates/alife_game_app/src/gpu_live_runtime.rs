@@ -4650,6 +4650,12 @@ fn seal_prepared_selection_core(
     })?;
     let physical = motor_receipt.joint.execution;
     let succeeded = motor_receipt.succeeded;
+    // Both collections are bounded by the validated MAX_MOTOR_CHANNELS contract.
+    // Capture existing CPU-side receipts only; this never adds a GPU readback.
+    let motor_execution = crate::LiveMotorExecutionTrace {
+        requested_channels: motor_receipt.bundle.channels.clone(),
+        channel_receipts: motor_receipt.channel_receipts,
+    };
     let target_state = grounded_successor_state(
         world,
         world_entity_id,
@@ -4767,6 +4773,7 @@ fn seal_prepared_selection_core(
         patch_success: Some(patch.outcome().success),
         physical_contact: Some(patch.outcome().physical.contact),
         action_failure: None,
+        motor_execution: Some(motor_execution),
         sealed_patch_count: sealed_patch_count.saturating_add(1),
         packed_record_count: 0,
         memory_updates: 0,
@@ -8318,6 +8325,7 @@ impl GpuLiveBrainRuntime {
             patch_success: None,
             physical_contact: None,
             action_failure: None,
+            motor_execution: None,
             sealed_patch_count,
             packed_record_count: 0,
             memory_updates: 0,
@@ -8355,6 +8363,7 @@ impl GpuLiveBrainRuntime {
             patch_success: None,
             physical_contact: None,
             action_failure: None,
+            motor_execution: None,
             sealed_patch_count,
             packed_record_count: 0,
             memory_updates: 0,
@@ -8389,6 +8398,7 @@ impl GpuLiveBrainRuntime {
             patch_success: None,
             physical_contact: None,
             action_failure: None,
+            motor_execution: None,
             sealed_patch_count,
             packed_record_count: 0,
             memory_updates: 0,
@@ -13206,6 +13216,30 @@ mod tests {
             .get(organism_id)
             .unwrap()
             .biochemistry();
+        let trace = sealed.summary.motor_execution.as_ref().unwrap();
+        assert_eq!(
+            trace.requested_channels,
+            sealed
+                .patch
+                .decision()
+                .selected_bundle
+                .as_ref()
+                .unwrap()
+                .channels
+        );
+        assert!(trace.channel_receipts.len() <= alife_core::MAX_MOTOR_CHANNELS);
+        let outcomes = &sealed
+            .patch
+            .outcome()
+            .joint
+            .as_ref()
+            .unwrap()
+            .channel_outcomes;
+        assert_eq!(trace.channel_receipts.len(), outcomes.len());
+        for (receipt, outcome) in trace.channel_receipts.iter().zip(outcomes) {
+            assert_eq!(receipt.command.channel, outcome.channel);
+            assert_eq!(receipt.physical, outcome.physical);
+        }
         assert_eq!(
             sealed.patch.pre_action().cognitive_context.as_ref(),
             Some(&expected_pre_action_context)

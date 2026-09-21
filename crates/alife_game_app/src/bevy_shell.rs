@@ -1279,6 +1279,7 @@ mod live_presentation_regression_tests {
             patch_success: Some(true),
             physical_contact: None,
             action_failure: None,
+            motor_execution: None,
             sealed_patch_count: 1,
             packed_record_count: 1,
             memory_updates: 0,

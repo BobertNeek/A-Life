@@ -122,7 +122,7 @@ impl PopulationLoopConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PopulationTickRecord {
     pub round: u32,
     pub order_index: usize,

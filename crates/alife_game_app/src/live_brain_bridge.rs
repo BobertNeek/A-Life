@@ -72,7 +72,15 @@ pub struct LiveCognitivePresentationSnapshot {
     pub topology_update_count: Option<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Passive projection of the contract-bounded motor bundle and world receipts.
+/// Kept only in the current presentation tick; never saved or fed back to cognition.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LiveMotorExecutionTrace {
+    pub requested_channels: Vec<alife_core::ChannelCommand>,
+    pub channel_receipts: Vec<alife_world::HeadlessMotorChannelReceipt>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct LiveBrainTickSummary {
     pub schema: &'static str,
     pub schema_version: u16,
@@ -90,6 +98,8 @@ pub struct LiveBrainTickSummary {
     pub patch_success: Option<bool>,
     pub physical_contact: Option<PhysicalContactKind>,
     pub action_failure: Option<ReferenceActionFailure>,
+    /// None means no joint motor receipt is available, not an empty motor command.
+    pub motor_execution: Option<LiveMotorExecutionTrace>,
     pub sealed_patch_count: usize,
     pub packed_record_count: usize,
     pub memory_updates: u32,
@@ -486,6 +496,7 @@ impl LiveBrainLoop {
             patch_success: patch.map(|patch| patch.outcome().success),
             physical_contact: patch.map(|patch| patch.outcome().physical.contact),
             action_failure,
+            motor_execution: None,
             sealed_patch_count,
             packed_record_count,
             memory_updates: brain.diagnostics.memory_updates,
