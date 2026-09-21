@@ -5420,6 +5420,9 @@ fn spawn_fvr05_production_ux_ui(app: &mut App) {
     ));
 }
 
+const V0_PLAYER_CONTROL_HINTS: &str =
+    "Click Select | E Place food on selected ground | Enter Speak | Space Pause/resume | F1 Help";
+
 fn spawn_v0_player_experience_ui(app: &mut App) {
     app.world_mut().spawn((
         Name::new("A-Life V0 player status chip"),
@@ -5462,7 +5465,7 @@ fn spawn_v0_player_experience_ui(app: &mut App) {
     ));
     app.world_mut().spawn((
         Name::new("A-Life V0 player control strip"),
-        Text::new("F1 Help"),
+        Text::new(V0_PLAYER_CONTROL_HINTS),
         TextFont {
             font_size: 13.0,
             ..default()
@@ -5548,7 +5551,7 @@ fn sync_v0_player_control_strip(
     let mut text = if ux.show_help {
         "F1 Close help | Space Pause | 1/2/3 Speed | S Save | L Load\nClick Select | E Place food on selected ground | Enter Speak | Y Lineage\nArrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
     } else {
-        "F1 Help".to_string()
+        V0_PLAYER_CONTROL_HINTS.to_string()
     };
     if ux.debug_mode {
         text.push_str(" | F3 Exit debug");
@@ -5561,9 +5564,36 @@ fn sync_v0_player_control_strip(
     let simulation_failed = false;
     if simulation_failed {
         text.push_str("\nSimulation stopped. F3 for details.");
-    } else if ux.last_error.is_some() {
-        text.push_str("\nAction failed. F3 for details.");
+    } else if let Some(error) = ux.last_error.as_deref() {
+        // Show only bounded, player-facing explanations here. The original
+        // error and action (including paths) remain in the debug panel.
+        let message = match error {
+            "select a visible terrain tile first" => {
+                "Click a ground tile, then press E to place food."
+            }
+            "GPU runtime unavailable" => "Care tools are unavailable. F3 has details.",
+            _ if ux.last_action.starts_with("Food placement") => {
+                "Food wasn't placed. Try another ground tile; F3 has details."
+            }
+            _ if ux.last_action.starts_with("Load") => {
+                "The save couldn't be loaded. Your current world is unchanged. F3 has details."
+            }
+            _ if ux.last_action == "UX settings save failed" => {
+                "Settings couldn't be saved. F3 has details."
+            }
+            _ if ux.last_action == "Save failed"
+                || ux.last_action.starts_with("GPU checkpoint save failed") =>
+            {
+                "The world wasn't saved. Press S to retry; F3 has details."
+            }
+            _ => "The last action couldn't finish. F3 has details.",
+        };
+        text.push('\n');
+        text.push_str(message);
     } else {
+        if ux.last_action == "Food placed" {
+            text.push_str("\nFood placed on the selected ground.");
+        }
         #[cfg(feature = "gpu-runtime")]
         match ux.last_manual_checkpoint_status.as_ref() {
             Some(crate::GpuManualCheckpointStatus::Queued { .. }) => text.push_str(" | Saving..."),
