@@ -116,7 +116,7 @@ captured region, so its visual acceptance remains unverified. No observed
 continuity of learned behavior is claimed. The minimum verification policy below
 still applies.
 
-The next bounded diagnosis is candidate choice versus motor-channel execution.
+The next bounded diagnosis after that trial was candidate choice versus motor-channel execution.
 Source inspection confirms held food remains perceived and edible; the saved
 apple was 1.0015 units away, inside the 1.25 eating radius. No representative Eat
 choice appeared after pickup, but aggregate trace outcomes cannot isolate each
@@ -126,6 +126,83 @@ before changing legality or training. The measured health loss is explained by
 chemical signalling, not proof of empty reserves; its calibration is a separate
 care-readability issue. Do not compensate with another reserve multiplier or
 forced feeding.
+
+### Supervised preparation for brain training
+
+The current bounded assignment is to repair the action path and biological
+foundation, then discuss training before starting it. These are preparation
+steps, not completion of the playable milestones below.
+
+The existing world motor receipts now appear in the passive action trace beside
+the requested motor channels. Representative candidate labels and aggregate
+outcomes remain explicitly distinguished from individual channel execution.
+This adds observation only: no new action selector, feeding controller, neural
+readback, or persisted simulation state.
+
+New founders inherit a lower EnergyDeficit-to-Hunger emitter gain and a small
+basal OrganRepair receptor response. Hunger now distinguishes provisioned from
+depleted reserves; existing damage-limited repair continues after acute pain
+fades and spends body reserves. Both alleles carry the changes. Existing saved
+genomes remain unchanged. Rest no longer grants an unearned positive energy
+event; its existing recovery signal remains. Legacy genomes without the repair
+receptor retain their historical core sleep-energy fallback.
+
+The existing starting hazard was on the second founder's spawn position. It is
+now away from the spawn group. The existing habitat regression verifies all
+eight supported founder positions in flat and Highlands terrain, reachable
+food, harmless idle ticks, and damage only after actual hazard contact.
+
+Two focused world regressions passed after these changes: inherited biological
+accounting (including 12,000 active unfed steps, hunger, Rest, and paid repair)
+and starting habitat safety. This is deterministic production-rate accounting,
+not an observed ten-minute GPU play session.
+
+The same review found a second, independently evolving ATP ledger in the GPU
+scheduler. Its fixed awake debit could exhaust a full budget in approximately
+five seconds despite healthy canonical biology. Normal production now connects
+to canonical biochemical BrainATP as a tick-bound affordability
+projection. Measured neural work still pays the existing world-owned body
+energy cost. The existing monotonic tick cursor prevents retry refills, durable
+sleep holds preserve their budget, and restore retains the recorded boundary.
+Explicit continuous-wake laboratory protocols retain their existing policy.
+No second chemical compartment or sleep controller was added.
+Requirement trace: AOA-BIO-001, AOA-TIME-003, AOA-PERF-002.
+
+Seven selected regressions pass: the two world checks above, real-GPU ATP
+budget/debit/restore guards, live canonical ATP binding, sleep retry atomicity,
+motor-receipt trace sealing, and New Game founder/save roundtrip. The binding
+test initially failed before its first tick because its old bare-agent fixture
+was not admitted as a registered organism. That existing test now uses ordinary
+New Game admission and passes. Only the corrected check was rerun. Core boundary
+checks pass. No broad suite or training was run.
+
+The repaired production trial at `6f8bb82` exited successfully on Vulkan / RTX
+3050 with GPU-authoritative cognition. Its last trace was tick 1174 at 59.79
+seconds; the 10–50 second interval ran at 19.900 ticks/s. The natural save at
+tick 1111 retained health 1.0, injury 0, energy 0.76368, hunger 0.42703, and
+biochemical ATP 0.44820. Two sleep cycles replaced the earlier repeated rapid
+cycles. This short observation supports the biological pacing check; it is not
+an observed 10–30 minute survival claim.
+
+The trace recorded five Manipulation Eat requests and five matching executed
+commands. Both food attempts occurred approximately 4–6 units from the food,
+outside the 1.25 eating radius; the other requests targeted an obstacle twice
+and a hazard. No `Consumed` contact occurred, food was never carried, and no Rest
+primitive was requested. This run demonstrates a choice/approach competence
+gap, not a dropped eating command. Do not repair it with forced consumption or
+a second food-seeking policy. Training remains unstarted pending discussion.
+
+Trial artifacts are local under
+`target/artifacts/core-loop-repair-20260921-172321`. Desktop recording was
+occluded by Chrome and does not establish game visuals or input usability.
+A separate 20-second visual-only run used the existing in-engine screenshot
+capture, without source changes. Its 96 captures show changing poses, position,
+and needs, with the entire care-control strip visible at 1280x720. Rendered
+positions track the authoritative positions with expected interpolation (maximum
+horizontal gap 0.742 units, below one movement step). The resulting nominal
+8 FPS frame sequence is a visual record, not wall-time/performance evidence.
+It is under `visual-only-20260921-181602` inside the trial artifact directory.
+Actual player input and fresh-process learned-state continuity remain unverified.
 
 ## Delivery sequence
 
