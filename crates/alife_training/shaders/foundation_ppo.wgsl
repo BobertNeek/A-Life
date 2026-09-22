@@ -16,7 +16,7 @@ fn finite(x:f32) -> bool { return x == x && abs(x) <= 3.402823466e+38; }
 fn metric_base(row:u32) -> u32 { return h(2u) * 32u + row * 8u; }
 fn value_base() -> u32 { return h(2u) * 40u; }
 fn put(i:u32, x:f32) { output[i] = bitcast<u32>(x); }
-fn get(i:u32) -> f32 { return bitcast<f32>(output[i]); }
+fn output_get(i:u32) -> f32 { return bitcast<f32>(output[i]); }
 fn head_get(i:u32) -> f32 { return bitcast<f32>(head[i]); }
 fn head_put(i:u32, x:f32) { head[i] = bitcast<u32>(x); }
 
@@ -38,19 +38,19 @@ fn masked_categorical(row:u32, mask:u32) -> MaskedCategorical {
     if (!finite(logit)) { return distribution; }
     maximum = max(maximum, logit);
   }
-  var partition = 0.0;
+  var normalizer = 0.0;
   for (var candidate = 0u; candidate < count; candidate++) {
     if ((mask & (1u << candidate)) == 0u) { continue; }
     let shifted = bitcast<f32>(logits[r(row, 51u) + candidate]) / hf(7u) - maximum;
     distribution.probability[candidate] = exp(shifted);
-    partition += distribution.probability[candidate];
+    normalizer += distribution.probability[candidate];
   }
-  if (!finite(partition) || partition <= 0.0) { return distribution; }
-  let log_partition = log(partition);
+  if (!finite(normalizer) || normalizer <= 0.0) { return distribution; }
+  let log_partition = log(normalizer);
   for (var candidate = 0u; candidate < count; candidate++) {
     if ((mask & (1u << candidate)) == 0u) { continue; }
     let log_probability = bitcast<f32>(logits[r(row, 51u) + candidate]) / hf(7u) - maximum - log_partition;
-    let probability = distribution.probability[candidate] / partition;
+    let probability = distribution.probability[candidate] / normalizer;
     distribution.probability[candidate] = probability;
     distribution.log_probability[candidate] = log_probability;
     if (probability > 0.0) { distribution.entropy -= probability * log_probability; }
@@ -125,7 +125,7 @@ fn ppo_objective(@builtin(global_invocation_id) gid:vec3<u32>) {
   let clipped = (advantage >= 0.0 && ratio > 1.0 + hf(4u))
     || (advantage < 0.0 && ratio < 1.0 - hf(4u));
   let log_probability_gradient = select(-advantage * ratio, 0.0, clipped);
-  let value_error = get(value_base() + row) - rf(row, 4u);
+  let value_error = output_get(value_base() + row) - rf(row, 4u);
   let value_loss = 0.5 * hf(6u) * value_error * value_error;
   let approximate_kl = max(0.0, (ratio - 1.0) - log_ratio);
   if (!finite(joint_log_probability) || !finite(ratio) || !finite(entropy)
@@ -179,7 +179,7 @@ fn ppo_value_gradients(@builtin(global_invocation_id) gid:vec3<u32>) {
   for (var row = 0u; row < h(0u); row++) {
     var feature = 1.0;
     if (coordinate < h(1u)) { feature = bitcast<f32>(features[r(row, 52u) + coordinate]); }
-    gradient += hf(6u) * (get(value_base() + row) - rf(row, 4u)) * feature / f32(h(0u));
+    gradient += hf(6u) * (output_get(value_base() + row) - rf(row, 4u)) * feature / f32(h(0u));
   }
   // Detached features: this pass never writes any recurrent activation adjoint.
   head_put(width * 3u + coordinate, gradient);
@@ -188,8 +188,8 @@ fn ppo_value_gradients(@builtin(global_invocation_id) gid:vec3<u32>) {
 fn value_update_scale() -> f32 {
   var mean_kl = 0.0;
   for (var row = 0u; row < h(0u); row++) {
-    if (get(metric_base(row) + 7u) != 1.0) { return -1.0; }
-    mean_kl += get(metric_base(row) + 1u) / f32(h(0u));
+    if (output_get(metric_base(row) + 7u) != 1.0) { return -1.0; }
+    mean_kl += output_get(metric_base(row) + 1u) / f32(h(0u));
   }
   if (h(17u) != 0u) { mean_kl=hf(18u); }
   if (!finite(mean_kl) || mean_kl > hf(14u) || h(3u) == 0u) { return -1.0; }
@@ -223,7 +223,7 @@ fn ppo_value_preflight() {
 
 @compute @workgroup_size(1)
 fn ppo_value_update() {
-  if (get(h(2u) * 41u) != 1.0 || hf(6u) == 0.0) { return; }
+  if (output_get(h(2u) * 41u) != 1.0 || hf(6u) == 0.0) { return; }
   let scale = value_update_scale();
   if (scale < 0.0) { return; }
   let width = h(1u) + 1u;
@@ -303,17 +303,17 @@ fn imitation_objective(row:u32, add:bool) {
     terms[representative]=term;
     maximum=max(maximum,term);
   }
-  var partition=0.0;
+  var normalizer=0.0;
   for (var candidate=0u; candidate<count; candidate++) {
-    if (compatible[candidate]) { partition+=exp(terms[candidate]-maximum); }
+    if (compatible[candidate]) { normalizer+=exp(terms[candidate]-maximum); }
   }
-  if (partition <= 0.0 || !finite(partition)) { return; }
-  let log_probability=maximum+log(partition);
+  if (normalizer <= 0.0 || !finite(normalizer)) { return; }
+  let log_probability=maximum+log(normalizer);
   var posterior: array<f32,32>;
   var forced_mass: array<f32,6>;
   for (var candidate=0u; candidate<count; candidate++) {
     if (!compatible[candidate]) { continue; }
-    posterior[candidate]=exp(terms[candidate]-maximum)/partition;
+    posterior[candidate]=exp(terms[candidate]-maximum)/normalizer;
     let forced=r(row,19u+candidate);
     if (forced<6u) { forced_mass[forced]+=posterior[candidate]; }
   }
@@ -325,7 +325,7 @@ fn imitation_objective(row:u32, add:bool) {
       gradient+=(1.0-forced_mass[slot])*(distributions[slot+1u].probability[candidate]-accepted[slot].probability[candidate]);
     }
     gradients[candidate]=hf(15u)*gradient/(hf(7u)*f32(h(0u)));
-    if (add) { gradients[candidate]+=get(row*32u+candidate); }
+    if (add) { gradients[candidate]+=output_get(row*32u+candidate); }
     if (!finite(gradients[candidate])) { return; }
   }
   let loss=-hf(15u)*log_probability;
