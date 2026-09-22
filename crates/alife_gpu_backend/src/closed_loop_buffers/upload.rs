@@ -39,6 +39,9 @@ pub struct GpuPhenotypeBytePlan {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GpuPhenotypeUpload {
+    /// Offline capture conversion must undo the production target-major packing.
+    #[cfg(feature = "training-rollout")]
+    pub canonical_to_local_synapse: Vec<u32>,
     pub joint_motor_mode: u32,
     pub class_id: u32,
     pub neuron_count: u32,
@@ -596,6 +599,8 @@ impl GpuPhenotypeUpload {
             sleep_parameters: vec![sleep_parameter],
             genetic_weights,
             alpha,
+            #[cfg(feature = "training-rollout")]
+            canonical_to_local_synapse: canonical_to_local,
             decoder_weight_index_word_base,
             extension_record_offset: GPU_NO_EXTENSION_SENTINEL,
         })

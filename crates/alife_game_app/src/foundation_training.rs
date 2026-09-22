@@ -181,6 +181,7 @@ pub fn foundation_replay_sequence(
 ) -> Result<TrainingSequence> {
     let first = steps.first().ok_or_else(invalid)?;
     let phenotype = &first.before.phenotype;
+    let upload = alife_gpu_backend::closed_loop_buffers::GpuPhenotypeUpload::try_from(phenotype)?;
     let homeostasis = snapshot_values(
         &first.before,
         first
@@ -314,7 +315,10 @@ pub fn foundation_replay_sequence(
                 .synapses()
                 .iter()
                 .enumerate()
-                .map(|(i, s)| lifetime[i] + s.alpha() * fast[i])
+                .map(|(i, s)| {
+                    let local = upload.canonical_to_local_synapse[i] as usize;
+                    lifetime[local] + s.alpha() * fast[local]
+                })
                 .collect(),
             candidates,
         });
@@ -458,6 +462,12 @@ pub fn run_foundation_training_pilot(
         return Err(invalid().into());
     }
     for (i, step) in steps.iter().enumerate() {
+        maximum_activation_error = maximum_activation_error.max(compare_replay_values(
+            i,
+            "activation",
+            &replay.final_activations[i],
+            &snapshot_activation(&step.after_inference)?,
+        )?);
         let observed = &step.behavior.logits;
         if replay.candidate_logits[i].len() != observed.len() {
             return Err(invalid().into());
@@ -481,16 +491,15 @@ pub fn run_foundation_training_pilot(
             let error = (actual - expected).abs();
             maximum_logit_error = maximum_logit_error.max(error);
             if !actual.is_finite() || error > 1e-4 + 1e-4 * expected.abs() {
-                return Err(format!("tick {i}: logit mismatch {actual} vs {expected}").into());
+                let activation_error = replay.final_activations[i]
+                    .iter()
+                    .zip(snapshot_activation(&step.after_inference)?)
+                    .map(|(a, b)| (a - b).abs())
+                    .fold(0.0_f32, f32::max);
+                return Err(format!("tick {i} candidate {candidate} {:?}: logit mismatch {actual} vs {expected}; max activation error={activation_error}, bank={}, generation={}",
+                    step.frame.candidates()[candidate].family, step.before.active_weight_bank, step.before.active_weight_generation).into());
             }
         }
-        let expected = snapshot_activation(&step.after_inference)?;
-        maximum_activation_error = maximum_activation_error.max(compare_replay_values(
-            i,
-            "activation",
-            &replay.final_activations[i],
-            &expected,
-        )?);
         let homeostasis = snapshot_values(
             &step.after_inference,
             step.after_inference
