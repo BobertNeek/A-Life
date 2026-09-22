@@ -23,7 +23,7 @@ function Assert-Idle {
 function Atomic-Json($Path, $Value) {
     $temporary = "$Path.$([Guid]::NewGuid().ToString('N')).tmp"
     [IO.File]::WriteAllText($temporary, ($Value | ConvertTo-Json -Depth 12), [Text.UTF8Encoding]::new($false))
-    if ([IO.File]::Exists($Path)) { [IO.File]::Replace($temporary, $Path, $null) } else { [IO.File]::Move($temporary, $Path) }
+    [IO.File]::Move($temporary, $Path, $true)
 }
 function Publish-State {
     $state.updatedUtc = [DateTime]::UtcNow.ToString('o')
