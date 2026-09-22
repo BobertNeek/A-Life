@@ -222,6 +222,12 @@ and displaying a creature alone do not establish the care loop.
 
 ### 1. Close basic care with a capable founder
 
+For the selected N2048 training route, use the
+[hardware-specific care training regimen](n2048-care-training-regimen-2026-09-21.md).
+It specifies prerequisite trainer repairs, parallel long lifetimes, bounded
+adaptive training, and the single final acceptance campaign. It is a design,
+not evidence that training or acceptance has completed.
+
 Inspect the evidence for the best retained candidate. Try reachable food,
 movement, eating, physiological recovery, and rest in the production terrain.
 Distinguish failure to perceive or choose from failure to move, execute, or
