@@ -13,6 +13,25 @@ use super::{BrainCapacityClass, BrainPhenotype, PhenotypeCompilerInputs};
 pub struct PhenotypeCompiler;
 
 impl PhenotypeCompiler {
+    /// Exact, explicit training candidate admission. Builtin compilation and its
+    /// inherited coordinate variation retain their existing behavior.
+    pub fn compile_n2048_foundation_candidate(
+        genome: BrainGenome,
+        development: DevelopmentState,
+        asset: FoundationWeightAsset,
+    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
+        let capacity = BrainCapacityClass::n2048();
+        let inputs = PhenotypeCompilerInputs::try_new_with_n2048_candidate(
+            genome,
+            &capacity,
+            development,
+            asset.manifest().sensor_profile(),
+            asset,
+        )?;
+        let phenotype = Self::compile_validated(&inputs, &capacity)?;
+        Ok((phenotype, inputs))
+    }
+
     pub fn compile_nano512_action_credit_candidate(
         candidate: &crate::Nano512ActionCreditCandidateV2,
     ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
@@ -115,6 +134,10 @@ impl PhenotypeCompiler {
         inputs: &PhenotypeCompilerInputs,
         capacity: &BrainCapacityClass,
     ) -> Result<BrainPhenotype, ScaffoldContractError> {
+        if let Some(asset) = inputs.n2048_candidate_asset() {
+            inputs.validate_against(capacity)?;
+            return super::construction::compile_with_foundation_asset(inputs, capacity, asset);
+        }
         if let crate::FoundationAbiSelection::Nano512ActionCreditCandidateV2(candidate) =
             inputs.foundation_abi()
         {

@@ -662,6 +662,8 @@ pub struct CreatureGenome {
     pub nano512_readout_candidate: Option<crate::Nano512ReadoutCandidateV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nano512_action_credit_candidate_v2: Option<crate::Nano512ActionCreditCandidateV2>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub n2048_foundation_candidate: Option<crate::FoundationWeightAsset>,
     pub provenance: GeneticLineageProvenance,
     pub body: BodyChromosome,
     pub brain: BrainChromosome,
@@ -754,6 +756,22 @@ pub struct CreaturePhenotype {
 }
 
 impl CreatureGenome {
+    /// Persist the exact inherited N2048 asset, never acquired life state.
+    pub fn with_n2048_foundation_candidate(
+        mut self,
+        asset: crate::FoundationWeightAsset,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.validate_contract()?;
+        if self.foundation.brain_class_id != BrainCapacityClass::N2048_ID
+            || asset.manifest().capacity_class_id() != BrainCapacityClass::N2048_ID
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        self.n2048_foundation_candidate = Some(asset);
+        self.validate_contract()?;
+        Ok(self)
+    }
+
     /// Attach an explicit, sanitized fixed-graph prior to a fresh genome.
     pub fn with_nano512_readout_candidate(
         mut self,
@@ -801,6 +819,7 @@ impl CreatureGenome {
             foundation,
             nano512_readout_candidate: None,
             nano512_action_credit_candidate_v2: None,
+            n2048_foundation_candidate: None,
             provenance: GeneticLineageProvenance::founder(species_seed),
             body: BodyChromosome {
                 size: ContinuousLocus::mean(0.42, 0.48)?,
@@ -900,6 +919,7 @@ impl CreatureGenome {
         maternal.validate_contract()?;
         paternal.validate_contract()?;
         if conception_seed == 0
+            || maternal.n2048_foundation_candidate != paternal.n2048_foundation_candidate
             || maternal.nano512_readout_candidate != paternal.nano512_readout_candidate
             || maternal.nano512_action_credit_candidate_v2
                 != paternal.nano512_action_credit_candidate_v2
@@ -967,6 +987,7 @@ impl CreatureGenome {
             foundation,
             nano512_readout_candidate: maternal.nano512_readout_candidate.clone(),
             nano512_action_credit_candidate_v2: maternal.nano512_action_credit_candidate_v2.clone(),
+            n2048_foundation_candidate: maternal.n2048_foundation_candidate.clone(),
             provenance: GeneticLineageProvenance {
                 conception_seed,
                 ordinary_birth: true,
@@ -2333,6 +2354,21 @@ impl Validate for CreatureGenome {
             return Err(ScaffoldContractError::InvalidId);
         }
         self.foundation.validate_contract()?;
+        if let Some(asset) = &self.n2048_foundation_candidate {
+            asset.encode_canonical()?;
+            let manifest = asset.manifest();
+            if self.nano512_readout_candidate.is_some()
+                || self.nano512_action_credit_candidate_v2.is_some()
+                || self.foundation.brain_class_id != BrainCapacityClass::N2048_ID
+                || manifest.capacity_class_id() != BrainCapacityClass::N2048_ID
+                || manifest.foundation_id().raw() != self.foundation.foundation_id
+                || manifest.foundation_version().raw() != u32::from(self.foundation.version)
+                || manifest.compatibility_family_id().raw()
+                    != self.foundation.compatibility_family_id
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        }
         match (
             &self.nano512_readout_candidate,
             &self.nano512_action_credit_candidate_v2,

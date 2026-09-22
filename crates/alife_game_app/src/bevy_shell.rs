@@ -838,7 +838,7 @@ pub fn build_production_voxel_frontend_app_shell(
                     config,
                     assets,
                 },
-                launch.new_game_founder,
+                launch.new_game_founder.clone(),
             )?;
             let exact_save = created.exact_save.clone();
             let mut admitted_launch = launch.clone();

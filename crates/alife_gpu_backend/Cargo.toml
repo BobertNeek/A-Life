@@ -17,3 +17,4 @@ wgpu.workspace = true
 [features]
 default = []
 gpu-tests = []
+training-rollout = []

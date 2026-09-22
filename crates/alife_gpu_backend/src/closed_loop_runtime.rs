@@ -663,6 +663,8 @@ pub struct GpuClosedLoopTick {
     pub compact_readback_bytes: usize,
     pub hardware_receipt_generation: u64,
     pub selector_diagnostic: Option<GpuSelectorDiagnosticReceipt>,
+    #[cfg(feature = "training-rollout")]
+    pub training_rollout: Option<crate::GpuTrainingRolloutReceipt>,
 }
 
 pub const GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION: u16 = 3;
@@ -4728,6 +4730,67 @@ impl GpuClosedLoopBackend {
         self.tick_inputs(&inputs, None)
     }
 
+    #[cfg(feature = "training-rollout")]
+    pub fn capture_training_state(
+        &mut self,
+        handle: GpuBrainHandle,
+        tick: alife_core::Tick,
+    ) -> Result<crate::training_rollout::GpuTrainingStateSnapshot, ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let (mut snapshot, ranges) = {
+            let bucket = self
+                .class_buckets
+                .get(&handle.class_id.raw())
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .bucket_for_handle(handle)?;
+            let resident = bucket.slots[handle.slot as usize]
+                .as_ref()
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let side = bucket
+                .pipelines
+                .slot_active_side(handle.slot, handle.generation)
+                .map_err(map_gpu_contract_error)?;
+            (
+                crate::training_rollout::GpuTrainingStateSnapshot {
+                    handle,
+                    tick: tick.raw(),
+                    logical_dispatch_generation: resident.logical_dispatch_generation,
+                    active_activation_side: side,
+                    active_weight_generation: resident.active_weight_generation,
+                    active_weight_bank: resident.active_weight_bank,
+                    phenotype: resident.phenotype.clone(),
+                    brain_slot: resident.brain_slot.clone(),
+                    v11: resident.v11.checkpoint(),
+                    mutable_word_base: resident.ranges.mutable_state_words.start,
+                    mutable_words: Vec::new(),
+                },
+                resident.ranges.clone(),
+            )
+        };
+        snapshot.mutable_words = self.read_slot_mutable_words(handle, &ranges)?;
+        Ok(snapshot)
+    }
+
+    /// Explicit training request; ordinary ticks always retain production argmax.
+    #[cfg(feature = "training-rollout")]
+    pub fn tick_memory_batch_training(
+        &mut self,
+        batch: &GpuClosedLoopMemoryBatchInput<'_>,
+        sampling: &[crate::GpuTrainingSamplingConfig],
+    ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
+        let inputs = batch
+            .members
+            .iter()
+            .map(|member| GpuRuntimeTickInput {
+                handle: member.handle,
+                frame: member.frame,
+                memory_upload: Some(member.memory_upload),
+            })
+            .collect::<Vec<_>>();
+        self.tick_inputs_with_selector_diagnostic_capture(&inputs, None, None, Some(sampling))
+    }
+
     pub fn tick_memory_batch_with_selector_diagnostics(
         &mut self,
         batch: &GpuClosedLoopMemoryBatchInput<'_>,
@@ -4747,6 +4810,8 @@ impl GpuClosedLoopBackend {
             &inputs,
             Some(requested_candidate_indices),
             Some(&mut capture),
+            #[cfg(feature = "training-rollout")]
+            None,
         ) {
             Ok(ticks) => Ok(ticks),
             Err(error) => match capture.enable_error {
@@ -4783,6 +4848,8 @@ impl GpuClosedLoopBackend {
         self.tick_inputs_with_selector_diagnostic_capture(
             batch,
             selector_diagnostic_candidate_indices,
+            None,
+            #[cfg(feature = "training-rollout")]
             None,
         )
     }

@@ -280,11 +280,20 @@ fn compile_inner(
                 let projection = projections
                     .get(usize::from(synapse.route_index()))
                     .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-                let delta = genome_weight_delta(
-                    overlay_seed.unwrap_or(genome.genetic_prior_seed),
-                    global_index as u32,
-                );
-                let mut composed = *weight + delta;
+                let delta = if inputs.n2048_candidate_asset().is_some() {
+                    0.0
+                } else {
+                    genome_weight_delta(
+                        overlay_seed.unwrap_or(genome.genetic_prior_seed),
+                        global_index as u32,
+                    )
+                };
+                let exact_candidate = inputs.n2048_candidate_asset().is_some();
+                let mut composed = if exact_candidate {
+                    *weight
+                } else {
+                    *weight + delta
+                };
                 match projection.projection_type() {
                     crate::ProjectionType::LateralInhibition if composed >= 0.0 => {
                         composed = -0.000_1;
@@ -295,6 +304,9 @@ fn compile_inner(
                         composed = 0.000_1;
                     }
                     _ => {}
+                }
+                if exact_candidate && composed.to_bits() != weight.to_bits() {
+                    return Err(ScaffoldContractError::PhenotypeCompile);
                 }
                 synapse.set_genetic_weight(composed);
             }

@@ -5,6 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[[bin]]
+name = "train_n2048_care"
+path = "src/bin/train_n2048_care.rs"
+required-features = ["foundation-training"]
+
 [dependencies]
 alife_core = { path = "../alife_core" }
 alife_archive = { path = "../alife_archive", optional = true }
@@ -62,6 +67,7 @@ bevy-app = [
     "dep:wgpu",
 ]
 gpu-runtime = ["dep:alife_archive", "dep:alife_gpu_backend", "dep:alife_runtime"]
+foundation-training = ["gpu-runtime", "dep:alife_training", "alife_runtime/training-rollout"]
 gpu-tests = [
     "gpu-runtime",
     "dep:alife_training",

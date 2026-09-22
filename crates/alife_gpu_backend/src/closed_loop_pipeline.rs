@@ -706,6 +706,65 @@ pub struct GpuActiveBatchUpload {
 }
 
 impl GpuActiveBatchUpload {
+    #[cfg(feature = "training-rollout")]
+    pub(crate) fn enable_training_sampling(
+        &mut self,
+        configs: &[crate::GpuTrainingSamplingConfig],
+        capacity: usize,
+    ) -> Result<(), GpuClosedLoopError> {
+        if configs.len() != self.headers.len()
+            || self
+                .frame_payload_words
+                .len()
+                .checked_add(configs.len() * 11)
+                .is_none_or(|n| n > capacity || n >= 0x8000_0000)
+            || self
+                .headers
+                .iter()
+                .zip(&self.joint_motor_modes)
+                .any(|(h, mode)| {
+                    h.reserved != 0
+                        || h.candidate_count == 0
+                        || h.candidate_count > 32
+                        || *mode == 0
+                })
+            || configs.iter().any(|config| config.validate().is_err())
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        for (row, config) in configs.iter().enumerate() {
+            let offset = self.frame_payload_words.len() as u32;
+            self.frame_payload_words.extend([
+                config.seed,
+                config.counter,
+                config.temperature.to_bits(),
+                u32::from(config.demonstrator.is_some()),
+                config
+                    .demonstrator
+                    .map_or(u32::MAX, |action| u32::from(action.representative_index)),
+            ]);
+            self.frame_payload_words.extend(
+                config
+                    .demonstrator
+                    .map_or([u16::MAX; 6], |action| action.motor_indices)
+                    .map(|index| {
+                        if index == u16::MAX {
+                            u32::MAX
+                        } else {
+                            u32::from(index)
+                        }
+                    }),
+            );
+            self.selector_diagnostic_offsets[row] =
+                self.learning_headers[row].decoder_learning_input_offset;
+            self.selector_diagnostic_word_counts[row] =
+                self.headers[row].candidate_count * self.learning_headers[row].decoder_input_stride;
+            self.headers[row].reserved = offset | crate::training_rollout::TRAINING_PAYLOAD_TAG;
+            self.dispatch_header_words[row * GPU_ACTIVE_DISPATCH_ROW_WORDS + 15] =
+                self.headers[row].reserved;
+        }
+        Ok(())
+    }
     #[allow(clippy::too_many_arguments)]
     fn try_from_views(
         entries: &[GpuBatchEntryView<'_>],
@@ -1269,6 +1328,8 @@ pub(crate) struct GpuSelectorCandidateContributionCapture {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GpuSelectorLogitCapture {
+    #[cfg(feature = "training-rollout")]
+    pub(crate) training_decoder_input_bits: Vec<u32>,
     pub(crate) pre_context_logit_bits: Vec<u32>,
     pub(crate) final_logit_bits: Vec<u32>,
     pub(crate) requested_candidate_indices: Vec<u16>,
@@ -1463,6 +1524,17 @@ pub(crate) struct GpuClosedLoopKernelSet {
     finalize_sleep_commit_pipeline: wgpu::ComputePipeline,
 }
 
+fn runtime_shader_source(source: &str) -> std::borrow::Cow<'_, str> {
+    #[cfg(feature = "training-rollout")]
+    {
+        crate::training_rollout::shader_source(source).into()
+    }
+    #[cfg(not(feature = "training-rollout"))]
+    {
+        source.into()
+    }
+}
+
 impl GpuClosedLoopKernelSet {
     pub(crate) fn new(device: &wgpu::Device) -> Result<Arc<Self>, GpuClosedLoopError> {
         for (source, entries) in [
@@ -1523,7 +1595,7 @@ impl GpuClosedLoopKernelSet {
                 &["replay_sleep_learning"][..],
             ),
         ] {
-            validate_production_shader_contract(source, entries)?;
+            validate_production_shader_contract(&runtime_shader_source(source), entries)?;
         }
         let layout = create_neural_bind_group_layout(device);
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -1533,39 +1605,45 @@ impl GpuClosedLoopKernelSet {
         });
         let encode_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("closed-loop-encode-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(CLOSED_LOOP_ENCODE_WGSL.into()),
+            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(CLOSED_LOOP_ENCODE_WGSL)),
         });
         let recurrent_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("closed-loop-recurrent-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(CLOSED_LOOP_RECURRENT_WGSL.into()),
+            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(CLOSED_LOOP_RECURRENT_WGSL)),
         });
         let clear_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("closed-loop-clear-diagnostics-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL.into()),
+            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(
+                CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
+            )),
         });
         let decode_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("closed-loop-decode-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(CLOSED_LOOP_DECODE_WGSL.into()),
+            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(CLOSED_LOOP_DECODE_WGSL)),
         });
         let memory_context_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("closed-loop-memory-context-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(CLOSED_LOOP_MEMORY_CONTEXT_WGSL.into()),
+            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(
+                CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
+            )),
         });
         let eligibility_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("closed-loop-eligibility-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(CLOSED_LOOP_ELIGIBILITY_WGSL.into()),
+            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(CLOSED_LOOP_ELIGIBILITY_WGSL)),
         });
         let plasticity_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("closed-loop-plasticity-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(CLOSED_LOOP_PLASTICITY_WGSL.into()),
+            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(CLOSED_LOOP_PLASTICITY_WGSL)),
         });
         let consolidate_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("closed-loop-consolidate-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(CLOSED_LOOP_CONSOLIDATE_WGSL.into()),
+            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(CLOSED_LOOP_CONSOLIDATE_WGSL)),
         });
         let replay_sleep_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("closed-loop-replay-learning-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(CLOSED_LOOP_REPLAY_LEARNING_WGSL.into()),
+            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(
+                CLOSED_LOOP_REPLAY_LEARNING_WGSL,
+            )),
         });
         let encode_pipeline = create_compute_pipeline(
             device,
@@ -3395,6 +3473,26 @@ impl GpuClosedLoopPipelines {
             if detail_end > details.len() {
                 return Err(GpuClosedLoopError::SubmissionFailed);
             }
+            #[cfg(feature = "training-rollout")]
+            if header.reserved & crate::training_rollout::TRAINING_PAYLOAD_TAG != 0 {
+                if detail_count
+                    != header.candidate_count as usize
+                        * batch.learning_headers[row].decoder_input_stride as usize
+                    || !batch.selector_diagnostic_requests[row].is_empty()
+                {
+                    return Err(GpuClosedLoopError::SubmissionFailed);
+                }
+                captures.push(GpuSelectorLogitCapture {
+                    training_decoder_input_bits: details[detail_cursor..detail_end].to_vec(),
+                    pre_context_logit_bits: pre[cursor..end].to_vec(),
+                    final_logit_bits: final_logits[cursor..end].to_vec(),
+                    requested_candidate_indices: Vec::new(),
+                    contributions: Vec::new(),
+                });
+                cursor = end;
+                detail_cursor = detail_end;
+                continue;
+            }
             let block = &details[detail_cursor..detail_end];
             let requested = &batch.selector_diagnostic_requests[row];
             if block.first().copied()
@@ -3452,6 +3550,8 @@ impl GpuClosedLoopPipelines {
                 return Err(GpuClosedLoopError::SubmissionFailed);
             }
             captures.push(GpuSelectorLogitCapture {
+                #[cfg(feature = "training-rollout")]
+                training_decoder_input_bits: Vec::new(),
                 pre_context_logit_bits: pre[cursor..end].to_vec(),
                 final_logit_bits: final_logits[cursor..end].to_vec(),
                 requested_candidate_indices: requested.clone(),

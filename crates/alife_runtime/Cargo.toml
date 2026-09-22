@@ -20,4 +20,5 @@ windows-sys = { version = "0.61.2", features = [
 
 [features]
 default = []
+training-rollout = ["alife_gpu_backend/training-rollout"]
 gpu-tests = ["alife_gpu_backend/gpu-tests"]

@@ -33,12 +33,42 @@ pub struct PhenotypeCompilerInputs {
     cognitive_channel_extension: Option<crate::CognitiveChannelExtensionV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     foundation_weight_application: Option<FoundationWeightApplication>,
+    /// Explicit opt-in exact genetic weights; absent in existing builtin inputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    n2048_candidate_asset: Option<crate::FoundationWeightAsset>,
     capacity_class_id: BrainClassId,
     capacity_digest: [u64; 4],
     canonical_digest: [u64; 4],
 }
 
 impl PhenotypeCompilerInputs {
+    pub fn try_new_with_n2048_candidate(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        asset: crate::FoundationWeightAsset,
+    ) -> Result<Self, ScaffoldContractError> {
+        if capacity.id() != BrainCapacityClass::N2048_ID
+            || asset.manifest().capacity_class_id() != capacity.id()
+            || asset.manifest().sensor_profile() != sensor_profile
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        asset.encode_canonical()?;
+        let abi = FoundationAbiBinding::canonical_for_foundation_asset(capacity, &asset)?;
+        let mut value =
+            Self::try_new_with_foundation_abi(genome, capacity, development, sensor_profile, abi)?;
+        value.n2048_candidate_asset = Some(asset);
+        value.canonical_digest = value.recompute_digest()?;
+        value.validate_against(capacity)?;
+        Ok(value)
+    }
+
+    pub const fn n2048_candidate_asset(&self) -> Option<&crate::FoundationWeightAsset> {
+        self.n2048_candidate_asset.as_ref()
+    }
+
     pub fn try_new(
         genome: BrainGenome,
         capacity: &BrainCapacityClass,
@@ -154,6 +184,7 @@ impl PhenotypeCompilerInputs {
             cognitive_channel_extension,
             foundation_weight_application,
             capacity_class_id: capacity.id(),
+            n2048_candidate_asset: None,
             capacity_digest: capacity.canonical_digest(),
             canonical_digest: [0; 4],
         };
@@ -278,6 +309,22 @@ impl PhenotypeCompilerInputs {
             &self.foundation_abi_selection,
             self.foundation_weight_application,
         )?;
+        if let Some(asset) = &self.n2048_candidate_asset {
+            asset.encode_canonical()?;
+            let abi = self
+                .foundation_abi_selection
+                .canonical_v2()
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            if capacity.id() != BrainCapacityClass::N2048_ID
+                || asset.manifest().capacity_class_id() != capacity.id()
+                || asset.manifest().sensor_profile() != self.sensor_profile
+                || abi.foundation_weight_asset() != Some(asset.asset_ref())
+                || self.foundation_weight_application.is_some()
+                || self.cognitive_channel_extension.is_some()
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        }
         if self.schema_version != INPUTS_SCHEMA_VERSION
             || self.capacity_class_id != capacity.id()
             || self.capacity_digest != capacity.canonical_digest()
@@ -309,6 +356,11 @@ impl PhenotypeCompilerInputs {
             d.write_u64(seed);
         }
         let language_codebook = self.foundation_abi_selection.language_codebook();
+        if let Some(asset) = &self.n2048_candidate_asset {
+            // Optional extension preserves all pre-existing input digests.
+            d.write_bytes(b"n2048-exact-candidate-v1");
+            d.write_bytes(asset.digest().bytes());
+        }
         d.write_u32(language_codebook.id().0);
         for byte in language_codebook.canonical_digest().bytes() {
             d.write_u8(*byte);
@@ -337,6 +389,8 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             cognitive_channel_extension: Option<crate::CognitiveChannelExtensionV1>,
             #[serde(default)]
             foundation_weight_application: Option<FoundationWeightApplication>,
+            #[serde(default)]
+            n2048_candidate_asset: Option<crate::FoundationWeightAsset>,
             capacity_class_id: BrainClassId,
             capacity_digest: [u64; 4],
             canonical_digest: [u64; 4],
@@ -350,6 +404,7 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             foundation_abi_selection: w.foundation_abi_selection,
             cognitive_channel_extension: w.cognitive_channel_extension,
             foundation_weight_application: w.foundation_weight_application,
+            n2048_candidate_asset: w.n2048_candidate_asset,
             capacity_class_id: w.capacity_class_id,
             capacity_digest: w.capacity_digest,
             canonical_digest: w.canonical_digest,

@@ -135,7 +135,11 @@ pub use environment_launcher::*;
 mod production_voxel_frontend;
 pub use production_voxel_frontend::*;
 
+#[cfg(feature = "foundation-training")]
+mod foundation_training;
 mod new_game_lifecycle;
+#[cfg(feature = "foundation-training")]
+pub use foundation_training::*;
 pub use new_game_lifecycle::*;
 
 mod curated_founder_reset;

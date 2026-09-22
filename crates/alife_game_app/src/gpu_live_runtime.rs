@@ -442,6 +442,20 @@ fn resident_authority_plan_from_record(
                     PhenotypeCompiler::compile_nano512_readout_candidate(&candidate.asset()?)?
                 };
             (phenotype, compiler_inputs, None)
+        } else if let Some(asset) = &admission.genome.n2048_foundation_candidate {
+            if asset.manifest().sensor_profile() != sensor_profile {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+            let capacity = BrainCapacityClass::n2048();
+            let construction =
+                foundation_construction_development(&genome, &capacity, &development)?;
+            let (phenotype, compiler_inputs) =
+                PhenotypeCompiler::compile_n2048_foundation_candidate(
+                    genome.clone(),
+                    construction,
+                    asset.clone(),
+                )?;
+            (phenotype, compiler_inputs, None)
         } else if selects_legacy_nano512_compatibility_from_record(&admission)? {
             let foundation = FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?;
             let projection = N512FounderFoundationProjection::compile(
@@ -1720,6 +1734,8 @@ fn run_exact_population_checkpoint_finalize_worker(
 
 #[derive(Debug, Clone, Copy)]
 struct GpuLiveRuntimeConstructionOptions {
+    #[cfg(feature = "foundation-training")]
+    training_sampling: Option<alife_gpu_backend::GpuTrainingSamplingConfig>,
     homeostatic_parameters: HomeostaticParameters,
     schedule_sleep: bool,
     observe_sidecars: bool,
@@ -1730,6 +1746,8 @@ struct GpuLiveRuntimeConstructionOptions {
 impl GpuLiveRuntimeConstructionOptions {
     const fn production() -> Self {
         Self {
+            #[cfg(feature = "foundation-training")]
+            training_sampling: None,
             homeostatic_parameters: HomeostaticParameters::reference(),
             schedule_sleep: true,
             observe_sidecars: true,
@@ -1745,6 +1763,8 @@ impl GpuLiveRuntimeConstructionOptions {
 
     const fn benchmark(homeostatic_parameters: HomeostaticParameters) -> Self {
         Self {
+            #[cfg(feature = "foundation-training")]
+            training_sampling: None,
             homeostatic_parameters,
             schedule_sleep: false,
             observe_sidecars: false,
@@ -1755,6 +1775,8 @@ impl GpuLiveRuntimeConstructionOptions {
 
     const fn causal_acceptance() -> Self {
         Self {
+            #[cfg(feature = "foundation-training")]
+            training_sampling: None,
             homeostatic_parameters: HomeostaticParameters::reference(),
             schedule_sleep: false,
             observe_sidecars: true,
@@ -1769,6 +1791,8 @@ impl GpuLiveRuntimeConstructionOptions {
     #[cfg(feature = "gpu-tests")]
     const fn soak() -> Self {
         Self {
+            #[cfg(feature = "foundation-training")]
+            training_sampling: None,
             homeostatic_parameters: HomeostaticParameters::reference(),
             schedule_sleep: true,
             observe_sidecars: true,
@@ -2932,7 +2956,9 @@ pub(crate) enum CuratedFounderResetRuntimeError {
     NoRetainedOperation,
     #[error("a curated founder operation is retained; retry it before starting another reset")]
     RetainedOperationPending,
-    #[error("a curated founder GPU residency plan is retained; recover it before starting another reset")]
+    #[error(
+        "a curated founder GPU residency plan is retained; recover it before starting another reset"
+    )]
     RetainedResidencyPlanPending,
     #[error("the retained curated founder GPU residency plan changed during retry")]
     ResidencyPlanMismatch,
@@ -3265,7 +3291,36 @@ impl CuratedFounderResetRuntimePort for GpuLiveBrainRuntime {
 }
 
 /// Owns all production neural authority for one headless world.
+#[cfg(feature = "foundation-training")]
+#[derive(Debug, Clone)]
+pub struct FoundationTrainingStep {
+    pub outcome_credit: alife_core::OutcomeCreditPacket,
+    pub frame: PerceptionFrame,
+    pub memory_upload: GpuMemoryContextUpload,
+    pub before: alife_gpu_backend::training_rollout::GpuTrainingStateSnapshot,
+    pub after_inference: alife_gpu_backend::training_rollout::GpuTrainingStateSnapshot,
+    pub behavior: alife_gpu_backend::GpuTrainingRolloutReceipt,
+    pub work: BrainWorkReceipt,
+    pub throttle: alife_core::NeuralThrottleDecision,
+    pub patch: ExperiencePatch,
+}
+
 pub struct GpuLiveBrainRuntime {
+    #[cfg(feature = "foundation-training")]
+    training_sampling: Option<alife_gpu_backend::GpuTrainingSamplingConfig>,
+    #[cfg(feature = "foundation-training")]
+    training_demonstrator: Option<
+        Box<
+            dyn FnMut(
+                    &PerceptionFrame,
+                ) -> Result<
+                    alife_gpu_backend::GpuTrainingDemonstratorAction,
+                    ScaffoldContractError,
+                > + Send,
+        >,
+    >,
+    #[cfg(feature = "foundation-training")]
+    last_foundation_training_steps: Vec<FoundationTrainingStep>,
     backend: GpuAuthoritativeSession,
     handles: BTreeMap<u64, GpuBrainHandle>,
     residents: BTreeMap<u64, ResidentCognition>,
@@ -3826,6 +3881,10 @@ fn archive_birth_into_library(
 fn archive_foundation_asset_bytes(
     resident: &ResidentCognition,
 ) -> Result<Option<Vec<u8>>, GameAppShellError> {
+    if let Some(asset) = resident.compiler_inputs.n2048_candidate_asset() {
+        asset.validate_against(&resident.phenotype)?;
+        return Ok(Some(asset.encode_canonical()?));
+    }
     if let alife_core::FoundationAbiSelection::Nano512ActionCreditCandidateV2(candidate) =
         resident.phenotype.foundation_abi()
     {
@@ -5722,6 +5781,67 @@ impl GpuLiveBrainRuntime {
         )
     }
 
+    /// Explicit training host over the same world, admission and archival path.
+    #[cfg(feature = "foundation-training")]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_profiled_foundation_training(
+        backend: GpuClosedLoopBackend,
+        world: HeadlessWorld,
+        deterministic_seed: u64,
+        brain_class: BrainScaleTier,
+        sensor_profile: SensorProfile,
+        archive_config: LineageLibraryConfig,
+        source_run_id: impl Into<String>,
+        learned_capture_policy: ArchiveLearnedCapturePolicy,
+        sampling: alife_gpu_backend::GpuTrainingSamplingConfig,
+    ) -> Result<Self, GameAppShellError> {
+        sampling.validate()?;
+        let mut options = GpuLiveRuntimeConstructionOptions::production();
+        options.training_sampling = Some(sampling);
+        let library = LineageLibrary::open(archive_config)?;
+        Self::new_profiled_with_parameters_and_archive(
+            backend,
+            world,
+            deterministic_seed,
+            brain_class,
+            sensor_profile,
+            options,
+            Some((library, source_run_id.into(), learned_capture_policy)),
+        )
+    }
+
+    /// Only complete successful staged world ticks are exposed. Drain between ticks.
+    #[cfg(feature = "foundation-training")]
+    pub fn take_foundation_training_steps(&mut self) -> Vec<FoundationTrainingStep> {
+        std::mem::take(&mut self.last_foundation_training_steps)
+    }
+
+    /// An offline teacher sees ordinary perceptions only. Production sessions reject it.
+    #[cfg(feature = "foundation-training")]
+    pub fn set_foundation_demonstrator<F>(
+        &mut self,
+        teacher: F,
+    ) -> Result<(), ScaffoldContractError>
+    where
+        F: FnMut(
+                &PerceptionFrame,
+            )
+                -> Result<alife_gpu_backend::GpuTrainingDemonstratorAction, ScaffoldContractError>
+            + Send
+            + 'static,
+    {
+        if self.training_sampling.is_none() {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        self.training_demonstrator = Some(Box::new(teacher));
+        Ok(())
+    }
+
+    #[cfg(feature = "foundation-training")]
+    pub fn clear_foundation_demonstrator(&mut self) {
+        self.training_demonstrator = None;
+    }
+
     pub(crate) fn new_benchmark_profiled(
         backend: GpuClosedLoopBackend,
         world: HeadlessWorld,
@@ -5832,8 +5952,21 @@ impl GpuLiveBrainRuntime {
                 Some((library, run_id, policy)) => (Some(library), Some(run_id), policy),
                 None => (None, None, ArchiveLearnedCapturePolicy::GeneticOnly),
             };
+        let consumer = GpuSessionConsumerKind::Gameplay;
+        #[cfg(feature = "foundation-training")]
+        let consumer = if options.training_sampling.is_some() {
+            GpuSessionConsumerKind::Training
+        } else {
+            consumer
+        };
         let mut runtime = Self {
-            backend: GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Gameplay),
+            #[cfg(feature = "foundation-training")]
+            training_sampling: options.training_sampling,
+            #[cfg(feature = "foundation-training")]
+            training_demonstrator: None,
+            #[cfg(feature = "foundation-training")]
+            last_foundation_training_steps: Vec::new(),
+            backend: GpuAuthoritativeSession::new(backend, consumer),
             handles: BTreeMap::new(),
             residents: BTreeMap::new(),
             memories: BTreeMap::new(),
@@ -5975,6 +6108,12 @@ impl GpuLiveBrainRuntime {
         }
         let world_tick = world.tick();
         let mut runtime = Self {
+            #[cfg(feature = "foundation-training")]
+            training_sampling: None,
+            #[cfg(feature = "foundation-training")]
+            training_demonstrator: None,
+            #[cfg(feature = "foundation-training")]
+            last_foundation_training_steps: Vec::new(),
             backend: GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Gameplay),
             handles: BTreeMap::new(),
             residents: BTreeMap::new(),
@@ -7500,6 +7639,8 @@ impl GpuLiveBrainRuntime {
                 runtime.tick_with_sleep_progress_staged(&mut progress)
             });
         if result.is_err() {
+            #[cfg(feature = "foundation-training")]
+            self.last_foundation_training_steps.clear();
             staged_sleep.restore(self);
         }
         self.performance_metrics.rollback_clone_calls = self

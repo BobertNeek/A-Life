@@ -1,9 +1,31 @@
 # N2048 care training regimen — 21 September 2026
 
-Status: implementation design, not an executed training result. This is the
+Status: approved implementation in progress, not an executed training result. This is the
 hardware-specific training subplan for the core-game-loop plan. It replaces the
 earlier conversational training proposals. The v2.0 architecture remains the
 only architecture authority.
+
+## Execution checkpoint — 22 September 2026
+
+The operator entry point is `scripts/run_n2048_care_training.ps1`; follow
+`docs/n2048-training-operator.md`. Preparation is not a training campaign.
+The campaign must remain unavailable until the following integration is done:
+
+- A bounded cohort runner connecting production captures, grounded demonstrations,
+  frozen GPU value predictions, full-life GAE, replay windows and PPO updates.
+- Compact on-disk replay, shared GPU scheduling of independent worlds, and measured
+  resource limits. Current diagnostic captures retain full GPU snapshots.
+- Exact graph/identity rebinding between founder generations without losing Adam
+  state, and complete campaign checkpoint/recovery (actor, critic, RNG, curriculum,
+  source/config identity and sealed world boundaries).
+- Protected development/acceptance episodes and the campaign deadline. The native
+  selected graph currently has no cognitive decoder rows; do not claim them trained.
+
+Implemented prerequisites include explicit native candidate admission, ordinary
+runtime training capture/sampling, production-context recurrent replay, GPU gradient
+accumulation, PPO/value/imitation objectives, and selective genetic delta merging.
+Implemented does not mean integrated or behaviorally proven. No founder has been
+promoted by this work, and the old synthetic trainer is not an allowed fallback.
 
 ## Outcome and hardware budget
 
@@ -76,11 +98,12 @@ conditional truncated backpropagation, not differentiation through an entire
 life. Unsupported structural changes split replay at a compatible checkpoint;
 never turn off normal deployed learning merely to simplify training.
 
-Replace care target-logit regression with stable pairwise ranking:
-`softplus(logit_competitor - logit_acceptable)`. Compare candidates that compete
-for the same production selection/channel decision. Preserve jointly compatible
-motor outputs and do not label all unchosen but acceptable actions as wrong.
-Normalize over valid pairs and sequences, excluding burn-in and padding.
+Replace care target-logit regression with masked imitation: minimize the
+negative log probability mass of acceptable joint commands under the actual
+representative/conditional-channel policy. Supervision can leave compatible
+channels unconstrained and include multiple acceptable choices. Do not label
+all unchosen but acceptable actions as wrong. Normalize over valid examples
+and sequences, excluding burn-in and padding.
 
 Add complete training-only checkpoints: genetic weights, Adam moments and step,
 per-weight optimizer age for newly enabled masks, RNG/sampler state, curriculum
@@ -95,22 +118,40 @@ unchanged unless version validation requires a narrowly scoped extension. Add
 an explicit N2048 asset option to existing New Game/import paths, preserving
 saved identities and current defaults. Trainer state never enters game saves.
 
-## Method: demonstrations, learner corrections, then long lives
+## Method: demonstrations, active recurrent PPO, then long lives
 
-Use recurrent imitation plus DAgger-style data collection for the first care
-campaign. Start from the canonical N2048 foundation, not Nano512 weights.
-Bootstrap with 32 complete grounded demonstrations, then collect and correct
-the states the learner actually visits. The offline demonstrator may choose
-training actions but has no presence in deployment or acceptance.
+Start from a native canonical N2048 foundation, not Nano512 weights. The bundled
+legacy N2048 asset uses an explicit migration ABI and cannot be relabelled as a
+native training export. Construct the native baseline through the existing
+compiler, export its genetic weights, then use explicit exact-candidate admission.
+That path preserves exported weights without adding genome variation again.
+Builtin loading retains its existing meaning. Bootstrap with
+32 complete grounded demonstrations balanced across the four care categories,
+then train with online recurrent PPO. Warm-up ends at 6/8 complete development
+successes with every category represented, or after 40 minutes. Failure at that
+cap requires diagnosis before spending the overnight budget on RL. The offline
+demonstrator is absent in deployment and acceptance.
 
-Do not add PPO, a value network, or a general reward designer to the first
-campaign. The immediate bottlenecks are faithful training, grounded data, and
-action competence. Pairwise imitation is not reinforcement learning and does
-not provide arbitrary long-delay return credit. Ordinary biological reinforcement
-and memory operate throughout learner lives. Their effectiveness is an acceptance
-question, not an assumption. If delayed-credit behavior fails despite correct
-execution and adequate examples, report it as the next algorithmic gap rather
-than claiming longer windows solved it.
+Training-only masked sampling follows the production representative decision and
+conditional motor slots. The representative overrides its own slot; omit that
+independent factor from the joint likelihood. Idle/Gesture posture overrides must
+match production. Record masks, RNG/counter, temperature, policy version and old
+joint log-probability. A rejected intent remains the sampled action, not a
+substituted executed action. Production selection defaults remain unchanged.
+
+Reward each tick with clamp(homeostatic_improvement - aversive_harm, -1, 1) from
+existing sealed biological outcomes. Zero feedback is valid. Do not count the
+same consequence again through chemistry or add action-name/distance bonuses.
+Discounted returns and GAE credit earlier enabling actions. Existing lifetime
+plasticity remains active; personal learned state is not inherited automatically.
+
+Add a training-only linear value estimator on detached recurrent activations.
+GPU execution owns its predictions and updates; it never chooses actions or
+enters exported founders. Initial PPO clip .2, two epochs, early stop above
+approximate KL .02, entropy coefficient .01, value coefficient .5. Discount
+half-life is 60 simulated seconds and GAE trace half-life 10 seconds, converted
+using actual dt. Normalize advantages over valid samples only. These defaults
+are hypotheses; behavior, not reward or loss alone, determines acceptance.
 
 Use teachers to demonstrate generic skills, not hidden food identities or future
 outcomes. Vary visual identity and consequences; teach sampling and revising
@@ -133,24 +174,25 @@ Do not reset memories or plasticity at gradient-window boundaries.
 Sample contiguous histories. For replay, restore the recorded compatible start
 context and replay burn-in under current genetic weights without gradients.
 This reduces stale-state error but is not exact reconstruction of a different
-genetic brain's entire life. Record behavior-foundation versions and prioritize
-recent learner trajectories. At least half of learner samples come from the
-latest completed collection round; older learner data expires after 3 rounds.
-Keep a separate fixed demonstration/earlier-skill reservoir.
+genetic brain's entire life. PPO uses fresh versioned rollouts and discards them
+after its bounded update cycle. Old demonstrations/corrections are auxiliary
+imitation only, coefficient .1 in basic/integrated care and .02 in adaptation;
+never treat those examples as on-policy experience.
 
-Pin genetic foundation weights for each collected life; new versions apply to
-new lives, not as midlife brain transplants. Collect parallel cohorts with a
-common foundation version, then perform bounded training rounds. Collection and
-training alternate on the one GPU; CPU preparation overlaps when useful. This
-avoids distributed asynchronous-policy machinery and uncontrolled policy lag.
-
-Initial replay mix: 50% demonstrations, 25% latest learner experience, 25% other
-eligible learner experience. After basic care passes, use 25% earlier-skill
-demonstrations, 50% current failures/corrections, and 25% mixed learner experience.
-Within those pools retain complete approach-to-outcome and sleep/revisit segments;
-never retain only successful Eat frames. Sample uniformly within each stratum.
-On memory pressure evict oldest eligible learner episodes first; retain required
-window context and never silently truncate a selected learning segment.
+Hold foundation weights fixed for the entire collected lifetime/cohort. Cut
+storage/replay segments at up to 1024 ticks in basic care and 2048 thereafter.
+Apply PPO after the cohort and use the updated asset for the next cohort.
+Implementation inspection found that changing genetic weights midlife would
+require rewriting genome, archive and checkpoint identities; that is unnecessary
+for online experience collection and would violate the preference to repair
+existing systems. Ordinary lifetime plasticity still learns after every action.
+Continue lives across storage cuts with bodies, neural state, memories and
+plasticity intact. Stream bounded compact segments rather than retain raw full
+GPU snapshots for an entire lifetime.
+Bootstrap time-limit/collection cuts, never death. Collection and training
+alternate on one GPU. CPU packing can overlap independent GPU work, but must
+not advance a world past an unresolved decision. Burn-in replays neural context,
+never physical outcomes or a second lifetime-plasticity commit.
 
 Keep replay compact: observations, candidate data, executed actions, outcomes,
 versioned context snapshots and weight deltas. Do not store a dense full neural
@@ -182,8 +224,8 @@ recurrent/action routes, then memory/cognitive routes as retention begins. Froze
 speech and unrelated weights remain bit-identical.
 
 Evaluate a fixed development panel of 8 complete episodes every 30 minutes and
-at phase transitions. Require 7/8 with no category wholly failing to advance
-basic/integrated care. Preserve earlier care categories in later panels. These
+at phase transitions. Require 6/8 with every category represented to advance
+basic care and 7/8 to advance integrated care. Preserve earlier categories. These
 small counts are engineering gates, not statistical guarantees.
 
 Make one adjustment at a time, checkpoint first, and compare on the same
@@ -202,6 +244,12 @@ candidate against its untrained starting checkpoint.
 - Avoidable GPU cost: index decoder ranges, reuse packed buffers, omit frozen
   speech work, and measure post-update diagnostic loss every 32 updates rather
   than doing a second forward pass every update. Keep fault status checks.
+  Parallelize loss/norm reductions. Batch independent worlds/sequences in shared
+  dispatches. Reuse bindings and replace per-microstep header copies with indexed
+  parameters where practical. Keep intermediates on GPU; asynchronously read
+  routine metrics, but await action receipts, KL decisions and sealed checkpoints
+  before dependent work. Record CPU encoding, GPU phases and waiting time. Use
+  FP32 first; mixed precision requires a measured bottleneck and numerical proof.
 - Repeated behavioral failure: dedicate half of new episodes to that category;
   retain earlier-skill replay. Inspect perception → selection → motor receipt →
   biology before assuming more optimization is needed.
@@ -261,11 +309,10 @@ interruptions, not score-improving experimental shortcuts.
    GPU work, synchronization, and recurring diagnostic overhead. Use 15 minutes
    per arm for the long-window/retention comparison. One-time build/warmup and
    evaluation are separately logged and still consume the global budget.
-3. For optimizer/window experiments use the same frozen replay snapshot and
-   sampling seeds. For collection/replay-policy experiments hold world-family
-   distributions and RNG seeds fixed, allow policy-driven trajectories to differ,
-   and count collection in both arms' time budget. Disclose which comparison was
-   run. Alternate control/variant execution order between experiments.
+3. PPO variants collect fresh on-policy trajectories. Hold world-family
+   distributions and scenario seeds fixed, allow trajectories to differ, and
+   count collection in both arms' budgets. Frozen replay is permitted only for
+   the separate imitation/numerical comparison. Alternate arm execution order.
 4. Evaluate both resulting checkpoints on the same 8 complete development
    episodes with the teacher/SLM absent. Rank by task success, then harmful
    contacts, then capped time-to-success (timeouts receive the cap, never disappear
@@ -288,7 +335,8 @@ the remaining tuning budget, classify it unproven and continue the incumbent;
 do not substitute a shorter test. Final acceptance remains a separate one-time
 evaluation and never supplies training examples or tuning scores.
 
-Run at most three paired hypotheses and stop earlier at the 90-minute tuning
+Reserve one paired hypothesis for selective weight merging below. Run at most
+three paired hypotheses and stop earlier at the 90-minute tuning
 cap, allowing for confirmation and the required final acceptance reserve. Reserve
 enough time for both arms and evaluation before launching a comparison. A crash
 consumes its actual time and permits one obvious repair retry within the same
@@ -308,6 +356,29 @@ RAM/VRAM, per-category outcomes, harmful contacts, time-to-success, and decision
 These receipts make unsuccessful experiments reusable knowledge without creating
 another persistent simulation subsystem.
 
+## Selective delta merge experiment
+
+Start two branches from the same complete parent checkpoint and compiled graph,
+using different balanced scenario seeds. Merge genetic deltas only. Unchanged
+coordinates retain the parent; unique changes retain their full magnitude;
+same-direction overlap is averaged; opposing changes retain the parent for this
+first experiment. Ignore deltas below max(1e-6, 1e-4 times the parent RMS in that
+compiled route), recording thresholds and conflict counts. Preserve frozen
+weights and genomic signs; reject incompatible graphs/nonfinite results.
+
+The user's zero-parent examples must give (0,1,0,1,0) for two identical changes,
+and (1,1,0,1,0) when (0,1,0,1,0) is combined with (1,1,0,0,0).
+
+Compare with shared PPO from the identical parent. The branches' combined
+training budget equals the control budget; serialize them on this GPU. Evaluate
+both branches, their merge and the control on matched development lives. Confirm
+any advantage on a fresh panel without category regression. Never merge Adam
+moments, critics, memory or acquired banks. Merged continuation resets optimizer
+and value state and collects fresh rollouts; subsequent continuation comparisons
+reset these states in both arms. Keep the trained control if the merge fails.
+If prerequisites prevent this experiment, report it unexecuted explicitly.
+Geometric/Fourier circuit merging remains deferred.
+
 ## Smallest meaningful verification and delivery
 
 Extend existing focused checks rather than introducing a test framework:
@@ -318,6 +389,8 @@ Extend existing focused checks rather than introducing a test framework:
    gradients away from clipping/sign/nondifferentiable boundaries. Use mixed
    absolute/relative tolerances appropriate to f32; investigate discrepancies
    rather than widening tolerances to pass.
+   Include joint-action likelihood, delayed/terminal credit, both merge examples
+   and one conflicting-delta case in the same focused contract check.
 2. Resume/export contract: the next update and sample selection survive a full
    checkpoint roundtrip; failed updates cannot partially commit; candidate
    export/load preserves identity and rejects corrupt/incompatible assets.
@@ -355,6 +428,10 @@ creature's personal memories or acquired lifetime state.
 
 ## Why this design and what remains uncertain
 
+- [PPO](https://arxiv.org/abs/1707.06347) motivates bounded online policy updates.
+- [Homeostatic RL](https://elifesciences.org/articles/04811) grounds value in physiology.
+- [TIES](https://arxiv.org/abs/2306.01708) informs disjoint merge/sign conflict handling;
+  it does not establish that merged changes are safe for this recurrent brain.
 - [DAgger](https://proceedings.mlr.press/v15/ross11a.html) motivates collecting
   corrections on learner-induced states rather than relying only on demonstrations.
 - [R2D2](https://openreview.net/pdf/387fb2fcee8f74c53cf707a9856f40c458f33933.pdf)
@@ -369,8 +446,8 @@ The selected method is the best-fit first campaign given the audited code and
 machine, not a measured global optimum. Longer windows and more parallel lives
 cannot by themselves establish long-delay credit or learning-to-learn. If the
 care policy succeeds but adaptation fails, the next work targets the observed
-memory/plasticity/credit failure; advanced RL or meta-training is then an explicit
-follow-on design informed by those receipts, not an automatic overnight addition.
+memory/plasticity/credit failure. Differentiating through lifetime learning or
+meta-training remains follow-on work informed by those receipts.
 
 Requirement trace: AOA-FOUND-001 through AOA-FOUND-008; AOA-SLM-002/005/006;
 AOA-TEACH-003/004/005/008. Offline supervision is permitted under section 27;

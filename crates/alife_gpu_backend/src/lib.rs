@@ -16,6 +16,13 @@ pub mod recompaction;
 pub mod routing_masks;
 pub mod runtime;
 pub mod shader_contract;
+#[cfg(feature = "training-rollout")]
+pub mod training_rollout;
+#[cfg(feature = "training-rollout")]
+pub use training_rollout::{
+    GpuTrainingBehaviorKind, GpuTrainingDemonstratorAction, GpuTrainingRolloutReceipt,
+    GpuTrainingSamplingConfig,
+};
 
 pub use buffers::{
     GpuAccumulatorLayout, GpuActionSummaryStagingRecord, GpuActivationPingPongViews,
@@ -82,6 +89,8 @@ pub fn closed_loop_shader_bundle_digest() -> alife_core::Blake3Digest {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"alife.gpu.closed-loop.wgsl-bundle.v1");
     for (name, source) in sources {
+        #[cfg(feature = "training-rollout")]
+        let source = training_rollout::shader_source(source);
         hasher.update(&(name.len() as u64).to_le_bytes());
         hasher.update(name.as_bytes());
         hasher.update(&(source.len() as u64).to_le_bytes());

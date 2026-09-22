@@ -8,8 +8,24 @@ impl GpuClosedLoopBackend {
         batch: &[GpuRuntimeTickInput<'_>],
         selector_diagnostic_candidate_indices: Option<&[u16]>,
         mut selector_diagnostic_error_capture: Option<&mut SelectorDiagnosticErrorCapture>,
+        #[cfg(feature = "training-rollout")] sampling: Option<&[crate::GpuTrainingSamplingConfig]>,
     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
         let capture_selector_diagnostics = selector_diagnostic_candidate_indices.is_some();
+        #[cfg(feature = "training-rollout")]
+        if let Some(configs) = sampling {
+            if selector_diagnostic_candidate_indices.is_some()
+                || configs.len() != batch.len()
+                || configs.iter().any(|c| c.validate().is_err())
+                || batch
+                    .iter()
+                    .any(|input| input.frame.candidates().len() > 32)
+            {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+        }
+        let capture_logits = capture_selector_diagnostics;
+        #[cfg(feature = "training-rollout")]
+        let capture_logits = capture_logits || sampling.is_some();
         self.ensure_ready()?;
         if batch.is_empty() {
             return Err(ScaffoldContractError::InvalidPerceptionFrame);
@@ -35,6 +51,10 @@ impl GpuClosedLoopBackend {
                 .bucket_index_for_handle(handle)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
             let resident = pool.resident(handle)?;
+            #[cfg(feature = "training-rollout")]
+            if let Some(action) = sampling.and_then(|configs| configs[index].demonstrator) {
+                action.validate_for_frame(frame, resident.brain_slot.record().reserved[0] & 255)?;
+            }
             if resident.ownership.organism_id != frame.organism_id()
                 || handle.organism_id != frame.organism_id()
             {
@@ -267,6 +287,32 @@ impl GpuClosedLoopBackend {
                             return Err(map_gpu_contract_error(error.gpu_error()));
                         }
                     }
+                    #[cfg(feature = "training-rollout")]
+                    if let Some(configs) = sampling {
+                        let capacity = self
+                            .class_buckets
+                            .get(&class_id)
+                            .and_then(|pool| pool.chunks.get(dispatches[index].chunk_index))
+                            .expect("preflight bucket exists")
+                            .buffers
+                            .frame_payload_capacity_words();
+                        let ordered = dispatches[index]
+                            .original_indices
+                            .iter()
+                            .map(|i| configs[*i])
+                            .collect::<Vec<_>>();
+                        if let Err(error) = active.enable_training_sampling(&ordered, capacity) {
+                            let _ = self
+                                .class_buckets
+                                .get_mut(&class_id)
+                                .and_then(|pool| pool.chunks.get_mut(dispatches[index].chunk_index))
+                                .expect("preflight bucket exists")
+                                .pipelines
+                                .abandon_unsubmitted_batch(active);
+                            self.cleanup_unsubmitted_dispatches(&mut dispatches);
+                            return Err(map_gpu_contract_error(error));
+                        }
+                    }
                     dispatches[index].batch = Some(active)
                 }
                 Err(error) => {
@@ -292,7 +338,7 @@ impl GpuClosedLoopBackend {
             }
         }
 
-        if capture_selector_diagnostics {
+        if capture_logits {
             for dispatch in &mut dispatches {
                 let bytes = dispatch
                     .batch
@@ -557,7 +603,7 @@ impl GpuClosedLoopBackend {
                 }
             };
 
-        if capture_selector_diagnostics {
+        if capture_logits {
             if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
                 capture.later_stage =
                     Some(GpuRuntimeSelectorDiagnosticStage::DecodeSelectorDiagnostics);
@@ -707,6 +753,8 @@ impl GpuClosedLoopBackend {
         let mut ordered_next_transaction_generations = vec![None; batch.len()];
         let mut ordered_memory_receipts = vec![None; batch.len()];
         let mut ordered_selector_diagnostics = vec![None; batch.len()];
+        #[cfg(feature = "training-rollout")]
+        let mut ordered_training_receipts = vec![None; batch.len()];
         if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
             capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::ValidateReceiptIdentity);
         }
@@ -931,6 +979,49 @@ impl GpuClosedLoopBackend {
             }
         }
 
+        #[cfg(feature = "training-rollout")]
+        if let Some(configs) = sampling {
+            let validation = (|| -> Result<(), ScaffoldContractError> {
+                for dispatch in &dispatches {
+                    let captures = dispatch
+                        .selector_captures
+                        .as_ref()
+                        .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                    if captures.len() != dispatch.original_indices.len() {
+                        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                    }
+                    for (original_index, capture) in dispatch.original_indices.iter().zip(captures)
+                    {
+                        let input = batch[*original_index];
+                        let record = ordered_records[*original_index]
+                            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                        let resident = self
+                            .class_buckets
+                            .get(&input.handle.class_id.raw())
+                            .and_then(|pool| pool.resident(input.handle).ok())
+                            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                        ordered_training_receipts[*original_index] =
+                            Some(crate::training_rollout::build_receipt(
+                                input.frame,
+                                dispatch_generation.get(),
+                                resident.active_weight_generation,
+                                resident.brain_slot.record().reserved[0] & 255,
+                                configs[*original_index],
+                                &capture.final_logit_bits,
+                                &capture.training_decoder_input_bits,
+                                record.candidate_index as u16,
+                                ordered_factorized_motor_candidates[*original_index],
+                            )?);
+                    }
+                }
+                Ok(())
+            })();
+            if let Err(error) = validation {
+                self.poison_submitted_dispatches(&dispatches);
+                return Err(error);
+            }
+        }
+
         if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
             capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::AccountActivityWork);
         }
@@ -1035,6 +1126,8 @@ impl GpuClosedLoopBackend {
                     compact_readback_bytes: crate::GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
                     hardware_receipt_generation: self.hardware.generation,
                     selector_diagnostic: ordered_selector_diagnostics[index].clone(),
+                    #[cfg(feature = "training-rollout")]
+                    training_rollout: ordered_training_receipts[index].clone(),
                 });
             }
             Ok(ticks)

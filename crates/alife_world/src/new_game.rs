@@ -73,6 +73,24 @@ pub fn create_canonical_new_game(
     create_new_game_inner(config, foundation, None)
 }
 
+/// Explicit N2048 experiment using the same ecology and inherited physiology.
+/// The asset remains bound into each genome for archive and exact restore.
+pub fn create_canonical_new_game_with_n2048_candidate(
+    config: &CanonicalNewGameConfig,
+    foundation: &FoundationWeightAsset,
+) -> Result<CanonicalNewGame, ScaffoldContractError> {
+    let mut expected = CanonicalNewGameConfig::phase3(config.world_seed, config.founder_count)?;
+    expected.brain_class = BrainScaleTier::Standard2048;
+    if *config != expected
+        || foundation.manifest().capacity_class_id() != BrainCapacityClass::N2048_ID
+        || foundation.manifest().sensor_profile() != config.sensor_profile
+    {
+        return Err(ScaffoldContractError::PhenotypeCompile);
+    }
+    foundation.encode_canonical()?;
+    create_new_game_inner(config, foundation, None)
+}
+
 /// Explicit experimental founder: candidate cognition and inherited pain sensing
 /// from birth. This does not change builtin admission or copy acquired state.
 pub fn create_canonical_new_game_with_nociceptive_candidate(
@@ -98,7 +116,7 @@ fn create_new_game_inner(
         u16::try_from(manifest.foundation_version().raw())
             .map_err(|_| ScaffoldContractError::InvalidId)?,
         manifest.compatibility_family_id().raw(),
-        BrainCapacityClass::N512_ID,
+        config.brain_class.default_class_id(),
     )?;
     let mut world = HeadlessWorld::new(config.world_seed);
     let mut habitats = HabitatAuthority::default();
@@ -133,6 +151,10 @@ fn create_new_game_inner(
             genome = genome.with_nano512_action_credit_candidate(candidate.clone())?;
             enable_inherited_newborn_nociception(&mut genome)?;
         }
+        if config.brain_class == BrainScaleTier::Standard2048 {
+            genome = genome.with_n2048_foundation_candidate(foundation.clone())?;
+            enable_inherited_newborn_nociception(&mut genome)?;
+        }
         let phenotype = genome.express()?;
         let world_entity_id = world.spawn_social_agent(&world_label, organism_id, position, 0.0)?;
         let record = WorldOrganismRecord::newborn(
@@ -143,7 +165,7 @@ fn create_new_game_inner(
             Tick::ZERO,
         )
         .map_err(|_| ScaffoldContractError::InvalidId)?;
-        let creature = initial_creature_save(&record, slot, founder_seed)?;
+        let creature = initial_creature_save(&record, slot, founder_seed, config.brain_class)?;
         let receipt = CanonicalFounderReceipt {
             organism_id,
             world_entity_id,
@@ -325,6 +347,7 @@ fn initial_creature_save(
     record: &WorldOrganismRecord,
     slot: u16,
     founder_seed: u64,
+    brain_class: BrainScaleTier,
 ) -> Result<CreatureSaveState, ScaffoldContractError> {
     let biochemistry = record.biochemistry();
     let genome_bytes =
@@ -332,7 +355,7 @@ fn initial_creature_save(
     Ok(CreatureSaveState {
         organism_id: record.organism_id(),
         genome_id: record.genome().id,
-        brain_class: BrainScaleTier::Nano512,
+        brain_class,
         development_tick: biochemistry.development.last_update_tick,
         appearance: CreatureAppearanceGenome::founder_for_species(
             u8::try_from(slot).map_err(|_| ScaffoldContractError::InvalidId)?,

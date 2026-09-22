@@ -16,6 +16,8 @@ impl GpuLiveBrainRuntime {
             Option<ConsolidationIntent>,
         ) -> SleepProgressResult,
     {
+        #[cfg(feature = "foundation-training")]
+        self.last_foundation_training_steps.clear();
         let preamble_started = Instant::now();
         let curated_first_tick_resident = match self.curated_first_tick_residency_gate() {
             Ok(receipt) => receipt.and_then(|receipt| receipt.ordered_residents.first().cloned()),
@@ -799,20 +801,86 @@ impl GpuLiveBrainRuntime {
                 })?;
             let memory_batch = GpuClosedLoopMemoryBatchInput::try_new(memory_inputs)?;
             let inference_rows = u64::try_from(batch.len()).unwrap_or(u64::MAX);
+            #[cfg(feature = "foundation-training")]
+            let before_training = if self.training_sampling.is_some() {
+                batch
+                    .iter()
+                    .map(|prepared| {
+                        self.backend
+                            .capture_training_state(prepared.handle, prepared.frame.tick())
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+            } else {
+                Vec::new()
+            };
             let inference_started = Instant::now();
-            #[cfg(all(test, feature = "gpu-tests"))]
+            #[cfg(all(test, feature = "gpu-tests", not(feature = "foundation-training")))]
             let gpu_ticks = super::action_credit_food_tests::tick_with_selector_capture(
                 &mut self.backend,
                 &memory_batch,
                 &batch,
             )?;
-            #[cfg(not(all(test, feature = "gpu-tests")))]
+            #[cfg(all(
+                not(all(test, feature = "gpu-tests")),
+                not(feature = "foundation-training")
+            ))]
             let gpu_ticks = self
                 .backend
                 .tick_memory_batch(&memory_batch)
                 .map_err(|error| GameAppShellError::InvalidProductionFrontend {
                     message: format!("neural execution failed: {error}"),
                 })?;
+            #[cfg(feature = "foundation-training")]
+            let gpu_ticks = if let Some(sampling) = self.training_sampling {
+                let count = u32::try_from(batch.len())
+                    .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
+                let next_counter = sampling
+                    .counter
+                    .checked_add(count)
+                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                let mut configs = Vec::with_capacity(batch.len());
+                for (index, prepared) in batch.iter().enumerate() {
+                    let demonstrator = match self.training_demonstrator.as_mut() {
+                        Some(teacher) => Some(teacher(&prepared.frame)?),
+                        None => sampling.demonstrator,
+                    };
+                    configs.push(alife_gpu_backend::GpuTrainingSamplingConfig {
+                        counter: sampling.counter + index as u32,
+                        demonstrator,
+                        ..sampling
+                    });
+                }
+                self.training_sampling
+                    .as_mut()
+                    .expect("training enabled")
+                    .counter = next_counter;
+                self.backend
+                    .tick_memory_batch_training(&memory_batch, &configs)?
+            } else {
+                self.backend.tick_memory_batch(&memory_batch)?
+            };
+            #[cfg(feature = "foundation-training")]
+            let mut training_rows = Vec::new();
+            #[cfg(feature = "foundation-training")]
+            for ((prepared, gpu_tick), before) in batch.iter().zip(&gpu_ticks).zip(before_training)
+            {
+                let behavior = gpu_tick
+                    .training_rollout
+                    .clone()
+                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                let after = self
+                    .backend
+                    .capture_training_state(prepared.handle, prepared.frame.tick())?;
+                training_rows.push((
+                    prepared.frame.clone(),
+                    prepared.memory_upload.clone(),
+                    before,
+                    after,
+                    behavior,
+                    gpu_tick.work.clone(),
+                    gpu_tick.throttle.clone(),
+                ));
+            }
             self.performance_metrics.inference_batches =
                 self.performance_metrics.inference_batches.saturating_add(1);
             self.performance_metrics.inference_rows = self
@@ -830,10 +898,48 @@ impl GpuLiveBrainRuntime {
             }
             self.record_gpu_tick_metrics(&gpu_ticks)?;
             let rows = batch.into_iter().zip(gpu_ticks).collect();
-            self.process_selection_batch_in_staged_tick(rows)
+            let summaries = self
+                .process_selection_batch_in_staged_tick(rows)
                 .map_err(|error| GameAppShellError::InvalidProductionFrontend {
                     message: format!("selected action processing failed: {error}"),
-                })?
+                })?;
+            #[cfg(feature = "foundation-training")]
+            for (frame, memory_upload, before, after_inference, behavior, work, throttle) in
+                training_rows
+            {
+                let patch = self
+                    .last_sealed_patches
+                    .iter()
+                    .find(|patch| {
+                        patch.header().organism_id == frame.organism_id()
+                            && patch.outcome().outcome_tick == tick_after
+                    })
+                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?
+                    .clone();
+                if !self.last_learning_receipts.iter().any(|receipt| {
+                    receipt.handle.organism_id() == frame.organism_id()
+                        && receipt.dispatch_generation == behavior.dispatch_generation
+                        && receipt.sequence_id == patch.header().sequence_id
+                }) || before.active_weight_generation != behavior.active_weight_generation
+                    || after_inference.active_weight_generation != behavior.active_weight_generation
+                    || after_inference.logical_dispatch_generation != behavior.dispatch_generation
+                {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+                }
+                self.last_foundation_training_steps
+                    .push(FoundationTrainingStep {
+                        outcome_credit: alife_core::OutcomeCreditPacket::from_sealed_patch(&patch)?,
+                        frame,
+                        memory_upload,
+                        before,
+                        after_inference,
+                        behavior,
+                        work,
+                        throttle,
+                        patch,
+                    });
+            }
+            summaries
         };
         for summary in awake_summaries {
             summaries_by_organism.insert(summary.organism_id.raw(), summary);

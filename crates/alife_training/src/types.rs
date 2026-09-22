@@ -2,12 +2,126 @@
 
 use alife_core::{
     BrainPhenotype, CandidateActionFamily, CandidateFeatureVector, CompiledSynapseKind,
-    ScaffoldContractError, SpeechDecoderLayoutV1, Validate, CANDIDATE_FEATURE_COUNT,
+    ScaffoldContractError, SpeechDecoderLayoutV1, Validate,
 };
 
 pub const TRAINING_SEQUENCE_TICKS: usize = 32;
+pub const MAX_TRAINING_SEQUENCE_TICKS: usize = 2048;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Detached production state at a replay boundary. These are real runtime
+/// snapshots, not hidden teacher inputs. Gradients stop at this boundary.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrainingInitialState {
+    pub activations: Vec<f32>,
+    pub activity_ema: Vec<f32>,
+    pub metabolic_load: Vec<f32>,
+    pub dendrites: alife_core::DendriticBranchSet,
+}
+
+/// One production decoder candidate, including confidence-weighted memory
+/// lanes (24..36) and cognitive projection lanes (36..54).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrainingReplayCandidate {
+    pub family: CandidateActionFamily,
+    pub decoder_inputs: [f32; 54],
+}
+
+/// A frozen ordinary-runtime context. Lifetime/fast weights, chemistry,
+/// memory and activity decisions are detached; their evolution is not BPTT.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrainingReplayTick {
+    /// The final production sensor-encoder output, including receptor effects.
+    pub encoded_inputs: Vec<f32>,
+    pub projection_gain: f32,
+    pub local_threshold_shift: f32,
+    pub microstep_count: u32,
+    pub enabled_routes: Vec<bool>,
+    /// Per compiled synapse: lifetime + alpha * fast, in canonical synapse order.
+    pub effective_weight_offsets: Vec<f32>,
+    pub candidates: Vec<TrainingReplayCandidate>,
+}
+
+/// Fixed-topology, frozen-context replay with a detached burn-in boundary.
+/// Production collection must supply every context; there is no neutral default.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrainingSequence {
+    pub phenotype_hash: alife_core::PhenotypeHash,
+    pub initial: TrainingInitialState,
+    pub ticks: Vec<TrainingReplayTick>,
+    pub burn_in_ticks: usize,
+    pub memory_candidate_gain: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrainingReplayEvaluation {
+    pub candidate_logits: Vec<Vec<f32>>,
+    pub final_activations: Vec<Vec<f32>>,
+    pub final_activity_ema: Vec<Vec<f32>>,
+    pub final_metabolic_load: Vec<Vec<f32>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrainingGradientProbe {
+    pub objective: f64,
+    pub gradients: Vec<f32>,
+}
+
+impl TrainingSequence {
+    pub fn validate_for(&self, phenotype: &BrainPhenotype) -> Result<(), ScaffoldContractError> {
+        let n = phenotype.neuron_count() as usize;
+        let finite = |xs: &[f32]| xs.iter().all(|x| x.is_finite());
+        if self.ticks.is_empty()
+            || self.ticks.len() > MAX_TRAINING_SEQUENCE_TICKS
+            || self.phenotype_hash != phenotype.phenotype_hash()
+            || self.burn_in_ticks >= self.ticks.len()
+            || self.initial.activations.len() != n
+            || self.initial.activity_ema.len() != n
+            || self.initial.metabolic_load.len() != n
+            || !finite(&self.initial.activations)
+            || !self
+                .initial
+                .activity_ema
+                .iter()
+                .chain(&self.initial.metabolic_load)
+                .all(|x| x.is_finite() && (0.0..=1.0).contains(x))
+            || !self.memory_candidate_gain.is_finite()
+            || self.memory_candidate_gain < 0.0
+            || self.memory_candidate_gain
+                != phenotype
+                    .candidate_decoder()
+                    .memory_channel()
+                    .map_or(0.0, |p| p.max_candidate_gain())
+            || phenotype
+                .projections()
+                .iter()
+                .any(|p| p.delay_microsteps() != 0)
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        self.initial
+            .dendrites
+            .validate_for_neuron_count(phenotype.neuron_count())?;
+        for tick in &self.ticks {
+            if tick.encoded_inputs.len() != n
+                || !finite(&tick.encoded_inputs)
+                || !tick.projection_gain.is_finite()
+                || !tick.local_threshold_shift.is_finite()
+                || tick.microstep_count > u32::from(phenotype.microstep_count())
+                || tick.enabled_routes.len() != phenotype.projections().len()
+                || tick.effective_weight_offsets.len() != phenotype.synapses().len()
+                || !finite(&tick.effective_weight_offsets)
+                || tick.candidates.is_empty()
+                || tick.candidates.len() > alife_core::MAX_ACTION_CANDIDATES
+                || tick.candidates.iter().any(|c| !finite(&c.decoder_inputs))
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AdamWConfig {
     pub learning_rate: f32,
     pub beta1: f32,
@@ -240,7 +354,7 @@ impl TrainingSequence32 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct StageTrainableMask {
     words: Vec<u32>,
 }
@@ -335,6 +449,32 @@ pub struct TrainingStepReceipt {
     pub trained_weight_count: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TrainingStepStatistics {
+    pub optimizer_step: u32,
+    pub loss_before: f32,
+    pub loss_after: Option<f32>,
+    pub unclipped_gradient_norm: f32,
+    pub trained_weight_count: u32,
+}
+
+/// Offline optimizer checkpoint. Organism saves never contain Adam state.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FoundationTrainerCheckpoint {
+    pub schema_version: u32,
+    pub phenotype_hash: alife_core::PhenotypeHash,
+    pub source_foundation_digest: alife_core::Blake3Digest,
+    pub optimizer_step: u32,
+    pub config: AdamWConfig,
+    pub stage_mask: StageTrainableMask,
+    pub weights: Vec<f32>,
+    pub first_moment: Vec<f32>,
+    pub second_moment: Vec<f32>,
+    /// Schema 2: successful Adam updates per weight, unchanged while frozen.
+    pub update_ages: Vec<u32>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SequenceEvaluation {
     mean_loss: f32,
@@ -392,4 +532,4 @@ impl SequenceEvaluation {
     }
 }
 
-pub(crate) const CANDIDATE_RECORD_WORDS: usize = 4 + CANDIDATE_FEATURE_COUNT + 8;
+pub(crate) const CANDIDATE_RECORD_WORDS: usize = 64;
