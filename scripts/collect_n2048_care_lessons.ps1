@@ -20,11 +20,15 @@ try {
     [IO.Directory]::CreateDirectory($outputPath) | Out-Null
     $entries = [Collections.Generic.List[string]]::new()
     $counts = [ordered]@{ feeding = 0; hazard_avoidance = 0; obstacle_navigation = 0; recovery = 0 }
+    $obstacleSides = [Collections.Generic.HashSet[int]]::new()
+    $recoveryFatigueLevels = [Collections.Generic.HashSet[string]]::new()
     $lessons = @('feeding', 'hazard_avoidance', 'obstacle_navigation', 'recovery')
     for ($index = 0; $index -lt 32; $index++) {
         $lesson = $lessons[$index % 4]
         $ordinal = [int][Math]::Floor($index / 4)
-        $seed = [ulong](539364000 + $index)
+        # The step of five alternates parity within each lesson category.
+        # A +4 schedule made every obstacle route take the same side.
+        $seed = [ulong](539364000 + 5 * $ordinal + ($index % 4))
         $name = ('lesson-{0:D2}-{1}' -f $index, $lesson)
         $directory = Join-Path $outputPath $name
         $ticks = switch ($lesson) { feeding { 16 } hazard_avoidance { 32 } obstacle_navigation { 64 } recovery { 40 } }
@@ -41,11 +45,27 @@ try {
         if ($receipt.lesson -ne $lesson -or $receipt.lesson_completed -ne $true -or
             $receipt.demonstration_replay_records -ne $receipt.ticks -or
             $receipt.founder_seed_base -ne $FounderSeedBase) { throw "Lesson $name receipt mismatch." }
+        if ($lesson -eq 'obstacle_navigation' -or $lesson -eq 'recovery') {
+            $trace = Get-Content -Raw -LiteralPath (Join-Path $directory 'lesson-trace.json') | ConvertFrom-Json
+            if ($lesson -eq 'obstacle_navigation') {
+                $side = [Math]::Sign([double]$trace.steps[0].physical.displacement.z)
+                if ($side -eq 0) { throw "Obstacle lesson $name has no lateral route." }
+                [void]$obstacleSides.Add($side)
+            } else {
+                $before = [double]$trace.steps[0].physiology.before_fatigue
+                $after = [double]$trace.steps[-1].physiology.after_fatigue
+                if ($before -lt 0.12 -or $after -ge $before - 0.02) { throw "Recovery lesson $name did not lower measured fatigue." }
+                [void]$recoveryFatigueLevels.Add(([Math]::Round($before, 2)).ToString('F2', [Globalization.CultureInfo]::InvariantCulture))
+            }
+        }
         $counts[$lesson]++
         $entries.Add($name)
         Write-Output "$name passed: $($receipt.ticks) sealed records"
     }
     if (@($counts.Values | Where-Object { $_ -ne 8 }).Count) { throw 'Lesson corpus is not balanced.' }
+    if ($obstacleSides.Count -ne 2 -or $recoveryFatigueLevels.Count -lt 3) {
+        throw 'Lesson corpus lacks both obstacle sides or varied biological fatigue.'
+    }
     $manifest = [ordered]@{ founder_seed_base = $FounderSeedBase; pilots = @($entries) }
     [IO.File]::WriteAllText((Join-Path $outputPath 'manifest.json'),
         ($manifest | ConvertTo-Json -Depth 4), [Text.UTF8Encoding]::new($false))

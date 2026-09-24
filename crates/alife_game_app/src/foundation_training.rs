@@ -765,6 +765,7 @@ fn run_foundation_training_pilot_inner(
     }
     if scenario_lesson == Some(FoundationTeacherLesson::Recovery) {
         let organism = game.world.organism_entity_ids()[0].0;
+        let required_fatigue = 0.12 + (seed % 4) as f32 * 0.025;
         for _ in 0..2_400 {
             let fatigue = game
                 .world
@@ -775,7 +776,7 @@ fn run_foundation_training_pilot_inner(
                 .homeostasis
                 .drives
                 .fatigue;
-            if fatigue >= 0.12 {
+            if fatigue >= required_fatigue {
                 break;
             }
             game.world.try_advance_tick()?;
@@ -789,7 +790,7 @@ fn run_foundation_training_pilot_inner(
             .homeostasis
             .drives
             .fatigue;
-        if fatigue < 0.12 {
+        if fatigue < required_fatigue {
             return Err("ordinary world aging did not produce measurable fatigue".into());
         }
     }
