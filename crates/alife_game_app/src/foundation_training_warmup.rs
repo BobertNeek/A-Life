@@ -13,9 +13,9 @@ use alife_training::{
 };
 
 use crate::{
-    foundation_replay_source, initial_n2048_care_asset, load_foundation_replay_window,
-    FoundationPilotReceipt, FoundationReplayBudget, FoundationReplayRecordRef,
-    FoundationReplaySource, FoundationTeacherLesson, GpuLiveBrainRuntime,
+    initial_n2048_care_asset, load_foundation_replay_window, FoundationPilotReceipt,
+    FoundationReplayBudget, FoundationReplayRecordRef, FoundationReplaySource,
+    FoundationTeacherLesson, GpuLiveBrainRuntime,
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -35,6 +35,8 @@ pub struct FoundationWarmupReceipt {
     pub source_asset_digest: String,
     pub trained_asset_digest: String,
     pub actor_optimizer_step: u32,
+    #[serde(default)]
+    pub epochs: u32,
     pub losses: Vec<f32>,
     pub next_cohort_optimizer_rebound: bool,
 }
@@ -93,9 +95,11 @@ fn imitation_example(
 pub fn run_foundation_imitation_warmup(
     output: &Path,
     manifest_path: &Path,
+    epochs: u32,
 ) -> Result<FoundationWarmupReceipt> {
     let manifest: DemonstrationManifest = serde_json::from_slice(&std::fs::read(manifest_path)?)?;
-    if manifest.founder_seed_base == 0 || manifest.pilots.len() != 32 {
+    if manifest.founder_seed_base == 0 || manifest.pilots.len() != 32 || !(1..=50).contains(&epochs)
+    {
         return Err("warm-up requires 32 lessons and one nonzero founder seed".into());
     }
     std::fs::create_dir(output)?;
@@ -153,8 +157,8 @@ pub fn run_foundation_imitation_warmup(
         AdamWConfig::default(),
     )?;
     let initial_checkpoint = serde_json::to_vec(&trainer.checkpoint()?)?;
-    let expected_source =
-        foundation_replay_source(&phenotype, &source_asset, 0, &initial_checkpoint)?;
+    let checkpoint_digest =
+        alife_core::Blake3Digest::from_bytes(*blake3::hash(&initial_checkpoint).as_bytes());
     let root = manifest_path
         .parent()
         .ok_or("manifest has no parent directory")?;
@@ -162,6 +166,7 @@ pub fn run_foundation_imitation_warmup(
     let mut seen_seeds = HashSet::new();
     let mut demos = Vec::with_capacity(32);
     let mut record_count = 0;
+    let mut expected_source: Option<FoundationReplaySource> = None;
     for entry in &manifest.pilots {
         let directory = root.join(entry);
         let receipt: FoundationPilotReceipt =
@@ -180,11 +185,19 @@ pub fn run_foundation_imitation_warmup(
         category_counts[lesson_index(lesson)] += 1;
         let source: FoundationReplaySource =
             serde_json::from_slice(&std::fs::read(directory.join("replay-source.json"))?)?;
-        if source != expected_source
+        if source.policy_version != 0
+            || source.actor_checkpoint_digest != checkpoint_digest
+            || source.foundation_asset_digest != source_asset.digest()
+            || source.phenotype_hash != phenotype.phenotype_hash()
+            || source.compiler_inputs_digest != phenotype.compiler_inputs_digest()
+            || expected_source
+                .as_ref()
+                .is_some_and(|expected| expected != &source)
             || std::fs::read(directory.join("actor-checkpoint.json"))? != initial_checkpoint
         {
             return Err("warm-up pilot is not bound to the same frozen actor".into());
         }
+        expected_source.get_or_insert(source);
         let references: Vec<FoundationReplayRecordRef> =
             serde_json::from_slice(&std::fs::read(directory.join("replay-manifest.json"))?)?;
         if references.len() != receipt.ticks {
@@ -196,6 +209,7 @@ pub fn run_foundation_imitation_warmup(
     if category_counts != [8; 4] {
         return Err("warm-up lessons are not balanced eight per category".into());
     }
+    let expected_source = expected_source.ok_or("warm-up has no replay source")?;
     let budget = FoundationReplayBudget::default();
     let mut state = PpoTrainingState::default();
     let losses = train_recurrent_imitation(
@@ -203,7 +217,7 @@ pub fn run_foundation_imitation_warmup(
         &mut state,
         demos.len(),
         8,
-        2,
+        epochs,
         1.0,
         1.0,
         |index| {
@@ -288,6 +302,7 @@ pub fn run_foundation_imitation_warmup(
         source_asset_digest: asset_digest(&source_asset),
         trained_asset_digest: asset_digest(&trained),
         actor_optimizer_step: actor.optimizer_step,
+        epochs,
         losses,
         next_cohort_optimizer_rebound: true,
     };

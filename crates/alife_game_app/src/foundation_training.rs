@@ -459,7 +459,7 @@ pub fn run_foundation_training_pilot(
     seed: u64,
     tick_count: usize,
 ) -> Result<FoundationPilotReceipt> {
-    run_foundation_training_pilot_inner(output, seed, seed, tick_count, false, None, None)
+    run_foundation_training_pilot_inner(output, seed, seed, tick_count, false, None, None, None)
 }
 
 /// Diagnostic of the existing legal teacher path against actual ingestion.
@@ -468,7 +468,7 @@ pub fn run_foundation_teacher_pilot(
     seed: u64,
     tick_count: usize,
 ) -> Result<FoundationPilotReceipt> {
-    run_foundation_training_pilot_inner(output, seed, seed, tick_count, true, None, None)
+    run_foundation_training_pilot_inner(output, seed, seed, tick_count, true, None, None, None)
 }
 
 pub fn run_foundation_teacher_pilot_with_scenario(
@@ -485,6 +485,7 @@ pub fn run_foundation_teacher_pilot_with_scenario(
         tick_count,
         true,
         food_position,
+        None,
         None,
     )
 }
@@ -505,6 +506,29 @@ pub fn run_foundation_teacher_pilot_with_lesson(
         true,
         food_position,
         Some(lesson),
+        None,
+    )
+}
+
+/// A frozen founder acts without a demonstrator in the same production world.
+pub fn run_foundation_evaluation_pilot(
+    output: &Path,
+    world_seed: u64,
+    founder_seed_base: u64,
+    tick_count: usize,
+    lesson: FoundationTeacherLesson,
+    food_position: Option<[f32; 2]>,
+    asset: FoundationWeightAsset,
+) -> Result<FoundationPilotReceipt> {
+    run_foundation_training_pilot_inner(
+        output,
+        world_seed,
+        founder_seed_base,
+        tick_count,
+        false,
+        food_position,
+        Some(lesson),
+        Some(asset),
     )
 }
 
@@ -701,12 +725,17 @@ fn run_foundation_training_pilot_inner(
     teacher_mode: bool,
     food_position: Option<[f32; 2]>,
     lesson: Option<FoundationTeacherLesson>,
+    asset_override: Option<FoundationWeightAsset>,
 ) -> Result<FoundationPilotReceipt> {
     if !(1..=512).contains(&tick_count) || seed == 0 || founder_seed_base == 0 {
         return Err(invalid().into());
     }
     std::fs::create_dir(output)?; // A fresh run never overwrites an earlier receipt.
-    let asset = initial_n2048_care_asset(founder_seed_base)?;
+    let asset = if let Some(asset) = asset_override {
+        asset
+    } else {
+        initial_n2048_care_asset(founder_seed_base)?
+    };
     std::fs::write(
         output.join("initial.alife-foundation"),
         asset.encode_canonical()?,
@@ -716,8 +745,9 @@ fn run_foundation_training_pilot_inner(
     config.founder_seed_base = founder_seed_base;
     let mut game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
     game.world.set_age_death_disabled_for_new_game(true)?;
-    let teacher_lesson = teacher_mode.then_some(lesson.unwrap_or(FoundationTeacherLesson::Feeding));
-    if food_position.is_some() && teacher_lesson != Some(FoundationTeacherLesson::Feeding) {
+    let scenario_lesson =
+        lesson.or_else(|| teacher_mode.then_some(FoundationTeacherLesson::Feeding));
+    if food_position.is_some() && scenario_lesson != Some(FoundationTeacherLesson::Feeding) {
         return Err("custom food placement is only supported for feeding lessons".into());
     }
     let food = game
@@ -735,7 +765,7 @@ fn run_foundation_training_pilot_inner(
     if let Some([x, z]) = food_position {
         move_scenario_object(&mut game.world, food, alife_core::Vec3f::new(x, 0.0, z))?;
     }
-    match teacher_lesson {
+    match scenario_lesson {
         Some(FoundationTeacherLesson::HazardAvoidance) => {
             move_scenario_object(
                 &mut game.world,
@@ -808,7 +838,8 @@ fn run_foundation_training_pilot_inner(
             runtime.set_foundation_demonstrator(grounded_care_teacher)?;
         }
     }
-    let initial_food_distance = teacher_mode
+    let initial_food_distance = scenario_lesson
+        .is_some()
         .then(|| teacher_food_distance(&runtime))
         .transpose()?;
     let started = Instant::now();
@@ -825,27 +856,27 @@ fn run_foundation_training_pilot_inner(
             )
             .into());
         }
-        let completed_teacher_lesson = teacher_mode
-            && teacher_lesson.is_some_and(|lesson| {
-                matches!(
-                    lesson,
-                    FoundationTeacherLesson::Feeding | FoundationTeacherLesson::ObstacleNavigation
-                ) && teacher_step_consumed(&collected[0])
-            });
+        let completed_teacher_lesson = scenario_lesson.is_some_and(|lesson| {
+            matches!(
+                lesson,
+                FoundationTeacherLesson::Feeding | FoundationTeacherLesson::ObstacleNavigation
+            ) && teacher_step_consumed(&collected[0])
+        });
         steps.append(&mut collected);
         if completed_teacher_lesson {
             break;
         }
     }
     let collection_seconds = started.elapsed().as_secs_f64();
-    let final_food_distance = teacher_mode
+    let final_food_distance = scenario_lesson
+        .is_some()
         .then(|| teacher_food_distance(&runtime))
         .transpose()?;
     let consumed_events = steps
         .iter()
         .filter(|step| teacher_step_consumed(step))
         .count() as u64;
-    let lesson_completed = teacher_lesson.map(|lesson| match lesson {
+    let lesson_completed = scenario_lesson.map(|lesson| match lesson {
         FoundationTeacherLesson::Feeding | FoundationTeacherLesson::ObstacleNavigation => {
             consumed_events > 0
         }
@@ -933,14 +964,16 @@ fn run_foundation_training_pilot_inner(
         std::fs::write(
             output.join("lesson-diagnostic.json"),
             serde_json::to_vec_pretty(&serde_json::json!({
-                "lesson": teacher_lesson,
+                "lesson": scenario_lesson,
                 "consumed_events": consumed_events,
                 "initial_food_distance": initial_food_distance,
                 "final_food_distance": final_food_distance,
                 "steps": trace,
             }))?,
         )?;
-        return Err("teacher lesson did not complete its measured world outcome".into());
+        if teacher_mode {
+            return Err("teacher lesson did not complete its measured world outcome".into());
+        }
     }
     let sequence = foundation_replay_sequence(&steps, 0)
         .map_err(|error| format!("pilot replay conversion: {error}"))?;
@@ -1091,7 +1124,7 @@ fn run_foundation_training_pilot_inner(
         food_position,
         initial_food_distance,
         final_food_distance,
-        lesson: teacher_lesson,
+        lesson: scenario_lesson,
         lesson_completed,
     };
     std::fs::write(

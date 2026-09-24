@@ -18,6 +18,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let output = std::path::PathBuf::from(args.next().ok_or("missing warm-up output")?);
         let manifest =
             std::path::PathBuf::from(args.next().ok_or("missing demonstration manifest")?);
+        let epochs = args
+            .next()
+            .map(|value| value.to_string_lossy().parse::<u32>())
+            .transpose()?
+            .unwrap_or(2);
         if args.next().is_some() {
             return Err("unexpected warm-up argument".into());
         }
@@ -25,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .name("foundation-imitation-warmup".into())
             .stack_size(32 * 1024 * 1024)
             .spawn(move || {
-                alife_game_app::run_foundation_imitation_warmup(&output, &manifest).map_err(
+                alife_game_app::run_foundation_imitation_warmup(&output, &manifest, epochs).map_err(
                     |error| {
                         let message = error.to_string();
                         let _ = std::fs::write(output.join("failure.txt"), &message);
@@ -35,6 +40,62 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })?
             .join()
             .map_err(|_| "warm-up thread panicked")??;
+        println!("{}", serde_json::to_string_pretty(&receipt)?);
+        return Ok(());
+    }
+    if mode == "--evaluate" {
+        let output = std::path::PathBuf::from(args.next().ok_or("missing evaluation output")?);
+        let asset_path = std::path::PathBuf::from(args.next().ok_or("missing founder asset")?);
+        let lesson = match args
+            .next()
+            .ok_or("missing evaluation lesson")?
+            .to_string_lossy()
+            .as_ref()
+        {
+            "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
+            "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,
+            "obstacle_navigation" => alife_game_app::FoundationTeacherLesson::ObstacleNavigation,
+            "recovery" => alife_game_app::FoundationTeacherLesson::Recovery,
+            _ => return Err("unknown evaluation lesson".into()),
+        };
+        let ticks = args
+            .next()
+            .ok_or("missing evaluation tick count")?
+            .to_string_lossy()
+            .parse::<usize>()?;
+        let seed = args
+            .next()
+            .ok_or("missing evaluation world seed")?
+            .to_string_lossy()
+            .parse::<u64>()?;
+        let founder_seed_base = args
+            .next()
+            .ok_or("missing evaluation founder seed")?
+            .to_string_lossy()
+            .parse::<u64>()?;
+        let food_position = if let Some(x) = args.next() {
+            let z = args.next().ok_or("missing evaluation food z")?;
+            Some([
+                x.to_string_lossy().parse::<f32>()?,
+                z.to_string_lossy().parse::<f32>()?,
+            ])
+        } else {
+            None
+        };
+        if args.next().is_some() {
+            return Err("unexpected evaluation argument".into());
+        }
+        let asset =
+            alife_core::FoundationWeightAsset::decode_canonical(&std::fs::read(asset_path)?)?;
+        let receipt = alife_game_app::run_foundation_evaluation_pilot(
+            &output,
+            seed,
+            founder_seed_base,
+            ticks,
+            lesson,
+            food_position,
+            asset,
+        )?;
         println!("{}", serde_json::to_string_pretty(&receipt)?);
         return Ok(());
     }
