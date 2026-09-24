@@ -26,6 +26,8 @@ rules. Prefer the more specific rule unless it conflicts with v2.0.
 
 Use the global working preferences. Read only documentation relevant to the touched behavior. Update affected docs and run the relevant existing checks. Preserve unrelated work.
 
+If in doubt, WWCD — What Would Creatures Do? Use Creatures 3 / Docking Station to guide open gameplay decisions.
+
 ## Current implementation guardrails
 
 These constraints protect the current implementation. They do not amend v2.0.
