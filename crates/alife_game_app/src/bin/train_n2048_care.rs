@@ -42,6 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut food_after_world_tick = None;
     let mut founder_seed_base = None;
     let mut food_position = None;
+    let mut lesson = None;
     while let Some(flag) = next {
         if flag == "--seed" {
             seed = args
@@ -83,6 +84,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .to_string_lossy()
                     .parse::<f32>()?,
             ]);
+        } else if flag == "--lesson" {
+            if lesson.is_some() {
+                return Err("duplicate lesson flag".into());
+            }
+            lesson = Some(
+                match args
+                    .next()
+                    .ok_or("missing teacher lesson")?
+                    .to_string_lossy()
+                    .as_ref()
+                {
+                    "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
+                    "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,
+                    "obstacle_navigation" => {
+                        alife_game_app::FoundationTeacherLesson::ObstacleNavigation
+                    }
+                    "recovery" => alife_game_app::FoundationTeacherLesson::Recovery,
+                    _ => return Err("unknown teacher lesson".into()),
+                },
+            );
         } else {
             return Err("unexpected argument".into());
         }
@@ -93,21 +114,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err("food availability is only supported in cycle mode".into());
         }
         let receipt = if mode == "--teacher-pilot" {
-            alife_game_app::run_foundation_teacher_pilot_with_scenario(
-                &output,
-                seed,
-                founder_seed_base.unwrap_or(seed),
-                ticks,
-                food_position,
-            )?
+            if let Some(lesson) = lesson {
+                alife_game_app::run_foundation_teacher_pilot_with_lesson(
+                    &output,
+                    seed,
+                    founder_seed_base.unwrap_or(seed),
+                    ticks,
+                    lesson,
+                    food_position,
+                )?
+            } else {
+                alife_game_app::run_foundation_teacher_pilot_with_scenario(
+                    &output,
+                    seed,
+                    founder_seed_base.unwrap_or(seed),
+                    ticks,
+                    food_position,
+                )?
+            }
         } else if founder_seed_base.is_none() && food_position.is_none() {
+            if lesson.is_some() {
+                return Err("lesson requires a teacher pilot".into());
+            }
             alife_game_app::run_foundation_training_pilot(&output, seed, ticks)?
         } else {
             return Err("founder seed and food position overrides need a teacher pilot".into());
         };
         println!("{}", serde_json::to_string_pretty(&receipt)?);
     } else {
-        if founder_seed_base.is_some() || food_position.is_some() {
+        if founder_seed_base.is_some() || food_position.is_some() || lesson.is_some() {
             return Err("founder seed and food position overrides need a teacher pilot".into());
         }
         // The production runtime and replay buffers have large debug-build

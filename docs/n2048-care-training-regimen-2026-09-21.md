@@ -26,23 +26,26 @@ structural-sleep boundary. Neither run establishes long survival or useful care.
 The campaign must remain unavailable until the following integration is done:
 
 - A balanced grounded demonstration corpus and protected behavioral evaluation
-  integrated with the existing production capture and trainer. A two-decision
-  feeding lesson now reaches a sealed meal and writes source-bound replay, but
-  it is not a four-category corpus or a warm-up update.
-- Food-free long-life survival and outcome proof. A release cycle survived
+  integrated with the existing production capture and trainer. Feeding,
+  hazard avoidance, obstacle navigation, and reserve-conserving rest each have
+  a measured single-lesson production pilot with source-bound replay. The rest
+  pilot measures lower energy expenditure after exertion; baseline ATP and
+  fatigue did not move, so it does not prove ATP restoration. These pilots are
+  not a balanced corpus or a warm-up update.
+- Correct long-life and terminal-death training. A release cycle survived
   59,565 world ticks with 98 meals and completed PPO/export/rebinding. The
   bounded cycle skips natural sleep ticks, starts replay segments on wake, and
-  uses actual elapsed world time in GAE. A 20-minute interval with food withheld
-  and subsequent autonomous feeding still needs its dedicated gate. The first
-  full delayed-food attempt ended after durable tick 20,030: the untrained
-  founder carried a hazard, health approached zero while energy remained about
-  0.306, and no meal occurred. Hazard avoidance is now a measured behavioral
-  prerequisite; this failure does not justify changing metabolism. A repeat
-  with terminal-PPO source reached death at world tick 18,014, still carrying
-  the hazard and before food returned. The runtime retired the organism before
-  the cycle could read terminal biology, so no update/export occurred. The
-  training-only retirement capture and neutral manipulation/release repairs
-  need focused checks and a fresh production run.
+  uses actual elapsed world time in GAE. A later food-free cycle ended from
+  energy depletion at tick 14,224 before food returned. Its 5,077 sealed
+  decisions still produced 26 actor/value updates, a canonical trained asset,
+  and exact next-cohort admission. The inspector confirmed the terminal tick,
+  zero meals, and zero final energy. This establishes a trainable terminal
+  outcome, not the desired survival behavior. The 20-minute food-free interval
+  followed by autonomous feeding is a post-training behavioral gate; requiring
+  an untrained policy to pass it before training would be circular. Earlier
+  attempts carried the hazard and died at ticks 20,030 and 18,014; the latest
+  one avoided carrying it but spent its reserve on activity. No physiology
+  parameter or survival timer was changed to make these results pass.
 - Measured independent-world throughput and a shared GPU dispatch coordinator.
   The available 1–8-world baseline shares a device but ticks separate sessions
   serially; it is not the planned fused batch.

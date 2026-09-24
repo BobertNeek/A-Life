@@ -698,6 +698,23 @@ fn grounded_profile_uses_the_dedicated_physical_extractor() {
     assert_eq!(neutral.kind, ActionKind::Interact);
     assert_eq!(neutral.target.entity, None);
     assert_eq!(neutral.observation, CandidateObservationRef::None);
+    let still = frame
+        .candidates()
+        .iter()
+        .find(|candidate| candidate.action_id == HeadlessActionIds::NO_LOCOMOTION)
+        .unwrap();
+    assert_eq!(still.kind, ActionKind::Move);
+    assert_eq!(still.target.entity, None);
+    assert_eq!(still.target.position, None);
+    assert_eq!(still.observation, CandidateObservationRef::None);
+    let no_posture = frame
+        .candidates()
+        .iter()
+        .find(|candidate| candidate.action_id == HeadlessActionIds::NO_POSTURE)
+        .unwrap();
+    assert_eq!(no_posture.kind, ActionKind::Hold);
+    assert_eq!(no_posture.target.entity, None);
+    assert_eq!(no_posture.observation, CandidateObservationRef::None);
     assert!(frame
         .sensory()
         .channels

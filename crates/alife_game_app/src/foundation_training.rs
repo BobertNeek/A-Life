@@ -440,6 +440,17 @@ pub struct FoundationPilotReceipt {
     pub food_position: Option<[f32; 2]>,
     pub initial_food_distance: Option<f32>,
     pub final_food_distance: Option<f32>,
+    pub lesson: Option<FoundationTeacherLesson>,
+    pub lesson_completed: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FoundationTeacherLesson {
+    Feeding,
+    HazardAvoidance,
+    ObstacleNavigation,
+    Recovery,
 }
 
 /// Prerequisite fidelity check, not behavioral acceptance or a training campaign.
@@ -448,7 +459,7 @@ pub fn run_foundation_training_pilot(
     seed: u64,
     tick_count: usize,
 ) -> Result<FoundationPilotReceipt> {
-    run_foundation_training_pilot_inner(output, seed, seed, tick_count, false, None)
+    run_foundation_training_pilot_inner(output, seed, seed, tick_count, false, None, None)
 }
 
 /// Diagnostic of the existing legal teacher path against actual ingestion.
@@ -457,7 +468,7 @@ pub fn run_foundation_teacher_pilot(
     seed: u64,
     tick_count: usize,
 ) -> Result<FoundationPilotReceipt> {
-    run_foundation_training_pilot_inner(output, seed, seed, tick_count, true, None)
+    run_foundation_training_pilot_inner(output, seed, seed, tick_count, true, None, None)
 }
 
 pub fn run_foundation_teacher_pilot_with_scenario(
@@ -474,6 +485,26 @@ pub fn run_foundation_teacher_pilot_with_scenario(
         tick_count,
         true,
         food_position,
+        None,
+    )
+}
+
+pub fn run_foundation_teacher_pilot_with_lesson(
+    output: &Path,
+    world_seed: u64,
+    founder_seed_base: u64,
+    tick_count: usize,
+    lesson: FoundationTeacherLesson,
+    food_position: Option<[f32; 2]>,
+) -> Result<FoundationPilotReceipt> {
+    run_foundation_training_pilot_inner(
+        output,
+        world_seed,
+        founder_seed_base,
+        tick_count,
+        true,
+        food_position,
+        Some(lesson),
     )
 }
 
@@ -537,6 +568,74 @@ fn grounded_care_teacher(
             })
         })
         .ok_or(ScaffoldContractError::InvalidActionDecision)?;
+    assemble_grounded_teacher(frame, enabled_channels, chosen)
+}
+
+fn grounded_lesson_teacher(
+    frame: &alife_core::PerceptionFrame,
+    enabled_channels: u32,
+    lesson: FoundationTeacherLesson,
+    lesson_tick: usize,
+    food: alife_core::WorldEntityId,
+    hazard: alife_core::WorldEntityId,
+    waypoint: alife_core::WorldEntityId,
+) -> std::result::Result<alife_gpu_backend::GpuTrainingDemonstratorAction, ScaffoldContractError> {
+    use alife_core::CandidateActionFamily as Family;
+    let target = |entity, family| {
+        frame
+            .candidates()
+            .iter()
+            .find(|candidate| candidate.target.entity == Some(entity) && candidate.family == family)
+    };
+    let food_contact = frame.candidates().iter().any(|candidate| {
+        candidate.target.entity == Some(food)
+            && matches!(candidate.observation, alife_core::CandidateObservationRef::ObjectSlot(index)
+                if frame.grounded_object_slots().iter().any(|slot| slot.slot_index == index && slot.contact >= 0.5))
+    });
+    let chosen = match lesson {
+        FoundationTeacherLesson::Feeding => target(
+            food,
+            if food_contact {
+                Family::Ingest
+            } else {
+                Family::Approach
+            },
+        ),
+        FoundationTeacherLesson::HazardAvoidance if lesson_tick < 12 => {
+            target(hazard, Family::Avoid)
+        }
+        FoundationTeacherLesson::ObstacleNavigation if lesson_tick < 18 => {
+            target(waypoint, Family::Approach)
+        }
+        FoundationTeacherLesson::ObstacleNavigation => target(
+            food,
+            if food_contact {
+                Family::Ingest
+            } else {
+                Family::Approach
+            },
+        ),
+        FoundationTeacherLesson::Recovery if lesson_tick < 12 => target(food, Family::Approach),
+        FoundationTeacherLesson::HazardAvoidance | FoundationTeacherLesson::Recovery => frame
+            .candidates()
+            .iter()
+            .find(|candidate| candidate.family == Family::Rest),
+    }
+    .or_else(|| {
+        frame
+            .candidates()
+            .iter()
+            .find(|candidate| candidate.family == Family::Rest)
+    })
+    .ok_or(ScaffoldContractError::InvalidActionDecision)?;
+    assemble_grounded_teacher(frame, enabled_channels, chosen)
+}
+
+fn assemble_grounded_teacher(
+    frame: &alife_core::PerceptionFrame,
+    enabled_channels: u32,
+    chosen: &alife_core::ActionCandidate,
+) -> std::result::Result<alife_gpu_backend::GpuTrainingDemonstratorAction, ScaffoldContractError> {
     let forced = match chosen.kind {
         alife_core::ActionKind::Move => 0,
         alife_core::ActionKind::Interact | alife_core::ActionKind::Write => 2,
@@ -557,8 +656,12 @@ fn grounded_care_teacher(
         if let Some(slot) = slot {
             if enabled_channels & (1 << slot) != 0
                 && (motor_indices[slot] == u16::MAX
+                    || (slot == 0
+                        && candidate.action_id == alife_world::HeadlessActionIds::NO_LOCOMOTION)
                     || (slot == 2
-                        && candidate.action_id == alife_world::HeadlessActionIds::NO_MANIPULATION))
+                        && candidate.action_id == alife_world::HeadlessActionIds::NO_MANIPULATION)
+                    || (slot == 4
+                        && candidate.action_id == alife_world::HeadlessActionIds::NO_POSTURE))
             {
                 motor_indices[slot] = candidate.candidate_index;
             }
@@ -597,6 +700,7 @@ fn run_foundation_training_pilot_inner(
     tick_count: usize,
     teacher_mode: bool,
     food_position: Option<[f32; 2]>,
+    lesson: Option<FoundationTeacherLesson>,
 ) -> Result<FoundationPilotReceipt> {
     if !(1..=512).contains(&tick_count) || seed == 0 || founder_seed_base == 0 {
         return Err(invalid().into());
@@ -612,6 +716,60 @@ fn run_foundation_training_pilot_inner(
     config.founder_seed_base = founder_seed_base;
     let mut game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
     game.world.set_age_death_disabled_for_new_game(true)?;
+    let teacher_lesson = teacher_mode.then_some(lesson.unwrap_or(FoundationTeacherLesson::Feeding));
+    if food_position.is_some() && teacher_lesson != Some(FoundationTeacherLesson::Feeding) {
+        return Err("custom food placement is only supported for feeding lessons".into());
+    }
+    let food = game
+        .world
+        .entity_id("food-01")
+        .ok_or("teacher world has no food")?;
+    let hazard = game
+        .world
+        .entity_id("hazard-01")
+        .ok_or("teacher world has no hazard")?;
+    let waypoint = game
+        .world
+        .entity_id("obstacle-02")
+        .ok_or("teacher world has no second obstacle")?;
+    if let Some([x, z]) = food_position {
+        move_scenario_object(&mut game.world, food, alife_core::Vec3f::new(x, 0.0, z))?;
+    }
+    match teacher_lesson {
+        Some(FoundationTeacherLesson::HazardAvoidance) => {
+            move_scenario_object(
+                &mut game.world,
+                food,
+                alife_core::Vec3f::new(50.0, 0.0, 50.0),
+            )?;
+            move_scenario_object(
+                &mut game.world,
+                hazard,
+                alife_core::Vec3f::new(5.0, 0.0, 0.0),
+            )?;
+        }
+        Some(FoundationTeacherLesson::ObstacleNavigation) => {
+            let blocker = game
+                .world
+                .entity_id("obstacle-01")
+                .ok_or("teacher world has no first obstacle")?;
+            move_scenario_object(&mut game.world, food, alife_core::Vec3f::new(7.0, 0.0, 0.0))?;
+            move_scenario_object(
+                &mut game.world,
+                blocker,
+                alife_core::Vec3f::new(4.5, 0.0, 0.0),
+            )?;
+            move_scenario_object(
+                &mut game.world,
+                waypoint,
+                alife_core::Vec3f::new(3.0, 0.0, 7.0),
+            )?;
+        }
+        Some(FoundationTeacherLesson::Recovery) => {
+            move_scenario_object(&mut game.world, food, alife_core::Vec3f::new(9.0, 0.0, 0.0))?;
+        }
+        Some(FoundationTeacherLesson::Feeding) | None => {}
+    }
     let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
     let mut runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
         backend,
@@ -630,18 +788,25 @@ fn run_foundation_training_pilot_inner(
         },
     )
     .map_err(|error| format!("pilot runtime admission: {error}"))?;
-    if let Some([x, y]) = food_position {
-        if !teacher_mode {
-            return Err("food placement belongs only to teacher scenarios".into());
-        }
-        let food = runtime
-            .world()
-            .entity_id("food-01")
-            .ok_or("teacher world has no food resource")?;
-        runtime.move_player_food(food, alife_core::Vec3f::new(x, y, 0.0))?;
-    }
     if teacher_mode {
-        runtime.set_foundation_demonstrator(grounded_care_teacher)?;
+        if let Some(lesson) = lesson {
+            let mut lesson_tick = 0;
+            runtime.set_foundation_demonstrator(move |frame, channels| {
+                let result = grounded_lesson_teacher(
+                    frame,
+                    channels,
+                    lesson,
+                    lesson_tick,
+                    food,
+                    hazard,
+                    waypoint,
+                );
+                lesson_tick += 1;
+                result
+            })?;
+        } else {
+            runtime.set_foundation_demonstrator(grounded_care_teacher)?;
+        }
     }
     let initial_food_distance = teacher_mode
         .then(|| teacher_food_distance(&runtime))
@@ -660,7 +825,13 @@ fn run_foundation_training_pilot_inner(
             )
             .into());
         }
-        let completed_teacher_lesson = teacher_mode && teacher_step_consumed(&collected[0]);
+        let completed_teacher_lesson = teacher_mode
+            && teacher_lesson.is_some_and(|lesson| {
+                matches!(
+                    lesson,
+                    FoundationTeacherLesson::Feeding | FoundationTeacherLesson::ObstacleNavigation
+                ) && teacher_step_consumed(&collected[0])
+            });
         steps.append(&mut collected);
         if completed_teacher_lesson {
             break;
@@ -674,6 +845,103 @@ fn run_foundation_training_pilot_inner(
         .iter()
         .filter(|step| teacher_step_consumed(step))
         .count() as u64;
+    let lesson_completed = teacher_lesson.map(|lesson| match lesson {
+        FoundationTeacherLesson::Feeding | FoundationTeacherLesson::ObstacleNavigation => {
+            consumed_events > 0
+        }
+        FoundationTeacherLesson::HazardAvoidance => {
+            let initial = 2.0_f32;
+            let world = runtime.world();
+            let subject = world.organism_entity_ids()[0].1;
+            let from = world.entity(subject).map(|object| object.position);
+            let to = world.entity(hazard).map(|object| object.position);
+            from.zip(to).is_some_and(|(from, to)| {
+                ((from.x - to.x).powi(2) + (from.z - to.z).powi(2)).sqrt() > initial + 0.5
+            })
+        }
+        FoundationTeacherLesson::Recovery => {
+            let exerted = &steps[..steps.len().min(12)];
+            let rested = steps.get(12..).unwrap_or_default();
+            let mean_cost = |period: &[crate::FoundationTrainingStep]| {
+                let costs = period
+                    .iter()
+                    .map(|step| {
+                        step.patch.outcome().measured_physiology.map(|transition| {
+                            transition.before.body.energy - transition.after.body.energy
+                        })
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                (!costs.is_empty()).then(|| costs.iter().sum::<f32>() / costs.len() as f32)
+            };
+            exerted.iter().any(|step| {
+                step.patch.outcome().physical.contact == alife_core::PhysicalContactKind::Moved
+            }) && rested.len() >= 12
+                && rested.iter().all(|step| {
+                    step.frame
+                        .candidates()
+                        .get(step.behavior.representative_index as usize)
+                        .is_some_and(|candidate| {
+                            candidate.family == alife_core::CandidateActionFamily::Rest
+                        })
+                })
+                && mean_cost(exerted)
+                    .zip(mean_cost(rested))
+                    .is_some_and(|(active_cost, rest_cost)| rest_cost + 1e-6 < active_cost)
+                && exerted
+                    .last()
+                    .and_then(|step| step.patch.outcome().measured_physiology)
+                    .zip(
+                        rested
+                            .last()
+                            .and_then(|step| step.patch.outcome().measured_physiology),
+                    )
+                    .is_some_and(|(active, rest)| {
+                        rest.after.homeostasis.drives.fatigue
+                            <= active.after.homeostasis.drives.fatigue
+                    })
+        }
+    });
+    if lesson_completed == Some(false) {
+        let trace = steps
+            .iter()
+            .map(|step| {
+                let chosen = step
+                    .frame
+                    .candidates()
+                    .get(step.behavior.representative_index as usize);
+                let outcome = step.patch.outcome();
+                serde_json::json!({
+                    "tick": step.frame.tick().raw(),
+                    "position": step.frame.body().pose.translation,
+                    "chosen_action": chosen.map(|candidate| candidate.action_id.raw()),
+                    "chosen_target": chosen.and_then(|candidate| candidate.target.entity),
+                    "chosen_family": chosen.map(|candidate| candidate.family),
+                    "motor_indices": step.behavior.motor_indices,
+                    "physical": outcome.physical,
+                    "channel_outcomes": outcome.joint.as_ref().map(|joint| &joint.channel_outcomes),
+                    "physiology": outcome.measured_physiology.map(|transition| serde_json::json!({
+                        "before_energy": transition.before.body.energy,
+                        "after_energy": transition.after.body.energy,
+                        "before_brain_atp": transition.before.homeostasis.drives.brain_atp,
+                        "after_brain_atp": transition.after.homeostasis.drives.brain_atp,
+                        "before_fatigue": transition.before.homeostasis.drives.fatigue,
+                        "after_fatigue": transition.after.homeostasis.drives.fatigue,
+                    })),
+                })
+            })
+            .collect::<Vec<_>>();
+        std::fs::write(
+            output.join("lesson-diagnostic.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "lesson": teacher_lesson,
+                "consumed_events": consumed_events,
+                "initial_food_distance": initial_food_distance,
+                "final_food_distance": final_food_distance,
+                "steps": trace,
+            }))?,
+        )?;
+        return Err("teacher lesson did not complete its measured world outcome".into());
+    }
     let sequence = foundation_replay_sequence(&steps, 0)
         .map_err(|error| format!("pilot replay conversion: {error}"))?;
     let phenotype = steps[0].before.phenotype.clone();
@@ -819,6 +1087,8 @@ fn run_foundation_training_pilot_inner(
         food_position,
         initial_food_distance,
         final_food_distance,
+        lesson: teacher_lesson,
+        lesson_completed,
     };
     std::fs::write(
         output.join("pilot.json"),
@@ -835,6 +1105,22 @@ fn teacher_step_consumed(step: &crate::FoundationTrainingStep) -> bool {
                 channel.physical.contact == alife_core::PhysicalContactKind::Consumed
             })
         })
+}
+
+fn move_scenario_object(
+    world: &mut alife_world::HeadlessWorld,
+    entity: alife_core::WorldEntityId,
+    position: alife_core::Vec3f,
+) -> Result<()> {
+    let mut physical = world
+        .entity(entity)
+        .ok_or("scenario object is missing")?
+        .grounded_physical;
+    world.editor_move_object(entity, position)?;
+    // A scenario placement is static scenery, not an observed moving object.
+    physical.velocity = alife_core::Vec3f::ZERO;
+    world.set_grounded_physical_properties(entity, physical)?;
+    Ok(())
 }
 
 fn teacher_food_distance(runtime: &GpuLiveBrainRuntime) -> Result<f32> {

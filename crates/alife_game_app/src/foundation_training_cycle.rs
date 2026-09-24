@@ -271,10 +271,10 @@ fn run_foundation_training_cycle_from(
             .entity(food_id)
             .ok_or("training food resource is missing")?
             .position;
-        // This canonical world is flat (Z = 0). Keep food in the legal world
-        // but far beyond the founder's practical reach during the gate.
+        // Keep food in the legal world but far beyond the founder's practical
+        // reach during the gate. Horizontal world coordinates are X and Z.
         let hidden_position =
-            runtime.move_player_food(food_id, alife_core::Vec3f::new(390.0, 340.0, 0.0))?;
+            runtime.move_player_food(food_id, alife_core::Vec3f::new(390.0, 0.0, 340.0))?;
         Some((food_id, original_position, hidden_position))
     } else {
         None

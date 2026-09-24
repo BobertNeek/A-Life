@@ -91,6 +91,8 @@ pub struct HeadlessActionIds;
 impl HeadlessActionIds {
     pub const APPROACH: ActionId = ActionId(101);
     pub const FLEE: ActionId = ActionId(102);
+    pub const NO_LOCOMOTION: ActionId = ActionId(103);
+    pub const NO_POSTURE: ActionId = ActionId(104);
     pub const EAT: ActionId = ActionId(210);
     pub const GRAB: ActionId = ActionId(211);
     pub const NO_MANIPULATION: ActionId = ActionId(212);
@@ -3047,6 +3049,22 @@ impl HeadlessWorld {
                 OutcomeProfile::no_manipulation(),
                 Vec::new(),
             ),
+            HeadlessAction::NoLocomotion => self.finish_action(
+                *command,
+                true,
+                None,
+                physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.0)?,
+                OutcomeProfile::no_manipulation(),
+                Vec::new(),
+            ),
+            HeadlessAction::NoPosture => self.finish_action(
+                *command,
+                true,
+                None,
+                physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.0)?,
+                OutcomeProfile::no_manipulation(),
+                Vec::new(),
+            ),
             HeadlessAction::Rest => self.finish_action(
                 *command,
                 true,
@@ -4550,6 +4568,8 @@ impl ReferenceOutcomeObserver for SharedOutcomeObserver {
 enum HeadlessAction {
     Idle,
     NoManipulation,
+    NoLocomotion,
+    NoPosture,
     Rest,
     Inspect,
     Move,
@@ -4586,6 +4606,10 @@ fn classify_action(command: &ActionCommand) -> HeadlessAction {
         HeadlessAction::Grab
     } else if command.action_id == HeadlessActionIds::NO_MANIPULATION {
         HeadlessAction::NoManipulation
+    } else if command.action_id == HeadlessActionIds::NO_LOCOMOTION {
+        HeadlessAction::NoLocomotion
+    } else if command.action_id == HeadlessActionIds::NO_POSTURE {
+        HeadlessAction::NoPosture
     } else {
         match command.kind {
             ActionKind::Idle => HeadlessAction::Idle,
@@ -4690,15 +4714,20 @@ fn legacy_action_for_motor_channel(
         MotorChannel::Locomotion => (
             if command.primitive == HeadlessActionIds::APPROACH
                 || command.primitive == HeadlessActionIds::FLEE
+                || command.primitive == HeadlessActionIds::NO_LOCOMOTION
             {
                 command.primitive
             } else {
                 ActionKind::Move.canonical_id()
             },
             ActionKind::Move,
-            command
-                .target
-                .unwrap_or_else(|| alife_core::ActionTarget::new(None, Some(command.direction))),
+            if command.primitive == HeadlessActionIds::NO_LOCOMOTION {
+                alife_core::ActionTarget::NONE
+            } else {
+                command
+                    .target
+                    .unwrap_or_else(|| alife_core::ActionTarget::new(None, Some(command.direction)))
+            },
         ),
         MotorChannel::Manipulation => (
             if command.primitive == HeadlessActionIds::EAT
@@ -4741,6 +4770,11 @@ fn legacy_action_for_motor_channel(
             ActionKind::Inspect.canonical_id(),
             ActionKind::Inspect,
             command.target.unwrap_or(alife_core::ActionTarget::NONE),
+        ),
+        MotorChannel::Posture if command.primitive == HeadlessActionIds::NO_POSTURE => (
+            HeadlessActionIds::NO_POSTURE,
+            ActionKind::Hold,
+            alife_core::ActionTarget::NONE,
         ),
         MotorChannel::Posture => {
             return Err(HeadlessMotorTransactionError::UnsupportedChannel(
@@ -5496,6 +5530,36 @@ mod task_6_factorized_motor_tests {
         assert_eq!(
             world.entity(near_food).unwrap().carried_by,
             Some(ORGANISM_ID)
+        );
+
+        let initial_position = world.agent_for(ORGANISM_ID).unwrap().position;
+        let neutral_locomotion = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            HeadlessActionIds::NO_LOCOMOTION,
+            ActionKind::Move,
+            None,
+            None,
+        )
+        .unwrap();
+        let still_result = world.apply_command(&neutral_locomotion).unwrap();
+        assert!(still_result.execution.succeeded);
+        assert_eq!(
+            world.agent_for(ORGANISM_ID).unwrap().position,
+            initial_position
+        );
+        let neutral_posture = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            HeadlessActionIds::NO_POSTURE,
+            ActionKind::Hold,
+            None,
+            None,
+        )
+        .unwrap();
+        let posture_result = world.apply_command(&neutral_posture).unwrap();
+        assert!(posture_result.execution.succeeded);
+        assert_eq!(
+            posture_result.execution.physical.contact,
+            PhysicalContactKind::None
         );
 
         let neutral_manipulation = HeadlessWorldCommand::structured(
