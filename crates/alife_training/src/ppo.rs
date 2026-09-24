@@ -1461,8 +1461,7 @@ where
             let counts = (start..end)
                 .map(|index| load_window(index).map(|window| window.examples.len()))
                 .collect::<Result<Vec<_>, _>>()?;
-            let samples = counts.iter().sum::<usize>();
-            if samples == 0 {
+            if counts.iter().any(|count| *count == 0) {
                 return Err(invalid());
             }
             trainer.begin_gradient_accumulation((end - start) as u32)?;
@@ -1492,7 +1491,10 @@ where
                         &objective.output,
                         objective.imitation_metric_bytes(),
                     )?;
-                    let scale = window.examples.len() as f32 / samples as f32;
+                    // Each demonstration is one curriculum episode. Equal
+                    // episode weight keeps a short feeding lesson from being
+                    // drowned by longer hazard or recovery trajectories.
+                    let scale = 1.0 / (end - start) as f32;
                     loss += f64::from(imitation_mean_loss(&metrics)?) * f64::from(scale);
                     let encoder = new_encoder(trainer.session(), "imitation-accumulate")?;
                     trainer.accumulate_replay_gradients(encoder, &objective.output, 0, scale)?;
