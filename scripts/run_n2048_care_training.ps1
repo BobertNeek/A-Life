@@ -9,7 +9,7 @@ $gitRoot = & git -C $repo rev-parse --show-toplevel
 if ($LASTEXITCODE -ne 0 -or [IO.Path]::GetFullPath($gitRoot) -ne $repo -or (Get-Location).Path -ne $repo) { throw 'Run from the repository root containing this script.' }
 $base = Join-Path $repo 'target/founder-training'
 $latest = Join-Path $base 'status.json'
-if ($Mode -eq 'Campaign') { throw 'Campaign is not implemented. The executable supports only --pilot; no eight-hour run or resume is available.' }
+if ($Mode -eq 'Campaign') { throw 'Campaign is not implemented. Use the documented bounded --cycle/--resume-cycle commands only; no guarded eight-hour run is available.' }
 if ($Mode -eq 'Status') {
     if (Test-Path -LiteralPath $latest) { Get-Content -Raw -LiteralPath $latest } else { Write-Output 'No preparation receipt exists.' }
     return
@@ -117,7 +117,7 @@ try {
     if ((Source-Receipt (Join-Path $run 'source-final')).fingerprint -ne $source.fingerprint -or (Get-FileHash $exe).Hash -ne $state.executableSha256) { throw 'Source or executable changed during pilot.' }
     $state.pilotReceipt = $receiptPath; $state.pilotReceiptSha256 = (Get-FileHash $receiptPath).Hash
     $state.state = 'Prepared'; $state.phase = 'pilot-verified'; Publish-State
-    Write-Output "Pilot verified: $receiptPath. Campaign and resumable training checkpoints are not implemented."
+    Write-Output "Pilot verified: $receiptPath. Bounded cohort resume exists; the guarded overnight campaign is not implemented."
 } catch {
     if ($null -ne $state) { $state.state = 'Failed'; $state.error = $_.Exception.Message; Publish-State }
     throw

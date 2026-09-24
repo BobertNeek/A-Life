@@ -690,6 +690,14 @@ fn grounded_profile_uses_the_dedicated_physical_extractor() {
         )
         .unwrap();
     assert_eq!(frame.grounded_object_slots().len(), 1);
+    let neutral = frame
+        .candidates()
+        .iter()
+        .find(|candidate| candidate.action_id == HeadlessActionIds::NO_MANIPULATION)
+        .unwrap();
+    assert_eq!(neutral.kind, ActionKind::Interact);
+    assert_eq!(neutral.target.entity, None);
+    assert_eq!(neutral.observation, CandidateObservationRef::None);
     assert!(frame
         .sensory()
         .channels

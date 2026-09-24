@@ -134,11 +134,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         alife_game_app::run_foundation_training_cycle(&output, seed, ticks)
                     }
                 };
-                result.map_err(|error| error.to_string())
+                result.map_err(|error| {
+                    let message = error.to_string();
+                    let _ = std::fs::write(
+                        output.join("failure.json"),
+                        serde_json::to_vec_pretty(&serde_json::json!({
+                            "error": message,
+                            "seed": seed,
+                            "requested_waking_decisions": ticks,
+                            "food_available_world_tick": food_after_world_tick,
+                        }))
+                        .unwrap_or_default(),
+                    );
+                    message
+                })
             })?
             .join()
             .map_err(|_| "training cycle thread panicked")??;
         println!("{}", serde_json::to_string_pretty(&receipt)?);
+        if receipt.food_available_world_tick.is_some() && !receipt.delayed_food_gate_passed {
+            return Err("delayed-food survival/meal gate failed; trained checkpoint retained in cycle directory".into());
+        }
     }
     Ok(())
 }
@@ -216,7 +232,7 @@ fn inspect_cycle(directory: &std::path::Path) -> Result<(), Box<dyn std::error::
             })
         {
             consumed_events += 1;
-            first_consumed_tick.get_or_insert(record.tick);
+            first_consumed_tick.get_or_insert(outcome.outcome_tick.raw());
         }
         let physiology = outcome
             .measured_physiology
@@ -227,19 +243,60 @@ fn inspect_cycle(directory: &std::path::Path) -> Result<(), Box<dyn std::error::
             .min(physiology.after.body.energy);
         final_energy = Some(physiology.after.body.energy);
     }
+    let completed = directory.join("cycle.json").exists();
+    let mut food_available_world_tick = None;
+    let mut food_available_elapsed_seconds = None;
+    let mut terminal_death_tick = None;
+    let mut cycle_world_ticks = None;
+    let mut cycle_final_energy = None;
+    let mut delayed_food_gate_passed = None;
+    if completed {
+        let receipt: alife_game_app::FoundationCycleReceipt =
+            serde_json::from_slice(&std::fs::read(directory.join("cycle.json"))?)?;
+        if receipt
+            .training_ticks
+            .checked_add(usize::from(receipt.terminal_death_tick.is_none()))
+            != Some(files.len())
+            || receipt.consumed_events != consumed_events
+            || receipt.first_consumed_world_tick != first_consumed_tick
+        {
+            return Err("cycle receipt disagrees with sealed replay".into());
+        }
+        food_available_world_tick = receipt.food_available_world_tick;
+        food_available_elapsed_seconds = receipt.food_available_elapsed_seconds;
+        terminal_death_tick = receipt.terminal_death_tick;
+        cycle_world_ticks = Some(receipt.world_ticks_elapsed);
+        cycle_final_energy = Some(receipt.final_energy);
+        delayed_food_gate_passed = Some(receipt.delayed_food_gate_passed);
+        if let Some(available) = food_available_world_tick {
+            if receipt.delayed_food_gate_passed
+                != (receipt.terminal_death_tick.is_none()
+                    && first_consumed_tick.is_some_and(|meal| meal > available)
+                    && food_available_elapsed_seconds.is_some())
+            {
+                return Err("delayed-food gate receipt disagrees with sealed replay".into());
+            }
+        }
+    }
     println!(
         "{}",
         serde_json::to_string_pretty(&serde_json::json!({
             "records": files.len(),
             "last_world_tick": last_tick,
+            "cycle_world_ticks": cycle_world_ticks,
             "simulated_minutes": last_tick as f64 / 1200.0,
             "waking_segments": last_segment + 1,
             "consumed_events": consumed_events,
             "first_consumed_tick": first_consumed_tick,
+            "food_available_world_tick": food_available_world_tick,
+            "food_available_elapsed_seconds": food_available_elapsed_seconds,
             "initial_energy": initial_energy,
             "minimum_waking_energy": minimum_waking_energy,
             "final_energy": final_energy,
-            "cycle_completed": directory.join("cycle.json").exists(),
+            "cycle_final_energy": cycle_final_energy,
+            "cycle_completed": completed,
+            "terminal_death_tick": terminal_death_tick,
+            "delayed_food_gate_passed": delayed_food_gate_passed,
             "manifest_complete": references.is_some(),
         }))?
     );

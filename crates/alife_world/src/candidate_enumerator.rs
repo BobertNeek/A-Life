@@ -139,7 +139,7 @@ impl GroundedCandidateEnumerator {
         }
 
         let mut candidates = Vec::with_capacity(
-            INTRINSIC_CANDIDATE_COUNT + grounded.slots().len().min(MAX_CANDIDATE_OBJECTS) * 5,
+            INTRINSIC_CANDIDATE_COUNT + grounded.slots().len().min(MAX_CANDIDATE_OBJECTS) * 5 + 1,
         );
         push_intrinsic_candidates(&mut candidates)?;
 
@@ -206,6 +206,22 @@ impl GroundedCandidateEnumerator {
                 )?);
             }
         }
+        // A visible object must not force an ingest or grab. This candidate
+        // belongs to the existing manipulation channel and carries no target.
+        candidates.push(ActionCandidate::new(
+            u16::try_from(candidates.len())
+                .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
+            HeadlessActionIds::NO_MANIPULATION,
+            ActionKind::Interact,
+            CandidateActionFamily::Contact,
+            CandidateObservationRef::None,
+            ActionTarget::NONE,
+            CandidateFeatureVector::zero(),
+            Confidence::new(1.0)?,
+            NormalizedScalar::new(0.0)?,
+            DurationTicks::new(1),
+            DurationTicks::new(1),
+        )?);
         Ok(candidates)
     }
 }

@@ -29,6 +29,12 @@ pub struct FoundationCycleReceipt {
     pub policy_version: u64,
     pub training_ticks: usize,
     #[serde(default)]
+    pub requested_training_ticks: usize,
+    #[serde(default)]
+    pub terminal_death_tick: Option<u64>,
+    #[serde(default)]
+    pub delayed_food_gate_passed: bool,
+    #[serde(default)]
     pub world_ticks_elapsed: u64,
     #[serde(default)]
     pub consumed_events: u64,
@@ -350,7 +356,16 @@ fn run_foundation_training_cycle_from(
     if first[0].frame.organism_id() != organism_id {
         return Err("first training capture belongs to a different organism".into());
     }
-    minimum_energy = minimum_energy.min(organism_energy(&runtime, organism_id)?);
+    minimum_energy = minimum_energy.min(
+        first[0]
+            .patch
+            .outcome()
+            .measured_physiology
+            .ok_or("first sealed training patch has no measured physiology")?
+            .after
+            .body
+            .energy,
+    );
     if consumed(&first[0]) {
         if food_hidden {
             return Err("food was consumed before the scenario made it available".into());
@@ -407,12 +422,32 @@ fn run_foundation_training_cycle_from(
     references.push(writer.append(&first.remove(0))?);
     replay_append_seconds += append_started.elapsed().as_secs_f64();
     let mut gap = false;
+    let (mut terminal_biology, mut terminal_death_tick) =
+        if let Some(record) = runtime.world().organism_registry().get(organism_id) {
+            (
+                (!record.lifecycle().is_alive()).then_some(*record.biochemistry()),
+                record.lifecycle().death_tick().map(|tick| tick.raw()),
+            )
+        } else {
+            let death_tick = runtime
+                .archive_retirement_receipt(organism_id)
+                .ok_or("first captured organism missing without archived retirement")?
+                .death_tick
+                .raw();
+            let biology = runtime
+                .take_foundation_terminal_biology(organism_id)
+                .ok_or("first archived death lacks terminal biology")?;
+            if biology.tick.raw() != death_tick {
+                return Err("first archived death tick disagrees with terminal biology".into());
+            }
+            (Some(biology), Some(death_tick))
+        };
     let mut stalled_since = Instant::now();
     let world_tick_limit = training_ticks
         .checked_mul(8)
         .and_then(|n| n.checked_add(4_096))
         .ok_or("cycle world-tick limit overflow")?;
-    while references.len() <= training_ticks {
+    while references.len() <= training_ticks && terminal_biology.is_none() {
         budget.check_additional(64 * 1024 * 1024)?;
         let before = runtime.world().tick().raw();
         if before as usize >= world_tick_limit {
@@ -438,9 +473,33 @@ fn run_foundation_training_cycle_from(
         if after != before + 1 {
             return Err("cycle world advanced by more than one tick".into());
         }
-        minimum_energy = minimum_energy.min(organism_energy(&runtime, organism_id)?);
+        if let Some(record) = runtime.world().organism_registry().get(organism_id) {
+            if !record.lifecycle().is_alive() {
+                terminal_biology = Some(*record.biochemistry());
+                terminal_death_tick = record.lifecycle().death_tick().map(|tick| tick.raw());
+            }
+            minimum_energy = minimum_energy.min(record.biochemistry().body.energy);
+        } else {
+            let death_tick = runtime
+                .archive_retirement_receipt(organism_id)
+                .ok_or("cycle organism missing without an archived retirement")?
+                .death_tick
+                .raw();
+            let biology = runtime
+                .take_foundation_terminal_biology(organism_id)
+                .ok_or("archived death lacks the world-owned terminal biology")?;
+            if biology.tick.raw() != death_tick {
+                return Err("archived death tick disagrees with terminal biology".into());
+            }
+            minimum_energy = minimum_energy.min(biology.body.energy);
+            terminal_biology = Some(biology);
+            terminal_death_tick = Some(death_tick);
+        }
         let was_food_hidden = food_hidden;
-        if food_hidden && after >= food_available_world_tick.unwrap_or(u64::MAX) {
+        if terminal_biology.is_none()
+            && food_hidden
+            && after >= food_available_world_tick.unwrap_or(u64::MAX)
+        {
             if consumed_events != 0 {
                 return Err("food was consumed before the scenario made it available".into());
             }
@@ -452,13 +511,8 @@ fn run_foundation_training_cycle_from(
         stalled_since = Instant::now();
         let mut captured = runtime.take_foundation_training_steps();
         if captured.is_empty() {
-            if runtime
-                .world()
-                .organism_registry()
-                .get(organism_id)
-                .is_none_or(|record| !record.lifecycle().is_alive())
-            {
-                return Err(format!("cycle organism died after world tick {after}").into());
+            if terminal_biology.is_some() {
+                break;
             }
             gap = true;
             continue;
@@ -484,13 +538,27 @@ fn run_foundation_training_cycle_from(
         let append_started = Instant::now();
         references.push(writer.append(&captured.remove(0))?);
         replay_append_seconds += append_started.elapsed().as_secs_f64();
+        if terminal_biology.is_some() {
+            break;
+        }
     }
     let collection_seconds = started.elapsed().as_secs_f64();
-    if food_hidden {
-        return Err("cycle ended before the delayed food became available".into());
+    let train_rows = references.len() - usize::from(terminal_biology.is_none());
+    if train_rows == 0 {
+        return Err("cycle has no complete training transition".into());
     }
+    let delayed_food_gate_passed = food_available_world_tick.is_some_and(|available| {
+        terminal_biology.is_none()
+            && !food_hidden
+            && first_consumed_world_tick.is_some_and(|meal| meal > available)
+            && food_available_elapsed_seconds.is_some()
+    });
     let world_ticks_elapsed = runtime.world().tick().raw();
-    let final_energy = organism_energy(&runtime, organism_id)?;
+    let final_energy = if let Some(biology) = terminal_biology {
+        biology.body.energy
+    } else {
+        organism_energy(&runtime, organism_id)?
+    };
     std::fs::write(
         output.join("timing.json"),
         serde_json::to_vec_pretty(&serde_json::json!({
@@ -516,7 +584,7 @@ fn run_foundation_training_cycle_from(
     // The exact production start state is stored at every replay row. Predict
     // old values before any update in bounded chunks; keep only scalar targets.
     let mut values = Vec::with_capacity(references.len());
-    let mut actions_rewards: Vec<(PpoJointAction, f32)> = Vec::with_capacity(training_ticks);
+    let mut actions_rewards: Vec<(PpoJointAction, f32)> = Vec::with_capacity(train_rows);
     let mut previous_physiology_after = None;
     let mut sleep_gap_reward_total = 0.0_f32;
     let ppo_config = PpoConfig::default();
@@ -559,7 +627,7 @@ fn run_foundation_training_cycle_from(
                     sleep_gap_reward_total += delayed;
                 }
                 previous_physiology_after = Some(physiology.after);
-                if index == training_ticks {
+                if index == train_rows {
                     break; // Real next state is a value bootstrap, never a loss row.
                 }
                 let modulator =
@@ -575,11 +643,29 @@ fn run_foundation_training_cycle_from(
     if values.len() != references.len() {
         return Err("GPU value prediction count does not match decisions".into());
     }
-    if actions_rewards.len() != training_ticks {
+    if actions_rewards.len() != train_rows {
         return Err("PPO action/reward count does not match training decisions".into());
     }
-    let mut transitions = Vec::with_capacity(training_ticks);
+    if let Some(terminal) = terminal_biology {
+        let before = previous_physiology_after.ok_or("terminal life has no sealed physiology")?;
+        let transition = alife_core::MeasuredPhysiologyTransition::new(before, terminal)?;
+        let elapsed = (terminal.tick.raw() - before.tick.raw()) as f64 / 20.0;
+        let discount = (-std::f64::consts::LN_2 * elapsed
+            / f64::from(ppo_config.discount_half_life_seconds))
+        .exp() as f32;
+        let delayed = (transition.homeostatic_improvement() - transition.aversive_harm())
+            .clamp(-1.0, 1.0)
+            * discount;
+        let final_reward = &mut actions_rewards
+            .last_mut()
+            .ok_or("terminal life has no trainable action")?
+            .1;
+        *final_reward = (*final_reward + delayed).clamp(-1.0, 1.0);
+        sleep_gap_reward_total += delayed;
+    }
+    let mut transitions = Vec::with_capacity(train_rows);
     for (tick, (action, reward)) in actions_rewards.into_iter().enumerate() {
+        let terminal = terminal_death_tick.is_some() && tick + 1 == train_rows;
         transitions.push(PpoTransition {
             policy_version,
             trajectory_id: seed,
@@ -587,9 +673,16 @@ fn run_foundation_training_cycle_from(
             action,
             reward,
             old_value: values[tick],
-            next_value: values[tick + 1],
-            elapsed_seconds: (references[tick + 1].tick - references[tick].tick) as f32 / 20.0,
-            boundary: if tick + 1 == training_ticks {
+            next_value: if terminal { 0.0 } else { values[tick + 1] },
+            elapsed_seconds: (if terminal {
+                terminal_death_tick.ok_or("missing terminal death tick")?
+            } else {
+                references[tick + 1].tick
+            } - references[tick].tick) as f32
+                / 20.0,
+            boundary: if terminal {
+                PpoBoundary::Terminated
+            } else if tick + 1 == train_rows {
                 PpoBoundary::Truncated
             } else {
                 PpoBoundary::Continuing
@@ -600,12 +693,12 @@ fn run_foundation_training_cycle_from(
     let started = Instant::now();
     let mut spans = Vec::new();
     let mut segment_start = 0;
-    while segment_start < training_ticks {
+    while segment_start < train_rows {
         let segment = references[segment_start].segment;
-        let segment_end = references[segment_start..training_ticks]
+        let segment_end = references[segment_start..train_rows]
             .iter()
             .position(|reference| reference.segment != segment)
-            .map_or(training_ticks, |offset| segment_start + offset);
+            .map_or(train_rows, |offset| segment_start + offset);
         for start in (segment_start..segment_end).step_by(256) {
             let end = (start + 256).min(segment_end);
             let burn_start = start.saturating_sub(128).max(segment_start);
@@ -707,7 +800,10 @@ fn run_foundation_training_cycle_from(
         seed,
         founder_seed_base,
         policy_version,
-        training_ticks,
+        training_ticks: train_rows,
+        requested_training_ticks: training_ticks,
+        terminal_death_tick,
+        delayed_food_gate_passed,
         world_ticks_elapsed,
         consumed_events,
         food_available_world_tick,

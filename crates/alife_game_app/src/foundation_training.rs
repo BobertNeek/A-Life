@@ -555,7 +555,11 @@ fn grounded_care_teacher(
             alife_core::ActionKind::Idle | alife_core::ActionKind::Gesture => None,
         };
         if let Some(slot) = slot {
-            if enabled_channels & (1 << slot) != 0 && motor_indices[slot] == u16::MAX {
+            if enabled_channels & (1 << slot) != 0
+                && (motor_indices[slot] == u16::MAX
+                    || (slot == 2
+                        && candidate.action_id == alife_world::HeadlessActionIds::NO_MANIPULATION))
+            {
                 motor_indices[slot] = candidate.candidate_index;
             }
         }

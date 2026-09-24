@@ -3326,6 +3326,8 @@ pub struct GpuLiveBrainRuntime {
     >,
     #[cfg(feature = "foundation-training")]
     last_foundation_training_steps: Vec<FoundationTrainingStep>,
+    #[cfg(feature = "foundation-training")]
+    last_foundation_terminal_biology: BTreeMap<u64, BiochemistryState>,
     backend: GpuAuthoritativeSession,
     handles: BTreeMap<u64, GpuBrainHandle>,
     residents: BTreeMap<u64, ResidentCognition>,
@@ -5821,6 +5823,16 @@ impl GpuLiveBrainRuntime {
         std::mem::take(&mut self.last_foundation_training_steps)
     }
 
+    /// Final world-owned biology captured by the existing retirement transaction.
+    #[cfg(feature = "foundation-training")]
+    pub fn take_foundation_terminal_biology(
+        &mut self,
+        organism_id: OrganismId,
+    ) -> Option<BiochemistryState> {
+        self.last_foundation_terminal_biology
+            .remove(&organism_id.raw())
+    }
+
     /// An offline teacher sees ordinary perceptions only. Production sessions reject it.
     #[cfg(feature = "foundation-training")]
     pub fn set_foundation_demonstrator<F>(
@@ -5972,6 +5984,8 @@ impl GpuLiveBrainRuntime {
             training_demonstrator: None,
             #[cfg(feature = "foundation-training")]
             last_foundation_training_steps: Vec::new(),
+            #[cfg(feature = "foundation-training")]
+            last_foundation_terminal_biology: BTreeMap::new(),
             backend: GpuAuthoritativeSession::new(backend, consumer),
             handles: BTreeMap::new(),
             residents: BTreeMap::new(),
@@ -6120,6 +6134,8 @@ impl GpuLiveBrainRuntime {
             training_demonstrator: None,
             #[cfg(feature = "foundation-training")]
             last_foundation_training_steps: Vec::new(),
+            #[cfg(feature = "foundation-training")]
+            last_foundation_terminal_biology: BTreeMap::new(),
             backend: GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Gameplay),
             handles: BTreeMap::new(),
             residents: BTreeMap::new(),
@@ -7110,6 +7126,9 @@ impl GpuLiveBrainRuntime {
         self.retained_learning.remove(&raw);
         self.pending_recovery_sleep_edges.remove(&raw);
         let (final_record, _) = self.world.retire_dead_organism(organism_id)?;
+        #[cfg(feature = "foundation-training")]
+        self.last_foundation_terminal_biology
+            .insert(raw, *final_record.biochemistry());
         // Archive completion supersedes unpublished live sleep transitions.
         // Workers already publishing an older checkpoint retain their inputs.
         self.pending_sleep_journal_entries
@@ -7647,6 +7666,8 @@ impl GpuLiveBrainRuntime {
         if result.is_err() {
             #[cfg(feature = "foundation-training")]
             self.last_foundation_training_steps.clear();
+            #[cfg(feature = "foundation-training")]
+            self.last_foundation_terminal_biology.clear();
             staged_sleep.restore(self);
         }
         self.performance_metrics.rollback_clone_calls = self
@@ -13971,7 +13992,7 @@ mod tests {
         .expect("required GPU");
         let world = HeadlessScenarioBuilder::new(96)
             .agent("archived", organism_id, Vec3f::ZERO)
-            .hazard("terminal", Vec3f::new(1.0, 0.0, 0.0), 1_000.0)
+            .hazard("terminal", Vec3f::new(0.1, 0.0, 0.0), 1_000.0)
             .build()
             .unwrap();
         let world_entity_id = world.entity_id("archived").unwrap();
@@ -14017,16 +14038,27 @@ mod tests {
         assert_eq!(runtime.lineage_archive_manifest_count().unwrap(), Some(1));
         assert!(runtime.handle_for(organism_id).is_some());
 
-        let terminal = runtime.world.entity_id("terminal").unwrap();
-        runtime
-            .world_mut()
-            .apply_registered_command(
-                &HeadlessWorldCommand::approach(organism_id, terminal).unwrap(),
-                world_entity_id,
-                Tick(1),
-            )
-            .unwrap();
-        assert_eq!(runtime.world_mut().try_advance_tick().unwrap(), Tick(1));
+        for tick in 1..=2_048 {
+            runtime
+                .world_mut()
+                .apply_registered_command(
+                    &HeadlessWorldCommand::idle(organism_id).unwrap(),
+                    world_entity_id,
+                    Tick(tick),
+                )
+                .unwrap();
+            assert_eq!(runtime.world_mut().try_advance_tick().unwrap(), Tick(tick));
+            if !runtime
+                .world
+                .organism_registry()
+                .get(organism_id)
+                .unwrap()
+                .lifecycle()
+                .is_alive()
+            {
+                break;
+            }
+        }
         let final_record = runtime
             .world
             .organism_registry()
@@ -14034,11 +14066,22 @@ mod tests {
             .unwrap()
             .clone();
         let final_object = runtime.world.entity(world_entity_id).unwrap().clone();
+        let death_tick = runtime.world.tick();
         assert_eq!(final_record.world_entity_id(), final_object.id);
         assert_eq!(final_object.organism_id, Some(organism_id));
-        assert_eq!(final_record.lifecycle().death_tick(), Some(Tick(1)));
+        assert_eq!(final_record.lifecycle().death_tick(), Some(death_tick));
 
         let receipt = runtime.retire_organism(organism_id, "test-death").unwrap();
+        #[cfg(feature = "foundation-training")]
+        {
+            assert_eq!(
+                runtime.take_foundation_terminal_biology(organism_id),
+                Some(*final_record.biochemistry())
+            );
+            assert!(runtime
+                .take_foundation_terminal_biology(organism_id)
+                .is_none());
+        }
         assert_eq!(
             runtime.archive_retirement_receipt(organism_id),
             Some(&receipt)
@@ -14070,8 +14113,7 @@ mod tests {
             .unwrap();
         assert_eq!(final_manifest.previous_manifest_digest, Some(birth));
         let final_statistics = library.load_life_statistics(&final_manifest).unwrap();
-        assert_eq!(final_statistics.survival_ticks(), 1);
-        assert_eq!(final_statistics.death_tick(), Some(Tick(1)));
+        assert_eq!(final_statistics.death_tick(), Some(death_tick));
         assert!(matches!(
             final_manifest.life.as_ref().unwrap().checkpoint,
             alife_core::ArchiveCheckpointDisposition::Stored(_)

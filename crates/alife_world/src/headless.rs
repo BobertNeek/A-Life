@@ -93,6 +93,7 @@ impl HeadlessActionIds {
     pub const FLEE: ActionId = ActionId(102);
     pub const EAT: ActionId = ActionId(210);
     pub const GRAB: ActionId = ActionId(211);
+    pub const NO_MANIPULATION: ActionId = ActionId(212);
 }
 
 #[derive(
@@ -3038,6 +3039,14 @@ impl HeadlessWorld {
                 OutcomeProfile::idle(),
                 Vec::new(),
             ),
+            HeadlessAction::NoManipulation => self.finish_action(
+                *command,
+                true,
+                None,
+                physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.0)?,
+                OutcomeProfile::no_manipulation(),
+                Vec::new(),
+            ),
             HeadlessAction::Rest => self.finish_action(
                 *command,
                 true,
@@ -3190,7 +3199,13 @@ impl HeadlessWorld {
             .objects
             .get_mut(&target.raw())
             .ok_or(ScaffoldContractError::InvalidId)?;
-        object.carried_by = Some(command.organism_id);
+        // Contact is reversible: the same legal target releases what this
+        // organism already holds. A painful carried object must be escapable.
+        object.carried_by = if target_carried_by == Some(command.organism_id) {
+            None
+        } else {
+            Some(command.organism_id)
+        };
         self.finish_action(
             command,
             true,
@@ -4534,6 +4549,7 @@ impl ReferenceOutcomeObserver for SharedOutcomeObserver {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HeadlessAction {
     Idle,
+    NoManipulation,
     Rest,
     Inspect,
     Move,
@@ -4568,6 +4584,8 @@ fn classify_action(command: &ActionCommand) -> HeadlessAction {
         HeadlessAction::Flee
     } else if command.action_id == HeadlessActionIds::GRAB {
         HeadlessAction::Grab
+    } else if command.action_id == HeadlessActionIds::NO_MANIPULATION {
+        HeadlessAction::NoManipulation
     } else {
         match command.kind {
             ActionKind::Idle => HeadlessAction::Idle,
@@ -4685,6 +4703,7 @@ fn legacy_action_for_motor_channel(
         MotorChannel::Manipulation => (
             if command.primitive == HeadlessActionIds::EAT
                 || command.primitive == HeadlessActionIds::GRAB
+                || command.primitive == HeadlessActionIds::NO_MANIPULATION
             {
                 command.primitive
             } else {
@@ -4695,9 +4714,13 @@ fn legacy_action_for_motor_channel(
             } else {
                 ActionKind::Interact
             },
-            command
-                .target
-                .unwrap_or_else(|| alife_core::ActionTarget::new(None, Some(command.direction))),
+            if command.primitive == HeadlessActionIds::NO_MANIPULATION {
+                alife_core::ActionTarget::NONE
+            } else {
+                command
+                    .target
+                    .unwrap_or_else(|| alife_core::ActionTarget::new(None, Some(command.direction)))
+            },
         ),
         MotorChannel::Vocal => (
             ActionKind::Vocalize.canonical_id(),
@@ -4876,6 +4899,18 @@ struct OutcomeProfile {
 }
 
 impl OutcomeProfile {
+    fn no_manipulation() -> Self {
+        Self::new(
+            DriveDelta::zero(),
+            EndocrineDelta::zero(),
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            false,
+        )
+    }
+
     fn idle() -> Self {
         Self::new(
             DriveDelta::zero(),
@@ -5458,6 +5493,40 @@ mod task_6_factorized_motor_tests {
         .unwrap();
         let nearby_grab_result = world.apply_command(&nearby_grab).unwrap();
         assert!(nearby_grab_result.execution.succeeded);
+        assert_eq!(
+            world.entity(near_food).unwrap().carried_by,
+            Some(ORGANISM_ID)
+        );
+
+        let neutral_manipulation = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            HeadlessActionIds::NO_MANIPULATION,
+            ActionKind::Interact,
+            None,
+            None,
+        )
+        .unwrap();
+        let neutral_result = world.apply_command(&neutral_manipulation).unwrap();
+        assert!(neutral_result.execution.succeeded);
+        assert_eq!(
+            neutral_result.execution.physical.contact,
+            PhysicalContactKind::None
+        );
+        assert_eq!(
+            world.entity(near_food).unwrap().carried_by,
+            Some(ORGANISM_ID)
+        );
+
+        let release_result = world.apply_command(&nearby_grab).unwrap();
+        assert!(release_result.execution.succeeded);
+        assert_eq!(world.entity(near_food).unwrap().carried_by, None);
+        assert!(
+            world
+                .apply_command(&nearby_grab)
+                .unwrap()
+                .execution
+                .succeeded
+        );
         assert_eq!(
             world.entity(near_food).unwrap().carried_by,
             Some(ORGANISM_ID)

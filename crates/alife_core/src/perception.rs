@@ -868,6 +868,10 @@ fn validate_frame_base(
                         if candidate.kind == ActionKind::Vocalize
                             && candidate.target == ActionTarget::NONE
                             && candidate.features == CandidateFeatureVector::zero() => {}
+                    (CandidateActionFamily::Contact, CandidateObservationRef::None)
+                        if candidate.kind == ActionKind::Interact
+                            && candidate.target == ActionTarget::NONE
+                            && candidate.features == CandidateFeatureVector::zero() => {}
                     (CandidateActionFamily::Idle, CandidateObservationRef::ObjectSlot(_))
                     | (_, CandidateObservationRef::None) => {
                         return Err(ScaffoldContractError::InvalidPerceptionFrame);

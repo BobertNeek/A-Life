@@ -33,7 +33,16 @@ The campaign must remain unavailable until the following integration is done:
   59,565 world ticks with 98 meals and completed PPO/export/rebinding. The
   bounded cycle skips natural sleep ticks, starts replay segments on wake, and
   uses actual elapsed world time in GAE. A 20-minute interval with food withheld
-  and subsequent autonomous feeding still needs its dedicated gate.
+  and subsequent autonomous feeding still needs its dedicated gate. The first
+  full delayed-food attempt ended after durable tick 20,030: the untrained
+  founder carried a hazard, health approached zero while energy remained about
+  0.306, and no meal occurred. Hazard avoidance is now a measured behavioral
+  prerequisite; this failure does not justify changing metabolism. A repeat
+  with terminal-PPO source reached death at world tick 18,014, still carrying
+  the hazard and before food returned. The runtime retired the organism before
+  the cycle could read terminal biology, so no update/export occurred. The
+  training-only retirement capture and neutral manipulation/release repairs
+  need focused checks and a fresh production run.
 - Measured independent-world throughput and a shared GPU dispatch coordinator.
   The available 1–8-world baseline shares a device but ticks separate sessions
   serially; it is not the planned fused batch.

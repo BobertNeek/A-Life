@@ -18,6 +18,8 @@ impl GpuLiveBrainRuntime {
     {
         #[cfg(feature = "foundation-training")]
         self.last_foundation_training_steps.clear();
+        #[cfg(feature = "foundation-training")]
+        self.last_foundation_terminal_biology.clear();
         let preamble_started = Instant::now();
         let curated_first_tick_resident = match self.curated_first_tick_residency_gate() {
             Ok(receipt) => receipt.and_then(|receipt| receipt.ordered_residents.first().cloned()),
