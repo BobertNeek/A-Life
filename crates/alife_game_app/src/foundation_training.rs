@@ -731,9 +731,31 @@ pub struct FoundationReplayRecord {
     pub organism_id: u64,
     pub sequence: TrainingSequence,
     pub behavior: alife_gpu_backend::GpuTrainingRolloutReceipt,
+    #[serde(with = "replay_patch_json")]
     pub patch: alife_core::ExperiencePatch,
     before: ReplayContinuity,
     after: ReplayContinuity,
+}
+
+// ExperiencePatch contains an untagged legacy variant. Preserve its validated
+// JSON wire inside the compact binary envelope instead of changing that type.
+mod replay_patch_json {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S: Serializer>(
+        patch: &alife_core::ExperiencePatch,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let bytes = serde_json::to_vec(patch).map_err(serde::ser::Error::custom)?;
+        bytes.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<alife_core::ExperiencePatch, D::Error> {
+        let bytes = Vec::<u8>::deserialize(deserializer)?;
+        serde_json::from_slice(&bytes).map_err(serde::de::Error::custom)
+    }
 }
 
 /// Keep these small references in the life manifest, not full GPU captures.
@@ -747,7 +769,7 @@ pub struct FoundationReplayRecordRef {
 }
 impl FoundationReplayRecordRef {
     pub fn file_name(&self) -> String {
-        format!("replay-{:012}.json.zst", self.record_index)
+        format!("replay-{:012}.bin.zst", self.record_index)
     }
 }
 
@@ -1023,7 +1045,7 @@ fn write_replay_record(
             bytes: 0,
         };
         let mut encoder = zstd::stream::write::Encoder::new(&mut writer, 3)?;
-        serde_json::to_writer(&mut encoder, record)?;
+        bincode::serde::encode_into_std_write(record, &mut encoder, bincode::config::standard())?;
         encoder.finish()?;
         writer.flush()?;
         writer.inner.get_ref().sync_all()?;
@@ -1081,8 +1103,10 @@ pub fn load_foundation_replay_record(
     }
     file.rewind()?;
     let decoder = zstd::stream::read::Decoder::new(std::io::BufReader::new(file))?;
-    let record: FoundationReplayRecord =
-        serde_json::from_reader(decoder.take(FOUNDATION_REPLAY_RECORD_LIMIT_BYTES + 1))?;
+    let record: FoundationReplayRecord = bincode::serde::decode_from_std_read(
+        &mut decoder.take(FOUNDATION_REPLAY_RECORD_LIMIT_BYTES + 1),
+        bincode::config::standard().with_limit::<268435456>(),
+    )?;
     record.validate(expected, phenotype)?;
     if record.record_index != reference.record_index
         || record.segment != reference.segment
