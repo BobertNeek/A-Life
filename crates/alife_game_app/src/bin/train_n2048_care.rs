@@ -227,7 +227,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         println!("{}", serde_json::to_string_pretty(&receipt)?);
     } else {
-        if founder_seed_base.is_some() || food_position.is_some() || lesson.is_some() {
+        if founder_seed_base.is_some() || food_position.is_some() {
             return Err("founder seed and food position overrides need a teacher pilot".into());
         }
         // The production runtime and replay buffers have large debug-build
@@ -236,21 +236,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .name("foundation-training-cycle".into())
             .stack_size(32 * 1024 * 1024)
             .spawn(move || {
-                let result = match (previous, food_after_world_tick) {
-                    (Some(previous), Some(food_after)) => {
+                let result = match (previous, food_after_world_tick, lesson) {
+                    (previous, None, Some(lesson)) => {
+                        alife_game_app::run_foundation_training_cycle_with_lesson(
+                            previous.as_deref(),
+                            &output,
+                            seed,
+                            ticks,
+                            lesson,
+                        )
+                    }
+                    (_, Some(_), Some(_)) => Err("food delay and lesson cannot be combined".into()),
+                    (Some(previous), Some(food_after), None) => {
                         alife_game_app::resume_foundation_training_cycle_with_food_delay(
                             &previous, &output, seed, ticks, food_after,
                         )
                     }
-                    (Some(previous), None) => alife_game_app::resume_foundation_training_cycle(
-                        &previous, &output, seed, ticks,
-                    ),
-                    (None, Some(food_after)) => {
+                    (Some(previous), None, None) => {
+                        alife_game_app::resume_foundation_training_cycle(
+                            &previous, &output, seed, ticks,
+                        )
+                    }
+                    (None, Some(food_after), None) => {
                         alife_game_app::run_foundation_training_cycle_with_food_delay(
                             &output, seed, ticks, food_after,
                         )
                     }
-                    (None, None) => {
+                    (None, None, None) => {
                         alife_game_app::run_foundation_training_cycle(&output, seed, ticks)
                     }
                 };
@@ -263,6 +275,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             "seed": seed,
                             "requested_waking_decisions": ticks,
                             "food_available_world_tick": food_after_world_tick,
+                            "lesson": lesson,
                         }))
                         .unwrap_or_default(),
                     );

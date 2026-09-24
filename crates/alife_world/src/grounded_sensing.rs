@@ -98,6 +98,22 @@ impl GroundedPhysicalProperties {
         }
     }
 
+    /// Give newly spawned objects a stable, physical chemical cue across
+    /// different spawn orders. Other channels retain per-object variation.
+    /// The brain receives this chemistry, never the world object's kind.
+    pub fn deterministic_for_kind(kind: crate::WorldObjectKind, spawn_sequence: u64) -> Self {
+        let mut properties = Self::deterministic_default(spawn_sequence);
+        let variation = properties.chemical[0].abs() * 0.2;
+        properties.chemical[0] = match kind {
+            crate::WorldObjectKind::Food => 0.75 + variation,
+            crate::WorldObjectKind::Hazard => -0.75 - variation,
+            crate::WorldObjectKind::Obstacle => properties.chemical[0] * 0.2,
+            crate::WorldObjectKind::Agent => 0.35 + properties.chemical[0] * 0.1,
+            crate::WorldObjectKind::Token => -0.35 + properties.chemical[0] * 0.1,
+        };
+        properties
+    }
+
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         self.velocity.validate()?;
         if !unit_values_valid(&self.color)

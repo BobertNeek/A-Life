@@ -7,6 +7,23 @@ only architecture authority.
 
 ## Execution checkpoint — 24 September 2026
 
+Later 24 September update: causal step traces exposed teacher lessons that
+stopped at Idle after fleeing and at Rest after recovery. The revised hazard
+lesson now flees, reaches safe distance, approaches food, and ingests; recovery
+rests at measured fatigue, then approaches food and ingests. The corrected
+32-lesson corpus is `target/founder-training/demonstrations-20260924-006`.
+Newly spawned objects now carry stable world-owned chemical cues across spawn
+orders, while the brain still sees only physical properties. The existing PPO
+cycle accepts these lesson layouts without a demonstrator and includes sealed
+frustration in action credit. A guarded serial campaign coordinator is
+implemented. A 160-epoch warm-up on 224 sealed records exported a rebound
+checkpoint, and a four-lesson, 16-decision-per-lesson teacher-free dry run
+completed all four durable PPO handoffs. The obstacle cohort still had 13
+blocked decisions and no meal, so the checkpoint is ready for training, not
+accepted as a care policy. The older prerequisite bullets below describe the state before these
+repairs; they are not evidence that the founder has learned care. The overnight
+run remains held until 1 a.m. America/Denver on 25 September 2026.
+
 The operator entry point is `scripts/run_n2048_care_training.ps1`; follow
 `docs/n2048-training-operator.md`. Preparation is not a training campaign.
 The production single-world path now has a bounded integration cycle: ordinary

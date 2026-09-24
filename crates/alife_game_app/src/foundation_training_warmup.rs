@@ -98,7 +98,9 @@ pub fn run_foundation_imitation_warmup(
     epochs: u32,
 ) -> Result<FoundationWarmupReceipt> {
     let manifest: DemonstrationManifest = serde_json::from_slice(&std::fs::read(manifest_path)?)?;
-    if manifest.founder_seed_base == 0 || manifest.pilots.len() != 32 || !(1..=50).contains(&epochs)
+    if manifest.founder_seed_base == 0
+        || manifest.pilots.len() != 32
+        || !(1..=160).contains(&epochs)
     {
         return Err("warm-up requires 32 lessons and one nonzero founder seed".into());
     }

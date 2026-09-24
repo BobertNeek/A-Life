@@ -14,9 +14,10 @@ use alife_training::{
 };
 
 use crate::{
-    foundation_replay_source, initial_n2048_care_asset, load_foundation_replay_window,
-    verify_foundation_replay_step, FoundationReplayBudget, FoundationReplayWriter,
-    FoundationWarmupReceipt, GpuDurableSaveManifest, GpuLiveBrainRuntime,
+    configure_foundation_scenario, foundation_replay_source, initial_n2048_care_asset,
+    load_foundation_replay_window, verify_foundation_replay_step, FoundationReplayBudget,
+    FoundationReplayWriter, FoundationTeacherLesson, FoundationWarmupReceipt,
+    GpuDurableSaveManifest, GpuLiveBrainRuntime,
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -39,7 +40,17 @@ pub struct FoundationCycleReceipt {
     #[serde(default)]
     pub consumed_events: u64,
     #[serde(default)]
+    pub blocked_actions: u64,
+    #[serde(default)]
+    pub collision_actions: u64,
+    #[serde(default)]
+    pub avoid_actions: u64,
+    #[serde(default)]
+    pub rest_recovery_actions: u64,
+    #[serde(default)]
     pub food_available_world_tick: Option<u64>,
+    #[serde(default)]
+    pub lesson: Option<FoundationTeacherLesson>,
     #[serde(default)]
     pub first_consumed_world_tick: Option<u64>,
     #[serde(default)]
@@ -123,7 +134,7 @@ pub fn run_foundation_training_cycle(
     seed: u64,
     training_ticks: usize,
 ) -> Result<FoundationCycleReceipt> {
-    run_foundation_training_cycle_from(output, seed, training_ticks, None, None)
+    run_foundation_training_cycle_from(output, seed, training_ticks, None, None, None)
 }
 
 /// A scenario gate: food is out of reach until an explicit world tick. Biology
@@ -140,6 +151,7 @@ pub fn run_foundation_training_cycle_with_food_delay(
         training_ticks,
         None,
         Some(food_available_world_tick),
+        None,
     )
 }
 
@@ -151,7 +163,7 @@ pub fn resume_foundation_training_cycle(
     seed: u64,
     training_ticks: usize,
 ) -> Result<FoundationCycleReceipt> {
-    run_foundation_training_cycle_from(output, seed, training_ticks, Some(previous), None)
+    run_foundation_training_cycle_from(output, seed, training_ticks, Some(previous), None, None)
 }
 
 pub fn resume_foundation_training_cycle_with_food_delay(
@@ -167,7 +179,20 @@ pub fn resume_foundation_training_cycle_with_food_delay(
         training_ticks,
         Some(previous),
         Some(food_available_world_tick),
+        None,
     )
+}
+
+/// Collect policy actions in the same world layout used by a teacher lesson.
+/// The teacher is absent; all decisions and outcomes come from the live brain.
+pub fn run_foundation_training_cycle_with_lesson(
+    previous: Option<&Path>,
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    lesson: FoundationTeacherLesson,
+) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from(output, seed, training_ticks, previous, None, Some(lesson))
 }
 
 fn run_foundation_training_cycle_from(
@@ -176,12 +201,16 @@ fn run_foundation_training_cycle_from(
     training_ticks: usize,
     previous: Option<&Path>,
     food_available_world_tick: Option<u64>,
+    lesson: Option<FoundationTeacherLesson>,
 ) -> Result<FoundationCycleReceipt> {
     if seed == 0 || !(1..=36_000).contains(&training_ticks) {
         return Err("cycle needs a nonzero seed and 1..=36000 training ticks".into());
     }
     if food_available_world_tick == Some(0) {
         return Err("food availability tick must be positive".into());
+    }
+    if food_available_world_tick.is_some() && lesson.is_some() {
+        return Err("a delayed food gate cannot be combined with a lesson layout".into());
     }
     std::fs::create_dir(output)?;
     let (asset, policy_version, restored_actor, restored_value, founder_seed_base) =
@@ -288,7 +317,24 @@ fn run_foundation_training_cycle_from(
     config.founder_seed_base = founder_seed_base;
     let mut game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
     game.world.set_age_death_disabled_for_new_game(true)?;
-    let creatures = game.creatures;
+    if lesson.is_some() {
+        configure_foundation_scenario(&mut game.world, seed, lesson, None, true)?;
+    }
+    let mut creatures = game.creatures;
+    // Recovery preconditioning advances ordinary world biology before the
+    // durable base is published. Keep the New Game save summaries in step
+    // with that same organism record, as the normal checkpoint path does.
+    for creature in &mut creatures {
+        let biochemistry = game
+            .world
+            .organism_registry()
+            .get(creature.organism_id)
+            .ok_or("scenario founder is missing from the world")?
+            .biochemistry();
+        creature.development_tick = biochemistry.development.last_update_tick;
+        creature.mind.tick = biochemistry.tick;
+        creature.mind.homeostasis = biochemistry.homeostasis;
+    }
     let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
     let mut runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
         backend,
@@ -330,6 +376,7 @@ fn run_foundation_training_cycle_from(
             "world_seed": seed,
             "founder_seed_base": founder_seed_base,
             "food_available_world_tick": food_available_world_tick,
+            "lesson": lesson,
             "food_hidden_position": delayed_food.map(|(_, _, position)| position.to_array()),
             "food_original_position": delayed_food.map(|(_, position, _)| position.to_array()),
             "age_death_disabled": true,
@@ -632,6 +679,10 @@ fn run_foundation_training_cycle_from(
     let mut actions_rewards: Vec<(PpoJointAction, f32)> = Vec::with_capacity(train_rows);
     let mut previous_physiology_after = None;
     let mut sleep_gap_reward_total = 0.0_f32;
+    let mut blocked_actions = 0_u64;
+    let mut collision_actions = 0_u64;
+    let mut avoid_actions = 0_u64;
+    let mut rest_recovery_actions = 0_u64;
     let ppo_config = PpoConfig::default();
     let mut segment_start = 0;
     while segment_start < references.len() {
@@ -675,11 +726,38 @@ fn run_foundation_training_cycle_from(
                 if index == train_rows {
                     break; // Real next state is a value bootstrap, never a loss row.
                 }
+                let outcome = patch.outcome();
+                let contacts = std::iter::once(outcome.physical.contact).chain(
+                    outcome.joint.iter().flat_map(|joint| {
+                        joint
+                            .channel_outcomes
+                            .iter()
+                            .map(|channel| channel.physical.contact)
+                    }),
+                );
+                let mut blocked = false;
+                let mut collision = false;
+                for contact in contacts {
+                    blocked |= contact == alife_core::PhysicalContactKind::Blocked;
+                    collision |= contact == alife_core::PhysicalContactKind::Collision;
+                }
+                blocked_actions += u64::from(blocked);
+                collision_actions += u64::from(collision);
+                let family = patch.decision().neural_evidence()?.action_family;
+                avoid_actions += u64::from(family == alife_core::CandidateActionFamily::Avoid);
+                rest_recovery_actions += u64::from(
+                    family == alife_core::CandidateActionFamily::Rest
+                        && physiology.after.homeostasis.drives.fatigue
+                            <= physiology.before.homeostasis.drives.fatigue - 0.02,
+                );
                 let modulator =
                     alife_core::OutcomeCreditPacket::from_sealed_patch(patch)?.modulator();
                 actions_rewards.push((
                     joint_action(behavior)?,
-                    (modulator.homeostatic_improvement() - modulator.pain()).clamp(-1.0, 1.0),
+                    (modulator.homeostatic_improvement()
+                        - modulator.pain()
+                        - modulator.frustration().max(0.0))
+                    .clamp(-1.0, 1.0),
                 ));
             }
         }
@@ -851,7 +929,12 @@ fn run_foundation_training_cycle_from(
         delayed_food_gate_passed,
         world_ticks_elapsed,
         consumed_events,
+        blocked_actions,
+        collision_actions,
+        avoid_actions,
+        rest_recovery_actions,
         food_available_world_tick,
+        lesson,
         first_consumed_world_tick,
         food_available_elapsed_seconds,
         first_consumed_elapsed_seconds,

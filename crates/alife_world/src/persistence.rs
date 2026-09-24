@@ -1169,7 +1169,10 @@ impl WorldObjectSaveWire {
                 };
                 let key = provenance.canonical_key();
                 (
-                    GroundedPhysicalProperties::deterministic_default(canonical_spawn_sequence),
+                    GroundedPhysicalProperties::deterministic_for_kind(
+                        self.kind,
+                        canonical_spawn_sequence,
+                    ),
                     provenance,
                     key,
                 )

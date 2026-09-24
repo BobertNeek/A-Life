@@ -45,16 +45,33 @@ try {
         if ($receipt.lesson -ne $lesson -or $receipt.lesson_completed -ne $true -or
             $receipt.demonstration_replay_records -ne $receipt.ticks -or
             $receipt.founder_seed_base -ne $FounderSeedBase) { throw "Lesson $name receipt mismatch." }
-        if ($lesson -eq 'obstacle_navigation' -or $lesson -eq 'recovery') {
+        if ($lesson -eq 'hazard_avoidance' -or $lesson -eq 'obstacle_navigation' -or $lesson -eq 'recovery') {
             $trace = Get-Content -Raw -LiteralPath (Join-Path $directory 'lesson-trace.json') | ConvertFrom-Json
-            if ($lesson -eq 'obstacle_navigation') {
+            if ($lesson -eq 'hazard_avoidance') {
+                $families = @($trace.steps | ForEach-Object { $_.chosen_family })
+                $avoidCount = @($families | Where-Object { $_ -eq 'Avoid' }).Count
+                $approachCount = @($families | Where-Object { $_ -eq 'Approach' }).Count
+                if ($avoidCount -lt 1 -or $approachCount -lt 1 -or $families[-1] -ne 'Ingest' -or
+                    @($families[0..($avoidCount - 1)] | Where-Object { $_ -ne 'Avoid' }).Count -ne 0 -or
+                    @($families[$avoidCount..($families.Count - 2)] | Where-Object { $_ -ne 'Approach' }).Count -ne 0 -or
+                    @($trace.steps | Where-Object { $_.physical.contact -in @('Blocked', 'Collision') }).Count -ne 0) {
+                    throw "Hazard lesson $name did not flee, switch to food, and ingest without contact."
+                }
+            } elseif ($lesson -eq 'obstacle_navigation') {
                 $side = [Math]::Sign([double]$trace.steps[0].physical.displacement.z)
                 if ($side -eq 0) { throw "Obstacle lesson $name has no lateral route." }
                 [void]$obstacleSides.Add($side)
             } else {
                 $before = [double]$trace.steps[0].physiology.before_fatigue
                 $after = [double]$trace.steps[-1].physiology.after_fatigue
-                if ($before -lt 0.12 -or $after -ge $before - 0.02) { throw "Recovery lesson $name did not lower measured fatigue." }
+                $families = @($trace.steps | ForEach-Object { $_.chosen_family })
+                $restCount = @($families | Where-Object { $_ -eq 'Rest' }).Count
+                if ($before -lt 0.12 -or $after -ge $before - 0.02 -or
+                    $restCount -lt 1 -or $families[0] -ne 'Rest' -or $families[-1] -ne 'Ingest' -or
+                    @($families[$restCount..($families.Count - 2)] | Where-Object { $_ -ne 'Approach' }).Count -ne 0 -or
+                    @($trace.steps | Where-Object { $_.physical.contact -eq 'Blocked' }).Count -ne 0) {
+                    throw "Recovery lesson $name did not rest, approach food, and ingest."
+                }
                 [void]$recoveryFatigueLevels.Add(([Math]::Round($before, 2)).ToString('F2', [Globalization.CultureInfo]::InvariantCulture))
             }
         }

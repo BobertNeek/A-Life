@@ -1,6 +1,12 @@
 #requires -Version 7.0
 [CmdletBinding()]
-param([ValidateSet('Prepare', 'Status', 'Campaign')][string]$Mode = 'Status')
+param(
+    [ValidateSet('Prepare', 'Status', 'Campaign')][string]$Mode = 'Status',
+    [string]$Source,
+    [ValidateRange(1, 24)][int]$DurationHours = 8,
+    [ValidateRange(16, 4096)][int]$CycleTicks = 256,
+    [ValidateRange(1, 100000)][int]$MaxCycles = 100000
+)
 $PilotTicks = 32
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -9,7 +15,6 @@ $gitRoot = & git -C $repo rev-parse --show-toplevel
 if ($LASTEXITCODE -ne 0 -or [IO.Path]::GetFullPath($gitRoot) -ne $repo -or (Get-Location).Path -ne $repo) { throw 'Run from the repository root containing this script.' }
 $base = Join-Path $repo 'target/founder-training'
 $latest = Join-Path $base 'status.json'
-if ($Mode -eq 'Campaign') { throw 'Campaign is not implemented. Use the documented bounded --cycle/--resume-cycle commands only; no guarded eight-hour run is available.' }
 if ($Mode -eq 'Status') {
     if (Test-Path -LiteralPath $latest) { Get-Content -Raw -LiteralPath $latest } else { Write-Output 'No preparation receipt exists.' }
     return
@@ -30,7 +35,7 @@ function Publish-State {
     Atomic-Json (Join-Path $run 'status.json') $state
     Atomic-Json $latest $state
 }
-function Run-Command([string]$Program, [string[]]$Arguments, [string]$Log, [switch]$OneTest) {
+function Run-Command([string]$Program, [string[]]$Arguments, [string]$Log, [switch]$OneTest, [datetime]$DeadlineUtc = [datetime]::MaxValue) {
     $info = [Diagnostics.ProcessStartInfo]::new($Program)
     $info.WorkingDirectory = $repo; $info.UseShellExecute = $false; $info.CreateNoWindow = $true
     $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true
@@ -44,7 +49,14 @@ function Run-Command([string]$Program, [string[]]$Arguments, [string]$Log, [swit
         if (-not $process.Start()) { throw "Failed to start $Program" }
         $outTask = $process.StandardOutput.BaseStream.CopyToAsync($stdout)
         $errTask = $process.StandardError.BaseStream.CopyToAsync($stderr)
-        $process.WaitForExit(); [Threading.Tasks.Task]::WaitAll(@($outTask, $errTask))
+        while (-not $process.WaitForExit(1000)) {
+            if ([DateTime]::UtcNow -ge $DeadlineUtc) {
+                $process.Kill($true)
+                $process.WaitForExit()
+                throw "Campaign deadline reached while running $Program; child process stopped."
+            }
+        }
+        [Threading.Tasks.Task]::WaitAll(@($outTask, $errTask))
         if ($process.ExitCode -ne 0) { throw "Exit $($process.ExitCode): $Program $($Arguments -join ' '); see $Log.*.log" }
     } finally { $stdout.Dispose(); $stderr.Dispose(); $process.Dispose() }
     if ($OneTest -and [IO.File]::ReadAllText("$Log.stdout.log") -notmatch 'test result: ok\. 1 passed; 0 failed;') { throw "Expected exactly one passing test: $Log.stdout.log" }
@@ -64,11 +76,95 @@ function Source-Receipt([string]$Directory) {
     Atomic-Json (Join-Path $Directory 'source.json') $receipt
     return $receipt
 }
+function Invoke-Campaign {
+    if (-not $Source) { throw 'Campaign needs -Source pointing to a sealed warm-up or cycle directory.' }
+    $sourcePath = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($Source)) { $Source } else { Join-Path $repo $Source }))
+    $relative = [IO.Path]::GetRelativePath($base, $sourcePath)
+    if ($relative -eq '.' -or $relative.StartsWith('..') -or [IO.Path]::IsPathRooted($relative) -or
+        -not (Test-Path -LiteralPath $sourcePath -PathType Container) -or
+        -not ((Test-Path -LiteralPath (Join-Path $sourcePath 'warmup.json')) -or
+              (Test-Path -LiteralPath (Join-Path $sourcePath 'cycle.json')))) {
+        throw 'Campaign source must be a sealed warm-up or cycle under target/founder-training.'
+    }
+    $script:run = Join-Path $base ("campaign-{0}-{1}" -f [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'), [Guid]::NewGuid().ToString('N').Substring(0, 8))
+    [IO.Directory]::CreateDirectory($run) | Out-Null
+    $sourceReceipt = Source-Receipt (Join-Path $run 'source')
+    $exe = Join-Path $repo 'target/release/train_n2048_care.exe'
+    $script:state = [ordered]@{
+        schema = 2; state = 'Running'; phase = 'build'; pid = $PID; run = $run
+        fingerprint = $sourceReceipt.fingerprint; executable = $exe; executableSha256 = $null
+        source = $sourcePath; latestCheckpoint = $sourcePath; deadlineUtc = $null
+        cycleTicks = $CycleTicks; maxCycles = $MaxCycles; updatedUtc = ''; completed = @(); bestByLesson = [ordered]@{}; error = $null
+    }
+    Publish-State
+    Run-Command 'cargo' @('build', '--release', '--offline', '--locked', '-j', '2', '-p', 'alife_game_app',
+        '--features', 'foundation-training', '--bin', 'train_n2048_care') (Join-Path $run 'build')
+    if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Release trainer was not built.' }
+    $deadline = [DateTime]::UtcNow.AddHours($DurationHours)
+    $lessons = @('feeding', 'hazard_avoidance', 'obstacle_navigation', 'recovery')
+    $state.phase = 'campaign'
+    $state.executableSha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
+    $state.deadlineUtc = $deadline.ToString('o')
+    Publish-State
+    $previous = $sourcePath
+    $index = 0
+    while ([DateTime]::UtcNow -lt $deadline -and $index -lt $MaxCycles) {
+        Assert-Idle
+        if ((Source-Receipt (Join-Path $run ("source-cycle-{0:D4}" -f $index))).fingerprint -ne $sourceReceipt.fingerprint -or
+            (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash -ne $state.executableSha256) {
+            throw 'Campaign source or executable changed between cycles.'
+        }
+        $lessonIndex = $index % $lessons.Count
+        $lesson = $lessons[$lessonIndex]
+        $round = [int][Math]::Floor($index / $lessons.Count)
+        $seed = [ulong](539365000 + 5 * $round + $lessonIndex)
+        $directory = Join-Path $run ("cycle-{0:D4}-{1}" -f $index, $lesson)
+        $state.phase = "cycle-$index-$lesson"; Publish-State
+        Write-Host "Training $lesson cycle $index; logs: $run"
+        Run-Command $exe @('--resume-cycle', $previous, $directory, [string]$CycleTicks,
+            '--seed', [string]$seed, '--lesson', $lesson) (Join-Path $run ("cycle-{0:D4}" -f $index)) -DeadlineUtc $deadline.AddMinutes(30)
+        $receiptPath = Join-Path $directory 'cycle.json'
+        $receipt = Get-Content -Raw -LiteralPath $receiptPath | ConvertFrom-Json
+        if ($receipt.lesson -ne $lesson -or $receipt.seed -ne $seed -or
+            -not $receipt.next_cohort_tick_captured -or -not $receipt.next_cohort_optimizer_rebound -or
+            $receipt.training_ticks -lt 1 -or $receipt.new_asset_digest -notmatch '^[0-9a-f]{64}$') {
+            throw "Cycle $index did not seal a valid next-cohort handoff."
+        }
+        $row = [ordered]@{
+            index = $index; lesson = $lesson; seed = $seed; directory = $directory
+            policyVersion = $receipt.policy_version; decisions = $receipt.training_ticks
+            meals = $receipt.consumed_events; blocked = $receipt.blocked_actions
+            collisions = $receipt.collision_actions; avoid = $receipt.avoid_actions
+            recovery = $receipt.rest_recovery_actions; minimumEnergy = $receipt.minimum_energy
+            finalEnergy = $receipt.final_energy; terminalDeathTick = $receipt.terminal_death_tick
+            collectionSeconds = $receipt.collection_seconds; updateSeconds = $receipt.update_seconds
+            assetDigest = $receipt.new_asset_digest
+        }
+        $state.completed += $row
+        $previous = $directory; $state.latestCheckpoint = $directory
+        # Training-world quality is only a provisional comparison; final
+        # acceptance needs separate teacher-free worlds on a frozen policy.
+        $score = 10 * [Math]::Min([int]$row.meals, 3) + [double]$row.finalEnergy +
+            [Math]::Min([int]$(if ($lesson -eq 'recovery') { $row.recovery } else { 0 }), 4) -
+            2 * [int]$row.blocked - 5 * [int]$row.collisions
+        $best = $state.bestByLesson[$lesson]
+        if ($null -eq $best -or $score -gt $best.score) {
+            $state.bestByLesson[$lesson] = [ordered]@{ score = $score; directory = $directory; receipt = $receiptPath }
+        }
+        Publish-State
+        $index++
+    }
+    $state.state = 'Completed'
+    $state.phase = $(if ($index -ge $MaxCycles) { 'cycle-limit-reached' } else { 'deadline-reached' })
+    Publish-State
+    Write-Output "Campaign completed $index bounded cycles. Latest checkpoint: $previous"
+}
 try {
     $lock = [IO.File]::Open((Join-Path $base 'operator.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
     Assert-Idle
     $cargoVersion = (& cargo --version) -join "`n"; if ($LASTEXITCODE) { throw 'Cargo unavailable.' }
     $rustcVersion = (& rustc --version) -join "`n"; if ($LASTEXITCODE) { throw 'Rust compiler unavailable.' }
+    if ($Mode -eq 'Campaign') { Invoke-Campaign; return }
     $run = Join-Path $base ("prepare-{0}-{1}" -f [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'), [Guid]::NewGuid().ToString('N').Substring(0, 8))
     [IO.Directory]::CreateDirectory($run) | Out-Null
     $source = Source-Receipt (Join-Path $run 'source')

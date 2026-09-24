@@ -3015,7 +3015,10 @@ impl HeadlessWorld {
             teacher_channel: spec.teacher_channel,
             consumed: false,
             carried_by: None,
-            grounded_physical: GroundedPhysicalProperties::deterministic_default(spawn_sequence),
+            grounded_physical: GroundedPhysicalProperties::deterministic_for_kind(
+                spec.kind,
+                spawn_sequence,
+            ),
             tracking_provenance,
             tracking_key,
         };

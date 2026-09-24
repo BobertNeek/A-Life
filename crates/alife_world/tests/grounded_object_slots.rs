@@ -5,10 +5,27 @@ use alife_core::{
 use alife_world::{
     AssetManifest, GroundedPhysicalProperties, HeadlessActionIds, HeadlessScenarioBuilder,
     PhysicalTrackingProvenance, PortableSaveFile, RuntimeConfig, StablePhysicalDescriptor,
-    TrackedObjectRegistry,
+    TrackedObjectRegistry, WorldObjectKind,
 };
 
 const ORGANISM: OrganismId = OrganismId(1);
+
+#[test]
+fn new_objects_keep_kind_specific_chemistry_across_spawn_order() {
+    for sequence in [1, 2, 5, 40, 4_000] {
+        let food =
+            GroundedPhysicalProperties::deterministic_for_kind(WorldObjectKind::Food, sequence);
+        let hazard =
+            GroundedPhysicalProperties::deterministic_for_kind(WorldObjectKind::Hazard, sequence);
+        let obstacle =
+            GroundedPhysicalProperties::deterministic_for_kind(WorldObjectKind::Obstacle, sequence);
+        assert!(food.chemical[0] >= 0.75);
+        assert!(hazard.chemical[0] <= -0.75);
+        assert!(obstacle.chemical[0].abs() <= 0.2);
+        assert!(food.validate_contract().is_ok());
+        assert!(hazard.validate_contract().is_ok());
+    }
+}
 
 fn assert_grounded_horizontal_bearing(offset: Vec3f, expected: [f32; 2]) {
     let observer = Vec3f::new(1.0, 0.25, -2.0);

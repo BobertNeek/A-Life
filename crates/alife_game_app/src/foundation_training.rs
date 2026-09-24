@@ -595,14 +595,26 @@ fn grounded_lesson_teacher(
                 Family::Approach
             },
         ),
-        FoundationTeacherLesson::HazardAvoidance => frame
-            .candidates()
-            .iter()
-            .find(|candidate| candidate.family == Family::Idle),
-        FoundationTeacherLesson::Recovery => frame
+        FoundationTeacherLesson::HazardAvoidance => target(
+            food,
+            if food_contact {
+                Family::Ingest
+            } else {
+                Family::Approach
+            },
+        ),
+        FoundationTeacherLesson::Recovery if frame.homeostasis().drives.fatigue >= 0.12 => frame
             .candidates()
             .iter()
             .find(|candidate| candidate.family == Family::Rest),
+        FoundationTeacherLesson::Recovery => target(
+            food,
+            if food_contact {
+                Family::Ingest
+            } else {
+                Family::Approach
+            },
+        ),
     }
     .ok_or(ScaffoldContractError::InvalidActionDecision)?;
     assemble_grounded_teacher(frame, enabled_channels, chosen)
@@ -700,120 +712,12 @@ fn run_foundation_training_pilot_inner(
     game.world.set_age_death_disabled_for_new_game(true)?;
     let scenario_lesson =
         lesson.or_else(|| teacher_mode.then_some(FoundationTeacherLesson::Feeding));
-    if food_position.is_some() && scenario_lesson != Some(FoundationTeacherLesson::Feeding) {
-        return Err("custom food placement is only supported for feeding lessons".into());
-    }
-    let food = game
-        .world
-        .entity_id("food-01")
-        .ok_or("teacher world has no food")?;
-    let hazard = game
-        .world
-        .entity_id("hazard-01")
-        .ok_or("teacher world has no hazard")?;
-    let waypoint = game
-        .world
-        .entity_id("obstacle-02")
-        .ok_or("teacher world has no second obstacle")?;
-    if let Some([x, z]) = food_position {
-        move_scenario_object(&mut game.world, food, alife_core::Vec3f::new(x, 0.0, z))?;
-    }
-    match scenario_lesson {
-        Some(FoundationTeacherLesson::HazardAvoidance) => {
-            move_scenario_object(
-                &mut game.world,
-                food,
-                alife_core::Vec3f::new(50.0, 0.0, 50.0),
-            )?;
-            move_scenario_object(
-                &mut game.world,
-                hazard,
-                alife_core::Vec3f::new(5.0, 0.0, (seed % 3) as f32 - 1.0),
-            )?;
-        }
-        Some(FoundationTeacherLesson::ObstacleNavigation) => {
-            let side = if seed & 1 == 0 { -1.0 } else { 1.0 };
-            let food_z = ((seed >> 1) % 3) as f32 * 0.5 - 0.5;
-            let blocker = game
-                .world
-                .entity_id("obstacle-01")
-                .ok_or("teacher world has no first obstacle")?;
-            move_scenario_object(
-                &mut game.world,
-                food,
-                alife_core::Vec3f::new(7.0, 0.0, food_z),
-            )?;
-            move_scenario_object(
-                &mut game.world,
-                blocker,
-                alife_core::Vec3f::new(4.5, 0.0, food_z),
-            )?;
-            move_scenario_object(
-                &mut game.world,
-                waypoint,
-                alife_core::Vec3f::new(3.0, 0.0, side * 7.0),
-            )?;
-        }
-        Some(FoundationTeacherLesson::Recovery) => {
-            move_scenario_object(
-                &mut game.world,
-                food,
-                alife_core::Vec3f::new(50.0, 0.0, 50.0),
-            )?;
-        }
-        Some(FoundationTeacherLesson::Feeding) | None => {}
-    }
-    if scenario_lesson == Some(FoundationTeacherLesson::Recovery) {
-        let organism = game.world.organism_entity_ids()[0].0;
-        let required_fatigue = 0.12 + (seed % 4) as f32 * 0.025;
-        for _ in 0..2_400 {
-            let fatigue = game
-                .world
-                .organism_registry()
-                .get(organism)
-                .ok_or("recovery organism is missing")?
-                .biochemistry()
-                .homeostasis
-                .drives
-                .fatigue;
-            if fatigue >= required_fatigue {
-                break;
-            }
-            game.world.try_advance_tick()?;
-        }
-        let fatigue = game
-            .world
-            .organism_registry()
-            .get(organism)
-            .ok_or("recovery organism is missing")?
-            .biochemistry()
-            .homeostasis
-            .drives
-            .fatigue;
-        if fatigue < required_fatigue {
-            return Err("ordinary world aging did not produce measurable fatigue".into());
-        }
-    }
-    let initial_hazard_distance =
-        if scenario_lesson == Some(FoundationTeacherLesson::HazardAvoidance) {
-            let organism = game.world.organism_entity_ids()[0].1;
-            let subject = game
-                .world
-                .entity(organism)
-                .ok_or("evaluation organism is missing")?
-                .position;
-            let hazard_position = game
-                .world
-                .entity(hazard)
-                .ok_or("evaluation hazard is missing")?
-                .position;
-            Some(
-                ((subject.x - hazard_position.x).powi(2) + (subject.z - hazard_position.z).powi(2))
-                    .sqrt(),
-            )
-        } else {
-            None
-        };
+    let scenario =
+        configure_foundation_scenario(&mut game.world, seed, scenario_lesson, food_position, true)?;
+    let food = scenario.food;
+    let hazard = scenario.hazard;
+    let waypoint = scenario.waypoint;
+    let initial_hazard_distance = scenario.initial_hazard_distance;
     let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
     let mut runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
         backend,
@@ -868,30 +772,18 @@ fn run_foundation_training_pilot_inner(
         let consumed_lesson = scenario_lesson.is_some_and(|lesson| {
             matches!(
                 lesson,
-                FoundationTeacherLesson::Feeding | FoundationTeacherLesson::ObstacleNavigation
+                FoundationTeacherLesson::Feeding
+                    | FoundationTeacherLesson::ObstacleNavigation
+                    | FoundationTeacherLesson::Recovery
             ) && teacher_step_consumed(&collected[0])
         });
         steps.append(&mut collected);
-        let idle_tail = steps
-            .iter()
-            .rev()
-            .take_while(|step| teacher_step_idle(step))
-            .count();
         let hazard_settled = teacher_mode
             && scenario_lesson == Some(FoundationTeacherLesson::HazardAvoidance)
-            && idle_tail >= 1;
-        let recovered = teacher_mode
-            && scenario_lesson == Some(FoundationTeacherLesson::Recovery)
             && steps.last().is_some_and(|step| {
-                step.patch
-                    .outcome()
-                    .measured_physiology
-                    .is_some_and(|transition| {
-                        transition.after.homeostasis.drives.fatigue
-                            <= steps[0].frame.homeostasis().drives.fatigue - 0.02
-                    })
+                teacher_step_consumed(step) && teacher_step_targets(step, food)
             });
-        if consumed_lesson || hazard_settled || recovered {
+        if consumed_lesson || hazard_settled {
             break;
         }
     }
@@ -935,13 +827,13 @@ fn run_foundation_training_pilot_inner(
             let to = world.entity(hazard).map(|object| object.position);
             from.zip(to).is_some_and(|(from, to)| {
                 ((from.x - to.x).powi(2) + (from.z - to.z).powi(2)).sqrt() > initial + 0.5
-            }) && steps.iter().any(|step| teacher_step_targets(step, hazard))
+            }) && food_consumed
+                && steps.iter().any(|step| teacher_step_targets(step, hazard))
                 && steps.iter().all(|step| !teacher_step_blocked(step))
                 && steps.iter().all(|step| {
                     step.patch.outcome().physical.contact
                         != alife_core::PhysicalContactKind::Collision
                 })
-                && steps.last().is_some_and(teacher_step_idle)
         }
         FoundationTeacherLesson::Recovery => {
             let initial = steps[0].frame.homeostasis().drives.fatigue;
@@ -949,10 +841,18 @@ fn run_foundation_training_pilot_inner(
                 .last()
                 .and_then(|step| step.patch.outcome().measured_physiology)
                 .map(|transition| transition.after.homeostasis.drives.fatigue);
+            let rest_end = steps.iter().position(|step| !teacher_step_rest(step));
             initial >= 0.12
                 && final_fatigue.is_some_and(|final_fatigue| final_fatigue <= initial - 0.02)
-                && steps.iter().all(teacher_step_rest)
-                && consumed_events == 0
+                && rest_end.is_some_and(|index| {
+                    index > 0
+                        && steps[..index].iter().all(teacher_step_rest)
+                        && steps[index..]
+                            .iter()
+                            .all(|step| teacher_step_targets(step, food))
+                })
+                && food_consumed
+                && steps.iter().all(|step| !teacher_step_blocked(step))
         }
     });
     if scenario_lesson.is_some() {
@@ -1188,13 +1088,6 @@ fn teacher_step_rest(step: &crate::FoundationTrainingStep) -> bool {
         .is_some_and(|candidate| candidate.family == alife_core::CandidateActionFamily::Rest)
 }
 
-fn teacher_step_idle(step: &crate::FoundationTrainingStep) -> bool {
-    step.frame
-        .candidates()
-        .get(step.behavior.representative_index as usize)
-        .is_some_and(|candidate| candidate.family == alife_core::CandidateActionFamily::Idle)
-}
-
 fn teacher_step_targets(
     step: &crate::FoundationTrainingStep,
     target: alife_core::WorldEntityId,
@@ -1229,6 +1122,120 @@ fn move_scenario_object(
     physical.velocity = alife_core::Vec3f::ZERO;
     world.set_grounded_physical_properties(entity, physical)?;
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct FoundationScenarioSetup {
+    pub(crate) food: alife_core::WorldEntityId,
+    pub(crate) hazard: alife_core::WorldEntityId,
+    pub(crate) waypoint: alife_core::WorldEntityId,
+    pub(crate) initial_hazard_distance: Option<f32>,
+}
+
+pub(crate) fn configure_foundation_scenario(
+    world: &mut alife_world::HeadlessWorld,
+    seed: u64,
+    lesson: Option<FoundationTeacherLesson>,
+    food_position: Option<[f32; 2]>,
+    precondition_recovery: bool,
+) -> Result<FoundationScenarioSetup> {
+    if food_position.is_some() && lesson != Some(FoundationTeacherLesson::Feeding) {
+        return Err("custom food placement is only supported for feeding lessons".into());
+    }
+    let food = world
+        .entity_id("food-01")
+        .ok_or("teacher world has no food")?;
+    let hazard = world
+        .entity_id("hazard-01")
+        .ok_or("teacher world has no hazard")?;
+    let waypoint = world
+        .entity_id("obstacle-02")
+        .ok_or("teacher world has no second obstacle")?;
+    if let Some([x, z]) = food_position {
+        move_scenario_object(world, food, alife_core::Vec3f::new(x, 0.0, z))?;
+    }
+    match lesson {
+        Some(FoundationTeacherLesson::HazardAvoidance) => {
+            // Once the hazard is out of the sensed danger range, the same
+            // teacher must resume care instead of learning to idle forever.
+            move_scenario_object(world, food, alife_core::Vec3f::new(-3.0, 0.0, 0.0))?;
+            move_scenario_object(
+                world,
+                hazard,
+                alife_core::Vec3f::new(5.0, 0.0, (seed % 3) as f32 - 1.0),
+            )?;
+        }
+        Some(FoundationTeacherLesson::ObstacleNavigation) => {
+            let side = if seed & 1 == 0 { -1.0 } else { 1.0 };
+            let food_z = ((seed >> 1) % 3) as f32 * 0.5 - 0.5;
+            let blocker = world
+                .entity_id("obstacle-01")
+                .ok_or("teacher world has no first obstacle")?;
+            move_scenario_object(world, food, alife_core::Vec3f::new(7.0, 0.0, food_z))?;
+            move_scenario_object(world, blocker, alife_core::Vec3f::new(4.5, 0.0, food_z))?;
+            move_scenario_object(
+                world,
+                waypoint,
+                alife_core::Vec3f::new(3.0, 0.0, side * 7.0),
+            )?;
+        }
+        Some(FoundationTeacherLesson::Recovery) => {
+            move_scenario_object(world, food, alife_core::Vec3f::new(6.0, 0.0, 0.0))?;
+        }
+        Some(FoundationTeacherLesson::Feeding) | None => {}
+    }
+    if precondition_recovery && lesson == Some(FoundationTeacherLesson::Recovery) {
+        let organism = world.organism_entity_ids()[0].0;
+        let required_fatigue = 0.12 + (seed % 4) as f32 * 0.025;
+        for _ in 0..2_400 {
+            let fatigue = world
+                .organism_registry()
+                .get(organism)
+                .ok_or("recovery organism is missing")?
+                .biochemistry()
+                .homeostasis
+                .drives
+                .fatigue;
+            if fatigue >= required_fatigue {
+                break;
+            }
+            world.try_advance_tick()?;
+        }
+        let fatigue = world
+            .organism_registry()
+            .get(organism)
+            .ok_or("recovery organism is missing")?
+            .biochemistry()
+            .homeostasis
+            .drives
+            .fatigue;
+        if fatigue < required_fatigue {
+            return Err("ordinary world aging did not produce measurable fatigue".into());
+        }
+    }
+    let initial_hazard_distance = if lesson == Some(FoundationTeacherLesson::HazardAvoidance) {
+        let organism = world.organism_entity_ids()[0].1;
+        let subject = world
+            .entity(organism)
+            .ok_or("evaluation organism is missing")?
+            .position;
+        let hazard_position = world
+            .entity(hazard)
+            .ok_or("evaluation hazard is missing")?
+            .position;
+        Some(
+            ((subject.x - hazard_position.x).powi(2) + (subject.z - hazard_position.z).powi(2))
+                .sqrt(),
+        )
+    } else {
+        None
+    };
+    Ok(FoundationScenarioSetup {
+        food,
+        hazard,
+        waypoint,
+        initial_hazard_distance,
+    })
 }
 
 fn teacher_food_distance(runtime: &GpuLiveBrainRuntime) -> Result<f32> {
