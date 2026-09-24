@@ -1,9 +1,10 @@
-# Phase 3.1 asynchronous exact-population checkpoint design
+# Exact-population checkpoint design — 2026-08-27
 
 ## Status and authority
 
-Status: conditionally approved on 2026-08-27. The corrections below are part of
-that approval and authorize the bounded implementation tranche.
+Historical implementation decision approved on 2026-08-27, retained for its
+transaction, ownership, and failure semantics. This is not an active work order
+or evidence that current HEAD satisfies the design.
 
 This is a non-normative implementation ADR for the measured Phase 3.1 persistence bottleneck. The controlling A-Life v2.0 architecture remains authoritative. The design preserves AOA-AUTH-002, AOA-INV-010/011, AOA-SLEEP-003/007, AOA-STR-007, AOA-PERSIST-001/002/004/006, and AOA-FAIL-001/002.
 
@@ -245,13 +246,3 @@ The focused metrics must count transactions, coalescing depth, update-thread che
 - Promotion before durable permit installation.
 - Fallback to the old synchronous whole-population capture.
 - Training, weight transformation, regeneration, truncation, or reduced workload.
-
-## Review gate
-
-The supervisor conditionally approved this ADR. The two required corrections are
-now explicit: post-CAS reopen belongs wholly to the worker, and an atomic
-versioned authority pointer replaces the unsupported two-rename crash claim.
-Implementation proceeds RED-first through authority generation, backend batch
-capture, runtime coordination, worker publication, and exact continuity gates.
-Exactly one new optimized six-founder profile is allowed after the focused gates
-pass and a clean implementation commit is pushed.

@@ -1,6 +1,16 @@
 # Current status
 
-Status date: 2026-09-02
+Baseline status: 2026-09-02. Care/training update: 2026-09-24.
+The older capability matrix below is a historical baseline, not a fresh HEAD validation.
+
+## Current care and training work
+
+The [core game-loop plan](core-game-loop-plan-2026-09-20.md) tracks current
+player-facing work. The [N2048 operator guide](n2048-training-operator.md) records
+the September 24 four-lesson teacher corpus, warm-up, and teacher-free handoffs.
+These establish bounded training integration; held-out learned care remains open.
+The obstacle handoff still recorded blocked decisions and no meal. See the
+[training regimen](n2048-care-training-regimen-2026-09-21.md) for acceptance criteria.
 
 ## Honest headline
 
@@ -72,7 +82,7 @@ Plateau status is `Unknown`; review eligibility and larger-brain authorization a
 
 ## Scale
 
-Production insertion supports N512, N1024, and N2048. N2048 is the current trained foundation. N4096 is research-only. Higher enum values, population caps, and performance target tables are not evidence of production support.
+Production insertion supports N512, N1024, and N2048. Fresh games default to the built-in Nano512 founder. N2048 care training is experimental and has not earned learned-care acceptance. N4096 is research-only. Higher enum values, population caps, and performance target tables are not evidence of production support.
 
 ## Release status
 

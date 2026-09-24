@@ -11,13 +11,13 @@ Read root `AGENTS.md` and the nearest subtree `AGENTS.md` before changing code o
 ## Launch and package
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -NewGame -Population 1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -PreviewCommand
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_production_voxel.ps1
 ```
 
-`-DryRun` executes application preflight without opening a window. `-PreviewCommand` only prints the Cargo command. The default profile is `MinSpecComfort1080p`. `MinimumSettings30x30` is a graphics floor, not permission for CPU neural fallback.
+The first command starts a fresh Nano512 founder. Resume and `-DryRun` need a valid current save; the bundled legacy save is not a supported starting point. `-DryRun` executes application preflight without opening a window. `-PreviewCommand` only prints the Cargo command. The default profile is `MinSpecComfort1080p`. `MinimumSettings30x30` is a graphics floor, not permission for CPU neural fallback.
 
 Camera controls: hold the arrow keys or move the pointer within 16 pixels of a
 game-window edge to pan. Panning releases creature follow. Home snaps to the
@@ -28,8 +28,8 @@ terrain region around the view without moving creatures or advancing simulation
 time. World shortcuts are suspended while typing in the conversation panel.
 
 Creature pose transitions blend over time. Ground contact uses the posed mesh
-bounds and rendered terrain heights, including the current placeholder sleep
-pose. The planned graphics redesign will replace that pose and the creature art.
+bounds and rendered terrain heights. The approved Hearthling art and its
+animations are described under Repository hygiene below.
 The shipped assembly metadata covers inherited parts on all supported torso
 types. Creature display capacity follows the graphics profile budget, so births
 can appear beyond the initial population.
@@ -75,7 +75,6 @@ Use the narrow validators for content and portable persistence:
 cargo run -p alife_tools --bin p34_persistence -- validate-save crates/alife_world/tests/fixtures/p34/tiny_save.json crates/alife_world/tests/fixtures/p34
 cargo run -p alife_tools --bin g16_content_authoring -- validate-pack content/fixtures/g16/content_pack_manifest.json
 cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets
-cargo test -p alife_game_app --test app_shell g19_manual_extended_balance_run -- --ignored --nocapture
 cargo test -p alife_world --test headless_soak fast_headless_soak_preserves_release_gate_invariants
 ```
 
@@ -84,12 +83,6 @@ tutorial or package. Optional GPU demonstrations remain manual.
 `scripts/build_geneforge_creature_parts.py` is the supported GeneForge command.
 It launches `scripts/geneforge_blender_worker.py` inside Blender; do not invoke
 the worker directly.
-The platform wrappers are:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_production_voxel.ps1
-```
 
 Optional systems must remain optional. A typed GPU unavailability result is a
 failure state, not permission to substitute a reference brain.
@@ -131,7 +124,7 @@ active documentation authorities.
 
 ## Documentation changes
 
-The active authority set is the eight documents linked from the root README plus operational `AGENTS.md` files. Update the relevant authority instead of adding a dated plan to the active docs tree. Git history retains superseded plans.
+The v2.0 controlling architecture is the single normative authority. The root README links the current implementation guides, status, and plans. Update the relevant guide; retain a separate plan only while it coordinates active work. Keep useful outcomes and unresolved decisions when removing superseded plans. Git history retains the originals.
 
 Before committing documentation:
 
@@ -140,7 +133,25 @@ git diff --check
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1
 ```
 
-Check relative links and scan for stale claims such as production CPU fallback, EI1 promotion, N4096 production support, or a completed live GPU-to-voxel bridge.
+Check relative links and scan for stale claims such as production CPU fallback, EI1 promotion, N4096 production support, or unsupported end-to-end gameplay claims.
+
+## Optional code navigation
+
+Graphify is optional and must not be a prerequisite for Cargo commands.
+On Windows, use `scripts/graphify.ps1` to find the installed executable even
+when it is absent from PATH.
+
+- Run `scripts/graphify.ps1 update --no-cluster` to build or refresh the code
+  graph. This performs structural extraction without an LLM.
+- Once `graphify-out/graph.json` exists, use
+  `scripts/graphify.ps1 query "<question>"`, `path "<A>" "<B>"`, or
+  `explain "<concept>"` for focused questions.
+- Use `graphify-out/wiki/index.md` for broad navigation when available. Read
+  `graphify-out/GRAPH_REPORT.md` only when focused queries are insufficient.
+- Generated files under `graphify-out/` are ignored. Check source files
+  directly when graph results are stale or incomplete.
+- Refresh an existing graph when this task relies on graph results that the changes made stale.
+- When the user requests `/graphify`, follow the available Graphify skill.
 
 ## Repository hygiene
 

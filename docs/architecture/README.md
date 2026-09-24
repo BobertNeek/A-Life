@@ -22,12 +22,9 @@ The controlling document defines conflict precedence among those categories. Do 
 ## Package contents
 
 - `ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md` is the canonical source.
-- The matching DOCX and PDF are publication copies.
 - `requirement_registry.csv` contains all 365 stable `AOA-*` requirements.
 - `compliance_matrix_template.csv` and `compliance_report_template.md` are blank report templates.
 - `diagrams/` contains the DOT, SVG, and PNG forms of all eight architecture diagrams.
-- `verification/` records publication checks. It is not codebase compliance.
-- `SHA256SUMS` records the adopted files after promotion.
 
 ## Compliance and implementation status
 
@@ -37,4 +34,10 @@ The current implementation maps in `../ARCHITECTURE.md` and `../REFERENCE.md` ar
 
 ## Historical lineage
 
-The v1.1 brain specification, its compliance matrix, and its recovery plan remain in the repository with explicit supersession notices. They may explain past decisions and evidence, but v2.0 controls every conflict.
+The superseded v1.1 specification, compliance matrix, and recovery plans remain
+in [Git history](https://github.com/BobertNeek/A-Life/tree/67e5d7475f607bab3f84789d973e67ac9ddfaa8d/docs). They cannot override v2.0.
+
+The original August 24 DOCX/PDF exports, publication checks, and checksums are
+also preserved in that snapshot. They predate the September 11 revision of the
+canonical Markdown and were removed from the working tree to avoid presenting
+outdated exports as current architecture.

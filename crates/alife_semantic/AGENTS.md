@@ -1,14 +1,7 @@
 # alife_semantic Instructions
 
-Architecture authority:
-
-- `../../docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md`
-  is the single normative source.
-- This file records current implementation guardrails only. Existing Rust
-  structures, processor placement, GPU layouts, constants, brain-size
-  assumptions, adapters, tests, and fixtures do not amend v2.0.
-- Earlier architecture documents are historical. Report conflicts as
-  `AOA-*` gaps and do not start an unrequested repair pass.
+Root [AGENTS.md](../../AGENTS.md) applies. These local rules are current
+implementation guardrails; they do not amend the controlling v2.0 architecture.
 
 This crate controls bounded internal semantic-prior and speech-translation
 provider interfaces.

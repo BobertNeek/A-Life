@@ -1,33 +1,16 @@
-## Plan
+## Why
 
-- Plan ID:
-- Branch:
-- Next plan(s):
+Describe the problem and the intended behavior.
 
 ## Changes
 
-- Files changed:
-- Public APIs changed:
-- Tests added/changed:
+Summarize the changes that matter to reviewers. Link a relevant issue or plan if one exists.
 
-## Validation
+## Verification
 
-- [ ] `cargo fmt --all -- --check`
-- [ ] `cargo check --workspace --all-targets`
-- [ ] `cargo test --workspace --all-targets`
-- [ ] `cargo clippy --workspace --all-targets -- -D warnings`
-- [ ] Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_core_boundaries.ps1`; non-Windows/Git Bash: run `scripts/check_core_boundaries.sh`
-- [ ] Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1`; non-Windows/Git Bash: run `scripts/docs_check.sh`
+List the relevant checks actually run and their results. Note unverified behavior
+and material limitations. GPU claims need source-bound physical-adapter evidence.
 
-## Invariants
+## Risks
 
-- [ ] `alife_core` remains engine-independent.
-- [ ] No Unity/C#/HLSL production files.
-- [ ] Runtime cognition and packed logging remain separate.
-- [ ] Teacher/semantic systems cannot bypass perception or action arbitration.
-- [ ] GPU claims, if any, include source-bound physical-adapter evidence; CPU helpers remain reference or test tools.
-
-## Deviations and Limitations
-
-- Deviations:
-- Known limitations:
+Note affected contracts, compatibility changes, or follow-up work, if any.
