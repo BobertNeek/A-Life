@@ -695,13 +695,15 @@ impl UnresolvedGap {
     #[allow(clippy::too_many_arguments)]
     fn new(
         id: UnresolvedGapId,
-        source_concepts: Vec<ConceptCellId>,
+        mut source_concepts: Vec<ConceptCellId>,
         contradiction_type: ContradictionType,
         prediction_error: NormalizedScalar,
         curiosity_voltage: NormalizedScalar,
         salience: NormalizedScalar,
         tick: Tick,
     ) -> Result<Self, ScaffoldContractError> {
+        source_concepts.sort_by_key(|concept| concept.raw());
+        source_concepts.dedup();
         let gap = Self {
             id,
             source_concepts,
@@ -783,6 +785,7 @@ impl Validate for UnresolvedGap {
         for id in &self.source_concepts {
             id.validate()?;
         }
+        ensure_unique_raw(self.source_concepts.iter().map(|id| id.raw()))?;
         NormalizedScalar::new(self.prediction_error.raw())?;
         NormalizedScalar::new(self.curiosity_voltage.raw())?;
         NormalizedScalar::new(self.salience.raw())?;
@@ -1859,7 +1862,9 @@ impl TopologicalMap {
             None
         };
 
-        let source_concepts = vec![source_concept, action_concept];
+        let mut source_concepts = vec![source_concept, action_concept];
+        source_concepts.sort_by_key(|id| id.raw());
+        source_concepts.dedup();
 
         let Some(contradiction_type) = contradiction_type else {
             let mut resolved = Vec::new();
@@ -3646,5 +3651,27 @@ fn merge_location_samples(
 fn push_unique<T: Copy + PartialEq>(target: &mut Vec<T>, value: T) {
     if !target.contains(&value) && target.len() < MAX_BINDING_REFS {
         target.push(value);
+    }
+}
+
+#[cfg(test)]
+mod gap_portability_tests {
+    use super::*;
+
+    #[test]
+    fn repeated_concept_gap_sources_roundtrip_through_portable_form() {
+        let concept = ConceptCellId(7);
+        let gap = UnresolvedGap::new(
+            UnresolvedGapId(1),
+            vec![concept, concept],
+            ContradictionType::PredictionError,
+            NormalizedScalar::new(0.8).unwrap(),
+            NormalizedScalar::new(0.6).unwrap(),
+            NormalizedScalar::new(0.5).unwrap(),
+            Tick::new(1),
+        )
+        .unwrap();
+        assert_eq!(gap.source_concepts, vec![concept]);
+        assert_eq!(domain_gap(&portable_gap(&gap)).unwrap(), gap);
     }
 }
