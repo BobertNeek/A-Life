@@ -422,7 +422,7 @@ pub fn initial_n2048_care_asset(seed: u64) -> Result<FoundationWeightAsset> {
     )?)
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct FoundationPilotReceipt {
     pub seed: u64,
     pub founder_seed_base: u64,
@@ -966,6 +966,10 @@ fn run_foundation_training_pilot_inner(
     if teacher_mode {
         let checkpoint = serde_json::to_vec(&trainer.checkpoint()?)?;
         let source = foundation_replay_source(&steps[0].before.phenotype, &asset, 0, &checkpoint)?;
+        std::fs::write(
+            output.join("replay-source.json"),
+            serde_json::to_vec_pretty(&source)?,
+        )?;
         let mut writer = FoundationReplayWriter::new(
             &output.join("replay"),
             source,

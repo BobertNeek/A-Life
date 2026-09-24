@@ -16,7 +16,7 @@ use alife_training::{
 use crate::{
     foundation_replay_source, initial_n2048_care_asset, load_foundation_replay_window,
     verify_foundation_replay_step, FoundationReplayBudget, FoundationReplayWriter,
-    GpuDurableSaveManifest, GpuLiveBrainRuntime,
+    FoundationWarmupReceipt, GpuDurableSaveManifest, GpuLiveBrainRuntime,
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -186,49 +186,94 @@ fn run_foundation_training_cycle_from(
     std::fs::create_dir(output)?;
     let (asset, policy_version, restored_actor, restored_value, founder_seed_base) =
         if let Some(previous) = previous {
-            let receipt: FoundationCycleReceipt =
-                serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
-            if !receipt.next_cohort_optimizer_rebound {
-                return Err("previous cycle is not an exact sealed cohort handoff".into());
-            }
-            let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
-                previous.join("trained.alife-foundation"),
-            )?)?;
-            if digest(&asset) != receipt.new_asset_digest {
-                return Err("previous exported asset does not match its receipt".into());
-            }
-            let actor: alife_training::FoundationTrainerCheckpoint =
-                serde_json::from_slice(&std::fs::read(previous.join("actor-checkpoint.json"))?)?;
-            let value: alife_training::PpoValueHeadCheckpoint =
-                serde_json::from_slice(&std::fs::read(previous.join("value-checkpoint.json"))?)?;
-            if actor.source_foundation_digest != asset.digest()
-                || actor.weights.len() != asset.weights().len()
-                || actor
-                    .weights
-                    .iter()
-                    .zip(asset.weights())
-                    .any(|(trained, exported)| trained.to_bits() != exported.to_bits())
-                || value.last_updated_policy_version != Some(receipt.policy_version)
-            {
-                return Err(
-                    "previous optimizer/value checkpoint does not match exported actor".into(),
-                );
-            }
-            let founder_seed_base = if receipt.founder_seed_base == 0 {
-                receipt.seed
+            if previous.join("warmup.json").is_file() {
+                let receipt: FoundationWarmupReceipt =
+                    serde_json::from_slice(&std::fs::read(previous.join("warmup.json"))?)?;
+                if !receipt.next_cohort_optimizer_rebound
+                    || receipt.demonstration_count != 32
+                    || receipt.category_counts != [8; 4]
+                {
+                    return Err("previous warm-up is not a balanced sealed handoff".into());
+                }
+                let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
+                    previous.join("trained.alife-foundation"),
+                )?)?;
+                if digest(&asset) != receipt.trained_asset_digest {
+                    return Err("warm-up exported asset does not match its receipt".into());
+                }
+                let actor: alife_training::FoundationTrainerCheckpoint = serde_json::from_slice(
+                    &std::fs::read(previous.join("actor-checkpoint.json"))?,
+                )?;
+                let value: alife_training::PpoValueHeadCheckpoint = serde_json::from_slice(
+                    &std::fs::read(previous.join("value-checkpoint.json"))?,
+                )?;
+                if actor.source_foundation_digest != asset.digest()
+                    || actor.optimizer_step != receipt.actor_optimizer_step
+                    || actor.weights.len() != asset.weights().len()
+                    || actor
+                        .weights
+                        .iter()
+                        .zip(asset.weights())
+                        .any(|(trained, exported)| trained.to_bits() != exported.to_bits())
+                    || value.last_updated_policy_version.is_some()
+                    || value.optimizer_step != 0
+                {
+                    return Err("warm-up optimizer/value checkpoint does not match actor".into());
+                }
+                (
+                    asset,
+                    1,
+                    Some(actor),
+                    Some(value),
+                    receipt.founder_seed_base,
+                )
             } else {
-                receipt.founder_seed_base
-            };
-            (
-                asset,
-                receipt
-                    .policy_version
-                    .checked_add(1)
-                    .ok_or("policy version overflow")?,
-                Some(actor),
-                Some(value),
-                founder_seed_base,
-            )
+                let receipt: FoundationCycleReceipt =
+                    serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
+                if !receipt.next_cohort_optimizer_rebound {
+                    return Err("previous cycle is not an exact sealed cohort handoff".into());
+                }
+                let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
+                    previous.join("trained.alife-foundation"),
+                )?)?;
+                if digest(&asset) != receipt.new_asset_digest {
+                    return Err("previous exported asset does not match its receipt".into());
+                }
+                let actor: alife_training::FoundationTrainerCheckpoint = serde_json::from_slice(
+                    &std::fs::read(previous.join("actor-checkpoint.json"))?,
+                )?;
+                let value: alife_training::PpoValueHeadCheckpoint = serde_json::from_slice(
+                    &std::fs::read(previous.join("value-checkpoint.json"))?,
+                )?;
+                if actor.source_foundation_digest != asset.digest()
+                    || actor.weights.len() != asset.weights().len()
+                    || actor
+                        .weights
+                        .iter()
+                        .zip(asset.weights())
+                        .any(|(trained, exported)| trained.to_bits() != exported.to_bits())
+                    || value.last_updated_policy_version != Some(receipt.policy_version)
+                {
+                    return Err(
+                        "previous optimizer/value checkpoint does not match exported actor".into(),
+                    );
+                }
+                let founder_seed_base = if receipt.founder_seed_base == 0 {
+                    receipt.seed
+                } else {
+                    receipt.founder_seed_base
+                };
+                (
+                    asset,
+                    receipt
+                        .policy_version
+                        .checked_add(1)
+                        .ok_or("policy version overflow")?,
+                    Some(actor),
+                    Some(value),
+                    founder_seed_base,
+                )
+            }
         } else {
             (initial_n2048_care_asset(seed)?, 0, None, None, seed)
         };

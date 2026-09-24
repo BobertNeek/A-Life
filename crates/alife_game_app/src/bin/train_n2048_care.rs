@@ -14,6 +14,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         return inspect_cycle(&directory);
     }
+    if mode == "--warmup" {
+        let output = std::path::PathBuf::from(args.next().ok_or("missing warm-up output")?);
+        let manifest =
+            std::path::PathBuf::from(args.next().ok_or("missing demonstration manifest")?);
+        if args.next().is_some() {
+            return Err("unexpected warm-up argument".into());
+        }
+        let receipt = std::thread::Builder::new()
+            .name("foundation-imitation-warmup".into())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(move || {
+                alife_game_app::run_foundation_imitation_warmup(&output, &manifest).map_err(
+                    |error| {
+                        let message = error.to_string();
+                        let _ = std::fs::write(output.join("failure.txt"), &message);
+                        message
+                    },
+                )
+            })?
+            .join()
+            .map_err(|_| "warm-up thread panicked")??;
+        println!("{}", serde_json::to_string_pretty(&receipt)?);
+        return Ok(());
+    }
     if mode != "--pilot"
         && mode != "--teacher-pilot"
         && mode != "--cycle"
