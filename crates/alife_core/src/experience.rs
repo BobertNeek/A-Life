@@ -1285,6 +1285,16 @@ impl MeasuredPhysiologyTransition {
             .max(self.before.body.health - self.after.body.health)
             .max(0.0)
     }
+
+    /// The same oriented biological value used by sealed action credit.
+    pub fn homeostatic_improvement(&self) -> f32 {
+        let drives = self.homeostatic_delta.drives;
+        let oriented_sum = -drives.hunger - drives.fatigue - drives.fear - drives.loneliness
+            + drives.brain_atp
+            - drives.temperature_stress
+            + self.energy_delta.raw();
+        (oriented_sum / 7.0).clamp(-1.0, 1.0)
+    }
 }
 
 impl Validate for MeasuredPhysiologyTransition {

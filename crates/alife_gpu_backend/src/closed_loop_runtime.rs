@@ -2759,6 +2759,15 @@ pub struct GpuClosedLoopBackend {
     pub(crate) next_sleep_job_id: u64,
     pub(crate) sleep_jobs: BTreeMap<u64, crate::GpuSleepJobState>,
     pub(crate) committed_sleep: BTreeMap<(u16, u32, u32, u64), crate::GpuSleepConsolidationReceipt>,
+    #[cfg(feature = "training-rollout")]
+    training_structural_cache: BTreeMap<(u16, u32, u32, u64), TrainingStructuralCache>,
+}
+
+#[cfg(feature = "training-rollout")]
+struct TrainingStructuralCache {
+    slot: GpuBrainSlot,
+    structural: alife_core::StructuralPlasticityState,
+    synapses: Vec<crate::training_rollout::GpuTrainingStructuralSynapse>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -2903,6 +2912,8 @@ impl GpuClosedLoopBackend {
             next_sleep_job_id: 1,
             sleep_jobs: BTreeMap::new(),
             committed_sleep: BTreeMap::new(),
+            #[cfg(feature = "training-rollout")]
+            training_structural_cache: BTreeMap::new(),
         })
     }
 
@@ -2960,6 +2971,8 @@ impl GpuClosedLoopBackend {
             next_sleep_job_id: plan.next_sleep_job_id,
             sleep_jobs: BTreeMap::new(),
             committed_sleep: BTreeMap::new(),
+            #[cfg(feature = "training-rollout")]
+            training_structural_cache: BTreeMap::new(),
         })
     }
 
@@ -4731,6 +4744,23 @@ impl GpuClosedLoopBackend {
     }
 
     #[cfg(feature = "training-rollout")]
+    pub fn training_enabled_motor_channels(
+        &self,
+        handle: GpuBrainHandle,
+    ) -> Result<u32, ScaffoldContractError> {
+        self.validate_handle_backend(handle)?;
+        Ok(self
+            .class_buckets
+            .get(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .resident(handle)?
+            .brain_slot
+            .record()
+            .reserved[0]
+            & 255)
+    }
+
+    #[cfg(feature = "training-rollout")]
     pub fn capture_training_state(
         &mut self,
         handle: GpuBrainHandle,
@@ -4773,6 +4803,20 @@ impl GpuClosedLoopBackend {
         let inherited = snapshot.phenotype.synapses().len();
         let live = snapshot.brain_slot.record().synapse_count as usize;
         if live > inherited {
+            let key = (
+                handle.class_id.raw(),
+                handle.slot,
+                handle.generation,
+                handle.organism_id.raw(),
+            );
+            if let Some(cached) = self.training_structural_cache.get(&key) {
+                if cached.slot == snapshot.brain_slot
+                    && cached.structural == snapshot.v11.structural
+                {
+                    snapshot.structural_synapses = cached.synapses.clone();
+                    return Ok(snapshot);
+                }
+            }
             let bucket = self
                 .class_buckets
                 .get(&handle.class_id.raw())
@@ -4850,6 +4894,14 @@ impl GpuClosedLoopBackend {
             if snapshot.structural_synapses.len() != live - inherited {
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
+            self.training_structural_cache.insert(
+                key,
+                TrainingStructuralCache {
+                    slot: snapshot.brain_slot.clone(),
+                    structural: snapshot.v11.structural.clone(),
+                    synapses: snapshot.structural_synapses.clone(),
+                },
+            );
         }
         Ok(snapshot)
     }

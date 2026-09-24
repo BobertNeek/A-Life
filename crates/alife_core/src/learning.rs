@@ -298,7 +298,7 @@ impl OutcomeCreditPacket {
         let modulator = NeuromodulatorSample::from_components(
             outcome.prediction_error.raw(),
             physiology.aversive_harm(),
-            homeostatic_improvement(physiology),
+            physiology.homeostatic_improvement(),
             outcome.frustration_delta.raw(),
             0.0,
         )?;
@@ -498,19 +498,6 @@ impl LearningSequenceGuard {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FastWeightSemantics {
     ImmediateThreeFactor,
-}
-
-fn homeostatic_improvement(physiology: &crate::MeasuredPhysiologyTransition) -> f32 {
-    let drives = physiology.homeostatic_delta.drives;
-    // Lower aversive drives and higher ATP/energy are improvements. Curiosity,
-    // reproductive drive, pain, and extension channels are excluded here:
-    // curiosity is represented by novelty, pain has its own negative factor,
-    // and the remaining channels have no universal good direction.
-    let oriented_sum = -drives.hunger - drives.fatigue - drives.fear - drives.loneliness
-        + drives.brain_atp
-        - drives.temperature_stress
-        + physiology.energy_delta.raw();
-    (oriented_sum / 7.0).clamp(-1.0, 1.0)
 }
 
 /// Validate a packet's learning ABI before backend upload.

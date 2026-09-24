@@ -1540,11 +1540,13 @@ impl MemoryBank {
             || source_sequences.len() != resolved_memory_ids.len()
             || max_records_after == 0
             || max_records_after > self.config.capacity
-            || source_sequences.len() > max_records_after
         {
             return Err(ScaffoldContractError::MemoryModeConflict);
         }
 
+        // Candidate memory bounded its retained records during observation;
+        // this path only resolves their identities. The legacy lifetime
+        // promotion limit cannot cap the number of replay events.
         let mut seen_sequences = std::collections::BTreeSet::new();
         let mut seen_memory_ids = std::collections::BTreeSet::new();
         let mut joined = Vec::new();

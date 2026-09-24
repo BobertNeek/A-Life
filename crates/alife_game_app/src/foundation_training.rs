@@ -433,6 +433,8 @@ pub struct FoundationPilotReceipt {
     pub maximum_activity_ema_error: f32,
     pub maximum_metabolic_error: f32,
     pub source_asset_digest: String,
+    pub teacher_mode: bool,
+    pub consumed_events: u64,
 }
 
 /// Prerequisite fidelity check, not behavioral acceptance or a training campaign.
@@ -440,6 +442,88 @@ pub fn run_foundation_training_pilot(
     output: &Path,
     seed: u64,
     tick_count: usize,
+) -> Result<FoundationPilotReceipt> {
+    run_foundation_training_pilot_inner(output, seed, tick_count, false)
+}
+
+/// Diagnostic of the existing legal teacher path against actual ingestion.
+pub fn run_foundation_teacher_pilot(
+    output: &Path,
+    seed: u64,
+    tick_count: usize,
+) -> Result<FoundationPilotReceipt> {
+    run_foundation_training_pilot_inner(output, seed, tick_count, true)
+}
+
+fn grounded_care_teacher(
+    frame: &alife_core::PerceptionFrame,
+    enabled_channels: u32,
+) -> std::result::Result<alife_gpu_backend::GpuTrainingDemonstratorAction, ScaffoldContractError> {
+    let chosen = [
+        alife_core::CandidateActionFamily::Ingest,
+        alife_core::CandidateActionFamily::Contact,
+        alife_core::CandidateActionFamily::Approach,
+        alife_core::CandidateActionFamily::Inspect,
+        alife_core::CandidateActionFamily::Rest,
+        alife_core::CandidateActionFamily::Idle,
+    ]
+    .into_iter()
+    .find_map(|family| {
+        frame
+            .candidates()
+            .iter()
+            .find(|candidate| candidate.family == family)
+    })
+    .ok_or(ScaffoldContractError::InvalidActionDecision)?;
+    let forced = match chosen.kind {
+        alife_core::ActionKind::Move => 0,
+        alife_core::ActionKind::Interact | alife_core::ActionKind::Write => 2,
+        alife_core::ActionKind::Vocalize => 3,
+        _ => 4,
+    };
+    let mut motor_indices = [u16::MAX; 6];
+    for candidate in frame.candidates() {
+        let slot = match candidate.kind {
+            alife_core::ActionKind::Move => Some(0),
+            alife_core::ActionKind::Interact | alife_core::ActionKind::Write => Some(2),
+            alife_core::ActionKind::Vocalize => Some(3),
+            alife_core::ActionKind::Hold
+            | alife_core::ActionKind::Rest
+            | alife_core::ActionKind::Inspect => Some(4),
+            alife_core::ActionKind::Idle | alife_core::ActionKind::Gesture => None,
+        };
+        if let Some(slot) = slot {
+            if enabled_channels & (1 << slot) != 0 && motor_indices[slot] == u16::MAX {
+                motor_indices[slot] = candidate.candidate_index;
+            }
+        }
+    }
+    motor_indices[forced] = chosen.candidate_index;
+    if std::env::var_os("ALIFE_FOUNDATION_TEACHER_TRACE").is_some() {
+        eprintln!(
+            "teacher tick={} enabled={enabled_channels:#08b} representative={} kind={:?} family={:?} motors={motor_indices:?} candidates={:?}",
+            frame.tick().raw(),
+            chosen.candidate_index,
+            chosen.kind,
+            chosen.family,
+            frame
+                .candidates()
+                .iter()
+                .map(|candidate| (candidate.candidate_index, candidate.kind, candidate.family))
+                .collect::<Vec<_>>()
+        );
+    }
+    Ok(alife_gpu_backend::GpuTrainingDemonstratorAction {
+        representative_index: chosen.candidate_index,
+        motor_indices,
+    })
+}
+
+fn run_foundation_training_pilot_inner(
+    output: &Path,
+    seed: u64,
+    tick_count: usize,
+    teacher_mode: bool,
 ) -> Result<FoundationPilotReceipt> {
     if !(1..=512).contains(&tick_count) || seed == 0 {
         return Err(invalid().into());
@@ -472,6 +556,9 @@ pub fn run_foundation_training_pilot(
         },
     )
     .map_err(|error| format!("pilot runtime admission: {error}"))?;
+    if teacher_mode {
+        runtime.set_foundation_demonstrator(grounded_care_teacher)?;
+    }
     let started = Instant::now();
     let mut steps = Vec::with_capacity(tick_count);
     for tick in 0..tick_count {
@@ -489,6 +576,18 @@ pub fn run_foundation_training_pilot(
         steps.append(&mut collected);
     }
     let collection_seconds = started.elapsed().as_secs_f64();
+    let consumed_events = steps
+        .iter()
+        .filter(|step| {
+            let outcome = step.patch.outcome();
+            outcome.physical.contact == alife_core::PhysicalContactKind::Consumed
+                || outcome.joint.as_ref().is_some_and(|joint| {
+                    joint.channel_outcomes.iter().any(|channel| {
+                        channel.physical.contact == alife_core::PhysicalContactKind::Consumed
+                    })
+                })
+        })
+        .count() as u64;
     let sequence = foundation_replay_sequence(&steps, 0)
         .map_err(|error| format!("pilot replay conversion: {error}"))?;
     let phenotype = steps[0].before.phenotype.clone();
@@ -607,6 +706,8 @@ pub fn run_foundation_training_pilot(
             .iter()
             .map(|b| format!("{b:02x}"))
             .collect(),
+        teacher_mode,
+        consumed_events,
     };
     std::fs::write(
         output.join("pilot.json"),

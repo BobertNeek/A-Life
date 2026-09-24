@@ -3317,6 +3317,7 @@ pub struct GpuLiveBrainRuntime {
         Box<
             dyn FnMut(
                     &PerceptionFrame,
+                    u32,
                 ) -> Result<
                     alife_gpu_backend::GpuTrainingDemonstratorAction,
                     ScaffoldContractError,
@@ -5829,6 +5830,7 @@ impl GpuLiveBrainRuntime {
     where
         F: FnMut(
                 &PerceptionFrame,
+                u32,
             )
                 -> Result<alife_gpu_backend::GpuTrainingDemonstratorAction, ScaffoldContractError>
             + Send

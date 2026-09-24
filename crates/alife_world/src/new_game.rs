@@ -19,6 +19,9 @@ pub const PHASE3_MAX_POPULATION: u16 = 8;
 pub struct CanonicalNewGameConfig {
     pub schema_version: u16,
     pub world_seed: u64,
+    /// Defaults to world_seed; explicit candidate cohorts may keep one
+    /// inherited graph while varying the world's deterministic seed.
+    pub founder_seed_base: u64,
     pub founder_count: u16,
     pub brain_class: BrainScaleTier,
     pub sensor_profile: SensorProfile,
@@ -34,6 +37,7 @@ impl CanonicalNewGameConfig {
         Ok(Self {
             schema_version: PHASE3_NEW_GAME_SCHEMA_VERSION,
             world_seed,
+            founder_seed_base: world_seed,
             founder_count,
             brain_class: BrainScaleTier::Nano512,
             sensor_profile: SensorProfile::GroundedObjectSlotsV1,
@@ -81,7 +85,9 @@ pub fn create_canonical_new_game_with_n2048_candidate(
 ) -> Result<CanonicalNewGame, ScaffoldContractError> {
     let mut expected = CanonicalNewGameConfig::phase3(config.world_seed, config.founder_count)?;
     expected.brain_class = BrainScaleTier::Standard2048;
-    if *config != expected
+    expected.founder_seed_base = config.founder_seed_base;
+    if config.founder_seed_base == 0
+        || *config != expected
         || foundation.manifest().capacity_class_id() != BrainCapacityClass::N2048_ID
         || foundation.manifest().sensor_profile() != config.sensor_profile
     {
@@ -127,7 +133,7 @@ fn create_new_game_inner(
         let ordinal = u64::from(slot) + 1;
         let organism_id = OrganismId(ordinal);
         let founder_seed = config
-            .world_seed
+            .founder_seed_base
             .checked_mul(16)
             .and_then(|seed| seed.checked_add(ordinal))
             .ok_or(ScaffoldContractError::InvalidId)?;

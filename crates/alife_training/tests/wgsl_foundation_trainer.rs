@@ -8,8 +8,8 @@ use alife_core::{
 use alife_training::{
     AdamWConfig, CandidateTrainingTarget, FoundationCurriculumStage, FoundationTrainer,
     N2048CurriculumV1, N2048FoundationProgram, SpeechTrainingTarget, StageTrainableMask,
-    TrainingInitialState, TrainingReplayCandidate, TrainingReplayTick, TrainingSequence,
-    TrainingSequence32, TrainingTick, TRAINING_SEQUENCE_TICKS,
+    TrainingFrozenSynapse, TrainingInitialState, TrainingReplayCandidate, TrainingReplayTick,
+    TrainingSequence, TrainingSequence32, TrainingTick, TRAINING_SEQUENCE_TICKS,
 };
 
 fn native_exact_foundation(
@@ -671,6 +671,50 @@ fn verify_sampled_replay_gradients(
         .unwrap();
     assert!(without.gradients[recurrent].abs() < 1.0e-7);
     assert!(probe.gradients[recurrent].abs() > 1.0e-6);
+    // A sleep-grown edge changes recurrent dynamics but is frozen context: its
+    // path must still contribute to the inherited weight's source adjoint.
+    let mut with_structural = suffix.clone();
+    let route = selected.route_index();
+    let cadence = u32::from(
+        phenotype.projections()[route as usize]
+            .update_cadence()
+            .raw(),
+    );
+    for tick in &mut with_structural.ticks {
+        tick.structural_synapses.push(TrainingFrozenSynapse {
+            source: selected.target(),
+            target: selected.target(),
+            route: u32::from(route),
+            cadence,
+            effective_weight: 0.31,
+        });
+    }
+    let structural = trainer
+        .probe_replay_gradients(&with_structural, &adjoints)
+        .unwrap();
+    let analytical = f64::from(structural.gradients[recurrent]);
+    let epsilon = 0.01f32;
+    let mut perturbed = checkpoint.clone();
+    perturbed.weights[recurrent] += epsilon;
+    trainer.restore_checkpoint(&perturbed).unwrap();
+    let plus = trainer.evaluate_replay(&with_structural).unwrap();
+    perturbed.weights[recurrent] = checkpoint.weights[recurrent] - epsilon;
+    trainer.restore_checkpoint(&perturbed).unwrap();
+    let minus = trainer.evaluate_replay(&with_structural).unwrap();
+    let objective = |values: &alife_training::TrainingReplayEvaluation| {
+        values
+            .candidate_logits
+            .iter()
+            .zip(&adjoints)
+            .map(|(row, a)| f64::from(row[0]) * f64::from(a[0]))
+            .sum::<f64>()
+    };
+    let numerical = (objective(&plus) - objective(&minus)) / f64::from(2.0 * epsilon);
+    assert!(
+        (analytical - numerical).abs() <= 2.0e-6 + 0.02 * analytical.abs(),
+        "structural context: analytic {analytical}, numerical {numerical}"
+    );
+    trainer.restore_checkpoint(&checkpoint).unwrap();
     assert_eq!(trainer.checkpoint().unwrap(), checkpoint);
 }
 

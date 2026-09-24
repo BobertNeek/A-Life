@@ -24,8 +24,22 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct FoundationCycleReceipt {
     pub seed: u64,
+    #[serde(default)]
+    pub founder_seed_base: u64,
     pub policy_version: u64,
     pub training_ticks: usize,
+    #[serde(default)]
+    pub world_ticks_elapsed: u64,
+    #[serde(default)]
+    pub consumed_events: u64,
+    #[serde(default)]
+    pub initial_energy: f32,
+    #[serde(default)]
+    pub minimum_energy: f32,
+    #[serde(default)]
+    pub final_energy: f32,
+    #[serde(default)]
+    pub sleep_gap_reward_total: f32,
     pub collection_seconds: f64,
     pub update_seconds: f64,
     pub old_asset_digest: String,
@@ -44,6 +58,27 @@ fn digest(asset: &FoundationWeightAsset) -> String {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect()
+}
+
+fn organism_energy(runtime: &GpuLiveBrainRuntime, organism: alife_core::OrganismId) -> Result<f32> {
+    Ok(runtime
+        .world()
+        .organism_registry()
+        .get(organism)
+        .ok_or("training organism missing from world")?
+        .biochemistry()
+        .body
+        .energy)
+}
+
+fn consumed(step: &crate::FoundationTrainingStep) -> bool {
+    let outcome = step.patch.outcome();
+    outcome.physical.contact == alife_core::PhysicalContactKind::Consumed
+        || outcome.joint.as_ref().is_some_and(|joint| {
+            joint.channel_outcomes.iter().any(|channel| {
+                channel.physical.contact == alife_core::PhysicalContactKind::Consumed
+            })
+        })
 }
 
 fn joint_action(behavior: &alife_gpu_backend::GpuTrainingRolloutReceipt) -> Result<PpoJointAction> {
@@ -98,45 +133,54 @@ fn run_foundation_training_cycle_from(
         return Err("cycle needs a nonzero seed and 1..=36000 training ticks".into());
     }
     std::fs::create_dir(output)?;
-    let (asset, policy_version, restored_actor, restored_value) = if let Some(previous) = previous {
-        let receipt: FoundationCycleReceipt =
-            serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
-        if receipt.seed != seed || !receipt.next_cohort_optimizer_rebound {
-            return Err("previous cycle is not an exact sealed cohort handoff".into());
-        }
-        let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
-            previous.join("trained.alife-foundation"),
-        )?)?;
-        if digest(&asset) != receipt.new_asset_digest {
-            return Err("previous exported asset does not match its receipt".into());
-        }
-        let actor: alife_training::FoundationTrainerCheckpoint =
-            serde_json::from_slice(&std::fs::read(previous.join("actor-checkpoint.json"))?)?;
-        let value: alife_training::PpoValueHeadCheckpoint =
-            serde_json::from_slice(&std::fs::read(previous.join("value-checkpoint.json"))?)?;
-        if actor.source_foundation_digest != asset.digest()
-            || actor.weights.len() != asset.weights().len()
-            || actor
-                .weights
-                .iter()
-                .zip(asset.weights())
-                .any(|(trained, exported)| trained.to_bits() != exported.to_bits())
-            || value.last_updated_policy_version != Some(receipt.policy_version)
-        {
-            return Err("previous optimizer/value checkpoint does not match exported actor".into());
-        }
-        (
-            asset,
-            receipt
-                .policy_version
-                .checked_add(1)
-                .ok_or("policy version overflow")?,
-            Some(actor),
-            Some(value),
-        )
-    } else {
-        (initial_n2048_care_asset(seed)?, 0, None, None)
-    };
+    let (asset, policy_version, restored_actor, restored_value, founder_seed_base) =
+        if let Some(previous) = previous {
+            let receipt: FoundationCycleReceipt =
+                serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
+            if !receipt.next_cohort_optimizer_rebound {
+                return Err("previous cycle is not an exact sealed cohort handoff".into());
+            }
+            let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
+                previous.join("trained.alife-foundation"),
+            )?)?;
+            if digest(&asset) != receipt.new_asset_digest {
+                return Err("previous exported asset does not match its receipt".into());
+            }
+            let actor: alife_training::FoundationTrainerCheckpoint =
+                serde_json::from_slice(&std::fs::read(previous.join("actor-checkpoint.json"))?)?;
+            let value: alife_training::PpoValueHeadCheckpoint =
+                serde_json::from_slice(&std::fs::read(previous.join("value-checkpoint.json"))?)?;
+            if actor.source_foundation_digest != asset.digest()
+                || actor.weights.len() != asset.weights().len()
+                || actor
+                    .weights
+                    .iter()
+                    .zip(asset.weights())
+                    .any(|(trained, exported)| trained.to_bits() != exported.to_bits())
+                || value.last_updated_policy_version != Some(receipt.policy_version)
+            {
+                return Err(
+                    "previous optimizer/value checkpoint does not match exported actor".into(),
+                );
+            }
+            let founder_seed_base = if receipt.founder_seed_base == 0 {
+                receipt.seed
+            } else {
+                receipt.founder_seed_base
+            };
+            (
+                asset,
+                receipt
+                    .policy_version
+                    .checked_add(1)
+                    .ok_or("policy version overflow")?,
+                Some(actor),
+                Some(value),
+                founder_seed_base,
+            )
+        } else {
+            (initial_n2048_care_asset(seed)?, 0, None, None, seed)
+        };
     std::fs::write(
         output.join("initial.alife-foundation"),
         asset.encode_canonical()?,
@@ -145,6 +189,7 @@ fn run_foundation_training_cycle_from(
 
     let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
     config.brain_class = BrainScaleTier::Standard2048;
+    config.founder_seed_base = founder_seed_base;
     let mut game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
     game.world.set_age_death_disabled_for_new_game(true)?;
     let creatures = game.creatures;
@@ -193,6 +238,17 @@ fn run_foundation_training_cycle_from(
     }
     std::fs::write(output.join("phase.txt"), "runtime-admitted")?;
 
+    let organism_id = runtime
+        .world()
+        .organism_registry()
+        .iter()
+        .next()
+        .ok_or("new training world has no founder")?
+        .organism_id();
+    let initial_energy = organism_energy(&runtime, organism_id)?;
+    let mut minimum_energy = initial_energy;
+    let mut consumed_events = 0_u64;
+
     let started = Instant::now();
     let mut production_tick_seconds = 0.0_f64;
     let mut replay_append_seconds = 0.0_f64;
@@ -213,7 +269,11 @@ fn run_foundation_training_cycle_from(
         )
         .into());
     }
-    let organism_id = first[0].frame.organism_id();
+    if first[0].frame.organism_id() != organism_id {
+        return Err("first training capture belongs to a different organism".into());
+    }
+    minimum_energy = minimum_energy.min(organism_energy(&runtime, organism_id)?);
+    consumed_events += u64::from(consumed(&first[0]));
     std::fs::write(output.join("phase.txt"), "first-capture")?;
     let phenotype = first[0].before.phenotype.clone();
     let trainable: Vec<u32> = phenotype.synapses().iter().enumerate().filter_map(|(i, synapse)| {
@@ -299,6 +359,7 @@ fn run_foundation_training_cycle_from(
         if after != before + 1 {
             return Err("cycle world advanced by more than one tick".into());
         }
+        minimum_energy = minimum_energy.min(organism_energy(&runtime, organism_id)?);
         stalled_since = Instant::now();
         let mut captured = runtime.take_foundation_training_steps();
         if captured.is_empty() {
@@ -321,11 +382,14 @@ fn run_foundation_training_cycle_from(
             writer.start_segment()?;
             gap = false;
         }
+        consumed_events += u64::from(consumed(&captured[0]));
         let append_started = Instant::now();
         references.push(writer.append(&captured.remove(0))?);
         replay_append_seconds += append_started.elapsed().as_secs_f64();
     }
     let collection_seconds = started.elapsed().as_secs_f64();
+    let world_ticks_elapsed = runtime.world().tick().raw();
+    let final_energy = organism_energy(&runtime, organism_id)?;
     std::fs::write(
         output.join("timing.json"),
         serde_json::to_vec_pretty(&serde_json::json!({
@@ -351,7 +415,10 @@ fn run_foundation_training_cycle_from(
     // The exact production start state is stored at every replay row. Predict
     // old values before any update in bounded chunks; keep only scalar targets.
     let mut values = Vec::with_capacity(references.len());
-    let mut actions_rewards = Vec::with_capacity(training_ticks);
+    let mut actions_rewards: Vec<(PpoJointAction, f32)> = Vec::with_capacity(training_ticks);
+    let mut previous_physiology_after = None;
+    let mut sleep_gap_reward_total = 0.0_f32;
+    let ppo_config = PpoConfig::default();
     let mut segment_start = 0;
     while segment_start < references.len() {
         let segment = references[segment_start].segment;
@@ -368,7 +435,30 @@ fn run_foundation_training_cycle_from(
             values.extend(value.predict_values(&mut trainer, &window.sequence)?);
             for (row, (behavior, patch)) in window.behavior.iter().zip(&window.patches).enumerate()
             {
-                if segment_start + chunk * 512 + row == training_ticks {
+                let index = segment_start + chunk * 512 + row;
+                let physiology = patch
+                    .outcome()
+                    .measured_physiology
+                    .ok_or("sealed training patch has no measured physiology")?;
+                if index > 0 && references[index].tick > references[index - 1].tick + 1 {
+                    let gap = alife_core::MeasuredPhysiologyTransition::new(
+                        previous_physiology_after.ok_or("sleep gap has no prior physiology")?,
+                        physiology.before,
+                    )?;
+                    let gap_seconds =
+                        (references[index].tick - references[index - 1].tick - 1) as f64 / 20.0;
+                    let discount = (-std::f64::consts::LN_2 * gap_seconds
+                        / f64::from(ppo_config.discount_half_life_seconds))
+                    .exp() as f32;
+                    let delayed = (gap.homeostatic_improvement() - gap.aversive_harm())
+                        .clamp(-1.0, 1.0)
+                        * discount;
+                    actions_rewards[index - 1].1 =
+                        (actions_rewards[index - 1].1 + delayed).clamp(-1.0, 1.0);
+                    sleep_gap_reward_total += delayed;
+                }
+                previous_physiology_after = Some(physiology.after);
+                if index == training_ticks {
                     break; // Real next state is a value bootstrap, never a loss row.
                 }
                 let modulator =
@@ -405,7 +495,6 @@ fn run_foundation_training_cycle_from(
             },
         });
     }
-    let ppo_config = PpoConfig::default();
     let batch = PpoBatch::from_rollout(policy_version, transitions, ppo_config)?;
     let started = Instant::now();
     let mut spans = Vec::new();
@@ -469,6 +558,7 @@ fn run_foundation_training_cycle_from(
     // world may be fresh, but must use the same genotype for exact admission.
     let mut next_config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
     next_config.brain_class = BrainScaleTier::Standard2048;
+    next_config.founder_seed_base = founder_seed_base;
     let bytes = std::fs::read(output.join("trained.alife-foundation"))?;
     let admitted_asset = FoundationWeightAsset::decode_canonical(&bytes)?;
     if admitted_asset.digest() != trained.digest() {
@@ -514,8 +604,15 @@ fn run_foundation_training_cycle_from(
     std::fs::write(output.join("phase.txt"), "next-cohort-admitted")?;
     let receipt = FoundationCycleReceipt {
         seed,
+        founder_seed_base,
         policy_version,
         training_ticks,
+        world_ticks_elapsed,
+        consumed_events,
+        initial_energy,
+        minimum_energy,
+        final_energy,
+        sleep_gap_reward_total,
         collection_seconds,
         update_seconds,
         old_asset_digest: digest(&asset),

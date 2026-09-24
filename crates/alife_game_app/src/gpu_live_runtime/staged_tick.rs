@@ -841,7 +841,11 @@ impl GpuLiveBrainRuntime {
                 let mut configs = Vec::with_capacity(batch.len());
                 for (index, prepared) in batch.iter().enumerate() {
                     let demonstrator = match self.training_demonstrator.as_mut() {
-                        Some(teacher) => Some(teacher(&prepared.frame)?),
+                        Some(teacher) => Some(teacher(
+                            &prepared.frame,
+                            self.backend
+                                .training_enabled_motor_channels(prepared.handle)?,
+                        )?),
                         None => sampling.demonstrator,
                     };
                     configs.push(alife_gpu_backend::GpuTrainingSamplingConfig {
