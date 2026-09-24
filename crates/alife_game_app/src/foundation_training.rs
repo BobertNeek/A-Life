@@ -13,8 +13,8 @@ use alife_gpu_backend::{
     GpuTrainingSamplingConfig,
 };
 use alife_training::{
-    AdamWConfig, FoundationTrainer, StageTrainableMask, TrainingInitialState,
-    TrainingReplayCandidate, TrainingReplayTick, TrainingSequence,
+    AdamWConfig, FoundationTrainer, StageTrainableMask, TrainingFrozenSynapse,
+    TrainingInitialState, TrainingReplayCandidate, TrainingReplayTick, TrainingSequence,
 };
 
 use crate::{FoundationTrainingStep, GpuLiveBrainRuntime};
@@ -66,28 +66,31 @@ fn snapshot_activation(snapshot: &GpuTrainingStateSnapshot) -> Result<Vec<f32>> 
 
 fn active_weight_ranges(snapshot: &GpuTrainingStateSnapshot) -> Result<(Range<u32>, Range<u32>)> {
     let ranges = snapshot.brain_slot.word_ranges();
-    match snapshot.active_weight_bank {
-        0 => Ok((
+    let (lifetime, fast) = match snapshot.active_weight_bank {
+        0 => (
             ranges.lifetime_weight_words.clone(),
             ranges.fast_weight_words.clone(),
-        )),
-        1 => Ok((
+        ),
+        1 => (
             ranges.lifetime_weight_bank_1_words.clone(),
             ranges.fast_weight_bank_1_words.clone(),
-        )),
-        _ => Err(invalid().into()),
+        ),
+        _ => return Err(invalid().into()),
+    };
+    let active = snapshot.brain_slot.record().synapse_count;
+    if active > lifetime.end - lifetime.start || active > fast.end - fast.start {
+        return Err(invalid().into());
     }
+    Ok((
+        lifetime.start..lifetime.start + active,
+        fast.start..fast.start + active,
+    ))
 }
 
 fn validate_snapshot_topology(snapshot: &GpuTrainingStateSnapshot) -> Result<()> {
     let phenotype = &snapshot.phenotype;
-    // Sparse spans are structural additions on top of the compiled graph. An
-    // unchanged overlay is still a different graph and cannot be replayed here.
-    if !snapshot.v11.sparse_spans.is_empty() || snapshot.v11.pending_lifetime_synapse.is_some() {
-        return Err(
-            "replay must split/reject structural synapses absent from the compiled phenotype"
-                .into(),
-        );
+    if snapshot.v11.pending_lifetime_synapse.is_some() {
+        return Err("replay cannot capture an uncommitted structural synapse".into());
     }
     let record = snapshot.brain_slot.record();
     let counts = snapshot.brain_slot.typed_counts();
@@ -97,6 +100,26 @@ fn validate_snapshot_topology(snapshot: &GpuTrainingStateSnapshot) -> Result<()>
         .iter()
         .filter(|s| s.kind() == CompiledSynapseKind::Recurrent)
         .count();
+    let added = snapshot.structural_synapses.len();
+    if added > alife_core::MAX_STRUCTURAL_EDGES
+        || record.synapse_count as usize != phenotype.synapses().len() + added
+        || record.recurrent_synapse_count as usize != recurrent + added
+        || snapshot
+            .structural_synapses
+            .iter()
+            .enumerate()
+            .any(|(i, edge)| {
+                edge.slot_index >= record.recurrent_synapse_count
+                    || edge.source >= neurons
+                    || edge.target >= neurons
+                    || edge.route as usize >= phenotype.projections().len()
+                    || !edge.genetic_weight.is_finite()
+                    || edge.alpha.to_bits() != (-0.0_f32).to_bits()
+                    || (i > 0 && snapshot.structural_synapses[i - 1].slot_index >= edge.slot_index)
+            })
+    {
+        return Err("captured structural synapses do not match the live GPU slot".into());
+    }
     if snapshot.handle.phenotype_hash() != phenotype.phenotype_hash()
         || snapshot.handle.class_id() != phenotype.brain_class_id()
         || record.class_id != u32::from(phenotype.brain_class_id().raw())
@@ -104,10 +127,8 @@ fn validate_snapshot_topology(snapshot: &GpuTrainingStateSnapshot) -> Result<()>
         || record.slot_generation != snapshot.handle.generation()
         || record.neuron_count != neurons
         || record.microstep_count != u32::from(phenotype.microstep_count())
-        || record.synapse_count as usize != phenotype.synapses().len()
-        || record.recurrent_synapse_count as usize != recurrent
-        || counts.source_indices != recurrent
-        || counts.route_indices != recurrent
+        || counts.source_indices != recurrent + added
+        || counts.route_indices != recurrent + added
         || counts.target_offsets != neurons as usize + 1
         || counts.neuron_dynamics != neurons as usize
         || counts.projections != phenotype.projections().len()
@@ -223,6 +244,7 @@ fn foundation_replay_sequence_with_upload(
             || step.before.handle != first.before.handle
             || step.after_inference.handle != step.before.handle
             || step.before.brain_slot != step.after_inference.brain_slot
+            || step.before.structural_synapses != step.after_inference.structural_synapses
             || step.before.handle.organism_id() != step.frame.organism_id()
             || step.before.tick != step.frame.tick().raw()
             || step.after_inference.tick != step.frame.tick().raw()
@@ -268,8 +290,25 @@ fn foundation_replay_sequence_with_upload(
         }
         let lifetime = snapshot_values(&step.before, lifetime)?;
         let fast = snapshot_values(&step.before, fast)?;
-        if lifetime.len() != phenotype.synapses().len() || fast.len() != lifetime.len() {
+        if lifetime.len() != phenotype.synapses().len() + step.before.structural_synapses.len()
+            || fast.len() != lifetime.len()
+        {
             return Err(invalid().into());
+        }
+        let mut genetic_slot_indices = Vec::with_capacity(phenotype.synapses().len());
+        let mut added = step.before.structural_synapses.iter().peekable();
+        for slot in 0..lifetime.len() {
+            if added
+                .peek()
+                .is_some_and(|edge| edge.slot_index as usize == slot)
+            {
+                added.next();
+            } else {
+                genetic_slot_indices.push(slot);
+            }
+        }
+        if genetic_slot_indices.len() != phenotype.synapses().len() || added.next().is_some() {
+            return Err("live structural slot mapping is incomplete".into());
         }
         let effects = step
             .memory_upload
@@ -328,7 +367,26 @@ fn foundation_replay_sequence_with_upload(
                 .enumerate()
                 .map(|(i, s)| {
                     let local = upload.canonical_to_local_synapse[i] as usize;
-                    lifetime[local] + s.alpha() * fast[local]
+                    let slot = genetic_slot_indices[local];
+                    lifetime[slot] + s.alpha() * fast[slot]
+                })
+                .collect(),
+            structural_synapses: step
+                .before
+                .structural_synapses
+                .iter()
+                .map(|edge| {
+                    let projection = &phenotype.projections()[edge.route as usize];
+                    let slot = edge.slot_index as usize;
+                    TrainingFrozenSynapse {
+                        source: edge.source,
+                        target: edge.target,
+                        route: edge.route,
+                        cadence: u32::from(projection.update_cadence().raw()),
+                        effective_weight: edge.genetic_weight
+                            + lifetime[slot]
+                            + edge.alpha * fast[slot],
+                    }
                 })
                 .collect(),
             candidates,
@@ -578,6 +636,62 @@ fn compare_replay_values(
         maximum = maximum.max(error);
     }
     Ok(maximum)
+}
+
+/// One exact parity gate at a new waking segment, including structural growth.
+/// This is deliberately run once per sleep boundary, not on every collection tick.
+pub fn verify_foundation_replay_step(
+    trainer: &mut FoundationTrainer,
+    step: &FoundationTrainingStep,
+) -> Result<()> {
+    let sequence = foundation_replay_sequence(std::slice::from_ref(step), 0)?;
+    let replay = trainer.evaluate_replay(&sequence)?;
+    compare_replay_values(
+        0,
+        "activation",
+        &replay.final_activations[0],
+        &snapshot_activation(&step.after_inference)?,
+    )?;
+    let observed = &step.behavior.logits;
+    let support = step
+        .behavior
+        .motor_masks
+        .iter()
+        .fold(step.behavior.representative_mask, |mask, channel| {
+            mask | channel
+        });
+    if replay.candidate_logits[0].len() != observed.len() {
+        return Err(invalid().into());
+    }
+    for (candidate, (actual, expected)) in
+        replay.candidate_logits[0].iter().zip(observed).enumerate()
+    {
+        if !expected.is_finite() {
+            if support & (1u32 << candidate) != 0 {
+                return Err("nonfinite production logit is in sampled policy support".into());
+            }
+            continue;
+        }
+        compare_replay_values(0, "candidate logit", &[*actual], &[*expected])?;
+    }
+    let homeostasis = snapshot_values(
+        &step.after_inference,
+        step.after_inference
+            .brain_slot
+            .word_ranges()
+            .homeostasis_words
+            .clone(),
+    )?;
+    let ema: Vec<f32> = homeostasis.chunks_exact(2).map(|row| row[0]).collect();
+    let metabolic: Vec<f32> = homeostasis.chunks_exact(2).map(|row| row[1]).collect();
+    compare_replay_values(0, "activity EMA", &replay.final_activity_ema[0], &ema)?;
+    compare_replay_values(
+        0,
+        "metabolic load",
+        &replay.final_metabolic_load[0],
+        &metabolic,
+    )?;
+    Ok(())
 }
 
 pub const FOUNDATION_REPLAY_HOST_LIMIT_BYTES: u64 = 8 * 1024 * 1024 * 1024;

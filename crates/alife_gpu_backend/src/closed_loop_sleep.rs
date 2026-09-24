@@ -1681,7 +1681,7 @@ fn absolute_slice<'a>(
         .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)
 }
 
-fn read_gpu_words(
+pub(crate) fn read_gpu_words(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     source: &wgpu::Buffer,

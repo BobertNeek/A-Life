@@ -11,17 +11,26 @@ The operator entry point is `scripts/run_n2048_care_training.ps1`; follow
 `docs/n2048-training-operator.md`. Preparation is not a training campaign.
 The production single-world path now has a bounded integration cycle: ordinary
 GPU sampling and sealed outcomes, compressed per-tick replay, frozen value
-predictions, one PPO update, canonical export, exact next-cohort admission, and
-actor/value optimizer restoration across a second process. A four-tick cycle
-and its resumed four-tick successor passed on the production GPU. This is
-numerical/integration evidence, not learned care behavior.
+predictions, global GAE over one biological life across sleep gaps, 256-tick PPO windows
+with 128-tick burn-in, canonical export, exact next-cohort admission, and
+actor/value optimizer restoration across a second process. Four-tick and
+resumed four-tick cycles passed on the production GPU, as did a 257-tick cycle
+that exercised two PPO windows. A 16-tick optimized cycle also passed; its
+2.56-second collection time is an early speed measurement, not a long-life
+throughput or learned-care result. A 640-decision optimized cycle subsequently
+crossed five natural sleep gaps, replayed structural synapses as frozen context,
+updated the actor and critic, and admitted its exported actor to a fresh cohort.
+A 400-decision run also passed exact production/replay parity at the first
+structural-sleep boundary. Neither run establishes long survival or useful care.
 
 The campaign must remain unavailable until the following integration is done:
 
-- A bounded cohort runner connecting production captures, grounded demonstrations,
-  frozen GPU value predictions, full-life GAE, replay windows and PPO updates.
-- Long-life replay windows with global GAE and grounded demonstrations. The
-  bounded cycle currently trains at most 511 ticks from a single world.
+- Grounded demonstrations and protected behavioral evaluation integrated with
+  the existing production capture and trainer.
+- Long-life survival and outcome proof. The bounded cycle now skips natural
+  sleep ticks, starts replay segments on wake, and uses actual elapsed world
+  time in GAE. It fails if the organism dies; no 10–30-minute biological life
+  has passed. Death/terminal training remains outside this single-life cycle.
 - Measured independent-world throughput and a shared GPU dispatch coordinator.
   The available 1–8-world baseline shares a device but ticks separate sessions
   serially; it is not the planned fused batch.

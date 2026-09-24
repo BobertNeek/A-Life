@@ -755,6 +755,11 @@ impl GpuLiveBrainRuntime {
             if self.pending_sleep_journal_entries.is_empty() {
                 return Ok(());
             }
+            // An ephemeral runtime cannot publish a queued sleep transition.
+            // Re-enqueueing it without a durable base would spin forever.
+            if self.checkpoint_durability.is_none() {
+                return Err(ScaffoldContractError::MissingPhaseData.into());
+            }
             let pending = std::mem::take(&mut self.pending_sleep_journal_entries);
             self.start_sleep_journal_publication(pending)?;
         }

@@ -1860,7 +1860,11 @@ fn pack_metadata_and_layout(
     let context = as_u32_u64(base_training_words)?;
     let route_count = as_u32(phenotype.projections().len())?;
     let initial = as_u32_u64(
-        base_training_words + ticks * (3 + u64::from(route_count) + synapse_count as u64),
+        base_training_words
+            + ticks
+                * (4 + u64::from(route_count)
+                    + synapse_count as u64
+                    + (alife_core::MAX_STRUCTURAL_EDGES as u64) * 5),
     )?;
     let training_words = u64::from(initial) + neurons * 3;
     let (
@@ -2046,15 +2050,30 @@ fn pack_replay_sequence(
             }
         }
         let base = layout.context as usize
-            + tick_index * (3 + tick.enabled_routes.len() + tick.effective_weight_offsets.len());
+            + tick_index
+                * (4 + tick.enabled_routes.len()
+                    + tick.effective_weight_offsets.len()
+                    + alife_core::MAX_STRUCTURAL_EDGES * 5);
         words[base] = tick.projection_gain.to_bits();
         words[base + 1] = tick.local_threshold_shift.to_bits();
         words[base + 2] = tick.microstep_count;
+        words[base + 3] = tick.structural_synapses.len() as u32;
         for (index, enabled) in tick.enabled_routes.iter().enumerate() {
-            words[base + 3 + index] = u32::from(*enabled);
+            words[base + 4 + index] = u32::from(*enabled);
         }
         for (index, value) in tick.effective_weight_offsets.iter().enumerate() {
-            words[base + 3 + tick.enabled_routes.len() + index] = value.to_bits();
+            words[base + 4 + tick.enabled_routes.len() + index] = value.to_bits();
+        }
+        let edge_base = base + 4 + tick.enabled_routes.len() + tick.effective_weight_offsets.len();
+        for (index, edge) in tick.structural_synapses.iter().enumerate() {
+            let at = edge_base + index * 5;
+            words[at..at + 5].copy_from_slice(&[
+                edge.source,
+                edge.target,
+                edge.route,
+                edge.cadence,
+                edge.effective_weight.to_bits(),
+            ]);
         }
     }
     for (index, value) in sequence

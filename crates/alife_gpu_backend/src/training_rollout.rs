@@ -20,6 +20,18 @@ pub struct GpuTrainingStateSnapshot {
     pub v11: crate::GpuV11Checkpoint,
     pub mutable_word_base: u32,
     pub mutable_words: Vec<u32>,
+    /// Exact production-only recurrent additions, indexed in the live slot.
+    pub structural_synapses: Vec<GpuTrainingStructuralSynapse>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GpuTrainingStructuralSynapse {
+    pub slot_index: u32,
+    pub source: u32,
+    pub target: u32,
+    pub route: u32,
+    pub genetic_weight: f32,
+    pub alpha: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

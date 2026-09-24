@@ -55,7 +55,18 @@ pub struct TrainingReplayTick {
     pub enabled_routes: Vec<bool>,
     /// Per compiled synapse: lifetime + alpha * fast, in canonical synapse order.
     pub effective_weight_offsets: Vec<f32>,
+    /// Live structural edges are fixed context, never trainable genetic weights.
+    pub structural_synapses: Vec<TrainingFrozenSynapse>,
     pub candidates: Vec<TrainingReplayCandidate>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TrainingFrozenSynapse {
+    pub source: u32,
+    pub target: u32,
+    pub route: u32,
+    pub cadence: u32,
+    pub effective_weight: f32,
 }
 
 /// Fixed-topology, frozen-context replay with a detached burn-in boundary.
@@ -127,6 +138,19 @@ impl TrainingSequence {
                 || tick.enabled_routes.len() != phenotype.projections().len()
                 || tick.effective_weight_offsets.len() != phenotype.synapses().len()
                 || !finite(&tick.effective_weight_offsets)
+                || tick.structural_synapses.len() > alife_core::MAX_STRUCTURAL_EDGES
+                || tick.structural_synapses.iter().any(|edge| {
+                    edge.source >= phenotype.neuron_count()
+                        || edge.target >= phenotype.neuron_count()
+                        || edge.route as usize >= phenotype.projections().len()
+                        || edge.cadence
+                            != u32::from(
+                                phenotype.projections()[edge.route as usize]
+                                    .update_cadence()
+                                    .raw(),
+                            )
+                        || !edge.effective_weight.is_finite()
+                })
                 || tick.candidates.is_empty()
                 || tick.candidates.len() > alife_core::MAX_ACTION_CANDIDATES
                 || tick.candidates.iter().any(|c| !finite(&c.decoder_inputs))

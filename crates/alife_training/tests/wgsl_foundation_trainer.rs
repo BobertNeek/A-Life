@@ -165,6 +165,7 @@ fn n2048_exact_graph_adamw_step_changes_only_the_masked_weight_and_exports() {
         microstep_count: 0,
         enabled_routes: vec![false; phenotype.projections().len()],
         effective_weight_offsets: vec![0.01; phenotype.synapses().len()],
+        structural_synapses: Vec::new(),
         candidates: vec![TrainingReplayCandidate {
             family: candidate.family,
             decoder_inputs,
@@ -584,6 +585,7 @@ fn verify_sampled_replay_gradients(
         microstep_count: u32::from(phenotype.microstep_count()).min(4),
         enabled_routes,
         effective_weight_offsets: offsets,
+        structural_synapses: Vec::new(),
         candidates: vec![TrainingReplayCandidate {
             family: CandidateActionFamily::Approach,
             decoder_inputs,
@@ -828,6 +830,7 @@ fn n2048_ppo_and_imitation_gpu_objective_matches_joint_derivatives_and_partial_b
             microstep_count: 0,
             enabled_routes: vec![false; phenotype.projections().len()],
             effective_weight_offsets: vec![0.0; phenotype.synapses().len()],
+            structural_synapses: Vec::new(),
             candidates,
         }],
         burn_in_ticks: 0,

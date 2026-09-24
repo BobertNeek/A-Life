@@ -4,18 +4,19 @@
 use std::{path::Path, time::Instant};
 
 use alife_core::{
-    BrainScaleTier, CompiledSynapseKind, DecoderHeadKind, FoundationWeightAsset, SensorProfile,
-    TrainingStageManifest,
+    BrainScaleTier, CompiledSynapseKind, DecoderHeadKind, FoundationWeightAsset,
+    ScaffoldContractError, SensorProfile, TrainingStageManifest,
 };
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile, GpuTrainingSamplingConfig};
 use alife_training::{
-    train_recurrent_ppo, AdamWConfig, FoundationTrainer, PpoBatch, PpoBoundary, PpoConfig,
-    PpoJointAction, PpoTrainingState, PpoTransition, StageTrainableMask,
+    train_recurrent_ppo_cohort, AdamWConfig, FoundationTrainer, PpoBatch, PpoBoundary, PpoConfig,
+    PpoJointAction, PpoTrainingState, PpoTrainingWindow, PpoTransition, StageTrainableMask,
 };
 
 use crate::{
-    initial_n2048_care_asset, load_foundation_replay_window, FoundationReplayBudget,
-    FoundationReplaySource, FoundationReplayWriter, GpuLiveBrainRuntime,
+    initial_n2048_care_asset, load_foundation_replay_window, verify_foundation_replay_step,
+    FoundationReplayBudget, FoundationReplaySource, FoundationReplayWriter, GpuDurableSaveManifest,
+    GpuLiveBrainRuntime,
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -93,8 +94,8 @@ fn run_foundation_training_cycle_from(
     training_ticks: usize,
     previous: Option<&Path>,
 ) -> Result<FoundationCycleReceipt> {
-    if seed == 0 || !(1..=511).contains(&training_ticks) {
-        return Err("cycle needs a nonzero seed and 1..=511 training ticks".into());
+    if seed == 0 || !(1..=36_000).contains(&training_ticks) {
+        return Err("cycle needs a nonzero seed and 1..=36000 training ticks".into());
     }
     std::fs::create_dir(output)?;
     let (asset, policy_version, restored_actor, restored_value) = if let Some(previous) = previous {
@@ -146,6 +147,7 @@ fn run_foundation_training_cycle_from(
     config.brain_class = BrainScaleTier::Standard2048;
     let mut game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
     game.world.set_age_death_disabled_for_new_game(true)?;
+    let creatures = game.creatures;
     let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
     let mut runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
         backend,
@@ -163,12 +165,46 @@ fn run_foundation_training_cycle_from(
             demonstrator: None,
         },
     )?;
+    // Sleep transitions use the same durable neural authority as an ordinary
+    // New Game. Without an exact base, the sleep journal has no publisher.
+    let asset_root = output.join("world-assets");
+    std::fs::create_dir(&asset_root)?;
+    let save_path = output.join("world.json");
+    let mut runtime_config =
+        alife_world::RuntimeConfig::deterministic_default(seed, BrainScaleTier::Standard2048);
+    runtime_config.features.gpu_backend_enabled = true;
+    let base = alife_world::PortableSaveFile::from_headless_world(
+        format!("n2048-cycle-{seed}"),
+        runtime.world(),
+        runtime_config,
+        alife_world::AssetManifest::empty(),
+        creatures,
+    )?;
+    base.validate_with_asset_root(&asset_root)?;
+    runtime.attach_durable_checkpoint_boundary(&save_path, &asset_root, base)?;
+    let exact = runtime.capture_portable_checkpoint()?;
+    let published = GpuDurableSaveManifest::publish_snapshot(&save_path, &asset_root, &exact)?;
+    if published.save != exact {
+        return Err("cycle exact checkpoint changed during publication".into());
+    }
+    runtime.rebind_durable_checkpoint_boundary(&save_path, &asset_root, &exact)?;
+    if std::env::var_os("ALIFE_FOUNDATION_PROFILE").is_some() {
+        runtime.set_performance_measurement_enabled(true);
+    }
     std::fs::write(output.join("phase.txt"), "runtime-admitted")?;
 
     let started = Instant::now();
-    runtime
-        .tick()
-        .map_err(|e| format!("cycle production tick 0: {e}"))?;
+    let mut production_tick_seconds = 0.0_f64;
+    let mut replay_append_seconds = 0.0_f64;
+    let tick_started = Instant::now();
+    runtime.tick().map_err(|e| {
+        let _ = std::fs::write(
+            output.join("runtime-performance-failed.json"),
+            serde_json::to_vec_pretty(&runtime.performance_metrics()).unwrap_or_default(),
+        );
+        format!("cycle production tick 0: {e}")
+    })?;
+    production_tick_seconds += tick_started.elapsed().as_secs_f64();
     let mut first = runtime.take_foundation_training_steps();
     if first.len() != 1 {
         return Err(format!(
@@ -177,6 +213,7 @@ fn run_foundation_training_cycle_from(
         )
         .into());
     }
+    let organism_id = first[0].frame.organism_id();
     std::fs::write(output.join("phase.txt"), "first-capture")?;
     let phenotype = first[0].before.phenotype.clone();
     let trainable: Vec<u32> = phenotype.synapses().iter().enumerate().filter_map(|(i, synapse)| {
@@ -227,54 +264,140 @@ fn run_foundation_training_cycle_from(
     )?;
     std::fs::write(output.join("phase.txt"), "replay-writer-ready")?;
     let mut references = Vec::with_capacity(training_ticks + 1);
+    let append_started = Instant::now();
     references.push(writer.append(&first.remove(0))?);
-    for tick in 1..=training_ticks {
+    replay_append_seconds += append_started.elapsed().as_secs_f64();
+    let mut gap = false;
+    let mut stalled_since = Instant::now();
+    let world_tick_limit = training_ticks
+        .checked_mul(8)
+        .and_then(|n| n.checked_add(4_096))
+        .ok_or("cycle world-tick limit overflow")?;
+    while references.len() <= training_ticks {
         budget.check_additional(64 * 1024 * 1024)?;
-        runtime
-            .tick()
-            .map_err(|e| format!("cycle production tick {tick}: {e}"))?;
-        let mut captured = runtime.take_foundation_training_steps();
-        if captured.len() != 1 {
-            return Err(format!(
-                "cycle tick {tick}: expected one waking decision, got {}",
-                captured.len()
-            )
-            .into());
+        let before = runtime.world().tick().raw();
+        if before as usize >= world_tick_limit {
+            return Err("cycle reached its world-tick limit before enough waking decisions".into());
         }
+        let tick_started = Instant::now();
+        runtime.tick().map_err(|e| {
+            let _ = std::fs::write(
+                output.join("runtime-performance-failed.json"),
+                serde_json::to_vec_pretty(&runtime.performance_metrics()).unwrap_or_default(),
+            );
+            format!("cycle production tick after {before}: {e}")
+        })?;
+        production_tick_seconds += tick_started.elapsed().as_secs_f64();
+        let after = runtime.world().tick().raw();
+        if after == before {
+            if stalled_since.elapsed().as_secs() > 300 {
+                return Err("cycle made no world progress for five minutes".into());
+            }
+            std::thread::yield_now();
+            continue;
+        }
+        if after != before + 1 {
+            return Err("cycle world advanced by more than one tick".into());
+        }
+        stalled_since = Instant::now();
+        let mut captured = runtime.take_foundation_training_steps();
+        if captured.is_empty() {
+            if runtime
+                .world()
+                .organism_registry()
+                .get(organism_id)
+                .is_none_or(|record| !record.lifecycle().is_alive())
+            {
+                return Err(format!("cycle organism died after world tick {after}").into());
+            }
+            gap = true;
+            continue;
+        }
+        if captured.len() != 1 {
+            return Err(format!("cycle world tick {after}: expected at most one decision").into());
+        }
+        if gap {
+            verify_foundation_replay_step(&mut trainer, &captured[0])?;
+            writer.start_segment()?;
+            gap = false;
+        }
+        let append_started = Instant::now();
         references.push(writer.append(&captured.remove(0))?);
+        replay_append_seconds += append_started.elapsed().as_secs_f64();
     }
     let collection_seconds = started.elapsed().as_secs_f64();
+    std::fs::write(
+        output.join("timing.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "production_tick_seconds": production_tick_seconds,
+            "replay_append_seconds": replay_append_seconds,
+            "collection_total_seconds": collection_seconds,
+        }))?,
+    )?;
+    std::fs::write(
+        output.join("runtime-performance.json"),
+        serde_json::to_vec_pretty(&runtime.performance_metrics())?,
+    )?;
     std::fs::write(output.join("phase.txt"), "collection-complete")?;
     std::fs::write(
         output.join("replay-manifest.json"),
         serde_json::to_vec(&references)?,
     )?;
-    let window =
-        load_foundation_replay_window(&replay_dir, &references, 0, &source, &phenotype, budget)?;
-    let mut sequence = window.sequence;
     let mut value = if let Some(checkpoint) = restored_value {
         PpoTrainingState::from_checkpoint(checkpoint)?
     } else {
         PpoTrainingState::default()
     };
-    let values = value.predict_values(&mut trainer, &sequence)?;
+    // The exact production start state is stored at every replay row. Predict
+    // old values before any update in bounded chunks; keep only scalar targets.
+    let mut values = Vec::with_capacity(references.len());
+    let mut actions_rewards = Vec::with_capacity(training_ticks);
+    let mut segment_start = 0;
+    while segment_start < references.len() {
+        let segment = references[segment_start].segment;
+        let segment_end = references[segment_start..]
+            .iter()
+            .position(|reference| reference.segment != segment)
+            .map_or(references.len(), |offset| segment_start + offset);
+        for (chunk, refs) in references[segment_start..segment_end]
+            .chunks(512)
+            .enumerate()
+        {
+            let window =
+                load_foundation_replay_window(&replay_dir, refs, 0, &source, &phenotype, budget)?;
+            values.extend(value.predict_values(&mut trainer, &window.sequence)?);
+            for (row, (behavior, patch)) in window.behavior.iter().zip(&window.patches).enumerate()
+            {
+                if segment_start + chunk * 512 + row == training_ticks {
+                    break; // Real next state is a value bootstrap, never a loss row.
+                }
+                let modulator =
+                    alife_core::OutcomeCreditPacket::from_sealed_patch(patch)?.modulator();
+                actions_rewards.push((
+                    joint_action(behavior)?,
+                    (modulator.homeostatic_improvement() - modulator.pain()).clamp(-1.0, 1.0),
+                ));
+            }
+        }
+        segment_start = segment_end;
+    }
     if values.len() != references.len() {
         return Err("GPU value prediction count does not match decisions".into());
     }
+    if actions_rewards.len() != training_ticks {
+        return Err("PPO action/reward count does not match training decisions".into());
+    }
     let mut transitions = Vec::with_capacity(training_ticks);
-    for tick in 0..training_ticks {
-        let behavior = &window.behavior[tick];
-        let modulator =
-            alife_core::OutcomeCreditPacket::from_sealed_patch(&window.patches[tick])?.modulator();
+    for (tick, (action, reward)) in actions_rewards.into_iter().enumerate() {
         transitions.push(PpoTransition {
             policy_version,
             trajectory_id: seed,
             step: tick as u64,
-            action: joint_action(behavior)?,
-            reward: (modulator.homeostatic_improvement() - modulator.pain()).clamp(-1.0, 1.0),
+            action,
+            reward,
             old_value: values[tick],
             next_value: values[tick + 1],
-            elapsed_seconds: 1.0 / 20.0,
+            elapsed_seconds: (references[tick + 1].tick - references[tick].tick) as f32 / 20.0,
             boundary: if tick + 1 == training_ticks {
                 PpoBoundary::Truncated
             } else {
@@ -282,15 +405,48 @@ fn run_foundation_training_cycle_from(
             },
         });
     }
-    sequence.ticks.pop(); // Bootstrap decision is context only, never an update row.
     let ppo_config = PpoConfig::default();
     let batch = PpoBatch::from_rollout(policy_version, transitions, ppo_config)?;
     let started = Instant::now();
-    let update = train_recurrent_ppo(
+    let mut spans = Vec::new();
+    let mut segment_start = 0;
+    while segment_start < training_ticks {
+        let segment = references[segment_start].segment;
+        let segment_end = references[segment_start..training_ticks]
+            .iter()
+            .position(|reference| reference.segment != segment)
+            .map_or(training_ticks, |offset| segment_start + offset);
+        for start in (segment_start..segment_end).step_by(256) {
+            let end = (start + 256).min(segment_end);
+            let burn_start = start.saturating_sub(128).max(segment_start);
+            spans.push((burn_start, start, end));
+        }
+        segment_start = segment_end;
+    }
+    let update = train_recurrent_ppo_cohort(
         &mut trainer,
         &mut value,
-        &sequence,
-        &batch,
+        spans.len(),
+        8,
+        |index| {
+            let (burn_start, start, end) = spans[index];
+            let replay = load_foundation_replay_window(
+                &replay_dir,
+                &references[burn_start..end],
+                start - burn_start,
+                &source,
+                &phenotype,
+                budget,
+            )
+            .map_err(|_| {
+                alife_training::TrainingError::from(ScaffoldContractError::InvalidDecisionEvidence)
+            })?;
+            Ok(PpoTrainingWindow {
+                sequence: replay.sequence,
+                batch: batch.window(start..end)?,
+                auxiliary: None,
+            })
+        },
         ppo_config,
         policy_version,
     )?;

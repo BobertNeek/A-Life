@@ -117,7 +117,9 @@ fn candidate_input(tick:u32, candidate:u32, lane:u32) -> f32 {
   let field = select(32u + lane - 24u, 4u + lane, lane < 24u);
   return bitcast<f32>(candidate_field(tick, candidate, field));
 }
-fn context_base(tick:u32) -> u32 { return h(42u) + tick * (3u + h(43u) + h(2u)); }
+fn context_base(tick:u32) -> u32 { return h(42u) + tick * (4u + h(43u) + h(2u) + 64u * 5u); }
+fn structural_edge_base(tick:u32) -> u32 { return context_base(tick) + 4u + h(43u) + h(2u); }
+fn structural_edge_count(tick:u32) -> u32 { return training_words[context_base(tick) + 3u]; }
 fn projection_gain(tick:u32) -> f32 {
   if (h(41u) == 0u) { return 1.0; }
   return load_training_f32(context_base(tick));
@@ -129,11 +131,11 @@ fn microstep_active(tick:u32, step:u32) -> bool {
 fn route_enabled(tick:u32, synapse:u32) -> bool {
   if (h(41u) == 0u) { return true; }
   let route = meta_words[h(16u) + synapse * SYNAPSE_STRIDE + 2u] >> 8u;
-  return training_words[context_base(tick) + 3u + route] != 0u;
+  return training_words[context_base(tick) + 4u + route] != 0u;
 }
 fn effective_weight(tick:u32, synapse:u32) -> f32 {
   if (h(41u) == 0u) { return load_weight_f32(synapse); }
-  return load_weight_f32(synapse) + load_training_f32(context_base(tick) + 3u + h(43u) + synapse);
+  return load_weight_f32(synapse) + load_training_f32(context_base(tick) + 4u + h(43u) + synapse);
 }
 fn dendritic_excess(branch:u32, previous_state:u32) -> f32 {
   let base = h(45u) + branch * 5u;
@@ -200,6 +202,17 @@ fn forward_microstep(@builtin(global_invocation_id) gid:vec3<u32>) {
     let source = synapse_word(synapse, 0u);
     recurrent_sum += load_state_f32(h(22u) + previous_state + source)
       * effective_weight(tick, synapse);
+  }
+  if (h(41u) != 0u) {
+    for (var edge = 0u; edge < structural_edge_count(tick); edge++) {
+      let at = structural_edge_base(tick) + edge * 5u;
+      if (training_words[at + 1u] != neuron) { continue; }
+      let route = training_words[at + 2u];
+      if (training_words[context_base(tick) + 4u + route] == 0u
+          || !route_fires(training_words[at + 3u], local_step)) { continue; }
+      recurrent_sum += load_state_f32(h(22u) + previous_state + training_words[at])
+        * bitcast<f32>(training_words[at + 4u]);
+    }
   }
   var dendritic_sum = 0.0;
   for (var branch = meta_words[h(44u) + neuron]; branch < meta_words[h(44u) + neuron + 1u]; branch++) {
@@ -458,6 +471,18 @@ fn backward_recurrent_sources(@builtin(global_invocation_id) gid:vec3<u32>) {
     let target_index = synapse_word(synapse, 1u);
     gradient += load_gradient_f32(h(26u) + step * neurons + target_index)
       * effective_weight(h(9u), synapse) * projection_gain(h(9u));
+  }
+  if (h(41u) != 0u) {
+    let tick = h(9u);
+    for (var edge = 0u; edge < structural_edge_count(tick); edge++) {
+      let at = structural_edge_base(tick) + edge * 5u;
+      if (training_words[at] != source) { continue; }
+      let route = training_words[at + 2u];
+      if (training_words[context_base(tick) + 4u + route] == 0u
+          || !route_fires(training_words[at + 3u], h(8u))) { continue; }
+      gradient += load_gradient_f32(h(26u) + step * neurons + training_words[at + 1u])
+        * bitcast<f32>(training_words[at + 4u]) * projection_gain(tick);
+    }
   }
   let branch_begin = meta_words[h(47u) + source];
   let branch_end = meta_words[h(47u) + source + 1u];
