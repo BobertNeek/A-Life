@@ -6,7 +6,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args_os().skip(1);
     let mode = args
         .next()
-        .ok_or("usage: train_n2048_care --pilot|--cycle OUTPUT_DIRECTORY [TICKS]")?;
+        .ok_or("usage: train_n2048_care --pilot|--teacher-pilot|--cycle OUTPUT_DIRECTORY [TICKS] [--seed N] [--food-after-world-tick N] | --resume-cycle PREVIOUS_DIRECTORY OUTPUT_DIRECTORY [TICKS] [--seed N]")?;
     if mode == "--inspect-cycle" {
         let directory = std::path::PathBuf::from(args.next().ok_or("missing cycle directory")?);
         if args.next().is_some() {
@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         && mode != "--cycle"
         && mode != "--resume-cycle"
     {
-        return Err("usage: train_n2048_care --pilot|--cycle OUTPUT_DIRECTORY [TICKS] | --resume-cycle PREVIOUS_DIRECTORY OUTPUT_DIRECTORY [TICKS]".into());
+        return Err("usage: train_n2048_care --pilot|--teacher-pilot|--cycle OUTPUT_DIRECTORY [TICKS] [--seed N] [--food-after-world-tick N] | --resume-cycle PREVIOUS_DIRECTORY OUTPUT_DIRECTORY [TICKS] [--seed N]".into());
     }
     let first_path = std::path::PathBuf::from(args.next().ok_or("missing output directory")?);
     let (previous, output) = if mode == "--resume-cycle" {
@@ -32,46 +32,107 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let mut ticks = 32;
     let mut next = args.next();
-    if next.as_deref() != Some(std::ffi::OsStr::new("--seed")) {
-        if let Some(value) = next.take() {
+    if let Some(value) = next.as_ref() {
+        if !value.to_string_lossy().starts_with("--") {
             ticks = value.to_string_lossy().parse::<usize>()?;
             next = args.next();
         }
     }
-    let seed = if let Some(flag) = next {
-        if flag != "--seed" {
-            return Err("expected --seed after optional tick count".into());
+    let mut seed = 0x2026_0921;
+    let mut food_after_world_tick = None;
+    let mut founder_seed_base = None;
+    let mut food_position = None;
+    while let Some(flag) = next {
+        if flag == "--seed" {
+            seed = args
+                .next()
+                .ok_or("missing training seed")?
+                .to_string_lossy()
+                .parse::<u64>()?;
+        } else if flag == "--food-after-world-tick" {
+            if food_after_world_tick.is_some() {
+                return Err("duplicate food availability flag".into());
+            }
+            food_after_world_tick = Some(
+                args.next()
+                    .ok_or("missing food availability tick")?
+                    .to_string_lossy()
+                    .parse::<u64>()?,
+            );
+        } else if flag == "--founder-seed-base" {
+            if founder_seed_base.is_some() {
+                return Err("duplicate founder seed flag".into());
+            }
+            founder_seed_base = Some(
+                args.next()
+                    .ok_or("missing founder seed base")?
+                    .to_string_lossy()
+                    .parse::<u64>()?,
+            );
+        } else if flag == "--food-position" {
+            if food_position.is_some() {
+                return Err("duplicate food position flag".into());
+            }
+            food_position = Some([
+                args.next()
+                    .ok_or("missing food x")?
+                    .to_string_lossy()
+                    .parse::<f32>()?,
+                args.next()
+                    .ok_or("missing food y")?
+                    .to_string_lossy()
+                    .parse::<f32>()?,
+            ]);
+        } else {
+            return Err("unexpected argument".into());
         }
-        args.next()
-            .ok_or("missing training seed")?
-            .to_string_lossy()
-            .parse::<u64>()?
-    } else {
-        0x2026_0921
-    };
-    if args.next().is_some() {
-        return Err("unexpected argument".into());
+        next = args.next();
     }
     if mode == "--pilot" || mode == "--teacher-pilot" {
+        if food_after_world_tick.is_some() {
+            return Err("food availability is only supported in cycle mode".into());
+        }
         let receipt = if mode == "--teacher-pilot" {
-            alife_game_app::run_foundation_teacher_pilot(&output, seed, ticks)?
-        } else {
+            alife_game_app::run_foundation_teacher_pilot_with_scenario(
+                &output,
+                seed,
+                founder_seed_base.unwrap_or(seed),
+                ticks,
+                food_position,
+            )?
+        } else if founder_seed_base.is_none() && food_position.is_none() {
             alife_game_app::run_foundation_training_pilot(&output, seed, ticks)?
+        } else {
+            return Err("founder seed and food position overrides need a teacher pilot".into());
         };
         println!("{}", serde_json::to_string_pretty(&receipt)?);
     } else {
+        if founder_seed_base.is_some() || food_position.is_some() {
+            return Err("founder seed and food position overrides need a teacher pilot".into());
+        }
         // The production runtime and replay buffers have large debug-build
         // stack frames on Windows. Keep the CLI's main thread small.
         let receipt = std::thread::Builder::new()
             .name("foundation-training-cycle".into())
             .stack_size(32 * 1024 * 1024)
             .spawn(move || {
-                let result = if let Some(previous) = previous {
-                    alife_game_app::resume_foundation_training_cycle(
+                let result = match (previous, food_after_world_tick) {
+                    (Some(previous), Some(food_after)) => {
+                        alife_game_app::resume_foundation_training_cycle_with_food_delay(
+                            &previous, &output, seed, ticks, food_after,
+                        )
+                    }
+                    (Some(previous), None) => alife_game_app::resume_foundation_training_cycle(
                         &previous, &output, seed, ticks,
-                    )
-                } else {
-                    alife_game_app::run_foundation_training_cycle(&output, seed, ticks)
+                    ),
+                    (None, Some(food_after)) => {
+                        alife_game_app::run_foundation_training_cycle_with_food_delay(
+                            &output, seed, ticks, food_after,
+                        )
+                    }
+                    (None, None) => {
+                        alife_game_app::run_foundation_training_cycle(&output, seed, ticks)
+                    }
                 };
                 result.map_err(|error| error.to_string())
             })?

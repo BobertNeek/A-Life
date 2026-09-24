@@ -25,12 +25,15 @@ structural-sleep boundary. Neither run establishes long survival or useful care.
 
 The campaign must remain unavailable until the following integration is done:
 
-- Grounded demonstrations and protected behavioral evaluation integrated with
-  the existing production capture and trainer.
-- Long-life survival and outcome proof. The bounded cycle now skips natural
-  sleep ticks, starts replay segments on wake, and uses actual elapsed world
-  time in GAE. It fails if the organism dies; no 10–30-minute biological life
-  has passed. Death/terminal training remains outside this single-life cycle.
+- A balanced grounded demonstration corpus and protected behavioral evaluation
+  integrated with the existing production capture and trainer. A two-decision
+  feeding lesson now reaches a sealed meal and writes source-bound replay, but
+  it is not a four-category corpus or a warm-up update.
+- Food-free long-life survival and outcome proof. A release cycle survived
+  59,565 world ticks with 98 meals and completed PPO/export/rebinding. The
+  bounded cycle skips natural sleep ticks, starts replay segments on wake, and
+  uses actual elapsed world time in GAE. A 20-minute interval with food withheld
+  and subsequent autonomous feeding still needs its dedicated gate.
 - Measured independent-world throughput and a shared GPU dispatch coordinator.
   The available 1–8-world baseline shares a device but ticks separate sessions
   serially; it is not the planned fused batch.

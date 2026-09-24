@@ -425,6 +425,7 @@ pub fn initial_n2048_care_asset(seed: u64) -> Result<FoundationWeightAsset> {
 #[derive(Debug, serde::Serialize)]
 pub struct FoundationPilotReceipt {
     pub seed: u64,
+    pub founder_seed_base: u64,
     pub ticks: usize,
     pub collection_seconds: f64,
     pub replay_seconds: f64,
@@ -435,6 +436,10 @@ pub struct FoundationPilotReceipt {
     pub source_asset_digest: String,
     pub teacher_mode: bool,
     pub consumed_events: u64,
+    pub demonstration_replay_records: usize,
+    pub food_position: Option<[f32; 2]>,
+    pub initial_food_distance: Option<f32>,
+    pub final_food_distance: Option<f32>,
 }
 
 /// Prerequisite fidelity check, not behavioral acceptance or a training campaign.
@@ -443,7 +448,7 @@ pub fn run_foundation_training_pilot(
     seed: u64,
     tick_count: usize,
 ) -> Result<FoundationPilotReceipt> {
-    run_foundation_training_pilot_inner(output, seed, tick_count, false)
+    run_foundation_training_pilot_inner(output, seed, seed, tick_count, false, None)
 }
 
 /// Diagnostic of the existing legal teacher path against actual ingestion.
@@ -452,29 +457,86 @@ pub fn run_foundation_teacher_pilot(
     seed: u64,
     tick_count: usize,
 ) -> Result<FoundationPilotReceipt> {
-    run_foundation_training_pilot_inner(output, seed, tick_count, true)
+    run_foundation_training_pilot_inner(output, seed, seed, tick_count, true, None)
+}
+
+pub fn run_foundation_teacher_pilot_with_scenario(
+    output: &Path,
+    world_seed: u64,
+    founder_seed_base: u64,
+    tick_count: usize,
+    food_position: Option<[f32; 2]>,
+) -> Result<FoundationPilotReceipt> {
+    run_foundation_training_pilot_inner(
+        output,
+        world_seed,
+        founder_seed_base,
+        tick_count,
+        true,
+        food_position,
+    )
 }
 
 fn grounded_care_teacher(
     frame: &alife_core::PerceptionFrame,
     enabled_channels: u32,
 ) -> std::result::Result<alife_gpu_backend::GpuTrainingDemonstratorAction, ScaffoldContractError> {
-    let chosen = [
-        alife_core::CandidateActionFamily::Ingest,
-        alife_core::CandidateActionFamily::Contact,
-        alife_core::CandidateActionFamily::Approach,
-        alife_core::CandidateActionFamily::Inspect,
-        alife_core::CandidateActionFamily::Rest,
-        alife_core::CandidateActionFamily::Idle,
-    ]
-    .into_iter()
-    .find_map(|family| {
-        frame
-            .candidates()
+    let contact = |candidate: &alife_core::ActionCandidate| match candidate.observation {
+        alife_core::CandidateObservationRef::ObjectSlot(index) => frame
+            .grounded_object_slots()
             .iter()
-            .find(|candidate| candidate.family == family)
-    })
-    .ok_or(ScaffoldContractError::InvalidActionDecision)?;
+            .find(|slot| slot.slot_index == index)
+            .is_some_and(|slot| slot.contact >= 0.5),
+        alife_core::CandidateObservationRef::None => false,
+    };
+    let nearest_slot = frame
+        .grounded_object_slots()
+        .iter()
+        .min_by(|left, right| left.distance.total_cmp(&right.distance))
+        .map(|slot| slot.slot_index);
+    let ingest_target = frame
+        .candidates()
+        .iter()
+        .find(|candidate| {
+            candidate.family == alife_core::CandidateActionFamily::Ingest
+                && candidate.observation
+                    == nearest_slot.map_or(
+                        alife_core::CandidateObservationRef::None,
+                        alife_core::CandidateObservationRef::ObjectSlot,
+                    )
+        })
+        .and_then(|candidate| candidate.target.entity);
+    let chosen = frame
+        .candidates()
+        .iter()
+        .find(|candidate| {
+            candidate.family == alife_core::CandidateActionFamily::Ingest
+                && candidate.target.entity == ingest_target
+                && contact(candidate)
+        })
+        .or_else(|| {
+            frame.candidates().iter().find(|candidate| {
+                candidate.family == alife_core::CandidateActionFamily::Approach
+                    && ingest_target.is_some()
+                    && candidate.target.entity == ingest_target
+            })
+        })
+        .or_else(|| {
+            [
+                alife_core::CandidateActionFamily::Contact,
+                alife_core::CandidateActionFamily::Inspect,
+                alife_core::CandidateActionFamily::Rest,
+                alife_core::CandidateActionFamily::Idle,
+            ]
+            .into_iter()
+            .find_map(|family| {
+                frame
+                    .candidates()
+                    .iter()
+                    .find(|candidate| candidate.family == family)
+            })
+        })
+        .ok_or(ScaffoldContractError::InvalidActionDecision)?;
     let forced = match chosen.kind {
         alife_core::ActionKind::Move => 0,
         alife_core::ActionKind::Interact | alife_core::ActionKind::Write => 2,
@@ -501,11 +563,16 @@ fn grounded_care_teacher(
     motor_indices[forced] = chosen.candidate_index;
     if std::env::var_os("ALIFE_FOUNDATION_TEACHER_TRACE").is_some() {
         eprintln!(
-            "teacher tick={} enabled={enabled_channels:#08b} representative={} kind={:?} family={:?} motors={motor_indices:?} candidates={:?}",
+            "teacher tick={} enabled={enabled_channels:#08b} representative={} kind={:?} family={:?} motors={motor_indices:?} slots={:?} candidates={:?}",
             frame.tick().raw(),
             chosen.candidate_index,
             chosen.kind,
             chosen.family,
+            frame
+                .grounded_object_slots()
+                .iter()
+                .map(|slot| (slot.slot_index, slot.distance, slot.contact))
+                .collect::<Vec<_>>(),
             frame
                 .candidates()
                 .iter()
@@ -522,20 +589,23 @@ fn grounded_care_teacher(
 fn run_foundation_training_pilot_inner(
     output: &Path,
     seed: u64,
+    founder_seed_base: u64,
     tick_count: usize,
     teacher_mode: bool,
+    food_position: Option<[f32; 2]>,
 ) -> Result<FoundationPilotReceipt> {
-    if !(1..=512).contains(&tick_count) || seed == 0 {
+    if !(1..=512).contains(&tick_count) || seed == 0 || founder_seed_base == 0 {
         return Err(invalid().into());
     }
     std::fs::create_dir(output)?; // A fresh run never overwrites an earlier receipt.
-    let asset = initial_n2048_care_asset(seed)?;
+    let asset = initial_n2048_care_asset(founder_seed_base)?;
     std::fs::write(
         output.join("initial.alife-foundation"),
         asset.encode_canonical()?,
     )?;
     let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
     config.brain_class = BrainScaleTier::Standard2048;
+    config.founder_seed_base = founder_seed_base;
     let mut game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
     game.world.set_age_death_disabled_for_new_game(true)?;
     let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
@@ -556,9 +626,22 @@ fn run_foundation_training_pilot_inner(
         },
     )
     .map_err(|error| format!("pilot runtime admission: {error}"))?;
+    if let Some([x, y]) = food_position {
+        if !teacher_mode {
+            return Err("food placement belongs only to teacher scenarios".into());
+        }
+        let food = runtime
+            .world()
+            .entity_id("food-01")
+            .ok_or("teacher world has no food resource")?;
+        runtime.move_player_food(food, alife_core::Vec3f::new(x, y, 0.0))?;
+    }
     if teacher_mode {
         runtime.set_foundation_demonstrator(grounded_care_teacher)?;
     }
+    let initial_food_distance = teacher_mode
+        .then(|| teacher_food_distance(&runtime))
+        .transpose()?;
     let started = Instant::now();
     let mut steps = Vec::with_capacity(tick_count);
     for tick in 0..tick_count {
@@ -573,20 +656,19 @@ fn run_foundation_training_pilot_inner(
             )
             .into());
         }
+        let completed_teacher_lesson = teacher_mode && teacher_step_consumed(&collected[0]);
         steps.append(&mut collected);
+        if completed_teacher_lesson {
+            break;
+        }
     }
     let collection_seconds = started.elapsed().as_secs_f64();
+    let final_food_distance = teacher_mode
+        .then(|| teacher_food_distance(&runtime))
+        .transpose()?;
     let consumed_events = steps
         .iter()
-        .filter(|step| {
-            let outcome = step.patch.outcome();
-            outcome.physical.contact == alife_core::PhysicalContactKind::Consumed
-                || outcome.joint.as_ref().is_some_and(|joint| {
-                    joint.channel_outcomes.iter().any(|channel| {
-                        channel.physical.contact == alife_core::PhysicalContactKind::Consumed
-                    })
-                })
-        })
+        .filter(|step| teacher_step_consumed(step))
         .count() as u64;
     let sequence = foundation_replay_sequence(&steps, 0)
         .map_err(|error| format!("pilot replay conversion: {error}"))?;
@@ -609,6 +691,26 @@ fn run_foundation_training_pilot_inner(
         AdamWConfig::default(),
     )
     .map_err(|error| format!("pilot trainer admission: {error}"))?;
+    if teacher_mode {
+        let checkpoint = serde_json::to_vec(&trainer.checkpoint()?)?;
+        let source = foundation_replay_source(&steps[0].before.phenotype, &asset, 0, &checkpoint)?;
+        let mut writer = FoundationReplayWriter::new(
+            &output.join("replay"),
+            source,
+            steps[0].before.phenotype.clone(),
+            &asset,
+            FoundationReplayBudget::default(),
+        )?;
+        let references = steps
+            .iter()
+            .map(|step| writer.append(step))
+            .collect::<Result<Vec<_>>>()?;
+        std::fs::write(
+            output.join("replay-manifest.json"),
+            serde_json::to_vec(&references)?,
+        )?;
+        std::fs::write(output.join("actor-checkpoint.json"), checkpoint)?;
+    }
     let started = Instant::now();
     let replay = trainer
         .evaluate_replay(&sequence)
@@ -693,7 +795,8 @@ fn run_foundation_training_pilot_inner(
     }
     let receipt = FoundationPilotReceipt {
         seed,
-        ticks: tick_count,
+        founder_seed_base,
+        ticks: steps.len(),
         collection_seconds,
         replay_seconds,
         maximum_logit_error,
@@ -708,12 +811,51 @@ fn run_foundation_training_pilot_inner(
             .collect(),
         teacher_mode,
         consumed_events,
+        demonstration_replay_records: if teacher_mode { steps.len() } else { 0 },
+        food_position,
+        initial_food_distance,
+        final_food_distance,
     };
     std::fs::write(
         output.join("pilot.json"),
         serde_json::to_vec_pretty(&receipt)?,
     )?;
     Ok(receipt)
+}
+
+fn teacher_step_consumed(step: &crate::FoundationTrainingStep) -> bool {
+    let outcome = step.patch.outcome();
+    outcome.physical.contact == alife_core::PhysicalContactKind::Consumed
+        || outcome.joint.as_ref().is_some_and(|joint| {
+            joint.channel_outcomes.iter().any(|channel| {
+                channel.physical.contact == alife_core::PhysicalContactKind::Consumed
+            })
+        })
+}
+
+fn teacher_food_distance(runtime: &GpuLiveBrainRuntime) -> Result<f32> {
+    let world = runtime.world();
+    let food = world
+        .entity_id("food-01")
+        .ok_or("teacher world has no food")?;
+    let organism = world
+        .organism_entity_ids()
+        .into_iter()
+        .next()
+        .ok_or("teacher world has no organism")?
+        .1;
+    let food = world
+        .entity(food)
+        .ok_or("teacher food is missing")?
+        .position;
+    let organism = world
+        .entity(organism)
+        .ok_or("teacher organism is missing")?
+        .position;
+    Ok(((food.x - organism.x).powi(2)
+        + (food.y - organism.y).powi(2)
+        + (food.z - organism.z).powi(2))
+    .sqrt())
 }
 
 fn compare_replay_values(
@@ -810,6 +952,31 @@ pub struct FoundationReplaySource {
     pub foundation_asset_digest: alife_core::Blake3Digest,
     pub phenotype_hash: alife_core::PhenotypeHash,
     pub compiler_inputs_digest: [u64; 4],
+}
+
+pub(crate) fn foundation_replay_source(
+    phenotype: &alife_core::BrainPhenotype,
+    asset: &FoundationWeightAsset,
+    policy_version: u64,
+    actor_checkpoint: &[u8],
+) -> Result<FoundationReplaySource> {
+    let revision = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()?;
+    if !revision.status.success() {
+        return Err("could not identify training source revision".into());
+    }
+    Ok(FoundationReplaySource {
+        source_revision: String::from_utf8(revision.stdout)?.trim().to_owned(),
+        policy_version,
+        actor_checkpoint_digest: alife_core::Blake3Digest::from_bytes(
+            *blake3::hash(actor_checkpoint).as_bytes(),
+        ),
+        foundation_asset_digest: asset.digest(),
+        phenotype_hash: phenotype.phenotype_hash(),
+        compiler_inputs_digest: phenotype.compiler_inputs_digest(),
+    })
 }
 
 /// Resident-process ceiling, not merely a cap on the serialized record. The

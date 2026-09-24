@@ -14,9 +14,9 @@ use alife_training::{
 };
 
 use crate::{
-    initial_n2048_care_asset, load_foundation_replay_window, verify_foundation_replay_step,
-    FoundationReplayBudget, FoundationReplaySource, FoundationReplayWriter, GpuDurableSaveManifest,
-    GpuLiveBrainRuntime,
+    foundation_replay_source, initial_n2048_care_asset, load_foundation_replay_window,
+    verify_foundation_replay_step, FoundationReplayBudget, FoundationReplayWriter,
+    GpuDurableSaveManifest, GpuLiveBrainRuntime,
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -32,6 +32,14 @@ pub struct FoundationCycleReceipt {
     pub world_ticks_elapsed: u64,
     #[serde(default)]
     pub consumed_events: u64,
+    #[serde(default)]
+    pub food_available_world_tick: Option<u64>,
+    #[serde(default)]
+    pub first_consumed_world_tick: Option<u64>,
+    #[serde(default)]
+    pub food_available_elapsed_seconds: Option<f64>,
+    #[serde(default)]
+    pub first_consumed_elapsed_seconds: Option<f64>,
     #[serde(default)]
     pub initial_energy: f32,
     #[serde(default)]
@@ -109,7 +117,24 @@ pub fn run_foundation_training_cycle(
     seed: u64,
     training_ticks: usize,
 ) -> Result<FoundationCycleReceipt> {
-    run_foundation_training_cycle_from(output, seed, training_ticks, None)
+    run_foundation_training_cycle_from(output, seed, training_ticks, None, None)
+}
+
+/// A scenario gate: food is out of reach until an explicit world tick. Biology
+/// and the organism's policy are unchanged throughout the interval.
+pub fn run_foundation_training_cycle_with_food_delay(
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    food_available_world_tick: u64,
+) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from(
+        output,
+        seed,
+        training_ticks,
+        None,
+        Some(food_available_world_tick),
+    )
 }
 
 /// Continue from an exactly rebound, sealed previous cycle. The saved optimizer
@@ -120,7 +145,23 @@ pub fn resume_foundation_training_cycle(
     seed: u64,
     training_ticks: usize,
 ) -> Result<FoundationCycleReceipt> {
-    run_foundation_training_cycle_from(output, seed, training_ticks, Some(previous))
+    run_foundation_training_cycle_from(output, seed, training_ticks, Some(previous), None)
+}
+
+pub fn resume_foundation_training_cycle_with_food_delay(
+    previous: &Path,
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    food_available_world_tick: u64,
+) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from(
+        output,
+        seed,
+        training_ticks,
+        Some(previous),
+        Some(food_available_world_tick),
+    )
 }
 
 fn run_foundation_training_cycle_from(
@@ -128,9 +169,13 @@ fn run_foundation_training_cycle_from(
     seed: u64,
     training_ticks: usize,
     previous: Option<&Path>,
+    food_available_world_tick: Option<u64>,
 ) -> Result<FoundationCycleReceipt> {
     if seed == 0 || !(1..=36_000).contains(&training_ticks) {
         return Err("cycle needs a nonzero seed and 1..=36000 training ticks".into());
+    }
+    if food_available_world_tick == Some(0) {
+        return Err("food availability tick must be positive".into());
     }
     std::fs::create_dir(output)?;
     let (asset, policy_version, restored_actor, restored_value, founder_seed_base) =
@@ -210,6 +255,35 @@ fn run_foundation_training_cycle_from(
             demonstrator: None,
         },
     )?;
+    let delayed_food = if food_available_world_tick.is_some() {
+        let food_id = runtime
+            .world()
+            .entity_id("food-01")
+            .ok_or("training world is missing its food resource")?;
+        let original_position = runtime
+            .world()
+            .entity(food_id)
+            .ok_or("training food resource is missing")?
+            .position;
+        // This canonical world is flat (Z = 0). Keep food in the legal world
+        // but far beyond the founder's practical reach during the gate.
+        let hidden_position =
+            runtime.move_player_food(food_id, alife_core::Vec3f::new(390.0, 340.0, 0.0))?;
+        Some((food_id, original_position, hidden_position))
+    } else {
+        None
+    };
+    std::fs::write(
+        output.join("scenario.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "world_seed": seed,
+            "founder_seed_base": founder_seed_base,
+            "food_available_world_tick": food_available_world_tick,
+            "food_hidden_position": delayed_food.map(|(_, _, position)| position.to_array()),
+            "food_original_position": delayed_food.map(|(_, position, _)| position.to_array()),
+            "age_death_disabled": true,
+        }))?,
+    )?;
     // Sleep transitions use the same durable neural authority as an ordinary
     // New Game. Without an exact base, the sleep journal has no publisher.
     let asset_root = output.join("world-assets");
@@ -248,6 +322,10 @@ fn run_foundation_training_cycle_from(
     let initial_energy = organism_energy(&runtime, organism_id)?;
     let mut minimum_energy = initial_energy;
     let mut consumed_events = 0_u64;
+    let mut first_consumed_world_tick = None;
+    let mut food_available_elapsed_seconds = None;
+    let mut first_consumed_elapsed_seconds = None;
+    let mut food_hidden = delayed_food.is_some();
 
     let started = Instant::now();
     let mut production_tick_seconds = 0.0_f64;
@@ -273,7 +351,24 @@ fn run_foundation_training_cycle_from(
         return Err("first training capture belongs to a different organism".into());
     }
     minimum_energy = minimum_energy.min(organism_energy(&runtime, organism_id)?);
-    consumed_events += u64::from(consumed(&first[0]));
+    if consumed(&first[0]) {
+        if food_hidden {
+            return Err("food was consumed before the scenario made it available".into());
+        }
+        consumed_events += 1;
+        first_consumed_world_tick = Some(first[0].patch.outcome().outcome_tick.raw());
+        first_consumed_elapsed_seconds = Some(started.elapsed().as_secs_f64());
+    }
+    if food_hidden && runtime.world().tick().raw() >= food_available_world_tick.unwrap_or(u64::MAX)
+    {
+        if consumed_events != 0 {
+            return Err("food was consumed before the scenario made it available".into());
+        }
+        let (food_id, original_position, _) = delayed_food.ok_or("missing delayed food")?;
+        runtime.move_player_food(food_id, original_position)?;
+        food_hidden = false;
+        food_available_elapsed_seconds = Some(started.elapsed().as_secs_f64());
+    }
     std::fs::write(output.join("phase.txt"), "first-capture")?;
     let phenotype = first[0].before.phenotype.clone();
     let trainable: Vec<u32> = phenotype.synapses().iter().enumerate().filter_map(|(i, synapse)| {
@@ -296,23 +391,7 @@ fn run_foundation_training_cycle_from(
         trainer.restore_checkpoint(checkpoint)?;
     }
     let initial_checkpoint = serde_json::to_vec(&trainer.checkpoint()?)?;
-    let source_revision = std::process::Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()?;
-    if !source_revision.status.success() {
-        return Err("could not identify training source revision".into());
-    }
-    let source = FoundationReplaySource {
-        source_revision: String::from_utf8(source_revision.stdout)?.trim().to_owned(),
-        policy_version,
-        actor_checkpoint_digest: alife_core::Blake3Digest::from_bytes(
-            *blake3::hash(&initial_checkpoint).as_bytes(),
-        ),
-        foundation_asset_digest: asset.digest(),
-        phenotype_hash: phenotype.phenotype_hash(),
-        compiler_inputs_digest: phenotype.compiler_inputs_digest(),
-    };
+    let source = foundation_replay_source(&phenotype, &asset, policy_version, &initial_checkpoint)?;
     let budget = FoundationReplayBudget::default();
     let replay_dir = output.join("replay");
     let mut writer = FoundationReplayWriter::new(
@@ -360,6 +439,16 @@ fn run_foundation_training_cycle_from(
             return Err("cycle world advanced by more than one tick".into());
         }
         minimum_energy = minimum_energy.min(organism_energy(&runtime, organism_id)?);
+        let was_food_hidden = food_hidden;
+        if food_hidden && after >= food_available_world_tick.unwrap_or(u64::MAX) {
+            if consumed_events != 0 {
+                return Err("food was consumed before the scenario made it available".into());
+            }
+            let (food_id, original_position, _) = delayed_food.ok_or("missing delayed food")?;
+            runtime.move_player_food(food_id, original_position)?;
+            food_hidden = false;
+            food_available_elapsed_seconds = Some(started.elapsed().as_secs_f64());
+        }
         stalled_since = Instant::now();
         let mut captured = runtime.take_foundation_training_steps();
         if captured.is_empty() {
@@ -382,12 +471,24 @@ fn run_foundation_training_cycle_from(
             writer.start_segment()?;
             gap = false;
         }
-        consumed_events += u64::from(consumed(&captured[0]));
+        if consumed(&captured[0]) {
+            if was_food_hidden {
+                return Err("food was consumed before the scenario made it available".into());
+            }
+            consumed_events += 1;
+            if first_consumed_world_tick.is_none() {
+                first_consumed_world_tick = Some(captured[0].patch.outcome().outcome_tick.raw());
+                first_consumed_elapsed_seconds = Some(started.elapsed().as_secs_f64());
+            }
+        }
         let append_started = Instant::now();
         references.push(writer.append(&captured.remove(0))?);
         replay_append_seconds += append_started.elapsed().as_secs_f64();
     }
     let collection_seconds = started.elapsed().as_secs_f64();
+    if food_hidden {
+        return Err("cycle ended before the delayed food became available".into());
+    }
     let world_ticks_elapsed = runtime.world().tick().raw();
     let final_energy = organism_energy(&runtime, organism_id)?;
     std::fs::write(
@@ -609,6 +710,10 @@ fn run_foundation_training_cycle_from(
         training_ticks,
         world_ticks_elapsed,
         consumed_events,
+        food_available_world_tick,
+        first_consumed_world_tick,
+        food_available_elapsed_seconds,
+        first_consumed_elapsed_seconds,
         initial_energy,
         minimum_energy,
         final_energy,
