@@ -8,6 +8,8 @@ mod checkpoint_poll;
 mod checkpoint_runtime;
 mod durability_hold;
 mod exact_population_checkpoint;
+#[cfg(feature = "foundation-training")]
+mod foundation_worlds;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod founder_consequence_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
@@ -21,6 +23,8 @@ mod recovery_sleep_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod sleep_atomicity_tests;
 mod staged_tick;
+#[cfg(feature = "foundation-training")]
+pub use foundation_worlds::*;
 
 use durability_hold::{
     brain_atp_world_tick_mode, motor_eligible, sleep_recovery_body_event_due, BrainAtpWorldTickMode,

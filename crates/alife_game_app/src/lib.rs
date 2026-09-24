@@ -137,9 +137,13 @@ pub use production_voxel_frontend::*;
 
 #[cfg(feature = "foundation-training")]
 mod foundation_training;
+#[cfg(feature = "foundation-training")]
+mod foundation_training_cycle;
 mod new_game_lifecycle;
 #[cfg(feature = "foundation-training")]
 pub use foundation_training::*;
+#[cfg(feature = "foundation-training")]
+pub use foundation_training_cycle::*;
 pub use new_game_lifecycle::*;
 
 mod curated_founder_reset;

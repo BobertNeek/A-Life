@@ -180,8 +180,19 @@ pub fn foundation_replay_sequence(
     burn_in_ticks: usize,
 ) -> Result<TrainingSequence> {
     let first = steps.first().ok_or_else(invalid)?;
+    let upload = alife_gpu_backend::closed_loop_buffers::GpuPhenotypeUpload::try_from(
+        &first.before.phenotype,
+    )?;
+    foundation_replay_sequence_with_upload(steps, burn_in_ticks, &upload)
+}
+
+fn foundation_replay_sequence_with_upload(
+    steps: &[FoundationTrainingStep],
+    burn_in_ticks: usize,
+    upload: &alife_gpu_backend::closed_loop_buffers::GpuPhenotypeUpload,
+) -> Result<TrainingSequence> {
+    let first = steps.first().ok_or_else(invalid)?;
     let phenotype = &first.before.phenotype;
-    let upload = alife_gpu_backend::closed_loop_buffers::GpuPhenotypeUpload::try_from(phenotype)?;
     let homeostasis = snapshot_values(
         &first.before,
         first
@@ -567,4 +578,588 @@ fn compare_replay_values(
         maximum = maximum.max(error);
     }
     Ok(maximum)
+}
+
+pub const FOUNDATION_REPLAY_HOST_LIMIT_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+pub const FOUNDATION_REPLAY_DISK_LIMIT_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+const FOUNDATION_REPLAY_RECORD_LIMIT_BYTES: u64 = 256 * 1024 * 1024;
+const FOUNDATION_REPLAY_SCHEMA: u32 = 1;
+
+/// Recorded provenance, not authentication. The caller obtains the checkpoint
+/// digest from the actual frozen actor, and keeps that actor pinned for the life.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct FoundationReplaySource {
+    pub source_revision: String,
+    pub policy_version: u64,
+    pub actor_checkpoint_digest: alife_core::Blake3Digest,
+    pub foundation_asset_digest: alife_core::Blake3Digest,
+    pub phenotype_hash: alife_core::PhenotypeHash,
+    pub compiler_inputs_digest: [u64; 4],
+}
+
+/// Resident-process ceiling, not merely a cap on the serialized record. The
+/// runner can use check_additional before requesting its next GPU capture too.
+#[derive(Debug, Clone, Copy)]
+pub struct FoundationReplayBudget {
+    pub host_limit_bytes: u64,
+}
+impl Default for FoundationReplayBudget {
+    fn default() -> Self {
+        Self {
+            host_limit_bytes: FOUNDATION_REPLAY_HOST_LIMIT_BYTES,
+        }
+    }
+}
+impl FoundationReplayBudget {
+    pub fn check_additional(self, bytes: u64) -> Result<()> {
+        if self.host_limit_bytes == 0 || self.host_limit_bytes > FOUNDATION_REPLAY_HOST_LIMIT_BYTES
+        {
+            return Err("replay host limit must be positive and at most 8 GiB".into());
+        }
+        let allocated = replay_process_bytes()?;
+        if allocated
+            .checked_add(bytes)
+            .and_then(|n| n.checked_add(64 * 1024 * 1024))
+            .is_none_or(|n| n > self.host_limit_bytes)
+        {
+            return Err(
+                "replay allocation would exceed the host memory ceiling; shorten the replay window"
+                    .into(),
+            );
+        }
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+fn replay_process_bytes() -> Result<u64> {
+    use windows_sys::Win32::System::{
+        ProcessStatus::{K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS},
+        Threading::GetCurrentProcess,
+    };
+    // SAFETY: zero initializes a plain Windows ABI output record; its cb is set
+    // before the API receives a valid writable pointer to that exact record.
+    let mut counters: PROCESS_MEMORY_COUNTERS = unsafe { std::mem::zeroed() };
+    counters.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+    // SAFETY: process pseudo-handle and record pointer remain valid for this call.
+    if unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, counters.cb) } == 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(counters.WorkingSetSize.max(counters.PagefileUsage) as u64)
+}
+#[cfg(not(windows))]
+fn replay_process_bytes() -> Result<u64> {
+    Err("bounded production replay currently requires the Windows process-memory query".into())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct ReplayContinuity {
+    organism_id: u64,
+    slot: u32,
+    slot_generation: u32,
+    dispatch_generation: u64,
+    activation_side: u8,
+    weight_generation: u64,
+    weight_bank: u8,
+    recurrent_digest: [u8; 32],
+    weight_digest: [u8; 32],
+    dendrites_digest: [u8; 32],
+}
+impl ReplayContinuity {
+    fn capture(snapshot: &GpuTrainingStateSnapshot) -> Result<Self> {
+        let mut recurrent = blake3::Hasher::new();
+        for range in [
+            activation_range(snapshot)?,
+            snapshot.brain_slot.word_ranges().homeostasis_words.clone(),
+        ] {
+            for word in snapshot_words(snapshot, range)? {
+                recurrent.update(&word.to_le_bytes());
+            }
+        }
+        let mut weights = blake3::Hasher::new();
+        let (lifetime, fast) = active_weight_ranges(snapshot)?;
+        for range in [lifetime, fast] {
+            for word in snapshot_words(snapshot, range)? {
+                weights.update(&word.to_le_bytes());
+            }
+        }
+        Ok(Self {
+            organism_id: snapshot.handle.organism_id().raw(),
+            slot: snapshot.handle.slot(),
+            slot_generation: snapshot.handle.generation(),
+            dispatch_generation: snapshot.logical_dispatch_generation,
+            activation_side: snapshot.active_activation_side,
+            weight_generation: snapshot.active_weight_generation,
+            weight_bank: snapshot.active_weight_bank,
+            recurrent_digest: *recurrent.finalize().as_bytes(),
+            weight_digest: *weights.finalize().as_bytes(),
+            dendrites_digest: *blake3::hash(&serde_json::to_vec(&snapshot.v11.dendritic_branches)?)
+                .as_bytes(),
+        })
+    }
+    fn validate_next(&self, next: &Self) -> Result<()> {
+        if self.organism_id != next.organism_id
+            || self.slot != next.slot
+            || self.slot_generation != next.slot_generation
+            || self.dispatch_generation != next.dispatch_generation
+            || self.activation_side != next.activation_side
+            || self.recurrent_digest != next.recurrent_digest
+            || self.dendrites_digest != next.dendrites_digest
+            || next.weight_generation < self.weight_generation
+            || (next.weight_generation == self.weight_generation
+                && (next.weight_bank != self.weight_bank
+                    || next.weight_digest != self.weight_digest))
+        {
+            return Err(
+                "replay discontinuity: start an explicit segment after sleep/reset/state change"
+                    .into(),
+            );
+        }
+        Ok(())
+    }
+}
+
+/// A compact disk record contains replay inputs and the original sealed world
+/// outcome. It contains no full mutable GPU allocation or second world state.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FoundationReplayRecord {
+    schema: u32,
+    pub source: FoundationReplaySource,
+    pub record_index: u64,
+    pub segment: u64,
+    pub tick: u64,
+    pub organism_id: u64,
+    pub sequence: TrainingSequence,
+    pub behavior: alife_gpu_backend::GpuTrainingRolloutReceipt,
+    pub patch: alife_core::ExperiencePatch,
+    before: ReplayContinuity,
+    after: ReplayContinuity,
+}
+
+/// Keep these small references in the life manifest, not full GPU captures.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct FoundationReplayRecordRef {
+    pub record_index: u64,
+    pub segment: u64,
+    pub tick: u64,
+    pub encoded_bytes: u64,
+    pub digest: [u8; 32],
+}
+impl FoundationReplayRecordRef {
+    pub fn file_name(&self) -> String {
+        format!("replay-{:012}.json.zst", self.record_index)
+    }
+}
+
+/// Streaming writer retains only the compiled topology and one compact boundary
+/// fingerprint. Drop each FoundationTrainingStep after append returns.
+pub struct FoundationReplayWriter {
+    directory: std::path::PathBuf,
+    source: FoundationReplaySource,
+    phenotype: alife_core::BrainPhenotype,
+    upload: alife_gpu_backend::closed_loop_buffers::GpuPhenotypeUpload,
+    budget: FoundationReplayBudget,
+    next_index: u64,
+    written_bytes: u64,
+    segment: u64,
+    previous: Option<(u64, ReplayContinuity, alife_gpu_backend::GpuBrainSlot)>,
+}
+impl FoundationReplayWriter {
+    pub fn new(
+        directory: &Path,
+        source: FoundationReplaySource,
+        phenotype: alife_core::BrainPhenotype,
+        asset: &FoundationWeightAsset,
+        budget: FoundationReplayBudget,
+    ) -> Result<Self> {
+        asset.validate_against(&phenotype)?;
+        if source.source_revision.is_empty()
+            || source.source_revision.len() > 128
+            || source.foundation_asset_digest != asset.digest()
+            || source.phenotype_hash != phenotype.phenotype_hash()
+            || source.compiler_inputs_digest != phenotype.compiler_inputs_digest()
+            || phenotype
+                .synapses()
+                .iter()
+                .zip(asset.weights())
+                .any(|(s, w)| s.genetic_weight().to_bits() != w.to_bits())
+        {
+            return Err("replay source is not the exact frozen actor phenotype".into());
+        }
+        budget.check_additional((phenotype.synapses().len() as u64).saturating_mul(256))?;
+        std::fs::create_dir_all(directory)?;
+        if std::fs::read_dir(directory)?.next().is_some() {
+            return Err("replay writer requires a new empty life directory; existing records are never overwritten".into());
+        }
+        let upload =
+            alife_gpu_backend::closed_loop_buffers::GpuPhenotypeUpload::try_from(&phenotype)?;
+        Ok(Self {
+            directory: directory.to_path_buf(),
+            source,
+            phenotype,
+            upload,
+            budget,
+            next_index: 0,
+            written_bytes: 0,
+            segment: 0,
+            previous: None,
+        })
+    }
+
+    /// A real sleep/reset/gap ends recurrent continuity. This does not terminate
+    /// the biological life or GAE; the runner records its actual outcome separately.
+    pub fn start_segment(&mut self) -> Result<()> {
+        self.segment = self.segment.checked_add(1).ok_or_else(invalid)?;
+        self.previous = None;
+        Ok(())
+    }
+
+    pub fn append(&mut self, step: &FoundationTrainingStep) -> Result<FoundationReplayRecordRef> {
+        if step.before.phenotype != self.phenotype
+            || step.after_inference.phenotype != self.phenotype
+        {
+            return Err("frozen genetic actor changed within a replay life".into());
+        }
+        // Reserve conversion's temporary float arrays, candidate/patch copies,
+        // and serialized evidence before creating another record-sized object.
+        let scratch = (step.before.mutable_words.len() as u64)
+            .checked_add(step.after_inference.mutable_words.len() as u64)
+            .and_then(|n| n.checked_mul(16))
+            .ok_or_else(invalid)?;
+        self.budget.check_additional(scratch)?;
+        let sequence =
+            foundation_replay_sequence_with_upload(std::slice::from_ref(step), 0, &self.upload)?;
+        if alife_core::OutcomeCreditPacket::from_sealed_patch(&step.patch)? != step.outcome_credit {
+            return Err("capture outcome credit differs from its sealed world patch".into());
+        }
+        let before = ReplayContinuity::capture(&step.before)?;
+        let after = ReplayContinuity::capture(&step.after_inference)?;
+        if let Some((tick, previous, slot)) = &self.previous {
+            if tick.checked_add(1) != Some(step.frame.tick().raw())
+                || *slot != step.before.brain_slot
+            {
+                return Err("replay tick/allocation gap requires an explicit new segment".into());
+            }
+            previous.validate_next(&before)?;
+        }
+        let record = FoundationReplayRecord {
+            schema: FOUNDATION_REPLAY_SCHEMA,
+            source: self.source.clone(),
+            record_index: self.next_index,
+            segment: self.segment,
+            tick: step.frame.tick().raw(),
+            organism_id: step.frame.organism_id().raw(),
+            sequence,
+            behavior: step.behavior.clone(),
+            patch: step.patch.clone(),
+            before,
+            after: after.clone(),
+        };
+        record.validate(&self.source, &self.phenotype)?;
+        if self.written_bytes >= FOUNDATION_REPLAY_DISK_LIMIT_BYTES {
+            return Err("compact replay reached its 4 GiB disk ceiling".into());
+        }
+        let reference = write_replay_record(&self.directory, &record)?;
+        let next_bytes = self
+            .written_bytes
+            .checked_add(reference.encoded_bytes)
+            .ok_or_else(invalid)?;
+        if next_bytes > FOUNDATION_REPLAY_DISK_LIMIT_BYTES {
+            std::fs::remove_file(self.directory.join(reference.file_name()))?;
+            return Err("compact replay would exceed its 4 GiB disk ceiling".into());
+        }
+        self.previous = Some((record.tick, after, step.after_inference.brain_slot.clone()));
+        self.next_index = self.next_index.checked_add(1).ok_or_else(invalid)?;
+        self.written_bytes = next_bytes;
+        Ok(reference)
+    }
+}
+
+impl FoundationReplayRecord {
+    fn validate(
+        &self,
+        expected: &FoundationReplaySource,
+        phenotype: &alife_core::BrainPhenotype,
+    ) -> Result<()> {
+        if self.schema != FOUNDATION_REPLAY_SCHEMA
+            || &self.source != expected
+            || self.source.phenotype_hash != phenotype.phenotype_hash()
+            || self.source.compiler_inputs_digest != phenotype.compiler_inputs_digest()
+            || self.sequence.ticks.len() != 1
+            || self.sequence.burn_in_ticks != 0
+            || self.tick != self.behavior.tick
+            || self.organism_id != self.behavior.organism_id
+            || self.organism_id != self.before.organism_id
+            || self.organism_id != self.after.organism_id
+            || self.patch.pre_action().perception().frame_digest() != self.behavior.frame_digest
+            || self.patch.pre_action().perception().tick().raw() != self.tick
+            || self.patch.pre_action().perception().organism_id().raw() != self.organism_id
+            || self.before.weight_generation != self.behavior.active_weight_generation
+            || self.after.weight_generation != self.before.weight_generation
+            || self.after.weight_bank != self.before.weight_bank
+            || self.after.weight_digest != self.before.weight_digest
+            || self.after.dispatch_generation != self.behavior.dispatch_generation
+            || self.after.activation_side
+                != (self.before.activation_side
+                    ^ (self.sequence.ticks[0].microstep_count as u8 & 1))
+        {
+            return Err("replay record identity/continuity contract mismatch".into());
+        }
+        self.sequence.validate_for(phenotype)?;
+        // Check float bits after decoding too. A codec/parser change must fail
+        // rather than silently alter the recurrent boundary used by replay.
+        let mut recurrent = blake3::Hasher::new();
+        for value in &self.sequence.initial.activations {
+            recurrent.update(&value.to_bits().to_le_bytes());
+        }
+        for (activity, metabolic) in self
+            .sequence
+            .initial
+            .activity_ema
+            .iter()
+            .zip(&self.sequence.initial.metabolic_load)
+        {
+            recurrent.update(&activity.to_bits().to_le_bytes());
+            recurrent.update(&metabolic.to_bits().to_le_bytes());
+        }
+        if recurrent.finalize().as_bytes() != &self.before.recurrent_digest
+            || blake3::hash(&serde_json::to_vec(&self.sequence.initial.dendrites)?).as_bytes()
+                != &self.before.dendrites_digest
+        {
+            return Err("decoded replay initial state differs from the captured boundary".into());
+        }
+        self.patch.validate_contract()?;
+        self.behavior.sampling.validate()?;
+        // The sealed patch retains actual body/homeostasis and measured outcome,
+        // rather than constructing reward or physiology from the proposed action.
+        alife_core::OutcomeCreditPacket::from_sealed_patch(&self.patch)?;
+        let tick = &self.sequence.ticks[0];
+        let count = tick.candidates.len();
+        if count == 0
+            || count > 32
+            || self.behavior.logits.len() != count
+            || self.behavior.forced_motor_slots.len() != count
+            || self.behavior.decoder_input_stride > 54
+            || self.behavior.decoder_input_stride < 24
+            || self.behavior.decoder_inputs.len() != count * self.behavior.decoder_input_stride
+            || self.patch.pre_action().perception().candidates().len() != count
+            || !self
+                .behavior
+                .logits
+                .iter()
+                .chain(self.behavior.factor_log_probabilities.iter())
+                .all(|x| x.is_finite())
+            || !self.behavior.policy_joint_log_probability.is_finite()
+        {
+            return Err(invalid().into());
+        }
+        for (index, candidate) in tick.candidates.iter().enumerate() {
+            let begin = index * self.behavior.decoder_input_stride;
+            if candidate.family != self.patch.pre_action().perception().candidates()[index].family
+                || candidate.decoder_inputs[..self.behavior.decoder_input_stride]
+                    != self.behavior.decoder_inputs
+                        [begin..begin + self.behavior.decoder_input_stride]
+            {
+                return Err("replay candidate inputs differ from GPU behavior evidence".into());
+            }
+        }
+        if self.behavior.behavior == alife_gpu_backend::GpuTrainingBehaviorKind::OnPolicy {
+            self.behavior.on_policy_log_probability()?;
+        } else if self.behavior.joint_log_probability.is_some()
+            || self.behavior.sampling.demonstrator.is_none()
+        {
+            return Err("demonstration record cannot claim on-policy behavior likelihood".into());
+        }
+        Ok(())
+    }
+}
+
+struct ReplayDigestWriter<W> {
+    inner: W,
+    hasher: blake3::Hasher,
+    bytes: u64,
+}
+impl<W: std::io::Write> std::io::Write for ReplayDigestWriter<W> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if self.bytes.saturating_add(bytes.len() as u64) > FOUNDATION_REPLAY_RECORD_LIMIT_BYTES {
+            return Err(std::io::Error::other(
+                "compact replay record exceeds file limit",
+            ));
+        }
+        let n = self.inner.write(bytes)?;
+        self.hasher.update(&bytes[..n]);
+        self.bytes += n as u64;
+        Ok(n)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+fn write_replay_record(
+    directory: &Path,
+    record: &FoundationReplayRecord,
+) -> Result<FoundationReplayRecordRef> {
+    use std::io::Write;
+    let mut reference = FoundationReplayRecordRef {
+        record_index: record.record_index,
+        segment: record.segment,
+        tick: record.tick,
+        encoded_bytes: 0,
+        digest: [0; 32],
+    };
+    let destination = directory.join(reference.file_name());
+    let temporary = directory.join(format!("replay-{:012}.pending", record.record_index));
+    if destination.exists() {
+        return Err("replay record already exists".into());
+    }
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)?;
+    let result = (|| -> Result<_> {
+        let mut writer = ReplayDigestWriter {
+            inner: std::io::BufWriter::with_capacity(64 * 1024, file),
+            hasher: blake3::Hasher::new(),
+            bytes: 0,
+        };
+        let mut encoder = zstd::stream::write::Encoder::new(&mut writer, 3)?;
+        serde_json::to_writer(&mut encoder, record)?;
+        encoder.finish()?;
+        writer.flush()?;
+        writer.inner.get_ref().sync_all()?;
+        reference.encoded_bytes = writer.bytes;
+        reference.digest = *writer.hasher.finalize().as_bytes();
+        drop(writer);
+        std::fs::rename(&temporary, &destination)?;
+        Ok(reference)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result
+}
+
+/// Load one verified record without reading the entire life. BLAKE3 binds the
+/// exact encoded bytes and provenance; typed validation still runs after decode.
+pub fn load_foundation_replay_record(
+    directory: &Path,
+    reference: &FoundationReplayRecordRef,
+    expected: &FoundationReplaySource,
+    phenotype: &alife_core::BrainPhenotype,
+    budget: FoundationReplayBudget,
+) -> Result<FoundationReplayRecord> {
+    use std::io::{Read, Seek};
+    if reference.encoded_bytes == 0
+        || reference.encoded_bytes > FOUNDATION_REPLAY_RECORD_LIMIT_BYTES
+    {
+        return Err(invalid().into());
+    }
+    // Conservative allowance for JSON decoding, vector capacities and validation
+    // temporaries. Existing loaded windows are included in measured process use.
+    budget.check_additional(
+        reference
+            .encoded_bytes
+            .checked_mul(8)
+            .and_then(|n| n.checked_add(FOUNDATION_REPLAY_RECORD_LIMIT_BYTES))
+            .ok_or_else(invalid)?,
+    )?;
+    let mut file = std::fs::File::open(directory.join(reference.file_name()))?;
+    if file.metadata()?.len() != reference.encoded_bytes {
+        return Err("replay file length mismatch".into());
+    }
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buffer[..n]);
+    }
+    if hasher.finalize().as_bytes() != &reference.digest {
+        return Err("replay file digest mismatch".into());
+    }
+    file.rewind()?;
+    let decoder = zstd::stream::read::Decoder::new(std::io::BufReader::new(file))?;
+    let record: FoundationReplayRecord =
+        serde_json::from_reader(decoder.take(FOUNDATION_REPLAY_RECORD_LIMIT_BYTES + 1))?;
+    record.validate(expected, phenotype)?;
+    if record.record_index != reference.record_index
+        || record.segment != reference.segment
+        || record.tick != reference.tick
+    {
+        return Err(invalid().into());
+    }
+    Ok(record)
+}
+
+pub struct FoundationReplayWindow {
+    pub sequence: TrainingSequence,
+    /// Aligned with every replay row, including burn-in. The loss builder must
+    /// exclude burn-in and calculate global life GAE before slicing its targets.
+    pub behavior: Vec<alife_gpu_backend::GpuTrainingRolloutReceipt>,
+    pub patches: Vec<alife_core::ExperiencePatch>,
+    pub first_tick: u64,
+    pub segment: u64,
+}
+
+/// Reload a bounded contiguous window from immutable record references. A caller
+/// may overlap earlier rows as burn-in; this neither duplicates loss rows nor
+/// invents a reset state. Segment boundaries cannot be crossed silently.
+pub fn load_foundation_replay_window(
+    directory: &Path,
+    references: &[FoundationReplayRecordRef],
+    burn_in_ticks: usize,
+    expected: &FoundationReplaySource,
+    phenotype: &alife_core::BrainPhenotype,
+    budget: FoundationReplayBudget,
+) -> Result<FoundationReplayWindow> {
+    if references.is_empty()
+        || references.len() > alife_training::MAX_TRAINING_SEQUENCE_TICKS
+        || burn_in_ticks >= references.len()
+    {
+        return Err(invalid().into());
+    }
+    let total = references.iter().try_fold(0u64, |sum, r| {
+        sum.checked_add(r.encoded_bytes).ok_or_else(invalid)
+    })?;
+    budget.check_additional(total.checked_mul(8).ok_or_else(invalid)?)?;
+    let mut records = references.iter();
+    let first = load_foundation_replay_record(
+        directory,
+        records.next().ok_or_else(invalid)?,
+        expected,
+        phenotype,
+        budget,
+    )?;
+    let mut window = FoundationReplayWindow {
+        sequence: first.sequence,
+        behavior: vec![first.behavior],
+        patches: vec![first.patch],
+        first_tick: first.tick,
+        segment: first.segment,
+    };
+    let mut previous = first.after;
+    let mut tick = first.tick;
+    let mut index = first.record_index;
+    for reference in records {
+        if reference.segment != window.segment
+            || tick.checked_add(1) != Some(reference.tick)
+            || index.checked_add(1) != Some(reference.record_index)
+        {
+            return Err("replay window crosses a gap or segment boundary".into());
+        }
+        let record =
+            load_foundation_replay_record(directory, reference, expected, phenotype, budget)?;
+        previous.validate_next(&record.before)?;
+        window.sequence.ticks.extend(record.sequence.ticks);
+        window.behavior.push(record.behavior);
+        window.patches.push(record.patch);
+        previous = record.after;
+        tick = record.tick;
+        index = record.record_index;
+    }
+    window.sequence.burn_in_ticks = burn_in_ticks;
+    window.sequence.validate_for(phenotype)?;
+    Ok(window)
 }

@@ -1026,10 +1026,14 @@ impl PpoTrainingState {
 
     /// Call after trainer.prepare_replay, including for pre-update GPU value
     /// collection. Rebinding preserves the learned head and its Adam moments.
+    /// After rebind_for_next_cohort, keep this same state and prepare a fresh
+    /// sequence from the newly admitted organisms before calling this method.
     pub fn prepare_for_replay(
         &mut self,
         trainer: &crate::FoundationTrainer,
     ) -> Result<(), TrainingError> {
+        // Reject stale replay buffers invalidated by a cohort identity change.
+        trainer.replay_all_rows()?;
         let feature_count = trainer.phenotype().neuron_count();
         if let Some(checkpoint) = &self.pending_restore {
             checkpoint.validate()?;

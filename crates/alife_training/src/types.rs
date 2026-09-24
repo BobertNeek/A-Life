@@ -10,7 +10,7 @@ pub const MAX_TRAINING_SEQUENCE_TICKS: usize = 2048;
 
 /// Detached production state at a replay boundary. These are real runtime
 /// snapshots, not hidden teacher inputs. Gradients stop at this boundary.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct TrainingInitialState {
     pub activations: Vec<f32>,
     pub activity_ema: Vec<f32>,
@@ -20,15 +20,32 @@ pub struct TrainingInitialState {
 
 /// One production decoder candidate, including confidence-weighted memory
 /// lanes (24..36) and cognitive projection lanes (36..54).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct TrainingReplayCandidate {
     pub family: CandidateActionFamily,
+    #[serde(with = "decoder_input_array")]
     pub decoder_inputs: [f32; 54],
+}
+
+mod decoder_input_array {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S: Serializer>(values: &[f32; 54], serializer: S) -> Result<S::Ok, S::Error> {
+        values.as_slice().serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<[f32; 54], D::Error> {
+        Vec::<f32>::deserialize(deserializer)?
+            .try_into()
+            .map_err(|values: Vec<f32>| {
+                serde::de::Error::invalid_length(values.len(), &"exactly 54 decoder inputs")
+            })
+    }
 }
 
 /// A frozen ordinary-runtime context. Lifetime/fast weights, chemistry,
 /// memory and activity decisions are detached; their evolution is not BPTT.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct TrainingReplayTick {
     /// The final production sensor-encoder output, including receptor effects.
     pub encoded_inputs: Vec<f32>,
@@ -43,7 +60,7 @@ pub struct TrainingReplayTick {
 
 /// Fixed-topology, frozen-context replay with a detached burn-in boundary.
 /// Production collection must supply every context; there is no neutral default.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct TrainingSequence {
     pub phenotype_hash: alife_core::PhenotypeHash,
     pub initial: TrainingInitialState,

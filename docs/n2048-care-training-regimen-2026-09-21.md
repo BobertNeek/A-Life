@@ -5,24 +5,34 @@ hardware-specific training subplan for the core-game-loop plan. It replaces the
 earlier conversational training proposals. The v2.0 architecture remains the
 only architecture authority.
 
-## Execution checkpoint — 22 September 2026
+## Execution checkpoint — 24 September 2026
 
 The operator entry point is `scripts/run_n2048_care_training.ps1`; follow
 `docs/n2048-training-operator.md`. Preparation is not a training campaign.
+The production single-world path now has a bounded integration cycle: ordinary
+GPU sampling and sealed outcomes, compressed per-tick replay, frozen value
+predictions, one PPO update, canonical export, exact next-cohort admission, and
+actor/value optimizer restoration across a second process. A four-tick cycle
+and its resumed four-tick successor passed on the production GPU. This is
+numerical/integration evidence, not learned care behavior.
+
 The campaign must remain unavailable until the following integration is done:
 
 - A bounded cohort runner connecting production captures, grounded demonstrations,
   frozen GPU value predictions, full-life GAE, replay windows and PPO updates.
-- Compact on-disk replay, shared GPU scheduling of independent worlds, and measured
-  resource limits. Current diagnostic captures retain full GPU snapshots.
-- Exact graph/identity rebinding between founder generations without losing Adam
-  state, and complete campaign checkpoint/recovery (actor, critic, RNG, curriculum,
-  source/config identity and sealed world boundaries).
+- Long-life replay windows with global GAE and grounded demonstrations. The
+  bounded cycle currently trains at most 511 ticks from a single world.
+- Measured independent-world throughput and a shared GPU dispatch coordinator.
+  The available 1–8-world baseline shares a device but ticks separate sessions
+  serially; it is not the planned fused batch.
+- Complete campaign checkpoint/recovery (actor, critic, RNG, curriculum,
+  source/config identity, sealed world boundaries, latest/best tracking, deadline).
 - Protected development/acceptance episodes and the campaign deadline. The native
   selected graph currently has no cognitive decoder rows; do not claim them trained.
 
 Implemented prerequisites include explicit native candidate admission, ordinary
-runtime training capture/sampling, production-context recurrent replay, GPU gradient
+runtime training capture/sampling, production-context recurrent replay, compressed
+bounded disk records, exact optimizer-preserving cohort rebinding, GPU gradient
 accumulation, PPO/value/imitation objectives, and selective genetic delta merging.
 Implemented does not mean integrated or behaviorally proven. No founder has been
 promoted by this work, and the old synthetic trainer is not an allowed fallback.

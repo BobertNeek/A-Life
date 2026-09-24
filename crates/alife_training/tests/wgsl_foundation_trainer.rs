@@ -123,9 +123,12 @@ fn n2048_exact_graph_adamw_step_changes_only_the_masked_weight_and_exports() {
     let encoded = asset.encode_canonical().unwrap();
     let decoded = FoundationWeightAsset::decode_canonical(&encoded).unwrap();
     assert_eq!(decoded.weights(), trained);
-    let (rebuilt, _) =
-        PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, decoded.clone())
-            .unwrap();
+    let (rebuilt, _) = PhenotypeCompiler::compile_n2048_foundation_candidate(
+        genome.clone(),
+        development.clone(),
+        decoded.clone(),
+    )
+    .unwrap();
     decoded.validate_against(&rebuilt).unwrap();
     assert!(rebuilt
         .synapses()
@@ -319,6 +322,81 @@ fn n2048_exact_graph_adamw_step_changes_only_the_masked_weight_and_exports() {
 
     verify_newly_enabled_adam_age(&mut trainer, &phenotype, &replay, index);
     verify_sampled_replay_gradients(&mut trainer, &phenotype, source_neuron, input_lane);
+
+    // A cohort transition admits the exact trained export in fresh organisms;
+    // it preserves optimizer coordinates and rejects stale replay/checkpoints.
+    let before_rebind = trainer.checkpoint().unwrap();
+    assert!(trainer.rebind_for_next_cohort(rebuilt, decoded).is_err());
+    let mut incompatible_genome = genome.clone();
+    incompatible_genome.alpha_mask =
+        alife_core::AlphaMask::default_for_projection(NormalizedScalar::new(0.731).unwrap());
+    let (incompatible, incompatible_asset) =
+        native_exact_foundation(&incompatible_genome, &development);
+    assert!(phenotype
+        .synapses()
+        .iter()
+        .zip(incompatible.synapses())
+        .any(|(a, b)| a.alpha().to_bits() != b.alpha().to_bits()));
+    assert!(trainer
+        .rebind_for_next_cohort(incompatible, incompatible_asset)
+        .is_err());
+    assert_eq!(trainer.checkpoint().unwrap(), before_rebind);
+    let before_forward = trainer.evaluate_replay(&replay).unwrap();
+    let value_checkpoint = alife_training::PpoValueHeadCheckpoint {
+        feature_count: phenotype.neuron_count(),
+        optimizer_step: 7,
+        parameters: vec![0.125; (neuron_count + 1) * 3],
+        last_updated_policy_version: Some(2),
+    };
+    let mut value_state =
+        alife_training::PpoTrainingState::from_checkpoint(value_checkpoint.clone()).unwrap();
+    value_state.prepare_for_replay(&trainer).unwrap();
+    let next_asset = trainer
+        .export_candidate(TrainingStageManifest::new(1, 1, 1))
+        .unwrap();
+    let (next_phenotype, _) = PhenotypeCompiler::compile_n2048_foundation_candidate(
+        genome,
+        development,
+        next_asset.clone(),
+    )
+    .unwrap();
+    trainer.begin_gradient_accumulation(1).unwrap();
+    assert!(trainer
+        .rebind_for_next_cohort(next_phenotype.clone(), next_asset.clone())
+        .is_err());
+    trainer.cancel_gradient_accumulation();
+    trainer
+        .rebind_for_next_cohort(next_phenotype.clone(), next_asset.clone())
+        .unwrap();
+    let mut expected_checkpoint = before_rebind.clone();
+    expected_checkpoint.phenotype_hash = next_phenotype.phenotype_hash();
+    expected_checkpoint.source_foundation_digest = next_asset.digest();
+    assert_ne!(
+        expected_checkpoint.phenotype_hash,
+        before_rebind.phenotype_hash
+    );
+    assert_eq!(trainer.checkpoint().unwrap(), expected_checkpoint);
+    assert!(trainer.replay_all_rows().is_err());
+    assert!(value_state.prepare_for_replay(&trainer).is_err());
+    assert!(trainer.prepare_replay(&replay).is_err());
+    assert!(trainer.restore_checkpoint(&before_rebind).is_err());
+    // Synthetic parity fixture only: production must recollect under the new
+    // asset, never relabel captures from the preceding policy.
+    let mut next_replay = replay;
+    next_replay.phenotype_hash = next_phenotype.phenotype_hash();
+    let encoded = serde_json::to_vec(&next_replay).unwrap();
+    let next_replay: TrainingSequence = serde_json::from_slice(&encoded).unwrap();
+    assert_eq!(
+        trainer.evaluate_replay(&next_replay).unwrap(),
+        before_forward
+    );
+    value_state.prepare_for_replay(&trainer).unwrap();
+    assert_eq!(
+        value_state.checkpoint(trainer.session()).unwrap(),
+        value_checkpoint
+    );
+    trainer.restore_checkpoint(&expected_checkpoint).unwrap();
+    assert_eq!(trainer.checkpoint().unwrap(), expected_checkpoint);
 }
 
 fn verify_newly_enabled_adam_age(

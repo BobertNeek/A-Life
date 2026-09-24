@@ -212,6 +212,91 @@ impl FoundationTrainer {
         &self.session
     }
 
+    /// Starts an offline cohort under an exactly compiled export of the current
+    /// GPU weights. This never replaces genetics in a living organism. Graph,
+    /// dynamics and learning coordinates must be unchanged, so Adam moments,
+    /// per-weight ages, stage mask and optimizer step remain meaningful.
+    ///
+    /// Prepared replay is invalidated: collect fresh organisms with this asset,
+    /// then prepare their sequence and rebind the existing PpoTrainingState.
+    /// Keep that value state to preserve its learned head and optimizer moments.
+    pub fn rebind_for_next_cohort(
+        &mut self,
+        next_phenotype: BrainPhenotype,
+        next_asset: FoundationWeightAsset,
+    ) -> Result<(), TrainingError> {
+        if self.accumulation.is_some() {
+            return Err(ScaffoldContractError::PhenotypeCompile.into());
+        }
+        next_phenotype.validate_against(&alife_core::BrainCapacityClass::n2048())?;
+        next_asset.validate_against(&next_phenotype)?;
+        self.stage_mask.validate_for(&next_phenotype)?;
+        let previous = &self.phenotype;
+        let next = &next_phenotype;
+        let binding = next
+            .foundation_abi_selection()
+            .canonical_v2()
+            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+        if previous.foundation_abi_selection().canonical_v2().is_none()
+            || binding.foundation_payload_digest() != Some(next_asset.digest())
+            || previous.schema_version() != next.schema_version()
+            || previous.brain_class_id() != next.brain_class_id()
+            || previous.neuron_count() != next.neuron_count()
+            || previous.microstep_count() != next.microstep_count()
+            || previous.sensor_profile() != next.sensor_profile()
+            || previous.lobe_layout() != next.lobe_layout()
+            || previous.language_codebook() != next.language_codebook()
+            || previous.cognitive_architecture() != next.cognitive_architecture()
+            || previous.projections() != next.projections()
+            || previous.neuron_dynamics() != next.neuron_dynamics()
+            || previous.sensor_encoder() != next.sensor_encoder()
+            || previous.candidate_decoder() != next.candidate_decoder()
+            || previous.speech_decoder() != next.speech_decoder()
+            || previous.memory_decoder() != next.memory_decoder()
+            || previous.cognitive_decoder() != next.cognitive_decoder()
+            || previous.cognitive_channel_plan() != next.cognitive_channel_plan()
+            || previous.plasticity_receptors() != next.plasticity_receptors()
+            || previous.replay_capture_plan() != next.replay_capture_plan()
+            || previous.sleep_consolidation_plan() != next.sleep_consolidation_plan()
+            || previous.plasticity_plan_digest() != next.plasticity_plan_digest()
+            || previous.persistent_address_map() != next.persistent_address_map()
+            || previous.route_abi_digest() != next.route_abi_digest()
+            || previous.plasticity_abi_digest() != next.plasticity_abi_digest()
+            || previous.budgets() != next.budgets()
+            || previous.synapses().len() != next.synapses().len()
+            || previous
+                .synapses()
+                .iter()
+                .zip(next.synapses())
+                .any(|(a, b)| {
+                    a.source() != b.source()
+                        || a.target() != b.target()
+                        || a.alpha().to_bits() != b.alpha().to_bits()
+                        || a.route_index() != b.route_index()
+                        || a.receptor_index() != b.receptor_index()
+                        || a.kind() != b.kind()
+                })
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile.into());
+        }
+        let weights = self.read_weights()?;
+        if weights
+            .iter()
+            .zip(next_asset.weights())
+            .zip(next.synapses())
+            .any(|((actual, asset), compiled)| {
+                actual.to_bits() != asset.to_bits()
+                    || actual.to_bits() != compiled.genetic_weight().to_bits()
+            })
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile.into());
+        }
+        self.phenotype = next_phenotype;
+        self.source_foundation = next_asset;
+        self.replay_shape = None;
+        Ok(())
+    }
+
     /// Replaces only replay scratch storage; genetic weights and both AdamW
     /// moments remain on GPU. Existing objective bindings must be recreated.
     pub fn prepare_replay(&mut self, sequence: &TrainingSequence) -> Result<(), TrainingError> {
@@ -290,7 +375,7 @@ impl FoundationTrainer {
     /// Diagnostic readback of the last replay, padded to the production
     /// candidate bound for each tick. Does not perform another forward pass.
     pub fn read_replay_logits(&self) -> Result<Vec<f32>, TrainingError> {
-        if !self.gpu.layout.replay {
+        if !self.gpu.layout.replay || self.replay_shape.is_none() {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
         self.read_float_buffer(
@@ -390,7 +475,7 @@ impl FoundationTrainer {
     /// Boundary features for value prediction, including burn-in rows. This
     /// does not add an unobserved next-state/bootstrap row.
     pub fn replay_all_rows(&self) -> Result<Vec<crate::PpoReplayRow>, TrainingError> {
-        if !self.gpu.layout.replay {
+        if !self.gpu.layout.replay || self.replay_shape.is_none() {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
         let steps = u32::from(self.phenotype.microstep_count());
@@ -408,7 +493,7 @@ impl FoundationTrainer {
         &self,
         encoder: &mut wgpu::CommandEncoder,
     ) -> Result<(), TrainingError> {
-        if !self.gpu.layout.replay {
+        if !self.gpu.layout.replay || self.replay_shape.is_none() {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
         encoder.clear_buffer(&self.gpu.state, 0, None);
@@ -572,7 +657,7 @@ impl FoundationTrainer {
         adjoint_offset: u64,
     ) -> Result<u32, TrainingError> {
         self.validate_objective_mask(true)?;
-        if self.accumulation.is_some() || !self.gpu.layout.replay {
+        if self.accumulation.is_some() || !self.gpu.layout.replay || self.replay_shape.is_none() {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
         let next_step = self
@@ -670,7 +755,12 @@ impl FoundationTrainer {
         let (expected, count) = self
             .accumulation
             .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-        if !self.gpu.layout.replay || count >= expected || !scale.is_finite() || scale <= 0.0 {
+        if !self.gpu.layout.replay
+            || self.replay_shape.is_none()
+            || count >= expected
+            || !scale.is_finite()
+            || scale <= 0.0
+        {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
         let mut layout = self.gpu.layout;
@@ -736,7 +826,7 @@ impl FoundationTrainer {
         let (expected, count) = self
             .accumulation
             .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-        if count != expected || !self.gpu.layout.replay {
+        if count != expected || !self.gpu.layout.replay || self.replay_shape.is_none() {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
         let next = self

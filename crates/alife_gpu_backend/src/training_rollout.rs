@@ -1,5 +1,6 @@
 //! Training-only behavior-policy evidence. Neural logits and samples originate on GPU.
 use alife_core::{ActionKind, PerceptionFrame, PerceptionFrameDigest, ScaffoldContractError};
+use serde::{Deserialize, Serialize};
 
 pub(crate) const TRAINING_PAYLOAD_TAG: u32 = 0x8000_0000;
 
@@ -21,7 +22,7 @@ pub struct GpuTrainingStateSnapshot {
     pub mutable_words: Vec<u32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GpuTrainingSamplingConfig {
     pub seed: u32,
     /// Caller-owned counter, never inferred from wall time or frame ordering.
@@ -49,7 +50,7 @@ impl GpuTrainingSamplingConfig {
 }
 
 /// Offline teacher intent only. The GPU still checks the dispatch's legal logits.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GpuTrainingDemonstratorAction {
     pub representative_index: u16,
     /// Zero-based indexes; u16::MAX for an empty channel. Forced slot equals representative.
@@ -87,13 +88,13 @@ impl GpuTrainingDemonstratorAction {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GpuTrainingBehaviorKind {
     OnPolicy,
     Demonstrator,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GpuTrainingRolloutReceipt {
     pub organism_id: u64,
     pub tick: u64,
@@ -365,16 +366,14 @@ mod tests {
             .validate(&module)
             .unwrap();
         }
-        assert!(
-            GpuTrainingSamplingConfig {
-                seed: 1,
-                counter: 0,
-                temperature: f32::NAN,
-                demonstrator: None,
-            }
-            .validate()
-            .is_err()
-        );
+        assert!(GpuTrainingSamplingConfig {
+            seed: 1,
+            counter: 0,
+            temperature: f32::NAN,
+            demonstrator: None,
+        }
+        .validate()
+        .is_err());
         let teacher = GpuTrainingDemonstratorAction {
             representative_index: 0,
             motor_indices: [u16::MAX, u16::MAX, u16::MAX, u16::MAX, 0, u16::MAX],
