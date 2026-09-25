@@ -715,6 +715,14 @@ fn run_foundation_training_pilot_inner(
     let scenario =
         configure_foundation_scenario(&mut game.world, seed, scenario_lesson, food_position, true)?;
     let food = scenario.food;
+    let food_position = scenario_lesson.map(|_| {
+        let position = game
+            .world
+            .entity(food)
+            .expect("scenario food exists")
+            .position;
+        [position.x, position.z]
+    });
     let hazard = scenario.hazard;
     let waypoint = scenario.waypoint;
     let initial_hazard_distance = scenario.initial_hazard_distance;
@@ -1151,6 +1159,15 @@ pub(crate) fn configure_foundation_scenario(
     let waypoint = world
         .entity_id("obstacle-02")
         .ok_or("teacher world has no second obstacle")?;
+    let food_position = food_position.or_else(|| {
+        (lesson == Some(FoundationTeacherLesson::Feeding)).then(|| {
+            let variation = (seed % 4) as usize;
+            [
+                4.2 + 0.4 * variation as f32,
+                [0.0, -0.5, 0.5, 1.0][variation],
+            ]
+        })
+    });
     if let Some([x, z]) = food_position {
         move_scenario_object(world, food, alife_core::Vec3f::new(x, 0.0, z))?;
     }
