@@ -1140,6 +1140,14 @@ pub(crate) struct FoundationScenarioSetup {
     pub(crate) initial_hazard_distance: Option<f32>,
 }
 
+fn scenario_random(seed: u64, stream: u64) -> f32 {
+    // SplitMix64 keeps adjacent cohort seeds from producing adjacent layouts.
+    let mut value = seed.wrapping_add(stream.wrapping_mul(0x9e37_79b9_7f4a_7c15));
+    value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    (((value ^ (value >> 31)) >> 40) as u32 as f32) / 16_777_216.0
+}
+
 pub(crate) fn configure_foundation_scenario(
     world: &mut alife_world::HeadlessWorld,
     seed: u64,
@@ -1159,23 +1167,33 @@ pub(crate) fn configure_foundation_scenario(
     let waypoint = world
         .entity_id("obstacle-02")
         .ok_or("teacher world has no second obstacle")?;
-    let food_position = food_position.or_else(|| {
-        (lesson == Some(FoundationTeacherLesson::Feeding)).then(|| {
-            let variation = (seed % 4) as usize;
-            [
-                4.2 + 0.4 * variation as f32,
-                [0.0, -0.5, 0.5, 1.0][variation],
-            ]
-        })
-    });
-    if let Some([x, z]) = food_position {
-        move_scenario_object(world, food, alife_core::Vec3f::new(x, 0.0, z))?;
-    }
+    let organism = world.organism_entity_ids()[0].1;
+    let origin = world
+        .entity(organism)
+        .ok_or("scenario founder is missing")?
+        .position;
     match lesson {
+        Some(FoundationTeacherLesson::Feeding) => {
+            let angle = std::f32::consts::TAU * scenario_random(seed, 0);
+            let distance = 2.2 + 1.4 * scenario_random(seed, 1);
+            let [x, z] = food_position.unwrap_or([
+                origin.x + distance * angle.cos(),
+                origin.z + distance * angle.sin(),
+            ]);
+            move_scenario_object(world, food, alife_core::Vec3f::new(x, 0.0, z))?;
+        }
         Some(FoundationTeacherLesson::HazardAvoidance) => {
             // Once the hazard is out of the sensed danger range, the same
             // teacher must resume care instead of learning to idle forever.
-            move_scenario_object(world, food, alife_core::Vec3f::new(-3.0, 0.0, 0.0))?;
+            move_scenario_object(
+                world,
+                food,
+                alife_core::Vec3f::new(
+                    origin.x - 5.0 - scenario_random(seed, 2),
+                    0.0,
+                    origin.z + 1.4 * (scenario_random(seed, 3) - 0.5),
+                ),
+            )?;
             move_scenario_object(
                 world,
                 hazard,
@@ -1183,23 +1201,48 @@ pub(crate) fn configure_foundation_scenario(
             )?;
         }
         Some(FoundationTeacherLesson::ObstacleNavigation) => {
-            let side = if seed & 1 == 0 { -1.0 } else { 1.0 };
-            let food_z = ((seed >> 1) % 3) as f32 * 0.5 - 0.5;
+            let angle = std::f32::consts::TAU * scenario_random(seed, 4);
+            let forward = [angle.cos(), angle.sin()];
+            let lateral = [-forward[1], forward[0]];
+            let side = if seed & 2 == 0 { -1.0 } else { 1.0 };
+            let food_distance = 4.0 + 0.7 * scenario_random(seed, 5);
+            let food_lateral = scenario_random(seed, 6) - 0.5;
+            let blocker_distance = 1.7 + 0.2 * scenario_random(seed, 7);
+            let position = |ahead: f32, across: f32| {
+                alife_core::Vec3f::new(
+                    origin.x + ahead * forward[0] + across * lateral[0],
+                    0.0,
+                    origin.z + ahead * forward[1] + across * lateral[1],
+                )
+            };
             let blocker = world
                 .entity_id("obstacle-01")
                 .ok_or("teacher world has no first obstacle")?;
-            move_scenario_object(world, food, alife_core::Vec3f::new(7.0, 0.0, food_z))?;
-            move_scenario_object(world, blocker, alife_core::Vec3f::new(4.5, 0.0, food_z))?;
+            move_scenario_object(world, food, position(food_distance, food_lateral))?;
             move_scenario_object(
                 world,
-                waypoint,
-                alife_core::Vec3f::new(3.0, 0.0, side * 7.0),
+                blocker,
+                position(
+                    blocker_distance,
+                    food_lateral * blocker_distance / food_distance,
+                ),
             )?;
+            move_scenario_object(world, waypoint, position(0.0, side * 6.4))?;
+            // This lesson isolates routing; the hazard belongs to its own lesson.
+            move_scenario_object(world, hazard, position(-8.0, 7.0))?;
         }
         Some(FoundationTeacherLesson::Recovery) => {
-            move_scenario_object(world, food, alife_core::Vec3f::new(6.0, 0.0, 0.0))?;
+            move_scenario_object(
+                world,
+                food,
+                alife_core::Vec3f::new(
+                    origin.x + 1.5 + scenario_random(seed, 8),
+                    0.0,
+                    origin.z + 2.0 * (scenario_random(seed, 9) - 0.5),
+                ),
+            )?;
         }
-        Some(FoundationTeacherLesson::Feeding) | None => {}
+        None => {}
     }
     if precondition_recovery && lesson == Some(FoundationTeacherLesson::Recovery) {
         let organism = world.organism_entity_ids()[0].0;

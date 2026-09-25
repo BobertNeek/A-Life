@@ -101,7 +101,11 @@ function Invoke-Campaign {
         '--features', 'foundation-training', '--bin', 'train_n2048_care') (Join-Path $run 'build')
     if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Release trainer was not built.' }
     $deadline = [DateTime]::UtcNow.AddHours($DurationHours)
-    $lessons = @('feeding', 'hazard_avoidance', 'obstacle_navigation', 'recovery')
+    # Half the cohorts require a detour; the others retain feeding, hazard,
+    # and brief recovery skills. Every cohort gets a distinct world seed.
+    $lessons = @('obstacle_navigation', 'feeding', 'obstacle_navigation', 'hazard_avoidance', 'obstacle_navigation', 'recovery')
+    $foodPositions = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $state['lessonSchedule'] = $lessons
     $state.phase = 'campaign'
     $state.executableSha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
     $state.deadlineUtc = $deadline.ToString('o')
@@ -116,8 +120,7 @@ function Invoke-Campaign {
         }
         $lessonIndex = $index % $lessons.Count
         $lesson = $lessons[$lessonIndex]
-        $round = [int][Math]::Floor($index / $lessons.Count)
-        $seed = [ulong](539365000 + 5 * $round + $lessonIndex)
+        $seed = [ulong](539366000 + $index)
         $directory = Join-Path $run ("cycle-{0:D4}-{1}" -f $index, $lesson)
         $state.phase = "cycle-$index-$lesson"; Publish-State
         Write-Host "Training $lesson cycle $index; logs: $run"
@@ -130,8 +133,18 @@ function Invoke-Campaign {
             $receipt.training_ticks -lt 1 -or $receipt.new_asset_digest -notmatch '^[0-9a-f]{64}$') {
             throw "Cycle $index did not seal a valid next-cohort handoff."
         }
+        $scenario = Get-Content -Raw -LiteralPath (Join-Path $directory 'scenario.json') | ConvertFrom-Json
+        if ($scenario.world_seed -ne $seed -or $scenario.lesson -ne $lesson -or
+            @($scenario.food_position).Count -ne 3) {
+            throw "Cycle $index has an invalid scenario receipt."
+        }
+        $foodKey = @($scenario.food_position) -join ','
+        if (-not $foodPositions.Add($foodKey)) {
+            throw "Cycle $index repeated a food position: $foodKey"
+        }
         $row = [ordered]@{
             index = $index; lesson = $lesson; seed = $seed; directory = $directory
+            foodPosition = $scenario.food_position
             policyVersion = $receipt.policy_version; decisions = $receipt.training_ticks
             meals = $receipt.consumed_events; blocked = $receipt.blocked_actions
             collisions = $receipt.collision_actions; avoid = $receipt.avoid_actions

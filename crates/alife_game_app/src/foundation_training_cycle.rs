@@ -370,6 +370,18 @@ fn run_foundation_training_cycle_from(
     } else {
         None
     };
+    let scenario_position = |label| -> Result<[f32; 3]> {
+        let entity = runtime
+            .world()
+            .entity_id(label)
+            .ok_or("scenario object is missing")?;
+        Ok(runtime
+            .world()
+            .entity(entity)
+            .ok_or("scenario object is missing")?
+            .position
+            .to_array())
+    };
     std::fs::write(
         output.join("scenario.json"),
         serde_json::to_vec_pretty(&serde_json::json!({
@@ -377,6 +389,10 @@ fn run_foundation_training_cycle_from(
             "founder_seed_base": founder_seed_base,
             "food_available_world_tick": food_available_world_tick,
             "lesson": lesson,
+            "food_position": scenario_position("food-01")?,
+            "blocker_position": scenario_position("obstacle-01")?,
+            "waypoint_position": scenario_position("obstacle-02")?,
+            "hazard_position": scenario_position("hazard-01")?,
             "food_hidden_position": delayed_food.map(|(_, _, position)| position.to_array()),
             "food_original_position": delayed_food.map(|(_, position, _)| position.to_array()),
             "age_death_disabled": true,
