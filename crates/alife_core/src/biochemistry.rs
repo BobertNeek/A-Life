@@ -939,7 +939,53 @@ fn signed_clamp(value: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity};
+    use crate::{
+        BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity, MeasuredPhysiologyTransition,
+    };
+
+    #[test]
+    fn food_relief_is_greater_when_biology_is_hungry_than_when_sated() {
+        let genome = CreatureGenome::early_mammal_founder(
+            0xE10_3201,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N2048_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let initial = BiochemistryState::new(&phenotype, Tick(600)).unwrap();
+        let food = BodyEventDelta {
+            energy: 0.3,
+            nutrition: 0.6,
+            ..BodyEventDelta::zero()
+        };
+
+        // Both states emerge through the ordinary chemistry and metabolism.
+        // The same food is then compared with doing nothing from each state.
+        let mut sated = initial;
+        let mut hungry = initial;
+        hungry.body.set_energy(0.1).unwrap();
+        for tick in 601..=603 {
+            sated = sated.advance(Tick(tick), food, &phenotype).unwrap();
+            hungry = hungry
+                .advance(Tick(tick), BodyEventDelta::zero(), &phenotype)
+                .unwrap();
+        }
+        assert!(hungry.homeostasis.drives.hunger > 0.5);
+        assert!(sated.homeostasis.drives.hunger <= 0.05);
+
+        let reward = |before: BiochemistryState, event: BodyEventDelta| {
+            let after = before.advance(Tick(604), event, &phenotype).unwrap();
+            MeasuredPhysiologyTransition::new(before, after)
+                .unwrap()
+                .homeostatic_improvement()
+        };
+        let sated_food_relief = reward(sated, food) - reward(sated, BodyEventDelta::zero());
+        let hungry_food_relief = reward(hungry, food) - reward(hungry, BodyEventDelta::zero());
+        assert!(
+            hungry_food_relief > sated_food_relief + 0.02,
+            "hungry relief {hungry_food_relief} should exceed sated relief {sated_food_relief}"
+        );
+        assert!(reward(hungry, food) > reward(sated, food));
+    }
 
     #[test]
     fn inherited_chemical_controls_change_upkeep_and_pay_for_repair() {
