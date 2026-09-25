@@ -165,12 +165,13 @@ fn new_game_inherited_turnover_preserves_legacy_identity_and_food_reserves() {
     assert!(cognitive_debit > 0.0);
     assert!((cognitive_debit - policy.energy_debit(&receipt).unwrap() * rate).abs() < 1e-8);
 
-    // Ten minutes at the production normal 20 ticks/s, continuously moving,
-    // unfed and charging active cognitive work every tick. No GPU is needed.
+    // Twenty minutes at the production normal 20 ticks/s, continuously moving,
+    // unfed and charging synthetic cognitive work every tick. This checks the
+    // inherited body's budget, not the production N2048 action mix or GPU work.
     let mut state = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
     let initial_energy = state.body.energy;
     let mut estimated_active_minutes = 0.0;
-    for tick in 1..=12_000 {
+    for tick in 1..=24_000 {
         state.body.debit_energy_pro_rata(cognitive_debit).unwrap();
         state = state
             .advance(
@@ -193,7 +194,7 @@ fn new_game_inherited_turnover_preserves_legacy_identity_and_food_reserves() {
         "active accounting estimate: {estimated_active_minutes} minutes"
     );
     assert!(state.body.energy < initial_energy - 0.1);
-    assert_eq!(state.development.age_ticks, Tick(12_000));
+    assert_eq!(state.development.age_ticks, Tick(24_000));
 
     // Mature, unfed biology: reserve loss strengthens hunger without saturating
     // a well provisioned founder. Regulatory chemistry retains its fast cadence.
@@ -304,7 +305,7 @@ fn new_game_inherited_turnover_preserves_legacy_identity_and_food_reserves() {
     // Material food still replenishes reserve; starvation remains lethal.
     let fed = state
         .advance(
-            Tick(12_001),
+            Tick(24_001),
             BodyEventDelta {
                 energy: 0.325,
                 nutrition: 0.65,
@@ -317,7 +318,7 @@ fn new_game_inherited_turnover_preserves_legacy_identity_and_food_reserves() {
     assert!(fed.homeostasis.drives.hunger < state.homeostasis.drives.hunger);
     let moving_fed = state
         .advance(
-            Tick(12_001),
+            Tick(24_001),
             BodyEventDelta {
                 energy: 0.325 - 0.04,
                 nutrition: 0.65,

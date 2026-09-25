@@ -24,6 +24,14 @@ accepted as a care policy. The older prerequisite bullets below describe the sta
 repairs; they are not evidence that the founder has learned care. The overnight
 run remains held until 1 a.m. America/Denver on 25 September 2026.
 
+A focused inherited-body check now survives 24,000 ticks (20 simulated minutes)
+without food while charging continuous movement and synthetic cognitive work.
+The production N2048 policy nevertheless depleted its reserve at tick 14,224.
+That discrepancy needs an accounting of actual action, organ, and cognitive
+costs; it is not evidence that the brain should learn to stay inert. The recovery
+lesson teaches a brief fatigue response followed by feeding, not starvation by
+sleep. Do not tune the policy toward prolonged Rest to clear the food-free gate.
+
 The operator entry point is `scripts/run_n2048_care_training.ps1`; follow
 `docs/n2048-training-operator.md`. Preparation is not a training campaign.
 The production single-world path now has a bounded integration cycle: ordinary
@@ -456,9 +464,12 @@ Extend existing focused checks rather than introducing a test framework:
      as learned object preference. If attribution is ambiguous, use one matched
      learning-disabled control; do not start a broad ablation campaign.
    - One 30-minute production session at normal 1x: first 20 minutes without
-     food, then reachable food. Require survival and subsequent autonomous
-     consumption with canonical biological benefit. The 20 minutes are an
-     observation target, never a programmed grace period or starvation deadline.
+     food, then reachable food. Require survival, ordinary engaged behaviour
+     compatible with its biological state, and subsequent autonomous consumption
+     with canonical biological benefit. Prolonged voluntary Rest or inactivity
+     is not a care-loop success; natural sleep and fatigue recovery remain valid.
+     The 20 minutes are an observation target, never a programmed grace period
+     or starvation deadline.
 
 Natural sleep must occur and finish in the retention observation; otherwise that
 criterion remains unproven. Capture visible gameplay with passive video and
