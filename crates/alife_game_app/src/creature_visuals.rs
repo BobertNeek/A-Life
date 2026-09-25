@@ -319,7 +319,7 @@ fn creature_animation_state(
 
     match action_kind {
         Some(ActionKind::Move) => CreatureAnimationState::Moving,
-        Some(ActionKind::Inspect) => CreatureAnimationState::Inspecting,
+        Some(ActionKind::Inspect | ActionKind::Look) => CreatureAnimationState::Inspecting,
         Some(ActionKind::Interact) | Some(ActionKind::Hold) => CreatureAnimationState::Interacting,
         Some(ActionKind::Rest) => CreatureAnimationState::Resting,
         Some(ActionKind::Vocalize) | Some(ActionKind::Write) | Some(ActionKind::Gesture) => {
@@ -388,7 +388,7 @@ const fn action_intent_rgba(action_kind: Option<ActionKind>) -> [f32; 4] {
     match action_kind {
         Some(ActionKind::Move) => [0.40, 0.74, 0.96, 1.0],
         Some(ActionKind::Interact) | Some(ActionKind::Hold) => [0.20, 0.88, 0.38, 1.0],
-        Some(ActionKind::Inspect) => [0.96, 0.84, 0.28, 1.0],
+        Some(ActionKind::Inspect | ActionKind::Look) => [0.96, 0.84, 0.28, 1.0],
         Some(ActionKind::Rest) => [0.50, 0.46, 0.86, 1.0],
         Some(ActionKind::Vocalize) | Some(ActionKind::Write) | Some(ActionKind::Gesture) => {
             [0.76, 0.58, 0.96, 1.0]

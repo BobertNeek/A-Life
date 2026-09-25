@@ -311,6 +311,11 @@ impl GpuMemoryGroundingEvidenceReceipt {
                     ));
                 }
             }
+            SensorProfile::GroundedTerrainVisionV1 => {
+                return Err(GpuEvidenceError::Contract(
+                    "Slice C has no terrain-vision acceptance protocol",
+                ));
+            }
         }
         validate_probe(&self.memory_enabled, &self.header.common)?;
         validate_probe(&self.memory_ablated, &self.header.common)?;
@@ -378,6 +383,11 @@ impl GpuMemoryGroundingEvidenceReceipt {
                     ));
                 }
             }
+            SensorProfile::GroundedTerrainVisionV1 => {
+                return Err(GpuEvidenceError::Contract(
+                    "Slice C has no terrain-vision acceptance protocol",
+                ));
+            }
         }
         Ok(())
     }
@@ -402,6 +412,7 @@ pub fn sensor_profile_slug(profile: SensorProfile) -> &'static str {
     match profile {
         SensorProfile::PrivilegedAffordanceV1 => "privileged-affordance-v1",
         SensorProfile::GroundedObjectSlotsV1 => "grounded-object-slots-v1",
+        SensorProfile::GroundedTerrainVisionV1 => "grounded-terrain-vision-v1",
     }
 }
 

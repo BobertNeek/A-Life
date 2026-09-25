@@ -12,6 +12,7 @@ const ACTION_KIND_INTERACT:u32 = 5u;
 const ACTION_KIND_VOCALIZE:u32 = 6u;
 const ACTION_KIND_WRITE:u32 = 7u;
 const ACTION_KIND_GESTURE:u32 = 8u;
+const ACTION_KIND_LOOK:u32 = 9u;
 
 fn find_decoder_family(decoder:GpuDecoderPlanRecord, family_raw:u32) -> GpuDecoderFamilyRecord {
   for (var index=0u; index<decoder.family_count; index++) {
@@ -199,6 +200,7 @@ const MAX_SPEECH_TOKENS:u32 = 6u;
 
 fn factorized_motor_slot(kind:u32) -> u32 {
   if (kind == ACTION_KIND_MOVE) { return 0u; }
+  if (kind == ACTION_KIND_LOOK) { return 1u; }
   if (kind == ACTION_KIND_INTERACT || kind == ACTION_KIND_WRITE) { return 2u; }
   if (kind == ACTION_KIND_VOCALIZE) { return 3u; }
   if (kind == ACTION_KIND_HOLD || kind == ACTION_KIND_REST || kind == ACTION_KIND_INSPECT) {

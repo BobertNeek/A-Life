@@ -29,6 +29,7 @@ pub enum SensorProfile {
     #[default]
     PrivilegedAffordanceV1 = 1,
     GroundedObjectSlotsV1 = 2,
+    GroundedTerrainVisionV1 = 3,
 }
 
 impl SensorProfile {
@@ -40,6 +41,7 @@ impl SensorProfile {
         match raw {
             1 => Ok(Self::PrivilegedAffordanceV1),
             2 => Ok(Self::GroundedObjectSlotsV1),
+            3 => Ok(Self::GroundedTerrainVisionV1),
             _ => Err(ScaffoldContractError::SensorProfileMismatch),
         }
     }
@@ -95,7 +97,7 @@ impl CandidateActionFamily {
             (self, kind),
             (Self::Idle, ActionKind::Idle)
                 | (Self::Rest, ActionKind::Rest)
-                | (Self::Inspect, ActionKind::Inspect)
+                | (Self::Inspect, ActionKind::Inspect | ActionKind::Look)
                 | (Self::Approach | Self::Avoid, ActionKind::Move)
                 | (Self::Contact | Self::Ingest, ActionKind::Interact)
                 | (
@@ -112,7 +114,7 @@ impl CandidateActionFamily {
         match kind {
             ActionKind::Idle => Self::Idle,
             ActionKind::Rest => Self::Rest,
-            ActionKind::Inspect => Self::Inspect,
+            ActionKind::Inspect | ActionKind::Look => Self::Inspect,
             ActionKind::Move => Self::Approach,
             ActionKind::Interact => Self::Contact,
             ActionKind::Hold | ActionKind::Gesture | ActionKind::Vocalize | ActionKind::Write => {
@@ -847,12 +849,13 @@ fn validate_frame_base(
                 return Err(ScaffoldContractError::InvalidPerceptionFrame);
             }
         }
-        SensorProfile::GroundedObjectSlotsV1 => {
-            if sensory
-                .channels
-                .visual_affordance
-                .iter()
-                .any(|value| *value != 0.0)
+        SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1 => {
+            if (sensor_profile == SensorProfile::GroundedObjectSlotsV1
+                && sensory
+                    .channels
+                    .visual_affordance
+                    .iter()
+                    .any(|value| *value != 0.0))
                 || sensory.channels.nearby_affordances.raw() != 0
             {
                 return Err(ScaffoldContractError::InvalidPerceptionFrame);
@@ -880,6 +883,19 @@ fn validate_frame_base(
                         if candidate.kind == ActionKind::Hold
                             && candidate.target == ActionTarget::NONE
                             && candidate.features == CandidateFeatureVector::zero() => {}
+                    (CandidateActionFamily::Inspect, CandidateObservationRef::None)
+                        if sensor_profile == SensorProfile::GroundedTerrainVisionV1
+                            && candidate.kind == ActionKind::Look
+                            && candidate.target == ActionTarget::NONE
+                            && candidate.features.0[18] == 1.0
+                            && candidate.features.0[2..18]
+                                .iter()
+                                .all(|value| *value == 0.0)
+                            && candidate.features.0[19..].iter().all(|value| *value == 0.0)
+                            && matches!(
+                                (candidate.features.0[0], candidate.features.0[1]),
+                                (1.0, 0.0) | (-1.0, 0.0) | (0.0, 1.0)
+                            ) => {}
                     (CandidateActionFamily::Idle, CandidateObservationRef::ObjectSlot(_))
                     | (_, CandidateObservationRef::None) => {
                         return Err(ScaffoldContractError::InvalidPerceptionFrame);

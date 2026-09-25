@@ -920,6 +920,9 @@ impl FoundationWeightAsset {
                 env!("CARGO_MANIFEST_DIR"),
                 "/../../assets/brain_foundations/n512-v1-grounded.alife-foundation"
             )),
+            SensorProfile::GroundedTerrainVisionV1 => {
+                return Err(ScaffoldContractError::SensorProfileMismatch);
+            }
         };
         Self::decode_canonical(bytes)
     }
@@ -934,6 +937,9 @@ impl FoundationWeightAsset {
                 env!("CARGO_MANIFEST_DIR"),
                 "/../../assets/brain_foundations/n2048-v1-grounded.alife-foundation"
             )),
+            SensorProfile::GroundedTerrainVisionV1 => {
+                return Err(ScaffoldContractError::SensorProfileMismatch);
+            }
         };
         Self::decode_canonical(bytes)
     }

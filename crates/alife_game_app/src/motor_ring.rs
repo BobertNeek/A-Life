@@ -325,9 +325,11 @@ fn channel_kind_for_proposal(proposal: ActionProposal) -> MotorRingChannelKind {
         ActionKind::Move => MotorRingChannelKind::Approach,
         ActionKind::Interact | ActionKind::Hold => MotorRingChannelKind::Eat,
         ActionKind::Rest => MotorRingChannelKind::Sleep,
-        ActionKind::Inspect | ActionKind::Vocalize | ActionKind::Write | ActionKind::Gesture => {
-            MotorRingChannelKind::Inspect
-        }
+        ActionKind::Inspect
+        | ActionKind::Look
+        | ActionKind::Vocalize
+        | ActionKind::Write
+        | ActionKind::Gesture => MotorRingChannelKind::Inspect,
     }
 }
 

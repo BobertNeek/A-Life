@@ -171,6 +171,7 @@ impl GpuTrainingRolloutReceipt {
 fn slot(kind: ActionKind) -> Option<usize> {
     match kind {
         ActionKind::Move => Some(0),
+        ActionKind::Look => Some(1),
         ActionKind::Interact | ActionKind::Write => Some(2),
         ActionKind::Vocalize => Some(3),
         ActionKind::Hold | ActionKind::Rest | ActionKind::Inspect => Some(4),

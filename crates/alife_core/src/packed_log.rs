@@ -1207,6 +1207,7 @@ fn action_kind_code(kind: ActionKind) -> u16 {
         ActionKind::Gesture => 300,
         ActionKind::Vocalize => 400,
         ActionKind::Write => 500,
+        ActionKind::Look => 600,
     }
 }
 

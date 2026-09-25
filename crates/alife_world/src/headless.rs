@@ -62,20 +62,128 @@ const DEFAULT_HEARING_RADIUS: f32 = 6.0;
 pub(crate) const HEADLESS_CONTACT_RADIUS: f32 = 0.75;
 const EAT_RADIUS: f32 = 1.25;
 const MOVE_STEP: f32 = 1.0;
+const HEAD_SWIVEL_LIMIT: f32 = 70.0_f32.to_radians();
+const HEAD_SWIVEL_STEP: f32 = 20.0_f32.to_radians();
+const VISION_HALF_ANGLE: f32 = 110.0_f32.to_radians();
+const VISION_EYE_HEIGHT: f32 = 1.0;
+const VISION_RAY_PITCH: f32 = -0.18;
 const MAX_VISIBLE_ENTITIES: usize = 16;
 const VOCAL_TOKEN_ID_BASE: u32 = 400_000;
 const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
 const PROMPTED_SPEECH_COOLDOWN_TICKS: u64 = 8;
-const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v6";
+const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v7";
 /// Current schema required by every fresh headless-world signature receipt.
 ///
-/// Version 6 includes terrain identity and body locomotion limits.
-pub const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 6;
+/// Version 7 additionally binds gaze and optical opacity.
+pub const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 7;
 
 fn map_organism_registry_error(error: OrganismRegistryError) -> ScaffoldContractError {
     match error {
         OrganismRegistryError::InvalidRecord(error) => error,
         _ => ScaffoldContractError::InvalidId,
+    }
+}
+
+#[cfg(test)]
+mod terrain_vision_tests {
+    use super::*;
+
+    fn seen(world: &HeadlessWorld, target: WorldEntityId) -> bool {
+        let observer = world.agent_for(OrganismId(1)).unwrap();
+        world
+            .physical_observation_snapshot_from_objects(
+                OrganismId(1),
+                Tick::ZERO,
+                observer,
+                world.objects.values(),
+                true,
+            )
+            .unwrap()
+            .visible
+            .iter()
+            .any(|object| object.transport_entity == target)
+    }
+
+    #[test]
+    fn gaze_opaque_barriers_and_transparency_change_actual_sight() {
+        let mut world = HeadlessScenarioBuilder::new(60_001)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .obstacle("barrier", Vec3f::new(2.0, 0.0, 0.0), 0.5)
+            .food("ahead", Vec3f::new(4.0, 0.0, 0.0), 0.6)
+            .food("behind", Vec3f::new(-4.0, 0.0, 0.0), 0.6)
+            .build()
+            .unwrap();
+        let barrier = world.entity_id("barrier").unwrap();
+        let ahead = world.entity_id("ahead").unwrap();
+        let behind = world.entity_id("behind").unwrap();
+        assert!(seen(&world, barrier));
+        assert!(!seen(&world, ahead));
+        assert!(!seen(&world, behind));
+
+        world.editor_set_optical_opacity(barrier, 0.0).unwrap();
+        assert!(seen(&world, ahead));
+        assert!(seen(&world, barrier));
+
+        let frame = world
+            .perception_frame(
+                OrganismId(1),
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap();
+        let looks = frame
+            .candidates()
+            .iter()
+            .filter(|candidate| candidate.kind == ActionKind::Look)
+            .collect::<Vec<_>>();
+        assert_eq!(looks.len(), 3);
+        assert_ne!(looks[0].features, looks[1].features);
+        assert_ne!(looks[0].features, looks[2].features);
+        assert_ne!(looks[1].features, looks[2].features);
+
+        let look = HeadlessWorldCommand::structured(
+            OrganismId(1),
+            HeadlessActionIds::LOOK_LEFT,
+            ActionKind::Look,
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(world.apply_command(&look).unwrap().execution.succeeded);
+        assert!(world.agent_for(OrganismId(1)).unwrap().head_yaw > 0.0);
+        assert!(!seen(&world, behind));
+    }
+
+    #[test]
+    fn terrain_obstacle_hides_food_and_shortens_depth_rays() {
+        let mut world = HeadlessScenarioBuilder::new(60_002)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .food("food", Vec3f::new(4.0, 0.0, 0.0), 0.6)
+            .build()
+            .unwrap();
+        let terrain = crate::WorldTerrain::new(
+            crate::TerrainData {
+                width: 17,
+                depth: 17,
+                origin_x: -8.0,
+                origin_z: -8.0,
+                spacing: 1.0,
+                heights: vec![0.0; 17 * 17],
+                obstacles: vec![[1.5, -1.0, 2.0, 1.0, 0.0, 2.0]],
+                water_level: None,
+            },
+            crate::LocomotionLimits::default(),
+        )
+        .unwrap();
+        world
+            .enable_terrain_for_new_game(terrain, Vec3f::ZERO)
+            .unwrap();
+        let food = world.entity_id("food").unwrap();
+        let observer = world.agent_for(OrganismId(1)).unwrap();
+        let blocked = world.terrain_vision_fan(observer);
+        assert!(!seen(&world, food));
+        assert!(blocked[7] < 0.5 || blocked[8] < 0.5);
     }
 }
 
@@ -96,6 +204,9 @@ impl HeadlessActionIds {
     pub const EAT: ActionId = ActionId(210);
     pub const GRAB: ActionId = ActionId(211);
     pub const NO_MANIPULATION: ActionId = ActionId(212);
+    pub const LOOK_LEFT: ActionId = ActionId(601);
+    pub const LOOK_RIGHT: ActionId = ActionId(602);
+    pub const LOOK_CENTER: ActionId = ActionId(603);
 }
 
 #[derive(
@@ -116,6 +227,12 @@ pub struct WorldObject {
     pub kind: WorldObjectKind,
     pub organism_id: Option<OrganismId>,
     pub position: Vec3f,
+    /// World-owned body heading in the horizontal X/Z plane.
+    pub body_yaw: f32,
+    /// Gaze offset from body heading, chosen through Orientation commands.
+    pub head_yaw: f32,
+    /// Optical opacity is independent of movement blocking.
+    pub optical_opacity: f32,
     pub radius: f32,
     pub nutrition: f32,
     pub hazard_pain: f32,
@@ -1820,6 +1937,22 @@ impl HeadlessWorld {
         Ok(())
     }
 
+    pub fn editor_set_optical_opacity(
+        &mut self,
+        id: WorldEntityId,
+        opacity: f32,
+    ) -> Result<(), ScaffoldContractError> {
+        id.validate()?;
+        if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        self.objects
+            .get_mut(&id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .optical_opacity = opacity;
+        Ok(())
+    }
+
     fn move_carried_objects(&mut self, carrier: OrganismId, displacement: Vec3f) {
         for object in self.objects.values_mut() {
             if object.carried_by != Some(carrier) {
@@ -2089,17 +2222,43 @@ impl HeadlessWorld {
                     Vec::new(),
                 )
             }
-            SensorProfile::GroundedObjectSlotsV1 => {
-                let snapshot = match index {
-                    Some(index) => {
+            SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1 => {
+                let terrain_vision = profile == SensorProfile::GroundedTerrainVisionV1;
+                let snapshot = match (index, terrain_vision) {
+                    (Some(index), true) => {
+                        let observer = self.indexed_agent_for(organism_id, index)?;
+                        self.physical_observation_snapshot_from_objects(
+                            organism_id,
+                            tick,
+                            observer,
+                            self.indexed_nearby_objects(observer, index)?.into_iter(),
+                            true,
+                        )?
+                    }
+                    (None, true) => {
+                        let observer = self.agent_for(organism_id)?;
+                        self.physical_observation_snapshot_from_objects(
+                            organism_id,
+                            tick,
+                            observer,
+                            self.objects.values(),
+                            true,
+                        )?
+                    }
+                    (Some(index), false) => {
                         self.physical_observation_snapshot_indexed(organism_id, tick, index)?
                     }
-                    None => self.physical_observation_snapshot(organism_id, tick)?,
+                    (None, false) => self.physical_observation_snapshot(organism_id, tick)?,
                 };
                 let grounded =
                     GroundedSensorExtractor::extract(&snapshot, &mut self.tracked_objects)?;
-                let candidates = GroundedCandidateEnumerator.enumerate_candidates(&grounded)?;
+                let candidates =
+                    GroundedCandidateEnumerator.enumerate_candidates(&grounded, profile)?;
                 let (mut sensory, body, slots, _transports) = grounded.into_parts();
+                if terrain_vision {
+                    let observer = self.agent_for(organism_id)?;
+                    sensory.channels.visual_affordance = self.terrain_vision_fan(observer);
+                }
                 let heard = self
                     .speech
                     .heard_tokens(organism_id, body.pose.translation, tick)?;
@@ -2144,6 +2303,7 @@ impl HeadlessWorld {
             tick,
             observer,
             self.objects.values(),
+            false,
         )
     }
 
@@ -2160,6 +2320,7 @@ impl HeadlessWorld {
             tick,
             observer,
             self.indexed_nearby_objects(observer, index)?.into_iter(),
+            false,
         )
     }
 
@@ -2169,10 +2330,16 @@ impl HeadlessWorld {
         tick: Tick,
         observer: &WorldObject,
         objects: impl Iterator<Item = &'a WorldObject>,
+        terrain_vision: bool,
     ) -> Result<PhysicalObservationSnapshot, ScaffoldContractError> {
+        let gaze_yaw = observer.body_yaw + observer.head_yaw;
         let observer_pose = Pose {
             translation: observer.position,
-            rotation: Quatf::IDENTITY,
+            rotation: if terrain_vision {
+                Quatf::new(0.0, (gaze_yaw * 0.5).sin(), 0.0, (gaze_yaw * 0.5).cos())
+            } else {
+                Quatf::IDENTITY
+            },
         };
         let observer_velocity = Velocity {
             linear: observer.grounded_physical.velocity,
@@ -2182,7 +2349,8 @@ impl HeadlessWorld {
             .filter(|object| object.id != observer.id && !object.consumed)
             .filter_map(|object| {
                 let measured_distance = distance(observer.position, object.position);
-                (measured_distance <= HEADLESS_VISION_RADIUS).then(|| {
+                let in_sight = !terrain_vision || self.object_in_sight(observer, object);
+                (measured_distance <= HEADLESS_VISION_RADIUS && in_sight).then(|| {
                     Ok((
                         measured_distance,
                         PhysicalObservedObject {
@@ -2216,6 +2384,130 @@ impl HeadlessWorld {
         };
         snapshot.validate_contract()?;
         Ok(snapshot)
+    }
+
+    fn object_in_sight(&self, observer: &WorldObject, target: &WorldObject) -> bool {
+        let relative = subtract(target.position, observer.position);
+        let bearing = relative.z.atan2(relative.x);
+        let gaze = observer.body_yaw + observer.head_yaw;
+        let angular_delta = (bearing - gaze + std::f32::consts::PI)
+            .rem_euclid(std::f32::consts::TAU)
+            - std::f32::consts::PI;
+        if angular_delta.abs() > VISION_HALF_ANGLE {
+            return false;
+        }
+        let eye = Vec3f::new(
+            observer.position.x,
+            observer.position.y + VISION_EYE_HEIGHT,
+            observer.position.z,
+        );
+        let target_point = Vec3f::new(
+            target.position.x,
+            target.position.y + target.radius * 0.5,
+            target.position.z,
+        );
+        let to_target = subtract(target_point, eye);
+        let range = distance(eye, target_point);
+        if range <= target.radius {
+            return true;
+        }
+        let direction = scale(to_target, 1.0 / range);
+        self.first_sight_hit(eye, direction, range, observer.id, Some(target.id))
+            .is_none_or(|hit| hit >= range - target.radius * 0.25)
+    }
+
+    /// The new grounded profile uses the existing 16 visual lanes as a
+    /// profile-bound fan of nearest solid-surface ranges, not food labels.
+    fn terrain_vision_fan(
+        &self,
+        observer: &WorldObject,
+    ) -> [f32; SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT] {
+        let mut rays = [1.0; SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT];
+        let eye = Vec3f::new(
+            observer.position.x,
+            observer.position.y + VISION_EYE_HEIGHT,
+            observer.position.z,
+        );
+        for (index, range) in rays.iter_mut().enumerate() {
+            let fraction = index as f32 / (SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT - 1) as f32;
+            let yaw =
+                observer.body_yaw + observer.head_yaw + (2.0 * fraction - 1.0) * VISION_HALF_ANGLE;
+            let direction = normalize(Vec3f::new(yaw.cos(), VISION_RAY_PITCH, yaw.sin()));
+            if let Some(hit) =
+                self.first_sight_hit(eye, direction, HEADLESS_VISION_RADIUS, observer.id, None)
+            {
+                *range = (hit / HEADLESS_VISION_RADIUS).clamp(0.0, 1.0);
+            }
+        }
+        rays
+    }
+
+    fn first_sight_hit(
+        &self,
+        origin: Vec3f,
+        direction: Vec3f,
+        max_range: f32,
+        observer: WorldEntityId,
+        target: Option<WorldEntityId>,
+    ) -> Option<f32> {
+        let mut nearest = max_range;
+        let mut found = false;
+        for object in self.objects.values() {
+            if object.id == observer
+                || Some(object.id) == target
+                || object.consumed
+                || object.optical_opacity <= 0.0
+            {
+                continue;
+            }
+            let center = Vec3f::new(
+                object.position.x,
+                object.position.y + object.radius * 0.5,
+                object.position.z,
+            );
+            if let Some(hit) = sight_sphere_hit(origin, direction, center, object.radius, nearest) {
+                nearest = hit;
+                found = true;
+            }
+        }
+        if let Some(terrain) = self.terrain.as_ref() {
+            for bounds in &terrain.surface().obstacles {
+                if let Some(hit) = sight_box_hit(origin, direction, *bounds, nearest) {
+                    nearest = hit;
+                    found = true;
+                }
+            }
+        }
+        let mut previous = 0.0;
+        let mut distance_along = 0.25;
+        while distance_along <= nearest {
+            let point = add(origin, scale(direction, distance_along));
+            let ground = self.terrain.as_ref().map_or(Some(0.0), |terrain| {
+                terrain.surface().height(point.x, point.z)
+            });
+            if ground.is_some_and(|height| point.y <= height) {
+                let mut low = previous;
+                let mut high = distance_along;
+                for _ in 0..8 {
+                    let middle = (low + high) * 0.5;
+                    let point = add(origin, scale(direction, middle));
+                    let surface = self.terrain.as_ref().map_or(Some(0.0), |terrain| {
+                        terrain.surface().height(point.x, point.z)
+                    });
+                    if surface.is_some_and(|height| point.y <= height) {
+                        high = middle;
+                    } else {
+                        low = middle;
+                    }
+                }
+                nearest = high;
+                found = true;
+                break;
+            }
+            previous = distance_along;
+            distance_along += 0.25;
+        }
+        found.then_some(nearest)
     }
 
     pub fn perception_frame(
@@ -3007,6 +3299,9 @@ impl HeadlessWorld {
             kind: spec.kind,
             organism_id: spec.organism_id,
             position: spec.position,
+            body_yaw: 0.0,
+            head_yaw: 0.0,
+            optical_opacity: 1.0,
             radius: HEADLESS_CONTACT_RADIUS,
             nutrition: spec.nutrition.clamp(0.0, 1.0),
             hazard_pain: spec.hazard_pain.clamp(0.0, 1.0),
@@ -3076,6 +3371,30 @@ impl HeadlessWorld {
                 OutcomeProfile::rest(),
                 Vec::new(),
             ),
+            HeadlessAction::LookLeft | HeadlessAction::LookRight | HeadlessAction::LookCenter => {
+                let agent = self
+                    .objects
+                    .get_mut(&agent_id.raw())
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                agent.head_yaw = match action {
+                    HeadlessAction::LookLeft => (agent.head_yaw
+                        + HEAD_SWIVEL_STEP * command.intensity.raw())
+                    .min(HEAD_SWIVEL_LIMIT),
+                    HeadlessAction::LookRight => (agent.head_yaw
+                        - HEAD_SWIVEL_STEP * command.intensity.raw())
+                    .max(-HEAD_SWIVEL_LIMIT),
+                    HeadlessAction::LookCenter => 0.0,
+                    _ => unreachable!(),
+                };
+                self.finish_action(
+                    *command,
+                    true,
+                    None,
+                    physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.005)?,
+                    OutcomeProfile::look(),
+                    Vec::new(),
+                )
+            }
             HeadlessAction::Inspect => {
                 let target = match self.require_target(command) {
                     Ok(target) => target,
@@ -3428,6 +3747,9 @@ impl HeadlessWorld {
         let displacement = subtract(destination, start);
         if let Some(agent) = self.objects.get_mut(&agent_id.raw()) {
             agent.position = destination;
+            if displacement.x.hypot(displacement.z) > f32::EPSILON {
+                agent.body_yaw = displacement.z.atan2(displacement.x);
+            }
         }
         self.move_carried_objects(command.organism_id, displacement);
         let zone_hazard = self
@@ -3926,6 +4248,9 @@ fn write_world_object_signature(
     });
     write_optional_u64(digest, object.organism_id.map(OrganismId::raw));
     write_vec3_bits(digest, object.position);
+    write_f32_bits(digest, object.body_yaw);
+    write_f32_bits(digest, object.head_yaw);
+    write_f32_bits(digest, object.optical_opacity);
     write_f32_bits(digest, object.radius);
     write_f32_bits(digest, object.nutrition);
     write_f32_bits(digest, object.hazard_pain);
@@ -4574,6 +4899,9 @@ enum HeadlessAction {
     NoLocomotion,
     NoPosture,
     Rest,
+    LookLeft,
+    LookRight,
+    LookCenter,
     Inspect,
     Move,
     Approach,
@@ -4613,11 +4941,18 @@ fn classify_action(command: &ActionCommand) -> HeadlessAction {
         HeadlessAction::NoLocomotion
     } else if command.action_id == HeadlessActionIds::NO_POSTURE {
         HeadlessAction::NoPosture
+    } else if command.action_id == HeadlessActionIds::LOOK_LEFT {
+        HeadlessAction::LookLeft
+    } else if command.action_id == HeadlessActionIds::LOOK_RIGHT {
+        HeadlessAction::LookRight
+    } else if command.action_id == HeadlessActionIds::LOOK_CENTER {
+        HeadlessAction::LookCenter
     } else {
         match command.kind {
             ActionKind::Idle => HeadlessAction::Idle,
             ActionKind::Rest => HeadlessAction::Rest,
             ActionKind::Inspect => HeadlessAction::Inspect,
+            ActionKind::Look => HeadlessAction::LookCenter,
             ActionKind::Move => HeadlessAction::Move,
             ActionKind::Hold | ActionKind::Interact => HeadlessAction::Grab,
             ActionKind::Vocalize | ActionKind::Write | ActionKind::Gesture => {
@@ -4784,6 +5119,20 @@ fn legacy_action_for_motor_channel(
                 command.channel,
             ));
         }
+        MotorChannel::Orientation
+            if matches!(
+                command.primitive,
+                HeadlessActionIds::LOOK_LEFT
+                    | HeadlessActionIds::LOOK_RIGHT
+                    | HeadlessActionIds::LOOK_CENTER
+            ) =>
+        {
+            (
+                command.primitive,
+                ActionKind::Look,
+                alife_core::ActionTarget::NONE,
+            )
+        }
         MotorChannel::Orientation | MotorChannel::SpeciesSpecific(_) => {
             return Err(HeadlessMotorTransactionError::UnsupportedChannel(
                 command.channel,
@@ -4910,7 +5259,14 @@ fn validate_persisted_object(object: &WorldObject) -> Result<(), ScaffoldContrac
     if !object.radius.is_finite() || object.radius <= 0.0 {
         return Err(ScaffoldContractError::ScalarOutOfRange);
     }
-    for value in [object.nutrition, object.hazard_pain, object.social_affinity] {
+    for value in [
+        object.nutrition,
+        object.hazard_pain,
+        object.social_affinity,
+        object.body_yaw,
+        object.head_yaw,
+        object.optical_opacity,
+    ] {
         if !value.is_finite() {
             return Err(ScaffoldContractError::NonFiniteFloat);
         }
@@ -4918,6 +5274,8 @@ fn validate_persisted_object(object: &WorldObject) -> Result<(), ScaffoldContrac
     if !(0.0..=1.0).contains(&object.nutrition)
         || !(0.0..=1.0).contains(&object.hazard_pain)
         || !(-1.0..=1.0).contains(&object.social_affinity)
+        || object.head_yaw.abs() > HEAD_SWIVEL_LIMIT
+        || !(0.0..=1.0).contains(&object.optical_opacity)
     {
         return Err(ScaffoldContractError::ScalarOutOfRange);
     }
@@ -4936,6 +5294,18 @@ struct OutcomeProfile {
 }
 
 impl OutcomeProfile {
+    fn look() -> Self {
+        Self::new(
+            DriveDelta::zero(),
+            EndocrineDelta::zero(),
+            0.0,
+            0.0,
+            -0.002,
+            0.0,
+            false,
+        )
+    }
+
     fn no_manipulation() -> Self {
         Self::new(
             DriveDelta::zero(),
@@ -5310,6 +5680,63 @@ fn distance(a: Vec3f, b: Vec3f) -> f32 {
     let dy = a.y - b.y;
     let dz = a.z - b.z;
     (dx * dx + dy * dy + dz * dz).sqrt()
+}
+
+fn add(a: Vec3f, b: Vec3f) -> Vec3f {
+    Vec3f::new(a.x + b.x, a.y + b.y, a.z + b.z)
+}
+
+fn scale(value: Vec3f, factor: f32) -> Vec3f {
+    Vec3f::new(value.x * factor, value.y * factor, value.z * factor)
+}
+
+fn normalize(value: Vec3f) -> Vec3f {
+    let length = distance(value, Vec3f::ZERO);
+    scale(value, 1.0 / length)
+}
+
+fn sight_sphere_hit(
+    origin: Vec3f,
+    direction: Vec3f,
+    center: Vec3f,
+    radius: f32,
+    max_range: f32,
+) -> Option<f32> {
+    let relative = subtract(origin, center);
+    let projection = relative.x * direction.x + relative.y * direction.y + relative.z * direction.z;
+    let offset = relative.x * relative.x + relative.y * relative.y + relative.z * relative.z
+        - radius * radius;
+    let discriminant = projection * projection - offset;
+    if discriminant < 0.0 {
+        return None;
+    }
+    let hit = (-projection - discriminant.sqrt()).max(0.0);
+    (hit <= max_range).then_some(hit)
+}
+
+fn sight_box_hit(origin: Vec3f, direction: Vec3f, bounds: [f32; 6], max_range: f32) -> Option<f32> {
+    let mut entry = 0.0_f32;
+    let mut exit = max_range;
+    for (position, velocity, minimum, maximum) in [
+        (origin.x, direction.x, bounds[0], bounds[2]),
+        (origin.y, direction.y, bounds[4], bounds[5]),
+        (origin.z, direction.z, bounds[1], bounds[3]),
+    ] {
+        if velocity.abs() <= f32::EPSILON {
+            if position < minimum || position > maximum {
+                return None;
+            }
+        } else {
+            let near = (minimum - position) / velocity;
+            let far = (maximum - position) / velocity;
+            entry = entry.max(near.min(far));
+            exit = exit.min(near.max(far));
+            if entry > exit {
+                return None;
+            }
+        }
+    }
+    Some(entry)
 }
 
 fn perception_cell(position: Vec3f) -> (i32, i32, i32) {

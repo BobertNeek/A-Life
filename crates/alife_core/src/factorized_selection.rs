@@ -150,6 +150,7 @@ pub fn arbitrate_gpu_selected_command_into_factorized_bundle(
         | ActionKind::Inspect
         | ActionKind::Gesture => MotorChannel::Posture,
         ActionKind::Move => MotorChannel::Locomotion,
+        ActionKind::Look => MotorChannel::Orientation,
         ActionKind::Interact | ActionKind::Write => MotorChannel::Manipulation,
         ActionKind::Vocalize => MotorChannel::Vocal,
     };
@@ -198,6 +199,7 @@ pub fn arbitrate_gpu_selected_command_into_factorized_bundle(
 fn factorized_motor_channel_for_action(kind: ActionKind) -> Option<MotorChannel> {
     match kind {
         ActionKind::Move => Some(MotorChannel::Locomotion),
+        ActionKind::Look => Some(MotorChannel::Orientation),
         ActionKind::Interact | ActionKind::Write => Some(MotorChannel::Manipulation),
         ActionKind::Vocalize => Some(MotorChannel::Vocal),
         ActionKind::Hold | ActionKind::Rest | ActionKind::Inspect => Some(MotorChannel::Posture),

@@ -77,6 +77,11 @@ impl GpuMemoryGroundingAcceptanceOptions {
         let expected_ticks = match self.sensor_profile {
             SensorProfile::GroundedObjectSlotsV1 => GROUNDED_ACCEPTANCE_TICKS,
             SensorProfile::PrivilegedAffordanceV1 => PRIVILEGED_ACCEPTANCE_TICKS,
+            SensorProfile::GroundedTerrainVisionV1 => {
+                return Err(GpuEvidenceError::Contract(
+                    "Slice C has no terrain-vision acceptance protocol",
+                ));
+            }
         };
         if self.requested_ticks != expected_ticks {
             return Err(GpuEvidenceError::Contract(
@@ -423,6 +428,11 @@ fn validate_saturation_run(
                     "grounded Slice C run reported a terminal capacity error",
                 ));
             }
+        }
+        SensorProfile::GroundedTerrainVisionV1 => {
+            return Err(GpuEvidenceError::Contract(
+                "Slice C has no terrain-vision acceptance protocol",
+            ));
         }
     }
     Ok(())

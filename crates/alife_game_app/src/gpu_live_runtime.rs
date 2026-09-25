@@ -4426,7 +4426,9 @@ fn grounded_successor_state(
         .entity(world_entity_id)
         .ok_or(ScaffoldContractError::InvalidId)?;
     let velocity = match profile {
-        SensorProfile::GroundedObjectSlotsV1 => object.grounded_physical.velocity,
+        SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1 => {
+            object.grounded_physical.velocity
+        }
         SensorProfile::PrivilegedAffordanceV1 => Vec3f::ZERO,
     };
     grounded_semantic_state(object.position, velocity, &biology_after.homeostasis)

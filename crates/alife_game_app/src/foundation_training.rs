@@ -627,6 +627,7 @@ fn assemble_grounded_teacher(
 ) -> std::result::Result<alife_gpu_backend::GpuTrainingDemonstratorAction, ScaffoldContractError> {
     let forced = match chosen.kind {
         alife_core::ActionKind::Move => 0,
+        alife_core::ActionKind::Look => 1,
         alife_core::ActionKind::Interact | alife_core::ActionKind::Write => 2,
         alife_core::ActionKind::Vocalize => 3,
         _ => 4,
@@ -635,6 +636,7 @@ fn assemble_grounded_teacher(
     for candidate in frame.candidates() {
         let slot = match candidate.kind {
             alife_core::ActionKind::Move => Some(0),
+            alife_core::ActionKind::Look => Some(1),
             alife_core::ActionKind::Interact | alife_core::ActionKind::Write => Some(2),
             alife_core::ActionKind::Vocalize => Some(3),
             alife_core::ActionKind::Hold

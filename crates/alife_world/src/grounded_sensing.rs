@@ -318,10 +318,20 @@ impl GroundedSensorExtractor {
         let mut slots = Vec::with_capacity(tracked.len());
         let mut transports = Vec::with_capacity(tracked.len());
         for (slot_index, tracked) in tracked.into_iter().enumerate() {
-            // Game space is Y-up; horizontal bearing keeps [sin, cos] in X/Z.
+            // Game space is Y-up. The observer pose is the sensing pose, so
+            // bearings rotate with its gaze while V1 identity poses are intact.
             let planar = tracked.relative.x.hypot(tracked.relative.z);
+            let yaw = 2.0
+                * snapshot
+                    .observer_pose
+                    .rotation
+                    .y
+                    .atan2(snapshot.observer_pose.rotation.w);
+            let (sine, cosine) = yaw.sin_cos();
+            let forward = tracked.relative.x * cosine + tracked.relative.z * sine;
+            let left = tracked.relative.z * cosine - tracked.relative.x * sine;
             let bearing = if planar > f32::EPSILON {
-                [tracked.relative.z / planar, tracked.relative.x / planar]
+                [left / planar, forward / planar]
             } else {
                 [0.0, 1.0]
             };

@@ -26,6 +26,7 @@ pub enum ActionKind {
     Vocalize = 6,
     Write = 7,
     Gesture = 8,
+    Look = 9,
 }
 
 impl ActionKind {
@@ -44,6 +45,7 @@ impl ActionKind {
             6 => Ok(Self::Vocalize),
             7 => Ok(Self::Write),
             8 => Ok(Self::Gesture),
+            9 => Ok(Self::Look),
             _ => Err(ScaffoldContractError::InvalidActionCandidate),
         }
     }
@@ -59,6 +61,7 @@ impl ActionKind {
             Self::Gesture => ActionId(300),
             Self::Vocalize => ActionId(400),
             Self::Write => ActionId(500),
+            Self::Look => ActionId(600),
         }
     }
 }

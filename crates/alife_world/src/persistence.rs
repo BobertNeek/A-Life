@@ -53,7 +53,7 @@ pub const BRAIN_POLICY_CONFIG_SCHEMA_VERSION: u16 = 1;
 pub const P34_MAX_INLINE_SAVE_BYTES: u64 = 64 * 1024;
 pub const FVR06_GPU_RUNTIME_STATE_SCHEMA: &str = "alife.fvr06.gpu_runtime_state.v1";
 pub const FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION: u16 = 1;
-pub const WORLD_OBJECT_SAVE_SCHEMA_VERSION: u16 = 1;
+pub const WORLD_OBJECT_SAVE_SCHEMA_VERSION: u16 = 2;
 
 #[derive(Debug, Error)]
 pub enum PersistenceError {
@@ -1061,6 +1061,9 @@ pub struct WorldObjectSaveState {
     pub kind: WorldObjectKind,
     pub organism_id: Option<OrganismId>,
     pub position: Vec3f,
+    pub body_yaw: f32,
+    pub head_yaw: f32,
+    pub optical_opacity: f32,
     pub radius: f32,
     pub nutrition: f32,
     pub hazard_pain: f32,
@@ -1114,6 +1117,12 @@ struct WorldObjectSaveWire {
     kind: WorldObjectKind,
     organism_id: Option<OrganismId>,
     position: Vec3f,
+    #[serde(default)]
+    body_yaw: Option<f32>,
+    #[serde(default)]
+    head_yaw: Option<f32>,
+    #[serde(default)]
+    optical_opacity: Option<f32>,
     radius: f32,
     nutrition: f32,
     hazard_pain: f32,
@@ -1143,7 +1152,7 @@ impl WorldObjectSaveWire {
             self.tracking_key,
         ) {
             (
-                Some(WORLD_OBJECT_SAVE_SCHEMA_VERSION),
+                Some(1 | WORLD_OBJECT_SAVE_SCHEMA_VERSION),
                 Some(physical),
                 Some(provenance),
                 Some(key),
@@ -1180,6 +1189,18 @@ impl WorldObjectSaveWire {
             (Some(_), _, _, _) => return Err("unsupported world-object save schema"),
             _ => return Err("partial grounded world-object provenance is forbidden"),
         };
+        let (body_yaw, head_yaw, optical_opacity) = match (
+            self.schema_version,
+            self.body_yaw,
+            self.head_yaw,
+            self.optical_opacity,
+        ) {
+            (Some(WORLD_OBJECT_SAVE_SCHEMA_VERSION), Some(body), Some(head), Some(opacity)) => {
+                (body, head, opacity)
+            }
+            (Some(1) | None, None, None, None) => (0.0, 0.0, 1.0),
+            _ => return Err("partial gaze or opacity state is forbidden"),
+        };
         Ok(WorldObjectSaveState {
             schema_version: WORLD_OBJECT_SAVE_SCHEMA_VERSION,
             id: self.id,
@@ -1187,6 +1208,9 @@ impl WorldObjectSaveWire {
             kind: self.kind,
             organism_id: self.organism_id,
             position: self.position,
+            body_yaw,
+            head_yaw,
+            optical_opacity,
             radius: self.radius,
             nutrition: self.nutrition,
             hazard_pain: self.hazard_pain,
@@ -2319,7 +2343,7 @@ impl WorldObjectSaveState {
     fn validate(&self) -> Result<(), PersistenceError> {
         if self.schema_version != WORLD_OBJECT_SAVE_SCHEMA_VERSION {
             return Err(PersistenceError::SchemaVersion {
-                schema: "alife.world_object.v1",
+                schema: "alife.world_object.v2",
                 expected: WORLD_OBJECT_SAVE_SCHEMA_VERSION,
                 actual: self.schema_version,
             });
@@ -2335,6 +2359,16 @@ impl WorldObjectSaveState {
             id.validate()?;
         }
         self.position.validate()?;
+        if !self.body_yaw.is_finite()
+            || !self.head_yaw.is_finite()
+            || self.head_yaw.abs() > 70.0_f32.to_radians()
+            || !self.optical_opacity.is_finite()
+            || !(0.0..=1.0).contains(&self.optical_opacity)
+        {
+            return Err(PersistenceError::Contract(
+                ScaffoldContractError::ScalarOutOfRange,
+            ));
+        }
         self.grounded_physical.validate_contract()?;
         self.tracking_provenance.validate_contract()?;
         if self.tracking_key != self.tracking_provenance.canonical_key() {
@@ -2374,6 +2408,9 @@ impl From<WorldObject> for WorldObjectSaveState {
             kind: value.kind,
             organism_id: value.organism_id,
             position: value.position,
+            body_yaw: value.body_yaw,
+            head_yaw: value.head_yaw,
+            optical_opacity: value.optical_opacity,
             radius: value.radius,
             nutrition: value.nutrition,
             hazard_pain: value.hazard_pain,
@@ -2397,6 +2434,9 @@ impl From<WorldObjectSaveState> for WorldObject {
             kind: value.kind,
             organism_id: value.organism_id,
             position: value.position,
+            body_yaw: value.body_yaw,
+            head_yaw: value.head_yaw,
+            optical_opacity: value.optical_opacity,
             radius: value.radius,
             nutrition: value.nutrition,
             hazard_pain: value.hazard_pain,

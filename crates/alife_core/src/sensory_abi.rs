@@ -81,7 +81,7 @@ pub const SENSORY_ABI_CHANNEL_GROUPS: [ChannelGroupSpec; 6] = [
     ChannelGroupSpec {
         kind: ChannelGroupKind::VisualAffordance,
         channel_count: SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
-        semantics: "egocentric visual affordance salience such as food, hazard, mate, shelter, tool, glyph, and teacher object cues",
+        semantics: "profile-bound egocentric visual cues: privileged V1 uses affordance salience; grounded terrain vision V1 uses 16 nearest solid-surface range samples across its view, with no food or hazard labels",
         bounds: ChannelBounds::NormalizedUnit,
         extension_policy: ChannelExtensionPolicy::AppendOnlyWithVersionBump,
     },
