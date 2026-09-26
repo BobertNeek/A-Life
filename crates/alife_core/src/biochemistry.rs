@@ -620,6 +620,13 @@ impl Validate for ReproductionReadiness {
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct BiochemistryState {
+    // A snapshot of inherited valuation makes sealed credit reproducible without
+    // a registry lookup. It cannot drift independently of the phenotype.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::chemistry::BiologicalValueProfile::is_default"
+    )]
+    value_profile: crate::chemistry::BiologicalValueProfile,
     pub source_genome_id: GenomeId,
     pub tick: Tick,
     pub body: BodyState,
@@ -666,6 +673,7 @@ impl BiochemistryState {
         )?;
         let value = Self {
             source_genome_id: phenotype.source_genome_id,
+            value_profile: phenotype.chemistry.biochemical.value_profile(),
             tick,
             body,
             homeostasis,
@@ -797,6 +805,7 @@ impl BiochemistryState {
         };
         let value = Self {
             source_genome_id: self.source_genome_id,
+            value_profile: self.value_profile,
             tick: next_tick,
             body,
             homeostasis,
@@ -840,7 +849,9 @@ impl BiochemistryState {
         phenotype: &CreaturePhenotype,
     ) -> Result<(), ScaffoldContractError> {
         self.validate_contract()?;
-        if self.source_genome_id != phenotype.source_genome_id {
+        if self.source_genome_id != phenotype.source_genome_id
+            || self.value_profile != phenotype.chemistry.biochemical.value_profile()
+        {
             return Err(ScaffoldContractError::InvalidId);
         }
         self.graph_state
@@ -849,6 +860,10 @@ impl BiochemistryState {
 
     pub const fn graph_state(&self) -> &BiochemicalGraphState {
         &self.graph_state
+    }
+
+    pub const fn value_profile(&self) -> crate::chemistry::BiologicalValueProfile {
+        self.value_profile
     }
 
     pub const fn biochemical_work(&self) -> BiochemicalWorkReceipt {
@@ -866,6 +881,7 @@ impl BiochemistryState {
 
 impl Validate for BiochemistryState {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.value_profile.validate_contract()?;
         self.source_genome_id.validate()?;
         self.body.validate_contract()?;
         self.homeostasis.validate_contract()?;

@@ -194,8 +194,15 @@ impl NeuromodulatorSample {
     ) -> Result<Self, ScaffoldContractError> {
         receptors.validate_contract()?;
         let mut lanes = *self.frame.lanes();
-        lanes[6] = receptors.activation_for(NeuralReceptorClass::PlasticityAppetitive);
-        lanes[7] = receptors.activation_for(NeuralReceptorClass::PlasticityAversive);
+        // Hormonal tone modulates a causally measured consequence; merely
+        // having baseline dopamine or cortisol is not an action's reward.
+        let appetitive = self.homeostatic_improvement.max(0.0);
+        let aversive = (self.pain.max(0.0)
+            + (-self.homeostatic_improvement).max(0.0)
+            + self.frustration.max(0.0))
+        .clamp(0.0, 1.0);
+        lanes[6] = appetitive * receptors.activation_for(NeuralReceptorClass::PlasticityAppetitive);
+        lanes[7] = aversive * receptors.activation_for(NeuralReceptorClass::PlasticityAversive);
         self.frame = NeuromodulatoryFrame::try_new(lanes)?;
         Ok(self)
     }
@@ -297,9 +304,10 @@ impl OutcomeCreditPacket {
             .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
         let modulator = NeuromodulatorSample::from_components(
             outcome.prediction_error.raw(),
-            physiology.aversive_harm(),
+            physiology.aversive_value(),
             physiology.homeostatic_improvement(),
-            outcome.frustration_delta.raw(),
+            (outcome.frustration_delta.raw() * physiology.before.value_profile().disappointment)
+                .clamp(0.0, 1.0),
             0.0,
         )?;
         Ok(Self {

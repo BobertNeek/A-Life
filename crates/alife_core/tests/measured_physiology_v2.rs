@@ -63,6 +63,9 @@ fn harm_signal_counts_fresh_change_once_and_does_not_punish_unchanged_pain() {
     );
     let mut recovering = before;
     recovering.homeostasis.drives.pain = 0.8;
+    let relief = MeasuredPhysiologyTransition::new(before, recovering).unwrap();
+    assert!(relief.homeostatic_improvement() > 0.0);
+    assert!(relief.homeostatic_improvement() < 0.2);
     assert_eq!(
         MeasuredPhysiologyTransition::new(before, recovering)
             .unwrap()
@@ -74,6 +77,12 @@ fn harm_signal_counts_fresh_change_once_and_does_not_punish_unchanged_pain() {
     let mut injured = before;
     injured.homeostasis.drives.pain = 0.25;
     injured.body.set_health(0.75).unwrap();
+    assert_eq!(
+        MeasuredPhysiologyTransition::new(before, injured)
+            .unwrap()
+            .homeostatic_improvement(),
+        0.0
+    );
     assert_eq!(
         MeasuredPhysiologyTransition::new(before, injured)
             .unwrap()

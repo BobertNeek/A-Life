@@ -60,6 +60,23 @@ For each admitted organism, the production live runtime:
 
 GPU unavailability is typed unavailability. CPU reference helpers do not take over the production neural policy.
 
+## Inherited biochemical learning signals
+
+Chemical dynamics remain in the inherited sparse graph: species baselines and
+decay, reactions, emitters, and receptors. The same graph now carries a
+`BiologicalValueProfile` for measured drive/hormone changes, energy, injury, and
+failed-attempt disappointment. Its two homologs use the existing chemistry
+inheritance path. A sealed biology snapshot stores the expressed profile and
+validates it against its phenotype; the world cannot choose those weights.
+
+Baseline dopamine and cortisol modulate measured consequences rather than
+rewarding/punishing an action merely for existing. The founder PPO objective
+uses this same causal frame and the inherited action-credit receptor profile,
+including sleep gaps and terminal deterioration. Older optimizer/value states
+were trained against the previous objective; do not silently mix them into a
+new campaign. See the [2026-09-25 chemical audit](BIOCHEMICAL_CREDIT_AUDIT_2026-09-25.md)
+for every active species, defaults, evidence, and remaining gaps.
+
 ## Production voxel startup
 
 The production frontend performs a GPU and content preflight, selects or materializes a portable save, restores a required GPU runtime, installs a GPU tick system, and spawns the voxel scene.

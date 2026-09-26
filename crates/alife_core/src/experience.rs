@@ -1288,12 +1288,14 @@ impl MeasuredPhysiologyTransition {
 
     /// The same oriented biological value used by sealed action credit.
     pub fn homeostatic_improvement(&self) -> f32 {
-        let drives = self.homeostatic_delta.drives;
-        let oriented_sum = -drives.hunger - drives.fatigue - drives.fear - drives.loneliness
-            + drives.brain_atp
-            - drives.temperature_stress
-            + self.energy_delta.raw();
-        (oriented_sum / 7.0).clamp(-1.0, 1.0)
+        self.before
+            .value_profile()
+            .value_change(self.homeostatic_delta, self.energy_delta.raw())
+    }
+
+    /// Genetic sensitivity changes valuation, never the measured injury.
+    pub fn aversive_value(&self) -> f32 {
+        (self.before.value_profile().injury * self.aversive_harm()).clamp(0.0, 1.0)
     }
 }
 
@@ -1303,6 +1305,9 @@ impl Validate for MeasuredPhysiologyTransition {
         self.after.validate_contract()?;
         if self.before.source_genome_id != self.after.source_genome_id {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        if self.before.value_profile() != self.after.value_profile() {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
         }
         Tick::validate_monotonic(self.before.tick, self.after.tick)?;
         let expected = measured_homeostatic_delta(self.before.homeostasis, self.after.homeostasis)?;

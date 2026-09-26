@@ -339,7 +339,10 @@ fn credit_packet_is_derived_exactly_from_matching_sealed_gpu_evidence() {
         packet.modulator().pain(),
         physiology.pain_delta.raw().max(0.0)
     );
-    assert_eq!(packet.modulator().frustration(), 0.2);
+    assert_eq!(
+        packet.modulator().frustration(),
+        0.2 * physiology.before.value_profile().disappointment
+    );
     assert_eq!(packet.modulator().novelty(), 0.0);
     assert!((-1.0..=1.0).contains(&packet.modulator().homeostatic_improvement()));
     assert_eq!(

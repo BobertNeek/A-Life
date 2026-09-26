@@ -11,6 +11,91 @@ use crate::{
 pub const DRIVE_EXTENSION_SLOTS: usize = 2;
 pub const ENDOCRINE_EXTENSION_SLOTS: usize = 2;
 
+/// Inherited valuation of measured changes, separate from chemical dynamics.
+/// Zero means regulatory only. Array order is the corresponding snapshot ABI.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct BiologicalValueProfile {
+    pub drives: [f32; DriveSnapshot::CHANNEL_COUNT],
+    pub hormones: [f32; EndocrineSnapshot::CHANNEL_COUNT],
+    pub energy: f32,
+    pub injury: f32,
+    pub disappointment: f32,
+}
+
+impl Default for BiologicalValueProfile {
+    fn default() -> Self {
+        Self {
+            // Hunger, fatigue, fear, pain relief, loneliness, curiosity, ATP,
+            // temperature, reproductive arousal, and two extension lanes.
+            drives: [
+                -1.0 / 7.0,
+                -1.0 / 7.0,
+                -1.0 / 7.0,
+                -1.0 / 7.0,
+                -1.0 / 7.0,
+                0.0,
+                1.0 / 7.0,
+                -1.0 / 7.0,
+                0.0,
+                0.0,
+                0.0,
+            ],
+            // Hormonal tone gates receptors; a rise is not itself a prize.
+            hormones: [0.0; EndocrineSnapshot::CHANNEL_COUNT],
+            energy: 1.0 / 7.0,
+            injury: 1.0,
+            disappointment: 0.03,
+        }
+    }
+}
+
+impl BiologicalValueProfile {
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+
+    pub fn value_change(&self, delta: HomeostaticDelta, energy: f32) -> f32 {
+        let mut drives = delta.drives.to_array();
+        // Fresh injury has its own non-duplicated signal, including saturation.
+        drives[3] = drives[3].min(0.0);
+        let value = self
+            .drives
+            .iter()
+            .zip(drives)
+            .map(|(w, d)| w * d)
+            .sum::<f32>()
+            + self
+                .hormones
+                .iter()
+                .zip(delta.hormones.to_array())
+                .map(|(w, d)| w * d)
+                .sum::<f32>()
+            + self.energy * energy;
+        value.clamp(-1.0, 1.0)
+    }
+}
+
+impl Validate for BiologicalValueProfile {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        let values = self
+            .drives
+            .iter()
+            .chain(self.hormones.iter())
+            .copied()
+            .chain([self.energy, self.injury, self.disappointment]);
+        for value in values {
+            validate_finite(value)?;
+            if !(-2.0..=2.0).contains(&value) {
+                return Err(ScaffoldContractError::ScalarOutOfRange);
+            }
+        }
+        if self.injury < 0.0 || self.disappointment < 0.0 || self.disappointment > 1.0 {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct DriveSnapshot {
     pub hunger: f32,

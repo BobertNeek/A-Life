@@ -125,10 +125,10 @@ pub use brain_class::{
 pub use canonical_digest::CanonicalDigestBuilder;
 pub use checkpoint::{BrainCheckpointMode, BRAIN_CHECKPOINT_MODE_SCHEMA_VERSION};
 pub use chemistry::{
-    ChemistryModulation, DriveDelta, DriveSnapshot, EndocrineDelta, EndocrineProfile,
-    EndocrineSnapshot, HomeostaticCadence, HomeostaticCadenceBand, HomeostaticDelta,
-    HomeostaticParameters, HomeostaticSnapshot, RecoveryAssessment, RecoveryTrigger,
-    DRIVE_EXTENSION_SLOTS, ENDOCRINE_EXTENSION_SLOTS,
+    BiologicalValueProfile, ChemistryModulation, DriveDelta, DriveSnapshot, EndocrineDelta,
+    EndocrineProfile, EndocrineSnapshot, HomeostaticCadence, HomeostaticCadenceBand,
+    HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot, RecoveryAssessment,
+    RecoveryTrigger, DRIVE_EXTENSION_SLOTS, ENDOCRINE_EXTENSION_SLOTS,
 };
 pub use cognitive_context::{
     CognitiveBudgetView, CognitiveConceptActivation, CognitiveConceptView, CognitiveContextFrame,

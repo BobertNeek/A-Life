@@ -438,6 +438,21 @@ pub struct BiochemicalGraphChromosome {
 }
 
 impl BiochemicalGraphChromosome {
+    /// Inherit valuation alongside the chemistry graph, never lifetime rewards.
+    pub fn with_value_profile(
+        mut self,
+        side: AlleleSide,
+        profile: crate::chemistry::BiologicalValueProfile,
+    ) -> Result<Self, ScaffoldContractError> {
+        let homolog = match side {
+            AlleleSide::Maternal => &mut self.maternal,
+            AlleleSide::Paternal => &mut self.paternal,
+        };
+        *homolog = homolog.with_value_profile(profile)?;
+        self.validate_contract()?;
+        Ok(self)
+    }
+
     pub fn new(
         maternal: BiochemicalPhenotype,
         paternal: BiochemicalPhenotype,

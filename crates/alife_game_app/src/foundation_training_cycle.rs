@@ -21,9 +21,43 @@ use crate::{
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+const BIOLOGICAL_OBJECTIVE_VERSION: u16 = 2;
+fn legacy_objective_version() -> u16 {
+    1
+}
+
+fn training_receptor_profile(
+    phenotype: &alife_core::CreaturePhenotype,
+) -> alife_core::PlasticityReceptorProfile {
+    let genes = phenotype.brain_genome.plasticity_parameters();
+    genes.action_candidate_credit_profile().map_or_else(
+        || genes.receptor_profile(),
+        |profile| profile.receptor_profile(),
+    )
+}
+
+fn training_biological_value(
+    transition: &alife_core::MeasuredPhysiologyTransition,
+    phenotype: &alife_core::CreaturePhenotype,
+) -> Result<f32> {
+    let receptors = transition.before.neural_receptor_frame(phenotype)?;
+    let sample = alife_core::NeuromodulatorSample::from_components(
+        0.0,
+        transition.aversive_value(),
+        transition.homeostatic_improvement(),
+        0.0,
+        0.0,
+    )?
+    .with_biochemical_receptors(&receptors)?;
+    Ok(training_receptor_profile(phenotype).project(&sample.frame())?)
+}
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct FoundationCycleReceipt {
+    #[serde(default = "legacy_objective_version")]
+    pub biological_objective_version: u16,
+    #[serde(default)]
+    pub objective_state_reset: bool,
     pub seed: u64,
     #[serde(default)]
     pub founder_seed_base: u64,
@@ -213,6 +247,7 @@ fn run_foundation_training_cycle_from(
         return Err("a delayed food gate cannot be combined with a lesson layout".into());
     }
     std::fs::create_dir(output)?;
+    let mut objective_state_reset = false;
     let (asset, policy_version, restored_actor, restored_value, founder_seed_base) =
         if let Some(previous) = previous {
             if previous.join("warmup.json").is_file() {
@@ -259,6 +294,11 @@ fn run_foundation_training_cycle_from(
             } else {
                 let receipt: FoundationCycleReceipt =
                     serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
+                if receipt.biological_objective_version > BIOLOGICAL_OBJECTIVE_VERSION {
+                    return Err("previous cohort uses a newer biological objective".into());
+                }
+                objective_state_reset =
+                    receipt.biological_objective_version != BIOLOGICAL_OBJECTIVE_VERSION;
                 if !receipt.next_cohort_optimizer_rebound {
                     return Err("previous cycle is not an exact sealed cohort handoff".into());
                 }
@@ -298,8 +338,16 @@ fn run_foundation_training_cycle_from(
                         .policy_version
                         .checked_add(1)
                         .ok_or("policy version overflow")?,
-                    Some(actor),
-                    Some(value),
+                    if objective_state_reset {
+                        None
+                    } else {
+                        Some(actor)
+                    },
+                    if objective_state_reset {
+                        None
+                    } else {
+                        Some(value)
+                    },
                     founder_seed_base,
                 )
             }
@@ -434,6 +482,13 @@ fn run_foundation_training_cycle_from(
         .ok_or("new training world has no founder")?
         .organism_id();
     let initial_energy = organism_energy(&runtime, organism_id)?;
+    let organism_phenotype = runtime
+        .world()
+        .organism_registry()
+        .get(organism_id)
+        .ok_or("training founder is missing")?
+        .phenotype()
+        .clone();
     let mut minimum_energy = initial_energy;
     let mut consumed_events = 0_u64;
     let mut first_consumed_world_tick = None;
@@ -731,9 +786,7 @@ fn run_foundation_training_cycle_from(
                     let discount = (-std::f64::consts::LN_2 * gap_seconds
                         / f64::from(ppo_config.discount_half_life_seconds))
                     .exp() as f32;
-                    let delayed = (gap.homeostatic_improvement() - gap.aversive_harm())
-                        .clamp(-1.0, 1.0)
-                        * discount;
+                    let delayed = training_biological_value(&gap, &organism_phenotype)? * discount;
                     actions_rewards[index - 1].1 =
                         (actions_rewards[index - 1].1 + delayed).clamp(-1.0, 1.0);
                     sleep_gap_reward_total += delayed;
@@ -766,14 +819,15 @@ fn run_foundation_training_cycle_from(
                         && physiology.after.homeostasis.drives.fatigue
                             <= physiology.before.homeostasis.drives.fatigue - 0.02,
                 );
-                let modulator =
-                    alife_core::OutcomeCreditPacket::from_sealed_patch(patch)?.modulator();
+                let receptors = physiology
+                    .before
+                    .neural_receptor_frame(&organism_phenotype)?;
+                let modulator = alife_core::OutcomeCreditPacket::from_sealed_patch(patch)?
+                    .with_biochemical_receptors(&receptors)?
+                    .modulator();
                 actions_rewards.push((
                     joint_action(behavior)?,
-                    (modulator.homeostatic_improvement()
-                        - modulator.pain()
-                        - modulator.frustration().max(0.0))
-                    .clamp(-1.0, 1.0),
+                    training_receptor_profile(&organism_phenotype).project(&modulator.frame())?,
                 ));
             }
         }
@@ -792,9 +846,7 @@ fn run_foundation_training_cycle_from(
         let discount = (-std::f64::consts::LN_2 * elapsed
             / f64::from(ppo_config.discount_half_life_seconds))
         .exp() as f32;
-        let delayed = (transition.homeostatic_improvement() - transition.aversive_harm())
-            .clamp(-1.0, 1.0)
-            * discount;
+        let delayed = training_biological_value(&transition, &organism_phenotype)? * discount;
         let final_reward = &mut actions_rewards
             .last_mut()
             .ok_or("terminal life has no trainable action")?
@@ -936,6 +988,8 @@ fn run_foundation_training_cycle_from(
     )?;
     std::fs::write(output.join("phase.txt"), "next-cohort-admitted")?;
     let receipt = FoundationCycleReceipt {
+        biological_objective_version: BIOLOGICAL_OBJECTIVE_VERSION,
+        objective_state_reset,
         seed,
         founder_seed_base,
         policy_version,

@@ -428,6 +428,11 @@ impl Validate for NeuralReceptorFrame {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(try_from = "BiochemicalPhenotypeWire")]
 pub struct BiochemicalPhenotype {
+    #[serde(
+        default,
+        skip_serializing_if = "crate::chemistry::BiologicalValueProfile::is_default"
+    )]
+    value_profile: crate::chemistry::BiologicalValueProfile,
     schema_version: u16,
     species_budget: usize,
     reaction_budget: usize,
@@ -444,6 +449,8 @@ pub struct BiochemicalPhenotype {
 // once on load; private source fields cannot invalidate them during simulation.
 #[derive(Deserialize)]
 struct BiochemicalPhenotypeWire {
+    #[serde(default)]
+    value_profile: crate::chemistry::BiologicalValueProfile,
     schema_version: u16,
     species_budget: usize,
     reaction_budget: usize,
@@ -458,6 +465,7 @@ impl TryFrom<BiochemicalPhenotypeWire> for BiochemicalPhenotype {
     type Error = ScaffoldContractError;
     fn try_from(wire: BiochemicalPhenotypeWire) -> Result<Self, Self::Error> {
         let mut value = Self {
+            value_profile: wire.value_profile,
             schema_version: wire.schema_version,
             species_budget: wire.species_budget,
             reaction_budget: wire.reaction_budget,
@@ -499,6 +507,20 @@ struct ReceptorGroup {
 }
 
 impl BiochemicalPhenotype {
+    pub const fn value_profile(&self) -> crate::chemistry::BiologicalValueProfile {
+        self.value_profile
+    }
+
+    pub(crate) fn with_value_profile(
+        &self,
+        profile: crate::chemistry::BiologicalValueProfile,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut value = self.clone();
+        value.value_profile = profile;
+        value.compile()?;
+        Ok(value)
+    }
+
     fn compile(&mut self) -> Result<(), ScaffoldContractError> {
         self.validate_contract()?;
         let mut compiled = CompiledBiochemistry::default();
@@ -811,6 +833,7 @@ impl BiochemicalPhenotype {
             emitters,
             receptors,
             neuroemitters,
+            value_profile: crate::chemistry::BiologicalValueProfile::default(),
             compiled: Arc::default(),
         };
         value.compile()?;
@@ -824,6 +847,7 @@ impl BiochemicalPhenotype {
 
 impl Validate for BiochemicalPhenotype {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.value_profile.validate_contract()?;
         if self.schema_version != BIOCHEMICAL_GRAPH_SCHEMA_VERSION
             || self.species.is_empty()
             || self.species.len() > self.species_budget

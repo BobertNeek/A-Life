@@ -5450,16 +5450,12 @@ impl OutcomeProfile {
     fn blocked() -> Self {
         Self::new(
             DriveDelta {
-                pain: 0.05,
                 brain_atp: -0.03,
                 ..DriveDelta::zero()
             },
-            EndocrineDelta {
-                cortisol: 0.08,
-                ..EndocrineDelta::zero()
-            },
-            0.45,
-            0.05,
+            EndocrineDelta::zero(),
+            1.0,
+            0.0,
             -0.03,
             0.6,
             true,
@@ -5473,12 +5469,8 @@ impl OutcomeProfile {
                 brain_atp: -0.02,
                 ..DriveDelta::zero()
             },
-            EndocrineDelta {
-                cortisol: 0.1,
-                dopamine: -0.05,
-                ..EndocrineDelta::zero()
-            },
-            0.65,
+            EndocrineDelta::zero(),
+            1.0,
             0.0,
             -0.02,
             0.85,
@@ -5493,11 +5485,8 @@ impl OutcomeProfile {
                 brain_atp: -0.01,
                 ..DriveDelta::zero()
             },
-            EndocrineDelta {
-                cortisol: 0.08,
-                ..EndocrineDelta::zero()
-            },
-            0.7,
+            EndocrineDelta::zero(),
+            1.0,
             0.0,
             -0.01,
             0.9,
@@ -5540,55 +5529,30 @@ impl OutcomeProfile {
     }
 
     fn social_contact(affinity: f32) -> Self {
-        let affinity = affinity.clamp(-1.0, 1.0);
-        if affinity >= 0.0 {
-            Self::new(
-                DriveDelta {
-                    loneliness: -0.08 * affinity,
-                    brain_atp: -0.02,
-                    ..DriveDelta::zero()
-                },
-                EndocrineDelta {
-                    oxytocin: 0.08 * affinity,
-                    serotonin: 0.03 * affinity,
-                    ..EndocrineDelta::zero()
-                },
-                0.02,
-                0.0,
-                -0.02,
-                0.15,
-                false,
-            )
-            .with_body_event(BodyEventDelta {
-                social_contact: affinity.abs(),
-                ..BodyEventDelta::zero()
-            })
-        } else {
-            let fear = affinity.abs();
-            Self::new(
-                DriveDelta {
-                    fear: 0.18 * fear,
-                    pain: 0.02 * fear,
-                    brain_atp: -0.04,
-                    ..DriveDelta::zero()
-                },
-                EndocrineDelta {
-                    adrenaline: 0.12 * fear,
-                    cortisol: 0.10 * fear,
-                    oxytocin: -0.04 * fear,
-                    ..EndocrineDelta::zero()
-                },
-                0.20 * fear,
-                0.02 * fear,
-                -0.04,
-                0.35,
-                true,
-            )
-            .with_body_event(BodyEventDelta {
-                social_contact: fear,
-                ..BodyEventDelta::zero()
-            })
-        }
+        // A negative affinity label is not a physical attack. It must neither
+        // manufacture fear nor turn into positive affiliative contact via abs.
+        let affinity = affinity.clamp(0.0, 1.0);
+        Self::new(
+            DriveDelta {
+                loneliness: -0.08 * affinity,
+                brain_atp: -0.02,
+                ..DriveDelta::zero()
+            },
+            EndocrineDelta {
+                oxytocin: 0.08 * affinity,
+                serotonin: 0.03 * affinity,
+                ..EndocrineDelta::zero()
+            },
+            0.0,
+            0.0,
+            -0.02,
+            0.15,
+            false,
+        )
+        .with_body_event(BodyEventDelta {
+            social_contact: affinity,
+            ..BodyEventDelta::zero()
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -5624,7 +5588,7 @@ impl OutcomeProfile {
     }
 
     fn with_social_contact(mut self, affinity: f32) -> Self {
-        self.body_event.social_contact = affinity.clamp(-1.0, 1.0).abs();
+        self.body_event.social_contact = affinity.clamp(0.0, 1.0);
         self
     }
 }
@@ -5790,6 +5754,42 @@ fn step_away(start: Vec3f, target: Vec3f, step: f32) -> Vec3f {
             start.y + delta.y / length * step,
             start.z + delta.z / length * step,
         )
+    }
+}
+
+#[cfg(test)]
+mod biochemical_outcome_tests {
+    use super::*;
+
+    #[test]
+    fn failures_report_disappointment_not_injury_and_affinity_is_not_threat() {
+        let genes = alife_core::BiologicalValueProfile::default();
+        for profile in [
+            OutcomeProfile::blocked(),
+            OutcomeProfile::missing_affordance(),
+            OutcomeProfile::invalid_target(),
+        ] {
+            assert_eq!(profile.frustration, 1.0); // An observed failed attempt, not a punishment magnitude.
+            assert_eq!(profile.body_event.damage, 0.0);
+            assert_eq!(profile.pain, 0.0);
+            assert_eq!(profile.homeostatic_delta.hormones, EndocrineDelta::zero());
+            assert!(profile.frustration * genes.disappointment < genes.injury * 0.1);
+        }
+        for affinity in [-1.0, 0.0, 0.5] {
+            let profile = OutcomeProfile::social_contact(affinity);
+            assert_eq!(profile.body_event.social_contact, affinity.max(0.0));
+            assert_eq!(profile.body_event.damage, 0.0);
+            assert_eq!(profile.homeostatic_delta.drives.fear, 0.0);
+            assert_eq!(profile.homeostatic_delta.drives.pain, 0.0);
+            assert_eq!(profile.frustration, 0.0);
+            assert_eq!(
+                OutcomeProfile::grab()
+                    .with_social_contact(affinity)
+                    .body_event
+                    .social_contact,
+                affinity.max(0.0)
+            );
+        }
     }
 }
 
