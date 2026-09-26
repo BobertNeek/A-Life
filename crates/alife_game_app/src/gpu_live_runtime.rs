@@ -3929,6 +3929,30 @@ fn archive_foundation_asset_bytes(
     Ok(Some(foundation.encode_canonical()?))
 }
 
+fn validate_restore_checkpoint_coverage(
+    world: &HeadlessWorld,
+    checkpoint_ids: &BTreeSet<u64>,
+) -> Result<(), ScaffoldContractError> {
+    for (id, _) in world.organism_entity_ids() {
+        if checkpoint_ids.contains(&id.raw()) {
+            continue;
+        }
+        let record = world
+            .organism_registry()
+            .get(id)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        // A new body may precede its first brain admission/checkpoint.
+        if record.birth_tick() != world.tick()
+            || record.biochemistry().development.age_ticks != Tick::ZERO
+            || *record.cognitive_work() != CognitiveWorkReceipt::zero()
+            || record.sleep_cycle_id() != 0
+        {
+            return Err(ScaffoldContractError::MissingPhaseData);
+        }
+    }
+    Ok(())
+}
+
 fn cognitive_context_for_recall(
     organism_id: OrganismId,
     sequence_id: ExperienceSequenceId,
@@ -6129,6 +6153,7 @@ impl GpuLiveBrainRuntime {
         if checkpoint_index.keys().any(|raw| !live_ids.contains(raw)) {
             return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
         }
+        validate_restore_checkpoint_coverage(&world, &checkpoint_index.keys().copied().collect())?;
         let world_tick = world.tick();
         let mut runtime = Self {
             #[cfg(feature = "foundation-training")]
@@ -13168,6 +13193,23 @@ mod tests {
                 .unwrap(),
             )
             .unwrap();
+    }
+
+    #[test]
+    fn checkpoint_coverage_allows_only_unused_newborns_to_lack_state() {
+        let id = OrganismId(1);
+        let mut world = HeadlessScenarioBuilder::new(73001)
+            .agent("newborn", id, Vec3f::ZERO)
+            .build()
+            .unwrap();
+        register_sealing_test_organism(&mut world, id);
+        assert!(validate_restore_checkpoint_coverage(&world, &BTreeSet::new()).is_ok());
+        world.try_advance_tick().unwrap();
+        assert_eq!(
+            validate_restore_checkpoint_coverage(&world, &BTreeSet::new()),
+            Err(ScaffoldContractError::MissingPhaseData)
+        );
+        assert!(validate_restore_checkpoint_coverage(&world, &BTreeSet::from([id.raw()])).is_ok());
     }
 
     #[test]

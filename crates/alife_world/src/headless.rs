@@ -163,6 +163,7 @@ mod terrain_vision_tests {
         clear.objects.get_mut(&food.raw()).unwrap().carried_by = Some(OrganismId(2));
         let eat = HeadlessWorldCommand::eat(OrganismId(1), food).unwrap();
         assert!(clear.apply_command(&eat).unwrap().execution.succeeded);
+        assert_eq!(clear.objects[&food.raw()].carried_by, None);
         assert!(!clear.apply_command(&eat).unwrap().execution.succeeded);
     }
 
@@ -1505,11 +1506,16 @@ impl HeadlessWorld {
         }))
     }
 
-    fn has_mating_opportunity(
+    fn mating_response(
         &self,
         organism_id: OrganismId,
         next_tick: Tick,
-    ) -> Result<bool, ScaffoldContractError> {
+    ) -> Result<f32, ScaffoldContractError> {
+        let own = self
+            .organism_registry
+            .get(organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let mut strongest = 0.0_f32;
         for partner_id in self.alive_organism_ids() {
             if partner_id.raw() == organism_id.raw() {
                 continue;
@@ -1523,10 +1529,18 @@ impl HeadlessWorld {
                 .eligible_mating_pair(maternal_id, paternal_id, next_tick)?
                 .is_some()
             {
-                return Ok(true);
+                let other = self
+                    .organism_registry
+                    .get(partner_id)
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                strongest = strongest.max(own.phenotype().reproduction.mate_response(
+                    own.phenotype(),
+                    other.phenotype(),
+                    other.biochemistry().body.health,
+                ));
             }
         }
-        Ok(false)
+        Ok(strongest)
     }
 
     pub fn advance_tick(&mut self) -> Tick {
@@ -3357,13 +3371,9 @@ impl HeadlessWorld {
         let action_and_hazard_event = hazard_contact.map_or(action_body_event, |(_, pain)| {
             merge_hazard_contact_body_event(action_body_event, pain)
         });
-        let ambient_event = if self.has_mating_opportunity(bundle.organism_id, outcome_tick)? {
-            BodyEventDelta {
-                mating_opportunity: 1.0,
-                ..BodyEventDelta::zero()
-            }
-        } else {
-            BodyEventDelta::zero()
+        let ambient_event = BodyEventDelta {
+            mating_opportunity: self.mating_response(bundle.organism_id, outcome_tick)?,
+            ..BodyEventDelta::zero()
         };
         let body_event = combine_body_event(ambient_event, action_and_hazard_event);
         body_event.validate_contract()?;
@@ -4163,6 +4173,7 @@ impl HeadlessWorld {
         let nutrition = object.nutrition;
         let pain = object.hazard_pain;
         object.consumed = true;
+        object.carried_by = None;
         self.ecology.record_consumed(target, self.tick);
         self.rebuild_ecology_metrics();
         self.finish_action(
@@ -4656,13 +4667,17 @@ impl HeadlessWorld {
             if self.tick.raw() < policy.next_spawn_tick.raw() {
                 continue;
             }
+            let generated_prefix = format!("{}-", policy.label_prefix);
             let active_for_prefix = self
                 .objects
                 .values()
                 .filter(|object| {
                     object.kind == WorldObjectKind::Food
                         && !object.consumed
-                        && object.label.starts_with(&policy.label_prefix)
+                        && object
+                            .label
+                            .strip_prefix(&generated_prefix)
+                            .is_some_and(|suffix| suffix.parse::<u32>().is_ok())
                 })
                 .count();
             if active_for_prefix >= policy.max_active
@@ -8769,6 +8784,19 @@ mod task_4_3a2_tests {
             prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID);
         let (mut replay, replay_next_tick) =
             prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID);
+        for (own_id, other_id) in [(MATERNAL_ID, PATERNAL_ID), (PATERNAL_ID, MATERNAL_ID)] {
+            let own = forward.organism_registry().get(own_id).unwrap();
+            let other = forward.organism_registry().get(other_id).unwrap();
+            let expected = own.phenotype().reproduction.mate_response(
+                own.phenotype(),
+                other.phenotype(),
+                other.biochemistry().body.health,
+            );
+            assert_eq!(
+                forward.mating_response(own_id, next_tick).unwrap(),
+                expected
+            );
+        }
         let expected_child_id = OrganismId(forward.next_organism_id);
         let maternal_genome_id = forward
             .organism_registry()

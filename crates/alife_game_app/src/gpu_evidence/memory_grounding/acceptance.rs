@@ -1301,7 +1301,8 @@ mod tests {
                 let options = GpuMemoryGroundingAcceptanceOptions {
                     capacity,
                     requested_ticks: match sensor_profile {
-                        SensorProfile::GroundedObjectSlotsV1 => GROUNDED_ACCEPTANCE_TICKS,
+                        SensorProfile::GroundedObjectSlotsV1
+                        | SensorProfile::GroundedTerrainVisionV1 => GROUNDED_ACCEPTANCE_TICKS,
                         SensorProfile::PrivilegedAffordanceV1 => PRIVILEGED_ACCEPTANCE_TICKS,
                     },
                     deterministic_seed: 4_303,

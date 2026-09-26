@@ -546,6 +546,7 @@ pub struct Fvr04CreatureExpressionSample {
     pub brain_class_id: Option<u16>,
     pub brain_neuron_count: Option<u32>,
     pub hunger: f32,
+    pub body_energy: Option<f32>,
     pub fatigue: f32,
     pub fear: f32,
     pub cortisol: f32,
@@ -4597,6 +4598,7 @@ fn spawn_fvr04_prepared_creature_batch(
             brain_class_id: creature.record.brain_class_id,
             brain_neuron_count: creature.record.brain_neuron_count,
             hunger: visual.cues.hunger.value,
+            body_energy: None,
             fatigue: visual.cues.fatigue.value,
             fear: visual.cues.fear.value,
             cortisol: visual.endocrine.cortisol,
@@ -5214,9 +5216,11 @@ fn fvr04_live_learning_explanation(
     let sleep_phase = fvr04_sleep_phase_text(current_row.sleep_phase);
 
     format!(
-        "LEARNING EXPLANATION\norganism {} | stable world {}\naction: previous {} -> current {}\nmeasured joint outcome: {}\nsleep current: {} | work units: {}\nupdates previous: {}\nupdates current: {}",
+        "LEARNING EXPLANATION\norganism {} | stable world {}\nbody heading: {:.0} deg | head offset: {:.0} deg\naction: previous {} -> current {}\nmeasured joint outcome: {}\nsleep current: {} | work units: {}\nupdates previous: {}\nupdates current: {}",
         organism_id.raw(),
         stable_id.raw(),
+        current_row.object.body_yaw.to_degrees(),
+        current_row.object.head_yaw.to_degrees(),
         previous_action,
         current_action,
         outcome_change,
@@ -5649,11 +5653,12 @@ fn sync_v0_player_control_strip(
 fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample) -> String {
     let display_name = v0_player_creature_name(&sample.display_label, sample.stable_id.raw());
     format!(
-        "{display_name}\n{} | {}\n\nHunger  {}\nEnergy  {}\nSafety  {}\nSleepiness  {}",
+        "{display_name}\n{} | {}\n\nHunger  {}\nEnergy  {}\nTiredness  {}\nSafety  {}\nSleepiness  {}",
         sample.animation.label(),
         sample.expression.label(),
         v0_need_bar(sample.hunger),
-        v0_need_bar(1.0 - sample.fatigue),
+        sample.body_energy.map(v0_need_bar).unwrap_or_else(|| "unavailable".to_string()),
+        v0_need_bar(sample.fatigue),
         v0_need_bar(1.0 - sample.fear),
         v0_need_bar(sample.sleep_pressure),
     )
