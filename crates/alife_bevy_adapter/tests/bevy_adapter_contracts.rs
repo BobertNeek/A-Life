@@ -254,6 +254,19 @@ fn action_adapter_translates_move_approach_flee_and_rest() {
     .unwrap();
     assert_eq!(rested.plan.kind, BevyActionKind::Rest);
     assert!(rested.plan.rest_requested);
+    let looked = execute_action_command(
+        &command(
+            ActionKind::Look.canonical_id(),
+            ActionKind::Look,
+            None,
+            None,
+        ),
+        &context,
+    )
+    .unwrap();
+    assert_eq!(looked.plan.kind, BevyActionKind::Look);
+    assert_eq!(looked.plan.displacement, Vec3::ZERO);
+    assert!(!looked.plan.rest_requested);
 }
 
 #[test]

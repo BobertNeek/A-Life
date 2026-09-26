@@ -15,7 +15,7 @@ use crate::{
 pub const CREATURE_GENOME_SCHEMA_VERSION: u16 = 3;
 pub const MAX_CROSSOVER_SEGMENTS: u8 = 8;
 pub const MAX_MUTATION_DELTA: f32 = 0.25;
-pub const MAX_MUTATION_RECORDS: usize = 128;
+pub const MAX_MUTATION_RECORDS: usize = 4096;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ContinuousLocus {
@@ -27,6 +27,12 @@ pub struct ContinuousLocus {
 }
 
 impl ContinuousLocus {
+    /// The exact same operation order as ordinary equal-weight expression.
+    /// Default-centered modifiers must not introduce floating-point drift.
+    pub fn midpoint_value(maternal: f32, paternal: f32) -> f32 {
+        maternal.mul_add(0.5, paternal * 0.5)
+    }
+
     pub fn mean(maternal: f32, paternal: f32) -> Result<Self, ScaffoldContractError> {
         Self::with_bounds(maternal, paternal, 0.0, 1.0, 0.5)
     }
@@ -152,6 +158,16 @@ pub enum BodyFrame {
     Sturdy,
 }
 
+impl BodyFrame {
+    pub fn bulk(self) -> f32 {
+        match self {
+            Self::Light => -1.0,
+            Self::Balanced => 0.0,
+            Self::Sturdy => 1.0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MatePreference {
     Novelty,
@@ -193,7 +209,7 @@ pub struct ChromosomeRecombinationRecord {
 pub enum MutationRecord {
     Continuous {
         chromosome: ChromosomeKind,
-        locus_index: u8,
+        locus_index: u16,
         allele: AlleleSide,
         before: f32,
         after: f32,
@@ -202,7 +218,7 @@ pub enum MutationRecord {
     },
     Discrete {
         chromosome: ChromosomeKind,
-        locus_index: u8,
+        locus_index: u16,
         allele: AlleleSide,
         before: u16,
         after: u16,
@@ -350,7 +366,45 @@ fn is_legacy_turnover_rate(value: &f32) -> bool {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BrainConstructionChromosome {
+    pub maternal_architecture: crate::genome::CognitiveArchitectureGenomeParameters,
+    pub paternal_architecture: crate::genome::CognitiveArchitectureGenomeParameters,
+    pub maternal_learning: crate::PlasticityGenomeParameters,
+    pub paternal_learning: crate::PlasticityGenomeParameters,
+}
+
+impl Default for BrainConstructionChromosome {
+    fn default() -> Self {
+        Self {
+            maternal_architecture:
+                crate::genome::CognitiveArchitectureGenomeParameters::canonical_default(),
+            paternal_architecture:
+                crate::genome::CognitiveArchitectureGenomeParameters::canonical_default(),
+            maternal_learning: crate::PlasticityGenomeParameters::canonical_default(),
+            paternal_learning: crate::PlasticityGenomeParameters::canonical_default(),
+        }
+    }
+}
+impl BrainConstructionChromosome {
+    fn is_default(&self) -> bool {
+        self == &Self::default()
+    }
+    fn validate(&self) -> Result<(), ScaffoldContractError> {
+        self.maternal_architecture.validate_contract()?;
+        self.paternal_architecture.validate_contract()?;
+        self.maternal_learning.validate_contract()?;
+        self.paternal_learning.validate_contract()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BrainChromosome {
+    /// Optional in old saves; these are construction parameters, never lifetime state.
+    #[serde(
+        default,
+        skip_serializing_if = "BrainConstructionChromosome::is_default"
+    )]
+    pub construction: BrainConstructionChromosome,
     pub brain_class: DiscreteLocus<BrainClassId>,
     pub sensory_lobe_ratio: ContinuousLocus,
     pub association_lobe_ratio: ContinuousLocus,
@@ -358,7 +412,9 @@ pub struct BrainChromosome {
     pub connectivity_density: ContinuousLocus,
     pub plasticity: ContinuousLocus,
     pub receptor_sensitivity: ContinuousLocus,
-    pub genetic_weight_bias: ContinuousLocus,
+    /// Procedural construction diversity; inactive for exact trained foundations.
+    #[serde(rename = "genetic_weight_bias", alias = "genetic_weight_variation")]
+    pub genetic_weight_variation: ContinuousLocus,
 }
 
 impl BrainChromosome {
@@ -381,6 +437,7 @@ impl BrainChromosome {
 
 impl Validate for BrainChromosome {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.construction.validate()?;
         BrainCapacityClass::production_for_id(self.brain_class.maternal.value)?;
         BrainCapacityClass::production_for_id(self.brain_class.paternal.value)?;
         self.expressed_brain_class()?;
@@ -391,7 +448,7 @@ impl Validate for BrainChromosome {
             &self.connectivity_density,
             &self.plasticity,
             &self.receptor_sensitivity,
-            &self.genetic_weight_bias,
+            &self.genetic_weight_variation,
         ])
     }
 }
@@ -467,6 +524,8 @@ impl BiochemicalGraphChromosome {
         Ok(value)
     }
 
+    /// Selected structural template. `CreatureGenome::express` blends matching
+    /// numeric parameters from both homologs before applying scalar modifiers.
     pub fn expressed(&self) -> &BiochemicalPhenotype {
         match self.expressed_homolog {
             AlleleSide::Maternal => &self.maternal,
@@ -570,9 +629,6 @@ impl Validate for DevelopmentChromosome {
             &self.critical_period_close,
             &self.migration_checkpoint,
         ])?;
-        if self.critical_period_open.expressed()? >= self.critical_period_close.expressed()? {
-            return Err(ScaffoldContractError::InvalidGeneticBounds);
-        }
         Ok(())
     }
 }
@@ -709,6 +765,7 @@ pub struct BodyPhenotype {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChemistryPhenotype {
     pub biochemical: BiochemicalPhenotype,
+    /// Legacy diagnostic projection only. Physiology uses `biochemical` exclusively.
     pub endocrine: EndocrineProfile,
     pub stress_baseline: f32,
     pub reward_sensitivity: f32,
@@ -743,6 +800,31 @@ pub struct ReproductionPhenotype {
     pub max_mutation_delta: f32,
     pub parental_investment: f32,
     pub mate_preference: DiscreteExpression<MatePreference>,
+}
+
+impl ReproductionPhenotype {
+    /// Chemical response to an encountered potential mate, not a candidate score
+    /// or a controller that selects the creature's actions.
+    pub fn mate_response(
+        &self,
+        own: &CreaturePhenotype,
+        other: &CreaturePhenotype,
+        health: f32,
+    ) -> f32 {
+        let difference = ((own.body.size_scale - other.body.size_scale).abs()
+            + (own.body.metabolic_efficiency - other.body.metabolic_efficiency).abs()
+            + (own.body.appearance_hue - other.body.appearance_hue).abs())
+            / 3.0;
+        let response = |preference| match preference {
+            MatePreference::Health => health.clamp(0.0, 1.0),
+            MatePreference::Similarity => 1.0 - difference,
+            MatePreference::Novelty => 0.5 + 0.5 * difference,
+        };
+        match self.mate_preference {
+            DiscreteExpression::Single(preference) => response(preference),
+            DiscreteExpression::Codominant(a, b) => (response(a) + response(b)) * 0.5,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -852,6 +934,7 @@ impl CreatureGenome {
                 ),
             },
             brain: BrainChromosome {
+                construction: BrainConstructionChromosome::default(),
                 brain_class: DiscreteLocus::new(
                     DiscreteAllele::new(class, dominant),
                     DiscreteAllele::new(class, recessive),
@@ -862,7 +945,7 @@ impl CreatureGenome {
                 connectivity_density: ContinuousLocus::mean(0.45, 0.52)?,
                 plasticity: ContinuousLocus::mean(0.48, 0.56)?,
                 receptor_sensitivity: ContinuousLocus::mean(0.50, 0.58)?,
-                genetic_weight_bias: ContinuousLocus::mean(0.47, 0.53)?,
+                genetic_weight_variation: ContinuousLocus::mean(0.47, 0.53)?,
             },
             chemistry: ChemistryChromosome {
                 graph: {
@@ -1023,10 +1106,13 @@ impl CreatureGenome {
     pub fn express(&self) -> Result<CreaturePhenotype, ScaffoldContractError> {
         self.validate_contract()?;
         let body = express_body(&self.body)?;
-        let chemistry = express_chemistry(&self.chemistry)?;
+        let mut chemistry = express_chemistry(&self.chemistry)?;
         let development = express_development(&self.development)?;
         let reproduction = express_reproduction(&self.reproduction)?;
         let predisposition = express_predisposition(&self.predisposition)?;
+        chemistry.biochemical = chemistry
+            .biochemical
+            .with_chromosome_traits(&chemistry, &predisposition)?;
         let brain_genome =
             express_brain_genome(self, &body, &chemistry, &development, &reproduction)?;
         Ok(CreaturePhenotype {
@@ -1105,15 +1191,20 @@ impl CreaturePhenotype {
 }
 
 fn express_body(body: &BodyChromosome) -> Result<BodyPhenotype, ScaffoldContractError> {
+    let frame = body.frame.expressed();
+    let bulk = match frame {
+        DiscreteExpression::Single(value) => value.bulk(),
+        DiscreteExpression::Codominant(a, b) => (a.bulk() + b.bulk()) * 0.5,
+    };
     Ok(BodyPhenotype {
-        frame: body.frame.expressed(),
-        size_scale: body.size.expressed()?,
+        frame,
+        size_scale: (body.size.expressed()? + bulk * 0.10).clamp(0.0, 1.0),
         metabolic_efficiency: body.metabolic_efficiency.expressed()?,
         metabolic_turnover: body.metabolic_turnover_log2.expressed()?.exp2(),
         sensory_acuity: body.sensory_acuity.expressed()?,
         movement_efficiency: body.movement_efficiency.expressed()?,
         lifespan_scale: body.lifespan.expressed()?,
-        injury_resistance: body.injury_resistance.expressed()?,
+        injury_resistance: (body.injury_resistance.expressed()? + bulk * 0.05).clamp(0.0, 1.0),
         temperature_tolerance: body.temperature_tolerance.expressed()?,
         appearance_hue: body.appearance_hue.expressed()?,
     })
@@ -1168,7 +1259,12 @@ fn express_chemistry(
         },
     };
     endocrine.validate_contract()?;
-    let biochemical = chemistry.graph.expressed().clone();
+    let preferred = chemistry.graph.expressed();
+    let other = match chemistry.graph.expressed_homolog {
+        AlleleSide::Maternal => &chemistry.graph.paternal,
+        AlleleSide::Paternal => &chemistry.graph.maternal,
+    };
+    let biochemical = preferred.map_homologous_parameters(other, |a, b, _, _| Ok((a + b) * 0.5))?;
     Ok(ChemistryPhenotype {
         biochemical,
         endocrine,
@@ -1194,16 +1290,18 @@ fn express_development(
     let juvenile_tick = maturation_duration_ticks / 3;
     let puberty_tick = ((maturation_duration_ticks as f32 * puberty_fraction).round() as u32)
         .clamp(juvenile_tick + 1, maturation_duration_ticks - 1);
+    let opens_at = ((maturation_duration_ticks as f32
+        * development.critical_period_open.expressed()?)
+    .round() as u64)
+        .min(u64::from(maturation_duration_ticks) - 2);
+    let closes_at = ((maturation_duration_ticks as f32
+        * development.critical_period_close.expressed()?)
+    .round() as u64)
+        .clamp(opens_at + 1, u64::from(maturation_duration_ticks));
     let critical_period = CriticalPeriod {
         lobe: LobeKind::TemporalPredictive,
-        opens_at: Tick(
-            (maturation_duration_ticks as f32 * development.critical_period_open.expressed()?)
-                .round() as u64,
-        ),
-        closes_at: Tick(
-            (maturation_duration_ticks as f32 * development.critical_period_close.expressed()?)
-                .round() as u64,
-        ),
+        opens_at: Tick(opens_at),
+        closes_at: Tick(closes_at),
         plasticity_bias: normalized(0.55 + 0.40 * maturation_rate)?,
     };
     critical_period.validate_contract()?;
@@ -1272,6 +1370,32 @@ fn express_brain_genome(
 ) -> Result<BrainGenome, ScaffoldContractError> {
     let brain_class_id = source.expressed_brain_class()?;
     let mut genome = BrainGenome::scaffold(source.conception_seed, brain_class_id);
+    let construction = &source.brain.construction;
+    let architecture = construction
+        .maternal_architecture
+        .map_inherited_parameters(
+            &construction.paternal_architecture,
+            brain_class_id,
+            |a, b, _, _| Ok((a + b) * 0.5),
+        )?;
+    // Sleep maturation and the biological sleep-pressure setpoint are distinct.
+    let sleep_threshold = (architecture.sleep_trigger_threshold()
+        + (chemistry.sleep_threshold - ContinuousLocus::midpoint_value(0.72, 0.80)))
+    .clamp(0.0, 1.0);
+    genome =
+        genome.with_cognitive_architecture(architecture.with_sleep_trigger(sleep_threshold)?)?;
+    let learning = construction
+        .maternal_learning
+        .map_inherited_parameters(&construction.paternal_learning, |a, b, _, _| {
+            Ok((a + b) * 0.5)
+        })?;
+    let credit_source = if source.conception_seed & 1 == 0 {
+        &construction.maternal_learning
+    } else {
+        &construction.paternal_learning
+    };
+    genome = genome
+        .with_plasticity_parameters(learning.with_inherited_credit_profile_from(credit_source))?;
     if let Some(candidate) = &source.nano512_action_credit_candidate_v2 {
         let parameters = genome
             .plasticity_parameters()
@@ -1425,11 +1549,14 @@ fn express_brain_genome(
         max_segments: reproduction.max_crossover_segments,
         parent_mix_bias: normalized(reproduction.crossover_probability)?,
     };
-    genome.developmental_schedule =
-        expressed_schedule(brain_class_id, development, chemistry.sleep_threshold)?;
+    genome.developmental_schedule = expressed_schedule(
+        brain_class_id,
+        development,
+        ContinuousLocus::midpoint_value(0.72, 0.80),
+    )?;
     genome.inheritance = InheritancePolicy::default();
 
-    let weight_bias_bits = u64::from(source.brain.genetic_weight_bias.expressed()?.to_bits());
+    let weight_bias_bits = u64::from(source.brain.genetic_weight_variation.expressed()?.to_bits());
     let genetic_prior_seed = nonzero_mix(genome.seeds.genetic_prior_seed ^ weight_bias_bits);
     genome.seeds.genetic_prior_seed = genetic_prior_seed;
     genome.genetic_prior_seed = genetic_prior_seed;
@@ -1711,7 +1838,7 @@ fn child_continuous(
     paternal_selector: &mut GameteSelector,
     context: &mut ReproductionContext,
     chromosome: ChromosomeKind,
-    locus_index: u8,
+    locus_index: u16,
     mutation_upper_override: Option<f32>,
 ) -> Result<ContinuousLocus, ScaffoldContractError> {
     maternal_locus.validate_contract()?;
@@ -1756,11 +1883,13 @@ fn mutate_continuous_value(
     lower: f32,
     upper: f32,
     chromosome: ChromosomeKind,
-    locus_index: u8,
+    locus_index: u16,
     allele: AlleleSide,
     context: &mut ReproductionContext,
 ) -> Result<(), ScaffoldContractError> {
-    if context.rng.next_unit() >= context.settings.mutation_rate {
+    if context.mutations.len() >= MAX_MUTATION_RECORDS
+        || context.rng.next_unit() >= context.settings.mutation_rate
+    {
         return Ok(());
     }
     let before = *value;
@@ -1803,9 +1932,16 @@ fn reflect_into_bounds(value: f32, lower: f32, upper: f32) -> Result<f32, Scaffo
 trait DiscreteDomain: Copy + PartialEq {
     fn values() -> &'static [Self];
     fn code(self) -> u16;
+    fn mutation_dominance(self) -> AlleleDominance;
 }
 
 impl DiscreteDomain for BodyFrame {
+    fn mutation_dominance(self) -> AlleleDominance {
+        match self {
+            Self::Balanced => AlleleDominance::Dominant,
+            _ => AlleleDominance::Recessive,
+        }
+    }
     fn values() -> &'static [Self] {
         &[Self::Light, Self::Balanced, Self::Sturdy]
     }
@@ -1820,6 +1956,13 @@ impl DiscreteDomain for BodyFrame {
 }
 
 impl DiscreteDomain for MatePreference {
+    fn mutation_dominance(self) -> AlleleDominance {
+        match self {
+            Self::Health => AlleleDominance::Codominant,
+            Self::Similarity => AlleleDominance::Dominant,
+            Self::Novelty => AlleleDominance::Recessive,
+        }
+    }
     fn values() -> &'static [Self] {
         &[Self::Novelty, Self::Similarity, Self::Health]
     }
@@ -1834,6 +1977,12 @@ impl DiscreteDomain for MatePreference {
 }
 
 impl DiscreteDomain for StarterVocabularyProfile {
+    fn mutation_dominance(self) -> AlleleDominance {
+        match self {
+            Self::Minimal => AlleleDominance::Recessive,
+            _ => AlleleDominance::Codominant,
+        }
+    }
     fn values() -> &'static [Self] {
         &[Self::Minimal, Self::Foraging, Self::Social]
     }
@@ -1854,7 +2003,7 @@ fn child_discrete<T: DiscreteDomain + 'static>(
     paternal_selector: &mut GameteSelector,
     context: &mut ReproductionContext,
     chromosome: ChromosomeKind,
-    locus_index: u8,
+    locus_index: u16,
 ) -> DiscreteLocus<T> {
     let mut maternal = maternal_selector.select_discrete(maternal_locus, &mut context.rng);
     let mut paternal = paternal_selector.select_discrete(paternal_locus, &mut context.rng);
@@ -1891,7 +2040,7 @@ fn child_discrete_unmutated<T: Copy>(
 fn mutate_discrete_allele<T: DiscreteDomain + 'static>(
     allele: &mut DiscreteAllele<T>,
     chromosome: ChromosomeKind,
-    locus_index: u8,
+    locus_index: u16,
     allele_side: AlleleSide,
     context: &mut ReproductionContext,
 ) {
@@ -1906,6 +2055,7 @@ fn mutate_discrete_allele<T: DiscreteDomain + 'static>(
         .expect("discrete allele must belong to its declared domain");
     let offset = 1 + context.rng.choose_index(values.len() - 1);
     allele.value = values[(current + offset) % values.len()];
+    allele.dominance = allele.value.mutation_dominance();
     context.mutations.push(MutationRecord::Discrete {
         chromosome,
         locus_index,
@@ -2012,23 +2162,17 @@ fn recombine_body(
             chromosome,
             8,
         ),
-        // Keep the exact legacy crossover/RNG sequence when this locus is absent.
-        metabolic_turnover_log2: if is_legacy_metabolic_turnover(&maternal.metabolic_turnover_log2)
-            && is_legacy_metabolic_turnover(&paternal.metabolic_turnover_log2)
-        {
-            legacy_metabolic_turnover()
-        } else {
-            child_continuous(
-                &maternal.metabolic_turnover_log2,
-                &paternal.metabolic_turnover_log2,
-                &mut maternal_selector,
-                &mut paternal_selector,
-                context,
-                chromosome,
-                9,
-                None,
-            )?
-        },
+        // Default zero alleles participate in mutation like every other locus.
+        metabolic_turnover_log2: child_continuous(
+            &maternal.metabolic_turnover_log2,
+            &paternal.metabolic_turnover_log2,
+            &mut maternal_selector,
+            &mut paternal_selector,
+            context,
+            chromosome,
+            9,
+            None,
+        )?,
     };
     context.finish_chromosome(chromosome, maternal_selector, paternal_selector);
     Ok(result)
@@ -2048,7 +2192,28 @@ fn recombine_brain(
         &mut paternal_selector,
         &mut context.rng,
     );
+    let class = maternal.expressed_brain_class()?;
+    let (maternal_architecture, maternal_learning) = construction_gamete(
+        &maternal.construction,
+        &mut maternal_selector,
+        context,
+        AlleleSide::Maternal,
+        class,
+    )?;
+    let (paternal_architecture, paternal_learning) = construction_gamete(
+        &paternal.construction,
+        &mut paternal_selector,
+        context,
+        AlleleSide::Paternal,
+        class,
+    )?;
     let result = BrainChromosome {
+        construction: BrainConstructionChromosome {
+            maternal_architecture,
+            paternal_architecture,
+            maternal_learning,
+            paternal_learning,
+        },
         brain_class,
         sensory_lobe_ratio: child_continuous(
             &maternal.sensory_lobe_ratio,
@@ -2110,9 +2275,9 @@ fn recombine_brain(
             6,
             None,
         )?,
-        genetic_weight_bias: child_continuous(
-            &maternal.genetic_weight_bias,
-            &paternal.genetic_weight_bias,
+        genetic_weight_variation: child_continuous(
+            &maternal.genetic_weight_variation,
+            &paternal.genetic_weight_variation,
             &mut maternal_selector,
             &mut paternal_selector,
             context,
@@ -2123,6 +2288,140 @@ fn recombine_brain(
     };
     context.finish_chromosome(chromosome, maternal_selector, paternal_selector);
     Ok(result)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn inherited_parameter(
+    a: f32,
+    b: f32,
+    lower: f32,
+    upper: f32,
+    selector: &mut GameteSelector,
+    context: &mut ReproductionContext,
+    chromosome: ChromosomeKind,
+    index: u16,
+    side: AlleleSide,
+) -> Result<f32, ScaffoldContractError> {
+    if lower == upper {
+        selector.maybe_cross(&mut context.rng);
+        return Ok(lower);
+    }
+    let locus = ContinuousLocus::with_bounds(a, b, lower, upper, 0.5)?;
+    let mut value = selector.select_continuous(&locus, &mut context.rng);
+    // Count genes are discrete quantities: journal their applied integer change,
+    // not a fractional mutation that disappears when construction rounds it.
+    if chromosome == ChromosomeKind::Brain && (64..=72).contains(&index) {
+        if context.mutations.len() < MAX_MUTATION_RECORDS
+            && context.rng.next_unit() < context.settings.discrete_mutation_rate
+        {
+            let before = value;
+            let step = (context.settings.max_mutation_delta * (upper - lower))
+                .round()
+                .max(1.0);
+            let delta = if context.rng.next_bool() { step } else { -step };
+            value = reflect_into_bounds(value + delta, lower, upper)?
+                .round()
+                .clamp(lower, upper);
+            if before != value {
+                context.mutations.push(MutationRecord::Continuous {
+                    chromosome,
+                    locus_index: index,
+                    allele: side,
+                    before,
+                    after: value,
+                    lower,
+                    upper,
+                });
+            }
+        }
+        return Ok(value);
+    }
+    mutate_continuous_value(&mut value, lower, upper, chromosome, index, side, context)?;
+    Ok(value)
+}
+
+fn graph_gamete(
+    chromosome: &BiochemicalGraphChromosome,
+    selector: &mut GameteSelector,
+    context: &mut ReproductionContext,
+    side: AlleleSide,
+) -> Result<BiochemicalPhenotype, ScaffoldContractError> {
+    let (a, b) = if selector.select_maternal_homolog {
+        (&chromosome.maternal, &chromosome.paternal)
+    } else {
+        (&chromosome.paternal, &chromosome.maternal)
+    };
+    let reversed = !selector.select_maternal_homolog;
+    let mut index = 256_u16;
+    a.map_homologous_parameters(b, |left, right, lower, upper| {
+        let (left, right) = if reversed {
+            (right, left)
+        } else {
+            (left, right)
+        };
+        let result = inherited_parameter(
+            left,
+            right,
+            lower,
+            upper,
+            selector,
+            context,
+            ChromosomeKind::Chemistry,
+            index,
+            side,
+        );
+        index = index
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::MutationOverflow)?;
+        result
+    })
+}
+
+fn construction_gamete(
+    chromosome: &BrainConstructionChromosome,
+    selector: &mut GameteSelector,
+    context: &mut ReproductionContext,
+    side: AlleleSide,
+    class: BrainClassId,
+) -> Result<
+    (
+        crate::genome::CognitiveArchitectureGenomeParameters,
+        crate::PlasticityGenomeParameters,
+    ),
+    ScaffoldContractError,
+> {
+    let mut index = 64_u16;
+    let mut map = |a, b, lower, upper| {
+        let result = inherited_parameter(
+            a,
+            b,
+            lower,
+            upper,
+            selector,
+            context,
+            ChromosomeKind::Brain,
+            index,
+            side,
+        );
+        index += 1;
+        result
+    };
+    let architecture = chromosome.maternal_architecture.map_inherited_parameters(
+        &chromosome.paternal_architecture,
+        class,
+        &mut map,
+    )?;
+    let learning = chromosome
+        .maternal_learning
+        .map_inherited_parameters(&chromosome.paternal_learning, &mut map)?;
+    // Named credit policies are whole alleles, selected at this linked position.
+    let credit_source = if selector.select_maternal_homolog {
+        &chromosome.maternal_learning
+    } else {
+        &chromosome.paternal_learning
+    };
+    let learning = learning.with_inherited_credit_profile_from(credit_source);
+    Ok((architecture, learning))
 }
 
 fn recombine_chemistry(
@@ -2148,16 +2447,18 @@ fn recombine_chemistry(
     }
     let result = ChemistryChromosome {
         graph: BiochemicalGraphChromosome::new(
-            if context.rng.next_bool() {
-                maternal.graph.maternal.clone()
-            } else {
-                maternal.graph.paternal.clone()
-            },
-            if context.rng.next_bool() {
-                paternal.graph.maternal.clone()
-            } else {
-                paternal.graph.paternal.clone()
-            },
+            graph_gamete(
+                &maternal.graph,
+                &mut maternal_selector,
+                context,
+                AlleleSide::Maternal,
+            )?,
+            graph_gamete(
+                &paternal.graph,
+                &mut paternal_selector,
+                context,
+                AlleleSide::Paternal,
+            )?,
             if context.rng.next_bool() {
                 AlleleSide::Maternal
             } else {

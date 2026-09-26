@@ -366,7 +366,8 @@ fn initial_creature_save(
         appearance: CreatureAppearanceGenome::founder_for_species(
             u8::try_from(slot).map_err(|_| ScaffoldContractError::InvalidId)?,
             founder_seed,
-        ),
+        )
+        .with_body_phenotype(&record.phenotype().body),
         mind: CreatureMindSaveSummary {
             tick: biochemistry.tick,
             homeostasis: biochemistry.homeostasis,

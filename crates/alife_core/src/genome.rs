@@ -188,6 +188,97 @@ impl CognitiveArchitectureGenomeParameters {
         self.structural_learning_rate
     }
 
+    pub(crate) fn map_inherited_parameters(
+        &self,
+        other: &Self,
+        class: BrainClassId,
+        mut map: impl FnMut(f32, f32, f32, f32) -> Result<f32, ScaffoldContractError>,
+    ) -> Result<Self, ScaffoldContractError> {
+        let capacity = crate::BrainCapacityClass::supported_for_id(class)?
+            .execution()
+            .max_neurons();
+        let mut child = *self;
+        macro_rules! count {
+            ($field:ident,$lo:expr,$hi:expr,$ty:ty) => {
+                child.$field = map(
+                    self.$field as f32,
+                    other.$field as f32,
+                    $lo as f32,
+                    $hi as f32,
+                )?
+                .round() as $ty;
+            };
+        }
+        count!(
+            attention_capacity,
+            1,
+            (capacity / 512).clamp(1, crate::attention::MAX_FOCAL_TARGETS as u32),
+            u8
+        );
+        count!(
+            active_concept_limit,
+            1,
+            crate::cognitive_context::MAX_ACTIVE_CONCEPTS,
+            u16
+        );
+        count!(
+            active_gap_limit,
+            1,
+            crate::cognitive_context::MAX_ACTIVE_GAPS,
+            u8
+        );
+        count!(
+            predictor_capacity,
+            8,
+            capacity.min(crate::predictive::MAX_SUCCESSOR_FEATURES as u32),
+            u16
+        );
+        count!(motor_head_count, 1, crate::motor::MAX_MOTOR_CHANNELS, u8);
+        count!(motor_head_width, 1, 256, u16);
+        count!(
+            dendritic_branch_capacity,
+            1,
+            (capacity * 2).min(crate::dendritic::MAX_DENDRITIC_BRANCHES as u32),
+            u16
+        );
+        count!(
+            structural_candidate_budget,
+            1,
+            (capacity / 2).min(crate::structural_plasticity::MAX_EVIDENCE_PER_PHASE as u32),
+            u16
+        );
+        count!(
+            structural_edit_budget,
+            1,
+            crate::structural_plasticity::MAX_ACCEPTED_PER_PHASE,
+            u8
+        );
+        macro_rules! rate {
+            ($field:ident) => {
+                child.$field = map(self.$field, other.$field, 0.0, 1.0)?;
+            };
+        }
+        rate!(predictor_learning_rate);
+        rate!(sleep_trigger_threshold);
+        rate!(sleep_replay_rate);
+        rate!(sleep_consolidation_rate);
+        rate!(attention_learning_rate);
+        rate!(concept_learning_rate);
+        rate!(motor_learning_rate);
+        rate!(structural_learning_rate);
+        child.validate_for_brain_class(class)?;
+        Ok(child)
+    }
+
+    pub(crate) fn with_sleep_trigger(
+        mut self,
+        threshold: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.sleep_trigger_threshold = threshold;
+        self.validate_contract()?;
+        Ok(self)
+    }
+
     pub(crate) fn write_canonical(
         &self,
         digest: &mut crate::CanonicalDigestBuilder,
@@ -967,6 +1058,37 @@ pub struct PlasticityGenomeParameters {
 }
 
 impl PlasticityGenomeParameters {
+    pub(crate) fn map_inherited_parameters(
+        &self,
+        other: &Self,
+        mut map: impl FnMut(f32, f32, f32, f32) -> Result<f32, ScaffoldContractError>,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut child = *self;
+        macro_rules! rate {
+            ($field:ident,$lo:expr,$hi:expr) => {
+                child.$field = map(self.$field, other.$field, $lo, $hi)?;
+            };
+        }
+        rate!(eligibility_decay, 0.0, 1.0);
+        rate!(base_learning_rate, 0.000001, 1.0);
+        rate!(normalization_rate, 0.0, 1.0);
+        rate!(sleep_replay_rate, 0.0, 1.0);
+        rate!(fast_min, -8.0, 8.0);
+        rate!(fast_max, -8.0, 8.0);
+        child.fast_min = child.fast_min.min(7.999);
+        child.fast_max = child.fast_max.max(child.fast_min + 0.001).min(8.0);
+        rate!(sleep_staging_rate, 0.000001, 1.0);
+        rate!(sleep_weight_limit, 0.000001, 8.0);
+        rate!(sleep_fast_decay_rate, 0.0, 1.0);
+        let mut weights = *self.receptor_profile.weights();
+        for (weight, other) in weights.iter_mut().zip(other.receptor_profile.weights()) {
+            *weight = map(*weight, *other, -2.0, 2.0)?;
+        }
+        child.receptor_profile = crate::PlasticityReceptorProfile::try_new(weights)?;
+        // Foundation-specific action-credit profiles are a coherent immutable block.
+        child.validate_contract()?;
+        Ok(child)
+    }
     #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         eligibility_decay: f32,
@@ -1040,7 +1162,7 @@ impl PlasticityGenomeParameters {
         Ok(value)
     }
 
-    fn canonical_default() -> Self {
+    pub(crate) fn canonical_default() -> Self {
         Self {
             schema_version: SchemaVersions::CURRENT.learning.raw(),
             eligibility_decay: 0.95,
@@ -1080,6 +1202,10 @@ impl PlasticityGenomeParameters {
     }
     pub const fn action_candidate_credit_profile(&self) -> Option<ActionCandidateCreditProfileV1> {
         self.action_candidate_credit_profile
+    }
+    pub(crate) fn with_inherited_credit_profile_from(mut self, source: &Self) -> Self {
+        self.action_candidate_credit_profile = source.action_candidate_credit_profile;
+        self
     }
     pub fn with_action_candidate_credit_profile(
         mut self,

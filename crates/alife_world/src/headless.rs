@@ -825,6 +825,28 @@ impl HeadlessWorld {
             eligible_pairs,
             mating_organism_ids,
         } = candidate.collect_mating_opportunities(next_tick)?;
+        // Both responses use the same pre-update biology snapshot. Traverse pairs
+        // once, rather than rescanning every pair for every living organism.
+        let mut mate_responses = BTreeMap::<u64, f32>::new();
+        for pair in &eligible_pairs {
+            let first = candidate
+                .organism_registry
+                .get(pair.maternal_id)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            let second = candidate
+                .organism_registry
+                .get(pair.paternal_id)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            for (own, other) in [(first, second), (second, first)] {
+                let response = own.phenotype().reproduction.mate_response(
+                    own.phenotype(),
+                    other.phenotype(),
+                    other.biochemistry().body.health,
+                );
+                let stored = mate_responses.entry(own.organism_id().raw()).or_default();
+                *stored = stored.max(response);
+            }
+        }
 
         #[cfg(test)]
         let mut advanced_organism = false;
@@ -839,7 +861,10 @@ impl HeadlessWorld {
                 tick if tick == current_tick => {
                     let ambient_event = if mating_organism_ids.contains(&organism_id.raw()) {
                         BodyEventDelta {
-                            mating_opportunity: 1.0,
+                            mating_opportunity: mate_responses
+                                .get(&organism_id.raw())
+                                .copied()
+                                .unwrap_or(0.0),
                             ..BodyEventDelta::zero()
                         }
                     } else {
@@ -931,7 +956,27 @@ impl HeadlessWorld {
                     .ok_or(ScaffoldContractError::InvalidId)?;
                 let maternal_age = maternal.age_at(next_tick)?;
                 let paternal_age = paternal.age_at(next_tick)?;
-                if maternal.lifecycle().is_alive()
+                let cadence = u64::from(
+                    maternal
+                        .biochemistry()
+                        .cadence
+                        .reproduction_ticks
+                        .max(paternal.biochemistry().cadence.reproduction_ticks),
+                );
+                let trial = conception_trial(
+                    candidate.seed,
+                    pair.maternal_id,
+                    pair.paternal_id,
+                    next_tick,
+                );
+                let fertility = (maternal.phenotype().reproduction.fertility
+                    * paternal.phenotype().reproduction.fertility)
+                    .sqrt();
+                let refreshed = cadence > 0
+                    && (maternal_age.raw() % cadence == 0 || paternal_age.raw() % cadence == 0);
+                if refreshed
+                    && trial < fertility
+                    && maternal.lifecycle().is_alive()
                     && paternal.lifecycle().is_alive()
                     && maternal.biochemistry().is_reproduction_ready_at(
                         next_tick,
@@ -985,44 +1030,83 @@ impl HeadlessWorld {
                 .get(paternal_id)
                 .ok_or(ScaffoldContractError::InvalidId)?
                 .genome();
-            let child_genome = alife_core::CreatureGenome::reproduce(
+            let conception = alife_core::CreatureGenome::reproduce(
                 maternal_genome,
                 paternal_genome,
                 conception_seed,
-            )?;
-            let child_phenotype = child_genome.express()?;
-            let child_id = OrganismId(candidate.next_organism_id);
-            child_id.validate()?;
-            candidate.next_organism_id = child_id
-                .raw()
-                .checked_add(1)
-                .ok_or(ScaffoldContractError::InvalidId)?;
-            let midpoint = Vec3f::new(
-                (maternal_position.x + paternal_position.x) * 0.5,
-                (maternal_position.y + paternal_position.y) * 0.5,
-                (maternal_position.z + paternal_position.z) * 0.5,
-            );
-            midpoint.validate()?;
-            let child_label = format!("organism-{}", child_id.raw());
-            let child_entity_id =
-                candidate.spawn_social_agent(&child_label, child_id, midpoint, 0.0)?;
-            let child_record = WorldOrganismRecord::newborn(
-                child_id,
-                child_entity_id,
-                child_genome,
-                child_phenotype,
-                next_tick,
             )
-            .map_err(map_organism_registry_error)?;
-            candidate.register_organism_record(child_record)?;
-            let mut child_habitats = candidate.habitats.clone();
-            child_habitats
-                .register_creature(child_id, habitat_id, next_tick)
-                .map_err(|_| ScaffoldContractError::InvalidId)?;
-            candidate
-                .replace_habitat_authority(child_habitats)
-                .map_err(|_| ScaffoldContractError::InvalidId)?;
-            candidate.validate_complete_organism_bindings()?;
+            .and_then(|genome| {
+                let phenotype = genome.express()?;
+                Ok((genome, phenotype))
+            });
+            let conception = match conception {
+                Ok(child) => Some(child),
+                Err(
+                    ScaffoldContractError::InvalidGeneticBounds
+                    | ScaffoldContractError::IncompatibleGeneticClass
+                    | ScaffoldContractError::MutationOverflow,
+                ) => None,
+                Err(error) => return Err(error),
+            };
+            if let Some((child_genome, child_phenotype)) = conception {
+                let child_id = OrganismId(candidate.next_organism_id);
+                child_id.validate()?;
+                candidate.next_organism_id = child_id
+                    .raw()
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                let midpoint = Vec3f::new(
+                    (maternal_position.x + paternal_position.x) * 0.5,
+                    (maternal_position.y + paternal_position.y) * 0.5,
+                    (maternal_position.z + paternal_position.z) * 0.5,
+                );
+                midpoint.validate()?;
+                let child_label = format!("organism-{}", child_id.raw());
+                let child_entity_id =
+                    candidate.spawn_social_agent(&child_label, child_id, midpoint, 0.0)?;
+                let mut child_record = WorldOrganismRecord::newborn(
+                    child_id,
+                    child_entity_id,
+                    child_genome,
+                    child_phenotype,
+                    next_tick,
+                )
+                .map_err(map_organism_registry_error)?;
+                // Investment transfers actual reserves from parents into the newborn.
+                // It does not instruct either brain to perform parental care.
+                let mut provision = 0.0;
+                for parent_id in [maternal_id, paternal_id] {
+                    let parent = candidate
+                        .organism_registry
+                        .get(parent_id)
+                        .ok_or(ScaffoldContractError::InvalidId)?;
+                    let requested = (0.20
+                        + 0.30 * parent.phenotype().reproduction.parental_investment)
+                        .min((parent.biochemistry().body.energy - 0.20).max(0.0));
+                    provision += candidate
+                        .organism_registry
+                        .with_biology_mut(parent_id, |biology| {
+                            biology
+                                .body
+                                .debit_energy_pro_rata(requested)
+                                .map_err(OrganismRegistryError::InvalidRecord)
+                        })
+                        .map_err(map_organism_registry_error)?;
+                }
+                // Newborn chemistry is initialized from its genes, not parent's state.
+                child_record
+                    .set_birth_energy(provision.min(1.0))
+                    .map_err(map_organism_registry_error)?;
+                candidate.register_organism_record(child_record)?;
+                let mut child_habitats = candidate.habitats.clone();
+                child_habitats
+                    .register_creature(child_id, habitat_id, next_tick)
+                    .map_err(|_| ScaffoldContractError::InvalidId)?;
+                candidate
+                    .replace_habitat_authority(child_habitats)
+                    .map_err(|_| ScaffoldContractError::InvalidId)?;
+                candidate.validate_complete_organism_bindings()?;
+            }
         }
 
         candidate.speech.retire_expired(candidate.tick);
@@ -1069,6 +1153,22 @@ impl HeadlessWorld {
         alive_organism_ids
     }
 
+    fn inherited_word_gain(&self, organism: OrganismId, token: u32) -> f32 {
+        self.organism_registry.get(organism).map_or(1.0, |record| {
+            if record
+                .phenotype()
+                .predisposition
+                .starter_tokens
+                .iter()
+                .any(|code| u32::from(code.raw()) == token)
+            {
+                1.0
+            } else {
+                0.85
+            }
+        })
+    }
+
     fn eligible_mating_pair(
         &self,
         maternal_id: OrganismId,
@@ -1096,7 +1196,21 @@ impl HeadlessWorld {
         }
         let maternal_expressed_brain_class = maternal.genome().expressed_brain_class()?;
         let paternal_expressed_brain_class = paternal.genome().expressed_brain_class()?;
-        if maternal.genome().id == paternal.genome().id
+        if maternal
+            .genome()
+            .n2048_foundation_candidate
+            .as_ref()
+            .map(|asset| asset.digest())
+            != paternal
+                .genome()
+                .n2048_foundation_candidate
+                .as_ref()
+                .map(|asset| asset.digest())
+            || maternal.genome().nano512_readout_candidate
+                != paternal.genome().nano512_readout_candidate
+            || maternal.genome().nano512_action_credit_candidate_v2
+                != paternal.genome().nano512_action_credit_candidate_v2
+            || maternal.genome().id == paternal.genome().id
             || maternal.genome().foundation.compatibility_family_id
                 != paternal.genome().foundation.compatibility_family_id
             || maternal.genome().foundation.brain_class_id
@@ -2263,7 +2377,12 @@ impl HeadlessWorld {
                     .speech
                     .heard_tokens(organism_id, body.pose.translation, tick)?;
                 let mut language_context = LanguageContextSnapshot::default();
-                for (index, token) in heard.into_iter().take(MAX_HEARD_TOKENS).enumerate() {
+                for (index, mut token) in heard.into_iter().take(MAX_HEARD_TOKENS).enumerate() {
+                    token.confidence = Confidence::new(
+                        (token.confidence.raw()
+                            * self.inherited_word_gain(organism_id, token.token_id))
+                        .clamp(0.0, 1.0),
+                    )?;
                     sensory.channels.auditory_acoustic[0] =
                         sensory.channels.auditory_acoustic[0].max(token.confidence.raw());
                     language_context.teacher_channel_marker = language_context
@@ -2677,6 +2796,12 @@ impl HeadlessWorld {
             }
         }
 
+        for token in vocal_tokens.iter_mut().flatten() {
+            token.confidence = Confidence::new(
+                (token.confidence.raw() * self.inherited_word_gain(organism_id, token.token_id))
+                    .clamp(0.0, 1.0),
+            )?;
+        }
         if !contact_entities.is_empty() {
             tactile[1] = 1.0;
         }
@@ -4986,6 +5111,15 @@ fn effector_capability_for_motor_channel(command: &ChannelCommand) -> EffectorCa
         MotorChannel::Vocal => EffectorCapability::Vocalization,
         MotorChannel::Posture => EffectorCapability::Rest,
     }
+}
+
+fn conception_trial(seed: u64, maternal: OrganismId, paternal: OrganismId, tick: Tick) -> f32 {
+    let mut bits =
+        seed ^ maternal.raw().rotate_left(17) ^ paternal.raw().rotate_left(31) ^ tick.raw();
+    bits = (bits ^ (bits >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    bits = (bits ^ (bits >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    bits ^= bits >> 31;
+    (bits >> 40) as f32 / (1_u32 << 24) as f32
 }
 
 fn adapt_motor_channel_to_embodiment(
@@ -7958,7 +8092,7 @@ mod task_4_3a2_tests {
     const COMPATIBILITY_FAMILY_ID: u64 = 7;
 
     fn founder(seed: u64, compatibility_family_id: u64) -> alife_core::CreatureGenome {
-        alife_core::CreatureGenome::early_mammal_founder(
+        let mut genome = alife_core::CreatureGenome::early_mammal_founder(
             seed,
             alife_core::FoundationGeneticIdentity::new(
                 FOUNDATION_ID,
@@ -7968,7 +8102,9 @@ mod task_4_3a2_tests {
             )
             .unwrap(),
         )
-        .unwrap()
+        .unwrap();
+        genome.reproduction.fertility = alife_core::ContinuousLocus::mean(1.0, 1.0).unwrap();
+        genome
     }
 
     fn prepared_world(
@@ -7989,8 +8125,26 @@ mod task_4_3a2_tests {
         maternal_birth_tick: Tick,
         paternal_birth_tick: Tick,
     ) -> (HeadlessWorld, Tick) {
-        let maternal_genome = founder(0xE10_43A1, COMPATIBILITY_FAMILY_ID);
-        let paternal_genome = founder(0xE10_43B3, paternal_compatibility_family_id);
+        prepared_world_with_genes(
+            paternal_position,
+            paternal_compatibility_family_id,
+            maternal_birth_tick,
+            paternal_birth_tick,
+            |_| {},
+        )
+    }
+
+    fn prepared_world_with_genes(
+        paternal_position: Vec3f,
+        paternal_compatibility_family_id: u64,
+        maternal_birth_tick: Tick,
+        paternal_birth_tick: Tick,
+        mut edit: impl FnMut(&mut alife_core::CreatureGenome),
+    ) -> (HeadlessWorld, Tick) {
+        let mut maternal_genome = founder(0xE10_43A1, COMPATIBILITY_FAMILY_ID);
+        let mut paternal_genome = founder(0xE10_43B3, paternal_compatibility_family_id);
+        edit(&mut maternal_genome);
+        edit(&mut paternal_genome);
         let maternal_phenotype = maternal_genome.express().unwrap();
         let paternal_phenotype = paternal_genome.express().unwrap();
         let reproduction_period =
@@ -8081,6 +8235,87 @@ mod task_4_3a2_tests {
     }
 
     #[test]
+    fn inherited_fertility_and_investment_change_actual_births_and_reserves() {
+        let prepare = |fertility, investment| {
+            prepared_world_with_genes(
+                Vec3f::new(0.5, 0.0, 0.0),
+                COMPATIBILITY_FAMILY_ID,
+                Tick::ZERO,
+                Tick::ZERO,
+                |genome| {
+                    genome.reproduction.fertility =
+                        alife_core::ContinuousLocus::mean(fertility, fertility).unwrap();
+                    genome.reproduction.parental_investment =
+                        alife_core::ContinuousLocus::mean(investment, investment).unwrap();
+                },
+            )
+            .0
+        };
+        let mut infertile = prepare(0.0, 0.0);
+        infertile.try_advance_tick().unwrap();
+        assert_eq!(infertile.organism_registry().iter().count(), 2);
+        let (mut nonviable, next_tick) = prepared_world_with_genes(
+            Vec3f::new(0.5, 0.0, 0.0),
+            COMPATIBILITY_FAMILY_ID,
+            Tick::ZERO,
+            Tick::ZERO,
+            |genome| {
+                genome.brain.brain_class.paternal.value = alife_core::BrainCapacityClass::N1024_ID;
+            },
+        );
+        assert_eq!(nonviable.try_advance_tick().unwrap(), next_tick);
+        assert_eq!(nonviable.organism_registry().iter().count(), 2);
+        let mut low = prepare(1.0, 0.0);
+        let mut high = prepare(1.0, 1.0);
+        let child_id = OrganismId(low.next_organism_id);
+        low.try_advance_tick().unwrap();
+        high.try_advance_tick().unwrap();
+        let low_energy = low
+            .organism_registry()
+            .get(child_id)
+            .unwrap()
+            .biochemistry()
+            .body
+            .energy;
+        let high_energy = high
+            .organism_registry()
+            .get(child_id)
+            .unwrap()
+            .biochemistry()
+            .body
+            .energy;
+        assert!(high_energy > low_energy);
+        for parent_id in [MATERNAL_ID, PATERNAL_ID] {
+            assert!(
+                high.organism_registry()
+                    .get(parent_id)
+                    .unwrap()
+                    .biochemistry()
+                    .body
+                    .energy
+                    < low
+                        .organism_registry()
+                        .get(parent_id)
+                        .unwrap()
+                        .biochemistry()
+                        .body
+                        .energy
+            );
+        }
+        let draws = (1..=1000)
+            .map(|seed| conception_trial(seed, MATERNAL_ID, PATERNAL_ID, Tick(120)))
+            .collect::<Vec<_>>();
+        let low_chance = draws.iter().filter(|draw| **draw < 0.1).count();
+        let high_chance = draws.iter().filter(|draw| **draw < 0.9).count();
+        assert!(low_chance > 50 && low_chance < 150 && high_chance > 850 && high_chance < 950);
+        let own = founder(77, COMPATIBILITY_FAMILY_ID).express().unwrap();
+        let mut health = own.reproduction.clone();
+        health.mate_preference =
+            alife_core::DiscreteExpression::Single(alife_core::MatePreference::Health);
+        assert!(health.mate_response(&own, &own, 0.9) > health.mate_response(&own, &own, 0.2));
+    }
+
+    #[test]
     fn nearby_ready_compatible_parents_create_one_deterministic_newborn() {
         let (mut forward, next_tick) =
             prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID);
@@ -8118,6 +8353,24 @@ mod task_4_3a2_tests {
             vec![maternal_genome_id, paternal_genome_id]
         );
         assert_eq!(child.phenotype(), &child.genome().express().unwrap());
+        let parents_before =
+            records(&prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID).0);
+        let transferred: f32 = parents_before
+            .iter()
+            .map(|parent| {
+                parent.biochemistry().body.energy
+                    - forward
+                        .organism_registry()
+                        .get(parent.organism_id())
+                        .unwrap()
+                        .biochemistry()
+                        .body
+                        .energy
+            })
+            .sum();
+        // Upkeep is separate; the child's reserve is actual parental provision.
+        assert!(child.biochemistry().body.energy > 0.0);
+        assert!(child.biochemistry().body.energy <= transferred);
         assert_eq!(child.biochemistry().development.age_ticks, Tick::ZERO);
         assert_eq!(child.birth_tick(), next_tick);
         assert!(child.lifecycle().is_alive());

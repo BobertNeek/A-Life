@@ -385,3 +385,205 @@ fn juvenile_motor_affordances_follow_their_individual_maturation_genes() {
         .active_motor_affordances
         .contains(&alife_core::MotorAffordanceKind::Reproduce));
 }
+
+#[test]
+fn chromosome_traits_change_live_chemistry_without_replacing_the_graph() {
+    use alife_core::{BiochemistryState, BodyEventDelta};
+    let baseline = early_mammal(0xE10_6001);
+    let before = baseline.express().unwrap();
+    let graph = &before.chemistry.biochemical;
+    // Every scalar chemistry trait reaches physiology or its actual sleep control.
+    for index in 0..10 {
+        let mut variant = baseline.clone();
+        let loci = [
+            &mut variant.chemistry.stress_baseline,
+            &mut variant.chemistry.reward_sensitivity,
+            &mut variant.chemistry.bonding_sensitivity,
+            &mut variant.chemistry.hormone_production,
+            &mut variant.chemistry.hormone_decay,
+            &mut variant.chemistry.hunger_threshold,
+            &mut variant.chemistry.fatigue_threshold,
+            &mut variant.chemistry.sleep_threshold,
+            &mut variant.chemistry.reproductive_threshold,
+            &mut variant.chemistry.brain_atp_efficiency,
+        ];
+        *loci.into_iter().nth(index).unwrap() = ContinuousLocus::mean(0.95, 0.95).unwrap();
+        let after = variant.express().unwrap();
+        if index == 7 {
+            assert!(
+                after
+                    .brain_genome
+                    .cognitive_architecture()
+                    .sleep_trigger_threshold()
+                    > before
+                        .brain_genome
+                        .cognitive_architecture()
+                        .sleep_trigger_threshold()
+            );
+            assert_eq!(
+                after
+                    .brain_genome
+                    .developmental_schedule
+                    .sleep_pressure_maturation_gate,
+                before
+                    .brain_genome
+                    .developmental_schedule
+                    .sleep_pressure_maturation_gate
+            );
+        } else if index == 8 {
+            assert!(
+                after.chemistry.reproductive_threshold > before.chemistry.reproductive_threshold
+            );
+        } else if index == 9 {
+            let advance = |p: &alife_core::CreaturePhenotype| {
+                BiochemistryState::new_with_age(p, Tick(1800), Tick(1800))
+                    .unwrap()
+                    .advance_with_age(Tick(1812), Tick(1812), BodyEventDelta::zero(), p)
+                    .unwrap()
+                    .body
+                    .energy
+            };
+            assert!(advance(&after) > advance(&before));
+        } else {
+            assert_ne!(
+                &after.chemistry.biochemical, graph,
+                "unwired chemistry trait {index}"
+            );
+        }
+    }
+    for index in 0..4 {
+        let mut variant = baseline.clone();
+        let loci = [
+            &mut variant.predisposition.food_attraction,
+            &mut variant.predisposition.hazard_aversion,
+            &mut variant.predisposition.social_attention,
+            &mut variant.predisposition.novelty_bias,
+        ];
+        *loci.into_iter().nth(index).unwrap() = ContinuousLocus::mean(0.95, 0.95).unwrap();
+        assert_ne!(
+            &variant.express().unwrap().chemistry.biochemical,
+            graph,
+            "unwired temperament trait {index}"
+        );
+    }
+    let mut fast = baseline.clone();
+    fast.development.maturation_rate = ContinuousLocus::mean(1.0, 1.0).unwrap();
+    let fast = fast.express().unwrap();
+    assert_ne!(
+        fast.development.maturation_duration_ticks,
+        before.development.maturation_duration_ticks
+    );
+    assert_eq!(
+        alife_core::PassiveBodyUpkeepPolicy::maximum_lifespan_ticks(&fast),
+        alife_core::PassiveBodyUpkeepPolicy::maximum_lifespan_ticks(&before)
+    );
+    assert_eq!(
+        alife_core::PassiveBodyUpkeepPolicy::reserve_horizon_ticks(&fast),
+        alife_core::PassiveBodyUpkeepPolicy::reserve_horizon_ticks(&before)
+    );
+}
+
+#[test]
+fn homologous_chemistry_and_brain_settings_recombine_and_survive_extreme_mutation() {
+    use alife_core::{AlleleSide, BiologicalValueProfile};
+    let mut mother = early_mammal(0xE10_6101);
+    let mut father = early_mammal(0xE10_6102);
+    let legacy_json = serde_json::to_value(&mother).unwrap();
+    assert!(legacy_json["brain"].get("construction").is_none());
+    let restored: CreatureGenome = serde_json::from_value(legacy_json).unwrap();
+    assert_eq!(restored.express().unwrap(), mother.express().unwrap());
+    let mut profile = BiologicalValueProfile::default();
+    profile.energy = 0.8;
+    for side in [AlleleSide::Maternal, AlleleSide::Paternal] {
+        mother.chemistry.graph = mother
+            .chemistry
+            .graph
+            .clone()
+            .with_value_profile(side, profile)
+            .unwrap();
+        father.chemistry.graph = father
+            .chemistry
+            .graph
+            .clone()
+            .with_reaction_rate(side, 0, 0.9)
+            .unwrap();
+    }
+    // Custom construction parameters must not reset to scaffold defaults at birth.
+    let architecture = alife_core::genome::CognitiveArchitectureGenomeParameters::try_new_v1(
+        1, 4, 2, 16, 0.37, 4, 16, 16, 8, 2, 0.4, 0.2, 0.2, 0.3, 0.3, 0.3, 0.3,
+    )
+    .unwrap();
+    for parent in [&mut mother, &mut father] {
+        parent.brain.construction.maternal_architecture = architecture;
+        parent.brain.construction.paternal_architecture = architecture;
+        parent.reproduction.mutation_rate = ContinuousLocus::mean(0.0, 0.0).unwrap();
+    }
+    use alife_core::genome::ActionCandidateCreditProfileV1;
+    for parent in [&mut mother, &mut father] {
+        parent.brain.construction.maternal_learning = parent
+            .brain
+            .construction
+            .maternal_learning
+            .with_action_candidate_credit_profile(
+                ActionCandidateCreditProfileV1::SignedConsequences,
+            )
+            .unwrap();
+        parent.brain.construction.paternal_learning = parent
+            .brain
+            .construction
+            .paternal_learning
+            .with_action_candidate_credit_profile(
+                ActionCandidateCreditProfileV1::SignedChoiceReadouts,
+            )
+            .unwrap();
+    }
+    let mut inherited_profiles = [false; 2];
+    for seed in 7001..7017 {
+        let child = CreatureGenome::reproduce(&mother, &father, seed).unwrap();
+        let profile = child
+            .express()
+            .unwrap()
+            .brain_genome
+            .plasticity_parameters()
+            .action_candidate_credit_profile()
+            .unwrap();
+        inherited_profiles[usize::from(profile.raw() - 1)] = true;
+    }
+    assert_eq!(inherited_profiles, [true, true]);
+    let child = CreatureGenome::reproduce(&mother, &father, 7001).unwrap();
+    let expressed = child.express().unwrap();
+    assert_eq!(
+        expressed
+            .brain_genome
+            .cognitive_architecture()
+            .predictor_learning_rate(),
+        0.37
+    );
+    assert!(
+        (expressed.chemistry.biochemical.value_profile().energy
+            - (0.8 + profile_default_energy()) * 0.5)
+            .abs()
+            < 1e-6
+    );
+    // A narrow parent window must remain viable when crossed or mutated backwards.
+    for parent in [&mut mother, &mut father] {
+        parent.reproduction.mutation_rate = ContinuousLocus::mean(1.0, 1.0).unwrap();
+        parent.reproduction.discrete_mutation_rate = ContinuousLocus::mean(1.0, 1.0).unwrap();
+        parent.reproduction.max_mutation_delta = ContinuousLocus::mean(0.25, 0.25).unwrap();
+        parent.development.critical_period_open = ContinuousLocus::mean(0.499, 0.499).unwrap();
+        parent.development.critical_period_close = ContinuousLocus::mean(0.501, 0.501).unwrap();
+    }
+    for seed in 1..=32 {
+        let child = CreatureGenome::reproduce(&mother, &father, seed).unwrap();
+        child.validate_contract().unwrap();
+        child.express().unwrap();
+        assert!(child.provenance.mutations.iter().any(|mutation| matches!(mutation,
+            MutationRecord::Continuous{chromosome:ChromosomeKind::Chemistry,locus_index,..} if *locus_index>=256)));
+        let restored: CreatureGenome =
+            serde_json::from_slice(&serde_json::to_vec(&child).unwrap()).unwrap();
+        assert_eq!(restored.express().unwrap(), child.express().unwrap());
+    }
+}
+fn profile_default_energy() -> f32 {
+    alife_core::BiologicalValueProfile::default().energy
+}

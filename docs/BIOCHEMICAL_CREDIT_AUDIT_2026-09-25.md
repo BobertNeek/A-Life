@@ -126,3 +126,10 @@ automatically starts fresh actor optimizer/value state and records
 warm-up's untouched PPO value state remains valid. Old campaign scores and value
 estimates are not comparable. The restart branch was compile-checked, not exercised
 in a GPU campaign. No new training run or founder promotion was performed.
+
+## Genetics follow-up (2026-09-26)
+
+[Genetics repair](GENETICS_REPAIR_2026-09-26.md) connects the older scalar hormone
+traits to the authoritative graph and makes matching graph/valuation parameters
+recombine and mutate. The earlier whole-graph inheritance restriction is superseded
+for homologous numerical parameters; structural mismatch still inherits intact wiring.

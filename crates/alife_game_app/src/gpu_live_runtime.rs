@@ -9768,7 +9768,7 @@ fn checkpoint_creature_save_state(
         genome_id: record.genome().id,
         brain_class,
         development_tick: biochemistry.development.last_update_tick,
-        appearance,
+        appearance: appearance.with_body_phenotype(&record.phenotype().body),
         mind: CreatureMindSaveSummary {
             tick: biochemistry.tick,
             homeostasis: biochemistry.homeostasis,

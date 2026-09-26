@@ -777,7 +777,13 @@ fn digest_provenance(
             } => {
                 digest.write_u8(1);
                 digest.write_u8(chromosome_kind_raw(*chromosome));
-                digest.write_u8(*locus_index);
+                if *locus_index < 255 {
+                    digest.write_u8(*locus_index as u8);
+                } else {
+                    // Extended construction-gene address; legacy loci keep exact bytes.
+                    digest.write_u8(255);
+                    digest.write_u16(*locus_index);
+                }
                 digest.write_u8(allele_side_raw(*allele));
                 digest.write_f32(*before)?;
                 digest.write_f32(*after)?;
@@ -793,7 +799,13 @@ fn digest_provenance(
             } => {
                 digest.write_u8(2);
                 digest.write_u8(chromosome_kind_raw(*chromosome));
-                digest.write_u8(*locus_index);
+                if *locus_index < 255 {
+                    digest.write_u8(*locus_index as u8);
+                } else {
+                    // Extended construction-gene address; legacy loci keep exact bytes.
+                    digest.write_u8(255);
+                    digest.write_u16(*locus_index);
+                }
                 digest.write_u8(allele_side_raw(*allele));
                 digest.write_u16(*before);
                 digest.write_u16(*after);

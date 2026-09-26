@@ -173,13 +173,14 @@ pub use evidence_digest::{
 };
 pub use evolutionary_genetics::{
     AlleleDominance, AlleleSide, BiochemicalGraphChromosome, BodyChromosome, BodyFrame,
-    BodyPhenotype, BrainChromosome, ChemistryChromosome, ChemistryPhenotype, ChromosomeKind,
-    ChromosomeRecombinationRecord, ContinuousLocus, CreatureGenome, CreaturePhenotype,
-    DevelopmentChromosome, DevelopmentPhenotype, DiscreteAllele, DiscreteExpression, DiscreteLocus,
-    FoundationGeneticIdentity, GeneticLineageProvenance, MatePreference, MutationRecord,
-    PredispositionChromosome, PredispositionPhenotype, ReproductionChromosome,
-    ReproductionPhenotype, StarterVocabularyProfile, CREATURE_GENOME_SCHEMA_VERSION,
-    MAX_CROSSOVER_SEGMENTS, MAX_MUTATION_DELTA, MAX_MUTATION_RECORDS,
+    BodyPhenotype, BrainChromosome, BrainConstructionChromosome, ChemistryChromosome,
+    ChemistryPhenotype, ChromosomeKind, ChromosomeRecombinationRecord, ContinuousLocus,
+    CreatureGenome, CreaturePhenotype, DevelopmentChromosome, DevelopmentPhenotype, DiscreteAllele,
+    DiscreteExpression, DiscreteLocus, FoundationGeneticIdentity, GeneticLineageProvenance,
+    MatePreference, MutationRecord, PredispositionChromosome, PredispositionPhenotype,
+    ReproductionChromosome, ReproductionPhenotype, StarterVocabularyProfile,
+    CREATURE_GENOME_SCHEMA_VERSION, MAX_CROSSOVER_SEGMENTS, MAX_MUTATION_DELTA,
+    MAX_MUTATION_RECORDS,
 };
 pub use experience::{
     ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,

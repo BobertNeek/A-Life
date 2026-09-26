@@ -592,6 +592,21 @@ impl WorldOrganismRecord {
         Ok(())
     }
 
+    pub(crate) fn set_birth_energy(&mut self, energy: f32) -> Result<(), OrganismRegistryError> {
+        if self.biochemistry.development.age_ticks != Tick::ZERO {
+            return Err(OrganismRegistryError::InvalidRecord(
+                ScaffoldContractError::InvalidId,
+            ));
+        }
+        self.biochemistry
+            .body
+            .set_energy(energy)
+            .map_err(OrganismRegistryError::InvalidRecord)?;
+        self.advance_body_state_ref()?;
+        self.validate_contract()
+            .map_err(OrganismRegistryError::InvalidRecord)
+    }
+
     pub fn age_at(&self, current_tick: Tick) -> Result<Tick, ScaffoldContractError> {
         Tick::validate_monotonic(self.birth_tick, current_tick)?;
         Ok(Tick(current_tick.raw() - self.birth_tick.raw()))
@@ -607,8 +622,11 @@ impl WorldOrganismRecord {
         }
         self.validate_contract()?;
         receipt.validate_contract()?;
-        let requested_debit =
-            policy.energy_debit(&receipt)? * self.phenotype.body.metabolic_turnover;
+        let requested_debit = policy.energy_debit(&receipt)?
+            * self.phenotype.body.metabolic_turnover
+            * (alife_core::ContinuousLocus::midpoint_value(0.52, 0.60)
+                - self.phenotype.chemistry.brain_atp_efficiency)
+                .exp2();
         let original_biochemistry = self.biochemistry;
         let original_state_graph = self.state_graph.clone();
         let original_work = self.cognitive_work;

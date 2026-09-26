@@ -195,6 +195,17 @@ impl BodyState {
                 * 0.01
                 * cadence_steps as f32
                 * energy_use.unwrap_or(1.0)
+                * match organ.kind {
+                    OrganKind::NeuralSupport => {
+                        (crate::ContinuousLocus::midpoint_value(0.52, 0.60)
+                            - phenotype.chemistry.brain_atp_efficiency)
+                            .exp2()
+                    }
+                    OrganKind::Locomotor => (crate::ContinuousLocus::midpoint_value(0.50, 0.57)
+                        - phenotype.body.movement_efficiency)
+                        .exp2(),
+                    _ => 1.0,
+                }
                 * turnover;
             // Legacy genomes without repair receptors retain their old sleep response.
             // Chemical repair spends existing reserve; it cannot create energy by healing.
@@ -417,6 +428,7 @@ impl Validate for BodyEventDelta {
 pub struct PassiveBodyUpkeepPolicy;
 
 impl PassiveBodyUpkeepPolicy {
+    pub const REFERENCE_LIFETIME_TICKS: u32 = 1_824;
     pub const ADULT_LIFETIME_BASE_MULTIPLIER: f32 = 2.0;
     pub const NO_FOOD_RESERVE_FRACTION: f32 = 0.55;
     pub const MATURATION_RESERVE_BUFFER: f32 = 1.25;
@@ -427,7 +439,7 @@ impl PassiveBodyUpkeepPolicy {
 
     pub fn maximum_lifespan_ticks(phenotype: &CreaturePhenotype) -> u64 {
         rounded_ticks(
-            f64::from(phenotype.development.maturation_duration_ticks)
+            f64::from(Self::REFERENCE_LIFETIME_TICKS)
                 * f64::from(Self::ADULT_LIFETIME_BASE_MULTIPLIER + phenotype.body.lifespan_scale),
         )
     }
@@ -455,11 +467,11 @@ impl PassiveBodyUpkeepPolicy {
     }
 
     pub fn reserve_horizon_ticks(phenotype: &CreaturePhenotype) -> u64 {
-        let maturation_ticks = f64::from(phenotype.development.maturation_duration_ticks);
+        let reference_ticks = f64::from(Self::REFERENCE_LIFETIME_TICKS);
         let maximum_lifespan_ticks = Self::maximum_lifespan_ticks(phenotype) as f64;
         let body_load = f64::from(Self::body_load(phenotype).max(f32::EPSILON));
         rounded_ticks(
-            (f64::from(Self::MATURATION_RESERVE_BUFFER) * maturation_ticks).max(
+            (f64::from(Self::MATURATION_RESERVE_BUFFER) * reference_ticks).max(
                 f64::from(Self::NO_FOOD_RESERVE_FRACTION) * maximum_lifespan_ticks / body_load,
             ),
         )

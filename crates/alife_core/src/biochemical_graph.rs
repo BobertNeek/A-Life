@@ -507,6 +507,216 @@ struct ReceptorGroup {
 }
 
 impl BiochemicalPhenotype {
+    /// Recombine only homologous parameters. Wiring, species bounds, and budgets
+    /// remain a coherent inherited graph; no runtime concentrations are involved.
+    pub(crate) fn map_homologous_parameters(
+        &self,
+        other: &Self,
+        mut map: impl FnMut(f32, f32, f32, f32) -> Result<f32, ScaffoldContractError>,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.validate_contract()?;
+        other.validate_contract()?;
+        let homologous = self.species.len() == other.species.len()
+            && self.species.iter().zip(&other.species).all(|(a, b)| {
+                a.id == b.id
+                    && a.kind == b.kind
+                    && a.compartment == b.compartment
+                    && a.minimum == b.minimum
+                    && a.maximum == b.maximum
+            })
+            && self.reactions.len() == other.reactions.len()
+            && self.reactions.iter().zip(&other.reactions).all(|(a, b)| {
+                a.rate_control == b.rate_control
+                    && a.reactants == b.reactants
+                    && a.products == b.products
+            })
+            && self.emitters.len() == other.emitters.len()
+            && self.emitters.iter().zip(&other.emitters).all(|(a, b)| {
+                a.source == b.source
+                    && a.target == b.target
+                    && a.cadence_ticks == b.cadence_ticks
+                    && a.response == b.response
+                    && a.inverted == b.inverted
+            })
+            && self.receptors.len() == other.receptors.len()
+            && self.receptors.iter().zip(&other.receptors).all(|(a, b)| {
+                a.source == b.source && a.target == b.target && a.digital == b.digital
+            })
+            && self.neuroemitters.len() == other.neuroemitters.len()
+            && self
+                .neuroemitters
+                .iter()
+                .zip(&other.neuroemitters)
+                .all(|(a, b)| a.source == b.source && a.target == b.target);
+        // Unmatched topology is an intact structural allele, not a half-built organ.
+        let other = if homologous { other } else { self };
+        let mut child = self.clone();
+        for (a, b) in child.species.iter_mut().zip(&other.species) {
+            a.baseline = map(a.baseline, b.baseline, a.minimum, a.maximum)?;
+            a.decay_retention = map(a.decay_retention, b.decay_retention, 0.0, 1.0)?;
+        }
+        for (a, b) in child.reactions.iter_mut().zip(&other.reactions) {
+            a.rate = map(a.rate, b.rate, 0.0, 1.0)?;
+        }
+        for (a, b) in child.emitters.iter_mut().zip(&other.emitters) {
+            a.threshold = map(a.threshold, b.threshold, 0.0, 1.0)?;
+            a.gain = map(a.gain, b.gain, -1.0, 1.0)?;
+            a.developmental_expression_floor = map(
+                a.developmental_expression_floor,
+                b.developmental_expression_floor,
+                0.0,
+                1.0,
+            )?;
+        }
+        for (a, b) in child.receptors.iter_mut().zip(&other.receptors) {
+            a.threshold = map(a.threshold, b.threshold, 0.0, 1.0)?;
+            a.gain = map(a.gain, b.gain, -2.0, 2.0)?;
+            a.nominal = map(a.nominal, b.nominal, 0.0, 1.0)?;
+        }
+        for (a, b) in child.neuroemitters.iter_mut().zip(&other.neuroemitters) {
+            a.threshold = map(a.threshold, b.threshold, 0.0, 1.0)?;
+            a.gain = map(a.gain, b.gain, -1.0, 1.0)?;
+        }
+        for (a, b) in child
+            .value_profile
+            .drives
+            .iter_mut()
+            .zip(other.value_profile.drives)
+        {
+            *a = map(*a, b, -2.0, 2.0)?;
+        }
+        for (a, b) in child
+            .value_profile
+            .hormones
+            .iter_mut()
+            .zip(other.value_profile.hormones)
+        {
+            *a = map(*a, b, -2.0, 2.0)?;
+        }
+        child.value_profile.energy = map(
+            child.value_profile.energy,
+            other.value_profile.energy,
+            -2.0,
+            2.0,
+        )?;
+        child.value_profile.injury = map(
+            child.value_profile.injury,
+            other.value_profile.injury,
+            0.0,
+            2.0,
+        )?;
+        child.value_profile.disappointment = map(
+            child.value_profile.disappointment,
+            other.value_profile.disappointment,
+            0.0,
+            1.0,
+        )?;
+        child.compile()?;
+        Ok(child)
+    }
+
+    /// Default-centered modifiers compile chromosome traits into the same graph
+    /// that owns physiology. They do not create a second endocrine simulation.
+    pub(crate) fn with_chromosome_traits(
+        &self,
+        chemistry: &crate::ChemistryPhenotype,
+        temperament: &crate::PredispositionPhenotype,
+    ) -> Result<Self, ScaffoldContractError> {
+        use ids::*;
+        let center = crate::ContinuousLocus::midpoint_value;
+        let scale = |value: f32, reference: f32| (value - reference).exp2();
+        let stress = scale(chemistry.stress_baseline, center(0.18, 0.24));
+        let reward = scale(chemistry.reward_sensitivity, center(0.50, 0.58));
+        let bond = scale(chemistry.bonding_sensitivity, center(0.46, 0.54));
+        let production = scale(chemistry.hormone_production, center(0.45, 0.52));
+        let decay = scale(chemistry.hormone_decay, center(0.50, 0.57));
+        let is_hormone = |id| {
+            matches!(
+                id,
+                ADRENALINE
+                    | CORTISOL
+                    | DOPAMINE
+                    | OXYTOCIN
+                    | SEROTONIN
+                    | ACETYLCHOLINE
+                    | LEARNING_SIGNAL
+                    | DEVELOPMENT_SIGNAL
+                    | SLEEP_PRESSURE
+            )
+        };
+        let mut result = self.clone();
+        for chemical in &mut result.species {
+            // Metabolic material reserves are not hormone production.
+            if chemical.kind == ChemicalSpeciesKind::Regulatory {
+                let gain = match chemical.id {
+                    FEAR | ADRENALINE | CORTISOL => stress,
+                    LONELINESS | OXYTOCIN | SEROTONIN => bond,
+                    CURIOSITY => scale(temperament.novelty_bias, center(0.45, 0.53)),
+                    _ => 1.0,
+                };
+                let gain = gain
+                    * if is_hormone(chemical.id) {
+                        production
+                    } else {
+                        1.0
+                    };
+                chemical.baseline =
+                    (chemical.baseline * gain).clamp(chemical.minimum, chemical.maximum);
+                chemical.decay_retention = chemical.decay_retention.powf(decay);
+            }
+        }
+        for emitter in &mut result.emitters {
+            let mut gain = if is_hormone(emitter.target) {
+                production
+            } else {
+                1.0
+            };
+            if matches!(emitter.target, ADRENALINE | CORTISOL | FEAR) {
+                gain *= stress;
+            }
+            if emitter.source == BiochemicalSourceLocus::SocialContact {
+                gain *= bond * scale(temperament.social_attention, center(0.42, 0.50));
+            }
+            if emitter.target == FEAR {
+                gain *= scale(temperament.hazard_aversion, center(0.58, 0.66));
+            }
+            emitter.gain = (emitter.gain * gain).clamp(-1.0, 1.0);
+        }
+        for emitter in &mut result.neuroemitters {
+            if is_hormone(emitter.target) {
+                emitter.gain = (emitter.gain * production).clamp(-1.0, 1.0);
+            }
+        }
+        for receptor in &mut result.receptors {
+            match receptor.target {
+                BiochemicalTargetLocus::Drive(DriveChannel::Hunger) => {
+                    receptor.threshold = (receptor.threshold
+                        + (chemistry.hunger_threshold - center(0.38, 0.44)))
+                    .clamp(0.0, 1.0);
+                    receptor.gain = (receptor.gain
+                        * scale(temperament.food_attraction, center(0.54, 0.62)))
+                    .clamp(-2.0, 2.0);
+                }
+                BiochemicalTargetLocus::Drive(DriveChannel::Fatigue) => {
+                    receptor.threshold = (receptor.threshold
+                        + (chemistry.fatigue_threshold - center(0.66, 0.72)))
+                    .clamp(0.0, 1.0);
+                }
+                BiochemicalTargetLocus::Drive(DriveChannel::Fear) => {
+                    receptor.gain = (receptor.gain
+                        * scale(temperament.hazard_aversion, center(0.58, 0.66)))
+                    .clamp(-2.0, 2.0);
+                }
+                BiochemicalTargetLocus::Neural(NeuralReceptorClass::PlasticityAppetitive) => {
+                    receptor.gain = (receptor.gain * reward).clamp(-2.0, 2.0);
+                }
+                _ => {}
+            }
+        }
+        result.compile()?;
+        Ok(result)
+    }
+
     pub const fn value_profile(&self) -> crate::chemistry::BiologicalValueProfile {
         self.value_profile
     }

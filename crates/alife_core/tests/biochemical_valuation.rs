@@ -28,6 +28,8 @@ fn valuation_genes_survive_birth_and_persistence_and_cannot_drift() {
     profile.injury = 0.4;
     profile.disappointment = 0.01;
     for genome in [&mut maternal, &mut paternal] {
+        // This checks faithful inheritance; mutation is exercised by genetics tests.
+        genome.reproduction.mutation_rate = ContinuousLocus::mean(0.0, 0.0).unwrap();
         for side in [AlleleSide::Maternal, AlleleSide::Paternal] {
             genome.chemistry.graph = genome
                 .chemistry

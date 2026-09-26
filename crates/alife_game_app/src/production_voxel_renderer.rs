@@ -2392,6 +2392,20 @@ fn fvr04_creature_visual_records_from_save(
                     organism_id.raw()
                 ),
             })?;
+        let appearance = save
+            .world
+            .organism_records
+            .as_ref()
+            .and_then(|records| {
+                records
+                    .iter()
+                    .find(|record| record.organism_id() == organism_id)
+            })
+            .map_or(creature.appearance, |record| {
+                creature
+                    .appearance
+                    .with_body_phenotype(&record.phenotype().body)
+            });
         let position = object.position;
         let rendered = world_position_for_render(position, save.world.terrain.is_some());
         let tile = VoxelTileCoord::new(rendered.x.floor() as i32, rendered.z.floor() as i32);
@@ -2404,7 +2418,7 @@ fn fvr04_creature_visual_records_from_save(
             &creature.mind.homeostasis,
             fvr04_sleep_phase_from_creature_save(creature),
             None,
-            creature.appearance,
+            appearance,
         )?;
         records.push(Fvr04CreatureVisualRecord {
             stable_ref: StableVoxelObjectRef {
@@ -4772,7 +4786,8 @@ fn fvr04_live_creature_visual_record(
             presentation.genome.id,
             presentation.organism_id.raw() as usize,
             world_seed,
-        ),
+        )
+        .with_body_phenotype(&presentation.phenotype.body),
     )
     .ok()?;
     let cognitive = frame.cognitive_for_organism(organism_id);

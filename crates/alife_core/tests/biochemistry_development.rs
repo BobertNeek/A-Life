@@ -174,7 +174,7 @@ fn sleep_recovery_lowers_fatigue_and_sleep_pressure() {
         .advance(
             Tick(tick.raw() + 12),
             BodyEventDelta {
-                energy: -0.80,
+                energy: -0.40,
                 damage: 0.20,
                 ..BodyEventDelta::zero()
             },
@@ -197,7 +197,9 @@ fn sleep_recovery_lowers_fatigue_and_sleep_pressure() {
         recovered.homeostasis.hormones.sleep_pressure
             < strained.homeostasis.hormones.sleep_pressure
     );
-    assert!(recovered.body.energy > strained.body.energy);
+    // Sleep relieves fatigue and permits reserve-paid repair; it is not food.
+    assert!(recovered.body.energy <= strained.body.energy);
+    assert!(recovered.body.health >= strained.body.health);
 }
 
 #[test]
@@ -218,7 +220,9 @@ fn puberty_health_and_mating_opportunity_gate_reproduction() {
     assert!(!juvenile.reproduction.ready);
 
     let adult_tick = Tick(4_080);
-    let adult = BiochemistryState::new(&phenotype, Tick(4_000))
+    // Keep the encounter short enough that this fixture remains ATP-sufficient.
+    // A long unfed batch also exercises metabolic exhaustion, a different gate.
+    let adult = BiochemistryState::new(&phenotype, Tick(4_076))
         .unwrap()
         .advance(
             adult_tick,
@@ -232,27 +236,22 @@ fn puberty_health_and_mating_opportunity_gate_reproduction() {
     assert!(adult.reproduction.puberty_reached);
     assert!(adult.reproduction.ready);
 
-    let injured_once = adult
-        .advance(
-            Tick(4_081),
-            BodyEventDelta {
-                damage: 1.0,
-                ..BodyEventDelta::zero()
-            },
-            &phenotype,
-        )
-        .unwrap();
-    let injured = injured_once
-        .advance(
-            Tick(4_200),
-            BodyEventDelta {
-                damage: 1.0,
-                mating_opportunity: 1.0,
-                ..BodyEventDelta::zero()
-            },
-            &phenotype,
-        )
-        .unwrap();
+    // Sustained damage outruns reserve-paid repair. Two isolated hits separated
+    // by a long recovery batch are not necessarily disabling injury.
+    let mut injured = adult;
+    for tick in (4090..=4200).step_by(10) {
+        injured = injured
+            .advance(
+                Tick(tick),
+                BodyEventDelta {
+                    damage: 1.0,
+                    mating_opportunity: 1.0,
+                    ..BodyEventDelta::zero()
+                },
+                &phenotype,
+            )
+            .unwrap();
+    }
     assert!(!injured.reproduction.healthy_enough);
     assert!(!injured.reproduction.ready);
 }
