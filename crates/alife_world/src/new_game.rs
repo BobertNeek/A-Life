@@ -243,6 +243,13 @@ fn calibrate_inherited_founder_biochemistry(
             // fades (including during Rest); it cannot heal without reserve.
             .with_receptor_nominal(allele, repair_receptor, 0.02)?;
     }
+    for allele in [AlleleSide::Maternal, AlleleSide::Paternal] {
+        genome.chemistry.graph = genome
+            .chemistry
+            .graph
+            .clone()
+            .with_waking_recovery(allele)?;
+    }
     Ok(())
 }
 

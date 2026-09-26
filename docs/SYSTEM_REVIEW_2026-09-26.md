@@ -70,6 +70,102 @@ Carry these findings into later reviews:
 - Feeding: review reach/obstruction and carried-object ownership semantics
   before changing them. Distance alone does not prove a legal meal.
 
-Groups 2–7 have not yet received this sequential end-to-end review. The biological
+Groups 3–7 have not yet received this sequential end-to-end review. The biological
 10–30 minute food-free survival gate remains acceptance work; it is not a lesson
 to reward extended inactivity.
+
+## Second group: food and recovery review
+
+Status: source trace completed; the user chose immediate meal energy for the
+alpha and separate hunger/tiredness. The waking/recovery and walking-capacity
+repair below is implemented. No new wall-time survival trial is claimed.
+Requirements: AOA-TIME-002, AOA-BODY-003/004, AOA-BIO-011/015/016/018,
+AOA-SLEEP-006, AOA-PERF-002.
+
+The user's final sleep decision is tiredness reduction plus greatly slowed
+metabolism, not energy restoration. The official [C3 Genetics Kit tutorials](https://lisdude.com/cdn/CreaturesGenKitTutorials.pdf)
+describe physical-state-to-chemical emitters and chemical-to-body receptors with
+inherited thresholds, gains, and response settings. This guides our mechanism;
+the exact stock C3 sleeping metabolic multiplier has not been verified. No exact
+C3 metabolic equivalence is claimed.
+
+Source findings before this repair:
+- `headless.rs::execute_eat` requires an existing target within EAT_RADIUS,
+  checks its food kind/consumed state, consumes it once, records ecology,
+  and emits measured nutrition and damage. It does not explicitly check
+  an intervening solid barrier or carried-object ownership in that path.
+- `OutcomeProfile::food` supplies both nutrition and an immediate signed energy
+  gain. `BodyState::apply_event` additionally distributes nutrition directly
+  to organ reserves, scaled by inherited metabolic efficiency. The existing
+  nutrient-to-ATP graph does not mediate those immediate body gains.
+- The default genetic graph emits nutrient and reduces hunger on nutrition.
+  Nutrient reacts into brain ATP. Its decay also removes material; body energy
+  accounting and this chemical conversion are separate representations, not
+  a single staged digestion chain.
+- Passive upkeep, organ upkeep, action expenditure, repair, and actual neural
+  work spend reserve. Inherited turnover scales body expenditure. The configured
+  normal simulation cadence is 20 ticks/second. A reserve-horizon formula alone
+  cannot establish 10–30 minute survival under actual activity.
+- Default hunger and fatigue emitters both respond to energy deficit. No default
+  basal waking or exertion source independently accumulates fatigue/sleep
+  pressure. Thus a well-fed, active creature has no complete independent
+  tiredness path in this reference graph.
+- Motor translation uses inherited embodiment controllability/proprioception.
+  Those gains do not read current reserve, injury, or fatigue. Biological
+  lethargy has not been wired into this physical limit.
+- The sleep scheduler observes chemical fatigue/sleep pressure and emergency
+  recovery triggers. The live staged tick emits recovery while non-awake, but
+  excludes completed sleep waiting for a durability permit. Recovery is real
+  biology, not a teacher reward. Default rest has no direct body energy gain;
+  the old no-repair-receptor fallback still adds sleep energy. The default graph
+  also emits ATP from sleep recovery and relaxes material ATP to its inherited
+  baseline. The live caller uses this as neural availability and separately
+  charges measured cognitive work to body reserve. Automatic ATP availability
+  is therefore not proof of free body energy; adding another debit without
+  replacing that accounting would risk charging twice.
+
+Implemented repair: retain immediate meal energy as the user requested.
+New Game's existing chromosome calibration installs an explicit waking circuit
+on both homologs. Awake emits fatigue and sleep pressure; their inherited
+retention, gains, developmental expression, and existing sleep recovery govern
+accumulation and relief. The old energy-deficit-to-fatigue emitter is removed
+from this calibrated circuit; hunger still responds to reserve deficit. These
+are mutable/recombinable graph parameters, not a fixed sleep timer.
+
+The same chromosome update installs a sleep-state signalling chemical and an
+inherited SleepMetabolicRate receptor. Its default lowers basal and organ upkeep
+to about 10% once the sleeping signal arrives; the first interval reads previous
+chemistry, and wake resumes normal upkeep immediately. The emitter's inherited
+expression floor keeps this working in newborns too. Tissue repair and measured
+cognitive work still cost real reserve. The sleep-specific ATP emitter is removed
+from these new genes; sleep supplies no food or body-energy gain. Existing ATP
+availability/baseline and measured-work accounting remain otherwise unchanged.
+The energy-deficit-to-ATP emitter's inherited sensitivity is reduced to avoid
+losing neural availability at ordinary body reserve after removing that sleep
+boost. A focused check verifies availability with half-full reserve; this is
+not a learned feeding or GPU recovery-loop acceptance trial.
+
+A typed LocomotorCapacity receptor reads fatigue and bounds translation in the
+existing factorized motor adapter. Current locomotor reserve relative to its
+inherited initial level, and organ integrity, further bound that physical
+capacity. The selected primitive and target are preserved; no rest action is
+selected on the brain's behalf. Other channels remain available for looking,
+handling nearby food, or communicating.
+
+The legacy reference constructor, stored concentrations, saved chromosomes,
+and exact existing founder assets are preserved. Graphs without the new receptor
+retain their previous motor behavior. The existing trained founder must acquire
+the explicit new genes during its adaptation; loading it alone does not install
+this circuit. Immediate digestion is an intentional simplification, not a new
+metabolism controller. No new teacher reward encourages prolonged inactivity.
+
+Outstanding in this group: solid-barrier/ownership reach semantics; the legacy
+sleep-energy fallback; normal-speed survival
+with actual cognition/activity; player-visible lethargy/sleep feedback. Do not
+mark the whole group accepted from the focused checks alone.
+
+Existing evidence in the training regimen records a 24,000-tick inherited-body
+check and a live N2048 policy depleting reserve at tick 14,224. These older records
+are not current wall-time acceptance proof. After the repair, use one focused
+food-to-energy/accounting check and one hunger/fatigue-to-motor/recovery check,
+reusing existing tests. Full player-visible survival acceptance remains separate.

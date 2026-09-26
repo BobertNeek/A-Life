@@ -147,6 +147,8 @@ pub enum BiochemicalSourceLocus {
     SocialContact,
     SleepRecovery,
     MatingOpportunity,
+    Awake,
+    Sleeping,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -245,6 +247,8 @@ pub enum BiochemicalTargetLocus {
     Autonomic(u8),
     OrganEnergyUse,
     OrganRepair,
+    LocomotorCapacity,
+    SleepMetabolicRate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -490,6 +494,8 @@ struct CompiledBiochemistry {
     receptor_groups: Vec<ReceptorGroup>,
     organ_energy_group: Option<usize>,
     organ_repair_group: Option<usize>,
+    locomotor_capacity_group: Option<usize>,
+    sleep_metabolic_group: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -797,6 +803,12 @@ impl BiochemicalPhenotype {
             match receptor.target {
                 BiochemicalTargetLocus::OrganEnergyUse => compiled.organ_energy_group = Some(slot),
                 BiochemicalTargetLocus::OrganRepair => compiled.organ_repair_group = Some(slot),
+                BiochemicalTargetLocus::LocomotorCapacity => {
+                    compiled.locomotor_capacity_group = Some(slot)
+                }
+                BiochemicalTargetLocus::SleepMetabolicRate => {
+                    compiled.sleep_metabolic_group = Some(slot)
+                }
                 _ => {}
             }
         }
@@ -889,6 +901,70 @@ impl BiochemicalPhenotype {
             .nominal = nominal;
         value.compile()?;
         Ok(value)
+    }
+
+    /// Install an explicit inherited waking/recovery circuit. Legacy reference
+    /// recipes and loaded concentrations remain unchanged until callers opt in.
+    pub(crate) fn with_waking_recovery(mut self) -> Result<Self, ScaffoldContractError> {
+        use ids::*;
+        self.emitters.retain(|row| {
+            !(row.target == FATIGUE && row.source == BiochemicalSourceLocus::EnergyDeficit)
+                && !(row.source == BiochemicalSourceLocus::SleepRecovery && row.target == BRAIN_ATP)
+                && !(row.target == SLEEP_STATE)
+                && !(row.source == BiochemicalSourceLocus::Awake
+                    && matches!(row.target, FATIGUE | SLEEP_PRESSURE))
+        });
+        // Availability must not collapse at ordinary reserves merely because
+        // sleeping no longer supplies a direct ATP boost. This sensitivity is
+        // an inherited emitter parameter; actual neural work still pays reserve.
+        for row in &mut self.emitters {
+            if row.source == BiochemicalSourceLocus::EnergyDeficit && row.target == BRAIN_ATP {
+                row.gain = -0.02;
+            }
+        }
+        self.species.retain(|row| row.id != SLEEP_STATE);
+        self.species.push(regulatory(SLEEP_STATE, 0.0, 0.0));
+        self.species.sort_by_key(|row| row.id);
+        let mut sleeping = emitter(BiochemicalSourceLocus::Sleeping, SLEEP_STATE, 1.0);
+        sleeping.developmental_expression_floor = 1.0;
+        self.emitters.push(sleeping);
+        for id in [FATIGUE, SLEEP_PRESSURE] {
+            let row = self
+                .species
+                .iter_mut()
+                .find(|row| row.id == id)
+                .ok_or(ScaffoldContractError::InvalidGeneticBounds)?;
+            row.decay_retention = 0.99995;
+            self.emitters
+                .push(emitter(BiochemicalSourceLocus::Awake, id, 0.00007));
+        }
+        self.receptors.retain(|row| {
+            !matches!(
+                row.target,
+                BiochemicalTargetLocus::LocomotorCapacity
+                    | BiochemicalTargetLocus::SleepMetabolicRate
+            )
+        });
+        self.receptors.push(BiochemicalReceptor {
+            source: FATIGUE,
+            target: BiochemicalTargetLocus::LocomotorCapacity,
+            threshold: 0.0,
+            gain: -1.0,
+            nominal: 1.0,
+            digital: false,
+        });
+        self.receptors.push(BiochemicalReceptor {
+            source: SLEEP_STATE,
+            target: BiochemicalTargetLocus::SleepMetabolicRate,
+            threshold: 0.0,
+            gain: -0.9,
+            nominal: 1.0,
+            digital: false,
+        });
+        self.receptors
+            .sort_by_key(|row| (target_order(row.target), row.source));
+        self.compile()?;
+        Ok(self)
     }
 
     pub(crate) fn early_mammal_reference(
@@ -1336,6 +1412,28 @@ impl BiochemicalGraphState {
         ))
     }
 
+    /// None preserves exact legacy motor behavior. A present receptor supplies
+    /// capacity only; it cannot select or replace the organism's movement intent.
+    pub fn locomotor_capacity(
+        &self,
+        phenotype: &BiochemicalPhenotype,
+    ) -> Result<Option<f32>, ScaffoldContractError> {
+        self.validate_against(phenotype)?;
+        Ok(phenotype.compiled.locomotor_capacity_group.map(|index| {
+            receptor_group_signal(self, phenotype, &phenotype.compiled.receptor_groups[index])
+        }))
+    }
+
+    pub fn sleep_metabolic_rate(
+        &self,
+        phenotype: &BiochemicalPhenotype,
+    ) -> Result<Option<f32>, ScaffoldContractError> {
+        self.validate_against(phenotype)?;
+        Ok(phenotype.compiled.sleep_metabolic_group.map(|index| {
+            receptor_group_signal(self, phenotype, &phenotype.compiled.receptor_groups[index])
+        }))
+    }
+
     pub fn neural_receptor_frame(
         &self,
         phenotype: &BiochemicalPhenotype,
@@ -1589,6 +1687,8 @@ fn source_value(source: BiochemicalSourceLocus, body: BodyState, event: BodyEven
         BiochemicalSourceLocus::SocialContact => event.social_contact,
         BiochemicalSourceLocus::SleepRecovery => event.sleep_recovery,
         BiochemicalSourceLocus::MatingOpportunity => event.mating_opportunity,
+        BiochemicalSourceLocus::Awake => f32::from(!body.sleeping),
+        BiochemicalSourceLocus::Sleeping => f32::from(body.sleeping),
     }
     .clamp(0.0, 1.0)
 }
@@ -1610,6 +1710,8 @@ fn emitter_release_count(source: BiochemicalSourceLocus, cadence_crossings: u32)
         | BiochemicalSourceLocus::SleepRecovery
         | BiochemicalSourceLocus::MatingOpportunity => 1,
         BiochemicalSourceLocus::Basal
+        | BiochemicalSourceLocus::Awake
+        | BiochemicalSourceLocus::Sleeping
         | BiochemicalSourceLocus::EnergyDeficit
         | BiochemicalSourceLocus::TemperatureStress => cadence_crossings,
     }
@@ -1777,6 +1879,8 @@ const fn target_order(target: BiochemicalTargetLocus) -> u8 {
         BiochemicalTargetLocus::Autonomic(_) => 4,
         BiochemicalTargetLocus::OrganEnergyUse => 5,
         BiochemicalTargetLocus::OrganRepair => 6,
+        BiochemicalTargetLocus::LocomotorCapacity => 7,
+        BiochemicalTargetLocus::SleepMetabolicRate => 8,
     }
 }
 
@@ -1802,4 +1906,5 @@ mod ids {
     pub const DEVELOPMENT_SIGNAL: ChemicalSpeciesId = ChemicalSpeciesId(17);
     pub const SLEEP_PRESSURE: ChemicalSpeciesId = ChemicalSpeciesId(18);
     pub const NUTRIENT: ChemicalSpeciesId = ChemicalSpeciesId(19);
+    pub const SLEEP_STATE: ChemicalSpeciesId = ChemicalSpeciesId(20);
 }

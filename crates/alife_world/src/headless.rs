@@ -287,6 +287,44 @@ mod terrain_vision_tests {
     }
 
     #[test]
+    fn biological_capacity_limits_translation_without_changing_intent() {
+        let genome = alife_core::CreatureGenome::early_mammal_founder(
+            60_006,
+            alife_core::FoundationGeneticIdentity::new(
+                10,
+                1,
+                7,
+                alife_core::BrainCapacityClass::N512_ID,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let embodiment = alife_core::EmbodimentState::from_phenotype(
+            WorldEntityId(1),
+            Tick::ZERO,
+            &genome.express().unwrap(),
+        )
+        .unwrap();
+        let action = HeadlessWorldCommand::structured(
+            OrganismId(1),
+            HeadlessActionIds::STEP_FORWARD,
+            ActionKind::Move,
+            None,
+            None,
+        )
+        .unwrap();
+        let command =
+            alife_core::channel_command_for_action(MotorChannel::Locomotion, &action).unwrap();
+        let normal = adapt_motor_channel_to_embodiment(&command, &embodiment, None).unwrap();
+        let weak = adapt_motor_channel_to_embodiment(&command, &embodiment, Some(0.25)).unwrap();
+        assert_eq!(weak.primitive, normal.primitive);
+        assert_eq!(weak.target, normal.target);
+        assert_eq!(weak.intensity.raw(), normal.intensity.raw() * 0.25);
+        let stopped = adapt_motor_channel_to_embodiment(&command, &embodiment, Some(0.0)).unwrap();
+        assert_eq!(stopped.intensity.raw(), 0.0);
+    }
+
+    #[test]
     fn scent_and_touch_survive_occlusion_without_creating_hidden_targets() {
         let mut world = HeadlessScenarioBuilder::new(60_005)
             .agent("observer", OrganismId(1), Vec3f::ZERO)
@@ -3181,6 +3219,20 @@ impl HeadlessWorld {
             .get(bundle.organism_id)
             .ok_or(ScaffoldContractError::InvalidId)?
             .biochemistry();
+        let phenotype = self
+            .organism_registry
+            .get(bundle.organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .phenotype();
+        let locomotor_capacity = biology_before
+            .graph_state()
+            .locomotor_capacity(&phenotype.chemistry.biochemical)?
+            .map(|chemical| {
+                let organ = biology_before.body.organ(alife_core::OrganKind::Locomotor);
+                let reserve = (organ.energy / (0.5 + 0.5 * phenotype.body.metabolic_efficiency))
+                    .clamp(0.0, 1.0);
+                chemical * reserve * organ.integrity
+            });
         let initial_position = self
             .objects
             .get(&world_entity_id.raw())
@@ -3191,7 +3243,9 @@ impl HeadlessWorld {
         let mut channels = bundle
             .channels
             .iter()
-            .map(|command| adapt_motor_channel_to_embodiment(command, &embodiment))
+            .map(|command| {
+                adapt_motor_channel_to_embodiment(command, &embodiment, locomotor_capacity)
+            })
             .collect::<Result<Vec<_>, _>>()?;
         channels.sort_by_key(|command| motor_channel_order(command.channel));
         let mut executed = Vec::with_capacity(channels.len());
@@ -5407,6 +5461,7 @@ fn conception_trial(seed: u64, maternal: OrganismId, paternal: OrganismId, tick:
 fn adapt_motor_channel_to_embodiment(
     command: &ChannelCommand,
     embodiment: &EmbodimentState,
+    locomotor_capacity: Option<f32>,
 ) -> Result<ChannelCommand, HeadlessMotorTransactionError> {
     let capability = effector_capability_for_motor_channel(command);
     let mut gain = embodiment.effector_gain(capability);
@@ -5422,7 +5477,12 @@ fn adapt_motor_channel_to_embodiment(
         gain *= embodiment.proprioceptive_gain();
     }
     let mut adapted = command.clone();
-    adapted.intensity = Intensity::new((adapted.intensity.raw() * gain).clamp(0.0, 1.0))?;
+    let intensity = (adapted.intensity.raw() * gain).clamp(0.0, 1.0);
+    adapted.intensity = Intensity::new(if capability == EffectorCapability::Translation {
+        intensity * locomotor_capacity.unwrap_or(1.0)
+    } else {
+        intensity
+    })?;
     adapted.validate_contract()?;
     Ok(adapted)
 }

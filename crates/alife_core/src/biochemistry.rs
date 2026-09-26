@@ -154,6 +154,7 @@ impl BodyState {
         max_catch_up_steps: u32,
         energy_use: Option<f32>,
         repair_signal: Option<f32>,
+        sleep_metabolic_rate: f32,
     ) -> Self {
         let injury_gain = event.damage * (1.0 - phenotype.body.injury_resistance);
         let turnover = phenotype.body.metabolic_turnover;
@@ -206,7 +207,8 @@ impl BodyState {
                         .exp2(),
                     _ => 1.0,
                 }
-                * turnover;
+                * turnover
+                * sleep_metabolic_rate;
             // Legacy genomes without repair receptors retain their old sleep response.
             // Chemical repair spends existing reserve; it cannot create energy by healing.
             let sleep_energy = if repair_signal.is_none() {
@@ -761,13 +763,24 @@ impl BiochemistryState {
             .organ_regulation(&phenotype.chemistry.biochemical)?;
         let upkeep =
             PassiveBodyUpkeepPolicy::upkeep_event(phenotype, self.cadence, metabolic_steps);
+        // Chemical state from the preceding interval regulates basal/organ
+        // expenditure. Wake resumes normal expenditure immediately. Actual
+        // measured cognitive work is debited separately, never discounted here.
+        let sleep_metabolic_rate = if event.sleep_recovery > 0.0 {
+            self.graph_state
+                .sleep_metabolic_rate(&phenotype.chemistry.biochemical)?
+                .unwrap_or(1.0)
+        } else {
+            1.0
+        };
         // Nutrition is the material food input (applied independently per organ).
         // Signed energy is metabolic effort/recovery, including composite world
         // events, and follows the same inherited clock as upkeep and repair.
         let turnover = phenotype.body.metabolic_turnover;
         let event = BodyEventDelta {
             energy: signed_clamp(
-                (event.energy + upkeep.energy * energy_use.unwrap_or(1.0)) * turnover,
+                (event.energy + upkeep.energy * energy_use.unwrap_or(1.0) * sleep_metabolic_rate)
+                    * turnover,
             ),
             ..event
         };
@@ -779,6 +792,7 @@ impl BiochemistryState {
             self.cadence.max_catch_up_steps,
             energy_use,
             repair_signal,
+            sleep_metabolic_rate,
         );
         body.validate_contract()?;
         let development = if development_steps > 0 {
