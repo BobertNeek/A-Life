@@ -88,6 +88,84 @@ fn map_organism_registry_error(error: OrganismRegistryError) -> ScaffoldContract
 mod terrain_vision_tests {
     use super::*;
 
+    #[test]
+    fn solid_reach_blocks_grab_and_eat_even_when_transparent() {
+        for terrain_wall in [false, true] {
+            for opacity in [0.0, 1.0] {
+                let mut world = HeadlessScenarioBuilder::new(60_010)
+                    .agent("observer", OrganismId(1), Vec3f::ZERO)
+                    .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.6)
+                    .build()
+                    .unwrap();
+                let food = world.entity_id("food").unwrap();
+                if terrain_wall {
+                    world
+                        .enable_terrain_for_new_game(
+                            crate::WorldTerrain::new(
+                                crate::TerrainData {
+                                    width: 3,
+                                    depth: 3,
+                                    origin_x: -1.0,
+                                    origin_z: -1.0,
+                                    spacing: 1.0,
+                                    heights: vec![0.0; 9],
+                                    obstacles: vec![[0.4, -0.1, 0.6, 0.1, 0.0, 2.0]],
+                                    water_level: None,
+                                },
+                                crate::LocomotionLimits::default(),
+                            )
+                            .unwrap(),
+                            Vec3f::ZERO,
+                        )
+                        .unwrap();
+                } else {
+                    world
+                        .insert_object(SpawnSpec {
+                            label: "wall",
+                            kind: WorldObjectKind::Obstacle,
+                            organism_id: None,
+                            position: Vec3f::new(0.5, 0.0, 0.0),
+                            nutrition: 0.0,
+                            hazard_pain: 0.0,
+                            token_id: None,
+                            social_affinity: 0.0,
+                            teacher_channel: None,
+                        })
+                        .unwrap();
+                    let wall = world.entity_id("wall").unwrap();
+                    world.editor_set_optical_opacity(wall, opacity).unwrap();
+                }
+                for (id, kind) in [
+                    (HeadlessActionIds::GRAB, ActionKind::Interact),
+                    (HeadlessActionIds::EAT, ActionKind::Interact),
+                ] {
+                    let command =
+                        HeadlessWorldCommand::structured(OrganismId(1), id, kind, Some(food), None)
+                            .unwrap();
+                    let blocked = world.apply_command(&command).unwrap();
+                    assert!(!blocked.execution.succeeded);
+                    assert_eq!(
+                        blocked.execution.physical.contact,
+                        PhysicalContactKind::None
+                    );
+                    assert!(!world.objects[&food.raw()].consumed);
+                    assert_eq!(world.objects[&food.raw()].carried_by, None);
+                }
+            }
+        }
+        let mut clear = HeadlessScenarioBuilder::new(60_011)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.6)
+            .build()
+            .unwrap();
+        let food = clear.entity_id("food").unwrap();
+        // Offering a held meal is legal; grabbing another's possession is separate.
+        clear.objects.get_mut(&food.raw()).unwrap().carried_by = Some(OrganismId(2));
+        let eat = HeadlessWorldCommand::eat(OrganismId(1), food).unwrap();
+        assert!(clear.apply_command(&eat).unwrap().execution.succeeded);
+        assert!(!clear.apply_command(&eat).unwrap().execution.succeeded);
+    }
+
     fn seen(world: &HeadlessWorld, target: WorldEntityId) -> bool {
         let observer = world.agent_for(OrganismId(1)).unwrap();
         world
@@ -3955,7 +4033,7 @@ impl HeadlessWorld {
         );
         let target_is_self = target == agent_id || target_organism == Some(command.organism_id);
         let owned_by_other = target_carried_by.is_some_and(|owner| owner != command.organism_id);
-        let within_reach = distance(agent_position, target_position) <= EAT_RADIUS;
+        let within_reach = self.physical_contact_reachable(agent_position, target_position);
         if !has_manipulation_effector
             || !target_is_live
             || !target_is_mobile
@@ -4037,7 +4115,7 @@ impl HeadlessWorld {
             return self.invalid_target(command, Some(target));
         };
         let agent = self.agent_for(command.organism_id)?;
-        if distance(agent.position, target_position) > EAT_RADIUS {
+        if !self.physical_contact_reachable(agent.position, target_position) {
             return self.finish_action(
                 command,
                 false,
@@ -4470,6 +4548,30 @@ impl HeadlessWorld {
                 .blocks_segment(start, end)
                 .then_some(WorldEntityId(*id))
         })
+    }
+
+    /// Contact legality uses solid geometry, independently of gaze and opacity.
+    fn physical_contact_reachable(&self, start: Vec3f, end: Vec3f) -> bool {
+        let length = distance(start, end);
+        if length > EAT_RADIUS || self.blocking_object_between(start, end).is_some() {
+            return false;
+        }
+        let Some(terrain) = self.terrain.as_ref() else {
+            return true;
+        };
+        if length <= f32::EPSILON {
+            return !terrain
+                .surface()
+                .obstacles
+                .iter()
+                .any(|bounds| sight_box_hit(start, Vec3f::ZERO, *bounds, 0.0).is_some());
+        }
+        let direction = scale(subtract(end, start), 1.0 / length);
+        !terrain
+            .surface()
+            .obstacles
+            .iter()
+            .any(|bounds| sight_box_hit(start, direction, *bounds, length).is_some())
     }
 
     fn hazard_contact_at(&self, position: Vec3f) -> Option<(WorldEntityId, f32)> {

@@ -602,8 +602,9 @@ impl MemoryRecord {
             PhysicalContactKind::None => 0.0,
             _ => 1.0,
         };
-        let positive_reward = outcome.reward_valence.raw().max(0.0);
-        let negative_reward = (-outcome.reward_valence.raw()).max(0.0);
+        let (valence, pain, disappointment) = memory_consequence(outcome);
+        let positive_reward = valence.max(0.0);
+        let negative_reward = (-valence).max(0.0);
         let social_bias = social_biases(pre_action);
         let record = Self {
             memory_id,
@@ -611,7 +612,7 @@ impl MemoryRecord {
             source_sequence_id: pre_action.sequence_id,
             source_tick: pre_action.tick,
             features: legacy_diagnostic_features(patch, max_feature_len)?,
-            expected_valence: outcome.reward_valence,
+            expected_valence: SignedValence::new(valence)?,
             predicted_drive_delta: outcome.homeostatic_delta.drives,
             outcome_summary: MemoryOutcomeSummary {
                 success_likelihood: NormalizedScalar(if outcome.success { 1.0 } else { 0.0 }),
@@ -621,11 +622,7 @@ impl MemoryRecord {
                 energy_delta: outcome.energy_delta,
             },
             affordance_bias: NormalizedScalar::new(max_affordance(pre_action))?,
-            danger_bias: NormalizedScalar::new(
-                negative_reward
-                    .max(outcome.pain_delta.raw())
-                    .max(outcome.frustration_delta.raw()),
-            )?,
+            danger_bias: NormalizedScalar::new(negative_reward.max(pain).max(disappointment))?,
             safety_bias: NormalizedScalar::new(if outcome.success {
                 positive_reward.max(0.25)
             } else {
@@ -640,6 +637,25 @@ impl MemoryRecord {
         };
         record.validate_contract()?;
         Ok(record)
+    }
+}
+
+// New biological experience uses the same inherited consequence components as
+// action credit. Old records/patches retain their historical diagnostic values.
+fn memory_consequence(outcome: &crate::PostActionOutcome) -> (f32, f32, f32) {
+    match outcome.measured_physiology.as_ref() {
+        Some(physiology) => {
+            let pain = physiology.aversive_value();
+            let disappointment = (outcome.frustration_delta.raw()
+                * physiology.before.value_profile().disappointment)
+                .clamp(0.0, 1.0);
+            (outcome.experienced_valence().raw(), pain, disappointment)
+        }
+        None => (
+            outcome.reward_valence.raw(),
+            outcome.pain_delta.raw(),
+            outcome.frustration_delta.raw(),
+        ),
     }
 }
 

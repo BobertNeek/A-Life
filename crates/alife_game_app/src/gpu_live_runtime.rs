@@ -3943,16 +3943,12 @@ fn cognitive_context_for_recall(
         .iter()
         .take(MAX_CONTEXT_MEMORY_EXPECTANCIES)
     {
+        // Target latent lane zero is hunger change, not signed valence:
+        // relieving hunger is negative there, but a positive experience.
         let expectancy = candidate
-            .best_target_source
-            .zip(candidate.target_latent.first().copied())
-            .map(|(memory_id, value)| (memory_id, value, candidate.target_confidence.raw()))
-            .or_else(|| {
-                candidate
-                    .best_family_source
-                    .zip(candidate.family_value.first().copied())
-                    .map(|(memory_id, value)| (memory_id, value, candidate.family_confidence.raw()))
-            });
+            .best_family_source
+            .zip(candidate.family_value.first().copied())
+            .map(|(memory_id, value)| (memory_id, value, candidate.family_confidence.raw()));
         if let Some((memory_id, value, confidence)) = expectancy {
             context.memory.expectancies.push(CognitiveMemoryExpectancy {
                 memory_id,

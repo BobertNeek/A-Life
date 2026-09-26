@@ -1596,7 +1596,7 @@ impl TopologicalMap {
         )?;
         let simplex_id = planned.push_simplex(
             vec![primary_concept_id, action_concept_id],
-            patch.outcome().reward_valence,
+            patch.outcome().experienced_valence(),
             patch.outcome().prediction_error,
             salience,
             tick,
@@ -3410,10 +3410,10 @@ fn bindings_from_patch(
     action_bindings.action_families.push(action_family);
     primary_bindings
         .emotions
-        .record(outcome.reward_valence, outcome.prediction_error)?;
+        .record(outcome.experienced_valence(), outcome.prediction_error)?;
     action_bindings
         .emotions
-        .record(outcome.reward_valence, outcome.prediction_error)?;
+        .record(outcome.experienced_valence(), outcome.prediction_error)?;
 
     if let Some(tracked) = decision
         .episodic_key()
@@ -3498,7 +3498,7 @@ fn patch_salience(patch: &ExperiencePatch) -> Result<NormalizedScalar, ScaffoldC
     let outcome_salience = outcome
         .prediction_error
         .raw()
-        .max(outcome.reward_valence.raw().abs());
+        .max(outcome.experienced_valence().raw().abs());
     NormalizedScalar::new(drive_salience.max(sensory_salience).max(outcome_salience))
 }
 

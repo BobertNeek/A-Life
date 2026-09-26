@@ -13,6 +13,7 @@ pub(super) fn candidate_record_from_patch(
         .ok_or(ScaffoldContractError::InvalidMemoryQuery)?;
     let query = key.query();
     let outcome = patch.outcome();
+    let (valence, pain, disappointment) = memory_consequence(outcome);
     let drives = outcome.homeostatic_delta.drives;
     let contact = if outcome.physical.contact == PhysicalContactKind::None {
         0.0
@@ -30,23 +31,18 @@ pub(super) fn candidate_record_from_patch(
         outcome.prediction_error.raw(),
     ]
     .map(|value| value.clamp(-1.0, 1.0));
-    let danger = outcome
-        .pain_delta
-        .raw()
-        .max(outcome.frustration_delta.raw())
-        .max((-outcome.reward_valence.raw()).max(0.0));
+    let danger = pain.max(disappointment).max((-valence).max(0.0));
     let family_value = [
-        outcome.reward_valence.raw(),
+        valence,
         if outcome.success { 1.0 } else { 0.0 },
         danger,
         outcome.energy_delta.raw(),
     ]
     .map(|value| value.clamp(-1.0, 1.0));
-    let salience = outcome
-        .reward_valence
-        .raw()
+    let salience = valence
         .abs()
-        .max(outcome.pain_delta.raw())
+        .max(pain)
+        .max(disappointment)
         .max(outcome.prediction_error.raw())
         .max(patch.pre_action().sensory().channels.novelty_signal.raw());
     let record = CandidateMemoryRecordV2 {

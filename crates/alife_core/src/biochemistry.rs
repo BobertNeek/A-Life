@@ -209,16 +209,8 @@ impl BodyState {
                 }
                 * turnover
                 * sleep_metabolic_rate;
-            // Legacy genomes without repair receptors retain their old sleep response.
-            // Chemical repair spends existing reserve; it cannot create energy by healing.
-            let sleep_energy = if repair_signal.is_none() {
-                recovery * organ.repair_capacity * 0.2
-            } else {
-                0.0
-            };
-            organ.energy = clamp01(
-                organ.energy + event_share + nutrition_gain + sleep_energy - periodic_upkeep,
-            );
+            // Sleep is not nutrition, including for genomes without repair receptors.
+            organ.energy = clamp01(organ.energy + event_share + nutrition_gain - periodic_upkeep);
             if let Some(signal) = repair_signal {
                 let repair = (signal * organ.repair_capacity * cadence_steps as f32 * turnover)
                     .min(organ.damage.max(1.0 - organ.integrity))
@@ -227,8 +219,13 @@ impl BodyState {
                 organ.integrity = clamp01(organ.integrity + repair);
                 organ.energy -= repair;
             } else {
-                organ.damage = clamp01(organ.damage - recovery * organ.repair_capacity);
-                organ.integrity = clamp01(organ.integrity + recovery * 0.15);
+                // The legacy repair path also pays from existing local reserve.
+                let repair = (recovery * organ.repair_capacity)
+                    .min(organ.damage.max(1.0 - organ.integrity))
+                    .min(organ.energy);
+                organ.damage = clamp01(organ.damage - repair);
+                organ.integrity = clamp01(organ.integrity + repair);
+                organ.energy -= repair;
             }
             organ.temperature_stress = if organ.kind == OrganKind::Thermoregulatory {
                 temperature_stress
@@ -1080,6 +1077,7 @@ mod tests {
                 MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
                 Some(energy),
                 Some(repair),
+                1.0,
             )
         };
         assert!(run(0.25, 0.0).energy > run(1.0, 0.0).energy);
@@ -1093,9 +1091,33 @@ mod tests {
             MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
             Some(1.0),
             Some(1.0),
+            1.0,
         );
         assert_eq!(after.health, exhausted.health);
         assert_eq!(after.energy, 0.0);
+
+        // No-receptor legacy bodies cannot turn sleep into food or free tissue.
+        let sleeping = |body: BodyState| {
+            body.apply_event(
+                Tick(601),
+                Tick(613),
+                BodyEventDelta {
+                    sleep_recovery: 1.0,
+                    ..BodyEventDelta::zero()
+                },
+                &phenotype,
+                MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
+                Some(0.0),
+                None,
+                1.0,
+            )
+        };
+        let recovered = sleeping(body);
+        assert!(recovered.health > body.health);
+        assert!(recovered.energy < body.energy);
+        let recovered = sleeping(exhausted);
+        assert_eq!(recovered.health, exhausted.health);
+        assert_eq!(recovered.energy, 0.0);
     }
 
     #[test]

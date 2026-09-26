@@ -159,9 +159,23 @@ the explicit new genes during its adaptation; loading it alone does not install
 this circuit. Immediate digestion is an intentional simplification, not a new
 metabolism controller. No new teacher reward encourages prolonged inactivity.
 
-Outstanding in this group: solid-barrier/ownership reach semantics; the legacy
-sleep-energy fallback; normal-speed survival
-with actual cognition/activity; player-visible lethargy/sleep feedback. Do not
+Further repairs: grab and eat now validate the existing solid-object segment
+and terrain obstacle boxes, regardless of optical opacity or gaze. A blocked
+attempt has no contact, consumption, or nutrition. Eating a nearby meal held by
+another organism remains legal for offering food; grabbing another organism's
+possession retains its existing ownership restriction. Food is still consumed
+at most once. This is straight-segment contact in the current point-body model,
+not articulated arm/mouth reach or a heightfield intersection proof.
+
+The no-repair-receptor legacy fallback no longer manufactures sleep energy.
+Its existing inherited repair capacity now restores tissue only as far as local
+reserve can pay, matching the resource rule of the chemical repair path. Saved
+chromosome bytes are unchanged; this intentionally fixes old runtime behavior.
+Two existing unit-test callers missing the sleep-metabolism argument were also
+repaired, and the existing repair/accounting test covers the legacy fallback.
+
+Outstanding in this group: heightfield/articulated contact limits; normal-speed
+survival with actual cognition/activity; player-visible lethargy/sleep feedback. Do not
 mark the whole group accepted from the focused checks alone.
 
 Existing evidence in the training regimen records a 24,000-tick inherited-body
@@ -169,3 +183,53 @@ check and a live N2048 policy depleting reserve at tick 14,224. These older reco
 are not current wall-time acceptance proof. After the repair, use one focused
 food-to-energy/accounting check and one hunger/fatigue-to-motor/recovery check,
 reusing existing tests. Full player-visible survival acceptance remains separate.
+
+## Third group: learning, chemical credit, memory, prediction, consolidation
+
+Requirements: AOA-LEARN-001 through 010, AOA-MEM-001 through 003/008,
+AOA-SLEEP-002/003/005/007. Source review and focused contract evidence are
+separate from post-training behavioral and GPU retention acceptance.
+
+The live motor transaction measures canonical before/after biology, including
+actual cognitive work cost, before sealing experience. Host reward stays zero.
+OutcomeCreditPacket derives homeostatic improvement, fresh injury valuation,
+and genetically scaled disappointment from that measured transition. Hormonal
+receptors modulate a measured consequence rather than treating baseline chemical
+concentrations as an action reward. GPU online plasticity and bounded sleep replay
+consume those separate lanes and exact causal eligibility; they do not use the
+legacy reward field as an answer key. No learning-rule replacement was needed
+for this part of the traced path.
+
+Found and repaired: active candidate-memory construction still used the zero
+legacy reward field for signed value and salience, and treated every failed
+attempt's raw frustration as severe danger. New memories now derive a signed
+summary from the existing measured homeostatic, injury, and disappointment
+components. The distinct learning lanes are retained. Legacy diagnostic patches
+keep their historical values; stored memories are not silently rewritten. The
+same summary repairs episodic diagnostic and topology emotional associations.
+
+The app also incorrectly used target latent lane zero (signed hunger change)
+as expected valence. It now reads the explicit family-value lane with its own
+source and confidence. A negative hunger change remains negative in the target
+prediction, while a relieving meal can be remembered as positive. One focused
+extension of the existing memory retrieval suite checks meal relief, mild
+blocked-attempt aversion, and save/restore preservation of the new memories.
+
+Prediction freezes a forecast before applying the world action and compares it
+with the grounded successor; physical outcome is not supplied as a teacher
+label. Sleep replay is bounded and validates event identity, eligibility spans,
+cycle/generation, and digest. The app prepares memory compaction on a clone and
+uses the existing staged sleep rollback/durability path. Source inspection alone
+does not prove a learned choice survives sleep, restore, and normal play.
+Existing GPU choice-retention and sleep-atomicity checks are the later focused
+acceptance path; no new GPU campaign was launched in this review.
+
+Groups 4 through 7 remain unreviewed. Do not describe all seven groups as repaired
+or accepted.
+
+Validation for this repair packet: one world contact-legality check passed;
+the existing core inherited-upkeep/repair check, extended for legacy sleep,
+passed; the existing candidate-memory retrieval suite passed 19/19 with one
+new measured-consequence check. The GPU-enabled app compiled with existing
+unused/dead-code warnings. Core boundary, documentation (77/77), and diff checks
+passed. No GPU dispatch, visible playtest, or wall-time survival trial was run.

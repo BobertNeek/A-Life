@@ -1500,6 +1500,22 @@ impl PostActionOutcome {
         self.validate_contract()?;
         Ok(self)
     }
+
+    /// A signed memory summary of the measured, genetically valued consequence.
+    /// This does not replace the distinct neuromodulatory learning lanes.
+    pub fn experienced_valence(&self) -> SignedValence {
+        match self.measured_physiology.as_ref() {
+            Some(physiology) => SignedValence::new(
+                (physiology.homeostatic_improvement()
+                    - physiology.aversive_value()
+                    - self.frustration_delta.raw()
+                        * physiology.before.value_profile().disappointment)
+                    .clamp(-1.0, 1.0),
+            )
+            .expect("validated biological value is finite and bounded"),
+            None => self.reward_valence,
+        }
+    }
 }
 
 impl Validate for PostActionOutcome {
