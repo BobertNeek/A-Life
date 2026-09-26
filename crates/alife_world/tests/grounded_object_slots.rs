@@ -244,11 +244,12 @@ fn sixteen_slots_yield_five_complete_family_groups_and_never_a_partial_group() {
     let frame = grounded_draft(&mut world, Tick::new(5));
 
     assert_eq!(frame.grounded_object_slots().len(), 16);
-    assert_eq!(frame.candidates().len(), 3 + 5 * 5);
+    let object_choices_end = 3 + 5 * 5;
+    assert_eq!(frame.candidates().len(), object_choices_end + 3);
     assert_eq!(frame.candidates()[0].family, CandidateActionFamily::Idle);
     assert_eq!(frame.candidates()[1].family, CandidateActionFamily::Rest);
     assert_eq!(frame.candidates()[2].kind, alife_core::ActionKind::Vocalize);
-    for group in frame.candidates()[3..].chunks_exact(5) {
+    for group in frame.candidates()[3..object_choices_end].chunks_exact(5) {
         assert_eq!(
             group
                 .iter()
@@ -260,6 +261,24 @@ fn sixteen_slots_yield_five_complete_family_groups_and_never_a_partial_group() {
             .iter()
             .all(|candidate| candidate.observation == group[0].observation));
     }
+    assert_eq!(
+        frame.candidates()[object_choices_end..]
+            .iter()
+            .map(|candidate| candidate.action_id)
+            .collect::<Vec<_>>(),
+        vec![
+            HeadlessActionIds::NO_LOCOMOTION,
+            HeadlessActionIds::NO_MANIPULATION,
+            HeadlessActionIds::NO_POSTURE
+        ],
+    );
+    assert!(frame.candidates()[object_choices_end..]
+        .iter()
+        .all(
+            |candidate| candidate.target == alife_core::ActionTarget::NONE
+                && candidate.features == alife_core::CandidateFeatureVector::zero()
+                && candidate.observation == alife_core::CandidateObservationRef::None
+        ));
 }
 
 #[test]

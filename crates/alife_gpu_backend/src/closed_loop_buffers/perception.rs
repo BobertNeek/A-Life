@@ -102,7 +102,7 @@ impl GpuPerceptionUpload {
             FIXED_FRAME_LANES as usize + frame.candidates().len() * decoder_input_stride,
         );
         frame_payload_words.extend(frame.sensory().channels.as_flat_array().map(f32::to_bits));
-        let body = frame.body();
+        let body = frame.body().neural_projection(frame.sensor_profile());
         frame_payload_words.extend(
             [
                 body.pose.translation.x,

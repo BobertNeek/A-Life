@@ -232,6 +232,37 @@ pub struct GroundedSensingFrame {
 }
 
 impl GroundedSensingFrame {
+    /// Calibrate the observed view after identity tracking, so a body's changing
+    /// sensitivity does not change the physical descriptor used for identity.
+    pub(crate) fn calibrate(
+        &mut self,
+        embodiment: Option<&alife_core::EmbodimentState>,
+    ) -> Result<(), ScaffoldContractError> {
+        let gain = |capability| embodiment.map_or(1.0, |body| body.sensor_gain(capability));
+        for slot in &mut self.slots {
+            slot.confidence = Confidence::new(
+                (slot.confidence.raw() * gain(alife_core::SensorCapability::Vision))
+                    .clamp(0.0, 1.0),
+            )?;
+            for chemical in &mut slot.chemical {
+                // Source-specific chemistry is a contact/taste observation.
+                // Distant smell is the anonymous bilateral field, not chemical GPS.
+                *chemical =
+                    (*chemical * slot.contact * gain(alife_core::SensorCapability::Chemical))
+                        .clamp(-1.0, 1.0);
+            }
+            slot.temperature *= slot.contact;
+            slot.contact =
+                (slot.contact * gain(alife_core::SensorCapability::Touch)).clamp(0.0, 1.0);
+            if let Some(body) = embodiment {
+                for value in &mut slot.proprioception {
+                    *value = (*value * body.proprioceptive_gain()).clamp(0.0, 1.0);
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn sensory(&self) -> &SensorySnapshot {
         &self.sensory
     }

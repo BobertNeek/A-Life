@@ -4372,7 +4372,7 @@ fn unit_successor_scalar(value: f32) -> Result<f32, ScaffoldContractError> {
 fn grounded_semantic_state_from_frame(
     frame: &PerceptionFrame,
 ) -> Result<SemanticStateVector, ScaffoldContractError> {
-    let body = frame.body();
+    let body = frame.body().neural_projection(frame.sensor_profile());
     grounded_semantic_state(
         body.pose.translation,
         body.velocity.linear,
@@ -4383,7 +4383,7 @@ fn grounded_semantic_state_from_frame(
 fn grounded_semantic_state_from_draft(
     draft: &PerceptionFrameDraft,
 ) -> Result<SemanticStateVector, ScaffoldContractError> {
-    let body = draft.body();
+    let body = draft.body().neural_projection(draft.sensor_profile());
     grounded_semantic_state(
         body.pose.translation,
         body.velocity.linear,
@@ -4431,7 +4431,12 @@ fn grounded_successor_state(
         }
         SensorProfile::PrivilegedAffordanceV1 => Vec3f::ZERO,
     };
-    grounded_semantic_state(object.position, velocity, &biology_after.homeostasis)
+    let position = if profile == SensorProfile::GroundedTerrainVisionV1 {
+        Vec3f::ZERO
+    } else {
+        object.position
+    };
+    grounded_semantic_state(position, velocity, &biology_after.homeostasis)
 }
 
 fn factorized_motor_bundle_for_candidates(

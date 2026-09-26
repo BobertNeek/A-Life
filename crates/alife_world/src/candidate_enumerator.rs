@@ -147,7 +147,9 @@ impl GroundedCandidateEnumerator {
 
         let terrain_vision = profile == SensorProfile::GroundedTerrainVisionV1;
         let object_limit = if terrain_vision {
-            4
+            // Leave room for locomotion, body/head orientation, and an explicit
+            // hold-gaze command within the frozen 32-candidate foundation ABI.
+            3
         } else {
             MAX_CANDIDATE_OBJECTS
         };
@@ -155,18 +157,62 @@ impl GroundedCandidateEnumerator {
             INTRINSIC_CANDIDATE_COUNT
                 + grounded.slots().len().min(object_limit) * 5
                 + 3
-                + if terrain_vision { 3 } else { 0 },
+                + if terrain_vision { 7 } else { 0 },
         );
         push_intrinsic_candidates(&mut candidates)?;
 
         if terrain_vision {
+            for (action_id, kind, family, bearing_sin, bearing_cos) in [
+                (
+                    HeadlessActionIds::STEP_FORWARD,
+                    ActionKind::Move,
+                    CandidateActionFamily::Approach,
+                    0.0,
+                    1.0,
+                ),
+                (
+                    HeadlessActionIds::TURN_LEFT,
+                    ActionKind::Look,
+                    CandidateActionFamily::Inspect,
+                    1.0,
+                    0.0,
+                ),
+                (
+                    HeadlessActionIds::TURN_RIGHT,
+                    ActionKind::Look,
+                    CandidateActionFamily::Inspect,
+                    -1.0,
+                    0.0,
+                ),
+            ] {
+                let mut features = [0.0; CANDIDATE_FEATURE_COUNT];
+                features[CANDIDATE_FEATURE_BEARING_SIN_LANE] = bearing_sin;
+                features[CANDIDATE_FEATURE_BEARING_COS_LANE] = bearing_cos;
+                // Distinguish body primitives from head gaze and object descriptors.
+                features[CANDIDATE_FEATURE_RESERVED_START_LANE + 1] = 1.0;
+                candidates.push(ActionCandidate::new(
+                    u16::try_from(candidates.len())
+                        .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
+                    action_id,
+                    kind,
+                    family,
+                    CandidateObservationRef::None,
+                    ActionTarget::NONE,
+                    CandidateFeatureVector(features),
+                    Confidence::new(1.0)?,
+                    NormalizedScalar::new(0.1)?,
+                    DurationTicks::new(1),
+                    DurationTicks::new(1),
+                )?);
+            }
             for (action_id, bearing_sin, bearing_cos) in [
                 (HeadlessActionIds::LOOK_LEFT, 1.0, 0.0),
                 (HeadlessActionIds::LOOK_RIGHT, -1.0, 0.0),
                 (HeadlessActionIds::LOOK_CENTER, 0.0, 1.0),
+                (HeadlessActionIds::HOLD_GAZE, 0.0, 0.0),
             ] {
                 // The GPU decoder scores features, not ActionId. Without a
-                // distinct feature vector these three actions tie forever.
+                // distinct feature vectors the gaze choices would tie forever.
                 let mut look_features = [0.0; CANDIDATE_FEATURE_COUNT];
                 look_features[CANDIDATE_FEATURE_BEARING_SIN_LANE] = bearing_sin;
                 look_features[CANDIDATE_FEATURE_BEARING_COS_LANE] = bearing_cos;

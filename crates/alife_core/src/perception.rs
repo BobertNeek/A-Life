@@ -136,6 +136,17 @@ pub struct BodySnapshot {
     pub velocity: Velocity,
 }
 
+impl BodySnapshot {
+    /// Neural observation only; authoritative poses and causal receipts keep
+    /// their real coordinates. Terrain vision does not include an innate GPS.
+    pub fn neural_projection(mut self, profile: SensorProfile) -> Self {
+        if profile == SensorProfile::GroundedTerrainVisionV1 {
+            self.pose.translation = Vec3f::ZERO;
+        }
+        self
+    }
+}
+
 impl Validate for BodySnapshot {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         self.pose.validate()?;
@@ -879,6 +890,17 @@ fn validate_frame_base(
                         if candidate.kind == ActionKind::Move
                             && candidate.target == ActionTarget::NONE
                             && candidate.features == CandidateFeatureVector::zero() => {}
+                    (CandidateActionFamily::Approach, CandidateObservationRef::None)
+                        if sensor_profile == SensorProfile::GroundedTerrainVisionV1
+                            && candidate.kind == ActionKind::Move
+                            && candidate.target == ActionTarget::NONE
+                            && candidate.features.0[0] == 0.0
+                            && candidate.features.0[1] == 1.0
+                            && candidate.features.0[2..19]
+                                .iter()
+                                .all(|value| *value == 0.0)
+                            && candidate.features.0[19] == 1.0
+                            && candidate.features.0[20..].iter().all(|value| *value == 0.0) => {}
                     (CandidateActionFamily::Other, CandidateObservationRef::None)
                         if candidate.kind == ActionKind::Hold
                             && candidate.target == ActionTarget::NONE
@@ -894,7 +916,20 @@ fn validate_frame_base(
                             && candidate.features.0[19..].iter().all(|value| *value == 0.0)
                             && matches!(
                                 (candidate.features.0[0], candidate.features.0[1]),
-                                (1.0, 0.0) | (-1.0, 0.0) | (0.0, 1.0)
+                                (1.0, 0.0) | (-1.0, 0.0) | (0.0, 1.0) | (0.0, 0.0)
+                            ) => {}
+                    (CandidateActionFamily::Inspect, CandidateObservationRef::None)
+                        if sensor_profile == SensorProfile::GroundedTerrainVisionV1
+                            && candidate.kind == ActionKind::Look
+                            && candidate.target == ActionTarget::NONE
+                            && candidate.features.0[2..19]
+                                .iter()
+                                .all(|value| *value == 0.0)
+                            && candidate.features.0[19] == 1.0
+                            && candidate.features.0[20..].iter().all(|value| *value == 0.0)
+                            && matches!(
+                                (candidate.features.0[0], candidate.features.0[1]),
+                                (1.0, 0.0) | (-1.0, 0.0)
                             ) => {}
                     (CandidateActionFamily::Idle, CandidateObservationRef::ObjectSlot(_))
                     | (_, CandidateObservationRef::None) => {

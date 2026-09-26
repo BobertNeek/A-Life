@@ -135,7 +135,14 @@ mod terrain_vision_tests {
         let looks = frame
             .candidates()
             .iter()
-            .filter(|candidate| candidate.kind == ActionKind::Look)
+            .filter(|candidate| {
+                matches!(
+                    candidate.action_id,
+                    HeadlessActionIds::LOOK_LEFT
+                        | HeadlessActionIds::LOOK_RIGHT
+                        | HeadlessActionIds::LOOK_CENTER
+                )
+            })
             .collect::<Vec<_>>();
         assert_eq!(looks.len(), 3);
         assert_ne!(looks[0].features, looks[1].features);
@@ -184,6 +191,133 @@ mod terrain_vision_tests {
         let blocked = world.terrain_vision_fan(observer);
         assert!(!seen(&world, food));
         assert!(blocked[7] < 0.5 || blocked[8] < 0.5);
+        let step = HeadlessWorldCommand::structured(
+            OrganismId(1),
+            HeadlessActionIds::STEP_FORWARD,
+            ActionKind::Move,
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(world.apply_command(&step).unwrap().execution.succeeded);
+        let before = world.agent_for(OrganismId(1)).unwrap().position;
+        assert!(!world.apply_command(&step).unwrap().execution.succeeded);
+        assert_eq!(world.agent_for(OrganismId(1)).unwrap().position, before);
+    }
+
+    #[test]
+    fn blind_exploration_primitives_survive_motor_translation_and_collision() {
+        let mut world = HeadlessScenarioBuilder::new(60_003)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let observer = world.entity_id("observer").unwrap();
+        world.objects.get_mut(&observer.raw()).unwrap().head_yaw = 0.35;
+        let frame = world
+            .perception_frame(
+                OrganismId(1),
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap();
+        assert!(frame.grounded_object_slots().is_empty());
+        for (id, channel) in [
+            (HeadlessActionIds::STEP_FORWARD, MotorChannel::Locomotion),
+            (HeadlessActionIds::TURN_LEFT, MotorChannel::Orientation),
+            (HeadlessActionIds::HOLD_GAZE, MotorChannel::Orientation),
+        ] {
+            let candidate = frame
+                .candidates()
+                .iter()
+                .find(|candidate| candidate.action_id == id)
+                .unwrap();
+            assert_eq!(candidate.target, alife_core::ActionTarget::NONE);
+            let command = candidate
+                .to_command(OrganismId(1), Confidence::new(1.0).unwrap())
+                .unwrap();
+            let channel = alife_core::channel_command_for_action(channel, &command).unwrap();
+            let translated = legacy_action_for_motor_channel(OrganismId(1), &channel).unwrap();
+            assert_eq!(translated.action_id, id);
+            let result = world.execute_command(&translated).unwrap();
+            assert!(result.execution.succeeded);
+        }
+        assert!(world.agent_for(OrganismId(1)).unwrap().position.x > 0.0);
+        assert!(world.agent_for(OrganismId(1)).unwrap().body_yaw > 0.0);
+        assert_eq!(world.agent_for(OrganismId(1)).unwrap().head_yaw, 0.35);
+        let mut crowded = HeadlessScenarioBuilder::new(60_004)
+            .agent("observer", OrganismId(1), Vec3f::new(0.1, 0.0, 0.0))
+            .food("a", Vec3f::new(3.0, 0.0, 0.0), 0.5)
+            .food("b", Vec3f::new(3.0, 0.0, 1.0), 0.5)
+            .food("c", Vec3f::new(3.0, 0.0, -1.0), 0.5)
+            .food("d", Vec3f::new(4.0, 0.0, 0.0), 0.5)
+            .build()
+            .unwrap();
+        let draft = crowded
+            .perception_frame_draft(
+                OrganismId(1),
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap();
+        let frame = draft
+            .clone()
+            .finalize(PerceptionContextBlock::empty())
+            .unwrap();
+        assert!(frame.candidates().len() <= alife_core::MAX_ACTION_CANDIDATES);
+        frame.validate_contract().unwrap();
+        for candidate in frame.candidates() {
+            let query =
+                alife_core::MemoryQueryEncoderV2::encode_candidate(&draft, candidate).unwrap();
+            query.validate_against_frame(&frame, candidate).unwrap();
+            let restored: alife_core::CandidateMemoryQueryV2 =
+                serde_json::from_str(&serde_json::to_string(&query).unwrap()).unwrap();
+            assert_eq!(query, restored);
+        }
+        assert_ne!(frame.body().pose.translation, Vec3f::ZERO);
+        assert_eq!(
+            frame
+                .body()
+                .neural_projection(frame.sensor_profile())
+                .pose
+                .translation,
+            Vec3f::ZERO
+        );
+    }
+
+    #[test]
+    fn scent_and_touch_survive_occlusion_without_creating_hidden_targets() {
+        let mut world = HeadlessScenarioBuilder::new(60_005)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .food("food", Vec3f::new(-2.0, 0.0, 2.0), 0.5)
+            .obstacle("contact", Vec3f::new(-0.5, 0.0, -0.2), 0.1)
+            .build()
+            .unwrap();
+        let contact = world.entity_id("contact").unwrap();
+        world
+            .objects
+            .get_mut(&contact.raw())
+            .unwrap()
+            .grounded_physical
+            .chemical = [0.0; 3];
+        let frame = world
+            .perception_frame(
+                OrganismId(1),
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap();
+        assert!(frame.grounded_object_slots().is_empty());
+        assert!(frame
+            .candidates()
+            .iter()
+            .all(|candidate| candidate.target.entity.is_none()));
+        let channels = &frame.sensory().channels;
+        assert!(channels.smell_chemistry[0] > channels.smell_chemistry[1]);
+        assert!(channels.smell_chemistry[1] > 0.0);
+        assert!(channels.tactile_contact[0] > 0.0);
     }
 }
 
@@ -201,12 +335,16 @@ impl HeadlessActionIds {
     pub const FLEE: ActionId = ActionId(102);
     pub const NO_LOCOMOTION: ActionId = ActionId(103);
     pub const NO_POSTURE: ActionId = ActionId(104);
+    pub const STEP_FORWARD: ActionId = ActionId(105);
     pub const EAT: ActionId = ActionId(210);
     pub const GRAB: ActionId = ActionId(211);
     pub const NO_MANIPULATION: ActionId = ActionId(212);
     pub const LOOK_LEFT: ActionId = ActionId(601);
     pub const LOOK_RIGHT: ActionId = ActionId(602);
     pub const LOOK_CENTER: ActionId = ActionId(603);
+    pub const TURN_LEFT: ActionId = ActionId(604);
+    pub const TURN_RIGHT: ActionId = ActionId(605);
+    pub const HOLD_GAZE: ActionId = ActionId(606);
 }
 
 #[derive(
@@ -2364,20 +2502,34 @@ impl HeadlessWorld {
                     }
                     (None, false) => self.physical_observation_snapshot(organism_id, tick)?,
                 };
-                let grounded =
+                let mut grounded =
                     GroundedSensorExtractor::extract(&snapshot, &mut self.tracked_objects)?;
+                let embodiment = self
+                    .organism_registry
+                    .get(organism_id)
+                    .map(WorldOrganismRecord::embodiment);
+                if terrain_vision {
+                    grounded.calibrate(embodiment)?;
+                }
                 let candidates =
                     GroundedCandidateEnumerator.enumerate_candidates(&grounded, profile)?;
                 let (mut sensory, body, slots, _transports) = grounded.into_parts();
                 if terrain_vision {
                     let observer = self.agent_for(organism_id)?;
                     sensory.channels.visual_affordance = self.terrain_vision_fan(observer);
+                    self.grounded_nonvisual_channels(observer, &mut sensory)?;
                 }
                 let heard = self
                     .speech
                     .heard_tokens(organism_id, body.pose.translation, tick)?;
                 let mut language_context = LanguageContextSnapshot::default();
                 for (index, mut token) in heard.into_iter().take(MAX_HEARD_TOKENS).enumerate() {
+                    if terrain_vision {
+                        let gain = embodiment
+                            .map_or(1.0, |body| body.sensor_gain(SensorCapability::Hearing));
+                        token.confidence =
+                            Confidence::new((token.confidence.raw() * gain).clamp(0.0, 1.0))?;
+                    }
                     token.confidence = Confidence::new(
                         (token.confidence.raw()
                             * self.inherited_word_gain(organism_id, token.token_id))
@@ -2503,6 +2655,77 @@ impl HeadlessWorld {
         };
         snapshot.validate_contract()?;
         Ok(snapshot)
+    }
+
+    /// Two local samples of four physical odor bands. No source identity,
+    /// object kind, exact bearing, or target is returned to cognition.
+    fn grounded_nonvisual_channels(
+        &self,
+        observer: &WorldObject,
+        sensory: &mut SensorySnapshot,
+    ) -> Result<(), ScaffoldContractError> {
+        let record = observer
+            .organism_id
+            .and_then(|id| self.organism_registry.get(id));
+        let gain =
+            |capability| record.map_or(1.0, |record| record.embodiment().sensor_gain(capability));
+        let yaw = observer.body_yaw + observer.head_yaw;
+        let lateral = Vec3f::new(-yaw.sin() * 0.25, 0.0, yaw.cos() * 0.25);
+        let samples = [
+            add(observer.position, lateral),
+            subtract(observer.position, lateral),
+        ];
+        for object in self
+            .objects
+            .values()
+            .filter(|object| object.id != observer.id && !object.consumed)
+        {
+            for (side, sample) in samples.iter().enumerate() {
+                let attenuation =
+                    proximity_salience(distance(*sample, object.position), HEADLESS_VISION_RADIUS);
+                for (component, chemical) in
+                    object.grounded_physical.chemical.iter().take(2).enumerate()
+                {
+                    let band = component * 2 + usize::from(*chemical < 0.0);
+                    sensory.channels.smell_chemistry[band * 2 + side] +=
+                        chemical.abs() * attenuation;
+                }
+            }
+            // Contact has its own physical range. Turning away does not remove it.
+            if distance(observer.position, object.position)
+                <= object.radius.max(HEADLESS_CONTACT_RADIUS)
+            {
+                sensory.channels.tactile_contact[0] = 1.0;
+                let heat = object.grounded_physical.surface_temperature;
+                sensory.channels.tactile_contact[3] =
+                    sensory.channels.tactile_contact[3].max(heat.max(0.0));
+                sensory.channels.tactile_contact[4] =
+                    sensory.channels.tactile_contact[4].max((-heat).max(0.0));
+            }
+            if object.carried_by == observer.organism_id && observer.organism_id.is_some() {
+                sensory.channels.tactile_contact[2] = 1.0;
+            }
+        }
+        let ground = self.terrain.as_ref().map_or(Some(0.0), |terrain| {
+            terrain
+                .surface()
+                .height(observer.position.x, observer.position.z)
+        });
+        sensory.channels.tactile_contact[1] =
+            f32::from(ground.is_some_and(|height| (observer.position.y - height).abs() <= 0.1));
+        if let Some(record) = record {
+            sensory.channels.pain_signal = NormalizedScalar::new(
+                (record.biochemistry().body.injury * gain(SensorCapability::Interoception))
+                    .clamp(0.0, 1.0),
+            )?;
+        }
+        for value in &mut sensory.channels.smell_chemistry {
+            *value = (*value * gain(SensorCapability::Chemical)).clamp(0.0, 1.0);
+        }
+        for value in &mut sensory.channels.tactile_contact {
+            *value = (*value * gain(SensorCapability::Touch)).clamp(0.0, 1.0);
+        }
+        Ok(())
     }
 
     fn object_in_sight(&self, observer: &WorldObject, target: &WorldObject) -> bool {
@@ -3520,6 +3743,41 @@ impl HeadlessWorld {
                     Vec::new(),
                 )
             }
+            HeadlessAction::TurnLeft | HeadlessAction::TurnRight => {
+                let agent = self
+                    .objects
+                    .get_mut(&agent_id.raw())
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                let sign = if matches!(action, HeadlessAction::TurnLeft) {
+                    1.0
+                } else {
+                    -1.0
+                };
+                agent.body_yaw = (agent.body_yaw
+                    + sign * HEAD_SWIVEL_STEP * command.intensity.raw()
+                    + std::f32::consts::PI)
+                    .rem_euclid(std::f32::consts::TAU)
+                    - std::f32::consts::PI;
+                self.finish_action(
+                    *command,
+                    true,
+                    None,
+                    physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.01)?,
+                    OutcomeProfile::look(),
+                    Vec::new(),
+                )
+            }
+            HeadlessAction::HoldGaze => self.finish_action(
+                *command,
+                true,
+                None,
+                physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.0)?,
+                OutcomeProfile::no_manipulation(),
+                Vec::new(),
+            ),
+            HeadlessAction::StepForward => {
+                self.execute_move(*command, agent_id, MoveIntent::Forward)
+            }
             HeadlessAction::Inspect => {
                 let target = match self.require_target(command) {
                     Ok(target) => target,
@@ -3803,6 +4061,17 @@ impl HeadlessWorld {
             .position;
         let max_step = MOVE_STEP * command.intensity.raw();
         let destination = match intent {
+            MoveIntent::Forward => {
+                let yaw = self
+                    .objects
+                    .get(&agent_id.raw())
+                    .expect("agent exists")
+                    .body_yaw;
+                Some(add(
+                    start,
+                    Vec3f::new(yaw.cos() * max_step, 0.0, yaw.sin() * max_step),
+                ))
+            }
             MoveIntent::Absolute => command
                 .target_position
                 .or_else(|| {
@@ -5027,6 +5296,10 @@ enum HeadlessAction {
     LookLeft,
     LookRight,
     LookCenter,
+    TurnLeft,
+    TurnRight,
+    StepForward,
+    HoldGaze,
     Inspect,
     Move,
     Approach,
@@ -5046,13 +5319,22 @@ enum RegisteredCommandMode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MoveIntent {
+    Forward,
     Absolute,
     Approach,
     Flee,
 }
 
 fn classify_action(command: &ActionCommand) -> HeadlessAction {
-    if command.action_id == HeadlessActionIds::EAT {
+    if command.action_id == HeadlessActionIds::STEP_FORWARD {
+        HeadlessAction::StepForward
+    } else if command.action_id == HeadlessActionIds::TURN_LEFT {
+        HeadlessAction::TurnLeft
+    } else if command.action_id == HeadlessActionIds::TURN_RIGHT {
+        HeadlessAction::TurnRight
+    } else if command.action_id == HeadlessActionIds::HOLD_GAZE {
+        HeadlessAction::HoldGaze
+    } else if command.action_id == HeadlessActionIds::EAT {
         HeadlessAction::Eat
     } else if command.action_id == HeadlessActionIds::APPROACH {
         HeadlessAction::Approach
@@ -5187,6 +5469,7 @@ fn legacy_action_for_motor_channel(
             if command.primitive == HeadlessActionIds::APPROACH
                 || command.primitive == HeadlessActionIds::FLEE
                 || command.primitive == HeadlessActionIds::NO_LOCOMOTION
+                || command.primitive == HeadlessActionIds::STEP_FORWARD
             {
                 command.primitive
             } else {
@@ -5259,6 +5542,9 @@ fn legacy_action_for_motor_channel(
                 HeadlessActionIds::LOOK_LEFT
                     | HeadlessActionIds::LOOK_RIGHT
                     | HeadlessActionIds::LOOK_CENTER
+                    | HeadlessActionIds::TURN_LEFT
+                    | HeadlessActionIds::TURN_RIGHT
+                    | HeadlessActionIds::HOLD_GAZE
             ) =>
         {
             (
