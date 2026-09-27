@@ -391,6 +391,8 @@ pub struct BodyEventDelta {
     pub temperature_stress: f32,
     pub nutrition: f32,
     pub social_contact: f32,
+    #[serde(default, skip_serializing_if = "is_zero_player_reward")]
+    pub player_reward: f32,
     pub sleep_recovery: f32,
     pub mating_opportunity: f32,
 }
@@ -403,6 +405,7 @@ impl BodyEventDelta {
             temperature_stress: 0.0,
             nutrition: 0.0,
             social_contact: 0.0,
+            player_reward: 0.0,
             sleep_recovery: 0.0,
             mating_opportunity: 0.0,
         }
@@ -417,10 +420,15 @@ impl Validate for BodyEventDelta {
             self.temperature_stress,
             self.nutrition,
             self.social_contact,
+            self.player_reward,
             self.sleep_recovery,
             self.mating_opportunity,
         ])
     }
+}
+
+fn is_zero_player_reward(value: &f32) -> bool {
+    *value == 0.0
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -57,6 +57,35 @@ fn assert_grounded_horizontal_bearing(offset: Vec3f, expected: [f32; 2]) {
 }
 
 #[test]
+fn looking_straight_at_food_after_approach_keeps_the_terrain_frame_valid() {
+    for angle in [0.218827_f32, -1.2, -0.7, 0.35, 0.9, 2.1] {
+        let mut world = HeadlessScenarioBuilder::new(4309)
+            .agent("agent", ORGANISM, Vec3f::new(3.0, 0.0, 0.0))
+            .food(
+                "food",
+                Vec3f::new(3.0 + 4.0 * angle.cos(), 0.0, 4.0 * angle.sin()),
+                0.6,
+            )
+            .build()
+            .unwrap();
+        let food = world.entity_id("food").unwrap();
+        world
+            .apply_command(&alife_world::HeadlessWorldCommand::approach(ORGANISM, food).unwrap())
+            .unwrap();
+        let frame = world
+            .perception_frame(
+                ORGANISM,
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap();
+        assert!(!frame.grounded_object_slots().is_empty());
+        assert!((frame.grounded_object_slots()[0].bearing[1] - 1.0).abs() < 1e-6);
+    }
+}
+
+#[test]
 fn grounded_horizontal_bearing_distinguishes_xz_cardinals_and_diagonals() {
     for (offset, expected) in [
         (Vec3f::new(0.0, 0.0, 1.0), [1.0, 0.0]),

@@ -1120,6 +1120,7 @@ fn reconcile_production_presentation(
             cognitive.and_then(|snapshot| snapshot.topology_update_count);
         sample.hunger = homeostasis.drives.hunger;
         sample.body_energy = Some(row.biochemistry.body.energy);
+        sample.praise_signal = homeostasis.hormones.extension[0];
         sample.fatigue = homeostasis.drives.fatigue;
         sample.fear = homeostasis.drives.fear;
         sample.cortisol = homeostasis.hormones.cortisol;

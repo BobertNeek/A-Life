@@ -1,0 +1,146 @@
+# Gameplay integration — 2026-09-27
+
+Scope: the user's requested founder adaptation, navigation teacher/curriculum,
+player care/reward, and visible embodiment. Repair existing world, biochemical,
+trainer, input, and animation paths. This is not founder promotion or an overnight
+training campaign. Source assets and unrelated Blender/cache files are preserved.
+
+## Founder and training
+
+Requirements: AOA-FOUND-001, AOA-SENSE-001/002, AOA-AUTH-001 through 005,
+AOA-GEN-001/007/008, AOA-PERSIST-001/003.
+
+Explicit `--adapt-terrain` accepts the sealed object-slot cohort, reconstructs its
+native inherited graph, compiles terrain sensing, and checks every source/target,
+route, synapse kind, and persistent address-map digest. Every learned foundation
+weight is retained bit-for-bit. The new asset has a different sensing identity;
+its receipt binds source and target digests and the inherited founder seed. Old
+actor moments and value estimates are deliberately reset. No lifetime memory,
+body state, or saved genome is silently rewritten.
+
+Fresh terrain cohorts use current calibrated genetic chemistry, including waking
+tiredness, reduced sleeping upkeep, and care signals. N2048 candidate New Game,
+pilot, warm-up, initial/resumed PPO, and successor admission derive their profile
+from the actual asset. Warm-up manifests may name `source_asset` so imitation can
+retain the adapted weights. Current lesson campaigns reject an unadapted legacy
+source. The old builtin Nano512 remains available, not silently promoted/replaced.
+
+`--teacher-adapted SOURCE OUTPUT TICKS WORLD_SEED LESSON` produces demonstrations
+from the adapted foundation, with its original inherited seed and new world seed.
+
+## Introductory navigation
+
+Requirements: AOA-WORLD-006, AOA-SENSE-001/002, AOA-MOTOR-001/004/007,
+AOA-LEARN-010, AOA-GAME-002.
+
+The teacher's state is separate from the learner. It knows the scenario's food
+identity for demonstration selection, but chooses hidden-food movement only from
+a previously observed food vector, sensed movement/orientation, and the local range fan. It
+cannot select an invisible food candidate. With no sighting it scans its head,
+recenters, and turns its body. Remembered food distance/bearing is updated by
+actual interval displacement, so a detour does not turn into endless movement
+along the original bearing. It ingests only at sensed contact. Clearance causes
+body turns and short forward detours; reacquired food updates the remembered
+heading. The introductory detour uses a bounded short clearance sequence, not a
+general path planner or a runtime NPC policy. Unused orientation holds gaze.
+
+Food direction, distance, and lateral offset vary by seed. In the first wall
+lesson a closing gate begins away from the sight line, then moves into it after
+two world ticks; its placement leaves room beyond the initial short approaches.
+This deliberately teaches sighting → occlusion → detour → reacquisition → meal.
+Teacher acceptance requires initial visibility, a later missing food observation,
+actual movement, consumption, and no blocked actions. The teacher-free cohort
+uses the same scenery and gate; no teacher state or answers enter the learner.
+Other lessons search with terrain senses after hazard separation or brief recovery.
+
+## Care and deliberate reward
+
+Requirements: AOA-GAME-001/002/007, AOA-SENSE-001, AOA-BIO-011/018,
+AOA-AUTH-001 through 005, AOA-LEARN-010, AOA-PERSIST-003.
+
+The user selected gentle touch, optional play, and a separate deliberate praise
+reward. Ordinary controls: select a creature; C touches gently; J offers/repositions
+one reusable physical plaything; K praises. Text entry blocks these shortcuts.
+The Hand acts at the selected world position. Touch requires physical reach and
+unblocked contact; praise requires local range and an unblocked source path.
+Dead/missing targets are rejected. Play offers ordinary investigation/contact
+opportunities and never selects the creature's action or forces enjoyment.
+
+The world owns a bounded, saved pending care stimulus per living individual.
+Duplicate presses before one tick do not stack their dose. Normal action biology
+or passive biology consumes it exactly once at the next boundary, inside existing
+rollback authority. Tactile/auditory channels carry the corresponding cue. No UI
+copy of chemistry advances independently, and no host reward/gradient is injected.
+
+Touch uses existing social-contact emitters. New founder alleles express this
+care circuit in newborns too, instead of waiting for mature expression. Praise
+uses an inherited PlayerReward emitter into a short regulatory pulse (chemical
+21, retention .25, default release .6), an inherited endocrine Extension0 receptor,
+and the inherited value-profile weight .3. Both homologs receive the construction
+genes; ordinary genetic expression/recombination/mutation remain in charge.
+Positive pulse arrival contributes measured reinforcement. Pulse clearance ends
+reward without punishing the next action. Existing eligibility supplies temporal
+credit; this does not label or force a particular next action. The player panel
+shows actual praise concentration alongside separate energy/tiredness/needs.
+
+## Visible embodiment
+
+Requirements: AOA-INV-003/011, AOA-AUTH-002, AOA-MOTOR-004, AOA-GAME-007.
+
+Astra repaired the existing skinned Hearthling projection. Authoritative body yaw
+sets model facing even during a turn without translation. Authoritative head
+offset replaces the authored idle yaw after animation sampling, retaining nod
+and roll. Repeated projection does not accumulate yaw. The existing gait follows
+actual displacement, so biological locomotor limits reduce visible stride travel;
+real sleep still selects the existing sleep clip. No GLB, manifest digest, motor
+controller, or biology was replaced by animation state.
+
+## Verification and limits
+
+Executed evidence:
+
+- Combined foundation-training/Bevy/production-assets binaries build successfully.
+- Explicit adaptation preserved all 32,768 weight bits and checked identical
+  synapse coordinates. The unpromoted asset and receipt are bundled at
+  `assets/founders/terrain-care-n2048-v1`.
+- Final navigation layouts at seeds 539366000 and 539366002 completed in 20 and
+  22 decisions, respectively. Each passed sighting/occlusion/reacquisition gates,
+  consumed one meal, and had no blocked actions. GPU replay maximum logit error
+  was 0.0000038146973. Receipts: `terrain-teacher-20260927-004/005` under
+  `target/founder-training`.
+- Hazard avoidance completed in 13 decisions at seed 539366010; recovery
+  completed in four decisions at seed 539366013 after ordinary biological
+  fatigue preconditioning. Both consumed one meal and passed their distinct
+  lesson gates and replay parity. These are bounded introductory checks,
+  not the complete 32-demonstration corpus.
+- A four-decision teacher-free PPO cycle sealed its exported checkpoint and
+  verified the next cohort's decision capture and optimizer rebound:
+  `target/founder-training/terrain-handoff-20260927-006`. It had no blocked
+  actions or deaths; this small integration check consumed no meal.
+- Focused existing world tests passed for gene-controlled touch/praise, one-time
+  consumption on direct and passive action paths, pending-care save restoration,
+  and praise clearance without negative reinforcement. The aligned food-bearing
+  regression passed. The focused animation yaw/gaze test and shipping GLB
+  animation validator passed.
+- A 90-second GPU-required ordinary New Game smoke with the bundled N2048
+  candidate exited successfully on the RTX 3050. The real Hearthling rendered.
+  Evidence: `target/founder-training/terrain-visual-20260927-002` (isolated
+  save/assets). The first launch exposed a stale Nano512-only frontend exact-save
+  check; it now requires the explicitly selected founder class while retaining
+  exact cognitive checkpoint, population, seed, and GPU validation. Desktop
+  window discovery/control timed out, so interactive C/J/K and live head-turn
+  acceptance remain unverified. This smoke is not sustained gameplay evidence.
+
+The learner check exposed floating-point bearing components a few ULPs outside
+the normalized range. Sensing now clamps its calculated normalized components;
+strict perception validation remains intact. The trainer reports the failing
+preparation stage and fails immediately on rejected perception instead of
+silently advancing passive world ticks without collecting decisions. Interrupted
+diagnostic runs remain preserved.
+
+Adaptation retains weights; it
+does not establish competence with changed senses. Demonstrations prove the
+teacher's physical sequence, not learned navigation. Direct praise is an effective
+biological stimulus, not proof of a trained response. Wall-time survival, learned
+sleep/restart retention, held-out navigation, and ordinary player-visible acceptance
+remain separate. No maze curriculum or complete articulated manipulation is claimed.

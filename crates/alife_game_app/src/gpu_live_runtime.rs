@@ -8007,6 +8007,58 @@ impl GpuLiveBrainRuntime {
         move_food_in_world(&mut self.world, source, position)
     }
 
+    pub fn provide_player_care(
+        &mut self,
+        organism: OrganismId,
+        source: Vec3f,
+        praise: bool,
+    ) -> Result<(), GameAppShellError> {
+        self.world.queue_player_care(organism, source, praise)?;
+        Ok(())
+    }
+
+    /// A reusable physical plaything. This offers inspection and contact without
+    /// setting a creature's intent, chemical reward, or social relationship.
+    pub fn offer_player_play(
+        &mut self,
+        organism: OrganismId,
+    ) -> Result<WorldEntityId, GameAppShellError> {
+        let object = self
+            .world
+            .organism_registry()
+            .get(organism)
+            .filter(|record| record.lifecycle().is_alive())
+            .and_then(|record| self.world.entity(record.world_entity_id()))
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let mut position = object.position;
+        position.x += 1.5 * object.body_yaw.cos();
+        position.z += 1.5 * object.body_yaw.sin();
+        let mut staged = self.world.clone();
+        let toy = if let Some(id) = staged.entity_id("player-plaything") {
+            if staged
+                .entity(id)
+                .is_none_or(|toy| toy.kind != WorldObjectKind::Token || toy.token_id != Some(1))
+            {
+                return Err(ScaffoldContractError::InvalidActionDecision.into());
+            }
+            staged.editor_move_object(id, position)?;
+            id
+        } else {
+            staged.editor_spawn_object(alife_world::WorldEditorSpawnSpec {
+                label: "player-plaything".to_string(),
+                kind: WorldObjectKind::Token,
+                organism_id: None,
+                position,
+                nutrition: 0.0,
+                hazard_pain: 0.0,
+                radius: 0.25,
+                token_id: Some(1),
+            })?
+        };
+        self.world = staged;
+        Ok(toy)
+    }
+
     pub fn residency_summary(&self) -> GpuLiveResidencySummary {
         GpuLiveResidencySummary {
             handle_count: self.handles.len(),
@@ -9702,7 +9754,7 @@ impl GpuLiveBrainRuntime {
         self.handles.get(&organism_id.raw()).copied()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "foundation-training"))]
     pub(crate) fn world_mut(&mut self) -> &mut HeadlessWorld {
         &mut self.world
     }
@@ -9867,7 +9919,7 @@ const fn gpu_consolidation_overlay_label(state: &ConsolidationState) -> &'static
     }
 }
 
-fn foundation_construction_development(
+pub(crate) fn foundation_construction_development(
     genome: &BrainGenome,
     capacity: &BrainCapacityClass,
     development: &DevelopmentState,

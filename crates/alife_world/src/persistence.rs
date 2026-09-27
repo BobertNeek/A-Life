@@ -11,8 +11,8 @@ use std::{
 
 use alife_core::{
     require_complete_v3_organism_state, require_version, ArchitectureMigrationError,
-    BrainCapacityClass, BrainScaleTier, CreatureGenome, FoundationWeightAsset, GenomeId,
-    HomeostaticSnapshot, MemoryId, OrganismId, PackedExperienceFrame, PhenotypeCompiler,
+    BodyEventDelta, BrainCapacityClass, BrainScaleTier, CreatureGenome, FoundationWeightAsset,
+    GenomeId, HomeostaticSnapshot, MemoryId, OrganismId, PackedExperienceFrame, PhenotypeCompiler,
     PhenotypeHash, PolicyBackend, ScaffoldContractError, SchemaKind, SchemaVersions, SensorProfile,
     TeacherPerceptionChannel, Tick, Validate, Vec3f, WorldEntityId,
 };
@@ -1097,6 +1097,8 @@ pub struct WorldSaveState {
     pub audible_utterances: Vec<AudibleUtterance>,
     #[serde(default)]
     pub last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub pending_player_care: BTreeMap<u64, BodyEventDelta>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub organism_records: Option<Vec<WorldOrganismRecord>>,
     #[serde(default)]
@@ -1282,6 +1284,8 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             next_utterance_id: Option<u64>,
             #[serde(default)]
             last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
+            #[serde(default)]
+            pending_player_care: BTreeMap<u64, BodyEventDelta>,
             #[serde(default, deserialize_with = "deserialize_present_organism_records")]
             organism_records: Option<Vec<WorldOrganismRecord>>,
             #[serde(default)]
@@ -1368,6 +1372,7 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             last_touched_entities: wire.last_touched_entities,
             audible_utterances: wire.audible_utterances,
             last_creature_utterance_ticks: wire.last_creature_utterance_ticks,
+            pending_player_care: wire.pending_player_care,
             organism_records: wire.organism_records,
             ecology: wire.ecology,
             voxel_backend: wire.voxel_backend,
@@ -2142,6 +2147,7 @@ impl WorldSaveState {
             last_touched_entities: parts.last_touched_entities,
             audible_utterances: parts.audible_utterances,
             last_creature_utterance_ticks: parts.last_creature_utterance_ticks,
+            pending_player_care: parts.pending_player_care,
             organism_records,
             ecology: parts.ecology,
             voxel_backend: None,
@@ -2299,6 +2305,22 @@ impl WorldSaveState {
             }
         }
         self.validate_organism_records()?;
+        for (id, event) in &self.pending_player_care {
+            event.validate_contract()?;
+            if !self.organism_records.as_ref().is_some_and(|records| {
+                records.iter().any(|record| {
+                    record.organism_id().raw() == *id && record.lifecycle().is_alive()
+                })
+            }) || event.energy != 0.0
+                || event.damage != 0.0
+                || event.temperature_stress != 0.0
+                || event.nutrition != 0.0
+                || event.sleep_recovery != 0.0
+                || event.mating_opportunity != 0.0
+            {
+                return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            }
+        }
         let habitat_creatures = self
             .habitats
             .memberships()
@@ -2332,6 +2354,7 @@ impl WorldSaveState {
             ecology: self.ecology.clone(),
             audible_utterances: self.audible_utterances.clone(),
             last_creature_utterance_ticks: self.last_creature_utterance_ticks.clone(),
+            pending_player_care: self.pending_player_care.clone(),
             habitats: self.habitats.clone(),
             organism_records: self.organism_records.clone(),
         };

@@ -7,6 +7,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mode = args
         .next()
         .ok_or("usage: train_n2048_care --pilot|--teacher-pilot|--cycle OUTPUT_DIRECTORY [TICKS] [--seed N] [--food-after-world-tick N] | --resume-cycle PREVIOUS_DIRECTORY OUTPUT_DIRECTORY [TICKS] [--seed N]")?;
+    if mode == "--teacher-adapted" {
+        let source = std::path::PathBuf::from(args.next().ok_or("missing adaptation source")?);
+        let output = std::path::PathBuf::from(args.next().ok_or("missing teacher output")?);
+        let ticks = args
+            .next()
+            .ok_or("missing ticks")?
+            .to_string_lossy()
+            .parse::<usize>()?;
+        let seed = args
+            .next()
+            .ok_or("missing seed")?
+            .to_string_lossy()
+            .parse::<u64>()?;
+        let lesson = match args
+            .next()
+            .ok_or("missing lesson")?
+            .to_string_lossy()
+            .as_ref()
+        {
+            "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
+            "obstacle_navigation" => alife_game_app::FoundationTeacherLesson::ObstacleNavigation,
+            "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,
+            "recovery" => alife_game_app::FoundationTeacherLesson::Recovery,
+            _ => return Err("unknown lesson".into()),
+        };
+        if args.next().is_some() {
+            return Err("unexpected adapted teacher argument".into());
+        }
+        let receipt = alife_game_app::run_adapted_foundation_teacher_pilot(
+            &source, &output, seed, ticks, lesson,
+        )?;
+        println!("{}", serde_json::to_string_pretty(&receipt)?);
+        return Ok(());
+    }
+    if mode == "--adapt-terrain" {
+        let source = std::path::PathBuf::from(args.next().ok_or("missing source cohort")?);
+        let output = std::path::PathBuf::from(args.next().ok_or("missing adaptation output")?);
+        if args.next().is_some() {
+            return Err("unexpected adaptation argument".into());
+        }
+        let receipt = alife_game_app::adapt_foundation_to_terrain(&source, &output)?;
+        println!("{}", serde_json::to_string_pretty(&receipt)?);
+        return Ok(());
+    }
     if mode == "--inspect-cycle" {
         let directory = std::path::PathBuf::from(args.next().ok_or("missing cycle directory")?);
         if args.next().is_some() {

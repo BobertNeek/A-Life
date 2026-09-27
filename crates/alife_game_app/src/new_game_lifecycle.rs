@@ -122,6 +122,7 @@ pub fn stage_phase3_new_game_with_founder(
         NewGameFounderSelection::N2048Candidate { asset_path } => {
             config.brain_class = BrainScaleTier::Standard2048;
             let asset = FoundationWeightAsset::decode_canonical(&fs::read(asset_path)?)?;
+            config.sensor_profile = asset.manifest().sensor_profile();
             alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?
         }
     };
@@ -190,6 +191,15 @@ fn create_canonical_new_game_runtime_inner(
         _ => BrainScaleTier::Nano512,
     };
     let staged = stage_phase3_new_game_with_founder(request, founder)?;
+    let sensor_profile = staged
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .and_then(|record| record.genome().n2048_foundation_candidate.as_ref())
+        .map_or(SensorProfile::GroundedObjectSlotsV1, |asset| {
+            asset.manifest().sensor_profile()
+        });
     let staging_path = staging_save_path(&staged.save_path)?;
     let archive_root = lineage_archive_root(&staged.save_path)?;
     if staging_path.exists() || archive_root.exists() {
@@ -213,7 +223,7 @@ fn create_canonical_new_game_runtime_inner(
             staged.world,
             staged.save.deterministic_seed,
             brain_class,
-            SensorProfile::GroundedObjectSlotsV1,
+            sensor_profile,
             LineageLibraryConfig::profile_default(&archive_root),
             format!("phase3-new-game-{}", staged.save.deterministic_seed),
             ArchiveLearnedCapturePolicy::GeneticOnly,

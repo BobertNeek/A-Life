@@ -528,6 +528,7 @@ impl GpuLiveBrainRuntime {
             let force_preparation_failure = self.forced_memory_preparation_failures.remove(&raw);
             #[cfg(not(feature = "gpu-tests"))]
             let force_preparation_failure = false;
+            let mut preparation_stage = "receptors";
             let preparation = (|| -> Result<PreparedGpuBrainFrame, ScaffoldContractError> {
                 if force_preparation_failure {
                     return Err(ScaffoldContractError::InvalidMemoryQuery);
@@ -547,6 +548,7 @@ impl GpuLiveBrainRuntime {
                 let receptor_phenotype = NeuralReceptorPhenotype::compile(&resident.phenotype)?;
                 let receptor_effects =
                     NeuralReceptorEffects::from_frame(&neural_receptors, &receptor_phenotype)?;
+                preparation_stage = "grounded draft";
                 let draft = self.world.perception_frame_draft_indexed(
                     OrganismId(raw),
                     tick_before,
@@ -567,6 +569,7 @@ impl GpuLiveBrainRuntime {
                     .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
                 let sequence_id = ExperienceSequenceId(resident.next_sequence);
                 sequence_id.validate()?;
+                preparation_stage = "baseline recall";
                 let prepared_recall = memory.recall_frame(&draft)?;
                 let baseline_context = cognitive_context_for_recall(
                     OrganismId(raw),
@@ -574,6 +577,7 @@ impl GpuLiveBrainRuntime {
                     &prepared_recall,
                     topology,
                 )?;
+                preparation_stage = "baseline finalization";
                 let baseline_prepared = prepared_recall
                     .clone()
                     .with_cognitive_context(baseline_context.clone())?;
@@ -602,6 +606,7 @@ impl GpuLiveBrainRuntime {
                     &topology_evidence,
                     receptor_effects,
                 )?;
+                preparation_stage = "attention selection";
                 let attention = select_focal_targets(
                     OrganismId(raw),
                     sequence_id,
@@ -611,10 +616,12 @@ impl GpuLiveBrainRuntime {
                     attention_selection_policy_for(&resident.phenotype),
                 )?;
                 resident.attention_hysteresis = attention.hysteresis;
+                preparation_stage = "focal routing";
                 let routed_draft = route_focal_candidates(draft, &attention)?;
                 attention_context_wall_ns = attention_context_wall_ns
                     .saturating_add(attention_context_started.map_or(0, elapsed_ns));
                 let topology_concept_started = measure_preparation.then(Instant::now);
+                preparation_stage = "routed recall";
                 let routed_recall = memory.recall_frame(&routed_draft)?;
                 let cognitive_context = cognitive_context_for_recall(
                     OrganismId(raw),
@@ -624,6 +631,7 @@ impl GpuLiveBrainRuntime {
                 )?;
                 let cognitive_context =
                     cognitive_context_with_attention(cognitive_context, attention)?;
+                preparation_stage = "cognitive projection";
                 let cognitive_projection = cognitive_projection_for_draft(
                     &routed_draft,
                     &routed_recall,
@@ -633,12 +641,14 @@ impl GpuLiveBrainRuntime {
                 )?;
                 let cognitive_context =
                     cognitive_context_with_projection(cognitive_context, cognitive_projection)?;
+                preparation_stage = "routed finalization";
                 let prepared_recall = routed_recall.with_cognitive_context(cognitive_context)?;
                 let (frame, memory_recall) = prepared_recall.finalize(routed_draft)?;
                 memory_recall.validate_for_frame(&frame)?;
                 topology_concept_wall_ns = topology_concept_wall_ns
                     .saturating_add(topology_concept_started.map_or(0, elapsed_ns));
                 let gpu_upload_started = measure_preparation.then(Instant::now);
+                preparation_stage = "GPU memory upload";
                 let memory_upload = self
                     .backend
                     .prepare_memory_context_upload(handle, &frame, &memory_recall)?
@@ -659,6 +669,9 @@ impl GpuLiveBrainRuntime {
             match preparation {
                 Ok(prepared) => batch.push(prepared),
                 Err(error) => {
+                    if std::env::var_os("ALIFE_FOUNDATION_PROFILE").is_some() {
+                        eprintln!("foundation perception preparation failed at {tick_before:?} in {preparation_stage}: {error:?}");
+                    }
                     self.last_memory_preparation_errors
                         .push((OrganismId(raw), error));
                     summaries_by_organism.insert(

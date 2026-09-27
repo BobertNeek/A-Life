@@ -67,7 +67,13 @@ impl BiologicalValueProfile {
             + self
                 .hormones
                 .iter()
-                .zip(delta.hormones.to_array())
+                .zip({
+                    let mut hormones = delta.hormones.to_array();
+                    // Extension0 is the explicit praise pulse: its clearance
+                    // ends reinforcement; it does not punish the next action.
+                    hormones[9] = hormones[9].max(0.0);
+                    hormones
+                })
                 .map(|(w, d)| w * d)
                 .sum::<f32>()
             + self.energy * energy;

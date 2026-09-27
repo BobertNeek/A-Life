@@ -495,6 +495,15 @@ pub struct BiochemicalGraphChromosome {
 }
 
 impl BiochemicalGraphChromosome {
+    pub fn with_player_reward(mut self, side: AlleleSide) -> Result<Self, ScaffoldContractError> {
+        let homolog = match side {
+            AlleleSide::Maternal => &mut self.maternal,
+            AlleleSide::Paternal => &mut self.paternal,
+        };
+        *homolog = homolog.clone().with_player_reward()?;
+        self.validate_contract()?;
+        Ok(self)
+    }
     /// Change construction genes explicitly, never a loaded organism's chemistry.
     pub fn with_waking_recovery(mut self, side: AlleleSide) -> Result<Self, ScaffoldContractError> {
         let homolog = match side {

@@ -86,6 +86,7 @@ pub fn create_canonical_new_game_with_n2048_candidate(
     let mut expected = CanonicalNewGameConfig::phase3(config.world_seed, config.founder_count)?;
     expected.brain_class = BrainScaleTier::Standard2048;
     expected.founder_seed_base = config.founder_seed_base;
+    expected.sensor_profile = foundation.manifest().sensor_profile();
     if config.founder_seed_base == 0
         || *config != expected
         || foundation.manifest().capacity_class_id() != BrainCapacityClass::N2048_ID
@@ -248,7 +249,8 @@ fn calibrate_inherited_founder_biochemistry(
             .chemistry
             .graph
             .clone()
-            .with_waking_recovery(allele)?;
+            .with_waking_recovery(allele)?
+            .with_player_reward(allele)?;
     }
     Ok(())
 }

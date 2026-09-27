@@ -677,6 +677,7 @@ pub struct HeadlessWorld {
     ecology: EcologyState,
     speech: SpatialSpeechBus,
     last_creature_utterance_ticks: BTreeMap<u64, Tick>,
+    pending_player_care: BTreeMap<u64, BodyEventDelta>,
     tracked_objects: TrackedObjectRegistry,
     habitats: HabitatAuthority,
     organism_registry: WorldOrganismRegistry,
@@ -772,6 +773,7 @@ pub(crate) struct HeadlessWorldPersistenceParts {
     pub ecology: EcologyState,
     pub audible_utterances: Vec<AudibleUtterance>,
     pub last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
+    pub pending_player_care: BTreeMap<u64, BodyEventDelta>,
     pub habitats: HabitatAuthority,
     pub organism_records: Option<Vec<WorldOrganismRecord>>,
 }
@@ -893,6 +895,7 @@ impl HeadlessWorld {
             ecology: EcologyState::default(),
             speech: SpatialSpeechBus::default(),
             last_creature_utterance_ticks: BTreeMap::new(),
+            pending_player_care: BTreeMap::new(),
             tracked_objects: TrackedObjectRegistry::new(
                 seed,
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
@@ -936,6 +939,51 @@ impl HeadlessWorld {
 
     pub const fn tick(&self) -> Tick {
         self.tick
+    }
+
+    /// The Hand supplies a local physical stimulus, not an action selection.
+    /// Repeated input before one biological boundary cannot stack its dose.
+    pub fn queue_player_care(
+        &mut self,
+        organism: OrganismId,
+        source: Vec3f,
+        praise: bool,
+    ) -> Result<(), ScaffoldContractError> {
+        source.validate()?;
+        let record = self
+            .organism_registry
+            .get(organism)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let body = self
+            .objects
+            .get(&record.world_entity_id().raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let reach = if praise {
+            HEADLESS_VISION_RADIUS
+        } else {
+            HEADLESS_CONTACT_RADIUS
+        };
+        if !record.lifecycle().is_alive()
+            || distance(source, body.position) > reach
+            || if praise {
+                self.blocking_object_between(source, body.position)
+                    .is_some()
+            } else {
+                !self.physical_contact_reachable(source, body.position)
+            }
+        {
+            return Err(ScaffoldContractError::InvalidActionDecision);
+        }
+        let event = self
+            .pending_player_care
+            .entry(organism.raw())
+            .or_insert_with(BodyEventDelta::zero);
+        if praise {
+            event.player_reward = 1.0;
+        } else {
+            event.social_contact = 0.25;
+        }
+        Ok(())
     }
 
     pub fn habitat_authority(&self) -> &HabitatAuthority {
@@ -1130,6 +1178,13 @@ impl HeadlessWorld {
                         body_events
                             .get(&organism_id.raw())
                             .copied()
+                            .unwrap_or_else(BodyEventDelta::zero),
+                    );
+                    let body_event = combine_body_event(
+                        body_event,
+                        candidate
+                            .pending_player_care
+                            .remove(&organism_id.raw())
                             .unwrap_or_else(BodyEventDelta::zero),
                     );
                     candidate
@@ -1779,6 +1834,13 @@ impl HeadlessWorld {
             digest.write_u64(*organism_id);
             digest.write_u64(tick.raw());
         }
+        if !self.pending_player_care.is_empty() {
+            digest.write_bytes(b"player-care-v1");
+            digest.write_bytes(
+                &serde_json::to_vec(&self.pending_player_care)
+                    .map_err(|_| ScaffoldContractError::InvalidId)?,
+            );
+        }
 
         let organisms = self.organism_entity_ids();
         digest.write_sequence_len(organisms.len());
@@ -2399,6 +2461,7 @@ impl HeadlessWorld {
             last_touched_entities: self.last_touched_entities.clone(),
             ecology: self.ecology.clone(),
             audible_utterances: self.speech.snapshot(),
+            pending_player_care: self.pending_player_care.clone(),
             last_creature_utterance_ticks: self
                 .last_creature_utterance_ticks
                 .iter()
@@ -2504,6 +2567,21 @@ impl HeadlessWorld {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
+        for (id, event) in &parts.pending_player_care {
+            event.validate_contract()?;
+            if !organism_registry
+                .get(OrganismId(*id))
+                .is_some_and(|record| record.lifecycle().is_alive())
+                || event.energy != 0.0
+                || event.damage != 0.0
+                || event.temperature_stress != 0.0
+                || event.nutrition != 0.0
+                || event.sleep_recovery != 0.0
+                || event.mating_opportunity != 0.0
+            {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
         let world = Self {
             seed: parts.seed,
             disable_age_death: parts.disable_age_death,
@@ -2519,6 +2597,7 @@ impl HeadlessWorld {
             last_action_result: None,
             ecology: parts.ecology,
             speech: SpatialSpeechBus::restore(parts.audible_utterances, parts.tick)?,
+            pending_player_care: parts.pending_player_care,
             last_creature_utterance_ticks: parts
                 .last_creature_utterance_ticks
                 .into_iter()
@@ -2800,6 +2879,13 @@ impl HeadlessWorld {
         let gain =
             |capability| record.map_or(1.0, |record| record.embodiment().sensor_gain(capability));
         let yaw = observer.body_yaw + observer.head_yaw;
+        if let Some(event) = observer
+            .organism_id
+            .and_then(|id| self.pending_player_care.get(&id.raw()))
+        {
+            sensory.channels.tactile_contact[0] = event.social_contact;
+            sensory.channels.auditory_acoustic[1] = event.player_reward;
+        }
         let lateral = Vec3f::new(-yaw.sin() * 0.25, 0.0, yaw.cos() * 0.25);
         let samples = [
             add(observer.position, lateral),
@@ -3376,6 +3462,12 @@ impl HeadlessWorld {
             ..BodyEventDelta::zero()
         };
         let body_event = combine_body_event(ambient_event, action_and_hazard_event);
+        let body_event = combine_body_event(
+            body_event,
+            self.pending_player_care
+                .remove(&bundle.organism_id.raw())
+                .unwrap_or_else(BodyEventDelta::zero),
+        );
         body_event.validate_contract()?;
         if let Some(neural) = neural {
             self.organism_registry
@@ -3577,13 +3669,20 @@ impl HeadlessWorld {
     ) -> Result<HeadlessActionBiologyReceipt, ScaffoldContractError> {
         let biology_before =
             self.validate_registered_action(command, world_entity_id, outcome_tick)?;
-        let action_result = match mode {
+        let mut action_result = match mode {
             RegisteredCommandMode::Legacy => self.apply_command(command)?,
             RegisteredCommandMode::Neural {
                 speech_payload,
                 prompted,
             } => self.apply_neural_command(command, speech_payload, prompted)?,
         };
+        action_result.body_event = combine_body_event(
+            action_result.body_event,
+            self.pending_player_care
+                .remove(&command.organism_id.raw())
+                .unwrap_or_else(BodyEventDelta::zero),
+        );
+        self.last_action_result = Some(action_result.clone());
         self.organism_registry
             .advance_biology(command.organism_id, outcome_tick, action_result.body_event)
             .map_err(map_organism_registry_error)?;
@@ -5758,6 +5857,7 @@ fn combine_body_event(total: BodyEventDelta, event: BodyEventDelta) -> BodyEvent
         temperature_stress: (total.temperature_stress + event.temperature_stress).clamp(0.0, 1.0),
         nutrition: (total.nutrition + event.nutrition).clamp(0.0, 1.0),
         social_contact: (total.social_contact + event.social_contact).clamp(0.0, 1.0),
+        player_reward: (total.player_reward + event.player_reward).clamp(0.0, 1.0),
         sleep_recovery: (total.sleep_recovery + event.sleep_recovery).clamp(0.0, 1.0),
         mating_opportunity: (total.mating_opportunity + event.mating_opportunity).clamp(0.0, 1.0),
     }

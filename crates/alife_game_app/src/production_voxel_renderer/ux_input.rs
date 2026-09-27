@@ -222,6 +222,59 @@ pub(super) fn handle_fvr05_production_ux_input(
             ux.last_action = "Food placement unavailable".to_string();
         }
     }
+    #[cfg(feature = "gpu-runtime")]
+    for (key, label) in [
+        (KeyCode::KeyC, "Gentle touch"),
+        (KeyCode::KeyJ, "Play"),
+        (KeyCode::KeyK, "Praise reward"),
+    ] {
+        if keyboard.just_pressed(key) && !ux.debug_mode {
+            let result = (|| -> Result<(), crate::GameAppShellError> {
+                let runtime = gpu_runtime.as_mut().ok_or_else(|| {
+                    crate::GameAppShellError::InvalidProductionFrontend {
+                        message: "GPU runtime unavailable".to_string(),
+                    }
+                })?;
+                let selected = selection
+                    .selected
+                    .and_then(|s| s.stable_id)
+                    .and_then(|id| runtime.runtime.world().entity(id))
+                    .filter(|object| object.kind == WorldObjectKind::Agent)
+                    .ok_or_else(|| crate::GameAppShellError::InvalidProductionFrontend {
+                        message: "select a living creature first".to_string(),
+                    })?;
+                let organism = selected
+                    .organism_id
+                    .ok_or(alife_core::ScaffoldContractError::InvalidId)?;
+                let hand_position = selected.position;
+                if key == KeyCode::KeyJ {
+                    runtime.runtime.offer_player_play(organism)?;
+                } else {
+                    runtime.runtime.provide_player_care(
+                        organism,
+                        hand_position,
+                        key == KeyCode::KeyK,
+                    )?;
+                }
+                frame.refresh_world_objects(runtime.runtime.world());
+                Ok(())
+            })();
+            match result {
+                Ok(()) => {
+                    ux.last_error = None;
+                    ux.last_action = if key == KeyCode::KeyJ {
+                        "Plaything offered; creature chooses whether to investigate".to_string()
+                    } else {
+                        format!("{label} offered; chemistry updates at the next simulation tick")
+                    };
+                }
+                Err(error) => {
+                    ux.last_error = Some(error.to_string());
+                    ux.last_action = format!("{label} unavailable");
+                }
+            }
+        }
+    }
     if keyboard.just_pressed(KeyCode::KeyS) {
         #[cfg(feature = "gpu-runtime")]
         if let Some(runtime) = gpu_runtime.as_mut() {

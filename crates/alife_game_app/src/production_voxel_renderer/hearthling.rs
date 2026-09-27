@@ -25,7 +25,6 @@ struct SharedHearthlingAssets {
 pub(super) struct HearthlingVisual {
     appearance: CreatureAppearanceGenome,
     previous_position: Vec3,
-    facing: Quat,
     walk_seconds: f32,
     moved: bool,
 }
@@ -50,7 +49,6 @@ pub(super) fn spawn(world: &mut World, root: Entity, appearance: CreatureAppeara
         HearthlingVisual {
             appearance,
             previous_position,
-            facing: Quat::IDENTITY,
             walk_seconds: 0.0,
             moved: false,
         },
@@ -71,6 +69,33 @@ struct HearthlingSource(Handle<Gltf>);
 
 #[derive(Component)]
 pub(super) struct InheritedBoneScale(Vec3);
+
+#[derive(Component)]
+pub(super) struct HearthlingHead(Entity);
+
+fn body_rotation(world_yaw: f32) -> Quat {
+    // World yaw zero faces +X; the exported character faces +Z.
+    Quat::from_rotation_y(std::f32::consts::FRAC_PI_2 - world_yaw)
+}
+
+fn head_rotation(sampled: Quat, world_head_yaw: f32) -> Quat {
+    // Keep the authored nod/roll, replacing its idle yaw with the chosen gaze.
+    let twist = Quat::from_xyzw(0.0, sampled.y, 0.0, sampled.w).normalize();
+    (sampled * twist.inverse()) * Quat::from_rotation_y(-world_head_yaw)
+}
+
+pub(super) fn apply_head_direction(
+    roots: Query<&Fvr04ProductionCreatureVisualMarker>,
+    mut heads: Query<(&mut Transform, &HearthlingHead)>,
+) {
+    // Every authored clip samples head rotation, even while paused, so this
+    // projection replaces that frame's yaw rather than accumulating rotations.
+    for (mut transform, head) in &mut heads {
+        if let Ok(marker) = roots.get(head.0) {
+            transform.rotation = head_rotation(transform.rotation, marker.head_yaw);
+        }
+    }
+}
 
 pub(super) fn apply_inherited_proportions(mut bones: Query<(&mut Transform, &InheritedBoneScale)>) {
     // All three authored clips sample scale on these bones, including at speed zero.
@@ -157,6 +182,9 @@ fn ready(
     let mut mesh_count = 0;
     for entity in children.iter_descendants(event.entity) {
         if let Ok(name) = names.get(entity) {
+            if name.as_str() == "head" {
+                commands.entity(entity).insert(HearthlingHead(root));
+            }
             let ear = f32::from(visual.appearance.ear_muzzle_trait) / 15.0;
             let tail = f32::from(visual.appearance.tail_trait) / 15.0;
             let scale = match name.as_str() {
@@ -270,18 +298,15 @@ pub(super) fn animate(
         let distance = Vec2::new(delta.x, delta.z).length();
         visual.moved = !ux.settings.paused && distance > f32::EPSILON;
         if visual.moved {
-            visual.facing = Quat::from_rotation_y(delta.x.atan2(delta.z));
             visual.walk_seconds = advance_walk(
                 distance,
                 transform.scale.z.abs().max(f32::EPSILON),
                 visual.walk_seconds,
             );
         }
-        if !ux.settings.paused {
-            transform.rotation = transform
-                .rotation
-                .slerp(visual.facing, 1.0 - (-10.0 * time.delta_secs()).exp());
-        }
+        // Turning in place is a real action too. Heading must never be
+        // inferred from displacement, which can be blocked or sideways.
+        transform.rotation = body_rotation(marker.body_yaw);
     }
     for (mut player, mut model) in &mut players {
         let Ok((_, visual, marker)) = transforms.get(model.root) else {
@@ -330,6 +355,21 @@ pub(super) fn animate(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn world_heading_and_chosen_gaze_replace_animation_yaw_without_drift() {
+        for yaw in [0.0, 0.7, -1.2, std::f32::consts::PI] {
+            let forward = body_rotation(yaw) * Vec3::Z;
+            assert!(forward.abs_diff_eq(Vec3::new(yaw.cos(), 0.0, yaw.sin()), 1e-6));
+            let chosen = head_rotation(Quat::from_rotation_y(0.15), yaw);
+            let gaze = body_rotation(0.0) * chosen * Vec3::Z;
+            assert!(gaze.abs_diff_eq(Vec3::new(yaw.cos(), 0.0, yaw.sin()), 1e-6));
+            let nod = Quat::from_rotation_x(0.35) * Quat::from_rotation_y(0.15);
+            let once = head_rotation(nod, yaw);
+            let twice = head_rotation(once, yaw);
+            assert!(once.abs_diff_eq(twice, 1e-6));
+        }
+    }
 
     #[test]
     fn one_step_tracks_authored_foot_travel_at_each_inherited_size() {

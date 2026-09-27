@@ -2,6 +2,39 @@
 
 Use PowerShell 7 from the authoritative repository root. The launcher has separate fidelity preparation and bounded campaign modes. Neither a completed teacher corpus nor a successful training cycle by itself proves learned care.
 
+Terrain-vision adaptation is explicit. Before resuming the old object-slot founder,
+run `train_n2048_care --adapt-terrain SOURCE_COHORT NEW_DIRECTORY`. This accepts a
+sealed old cycle, preserves every weight at identical inherited synapse coordinates,
+creates a different profile-bound asset, and records `adaptation.json`. Old Adam
+moments and the value head are reset because observations and biology changed.
+The first resumed cohort installs current genetic founder chemistry (separate
+tiredness, slowed sleep metabolism, and player praise). Source assets, saved
+individuals, and old receipts remain unchanged. Campaign `-Source` accepts the
+adaptation directory. It is an unpromoted candidate.
+
+The verified adapted checkpoint is bundled at
+`assets/founders/terrain-care-n2048-v1`. Use that directory, or a sealed terrain
+warm-up/cycle derived from it, for the next campaign. Do not resume the old
+object-slot checkpoint directly into these lessons.
+
+Fresh training uses GroundedTerrainVisionV1. Candidate New Game launches derive
+their sensing profile from the selected asset; the legacy builtin Nano512 option
+remains available. Select the adapted N2048 asset explicitly for a vision founder.
+No trained founder is promoted by changing a default or relabeling an old asset.
+
+For terrain demonstrations, use `train_n2048_care --teacher-adapted ADAPTATION_DIRECTORY OUTPUT_DIRECTORY TICKS WORLD_SEED obstacle_navigation`.
+This retains the adapted founder's inherited seed while varying the world layout.
+An imitation manifest must name that same foundation in its optional `source_asset`
+field (relative to the manifest, or an absolute path); replay still checks every
+demonstration's founder identity and foundation digest. Do not feed the old
+object-slot corpus into terrain warm-up.
+
+After rebuilding the release CLI, `scripts/collect_n2048_care_lessons.ps1 -Source assets/founders/terrain-care-n2048-v1 -Output target/founder-training/NEW_CORPUS`
+collects the balanced 32-lesson terrain corpus from this explicit source. Every
+lesson stops at its measured meal, within a 128-decision cap. Its existing checks
+now accept needed scan/body-turn actions between avoidance or recovery and eating,
+and bind every demonstration and the warm-up manifest to the adapted asset.
+
 ```powershell
 Set-Location -LiteralPath 'D:\A life'
 & 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -File .\scripts\run_n2048_care_training.ps1 -Mode Status
@@ -36,8 +69,8 @@ The teacher's action sequence is a causal contract, not a script of desired labe
 | --- | --- | --- |
 | Feeding | Approach the sensed food until contact, then Ingest. | Movement reaches food without a block; the ingestion receipt says Consumed and energy rises. |
 | Hazard avoidance | Avoid the sensed nearby hazard; when its sensed distance is safe, approach the food behind the founder and ingest. | Distance from the hazard increases, there is no collision or block, and the creature resumes feeding instead of idling indefinitely. |
-| Obstacle navigation | Approach the sensed lateral waypoint until near it, then approach food around the blocker and ingest. | Both route sides are demonstrated; no move is blocked, and the food is actually consumed. The waypoint is currently another obstacle. Rotating the layout prevents memorizing one compass direction, but this remains a detour lesson rather than proof of general path planning. |
-| Recovery | Ordinary world aging first produces measurable fatigue; Rest before approaching reachable food, then Ingest. | Fatigue falls, brain ATP rises, and the creature resumes movement and eats. |
+| Obstacle navigation | First see food; a gate closes after two world ticks. Retain the observed heading, read the coarse range fan, turn toward clearance, take short steps, reacquire food, then ingest at contact. | Initial food sighting, later occlusion, actual movement, a consumed meal, and no blocked action are required. Food/layout vary by seed; no invisible food candidate or obstacle waypoint is used by the terrain teacher. This is an introductory detour, not maze competence. |
+| Recovery | Ordinary world aging first produces measurable fatigue; briefly Rest before searching for reachable food and ingesting. | Fatigue falls and the creature resumes movement and eats. Sleep supplies no meal energy; increased ATP is not a reward requirement. |
 
 The teacher selects known world objects, while the learner sees physical object slots and sealed consequences, not the teacher's object labels. World-spawned food, hazards, and obstacles now retain distinct chemical ranges across spawn orders; other physical channels still vary by object. The 32-lesson corpus at `target/founder-training/demonstrations-20260924-006/manifest.json` balances eight examples per lesson, covers both obstacle sides and several fatigue levels, and requires hazard Avoid → Approach → Ingest and recovery Rest → Approach → Ingest sequences. These are demonstrations, not learned-behavior proof.
 

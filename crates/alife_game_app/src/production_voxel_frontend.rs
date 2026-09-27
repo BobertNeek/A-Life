@@ -1260,7 +1260,13 @@ pub fn run_production_voxel_frontend_preflight(
             (launch_config, production_save, gpu_runtime_state)
         }
         ProductionWorldSource::NewGame { seed } => {
-            validate_exact_canonical_new_game_save(&save, seed, population)?;
+            let founder_class = match launch.new_game_founder {
+                crate::NewGameFounderSelection::N2048Candidate { .. } => {
+                    alife_core::BrainScaleTier::Standard2048
+                }
+                _ => alife_core::BrainScaleTier::Nano512,
+            };
+            validate_exact_canonical_new_game_save(&save, seed, population, founder_class)?;
             let config = save.config.clone();
             let gpu_runtime_state = fvr06_gpu_runtime_save_state(launch, &runtime, &config, &save)?;
             (config, save, gpu_runtime_state)
@@ -1399,6 +1405,7 @@ fn validate_exact_canonical_new_game_save(
     save: &PortableSaveFile,
     requested_seed: u64,
     requested_population: u16,
+    founder_class: alife_core::BrainScaleTier,
 ) -> Result<(), GameAppShellError> {
     let population = usize::from(requested_population);
     let organism_count = save
@@ -1423,7 +1430,7 @@ fn validate_exact_canonical_new_game_save(
     if requested_seed == 0
         || save.deterministic_seed != requested_seed
         || save.config.deterministic_seed != requested_seed
-        || save.config.brain_class != alife_core::BrainScaleTier::Nano512
+        || save.config.brain_class != founder_class
         || !save.config.features.gpu_backend_enabled
         || population == 0
         || organism_count != population

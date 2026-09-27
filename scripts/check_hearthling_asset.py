@@ -54,7 +54,9 @@ for animation in gltf['animations']:
     assert {'head', 'ear.L', 'ear.R', 'tail.00'} <= scaled_bones
     rotating_bones = {gltf['nodes'][c['target']['node']].get('name')
                       for c in animation['channels'] if c['target']['path'] == 'rotation'}
-    assert {'lid_upper.L', 'lid_lower.L', 'lid_upper.R', 'lid_lower.R'} <= rotating_bones
+    # Gaze replaces the authored head yaw after sampling. Keep a rotation track
+    # in every clip so the head's nod/roll always start from that frame's pose.
+    assert {'head', 'lid_upper.L', 'lid_lower.L', 'lid_upper.R', 'lid_lower.R'} <= rotating_bones
 triangles = sum(gltf['accessors'][p['indices']]['count'] // 3
                 for m in gltf['meshes'] for p in m['primitives'])
 assert triangles <= 32768, triangles

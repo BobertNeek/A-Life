@@ -70,7 +70,7 @@ Carry these findings into later reviews:
 - Feeding: review reach/obstruction and carried-object ownership semantics
   before changing them. Distance alone does not prove a legal meal.
 
-Groups 3–7 have not yet received this sequential end-to-end review. The biological
+The sequential reviews of groups 3–7 are recorded below. The biological
 10–30 minute food-free survival gate remains acceptance work; it is not a lesson
 to reward extended inactivity.
 

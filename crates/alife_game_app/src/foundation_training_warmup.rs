@@ -3,7 +3,7 @@
 use std::{collections::HashSet, path::Path};
 
 use alife_core::{
-    BrainScaleTier, CompiledSynapseKind, DecoderHeadKind, FoundationWeightAsset, SensorProfile,
+    BrainScaleTier, CompiledSynapseKind, DecoderHeadKind, FoundationWeightAsset,
     TrainingStageManifest,
 };
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile, GpuTrainingSamplingConfig};
@@ -24,6 +24,8 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 struct DemonstrationManifest {
     founder_seed_base: u64,
     pilots: Vec<String>,
+    #[serde(default)]
+    source_asset: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -105,10 +107,18 @@ pub fn run_foundation_imitation_warmup(
         return Err("warm-up requires 32 lessons and one nonzero founder seed".into());
     }
     std::fs::create_dir(output)?;
-    let source_asset = initial_n2048_care_asset(manifest.founder_seed_base)?;
+    let source_asset = if let Some(path) = &manifest.source_asset {
+        let root = manifest_path
+            .parent()
+            .ok_or("manifest has no parent directory")?;
+        FoundationWeightAsset::decode_canonical(&std::fs::read(root.join(path))?)?
+    } else {
+        initial_n2048_care_asset(manifest.founder_seed_base)?
+    };
     let mut config = alife_world::CanonicalNewGameConfig::phase3(manifest.founder_seed_base, 1)?;
     config.brain_class = BrainScaleTier::Standard2048;
     config.founder_seed_base = manifest.founder_seed_base;
+    config.sensor_profile = source_asset.manifest().sensor_profile();
     let mut game =
         alife_world::create_canonical_new_game_with_n2048_candidate(&config, &source_asset)?;
     game.world.set_age_death_disabled_for_new_game(true)?;
@@ -118,7 +128,7 @@ pub fn run_foundation_imitation_warmup(
         game.world,
         manifest.founder_seed_base,
         BrainScaleTier::Standard2048,
-        SensorProfile::GroundedObjectSlotsV1,
+        config.sensor_profile,
         alife_archive::LineageLibraryConfig::profile_default(output.join("lineage")),
         "n2048-imitation-warmup",
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
@@ -267,7 +277,7 @@ pub fn run_foundation_imitation_warmup(
         next_game.world,
         manifest.founder_seed_base,
         BrainScaleTier::Standard2048,
-        SensorProfile::GroundedObjectSlotsV1,
+        config.sensor_profile,
         alife_archive::LineageLibraryConfig::profile_default(output.join("next-lineage")),
         "n2048-imitation-warmup-next",
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,

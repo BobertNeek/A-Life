@@ -547,6 +547,7 @@ pub struct Fvr04CreatureExpressionSample {
     pub brain_neuron_count: Option<u32>,
     pub hunger: f32,
     pub body_energy: Option<f32>,
+    pub praise_signal: f32,
     pub fatigue: f32,
     pub fear: f32,
     pub cortisol: f32,
@@ -1057,6 +1058,8 @@ pub struct Fvr04ProductionCreatureVisualMarker {
     pub base_scale: Vec3,
     pub local_bounds: CreatureVisualBounds,
     pub surface_height: f32,
+    pub body_yaw: f32,
+    pub head_yaw: f32,
     pub phase: f32,
 }
 
@@ -2121,7 +2124,10 @@ pub fn spawn_fvr03_production_voxel_scene(
     configure_production_voxel_presentation_schedule(app);
     app.add_systems(
         bevy::prelude::PostUpdate,
-        hearthling::apply_inherited_proportions
+        (
+            hearthling::apply_inherited_proportions,
+            hearthling::apply_head_direction,
+        )
             .after(bevy::app::AnimationSystems)
             .before(bevy::transform::TransformSystems::Propagate),
     );
@@ -2896,6 +2902,8 @@ fn prepare_fvr04_creature_batch(
                     base_scale,
                     local_bounds,
                     surface_height,
+                    body_yaw: 0.0,
+                    head_yaw: 0.0,
                     phase,
                 },
             });
@@ -4599,6 +4607,7 @@ fn spawn_fvr04_prepared_creature_batch(
             brain_neuron_count: creature.record.brain_neuron_count,
             hunger: visual.cues.hunger.value,
             body_energy: None,
+            praise_signal: 0.0,
             fatigue: visual.cues.fatigue.value,
             fear: visual.cues.fear.value,
             cortisol: visual.endocrine.cortisol,
@@ -5446,7 +5455,7 @@ fn spawn_fvr05_production_ux_ui(app: &mut App) {
 }
 
 const V0_PLAYER_CONTROL_HINTS: &str =
-    "Click Select | E Place food | G Move food | Enter Speak | Space Pause/resume | F1 Help";
+    "Click Select | E Food | G Move food | C Touch | J Play | K Praise | Enter Speak | Space Pause | F1 Help";
 
 fn spawn_v0_player_experience_ui(app: &mut App) {
     app.world_mut().spawn((
@@ -5574,7 +5583,7 @@ fn sync_v0_player_control_strip(
         return;
     }
     let mut text = if ux.show_help {
-        "F1 Close help | Space Pause | 1/2/3 Speed | S Save | L Load\nClick Select | E Place food on selected ground | G Choose food to move | Enter Speak | Y Lineage\nArrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
+        "F1 Close help | Space Pause | 1/2/3 Speed | S Save | L Load\nClick Select | E Food on ground | G Move food | C Gentle touch | J Offer play | K Praise reward\nEnter Speak | Y Lineage | Arrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
     } else {
         V0_PLAYER_CONTROL_HINTS.to_string()
     };
@@ -5653,7 +5662,7 @@ fn sync_v0_player_control_strip(
 fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample) -> String {
     let display_name = v0_player_creature_name(&sample.display_label, sample.stable_id.raw());
     format!(
-        "{display_name}\n{} | {}\n\nHunger  {}\nEnergy  {}\nTiredness  {}\nSafety  {}\nSleepiness  {}",
+        "{display_name}\n{} | {}\n\nHunger  {}\nEnergy  {}\nTiredness  {}\nSafety  {}\nSleepiness  {}\nPraise  {}",
         sample.animation.label(),
         sample.expression.label(),
         v0_need_bar(sample.hunger),
@@ -5661,6 +5670,7 @@ fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample) -> String {
         v0_need_bar(sample.fatigue),
         v0_need_bar(1.0 - sample.fear),
         v0_need_bar(sample.sleep_pressure),
+        v0_need_bar(sample.praise_signal),
     )
 }
 

@@ -119,6 +119,122 @@ fn digest(asset: &FoundationWeightAsset) -> String {
         .collect()
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct FoundationAdaptationReceipt {
+    pub source_directory: std::path::PathBuf,
+    pub source_asset_digest: String,
+    pub adapted_asset_digest: String,
+    pub founder_seed_base: u64,
+    pub policy_version: u64,
+    pub preserved_weight_count: usize,
+    pub optimizer_reset: bool,
+    pub founder_biology_calibration: u16,
+}
+
+/// Explicit candidate migration. Personal state is absent, and the source is
+/// immutable. Changing observations invalidates old optimizer/value statistics.
+pub fn adapt_foundation_to_terrain(
+    previous: &Path,
+    output: &Path,
+) -> Result<FoundationAdaptationReceipt> {
+    let receipt: FoundationCycleReceipt =
+        serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
+    let source = FoundationWeightAsset::decode_canonical(&std::fs::read(
+        previous.join("trained.alife-foundation"),
+    )?)?;
+    if !receipt.next_cohort_optimizer_rebound
+        || digest(&source) != receipt.new_asset_digest
+        || source.manifest().sensor_profile() != SensorProfile::GroundedObjectSlotsV1
+    {
+        return Err("adaptation requires a sealed grounded-object source cohort".into());
+    }
+    let founder_seed_base = if receipt.founder_seed_base == 0 {
+        receipt.seed
+    } else {
+        receipt.founder_seed_base
+    };
+    let mut config = alife_world::CanonicalNewGameConfig::phase3(receipt.seed, 1)?;
+    config.brain_class = BrainScaleTier::Standard2048;
+    config.founder_seed_base = founder_seed_base;
+    let game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &source)?;
+    let record = game
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .ok_or("source founder missing")?;
+    let genome = record.phenotype().brain_genome.clone();
+    let development = crate::gpu_live_runtime::foundation_construction_development(
+        &genome,
+        &alife_core::BrainCapacityClass::n2048(),
+        &record
+            .phenotype()
+            .development_state_at(alife_core::Tick::ZERO)?,
+    )?;
+    let (old, _) = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
+        genome.clone(),
+        development.clone(),
+        source.clone(),
+    )?;
+    let target = alife_core::PhenotypeCompiler::compile_testing_procedural_baseline(
+        &genome,
+        &alife_core::BrainCapacityClass::n2048(),
+        &development,
+        SensorProfile::GroundedTerrainVisionV1,
+    )?;
+    if old.persistent_address_map().digest() != target.persistent_address_map().digest()
+        || old.synapses().len() != target.synapses().len()
+        || old.synapses().iter().zip(target.synapses()).any(|(a, b)| {
+            a.source() != b.source()
+                || a.target() != b.target()
+                || a.route_index() != b.route_index()
+                || a.kind() != b.kind()
+        })
+    {
+        return Err("terrain adaptation changed inherited synapse coordinates".into());
+    }
+    let adapted = FoundationWeightAsset::from_trained_weights(
+        &target,
+        source.weights().to_vec(),
+        source.manifest().training_stage(),
+    )?;
+    if adapted.weights().len() != source.weights().len()
+        || adapted
+            .weights()
+            .iter()
+            .zip(source.weights())
+            .any(|(a, b)| a.to_bits() != b.to_bits())
+    {
+        return Err("terrain adaptation changed inherited weight bits".into());
+    }
+    let mut target_config = config;
+    target_config.sensor_profile = SensorProfile::GroundedTerrainVisionV1;
+    alife_world::create_canonical_new_game_with_n2048_candidate(&target_config, &adapted)?;
+    let result = FoundationAdaptationReceipt {
+        source_directory: previous.to_path_buf(),
+        source_asset_digest: digest(&source),
+        adapted_asset_digest: digest(&adapted),
+        founder_seed_base,
+        policy_version: receipt
+            .policy_version
+            .checked_add(1)
+            .ok_or("policy version overflow")?,
+        preserved_weight_count: source.weights().len(),
+        optimizer_reset: true,
+        founder_biology_calibration: 2,
+    };
+    std::fs::create_dir(output)?;
+    std::fs::write(
+        output.join("trained.alife-foundation"),
+        adapted.encode_canonical()?,
+    )?;
+    std::fs::write(
+        output.join("adaptation.json"),
+        serde_json::to_vec_pretty(&result)?,
+    )?;
+    Ok(result)
+}
+
 fn organism_energy(runtime: &GpuLiveBrainRuntime, organism: alife_core::OrganismId) -> Result<f32> {
     Ok(runtime
         .world()
@@ -250,7 +366,29 @@ fn run_foundation_training_cycle_from(
     let mut objective_state_reset = false;
     let (asset, policy_version, restored_actor, restored_value, founder_seed_base) =
         if let Some(previous) = previous {
-            if previous.join("warmup.json").is_file() {
+            if previous.join("adaptation.json").is_file() {
+                let receipt: FoundationAdaptationReceipt =
+                    serde_json::from_slice(&std::fs::read(previous.join("adaptation.json"))?)?;
+                let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
+                    previous.join("trained.alife-foundation"),
+                )?)?;
+                if digest(&asset) != receipt.adapted_asset_digest
+                    || !receipt.optimizer_reset
+                    || receipt.founder_biology_calibration != 2
+                    || asset.manifest().sensor_profile() != SensorProfile::GroundedTerrainVisionV1
+                    || receipt.preserved_weight_count != asset.weights().len()
+                {
+                    return Err("invalid explicit terrain adaptation handoff".into());
+                }
+                objective_state_reset = true;
+                (
+                    asset,
+                    receipt.policy_version,
+                    None,
+                    None,
+                    receipt.founder_seed_base,
+                )
+            } else if previous.join("warmup.json").is_file() {
                 let receipt: FoundationWarmupReceipt =
                     serde_json::from_slice(&std::fs::read(previous.join("warmup.json"))?)?;
                 if !receipt.next_cohort_optimizer_rebound
@@ -354,6 +492,11 @@ fn run_foundation_training_cycle_from(
         } else {
             (initial_n2048_care_asset(seed)?, 0, None, None, seed)
         };
+    if lesson.is_some()
+        && asset.manifest().sensor_profile() != SensorProfile::GroundedTerrainVisionV1
+    {
+        return Err("navigation curriculum requires explicit --adapt-terrain before resuming an old founder".into());
+    }
     std::fs::write(
         output.join("initial.alife-foundation"),
         asset.encode_canonical()?,
@@ -363,11 +506,20 @@ fn run_foundation_training_cycle_from(
     let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
     config.brain_class = BrainScaleTier::Standard2048;
     config.founder_seed_base = founder_seed_base;
+    config.sensor_profile = asset.manifest().sensor_profile();
     let mut game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
     game.world.set_age_death_disabled_for_new_game(true)?;
-    if lesson.is_some() {
-        configure_foundation_scenario(&mut game.world, seed, lesson, None, true)?;
-    }
+    let scenario = if lesson.is_some() {
+        Some(configure_foundation_scenario(
+            &mut game.world,
+            seed,
+            lesson,
+            None,
+            true,
+        )?)
+    } else {
+        None
+    };
     let mut creatures = game.creatures;
     // Recovery preconditioning advances ordinary world biology before the
     // durable base is published. Keep the New Game save summaries in step
@@ -389,7 +541,7 @@ fn run_foundation_training_cycle_from(
         game.world,
         seed,
         BrainScaleTier::Standard2048,
-        SensorProfile::GroundedObjectSlotsV1,
+        config.sensor_profile,
         alife_archive::LineageLibraryConfig::profile_default(output.join("lineage")),
         format!("n2048-cycle-{seed}"),
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
@@ -436,6 +588,9 @@ fn run_foundation_training_cycle_from(
             "world_seed": seed,
             "founder_seed_base": founder_seed_base,
             "food_available_world_tick": food_available_world_tick,
+            "sensor_profile": config.sensor_profile,
+            "gate_closed_world_tick": scenario.as_ref().and_then(|setup| setup.closing_gate).map(|_| 2),
+            "gate_closed_position": scenario.as_ref().and_then(|setup| setup.closing_gate).map(|(_, position)| position.to_array()),
             "lesson": lesson,
             "food_position": scenario_position("food-01")?,
             "blocker_position": scenario_position("obstacle-01")?,
@@ -500,6 +655,9 @@ fn run_foundation_training_cycle_from(
     let mut production_tick_seconds = 0.0_f64;
     let mut replay_append_seconds = 0.0_f64;
     let tick_started = Instant::now();
+    if let Some(scenario) = &scenario {
+        crate::close_foundation_navigation_gate(&mut runtime, scenario)?;
+    }
     runtime.tick().map_err(|e| {
         let _ = std::fs::write(
             output.join("runtime-performance-failed.json"),
@@ -606,6 +764,7 @@ fn run_foundation_training_cycle_from(
             (Some(biology), Some(death_tick))
         };
     let mut stalled_since = Instant::now();
+    let mut last_stall_reason = None;
     let world_tick_limit = training_ticks
         .checked_mul(8)
         .and_then(|n| n.checked_add(4_096))
@@ -617,7 +776,10 @@ fn run_foundation_training_cycle_from(
             return Err("cycle reached its world-tick limit before enough waking decisions".into());
         }
         let tick_started = Instant::now();
-        runtime.tick().map_err(|e| {
+        if let Some(scenario) = &scenario {
+            crate::close_foundation_navigation_gate(&mut runtime, scenario)?;
+        }
+        let tick_outcome = runtime.tick_outcome().map_err(|e| {
             let _ = std::fs::write(
                 output.join("runtime-performance-failed.json"),
                 serde_json::to_vec_pretty(&runtime.performance_metrics()).unwrap_or_default(),
@@ -626,9 +788,48 @@ fn run_foundation_training_cycle_from(
         })?;
         production_tick_seconds += tick_started.elapsed().as_secs_f64();
         let after = runtime.world().tick().raw();
+        if after != before && after % 64 == 0 {
+            std::fs::write(
+                output.join("phase.txt"),
+                format!(
+                    "collecting world_tick={after} waking_records={}",
+                    references.len()
+                ),
+            )?;
+            std::fs::write(
+                output.join("progress.json"),
+                serde_json::to_vec_pretty(&serde_json::json!({
+                    "world_tick": after,
+                    "waking_records": references.len(),
+                    "biology": runtime.world().organism_registry().get(organism_id).map(|record| record.biochemistry()),
+                    "checkpoint": runtime.exact_checkpoint_performance_state(),
+                "retained_learning": format!("{:?}", runtime.retained_learning_recovery(organism_id)),
+                "tick_outcome": format!("{tick_outcome:?}"),
+                "preparation_errors": format!("{:?}", runtime.last_memory_preparation_errors()),
+                "authority": format!("{:?}", runtime.authority_telemetry()),
+                }))?,
+            )?;
+        }
         if after == before {
+            let reason = format!("{tick_outcome:?}");
+            if last_stall_reason.as_ref() != Some(&reason) {
+                std::fs::write(
+                    output.join("stall.json"),
+                    serde_json::to_vec_pretty(&serde_json::json!({
+                        "world_tick": before,
+                        "reason": reason,
+                    "performance": runtime.performance_metrics(),
+                    "checkpoint": runtime.exact_checkpoint_performance_state(),
+                    "biology": runtime.world().organism_registry().get(organism_id).map(|record| record.biochemistry()),
+                    }))?,
+                )?;
+                last_stall_reason = Some(reason);
+            }
             if stalled_since.elapsed().as_secs() > 300 {
-                return Err("cycle made no world progress for five minutes".into());
+                return Err(format!(
+                    "cycle made no world progress for five minutes: {last_stall_reason:?}"
+                )
+                .into());
             }
             std::thread::yield_now();
             continue;
@@ -672,8 +873,16 @@ fn run_foundation_training_cycle_from(
             food_available_elapsed_seconds = Some(started.elapsed().as_secs_f64());
         }
         stalled_since = Instant::now();
+        last_stall_reason = None;
         let mut captured = runtime.take_foundation_training_steps();
         if captured.is_empty() {
+            if !runtime.last_memory_preparation_errors().is_empty() {
+                return Err(format!(
+                    "cycle perception preparation failed at world tick {after}: {:?}",
+                    runtime.last_memory_preparation_errors()
+                )
+                .into());
+            }
             if terminal_biology.is_some() {
                 break;
             }
@@ -944,6 +1153,7 @@ fn run_foundation_training_cycle_from(
     let mut next_config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
     next_config.brain_class = BrainScaleTier::Standard2048;
     next_config.founder_seed_base = founder_seed_base;
+    next_config.sensor_profile = trained.manifest().sensor_profile();
     let bytes = std::fs::read(output.join("trained.alife-foundation"))?;
     let admitted_asset = FoundationWeightAsset::decode_canonical(&bytes)?;
     if admitted_asset.digest() != trained.digest() {
@@ -958,7 +1168,7 @@ fn run_foundation_training_cycle_from(
         next_game.world,
         seed,
         BrainScaleTier::Standard2048,
-        SensorProfile::GroundedObjectSlotsV1,
+        next_config.sensor_profile,
         alife_archive::LineageLibraryConfig::profile_default(output.join("next-lineage")),
         format!("n2048-cycle-next-{}", seed + 1),
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,

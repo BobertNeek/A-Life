@@ -362,7 +362,12 @@ impl GroundedSensorExtractor {
             let forward = tracked.relative.x * cosine + tracked.relative.z * sine;
             let left = tracked.relative.z * cosine - tracked.relative.x * sine;
             let bearing = if planar > f32::EPSILON {
-                [left / planar, forward / planar]
+                // Rotation can overshoot the normalized range by an f32 ULP.
+                // Bound the sensor output without relaxing frame validation.
+                [
+                    (left / planar).clamp(-1.0, 1.0),
+                    (forward / planar).clamp(-1.0, 1.0),
+                ]
             } else {
                 [0.0, 1.0]
             };

@@ -2,13 +2,18 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$Output,
-    [ulong]$FounderSeedBase = 539363617
+    [Parameter(Mandatory)][string]$Source
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $exe = Join-Path $repo 'target/release/train_n2048_care.exe'
 if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Build the release training CLI first.' }
+$sourcePath = (Resolve-Path -LiteralPath $Source).Path
+$adaptation = Get-Content -Raw -LiteralPath (Join-Path $sourcePath 'adaptation.json') | ConvertFrom-Json
+$FounderSeedBase = [ulong]$adaptation.founder_seed_base
+if ($FounderSeedBase -eq 0 -or -not $adaptation.optimizer_reset -or
+    $adaptation.founder_biology_calibration -ne 2) { throw 'Use a verified terrain adaptation source.' }
 $outputPath = [IO.Path]::GetFullPath((Join-Path (Get-Location).Path $Output))
 if (Test-Path -LiteralPath $outputPath) { throw "Dataset output already exists: $outputPath" }
 $base = Join-Path $repo 'target/founder-training'
@@ -31,20 +36,16 @@ try {
         $seed = [ulong](539364000 + 5 * $ordinal + ($index % 4))
         $name = ('lesson-{0:D2}-{1}' -f $index, $lesson)
         $directory = Join-Path $outputPath $name
-        $ticks = switch ($lesson) { feeding { 16 } hazard_avoidance { 32 } obstacle_navigation { 64 } recovery { 40 } }
-        $arguments = @('--teacher-pilot', $directory, [string]$ticks, '--seed', [string]$seed,
-            '--founder-seed-base', [string]$FounderSeedBase, '--lesson', $lesson)
-        if ($lesson -eq 'feeding') {
-            $x = (4.2 + 0.4 * ($ordinal % 4)).ToString('R', [Globalization.CultureInfo]::InvariantCulture)
-            $z = @('0', '-0.5', '0.5', '1')[$ordinal % 4]
-            $arguments += @('--food-position', $x, $z)
-        }
+        # A cap, not a fixed-length lesson: the CLI stops at the measured meal.
+        # Scanning and turning can take longer than the old transparent-view scripts.
+        $arguments = @('--teacher-adapted', $sourcePath, $directory, '128', [string]$seed, $lesson)
         & $exe @arguments 1> (Join-Path $outputPath "$name.stdout.log") 2> (Join-Path $outputPath "$name.stderr.log")
         if ($LASTEXITCODE -ne 0) { throw "Lesson $name failed; see its logs and diagnostic receipt." }
         $receipt = Get-Content -Raw -LiteralPath (Join-Path $directory 'pilot.json') | ConvertFrom-Json
         if ($receipt.lesson -ne $lesson -or $receipt.lesson_completed -ne $true -or
             $receipt.demonstration_replay_records -ne $receipt.ticks -or
-            $receipt.founder_seed_base -ne $FounderSeedBase) { throw "Lesson $name receipt mismatch." }
+            $receipt.founder_seed_base -ne $FounderSeedBase -or
+            $receipt.source_asset_digest -ne $adaptation.adapted_asset_digest) { throw "Lesson $name receipt mismatch." }
         if ($lesson -eq 'hazard_avoidance' -or $lesson -eq 'obstacle_navigation' -or $lesson -eq 'recovery') {
             $trace = Get-Content -Raw -LiteralPath (Join-Path $directory 'lesson-trace.json') | ConvertFrom-Json
             if ($lesson -eq 'hazard_avoidance') {
@@ -53,12 +54,13 @@ try {
                 $approachCount = @($families | Where-Object { $_ -eq 'Approach' }).Count
                 if ($avoidCount -lt 1 -or $approachCount -lt 1 -or $families[-1] -ne 'Ingest' -or
                     @($families[0..($avoidCount - 1)] | Where-Object { $_ -ne 'Avoid' }).Count -ne 0 -or
-                    @($families[$avoidCount..($families.Count - 2)] | Where-Object { $_ -ne 'Approach' }).Count -ne 0 -or
+                    @($families[$avoidCount..($families.Count - 2)] | Where-Object { $_ -notin @('Approach', 'Inspect') }).Count -ne 0 -or
                     @($trace.steps | Where-Object { $_.physical.contact -in @('Blocked', 'Collision') }).Count -ne 0) {
                     throw "Hazard lesson $name did not flee, switch to food, and ingest without contact."
                 }
             } elseif ($lesson -eq 'obstacle_navigation') {
-                $side = [Math]::Sign([double]$trace.steps[0].physical.displacement.z)
+                $firstMovement = $trace.steps | Where-Object { $_.physical.contact -eq 'Moved' } | Select-Object -First 1
+                $side = [Math]::Sign([double]$firstMovement.physical.displacement.z)
                 if ($side -eq 0) { throw "Obstacle lesson $name has no lateral route." }
                 [void]$obstacleSides.Add($side)
             } else {
@@ -68,7 +70,7 @@ try {
                 $restCount = @($families | Where-Object { $_ -eq 'Rest' }).Count
                 if ($before -lt 0.12 -or $after -ge $before - 0.02 -or
                     $restCount -lt 1 -or $families[0] -ne 'Rest' -or $families[-1] -ne 'Ingest' -or
-                    @($families[$restCount..($families.Count - 2)] | Where-Object { $_ -ne 'Approach' }).Count -ne 0 -or
+                    @($families[$restCount..($families.Count - 2)] | Where-Object { $_ -notin @('Approach', 'Inspect') }).Count -ne 0 -or
                     @($trace.steps | Where-Object { $_.physical.contact -eq 'Blocked' }).Count -ne 0) {
                     throw "Recovery lesson $name did not rest, approach food, and ingest."
                 }
@@ -83,7 +85,8 @@ try {
     if ($obstacleSides.Count -ne 2 -or $recoveryFatigueLevels.Count -lt 3) {
         throw 'Lesson corpus lacks both obstacle sides or varied biological fatigue.'
     }
-    $manifest = [ordered]@{ founder_seed_base = $FounderSeedBase; pilots = @($entries) }
+    $manifest = [ordered]@{ founder_seed_base = $FounderSeedBase; pilots = @($entries);
+        source_asset = (Join-Path $sourcePath 'trained.alife-foundation') }
     [IO.File]::WriteAllText((Join-Path $outputPath 'manifest.json'),
         ($manifest | ConvertTo-Json -Depth 4), [Text.UTF8Encoding]::new($false))
     Write-Output "Balanced manifest: $(Join-Path $outputPath 'manifest.json')"

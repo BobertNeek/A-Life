@@ -77,14 +77,20 @@ function Source-Receipt([string]$Directory) {
     return $receipt
 }
 function Invoke-Campaign {
-    if (-not $Source) { throw 'Campaign needs -Source pointing to a sealed warm-up or cycle directory.' }
+    if (-not $Source) { throw 'Campaign needs -Source pointing to a sealed adaptation, warm-up, or cycle directory.' }
     $sourcePath = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($Source)) { $Source } else { Join-Path $repo $Source }))
     $relative = [IO.Path]::GetRelativePath($base, $sourcePath)
-    if ($relative -eq '.' -or $relative.StartsWith('..') -or [IO.Path]::IsPathRooted($relative) -or
+    $bundledRelative = [IO.Path]::GetRelativePath((Join-Path $repo 'assets/founders'), $sourcePath)
+    $trainingSource = $relative -ne '.' -and -not $relative.StartsWith('..') -and -not [IO.Path]::IsPathRooted($relative)
+    $bundledAdaptation = $bundledRelative -ne '.' -and -not $bundledRelative.StartsWith('..') -and
+        -not [IO.Path]::IsPathRooted($bundledRelative) -and
+        (Test-Path -LiteralPath (Join-Path $sourcePath 'adaptation.json'))
+    if (-not ($trainingSource -or $bundledAdaptation) -or
         -not (Test-Path -LiteralPath $sourcePath -PathType Container) -or
         -not ((Test-Path -LiteralPath (Join-Path $sourcePath 'warmup.json')) -or
-              (Test-Path -LiteralPath (Join-Path $sourcePath 'cycle.json')))) {
-        throw 'Campaign source must be a sealed warm-up or cycle under target/founder-training.'
+              (Test-Path -LiteralPath (Join-Path $sourcePath 'cycle.json')) -or
+              (Test-Path -LiteralPath (Join-Path $sourcePath 'adaptation.json')))) {
+        throw 'Campaign source must be sealed under target/founder-training, or a bundled adaptation under assets/founders.'
     }
     $script:run = Join-Path $base ("campaign-{0}-{1}" -f [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'), [Guid]::NewGuid().ToString('N').Substring(0, 8))
     [IO.Directory]::CreateDirectory($run) | Out-Null

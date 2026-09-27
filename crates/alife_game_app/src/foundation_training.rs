@@ -415,7 +415,7 @@ pub fn initial_n2048_care_asset(seed: u64) -> Result<FoundationWeightAsset> {
         &genome,
         &capacity,
         &development,
-        SensorProfile::GroundedObjectSlotsV1,
+        SensorProfile::GroundedTerrainVisionV1,
     )?;
     Ok(FoundationWeightAsset::from_phenotype_for_genetic_birth(
         &native,
@@ -510,6 +510,41 @@ pub fn run_foundation_teacher_pilot_with_lesson(
     )
 }
 
+pub fn run_adapted_foundation_teacher_pilot(
+    source: &Path,
+    output: &Path,
+    seed: u64,
+    ticks: usize,
+    lesson: FoundationTeacherLesson,
+) -> Result<FoundationPilotReceipt> {
+    let receipt: crate::FoundationAdaptationReceipt =
+        serde_json::from_slice(&std::fs::read(source.join("adaptation.json"))?)?;
+    let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
+        source.join("trained.alife-foundation"),
+    )?)?;
+    let digest: String = asset
+        .digest()
+        .bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    if digest != receipt.adapted_asset_digest
+        || asset.manifest().sensor_profile() != SensorProfile::GroundedTerrainVisionV1
+    {
+        return Err("teacher source is not the sealed terrain adaptation".into());
+    }
+    run_foundation_training_pilot_inner(
+        output,
+        seed,
+        receipt.founder_seed_base,
+        ticks,
+        true,
+        None,
+        Some(lesson),
+        Some(asset),
+    )
+}
+
 /// A frozen founder acts without a demonstrator in the same production world.
 pub fn run_foundation_evaluation_pilot(
     output: &Path,
@@ -532,6 +567,122 @@ pub fn run_foundation_evaluation_pilot(
     )
 }
 
+#[derive(Default)]
+struct GroundedNavigationTeacher {
+    remembered_food: Option<alife_core::Vec3f>,
+    search_phase: u8,
+    detour_side: f32,
+    clear_steps: u8,
+}
+
+impl GroundedNavigationTeacher {
+    fn choose<'a>(
+        &mut self,
+        frame: &'a alife_core::PerceptionFrame,
+        food: alife_core::WorldEntityId,
+    ) -> Option<&'a alife_core::ActionCandidate> {
+        use alife_core::CandidateActionFamily as Family;
+        use alife_world::HeadlessActionIds as Id;
+        let action = |id| frame.candidates().iter().find(|c| c.action_id == id);
+        let food_candidate = frame
+            .candidates()
+            .iter()
+            .find(|c| c.target.entity == Some(food) && c.family == Family::Approach);
+        let slot = food_candidate.and_then(|c| match c.observation {
+            alife_core::CandidateObservationRef::ObjectSlot(index) => frame
+                .grounded_object_slots()
+                .iter()
+                .find(|s| s.slot_index == index),
+            _ => None,
+        });
+        let gaze = 2.0
+            * frame
+                .body()
+                .pose
+                .rotation
+                .y
+                .atan2(frame.body().pose.rotation.w);
+        if let Some(offset) = &mut self.remembered_food {
+            // Proprioception reports the last interval's actual displacement,
+            // including zero movement when blocked. No absolute GPS is used.
+            offset.x -= frame.body().velocity.linear.x;
+            offset.z -= frame.body().velocity.linear.z;
+        }
+        if let Some(slot) = slot {
+            let heading = gaze + slot.bearing[0].atan2(slot.bearing[1]);
+            let range = slot.distance * alife_world::HEADLESS_VISION_RADIUS;
+            self.remembered_food = Some(alife_core::Vec3f::new(
+                range * heading.cos(),
+                0.0,
+                range * heading.sin(),
+            ));
+            if slot.contact >= 0.5 {
+                return frame
+                    .candidates()
+                    .iter()
+                    .find(|c| c.target.entity == Some(food) && c.family == Family::Ingest);
+            }
+        }
+        if self.remembered_food.is_none() {
+            let id = match self.search_phase % 7 {
+                0 | 1 => Id::LOOK_LEFT,
+                2 | 3 | 4 => Id::LOOK_RIGHT,
+                5 => Id::LOOK_CENTER,
+                _ => Id::TURN_LEFT,
+            };
+            self.search_phase = self.search_phase.wrapping_add(1);
+            return action(id);
+        }
+        // Recentering is an actual motor choice. Heading is sensed orientation,
+        // never a lookup of a hidden food's world position.
+        if self.search_phase != 0 {
+            self.search_phase = 0;
+            return action(Id::LOOK_CENTER);
+        }
+        let fan = &frame.sensory().channels.visual_affordance;
+        let forward_clearance = fan[7].min(fan[8]);
+        if forward_clearance < 0.14 {
+            if self.detour_side == 0.0 {
+                self.detour_side =
+                    if fan[10..13].iter().sum::<f32>() >= fan[3..6].iter().sum::<f32>() {
+                        1.0
+                    } else {
+                        -1.0
+                    };
+            }
+            self.clear_steps = 0;
+            return action(if self.detour_side > 0.0 {
+                Id::TURN_LEFT
+            } else {
+                Id::TURN_RIGHT
+            });
+        }
+        if self.detour_side != 0.0 && self.clear_steps < 3 {
+            self.clear_steps += 1;
+            return action(Id::STEP_FORWARD);
+        }
+        let remembered = self.remembered_food?;
+        let heading = remembered.z.atan2(remembered.x);
+        let error = (heading - gaze + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
+            - std::f32::consts::PI;
+        if slot.is_some() {
+            self.detour_side = 0.0;
+        }
+        if error.abs() > 0.22 {
+            return action(if error > 0.0 {
+                Id::TURN_LEFT
+            } else {
+                Id::TURN_RIGHT
+            });
+        }
+        if slot.is_some() {
+            food_candidate
+        } else {
+            action(Id::STEP_FORWARD)
+        }
+    }
+}
+
 fn grounded_lesson_teacher(
     frame: &alife_core::PerceptionFrame,
     enabled_channels: u32,
@@ -540,8 +691,27 @@ fn grounded_lesson_teacher(
     food: alife_core::WorldEntityId,
     hazard: alife_core::WorldEntityId,
     waypoint: alife_core::WorldEntityId,
+    navigation: &mut GroundedNavigationTeacher,
 ) -> std::result::Result<alife_gpu_backend::GpuTrainingDemonstratorAction, ScaffoldContractError> {
     use alife_core::CandidateActionFamily as Family;
+    if frame.sensor_profile() == SensorProfile::GroundedTerrainVisionV1
+        && matches!(
+            lesson,
+            FoundationTeacherLesson::Feeding
+                | FoundationTeacherLesson::ObstacleNavigation
+                | FoundationTeacherLesson::Recovery
+        )
+    {
+        let chosen = if lesson == FoundationTeacherLesson::Recovery
+            && frame.homeostasis().drives.fatigue >= 0.12
+        {
+            frame.candidates().iter().find(|c| c.family == Family::Rest)
+        } else {
+            navigation.choose(frame, food)
+        }
+        .ok_or(ScaffoldContractError::InvalidActionDecision)?;
+        return assemble_grounded_teacher(frame, enabled_channels, chosen);
+    }
     let target = |entity, family| {
         frame
             .candidates()
@@ -574,6 +744,17 @@ fn grounded_lesson_teacher(
             alife_core::CandidateObservationRef::None => None,
         })
         .is_some_and(|slot| slot.distance < 0.75);
+    if frame.sensor_profile() == SensorProfile::GroundedTerrainVisionV1
+        && lesson == FoundationTeacherLesson::HazardAvoidance
+    {
+        let chosen = if hazard_near {
+            target(hazard, Family::Avoid)
+        } else {
+            navigation.choose(frame, food)
+        }
+        .ok_or(ScaffoldContractError::InvalidActionDecision)?;
+        return assemble_grounded_teacher(frame, enabled_channels, chosen);
+    }
     let chosen = match lesson {
         FoundationTeacherLesson::Feeding => target(
             food,
@@ -649,6 +830,8 @@ fn assemble_grounded_teacher(
                 && (motor_indices[slot] == u16::MAX
                     || (slot == 0
                         && candidate.action_id == alife_world::HeadlessActionIds::NO_LOCOMOTION)
+                    || (slot == 1
+                        && candidate.action_id == alife_world::HeadlessActionIds::HOLD_GAZE)
                     || (slot == 2
                         && candidate.action_id == alife_world::HeadlessActionIds::NO_MANIPULATION)
                     || (slot == 4
@@ -710,6 +893,7 @@ fn run_foundation_training_pilot_inner(
     let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
     config.brain_class = BrainScaleTier::Standard2048;
     config.founder_seed_base = founder_seed_base;
+    config.sensor_profile = asset.manifest().sensor_profile();
     let mut game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
     game.world.set_age_death_disabled_for_new_game(true)?;
     let scenario_lesson =
@@ -734,7 +918,7 @@ fn run_foundation_training_pilot_inner(
         game.world,
         seed,
         BrainScaleTier::Standard2048,
-        SensorProfile::GroundedObjectSlotsV1,
+        config.sensor_profile,
         alife_archive::LineageLibraryConfig::profile_default(output.join("lineage")),
         format!("n2048-training-pilot-{seed}"),
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
@@ -747,6 +931,7 @@ fn run_foundation_training_pilot_inner(
     )
     .map_err(|error| format!("pilot runtime admission: {error}"))?;
     if teacher_mode {
+        let mut navigation = GroundedNavigationTeacher::default();
         let lesson = scenario_lesson.ok_or("teacher lesson is missing")?;
         let mut waypoint_passed = false;
         runtime.set_foundation_demonstrator(move |frame, channels| {
@@ -758,6 +943,7 @@ fn run_foundation_training_pilot_inner(
                 food,
                 hazard,
                 waypoint,
+                &mut navigation,
             )
         })?;
     }
@@ -768,6 +954,7 @@ fn run_foundation_training_pilot_inner(
     let started = Instant::now();
     let mut steps = Vec::with_capacity(tick_count);
     for tick in 0..tick_count {
+        close_foundation_navigation_gate(&mut runtime, &scenario)?;
         runtime
             .tick()
             .map_err(|error| format!("pilot production tick {tick}: {error}"))?;
@@ -814,20 +1001,39 @@ fn run_foundation_training_pilot_inner(
             food_consumed && steps.iter().all(|step| !teacher_step_blocked(step))
         }
         FoundationTeacherLesson::ObstacleNavigation => {
-            let food_start = steps
-                .iter()
-                .position(|step| teacher_step_targets(step, food));
-            food_consumed
-                && steps.iter().all(|step| !teacher_step_blocked(step))
-                && food_start.is_some_and(|index| {
-                    index > 0
-                        && steps[..index]
-                            .iter()
-                            .all(|step| teacher_step_targets(step, waypoint))
-                        && steps[index..]
-                            .iter()
-                            .all(|step| teacher_step_targets(step, food))
-                })
+            if config.sensor_profile == SensorProfile::GroundedTerrainVisionV1 {
+                let visible = |step: &FoundationTrainingStep| {
+                    step.frame
+                        .candidates()
+                        .iter()
+                        .any(|c| c.target.entity == Some(food))
+                };
+                food_consumed
+                    && steps.iter().all(|step| !teacher_step_blocked(step))
+                    && steps.first().is_some_and(visible)
+                    && steps.iter().any(|step| !visible(step))
+                    && steps.iter().any(|step| {
+                        matches!(
+                            step.patch.outcome().physical.contact,
+                            alife_core::PhysicalContactKind::Moved
+                        )
+                    })
+            } else {
+                let food_start = steps
+                    .iter()
+                    .position(|step| teacher_step_targets(step, food));
+                food_consumed
+                    && steps.iter().all(|step| !teacher_step_blocked(step))
+                    && food_start.is_some_and(|index| {
+                        index > 0
+                            && steps[..index]
+                                .iter()
+                                .all(|step| teacher_step_targets(step, waypoint))
+                            && steps[index..]
+                                .iter()
+                                .all(|step| teacher_step_targets(step, food))
+                    })
+            }
         }
         FoundationTeacherLesson::HazardAvoidance => {
             let initial = initial_hazard_distance.unwrap_or(f32::INFINITY);
@@ -857,9 +1063,13 @@ fn run_foundation_training_pilot_inner(
                 && rest_end.is_some_and(|index| {
                     index > 0
                         && steps[..index].iter().all(teacher_step_rest)
-                        && steps[index..]
-                            .iter()
-                            .all(|step| teacher_step_targets(step, food))
+                        && steps[index..].iter().all(|step| {
+                            if config.sensor_profile == SensorProfile::GroundedTerrainVisionV1 {
+                                !teacher_step_rest(step)
+                            } else {
+                                teacher_step_targets(step, food)
+                            }
+                        })
                 })
                 && food_consumed
                 && steps.iter().all(|step| !teacher_step_blocked(step))
@@ -877,6 +1087,8 @@ fn run_foundation_training_pilot_inner(
                 serde_json::json!({
                     "tick": step.frame.tick().raw(),
                     "position": step.frame.body().pose.translation,
+                    "gaze_rotation": step.frame.body().pose.rotation,
+                    "terrain_ranges": step.frame.sensory().channels.visual_affordance,
                     "chosen_action": chosen.map(|candidate| candidate.action_id.raw()),
                     "chosen_target": chosen.and_then(|candidate| candidate.target.entity),
                     "chosen_family": chosen.map(|candidate| candidate.family),
@@ -1140,6 +1352,25 @@ pub(crate) struct FoundationScenarioSetup {
     pub(crate) hazard: alife_core::WorldEntityId,
     pub(crate) waypoint: alife_core::WorldEntityId,
     pub(crate) initial_hazard_distance: Option<f32>,
+    pub(crate) closing_gate: Option<(alife_core::WorldEntityId, alife_core::Vec3f)>,
+}
+
+pub(crate) fn close_foundation_navigation_gate(
+    runtime: &mut GpuLiveBrainRuntime,
+    scenario: &FoundationScenarioSetup,
+) -> Result<()> {
+    if runtime.world().tick().raw() >= 2 {
+        if let Some((gate, position)) = scenario.closing_gate {
+            if runtime
+                .world()
+                .entity(gate)
+                .is_some_and(|object| object.position != position)
+            {
+                move_scenario_object(runtime.world_mut(), gate, position)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn scenario_random(seed: u64, stream: u64) -> f32 {
@@ -1174,6 +1405,7 @@ pub(crate) fn configure_foundation_scenario(
         .entity(organism)
         .ok_or("scenario founder is missing")?
         .position;
+    let mut closing_gate = None;
     match lesson {
         Some(FoundationTeacherLesson::Feeding) => {
             let angle = std::f32::consts::TAU * scenario_random(seed, 0);
@@ -1203,13 +1435,13 @@ pub(crate) fn configure_foundation_scenario(
             )?;
         }
         Some(FoundationTeacherLesson::ObstacleNavigation) => {
-            let angle = std::f32::consts::TAU * scenario_random(seed, 4);
+            let angle = (scenario_random(seed, 4) - 0.5) * 2.6;
             let forward = [angle.cos(), angle.sin()];
             let lateral = [-forward[1], forward[0]];
             let side = if seed & 2 == 0 { -1.0 } else { 1.0 };
-            let food_distance = 4.0 + 0.7 * scenario_random(seed, 5);
+            let food_distance = 6.2 + 0.7 * scenario_random(seed, 5);
             let food_lateral = scenario_random(seed, 6) - 0.5;
-            let blocker_distance = 1.7 + 0.2 * scenario_random(seed, 7);
+            let blocker_distance = 4.0 + 0.2 * scenario_random(seed, 7);
             let position = |ahead: f32, across: f32| {
                 alife_core::Vec3f::new(
                     origin.x + ahead * forward[0] + across * lateral[0],
@@ -1221,14 +1453,14 @@ pub(crate) fn configure_foundation_scenario(
                 .entity_id("obstacle-01")
                 .ok_or("teacher world has no first obstacle")?;
             move_scenario_object(world, food, position(food_distance, food_lateral))?;
-            move_scenario_object(
-                world,
+            move_scenario_object(world, blocker, position(blocker_distance, side * 7.0))?;
+            closing_gate = Some((
                 blocker,
                 position(
                     blocker_distance,
                     food_lateral * blocker_distance / food_distance,
                 ),
-            )?;
+            ));
             move_scenario_object(world, waypoint, position(0.0, side * 6.4))?;
             // This lesson isolates routing; the hazard belongs to its own lesson.
             move_scenario_object(world, hazard, position(-8.0, 7.0))?;
@@ -1297,6 +1529,7 @@ pub(crate) fn configure_foundation_scenario(
         hazard,
         waypoint,
         initial_hazard_distance,
+        closing_gate,
     })
 }
 

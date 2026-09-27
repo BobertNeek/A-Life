@@ -17,6 +17,95 @@ fn phase3_game(population: u16) -> alife_world::CanonicalNewGame {
 }
 
 #[test]
+fn player_care_is_local_gene_controlled_and_survives_pending_save() {
+    let game = phase3_game(1);
+    let mut world = game.world;
+    let (organism, entity) = world.organism_entity_ids()[0];
+    let position = world.entity(entity).unwrap().position;
+    let before_signature = world.canonical_signature_digest().unwrap();
+    let mut control = world.clone();
+    assert!(world
+        .queue_player_care(organism, alife_core::Vec3f::new(100.0, 0.0, 0.0), true)
+        .is_err());
+    assert_eq!(
+        world.canonical_signature_digest().unwrap(),
+        before_signature
+    );
+    world.queue_player_care(organism, position, true).unwrap();
+    world.queue_player_care(organism, position, true).unwrap();
+    world.queue_player_care(organism, position, false).unwrap();
+    let mut acting = world.clone();
+    let action = HeadlessWorldCommand::idle(organism).unwrap();
+    let action_receipt = acting
+        .apply_registered_command(&action, entity, Tick(1))
+        .unwrap();
+    assert_eq!(action_receipt.action_result.body_event.player_reward, 1.0);
+    assert!(action_receipt.biology_after.homeostasis.hormones.extension[0] > 0.0);
+    acting.try_advance_tick().unwrap();
+    let next = acting
+        .apply_registered_command(&action, entity, Tick(2))
+        .unwrap();
+    assert_eq!(next.action_result.body_event.player_reward, 0.0);
+    let before = *world
+        .organism_registry()
+        .get(organism)
+        .unwrap()
+        .biochemistry();
+    let save = alife_world::PortableSaveFile::from_headless_world(
+        "care",
+        &world,
+        alife_world::RuntimeConfig::deterministic_default(
+            world.seed(),
+            alife_core::BrainScaleTier::Nano512,
+        ),
+        alife_world::AssetManifest::empty(),
+        game.creatures,
+    )
+    .unwrap();
+    let mut restored =
+        alife_world::PortableSaveFile::from_json_str(&serde_json::to_string(&save).unwrap())
+            .unwrap()
+            .restore_headless_world()
+            .unwrap();
+    world.try_advance_tick().unwrap();
+    control.try_advance_tick().unwrap();
+    restored.try_advance_tick().unwrap();
+    assert_eq!(
+        world.canonical_signature_digest().unwrap(),
+        restored.canonical_signature_digest().unwrap()
+    );
+    let after = *world
+        .organism_registry()
+        .get(organism)
+        .unwrap()
+        .biochemistry();
+    assert!(after.homeostasis.hormones.extension[0] > before.homeostasis.hormones.extension[0]);
+    let untouched = control
+        .organism_registry()
+        .get(organism)
+        .unwrap()
+        .biochemistry();
+    assert!(after.homeostasis.drives.loneliness <= untouched.homeostasis.drives.loneliness);
+    assert!(after.homeostasis.hormones.oxytocin > untouched.homeostasis.hormones.oxytocin);
+    assert!(
+        alife_core::MeasuredPhysiologyTransition::new(before, after)
+            .unwrap()
+            .homeostatic_improvement()
+            > 0.0
+    );
+    world.try_advance_tick().unwrap();
+    let faded = *world
+        .organism_registry()
+        .get(organism)
+        .unwrap()
+        .biochemistry();
+    assert!(faded.homeostasis.hormones.extension[0] < after.homeostasis.hormones.extension[0]);
+    let mut neutral = alife_core::HomeostaticDelta::zero();
+    neutral.hormones.extension[0] = -0.5;
+    assert_eq!(after.value_profile().value_change(neutral, 0.0), 0.0);
+}
+
+#[test]
 fn canonical_new_game_creates_exact_requested_population() {
     let foundation =
         FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
