@@ -172,4 +172,20 @@ on every relevant operation. No action, learning, biological, or tick-rate rule
 changes. The existing release-default launcher now forwards explicit founder
 and isolated settings paths, and rejects debug performance recording up front.
 
-Post-repair performance verification is pending.
+The matched post-repair 60-second receipt at
+`target/founder-training/lag-profile-20260927-002/performance.json`, built from
+`3a29daabcd7b16046bea56e1246876483547c14b`, records 5,286 frames
+(88.1 FPS): median 6.130 ms, p95 31.086 ms, p99 34.188 ms, maximum
+99.135 ms, and zero frames over 100 ms. It completed 1,200 world ticks
+(19.998 TPS against configured 20), with no dropped catch-up ticks. Mean
+runtime tick work fell from approximately 117 ms to 22.9 ms. GPU cognition
+and learning remained active; ordinary full snapshots and persistence waits
+remained zero, and shutdown drained successfully.
+
+One focused regression passed for fresh-load validation, canonical equality,
+unchanged biological advancement, and rejection of forged genetic bindings
+and phenotype data. Release build, core boundary check, documentation check,
+and launcher preview/debug-recording guard passed. Windows MCP captured the
+game window; attempted keyboard interaction was not visibly verified. This
+measurement covers one creature at the graphics floor, not larger populations,
+default graphics settings, long-term survival, or player-care acceptance.
