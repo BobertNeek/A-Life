@@ -130,6 +130,9 @@ Executed evidence:
   exact cognitive checkpoint, population, seed, and GPU validation. Desktop
   window discovery/control timed out, so interactive C/J/K and live head-turn
   acceptance remain unverified. This smoke is not sustained gameplay evidence.
+  It used an unoptimized, training-enabled debug executable and collected no
+  frame timings. The player reported extreme game lag, so its successful exit
+  must not be treated as acceptable responsiveness.
 
 The learner check exposed floating-point bearing components a few ULPs outside
 the normalized range. Sensing now clamps its calculated normalized components;
@@ -144,3 +147,29 @@ teacher's physical sequence, not learned navigation. Direct praise is an effecti
 biological stimulus, not proof of a trained response. Wall-time survival, learned
 sleep/restart retention, held-out navigation, and ordinary player-visible acceptance
 remain separate. No maze curriculum or complete articulated manipulation is claimed.
+
+## Lag follow-up
+
+Requirements: AOA-PERF-001/002/003, AOA-AUTH-002, AOA-PERSIST-001/003.
+
+The reported lag was reproduced with an optimized production frontend, Vulkan,
+the same adapted founder, one creature, and 1280x720 MinimumSettings30x30.
+The 60-second receipt at `target/founder-training/lag-profile-20260927-001/performance.json`
+records 482 frames: median 118.714 ms, p95 164.208 ms, p99 240.544 ms,
+maximum 335.687 ms; every measured frame exceeded 100 ms. It completed 483
+world ticks (8.043 TPS against configured 20). Runtime tick work consumed 56.5
+of the measured 60 seconds; persistence waits and ordinary full-brain snapshots
+were zero. This falsifies the claim that a release launch alone resolves lag.
+
+The existing organism validator repeatedly hashes the complete immutable genome
+and re-expresses its phenotype for sleep, action, energy accounting, and cognitive
+seals. The focused repair retains that proof in the existing organism record.
+Genome/phenotype fields are private and have no mutation path after construction.
+The proof is process-local, excluded from serialization and canonical equality;
+deserialized records must validate genetics afresh. Mutable state, inherited
+digest binding, chemistry, sleep, body, lifecycle, and rollback validation remain
+on every relevant operation. No action, learning, biological, or tick-rate rule
+changes. The existing release-default launcher now forwards explicit founder
+and isolated settings paths, and rejects debug performance recording up front.
+
+Post-repair performance verification is pending.

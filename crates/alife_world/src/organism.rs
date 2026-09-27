@@ -1,6 +1,6 @@
 //! World-owned, Bevy-independent organism identity and biology records.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::OnceLock};
 
 use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkReceipt};
 use alife_core::{
@@ -277,12 +277,27 @@ impl Validate for OrganismSubsystemStateGraph {
     }
 }
 
+// Genome and expressed phenotype are private, immutable after construction.
+// Cache their validation only; mutable body/state refs still validate every time.
+// Deserialization never imports this process-local proof.
+#[derive(Debug, Clone, Default)]
+struct GeneticValidationCache(OnceLock<[u64; 4]>);
+
+impl PartialEq for GeneticValidationCache {
+    fn eq(&self, _other: &Self) -> bool {
+        // Warming a cache is not a change to canonical organism state.
+        true
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorldOrganismRecord {
     organism_id: OrganismId,
     world_entity_id: WorldEntityId,
     genome: CreatureGenome,
     phenotype: CreaturePhenotype,
+    #[serde(skip)]
+    genetic_validation: GeneticValidationCache,
     biochemistry: BiochemistryState,
     state_graph: OrganismSubsystemStateGraph,
     embodiment: EmbodimentState,
@@ -444,6 +459,7 @@ impl WorldOrganismRecord {
             world_entity_id,
             genome,
             phenotype,
+            genetic_validation: GeneticValidationCache::default(),
             biochemistry,
             state_graph: OrganismSubsystemStateGraph {
                 organism_id,
@@ -517,6 +533,10 @@ impl WorldOrganismRecord {
     }
 
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        let genetics_digest = match self.genetic_validation.0.get() {
+            Some(digest) => *digest,
+            None => genetics_development_digest(&self.genome, &self.phenotype)?,
+        };
         self.organism_id.validate()?;
         self.world_entity_id.validate()?;
         self.state_graph.validate_contract()?;
@@ -529,8 +549,7 @@ impl WorldOrganismRecord {
             || self.state_graph.body_biochemistry.content_digest
                 != body_biochemistry_digest(&self.biochemistry)?
             || self.state_graph.embodiment.content_digest != embodiment_digest(&self.embodiment)?
-            || self.state_graph.genetics_development.content_digest
-                != genetics_development_digest(&self.genome, &self.phenotype)?
+            || self.state_graph.genetics_development.content_digest != genetics_digest
             || self.state_graph.lifecycle_persistence.content_digest
                 != lifecycle_persistence_digest(
                     self.organism_id,
@@ -546,16 +565,18 @@ impl WorldOrganismRecord {
         {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
-        self.genome.validate_contract()?;
+        if self.genetic_validation.0.get().is_none() {
+            self.genome.validate_contract()?;
+            if self.phenotype != self.genome.express()? {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+            // Concurrent readers may race to install the same immutable proof.
+            let _ = self.genetic_validation.0.set(genetics_digest);
+        }
         if self.phenotype.source_genome_id != self.genome.id
             || self.phenotype.lineage_id != self.genome.lineage_id
             || self.biochemistry.source_genome_id != self.genome.id
         {
-            return Err(ScaffoldContractError::InvalidId);
-        }
-
-        let expressed = self.genome.express()?;
-        if self.phenotype != expressed {
             return Err(ScaffoldContractError::InvalidId);
         }
 
@@ -1338,6 +1359,50 @@ impl WorldOrganismRegistry {
 mod tests {
     use super::*;
     use alife_core::{BrainCapacityClass, FoundationGeneticIdentity, LineageId};
+
+    #[test]
+    fn immutable_genetic_validation_preserves_restore_and_mutable_guards() {
+        let genome = CreatureGenome::early_mammal_founder(
+            0xE10_3204,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let mut record = WorldOrganismRecord::newborn(
+            OrganismId(1),
+            WorldEntityId(101),
+            genome.clone(),
+            genome.express().unwrap(),
+            Tick::ZERO,
+        )
+        .unwrap();
+        let wire = serde_json::to_value(&record).unwrap();
+        assert!(wire.get("genetic_validation").is_none());
+        let mut restored: WorldOrganismRecord = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(restored, record);
+        restored.validate_contract().unwrap();
+        record
+            .advance_biology(Tick(1), BodyEventDelta::zero())
+            .unwrap();
+        restored
+            .advance_biology(Tick(1), BodyEventDelta::zero())
+            .unwrap();
+        assert_eq!(restored, record);
+
+        let mut forged = record.clone();
+        forged.state_graph.genetics_development.content_digest[0] ^= 1;
+        assert_eq!(
+            forged.validate_contract(),
+            Err(ScaffoldContractError::BrainOwnershipMismatch)
+        );
+        let mut forged = wire;
+        forged["phenotype"]["lineage_id"] = serde_json::json!(LineageId(3));
+        // Loading cannot inherit the original object's cached validation.
+        let forged: WorldOrganismRecord = serde_json::from_value(forged).unwrap();
+        assert_eq!(
+            forged.validate_contract(),
+            Err(ScaffoldContractError::BrainOwnershipMismatch)
+        );
+    }
 
     fn malformed_registry() -> (WorldOrganismRegistry, OrganismId) {
         let genome = CreatureGenome::early_mammal_founder(

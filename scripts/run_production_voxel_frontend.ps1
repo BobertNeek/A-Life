@@ -3,6 +3,8 @@ param(
     [string]$BuildProfile = "release",
     [string]$Manifest = "",
     [switch]$NewGame,
+    [string]$Founder = "",
+    [string]$UiSettings = "",
     [UInt64]$Seed = 0,
     [switch]$DryRun,
     [switch]$PreviewCommand,
@@ -25,6 +27,9 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $FeatureList = "production-voxel-frontend"
+if ($RecordPerformance -and $BuildProfile -ne "release") {
+    throw "Performance recording requires the optimized release build."
+}
 # Use -DryRun to execute the application's real preflight without opening a window.
 # Use -PreviewCommand to print the Cargo command without executing it.
 
@@ -60,6 +65,15 @@ if ($NewGame) {
     $AppArgs += @("--new-game", "--seed", "$Seed")
 } elseif ($Seed -ne 0) {
     throw "-Seed requires -NewGame."
+}
+
+if ($Founder) {
+    if (-not $NewGame) { throw "-Founder requires -NewGame." }
+    $AppArgs += @("--founder", $Founder)
+}
+
+if ($UiSettings) {
+    $AppArgs += @("--ui-settings", $UiSettings)
 }
 
 if ($Population -gt 0) {

@@ -19,6 +19,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_prod
 
 The first command starts a fresh Nano512 founder. Resume and `-DryRun` need a valid current save; the bundled legacy save is not a supported starting point. `-DryRun` executes application preflight without opening a window. `-PreviewCommand` only prints the Cargo command. The default profile is `MinSpecComfort1080p`. `MinimumSettings30x30` is a graphics floor, not permission for CPU neural fallback.
 
+Use this release-default launcher for graphical playtests. The unoptimized
+`target/debug` game can stall its window during live simulation and is not
+performance evidence. For the unpromoted terrain N2048 candidate, add
+`-Founder 'n2048:assets/founders/terrain-care-n2048-v1/trained.alife-foundation'`
+and `-Seed 539363617` to `-NewGame`. `-UiSettings` accepts an isolated settings
+path whose parent also receives the new save. `-RecordPerformance` requires
+`-BuildProfile release`; the existing recorder also requires
+`ALIFE_PHASE31_SOURCE_HEAD` to identify the measured source.
+
 Camera controls: hold the arrow keys or move the pointer within 16 pixels of a
 game-window edge to pan. Panning releases creature follow. Home snaps to the
 selected creature, or finds the first creature when none is selected.
