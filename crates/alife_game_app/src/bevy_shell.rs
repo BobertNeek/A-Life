@@ -1121,6 +1121,12 @@ fn reconcile_production_presentation(
         sample.hunger = homeostasis.drives.hunger;
         sample.body_energy = Some(row.biochemistry.body.energy);
         sample.praise_signal = homeostasis.hormones.extension[0];
+        sample.last_attempt_blocked = row.outcome.as_ref().is_some_and(|outcome| {
+            outcome.patch_sealed
+                && outcome.patch_success == Some(false)
+                && (outcome.physical_contact == Some(alife_core::PhysicalContactKind::Blocked)
+                    || outcome.action_failure == Some(alife_core::ReferenceActionFailure::Blocked))
+        });
         if let Some(response) = crate::production_voxel_renderer::v0_confirmed_creature_response(
             row,
             frame.previous.organism(sample.stable_id),
@@ -1129,7 +1135,9 @@ fn reconcile_production_presentation(
                 .and_then(|motor| motor.target_entity)
                 .and_then(|target| frame.current.object(target)),
         ) {
-            sample.last_response = Some(response);
+            if response != "Attempt blocked" {
+                sample.last_response = Some(response);
+            }
         }
         sample.fatigue = homeostasis.drives.fatigue;
         sample.fear = homeostasis.drives.fear;

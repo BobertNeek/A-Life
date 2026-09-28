@@ -551,6 +551,7 @@ pub struct Fvr04CreatureExpressionSample {
     /// Last confirmed response, retained for legibility after a brief tick.
     /// Presentation only; never selects an action or changes chemistry.
     pub last_response: Option<&'static str>,
+    pub last_attempt_blocked: bool,
     pub fatigue: f32,
     pub fear: f32,
     pub cortisol: f32,
@@ -4612,6 +4613,7 @@ fn spawn_fvr04_prepared_creature_batch(
             body_energy: None,
             praise_signal: 0.0,
             last_response: None,
+            last_attempt_blocked: false,
             fatigue: visual.cues.fatigue.value,
             fear: visual.cues.fear.value,
             cortisol: visual.endocrine.cortisol,
@@ -5691,6 +5693,9 @@ fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample) -> String {
         v0_need_bar(sample.sleep_pressure),
         v0_need_bar(sample.praise_signal),
     );
+    if sample.last_attempt_blocked {
+        text.push_str("\nCurrent attempt blocked");
+    }
     if let Some(response) = sample.last_response {
         text.push_str("\n\nLast response: ");
         text.push_str(response);
@@ -5706,12 +5711,25 @@ pub(crate) fn v0_confirmed_creature_response(
     target: Option<&alife_world::WorldObject>,
 ) -> Option<&'static str> {
     use alife_core::{ActionKind, PhysicalContactKind, ReferenceActionFailure};
-    if let Some(outcome) = row.outcome.as_ref().filter(|outcome| outcome.patch_sealed) {
+    let outcome = row.outcome.as_ref().filter(|outcome| outcome.patch_sealed);
+    if let Some(outcome) = outcome {
         // A different motor channel can fail in the same sealed bundle.
         // Consumption is still a physical fact in that aggregate receipt.
         if outcome.physical_contact == Some(PhysicalContactKind::Consumed) {
             return Some("Ate food");
         }
+    }
+    if let Some(previous) = previous.filter(|previous| previous.organism_id == row.organism_id) {
+        let current = &row.biochemistry.homeostasis.hormones;
+        let prior = &previous.biochemistry.homeostasis.hormones;
+        if current.extension[0] > prior.extension[0] + 0.01 {
+            return Some("Praise signal rose");
+        }
+        if current.oxytocin > prior.oxytocin + 0.01 {
+            return Some("Comfort signal rose");
+        }
+    }
+    if let Some(outcome) = outcome {
         if outcome.patch_success == Some(false)
             && (outcome.physical_contact == Some(PhysicalContactKind::Blocked)
                 || outcome.action_failure == Some(ReferenceActionFailure::Blocked))
@@ -5727,15 +5745,6 @@ pub(crate) fn v0_confirmed_creature_response(
                 return Some("Inspected plaything");
             }
         }
-    }
-    let previous = previous.filter(|previous| previous.organism_id == row.organism_id)?;
-    let current = &row.biochemistry.homeostasis.hormones;
-    let prior = &previous.biochemistry.homeostasis.hormones;
-    if current.extension[0] > prior.extension[0] + 0.01 {
-        return Some("Praise signal rose");
-    }
-    if current.oxytocin > prior.oxytocin + 0.01 {
-        return Some("Comfort signal rose");
     }
     None
 }
@@ -7256,12 +7265,12 @@ mod tests {
             v0_confirmed_creature_response(&row, Some(&prior), None),
             Some("Attempt blocked")
         );
-        row.outcome = None;
         row.biochemistry.homeostasis.hormones.extension[0] += 0.2;
         assert_eq!(
             v0_confirmed_creature_response(&row, Some(&prior), None),
             Some("Praise signal rose")
         );
+        row.outcome = None;
         let peak = row.clone();
         row.biochemistry.homeostasis.hormones.extension[0] *= 0.25;
         assert_eq!(

@@ -210,4 +210,25 @@ learning reward, or animation is forced. The existing optional bounded action
 trace includes body energy, hunger, comfort/praise concentrations, and lifetime
 learning update counts to inspect the same live sequence without extra readback.
 
-Execution and player-visible verification are pending.
+The two focused care-feedback regressions passed, as did the production release
+build, core boundary check, and documentation check. The release run at
+`target/founder-training/care-visible-20260927-002/actions.jsonl` confirms a sealed
+meal at tick 3 with immediate energy and hunger changes. This was existing spawn
+food, not proof of player-placed food or Hand care. The requested manual care
+sequence was interrupted by the player's observation that movement is too fast
+for practical care; touch, praise, play, and player-placed feeding acceptance
+remain pending.
+
+A follow-up separates a current blocked attempt from the retained last care
+response, and gives observed praise/comfort increases priority when another
+motor channel is blocked. Its focused regression passed; that follow-up has not
+yet been rebuilt into the live release.
+
+The live scheduler is paced at 20 world ticks per second at 1x, rather than
+unbounded execution. Existing speed controls accelerate the same sequence by
+2x through 4x. However, locomotion currently permits up to one world unit per
+tick: the observed policy moved approximately 0.7 units per tick, or 14 units
+per wall second. Care pacing requires a decision between correcting physical
+walking speed while keeping the established biological clock, and rebasing the
+whole simulation clock. Neither clock nor locomotion behavior has been changed
+in this follow-up.
