@@ -232,3 +232,43 @@ per wall second. Care pacing requires a decision between correcting physical
 walking speed while keeping the established biological clock, and rebasing the
 whole simulation clock. Neither clock nor locomotion behavior has been changed
 in this follow-up.
+
+## Care pacing and playback modes
+
+Requirements: AOA-TIME-001/002/004/005, AOA-AUTH-002, AOA-PERSIST-001/003.
+
+Normal mode keeps the established 20 world ticks per second. Walking now uses a
+50 ms physical interval with a two-world-unit-per-second reference ceiling,
+rather than a whole unit per decision. The existing inherited embodiment gain,
+locomotor chemistry, organ reserve, and integrity still reduce commanded motion.
+Movement legality, carried-object movement, and measured feedback use the same
+world executor in all hosts. This changes navigation distances per decision;
+older navigation scores do not certify behavior under the corrected pacing.
+Hunger, energy, tiredness, learning, and ageing rates are not slowed or retuned.
+
+The only modes are `1x`, `max`, and `headless-max`. Keys 1 and 2 select normal
+and graphical maximum speed; brackets are aliases for these two modes. Maximum
+speed is unpaced, with bounded batches yielding to input/rendering after 8 ms
+of tick work (a slow tick finishes before yielding), and immediate presentation.
+It is not a fixed 2x, 3x, or 4x multiplier. Pause and single-step remain separate.
+Animation time derives from completed authoritative intervals, not a pretend
+multiplier saved in settings. Older accelerated UX settings migrate to Max speed.
+
+Key 3 starts headless maximum speed, closes the window, and transfers ownership
+of the same live GPU runtime after the graphical schedule finishes. It does not
+rebuild the brain or world. Startup can instead use `--run-mode headless-max`, or
+`scripts/run_production_voxel_frontend.ps1 -RunMode headless-max`. This path uses
+the same canonical admission and tick method without creating rendering plugins.
+The headless loop prints a world-specific `.stop` path. Creating that file stops
+at a tick boundary, requests the existing manual checkpoint, drains publication,
+and requires a completed checkpoint at least as recent as the final world tick.
+It writes a compact `.headless.json` receipt beside that checkpoint. A bounded
+run can use the existing `--smoke-seconds` / `-SmokeSeconds` option. Restore uses
+the existing canonical world/load path; selecting New Game still creates a new
+world. A headless run must finish before resuming that world in another process.
+
+Verification of the production modes and checkpoint handoff is pending. The
+existing movement regression covers the new interval distance, carried objects,
+stationary and blocked velocity, and joint motor execution. The clock regression
+covers normal cadence, unpaced scheduling, pause, single-step, and debt reset;
+the existing UX roundtrip covers migration and all three persisted modes.

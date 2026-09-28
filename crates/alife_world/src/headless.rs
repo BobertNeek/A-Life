@@ -61,7 +61,11 @@ const DEFAULT_ORGANISM_ID_START: u64 = 1;
 const DEFAULT_HEARING_RADIUS: f32 = 6.0;
 pub(crate) const HEADLESS_CONTACT_RADIUS: f32 = 0.75;
 const EAT_RADIUS: f32 = 1.25;
-const MOVE_STEP: f32 = 1.0;
+/// Physical interval shared by graphical and unpaced hosts. Acceleration changes
+/// how quickly intervals execute, never the displacement within an interval.
+pub const WORLD_TICKS_PER_SECOND: u32 = 20;
+const WALK_SPEED_UNITS_PER_SECOND: f32 = 2.0;
+const MOVE_STEP: f32 = WALK_SPEED_UNITS_PER_SECOND / WORLD_TICKS_PER_SECOND as f32;
 const HEAD_SWIVEL_LIMIT: f32 = 70.0_f32.to_radians();
 const HEAD_SWIVEL_STEP: f32 = 20.0_f32.to_radians();
 const VISION_HALF_ANGLE: f32 = 110.0_f32.to_radians();
@@ -6824,17 +6828,17 @@ mod task_6_factorized_motor_tests {
             );
             assert_eq!(
                 world.entity(agent).unwrap().grounded_physical.velocity,
-                Vec3f::new(1.0, 0.0, 0.0),
+                Vec3f::new(0.1, 0.0, 0.0),
                 "{label}"
             );
             assert_eq!(
                 world.entity(neighbor).unwrap().position,
-                Vec3f::new(1.5, 0.0, 0.0),
+                Vec3f::new(0.6, 0.0, 0.0),
                 "{label}"
             );
             assert_eq!(
                 world.entity(neighbor).unwrap().grounded_physical.velocity,
-                Vec3f::new(1.0, 0.0, 0.0),
+                Vec3f::new(0.1, 0.0, 0.0),
                 "{label}"
             );
             assert_eq!(
@@ -6870,7 +6874,7 @@ mod task_6_factorized_motor_tests {
         let mut blocked_world = HeadlessScenarioBuilder::new(36_004)
             .agent("agent", ORGANISM_ID, Vec3f::ZERO)
             .food("neighbor", Vec3f::new(0.5, 0.0, 0.0), 0.6)
-            .obstacle("blocker", Vec3f::new(2.0, 0.0, 0.0), 0.5)
+            .obstacle("blocker", Vec3f::new(0.2, 0.0, 0.0), 0.05)
             .build()
             .unwrap();
         let blocked_agent = blocked_world.entity_id("agent").unwrap();
@@ -6910,6 +6914,25 @@ mod task_6_factorized_motor_tests {
             relative_velocity(&mut blocked_world, blocked_neighbor),
             [0.0, 0.0, 0.0]
         );
+
+        // Twenty physical intervals are one simulated second in every host.
+        let mut walking = HeadlessScenarioBuilder::new(36_005)
+            .agent("agent", ORGANISM_ID, Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let walker = walking.entity_id("agent").unwrap();
+        let forward = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            HeadlessActionIds::STEP_FORWARD,
+            ActionKind::Move,
+            None,
+            None,
+        )
+        .unwrap();
+        for _ in 0..20 {
+            walking.apply_command(&forward).unwrap();
+        }
+        assert!((walking.entity(walker).unwrap().position.x - 2.0).abs() < 0.00001);
 
         let (mut bundle_world, agent, food, _) = prepared_world();
         let grab = HeadlessWorldCommand::structured(
@@ -6963,7 +6986,7 @@ mod task_6_factorized_motor_tests {
             .unwrap();
         assert_eq!(
             receipt.joint.execution.displacement,
-            Vec3f::new(1.0, 0.0, 0.0)
+            Vec3f::new(0.1, 0.0, 0.0)
         );
         assert_eq!(
             bundle_world
@@ -6971,11 +6994,11 @@ mod task_6_factorized_motor_tests {
                 .unwrap()
                 .grounded_physical
                 .velocity,
-            Vec3f::new(1.0, 0.0, 0.0)
+            Vec3f::new(0.1, 0.0, 0.0)
         );
         assert_eq!(
             bundle_world.entity(food).unwrap().position,
-            Vec3f::new(2.0, 0.0, 0.0)
+            Vec3f::new(1.1, 0.0, 0.0)
         );
         assert_eq!(
             bundle_world
@@ -6983,7 +7006,7 @@ mod task_6_factorized_motor_tests {
                 .unwrap()
                 .grounded_physical
                 .velocity,
-            Vec3f::new(1.0, 0.0, 0.0)
+            Vec3f::new(0.1, 0.0, 0.0)
         );
     }
 

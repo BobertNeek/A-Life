@@ -421,6 +421,7 @@ fn parse_launch(args: &[String]) -> Result<ProductionVoxelLaunchConfig, String> 
     let mut resolution = None;
     let mut graphics_backend = if cfg!(windows) { "vulkan" } else { "auto" }.to_string();
     let mut smoke_seconds = None;
+    let mut run_mode = None;
     let mut dry_run = false;
     let mut record_performance = false;
     let mut require_gpu = false;
@@ -507,6 +508,14 @@ fn parse_launch(args: &[String]) -> Result<ProductionVoxelLaunchConfig, String> 
                 );
                 index += 2;
             }
+            "--run-mode" => {
+                run_mode = Some(alife_game_app::ProductionRunMode::parse(value(
+                    args,
+                    index,
+                    "--run-mode",
+                )?)?);
+                index += 2;
+            }
             "--ui-settings" => {
                 ui_settings_path = Some(PathBuf::from(value(args, index, "--ui-settings")?));
                 index += 2;
@@ -554,6 +563,7 @@ fn parse_launch(args: &[String]) -> Result<ProductionVoxelLaunchConfig, String> 
     }
     launch.graphics_backend = graphics_backend;
     launch.smoke_seconds = smoke_seconds;
+    launch.run_mode = run_mode;
     launch.dry_run = dry_run;
     launch.record_performance = record_performance;
     launch.require_gpu = require_gpu;
@@ -1011,7 +1021,7 @@ fn run_graphical(
 
 fn help() -> String {
     format!(
-        "{PRODUCTION_VOXEL_COMMAND} [--manifest PATH] [--scenario ID] [--new-game --seed N [--founder builtin-nano512|scaled-choice-nociceptive-v1|n2048:<path>] [--disable-age-death|--enable-age-death]] [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--ui-settings PATH] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --seed N --output PATH\n{GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks 64|10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1\n{GPU_CLOSED_LOOP_SOAK_COMMAND} --class n512|n1024|n2048 --ticks 10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|b|c|d --input PATH\n{GPU_CLOSED_LOOP_PROMOTION_COMMAND} --slice-a PATH (x3) --slice-b PATH (x3) --slice-c PATH (x6) --slice-d PATH (x6) --benchmark PATH --gates PATH --output PATH\n{GPU_CLOSED_LOOP_GATE_SEAL_COMMAND} --capture PATH --gate-script PATH --adapter-evidence PATH --output PATH\nNew Game disables age-only death by default; --enable-age-death restores the age cap. Loading keeps the saved setting.\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
+        "{PRODUCTION_VOXEL_COMMAND} [--manifest PATH] [--scenario ID] [--new-game --seed N [--founder builtin-nano512|scaled-choice-nociceptive-v1|n2048:<path>] [--disable-age-death|--enable-age-death]] [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--ui-settings PATH] [--developer-overlay] [--run-mode 1x|max|headless-max] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --seed N --output PATH\n{GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks 64|10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1\n{GPU_CLOSED_LOOP_SOAK_COMMAND} --class n512|n1024|n2048 --ticks 10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|b|c|d --input PATH\n{GPU_CLOSED_LOOP_PROMOTION_COMMAND} --slice-a PATH (x3) --slice-b PATH (x3) --slice-c PATH (x6) --slice-d PATH (x6) --benchmark PATH --gates PATH --output PATH\n{GPU_CLOSED_LOOP_GATE_SEAL_COMMAND} --capture PATH --gate-script PATH --adapter-evidence PATH --output PATH\nNew Game disables age-only death by default; --enable-age-death restores the age cap. Loading keeps the saved setting.\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
     )
 }
 

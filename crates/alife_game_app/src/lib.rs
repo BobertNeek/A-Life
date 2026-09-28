@@ -43,6 +43,9 @@ mod prelude {
 mod schema;
 pub use schema::*;
 
+mod production_run_mode;
+pub use production_run_mode::*;
+
 mod app_shell;
 pub use app_shell::*;
 

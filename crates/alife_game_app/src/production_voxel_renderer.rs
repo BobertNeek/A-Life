@@ -1514,6 +1514,8 @@ struct Fvr07ProductionPolishSummary {
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct Fvr05ProductionUxStateResource {
     pub settings: Fvr05ProductionUxSettings,
+    /// Derived from completed authoritative intervals, never persisted as policy.
+    pub animation_speed: f32,
     pub debug_mode: bool,
     pub show_help: bool,
     pub ui_settings_path: PathBuf,
@@ -1552,6 +1554,7 @@ impl Fvr05ProductionUxStateResource {
         }
         Self {
             settings,
+            animation_speed: 0.0,
             debug_mode: summary.developer_overlay,
             show_help: false,
             ui_settings_path: summary.ui_settings_path.clone(),
@@ -1953,7 +1956,7 @@ fn apply_production_runtime_load(world: &mut World) {
         } else {
             RuntimePlaybackState::Running
         };
-        let speed_ticks = candidate_settings.simulation_speed.round().clamp(1.0, 5.0) as u32;
+        let mode = candidate_settings.playback_mode();
 
         {
             let mut live_runtime = world
@@ -1969,7 +1972,7 @@ fn apply_production_runtime_load(world: &mut World) {
         world.insert_resource(candidate_frame);
         world
             .resource_mut::<ProductionGpuBrainTickScheduleResource>()
-            .reset_after_load(playback, speed_ticks);
+            .reset_after_load(playback, mode);
         {
             let mut ux = world.resource_mut::<Fvr05ProductionUxStateResource>();
             ux.settings = candidate_settings;
@@ -4880,10 +4883,7 @@ fn animate_fvr04_creatures(
     >,
 ) {
     let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
-    let speed = ux
-        .as_ref()
-        .map(|ux| ux.settings.simulation_speed)
-        .unwrap_or(1.0);
+    let speed = ux.as_ref().map(|ux| ux.animation_speed).unwrap_or(1.0);
     let seconds =
         advance_fvr04_animation_phase(*animation_seconds, time.delta_secs(), speed, paused);
     *animation_seconds = seconds;
@@ -4919,10 +4919,7 @@ fn animate_fvr04_creature_parts(
     )>,
 ) {
     let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
-    let speed = ux
-        .as_ref()
-        .map(|ux| ux.settings.simulation_speed)
-        .unwrap_or(1.0);
+    let speed = ux.as_ref().map(|ux| ux.animation_speed).unwrap_or(1.0);
     let seconds =
         advance_fvr04_animation_phase(*animation_seconds, time.delta_secs(), speed, paused);
     *animation_seconds = seconds;
@@ -5111,10 +5108,7 @@ fn animate_fvr07_production_vfx(
     )>,
 ) {
     let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
-    let speed = ux
-        .as_ref()
-        .map(|ux| ux.settings.simulation_speed)
-        .unwrap_or(1.0);
+    let speed = ux.as_ref().map(|ux| ux.animation_speed).unwrap_or(1.0);
     let seconds =
         advance_fvr04_animation_phase(*animation_seconds, time.delta_secs(), speed, paused);
     *animation_seconds = seconds;
@@ -5534,8 +5528,8 @@ fn sync_v0_player_status_chip(
     }
     let playback = if ux.settings.paused {
         " | Paused".to_string()
-    } else if ux.settings.simulation_speed != 1.0 {
-        format!(" | {:.0}x", ux.settings.simulation_speed)
+    } else if ux.settings.playback_mode() != crate::ProductionRunMode::OneX {
+        format!(" | {}", ux.settings.playback_mode().label())
     } else {
         String::new()
     };
@@ -5589,7 +5583,7 @@ fn sync_v0_player_control_strip(
         return;
     }
     let mut text = if ux.show_help {
-        "F1 Close help | Space Pause | 1/2/3 Speed | S Save | L Load\nClick Select | E Food on ground | G Move food | C Gentle touch | J Offer play | K Praise reward\nEnter Speak | Y Lineage | Arrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
+        "F1 Close help | Space Pause | 1 1x | 2 Max | 3 Headless max (closes window) | S Save | L Load\nClick Select | E Food on ground | G Move food | C Gentle touch | J Offer play | K Praise reward\nEnter Speak | Y Lineage | Arrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
     } else {
         V0_PLAYER_CONTROL_HINTS.to_string()
     };
@@ -6119,7 +6113,7 @@ fn sync_fvr05_left_control_panel(
         .map(|error| format!("\nERROR\n{error}\n"))
         .unwrap_or_default();
     let text = format!(
-        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1/2/3 speed\n[ ] adjust speed\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\nShift+1-3, 4-9, B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nLIVE / STARTUP ESTIMATES\nlive creatures {}\nstartup chunks loaded {}\nstartup chunks resident {}\nstartup tiles sampled {}\nstartup mesher {} quads {} face reduction {:.2}x\nconfigured remesh budget {} snapshot dirty {} estimated cached {} deferred {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
+        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1 1x | 2 Max | 3 Headless max\nHeadless closes the window; stop file path prints in launch log\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\nShift+1-3, 4-9, B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nRUN MODE\n{}\n\nLIVE / STARTUP ESTIMATES\nlive creatures {}\nstartup chunks loaded {}\nstartup chunks resident {}\nstartup tiles sampled {}\nstartup mesher {} quads {} face reduction {:.2}x\nconfigured remesh budget {} snapshot dirty {} estimated cached {} deferred {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
         if ux.settings.paused {
             "paused"
         } else {
@@ -6128,7 +6122,7 @@ fn sync_fvr05_left_control_panel(
         ux.settings.follow_selection,
         ux.settings.pause_on_focus_loss,
         ux.settings.show_overlays,
-        ux.settings.simulation_speed,
+        ux.settings.playback_mode().label(),
         scene.creature_render_count,
         scene.visible_chunk_count,
         scene.resident_chunk_count,

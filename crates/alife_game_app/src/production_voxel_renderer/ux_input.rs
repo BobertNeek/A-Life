@@ -4,6 +4,8 @@ use super::*;
 
 pub(super) fn handle_fvr05_production_ux_input(
     keyboard: Res<ButtonInput<KeyCode>>,
+    mut windows: bevy::prelude::Query<&mut Window, With<PrimaryWindow>>,
+    frontend: Res<crate::bevy_shell::ProductionVoxelFrontendResource>,
     #[cfg(feature = "gpu-runtime")] conversation: Option<
         Res<crate::ProductionConversationLineageUiState>,
     >,
@@ -30,13 +32,20 @@ pub(super) fn handle_fvr05_production_ux_input(
     #[cfg(feature = "gpu-runtime")]
     if let Some(schedule) = schedule.as_deref() {
         let paused = schedule.is_paused();
-        let speed = schedule.speed_ticks() as f32;
+        let mode = schedule.run_mode();
+        ux.animation_speed = schedule.animation_speed();
+        for mut window in &mut windows {
+            window.present_mode =
+                if mode == crate::ProductionRunMode::OneX && !frontend.summary.record_performance {
+                    bevy::window::PresentMode::AutoVsync
+                } else {
+                    bevy::window::PresentMode::Immediate
+                };
+        }
         if ux.settings.paused != paused {
             ux.settings.paused = paused;
         }
-        if ux.settings.simulation_speed != speed {
-            ux.settings.simulation_speed = speed;
-        }
+        ux.settings.run_mode = Some(mode);
     }
     #[cfg(feature = "gpu-runtime")]
     if let Some(runtime) = gpu_runtime.as_ref() {
@@ -134,50 +143,37 @@ pub(super) fn handle_fvr05_production_ux_input(
         ux.settings.show_overlays = !ux.settings.show_overlays;
         ux.last_action = format!("Overlays visible: {}", ux.settings.show_overlays);
     }
-    if keyboard.just_pressed(KeyCode::BracketLeft) {
-        #[cfg(feature = "gpu-runtime")]
-        if let Some(schedule) = schedule.as_deref_mut() {
-            let speed = schedule.speed_ticks().saturating_sub(1);
-            schedule.set_running_speed(speed);
-            ux.settings.paused = schedule.is_paused();
-            ux.settings.simulation_speed = schedule.speed_ticks() as f32;
-        } else {
-            ux.settings.simulation_speed = (ux.settings.simulation_speed * 0.5).clamp(0.10, 5.0);
-        }
-        #[cfg(not(feature = "gpu-runtime"))]
-        {
-            ux.settings.simulation_speed = (ux.settings.simulation_speed * 0.5).clamp(0.10, 5.0);
-        }
-        ux.last_action = format!("Simulation speed {:.2}x", ux.settings.simulation_speed);
-    }
-    if keyboard.just_pressed(KeyCode::BracketRight) {
-        #[cfg(feature = "gpu-runtime")]
-        if let Some(schedule) = schedule.as_deref_mut() {
-            let speed = schedule.speed_ticks().saturating_add(1);
-            schedule.set_running_speed(speed);
-            ux.settings.paused = schedule.is_paused();
-            ux.settings.simulation_speed = schedule.speed_ticks() as f32;
-        } else {
-            ux.settings.simulation_speed = (ux.settings.simulation_speed * 2.0).clamp(0.10, 5.0);
-        }
-        #[cfg(not(feature = "gpu-runtime"))]
-        {
-            ux.settings.simulation_speed = (ux.settings.simulation_speed * 2.0).clamp(0.10, 5.0);
-        }
-        ux.last_action = format!("Simulation speed {:.2}x", ux.settings.simulation_speed);
-    }
-    #[cfg(feature = "gpu-runtime")]
-    for (key, speed) in [
-        (KeyCode::Digit1, 1),
-        (KeyCode::Digit2, 2),
-        (KeyCode::Digit3, 3),
+    // These are the only playback modes. Brackets are aliases, not multipliers.
+    for (key, mode) in [
+        (KeyCode::Digit1, crate::ProductionRunMode::OneX),
+        (KeyCode::Digit2, crate::ProductionRunMode::MaxSpeed),
+        (KeyCode::Digit3, crate::ProductionRunMode::HeadlessMaxSpeed),
+        (KeyCode::BracketLeft, crate::ProductionRunMode::OneX),
+        (KeyCode::BracketRight, crate::ProductionRunMode::MaxSpeed),
     ] {
         if keyboard.just_pressed(key) && !fvr05_overlay_modifier_pressed(&keyboard) {
+            if mode == crate::ProductionRunMode::HeadlessMaxSpeed
+                && frontend.summary.record_performance
+            {
+                ux.last_error = Some(
+                    "Finish graphical performance recording before entering headless mode"
+                        .to_string(),
+                );
+                continue;
+            }
+            #[cfg(feature = "gpu-runtime")]
             if let Some(schedule) = schedule.as_deref_mut() {
-                schedule.set_running_speed(speed);
+                schedule.set_run_mode(mode);
+                if mode == crate::ProductionRunMode::HeadlessMaxSpeed && schedule.is_paused() {
+                    schedule.toggle_playback();
+                }
                 ux.settings.paused = schedule.is_paused();
-                ux.settings.simulation_speed = schedule.speed_ticks() as f32;
-                ux.last_action = format!("Simulation speed {:.0}x", ux.settings.simulation_speed);
+                ux.settings.run_mode = Some(mode);
+                ux.last_action = format!("Simulation: {}", mode.label());
+            }
+            #[cfg(not(feature = "gpu-runtime"))]
+            {
+                ux.last_error = Some("Playback requires the GPU runtime".to_string());
             }
         }
     }
@@ -293,7 +289,7 @@ pub(super) fn handle_fvr05_production_ux_input(
         if let Some(schedule) = schedule.as_deref_mut() {
             schedule.queue_step();
             ux.settings.paused = schedule.is_paused();
-            ux.settings.simulation_speed = schedule.speed_ticks() as f32;
+            ux.settings.run_mode = Some(schedule.run_mode());
             ux.last_action = "Queued one production simulation step".to_string();
         } else if let Some(runtime) = gpu_runtime.as_mut() {
             ux.write_gpu_runtime_save(true, &mut runtime.runtime);

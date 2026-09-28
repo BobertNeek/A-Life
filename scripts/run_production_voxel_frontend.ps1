@@ -5,6 +5,8 @@ param(
     [switch]$NewGame,
     [string]$Founder = "",
     [string]$UiSettings = "",
+    [ValidateSet("1x", "max", "headless-max")]
+    [string]$RunMode = "1x",
     [UInt64]$Seed = 0,
     [switch]$DryRun,
     [switch]$PreviewCommand,
@@ -50,6 +52,7 @@ $AppArgs = @(
     "--brain-policy", $BrainPolicy,
     "--graphics-backend", $GraphicsBackend
 )
+$AppArgs += @("--run-mode", $RunMode)
 
 if ($Manifest) {
     $AppArgs += @("--manifest", $Manifest)

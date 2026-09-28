@@ -336,7 +336,7 @@ pub(super) fn animate(
         let speed = if ux.settings.paused {
             0.0
         } else {
-            ux.settings.simulation_speed
+            ux.animation_speed
         };
         for (_, active) in player.playing_animations_mut() {
             if next == 1 {

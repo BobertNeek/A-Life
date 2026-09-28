@@ -31,10 +31,7 @@ fn animate_water_material(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
-    let speed = ux
-        .as_ref()
-        .map(|ux| ux.settings.simulation_speed)
-        .unwrap_or(1.0);
+    let speed = ux.as_ref().map(|ux| ux.animation_speed).unwrap_or(1.0);
     water.phase = advance_water_phase(water.phase, time.delta_secs(), speed, paused);
     if paused {
         return;
