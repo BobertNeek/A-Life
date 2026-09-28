@@ -945,19 +945,19 @@ fn portable_bank_from_memory(
             query_feature_bits: record
                 .query_features
                 .iter()
-                .map(|value| value.to_bits())
+                .map(|value| portable_float_bits(*value))
                 .collect(),
             target_latent_bits: record
                 .target_latent
                 .iter()
-                .map(|value| value.to_bits())
+                .map(|value| portable_float_bits(*value))
                 .collect(),
             family_value_bits: record
                 .family_value
                 .iter()
-                .map(|value| value.to_bits())
+                .map(|value| portable_float_bits(*value))
                 .collect(),
-            confidence_bits: record.confidence.to_bits(),
+            confidence_bits: portable_float_bits(record.confidence),
             salience_q16: record.salience_q16,
             observation_count: record.observation_count,
             canonical_digest: [0; 4],
@@ -987,8 +987,8 @@ fn portable_bank_from_memory(
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?,
         max_match_count: u32::try_from(bank.config.max_match_count)
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?,
-        min_match_score_bits: bank.config.min_match_score.to_bits(),
-        empty_confidence_bits: bank.config.empty_confidence.raw().to_bits(),
+        min_match_score_bits: portable_float_bits(bank.config.min_match_score),
+        empty_confidence_bits: portable_float_bits(bank.config.empty_confidence.raw()),
         generation: bank.candidate_store.generation,
         next_memory_id_raw: bank.candidate_store.next_memory_id,
         last_observed_sequence_id_raw,
@@ -1093,6 +1093,16 @@ fn portable_memory_config(
         Confidence::new(portable_float(asset.empty_confidence_bits)?)?,
     )
     .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)
+}
+
+fn portable_float_bits(value: f32) -> u32 {
+    // Match canonical digests: signed zero is valid live state but has one
+    // portable encoding. Keep import validation strict about that encoding.
+    if value == 0.0 {
+        0
+    } else {
+        value.to_bits()
+    }
 }
 
 fn portable_float(bits: u32) -> Result<f32, ScaffoldContractError> {

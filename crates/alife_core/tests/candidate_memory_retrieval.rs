@@ -1142,8 +1142,11 @@ fn portable_memory_assets_roundtrip_private_indices_and_reject_tampering() {
     .unwrap()
     .identity();
     let mut sidecar = MemorySidecarState::new_profiled(ORGANISM, profile, config).unwrap();
+    let mut object = slot(0, 71, 0.4, [0.0, 0.8, 0.9]);
+    // A valid physical reading can carry signed zero from ordinary arithmetic.
+    object.relative_velocity[0] = -0.0;
     sidecar
-        .observe_sealed_patch(&sequenced_patch(1, 2, 71, 0.4, -1.0, 1.0))
+        .observe_sealed_patch(&sequenced_patch_for_object(1, 2, object, -1.0, 1.0))
         .unwrap();
     let before = sidecar
         .recall_frame(&cyan_amber_family_draft())
@@ -1152,6 +1155,8 @@ fn portable_memory_assets_roundtrip_private_indices_and_reject_tampering() {
         .bank_digest;
 
     let active = sidecar.export_active_bank().unwrap();
+    // Relative velocity occupies target feature lane 3 (query lane 60).
+    assert_eq!(active.records[0].query_feature_bits[60], 0);
     assert_eq!(active.organism_id_raw, ORGANISM.raw());
     assert_eq!(active.profile, profile);
     assert_eq!(active.records.len(), 1);
