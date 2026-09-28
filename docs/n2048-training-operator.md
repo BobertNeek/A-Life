@@ -2,6 +2,8 @@
 
 Use PowerShell 7 from the authoritative repository root. The launcher has separate fidelity preparation and bounded campaign modes. Neither a completed teacher corpus nor a successful training cycle by itself proves learned care.
 
+The next proposed [vision, maze, and vocabulary campaign](n2048-vision-maze-vocabulary-run-2026-09-28.md) must use the internal SLM prior during warmup and training, with deliberate dropout, and run headlessly at maximum sustainable speed. Its prior-to-neural-input, maze, and speech integrations still require implementation and qualification; the existing launcher is not yet ready to execute that design. No training or scheduling is requested by this operator update.
+
 Terrain-vision adaptation is explicit. Before resuming the old object-slot founder,
 run `train_n2048_care --adapt-terrain SOURCE_COHORT NEW_DIRECTORY`. This accepts a
 sealed old cycle, preserves every weight at identical inherited synapse coordinates,
