@@ -548,6 +548,9 @@ pub struct Fvr04CreatureExpressionSample {
     pub hunger: f32,
     pub body_energy: Option<f32>,
     pub praise_signal: f32,
+    /// Last confirmed response, retained for legibility after a brief tick.
+    /// Presentation only; never selects an action or changes chemistry.
+    pub last_response: Option<&'static str>,
     pub fatigue: f32,
     pub fear: f32,
     pub cortisol: f32,
@@ -2139,7 +2142,7 @@ pub fn spawn_fvr03_production_voxel_scene(
         Update,
         (
             project_live_world_to_fvr04_creature_roots,
-            live_food_projection::sync_food,
+            live_food_projection::sync_care_objects,
         )
             .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
     )
@@ -4608,6 +4611,7 @@ fn spawn_fvr04_prepared_creature_batch(
             hunger: visual.cues.hunger.value,
             body_energy: None,
             praise_signal: 0.0,
+            last_response: None,
             fatigue: visual.cues.fatigue.value,
             fear: visual.cues.fear.value,
             cortisol: visual.endocrine.cortisol,
@@ -5605,6 +5609,9 @@ fn sync_v0_player_control_strip(
             "select a visible terrain tile first" => {
                 "Click a ground tile, then press E to place food."
             }
+            "select a living creature first" => {
+                "Click a creature, or press PgUp/PgDn, before giving care."
+            }
             "GPU runtime unavailable" => "Care tools are unavailable. F3 has details.",
             "select loose food to move" => {
                 "Click loose food, then press G to choose it for moving."
@@ -5643,6 +5650,18 @@ fn sync_v0_player_control_strip(
             text.push_str("\nFood moved to the selected ground.");
         } else if ux.last_action == "Food move cancelled" {
             text.push_str("\nFood move cancelled.");
+        } else if ux.last_action.starts_with("Gentle touch offered") {
+            text.push_str("\nGentle touch queued for the selected creature.");
+        } else if ux.last_action.starts_with("Praise reward offered") {
+            text.push_str("\nPraise queued for the selected creature.");
+        } else if ux.last_action.starts_with("Plaything offered") {
+            text.push_str("\nPlaything offered. The creature can investigate or ignore it.");
+        }
+        if ux.settings.paused
+            && (ux.last_action.starts_with("Gentle touch offered")
+                || ux.last_action.starts_with("Praise reward offered"))
+        {
+            text.push_str(" Resume with Space to deliver the stimulus.");
         }
         #[cfg(feature = "gpu-runtime")]
         match ux.last_manual_checkpoint_status.as_ref() {
@@ -5661,7 +5680,7 @@ fn sync_v0_player_control_strip(
 
 fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample) -> String {
     let display_name = v0_player_creature_name(&sample.display_label, sample.stable_id.raw());
-    format!(
+    let mut text = format!(
         "{display_name}\n{} | {}\n\nHunger  {}\nEnergy  {}\nTiredness  {}\nSafety  {}\nSleepiness  {}\nPraise  {}",
         sample.animation.label(),
         sample.expression.label(),
@@ -5671,7 +5690,54 @@ fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample) -> String {
         v0_need_bar(1.0 - sample.fear),
         v0_need_bar(sample.sleep_pressure),
         v0_need_bar(sample.praise_signal),
-    )
+    );
+    if let Some(response) = sample.last_response {
+        text.push_str("\n\nLast response: ");
+        text.push_str(response);
+    }
+    text
+}
+
+/// Report consequences from the existing sealed world receipt, not intentions.
+#[cfg(feature = "gpu-runtime")]
+pub(crate) fn v0_confirmed_creature_response(
+    row: &alife_world::WorldOrganismPresentationRow,
+    previous: Option<&alife_world::WorldOrganismPresentationRow>,
+    target: Option<&alife_world::WorldObject>,
+) -> Option<&'static str> {
+    use alife_core::{ActionKind, PhysicalContactKind, ReferenceActionFailure};
+    if let Some(outcome) = row.outcome.as_ref().filter(|outcome| outcome.patch_sealed) {
+        // A different motor channel can fail in the same sealed bundle.
+        // Consumption is still a physical fact in that aggregate receipt.
+        if outcome.physical_contact == Some(PhysicalContactKind::Consumed) {
+            return Some("Ate food");
+        }
+        if outcome.patch_success == Some(false)
+            && (outcome.physical_contact == Some(PhysicalContactKind::Blocked)
+                || outcome.action_failure == Some(ReferenceActionFailure::Blocked))
+        {
+            return Some("Attempt blocked");
+        }
+        if outcome.patch_success == Some(true)
+            && target.is_some_and(|target| target.label == "player-plaything")
+        {
+            // The aggregate contact can belong to another motor channel.
+            // Do not attribute it to this representative target.
+            if row.motor.as_ref().and_then(|motor| motor.action_kind) == Some(ActionKind::Inspect) {
+                return Some("Inspected plaything");
+            }
+        }
+    }
+    let previous = previous.filter(|previous| previous.organism_id == row.organism_id)?;
+    let current = &row.biochemistry.homeostasis.hormones;
+    let prior = &previous.biochemistry.homeostasis.hormones;
+    if current.extension[0] > prior.extension[0] + 0.01 {
+        return Some("Praise signal rose");
+    }
+    if current.oxytocin > prior.oxytocin + 0.01 {
+        return Some("Comfort signal rose");
+    }
+    None
 }
 
 fn v0_player_creature_name(label: &str, stable_id: u64) -> String {
@@ -7133,6 +7199,89 @@ mod tests {
     use super::*;
     use alife_core::{OrganismId, Tick, WorldEntityId};
     use alife_world::{HeadlessScenarioBuilder, WorldObjectKind};
+
+    #[cfg(feature = "gpu-runtime")]
+    #[test]
+    fn care_feedback_requires_confirmed_consequences() {
+        use alife_core::{
+            BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity, PhysicalContactKind,
+            ReferenceActionFailure,
+        };
+        use alife_world::{PresentationOutcomeSnapshot, WorldOrganismRecord};
+        let id = OrganismId(1);
+        let mut world = HeadlessScenarioBuilder::new(21)
+            .agent("agent", id, Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let entity = world.entity_id("agent").unwrap();
+        let genome = CreatureGenome::early_mammal_founder(
+            21,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        world
+            .register_organism_record(
+                WorldOrganismRecord::newborn(id, entity, genome, phenotype, Tick::ZERO).unwrap(),
+            )
+            .unwrap();
+        let mut row = world.presentation_snapshot().organisms.remove(0);
+        let prior = row.clone();
+        row.outcome = Some(PresentationOutcomeSnapshot {
+            patch_sealed: false,
+            patch_sequence_id: Some(1),
+            patch_success: Some(true),
+            physical_contact: Some(PhysicalContactKind::Consumed),
+            action_failure: None,
+        });
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&prior), None),
+            None
+        );
+        row.outcome.as_mut().unwrap().patch_sealed = true;
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&prior), None),
+            Some("Ate food")
+        );
+        row.outcome.as_mut().unwrap().patch_success = Some(false);
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&prior), None),
+            Some("Ate food")
+        );
+        let outcome = row.outcome.as_mut().unwrap();
+        outcome.patch_success = Some(false);
+        outcome.physical_contact = Some(PhysicalContactKind::Blocked);
+        outcome.action_failure = Some(ReferenceActionFailure::Blocked);
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&prior), None),
+            Some("Attempt blocked")
+        );
+        row.outcome = None;
+        row.biochemistry.homeostasis.hormones.extension[0] += 0.2;
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&prior), None),
+            Some("Praise signal rose")
+        );
+        let peak = row.clone();
+        row.biochemistry.homeostasis.hormones.extension[0] *= 0.25;
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&peak), None),
+            None
+        );
+        row.biochemistry.homeostasis.hormones.extension[0] =
+            prior.biochemistry.homeostasis.hormones.extension[0];
+        row.biochemistry.homeostasis.hormones.oxytocin += 0.2;
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&prior), None),
+            Some("Comfort signal rose")
+        );
+        let mut foreign = prior.clone();
+        foreign.organism_id = OrganismId(2);
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&foreign), None),
+            None
+        );
+    }
 
     #[cfg(feature = "gpu-runtime")]
     use crate::bevy_shell::{

@@ -91,6 +91,11 @@ pub(super) fn capture_player_view(
                         "target_position": target.map(|o| [o.position.x, o.position.y, o.position.z]),
                         "position": object.map(|o| [o.position.x, o.position.y, o.position.z]),
                         "sleep_phase": organism.map(|o| format!("{:?}", o.sleep_phase)),
+                        "body_energy": organism.map(|o| o.biochemistry.body.energy),
+                        "hunger": organism.map(|o| o.biochemistry.homeostasis.drives.hunger),
+                        "comfort_signal": organism.map(|o| o.biochemistry.homeostasis.hormones.oxytocin),
+                        "praise_signal": organism.map(|o| o.biochemistry.homeostasis.hormones.extension[0]),
+                        "learning_updates": s.learning_updates,
                         "sealed": s.patch_sealed, "success": s.patch_success,
                         "contact": s.physical_contact.map(|v| format!("{v:?}")),
                         "outcome_scope": "aggregate_joint_motor_outcome",
@@ -142,6 +147,8 @@ pub(super) fn capture_player_view(
         "visible_mesh_triangles_before_batching": visible_meshes.iter().filter(|(_,v)| v.get())
             .filter_map(|(m,_)| meshes.get(&m.0)).map(|m| m.indices().map_or(m.count_vertices(),|i| i.len())/3).sum::<usize>(),
         "paused": ux.settings.paused, "elapsed_seconds": time.elapsed_secs_f64(),
+        "last_player_action": ux.last_action,
+        "last_player_error": ux.last_error,
         "world_tick": frame.as_ref().map(|f| f.current.authoritative_world_tick.raw()),
         "food": frame.as_ref().map(|f| f.current.objects().filter(|o| o.kind == WorldObjectKind::Food).map(|o| serde_json::json!({
             "id":o.id.raw(), "position":[o.position.x,o.position.y,o.position.z], "consumed":o.consumed,

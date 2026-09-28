@@ -1121,6 +1121,16 @@ fn reconcile_production_presentation(
         sample.hunger = homeostasis.drives.hunger;
         sample.body_energy = Some(row.biochemistry.body.energy);
         sample.praise_signal = homeostasis.hormones.extension[0];
+        if let Some(response) = crate::production_voxel_renderer::v0_confirmed_creature_response(
+            row,
+            frame.previous.organism(sample.stable_id),
+            row.motor
+                .as_ref()
+                .and_then(|motor| motor.target_entity)
+                .and_then(|target| frame.current.object(target)),
+        ) {
+            sample.last_response = Some(response);
+        }
         sample.fatigue = homeostasis.drives.fatigue;
         sample.fear = homeostasis.drives.fear;
         sample.cortisol = homeostasis.hormones.cortisol;

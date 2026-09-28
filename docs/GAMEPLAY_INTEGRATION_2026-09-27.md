@@ -189,3 +189,25 @@ and launcher preview/debug-recording guard passed. Windows MCP captured the
 game window; attempted keyboard interaction was not visibly verified. This
 measurement covers one creature at the graphics floor, not larger populations,
 default graphics settings, long-term survival, or player-care acceptance.
+
+## Visible care follow-up
+
+Requirements: AOA-GAME-001/002/007/009, AOA-INV-003/011, AOA-AUTH-002.
+
+The current HUD is a temporary development interface, not an approved visual
+design. This repair makes its feedback functional without redesigning it.
+Accepted touch and praise now show a queued acknowledgement, including a resume
+hint while paused; play acknowledges an offer without claiming enjoyment. Missing
+creature selection has a direct explanation. The existing live food projection
+also draws the canonical player plaything as a blue ball, follows repositioning,
+and removes unavailable objects. It does not create a second toy simulation.
+
+The selected creature panel retains a last confirmed response from the existing
+sealed action receipt or an observed change in inherited chemistry. It separates
+confirmed consumption, blocked attempts, plaything inspection, and rises
+in praise/comfort signals from the player's offered stimulus. No action, affect,
+learning reward, or animation is forced. The existing optional bounded action
+trace includes body energy, hunger, comfort/praise concentrations, and lifetime
+learning update counts to inspect the same live sequence without extra readback.
+
+Execution and player-visible verification are pending.
