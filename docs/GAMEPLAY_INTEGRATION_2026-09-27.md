@@ -267,8 +267,33 @@ run can use the existing `--smoke-seconds` / `-SmokeSeconds` option. Restore use
 the existing canonical world/load path; selecting New Game still creates a new
 world. A headless run must finish before resuming that world in another process.
 
-Verification of the production modes and checkpoint handoff is pending. The
-existing movement regression covers the new interval distance, carried objects,
-stationary and blocked velocity, and joint motor execution. The clock regression
-covers normal cadence, unpaced scheduling, pause, single-step, and debt reset;
-the existing UX roundtrip covers migration and all three persisted modes.
+Three focused existing regressions passed: movement interval distance, carried
+objects, stationary/blocked velocity and joint motor execution; normal cadence,
+unpaced scheduling, pause, single-step and debt reset; and UX migration plus all
+three persisted modes. The optimized release built successfully. In isolated
+one-founder graphical runs, normal mode measured 19.99985 ticks/second over the
+stable 19.8-second interval; Max measured 28.0966 ticks/second. Both capped observed
+horizontal displacement at 0.100003 units per tick (floating-point rounding).
+These are hardware measurements, not promised acceleration factors.
+
+The rebuilt live HUD retained an observed "Ate food" response beside a later
+blocked attempt. This was spawn food: direct player touch, praise, play and placed
+food still need a manual end-to-end care check. The graphical key-3 ownership
+handoff also remains unverified by actual keyboard input.
+
+The initial headless stop uncovered a portable-memory export failure: valid live
+sensory arithmetic can produce negative zero, but portable import rejects that
+noncanonical encoding. Export now normalizes signed zero consistently with the
+existing canonical digest. The existing memory roundtrip regression reproduced
+the failure before repair and passes afterward, preserving recall digest and
+tamper rejection. The repaired optimized release ran headless from tick 0 to
+306 in 8.016 seconds (38.1728 ticks/second), published its final checkpoint and
+exited successfully. The ordinary LoadExisting path then restored that checkpoint
+at tick 306, continued to tick 350, and published another completed checkpoint.
+The saved world identity and Standard2048 class persisted. These runs did not
+create a render window. Evidence is under
+`target/founder-training/care-paced-release-20260927/headless-fixed/`;
+the first receipt is retained as `first-headless-receipt.json`, with the original
+checkpoint as `before-resume.json`. Core boundary checks and documentation
+assertions passed. This does not certify long food-free survival, navigation under
+the smaller movement interval, or the pending direct-input care/handoff checks.

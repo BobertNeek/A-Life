@@ -60,7 +60,7 @@ if ($Manifest) {
 
 if ($NewGame) {
     if ($DryRun) {
-        throw "New Game needs a graphical launch; -DryRun only checks an existing save."
+        throw "New Game needs a live launch; -DryRun only checks an existing save."
     }
     if ($Seed -eq 0) {
         $Seed = [UInt64][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
