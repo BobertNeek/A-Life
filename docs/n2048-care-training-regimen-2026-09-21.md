@@ -5,6 +5,8 @@ hardware-specific training subplan for the core-game-loop plan. It replaces the
 earlier conversational training proposals. The v2.0 architecture remains the
 only architecture authority.
 
+The next proposed campaign is the [28 September vision, maze, and vocabulary run](n2048-vision-maze-vocabulary-run-2026-09-28.md). It uses the adapted terrain founder and gives vocabulary reception and production equal priority. It is design only, identifies required repairs, and does not authorize or start training. Historical source-bound evidence below remains limited to the original source and lessons.
+
 ## Execution checkpoint — 24 September 2026
 
 Later 24 September update: causal step traces exposed teacher lessons that
