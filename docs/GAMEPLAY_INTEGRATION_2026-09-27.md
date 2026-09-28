@@ -297,3 +297,26 @@ the first receipt is retained as `first-headless-receipt.json`, with the origina
 checkpoint as `before-resume.json`. Core boundary checks and documentation
 assertions passed. This does not certify long food-free survival, navigation under
 the smaller movement interval, or the pending direct-input care/handoff checks.
+
+## Manual care evidence at 1x
+
+Requirements: AOA-GAME-001/002/007/009, AOA-BIO-018, AOA-AUTH-002.
+
+The player exercised the ordinary controls in the optimized release at source
+`6e927914db1bb0a4bc3853f1ed692d567792faea`. F12 captures and the passive tick trace
+are retained under `target/founder-training/care-player-20260927-003/`.
+`touch.png` shows the selected founder's confirmed "Comfort signal rose" response.
+The player reported the creature approaching placed food. At tick 794 the sealed
+world receipt records consumption of player food entity 6: energy changed from
+0.767811 to 0.823470 and hunger from 0.421051 to 0.344501. The food object's consumed
+flag changed at that boundary, and `player-food.png` retains "Ate food" on the HUD.
+This closes the observed touch/feeding path beyond the earlier spawn-food smoke.
+
+The player reported successful offers, but the available trace through tick 1181
+contains no praise pulse or representative token interaction. Praise delivery and
+the play offer/response therefore remain unverified; a targeted clarification is
+pending. Active learning updates are recorded, not proof of retained behavior.
+Sky window discovery failed. Windows MCP mouse focus reached the left monitor;
+its single-letter shortcuts send Unicode text and did not activate physical-key
+care bindings. This is an input-evidence limitation, not a demonstrated chemical
+failure. No behavior was changed to manufacture a passing receipt.
