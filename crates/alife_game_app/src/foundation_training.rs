@@ -755,8 +755,7 @@ fn grounded_lesson_teacher(
             navigation.vocabulary_word = Some(word);
         }
         let action = if lesson == FoundationTeacherLesson::VocabularyProduction
-            && matches!(navigation.vocabulary_word, Some(11 | 12))
-            && heard.iter().any(Option::is_some)
+            && !teacher_words.is_empty()
         {
             frame.candidates().iter().find(|c| c.family == Family::Idle)
         } else {
@@ -2360,6 +2359,28 @@ pub(crate) fn configure_foundation_scenario(
                 _ => noun,
             });
             vocabulary_target = Some(targets[noun as usize - 1]);
+            if vocabulary_token == Some(7) {
+                // Retreat must start from an actionable visible referent. The
+                // terrain profile exposes only three objects to the motor
+                // candidate window; four equally distant examples can hide
+                // the named object there even while it is in forward sight.
+                // Keep distractors, but make this initial referent nearer.
+                let target = targets[noun as usize - 1];
+                let position = world
+                    .entity(target)
+                    .ok_or("retreat target missing")?
+                    .position;
+                let scale = (2.5 + scenario_random(seed, 23) * 0.2) / 3.0;
+                move_scenario_object(
+                    world,
+                    target,
+                    alife_core::Vec3f::new(
+                        origin.x + (position.x - origin.x) * scale,
+                        position.y,
+                        origin.z + (position.z - origin.z) * scale,
+                    ),
+                )?;
+            }
         }
         None => {}
     }
