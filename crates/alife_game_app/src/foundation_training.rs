@@ -2368,7 +2368,11 @@ pub(crate) fn configure_foundation_scenario(
     {
         let organism = world.organism_entity_ids()[0].0;
         let required_fatigue = 0.12 + (seed % 4) as f32 * 0.025;
-        for _ in 0..2_400 {
+        // The inherited waking emitter releases at most 0.00007 per tick,
+        // before developmental expression and decay. Even its maximum rate
+        // cannot reach the upper 0.195 lesson target within 2,400 ticks.
+        // Allow ordinary biology to reach the target; never inject tiredness.
+        for _ in 0..7_200 {
             let fatigue = world
                 .organism_registry()
                 .get(organism)
@@ -2391,7 +2395,10 @@ pub(crate) fn configure_foundation_scenario(
             .drives
             .fatigue;
         if fatigue < required_fatigue {
-            return Err("ordinary world aging did not produce measurable fatigue".into());
+            return Err(format!(
+                "ordinary world aging produced fatigue {fatigue:.6}, below lesson target {required_fatigue:.6} after 7200 ticks"
+            )
+            .into());
         }
     }
     if precondition_recovery && vocabulary_token == Some(11) {
