@@ -460,6 +460,7 @@ impl HeadlessActionIds {
     pub const EAT: ActionId = ActionId(210);
     pub const GRAB: ActionId = ActionId(211);
     pub const NO_MANIPULATION: ActionId = ActionId(212);
+    pub const PLAY: ActionId = ActionId(213);
     pub const LOOK_LEFT: ActionId = ActionId(601);
     pub const LOOK_RIGHT: ActionId = ActionId(602);
     pub const LOOK_CENTER: ActionId = ActionId(603);
@@ -477,6 +478,8 @@ pub enum WorldObjectKind {
     Hazard,
     Obstacle,
     Token,
+    Ball,
+    ActivityToy,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -516,6 +519,7 @@ impl WorldObject {
             WorldObjectKind::Food => AffordanceBits::FOOD,
             WorldObjectKind::Hazard => AffordanceBits::HAZARD,
             WorldObjectKind::Obstacle => AffordanceBits::RESOURCE,
+            WorldObjectKind::Ball | WorldObjectKind::ActivityToy => AffordanceBits::RESOURCE,
             WorldObjectKind::Token => {
                 let mut affordances = AffordanceBits::GLYPH_OR_WRITING;
                 if self.teacher_channel.is_some() {
@@ -1894,6 +1898,25 @@ impl HeadlessWorld {
         self.objects.values().cloned().collect()
     }
 
+    pub(crate) fn set_food_nutrition(
+        &mut self,
+        id: WorldEntityId,
+        nutrition: f32,
+    ) -> Result<(), ScaffoldContractError> {
+        let object = self
+            .objects
+            .get_mut(&id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if object.kind != WorldObjectKind::Food
+            || !nutrition.is_finite()
+            || !(0.0..=1.0).contains(&nutrition)
+        {
+            return Err(ScaffoldContractError::InvalidActionDecision);
+        }
+        object.nutrition = nutrition;
+        Ok(())
+    }
+
     pub fn build_perception_batch_index(
         &self,
     ) -> Result<HeadlessPerceptionBatchIndex, ScaffoldContractError> {
@@ -2580,6 +2603,7 @@ impl HeadlessWorld {
                 || event.damage != 0.0
                 || event.temperature_stress != 0.0
                 || event.nutrition != 0.0
+                || event.play_stimulation != 0.0
                 || event.sleep_recovery != 0.0
                 || event.mating_opportunity != 0.0
             {
@@ -2842,7 +2866,18 @@ impl HeadlessWorld {
                             tracking_provenance: object.tracking_provenance,
                             tracking_key: object.tracking_key,
                             position: object.position,
-                            properties: object.grounded_physical,
+                            properties: {
+                                let mut properties = object.grounded_physical;
+                                if terrain_vision
+                                    && !self.physical_contact_reachable(
+                                        observer.position,
+                                        object.position,
+                                    )
+                                {
+                                    properties.chemical[2] = 0.0;
+                                }
+                                properties
+                            },
                             contact: measured_distance <= object.radius,
                             confidence: Confidence::new(
                                 proximity_salience(measured_distance, HEADLESS_VISION_RADIUS)
@@ -2938,6 +2973,21 @@ impl HeadlessWorld {
                 (record.biochemistry().body.injury * gain(SensorCapability::Interoception))
                     .clamp(0.0, 1.0),
             )?;
+        }
+        if let Some(action) = self.last_action_result.as_ref().filter(|action| {
+            Some(action.command.organism_id) == observer.organism_id
+                && action.execution.succeeded
+                && classify_action(&action.command) == HeadlessAction::Eat
+        }) {
+            if let Some(food) = action
+                .command
+                .target_entity
+                .and_then(|id| self.objects.get(&id.raw()))
+            {
+                let taste = food.grounded_physical.chemical[2] * gain(SensorCapability::Chemical);
+                sensory.channels.tactile_contact[5] = taste.max(0.0);
+                sensory.channels.tactile_contact[6] = (-taste).max(0.0);
+            }
         }
         for value in &mut sensory.channels.smell_chemistry {
             *value = (*value * gain(SensorCapability::Chemical)).clamp(0.0, 1.0);
@@ -3161,6 +3211,9 @@ impl HeadlessWorld {
                         visible.distance,
                         HEADLESS_CONTACT_RADIUS * 2.0,
                     ));
+                }
+                WorldObjectKind::Ball | WorldObjectKind::ActivityToy => {
+                    visual[2] = visual[2].max(salience);
                 }
                 WorldObjectKind::Obstacle => {
                     visual[2] = visual[2].max(salience);
@@ -4084,6 +4137,7 @@ impl HeadlessWorld {
             HeadlessAction::Approach => self.execute_move(*command, agent_id, MoveIntent::Approach),
             HeadlessAction::Flee => self.execute_move(*command, agent_id, MoveIntent::Flee),
             HeadlessAction::Grab => self.execute_grab(*command, agent_id),
+            HeadlessAction::Play => self.execute_play(*command, agent_id),
             HeadlessAction::Vocalize => {
                 let token = self.emit_vocalization_token(command.organism_id)?;
                 self.finish_action(
@@ -4096,6 +4150,64 @@ impl HeadlessWorld {
                 )
             }
         }
+    }
+
+    fn execute_play(
+        &mut self,
+        command: ActionCommand,
+        agent_id: WorldEntityId,
+    ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+        let target = match self.require_target(&command) {
+            Ok(target) => target,
+            Err(_) => return self.invalid_target(command, command.target_entity),
+        };
+        let agent = self
+            .objects
+            .get(&agent_id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let toy = self
+            .objects
+            .get(&target.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let effector = self
+            .organism_registry
+            .get(command.organism_id)
+            .is_none_or(|record| {
+                record
+                    .embodiment()
+                    .effector_gain(EffectorCapability::Manipulation)
+                    > 0.0
+            });
+        if !effector
+            || toy.consumed
+            || !matches!(
+                toy.kind,
+                WorldObjectKind::Ball | WorldObjectKind::ActivityToy
+            )
+            || toy.carried_by.is_some_and(|id| id != command.organism_id)
+            || !self.physical_contact_reachable(agent.position, toy.position)
+        {
+            return self.finish_action(
+                command,
+                false,
+                Some(ReferenceActionFailure::MissingAffordance),
+                physical(PhysicalContactKind::None, Some(target), Vec3f::ZERO, 0.06)?,
+                OutcomeProfile::missing_affordance(),
+                Vec::new(),
+            );
+        }
+        // A voluntary physical activation. Stimulation is a measured event;
+        // the inherited emitter/receptor/value circuit determines its effect.
+        let mut profile = OutcomeProfile::grab();
+        profile.body_event.play_stimulation = command.intensity.raw();
+        self.finish_action(
+            command,
+            true,
+            None,
+            physical(PhysicalContactKind::Touch, Some(target), Vec3f::ZERO, 0.06)?,
+            profile,
+            vec![target],
+        )
     }
 
     fn execute_grab(
@@ -4142,7 +4254,10 @@ impl HeadlessWorld {
             });
         let target_is_mobile = matches!(
             target_kind,
-            WorldObjectKind::Food | WorldObjectKind::Hazard | WorldObjectKind::Token
+            WorldObjectKind::Food
+                | WorldObjectKind::Hazard
+                | WorldObjectKind::Token
+                | WorldObjectKind::Ball
         );
         let target_is_self = target == agent_id || target_organism == Some(command.organism_id);
         let owned_by_other = target_carried_by.is_some_and(|owner| owner != command.organism_id);
@@ -4913,6 +5028,8 @@ fn write_world_object_signature(
         WorldObjectKind::Hazard => 2,
         WorldObjectKind::Obstacle => 3,
         WorldObjectKind::Token => 4,
+        WorldObjectKind::Ball => 5,
+        WorldObjectKind::ActivityToy => 6,
     });
     write_optional_u64(digest, object.organism_id.map(OrganismId::raw));
     write_vec3_bits(digest, object.position);
@@ -5128,6 +5245,15 @@ impl HeadlessScenarioBuilder {
         if let Some(id) = self.world.entity_id(label) {
             if let Some(object) = self.world.objects.get_mut(&id.raw()) {
                 object.radius = radius.max(0.1);
+            }
+        }
+        self
+    }
+
+    pub fn toy(mut self, label: &str, position: Vec3f, movable: bool) -> Self {
+        if self.error.is_none() {
+            if let Err(error) = self.world.spawn_toy(label, position, movable) {
+                self.error = Some(error);
             }
         }
         self
@@ -5580,6 +5706,7 @@ enum HeadlessAction {
     Flee,
     Eat,
     Grab,
+    Play,
     Vocalize,
 }
 
@@ -5616,6 +5743,8 @@ fn classify_action(command: &ActionCommand) -> HeadlessAction {
         HeadlessAction::Flee
     } else if command.action_id == HeadlessActionIds::GRAB {
         HeadlessAction::Grab
+    } else if command.action_id == HeadlessActionIds::PLAY {
+        HeadlessAction::Play
     } else if command.action_id == HeadlessActionIds::NO_MANIPULATION {
         HeadlessAction::NoManipulation
     } else if command.action_id == HeadlessActionIds::NO_LOCOMOTION {
@@ -5767,6 +5896,7 @@ fn legacy_action_for_motor_channel(
         MotorChannel::Manipulation => (
             if command.primitive == HeadlessActionIds::EAT
                 || command.primitive == HeadlessActionIds::GRAB
+                || command.primitive == HeadlessActionIds::PLAY
                 || command.primitive == HeadlessActionIds::NO_MANIPULATION
             {
                 command.primitive
@@ -5862,6 +5992,7 @@ fn combine_body_event(total: BodyEventDelta, event: BodyEventDelta) -> BodyEvent
         nutrition: (total.nutrition + event.nutrition).clamp(0.0, 1.0),
         social_contact: (total.social_contact + event.social_contact).clamp(0.0, 1.0),
         player_reward: (total.player_reward + event.player_reward).clamp(0.0, 1.0),
+        play_stimulation: (total.play_stimulation + event.play_stimulation).clamp(0.0, 1.0),
         sleep_recovery: (total.sleep_recovery + event.sleep_recovery).clamp(0.0, 1.0),
         mating_opportunity: (total.mating_opportunity + event.mating_opportunity).clamp(0.0, 1.0),
     }

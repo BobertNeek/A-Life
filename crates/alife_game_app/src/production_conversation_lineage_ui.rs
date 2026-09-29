@@ -811,7 +811,7 @@ impl ProductionConversationLineageUiState {
             raw_tokens_visible: summary.developer_overlay,
             slm_off: true,
             developer_overlay: summary.developer_overlay,
-            bindings: Vec::new(),
+            bindings: alife_core::basic_vocabulary_bindings(),
             last_player_receipt: None,
             last_creature_receipt: None,
             last_creature_utterance_id: None,

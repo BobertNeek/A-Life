@@ -5,6 +5,7 @@ param(
     [string]$Source,
     [ValidateRange(1, 24)][int]$DurationHours = 8,
     [ValidateRange(16, 4096)][int]$CycleTicks = 256,
+    [ValidateSet('Care','VisionLanguage')][string]$Curriculum = 'VisionLanguage',
     [ValidateRange(1, 100000)][int]$MaxCycles = 100000
 )
 $PilotTicks = 32
@@ -69,7 +70,7 @@ function Source-Receipt([string]$Directory) {
     $files = @([IO.File]::ReadAllLines((Join-Path $Directory 'untracked.stdout.log')) | Sort-Object | Where-Object {
         $_ -and $_ -notmatch '(^|/)(target|artifacts|__pycache__)/|\.blend[0-9]+$|\.pyc$'
     } | ForEach-Object { [ordered]@{ path = $_; sha256 = (Get-FileHash -LiteralPath (Join-Path $repo $_) -Algorithm SHA256).Hash } })
-    $identity = [ordered]@{ head = [IO.File]::ReadAllText((Join-Path $Directory 'head.stdout.log')).Trim(); trackedDiffSha256 = (Get-FileHash (Join-Path $Directory 'tracked-diff.stdout.log')).Hash; untracked = $files; pilotTicks = $PilotTicks; cargo = $cargoVersion; rustc = $rustcVersion; profile = 'dev'; features = 'foundation-training' }
+    $identity = [ordered]@{ head = [IO.File]::ReadAllText((Join-Path $Directory 'head.stdout.log')).Trim(); trackedDiffSha256 = (Get-FileHash (Join-Path $Directory 'tracked-diff.stdout.log')).Hash; untracked = $files; pilotTicks = $PilotTicks; cargo = $cargoVersion; rustc = $rustcVersion; profile = 'dev'; features = 'foundation-training'; curriculum = $Curriculum; cycleTicks = $CycleTicks; semanticPriorMode = $env:ALIFE_SLM_PRIOR; semanticPriorModel = $env:ALIFE_SLM_PRIOR_MODEL; semanticPriorModelSha256 = $env:ALIFE_SLM_PRIOR_MODEL_SHA256 }
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $fingerprint = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes(($identity | ConvertTo-Json -Depth 8 -Compress)))).Replace('-', '') } finally { $sha.Dispose() }
     $receipt = [ordered]@{ fingerprint = $fingerprint; identity = $identity }
@@ -107,9 +108,12 @@ function Invoke-Campaign {
         '--features', 'foundation-training', '--bin', 'train_n2048_care') (Join-Path $run 'build')
     if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Release trainer was not built.' }
     $deadline = [DateTime]::UtcNow.AddHours($DurationHours)
-    # Half the cohorts require a detour; the others retain feeding, hazard,
-    # and brief recovery skills. Every cohort gets a distinct world seed.
-    $lessons = @('obstacle_navigation', 'feeding', 'obstacle_navigation', 'hazard_avoidance', 'obstacle_navigation', 'recovery')
+    # Preserve care while adding longer navigation and both language directions.
+    $lessons = if ($Curriculum -eq 'Care') {
+        @('obstacle_navigation', 'feeding', 'obstacle_navigation', 'hazard_avoidance', 'obstacle_navigation', 'recovery')
+    } else {
+        @('vision_search','maze_navigation','vision_search','maze_navigation','vocabulary_reception','vocabulary_production','vocabulary_reception','vocabulary_production','feeding','hazard_avoidance')
+    }
     $foodPositions = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $state['lessonSchedule'] = $lessons
     $state.phase = 'campaign'
@@ -126,11 +130,13 @@ function Invoke-Campaign {
         }
         $lessonIndex = $index % $lessons.Count
         $lesson = $lessons[$lessonIndex]
-        $seed = [ulong](539366000 + $index)
+        # Vary token identity across schedule repetitions, not just scenery.
+        $seed = [ulong](539366000 + $index + 3 * [Math]::Floor($index / $lessons.Count))
+        $decisions = if ($lesson -eq 'maze_navigation') { [Math]::Max($CycleTicks, 1024) } else { $CycleTicks }
         $directory = Join-Path $run ("cycle-{0:D4}-{1}" -f $index, $lesson)
         $state.phase = "cycle-$index-$lesson"; Publish-State
         Write-Host "Training $lesson cycle $index; logs: $run"
-        Run-Command $exe @('--resume-cycle', $previous, $directory, [string]$CycleTicks,
+        Run-Command $exe @('--resume-cycle', $previous, $directory, [string]$decisions,
             '--seed', [string]$seed, '--lesson', $lesson) (Join-Path $run ("cycle-{0:D4}" -f $index)) -DeadlineUtc $deadline.AddMinutes(30)
         $receiptPath = Join-Path $directory 'cycle.json'
         $receipt = Get-Content -Raw -LiteralPath $receiptPath | ConvertFrom-Json
@@ -155,6 +161,7 @@ function Invoke-Campaign {
             meals = $receipt.consumed_events; blocked = $receipt.blocked_actions
             collisions = $receipt.collision_actions; avoid = $receipt.avoid_actions
             recovery = $receipt.rest_recovery_actions; minimumEnergy = $receipt.minimum_energy
+            speechTargetRows = $receipt.speech_target_rows; semanticPrior = $receipt.semantic_prior
             finalEnergy = $receipt.final_energy; terminalDeathTick = $receipt.terminal_death_tick
             collectionSeconds = $receipt.collection_seconds; updateSeconds = $receipt.update_seconds
             assetDigest = $receipt.new_asset_digest

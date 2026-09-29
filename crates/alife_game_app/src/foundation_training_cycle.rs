@@ -4,8 +4,8 @@
 use std::{path::Path, time::Instant};
 
 use alife_core::{
-    BrainScaleTier, CompiledSynapseKind, DecoderHeadKind, FoundationWeightAsset,
-    ScaffoldContractError, SensorProfile, TrainingStageManifest,
+    BrainScaleTier, FoundationWeightAsset, ScaffoldContractError, SensorProfile,
+    TrainingStageManifest,
 };
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile, GpuTrainingSamplingConfig};
 use alife_training::{
@@ -99,6 +99,10 @@ pub struct FoundationCycleReceipt {
     pub final_energy: f32,
     #[serde(default)]
     pub sleep_gap_reward_total: f32,
+    #[serde(default)]
+    pub semantic_prior: Option<crate::gpu_live_runtime::SemanticPriorMetrics>,
+    #[serde(default)]
+    pub speech_target_rows: usize,
     pub collection_seconds: f64,
     pub update_seconds: f64,
     pub old_asset_digest: String,
@@ -392,8 +396,8 @@ fn run_foundation_training_cycle_from(
                 let receipt: FoundationWarmupReceipt =
                     serde_json::from_slice(&std::fs::read(previous.join("warmup.json"))?)?;
                 if !receipt.next_cohort_optimizer_rebound
-                    || receipt.demonstration_count != 32
-                    || receipt.category_counts != [8; 4]
+                    || receipt.demonstration_count == 0
+                    || receipt.category_counts.iter().sum::<usize>() != receipt.demonstration_count
                 {
                     return Err("previous warm-up is not a balanced sealed handoff".into());
                 }
@@ -592,6 +596,9 @@ fn run_foundation_training_cycle_from(
             "gate_closed_world_tick": scenario.as_ref().and_then(|setup| setup.closing_gate).map(|_| 2),
             "gate_closed_position": scenario.as_ref().and_then(|setup| setup.closing_gate).map(|(_, position)| position.to_array()),
             "lesson": lesson,
+            "maze_walls": scenario.as_ref().map(|s|s.maze_walls.iter().map(|(id,p)|(id.raw(),p.to_array())).collect::<Vec<_>>()),
+            "vocabulary_token": scenario.as_ref().and_then(|s|s.vocabulary_token),
+            "vocabulary_target": scenario.as_ref().and_then(|s|s.vocabulary_target).map(|id|id.raw()),
             "food_position": scenario_position("food-01")?,
             "blocker_position": scenario_position("obstacle-01")?,
             "waypoint_position": scenario_position("obstacle-02")?,
@@ -707,11 +714,14 @@ fn run_foundation_training_cycle_from(
     }
     std::fs::write(output.join("phase.txt"), "first-capture")?;
     let phenotype = first[0].before.phenotype.clone();
-    let trainable: Vec<u32> = phenotype.synapses().iter().enumerate().filter_map(|(i, synapse)| {
-        (!matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::SpeechPayload))
-            .then_some(i as u32)
-    }).collect();
-    let mask = StageTrainableMask::from_synapse_indices(&phenotype, &trainable)?;
+    let mask = if let Some(checkpoint) = &restored_actor {
+        checkpoint.stage_mask.clone()
+    } else {
+        StageTrainableMask::from_synapse_indices(
+            &phenotype,
+            &(0..phenotype.synapses().len() as u32).collect::<Vec<_>>(),
+        )?
+    };
     let staging = runtime.new_staging_like_live()?;
     let mut trainer = FoundationTrainer::from_session(
         alife_runtime::GpuAuthoritativeSession::new(
@@ -739,7 +749,17 @@ fn run_foundation_training_cycle_from(
     )?;
     std::fs::write(output.join("phase.txt"), "replay-writer-ready")?;
     let mut references = Vec::with_capacity(training_ticks + 1);
+    let speech_label = |frame: &alife_core::PerceptionFrame| {
+        crate::foundation_training::vocabulary_speech_target(
+            frame,
+            scenario.as_ref().and_then(|s| s.vocabulary_token),
+            scenario.as_ref().and_then(|s| s.vocabulary_target),
+            lesson == Some(FoundationTeacherLesson::VocabularyProduction),
+        )
+    };
+    let mut speech_targets = Vec::with_capacity(training_ticks + 1);
     let append_started = Instant::now();
+    speech_targets.push(speech_label(&first[0].frame));
     references.push(writer.append(&first.remove(0))?);
     replay_append_seconds += append_started.elapsed().as_secs_f64();
     let mut gap = false;
@@ -778,6 +798,9 @@ fn run_foundation_training_cycle_from(
         let tick_started = Instant::now();
         if let Some(scenario) = &scenario {
             crate::close_foundation_navigation_gate(&mut runtime, scenario)?;
+        }
+        if before == 0 {
+            runtime.prime_foundation_semantic_prior()?;
         }
         let tick_outcome = runtime.tick_outcome().map_err(|e| {
             let _ = std::fs::write(
@@ -908,6 +931,7 @@ fn run_foundation_training_cycle_from(
             }
         }
         let append_started = Instant::now();
+        speech_targets.push(speech_label(&captured[0].frame));
         references.push(writer.append(&captured.remove(0))?);
         replay_append_seconds += append_started.elapsed().as_secs_f64();
         if terminal_biology.is_some() {
@@ -1125,6 +1149,11 @@ fn run_foundation_training_cycle_from(
                 alife_training::TrainingError::from(ScaffoldContractError::InvalidDecisionEvidence)
             })?;
             Ok(PpoTrainingWindow {
+                speech_targets: speech_targets[burn_start..end]
+                    .iter()
+                    .enumerate()
+                    .map(|(i, t)| if i < start - burn_start { None } else { *t })
+                    .collect(),
                 sequence: replay.sequence,
                 batch: batch.window(start..end)?,
                 auxiliary: None,
@@ -1222,6 +1251,8 @@ fn run_foundation_training_cycle_from(
         minimum_energy,
         final_energy,
         sleep_gap_reward_total,
+        semantic_prior: runtime.semantic_prior_metrics().cloned(),
+        speech_target_rows: speech_targets[..train_rows].iter().flatten().count(),
         collection_seconds,
         update_seconds,
         old_asset_digest: digest(&asset),

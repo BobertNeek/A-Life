@@ -1,4 +1,5 @@
 #![cfg(feature = "gpu-tests")]
+use wgpu::util::DeviceExt;
 
 use alife_core::{
     BrainCapacityClass, BrainGenome, CandidateActionFamily, CandidateFeatureVector,
@@ -776,6 +777,144 @@ fn n2048_speech_payload_head_trains_on_gpu_and_remains_exportable() {
         .map(|(index, _)| index)
         .collect::<Vec<_>>();
     assert_eq!(changed, vec![synapse_index as usize]);
+    // The production replay path teaches all word bits, not just the legacy
+    // single output. Burn-in carries state but receives no speech label.
+    let phenotype = trainer.phenotype().clone();
+    let neurons = phenotype.neuron_count() as usize;
+    let mut inputs = vec![0.0; neurons];
+    inputs[source_neuron as usize] = 1.0;
+    let context = TrainingReplayTick {
+        encoded_inputs: inputs,
+        projection_gain: 1.0,
+        local_threshold_shift: 0.0,
+        microstep_count: u32::from(phenotype.microstep_count()),
+        enabled_routes: vec![true; phenotype.projections().len()],
+        effective_weight_offsets: vec![0.01; phenotype.synapses().len()],
+        structural_synapses: Vec::new(),
+        candidates: vec![TrainingReplayCandidate {
+            family: CandidateActionFamily::Idle,
+            decoder_inputs: [0.0; 54],
+        }],
+    };
+    let replay = TrainingSequence {
+        phenotype_hash: phenotype.phenotype_hash(),
+        initial: TrainingInitialState {
+            activations: vec![0.1; neurons],
+            activity_ema: vec![0.0; neurons],
+            metabolic_load: vec![0.0; neurons],
+            dendrites: Default::default(),
+        },
+        ticks: vec![context.clone(), context.clone(), context],
+        burn_in_ticks: 1,
+        memory_candidate_gain: phenotype
+            .candidate_decoder()
+            .memory_channel()
+            .map_or(0.0, |p| p.max_candidate_gain()),
+    };
+    let labels = vec![
+        None,
+        Some(alife_training::ReplaySpeechTarget {
+            token: Some(8),
+            act: alife_core::SpeechActKind::Declare,
+            weight: 1.0,
+        }),
+        Some(alife_training::ReplaySpeechTarget {
+            token: None,
+            act: alife_core::SpeechActKind::Declare,
+            weight: 1.0,
+        }),
+    ];
+    let adjoints = vec![vec![0.0]; 2];
+    let baseline = trainer.checkpoint().unwrap();
+    let detached = trainer.evaluate_replay(&replay).unwrap();
+    let mut numerical_replay = replay.clone();
+    numerical_replay.initial.activations = detached.final_activations[0].clone();
+    numerical_replay.initial.activity_ema = detached.final_activity_ema[0].clone();
+    numerical_replay.initial.metabolic_load = detached.final_metabolic_load[0].clone();
+    numerical_replay.ticks.remove(0);
+    numerical_replay.burn_in_ticks = 0;
+    let numerical_labels = labels[1..].to_vec();
+    let probe = trainer
+        .probe_replay_gradients_with_speech(&replay, &adjoints, &labels)
+        .unwrap();
+    for kind in [false, true] {
+        let index = phenotype
+            .synapses()
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| matches!(s.kind(), CompiledSynapseKind::Recurrent) == kind)
+            .max_by(|(a, _), (b, _)| {
+                probe.gradients[*a]
+                    .abs()
+                    .total_cmp(&probe.gradients[*b].abs())
+            })
+            .unwrap()
+            .0;
+        assert!(
+            probe.gradients[index].abs() > 1e-7,
+            "speech gradient must reach both decoder and recurrent graph"
+        );
+        let epsilon = 0.002;
+        let mut plus = baseline.clone();
+        plus.weights[index] += epsilon;
+        trainer.restore_checkpoint(&plus).unwrap();
+        let high = trainer
+            .probe_replay_gradients_with_speech(&numerical_replay, &adjoints, &numerical_labels)
+            .unwrap()
+            .objective;
+        let mut minus = baseline.clone();
+        minus.weights[index] -= epsilon;
+        trainer.restore_checkpoint(&minus).unwrap();
+        let low = trainer
+            .probe_replay_gradients_with_speech(&numerical_replay, &adjoints, &numerical_labels)
+            .unwrap()
+            .objective;
+        let numerical = (high - low) / (2.0 * f64::from(epsilon));
+        assert!(
+            (numerical - f64::from(probe.gradients[index])).abs() < 0.003,
+            "speech finite difference {index}: {numerical} versus {}",
+            probe.gradients[index]
+        );
+    }
+    trainer.restore_checkpoint(&baseline).unwrap();
+    trainer.prepare_replay(&replay).unwrap();
+    trainer.upload_replay_speech_targets(&labels).unwrap();
+    let (device, queue) = trainer
+        .session()
+        .backend()
+        .offline_training_device_queue()
+        .unwrap();
+    let zero = vec![0.0f32; 2 * alife_core::MAX_ACTION_CANDIDATES];
+    let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("speech-only-adjoints"),
+        contents: bytemuck::cast_slice(&zero),
+        usage: wgpu::BufferUsages::COPY_SRC,
+    });
+    let mut encoder = device.create_command_encoder(&Default::default());
+    trainer.encode_replay_forward(&mut encoder).unwrap();
+    queue.submit(Some(encoder.finish()));
+    let encoder = device.create_command_encoder(&Default::default());
+    trainer.submit_replay_update(encoder, &buffer, 0).unwrap();
+    let after = trainer.checkpoint().unwrap();
+    assert_ne!(
+        after.weights[synapse_index as usize].to_bits(),
+        baseline.weights[synapse_index as usize].to_bits()
+    );
+    for (index, (a, b)) in baseline.weights.iter().zip(&after.weights).enumerate() {
+        if index != synapse_index as usize {
+            assert_eq!(a.to_bits(), b.to_bits());
+        }
+    }
+    let exported = trainer
+        .export_candidate(TrainingStageManifest::new(1, 1, 1))
+        .unwrap();
+    let (next, _) = PhenotypeCompiler::compile_n2048_foundation_candidate(
+        genome,
+        development,
+        exported.clone(),
+    )
+    .unwrap();
+    trainer.rebind_for_next_cohort(next, exported).unwrap();
 }
 
 #[test]
@@ -1108,6 +1247,7 @@ fn n2048_ppo_and_imitation_gpu_objective_matches_joint_derivatives_and_partial_b
                 sequence: sequence.clone(),
                 batch: batch.clone(),
                 auxiliary: None,
+                speech_targets: vec![None; sequence.ticks.len()],
             })
         },
         config,

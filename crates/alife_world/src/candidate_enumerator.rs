@@ -27,8 +27,20 @@ pub const CANDIDATE_FEATURE_CONTACT_LANE: usize = 16;
 pub const CANDIDATE_FEATURE_EVIDENCE_LANE: usize = 17;
 pub const CANDIDATE_FEATURE_RESERVED_START_LANE: usize = 18;
 
+// Same Contact head, distinct motor operation. The feature describes the
+// attempted action, never a hidden object kind or successful outcome.
+fn interaction_features(
+    mut features: CandidateFeatureVector,
+    action: alife_core::ActionId,
+) -> CandidateFeatureVector {
+    if action == HeadlessActionIds::PLAY {
+        features.0[alife_core::CONTACT_ACTIVATION_FEATURE_LANE] = 1.0;
+    }
+    features
+}
+
 const INTRINSIC_CANDIDATE_COUNT: usize = 3;
-const MAX_CANDIDATE_OBJECTS: usize = (MAX_ACTION_CANDIDATES - INTRINSIC_CANDIDATE_COUNT) / 5;
+const MAX_CANDIDATE_OBJECTS: usize = (MAX_ACTION_CANDIDATES - INTRINSIC_CANDIDATE_COUNT) / 6;
 const KNOWN_AFFORDANCE_MASK: u32 = (1 << CANDIDATE_FEATURE_AFFORDANCE_COUNT) - 1;
 
 pub trait CandidateEnumerator {
@@ -61,7 +73,7 @@ impl CandidateEnumerator for HeadlessCandidateEnumerator {
         });
         visible.truncate(MAX_CANDIDATE_OBJECTS);
 
-        let mut candidates = Vec::with_capacity(INTRINSIC_CANDIDATE_COUNT + visible.len() * 5);
+        let mut candidates = Vec::with_capacity(INTRINSIC_CANDIDATE_COUNT + visible.len() * 6);
         push_intrinsic_candidates(&mut candidates)?;
 
         for entity in visible {
@@ -103,6 +115,12 @@ impl CandidateEnumerator for HeadlessCandidateEnumerator {
                     CandidateActionFamily::Contact,
                     0.2,
                 ),
+                (
+                    HeadlessActionIds::PLAY,
+                    ActionKind::Interact,
+                    CandidateActionFamily::Contact,
+                    0.2,
+                ),
             ] {
                 candidates.push(ActionCandidate::new(
                     u16::try_from(candidates.len())
@@ -112,7 +130,7 @@ impl CandidateEnumerator for HeadlessCandidateEnumerator {
                     family,
                     observation,
                     target,
-                    features,
+                    interaction_features(features, action_id),
                     Confidence::new(1.0)?,
                     NormalizedScalar::new(effort)?,
                     DurationTicks::new(1),
@@ -155,7 +173,7 @@ impl GroundedCandidateEnumerator {
         };
         let mut candidates = Vec::with_capacity(
             INTRINSIC_CANDIDATE_COUNT
-                + grounded.slots().len().min(object_limit) * 5
+                + grounded.slots().len().min(object_limit) * 6
                 + 3
                 + if terrain_vision { 7 } else { 0 },
         );
@@ -280,6 +298,12 @@ impl GroundedCandidateEnumerator {
                     CandidateActionFamily::Contact,
                     0.2,
                 ),
+                (
+                    HeadlessActionIds::PLAY,
+                    ActionKind::Interact,
+                    CandidateActionFamily::Contact,
+                    0.2,
+                ),
             ] {
                 candidates.push(ActionCandidate::new(
                     u16::try_from(candidates.len())
@@ -289,7 +313,7 @@ impl GroundedCandidateEnumerator {
                     family,
                     observation,
                     target,
-                    features,
+                    interaction_features(features, action_id),
                     slot.confidence,
                     NormalizedScalar::new(effort)?,
                     DurationTicks::new(1),

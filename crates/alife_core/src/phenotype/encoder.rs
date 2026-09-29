@@ -19,6 +19,8 @@ pub enum SensorEncoderSourceGroup {
     SensoryChannel = 1,
     Body = 2,
     Homeostasis = 3,
+    HeardLanguage = 4,
+    SemanticPrior = 5,
 }
 
 impl SensorEncoderSourceGroup {
@@ -30,6 +32,8 @@ impl SensorEncoderSourceGroup {
             1 => Ok(Self::SensoryChannel),
             2 => Ok(Self::Body),
             3 => Ok(Self::Homeostasis),
+            4 => Ok(Self::HeardLanguage),
+            5 => Ok(Self::SemanticPrior),
             _ => Err(ScaffoldContractError::PhenotypeCompile),
         }
     }
@@ -91,6 +95,9 @@ impl SensorEncoderAssignment {
             SensorEncoderSourceGroup::SensoryChannel => widths.0,
             SensorEncoderSourceGroup::Body => widths.1,
             SensorEncoderSourceGroup::Homeostasis => widths.2,
+            SensorEncoderSourceGroup::HeardLanguage | SensorEncoderSourceGroup::SemanticPrior => {
+                128
+            }
         };
         if self.source_index >= width
             || ![self.scale, self.bias, self.clamp_min, self.clamp_max]
@@ -182,98 +189,18 @@ impl SensorEncoderPlan {
         inputs: &PhenotypeCompilerInputs,
     ) -> Result<(), ScaffoldContractError> {
         self.validate_against(phenotype)?;
-        let genome = inputs.genome();
-        let development = inputs.development();
-        let active_genes = genome
-            .sensor_layout
-            .channels
-            .iter()
-            .filter(|gene| {
-                f32::from(gene.enabled_at_maturation) <= development.maturation.raw() * 100.0
-                    && (development.active_sensor_channels.is_empty()
-                        || development.active_sensor_channels.contains(&gene.kind))
-                    && (development.enabled_lobes.is_empty()
-                        || development.enabled_lobes.contains(&gene.target_lobe))
-            })
-            .collect::<Vec<_>>();
-
-        let mut gene_keys = Vec::with_capacity(active_genes.len());
-        let mut groups: Vec<(u16, SensorEncoderSourceGroup, u16, u16, usize)> = Vec::new();
-        for gene in &active_genes {
-            let key = (gene.kind.raw(), gene.target_lobe.raw());
-            if gene_keys.contains(&key) {
-                return Err(ScaffoldContractError::PhenotypeCompile);
-            }
-            gene_keys.push(key);
-            let _target = phenotype
-                .lobe_layout()
-                .region(gene.target_lobe)
-                .filter(|region| region.enabled)
-                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-            let (group, start, end) = source_lane_range(gene.kind);
-            if let Some(row) = groups.iter_mut().find(|row| {
-                (row.0, row.1, row.2, row.3) == (gene.target_lobe.raw(), group, start, end)
-            }) {
-                row.4 = row
-                    .4
-                    .checked_add(usize::from(gene.receptor_count))
-                    .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-            } else {
-                groups.push((
-                    gene.target_lobe.raw(),
-                    group,
-                    start,
-                    end,
-                    usize::from(gene.receptor_count),
-                ));
-            }
+        let expected = super::io_compile::compile_encoder(
+            inputs.genome(),
+            inputs.development(),
+            phenotype.lobe_layout(),
+            self.sensor_profile,
+        )?;
+        if self == &expected {
+            Ok(())
+        } else {
+            Err(ScaffoldContractError::PhenotypeCompile)
         }
-
-        for &(target_raw, group, start, end, expected) in &groups {
-            let target_lobe = crate::LobeKind::try_from_raw(target_raw)?;
-            let target = phenotype
-                .lobe_layout()
-                .region(target_lobe)
-                .filter(|region| region.enabled)
-                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-            let count = self
-                .assignments
-                .iter()
-                .filter(|assignment| {
-                    assignment.source_group == group
-                        && (start..end).contains(&assignment.source_index)
-                        && target.contains_neuron(assignment.target_neuron)
-                })
-                .count();
-            if count != expected {
-                return Err(ScaffoldContractError::PhenotypeCompile);
-            }
-        }
-
-        for assignment in &self.assignments {
-            let matches = groups
-                .iter()
-                .filter(|(target_raw, group, start, end, _)| {
-                    let Ok(target_lobe) = crate::LobeKind::try_from_raw(*target_raw) else {
-                        return false;
-                    };
-                    phenotype
-                        .lobe_layout()
-                        .region(target_lobe)
-                        .is_some_and(|target| {
-                            assignment.source_group == *group
-                                && (*start..*end).contains(&assignment.source_index)
-                                && target.contains_neuron(assignment.target_neuron)
-                        })
-                })
-                .count();
-            if matches != 1 {
-                return Err(ScaffoldContractError::PhenotypeCompile);
-            }
-        }
-        Ok(())
     }
-
     fn validate_shape(&self) -> Result<(), ScaffoldContractError> {
         if self.schema_version != ENCODER_SCHEMA_VERSION
             || SensorProfile::try_from_raw(self.sensor_profile.raw()).is_err()
@@ -332,22 +259,6 @@ impl SensorEncoderPlan {
             digest.write_f32(assignment.clamp_max)?;
         }
         Ok(digest.finish256())
-    }
-}
-
-fn source_lane_range(kind: crate::SensorChannelKind) -> (SensorEncoderSourceGroup, u16, u16) {
-    use crate::SensorChannelKind;
-    match kind {
-        SensorChannelKind::Vision | SensorChannelKind::GlyphVision => {
-            (SensorEncoderSourceGroup::SensoryChannel, 0, 16)
-        }
-        SensorChannelKind::Hearing => (SensorEncoderSourceGroup::SensoryChannel, 16, 24),
-        SensorChannelKind::Smell | SensorChannelKind::Taste => {
-            (SensorEncoderSourceGroup::SensoryChannel, 24, 32)
-        }
-        SensorChannelKind::Touch => (SensorEncoderSourceGroup::SensoryChannel, 32, 40),
-        SensorChannelKind::Proprioception => (SensorEncoderSourceGroup::Body, 0, 13),
-        SensorChannelKind::Interoception => (SensorEncoderSourceGroup::Homeostasis, 0, 22),
     }
 }
 

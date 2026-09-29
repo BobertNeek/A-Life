@@ -67,6 +67,8 @@ struct PackedLayout {
     speech_logits: u32,
     metrics: u32,
     speech_target_start: u32,
+    replay_speech_targets: u32,
+    speech_offsets: u32,
     optimizer_v: u32,
     optimizer_age: u32,
     state_words: u64,
@@ -124,6 +126,7 @@ pub struct FoundationTrainer {
     replay_shape: Option<(usize, usize, alife_core::DendriticBranchSet)>,
     accumulated_gradients: wgpu::Buffer,
     accumulation: Option<(u32, u32)>,
+    replay_speech_active: bool,
 }
 
 impl FoundationTrainer {
@@ -189,6 +192,7 @@ impl FoundationTrainer {
             replay_shape: None,
             accumulated_gradients,
             accumulation: None,
+            replay_speech_active: false,
         })
     }
 
@@ -301,6 +305,7 @@ impl FoundationTrainer {
     /// moments remain on GPU. Existing objective bindings must be recreated.
     pub fn prepare_replay(&mut self, sequence: &TrainingSequence) -> Result<(), TrainingError> {
         sequence.validate_for(&self.phenotype)?;
+        self.replay_speech_active = false;
         let shape = (
             sequence.ticks.len(),
             sequence.burn_in_ticks,
@@ -367,6 +372,41 @@ impl FoundationTrainer {
 
     pub fn replay_output_buffer(&self) -> &wgpu::Buffer {
         &self.gpu.outputs
+    }
+
+    pub fn upload_replay_speech_targets(
+        &mut self,
+        targets: &[Option<crate::ReplaySpeechTarget>],
+    ) -> Result<(), TrainingError> {
+        if !self.gpu.layout.replay || targets.len() != self.gpu.layout.ticks as usize {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+        }
+        let mut words = vec![0_u32; targets.len() * 64];
+        let target_count = targets.iter().flatten().count().max(1) as f32;
+        for (tick, target) in targets.iter().enumerate() {
+            if let Some(target) = target {
+                target.validate()?;
+                if tick
+                    < (self.gpu.layout.burn_in_steps / u32::from(self.phenotype.microstep_count()))
+                        as usize
+                {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+                }
+                for (output, value) in target.logits().into_iter().enumerate() {
+                    words[tick * 64 + output * 2] = value.to_bits();
+                    words[tick * 64 + output * 2 + 1] =
+                        (target.output_weight(output) / (32.0 * target_count)).to_bits();
+                }
+            }
+        }
+        let (_, queue) = self.session.backend().offline_training_device_queue()?;
+        queue.write_buffer(
+            &self.gpu.training,
+            u64::from(self.gpu.layout.replay_speech_targets) * 4,
+            bytemuck::cast_slice(&words),
+        );
+        self.replay_speech_active = targets.iter().any(Option::is_some);
+        Ok(())
     }
     pub fn replay_state_buffer(&self) -> &wgpu::Buffer {
         &self.gpu.state
@@ -557,6 +597,24 @@ impl FoundationTrainer {
             self.gpu.layout.ticks,
             "replay-seed-policy-adjoints",
         );
+        if self.replay_speech_active {
+            dispatch(
+                encoder,
+                &self.gpu.pipelines.speech_forward,
+                &self.gpu.bind_group,
+                self.gpu.layout.ticks,
+                32,
+                "replay-speech-forward",
+            );
+            dispatch(
+                encoder,
+                &self.gpu.pipelines.seed_speech,
+                &self.gpu.bind_group,
+                groups,
+                self.gpu.layout.ticks,
+                "replay-speech-adjoints",
+            );
+        }
         self.record_backward(encoder, self.gpu.layout.ticks * steps, groups);
         dispatch(
             encoder,
@@ -574,6 +632,16 @@ impl FoundationTrainer {
             1,
             "replay-decoder-gradients",
         );
+        if self.replay_speech_active {
+            dispatch(
+                encoder,
+                &self.gpu.pipelines.speech_gradients,
+                &self.gpu.bind_group,
+                weight_groups,
+                1,
+                "replay-speech-gradients",
+            );
+        }
         dispatch(
             encoder,
             &self.gpu.pipelines.gradient_norm,
@@ -593,6 +661,19 @@ impl FoundationTrainer {
         sequence: &TrainingSequence,
         adjoints: &[Vec<f32>],
     ) -> Result<crate::TrainingGradientProbe, TrainingError> {
+        self.probe_replay_gradients_with_speech(
+            sequence,
+            adjoints,
+            &vec![None; sequence.ticks.len()],
+        )
+    }
+
+    pub fn probe_replay_gradients_with_speech(
+        &mut self,
+        sequence: &TrainingSequence,
+        adjoints: &[Vec<f32>],
+        speech: &[Option<crate::ReplaySpeechTarget>],
+    ) -> Result<crate::TrainingGradientProbe, TrainingError> {
         sequence.validate_for(&self.phenotype)?;
         if adjoints.len() != sequence.ticks.len() - sequence.burn_in_ticks
             || adjoints
@@ -603,6 +684,7 @@ impl FoundationTrainer {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
         self.prepare_replay(sequence)?;
+        self.upload_replay_speech_targets(speech)?;
         let mut packed = vec![0.0; adjoints.len() * alife_core::MAX_ACTION_CANDIDATES];
         for (row, values) in adjoints.iter().enumerate() {
             packed[row * alife_core::MAX_ACTION_CANDIDATES
@@ -631,6 +713,23 @@ impl FoundationTrainer {
                         logits[(row + sequence.burn_in_ticks) * alife_core::MAX_ACTION_CANDIDATES
                             + candidate],
                     );
+            }
+        }
+        if self.replay_speech_active {
+            let logits = self.read_float_buffer(
+                &self.gpu.outputs,
+                u64::from(self.gpu.layout.speech_logits) * 4,
+                sequence.ticks.len() * 32,
+            )?;
+            let count = speech.iter().flatten().count() as f64;
+            for (tick, label) in speech.iter().enumerate() {
+                if let Some(label) = label {
+                    for (output, target) in label.logits().iter().enumerate() {
+                        let error = f64::from(logits[tick * 32 + output] - target);
+                        objective +=
+                            f64::from(label.output_weight(output)) * error * error / (32.0 * count);
+                    }
+                }
             }
         }
         let gradients = self.read_float_buffer(
@@ -711,7 +810,7 @@ impl FoundationTrainer {
             }
             if let CompiledSynapseKind::Decoder(coordinate) = synapse.kind() {
                 let head = coordinate.head().raw();
-                if (replay && head == 3) || (!replay && (head == 2 || head == 4)) {
+                if !replay && (head == 2 || head == 4) {
                     return Err(ScaffoldContractError::PhenotypeCompile.into());
                 }
             }
@@ -1816,6 +1915,16 @@ fn pack_metadata_and_layout(
         biases[usize::from(family.family().raw())] = family.bias();
     }
     meta.extend(biases.into_iter().map(f32::to_bits));
+    let speech_offsets = as_u32(meta.len())?;
+    let speech_start =
+        phenotype.candidate_decoder().motor_start() + SpeechDecoderLayoutV1::MOTOR_TARGET_OFFSET;
+    let mut speech_ids = Vec::new();
+    for output in 0..32_u32 {
+        meta.push(as_u32(speech_ids.len())?);
+        speech_ids.extend(phenotype.synapses().iter().enumerate().filter(|(_,s)| matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==alife_core::DecoderHeadKind::SpeechPayload) && s.target()==speech_start+output).map(|(i,_)|i as u32));
+    }
+    meta.push(as_u32(speech_ids.len())?);
+    meta.extend(speech_ids);
 
     let ticks = replay.map_or(TRAINING_SEQUENCE_TICKS, |r| r.ticks.len()) as u64;
     let candidate_capacity = if replay.is_some() {
@@ -1853,7 +1962,8 @@ fn pack_metadata_and_layout(
     let gradient_words = u64::from(accumulated_weights) + synapse_count as u64;
     let candidate_logits = 0;
     let speech_logits = as_u32_u64(ticks * candidate_capacity)?;
-    let metrics = as_u32_u64(ticks * candidate_capacity + ticks)?;
+    let metrics =
+        as_u32_u64(ticks * candidate_capacity + ticks * if replay.is_some() { 32 } else { 1 })?;
     let memory_raw = metrics + 4;
     let cognitive_raw = memory_raw + as_u32_u64(ticks * candidate_capacity)?;
     let output_words = u64::from(cognitive_raw) + ticks * candidate_capacity;
@@ -1866,7 +1976,8 @@ fn pack_metadata_and_layout(
                     + synapse_count as u64
                     + (alife_core::MAX_STRUCTURAL_EDGES as u64) * 5),
     )?;
-    let training_words = u64::from(initial) + neurons * 3;
+    let replay_speech_targets = as_u32_u64(u64::from(initial) + neurons * 3)?;
+    let training_words = u64::from(replay_speech_targets) + ticks * 64;
     let (
         dendritic_offsets,
         dendritic_branches,
@@ -1945,6 +2056,8 @@ fn pack_metadata_and_layout(
             speech_logits,
             metrics,
             speech_target_start,
+            replay_speech_targets,
+            speech_offsets,
             optimizer_v: synapse_count as u32,
             optimizer_age: as_u32(
                 synapse_count
@@ -2178,6 +2291,7 @@ fn build_step_headers(
         header[8] = step % u32::from(phenotype.microstep_count());
         header[9] = step / u32::from(phenotype.microstep_count());
         header[10] = optimizer_step;
+        header[11] = layout.speech_offsets;
         header[12] = layout.target_offsets;
         header[13] = layout.incoming_ids;
         header[14] = layout.source_offsets;
@@ -2229,6 +2343,7 @@ fn build_step_headers(
         header[60] = layout.accumulated_weights;
         header[61] = layout.gradient_scale.to_bits();
         header[62] = layout.optimizer_age;
+        header[63] = layout.replay_speech_targets;
         headers.extend_from_slice(&header);
     }
     Ok(headers)

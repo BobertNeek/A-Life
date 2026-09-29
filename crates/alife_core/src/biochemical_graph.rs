@@ -150,6 +150,7 @@ pub enum BiochemicalSourceLocus {
     Awake,
     Sleeping,
     PlayerReward,
+    PlayStimulation,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -968,6 +969,39 @@ impl BiochemicalPhenotype {
         Ok(self)
     }
 
+    /// Inherited boredom circuit, separate from exploratory curiosity. Toy
+    /// use can relieve an existing need; it cannot manufacture praise or food.
+    pub(crate) fn with_play_stimulation(mut self) -> Result<Self, ScaffoldContractError> {
+        let boredom = ChemicalSpeciesId(22);
+        self.species.retain(|row| row.id != boredom);
+        self.species.push(regulatory(boredom, 0.0, 1.0));
+        self.species.sort_by_key(|row| row.id);
+        self.emitters.retain(|row| row.target != boredom);
+        for (source, gain) in [
+            (BiochemicalSourceLocus::Awake, 0.0002),
+            (BiochemicalSourceLocus::PlayStimulation, -0.2),
+        ] {
+            let mut release = emitter(source, boredom, gain);
+            release.developmental_expression_floor = 1.0;
+            self.emitters.push(release);
+        }
+        self.receptors
+            .retain(|row| row.target != BiochemicalTargetLocus::Drive(DriveChannel::Extension0));
+        self.receptors.push(BiochemicalReceptor {
+            source: boredom,
+            target: BiochemicalTargetLocus::Drive(DriveChannel::Extension0),
+            threshold: 0.0,
+            gain: 1.0,
+            nominal: 0.0,
+            digital: false,
+        });
+        self.value_profile.drives[9] = -0.08;
+        self.receptors
+            .sort_by_key(|row| (target_order(row.target), row.source));
+        self.compile()?;
+        Ok(self)
+    }
+
     pub(crate) fn with_player_reward(mut self) -> Result<Self, ScaffoldContractError> {
         // Newborns can receive care before mature regulatory expression.
         for row in &mut self.emitters {
@@ -1725,6 +1759,7 @@ fn source_value(source: BiochemicalSourceLocus, body: BodyState, event: BodyEven
         BiochemicalSourceLocus::Awake => f32::from(!body.sleeping),
         BiochemicalSourceLocus::Sleeping => f32::from(body.sleeping),
         BiochemicalSourceLocus::PlayerReward => event.player_reward,
+        BiochemicalSourceLocus::PlayStimulation => event.play_stimulation,
     }
     .clamp(0.0, 1.0)
 }
@@ -1745,7 +1780,8 @@ fn emitter_release_count(source: BiochemicalSourceLocus, cadence_crossings: u32)
         | BiochemicalSourceLocus::SocialContact
         | BiochemicalSourceLocus::SleepRecovery
         | BiochemicalSourceLocus::MatingOpportunity
-        | BiochemicalSourceLocus::PlayerReward => 1,
+        | BiochemicalSourceLocus::PlayerReward
+        | BiochemicalSourceLocus::PlayStimulation => 1,
         BiochemicalSourceLocus::Basal
         | BiochemicalSourceLocus::Awake
         | BiochemicalSourceLocus::Sleeping

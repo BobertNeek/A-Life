@@ -246,6 +246,181 @@ mod hardware {
         }
     }
 
+    #[cfg(feature = "training-rollout")]
+    #[test]
+    fn grounded_language_and_private_prior_reach_gpu_encoder_separately() {
+        let mut backend = required_backend();
+        let capacity = BrainCapacityClass::n2048();
+        let mut genome = alife_core::BrainGenome::scaffold(92, capacity.id());
+        genome
+            .sensor_layout
+            .channels
+            .push(alife_core::SensorChannelGene {
+                kind: alife_core::SensorChannelKind::Hearing,
+                receptor_count: 32,
+                target_lobe: alife_core::LobeKind::PerceptualIntegration,
+                enabled_at_maturation: 0,
+            });
+        let development = alife_core::DevelopmentState::new(
+            genome.id,
+            Tick::ZERO,
+            NormalizedScalar::new(1.0).unwrap(),
+        );
+        let phenotype = alife_core::PhenotypeCompiler::compile_testing_procedural_baseline(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedTerrainVisionV1,
+        )
+        .unwrap();
+        let physiology = super::support::test_physiology(92, &phenotype).unwrap();
+        let mut encoded = Vec::new();
+        for (index, (heard, prior)) in [
+            (None, None),
+            (Some(1), None),
+            (Some(2), None),
+            (None, Some(1)),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let id = OrganismId(index as u64 + 1);
+            let at = Tick::new(220);
+            let base = PerceptionFrame::new(
+                id,
+                at,
+                SensorProfile::GroundedTerrainVisionV1,
+                SensorySnapshot::new(
+                    id,
+                    at,
+                    Vec3f::ZERO,
+                    SensoryChannels::ZERO,
+                    Default::default(),
+                )
+                .unwrap(),
+                BodySnapshot {
+                    pose: Pose::IDENTITY,
+                    velocity: Velocity::ZERO,
+                },
+                HomeostaticSnapshot::baseline(at),
+                vec![ActionCandidate::new(
+                    0,
+                    alife_core::ActionId(1),
+                    ActionKind::Idle,
+                    CandidateActionFamily::Idle,
+                    CandidateObservationRef::None,
+                    ActionTarget::NONE,
+                    CandidateFeatureVector::zero(),
+                    Confidence::new(1.0).unwrap(),
+                    NormalizedScalar::new(0.0).unwrap(),
+                    DurationTicks::new(1),
+                    DurationTicks::new(1),
+                )
+                .unwrap()],
+                SensorProfileProvenance::new(
+                    SensorProfile::GroundedTerrainVisionV1,
+                    SensoryAbiVersion::CURRENT,
+                    at,
+                )
+                .unwrap(),
+                Vec::new(),
+            )
+            .unwrap();
+            let mut sensory = base.sensory().clone();
+            if let Some(token) = heard {
+                sensory.language_context.heard_tokens[0] = Some(alife_core::HeardToken {
+                    utterance_id: alife_core::UtteranceId::new(1).unwrap(),
+                    sequence_position: 0,
+                    source_kind: alife_core::UtteranceSourceKind::Teacher,
+                    speaker_id: None,
+                    addressee: Some(id),
+                    source_entity: None,
+                    token_id: token,
+                    source_position: Vec3f::new(1.0, 0.0, 0.0),
+                    confidence: Confidence::new(1.0).unwrap(),
+                    teacher_channel: Some(alife_core::TeacherPerceptionChannel::Hearing),
+                });
+            }
+            if let Some(code) = prior {
+                sensory.semantic_context = Some(alife_core::SemanticContextRef {
+                    feature_flags: alife_core::ContextFeatureFlags::NONE,
+                    confidence: Confidence::new(0.2).unwrap(),
+                    compressed_codes: vec![alife_core::CompressedSemanticCode {
+                        codebook_id: 1,
+                        code,
+                        salience: NormalizedScalar::new(1.0).unwrap(),
+                    }],
+                    salience: Vec::new(),
+                });
+            }
+            let frame = PerceptionFrame::new(
+                id,
+                base.tick(),
+                base.sensor_profile(),
+                sensory,
+                base.body(),
+                *base.homeostasis(),
+                base.candidates().to_vec(),
+                SensorProfileProvenance::new(
+                    base.sensor_profile(),
+                    SensoryAbiVersion::CURRENT,
+                    base.tick(),
+                )
+                .unwrap(),
+                Vec::new(),
+            )
+            .unwrap();
+            assert_eq!(frame.sensory().channels, base.sensory().channels);
+            assert_eq!(frame.candidates(), base.candidates());
+            let handle = backend.insert_brain(id, phenotype.clone()).unwrap();
+            let (frame, recall) =
+                super::support::try_empty_recall(&frame).expect("language frame recall");
+            let upload = backend
+                .prepare_memory_context_upload(handle, &frame, &recall)
+                .expect("language context upload");
+            let upload = super::support::bind_chemistry_receptor_effects(
+                upload,
+                &phenotype,
+                &physiology,
+                frame.tick(),
+            )
+            .expect("language receptor effects");
+            let input =
+                alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &upload)
+                    .expect("language tick binding");
+            let batch = alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(vec![input])
+                .expect("language batch");
+            let tick = backend
+                .tick_memory_batch(&batch)
+                .expect("language GPU dispatch")
+                .remove(0);
+            let state = backend
+                .capture_training_state(handle, frame.tick())
+                .unwrap();
+            let range = state.brain_slot.word_ranges().encoded_input_words.clone();
+            encoded.push(
+                state.mutable_words[(range.start - state.mutable_word_base) as usize
+                    ..(range.end - state.mutable_word_base) as usize]
+                    .to_vec(),
+            );
+            discard_tick(&mut backend, &tick);
+            backend.remove_brain(handle).unwrap();
+        }
+        assert!(encoded[0] != encoded[1], "heard word must reach neurons");
+        assert!(
+            encoded[1] != encoded[2],
+            "different nouns must have different neural input"
+        );
+        assert!(
+            encoded[0] != encoded[3],
+            "bounded private hint must reach neurons"
+        );
+        assert!(
+            encoded[1] != encoded[3],
+            "private prior is distinct from hearing"
+        );
+    }
+
     fn assert_tick_identity(
         tick: &GpuClosedLoopTick,
         handle: GpuBrainHandle,

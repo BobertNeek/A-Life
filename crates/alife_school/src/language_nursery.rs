@@ -90,6 +90,34 @@ pub struct LanguageNursery {
 }
 
 impl LanguageNursery {
+    /// Reusable ordinary teacher speech exposure in an existing production world.
+    pub fn speak_in_world(
+        world: &mut HeadlessWorld,
+        subject: OrganismId,
+        position: Vec3f,
+        tokens: Vec<LanguageTokenId>,
+    ) -> Result<AudibleUtterance, ScaffoldContractError> {
+        let teacher = if let Some(existing) = world.entity_id("nursery-teacher") {
+            world.editor_move_object(existing, position)?;
+            existing
+        } else {
+            let raw = world
+                .organism_entity_ids()
+                .iter()
+                .map(|(id, _)| id.raw())
+                .max()
+                .unwrap_or(0)
+                .checked_add(1)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            world.spawn_social_agent("nursery-teacher", OrganismId(raw), position, 0.75)?
+        };
+        world.grounded_teacher_actor(teacher)?.speak(
+            world,
+            Some(subject),
+            tokens,
+            TeacherPerceptionChannel::Hearing,
+        )
+    }
     pub fn new(seed: u64, subject: OrganismId) -> Result<Self, ScaffoldContractError> {
         subject.validate()?;
         let world = HeadlessScenarioBuilder::new(seed)
@@ -212,7 +240,7 @@ impl LanguageNursery {
         let perception = self.world.perception_frame_draft(
             self.subject,
             tick,
-            SensorProfile::GroundedObjectSlotsV1,
+            SensorProfile::GroundedTerrainVisionV1,
             HomeostaticSnapshot::baseline(tick),
         )?;
         let demonstration_actions = match speaker {

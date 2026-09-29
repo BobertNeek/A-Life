@@ -99,7 +99,7 @@ impl GpuPerceptionUpload {
             dispatch_header_words.extend_from_slice(candidate.words());
         }
         let mut frame_payload_words = Vec::with_capacity(
-            FIXED_FRAME_LANES as usize + frame.candidates().len() * decoder_input_stride,
+            FIXED_FRAME_LANES as usize + 256 + frame.candidates().len() * decoder_input_stride,
         );
         frame_payload_words.extend(frame.sensory().channels.as_flat_array().map(f32::to_bits));
         let body = frame.body().neural_projection(frame.sensor_profile());
@@ -130,6 +130,14 @@ impl GpuPerceptionUpload {
                 0,
             );
         }
+        // Context banks follow candidate lanes, preserving the existing 77-lane
+        // sensory/body ABI and decoder feature offsets.
+        frame_payload_words.extend(
+            frame
+                .sensory()
+                .language_prior_neural_lanes()
+                .map(f32::to_bits),
+        );
         if frame_payload_words.len() < FIXED_FRAME_LANES as usize
             || frame_payload_words
                 .iter()

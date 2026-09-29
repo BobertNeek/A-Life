@@ -106,6 +106,197 @@ fn player_care_is_local_gene_controlled_and_survives_pending_save() {
 }
 
 #[test]
+fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() {
+    use alife_core::{
+        ActionCommand, ActionKind, ActionTarget, AlleleSide, BiochemicalSourceLocus,
+        BodyEventDelta, Confidence, DurationTicks, Intensity, Vec3f,
+    };
+    use alife_world::{FoodVariety, HeadlessActionIds};
+    let game = phase3_game(1);
+    let mut world = game.world;
+    let (organism, entity) = world.organism_entity_ids()[0];
+    let position = world.entity(entity).unwrap().position;
+    let food = world.entity_id("food-01").unwrap();
+    let mut foods = Vec::new();
+    for variety in [FoodVariety::Root, FoodVariety::Fruit, FoodVariety::Seed] {
+        let mut trial = world.clone();
+        trial.set_food_variety(food, variety).unwrap();
+        trial.editor_move_object(food, position).unwrap();
+        let object = trial.entity(food).unwrap().clone();
+        let command = ActionCommand::structured(
+            organism,
+            HeadlessActionIds::EAT,
+            ActionKind::Interact,
+            ActionTarget::new(Some(food), None),
+            Intensity::new(1.0).unwrap(),
+            DurationTicks::new(1),
+            Confidence::new(1.0).unwrap(),
+            0,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let receipt = trial
+            .apply_registered_command(&command, entity, Tick(1))
+            .unwrap();
+        assert!(receipt.action_result.execution.succeeded);
+        assert_eq!(
+            receipt.action_result.body_event.nutrition,
+            variety.nutrition()
+        );
+        assert!(trial.entity(food).unwrap().consumed);
+        foods.push((object.nutrition, object.grounded_physical));
+    }
+    assert!(foods.windows(2).all(|pair| pair[0].0 != pair[1].0
+        && pair[0].1.color != pair[1].1.color
+        && pair[0].1.chemical != pair[1].1.chemical));
+    let ball = world.spawn_toy("test-ball", position, true).unwrap();
+    let station = world
+        .spawn_toy(
+            "test-station",
+            Vec3f::new(position.x + 0.1, position.y, position.z),
+            false,
+        )
+        .unwrap();
+    let command = |action, target| {
+        ActionCommand::structured(
+            organism,
+            action,
+            ActionKind::Interact,
+            ActionTarget::new(Some(target), None),
+            Intensity::new(1.0).unwrap(),
+            DurationTicks::new(1),
+            Confidence::new(1.0).unwrap(),
+            0,
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+    };
+    let baseline = world.clone();
+    let get = world
+        .apply_registered_command(&command(HeadlessActionIds::GRAB, ball), entity, Tick(1))
+        .unwrap();
+    assert!(get.action_result.execution.succeeded);
+    assert_eq!(world.entity(ball).unwrap().carried_by, Some(organism));
+    world.try_advance_tick().unwrap();
+    let release = world
+        .apply_registered_command(&command(HeadlessActionIds::GRAB, ball), entity, Tick(2))
+        .unwrap();
+    assert!(release.action_result.execution.succeeded);
+    assert_eq!(world.entity(ball).unwrap().carried_by, None);
+    world.try_advance_tick().unwrap();
+    for toy in [ball, station] {
+        let mut trial = baseline.clone();
+        let play = trial
+            .apply_registered_command(&command(HeadlessActionIds::PLAY, toy), entity, Tick(1))
+            .unwrap();
+        assert!(play.action_result.execution.succeeded);
+        assert_eq!(play.action_result.body_event.play_stimulation, 1.0);
+        assert_eq!(
+            trial.entity(toy).unwrap().position,
+            baseline.entity(toy).unwrap().position
+        );
+        assert!(!trial.entity(toy).unwrap().consumed);
+        let mut trial = baseline.clone();
+        assert!(
+            !trial
+                .apply_registered_command(&command(HeadlessActionIds::EAT, toy), entity, Tick(1))
+                .unwrap()
+                .action_result
+                .execution
+                .succeeded
+        );
+    }
+    let mut trial = baseline.clone();
+    assert!(
+        !trial
+            .apply_registered_command(&command(HeadlessActionIds::GRAB, station), entity, Tick(1))
+            .unwrap()
+            .action_result
+            .execution
+            .succeeded
+    );
+    trial.try_advance_tick().unwrap();
+    trial
+        .editor_move_object(
+            station,
+            Vec3f::new(position.x + 10.0, position.y, position.z),
+        )
+        .unwrap();
+    assert!(
+        !trial
+            .apply_registered_command(&command(HeadlessActionIds::PLAY, station), entity, Tick(2))
+            .unwrap()
+            .action_result
+            .execution
+            .succeeded
+    );
+    // The chemical response is inherited and can be silenced by its gene.
+    let record = baseline.organism_registry().get(organism).unwrap();
+    let mut genome = record.genome().clone();
+    let index = genome
+        .chemistry
+        .graph
+        .expressed()
+        .emitters()
+        .iter()
+        .position(|row| row.source == BiochemicalSourceLocus::PlayStimulation)
+        .unwrap();
+    for side in [AlleleSide::Maternal, AlleleSide::Paternal] {
+        genome.chemistry.graph = genome
+            .chemistry
+            .graph
+            .clone()
+            .with_emitter_gain(side, index, 0.0)
+            .unwrap();
+    }
+    let no_play = genome.express().unwrap();
+    let mut chemistry = *record.biochemistry();
+    for tick in 1..=600 {
+        chemistry = chemistry
+            .advance(Tick(tick), BodyEventDelta::zero(), record.phenotype())
+            .unwrap();
+    }
+    let stimulus = BodyEventDelta {
+        play_stimulation: 1.0,
+        ..BodyEventDelta::zero()
+    };
+    let pleased = chemistry
+        .advance(Tick(601), stimulus, record.phenotype())
+        .unwrap();
+    let unchanged = chemistry.advance(Tick(601), stimulus, &no_play).unwrap();
+    assert!(pleased.homeostasis.drives.extension[0] < unchanged.homeostasis.drives.extension[0]);
+    let relief = alife_core::MeasuredPhysiologyTransition::new(chemistry, pleased)
+        .unwrap()
+        .homeostatic_improvement();
+    assert!(relief > 0.0);
+    let save = alife_world::PortableSaveFile::from_headless_world(
+        "variety",
+        &world,
+        alife_world::RuntimeConfig::deterministic_default(
+            world.seed(),
+            alife_core::BrainScaleTier::Nano512,
+        ),
+        alife_world::AssetManifest::empty(),
+        game.creatures,
+    )
+    .unwrap();
+    let restored =
+        alife_world::PortableSaveFile::from_json_str(&serde_json::to_string(&save).unwrap())
+            .unwrap()
+            .restore_headless_world()
+            .unwrap();
+    assert_eq!(world.object_snapshots(), restored.object_snapshots());
+    assert_eq!(
+        world.canonical_signature_digest().unwrap(),
+        restored.canonical_signature_digest().unwrap()
+    );
+}
+
+#[test]
 fn canonical_new_game_creates_exact_requested_population() {
     let foundation =
         FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();

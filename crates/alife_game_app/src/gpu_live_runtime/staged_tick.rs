@@ -32,6 +32,9 @@ impl GpuLiveBrainRuntime {
         let curated_first_tick = curated_first_tick_resident.is_some();
         self.retire_dead_organisms()?;
         self.reconcile_population()?;
+        if let Some(prior) = self.semantic_prior.as_mut() {
+            prior.retain_lives(&self.handles);
+        }
         self.last_sealed_patches
             .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
         self.restored_replay_patches
@@ -556,6 +559,11 @@ impl GpuLiveBrainRuntime {
                     resident.homeostasis,
                     &perception_index,
                 )?;
+                let draft = if let Some(prior) = self.semantic_prior.as_mut() {
+                    prior.prepare(draft, ExperienceSequenceId(resident.next_sequence))?
+                } else {
+                    draft
+                };
                 grounded_perception_wall_ns = grounded_perception_wall_ns
                     .saturating_add(grounded_perception_started.map_or(0, elapsed_ns));
                 let episodic_retrieval_started = measure_preparation.then(Instant::now);

@@ -901,7 +901,14 @@ impl GpuActiveBatchUpload {
             {
                 return Err(GpuClosedLoopError::CapacityExceeded);
             }
-            frame_payload_words.extend_from_slice(&upload.frame_payload_words);
+            // Preserve candidate-feature/digest adjacency for eligibility.
+            // Private input banks follow the digests, before pending metadata.
+            let context_start = upload
+                .frame_payload_words
+                .len()
+                .checked_sub(256)
+                .ok_or(GpuClosedLoopError::MalformedUpload)?;
+            frame_payload_words.extend_from_slice(&upload.frame_payload_words[..context_start]);
             let decoder_learning_input_offset = upload
                 .candidates
                 .first()
@@ -928,6 +935,7 @@ impl GpuActiveBatchUpload {
                     .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
                 frame_payload_words.extend_from_slice(&split_u64x2(digest.0));
             }
+            frame_payload_words.extend_from_slice(&upload.frame_payload_words[context_start..]);
             upload.header.microstep_count = u32::from(entry.activity.microsteps);
             let pending_template_offset = u32::try_from(frame_payload_words.len())
                 .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
@@ -4604,6 +4612,7 @@ fn validate_dispatch(
                     .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
             )
             .and_then(|value| value.checked_add(learning.candidate_count.checked_mul(4)?))
+            .and_then(|value| value.checked_add(256))
             .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
         if learning.outcome_offset != expected_outcome_offset {
             return Err(GpuClosedLoopError::MalformedUpload);

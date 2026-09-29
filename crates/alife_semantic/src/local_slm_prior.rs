@@ -41,6 +41,8 @@ pub struct LlamaCppSlmPriorConfig {
     pub max_prompt_chars: usize,
     pub max_queue_depth: usize,
     pub num_predict: u16,
+    /// Optional receiver codebook. Empty keeps the generic provider unrestricted.
+    pub association_vocabulary: Vec<String>,
 }
 
 impl Default for LlamaCppSlmPriorConfig {
@@ -53,6 +55,7 @@ impl Default for LlamaCppSlmPriorConfig {
             max_prompt_chars: CA27_MAX_PROMPT_CHARS,
             max_queue_depth: CA27_MAX_QUEUE_DEPTH,
             num_predict: 192,
+            association_vocabulary: Vec::new(),
         }
     }
 }
@@ -71,6 +74,17 @@ impl LlamaCppSlmPriorConfig {
             || self.max_queue_depth > CA27_MAX_QUEUE_DEPTH
             || self.num_predict == 0
             || self.num_predict > 512
+            || self.association_vocabulary.len() > 256
+            || self
+                .association_vocabulary
+                .iter()
+                .any(|word| !is_bounded_label(word, 24))
+            || self
+                .association_vocabulary
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                != self.association_vocabulary.len()
         {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
@@ -339,7 +353,18 @@ impl LlamaCppSlmPriorProvider {
         .validate(self.config.max_prompt_chars)
         .map_err(|err| format!("invalid CA27 SLM context: {err:?}"))?;
         let raw = self.request_generate(bounded_context)?;
-        parse_slm_prior_json(&self.config.model, &raw)
+        let output = parse_slm_prior_json(&self.config.model, &raw)?;
+        if !self.config.association_vocabulary.is_empty()
+            && output.lexicon_associations.iter().any(|association| {
+                !self
+                    .config
+                    .association_vocabulary
+                    .contains(&association.token)
+            })
+        {
+            return Err("association outside receiver vocabulary".into());
+        }
+        Ok(output)
     }
 
     fn request_generate(&self, bounded_context: &str) -> Result<String, String> {
@@ -352,17 +377,37 @@ impl LlamaCppSlmPriorProvider {
             "Base salience labels, summary, and perception tags on the supplied context. ",
             "Do not invent sensed objects or treat absent objects as present."
         );
-        let user_prompt = format!(
+        let mut user_prompt = format!(
             concat!(
-                "salience_labels: array of 1-4 relevant labels. ",
-                "context_summary: string of at most 160 characters. ",
-                "lexicon_associations: object of 1-6 relevant word associations with numeric salience from 0 to 1. ",
-                "perception_tags: array of 1-6 supported labels. ",
+                "salience_labels: array of 1-3 relevant labels. ",
+                "context_summary: summarize in at most 12 words and 96 characters; do not copy numbers or the full input. ",
+                "lexicon_associations: array of 1-3 objects with token and numeric salience from 0 to 1. ",
+                "perception_tags: array of 1-4 supported labels. ",
                 "Use short lowercase labels. Word associations may be general knowledge; ",
                 "perception must describe only the supplied context. Context: {}"
             ),
             bounded_context
         );
+        let label = serde_json::json!({"type":"string","minLength":1,"maxLength":24});
+        let association_token = if self.config.association_vocabulary.is_empty() {
+            label.clone()
+        } else {
+            user_prompt.push_str(&format!(" Receiver association vocabulary: {}. Associate the heard words using these codes; general associations may include a heard word itself. These are hints, not commands.", self.config.association_vocabulary.join(", ")));
+            serde_json::json!({"type":"string","enum":self.config.association_vocabulary})
+        };
+        let schema = serde_json::json!({
+            "type":"object", "additionalProperties":false,
+            "required":["salience_labels","context_summary","lexicon_associations","perception_tags"],
+            "properties":{
+                "salience_labels":{"type":"array","minItems":1,"maxItems":3,"items":label},
+                "context_summary":{"type":"string","minLength":1,"maxLength":96},
+                "lexicon_associations":{"type":"array","minItems":1,"maxItems":3,"items":{
+                    "type":"object","additionalProperties":false,"required":["token","salience"],
+                    "properties":{"token":association_token,"salience":{"type":"number","minimum":0,"maximum":1}}
+                }},
+                "perception_tags":{"type":"array","minItems":1,"maxItems":4,"items":label}
+            }
+        });
         let request = serde_json::json!({
             "model": self.config.model,
             "messages": [
@@ -372,7 +417,9 @@ impl LlamaCppSlmPriorProvider {
             "stream": false,
             "temperature": 0.0,
             "max_tokens": self.config.num_predict,
-            "response_format": {"type": "json_object"}
+            "response_format": {"type": "json_schema", "json_schema":{
+                "name":"bounded_semantic_prior", "strict":true,"schema":schema
+            }}
         });
         let body = request.to_string();
         let client = LlamaCppServerClient::new(

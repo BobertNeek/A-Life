@@ -27,7 +27,9 @@ impl GpuLiveBrainRuntime {
                 self.world
                     .organism_registry()
                     .get(*organism_id)
-                    .is_none_or(|record| record.lifecycle().is_alive())
+                    // Unregistered embodied actors (such as the nursery
+                    // teacher) are perceived world objects, not GPU residents.
+                    .is_some_and(|record| record.lifecycle().is_alive())
             })
             .map(|(organism_id, _)| organism_id.raw())
             .collect()

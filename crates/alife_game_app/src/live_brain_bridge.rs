@@ -442,7 +442,10 @@ impl LiveBrainLoop {
                     0.7,
                     visible.distance,
                 )?),
-                WorldObjectKind::Agent | WorldObjectKind::Token => proposals.push(proposal(
+                WorldObjectKind::Agent
+                | WorldObjectKind::Token
+                | WorldObjectKind::Ball
+                | WorldObjectKind::ActivityToy => proposals.push(proposal(
                     ActionKind::Inspect.canonical_id(),
                     ActionKind::Inspect,
                     Some(visible.id),

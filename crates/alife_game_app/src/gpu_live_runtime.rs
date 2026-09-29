@@ -20,11 +20,13 @@ mod journal_worker_poll_tests;
 mod nociception_food_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod recovery_sleep_tests;
+mod semantic_prior;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod sleep_atomicity_tests;
 mod staged_tick;
 #[cfg(feature = "foundation-training")]
 pub use foundation_worlds::*;
+pub use semantic_prior::SemanticPriorMetrics;
 
 use durability_hold::{
     brain_atp_world_tick_mode, motor_eligible, sleep_recovery_body_event_due, BrainAtpWorldTickMode,
@@ -3310,6 +3312,7 @@ pub struct FoundationTrainingStep {
 }
 
 pub struct GpuLiveBrainRuntime {
+    semantic_prior: Option<semantic_prior::RuntimeSemanticPrior>,
     #[cfg(feature = "foundation-training")]
     training_sampling: Option<alife_gpu_backend::GpuTrainingSamplingConfig>,
     #[cfg(feature = "foundation-training")]
@@ -3409,7 +3412,6 @@ pub struct GpuLiveBrainRuntime {
 }
 
 pub const PLAYER_RESOURCE_PLACEMENT_SCHEMA_VERSION: u16 = 1;
-const PLAYER_FOOD_NUTRITION: f32 = 0.25;
 const PLAYER_FOOD_RADIUS: f32 = 0.5;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -3934,6 +3936,9 @@ fn validate_restore_checkpoint_coverage(
     checkpoint_ids: &BTreeSet<u64>,
 ) -> Result<(), ScaffoldContractError> {
     for (id, _) in world.organism_entity_ids() {
+        if world.organism_registry().get(id).is_none() {
+            continue; // External embodied actors have no neural checkpoint.
+        }
         if checkpoint_ids.contains(&id.raw()) {
             continue;
         }
@@ -5850,6 +5855,45 @@ impl GpuLiveBrainRuntime {
         std::mem::take(&mut self.last_foundation_training_steps)
     }
 
+    /// Setup-only priming for max-speed collection. No world tick, neural
+    /// dispatch or learned state advances while the provider prepares a hint.
+    pub(crate) fn prime_foundation_semantic_prior(&mut self) -> Result<(), GameAppShellError> {
+        let Some(prior) = self.semantic_prior.as_mut() else {
+            return Ok(());
+        };
+        let Some((&raw, resident)) = self.residents.iter().next() else {
+            return Ok(());
+        };
+        let index = self.world.build_perception_batch_index()?;
+        let draft = self.world.perception_frame_draft_indexed(
+            OrganismId(raw),
+            self.world.tick(),
+            self.sensor_profile,
+            resident.homeostasis,
+            &index,
+        )?;
+        let sequence = ExperienceSequenceId(resident.next_sequence);
+        let started = std::time::Instant::now();
+        loop {
+            prior.prime(draft.clone(), sequence)?;
+            if !prior.pending(raw) {
+                break;
+            }
+            if started.elapsed() >= std::time::Duration::from_secs(5) {
+                prior.metrics.prime_timeouts += 1;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        prior.metrics.prime_wait_ms +=
+            started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        Ok(())
+    }
+
+    pub fn semantic_prior_metrics(&self) -> Option<&SemanticPriorMetrics> {
+        self.semantic_prior.as_ref().map(|prior| &prior.metrics)
+    }
+
     /// Final world-owned biology captured by the existing retirement transaction.
     #[cfg(feature = "foundation-training")]
     pub fn take_foundation_terminal_biology(
@@ -6005,6 +6049,10 @@ impl GpuLiveBrainRuntime {
             consumer
         };
         let mut runtime = Self {
+            semantic_prior: semantic_prior::RuntimeSemanticPrior::from_environment(
+                deterministic_seed,
+                consumer == GpuSessionConsumerKind::Training,
+            )?,
             #[cfg(feature = "foundation-training")]
             training_sampling: options.training_sampling,
             #[cfg(feature = "foundation-training")]
@@ -6141,6 +6189,7 @@ impl GpuLiveBrainRuntime {
         let live_bindings = world
             .organism_entity_ids()
             .into_iter()
+            .filter(|(id, _)| world.organism_registry().get(*id).is_some())
             .map(|(organism_id, world_entity_id)| {
                 (organism_id.raw(), (organism_id, world_entity_id))
             })
@@ -6156,6 +6205,10 @@ impl GpuLiveBrainRuntime {
         validate_restore_checkpoint_coverage(&world, &checkpoint_index.keys().copied().collect())?;
         let world_tick = world.tick();
         let mut runtime = Self {
+            semantic_prior: semantic_prior::RuntimeSemanticPrior::from_environment(
+                deterministic_seed,
+                false,
+            )?,
             #[cfg(feature = "foundation-training")]
             training_sampling: None,
             #[cfg(feature = "foundation-training")]
@@ -8035,26 +8088,29 @@ impl GpuLiveBrainRuntime {
         position.z += 1.5 * object.body_yaw.sin();
         let mut staged = self.world.clone();
         let toy = if let Some(id) = staged.entity_id("player-plaything") {
-            if staged
-                .entity(id)
-                .is_none_or(|toy| toy.kind != WorldObjectKind::Token || toy.token_id != Some(1))
-            {
+            let toy = staged.entity(id).ok_or(ScaffoldContractError::InvalidId)?;
+            if toy.carried_by.is_some() {
                 return Err(ScaffoldContractError::InvalidActionDecision.into());
             }
-            staged.editor_move_object(id, position)?;
-            id
+            if toy.kind == WorldObjectKind::Token && toy.token_id == Some(1) {
+                // Explicitly replace the old development prop on a new player
+                // offer; ordinary save/load leaves identities untouched.
+                staged.editor_remove_object(id)?;
+                staged.spawn_toy("player-plaything", position, true)?
+            } else if toy.kind == WorldObjectKind::Ball {
+                staged.editor_move_object(id, position)?;
+                id
+            } else {
+                return Err(ScaffoldContractError::InvalidActionDecision.into());
+            }
         } else {
-            staged.editor_spawn_object(alife_world::WorldEditorSpawnSpec {
-                label: "player-plaything".to_string(),
-                kind: WorldObjectKind::Token,
-                organism_id: None,
-                position,
-                nutrition: 0.0,
-                hazard_pain: 0.0,
-                radius: 0.25,
-                token_id: Some(1),
-            })?
+            staged.spawn_toy("player-plaything", position, true)?
         };
+        // The activity toy has a persistent fixed location after placement.
+        if staged.entity_id("player-activity-toy").is_none() {
+            let station_position = Vec3f::new(position.x + 1.5, position.y, position.z + 1.5);
+            staged.spawn_toy("player-activity-toy", station_position, false)?;
+        }
         self.world = staged;
         Ok(toy)
     }
@@ -10124,7 +10180,10 @@ fn place_food_in_world(
         .map(|suffix| format!("player-food-t{}-{suffix}", world.tick().raw()))
         .find(|label| world.entity_id(label).is_none())
         .ok_or(ScaffoldContractError::InvalidId)?;
-    let command = WorldEditCommand::place_food(&label, position, PLAYER_FOOD_NUTRITION);
+    let variety =
+        alife_world::FoodVariety::from_seed(world.seed().wrapping_add(world.object_count() as u64));
+    let nutrition = variety.nutrition();
+    let command = WorldEditCommand::place_food(&label, position, nutrition);
     command.validate(config)?;
 
     let mut candidate = world.clone();
@@ -10133,11 +10192,12 @@ fn place_food_in_world(
         kind: WorldObjectKind::Food,
         organism_id: None,
         position,
-        nutrition: PLAYER_FOOD_NUTRITION,
+        nutrition,
         hazard_pain: 0.0,
         radius: PLAYER_FOOD_RADIUS,
         token_id: None,
     })?;
+    candidate.set_food_variety(world_entity_id, variety)?;
     candidate.validate_organism_bindings()?;
     let placed_position = candidate
         .entity(world_entity_id)
@@ -10151,7 +10211,7 @@ fn place_food_in_world(
         world_entity_id,
         label,
         position: placed_position,
-        nutrition: PLAYER_FOOD_NUTRITION,
+        nutrition,
         radius: PLAYER_FOOD_RADIUS,
         world_signature,
     })

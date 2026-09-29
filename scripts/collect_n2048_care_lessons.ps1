@@ -2,7 +2,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$Output,
-    [Parameter(Mandatory)][string]$Source
+    [Parameter(Mandatory)][string]$Source,
+    [ValidateSet('Care','VisionLanguage')][string]$Curriculum = 'VisionLanguage'
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -24,21 +25,29 @@ try {
     if ($busy.Count) { throw "GPU/Cargo lane occupied: $($busy.ProcessName -join ', ')" }
     [IO.Directory]::CreateDirectory($outputPath) | Out-Null
     $entries = [Collections.Generic.List[string]]::new()
-    $counts = [ordered]@{ feeding = 0; hazard_avoidance = 0; obstacle_navigation = 0; recovery = 0 }
+    $counts = [ordered]@{ feeding = 0; hazard_avoidance = 0; obstacle_navigation = 0; recovery = 0;
+        vision_search = 0; maze_navigation = 0; vocabulary_reception = 0; vocabulary_production = 0 }
     $obstacleSides = [Collections.Generic.HashSet[int]]::new()
     $recoveryFatigueLevels = [Collections.Generic.HashSet[string]]::new()
-    $lessons = @('feeding', 'hazard_avoidance', 'obstacle_navigation', 'recovery')
-    for ($index = 0; $index -lt 32; $index++) {
-        $lesson = $lessons[$index % 4]
-        $ordinal = [int][Math]::Floor($index / 4)
-        # The step of five alternates parity within each lesson category.
-        # A +4 schedule made every obstacle route take the same side.
-        $seed = [ulong](539364000 + 5 * $ordinal + ($index % 4))
+    $expected = if ($Curriculum -eq 'Care') { @(8,8,8,8,0,0,0,0) } else { @(2,2,2,0,4,4,24,24) }
+    $lessons = @($counts.Keys)
+    $schedule = [Collections.Generic.List[string]]::new()
+    for ($ordinal=0; $ordinal -lt ($expected | Measure-Object -Maximum).Maximum; $ordinal++) {
+        for ($category=0; $category -lt $lessons.Count; $category++) {
+            if ($ordinal -lt $expected[$category]) { $schedule.Add($lessons[$category]) }
+        }
+    }
+    for ($index = 0; $index -lt $schedule.Count; $index++) {
+        $lesson = $schedule[$index]
+        $ordinal = $counts[$lesson]
+        # Thirteen alternates route parity and visits all twelve lesson vocabulary tokens.
+        $seed = [ulong](539364000 + 1000 * $lessons.IndexOf($lesson) + 13 * $ordinal)
         $name = ('lesson-{0:D2}-{1}' -f $index, $lesson)
         $directory = Join-Path $outputPath $name
         # A cap, not a fixed-length lesson: the CLI stops at the measured meal.
         # Scanning and turning can take longer than the old transparent-view scripts.
-        $arguments = @('--teacher-adapted', $sourcePath, $directory, '128', [string]$seed, $lesson)
+        $ticks = switch ($lesson) { 'maze_navigation' { 1024 }; 'vocabulary_reception' { 64 }; 'vocabulary_production' { 64 }; default { 128 } }
+        $arguments = @('--teacher-adapted', $sourcePath, $directory, [string]$ticks, [string]$seed, $lesson)
         & $exe @arguments 1> (Join-Path $outputPath "$name.stdout.log") 2> (Join-Path $outputPath "$name.stderr.log")
         if ($LASTEXITCODE -ne 0) { throw "Lesson $name failed; see its logs and diagnostic receipt." }
         $receipt = Get-Content -Raw -LiteralPath (Join-Path $directory 'pilot.json') | ConvertFrom-Json
@@ -81,12 +90,14 @@ try {
         $entries.Add($name)
         Write-Output "$name passed: $($receipt.ticks) sealed records"
     }
-    if (@($counts.Values | Where-Object { $_ -ne 8 }).Count) { throw 'Lesson corpus is not balanced.' }
-    if ($obstacleSides.Count -ne 2 -or $recoveryFatigueLevels.Count -lt 3) {
+    for ($category=0;$category -lt $lessons.Count;$category++) {
+        if ($counts[$lessons[$category]] -ne $expected[$category]) { throw 'Lesson corpus differs from its requested category counts.' }
+    }
+    if ($Curriculum -eq 'Care' -and ($obstacleSides.Count -ne 2 -or $recoveryFatigueLevels.Count -lt 3)) {
         throw 'Lesson corpus lacks both obstacle sides or varied biological fatigue.'
     }
     $manifest = [ordered]@{ founder_seed_base = $FounderSeedBase; pilots = @($entries);
-        source_asset = (Join-Path $sourcePath 'trained.alife-foundation') }
+        source_asset = (Join-Path $sourcePath 'trained.alife-foundation'); category_counts = $expected; curriculum = $Curriculum }
     [IO.File]::WriteAllText((Join-Path $outputPath 'manifest.json'),
         ($manifest | ConvertTo-Json -Depth 4), [Text.UTF8Encoding]::new($false))
     Write-Output "Balanced manifest: $(Join-Path $outputPath 'manifest.json')"

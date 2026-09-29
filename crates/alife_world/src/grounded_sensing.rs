@@ -110,7 +110,21 @@ impl GroundedPhysicalProperties {
             crate::WorldObjectKind::Obstacle => properties.chemical[0] * 0.2,
             crate::WorldObjectKind::Agent => 0.35 + properties.chemical[0] * 0.1,
             crate::WorldObjectKind::Token => -0.35 + properties.chemical[0] * 0.1,
+            crate::WorldObjectKind::Ball | crate::WorldObjectKind::ActivityToy => 0.0,
         };
+        if matches!(
+            kind,
+            crate::WorldObjectKind::Ball | crate::WorldObjectKind::ActivityToy
+        ) {
+            properties.color = [0.1 + properties.color[0] * 0.1, 0.35, 0.9];
+            properties.material = [0.2, 0.8, 0.2];
+            properties.shape = if kind == crate::WorldObjectKind::Ball {
+                [0.8; 3]
+            } else {
+                [0.9, 0.65, 0.6]
+            };
+            properties.chemical = [0.0; 3];
+        }
         properties
     }
 

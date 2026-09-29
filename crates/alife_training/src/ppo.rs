@@ -1151,6 +1151,7 @@ pub struct PpoTrainingWindow {
     pub sequence: crate::TrainingSequence,
     pub batch: PpoBatch,
     pub auxiliary: Option<(Vec<ImitationTarget>, f32)>,
+    pub speech_targets: Vec<Option<crate::ReplaySpeechTarget>>,
 }
 
 /// Compatibility entry for an explicit single-window update. Campaigns should
@@ -1173,6 +1174,7 @@ pub fn train_recurrent_ppo(
                 sequence: sequence.clone(),
                 batch: batch.clone(),
                 auxiliary: None,
+                speech_targets: vec![None; sequence.ticks.len()],
             })
         },
         config,
@@ -1374,6 +1376,7 @@ fn evaluate_ppo_window(
     version: u64,
 ) -> Result<Vec<f32>, TrainingError> {
     trainer.prepare_replay(&window.sequence)?;
+    trainer.upload_replay_speech_targets(&window.speech_targets)?;
     state.prepare_for_replay(trainer)?;
     let replay = trainer.replay_rows()?;
     let next_step = state
@@ -1426,6 +1429,7 @@ fn evaluate_ppo_window(
 pub struct ImitationTrainingWindow {
     pub sequence: crate::TrainingSequence,
     pub examples: Vec<ImitationExample>,
+    pub speech_targets: Vec<Option<crate::ReplaySpeechTarget>>,
 }
 
 /// Warmup on the same recurrent graph. Labels are only consumed by the GPU
@@ -1473,6 +1477,7 @@ where
                         return Err(invalid());
                     }
                     trainer.prepare_replay(&window.sequence)?;
+                    trainer.upload_replay_speech_targets(&window.speech_targets)?;
                     state.prepare_for_replay(trainer)?;
                     let objective = state.objective.as_mut().ok_or_else(invalid)?;
                     objective.upload_imitation(

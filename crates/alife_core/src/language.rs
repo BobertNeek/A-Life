@@ -14,6 +14,40 @@ use crate::{
 
 const CODEBOOK_DOMAIN: &[u8] = b"alife.language-codebook.v1";
 
+/// Surface convention only: a token's meaning must still be learned from the world.
+pub const BASIC_VOCABULARY_V1: &[(&str, u16)] = &[
+    ("food", 1),
+    ("toy", 2),
+    ("creature", 3),
+    ("obstacle", 4),
+    ("look", 5),
+    ("approach", 6),
+    ("retreat", 7),
+    ("eat", 8),
+    ("get", 9),
+    ("rest", 10),
+    ("hungry", 11),
+    ("tired", 12),
+    ("play", 13),
+    ("ball", 14),
+];
+
+/// Groundable first lessons; bodily need words require separate exposure.
+pub const FOUNDATION_LESSON_VOCABULARY: &[u16] = &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14];
+
+pub fn basic_vocabulary_bindings() -> Vec<SurfaceTokenBinding> {
+    BASIC_VOCABULARY_V1
+        .iter()
+        .map(|(word, id)| {
+            SurfaceTokenBinding::try_new(
+                *word,
+                LanguageTokenId::new(*id).expect("bounded vocabulary code"),
+            )
+            .expect("bounded vocabulary word")
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct LanguageCodebookId(pub u32);
 

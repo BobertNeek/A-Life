@@ -250,7 +250,8 @@ fn calibrate_inherited_founder_biochemistry(
             .graph
             .clone()
             .with_waking_recovery(allele)?
-            .with_player_reward(allele)?;
+            .with_player_reward(allele)?
+            .with_play_stimulation(allele)?;
     }
     Ok(())
 }
@@ -309,7 +310,10 @@ fn spawn_phase3_ecology(world: &mut HeadlessWorld) -> Result<(), ScaffoldContrac
         radius: 0.45,
         token_id: None,
     })?;
+    world.set_food_variety(food_id, crate::FoodVariety::from_seed(world.seed()))?;
     world.track_resource_lifecycle(food_id, meadow, 48, 240)?;
+    world.spawn_toy("meadow-ball", Vec3f::new(4.0, 0.0, 0.0), true)?;
+    world.spawn_toy("meadow-activity-toy", Vec3f::new(-4.0, 0.0, 0.0), false)?;
 
     world.editor_spawn_object(WorldEditorSpawnSpec {
         label: "hazard-01".to_string(),

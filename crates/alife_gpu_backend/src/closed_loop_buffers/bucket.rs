@@ -2197,6 +2197,8 @@ impl GpuFixedClassArenaPlan {
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
         )?;
         let frame_words_per_row = 77_u64
+            .checked_add(256)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?
             .checked_add(
                 u64::from(candidates)
                     .checked_mul(u64::from(execution.max_decoder_input_lanes()))
@@ -2382,6 +2384,8 @@ impl GpuFixedClassArenaPlan {
         .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
         let candidates = u64::from(self.capacity.execution().max_candidates());
         let staging_words = 77_u64
+            .checked_add(256)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?
             .checked_add(
                 candidates
                     .checked_mul(u64::from(

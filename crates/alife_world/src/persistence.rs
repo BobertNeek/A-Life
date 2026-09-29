@@ -2315,6 +2315,7 @@ impl WorldSaveState {
                 || event.damage != 0.0
                 || event.temperature_stress != 0.0
                 || event.nutrition != 0.0
+                || event.play_stimulation != 0.0
                 || event.sleep_recovery != 0.0
                 || event.mating_opportunity != 0.0
             {

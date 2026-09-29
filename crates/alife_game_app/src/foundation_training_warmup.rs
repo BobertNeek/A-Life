@@ -2,10 +2,7 @@
 
 use std::{collections::HashSet, path::Path};
 
-use alife_core::{
-    BrainScaleTier, CompiledSynapseKind, DecoderHeadKind, FoundationWeightAsset,
-    TrainingStageManifest,
-};
+use alife_core::{BrainScaleTier, FoundationWeightAsset, TrainingStageManifest};
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile, GpuTrainingSamplingConfig};
 use alife_training::{
     train_recurrent_imitation, AdamWConfig, FoundationTrainer, ImitationExample, ImitationTarget,
@@ -26,6 +23,8 @@ struct DemonstrationManifest {
     pilots: Vec<String>,
     #[serde(default)]
     source_asset: Option<std::path::PathBuf>,
+    #[serde(default)]
+    category_counts: Option<Vec<usize>>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -33,7 +32,7 @@ pub struct FoundationWarmupReceipt {
     pub founder_seed_base: u64,
     pub demonstration_count: usize,
     pub demonstration_records: usize,
-    pub category_counts: [usize; 4],
+    pub category_counts: Vec<usize>,
     pub source_asset_digest: String,
     pub trained_asset_digest: String,
     pub actor_optimizer_step: u32,
@@ -58,6 +57,10 @@ fn lesson_index(lesson: FoundationTeacherLesson) -> usize {
         FoundationTeacherLesson::HazardAvoidance => 1,
         FoundationTeacherLesson::ObstacleNavigation => 2,
         FoundationTeacherLesson::Recovery => 3,
+        FoundationTeacherLesson::VisionSearch => 4,
+        FoundationTeacherLesson::MazeNavigation => 5,
+        FoundationTeacherLesson::VocabularyReception => 6,
+        FoundationTeacherLesson::VocabularyProduction => 7,
     }
 }
 
@@ -92,7 +95,7 @@ fn imitation_example(
     Ok(example)
 }
 
-/// Read exactly eight measured lessons of each type, then update the same
+/// Read source-bound measured lessons, then update the same
 /// foundation graph/optimizer later used by the production PPO cycle.
 pub fn run_foundation_imitation_warmup(
     output: &Path,
@@ -101,10 +104,10 @@ pub fn run_foundation_imitation_warmup(
 ) -> Result<FoundationWarmupReceipt> {
     let manifest: DemonstrationManifest = serde_json::from_slice(&std::fs::read(manifest_path)?)?;
     if manifest.founder_seed_base == 0
-        || manifest.pilots.len() != 32
+        || !(1..=128).contains(&manifest.pilots.len())
         || !(1..=160).contains(&epochs)
     {
-        return Err("warm-up requires 32 lessons and one nonzero founder seed".into());
+        return Err("warm-up requires 1-128 lessons and one nonzero founder seed".into());
     }
     std::fs::create_dir(output)?;
     let source_asset = if let Some(path) = &manifest.source_asset {
@@ -151,10 +154,7 @@ pub fn run_foundation_imitation_warmup(
         .synapses()
         .iter()
         .enumerate()
-        .filter_map(|(index, synapse)| {
-            (!matches!(synapse.kind(), CompiledSynapseKind::Decoder(decoder) if decoder.head() == DecoderHeadKind::SpeechPayload))
-                .then_some(index as u32)
-        })
+        .map(|(index, _)| index as u32)
         .collect::<Vec<_>>();
     let mask = StageTrainableMask::from_synapse_indices(&phenotype, &ids)?;
     let staging = runtime.new_staging_like_live()?;
@@ -174,7 +174,7 @@ pub fn run_foundation_imitation_warmup(
     let root = manifest_path
         .parent()
         .ok_or("manifest has no parent directory")?;
-    let mut category_counts = [0usize; 4];
+    let mut category_counts = vec![0usize; 8];
     let mut seen_seeds = HashSet::new();
     let mut demos = Vec::with_capacity(32);
     let mut record_count = 0;
@@ -209,35 +209,57 @@ pub fn run_foundation_imitation_warmup(
         {
             return Err("warm-up pilot is not bound to the same frozen actor".into());
         }
-        expected_source.get_or_insert(source);
+        expected_source.get_or_insert(source.clone());
         let references: Vec<FoundationReplayRecordRef> =
             serde_json::from_slice(&std::fs::read(directory.join("replay-manifest.json"))?)?;
         if references.len() != receipt.ticks {
             return Err("warm-up pilot replay length mismatch".into());
         }
         record_count += references.len();
-        demos.push((directory.join("replay"), references));
+        let labels: crate::foundation_training::DemonstrationSpeechLabels =
+            serde_json::from_slice(&std::fs::read(directory.join("speech-labels.json"))?)?;
+        if labels.source != source
+            || labels.record_digests != references.iter().map(|r| r.digest).collect::<Vec<_>>()
+            || labels.targets.len() != references.len()
+        {
+            return Err("speech labels are not bound to the captured demonstration".into());
+        }
+        demos.push((directory.join("replay"), references, labels.targets));
     }
-    if category_counts != [8; 4] {
-        return Err("warm-up lessons are not balanced eight per category".into());
+    if let Some(expected) = &manifest.category_counts {
+        if expected != &category_counts {
+            return Err("warm-up category counts differ from the manifest".into());
+        }
     }
     let expected_source = expected_source.ok_or("warm-up has no replay source")?;
     let budget = FoundationReplayBudget::default();
+    let mut spans = Vec::new();
+    for (demo, (_, references, _)) in demos.iter().enumerate() {
+        for start in (0..references.len()).step_by(256) {
+            spans.push((
+                demo,
+                start.saturating_sub(128),
+                start,
+                (start + 256).min(references.len()),
+            ));
+        }
+    }
     let mut state = PpoTrainingState::default();
     let losses = train_recurrent_imitation(
         &mut trainer,
         &mut state,
-        demos.len(),
+        spans.len(),
         8,
         epochs,
         1.0,
         1.0,
         |index| {
-            let (directory, references) = &demos[index];
+            let (demo, burn_start, start, end) = spans[index];
+            let (directory, references, targets) = &demos[demo];
             let replay = load_foundation_replay_window(
                 directory,
-                references,
-                0,
+                &references[burn_start..end],
+                start - burn_start,
                 &expected_source,
                 &phenotype,
                 budget,
@@ -247,8 +269,7 @@ pub fn run_foundation_imitation_warmup(
                     alife_core::ScaffoldContractError::InvalidDecisionEvidence,
                 )
             })?;
-            let examples = replay
-                .behavior
+            let examples = replay.behavior[start - burn_start..]
                 .iter()
                 .map(imitation_example)
                 .collect::<Result<Vec<_>>>()
@@ -260,6 +281,11 @@ pub fn run_foundation_imitation_warmup(
             Ok(ImitationTrainingWindow {
                 sequence: replay.sequence,
                 examples,
+                speech_targets: targets[burn_start..end]
+                    .iter()
+                    .enumerate()
+                    .map(|(i, t)| if i < start - burn_start { None } else { *t })
+                    .collect(),
             })
         },
     )?;

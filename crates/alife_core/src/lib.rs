@@ -304,7 +304,7 @@ pub use perception::{
     CandidateFeatureVector, CandidateObservationRef, NeuralActionSelection, PerceptionBaseDigest,
     PerceptionContextBlock, PerceptionContextDigest, PerceptionContextKind, PerceptionFrame,
     PerceptionFrameDigest, PerceptionFrameDraft, PolicyBackend, SensorProfile,
-    CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
+    CANDIDATE_FEATURE_COUNT, CONTACT_ACTIVATION_FEATURE_LANE, MAX_ACTION_CANDIDATES,
 };
 pub use phenotype::{
     AuxiliaryDecoderPlan, BrainCapacityClass, BrainExecutionBudget, BrainPhenotype,
@@ -385,6 +385,8 @@ pub use traits::{
     SEMANTIC_PRIOR_MAX_GAIN, SEMANTIC_PRIOR_MAX_LEXICON_BIAS_SLOTS,
     SEMANTIC_PRIOR_MAX_PACKET_TICKS,
 };
+
+pub use language::{basic_vocabulary_bindings, BASIC_VOCABULARY_V1, FOUNDATION_LESSON_VOCABULARY};
 pub use units::{
     Confidence, DurationTicks, FixedPointScale, Intensity, NormalizedScalar, Seconds,
     SignedValence, Tick,

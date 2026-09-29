@@ -68,7 +68,13 @@ fn encode_perception(@builtin(global_invocation_id) gid:vec3<u32>) {
       store_state_f32(brain.encoded_input_offset + index, 0.0);
       return;
     }
-    let source_lane = resolve_encoder_source_lane(encoder, assignment);
+    var source_lane = resolve_encoder_source_lane(encoder, assignment);
+    if ((assignment.source_group_raw == 4u || assignment.source_group_raw == 5u)
+        && assignment.source_index < 128u) {
+      let decoder = load_decoder_plan(brain.decoder_plan_offset);
+      source_lane = 77u + header.candidate_count * (decoder.flattened_input_lane_count + 4u)
+        + (assignment.source_group_raw - 4u) * 128u + assignment.source_index;
+    }
     if (source_lane == INVALID_LANE) {
       atomicOr(
         &mutable_state_words[brain.diagnostic_offset + 2u],

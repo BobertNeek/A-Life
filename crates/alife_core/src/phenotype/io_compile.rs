@@ -104,6 +104,46 @@ pub(super) fn compile_encoder(
             ));
         }
     }
+    // Private language/prior ports share the ordinary learned association region.
+    // Token IDs are encoded as bits, never treated as neuron addresses.
+    if profile == SensorProfile::GroundedTerrainVisionV1
+        && genome.sensor_layout.channels.iter().any(|gene| {
+            gene.kind == SensorChannelKind::Hearing
+                && gene.receptor_count > 0
+                && gene.enabled_at_maturation as f32 <= development.maturation.raw() * 100.0
+                && (development.active_sensor_channels.is_empty()
+                    || development.active_sensor_channels.contains(&gene.kind))
+        })
+    {
+        if let Some(region) = layout
+            .region(LobeKind::MultimodalAssociation)
+            .filter(|r| r.enabled)
+        {
+            let base = (splitmix64(genome.seeds.sensor_layout_seed ^ 0x4C41_4E47)
+                % u64::from(region.len)) as u32;
+            let mut step = ((splitmix64(genome.seeds.sensor_layout_seed ^ 0x5052_494F)
+                % u64::from(region.len)) as u32)
+                | 1;
+            while gcd_u32(step, region.len) != 1 {
+                step = (step + 2) % region.len;
+                if step == 0 {
+                    step = 1;
+                }
+            }
+            for group in [
+                SensorEncoderSourceGroup::HeardLanguage,
+                SensorEncoderSourceGroup::SemanticPrior,
+            ] {
+                for lane in 0..128_u16 {
+                    let port_lane = (u32::from(group.raw()) - 4) * 128 + u32::from(lane);
+                    let target = region.start + (base + port_lane * step) % region.len;
+                    assignments.push(SensorEncoderAssignment::new(
+                        group, lane, target, 0.5, 0.0, -1.0, 1.0,
+                    ));
+                }
+            }
+        }
+    }
     assignments.sort_by_key(|assignment| {
         (
             assignment.target_neuron(),

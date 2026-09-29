@@ -648,6 +648,50 @@ pub struct SensorySnapshot {
 }
 
 impl SensorySnapshot {
+    /// Position-sensitive language code bits for the compiler-owned context ports.
+    /// The second bank is a private hint and cannot create sensory object slots.
+    pub fn language_prior_neural_lanes(&self) -> [f32; 256] {
+        let mut lanes = [0.0; 256];
+        for (slot, heard) in self
+            .language_context
+            .heard_tokens
+            .iter()
+            .enumerate()
+            .take(16)
+        {
+            if let Some(heard) = heard {
+                let token = heard.token_id;
+                for bit in 0..8 {
+                    lanes[slot * 8 + bit] = if token & (1 << bit) != 0 {
+                        heard.confidence.raw()
+                    } else {
+                        -heard.confidence.raw()
+                    };
+                }
+            }
+        }
+        if let Some(prior) = &self.semantic_context {
+            for (slot, code) in prior
+                .compressed_codes
+                .iter()
+                .filter(|c| c.codebook_id == 1 && c.code > 0 && c.code < 256)
+                .take(16)
+                .enumerate()
+            {
+                let gain = prior.confidence.raw().min(crate::SEMANTIC_PRIOR_MAX_GAIN)
+                    * code.salience.raw();
+                for bit in 0..8 {
+                    lanes[128 + slot * 8 + bit] = if code.code & (1 << bit) != 0 {
+                        gain
+                    } else {
+                        -gain
+                    };
+                }
+            }
+        }
+        lanes
+    }
+
     pub fn new(
         organism_id: OrganismId,
         tick: Tick,

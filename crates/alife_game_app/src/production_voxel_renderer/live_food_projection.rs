@@ -1,6 +1,6 @@
-//! Visible care objects follow canonical placement, carrying, consumption, and reloads.
+//! Care objects follow canonical physical appearance, placement and carrying.
 use super::*;
-use bevy::prelude::{Meshable, Query, Sphere};
+use bevy::prelude::{Cuboid, Meshable, Query, Sphere};
 
 #[derive(Component)]
 pub(super) struct LiveCareObject(WorldEntityId);
@@ -12,14 +12,7 @@ pub(super) fn sync_care_objects(
     surface: Res<creature_grounding::RenderedTerrainSurface>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut assets: Local<
-        Option<(
-            Handle<Mesh>,
-            Handle<StandardMaterial>,
-            Handle<StandardMaterial>,
-            Handle<StandardMaterial>,
-        )>,
-    >,
+    mut assets: Local<Option<(Handle<Mesh>, Handle<Mesh>)>>,
     mut object_entities: Query<(Entity, &LiveCareObject, &mut Transform)>,
 ) {
     let Some(frame) = frame else {
@@ -33,11 +26,12 @@ pub(super) fn sync_care_objects(
         .objects()
         .filter(|object| {
             !object.consumed
-                && (object.kind == WorldObjectKind::Food
-                    || (object.kind == WorldObjectKind::Token
-                        && object.label == "player-plaything"))
+                && matches!(
+                    object.kind,
+                    WorldObjectKind::Food | WorldObjectKind::Ball | WorldObjectKind::ActivityToy
+                )
         })
-        .map(|object| (object.id.raw(), (object.position, object.kind)))
+        .map(|object| (object.id.raw(), object))
         .collect();
     let translation = |position: Vec3f| {
         let rendered = world_position_for_render(position, highlands.is_some());
@@ -50,8 +44,8 @@ pub(super) fn sync_care_objects(
         ground + Vec3::Y * (height + 0.30)
     };
     for (entity, marker, mut transform) in &mut object_entities {
-        if let Some((position, _)) = objects.remove(&marker.0.raw()) {
-            transform.translation = translation(position);
+        if let Some(object) = objects.remove(&marker.0.raw()) {
+            transform.translation = translation(object.position);
         } else {
             commands.entity(entity).despawn();
         }
@@ -59,50 +53,39 @@ pub(super) fn sync_care_objects(
     if objects.is_empty() {
         return;
     }
-    let (mesh, fruit, leaf, toy) = assets.get_or_insert_with(|| {
+    let (sphere, station) = assets.get_or_insert_with(|| {
         (
             meshes.add(Sphere::new(1.0).mesh().uv(16, 12)),
-            materials.add(StandardMaterial {
-                base_color: Color::srgb(0.90, 0.16, 0.035),
-                perceptual_roughness: 0.5,
-                ..default()
-            }),
-            materials.add(StandardMaterial {
-                base_color: Color::srgb(0.18, 0.42, 0.035),
-                ..default()
-            }),
-            materials.add(StandardMaterial {
-                base_color: Color::srgb(0.08, 0.38, 0.95),
-                perceptual_roughness: 0.6,
-                ..default()
-            }),
+            meshes.add(Cuboid::new(2.0, 2.0, 2.0)),
         )
     });
-    for (id, (position, kind)) in objects {
-        let is_food = kind == WorldObjectKind::Food;
+    for (id, object) in objects {
+        let physical = object.grounded_physical;
+        let material = materials.add(StandardMaterial {
+            base_color: Color::srgb(physical.color[0], physical.color[1], physical.color[2]),
+            perceptual_roughness: physical.material[0].clamp(0.05, 1.0),
+            ..default()
+        });
+        let shape = Vec3::new(physical.shape[0], physical.shape[1], physical.shape[2]) * 0.3
+            + Vec3::splat(0.1);
         commands
             .spawn((
-                Name::new(if is_food { "Food" } else { "Plaything" }),
+                Name::new(object.label.clone()),
                 LiveCareObject(WorldEntityId(id)),
                 Fvr04ProductionRuntimeSceneRoot,
-                Transform::from_translation(translation(position)),
+                Transform::from_translation(translation(object.position)),
                 Visibility::default(),
             ))
             .with_children(|parent| {
                 parent.spawn((
-                    Mesh3d(mesh.clone()),
-                    MeshMaterial3d(if is_food { fruit.clone() } else { toy.clone() }),
-                    Transform::from_scale(Vec3::new(0.34, 0.30, 0.34)),
+                    Mesh3d(if object.kind == WorldObjectKind::ActivityToy {
+                        station.clone()
+                    } else {
+                        sphere.clone()
+                    }),
+                    MeshMaterial3d(material),
+                    Transform::from_scale(shape),
                 ));
-                if is_food {
-                    parent.spawn((
-                        Mesh3d(mesh.clone()),
-                        MeshMaterial3d(leaf.clone()),
-                        Transform::from_xyz(0.10, 0.29, 0.0)
-                            .with_rotation(Quat::from_rotation_z(0.4))
-                            .with_scale(Vec3::new(0.19, 0.025, 0.07)),
-                    ));
-                }
             });
     }
 }
@@ -121,7 +104,7 @@ mod tests {
             };
             let world = alife_world::HeadlessScenarioBuilder::new(7)
                 .food("apple", position, 0.25)
-                .token("player-plaything", position, 1)
+                .toy("player-plaything", position, true)
                 .build()
                 .unwrap();
             let mut app = App::new();
@@ -152,7 +135,7 @@ mod tests {
             let mut objects = world.object_snapshots();
             let toy = objects
                 .iter_mut()
-                .find(|object| object.kind == WorldObjectKind::Token)
+                .find(|object| object.kind == WorldObjectKind::Ball)
                 .unwrap();
             toy.position.x += 2.0;
             let moved =

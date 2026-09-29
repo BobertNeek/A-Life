@@ -30,6 +30,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "obstacle_navigation" => alife_game_app::FoundationTeacherLesson::ObstacleNavigation,
             "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,
             "recovery" => alife_game_app::FoundationTeacherLesson::Recovery,
+            "vision_search" => alife_game_app::FoundationTeacherLesson::VisionSearch,
+            "maze_navigation" => alife_game_app::FoundationTeacherLesson::MazeNavigation,
+            "vocabulary_reception" => alife_game_app::FoundationTeacherLesson::VocabularyReception,
+            "vocabulary_production" => {
+                alife_game_app::FoundationTeacherLesson::VocabularyProduction
+            }
             _ => return Err("unknown lesson".into()),
         };
         if args.next().is_some() {
@@ -100,6 +106,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,
             "obstacle_navigation" => alife_game_app::FoundationTeacherLesson::ObstacleNavigation,
             "recovery" => alife_game_app::FoundationTeacherLesson::Recovery,
+            "vision_search" => alife_game_app::FoundationTeacherLesson::VisionSearch,
+            "maze_navigation" => alife_game_app::FoundationTeacherLesson::MazeNavigation,
+            "vocabulary_reception" => alife_game_app::FoundationTeacherLesson::VocabularyReception,
+            "vocabulary_production" => {
+                alife_game_app::FoundationTeacherLesson::VocabularyProduction
+            }
             _ => return Err("unknown evaluation lesson".into()),
         };
         let ticks = args
@@ -230,6 +242,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         alife_game_app::FoundationTeacherLesson::ObstacleNavigation
                     }
                     "recovery" => alife_game_app::FoundationTeacherLesson::Recovery,
+                    "vision_search" => alife_game_app::FoundationTeacherLesson::VisionSearch,
+                    "maze_navigation" => alife_game_app::FoundationTeacherLesson::MazeNavigation,
+                    "vocabulary_reception" => {
+                        alife_game_app::FoundationTeacherLesson::VocabularyReception
+                    }
+                    "vocabulary_production" => {
+                        alife_game_app::FoundationTeacherLesson::VocabularyProduction
+                    }
                     _ => return Err("unknown teacher lesson".into()),
                 },
             );

@@ -20,6 +20,7 @@ use alife_training::{
 use crate::{FoundationTrainingStep, GpuLiveBrainRuntime};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+mod maze;
 
 fn invalid() -> ScaffoldContractError {
     ScaffoldContractError::InvalidDecisionEvidence
@@ -442,15 +443,35 @@ pub struct FoundationPilotReceipt {
     pub final_food_distance: Option<f32>,
     pub lesson: Option<FoundationTeacherLesson>,
     pub lesson_completed: Option<bool>,
+    #[serde(default)]
+    pub vocabulary_token: Option<u16>,
+    #[serde(default)]
+    pub semantic_prior: Option<crate::gpu_live_runtime::SemanticPriorMetrics>,
+    #[serde(default)]
+    pub heard_word_frames: usize,
+    #[serde(default)]
+    pub vocabulary_target_actions: usize,
+    #[serde(default)]
+    pub literal_word_matches: usize,
+    #[serde(default)]
+    pub maze_nodes_reached: usize,
+    #[serde(default)]
+    pub maze_route_nodes: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum FoundationTeacherLesson {
     Feeding,
     HazardAvoidance,
     ObstacleNavigation,
     Recovery,
+    VisionSearch,
+    MazeNavigation,
+    VocabularyReception,
+    VocabularyProduction,
 }
 
 /// Prerequisite fidelity check, not behavioral acceptance or a training campaign.
@@ -569,6 +590,10 @@ pub fn run_foundation_evaluation_pilot(
 
 #[derive(Default)]
 struct GroundedNavigationTeacher {
+    maze: maze::MazeTeacher,
+    vocabulary_target: Option<alife_core::WorldEntityId>,
+    vocabulary_position: Option<alife_core::Vec3f>,
+    vocabulary_word: Option<u32>,
     remembered_food: Option<alife_core::Vec3f>,
     search_phase: u8,
     detour_side: f32,
@@ -694,11 +719,71 @@ fn grounded_lesson_teacher(
     navigation: &mut GroundedNavigationTeacher,
 ) -> std::result::Result<alife_gpu_backend::GpuTrainingDemonstratorAction, ScaffoldContractError> {
     use alife_core::CandidateActionFamily as Family;
+    if lesson == FoundationTeacherLesson::MazeNavigation {
+        let chosen = navigation
+            .maze
+            .choose(frame, food)
+            .ok_or(ScaffoldContractError::InvalidActionDecision)?;
+        return assemble_grounded_teacher(frame, enabled_channels, chosen);
+    }
+    if matches!(
+        lesson,
+        FoundationTeacherLesson::VocabularyReception
+            | FoundationTeacherLesson::VocabularyProduction
+    ) {
+        let heard = &frame.sensory().language_context.heard_tokens;
+        let word = heard
+            .iter()
+            .flatten()
+            .find(|h| (5..=10).contains(&h.token_id) || h.token_id == 13)
+            .or_else(|| heard.iter().flatten().last())
+            .map(|h| h.token_id);
+        if let Some(word) = word {
+            navigation.vocabulary_word = Some(word);
+        }
+        let action = vocabulary_reception_choice(
+            frame,
+            navigation.vocabulary_word,
+            navigation.vocabulary_target,
+            navigation.vocabulary_position,
+        )
+        .ok_or(ScaffoldContractError::InvalidActionDecision)?;
+        let speak = vocabulary_speech_target(
+            frame,
+            navigation.vocabulary_word.map(|w| w as u16),
+            navigation.vocabulary_target,
+            lesson == FoundationTeacherLesson::VocabularyProduction,
+        )
+        .is_some_and(|label| label.token.is_some());
+        if speak {
+            if let Some(vocal) = frame
+                .candidates()
+                .iter()
+                .find(|c| c.kind == alife_core::ActionKind::Vocalize)
+            {
+                let mut demonstration = assemble_grounded_teacher(frame, enabled_channels, vocal)?;
+                let slot = match action.kind {
+                    alife_core::ActionKind::Move => 0,
+                    alife_core::ActionKind::Look => 1,
+                    alife_core::ActionKind::Interact => 2,
+                    _ => 4,
+                };
+                if enabled_channels & (1 << slot) != 0
+                    && action.kind != alife_core::ActionKind::Idle
+                {
+                    demonstration.motor_indices[slot] = action.candidate_index;
+                }
+                return Ok(demonstration);
+            }
+        }
+        return assemble_grounded_teacher(frame, enabled_channels, action);
+    }
     if frame.sensor_profile() == SensorProfile::GroundedTerrainVisionV1
         && matches!(
             lesson,
             FoundationTeacherLesson::Feeding
                 | FoundationTeacherLesson::ObstacleNavigation
+                | FoundationTeacherLesson::VisionSearch
                 | FoundationTeacherLesson::Recovery
         )
     {
@@ -796,6 +881,7 @@ fn grounded_lesson_teacher(
                 Family::Approach
             },
         ),
+        _ => navigation.choose(frame, food),
     }
     .ok_or(ScaffoldContractError::InvalidActionDecision)?;
     assemble_grounded_teacher(frame, enabled_channels, chosen)
@@ -867,6 +953,163 @@ fn assemble_grounded_teacher(
     })
 }
 
+fn vocabulary_reception_choice(
+    frame: &alife_core::PerceptionFrame,
+    word: Option<u32>,
+    target: Option<alife_core::WorldEntityId>,
+    known_position: Option<alife_core::Vec3f>,
+) -> Option<&alife_core::ActionCandidate> {
+    use alife_core::{ActionKind as Kind, CandidateActionFamily as Family};
+    let family = match word {
+        Some(1..=5 | 14) => Family::Inspect,
+        Some(7) => Family::Avoid,
+        Some(8) => Family::Ingest,
+        Some(9 | 13) => Family::Contact,
+        Some(10) => Family::Rest,
+        Some(6) => Family::Approach,
+        _ => Family::Idle,
+    };
+    let range = frame
+        .candidates()
+        .iter()
+        .find(|c| c.target.entity == target)
+        .and_then(|c| match c.observation {
+            alife_core::CandidateObservationRef::ObjectSlot(i) => frame
+                .grounded_object_slots()
+                .iter()
+                .find(|s| s.slot_index == i)
+                .map(|s| s.distance * alife_world::HEADLESS_VISION_RADIUS),
+            _ => None,
+        });
+    if range.is_none() && !matches!(family, Family::Rest | Family::Idle | Family::Avoid) {
+        if let Some(position) = known_position {
+            let body = frame.body().pose;
+            let heading = (position.z - body.translation.z).atan2(position.x - body.translation.x);
+            let gaze = 2.0 * body.rotation.y.atan2(body.rotation.w);
+            let error = (heading - gaze + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
+                - std::f32::consts::PI;
+            let primitive = if error.abs() > 0.18 {
+                if error > 0.0 {
+                    alife_world::HeadlessActionIds::TURN_LEFT
+                } else {
+                    alife_world::HeadlessActionIds::TURN_RIGHT
+                }
+            } else {
+                alife_world::HeadlessActionIds::STEP_FORWARD
+            };
+            return frame.candidates().iter().find(|c| c.action_id == primitive);
+        }
+    }
+    let at_contact = frame
+        .candidates()
+        .iter()
+        .find(|c| c.target.entity == target)
+        .and_then(|c| match c.observation {
+            alife_core::CandidateObservationRef::ObjectSlot(i) => frame
+                .grounded_object_slots()
+                .iter()
+                .find(|s| s.slot_index == i)
+                .map(|s| s.contact >= 0.5),
+            _ => None,
+        })
+        .unwrap_or(false);
+    // Picking up is complete once something is held. Repeating `get` must not
+    // immediately release the object through Grab's reversible physical toggle.
+    if word == Some(9) && frame.sensory().channels.tactile_contact[2] > 0.5 {
+        return frame.candidates().iter().find(|c| c.family == Family::Idle);
+    }
+    if matches!(family, Family::Ingest | Family::Contact) && !at_contact {
+        return frame
+            .candidates()
+            .iter()
+            .find(|c| c.target.entity == target && c.family == Family::Approach);
+    }
+    let retreat_range = range.or_else(|| {
+        known_position.map(|p| {
+            (p.x - frame.body().pose.translation.x).hypot(p.z - frame.body().pose.translation.z)
+        })
+    });
+    if (family == Family::Avoid && retreat_range.is_some_and(|r| r > 4.0))
+        || (family == Family::Approach && range.is_some_and(|r| r <= 1.5))
+    {
+        return frame.candidates().iter().find(|c| c.family == Family::Idle);
+    }
+    if family == Family::Avoid && range.is_none() && retreat_range.is_some_and(|r| r <= 4.0) {
+        // The first Flee faces the body away; keep retreating physically when
+        // the object leaves forward sight. This location stays teacher-private.
+        return frame
+            .candidates()
+            .iter()
+            .find(|c| c.action_id == alife_world::HeadlessActionIds::STEP_FORWARD);
+    }
+    frame
+        .candidates()
+        .iter()
+        .filter(|c| {
+            c.family == family
+                && c.kind != Kind::Vocalize
+                && (word != Some(9) || c.action_id == alife_world::HeadlessActionIds::GRAB)
+                && (word != Some(13) || c.action_id == alife_world::HeadlessActionIds::PLAY)
+                && (matches!(family, Family::Idle | Family::Rest) || c.target.entity == target)
+        })
+        .min_by(|a, b| a.features.0[2].total_cmp(&b.features.0[2]))
+        .or_else(|| {
+            frame
+                .candidates()
+                .iter()
+                .find(|c| c.target.entity == target && c.family == Family::Approach)
+        })
+        .or_else(|| frame.candidates().iter().find(|c| c.family == Family::Idle))
+}
+
+pub(crate) fn vocabulary_speech_target(
+    frame: &alife_core::PerceptionFrame,
+    token: Option<u16>,
+    target: Option<alife_core::WorldEntityId>,
+    production: bool,
+) -> Option<alife_training::ReplaySpeechTarget> {
+    // Teacher sound lasts one interval. Later opportunities require remembering
+    // that ordinary exposure; the target remains physically observable.
+    if production
+        && frame.tick().raw() % 4 == 3
+        && (frame.candidates().iter().any(|c| {
+            c.target.entity == target
+                && matches!(
+                    c.observation,
+                    alife_core::CandidateObservationRef::ObjectSlot(_)
+                )
+        }) || (token == Some(7)
+            && frame
+                .body()
+                .velocity
+                .linear
+                .x
+                .hypot(frame.body().velocity.linear.z)
+                > 0.001))
+    {
+        token.map(|token| alife_training::ReplaySpeechTarget {
+            token: Some(token),
+            act: alife_core::SpeechActKind::Declare,
+            weight: 1.0,
+        })
+    } else if production && token.is_some() {
+        Some(alife_training::ReplaySpeechTarget {
+            token: None,
+            act: alife_core::SpeechActKind::Declare,
+            weight: 1.0,
+        })
+    } else {
+        None
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub(crate) struct DemonstrationSpeechLabels {
+    pub source: FoundationReplaySource,
+    pub record_digests: Vec<[u8; 32]>,
+    pub targets: Vec<Option<alife_training::ReplaySpeechTarget>>,
+}
+
 fn run_foundation_training_pilot_inner(
     output: &Path,
     seed: u64,
@@ -877,7 +1120,7 @@ fn run_foundation_training_pilot_inner(
     lesson: Option<FoundationTeacherLesson>,
     asset_override: Option<FoundationWeightAsset>,
 ) -> Result<FoundationPilotReceipt> {
-    if !(1..=512).contains(&tick_count) || seed == 0 || founder_seed_base == 0 {
+    if !(1..=2048).contains(&tick_count) || seed == 0 || founder_seed_base == 0 {
         return Err(invalid().into());
     }
     std::fs::create_dir(output)?; // A fresh run never overwrites an earlier receipt.
@@ -898,8 +1141,10 @@ fn run_foundation_training_pilot_inner(
     game.world.set_age_death_disabled_for_new_game(true)?;
     let scenario_lesson =
         lesson.or_else(|| teacher_mode.then_some(FoundationTeacherLesson::Feeding));
-    let scenario =
+    let mut scenario =
         configure_foundation_scenario(&mut game.world, seed, scenario_lesson, food_position, true)?;
+    scenario.repeat_vocabulary = teacher_mode;
+    scenario.training_language_feedback = teacher_mode;
     let food = scenario.food;
     let food_position = scenario_lesson.map(|_| {
         let position = game
@@ -932,6 +1177,12 @@ fn run_foundation_training_pilot_inner(
     .map_err(|error| format!("pilot runtime admission: {error}"))?;
     if teacher_mode {
         let mut navigation = GroundedNavigationTeacher::default();
+        navigation.maze.route = scenario.demonstration_route.clone();
+        navigation.vocabulary_target = scenario.vocabulary_target;
+        navigation.vocabulary_position = scenario
+            .vocabulary_target
+            .and_then(|id| runtime.world().entity(id))
+            .map(|o| o.position);
         let lesson = scenario_lesson.ok_or("teacher lesson is missing")?;
         let mut waypoint_passed = false;
         runtime.set_foundation_demonstrator(move |frame, channels| {
@@ -951,10 +1202,14 @@ fn run_foundation_training_pilot_inner(
         .is_some()
         .then(|| teacher_food_distance(&runtime))
         .transpose()?;
+    close_foundation_navigation_gate(&mut runtime, &scenario)?;
+    runtime.prime_foundation_semantic_prior()?;
     let started = Instant::now();
     let mut steps = Vec::with_capacity(tick_count);
     for tick in 0..tick_count {
-        close_foundation_navigation_gate(&mut runtime, &scenario)?;
+        if tick != 0 {
+            close_foundation_navigation_gate(&mut runtime, &scenario)?;
+        }
         runtime
             .tick()
             .map_err(|error| format!("pilot production tick {tick}: {error}"))?;
@@ -971,8 +1226,14 @@ fn run_foundation_training_pilot_inner(
                 lesson,
                 FoundationTeacherLesson::Feeding
                     | FoundationTeacherLesson::ObstacleNavigation
+                    | FoundationTeacherLesson::VisionSearch
+                    | FoundationTeacherLesson::MazeNavigation
                     | FoundationTeacherLesson::Recovery
             ) && teacher_step_consumed(&collected[0])
+                || (teacher_mode
+                    && scenario.vocabulary_token == Some(8)
+                    && teacher_step_consumed(&collected[0])
+                    && teacher_step_targets(&collected[0], food))
         });
         steps.append(&mut collected);
         let hazard_settled = teacher_mode
@@ -996,9 +1257,114 @@ fn run_foundation_training_pilot_inner(
     let food_consumed = steps
         .iter()
         .any(|step| teacher_step_consumed(step) && teacher_step_targets(step, food));
+    let heard_word_frames = steps
+        .iter()
+        .filter(|s| {
+            s.frame
+                .sensory()
+                .language_context
+                .heard_tokens
+                .iter()
+                .flatten()
+                .any(|h| Some(h.token_id) == scenario.vocabulary_token.map(u32::from))
+        })
+        .count();
+    let vocabulary_target_actions = steps
+        .iter()
+        .filter(|s| {
+            let expected = match scenario.vocabulary_token {
+                Some(1..=5 | 14) => alife_core::CandidateActionFamily::Inspect,
+                Some(6) => alife_core::CandidateActionFamily::Approach,
+                Some(7) => alife_core::CandidateActionFamily::Avoid,
+                Some(8) => alife_core::CandidateActionFamily::Ingest,
+                Some(9 | 13) => alife_core::CandidateActionFamily::Contact,
+                Some(10) => alife_core::CandidateActionFamily::Rest,
+                _ => alife_core::CandidateActionFamily::Idle,
+            };
+            let matches = |c: &alife_core::ActionCandidate| {
+                c.family == expected
+                    && (scenario.vocabulary_token != Some(9)
+                        || c.action_id == alife_world::HeadlessActionIds::GRAB)
+                    && (scenario.vocabulary_token != Some(13)
+                        || c.action_id == alife_world::HeadlessActionIds::PLAY)
+                    && (scenario.vocabulary_token == Some(10)
+                        || (c.target.entity == scenario.vocabulary_target
+                            && c.target.entity.is_some()))
+            };
+            !teacher_step_blocked(s)
+                && (s
+                    .frame
+                    .candidates()
+                    .get(s.behavior.representative_index as usize)
+                    .is_some_and(matches)
+                    || s.behavior
+                        .motor_indices
+                        .iter()
+                        .filter_map(|i| s.frame.candidates().get(*i as usize))
+                        .any(matches))
+        })
+        .count();
+    let literal_word_matches = steps
+        .iter()
+        .filter(|s| {
+            s.frame
+                .sensory()
+                .language_context
+                .vocalized_token
+                .is_some_and(|v| Some(v.token_id) == scenario.vocabulary_token.map(u32::from))
+        })
+        .count();
+    let mut maze_nodes_reached = 0;
+    for step in &steps {
+        while let Some(target) = scenario.demonstration_route.get(maze_nodes_reached) {
+            let position = step.frame.body().pose.translation;
+            if (position.x - target.x).hypot(position.z - target.z) > 0.24 {
+                break;
+            }
+            maze_nodes_reached += 1;
+        }
+    }
     let lesson_completed = scenario_lesson.map(|lesson| match lesson {
         FoundationTeacherLesson::Feeding => {
             food_consumed && steps.iter().all(|step| !teacher_step_blocked(step))
+        }
+        FoundationTeacherLesson::VisionSearch => food_consumed,
+        FoundationTeacherLesson::MazeNavigation => {
+            food_consumed
+                && (!teacher_mode || maze_nodes_reached == scenario.demonstration_route.len())
+                && steps.iter().any(|s| {
+                    !s.frame
+                        .candidates()
+                        .iter()
+                        .any(|c| c.target.entity == Some(food))
+                })
+                && steps.iter().all(|s| !teacher_step_blocked(s))
+        }
+        FoundationTeacherLesson::VocabularyReception
+        | FoundationTeacherLesson::VocabularyProduction => {
+            heard_word_frames > 0
+                && if teacher_mode {
+                    (vocabulary_target_actions > 0 || scenario.vocabulary_token == Some(10))
+                        && (scenario.vocabulary_token != Some(9)
+                            || scenario
+                                .vocabulary_target
+                                .and_then(|id| runtime.world().entity(id))
+                                .is_some_and(|object| {
+                                    object.carried_by == Some(steps[0].frame.organism_id())
+                                }))
+                        && steps.iter().all(|s| !teacher_step_blocked(s))
+                } else if lesson == FoundationTeacherLesson::VocabularyProduction {
+                    literal_word_matches > 0
+                } else {
+                    vocabulary_target_actions > 0
+                        && (scenario.vocabulary_token != Some(9)
+                            || scenario
+                                .vocabulary_target
+                                .and_then(|id| runtime.world().entity(id))
+                                .is_some_and(|object| {
+                                    object.carried_by == Some(steps[0].frame.organism_id())
+                                }))
+                }
         }
         FoundationTeacherLesson::ObstacleNavigation => {
             if config.sensor_profile == SensorProfile::GroundedTerrainVisionV1 {
@@ -1089,6 +1455,9 @@ fn run_foundation_training_pilot_inner(
                     "position": step.frame.body().pose.translation,
                     "gaze_rotation": step.frame.body().pose.rotation,
                     "terrain_ranges": step.frame.sensory().channels.visual_affordance,
+                    "heard_tokens": step.frame.sensory().language_context.heard_tokens,
+                    "vocalized_token": step.frame.sensory().language_context.vocalized_token,
+                    "semantic_context": step.frame.sensory().semantic_context,
                     "chosen_action": chosen.map(|candidate| candidate.action_id.raw()),
                     "chosen_target": chosen.and_then(|candidate| candidate.target.entity),
                     "chosen_family": chosen.map(|candidate| candidate.family),
@@ -1128,19 +1497,21 @@ fn run_foundation_training_pilot_inner(
                 "initial_food_distance": initial_food_distance,
                 "final_food_distance": final_food_distance,
                 "steps": trace,
+                "maze_demonstration_route": scenario.demonstration_route,
+                "maze_nodes_reached": maze_nodes_reached,
+                "vocabulary_token": scenario.vocabulary_token,
+                "vocabulary_target": scenario.vocabulary_target,
+                "language_praises": scenario.language_praise_count.get(),
+                "heard_language_encoder_lanes": steps[0].before.phenotype.sensor_encoder().assignments().iter().filter(|a|a.source_group()==alife_core::SensorEncoderSourceGroup::HeardLanguage).count(),
+                "semantic_prior_encoder_lanes": steps[0].before.phenotype.sensor_encoder().assignments().iter().filter(|a|a.source_group()==alife_core::SensorEncoderSourceGroup::SemanticPrior).count(),
             }))?,
         )?;
     }
     if lesson_completed == Some(false) && teacher_mode {
         return Err("teacher lesson did not complete its measured world outcome".into());
     }
-    let sequence = foundation_replay_sequence(&steps, 0)
-        .map_err(|error| format!("pilot replay conversion: {error}"))?;
     let phenotype = steps[0].before.phenotype.clone();
-    let ids: Vec<u32> = phenotype.synapses().iter().enumerate().filter_map(|(i, s)| {
-        (!matches!(s.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::SpeechPayload))
-            .then_some(i as u32)
-    }).collect();
+    let ids: Vec<u32> = (0..phenotype.synapses().len() as u32).collect();
     let mask = StageTrainableMask::from_synapse_indices(&phenotype, &ids)?;
     // Reuse the same physical adapter/device context, with a Training consumer.
     let trainer_backend = runtime.new_staging_like_live()?;
@@ -1164,7 +1535,7 @@ fn run_foundation_training_pilot_inner(
         )?;
         let mut writer = FoundationReplayWriter::new(
             &output.join("replay"),
-            source,
+            source.clone(),
             steps[0].before.phenotype.clone(),
             &asset,
             FoundationReplayBudget::default(),
@@ -1178,11 +1549,50 @@ fn run_foundation_training_pilot_inner(
             serde_json::to_vec(&references)?,
         )?;
         std::fs::write(output.join("actor-checkpoint.json"), checkpoint)?;
+        let labels = DemonstrationSpeechLabels {
+            source,
+            record_digests: references.iter().map(|r| r.digest).collect(),
+            targets: steps
+                .iter()
+                .map(|s| {
+                    vocabulary_speech_target(
+                        &s.frame,
+                        scenario.vocabulary_token,
+                        scenario.vocabulary_target,
+                        scenario_lesson == Some(FoundationTeacherLesson::VocabularyProduction),
+                    )
+                })
+                .collect(),
+        };
+        std::fs::write(
+            output.join("speech-labels.json"),
+            serde_json::to_vec(&labels)?,
+        )?;
     }
     let started = Instant::now();
-    let replay = trainer
-        .evaluate_replay(&sequence)
-        .map_err(|error| format!("pilot trainer replay: {error}"))?;
+    let mut replay = alife_training::TrainingReplayEvaluation {
+        candidate_logits: Vec::new(),
+        final_activations: Vec::new(),
+        final_activity_ema: Vec::new(),
+        final_metabolic_load: Vec::new(),
+    };
+    for chunk in steps.chunks(256) {
+        let sequence = foundation_replay_sequence(chunk, 0)
+            .map_err(|e| format!("pilot replay conversion: {e}"))?;
+        let mut window = trainer
+            .evaluate_replay(&sequence)
+            .map_err(|e| format!("pilot trainer replay: {e}"))?;
+        replay.candidate_logits.append(&mut window.candidate_logits);
+        replay
+            .final_activations
+            .append(&mut window.final_activations);
+        replay
+            .final_activity_ema
+            .append(&mut window.final_activity_ema);
+        replay
+            .final_metabolic_load
+            .append(&mut window.final_metabolic_load);
+    }
     let replay_seconds = started.elapsed().as_secs_f64();
     let mut maximum_logit_error = 0.0_f32;
     let mut maximum_activation_error = 0.0_f32;
@@ -1285,6 +1695,13 @@ fn run_foundation_training_pilot_inner(
         final_food_distance,
         lesson: scenario_lesson,
         lesson_completed,
+        vocabulary_token: scenario.vocabulary_token,
+        semantic_prior: runtime.semantic_prior_metrics().cloned(),
+        heard_word_frames,
+        vocabulary_target_actions,
+        literal_word_matches,
+        maze_nodes_reached,
+        maze_route_nodes: scenario.demonstration_route.len(),
     };
     std::fs::write(
         output.join("pilot.json"),
@@ -1346,19 +1763,157 @@ fn move_scenario_object(
     Ok(())
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) struct FoundationScenarioSetup {
     pub(crate) food: alife_core::WorldEntityId,
     pub(crate) hazard: alife_core::WorldEntityId,
     pub(crate) waypoint: alife_core::WorldEntityId,
     pub(crate) initial_hazard_distance: Option<f32>,
     pub(crate) closing_gate: Option<(alife_core::WorldEntityId, alife_core::Vec3f)>,
+    pub(crate) maze_walls: Vec<(alife_core::WorldEntityId, alife_core::Vec3f)>,
+    pub(crate) demonstration_route: Vec<alife_core::Vec3f>,
+    pub(crate) vocabulary_token: Option<u16>,
+    pub(crate) vocabulary_target: Option<alife_core::WorldEntityId>,
+    pub(crate) vocabulary_noun: Option<u16>,
+    pub(crate) repeat_vocabulary: bool,
+    pub(crate) training_language_feedback: bool,
+    last_language_praise_tick: std::cell::Cell<Option<u64>>,
+    language_praise_count: std::cell::Cell<u8>,
 }
 
 pub(crate) fn close_foundation_navigation_gate(
     runtime: &mut GpuLiveBrainRuntime,
     scenario: &FoundationScenarioSetup,
 ) -> Result<()> {
+    if runtime.world().tick().raw() >= 2 {
+        for (wall, position) in &scenario.maze_walls {
+            if runtime
+                .world()
+                .entity(*wall)
+                .is_some_and(|object| object.position != *position)
+            {
+                move_scenario_object(runtime.world_mut(), *wall, *position)?;
+            }
+        }
+    }
+    if let Some(token) = scenario.vocabulary_token {
+        if scenario.training_language_feedback
+            && scenario.language_praise_count.get() < 2
+            && scenario
+                .last_language_praise_tick
+                .get()
+                .is_none_or(|at| runtime.world().tick().raw().saturating_sub(at) >= 24)
+        {
+            let (subject, _) = runtime.world().organism_entity_ids()[0];
+            let spoken = runtime
+                .world()
+                .audible_utterances()
+                .iter()
+                .any(|utterance| {
+                    utterance.speaker_id == Some(subject)
+                        && utterance.source_kind == alife_core::UtteranceSourceKind::Creature
+                        && utterance.emitted_tick.raw() + 1 >= runtime.world().tick().raw()
+                        && utterance
+                            .tokens
+                            .first()
+                            .is_some_and(|word| word.raw() == token)
+                });
+            let acted = runtime.sealed_patches().last().is_some_and(|patch| {
+                let expected = match token {
+                    1..=5 | 14 => alife_core::CandidateActionFamily::Inspect,
+                    6 => alife_core::CandidateActionFamily::Approach,
+                    7 => alife_core::CandidateActionFamily::Avoid,
+                    8 => alife_core::CandidateActionFamily::Ingest,
+                    9 | 13 => alife_core::CandidateActionFamily::Contact,
+                    _ => alife_core::CandidateActionFamily::Rest,
+                };
+                patch.decision().neural_evidence().ok().is_some_and(|e| {
+                    e.action_family == expected
+                        && patch
+                            .pre_action()
+                            .perception()
+                            .candidates()
+                            .get(e.candidate_index as usize)
+                            .is_some_and(|c| {
+                                (token != 9 || c.action_id == alife_world::HeadlessActionIds::GRAB)
+                                    && (token != 13
+                                        || c.action_id == alife_world::HeadlessActionIds::PLAY)
+                                    && (token == 10
+                                        || c.target.entity == scenario.vocabulary_target)
+                            })
+                }) && (token != 9
+                    || scenario
+                        .vocabulary_target
+                        .and_then(|id| runtime.world().entity(id))
+                        .is_some_and(|object| object.carried_by == Some(subject)))
+                    && !matches!(
+                        patch.outcome().physical.contact,
+                        alife_core::PhysicalContactKind::Blocked
+                            | alife_core::PhysicalContactKind::Collision
+                    )
+            });
+            if spoken || acted {
+                if let Some(source) = runtime
+                    .world()
+                    .entity_id("nursery-teacher")
+                    .and_then(|id| runtime.world().entity(id))
+                    .map(|o| o.position)
+                {
+                    // An ordinary spatial Hand praise stimulus: world reach and
+                    // occlusion can reject it. No synthetic reward is written.
+                    if runtime.provide_player_care(subject, source, true).is_ok() {
+                        scenario
+                            .last_language_praise_tick
+                            .set(Some(runtime.world().tick().raw()));
+                        scenario
+                            .language_praise_count
+                            .set(scenario.language_praise_count.get() + 1);
+                    }
+                }
+            }
+        }
+        if runtime.world().tick().raw() == 0
+            || (scenario.repeat_vocabulary
+                && runtime.world().tick().raw() % 24 == 0
+                && (token != 8
+                    || scenario
+                        .vocabulary_target
+                        .and_then(|id| runtime.world().entity(id))
+                        .is_some_and(|object| !object.consumed)))
+        {
+            let (subject, entity) = runtime.world().organism_entity_ids()[0];
+            let position = runtime
+                .world()
+                .entity(entity)
+                .ok_or("vocabulary subject missing")?
+                .position;
+            let target_position = scenario
+                .vocabulary_target
+                .and_then(|id| runtime.world().entity(id))
+                .map_or(position, |o| o.position);
+            let mut tokens = vec![alife_core::LanguageTokenId::new(token)?];
+            if (5..=9).contains(&token) || token == 13 {
+                if let Some(noun) = scenario.vocabulary_noun {
+                    tokens.push(alife_core::LanguageTokenId::new(noun)?);
+                }
+            }
+            let dx = target_position.x - position.x;
+            let dz = target_position.z - position.z;
+            let norm = dx.hypot(dz).max(0.1);
+            // Stand beside the object, not on the learner's sightline to it.
+            let teacher_position = alife_core::Vec3f::new(
+                target_position.x - 2.0 * dz / norm,
+                target_position.y,
+                target_position.z + 2.0 * dx / norm,
+            );
+            alife_school::LanguageNursery::speak_in_world(
+                runtime.world_mut(),
+                subject,
+                teacher_position,
+                tokens,
+            )?;
+        }
+    }
     if runtime.world().tick().raw() >= 2 {
         if let Some((gate, position)) = scenario.closing_gate {
             if runtime
@@ -1394,6 +1949,9 @@ pub(crate) fn configure_foundation_scenario(
     let food = world
         .entity_id("food-01")
         .ok_or("teacher world has no food")?;
+    // Separate physical variety from the vocabulary residue; otherwise all
+    // demonstrations of the word food would always show the same recipe.
+    world.set_food_variety(food, alife_world::FoodVariety::from_seed(seed / 12))?;
     let hazard = world
         .entity_id("hazard-01")
         .ok_or("teacher world has no hazard")?;
@@ -1405,9 +1963,23 @@ pub(crate) fn configure_foundation_scenario(
         .entity(organism)
         .ok_or("scenario founder is missing")?
         .position;
+    for label in ["meadow-ball", "meadow-activity-toy"] {
+        if let Some(id) = world.entity_id(label) {
+            move_scenario_object(
+                world,
+                id,
+                alife_core::Vec3f::new(origin.x - 80.0, origin.y, origin.z - 80.0),
+            )?;
+        }
+    }
     let mut closing_gate = None;
+    let mut maze_walls = Vec::new();
+    let mut demonstration_route = Vec::new();
+    let mut vocabulary_target = None;
+    let mut vocabulary_noun = None;
+    let mut vocabulary_token = None;
     match lesson {
-        Some(FoundationTeacherLesson::Feeding) => {
+        Some(FoundationTeacherLesson::Feeding | FoundationTeacherLesson::VisionSearch) => {
             let angle = std::f32::consts::TAU * scenario_random(seed, 0);
             let distance = 2.2 + 1.4 * scenario_random(seed, 1);
             let [x, z] = food_position.unwrap_or([
@@ -1476,6 +2048,95 @@ pub(crate) fn configure_foundation_scenario(
                 ),
             )?;
         }
+        Some(FoundationTeacherLesson::MazeNavigation) => {
+            for label in ["obstacle-01", "obstacle-02", "hazard-01"] {
+                if let Some(entity) = world.entity_id(label) {
+                    move_scenario_object(
+                        world,
+                        entity,
+                        alife_core::Vec3f::new(origin.x - 30.0, origin.y, origin.z + 20.0),
+                    )?;
+                }
+            }
+            let layout = maze::configure(world, seed, origin, food)?;
+            maze_walls = layout.walls;
+            demonstration_route = layout.demonstration_route;
+        }
+        Some(
+            FoundationTeacherLesson::VocabularyReception
+            | FoundationTeacherLesson::VocabularyProduction,
+        ) => {
+            let words = alife_core::FOUNDATION_LESSON_VOCABULARY;
+            vocabulary_token = Some(words[(seed % words.len() as u64) as usize]);
+            move_scenario_object(
+                world,
+                food,
+                alife_core::Vec3f::new(origin.x + 1.5, origin.y, origin.z),
+            )?;
+            // `get` must select the movable example. Noun lessons alternate
+            // physical toy uses across seeds rather than equating toy with a ball.
+            let movable = matches!(vocabulary_token, Some(9 | 14)) || (seed / 12) % 2 == 0;
+            let toy = world.spawn_toy(
+                "vocabulary-toy",
+                alife_core::Vec3f::new(origin.x + 1.5, origin.y, origin.z + 2.0),
+                movable,
+            )?;
+            let creature = world.spawn_social_agent(
+                "vocabulary-creature",
+                alife_core::OrganismId(
+                    world
+                        .organism_entity_ids()
+                        .iter()
+                        .map(|(id, _)| id.raw())
+                        .max()
+                        .unwrap_or(0)
+                        + 1,
+                ),
+                alife_core::Vec3f::new(origin.x + 3.0, origin.y, origin.z - 2.0),
+                0.75,
+            )?;
+            move_scenario_object(
+                world,
+                waypoint,
+                alife_core::Vec3f::new(origin.x + 3.0, origin.y, origin.z + 3.0),
+            )?;
+            if let Some(entity) = world.entity_id("obstacle-01") {
+                move_scenario_object(
+                    world,
+                    entity,
+                    alife_core::Vec3f::new(origin.x - 30.0, origin.y, origin.z + 20.0),
+                )?;
+            }
+            move_scenario_object(
+                world,
+                hazard,
+                alife_core::Vec3f::new(origin.x - 30.0, origin.y, origin.z - 20.0),
+            )?;
+            let targets = [food, toy, creature, waypoint];
+            for (i, entity) in targets.iter().enumerate() {
+                let angle = (-75.0
+                    + 50.0 * ((i + ((seed / 10) % 4) as usize) % 4) as f32
+                    + (scenario_random(seed, 19) - 0.5) * 40.0)
+                    .to_radians();
+                move_scenario_object(
+                    world,
+                    *entity,
+                    alife_core::Vec3f::new(
+                        origin.x + 3.0 * angle.cos(),
+                        origin.y,
+                        origin.z + 3.0 * angle.sin(),
+                    ),
+                )?;
+            }
+            let noun = match vocabulary_token {
+                Some(n @ 1..=4) => n,
+                Some(9 | 13 | 14) => 2,
+                Some(5..=7) => 1 + ((seed / 10) % 4) as u16,
+                _ => 1,
+            };
+            vocabulary_noun = Some(noun);
+            vocabulary_target = Some(targets[noun as usize - 1]);
+        }
         None => {}
     }
     if precondition_recovery && lesson == Some(FoundationTeacherLesson::Recovery) {
@@ -1530,6 +2191,15 @@ pub(crate) fn configure_foundation_scenario(
         waypoint,
         initial_hazard_distance,
         closing_gate,
+        maze_walls,
+        demonstration_route,
+        vocabulary_token,
+        vocabulary_target,
+        vocabulary_noun,
+        repeat_vocabulary: true,
+        training_language_feedback: true,
+        last_language_praise_tick: std::cell::Cell::new(None),
+        language_praise_count: std::cell::Cell::new(0),
     })
 }
 

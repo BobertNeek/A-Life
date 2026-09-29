@@ -495,6 +495,18 @@ pub struct BiochemicalGraphChromosome {
 }
 
 impl BiochemicalGraphChromosome {
+    pub fn with_play_stimulation(
+        mut self,
+        side: AlleleSide,
+    ) -> Result<Self, ScaffoldContractError> {
+        let homolog = match side {
+            AlleleSide::Maternal => &mut self.maternal,
+            AlleleSide::Paternal => &mut self.paternal,
+        };
+        *homolog = homolog.clone().with_play_stimulation()?;
+        self.validate_contract()?;
+        Ok(self)
+    }
     pub fn with_player_reward(mut self, side: AlleleSide) -> Result<Self, ScaffoldContractError> {
         let homolog = match side {
             AlleleSide::Maternal => &mut self.maternal,
