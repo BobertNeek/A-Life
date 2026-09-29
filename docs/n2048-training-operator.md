@@ -4,6 +4,24 @@ Use PowerShell 7 from the authoritative repository root. The launcher has separa
 
 The next proposed [vision, maze, and vocabulary campaign](n2048-vision-maze-vocabulary-run-2026-09-28.md) must use the internal SLM prior during warmup and training, with deliberate dropout, and run headlessly at maximum sustainable speed. Its prior-to-neural-input, maze, and speech integrations still require implementation and qualification; the existing launcher is not yet ready to execute that design. No training or scheduling is requested by this operator update.
 
+## Tiny local prior trial (September 28)
+
+The selected small-model trial uses [Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B), converted by [ggml-org](https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF), in Q8_0. The downloaded file is 833,592,096 bytes, from revision `8fea620810c4afa23dd6443f999a48574c1611a3`, with SHA256 `37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f`. It lives at `models/local/qwen3.5-0.8b-gguf/Qwen3.5-0.8B-Q8_0.gguf`. The previous Qwen3-4B model remains available. Qwen3-Embedding-0.6B is an embedding model, not a generative prior replacement.
+
+For this trial, pass the model and alias explicitly; existing provider and launcher defaults still name the older 4B model. Do not start a second server if port 18081 is already occupied. The verified service uses full GPU offload on the RTX 3050, four CPU threads, a 2,048-token context, one request slot, and reasoning disabled. The launcher's reasoning parser separates the template's empty think tags from JSON; leaving those tags in content broke JSON-constrained generation with this model.
+
+```powershell
+pwsh -NoProfile -File .\scripts\start_llamacpp_slm_prior.ps1 -ModelPath .\models\local\qwen3.5-0.8b-gguf\Qwen3.5-0.8B-Q8_0.gguf -ModelAlias alife-qwen3.5-0.8b-prior -GpuLayers 999 -Threads 4 -ContextSize 2048 -ParallelSlots 1
+cargo build -p alife_semantic --features local-llamacpp --example local_slm_prior --offline -j 2
+.\target\debug\examples\local_slm_prior.exe alife-qwen3.5-0.8b-prior 'heard word food; sees food nearby; hunger high'
+```
+
+The example makes one real request through the existing bounded production provider and prints its validated result. It creates no organism and performs no training. Food, toy, and opaque-wall contexts all returned distinct valid associations after removing a hardcoded food/hazard example from the prompt: the original example had caused the tiny model to invent a hazard in the food scene. Revised outputs did not repeat that error in these three samples. Six existing provider/parser checks also passed. Receipts and service configuration are under `target/slm-prior/qwen3.5-0.8b-20260928/`; the revised sample files end in `-prior-revised.json`.
+
+The original CPU responses took roughly 7–9 seconds, with some build contention during collection. A subsequent same-context comparison without the build took 6,341 ms on CPU and 1,359 ms with GPU offload, producing the same validated prior. Reported GPU memory usage rose from 678 MiB to 1,594 MiB (about 0.9 GiB). This single-request check supports using GPU for the current trial; it does not measure concurrent training throughput, compare quality against 4B, or prove creature improvement. Receipts are `food-prior-cpu-warm.json` and `food-prior-gpu.json`. If shared GPU contention later reduces training throughput, `-GpuLayers 0` restores the measured CPU configuration. Collection still needs asynchronous requests, caching, expiry, dropout, and a verified prior-to-neural-input path. No training campaign was started, and this model is not yet wired into the creature's brain.
+
+## Terrain founder and training
+
 Terrain-vision adaptation is explicit. Before resuming the old object-slot founder,
 run `train_n2048_care --adapt-terrain SOURCE_COHORT NEW_DIRECTORY`. This accepts a
 sealed old cycle, preserves every weight at identical inherited synapse coordinates,

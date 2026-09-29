@@ -348,15 +348,18 @@ impl LlamaCppSlmPriorProvider {
             "Return exactly one compact JSON object and no prose. ",
             "Do not include thinking text, markdown fences, commands, motor plans, ",
             "weight changes, vectors, Bevy entities, or arbitration text. ",
-            "Allowed keys only: salience_labels, context_summary, lexicon_associations, perception_tags."
+            "Allowed keys only: salience_labels, context_summary, lexicon_associations, perception_tags. ",
+            "Base salience labels, summary, and perception tags on the supplied context. ",
+            "Do not invent sensed objects or treat absent objects as present."
         );
         let user_prompt = format!(
             concat!(
-                "Required shape: {{\"salience_labels\":[\"food\",\"hazard\"],",
-                "\"context_summary\":\"short sensory context\",",
-                "\"lexicon_associations\":{{\"food\":0.8,\"hazard\":0.7}},",
-                "\"perception_tags\":[\"near\",\"sees\"]}}. ",
-                "Use only lowercase short labels. Context: {}"
+                "salience_labels: array of 1-4 relevant labels. ",
+                "context_summary: string of at most 160 characters. ",
+                "lexicon_associations: object of 1-6 relevant word associations with numeric salience from 0 to 1. ",
+                "perception_tags: array of 1-6 supported labels. ",
+                "Use short lowercase labels. Word associations may be general knowledge; ",
+                "perception must describe only the supplied context. Context: {}"
             ),
             bounded_context
         );

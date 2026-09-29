@@ -1,10 +1,16 @@
 param(
     [string]$LlamaServerPath = "",
     [string]$ModelPath = "",
+    [ValidatePattern('^[A-Za-z0-9_.-]+$')]
+    [string]$ModelAlias = "alife-qwen3-4b-prior",
     [ValidateRange(1, 65535)]
     [int]$Port = 18081,
     [int]$ContextSize = 4096,
     [int]$GpuLayers = 999,
+    [ValidateRange(0, 128)]
+    [int]$Threads = 0,
+    [ValidateRange(1, 16)]
+    [int]$ParallelSlots = 1,
     [switch]$PrintOnly
 )
 
@@ -64,13 +70,18 @@ $arguments = @(
     "-m", $model,
     "--host", "127.0.0.1",
     "--port", "$Port",
-    "--alias", "alife-qwen3-4b-prior",
+    "--alias", $ModelAlias,
     "-c", "$ContextSize",
     "--reasoning", "off",
-    "--reasoning-format", "none",
+    # Parse the template's empty think tags separately so JSON grammar stays valid.
+    "--reasoning-format", "deepseek",
     "--reasoning-budget", "0",
-    "--n-gpu-layers", "$GpuLayers"
+    "--n-gpu-layers", "$GpuLayers",
+    "--parallel", "$ParallelSlots"
 )
+if ($Threads -gt 0) {
+    $arguments += @("--threads", "$Threads", "--threads-batch", "$Threads")
+}
 
 function Format-CommandArgument {
     param([string]$Value)

@@ -15,3 +15,7 @@ default = []
 gaussian-adapter = []
 fake-semantic-provider = ["gaussian-adapter"]
 local-llamacpp = ["gaussian-adapter"]
+
+[[example]]
+name = "local_slm_prior"
+required-features = ["local-llamacpp"]
