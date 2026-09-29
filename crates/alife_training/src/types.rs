@@ -8,6 +8,25 @@ use alife_core::{
 pub const TRAINING_SEQUENCE_TICKS: usize = 32;
 pub const MAX_TRAINING_SEQUENCE_TICKS: usize = 2048;
 
+/// Equal positive/silence loss budgets per replay window. A single physically
+/// completed verb must not be diluted by dozens of waiting/silence frames.
+/// Relative label weights remain meaningful within each class; missing classes
+/// receive no budget. Only the 18 positive or two silence outputs are supervised.
+pub fn replay_speech_loss_scales(targets: &[Option<ReplaySpeechTarget>]) -> [f32; 2] {
+    let mut mass = [0.0_f32; 2];
+    for target in targets.iter().flatten() {
+        mass[usize::from(target.token.is_none())] += target.weight * target.len() as f32;
+    }
+    let classes = mass.iter().filter(|m| **m > 0.0).count().max(1) as f32;
+    [0, 1].map(|class| {
+        if mass[class] > 0.0 {
+            1.0 / (classes * mass[class] * if class == 0 { 18.0 } else { 2.0 })
+        } else {
+            0.0
+        }
+    })
+}
+
 /// Grounded bounded utterance label, never an input or policy probability.
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct ReplaySpeechTarget {

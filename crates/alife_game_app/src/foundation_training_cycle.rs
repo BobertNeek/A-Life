@@ -512,6 +512,7 @@ fn run_foundation_training_cycle_from(
     config.founder_seed_base = founder_seed_base;
     config.sensor_profile = asset.manifest().sensor_profile();
     let mut game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
+    crate::foundation_training::ground_foundation_training_world(&mut game.world)?;
     game.world.set_age_death_disabled_for_new_game(true)?;
     let mut scenario = if lesson.is_some() {
         Some(configure_foundation_scenario(
@@ -1196,6 +1197,7 @@ fn run_foundation_training_cycle_from(
     }
     let mut next_game =
         alife_world::create_canonical_new_game_with_n2048_candidate(&next_config, &admitted_asset)?;
+    crate::foundation_training::ground_foundation_training_world(&mut next_game.world)?;
     next_game.world.set_age_death_disabled_for_new_game(true)?;
     let next_backend = runtime.new_staging_like_live()?;
     let mut next_runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(

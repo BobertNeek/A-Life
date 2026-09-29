@@ -446,6 +446,14 @@ pub struct FoundationPilotReceipt {
     #[serde(default)]
     pub vocabulary_token: Option<u16>,
     #[serde(default)]
+    pub initial_world_signature: String,
+    #[serde(default)]
+    pub silent_request: bool,
+    #[serde(default)]
+    pub request_target: Option<alife_core::WorldEntityId>,
+    #[serde(default)]
+    pub request_responses: Vec<FoundationRequestResponse>,
+    #[serde(default)]
     pub semantic_prior: Option<crate::gpu_live_runtime::SemanticPriorMetrics>,
     #[serde(default)]
     pub heard_word_frames: usize,
@@ -569,6 +577,45 @@ pub fn run_adapted_foundation_teacher_pilot(
         None,
         Some(lesson),
         Some(asset),
+    )
+}
+
+/// Offline evaluation controls change only the audible request, after the scene
+/// has been constructed. They are not learner inputs or executable teacher policy.
+#[derive(Debug, Clone, Copy)]
+pub struct FoundationEvaluationRequest {
+    pub token: u16,
+    pub silent: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FoundationRequestResponse {
+    pub tick: u64,
+    pub action: u32,
+    pub target: Option<alife_core::WorldEntityId>,
+}
+
+pub fn run_foundation_request_evaluation(
+    output: &Path,
+    world_seed: u64,
+    founder_seed_base: u64,
+    tick_count: usize,
+    asset: FoundationWeightAsset,
+    request: FoundationEvaluationRequest,
+) -> Result<FoundationPilotReceipt> {
+    if !matches!(request.token, 1 | 2 | 9 | 13 | 15 | 16) {
+        return Err("controlled request supports food/toy, get/play, and root/fruit pairs".into());
+    }
+    run_foundation_training_pilot_with_request(
+        output,
+        world_seed,
+        founder_seed_base,
+        tick_count,
+        false,
+        None,
+        Some(FoundationTeacherLesson::VocabularyReception),
+        Some(asset),
+        Some(request),
     )
 }
 
@@ -1212,6 +1259,30 @@ fn run_foundation_training_pilot_inner(
     lesson: Option<FoundationTeacherLesson>,
     asset_override: Option<FoundationWeightAsset>,
 ) -> Result<FoundationPilotReceipt> {
+    run_foundation_training_pilot_with_request(
+        output,
+        seed,
+        founder_seed_base,
+        tick_count,
+        teacher_mode,
+        food_position,
+        lesson,
+        asset_override,
+        None,
+    )
+}
+
+fn run_foundation_training_pilot_with_request(
+    output: &Path,
+    seed: u64,
+    founder_seed_base: u64,
+    tick_count: usize,
+    teacher_mode: bool,
+    food_position: Option<[f32; 2]>,
+    lesson: Option<FoundationTeacherLesson>,
+    asset_override: Option<FoundationWeightAsset>,
+    request: Option<FoundationEvaluationRequest>,
+) -> Result<FoundationPilotReceipt> {
     if !(1..=2048).contains(&tick_count) || seed == 0 || founder_seed_base == 0 {
         return Err(invalid().into());
     }
@@ -1238,6 +1309,71 @@ fn run_foundation_training_pilot_inner(
     scenario.repeat_vocabulary =
         teacher_mode && scenario_lesson != Some(FoundationTeacherLesson::VocabularyProduction);
     scenario.training_language_feedback = teacher_mode;
+    if let Some(request) = request {
+        // Construct once from the same seed; never relocate objects, change needs,
+        // or change a toy's mobility to match the counterfactual request.
+        let target = match request.token {
+            1 => Some(scenario.food),
+            2 | 9 | 13 => game.world.entity_id("vocabulary-toy"),
+            15 | 16 => game
+                .world
+                .object_snapshots()
+                .iter()
+                .find(|object| {
+                    object.kind == alife_world::WorldObjectKind::Food
+                        && (object.nutrition
+                            - alife_world::FoodVariety::from_seed(u64::from(request.token - 15))
+                                .nutrition())
+                        .abs()
+                            < 0.0001
+                })
+                .map(|object| object.id),
+            _ => None,
+        }
+        .ok_or("controlled request has no physical referent in this scene")?;
+        if matches!(request.token, 9 | 13)
+            && game
+                .world
+                .entity(target)
+                .is_none_or(|object| object.kind != alife_world::WorldObjectKind::Ball)
+        {
+            return Err("get/play comparison needs the same movable ball scene".into());
+        }
+        scenario.vocabulary_token = Some(request.token);
+        scenario.vocabulary_target = Some(target);
+        scenario.vocabulary_noun = Some(if matches!(request.token, 2 | 9 | 13) {
+            14
+        } else {
+            request.token
+        });
+        scenario.silent_request = request.silent;
+        let origin = game
+            .world
+            .entity(game.world.organism_entity_ids()[0].1)
+            .ok_or("comparison subject missing")?
+            .position;
+        let position = alife_core::Vec3f::new(origin.x - 2.0, origin.y, origin.z + 0.5);
+        let raw = game
+            .world
+            .organism_entity_ids()
+            .iter()
+            .map(|(id, _)| id.raw())
+            .max()
+            .unwrap_or(0)
+            + 2;
+        if let Some(teacher) = game.world.entity_id("nursery-teacher") {
+            game.world.editor_move_object(teacher, position)?;
+        } else {
+            game.world.spawn_social_agent(
+                "nursery-teacher",
+                alife_core::OrganismId(raw),
+                position,
+                0.75,
+            )?;
+        }
+        scenario.fixed_speaker_position = Some(position);
+    }
+    let initial_world_signature = format!("{:?}", game.world.canonical_signature_digest()?);
     let food = scenario.food;
     let food_position = scenario_lesson.map(|_| {
         let position = game
@@ -1313,6 +1449,12 @@ fn run_foundation_training_pilot_inner(
             .tick()
             .map_err(|error| format!("pilot production tick {tick}: {error}"))?;
         let mut collected = runtime.take_foundation_training_steps();
+        if collected.is_empty() && !teacher_mode {
+            // A sleeping or terminal learner has no waking decision to replay.
+            // Seal the contiguous segment already observed; failing the whole
+            // evaluation would hide the behavioral outcome.
+            break;
+        }
         if collected.len() != 1 {
             return Err(format!(
                 "pilot tick {tick}: expected one waking capture, got {}",
@@ -1450,6 +1592,35 @@ fn run_foundation_training_pilot_inner(
                         .any(matches))
         })
         .count();
+    let request_responses = if request.is_some() {
+        steps
+            .iter()
+            .filter(|step| !teacher_step_blocked(step))
+            .flat_map(|step| {
+                step.behavior
+                    .motor_indices
+                    .iter()
+                    .chain(std::iter::once(&step.behavior.representative_index))
+                    .filter_map(|index| step.frame.candidates().get(*index as usize))
+                    .filter(|candidate| match scenario.vocabulary_token {
+                        Some(9 | 13) => matches!(
+                            candidate.action_id,
+                            alife_world::HeadlessActionIds::GRAB
+                                | alife_world::HeadlessActionIds::PLAY
+                        ),
+                        _ => candidate.family == alife_core::CandidateActionFamily::Inspect,
+                    })
+                    .map(|candidate| FoundationRequestResponse {
+                        tick: step.frame.tick().raw(),
+                        action: candidate.action_id.raw(),
+                        target: candidate.target.entity,
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     let literal_word_matches = steps
         .iter()
         .filter(|s| {
@@ -1845,6 +2016,10 @@ fn run_foundation_training_pilot_inner(
         lesson: scenario_lesson,
         lesson_completed,
         vocabulary_token: scenario.vocabulary_token,
+        initial_world_signature,
+        silent_request: scenario.silent_request,
+        request_target: scenario.vocabulary_target,
+        request_responses,
         semantic_prior: runtime.semantic_prior_metrics().cloned(),
         heard_word_frames,
         vocabulary_target_actions,
@@ -1928,6 +2103,8 @@ pub(crate) struct FoundationScenarioSetup {
     pub(crate) vocabulary_target: Option<alife_core::WorldEntityId>,
     pub(crate) vocabulary_noun: Option<u16>,
     pub(crate) repeat_vocabulary: bool,
+    pub(crate) silent_request: bool,
+    pub(crate) fixed_speaker_position: Option<alife_core::Vec3f>,
     pub(crate) training_language_feedback: bool,
     pub(crate) start_tick: u64,
     last_language_praise_tick: std::cell::Cell<Option<u64>>,
@@ -2048,20 +2225,21 @@ pub(crate) fn close_foundation_navigation_gate(
                 }
             }
         }
-        if runtime.world().tick().raw() == scenario.start_tick
-            || (scenario.repeat_vocabulary
-                && runtime
-                    .world()
-                    .tick()
-                    .raw()
-                    .saturating_sub(scenario.start_tick)
-                    % 24
-                    == 0
-                && (!matches!(token, 8 | 11)
-                    || scenario
-                        .vocabulary_target
-                        .and_then(|id| runtime.world().entity(id))
-                        .is_some_and(|object| !object.consumed)))
+        if !scenario.silent_request
+            && (runtime.world().tick().raw() == scenario.start_tick
+                || (scenario.repeat_vocabulary
+                    && runtime
+                        .world()
+                        .tick()
+                        .raw()
+                        .saturating_sub(scenario.start_tick)
+                        % 24
+                        == 0
+                    && (!matches!(token, 8 | 11)
+                        || scenario
+                            .vocabulary_target
+                            .and_then(|id| runtime.world().entity(id))
+                            .is_some_and(|object| !object.consumed))))
         {
             let (subject, entity) = runtime.world().organism_entity_ids()[0];
             let position = runtime
@@ -2083,11 +2261,14 @@ pub(crate) fn close_foundation_navigation_gate(
             let dz = target_position.z - position.z;
             let norm = dx.hypot(dz).max(0.1);
             // Stand beside the object, not on the learner's sightline to it.
-            let teacher_position = alife_core::Vec3f::new(
-                target_position.x - 2.0 * dz / norm,
-                target_position.y,
-                target_position.z + 2.0 * dx / norm,
-            );
+            let teacher_position =
+                scenario
+                    .fixed_speaker_position
+                    .unwrap_or(alife_core::Vec3f::new(
+                        target_position.x - 2.0 * dz / norm,
+                        target_position.y,
+                        target_position.z + 2.0 * dx / norm,
+                    ));
             alife_school::LanguageNursery::speak_in_world(
                 runtime.world_mut(),
                 subject,
@@ -2118,6 +2299,31 @@ fn scenario_random(seed: u64, stream: u64) -> f32 {
     (((value ^ (value >> 31)) >> 40) as u32 as f32) / 16_777_216.0
 }
 
+/// Canonical fixtures start in legacy X/Y coordinates. Production terrain
+/// admission already converts them to X/Z and grounds movement. Offline lives
+/// must use that same admission path instead of learning to walk into the air.
+pub(crate) fn ground_foundation_training_world(
+    world: &mut alife_world::HeadlessWorld,
+) -> Result<()> {
+    if world.terrain().is_none() {
+        let terrain = alife_world::WorldTerrain::new(
+            alife_world::TerrainData {
+                width: 2,
+                depth: 2,
+                origin_x: -256.0,
+                origin_z: -256.0,
+                spacing: 512.0,
+                heights: vec![0.0; 4],
+                obstacles: Vec::new(),
+                water_level: None,
+            },
+            alife_world::LocomotionLimits::default(),
+        )?;
+        world.enable_terrain_for_new_game(terrain, alife_core::Vec3f::ZERO)?;
+    }
+    Ok(())
+}
+
 pub(crate) fn configure_foundation_scenario(
     world: &mut alife_world::HeadlessWorld,
     seed: u64,
@@ -2125,6 +2331,7 @@ pub(crate) fn configure_foundation_scenario(
     food_position: Option<[f32; 2]>,
     precondition_recovery: bool,
 ) -> Result<FoundationScenarioSetup> {
+    ground_foundation_training_world(world)?;
     if food_position.is_some() && lesson != Some(FoundationTeacherLesson::Feeding) {
         return Err("custom food placement is only supported for feeding lessons".into());
     }
@@ -2496,6 +2703,8 @@ pub(crate) fn configure_foundation_scenario(
         vocabulary_target,
         vocabulary_noun,
         repeat_vocabulary: true,
+        silent_request: false,
+        fixed_speaker_position: None,
         training_language_feedback: true,
         start_tick: world.tick().raw(),
         last_language_praise_tick: std::cell::Cell::new(None),

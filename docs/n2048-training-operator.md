@@ -102,7 +102,7 @@ target/debug/train_n2048_care.exe --inspect-cycle target/founder-training/cycle-
 
 The cycle collects ordinary GPU decisions, streams Zstd-compressed binary replay records with a 4 GiB disk ceiling and 8 GiB process-memory check, predicts frozen values, calculates GAE across natural sleep gaps using actual world time, applies PPO in 256-tick waking windows with up to 128 burn-in ticks, exports a canonical N2048 asset, and verifies its admission into a fresh cohort. Structural synapses remain frozen replay context while inherited weights train. The first waking decision after each sleep must pass exact GPU production/replay parity. The sealed experience patch retains its existing JSON wire inside each binary record. The second command restores the exported actor, Adam state, and GPU value head, and increments the policy version. `--seed N` may change the world seed on resume while preserving the original inherited founder seed and graph; `cycle.json` records both. `--inspect-cycle` reads and checks sealed replay records, including finalized records from an interrupted collection. Both training commands fail rather than overwrite an output directory. `cycle.json` and its actor/value checkpoints are integration evidence, not a full campaign checkpoint or a promoted founder. The cycle accepts at most 36,000 waking decisions. A production delayed-food run has now closed biological death as a terminal PPO trajectory with zero value bootstrap, exported a trained asset, and admitted its next cohort. A delayed-food invocation still exits as a failed behavior gate unless the organism survives and eats after food returns.
 
-For a held-out check of a frozen checkpoint, run `--resume-cycle` from that checkpoint with a seed outside the campaign sequence, read the pre-update actions and outcomes in `cycle.json`, and do not use the evaluation run's exported checkpoint as the next training source. This reuses production collection without letting evaluation updates affect the candidate. Reserve the long delayed-food gate for post-training acceptance.
+For a held-out check of a frozen checkpoint, use `--evaluate OUTPUT ASSET LESSON TICKS WORLD_SEED FOUNDER_SEED`. It performs ordinary production collection and replay verification without an optimizer update. Use seeds outside the campaign and demonstration bands. Reserve the long delayed-food gate for post-training acceptance.
 
 `--food-after-world-tick N` in cycle mode temporarily moves the existing food resource to a distant legal world position, then returns it at world tick `N`. `scenario.json` records both positions, and `cycle.json` records the availability tick, first meal, and energy. It changes no physiology or policy. `--teacher-pilot OUTPUT [TICKS] --seed WORLD_SEED --founder-seed-base GENOME_SEED --lesson feeding|hazard_avoidance|obstacle_navigation|recovery` produces source-bound compact demonstration replay in the same format as the cycle. The optional `--food-position X Z` applies to feeding only; the second coordinate is horizontal Z, not elevation. `--cycle` and `--resume-cycle` also accept `--lesson` to place the same scenery around a teacher-free policy; a delayed-food gate cannot be combined with a lesson. Each teacher lesson must complete its measured world outcome before replay is accepted. Successful lessons write `lesson-trace.json`; failed lessons write `lesson-diagnostic.json`, both with every chosen action, sensed object slot, physical contact, and measured physiology.
 
@@ -122,17 +122,24 @@ The first overnight campaign completed 528 teacher-free PPO cohorts on 25 Septem
 ## Automatic behavior stages
 
 The VisionLanguage campaign starts at stage 0. Every 40 completed cohorts, while
-at least 20 minutes remain, it assesses the exported policy without a teacher or
-optimizer on nine fixed disjoint-seed worlds: three navigation, three reception,
-three production. Each group must pass at least two of three cases. Production
+at least 20 minutes of collection time remain, it assesses the exported policy
+without a demonstrator or optimizer: three navigation runs, two different requests
+and silence in one identical scene, three production runs, and feeding/hazard care
+checks. Navigation and production each require two of three successes; both care
+checks must pass. Both requested first responses must be correct and different.
+Inspecting every object eventually is insufficient. Production
 requires exact meaningful emitted token sequences after the initial hearing
 exposure, not a matching first word or HUD translation. An assisted pass then
 requires two paired prior-off probes (navigation and production). A failure holds
 the stage. These small screens are progression checks, not statistical acceptance.
 
-Stage 0 uses small two-by-two maze trees and basic noun/play/hunger assessment;
-stage 1 uses three-by-three trees and look/get/tired cases; stage 2 adds food/toy
-subtype assessment. Demonstrations and training vary actual connectivity using
+Stage 0 uses small two-by-two maze trees, a food/toy request contrast, and
+food/play/hunger production assessment. Stage 1 uses three-by-three trees, a
+get/play request contrast for the same ball, and look/get/tired production.
+Stage 2 adds root/fruit request contrasts and food/toy subtype production.
+The request comparison changes only words: speaker, object geometry, biology,
+founder weights and random seed stay fixed. Initial world signatures are checked.
+Demonstrations and training vary actual connectivity using
 two tree generators; mirrors and rotations alone do not count as diversity.
 Training vocabulary still samples all eighteen words. No score authorizes founder
 promotion. The food-free biology and player-visible acceptance gates remain.
@@ -140,7 +147,34 @@ promotion. The food-free biology and player-visible acceptance gates remain.
 Panels and their source digests are recorded separately. Ranking compares scores
 only within the same stage and cannot exchange a language regression for meals.
 Status retains compact prior metrics; full deliveries stay in sealed receipts.
-The prior environment is restored after every panel, including exceptions.
+The prior and stage environments are restored after every panel, including exceptions.
+
+The campaign wall-time budget starts before its build. Collection stops 45 minutes
+before the hard deadline, including any unfinished cohort; an interrupted directory
+is never used as a next source. The runner then compares the starting source, latest
+sealed checkpoint, and the best previously assessed checkpoint for the current stage.
+Identical asset digests are assessed once. All candidates face the same current stage.
+Navigation, request discrimination, literal speaking and care stay separate: a
+candidate can replace the baseline only through componentwise improvement. Ties
+and skill tradeoffs retain the baseline. `final-comparison.json`, `selectedCheckpoint`
+and `selectedCheckpointPassed` distinguish selection from the latest trained source.
+A timeout preserves sealed results and records incomplete assessment. No selection
+authorizes founder promotion or replaces the player-visible/food-free gates.
+
+Warmup speech loss gives positive utterances and meaningful silence equal budgets
+within each replay window, normalized over their actually supervised outputs.
+One completed verb therefore receives the same positive budget as repeated noun
+labels in another comparable window. Labels still require physical grounding;
+there are no fabricated extra utterances. `warmup.json` records the normalization.
+
+The offline teacher, warm-up, cycle, and frozen evaluation worlds now admit the
+same grounded terrain rule as the playable game. This converts canonical legacy
+X/Y fixture positions into horizontal X/Z positions and keeps movement on the
+ground. Older replay corpora and warm-ups collected without terrain admission
+are diagnostic artifacts only; collect a fresh corpus and warm-up before the
+next campaign. The behavior panel checks two requests and a silent control in
+the same scene, plus navigation, literal speech, and care on frozen weights.
+Training-world scores alone still cannot certify a founder.
 
 Exact saves retain bounded provider-private fade/context/active-hint state inside
 the existing cognitive checkpoint. A provider identity mismatch fails restore

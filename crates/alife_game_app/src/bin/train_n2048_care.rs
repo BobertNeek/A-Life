@@ -129,29 +129,71 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .ok_or("missing evaluation founder seed")?
             .to_string_lossy()
             .parse::<u64>()?;
-        let food_position = if let Some(x) = args.next() {
-            let z = args.next().ok_or("missing evaluation food z")?;
-            Some([
-                x.to_string_lossy().parse::<f32>()?,
-                z.to_string_lossy().parse::<f32>()?,
-            ])
-        } else {
-            None
-        };
-        if args.next().is_some() {
-            return Err("unexpected evaluation argument".into());
+        let tail: Vec<_> = args.collect();
+        let mut food_position = None;
+        let mut request_token = None;
+        let mut silent = false;
+        let mut i = 0;
+        while i < tail.len() {
+            match tail[i].to_string_lossy().as_ref() {
+                "--request-token" => {
+                    i += 1;
+                    if request_token.is_some() {
+                        return Err("duplicate request token".into());
+                    }
+                    request_token = Some(
+                        tail.get(i)
+                            .ok_or("missing request token")?
+                            .to_string_lossy()
+                            .parse::<u16>()?,
+                    );
+                }
+                "--silent-request" => {
+                    silent = true;
+                }
+                _ if i == 0 && tail.len() == 2 => {
+                    food_position = Some([
+                        tail[0].to_string_lossy().parse::<f32>()?,
+                        tail[1].to_string_lossy().parse::<f32>()?,
+                    ]);
+                    i += 1;
+                }
+                _ => return Err("unexpected evaluation argument".into()),
+            }
+            i += 1;
+        }
+        if silent && request_token.is_none() {
+            return Err("silence requires controlled request token".into());
         }
         let asset =
             alife_core::FoundationWeightAsset::decode_canonical(&std::fs::read(asset_path)?)?;
-        let receipt = alife_game_app::run_foundation_evaluation_pilot(
-            &output,
-            seed,
-            founder_seed_base,
-            ticks,
-            lesson,
-            food_position,
-            asset,
-        )?;
+        let receipt = if let Some(token) = request_token {
+            if lesson != alife_game_app::FoundationTeacherLesson::VocabularyReception
+                || food_position.is_some()
+            {
+                return Err(
+                    "request comparison applies to reception without food relocation".into(),
+                );
+            }
+            alife_game_app::run_foundation_request_evaluation(
+                &output,
+                seed,
+                founder_seed_base,
+                ticks,
+                asset,
+                alife_game_app::FoundationEvaluationRequest { token, silent },
+            )?
+        } else {
+            alife_game_app::run_foundation_evaluation_pilot(
+                &output,
+                seed,
+                founder_seed_base,
+                ticks,
+                lesson,
+                food_position,
+                asset,
+            )?
+        };
         println!("{}", serde_json::to_string_pretty(&receipt)?);
         return Ok(());
     }

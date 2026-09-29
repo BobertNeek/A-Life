@@ -38,6 +38,8 @@ pub struct FoundationWarmupReceipt {
     pub actor_optimizer_step: u32,
     #[serde(default)]
     pub epochs: u32,
+    #[serde(default)]
+    pub speech_loss_normalization: String,
     pub losses: Vec<f32>,
     pub next_cohort_optimizer_rebound: bool,
 }
@@ -124,6 +126,7 @@ pub fn run_foundation_imitation_warmup(
     config.sensor_profile = source_asset.manifest().sensor_profile();
     let mut game =
         alife_world::create_canonical_new_game_with_n2048_candidate(&config, &source_asset)?;
+    crate::foundation_training::ground_foundation_training_world(&mut game.world)?;
     game.world.set_age_death_disabled_for_new_game(true)?;
     let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
     let mut runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
@@ -297,6 +300,7 @@ pub fn run_foundation_imitation_warmup(
     )?;
     let mut next_game =
         alife_world::create_canonical_new_game_with_n2048_candidate(&config, &trained)?;
+    crate::foundation_training::ground_foundation_training_world(&mut next_game.world)?;
     next_game.world.set_age_death_disabled_for_new_game(true)?;
     let mut next_runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
         runtime.new_staging_like_live()?,
@@ -341,6 +345,8 @@ pub fn run_foundation_imitation_warmup(
         trained_asset_digest: asset_digest(&trained),
         actor_optimizer_step: actor.optimizer_step,
         epochs,
+        speech_loss_normalization:
+            "equal positive/silence budgets per replay window; normalized active outputs".into(),
         losses,
         next_cohort_optimizer_rebound: true,
     };

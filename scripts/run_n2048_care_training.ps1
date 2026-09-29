@@ -38,6 +38,7 @@ function Publish-State {
     Atomic-Json $latest $state
 }
 function Run-Command([string]$Program, [string[]]$Arguments, [string]$Log, [switch]$OneTest, [datetime]$DeadlineUtc = [datetime]::MaxValue) {
+    if ([DateTime]::UtcNow -ge $DeadlineUtc) { throw [TimeoutException]::new('Wall-time budget exhausted before child launch.') }
     $info = [Diagnostics.ProcessStartInfo]::new($Program)
     $info.WorkingDirectory = $repo; $info.UseShellExecute = $false; $info.CreateNoWindow = $true
     $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true
@@ -51,11 +52,12 @@ function Run-Command([string]$Program, [string[]]$Arguments, [string]$Log, [swit
         if (-not $process.Start()) { throw "Failed to start $Program" }
         $outTask = $process.StandardOutput.BaseStream.CopyToAsync($stdout)
         $errTask = $process.StandardError.BaseStream.CopyToAsync($stderr)
-        while (-not $process.WaitForExit(1000)) {
+        while (-not $process.WaitForExit([int][Math]::Clamp(($DeadlineUtc - [DateTime]::UtcNow).TotalMilliseconds, 1, 1000))) {
             if ([DateTime]::UtcNow -ge $DeadlineUtc) {
                 $process.Kill($true)
                 $process.WaitForExit()
-                throw "Campaign deadline reached while running $Program; child process stopped."
+                [Threading.Tasks.Task]::WaitAll(@($outTask, $errTask))
+                throw [TimeoutException]::new("Wall-time budget exhausted while running $Program; child process stopped.")
             }
         }
         [Threading.Tasks.Task]::WaitAll(@($outTask, $errTask))
@@ -103,13 +105,18 @@ function Invoke-Campaign {
         fingerprint = $sourceReceipt.fingerprint; executable = $exe; executableSha256 = $null
         source = $sourcePath; latestCheckpoint = $sourcePath; deadlineUtc = $null
         cycleTicks = $CycleTicks; maxCycles = $MaxCycles; updatedUtc = ''; completed = @(); bestByLesson = [ordered]@{}; error = $null
+        selectedCheckpoint = $null; selectedCheckpointPassed = $false; finalComparison = $null; interruptedCohort = $null
         curriculumStage = 0; gateEveryCycles = $GateEveryCycles; behaviorPanels = @(); bestBehaviorCheckpoint = $null; bestBehaviorByStage = [ordered]@{}
     }
+    $deadline = [DateTime]::UtcNow.AddHours($DurationHours)
+    $collectionDeadline = $deadline.AddMinutes(-45)
+    $state.deadlineUtc = $deadline.ToString('o')
+    $state['collectionDeadlineUtc'] = $collectionDeadline.ToString('o')
+    $state['finalAssessmentReserveMinutes'] = 45
     Publish-State
     Run-Command 'cargo' @('build', '--release', '--offline', '--locked', '-j', '2', '-p', 'alife_game_app',
-        '--features', 'foundation-training', '--bin', 'train_n2048_care') (Join-Path $run 'build')
+        '--features', 'foundation-training', '--bin', 'train_n2048_care') (Join-Path $run 'build') -DeadlineUtc $collectionDeadline
     if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Release trainer was not built.' }
-    $deadline = [DateTime]::UtcNow.AddHours($DurationHours)
     # Preserve care while adding longer navigation and both language directions.
     $lessons = if ($Curriculum -eq 'Care') {
         @('obstacle_navigation', 'feeding', 'obstacle_navigation', 'hazard_avoidance', 'obstacle_navigation', 'recovery')
@@ -124,7 +131,7 @@ function Invoke-Campaign {
     Publish-State
     $previous = $sourcePath
     $index = 0
-    while ([DateTime]::UtcNow -lt $deadline -and $index -lt $MaxCycles) {
+    while ([DateTime]::UtcNow -lt $collectionDeadline -and $index -lt $MaxCycles) {
         $env:ALIFE_TRAINING_STAGE = [string]$state.curriculumStage
         Assert-Idle
         if ((Source-Receipt (Join-Path $run ("source-cycle-{0:D4}" -f $index))).fingerprint -ne $sourceReceipt.fingerprint -or
@@ -139,8 +146,13 @@ function Invoke-Campaign {
         $directory = Join-Path $run ("cycle-{0:D4}-{1}" -f $index, $lesson)
         $state.phase = "cycle-$index-$lesson"; Publish-State
         Write-Host "Training $lesson cycle $index; logs: $run"
-        Run-Command $exe @('--resume-cycle', $previous, $directory, [string]$decisions,
-            '--seed', [string]$seed, '--lesson', $lesson) (Join-Path $run ("cycle-{0:D4}" -f $index)) -DeadlineUtc $deadline.AddMinutes(30)
+        try { Run-Command $exe @('--resume-cycle', $previous, $directory, [string]$decisions,
+            '--seed', [string]$seed, '--lesson', $lesson) (Join-Path $run ("cycle-{0:D4}" -f $index)) -DeadlineUtc $collectionDeadline
+        } catch [TimeoutException] {
+            # A partial directory is never a next source. Preserve the last
+            # fully verified handoff and spend the reserved time assessing it.
+            $state.interruptedCohort = $directory; Publish-State; break
+        }
         $receiptPath = Join-Path $directory 'cycle.json'
         $receipt = Get-Content -Raw -LiteralPath $receiptPath | ConvertFrom-Json
         if ($receipt.lesson -ne $lesson -or $receipt.seed -ne $seed -or
@@ -188,75 +200,165 @@ function Invoke-Campaign {
         Publish-State
         $index++
         if ($Curriculum -eq 'VisionLanguage' -and $index % $GateEveryCycles -eq 0 -and
-            [DateTime]::UtcNow.AddMinutes(20) -lt $deadline) {
-            Invoke-BehaviorPanel $exe $previous $index $deadline
+            [DateTime]::UtcNow.AddMinutes(20) -lt $collectionDeadline) {
+            try { Invoke-BehaviorPanel $exe $previous $index $collectionDeadline | Out-Null } catch [TimeoutException] { break }
         }
     }
+    Invoke-FinalComparison $exe $sourcePath $previous $index $deadline
     $state.state = 'Completed'
     $state.phase = $(if ($index -ge $MaxCycles) { 'cycle-limit-reached' } else { 'deadline-reached' })
     Publish-State
     Write-Output "Campaign completed $index bounded cycles. Latest checkpoint: $previous"
 }
-function Invoke-BehaviorPanel([string]$Exe, [string]$Checkpoint, [int]$Index, [datetime]$Deadline) {
-    # Frozen held-out worlds. No optimizer, teacher control, or in-place weight changes.
-    $adaptation = Get-Content -Raw (Join-Path $Checkpoint 'cycle.json') | ConvertFrom-Json
-    $panel = Join-Path $run ("behavior-{0:D4}-stage-{1}" -f $Index,$state.curriculumStage)
+function Checkpoint-Identity([string]$Checkpoint) {
+    foreach ($name in @('cycle.json','warmup.json','adaptation.json')) {
+        $path = Join-Path $Checkpoint $name
+        if (Test-Path -LiteralPath $path) {
+            $receipt = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
+            $digest = switch ($name) {'cycle.json' {$receipt.new_asset_digest}; 'warmup.json' {$receipt.trained_asset_digest}; default {$receipt.adapted_asset_digest}}
+            return [pscustomobject]@{founderSeed=$receipt.founder_seed_base;digest=$digest;asset=(Join-Path $Checkpoint 'trained.alife-foundation')}
+        }
+    }
+    throw 'Candidate has no sealed native checkpoint receipt.'
+}
+function Test-RequestContrast($Receipts) {
+    if ($Receipts.Count -ne 3) {throw 'Contrast requires two requests and silence.'}
+    if (@($Receipts.initial_world_signature | Select-Object -Unique).Count -ne 1 -or
+        -not $Receipts[0].initial_world_signature -or
+        @($Receipts.source_asset_digest | Select-Object -Unique).Count -ne 1) {throw 'Request contrast changed the scene or policy.'}
+    if (-not $Receipts[2].silent_request -or $Receipts[2].heard_word_frames -ne 0) {throw 'Silent control heard a request.'}
+    $correct = @(); $first = @()
+    foreach ($receipt in $Receipts[0..1]) {
+        $response = @($receipt.request_responses) | Select-Object -First 1
+        $actionMatches = $null -ne $response -and $(switch ($receipt.vocabulary_token) {9 {$response.action -eq 211}; 13 {$response.action -eq 213}; default {$true}})
+        $correct += ($receipt.heard_word_frames -gt 0 -and $actionMatches -and $response.target -eq $receipt.request_target)
+        $first += $(if ($null -eq $response) {''} else {"$($response.action)/$($response.target)"})
+    }
+    # Inspecting both objects eventually does not establish understanding.
+    return [pscustomobject]@{correct=$correct;passed=($correct -notcontains $false -and $first[0] -ne $first[1]);first=$first}
+}
+function Invoke-BehaviorPanel([string]$Exe, [string]$Checkpoint, [int]$Index, [datetime]$Deadline,
+    [switch]$FinalAssessment, [string]$Tag = 'periodic') {
+    $identity = Checkpoint-Identity $Checkpoint
+    $panel = Join-Path $run ("behavior-{0:D4}-stage-{1}-{2}" -f $Index,$state.curriculumStage,$Tag)
     [IO.Directory]::CreateDirectory($panel) | Out-Null
-    $rows = @(); $priorBefore = $env:ALIFE_SLM_PRIOR
+    $rows = @(); $priorBefore = $env:ALIFE_SLM_PRIOR; $stageBefore = $env:ALIFE_TRAINING_STAGE; $contrastReceipts = @()
     try {
-        for ($group=0; $group -lt 3; $group++) {
-            $lesson = @('maze_navigation','vocabulary_reception','vocabulary_production')[$group]
-            for ($case=0; $case -lt 3; $case++) {
-                # Fixed disjoint seed band. Food noun, play, and a real hunger need.
+        $env:ALIFE_TRAINING_STAGE = [string]$state.curriculumStage
+        for ($group=0; $group -lt 4; $group++) {
+            $lesson = @('maze_navigation','vocabulary_reception','vocabulary_production','feeding')[$group]
+            $cases = if ($group -eq 3) {2} else {3}
+            for ($case=0; $case -lt $cases; $case++) {
                 $seed = [ulong](771900000 + $case * 100)
-                if ($group -gt 0) {
+                $extra = @()
+                if ($group -eq 1) {
+                    # Same physical scene and random stream in all three cases.
+                    $pair = switch ($state.curriculumStage) {0 {@(1,2)}; 1 {@(9,13)}; default {@(15,16)}}
+                    $sceneWord = switch ($state.curriculumStage) {0 {1}; 1 {9}; default {15}}
+                    $seed = [ulong]771910000
+                    $seed += [ulong](($sceneWord-1 + 18 - ($seed % 18)) % 18)
+                    $word = $pair[[Math]::Min($case,1)]
+                    $extra = @('--request-token',[string]$word)
+                    if ($case -eq 2) {$extra += '--silent-request'}
+                } elseif ($group -eq 2) {
                     $word = switch ($state.curriculumStage) {0 {@(1,13,11)[$case]}; 1 {@(5,9,12)[$case]}; default {@(15,16,18)[$case]}}
                     $seed += [ulong](($word-1 + 18 - ($seed % 18)) % 18)
-                }
+                } elseif ($group -eq 3 -and $case -eq 1) {$lesson='hazard_avoidance'}
                 $directory = Join-Path $panel "$lesson-$case"
-                $ticks = if ($group -eq 0) {2048} else {256}
+                $ticks = if ($group -eq 0) {2048} elseif ($group -eq 3) {512} else {256}
                 $state.phase = "held-out-$lesson-$case"; Publish-State
-                Run-Command $Exe @('--evaluate',$directory,(Join-Path $Checkpoint 'trained.alife-foundation'),
-                    $lesson,[string]$ticks,[string]$seed,[string]$adaptation.founder_seed_base) (Join-Path $panel "$lesson-$case") -DeadlineUtc $Deadline
+                Run-Command $Exe (@('--evaluate',$directory,$identity.asset,$lesson,[string]$ticks,
+                    [string]$seed,[string]$identity.founderSeed) + $extra) (Join-Path $panel "$lesson-$case") -DeadlineUtc $Deadline
                 $receipt = Get-Content -Raw (Join-Path $directory 'pilot.json') | ConvertFrom-Json
-                if ($receipt.teacher_mode -or $receipt.source_asset_digest -ne $adaptation.new_asset_digest) {throw 'Frozen panel source mismatch.'}
+                if ($receipt.teacher_mode -or $receipt.source_asset_digest -ne $identity.digest -or
+                    $receipt.seed -ne $seed -or $receipt.founder_seed_base -ne $identity.founderSeed -or
+                    $receipt.lesson -ne $lesson) {throw 'Frozen panel source/scenario mismatch.'}
+                if ($group -eq 1) {$contrastReceipts += $receipt}
                 $rows += [ordered]@{group=$group;case=$case;seed=$seed;passed=($receipt.lesson_completed -eq $true);
                     meals=$receipt.consumed_events;targetActions=$receipt.vocabulary_target_actions;
                     correctUtterances=$receipt.correct_utterances;unprompted=$receipt.unprompted_correct_utterances;
-                    speechOpportunities=$receipt.speech_opportunities;receipt=(Join-Path $directory 'pilot.json')}
+                    speechOpportunities=$receipt.speech_opportunities;
+                    semanticPrior=if ($null -eq $receipt.semantic_prior) {$null} else {[ordered]@{
+                        model=$receipt.semantic_prior.model;delivered_frames=$receipt.semantic_prior.delivered_frames;
+                        requests=$receipt.semantic_prior.requests;failures=$receipt.semantic_prior.failures;
+                        cache_hits=$receipt.semantic_prior.cache_hits;prime_timeouts=$receipt.semantic_prior.prime_timeouts}};
+                    receipt=(Join-Path $directory 'pilot.json')}
             }
         }
-        $scores = @(0,1,2 | ForEach-Object {$group=$_; @($rows | Where-Object {$_.group -eq $group -and $_.passed}).Count})
-        # Run the expensive unaided probes only after the assisted panel passes.
+        $contrast = Test-RequestContrast $contrastReceipts
+        $scores = @(0,1,2,3 | ForEach-Object {$group=$_; @($rows | Where-Object {$_.group -eq $group -and $_.passed}).Count})
+        # Reception is a contrast, never a tally of eventual target actions.
+        $scores[1] = if ($contrast.passed) {2} else {0}
+        $assistedPass = $scores[0] -ge 2 -and $scores[1] -eq 2 -and $scores[2] -ge 2 -and $scores[3] -eq 2
         $unaided = @()
-        if (@($scores | Where-Object {$_ -lt 2}).Count -eq 0) {
+        if ($assistedPass) {
             $env:ALIFE_SLM_PRIOR = 'off'
-            foreach ($row in @($rows | Where-Object {$_.case -eq 0 -and $_.group -ne 1})) {
+            foreach ($row in @($rows | Where-Object {$_.case -eq 0 -and $_.group -in @(0,2)})) {
                 $lesson = @('maze_navigation','vocabulary_reception','vocabulary_production')[$row.group]
                 $directory = Join-Path $panel "unaided-$lesson"
                 $ticks = if ($row.group -eq 0) {2048} else {256}
-                Run-Command $Exe @('--evaluate',$directory,(Join-Path $Checkpoint 'trained.alife-foundation'),
-                    $lesson,[string]$ticks,[string]$row.seed,[string]$adaptation.founder_seed_base) (Join-Path $panel "unaided-$lesson") -DeadlineUtc $Deadline
+                Run-Command $Exe @('--evaluate',$directory,$identity.asset,$lesson,[string]$ticks,
+                    [string]$row.seed,[string]$identity.founderSeed) (Join-Path $panel "unaided-$lesson") -DeadlineUtc $Deadline
                 $receipt = Get-Content -Raw (Join-Path $directory 'pilot.json') | ConvertFrom-Json
+                if ($receipt.teacher_mode -or $receipt.source_asset_digest -ne $identity.digest) {throw 'Unaided source mismatch.'}
                 $unaided += ($receipt.lesson_completed -eq $true)
             }
         }
-        $passed = @($scores | Where-Object {$_ -lt 2}).Count -eq 0 -and $unaided.Count -eq 2 -and $unaided -notcontains $false
-        $summary = [ordered]@{checkpoint=$Checkpoint;stage=$state.curriculumStage;scores=$scores;rows=$rows;unaided=$unaided;passed=$passed}
+        $passed = $assistedPass -and $unaided.Count -eq 2 -and $unaided -notcontains $false
+        $summary = [ordered]@{checkpoint=$Checkpoint;assetDigest=$identity.digest;founderSeed=$identity.founderSeed;
+            stage=$state.curriculumStage;scoreOrder=@('navigation','requestContrast','speaking','care');scores=$scores;
+            rows=$rows;contrast=$contrast;unaided=$unaided;passed=$passed;finalAssessment=[bool]$FinalAssessment}
         Atomic-Json (Join-Path $panel 'panel.json') $summary
         $state.behaviorPanels += $summary
-        $best = $state.bestBehaviorByStage[[string]$summary.stage]
-        # Keep separate scores: improvements cannot buy a regression in another skill.
-        if ($null -eq $best -or ($best.stage -eq $summary.stage -and
-            $scores[0] -ge $best.scores[0] -and $scores[1] -ge $best.scores[1] -and $scores[2] -ge $best.scores[2] -and
-            ($scores[0]+$scores[1]+$scores[2]) -gt ($best.scores[0]+$best.scores[1]+$best.scores[2]))) {
-            $state.bestBehaviorByStage[[string]$summary.stage] = $summary
+        if (-not $FinalAssessment) {
+            $best = $state.bestBehaviorByStage[[string]$summary.stage]
+            if ($null -eq $best -or (Test-ScoreImprovement $summary $best)) {$state.bestBehaviorByStage[[string]$summary.stage]=$summary}
+            if ($passed) {$state.bestBehaviorCheckpoint=$summary}
+            if ($passed -and $state.curriculumStage -lt 2) {$state.curriculumStage++}
         }
-        if ($passed -and ($null -eq $state.bestBehaviorCheckpoint -or $summary.stage -ge $state.bestBehaviorCheckpoint.stage)) {$state.bestBehaviorCheckpoint=$summary}
-        if ($passed -and $state.curriculumStage -lt 2) {$state.curriculumStage++}
         Publish-State
-    } finally { $env:ALIFE_SLM_PRIOR = $priorBefore }
+        return $summary
+    } finally { $env:ALIFE_SLM_PRIOR = $priorBefore; $env:ALIFE_TRAINING_STAGE = $stageBefore }
 }
+function Test-ScoreImprovement($Candidate,$Reference) {
+    if ($Candidate.stage -ne $Reference.stage -or $Candidate.founderSeed -ne $Reference.founderSeed) {return $false}
+    $better=$false
+    for ($i=0;$i -lt 4;$i++) {
+        if ($Candidate.scores[$i] -lt $Reference.scores[$i]) {return $false}
+        if ($Candidate.scores[$i] -gt $Reference.scores[$i]) {$better=$true}
+    }
+    if ($Reference.passed -and -not $Candidate.passed) {return $false}
+    if ($Candidate.passed -and -not $Reference.passed) {$better=$true}
+    return $better
+}
+function Invoke-FinalComparison([string]$Exe,[string]$Baseline,[string]$Latest,[int]$Index,[datetime]$Deadline) {
+    $candidates = @($Baseline,$Latest)
+    $best = $state.bestBehaviorByStage[[string]$state.curriculumStage]
+    if ($null -eq $best) {$best = $state.bestBehaviorCheckpoint}
+    if ($null -ne $best) {$candidates += $best.checkpoint}
+    $seen = [Collections.Generic.HashSet[string]]::new()
+    $panels = @(); $interrupted = $false; $reference = Checkpoint-Identity $Baseline
+    foreach ($checkpoint in $candidates) {
+        $identity = Checkpoint-Identity $checkpoint
+        if ($identity.founderSeed -ne $reference.founderSeed) {throw 'Incompatible final candidate founder.'}
+        if (-not $seen.Add($identity.digest)) {continue}
+        try {
+            $panels += Invoke-BehaviorPanel $Exe $checkpoint $Index $Deadline -FinalAssessment -Tag ("final-{0}" -f $panels.Count)
+        } catch [TimeoutException] {$interrupted=$true; break}
+    }
+    $winner = if ($panels.Count) {$panels[0]} else {$null}
+    foreach ($panel in $panels | Select-Object -Skip 1) {
+        if (Test-ScoreImprovement $panel $winner) {$winner=$panel}
+    }
+    # Baseline wins ties/incomparable scores. A incomplete comparison cannot
+    # silently certify a partially evaluated candidate. This never promotes it.
+    $state.finalComparison = [ordered]@{panels=$panels;interrupted=$interrupted;completed=($panels.Count -eq $seen.Count -and -not $interrupted);
+        selectionRule='same-stage componentwise improvement; baseline wins ties and tradeoffs';winner=$winner}
+    if ($null -ne $winner) {$state.selectedCheckpoint=$winner.checkpoint;$state.selectedCheckpointPassed=$winner.passed}
+    Atomic-Json (Join-Path $run 'final-comparison.json') $state.finalComparison
+    Publish-State
+}
+
 try {
     $lock = [IO.File]::Open((Join-Path $base 'operator.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
     Assert-Idle
@@ -310,6 +412,9 @@ try {
     $state.pilotReceipt = $receiptPath; $state.pilotReceiptSha256 = (Get-FileHash $receiptPath).Hash
     $state.state = 'Prepared'; $state.phase = 'pilot-verified'; Publish-State
     Write-Output "Pilot verified: $receiptPath. Preparation is complete. Overnight Campaign remains a separate explicit launch."
+} catch [TimeoutException] {
+    if ($null -ne $state) { $state.state = 'Completed'; $state.phase = 'budget-exhausted-before-final-comparison'; $state.error = $_.Exception.Message; Publish-State }
+    Write-Output 'Wall-time budget exhausted. No unchecked checkpoint selected.'
 } catch {
     if ($null -ne $state) { $state.state = 'Failed'; $state.error = $_.Exception.Message; Publish-State }
     throw

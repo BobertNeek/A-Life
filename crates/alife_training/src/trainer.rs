@@ -382,12 +382,7 @@ impl FoundationTrainer {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
         let mut words = vec![0_u32; targets.len() * 384];
-        let target_count = targets
-            .iter()
-            .flatten()
-            .map(|t| t.len())
-            .sum::<usize>()
-            .max(1) as f32;
+        let scales = crate::replay_speech_loss_scales(targets);
         for (tick, target) in targets.iter().enumerate() {
             if let Some(target) = target {
                 target.validate()?;
@@ -400,8 +395,10 @@ impl FoundationTrainer {
                 for step in 0..target.len() {
                     for (output, value) in target.step_logits(step).into_iter().enumerate() {
                         words[tick * 384 + step * 64 + output * 2] = value.to_bits();
-                        words[tick * 384 + step * 64 + output * 2 + 1] =
-                            (target.output_weight(output) / (32.0 * target_count)).to_bits();
+                        words[tick * 384 + step * 64 + output * 2 + 1] = (target
+                            .output_weight(output)
+                            * scales[usize::from(target.token.is_none())])
+                        .to_bits();
                     }
                 }
             }
@@ -728,14 +725,17 @@ impl FoundationTrainer {
                 u64::from(self.gpu.layout.speech_logits) * 4,
                 sequence.ticks.len() * 192,
             )?;
-            let count = speech.iter().flatten().map(|s| s.len()).sum::<usize>() as f64;
+            let scales = crate::replay_speech_loss_scales(speech);
             for (tick, label) in speech.iter().enumerate() {
                 if let Some(label) = label {
                     for step in 0..label.len() {
                         for (output, target) in label.step_logits(step).iter().enumerate() {
                             let error = f64::from(logits[(tick * 6 + step) * 32 + output] - target);
-                            objective += f64::from(label.output_weight(output)) * error * error
-                                / (32.0 * count);
+                            objective += f64::from(
+                                label.output_weight(output)
+                                    * scales[usize::from(label.token.is_none())],
+                            ) * error
+                                * error;
                         }
                     }
                 }

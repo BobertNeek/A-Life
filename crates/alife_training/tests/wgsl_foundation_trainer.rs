@@ -827,6 +827,21 @@ fn n2048_speech_payload_head_trains_on_gpu_and_remains_exportable() {
         }),
     ];
     let adjoints = vec![vec![0.0]; 2];
+    // Rare completed verbs and common nouns get the same positive budget;
+    // meaningful silence retains half the loss, rather than being deleted.
+    let positive = labels[1].unwrap();
+    let quiet = labels[2].unwrap();
+    for positives in [1, 59] {
+        let mut exposure = vec![Some(positive); positives];
+        exposure.extend(vec![Some(quiet); 63]);
+        let scales = alife_training::replay_speech_loss_scales(&exposure);
+        assert!(
+            (scales[0] * positive.weight * positive.len() as f32 * positives as f32 * 18.0 - 0.5)
+                .abs()
+                < 1e-6
+        );
+        assert!((scales[1] * quiet.weight * 63.0 * 2.0 - 0.5).abs() < 1e-6);
+    }
     let baseline = trainer.checkpoint().unwrap();
     let detached = trainer.evaluate_replay(&replay).unwrap();
     let mut numerical_replay = replay.clone();
