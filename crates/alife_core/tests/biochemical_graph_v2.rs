@@ -1,7 +1,8 @@
 use alife_core::{
-    BiochemicalGraphState, BiochemicalPhenotype, BiochemistryState, BodyEventDelta,
-    BrainCapacityClass, ChemicalSpeciesId, FoundationGeneticIdentity, NeuralEmission,
-    NeuralEmissionClass, NeuralEmissionFrame, Tick, Validate, BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
+    AlleleSide, BiochemicalGraphState, BiochemicalPhenotype, BiochemicalSourceLocus,
+    BiochemistryState, BodyEventDelta, BrainCapacityClass, ChemicalSpeciesId,
+    FoundationGeneticIdentity, NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame, Tick,
+    Validate, BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
 };
 use serde_json::json;
 
@@ -13,6 +14,33 @@ fn founder_phenotype() -> alife_core::CreaturePhenotype {
     .unwrap()
     .express()
     .unwrap()
+}
+
+#[test]
+fn player_praise_graph_keeps_the_dopamine_emitter() {
+    let mut genome = alife_core::CreatureGenome::early_mammal_founder(
+        0xA0A_2002,
+        FoundationGeneticIdentity::new(20, 1, 1, BrainCapacityClass::N512_ID).unwrap(),
+    )
+    .unwrap();
+    for side in [AlleleSide::Maternal, AlleleSide::Paternal] {
+        genome.chemistry.graph = genome
+            .chemistry
+            .graph
+            .clone()
+            .with_player_reward(side)
+            .unwrap();
+    }
+    let phenotype = genome.express().unwrap();
+    assert!(phenotype
+        .chemistry
+        .biochemical
+        .emitters()
+        .iter()
+        .any(|row| {
+            row.source == BiochemicalSourceLocus::PlayerReward
+                && row.target == ChemicalSpeciesId(12)
+        }));
 }
 
 fn mature_tick(phenotype: &alife_core::CreaturePhenotype) -> Tick {
@@ -71,6 +99,50 @@ fn neural_emission_changes_authoritative_chemistry_and_targeted_receptors() {
         next.biochemical_work().neural_emitter_evaluations,
         phenotype.chemistry.biochemical.neuroemitters().len() as u32
     );
+}
+
+#[test]
+fn founder_graph_produces_reward_social_learning_and_growth_signals() {
+    let phenotype = founder_phenotype();
+    let tick = mature_tick(&phenotype);
+    let state = BiochemistryState::new(&phenotype, tick).unwrap();
+    let next_tick = Tick(tick.raw() + 1);
+    let neutral = state
+        .advance(next_tick, BodyEventDelta::zero(), &phenotype)
+        .unwrap();
+    let neural = NeuralEmissionFrame::new(
+        tick,
+        1,
+        vec![NeuralEmission::new(NeuralEmissionClass::PredictionResidual, 0.8, 1.0).unwrap()],
+    )
+    .unwrap();
+    let stimulated = state
+        .advance_with_neural_emission(
+            next_tick,
+            next_tick,
+            BodyEventDelta {
+                nutrition: 0.5,
+                social_contact: 0.5,
+                player_reward: 0.5,
+                ..BodyEventDelta::zero()
+            },
+            Some(&neural),
+            &phenotype,
+        )
+        .unwrap();
+    let graph = &phenotype.chemistry.biochemical;
+    for species in [12, 14, 16, 17] {
+        let species = ChemicalSpeciesId(species);
+        assert!(
+            stimulated
+                .graph_state()
+                .concentration(graph, species)
+                .unwrap()
+                > neutral.graph_state().concentration(graph, species).unwrap(),
+            "species {} lacked a causal producer",
+            species.0
+        );
+    }
 }
 
 #[test]

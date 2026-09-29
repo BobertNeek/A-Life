@@ -1062,7 +1062,6 @@ impl CreatureGenome {
             || maternal.nano512_readout_candidate != paternal.nano512_readout_candidate
             || maternal.nano512_action_credit_candidate_v2
                 != paternal.nano512_action_credit_candidate_v2
-            || maternal.id == paternal.id
             || maternal.foundation.compatibility_family_id
                 != paternal.foundation.compatibility_family_id
             || maternal.foundation.brain_class_id != paternal.foundation.brain_class_id
@@ -1896,7 +1895,9 @@ fn child_continuous(
     }
     let mut maternal = maternal_selector.select_continuous(maternal_locus, &mut context.rng);
     let mut paternal = paternal_selector.select_continuous(paternal_locus, &mut context.rng);
-    let mutation_upper = mutation_upper_override.unwrap_or(maternal_locus.upper);
+    let mutation_upper = mutation_upper_override
+        .unwrap_or(maternal_locus.upper)
+        .min(maternal_locus.upper);
     mutate_continuous_value(
         &mut maternal,
         maternal_locus.lower,
@@ -2709,11 +2710,6 @@ impl Validate for CreatureGenome {
         }
         for parent in &self.parent_genome_ids {
             parent.validate()?;
-        }
-        if self.parent_genome_ids.len() == 2
-            && self.parent_genome_ids[0] == self.parent_genome_ids[1]
-        {
-            return Err(ScaffoldContractError::InvalidId);
         }
         self.foundation.validate_contract()?;
         if let Some(asset) = &self.n2048_foundation_candidate {

@@ -119,6 +119,24 @@ fn mutation_delta_above_the_ei0_limit_is_rejected_as_overflow() {
 }
 
 #[test]
+fn mutation_of_narrow_delta_locus_stays_within_its_declared_bounds() {
+    let mut maternal = early_mammal(0xE10_0003);
+    let mut paternal = early_mammal(0xE10_0004);
+    for parent in [&mut maternal, &mut paternal] {
+        parent.reproduction.mutation_rate = ContinuousLocus::mean(1.0, 1.0).unwrap();
+        parent.reproduction.max_mutation_delta =
+            ContinuousLocus::with_bounds(0.08, 0.12, 0.0, 0.2, 0.5).unwrap();
+        parent.validate_contract().unwrap();
+    }
+    for seed in 1..=32 {
+        let child = CreatureGenome::reproduce(&maternal, &paternal, seed).unwrap();
+        assert!(child.reproduction.max_mutation_delta.maternal <= 0.2);
+        assert!(child.reproduction.max_mutation_delta.paternal <= 0.2);
+        child.validate_contract().unwrap();
+    }
+}
+
+#[test]
 fn seeded_reproduction_is_byte_deterministic_bounded_and_records_both_parents() {
     let maternal = early_mammal(0xE10_0101);
     let paternal = early_mammal(0xE10_0102);
@@ -150,6 +168,15 @@ fn seeded_reproduction_is_byte_deterministic_bounded_and_records_both_parents() 
         MutationRecord::Discrete { before, after, .. } => before != after,
     }));
     one.validate_contract().unwrap();
+}
+
+#[test]
+fn two_organisms_with_the_same_genome_can_have_genetic_offspring() {
+    let founder = early_mammal(0xE10_0103);
+    let child = CreatureGenome::reproduce(&founder, &founder, 0xC0FF_EE03).unwrap();
+    assert_ne!(child.id, founder.id);
+    assert_eq!(child.parent_genome_ids, vec![founder.id, founder.id]);
+    child.validate_contract().unwrap();
 }
 
 #[test]

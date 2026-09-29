@@ -1493,6 +1493,9 @@ impl HeadlessWorld {
         paternal_id: OrganismId,
         next_tick: Tick,
     ) -> Result<Option<EligibleMatingPair>, ScaffoldContractError> {
+        if maternal_id == paternal_id {
+            return Ok(None);
+        }
         let maternal = self
             .organism_registry
             .get(maternal_id)
@@ -1528,7 +1531,6 @@ impl HeadlessWorld {
                 != paternal.genome().nano512_readout_candidate
             || maternal.genome().nano512_action_credit_candidate_v2
                 != paternal.genome().nano512_action_credit_candidate_v2
-            || maternal.genome().id == paternal.genome().id
             || maternal.genome().foundation.compatibility_family_id
                 != paternal.genome().foundation.compatibility_family_id
             || maternal.genome().foundation.brain_class_id
@@ -9197,6 +9199,54 @@ mod task_4_3a2_tests {
         assert_eq!(
             forward.canonical_signature_digest().unwrap(),
             replay.canonical_signature_digest().unwrap()
+        );
+    }
+
+    #[test]
+    fn distinct_cloned_founders_remain_eligible_for_a_real_birth() {
+        let mut first: Option<alife_core::CreatureGenome> = None;
+        let (mut world, next_tick) = prepared_world_with_genes(
+            Vec3f::new(0.5, 0.0, 0.0),
+            COMPATIBILITY_FAMILY_ID,
+            Tick::ZERO,
+            Tick::ZERO,
+            |genome| {
+                if let Some(template) = &first {
+                    *genome = template.clone();
+                } else {
+                    first = Some(genome.clone());
+                }
+            },
+        );
+        let shared_id = world
+            .organism_registry()
+            .get(MATERNAL_ID)
+            .unwrap()
+            .genome()
+            .id;
+        assert_eq!(
+            world
+                .organism_registry()
+                .get(PATERNAL_ID)
+                .unwrap()
+                .genome()
+                .id,
+            shared_id
+        );
+        assert!(world
+            .eligible_mating_pair(MATERNAL_ID, MATERNAL_ID, next_tick)
+            .unwrap()
+            .is_none());
+        assert!(world
+            .eligible_mating_pair(MATERNAL_ID, PATERNAL_ID, next_tick)
+            .unwrap()
+            .is_some());
+        let newborn_id = OrganismId(world.next_organism_id);
+        world.try_advance_tick().unwrap();
+        let newborn = world.organism_registry().get(newborn_id).unwrap();
+        assert_eq!(
+            newborn.genome().parent_genome_ids,
+            vec![shared_id, shared_id]
         );
     }
 

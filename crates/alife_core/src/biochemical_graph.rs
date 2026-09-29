@@ -1047,8 +1047,9 @@ impl BiochemicalPhenotype {
         self.species.retain(|row| row.id != praise);
         self.species.push(regulatory(praise, 0.0, 0.25));
         self.species.sort_by_key(|row| row.id);
-        self.emitters
-            .retain(|row| row.source != BiochemicalSourceLocus::PlayerReward);
+        self.emitters.retain(|row| {
+            row.source != BiochemicalSourceLocus::PlayerReward || row.target != praise
+        });
         let mut release = emitter(BiochemicalSourceLocus::PlayerReward, praise, 0.6);
         release.developmental_expression_floor = 1.0;
         self.emitters.push(release);
@@ -1124,8 +1125,12 @@ impl BiochemicalPhenotype {
             emitter(BiochemicalSourceLocus::Damage, CORTISOL, 0.65),
             emitter(BiochemicalSourceLocus::Nutrition, NUTRIENT, 0.80),
             emitter(BiochemicalSourceLocus::Nutrition, HUNGER, -0.30),
+            emitter(BiochemicalSourceLocus::Nutrition, DOPAMINE, 0.12),
+            emitter(BiochemicalSourceLocus::Nutrition, DEVELOPMENT_SIGNAL, 0.08),
+            emitter(BiochemicalSourceLocus::PlayerReward, DOPAMINE, 0.18),
             emitter(BiochemicalSourceLocus::SocialContact, LONELINESS, -0.60),
             emitter(BiochemicalSourceLocus::SocialContact, OXYTOCIN, 0.45),
+            emitter(BiochemicalSourceLocus::SocialContact, SEROTONIN, 0.12),
             emitter(BiochemicalSourceLocus::SleepRecovery, FATIGUE, -0.70),
             emitter(BiochemicalSourceLocus::SleepRecovery, PAIN, -0.45),
             emitter(BiochemicalSourceLocus::SleepRecovery, SLEEP_PRESSURE, -0.75),
@@ -1193,6 +1198,12 @@ impl BiochemicalPhenotype {
                 target: ADRENALINE,
                 threshold: 0.0,
                 gain: 0.25,
+            },
+            Neuroemitter {
+                source: NeuralEmissionClass::PredictionResidual,
+                target: LEARNING_SIGNAL,
+                threshold: 0.0,
+                gain: 0.20,
             },
             Neuroemitter {
                 source: NeuralEmissionClass::MotorCommitment,

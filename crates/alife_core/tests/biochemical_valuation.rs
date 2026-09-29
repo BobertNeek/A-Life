@@ -69,7 +69,7 @@ fn valuation_genes_survive_birth_and_persistence_and_cannot_drift() {
 }
 
 #[test]
-fn every_drive_and_hormone_has_the_same_gene_scaled_delta_contract() {
+fn valuation_genes_scale_deltas_without_punishing_praise_clearance() {
     let mut wire = serde_json::to_value(BiologicalValueProfile::default()).unwrap();
     for (name, count) in [
         ("drives", DriveSnapshot::CHANNEL_COUNT),
@@ -111,13 +111,24 @@ fn every_drive_and_hormone_has_the_same_gene_scaled_delta_contract() {
             wire[name][channel] = serde_json::json!(0.5);
             let profile: BiologicalValueProfile = serde_json::from_value(wire.clone()).unwrap();
             let delta: HomeostaticDelta = serde_json::from_value(delta).unwrap();
+            let expected = if name == "hormones" && channel == 9 {
+                0.0
+            } else {
+                -0.1
+            };
             assert!(
-                (profile.value_change(delta, 0.0) + 0.1).abs() < 1e-6,
+                (profile.value_change(delta, 0.0) - expected).abs() < 1e-6,
                 "{name} {channel}"
             );
             wire[name][channel] = serde_json::json!(1.0);
             let doubled: BiologicalValueProfile = serde_json::from_value(wire.clone()).unwrap();
-            assert!((doubled.value_change(delta, 0.0) + 0.2).abs() < 1e-6);
+            assert!((doubled.value_change(delta, 0.0) - expected * 2.0).abs() < 1e-6);
+            if name == "hormones" && channel == 9 {
+                let mut pulse = HomeostaticDelta::zero();
+                pulse.hormones.extension[0] = 0.2;
+                assert!((profile.value_change(pulse, 0.0) - 0.1).abs() < 1e-6);
+                assert!((doubled.value_change(pulse, 0.0) - 0.2).abs() < 1e-6);
+            }
         }
         wire[name] = serde_json::json!(vec![0.0; count]);
     }

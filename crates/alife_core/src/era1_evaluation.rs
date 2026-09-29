@@ -131,8 +131,7 @@ impl Validate for Era1TrialIdentity {
                 let paternal = self.parent_genome_ids[1];
                 maternal.validate()?;
                 paternal.validate()?;
-                if maternal == paternal || maternal == self.genome_id || paternal == self.genome_id
-                {
+                if maternal == self.genome_id || paternal == self.genome_id {
                     return Err(ScaffoldContractError::InvalidId);
                 }
             }
