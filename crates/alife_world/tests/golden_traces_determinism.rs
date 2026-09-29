@@ -508,6 +508,7 @@ fn action_kind_name(kind: ActionKind) -> &'static str {
         ActionKind::Vocalize => "Vocalize",
         ActionKind::Write => "Write",
         ActionKind::Gesture => "Gesture",
+        ActionKind::Look => "Look",
     }
 }
 
