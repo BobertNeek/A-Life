@@ -66,6 +66,9 @@ pub struct ExactCognitiveCheckpointState {
     pub structural_plasticity: StructuralPlasticityState,
     pub structural_edit_receipts: Vec<StructuralEditBatch>,
     pub last_sleep_report: Option<SleepConsolidationReport>,
+    /// Bounded provider-private resume state. Never inherited into a founder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_semantic_prior: Option<Vec<u8>>,
 }
 
 impl ExactCognitiveCheckpointState {
@@ -87,6 +90,15 @@ impl ExactCognitiveCheckpointState {
                 expected: V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
                 actual: self.schema_version,
             });
+        }
+        if self
+            .private_semantic_prior
+            .as_ref()
+            .is_some_and(|bytes| bytes.len() > 16_384)
+        {
+            return Err(PersistenceError::Contract(
+                ScaffoldContractError::InvalidSparseProjectionSchema,
+            ));
         }
         self.organism_id.validate()?;
         self.cognitive_context.validate_contract()?;

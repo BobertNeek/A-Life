@@ -6,7 +6,8 @@ param(
     [ValidateRange(1, 24)][int]$DurationHours = 8,
     [ValidateRange(16, 4096)][int]$CycleTicks = 256,
     [ValidateSet('Care','VisionLanguage')][string]$Curriculum = 'VisionLanguage',
-    [ValidateRange(1, 100000)][int]$MaxCycles = 100000
+    [ValidateRange(1, 100000)][int]$MaxCycles = 100000,
+    [ValidateRange(10, 1000)][int]$GateEveryCycles = 40
 )
 $PilotTicks = 32
 $ErrorActionPreference = 'Stop'
@@ -70,7 +71,7 @@ function Source-Receipt([string]$Directory) {
     $files = @([IO.File]::ReadAllLines((Join-Path $Directory 'untracked.stdout.log')) | Sort-Object | Where-Object {
         $_ -and $_ -notmatch '(^|/)(target|artifacts|__pycache__)/|\.blend[0-9]+$|\.pyc$'
     } | ForEach-Object { [ordered]@{ path = $_; sha256 = (Get-FileHash -LiteralPath (Join-Path $repo $_) -Algorithm SHA256).Hash } })
-    $identity = [ordered]@{ head = [IO.File]::ReadAllText((Join-Path $Directory 'head.stdout.log')).Trim(); trackedDiffSha256 = (Get-FileHash (Join-Path $Directory 'tracked-diff.stdout.log')).Hash; untracked = $files; pilotTicks = $PilotTicks; cargo = $cargoVersion; rustc = $rustcVersion; profile = 'dev'; features = 'foundation-training'; curriculum = $Curriculum; cycleTicks = $CycleTicks; semanticPriorMode = $env:ALIFE_SLM_PRIOR; semanticPriorModel = $env:ALIFE_SLM_PRIOR_MODEL; semanticPriorModelSha256 = $env:ALIFE_SLM_PRIOR_MODEL_SHA256 }
+    $identity = [ordered]@{ head = [IO.File]::ReadAllText((Join-Path $Directory 'head.stdout.log')).Trim(); trackedDiffSha256 = (Get-FileHash (Join-Path $Directory 'tracked-diff.stdout.log')).Hash; untracked = $files; pilotTicks = $PilotTicks; cargo = $cargoVersion; rustc = $rustcVersion; profile = 'release'; features = 'foundation-training'; curriculum = $Curriculum; cycleTicks = $CycleTicks; semanticPriorMode = $env:ALIFE_SLM_PRIOR; semanticPriorModel = $env:ALIFE_SLM_PRIOR_MODEL; semanticPriorModelSha256 = $env:ALIFE_SLM_PRIOR_MODEL_SHA256 }
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $fingerprint = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes(($identity | ConvertTo-Json -Depth 8 -Compress)))).Replace('-', '') } finally { $sha.Dispose() }
     $receipt = [ordered]@{ fingerprint = $fingerprint; identity = $identity }
@@ -102,6 +103,7 @@ function Invoke-Campaign {
         fingerprint = $sourceReceipt.fingerprint; executable = $exe; executableSha256 = $null
         source = $sourcePath; latestCheckpoint = $sourcePath; deadlineUtc = $null
         cycleTicks = $CycleTicks; maxCycles = $MaxCycles; updatedUtc = ''; completed = @(); bestByLesson = [ordered]@{}; error = $null
+        curriculumStage = 0; gateEveryCycles = $GateEveryCycles; behaviorPanels = @(); bestBehaviorCheckpoint = $null; bestBehaviorByStage = [ordered]@{}
     }
     Publish-State
     Run-Command 'cargo' @('build', '--release', '--offline', '--locked', '-j', '2', '-p', 'alife_game_app',
@@ -123,6 +125,7 @@ function Invoke-Campaign {
     $previous = $sourcePath
     $index = 0
     while ([DateTime]::UtcNow -lt $deadline -and $index -lt $MaxCycles) {
+        $env:ALIFE_TRAINING_STAGE = [string]$state.curriculumStage
         Assert-Idle
         if ((Source-Receipt (Join-Path $run ("source-cycle-{0:D4}" -f $index))).fingerprint -ne $sourceReceipt.fingerprint -or
             (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash -ne $state.executableSha256) {
@@ -161,7 +164,12 @@ function Invoke-Campaign {
             meals = $receipt.consumed_events; blocked = $receipt.blocked_actions
             collisions = $receipt.collision_actions; avoid = $receipt.avoid_actions
             recovery = $receipt.rest_recovery_actions; minimumEnergy = $receipt.minimum_energy
-            speechTargetRows = $receipt.speech_target_rows; semanticPrior = $receipt.semantic_prior
+            speechTargetRows = $receipt.speech_target_rows
+            semanticPrior = if ($null -eq $receipt.semantic_prior) {$null} else {[ordered]@{
+                model=$receipt.semantic_prior.model;delivered_frames=$receipt.semantic_prior.delivered_frames;
+                requests=$receipt.semantic_prior.requests;failures=$receipt.semantic_prior.failures;
+                cache_hits=$receipt.semantic_prior.cache_hits;prime_timeouts=$receipt.semantic_prior.prime_timeouts}}
+            receipt = $receiptPath
             finalEnergy = $receipt.final_energy; terminalDeathTick = $receipt.terminal_death_tick
             collectionSeconds = $receipt.collection_seconds; updateSeconds = $receipt.update_seconds
             assetDigest = $receipt.new_asset_digest
@@ -174,16 +182,80 @@ function Invoke-Campaign {
             [Math]::Min([int]$(if ($lesson -eq 'recovery') { $row.recovery } else { 0 }), 4) -
             2 * [int]$row.blocked - 5 * [int]$row.collisions
         $best = $state.bestByLesson[$lesson]
-        if ($null -eq $best -or $score -gt $best.score) {
+        if ($lesson -notlike 'vocabulary_*' -and ($null -eq $best -or $score -gt $best.score)) {
             $state.bestByLesson[$lesson] = [ordered]@{ score = $score; directory = $directory; receipt = $receiptPath }
         }
         Publish-State
         $index++
+        if ($Curriculum -eq 'VisionLanguage' -and $index % $GateEveryCycles -eq 0 -and
+            [DateTime]::UtcNow.AddMinutes(20) -lt $deadline) {
+            Invoke-BehaviorPanel $exe $previous $index $deadline
+        }
     }
     $state.state = 'Completed'
     $state.phase = $(if ($index -ge $MaxCycles) { 'cycle-limit-reached' } else { 'deadline-reached' })
     Publish-State
     Write-Output "Campaign completed $index bounded cycles. Latest checkpoint: $previous"
+}
+function Invoke-BehaviorPanel([string]$Exe, [string]$Checkpoint, [int]$Index, [datetime]$Deadline) {
+    # Frozen held-out worlds. No optimizer, teacher control, or in-place weight changes.
+    $adaptation = Get-Content -Raw (Join-Path $Checkpoint 'cycle.json') | ConvertFrom-Json
+    $panel = Join-Path $run ("behavior-{0:D4}-stage-{1}" -f $Index,$state.curriculumStage)
+    [IO.Directory]::CreateDirectory($panel) | Out-Null
+    $rows = @(); $priorBefore = $env:ALIFE_SLM_PRIOR
+    try {
+        for ($group=0; $group -lt 3; $group++) {
+            $lesson = @('maze_navigation','vocabulary_reception','vocabulary_production')[$group]
+            for ($case=0; $case -lt 3; $case++) {
+                # Fixed disjoint seed band. Food noun, play, and a real hunger need.
+                $seed = [ulong](771900000 + $case * 100)
+                if ($group -gt 0) {
+                    $word = switch ($state.curriculumStage) {0 {@(1,13,11)[$case]}; 1 {@(5,9,12)[$case]}; default {@(15,16,18)[$case]}}
+                    $seed += [ulong](($word-1 + 18 - ($seed % 18)) % 18)
+                }
+                $directory = Join-Path $panel "$lesson-$case"
+                $ticks = if ($group -eq 0) {2048} else {256}
+                $state.phase = "held-out-$lesson-$case"; Publish-State
+                Run-Command $Exe @('--evaluate',$directory,(Join-Path $Checkpoint 'trained.alife-foundation'),
+                    $lesson,[string]$ticks,[string]$seed,[string]$adaptation.founder_seed_base) (Join-Path $panel "$lesson-$case") -DeadlineUtc $Deadline
+                $receipt = Get-Content -Raw (Join-Path $directory 'pilot.json') | ConvertFrom-Json
+                if ($receipt.teacher_mode -or $receipt.source_asset_digest -ne $adaptation.new_asset_digest) {throw 'Frozen panel source mismatch.'}
+                $rows += [ordered]@{group=$group;case=$case;seed=$seed;passed=($receipt.lesson_completed -eq $true);
+                    meals=$receipt.consumed_events;targetActions=$receipt.vocabulary_target_actions;
+                    correctUtterances=$receipt.correct_utterances;unprompted=$receipt.unprompted_correct_utterances;
+                    speechOpportunities=$receipt.speech_opportunities;receipt=(Join-Path $directory 'pilot.json')}
+            }
+        }
+        $scores = @(0,1,2 | ForEach-Object {$group=$_; @($rows | Where-Object {$_.group -eq $group -and $_.passed}).Count})
+        # Run the expensive unaided probes only after the assisted panel passes.
+        $unaided = @()
+        if (@($scores | Where-Object {$_ -lt 2}).Count -eq 0) {
+            $env:ALIFE_SLM_PRIOR = 'off'
+            foreach ($row in @($rows | Where-Object {$_.case -eq 0 -and $_.group -ne 1})) {
+                $lesson = @('maze_navigation','vocabulary_reception','vocabulary_production')[$row.group]
+                $directory = Join-Path $panel "unaided-$lesson"
+                $ticks = if ($row.group -eq 0) {2048} else {256}
+                Run-Command $Exe @('--evaluate',$directory,(Join-Path $Checkpoint 'trained.alife-foundation'),
+                    $lesson,[string]$ticks,[string]$row.seed,[string]$adaptation.founder_seed_base) (Join-Path $panel "unaided-$lesson") -DeadlineUtc $Deadline
+                $receipt = Get-Content -Raw (Join-Path $directory 'pilot.json') | ConvertFrom-Json
+                $unaided += ($receipt.lesson_completed -eq $true)
+            }
+        }
+        $passed = @($scores | Where-Object {$_ -lt 2}).Count -eq 0 -and $unaided.Count -eq 2 -and $unaided -notcontains $false
+        $summary = [ordered]@{checkpoint=$Checkpoint;stage=$state.curriculumStage;scores=$scores;rows=$rows;unaided=$unaided;passed=$passed}
+        Atomic-Json (Join-Path $panel 'panel.json') $summary
+        $state.behaviorPanels += $summary
+        $best = $state.bestBehaviorByStage[[string]$summary.stage]
+        # Keep separate scores: improvements cannot buy a regression in another skill.
+        if ($null -eq $best -or ($best.stage -eq $summary.stage -and
+            $scores[0] -ge $best.scores[0] -and $scores[1] -ge $best.scores[1] -and $scores[2] -ge $best.scores[2] -and
+            ($scores[0]+$scores[1]+$scores[2]) -gt ($best.scores[0]+$best.scores[1]+$best.scores[2]))) {
+            $state.bestBehaviorByStage[[string]$summary.stage] = $summary
+        }
+        if ($passed -and ($null -eq $state.bestBehaviorCheckpoint -or $summary.stage -ge $state.bestBehaviorCheckpoint.stage)) {$state.bestBehaviorCheckpoint=$summary}
+        if ($passed -and $state.curriculumStage -lt 2) {$state.curriculumStage++}
+        Publish-State
+    } finally { $env:ALIFE_SLM_PRIOR = $priorBefore }
 }
 try {
     $lock = [IO.File]::Open((Join-Path $base 'operator.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
@@ -207,15 +279,13 @@ try {
     $state = [ordered]@{ schema = 1; state = 'Running'; phase = 'gates'; pid = $PID; run = $run; fingerprint = $source.fingerprint; updatedUtc = ''; completed = @(); error = $null }
     Publish-State
     $gates = @(
-        @('asset', '-p', 'alife_core', '--test', 'n2048_foundation_abi', 'explicit_n2048_candidate_preserves_exact_weights_and_compiler_resume_identity'),
-        @('sampling', '-p', 'alife_gpu_backend', '--features', 'training-rollout', '--lib', 'training_rollout::tests::training_policy_shader_and_probability_contract'),
-        @('trainer-gpu', '-p', 'alife_training', '--features', 'gpu-tests', '--test', 'wgsl_foundation_trainer', 'n2048_exact_graph_adamw_step_changes_only_the_masked_weight_and_exports'),
-        @('ppo', '-p', 'alife_training', '--lib', 'ppo::tests::ppo_rollout_keeps_bootstrap_boundaries_masks_and_policy_version'),
-        @('ppo-gpu', '-p', 'alife_training', '--features', 'gpu-tests', '--test', 'wgsl_foundation_trainer', 'n2048_ppo_and_imitation_gpu_objective_matches_joint_derivatives_and_partial_batches'),
-        @('merge', '-p', 'alife_training', '--lib', 'founder_merge::tests::selective_merge_preserves_unique_changes_averages_overlap_and_rejects_conflicts'),
-        @('save', '-p', 'alife_game_app', '--features', 'foundation-training', '--lib', 'new_game_lifecycle::tests::n2048_new_game_save_reload_preserves_exact_candidate_and_class')
+        @('speech', '-p', 'alife_training', '--features', 'gpu-tests', '--test', 'wgsl_foundation_trainer', 'n2048_speech_payload_head_trains_on_gpu_and_remains_exportable'),
+        @('biology', '-p', 'alife_world', '--test', 'canonical_new_game', 'food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects'),
+        @('memory', '-p', 'alife_core', '--test', 'candidate_memory_retrieval', 'memory_bank_roundtrip_rebuilds_indices_and_preserves_recall'),
+        @('maze', '-p', 'alife_game_app', '--features', 'foundation-training,gpu-tests', '--lib', 'foundation_training::maze::tests::layouts_change_connectivity_and_keep_routes_connected'),
+        @('resume', '-p', 'alife_game_app', '--features', 'foundation-training,gpu-tests', '--lib', 'gpu_live_runtime::checkpoint_manifest_pruning_tests::readiness_resume_preserves_external_actors_toys_and_private_prior')
     )
-    $steps = @([pscustomobject]@{ name = 'build'; argv = @('build', '--offline', '--locked', '-j', '2', '-p', 'alife_game_app', '--features', 'foundation-training', '--bin', 'train_n2048_care'); test = $false })
+    $steps = @([pscustomobject]@{ name = 'build'; argv = @('build', '--release', '--offline', '--locked', '-j', '2', '-p', 'alife_game_app', '--features', 'foundation-training', '--bin', 'train_n2048_care'); test = $false })
     $steps += @($gates | ForEach-Object { [pscustomobject]@{ name = $_[0]; argv = @('test', '--offline', '--locked', '-j', '2') + $_[1..($_.Count - 1)] + @('--', '--exact', '--test-threads=1'); test = $true } })
     foreach ($step in $steps) {
         Assert-Idle; $state.phase = $step.name; Publish-State; Write-Host "Running $($step.name); logs: $run"
@@ -225,7 +295,7 @@ try {
     }
     Assert-Idle
     if ((Source-Receipt (Join-Path $run 'source-pilot')).fingerprint -ne $source.fingerprint) { throw 'Source changed before pilot.' }
-    $exe = Join-Path $repo 'target/debug/train_n2048_care.exe'
+    $exe = Join-Path $repo 'target/release/train_n2048_care.exe'
     $state.executable = $exe; $state.executableSha256 = (Get-FileHash $exe).Hash
     $state.phase = 'pilot'; Publish-State
     $pilot = Join-Path $run 'pilot' # The executable requires this path NOT to exist.
@@ -239,7 +309,7 @@ try {
     if ((Source-Receipt (Join-Path $run 'source-final')).fingerprint -ne $source.fingerprint -or (Get-FileHash $exe).Hash -ne $state.executableSha256) { throw 'Source or executable changed during pilot.' }
     $state.pilotReceipt = $receiptPath; $state.pilotReceiptSha256 = (Get-FileHash $receiptPath).Hash
     $state.state = 'Prepared'; $state.phase = 'pilot-verified'; Publish-State
-    Write-Output "Pilot verified: $receiptPath. Bounded cohort resume exists; the guarded overnight campaign is not implemented."
+    Write-Output "Pilot verified: $receiptPath. Preparation is complete. Overnight Campaign remains a separate explicit launch."
 } catch {
     if ($null -ne $state) { $state.state = 'Failed'; $state.error = $_.Exception.Message; Publish-State }
     throw

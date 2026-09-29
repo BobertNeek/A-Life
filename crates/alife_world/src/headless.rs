@@ -73,7 +73,7 @@ const VISION_EYE_HEIGHT: f32 = 1.0;
 const VISION_RAY_PITCH: f32 = -0.18;
 const MAX_VISIBLE_ENTITIES: usize = 16;
 const VOCAL_TOKEN_ID_BASE: u32 = 400_000;
-const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
+pub const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
 const PROMPTED_SPEECH_COOLDOWN_TICKS: u64 = 8;
 const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v7";
 /// Current schema required by every fresh headless-world signature receipt.
@@ -1423,7 +1423,7 @@ impl HeadlessWorld {
                 candidate
                     .replace_habitat_authority(child_habitats)
                     .map_err(|_| ScaffoldContractError::InvalidId)?;
-                candidate.validate_complete_organism_bindings()?;
+                candidate.validate_complete_organism_bindings(true)?;
             }
         }
 
@@ -2135,7 +2135,7 @@ impl HeadlessWorld {
         if let Some(next_organism_id) = replacement_next_organism_id {
             replacement.next_organism_id = replacement.next_organism_id.max(next_organism_id);
         }
-        replacement.validate_complete_organism_bindings()?;
+        replacement.validate_complete_organism_bindings(false)?;
         *self = replacement;
         Ok(())
     }
@@ -2171,7 +2171,10 @@ impl HeadlessWorld {
             .map_err(map_organism_registry_error)
     }
 
-    fn validate_complete_organism_bindings(&self) -> Result<(), ScaffoldContractError> {
+    fn validate_complete_organism_bindings(
+        &self,
+        allow_external_actors: bool,
+    ) -> Result<(), ScaffoldContractError> {
         self.validate_organism_bindings()?;
 
         let mut agent_cohort = BTreeMap::new();
@@ -2192,16 +2195,16 @@ impl HeadlessWorld {
             .map(|record| record.organism_id().raw())
             .collect::<BTreeSet<_>>();
         let cohort_ids = agent_cohort.keys().copied().collect::<BTreeSet<_>>();
-        if registered_ids != cohort_ids {
+        if if allow_external_actors {
+            !registered_ids.is_subset(&cohort_ids)
+        } else {
+            registered_ids != cohort_ids
+        } {
             return Err(ScaffoldContractError::InvalidId);
         }
 
-        for (organism_id, world_entity_id) in agent_cohort {
-            let record = self
-                .organism_registry
-                .get(OrganismId(organism_id))
-                .ok_or(ScaffoldContractError::InvalidId)?;
-            if record.world_entity_id() != world_entity_id {
+        for record in self.organism_registry.iter() {
+            if agent_cohort.get(&record.organism_id().raw()) != Some(&record.world_entity_id()) {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
@@ -2604,6 +2607,8 @@ impl HeadlessWorld {
                 || event.temperature_stress != 0.0
                 || event.nutrition != 0.0
                 || event.play_stimulation != 0.0
+                || event.perceived_novelty != 0.0
+                || event.investigation != 0.0
                 || event.sleep_recovery != 0.0
                 || event.mating_opportunity != 0.0
             {
@@ -2643,7 +2648,7 @@ impl HeadlessWorld {
             injected_tick_late_failure_after_first_organism: false,
         };
         if has_authoritative_organism_records {
-            world.validate_complete_organism_bindings()?;
+            world.validate_complete_organism_bindings(true)?;
         }
         Ok(world)
     }
@@ -3398,7 +3403,7 @@ impl HeadlessWorld {
         world_entity_id: WorldEntityId,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
         let before = self.clone();
-        let result = self.apply_registered_motor_bundle_inner(bundle, world_entity_id, None);
+        let result = self.apply_registered_motor_bundle_inner(bundle, world_entity_id, None, None);
         if let Err(error) = result {
             *self = before;
             return Err(error);
@@ -3414,7 +3419,7 @@ impl HeadlessWorld {
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
         let before = self.clone();
         let result =
-            self.apply_registered_motor_bundle_inner(bundle, world_entity_id, Some(neural));
+            self.apply_registered_motor_bundle_inner(bundle, world_entity_id, Some(neural), None);
         if let Err(error) = result {
             *self = before;
             return Err(error);
@@ -3433,7 +3438,34 @@ impl HeadlessWorld {
         world_entity_id: WorldEntityId,
         neural: &NeuralEmissionFrame,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
-        self.apply_registered_motor_bundle_inner(bundle, world_entity_id, Some(neural))
+        self.apply_registered_motor_bundle_inner(bundle, world_entity_id, Some(neural), None)
+    }
+
+    /// Organism-owned perception/memory evidence modulates inherited chemistry;
+    /// it supplies no reward or action. The enclosing runtime owns rollback.
+    pub fn apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
+        &mut self,
+        bundle: &MotorCommandBundle,
+        world_entity_id: WorldEntityId,
+        neural: &NeuralEmissionFrame,
+        novelty: f32,
+        object_novelty: &[(WorldEntityId, f32)],
+    ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
+        if !novelty.is_finite()
+            || !(0.0..=1.0).contains(&novelty)
+            || object_novelty.len() > bundle.channels.len()
+            || object_novelty.iter().any(|(id, value)| {
+                id.raw() == 0 || !value.is_finite() || !(0.0..=1.0).contains(value)
+            })
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange.into());
+        }
+        self.apply_registered_motor_bundle_inner(
+            bundle,
+            world_entity_id,
+            Some(neural),
+            Some((novelty, object_novelty)),
+        )
     }
 
     fn apply_registered_motor_bundle_inner(
@@ -3441,6 +3473,7 @@ impl HeadlessWorld {
         bundle: &MotorCommandBundle,
         world_entity_id: WorldEntityId,
         neural: Option<&NeuralEmissionFrame>,
+        novelty: Option<(f32, &[(WorldEntityId, f32)])>,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
         let outcome_tick = self.validate_registered_motor_bundle(bundle, world_entity_id)?;
         let embodiment = self
@@ -3486,7 +3519,7 @@ impl HeadlessWorld {
         let mut executed = Vec::with_capacity(channels.len());
         for channel in &channels {
             let command = legacy_action_for_motor_channel(bundle.organism_id, channel)?;
-            let result = if channel.channel == MotorChannel::Vocal {
+            let mut result = if channel.channel == MotorChannel::Vocal {
                 match decode_vocal_channel_payload(channel)? {
                     Some((payload, prompted)) => {
                         self.apply_neural_command(&command, Some(payload), prompted)?
@@ -3496,6 +3529,24 @@ impl HeadlessWorld {
             } else {
                 self.execute_command(&command)?
             };
+            if let Some((_, objects)) = novelty {
+                let interaction_novelty = objects
+                    .iter()
+                    .find(|(id, _)| Some(*id) == result.command.target_entity)
+                    .map_or(0.0, |(_, value)| *value);
+                if result.execution.succeeded
+                    && matches!(
+                        classify_action(&result.command),
+                        HeadlessAction::Inspect
+                            | HeadlessAction::Play
+                            | HeadlessAction::Grab
+                            | HeadlessAction::Eat
+                    )
+                {
+                    result.body_event.investigation = interaction_novelty;
+                    result.body_event.play_stimulation *= 1.0 - interaction_novelty;
+                }
+            }
             executed.push((Some(channel.clone()), result));
         }
 
@@ -3519,12 +3570,15 @@ impl HeadlessWorld {
             ..BodyEventDelta::zero()
         };
         let body_event = combine_body_event(ambient_event, action_and_hazard_event);
-        let body_event = combine_body_event(
+        let mut body_event = combine_body_event(
             body_event,
             self.pending_player_care
                 .remove(&bundle.organism_id.raw())
                 .unwrap_or_else(BodyEventDelta::zero),
         );
+        if let Some((novelty, _)) = novelty {
+            body_event.perceived_novelty = novelty;
+        }
         body_event.validate_contract()?;
         if let Some(neural) = neural {
             self.organism_registry
@@ -3918,6 +3972,17 @@ impl HeadlessWorld {
             return Err(ScaffoldContractError::InvalidId);
         }
         let id = WorldEntityId(self.next_entity_id);
+        // Reserve supplied external actor identities immediately, so a future
+        // birth and a save/load normalization cannot reuse or change them.
+        let next_organism_id = match spec.organism_id {
+            Some(organism) => self.next_organism_id.max(
+                organism
+                    .raw()
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::InvalidId)?,
+            ),
+            None => self.next_organism_id,
+        };
         let next_entity_id = self
             .next_entity_id
             .checked_add(1)
@@ -3964,6 +4029,7 @@ impl HeadlessWorld {
             tracking_key,
         };
         self.next_entity_id = next_entity_id;
+        self.next_organism_id = next_organism_id;
         self.next_spawn_sequence = next_spawn_sequence;
         self.objects.insert(id.raw(), object);
         self.labels.insert(spec.label.to_string(), id);
@@ -5993,6 +6059,8 @@ fn combine_body_event(total: BodyEventDelta, event: BodyEventDelta) -> BodyEvent
         social_contact: (total.social_contact + event.social_contact).clamp(0.0, 1.0),
         player_reward: (total.player_reward + event.player_reward).clamp(0.0, 1.0),
         play_stimulation: (total.play_stimulation + event.play_stimulation).clamp(0.0, 1.0),
+        perceived_novelty: (total.perceived_novelty + event.perceived_novelty).clamp(0.0, 1.0),
+        investigation: (total.investigation + event.investigation).clamp(0.0, 1.0),
         sleep_recovery: (total.sleep_recovery + event.sleep_recovery).clamp(0.0, 1.0),
         mating_opportunity: (total.mating_opportunity + event.mating_opportunity).clamp(0.0, 1.0),
     }

@@ -52,6 +52,17 @@ struct Life {
     last_request: Option<(String, u64)>,
     recently_heard: Option<(u64, Vec<String>)>,
 }
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PriorResume {
+    schema: u16,
+    provider: String,
+    controller: DevelopmentalPriorController,
+    active: Option<(String, SemanticPriorPacket, LocalSlmPriorOutput)>,
+    last_request: Option<(String, u64)>,
+    recently_heard: Option<(u64, Vec<String>)>,
+    next_request: u64,
+    pending_request: bool,
+}
 pub(super) struct RuntimeSemanticPrior {
     queue: LocalSlmPriorAsyncQueue,
     lives: BTreeMap<u64, Life>,
@@ -323,6 +334,125 @@ impl RuntimeSemanticPrior {
             life.controller.record_relevant_exposure(context.is_some());
         }
         draft.with_semantic_context(context)
+    }
+    #[cfg(all(test, feature = "gpu-tests"))]
+    pub(super) fn seed_resume_check(&mut self, id: u64, tick: u64) {
+        let life = self.lives.entry(id).or_default();
+        for _ in 0..256 {
+            life.controller.record_relevant_exposure(false);
+        }
+        for _ in 0..3 {
+            life.controller.record_unaided_probe(1.0).unwrap();
+        }
+        assert_eq!(life.controller.developmental_gain(), 0.0);
+        life.recently_heard = Some((tick, vec!["play".into(), "ball".into()]));
+        let packet = life
+            .controller
+            .issue_packet(
+                SemanticPriorRequest::new(alife_core::OrganismId(id), ExperienceSequenceId(1))
+                    .unwrap(),
+                alife_core::Tick(tick),
+                vec![13, 14],
+                false,
+            )
+            .unwrap();
+        let output = LocalSlmPriorOutput {
+            schema: "alife.ca27.local_slm_prior_output.v1".into(),
+            schema_version: 1,
+            model: self.metrics.model.clone(),
+            salience_labels: vec!["toy".into()],
+            context_summary: "play ball".into(),
+            lexicon_associations: vec![alife_semantic::SlmLexiconAssociation {
+                token: "play".into(),
+                salience: 0.5,
+            }],
+            perception_tags: vec!["near".into()],
+            can_issue_actions: false,
+            can_rewrite_weights: false,
+            can_bypass_arbitration: false,
+            hidden_vector_injection: false,
+            bounded_context_only: true,
+        };
+        output.validate().unwrap();
+        life.active = Some(("play ball".into(), packet, output));
+    }
+    pub fn snapshot(&self, id: u64) -> Result<Option<Vec<u8>>, alife_core::ScaffoldContractError> {
+        let Some(life) = self.lives.get(&id) else {
+            return Ok(None);
+        };
+        let state = PriorResume {
+            schema: 1,
+            provider: self.metrics.provider_identity.clone(),
+            controller: life.controller.clone(),
+            active: life.active.clone(),
+            last_request: life.last_request.clone(),
+            recently_heard: life.recently_heard.clone(),
+            next_request: self.next_request,
+            pending_request: life.pending.is_some(),
+        };
+        let bytes = serde_json::to_vec(&state)
+            .map_err(|_| alife_core::ScaffoldContractError::InvalidSparseProjectionSchema)?;
+        if bytes.len() > 16_384 {
+            return Err(alife_core::ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        Ok(Some(bytes))
+    }
+    pub fn restore_life(
+        &mut self,
+        id: u64,
+        tick: u64,
+        bytes: &[u8],
+    ) -> Result<(), alife_core::ScaffoldContractError> {
+        use alife_core::Validate;
+        let invalid = || alife_core::ScaffoldContractError::InvalidSparseProjectionSchema;
+        if bytes.len() > 16_384 {
+            return Err(invalid());
+        }
+        let state: PriorResume = serde_json::from_slice(bytes).map_err(|_| invalid())?;
+        if state.schema != 1
+            || state.provider != self.metrics.provider_identity
+            || state.next_request == 0
+            || state.controller.consecutive_passing_probes()
+                > alife_semantic::PASSING_PROBES_TO_ZERO
+            || state
+                .last_request
+                .as_ref()
+                .is_some_and(|(k, t)| k.len() > 768 || *t > tick)
+            || state
+                .recently_heard
+                .as_ref()
+                .is_some_and(|(t, w)| *t > tick || w.len() > 6 || w.iter().any(|w| w.len() > 24))
+        {
+            return Err(invalid());
+        }
+        state.controller.validate_resume(alife_core::Tick(tick))?;
+        if let Some((key, packet, output)) = &state.active {
+            packet.validate_contract()?;
+            output.validate()?;
+            if key.len() > 768
+                || packet.issued_at_tick.raw() > tick
+                || packet.request.organism_id.raw() != id
+            {
+                return Err(invalid());
+            }
+        }
+        self.next_request = self.next_request.max(state.next_request);
+        // In-flight network work is resubmitted; sealed active hints and fade state survive.
+        self.lives.insert(
+            id,
+            Life {
+                controller: state.controller,
+                pending: None,
+                active: state.active,
+                last_request: if state.pending_request {
+                    None
+                } else {
+                    state.last_request
+                },
+                recently_heard: state.recently_heard,
+            },
+        );
+        Ok(())
     }
     pub fn retain_lives<T>(&mut self, live: &std::collections::BTreeMap<u64, T>) {
         self.lives.retain(|id, _| live.contains_key(id));

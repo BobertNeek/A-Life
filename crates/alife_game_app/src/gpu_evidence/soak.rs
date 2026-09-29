@@ -1212,8 +1212,10 @@ fn record_frame_truncations(
     let retained_candidates = u32::try_from(frame.candidates().len())
         .map_err(|_| GpuEvidenceError::Contract("candidate count exceeds u32"))?;
     let retained_objects = match frame.sensor_profile() {
-        SensorProfile::GroundedObjectSlotsV1 => u32::try_from(frame.grounded_object_slots().len())
-            .map_err(|_| GpuEvidenceError::Contract("object-slot count exceeds u32"))?,
+        SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1 => {
+            u32::try_from(frame.grounded_object_slots().len())
+                .map_err(|_| GpuEvidenceError::Contract("object-slot count exceeds u32"))?
+        }
         SensorProfile::PrivilegedAffordanceV1 => pre.visible_requested.min(16),
     };
     if pre.candidate_requested > retained_candidates {

@@ -68,3 +68,5 @@ impl WorldContractManifest {
 pub trait ActionLegalityChecker {
     fn check_action(&self, action: &ActionCommand) -> ActionLegality;
 }
+
+pub use headless::SPONTANEOUS_SPEECH_COOLDOWN_TICKS;

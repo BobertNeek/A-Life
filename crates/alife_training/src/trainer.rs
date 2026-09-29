@@ -381,8 +381,13 @@ impl FoundationTrainer {
         if !self.gpu.layout.replay || targets.len() != self.gpu.layout.ticks as usize {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
-        let mut words = vec![0_u32; targets.len() * 64];
-        let target_count = targets.iter().flatten().count().max(1) as f32;
+        let mut words = vec![0_u32; targets.len() * 384];
+        let target_count = targets
+            .iter()
+            .flatten()
+            .map(|t| t.len())
+            .sum::<usize>()
+            .max(1) as f32;
         for (tick, target) in targets.iter().enumerate() {
             if let Some(target) = target {
                 target.validate()?;
@@ -392,10 +397,12 @@ impl FoundationTrainer {
                 {
                     return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
                 }
-                for (output, value) in target.logits().into_iter().enumerate() {
-                    words[tick * 64 + output * 2] = value.to_bits();
-                    words[tick * 64 + output * 2 + 1] =
-                        (target.output_weight(output) / (32.0 * target_count)).to_bits();
+                for step in 0..target.len() {
+                    for (output, value) in target.step_logits(step).into_iter().enumerate() {
+                        words[tick * 384 + step * 64 + output * 2] = value.to_bits();
+                        words[tick * 384 + step * 64 + output * 2 + 1] =
+                            (target.output_weight(output) / (32.0 * target_count)).to_bits();
+                    }
                 }
             }
         }
@@ -603,7 +610,7 @@ impl FoundationTrainer {
                 &self.gpu.pipelines.speech_forward,
                 &self.gpu.bind_group,
                 self.gpu.layout.ticks,
-                32,
+                1,
                 "replay-speech-forward",
             );
             dispatch(
@@ -719,15 +726,17 @@ impl FoundationTrainer {
             let logits = self.read_float_buffer(
                 &self.gpu.outputs,
                 u64::from(self.gpu.layout.speech_logits) * 4,
-                sequence.ticks.len() * 32,
+                sequence.ticks.len() * 192,
             )?;
-            let count = speech.iter().flatten().count() as f64;
+            let count = speech.iter().flatten().map(|s| s.len()).sum::<usize>() as f64;
             for (tick, label) in speech.iter().enumerate() {
                 if let Some(label) = label {
-                    for (output, target) in label.logits().iter().enumerate() {
-                        let error = f64::from(logits[tick * 32 + output] - target);
-                        objective +=
-                            f64::from(label.output_weight(output)) * error * error / (32.0 * count);
+                    for step in 0..label.len() {
+                        for (output, target) in label.step_logits(step).iter().enumerate() {
+                            let error = f64::from(logits[(tick * 6 + step) * 32 + output] - target);
+                            objective += f64::from(label.output_weight(output)) * error * error
+                                / (32.0 * count);
+                        }
                     }
                 }
             }
@@ -1959,11 +1968,11 @@ fn pack_metadata_and_layout(
         .ok_or(ScaffoldContractError::PhenotypeCompile)?;
     let adjoints = as_u32_u64(base_gradient_words)?;
     let accumulated_weights = as_u32_u64(base_gradient_words + ticks * candidate_capacity)?;
-    let gradient_words = u64::from(accumulated_weights) + synapse_count as u64;
+    let gradient_words = u64::from(accumulated_weights) + synapse_count as u64 + ticks * 192;
     let candidate_logits = 0;
     let speech_logits = as_u32_u64(ticks * candidate_capacity)?;
     let metrics =
-        as_u32_u64(ticks * candidate_capacity + ticks * if replay.is_some() { 32 } else { 1 })?;
+        as_u32_u64(ticks * candidate_capacity + ticks * if replay.is_some() { 192 } else { 1 })?;
     let memory_raw = metrics + 4;
     let cognitive_raw = memory_raw + as_u32_u64(ticks * candidate_capacity)?;
     let output_words = u64::from(cognitive_raw) + ticks * candidate_capacity;
@@ -1977,7 +1986,7 @@ fn pack_metadata_and_layout(
                     + (alife_core::MAX_STRUCTURAL_EDGES as u64) * 5),
     )?;
     let replay_speech_targets = as_u32_u64(u64::from(initial) + neurons * 3)?;
-    let training_words = u64::from(replay_speech_targets) + ticks * 64;
+    let training_words = u64::from(replay_speech_targets) + ticks * 384;
     let (
         dendritic_offsets,
         dendritic_branches,

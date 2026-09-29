@@ -219,6 +219,7 @@ fn exact_population_capture_codec_matches_synchronous_completed_sleep_assets() {
         structural_plasticity: v11.structural,
         structural_edit_receipts: Vec::new(),
         last_sleep_report: None,
+        private_semantic_prior: None,
     };
     let captured_exact = exact_state(row.identity().v11.clone());
     let synchronous_exact = exact_state(source.checkpoint_v11(handle).unwrap());
@@ -347,6 +348,7 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
         structural_plasticity: canonical_v11.structural,
         structural_edit_receipts: Vec::new(),
         last_sleep_report: None,
+        private_semantic_prior: None,
     };
     canonical_write
         .attach_exact_cognitive_state(&store, &canonical_exact)
@@ -552,7 +554,9 @@ fn assert_learned_awake_profile_roundtrip(
     let mut mismatched = write.save_state.clone();
     mismatched.sensor_profile.profile_id = match sensor_profile {
         SensorProfile::PrivilegedAffordanceV1 => SensorProfile::GroundedObjectSlotsV1.into(),
-        SensorProfile::GroundedObjectSlotsV1 => SensorProfile::PrivilegedAffordanceV1.into(),
+        SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1 => {
+            SensorProfile::PrivilegedAffordanceV1.into()
+        }
     };
     let mismatch = GpuLiveBrainRuntime::restore_with_checkpoints(
         GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())

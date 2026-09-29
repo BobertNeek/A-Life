@@ -48,6 +48,7 @@ fn fixture(profile: SensorProfile) -> GpuMemoryGroundingEvidenceReceipt {
         match profile {
             SensorProfile::PrivilegedAffordanceV1 => "privileged-affordance-v1",
             SensorProfile::GroundedObjectSlotsV1 => "grounded-object-slots-v1",
+            SensorProfile::GroundedTerrainVisionV1 => "grounded-terrain-vision-v1",
         }
     );
     let hardware = GpuHardwareReceipt {

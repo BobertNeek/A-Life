@@ -460,7 +460,7 @@ impl GpuLiveBrainRuntime {
                         last_error_code: recovery.last_error.slug(),
                     }
                 }),
-                exact_cognitive_state: Self::exact_cognitive_host_snapshot(
+                exact_cognitive_state: self.exact_cognitive_host_snapshot_with_prior(
                     organism_id,
                     resident,
                     checkpoint_tick,

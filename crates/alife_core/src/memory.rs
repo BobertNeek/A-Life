@@ -805,6 +805,48 @@ impl MemoryBank {
         self.lifetime_records.len()
     }
 
+    /// Familiarity derives from retained episodes, never a parallel interaction
+    /// counter. The existing target index bounds work independently of bank
+    /// capacity. Eviction/forgetting can make an object novel again.
+    pub fn object_familiarity(
+        &self,
+        organism: OrganismId,
+        object: crate::TrackedObjectId,
+        profile: crate::SensorProfileIdentity,
+    ) -> f32 {
+        let key = TargetMemoryBucketKey {
+            organism_id_raw: organism.raw(),
+            profile_id_raw: profile.profile_id.raw(),
+            profile_schema_version: profile.profile_schema_version,
+            sensory_abi_version_raw: profile.sensory_abi_version,
+            query_version_raw: crate::MemoryQueryVersion::StateActionTargetV2.raw(),
+            tracked_object_id_raw: object.raw(),
+            target_bins: [0; CANDIDATE_FEATURE_COUNT],
+        };
+        let observations = self
+            .candidate_store
+            .target_namespace_index
+            .get(&key)
+            .into_iter()
+            .flatten()
+            .take(MEMORY_TARGET_SEARCH_CAP)
+            .filter_map(|id| self.candidate_store.records.get(&id.raw()))
+            .filter(|r| {
+                r.organism_id_raw == organism.raw()
+                    && r.tracked_object_id_raw == object.raw()
+                    && matches!(
+                        ActionKind::try_from_raw(r.action_kind_raw),
+                        Ok(ActionKind::Look
+                            | ActionKind::Inspect
+                            | ActionKind::Interact
+                            | ActionKind::Hold)
+                    )
+            })
+            .map(|r| r.observation_count)
+            .fold(0_u32, u32::saturating_add);
+        1.0 - 1.0 / (1.0 + observations as f32)
+    }
+
     pub fn lifetime_records(&self) -> &[MemoryRecord] {
         &self.lifetime_records
     }

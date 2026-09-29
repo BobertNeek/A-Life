@@ -280,22 +280,25 @@ fn forward_speech_logits(@builtin(global_invocation_id) gid:vec3<u32>) {
   let tick = gid.x;
   if (tick >= h(5u)) { return; }
   if (h(52u) == 1u) {
-    let output = gid.y;
-    if (output >= 32u) { return; }
-    let target_neuron = h(37u) + output;
-    var logit = 0.0;
-    if (bitcast<f32>(training_words[h(63u) + tick * 64u + output * 2u + 1u]) > 0.0) {
+    if (gid.y != 0u) { return; }
+    for (var step=0u; step<6u; step++) {
+      for (var output=0u; output<32u; output++) {
+        var logit = 0.0;
       let final_state = (tick + 1u) * h(4u) * h(1u);
       for (var cursor=meta_words[h(11u)+output]; cursor<meta_words[h(11u)+output+1u]; cursor++) {
         let synapse=meta_words[h(11u)+33u+cursor];
         if (synapse_word(synapse, 2u) == SYNAPSE_DECODER
             && synapse_word(synapse, 4u) == DECODER_SPEECH_PAYLOAD
-            && synapse_word(synapse, 1u) == target_neuron) {
-          logit += load_state_f32(h(22u) + final_state + synapse_word(synapse, 0u)) * effective_weight(tick, synapse);
+            && synapse_word(synapse, 1u) == h(37u) + output) {
+          let lane = synapse_word(synapse, 0u) - (h(37u) - 32u);
+          var input = load_state_f32(h(22u) + final_state + synapse_word(synapse, 0u));
+          if (step>0u && lane>=18u) { input=tanh(load_output_f32(h(40u)+(tick*6u+step-1u)*32u+lane)); }
+          logit += input * effective_weight(tick, synapse);
         }
       }
+        store_output_f32(h(40u)+(tick*6u+step)*32u+output, logit);
+      }
     }
-    store_output_f32(h(40u) + tick * 32u + output, logit);
     return;
   }
   if (candidate_word(tick, 28u) == 0u) {
@@ -393,21 +396,39 @@ fn seed_speech_activation_gradients(@builtin(global_invocation_id) gid:vec3<u32>
   let neuron = gid.x;
   let tick = gid.y;
   if (h(52u) == 1u) {
-    if (neuron >= h(1u) || tick >= h(5u)) { return; }
-    var gradient = 0.0;
-    let begin = meta_words[h(14u) + neuron];
-    let end = meta_words[h(14u) + neuron + 1u];
-    for (var cursor = begin; cursor < end; cursor++) {
-      let synapse = meta_words[h(15u) + cursor];
-      if (synapse_word(synapse, 2u) != SYNAPSE_DECODER || synapse_word(synapse, 4u) != DECODER_SPEECH_PAYLOAD) { continue; }
-      let output = synapse_word(synapse, 1u) - h(37u);
-      let label = h(63u) + tick * 64u + output * 2u;
-      let weight = bitcast<f32>(training_words[label + 1u]);
-      let delta = 2.0 * weight * (load_output_f32(h(40u) + tick * 32u + output) - bitcast<f32>(training_words[label]));
-      gradient += delta * effective_weight(tick, synapse);
+    if (neuron != 0u || tick >= h(5u)) { return; }
+    var future:array<f32,32>;
+    var initial:array<f32,32>;
+    for (var reverse=0u; reverse<6u; reverse++) {
+      let step=5u-reverse;
+      var deltas:array<f32,32>;
+      for (var output=0u; output<32u; output++) {
+        let label=h(63u)+tick*384u+step*64u+output*2u;
+        let raw=load_output_f32(h(40u)+(tick*6u+step)*32u+output);
+        let weight=bitcast<f32>(training_words[label+1u]);
+        let activation=tanh(raw);
+        deltas[output]=2.0*weight*(raw-bitcast<f32>(training_words[label]));
+        if (output>=18u) { deltas[output]+=future[output]*(1.0-activation*activation); }
+        store_gradient_f32(h(60u)+h(2u)+(tick*6u+step)*32u+output,deltas[output]);
+      }
+      var input_gradient:array<f32,32>;
+      for (var lane=0u;lane<32u;lane++) {input_gradient[lane]=0.0;}
+      for (var output=0u; output<32u; output++) {
+        for (var cursor=meta_words[h(11u)+output]; cursor<meta_words[h(11u)+output+1u]; cursor++) {
+          let synapse=meta_words[h(11u)+33u+cursor];
+          let lane=synapse_word(synapse,0u)-(h(37u)-32u);
+          input_gradient[lane]+=deltas[output]*effective_weight(tick,synapse);
+        }
+      }
+      for (var lane=0u; lane<32u; lane++) {
+        if (step==0u || lane<18u) { initial[lane]+=input_gradient[lane]; }
+        future[lane]=input_gradient[lane];
+      }
     }
-    let at = h(24u) + (tick + 1u) * h(4u) * h(1u) + neuron;
-    store_gradient_f32(at, load_gradient_f32(at) + gradient);
+    for (var lane=0u; lane<32u; lane++) {
+      let at=h(24u)+(tick+1u)*h(4u)*h(1u)+h(37u)-32u+lane;
+      store_gradient_f32(at,load_gradient_f32(at)+initial[lane]);
+    }
     return;
   }
   if (neuron >= h(1u) || tick >= h(5u) || candidate_word(tick, 28u) == 0u) { return; }
@@ -590,10 +611,12 @@ fn speech_weight_gradients(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (h(52u) == 1u) {
     let output = target_neuron - h(37u);
     for (var tick = 0u; tick < h(5u); tick++) {
-      let label = h(63u) + tick * 64u + output * 2u;
-      let weight = bitcast<f32>(training_words[label + 1u]);
-      let delta = 2.0 * weight * (load_output_f32(h(40u) + tick * 32u + output) - bitcast<f32>(training_words[label]));
-      gradient += delta * load_state_f32(h(22u) + (tick + 1u) * h(4u) * h(1u) + source);
+      for (var step=0u; step<6u; step++) {
+        let lane=source-(h(37u)-32u);
+        var input=load_state_f32(h(22u)+(tick+1u)*h(4u)*h(1u)+source);
+        if (step>0u && lane>=18u) { input=tanh(load_output_f32(h(40u)+(tick*6u+step-1u)*32u+lane)); }
+        gradient+=load_gradient_f32(h(60u)+h(2u)+(tick*6u+step)*32u+output)*input;
+      }
     }
     store_gradient_f32(h(27u) + synapse, gradient);
     return;

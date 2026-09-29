@@ -3,7 +3,8 @@
 param(
     [Parameter(Mandatory)][string]$Output,
     [Parameter(Mandatory)][string]$Source,
-    [ValidateSet('Care','VisionLanguage')][string]$Curriculum = 'VisionLanguage'
+    [ValidateSet('Care','VisionLanguage')][string]$Curriculum = 'VisionLanguage',
+    [ValidateRange(1,2)][int]$ExamplesPerWord = 2
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -29,7 +30,9 @@ try {
         vision_search = 0; maze_navigation = 0; vocabulary_reception = 0; vocabulary_production = 0 }
     $obstacleSides = [Collections.Generic.HashSet[int]]::new()
     $recoveryFatigueLevels = [Collections.Generic.HashSet[string]]::new()
-    $expected = if ($Curriculum -eq 'Care') { @(8,8,8,8,0,0,0,0) } else { @(2,2,2,0,4,4,24,24) }
+    $languageWords = @{ vocabulary_reception = [Collections.Generic.HashSet[int]]::new();
+        vocabulary_production = [Collections.Generic.HashSet[int]]::new() }
+    $expected = if ($Curriculum -eq 'Care') { @(8,8,8,8,0,0,0,0) } else { @(2,2,2,0,4,4,(18*$ExamplesPerWord),(18*$ExamplesPerWord)) }
     $lessons = @($counts.Keys)
     $schedule = [Collections.Generic.List[string]]::new()
     for ($ordinal=0; $ordinal -lt ($expected | Measure-Object -Maximum).Maximum; $ordinal++) {
@@ -40,7 +43,7 @@ try {
     for ($index = 0; $index -lt $schedule.Count; $index++) {
         $lesson = $schedule[$index]
         $ordinal = $counts[$lesson]
-        # Thirteen alternates route parity and visits all twelve lesson vocabulary tokens.
+        # Thirteen alternates route parity and visits all eighteen lesson vocabulary tokens.
         $seed = [ulong](539364000 + 1000 * $lessons.IndexOf($lesson) + 13 * $ordinal)
         $name = ('lesson-{0:D2}-{1}' -f $index, $lesson)
         $directory = Join-Path $outputPath $name
@@ -55,6 +58,13 @@ try {
             $receipt.demonstration_replay_records -ne $receipt.ticks -or
             $receipt.founder_seed_base -ne $FounderSeedBase -or
             $receipt.source_asset_digest -ne $adaptation.adapted_asset_digest) { throw "Lesson $name receipt mismatch." }
+        if ($lesson -in @('vocabulary_reception','vocabulary_production')) {
+            if ($receipt.vocabulary_token -lt 1 -or $receipt.vocabulary_token -gt 18) { throw "Lesson $name has no valid word." }
+            [void]$languageWords[$lesson].Add([int]$receipt.vocabulary_token)
+            if ($lesson -eq 'vocabulary_production' -and $receipt.speech_opportunities -lt 1) {
+                throw "Lesson $name has no grounded production target; physical completion alone is insufficient."
+            }
+        }
         if ($lesson -eq 'hazard_avoidance' -or $lesson -eq 'obstacle_navigation' -or $lesson -eq 'recovery') {
             $trace = Get-Content -Raw -LiteralPath (Join-Path $directory 'lesson-trace.json') | ConvertFrom-Json
             if ($lesson -eq 'hazard_avoidance') {
@@ -95,6 +105,10 @@ try {
     }
     if ($Curriculum -eq 'Care' -and ($obstacleSides.Count -ne 2 -or $recoveryFatigueLevels.Count -lt 3)) {
         throw 'Lesson corpus lacks both obstacle sides or varied biological fatigue.'
+    }
+    if ($Curriculum -eq 'VisionLanguage' -and
+        ($languageWords.vocabulary_reception.Count -ne 18 -or $languageWords.vocabulary_production.Count -ne 18)) {
+        throw 'Lesson corpus must cover all eighteen words in both directions.'
     }
     $manifest = [ordered]@{ founder_seed_base = $FounderSeedBase; pilots = @($entries);
         source_asset = (Join-Path $sourcePath 'trained.alife-foundation'); category_counts = $expected; curriculum = $Curriculum }

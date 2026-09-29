@@ -79,7 +79,8 @@ Start with categories the game can ground:
 
 - Nouns: `food`, `toy`, `creature`, `obstacle`. Use more than one object and placement for each. Obstacles include the maze's physical blockers; no noun class label is injected into sensory channels.
 - Verbs: `look`, `approach`, `retreat`, `eat`, `get`, `rest`. `Get` requires the existing Grab receipt to show actual carrying. `Rest` is taught in brief naturally tired contexts, never as the answer to hunger or a standing inactivity objective.
-- After core words work: `hungry` and `tired`, paired with separate real interoceptive states. These are descriptions, not extra reward chemicals.
+- Needs: `hungry` and `tired`, exposed through separate real interoceptive states and short phrases such as `hungry food` and `tired rest`. These are descriptions, not extra reward chemicals.
+- Subtypes: `root`, `fruit`, `seed`, `ball`, and `activity`, alongside the shared `food` and `toy` categories. Same-category distractors prevent a single available referent from doing all the teaching.
 
 Keep `push`, `pull`, `drop`, and `drink` outside the first set until their gameplay executor and sensed outcomes are qualified for training; Creatures having a verb is not evidence that this game can ground it. Likewise, creature names, Hand naming, query words, negation, and the wider C3 category list can follow this first functional set.
 
@@ -93,9 +94,9 @@ For words alone and later combinations, vary which target is nearer, left/right 
 
 The maze planner is allowed to know the layout, food position, and lesson goal. This was explicitly chosen by the user. It plans routes through actual junctions and dead ends, including deliberate wrong turns and backtracking. It then executes ordinary body turns, short steps, and ingestion. World collisions and sensed consequences remain authoritative. The teacher's plan, entity IDs and absolute positions never enter the learner's neural input or private SLM prompt.
 
-The introductory vision/detour teacher retains its existing sensed goal and clearance logic. Maze geometry is independently rotated, mirrored and scaled by seed, with varied dead-end lengths. The food is seen before walls close at world tick two. The demonstrator centers its head so subsequent body turns have a truthful facing reference, walks the route, and consumes through the normal world action. A planned path is not success evidence: the diagnostic must show physical passage, reversal, reacquisition and a meal.
+The introductory vision/detour teacher retains its existing sensed goal and clearance logic. Maze connectivity comes from independently seeded spanning trees, with two generation methods and two-by-two or three-by-three room grids; rotation, reflection and scale additionally vary physical placement. The food is seen before walls close at world tick two. The demonstrator centers its head so subsequent body turns have a truthful facing reference, walks the route, and consumes through the normal world action. A planned path is not success evidence: the diagnostic must show physical passage, reversal, reacquisition and a meal.
 
-Vocabulary lessons pair ordinary spatial teacher speech with real objects and motor consequences. Reception targets the named object or requested action; production supplies offline single-word decoder targets alongside those actions. These targets are separate from perception and bind to exact captured replay records. The teacher never supplies a live creature speech payload. Initial verb-noun requests use the same token identities as the Hand; generated phrases remain a later stage after reliable individual nouns and verbs.
+Vocabulary lessons pair ordinary spatial teacher speech with real objects and motor consequences. Reception targets the named object or requested action; production supplies offline causal single-word and short-phrase decoder targets alongside those actions. These targets are separate from perception and bind to exact captured replay records. The teacher never supplies a live creature speech payload. Initial verb-noun requests use the same token identities as the Hand; the existing recurrent six-token decoder can now receive two-token action/need targets.
 
 
 Food yields the existing gene-controlled hunger relief and nutritional consequence. Actual injury produces its existing pain response. A harmless blocked attempt produces mild disappointment, not severe pain. Correct language behavior can earn bounded ordinary praise through the existing world-to-chemistry path after delivery is verified. The teacher never writes a floating-point reward directly. Praise has finite opportunities and a cooldown; repeating words cannot farm it. Speech accuracy is an evaluation measurement, not a new biological reward.
@@ -142,3 +143,11 @@ The initial examples include root, fruit and seed food recipes with distinct nut
 Shared category words (`food`, `toy`) coexist with a narrower word (`ball`) and individual tracked object identities. Attribute similarities are available to perception, but similarity learning and correct transfer to unseen variants remain Unknown. The user's intended progression is curious investigation of a new object, followed by useful repeat play when familiar. That progression is a learning and habituation goal, not a hardcoded interaction-count switch, and is not yet demonstrated. No full ball-rolling physics, medicinal foods or final toy art is claimed.
 
 Before a max-speed cohort, the runtime can prime its initial hint from actual current perception, waiting at most five wall seconds during setup. Normal ticks never wait. The private request context can retain at most six genuinely heard words for 32 simulation ticks; it never fabricates current hearing or writes learner memory. Actual deliveries and setup wait/timeouts are reported, rather than inferring exposure from an enabled flag.
+
+The September 28 seven-gap repair adds automatic frozen progression panels and
+source-bound phrase supervision. See [the current operator](n2048-training-operator.md)
+for executable stage gates and preparation limits. Novelty derives from retained
+inspection/interaction episodes, not a second counter. Perception of a new object
+raises inherited curiosity; successful investigation can relieve it; familiar play
+increasingly relieves inherited boredom. These are chemical consequences, never
+forced exploration or a rule that the third interaction must choose play.

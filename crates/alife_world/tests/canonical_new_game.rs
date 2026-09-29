@@ -234,6 +234,100 @@ fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() 
             .execution
             .succeeded
     );
+    // Same physical play: new toys satisfy curiosity, familiar toys relieve boredom.
+    let channel = alife_core::ChannelCommand::new(
+        alife_core::MotorChannel::Manipulation,
+        HeadlessActionIds::PLAY,
+        Some(ActionTarget::new(Some(ball), None)),
+        Vec3f::ZERO,
+        Intensity::new(1.0).unwrap(),
+        DurationTicks::new(1),
+        0.0,
+        Confidence::new(1.0).unwrap(),
+        0,
+    )
+    .unwrap();
+    let bundle = alife_core::MotorCommandBundle::new(
+        organism,
+        alife_core::ExperienceSequenceId(1),
+        baseline.tick(),
+        vec![channel],
+    )
+    .unwrap();
+    let neural = alife_core::NeuralEmissionFrame::new(
+        baseline.tick(),
+        1,
+        vec![alife_core::NeuralEmission::new(
+            alife_core::NeuralEmissionClass::ExecutiveSustain,
+            0.0,
+            1.0,
+        )
+        .unwrap()],
+    )
+    .unwrap();
+    let mut new_toy = baseline.clone();
+    let mut familiar_toy = baseline.clone();
+    let new_play = new_toy
+        .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
+            &bundle,
+            entity,
+            &neural,
+            1.0,
+            &[(ball, 1.0)],
+        )
+        .unwrap();
+    let familiar_play = familiar_toy
+        .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
+            &bundle,
+            entity,
+            &neural,
+            0.0,
+            &[(ball, 0.0)],
+        )
+        .unwrap();
+    assert_eq!(new_play.body_event.play_stimulation, 0.0);
+    assert_eq!(new_play.body_event.investigation, 1.0);
+    assert_eq!(familiar_play.body_event.play_stimulation, 1.0);
+    assert_eq!(
+        new_toy.entity(ball).unwrap().position,
+        familiar_toy.entity(ball).unwrap().position
+    );
+    // Looking at a familiar ball must not make a different, new station
+    // relieve boredom. Each channel uses its own physical interaction target.
+    let inspect = alife_core::ChannelCommand::new(
+        alife_core::MotorChannel::Posture,
+        ActionKind::Inspect.canonical_id(),
+        Some(ActionTarget::new(Some(ball), None)),
+        Vec3f::ZERO,
+        Intensity::new(1.0).unwrap(),
+        DurationTicks::new(1),
+        0.0,
+        Confidence::new(1.0).unwrap(),
+        0,
+    )
+    .unwrap();
+    let mut play = bundle.channels[0].clone();
+    play.target = Some(ActionTarget::new(Some(station), None));
+    let mixed = alife_core::MotorCommandBundle::new(
+        organism,
+        alife_core::ExperienceSequenceId(1),
+        baseline.tick(),
+        vec![inspect, play],
+    )
+    .unwrap();
+    let mut mixed_world = baseline.clone();
+    let mixed_play = mixed_world
+        .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
+            &mixed,
+            entity,
+            &neural,
+            0.0,
+            &[(ball, 0.0), (station, 1.0)],
+        )
+        .unwrap();
+    assert!(mixed_play.succeeded);
+    assert_eq!(mixed_play.body_event.play_stimulation, 0.0);
+    assert_eq!(mixed_play.body_event.investigation, 1.0);
     // The chemical response is inherited and can be silenced by its gene.
     let record = baseline.organism_registry().get(organism).unwrap();
     let mut genome = record.genome().clone();
@@ -273,6 +367,56 @@ fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() 
         .unwrap()
         .homeostatic_improvement();
     assert!(relief > 0.0);
+    // Novel stimuli raise curiosity; investigation relieves it through genes.
+    let novelty = BodyEventDelta {
+        perceived_novelty: 1.0,
+        ..BodyEventDelta::zero()
+    };
+    let curious = chemistry
+        .advance(Tick(601), novelty, record.phenotype())
+        .unwrap();
+    let neutral = chemistry
+        .advance(Tick(601), BodyEventDelta::zero(), record.phenotype())
+        .unwrap();
+    assert!(curious.homeostasis.drives.curiosity > neutral.homeostasis.drives.curiosity);
+    let investigated = curious
+        .advance(
+            Tick(602),
+            BodyEventDelta {
+                investigation: 1.0,
+                ..BodyEventDelta::zero()
+            },
+            record.phenotype(),
+        )
+        .unwrap();
+    let uninvolved = curious
+        .advance(Tick(602), BodyEventDelta::zero(), record.phenotype())
+        .unwrap();
+    assert!(investigated.homeostasis.drives.curiosity < uninvolved.homeostasis.drives.curiosity);
+    let mut genome = record.genome().clone();
+    let index = genome
+        .chemistry
+        .graph
+        .expressed()
+        .emitters()
+        .iter()
+        .position(|row| row.source == BiochemicalSourceLocus::PerceivedNovelty)
+        .unwrap();
+    for side in [AlleleSide::Maternal, AlleleSide::Paternal] {
+        genome.chemistry.graph = genome
+            .chemistry
+            .graph
+            .clone()
+            .with_emitter_gain(side, index, 0.0)
+            .unwrap();
+    }
+    let silenced = chemistry
+        .advance(Tick(601), novelty, &genome.express().unwrap())
+        .unwrap();
+    assert_eq!(
+        silenced.homeostasis.drives.curiosity,
+        neutral.homeostasis.drives.curiosity
+    );
     let save = alife_world::PortableSaveFile::from_headless_world(
         "variety",
         &world,

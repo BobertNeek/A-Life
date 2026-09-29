@@ -104,6 +104,7 @@ fn r06_exact_cognitive_checkpoint_preserves_acquired_predictor_and_rejects_legac
         .unwrap(),
         structural_edit_receipts: Vec::new(),
         last_sleep_report: None,
+        private_semantic_prior: None,
     };
     let encoded = checkpoint.encode().unwrap();
     let restored = ExactCognitiveCheckpointState::decode(&encoded).unwrap();

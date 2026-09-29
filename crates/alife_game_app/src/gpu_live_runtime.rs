@@ -947,6 +947,7 @@ struct ExactCognitiveHostSnapshotV1 {
     last_sleep_work: Option<SleepWorkReceipt>,
     structural_edit_receipts: Vec<alife_core::StructuralEditBatch>,
     last_sleep_report: Option<alife_core::SleepConsolidationReport>,
+    private_semantic_prior: Option<Vec<u8>>,
 }
 
 enum ExactPopulationCheckpointRuntimeWorkV1 {
@@ -1322,6 +1323,7 @@ impl ExactCognitiveHostSnapshotV1 {
             structural_plasticity: v11.structural.clone(),
             structural_edit_receipts: self.structural_edit_receipts.clone(),
             last_sleep_report: self.last_sleep_report.clone(),
+            private_semantic_prior: self.private_semantic_prior.clone(),
         };
         state.validate()?;
         Ok(state)
@@ -4724,18 +4726,50 @@ fn seal_prepared_selection_core(
             )?,
         ],
     )?;
+    let object_novelty = motor_bundle
+        .channels
+        .iter()
+        .filter_map(|c| c.target.and_then(|t| t.entity))
+        .filter_map(|entity| {
+            let key = world.entity(entity)?.tracking_provenance.canonical_key();
+            let tracked = world
+                .tracked_objects()
+                .records_for(organism_id)?
+                .find(|r| r.tracking_key == key)?;
+            pre_action_context
+                .peripheral
+                .summaries
+                .iter()
+                .find(|r| {
+                    r.identity
+                        == alife_core::StableFocusIdentity::TrackedObject(tracked.tracked_object_id)
+                })
+                .map(|r| (entity, r.salience.novelty.raw()))
+        })
+        .collect::<Vec<_>>();
     let motor_result = match rollback {
         #[cfg(test)]
-        WorldMutationRollback::Local => world.apply_registered_motor_bundle_with_neural_emission(
-            &motor_bundle,
-            world_entity_id,
-            &neural_emission,
-        ),
-        WorldMutationRollback::EnclosingStagedTick => world
-            .apply_registered_motor_bundle_with_neural_emission_in_staged_tick(
+        WorldMutationRollback::Local => {
+            let before = world.clone();
+            let result = world.apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
                 &motor_bundle,
                 world_entity_id,
                 &neural_emission,
+                frame.sensory().channels.novelty_signal.raw(),
+                &object_novelty,
+            );
+            if result.is_err() {
+                *world = before
+            }
+            result
+        }
+        WorldMutationRollback::EnclosingStagedTick => world
+            .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
+                &motor_bundle,
+                world_entity_id,
+                &neural_emission,
+                frame.sensory().channels.novelty_signal.raw(),
+                &object_novelty,
             ),
     };
     let motor_receipt = motor_result.map_err(|error| match error {
@@ -6401,6 +6435,12 @@ impl GpuLiveBrainRuntime {
                         sleep_consolidation_config_for(&restored.phenotype)?,
                         exact_cognitive_state.sleep_state,
                     )?;
+                    if let (Some(prior), Some(bytes)) = (
+                        &mut runtime.semantic_prior,
+                        &exact_cognitive_state.private_semantic_prior,
+                    ) {
+                        prior.restore_life(organism_id.raw(), world_tick.raw(), bytes)?;
+                    }
                     let ExactCognitiveCheckpointState {
                         cognitive_context,
                         predictor,
@@ -6664,12 +6704,24 @@ impl GpuLiveBrainRuntime {
         checkpoint_tick: Tick,
     ) -> Result<ExactCognitiveCheckpointState, GameAppShellError> {
         let v11_checkpoint = self.backend.backend().checkpoint_v11(handle)?;
-        Self::exact_cognitive_state_for_checkpoint_with_v11(
-            organism_id,
-            resident,
-            checkpoint_tick,
-            v11_checkpoint,
-        )
+        self.exact_cognitive_host_snapshot_with_prior(organism_id, resident, checkpoint_tick)?
+            .with_captured_v11(&v11_checkpoint)
+    }
+
+    fn exact_cognitive_host_snapshot_with_prior(
+        &self,
+        organism_id: OrganismId,
+        resident: &ResidentCognition,
+        checkpoint_tick: Tick,
+    ) -> Result<ExactCognitiveHostSnapshotV1, GameAppShellError> {
+        let mut host = Self::exact_cognitive_host_snapshot(organism_id, resident, checkpoint_tick)?;
+        host.private_semantic_prior = self
+            .semantic_prior
+            .as_ref()
+            .map(|p| p.snapshot(organism_id.raw()))
+            .transpose()?
+            .flatten();
+        Ok(host)
     }
 
     fn exact_cognitive_state_for_checkpoint_with_v11(
@@ -6717,6 +6769,7 @@ impl GpuLiveBrainRuntime {
             last_sleep_work: resident.last_sleep_work.clone(),
             structural_edit_receipts: resident.last_structural_edit_receipts.clone(),
             last_sleep_report: resident.last_sleep_report.clone(),
+            private_semantic_prior: None,
         })
     }
 

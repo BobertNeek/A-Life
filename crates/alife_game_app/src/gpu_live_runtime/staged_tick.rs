@@ -615,6 +615,17 @@ impl GpuLiveBrainRuntime {
                     receptor_effects,
                 )?;
                 preparation_stage = "attention selection";
+                for summary in &mut peripheral_summaries {
+                    if let alife_core::StableFocusIdentity::TrackedObject(id) = summary.identity {
+                        summary.salience.novelty = NormalizedScalar::new(
+                            1.0 - memory.bank().object_familiarity(
+                                OrganismId(raw),
+                                id,
+                                memory.profile(),
+                            ),
+                        )?;
+                    }
+                }
                 let attention = select_focal_targets(
                     OrganismId(raw),
                     sequence_id,
@@ -626,6 +637,21 @@ impl GpuLiveBrainRuntime {
                 resident.attention_hysteresis = attention.hysteresis;
                 preparation_stage = "focal routing";
                 let routed_draft = route_focal_candidates(draft, &attention)?;
+                let novelty = attention
+                    .focal_targets
+                    .first()
+                    .and_then(|id| match id {
+                        alife_core::StableFocusIdentity::TrackedObject(object) => Some(
+                            1.0 - memory.bank().object_familiarity(
+                                OrganismId(raw),
+                                *object,
+                                memory.profile(),
+                            ),
+                        ),
+                        _ => None,
+                    })
+                    .unwrap_or(0.0);
+                let routed_draft = routed_draft.with_remembered_novelty(novelty)?;
                 attention_context_wall_ns = attention_context_wall_ns
                     .saturating_add(attention_context_started.map_or(0, elapsed_ns));
                 let topology_concept_started = measure_preparation.then(Instant::now);

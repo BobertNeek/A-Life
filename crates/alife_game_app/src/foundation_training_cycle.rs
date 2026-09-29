@@ -513,7 +513,7 @@ fn run_foundation_training_cycle_from(
     config.sensor_profile = asset.manifest().sensor_profile();
     let mut game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
     game.world.set_age_death_disabled_for_new_game(true)?;
-    let scenario = if lesson.is_some() {
+    let mut scenario = if lesson.is_some() {
         Some(configure_foundation_scenario(
             &mut game.world,
             seed,
@@ -524,6 +524,9 @@ fn run_foundation_training_cycle_from(
     } else {
         None
     };
+    if let Some(scenario) = &mut scenario {
+        scenario.repeat_vocabulary = lesson != Some(FoundationTeacherLesson::VocabularyProduction);
+    }
     let mut creatures = game.creatures;
     // Recovery preconditioning advances ordinary world biology before the
     // durable base is published. Keep the New Game save summaries in step
@@ -665,6 +668,7 @@ fn run_foundation_training_cycle_from(
     if let Some(scenario) = &scenario {
         crate::close_foundation_navigation_gate(&mut runtime, scenario)?;
     }
+    runtime.prime_foundation_semantic_prior()?;
     runtime.tick().map_err(|e| {
         let _ = std::fs::write(
             output.join("runtime-performance-failed.json"),
@@ -749,17 +753,21 @@ fn run_foundation_training_cycle_from(
     )?;
     std::fs::write(output.join("phase.txt"), "replay-writer-ready")?;
     let mut references = Vec::with_capacity(training_ticks + 1);
-    let speech_label = |frame: &alife_core::PerceptionFrame| {
-        crate::foundation_training::vocabulary_speech_target(
+    let speech_label = |frame: &alife_core::PerceptionFrame,
+                        previous: Option<&alife_core::ExperiencePatch>| {
+        crate::foundation_training::grounded_speech_label(
             frame,
             scenario.as_ref().and_then(|s| s.vocabulary_token),
+            scenario.as_ref().and_then(|s| s.vocabulary_noun),
             scenario.as_ref().and_then(|s| s.vocabulary_target),
+            previous,
             lesson == Some(FoundationTeacherLesson::VocabularyProduction),
         )
     };
     let mut speech_targets = Vec::with_capacity(training_ticks + 1);
     let append_started = Instant::now();
-    speech_targets.push(speech_label(&first[0].frame));
+    speech_targets.push(speech_label(&first[0].frame, None));
+    let mut last_speech_patch = first[0].patch.clone();
     references.push(writer.append(&first.remove(0))?);
     replay_append_seconds += append_started.elapsed().as_secs_f64();
     let mut gap = false;
@@ -798,9 +806,6 @@ fn run_foundation_training_cycle_from(
         let tick_started = Instant::now();
         if let Some(scenario) = &scenario {
             crate::close_foundation_navigation_gate(&mut runtime, scenario)?;
-        }
-        if before == 0 {
-            runtime.prime_foundation_semantic_prior()?;
         }
         let tick_outcome = runtime.tick_outcome().map_err(|e| {
             let _ = std::fs::write(
@@ -931,7 +936,8 @@ fn run_foundation_training_cycle_from(
             }
         }
         let append_started = Instant::now();
-        speech_targets.push(speech_label(&captured[0].frame));
+        speech_targets.push(speech_label(&captured[0].frame, Some(&last_speech_patch)));
+        last_speech_patch = captured[0].patch.clone();
         references.push(writer.append(&captured.remove(0))?);
         replay_append_seconds += append_started.elapsed().as_secs_f64();
         if terminal_biology.is_some() {

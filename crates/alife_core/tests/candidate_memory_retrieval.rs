@@ -718,12 +718,29 @@ fn memory_bank_roundtrip_rebuilds_indices_and_preserves_recall() {
         .unwrap();
     let probe = cyan_amber_family_draft();
     let before = bank.recall_frame(&probe).unwrap();
+    let profile = probe.profile_provenance().identity();
+    assert_eq!(
+        bank.object_familiarity(ORGANISM, TrackedObjectId(71), profile),
+        0.5
+    );
+    assert_eq!(
+        bank.object_familiarity(ORGANISM, TrackedObjectId(72), profile),
+        0.0
+    );
+    assert_eq!(
+        bank.object_familiarity(OrganismId(812), TrackedObjectId(71), profile),
+        0.0
+    );
     let restored: MemoryBank =
         serde_json::from_value(serde_json::to_value(&bank).unwrap()).unwrap();
     let after = restored.recall_frame(&probe).unwrap();
 
     assert_eq!(after.context(), before.context());
     assert_eq!(after.receipt(), before.receipt());
+    assert_eq!(
+        restored.object_familiarity(ORGANISM, TrackedObjectId(71), profile),
+        0.5
+    );
 }
 
 fn stopped_meal_fixture() -> (MemoryBank, PerceptionFrameDraft) {

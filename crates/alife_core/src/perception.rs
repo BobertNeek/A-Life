@@ -493,6 +493,21 @@ impl PerceptionFrameDraft {
             self.grounded_object_slots,
         )
     }
+
+    pub fn with_remembered_novelty(mut self, novelty: f32) -> Result<Self, ScaffoldContractError> {
+        self.sensory.channels.novelty_signal = crate::NormalizedScalar::new(novelty)?;
+        Self::new(
+            self.organism_id,
+            self.tick,
+            self.sensor_profile,
+            self.sensory,
+            self.body,
+            self.homeostasis,
+            self.candidates,
+            self.profile_provenance,
+            self.grounded_object_slots,
+        )
+    }
 }
 
 impl Validate for PerceptionFrameDraft {

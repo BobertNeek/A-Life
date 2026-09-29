@@ -151,6 +151,8 @@ pub enum BiochemicalSourceLocus {
     Sleeping,
     PlayerReward,
     PlayStimulation,
+    PerceivedNovelty,
+    Investigation,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -996,6 +998,20 @@ impl BiochemicalPhenotype {
             digital: false,
         });
         self.value_profile.drives[9] = -0.08;
+        self.emitters.retain(|row| {
+            !matches!(
+                row.source,
+                BiochemicalSourceLocus::PerceivedNovelty | BiochemicalSourceLocus::Investigation
+            )
+        });
+        for (source, gain) in [
+            (BiochemicalSourceLocus::PerceivedNovelty, 0.04),
+            (BiochemicalSourceLocus::Investigation, -0.08),
+        ] {
+            let mut release = emitter(source, ids::CURIOSITY, gain);
+            release.developmental_expression_floor = 1.0;
+            self.emitters.push(release);
+        }
         self.receptors
             .sort_by_key(|row| (target_order(row.target), row.source));
         self.compile()?;
@@ -1760,6 +1776,8 @@ fn source_value(source: BiochemicalSourceLocus, body: BodyState, event: BodyEven
         BiochemicalSourceLocus::Sleeping => f32::from(body.sleeping),
         BiochemicalSourceLocus::PlayerReward => event.player_reward,
         BiochemicalSourceLocus::PlayStimulation => event.play_stimulation,
+        BiochemicalSourceLocus::PerceivedNovelty => event.perceived_novelty,
+        BiochemicalSourceLocus::Investigation => event.investigation,
     }
     .clamp(0.0, 1.0)
 }
@@ -1781,7 +1799,9 @@ fn emitter_release_count(source: BiochemicalSourceLocus, cadence_crossings: u32)
         | BiochemicalSourceLocus::SleepRecovery
         | BiochemicalSourceLocus::MatingOpportunity
         | BiochemicalSourceLocus::PlayerReward
-        | BiochemicalSourceLocus::PlayStimulation => 1,
+        | BiochemicalSourceLocus::PlayStimulation
+        | BiochemicalSourceLocus::PerceivedNovelty
+        | BiochemicalSourceLocus::Investigation => 1,
         BiochemicalSourceLocus::Basal
         | BiochemicalSourceLocus::Awake
         | BiochemicalSourceLocus::Sleeping

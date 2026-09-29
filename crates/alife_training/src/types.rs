@@ -8,17 +8,25 @@ use alife_core::{
 pub const TRAINING_SEQUENCE_TICKS: usize = 32;
 pub const MAX_TRAINING_SEQUENCE_TICKS: usize = 2048;
 
-/// Grounded single-word auxiliary label, never an input or policy probability.
+/// Grounded bounded utterance label, never an input or policy probability.
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct ReplaySpeechTarget {
     /// None teaches silence; it is not a reserved or fabricated language token.
     pub token: Option<u16>,
+    #[serde(default)]
+    pub continuation: [u16; 5],
     pub act: alife_core::SpeechActKind,
     pub weight: f32,
 }
 impl ReplaySpeechTarget {
     pub fn validate(self) -> Result<(), ScaffoldContractError> {
         if self.token.is_some_and(|token| token == 0 || token >= 256)
+            || self.continuation.iter().any(|token| *token >= 256)
+            || (self.token.is_none() && self.continuation != [0; 5])
+            || self
+                .continuation
+                .windows(2)
+                .any(|pair| pair[0] == 0 && pair[1] != 0)
             || !self.weight.is_finite()
             || self.weight <= 0.0
         {
@@ -27,8 +35,23 @@ impl ReplaySpeechTarget {
         Ok(())
     }
     pub fn logits(self) -> [f32; 32] {
+        self.step_logits(0)
+    }
+    pub fn len(self) -> usize {
+        if self.token.is_none() {
+            1
+        } else {
+            1 + self.continuation.iter().take_while(|v| **v != 0).count()
+        }
+    }
+    pub fn step_logits(self, step: usize) -> [f32; 32] {
         let mut logits = [0.0; 32];
-        let Some(token) = self.token else {
+        let token = if step == 0 {
+            self.token
+        } else {
+            self.continuation.get(step - 1).copied().filter(|v| *v != 0)
+        };
+        let Some(token) = token else {
             logits[16] = -0.8;
             logits[17] = 0.8;
             return logits;
@@ -39,11 +62,14 @@ impl ReplaySpeechTarget {
             logits[8 + bit] = if token & (1 << bit) != 0 { 0.8 } else { -0.8 };
         }
         logits[16] = 0.8;
-        logits[17] = 0.8;
+        logits[17] = if step + 1 == self.len() { 0.8 } else { -0.8 };
         logits
     }
     pub fn output_weight(self, output: usize) -> f32 {
         if self.token.is_none() && !matches!(output, 16 | 17) {
+            0.0
+        } else if output >= 18 {
+            // Recurrent controls learn through later tokens, not zero clamps.
             0.0
         } else {
             self.weight

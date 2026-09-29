@@ -814,11 +814,13 @@ fn n2048_speech_payload_head_trains_on_gpu_and_remains_exportable() {
     let labels = vec![
         None,
         Some(alife_training::ReplaySpeechTarget {
+            continuation: [1, 0, 0, 0, 0],
             token: Some(8),
             act: alife_core::SpeechActKind::Declare,
             weight: 1.0,
         }),
         Some(alife_training::ReplaySpeechTarget {
+            continuation: [0; 5],
             token: None,
             act: alife_core::SpeechActKind::Declare,
             weight: 1.0,
@@ -837,12 +839,16 @@ fn n2048_speech_payload_head_trains_on_gpu_and_remains_exportable() {
     let probe = trainer
         .probe_replay_gradients_with_speech(&replay, &adjoints, &labels)
         .unwrap();
-    for kind in [false, true] {
+    for kind in 0..3 {
         let index = phenotype
             .synapses()
             .iter()
             .enumerate()
-            .filter(|(_, s)| matches!(s.kind(), CompiledSynapseKind::Recurrent) == kind)
+            .filter(|(_, s)| match kind {
+                0=>matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::SpeechPayload),
+                1=>matches!(s.kind(),CompiledSynapseKind::Recurrent),
+                _=>matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::SpeechPayload && c.motor_index()>=18),
+            })
             .max_by(|(a, _), (b, _)| {
                 probe.gradients[*a]
                     .abs()
@@ -854,7 +860,8 @@ fn n2048_speech_payload_head_trains_on_gpu_and_remains_exportable() {
             probe.gradients[index].abs() > 1e-7,
             "speech gradient must reach both decoder and recurrent graph"
         );
-        let epsilon = 0.002;
+        // Stay local to the sparse graph's piecewise activation boundaries.
+        let epsilon = 0.0002;
         let mut plus = baseline.clone();
         plus.weights[index] += epsilon;
         trainer.restore_checkpoint(&plus).unwrap();

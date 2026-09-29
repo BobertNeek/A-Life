@@ -454,6 +454,12 @@ pub struct FoundationPilotReceipt {
     #[serde(default)]
     pub literal_word_matches: usize,
     #[serde(default)]
+    pub correct_utterances: usize,
+    #[serde(default)]
+    pub unprompted_correct_utterances: usize,
+    #[serde(default)]
+    pub speech_opportunities: usize,
+    #[serde(default)]
     pub maze_nodes_reached: usize,
     #[serde(default)]
     pub maze_route_nodes: usize,
@@ -594,6 +600,9 @@ struct GroundedNavigationTeacher {
     vocabulary_target: Option<alife_core::WorldEntityId>,
     vocabulary_position: Option<alife_core::Vec3f>,
     vocabulary_word: Option<u32>,
+    vocabulary_noun: Option<u16>,
+    last_speech_tick: Option<u64>,
+    previous_receipt: std::sync::Arc<std::sync::Mutex<Option<alife_core::ExperiencePatch>>>,
     remembered_food: Option<alife_core::Vec3f>,
     search_phase: u8,
     detour_side: f32,
@@ -732,35 +741,55 @@ fn grounded_lesson_teacher(
             | FoundationTeacherLesson::VocabularyProduction
     ) {
         let heard = &frame.sensory().language_context.heard_tokens;
-        let word = heard
+        let teacher_words = heard
             .iter()
             .flatten()
+            .filter(|h| h.source_kind == alife_core::UtteranceSourceKind::Teacher)
+            .collect::<Vec<_>>();
+        let word = teacher_words
+            .iter()
             .find(|h| (5..=10).contains(&h.token_id) || h.token_id == 13)
-            .or_else(|| heard.iter().flatten().last())
+            .or_else(|| teacher_words.last())
             .map(|h| h.token_id);
         if let Some(word) = word {
             navigation.vocabulary_word = Some(word);
         }
-        let action = vocabulary_reception_choice(
-            frame,
-            navigation.vocabulary_word,
-            navigation.vocabulary_target,
-            navigation.vocabulary_position,
-        )
+        let action = if lesson == FoundationTeacherLesson::VocabularyProduction
+            && matches!(navigation.vocabulary_word, Some(11 | 12))
+            && heard.iter().any(Option::is_some)
+        {
+            frame.candidates().iter().find(|c| c.family == Family::Idle)
+        } else {
+            vocabulary_reception_choice(
+                frame,
+                navigation.vocabulary_word,
+                navigation.vocabulary_target,
+                navigation.vocabulary_position,
+            )
+        }
         .ok_or(ScaffoldContractError::InvalidActionDecision)?;
-        let speak = vocabulary_speech_target(
+        // Ordinary past action/physical receipts, never future outcomes or route inputs.
+        let speak = grounded_speech_label(
             frame,
             navigation.vocabulary_word.map(|w| w as u16),
+            navigation.vocabulary_noun,
             navigation.vocabulary_target,
+            navigation.previous_receipt.lock().unwrap().as_ref(),
             lesson == FoundationTeacherLesson::VocabularyProduction,
         )
         .is_some_and(|label| label.token.is_some());
-        if speak {
+        if speak
+            && navigation.last_speech_tick.is_none_or(|at| {
+                frame.tick().raw().saturating_sub(at)
+                    >= alife_world::SPONTANEOUS_SPEECH_COOLDOWN_TICKS
+            })
+        {
             if let Some(vocal) = frame
                 .candidates()
                 .iter()
                 .find(|c| c.kind == alife_core::ActionKind::Vocalize)
             {
+                navigation.last_speech_tick = Some(frame.tick().raw());
                 let mut demonstration = assemble_grounded_teacher(frame, enabled_channels, vocal)?;
                 let slot = match action.kind {
                     alife_core::ActionKind::Move => 0,
@@ -961,11 +990,12 @@ fn vocabulary_reception_choice(
 ) -> Option<&alife_core::ActionCandidate> {
     use alife_core::{ActionKind as Kind, CandidateActionFamily as Family};
     let family = match word {
-        Some(1..=5 | 14) => Family::Inspect,
+        Some(1..=5 | 14..=18) => Family::Inspect,
         Some(7) => Family::Avoid,
         Some(8) => Family::Ingest,
         Some(9 | 13) => Family::Contact,
-        Some(10) => Family::Rest,
+        Some(10 | 12) => Family::Rest,
+        Some(11) => Family::Ingest,
         Some(6) => Family::Approach,
         _ => Family::Idle,
     };
@@ -1062,45 +1092,92 @@ fn vocabulary_reception_choice(
         .or_else(|| frame.candidates().iter().find(|c| c.family == Family::Idle))
 }
 
-pub(crate) fn vocabulary_speech_target(
+pub(crate) fn grounded_speech_label(
     frame: &alife_core::PerceptionFrame,
-    token: Option<u16>,
+    word: Option<u16>,
+    noun: Option<u16>,
     target: Option<alife_core::WorldEntityId>,
+    previous: Option<&alife_core::ExperiencePatch>,
     production: bool,
 ) -> Option<alife_training::ReplaySpeechTarget> {
-    // Teacher sound lasts one interval. Later opportunities require remembering
-    // that ordinary exposure; the target remains physically observable.
-    if production
-        && frame.tick().raw() % 4 == 3
-        && (frame.candidates().iter().any(|c| {
-            c.target.entity == target
-                && matches!(
-                    c.observation,
-                    alife_core::CandidateObservationRef::ObjectSlot(_)
-                )
-        }) || (token == Some(7)
-            && frame
-                .body()
-                .velocity
-                .linear
-                .x
-                .hypot(frame.body().velocity.linear.z)
-                > 0.001))
-    {
-        token.map(|token| alife_training::ReplaySpeechTarget {
-            token: Some(token),
-            act: alife_core::SpeechActKind::Declare,
-            weight: 1.0,
-        })
-    } else if production && token.is_some() {
-        Some(alife_training::ReplaySpeechTarget {
-            token: None,
-            act: alife_core::SpeechActKind::Declare,
-            weight: 1.0,
-        })
-    } else {
-        None
+    let word = word?;
+    let ready = production
+        && frame
+            .sensory()
+            .language_context
+            .heard_tokens
+            .iter()
+            .all(Option::is_none);
+    let mut label = alife_training::ReplaySpeechTarget {
+        token: if ready { Some(word) } else { None },
+        continuation: [0; 5],
+        act: alife_core::SpeechActKind::Declare,
+        weight: if ready { 1.0 } else { 0.25 },
+    };
+    if !ready {
+        return Some(label);
     }
+    let needs = frame.homeostasis().drives;
+    let need = match word {
+        11 if needs.hunger >= 0.12 => Some((11, 1)),
+        12 if needs.fatigue >= 0.12 => Some((12, 10)),
+        _ => None,
+    };
+    let acted = previous.is_some_and(|patch| {
+        patch.outcome().success
+            && !matches!(
+                patch.outcome().physical.contact,
+                alife_core::PhysicalContactKind::Blocked
+                    | alife_core::PhysicalContactKind::Collision
+            )
+            && patch
+                .pre_action()
+                .perception()
+                .candidates()
+                .iter()
+                .any(|candidate| {
+                    let expected = match word {
+                        1..=5 | 14..=18 => {
+                            candidate.family == alife_core::CandidateActionFamily::Inspect
+                        }
+                        6 => candidate.family == alife_core::CandidateActionFamily::Approach,
+                        7 => candidate.family == alife_core::CandidateActionFamily::Avoid,
+                        8 => candidate.action_id == alife_world::HeadlessActionIds::EAT,
+                        9 => {
+                            candidate.action_id == alife_world::HeadlessActionIds::GRAB
+                                && frame.sensory().channels.tactile_contact[2] > 0.5
+                        }
+                        13 => candidate.action_id == alife_world::HeadlessActionIds::PLAY,
+                        10 => candidate.family == alife_core::CandidateActionFamily::Rest,
+                        _ => false,
+                    };
+                    expected
+                        && (word == 10 || candidate.target.entity == target)
+                        && patch
+                            .decision()
+                            .selected_bundle
+                            .as_ref()
+                            .is_some_and(|bundle| {
+                                bundle.channels.iter().any(|channel| {
+                                    channel.primitive == candidate.action_id
+                                        && (word == 10
+                                            || channel.target.and_then(|t| t.entity) == target)
+                                })
+                            })
+                })
+    });
+    if let Some((first, second)) = need {
+        label.token = Some(first);
+        label.continuation[0] = second;
+    } else if acted {
+        if matches!(word, 5..=9 | 13) {
+            label.continuation[0] = noun.unwrap_or(1);
+        }
+    } else {
+        label.token = None;
+        label.weight = 0.25;
+    }
+    Some(label)
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -1143,7 +1220,8 @@ fn run_foundation_training_pilot_inner(
         lesson.or_else(|| teacher_mode.then_some(FoundationTeacherLesson::Feeding));
     let mut scenario =
         configure_foundation_scenario(&mut game.world, seed, scenario_lesson, food_position, true)?;
-    scenario.repeat_vocabulary = teacher_mode;
+    scenario.repeat_vocabulary =
+        teacher_mode && scenario_lesson != Some(FoundationTeacherLesson::VocabularyProduction);
     scenario.training_language_feedback = teacher_mode;
     let food = scenario.food;
     let food_position = scenario_lesson.map(|_| {
@@ -1175,10 +1253,13 @@ fn run_foundation_training_pilot_inner(
         },
     )
     .map_err(|error| format!("pilot runtime admission: {error}"))?;
+    let teacher_previous = std::sync::Arc::new(std::sync::Mutex::new(None));
     if teacher_mode {
         let mut navigation = GroundedNavigationTeacher::default();
         navigation.maze.route = scenario.demonstration_route.clone();
         navigation.vocabulary_target = scenario.vocabulary_target;
+        navigation.previous_receipt = teacher_previous.clone();
+        navigation.vocabulary_noun = scenario.vocabulary_noun;
         navigation.vocabulary_position = scenario
             .vocabulary_target
             .and_then(|id| runtime.world().entity(id))
@@ -1206,6 +1287,9 @@ fn run_foundation_training_pilot_inner(
     runtime.prime_foundation_semantic_prior()?;
     let started = Instant::now();
     let mut steps = Vec::with_capacity(tick_count);
+    let mut correct_utterances = 0;
+    let mut unprompted_correct_utterances = 0;
+    let mut speech_opportunities = 0;
     for tick in 0..tick_count {
         if tick != 0 {
             close_foundation_navigation_gate(&mut runtime, &scenario)?;
@@ -1221,6 +1305,45 @@ fn run_foundation_training_pilot_inner(
             )
             .into());
         }
+        if let Some(label) = grounded_speech_label(
+            &collected[0].frame,
+            scenario.vocabulary_token,
+            scenario.vocabulary_noun,
+            scenario.vocabulary_target,
+            steps.last().map(|s: &FoundationTrainingStep| &s.patch),
+            scenario_lesson == Some(FoundationTeacherLesson::VocabularyProduction),
+        ) {
+            if let Some(first) = label.token {
+                speech_opportunities += 1;
+                let mut expected = vec![first];
+                expected.extend(label.continuation.into_iter().take_while(|v| *v != 0));
+                let matched = runtime
+                    .world()
+                    .audible_utterances()
+                    .iter()
+                    .any(|utterance| {
+                        utterance.speaker_id == Some(collected[0].frame.organism_id())
+                            && utterance.emitted_tick.raw() == collected[0].frame.tick().raw()
+                            && utterance
+                                .tokens
+                                .iter()
+                                .map(|t| t.raw())
+                                .eq(expected.iter().copied())
+                    });
+                if matched {
+                    correct_utterances += 1;
+                    if collected[0]
+                        .frame
+                        .tick()
+                        .raw()
+                        .saturating_sub(scenario.start_tick)
+                        >= 16
+                    {
+                        unprompted_correct_utterances += 1;
+                    }
+                }
+            }
+        }
         let consumed_lesson = scenario_lesson.is_some_and(|lesson| {
             matches!(
                 lesson,
@@ -1231,17 +1354,25 @@ fn run_foundation_training_pilot_inner(
                     | FoundationTeacherLesson::Recovery
             ) && teacher_step_consumed(&collected[0])
                 || (teacher_mode
-                    && scenario.vocabulary_token == Some(8)
+                    && matches!(scenario.vocabulary_token, Some(8 | 11))
                     && teacher_step_consumed(&collected[0])
                     && teacher_step_targets(&collected[0], food))
         });
+        *teacher_previous.lock().unwrap() = Some(collected[0].patch.clone());
+        let production_consumed_previous = teacher_mode
+            && scenario_lesson == Some(FoundationTeacherLesson::VocabularyProduction)
+            && steps.last().is_some_and(teacher_step_consumed);
         steps.append(&mut collected);
         let hazard_settled = teacher_mode
             && scenario_lesson == Some(FoundationTeacherLesson::HazardAvoidance)
             && steps.last().is_some_and(|step| {
                 teacher_step_consumed(step) && teacher_step_targets(step, food)
             });
-        if consumed_lesson || hazard_settled {
+        if (consumed_lesson
+            && scenario_lesson != Some(FoundationTeacherLesson::VocabularyProduction))
+            || production_consumed_previous
+            || hazard_settled
+        {
             break;
         }
     }
@@ -1273,12 +1404,12 @@ fn run_foundation_training_pilot_inner(
         .iter()
         .filter(|s| {
             let expected = match scenario.vocabulary_token {
-                Some(1..=5 | 14) => alife_core::CandidateActionFamily::Inspect,
+                Some(1..=5 | 14..=18) => alife_core::CandidateActionFamily::Inspect,
                 Some(6) => alife_core::CandidateActionFamily::Approach,
                 Some(7) => alife_core::CandidateActionFamily::Avoid,
-                Some(8) => alife_core::CandidateActionFamily::Ingest,
+                Some(8 | 11) => alife_core::CandidateActionFamily::Ingest,
                 Some(9 | 13) => alife_core::CandidateActionFamily::Contact,
-                Some(10) => alife_core::CandidateActionFamily::Rest,
+                Some(10 | 12) => alife_core::CandidateActionFamily::Rest,
                 _ => alife_core::CandidateActionFamily::Idle,
             };
             let matches = |c: &alife_core::ActionCandidate| {
@@ -1287,7 +1418,7 @@ fn run_foundation_training_pilot_inner(
                         || c.action_id == alife_world::HeadlessActionIds::GRAB)
                     && (scenario.vocabulary_token != Some(13)
                         || c.action_id == alife_world::HeadlessActionIds::PLAY)
-                    && (scenario.vocabulary_token == Some(10)
+                    && (matches!(scenario.vocabulary_token, Some(10 | 12))
                         || (c.target.entity == scenario.vocabulary_target
                             && c.target.entity.is_some()))
             };
@@ -1344,7 +1475,7 @@ fn run_foundation_training_pilot_inner(
         | FoundationTeacherLesson::VocabularyProduction => {
             heard_word_frames > 0
                 && if teacher_mode {
-                    (vocabulary_target_actions > 0 || scenario.vocabulary_token == Some(10))
+                    (vocabulary_target_actions > 0)
                         && (scenario.vocabulary_token != Some(9)
                             || scenario
                                 .vocabulary_target
@@ -1354,7 +1485,7 @@ fn run_foundation_training_pilot_inner(
                                 }))
                         && steps.iter().all(|s| !teacher_step_blocked(s))
                 } else if lesson == FoundationTeacherLesson::VocabularyProduction {
-                    literal_word_matches > 0
+                    correct_utterances > 0 && unprompted_correct_utterances > 0
                 } else {
                     vocabulary_target_actions > 0
                         && (scenario.vocabulary_token != Some(9)
@@ -1554,11 +1685,14 @@ fn run_foundation_training_pilot_inner(
             record_digests: references.iter().map(|r| r.digest).collect(),
             targets: steps
                 .iter()
-                .map(|s| {
-                    vocabulary_speech_target(
+                .enumerate()
+                .map(|(index, s)| {
+                    grounded_speech_label(
                         &s.frame,
                         scenario.vocabulary_token,
+                        scenario.vocabulary_noun,
                         scenario.vocabulary_target,
+                        index.checked_sub(1).map(|i| &steps[i].patch),
                         scenario_lesson == Some(FoundationTeacherLesson::VocabularyProduction),
                     )
                 })
@@ -1700,6 +1834,9 @@ fn run_foundation_training_pilot_inner(
         heard_word_frames,
         vocabulary_target_actions,
         literal_word_matches,
+        correct_utterances,
+        unprompted_correct_utterances,
+        speech_opportunities,
         maze_nodes_reached,
         maze_route_nodes: scenario.demonstration_route.len(),
     };
@@ -1777,6 +1914,7 @@ pub(crate) struct FoundationScenarioSetup {
     pub(crate) vocabulary_noun: Option<u16>,
     pub(crate) repeat_vocabulary: bool,
     pub(crate) training_language_feedback: bool,
+    pub(crate) start_tick: u64,
     last_language_praise_tick: std::cell::Cell<Option<u64>>,
     language_praise_count: std::cell::Cell<u8>,
 }
@@ -1805,25 +1943,48 @@ pub(crate) fn close_foundation_navigation_gate(
                 .is_none_or(|at| runtime.world().tick().raw().saturating_sub(at) >= 24)
         {
             let (subject, _) = runtime.world().organism_entity_ids()[0];
-            let spoken = runtime
-                .world()
-                .audible_utterances()
-                .iter()
-                .any(|utterance| {
-                    utterance.speaker_id == Some(subject)
-                        && utterance.source_kind == alife_core::UtteranceSourceKind::Creature
-                        && utterance.emitted_tick.raw() + 1 >= runtime.world().tick().raw()
-                        && utterance
-                            .tokens
-                            .first()
-                            .is_some_and(|word| word.raw() == token)
+            let patches = runtime.sealed_patches();
+            let expected = patches.last().and_then(|patch| {
+                grounded_speech_label(
+                    patch.pre_action().perception(),
+                    Some(token),
+                    scenario.vocabulary_noun,
+                    scenario.vocabulary_target,
+                    patches.iter().rev().nth(1),
+                    true,
+                )
+            });
+            let spoken = expected
+                .and_then(|label| {
+                    label.token.map(|first| {
+                        let mut words = vec![first];
+                        words.extend(label.continuation.into_iter().take_while(|v| *v != 0));
+                        words
+                    })
+                })
+                .is_some_and(|words| {
+                    runtime
+                        .world()
+                        .audible_utterances()
+                        .iter()
+                        .any(|utterance| {
+                            utterance.speaker_id == Some(subject)
+                                && utterance.source_kind
+                                    == alife_core::UtteranceSourceKind::Creature
+                                && utterance.emitted_tick.raw() + 1 >= runtime.world().tick().raw()
+                                && utterance
+                                    .tokens
+                                    .iter()
+                                    .map(|word| word.raw())
+                                    .eq(words.iter().copied())
+                        })
                 });
             let acted = runtime.sealed_patches().last().is_some_and(|patch| {
                 let expected = match token {
-                    1..=5 | 14 => alife_core::CandidateActionFamily::Inspect,
+                    1..=5 | 14..=18 => alife_core::CandidateActionFamily::Inspect,
                     6 => alife_core::CandidateActionFamily::Approach,
                     7 => alife_core::CandidateActionFamily::Avoid,
-                    8 => alife_core::CandidateActionFamily::Ingest,
+                    8 | 11 => alife_core::CandidateActionFamily::Ingest,
                     9 | 13 => alife_core::CandidateActionFamily::Contact,
                     _ => alife_core::CandidateActionFamily::Rest,
                 };
@@ -1838,7 +1999,7 @@ pub(crate) fn close_foundation_navigation_gate(
                                 (token != 9 || c.action_id == alife_world::HeadlessActionIds::GRAB)
                                     && (token != 13
                                         || c.action_id == alife_world::HeadlessActionIds::PLAY)
-                                    && (token == 10
+                                    && (matches!(token, 10 | 12)
                                         || c.target.entity == scenario.vocabulary_target)
                             })
                 }) && (token != 9
@@ -1872,10 +2033,16 @@ pub(crate) fn close_foundation_navigation_gate(
                 }
             }
         }
-        if runtime.world().tick().raw() == 0
+        if runtime.world().tick().raw() == scenario.start_tick
             || (scenario.repeat_vocabulary
-                && runtime.world().tick().raw() % 24 == 0
-                && (token != 8
+                && runtime
+                    .world()
+                    .tick()
+                    .raw()
+                    .saturating_sub(scenario.start_tick)
+                    % 24
+                    == 0
+                && (!matches!(token, 8 | 11)
                     || scenario
                         .vocabulary_target
                         .and_then(|id| runtime.world().entity(id))
@@ -2068,6 +2235,12 @@ pub(crate) fn configure_foundation_scenario(
         ) => {
             let words = alife_core::FOUNDATION_LESSON_VOCABULARY;
             vocabulary_token = Some(words[(seed % words.len() as u64) as usize]);
+            if let Some(word @ 15..=17) = vocabulary_token {
+                world.set_food_variety(
+                    food,
+                    alife_world::FoodVariety::from_seed(u64::from(word - 15)),
+                )?;
+            }
             move_scenario_object(
                 world,
                 food,
@@ -2075,7 +2248,8 @@ pub(crate) fn configure_foundation_scenario(
             )?;
             // `get` must select the movable example. Noun lessons alternate
             // physical toy uses across seeds rather than equating toy with a ball.
-            let movable = matches!(vocabulary_token, Some(9 | 14)) || (seed / 12) % 2 == 0;
+            let movable = matches!(vocabulary_token, Some(9 | 14))
+                || (vocabulary_token != Some(18) && (seed / 18) % 2 == 0);
             let toy = world.spawn_toy(
                 "vocabulary-toy",
                 alife_core::Vec3f::new(origin.x + 1.5, origin.y, origin.z + 2.0),
@@ -2128,18 +2302,70 @@ pub(crate) fn configure_foundation_scenario(
                     ),
                 )?;
             }
+            // Category and subtype words must survive a physical same-category choice.
+            let food_position = world
+                .entity(food)
+                .ok_or("vocabulary food missing")?
+                .position;
+            let food_bearing = (food_position.z - origin.z).atan2(food_position.x - origin.x)
+                + 25.0_f32.to_radians();
+            if let Some(other_food) = world.entity_id("food-02") {
+                let variety = match vocabulary_token {
+                    Some(word @ 15..=17) => u64::from(word - 15),
+                    _ => seed / 12,
+                };
+                world.set_food_variety(
+                    other_food,
+                    alife_world::FoodVariety::from_seed(variety + 1),
+                )?;
+                move_scenario_object(
+                    world,
+                    other_food,
+                    alife_core::Vec3f::new(
+                        origin.x + 3.8 * food_bearing.cos(),
+                        origin.y,
+                        origin.z + 3.8 * food_bearing.sin(),
+                    ),
+                )?;
+            }
+            let toy_position = world.entity(toy).ok_or("vocabulary toy missing")?.position;
+            let toy_bearing = (toy_position.z - origin.z).atan2(toy_position.x - origin.x)
+                - 25.0_f32.to_radians();
+            world.spawn_toy(
+                "vocabulary-other-toy",
+                alife_core::Vec3f::new(
+                    origin.x + 3.8 * toy_bearing.cos(),
+                    origin.y,
+                    origin.z + 3.8 * toy_bearing.sin(),
+                ),
+                !movable,
+            )?;
             let noun = match vocabulary_token {
                 Some(n @ 1..=4) => n,
-                Some(9 | 13 | 14) => 2,
+                Some(9 | 13 | 14 | 18) => 2,
                 Some(5..=7) => 1 + ((seed / 10) % 4) as u16,
                 _ => 1,
             };
-            vocabulary_noun = Some(noun);
+            vocabulary_noun = Some(match noun {
+                1 => 15 + ((seed / 12) % 3) as u16,
+                2 => {
+                    if matches!(vocabulary_token, Some(9 | 14))
+                        || (vocabulary_token != Some(18) && (seed / 18) % 2 == 0)
+                    {
+                        14
+                    } else {
+                        18
+                    }
+                }
+                _ => noun,
+            });
             vocabulary_target = Some(targets[noun as usize - 1]);
         }
         None => {}
     }
-    if precondition_recovery && lesson == Some(FoundationTeacherLesson::Recovery) {
+    if precondition_recovery
+        && (lesson == Some(FoundationTeacherLesson::Recovery) || vocabulary_token == Some(12))
+    {
         let organism = world.organism_entity_ids()[0].0;
         let required_fatigue = 0.12 + (seed % 4) as f32 * 0.025;
         for _ in 0..2_400 {
@@ -2166,6 +2392,35 @@ pub(crate) fn configure_foundation_scenario(
             .fatigue;
         if fatigue < required_fatigue {
             return Err("ordinary world aging did not produce measurable fatigue".into());
+        }
+    }
+    if precondition_recovery && vocabulary_token == Some(11) {
+        let organism = world.organism_entity_ids()[0].0;
+        for _ in 0..2400 {
+            let need = world
+                .organism_registry()
+                .get(organism)
+                .ok_or("hunger organism missing")?
+                .biochemistry()
+                .homeostasis
+                .drives
+                .hunger;
+            if need >= 0.12 {
+                break;
+            }
+            world.try_advance_tick()?;
+        }
+        if world
+            .organism_registry()
+            .get(organism)
+            .ok_or("hunger organism missing")?
+            .biochemistry()
+            .homeostasis
+            .drives
+            .hunger
+            < 0.12
+        {
+            return Err("ordinary biology did not produce a measurable hunger need".into());
         }
     }
     let initial_hazard_distance = if lesson == Some(FoundationTeacherLesson::HazardAvoidance) {
@@ -2198,6 +2453,7 @@ pub(crate) fn configure_foundation_scenario(
         vocabulary_noun,
         repeat_vocabulary: true,
         training_language_feedback: true,
+        start_tick: world.tick().raw(),
         last_language_praise_tick: std::cell::Cell::new(None),
         language_praise_count: std::cell::Cell::new(0),
     })

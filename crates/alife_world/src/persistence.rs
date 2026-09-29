@@ -2207,7 +2207,10 @@ impl WorldSaveState {
             .map(|record| record.organism_id().raw())
             .collect::<BTreeSet<_>>();
         let agent_ids = agent_bindings.keys().copied().collect::<BTreeSet<_>>();
-        if registered_ids != agent_ids {
+        // External embodied teachers remain ordinary Agent objects, without
+        // biological/neural registration. Every registered life still binds
+        // exactly once; extra objects must not become implicit newborns.
+        if !registered_ids.is_subset(&agent_ids) {
             return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
         }
         for record in registry.iter() {
@@ -2316,6 +2319,8 @@ impl WorldSaveState {
                 || event.temperature_stress != 0.0
                 || event.nutrition != 0.0
                 || event.play_stimulation != 0.0
+                || event.perceived_novelty != 0.0
+                || event.investigation != 0.0
                 || event.sleep_recovery != 0.0
                 || event.mating_opportunity != 0.0
             {

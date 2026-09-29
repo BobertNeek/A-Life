@@ -30,10 +30,16 @@ pub const BASIC_VOCABULARY_V1: &[(&str, u16)] = &[
     ("tired", 12),
     ("play", 13),
     ("ball", 14),
+    ("root", 15),
+    ("fruit", 16),
+    ("seed", 17),
+    ("activity", 18),
 ];
 
-/// Groundable first lessons; bodily need words require separate exposure.
-pub const FOUNDATION_LESSON_VOCABULARY: &[u16] = &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14];
+/// Groundable first lessons, including bodily needs exposed through ordinary biology.
+pub const FOUNDATION_LESSON_VOCABULARY: &[u16] = &[
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+];
 
 pub fn basic_vocabulary_bindings() -> Vec<SurfaceTokenBinding> {
     BASIC_VOCABULARY_V1

@@ -2,13 +2,13 @@
 
 Use PowerShell 7 from the authoritative repository root. The launcher has separate fidelity preparation and bounded campaign modes. Neither a completed teacher corpus nor a successful training cycle by itself proves learned care.
 
-The next proposed [vision, maze, and vocabulary campaign](n2048-vision-maze-vocabulary-run-2026-09-28.md) must use the internal SLM prior during warmup and training, with deliberate dropout, and run headlessly at maximum sustainable speed. The launcher has explicit Care and VisionLanguage curricula. The [September 28 repair evidence](n2048-prior-maze-speech-repairs-2026-09-28.md) separates integration checks from learned behavior. No founder training campaign or scheduling is authorized by this operator update.
+The next proposed [vision, maze, and vocabulary campaign](n2048-vision-maze-vocabulary-run-2026-09-28.md) must use the internal SLM prior during warmup and training, with deliberate dropout, and run headlessly at maximum sustainable speed. The launcher has explicit Care and VisionLanguage curricula. The [September 29 seven-repair report](n2048-seven-repairs-2026-09-29.md) records the current changes and preparation; the [September 28 evidence](n2048-prior-maze-speech-repairs-2026-09-28.md) is historical. No founder training campaign or scheduling is authorized by this operator update.
 
 ## Tiny local prior trial (September 28)
 
 The selected small-model trial uses [Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B), converted by [ggml-org](https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF), in Q8_0. The downloaded file is 833,592,096 bytes, from revision `8fea620810c4afa23dd6443f999a48574c1611a3`, with SHA256 `37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f`. It lives at `models/local/qwen3.5-0.8b-gguf/Qwen3.5-0.8B-Q8_0.gguf`. The previous Qwen3-4B model remains available. Qwen3-Embedding-0.6B is an embedding model, not a generative prior replacement.
 
-For this trial, pass the model and alias explicitly; existing provider and launcher defaults still name the older 4B model. Do not start a second server if port 18081 is already occupied. The verified service uses full GPU offload on the RTX 3050, four CPU threads, a 2,048-token context, one request slot, and reasoning disabled. The launcher's reasoning parser separates the template's empty think tags from JSON; leaving those tags in content broke JSON-constrained generation with this model.
+The game bridge and launcher now default to this 0.8B model, a 2,048-token context, four threads, one GPU request slot, and reasoning disabled. Explicit overrides remain available. Do not start a second server if port 18081 is already occupied. The verified service uses full GPU offload on the RTX 3050, four CPU threads, a 2,048-token context, one request slot, and reasoning disabled. The launcher's reasoning parser separates the template's empty think tags from JSON; leaving those tags in content broke JSON-constrained generation with this model.
 
 ```powershell
 pwsh -NoProfile -File .\scripts\start_llamacpp_slm_prior.ps1 -ModelPath .\models\local\qwen3.5-0.8b-gguf\Qwen3.5-0.8B-Q8_0.gguf -ModelAlias alife-qwen3.5-0.8b-prior -GpuLayers 999 -Threads 4 -ContextSize 2048 -ParallelSlots 1
@@ -50,10 +50,10 @@ demonstration's founder identity and foundation digest. Do not feed the old
 object-slot corpus into terrain warm-up.
 
 After rebuilding the release CLI, `scripts/collect_n2048_care_lessons.ps1 -Source assets/founders/terrain-care-n2048-v1 -Output target/founder-training/NEW_CORPUS`
-defaults to the 62-demonstration `VisionLanguage` corpus: 14 care/vision/maze lessons,
-24 reception lessons, and 24 production lessons. Each language direction visits
-all twelve lesson words twice with varied object placements. These include `play`
-and `ball`; `hungry` and `tired` remain protocol words requiring later bodily-state lessons. Maze demonstrations
+defaults to the 86-demonstration `VisionLanguage` corpus: 14 care/vision/maze lessons,
+36 reception lessons, and 36 production lessons. Each direction visits all eighteen
+words twice, including real hunger/tiredness and food/toy subtypes.
+`-ExamplesPerWord 1` gives a bounded 50-demonstration preparation corpus. Maze demonstrations
 have a 1,024-decision cap, vocabulary 64, and other lessons 128. Meal lessons stop
 when they eat; vocabulary records hearing, named actions, and speaking opportunities.
 Use `-Curriculum Care` explicitly for the earlier balanced 32-lesson care corpus.
@@ -74,13 +74,13 @@ Set-Location -LiteralPath 'D:\A life'
 
 Before `Prepare`, the supervisor must release the Cargo/GPU lane. Do not run another Cargo command, game, GPU test, or training process alongside it. The launcher takes an exclusive file lock and rejects existing project processes; that lock only coordinates callers that respect it. It never kills processes.
 
-Preparation builds `train_n2048_care` with `foundation-training`, runs exact serial gates (including the PPO GPU objective and selective merge), requires one executed passing test per gate, and runs the supported `--pilot` command for a fixed 32 ticks. Cargo uses existing default features and dependencies offline, two build jobs, and the development profile. This is correctness evidence, not a release-performance measurement. No source edits, downloads, legacy trainer fallback, or full test suites are performed.
+Preparation builds the release `train_n2048_care` with `foundation-training`, runs five focused serial checks (phrase GPU gradients, gene-controlled object chemistry, indexed familiarity persistence, maze connectivity, and exact runtime save/resume), requires one executed passing test per check, and runs the supported `--pilot` command for a fixed 32 decisions. Cargo uses existing default features and dependencies offline, with two build jobs. The pilot checks replay fidelity; it does not prove learned gameplay. No source edits, downloads, legacy trainer fallback, or full test suites are performed.
 
 Evidence lives in a fresh `target/founder-training/prepare-*` directory. `source/` records HEAD, the complete tracked binary diff, and hashes of nonignored new files under source/docs/scripts/assets directories. Artifact folders, Blender backups, and Python caches are excluded. Source identity is checked between phases and after the pilot. Each command has separate stdout/stderr logs. `status.json` is atomically published both in that directory and at `target/founder-training/status.json`.
 
 `Prepared` means the listed gates and pilot succeeded for that exact source, executable, and receipt. The executable enforces replay tolerances; the launcher additionally rejects missing, negative, or nonfinite receipt metrics. Matching successful evidence is reused. `Failed` means stop and inspect the named phase and logs with the supervisor. Do not change tolerances, skip a gate, repeatedly retry, delete receipts, or modify source just to change its fingerprint. An interrupted `Running` receipt also needs supervisor diagnosis. Check status with the first command above.
 
-`-Mode Campaign -Source target/founder-training/SEALED_CYCLE_DIRECTORY -DurationHours 8 -CycleTicks 256` rebuilds the release trainer from the current source, then runs one teacher-free lesson world per cohort. The default `VisionLanguage` schedule allocates 40% of cohorts to vision/maze, 40% to vocabulary reception/production, and 20% to feeding/hazard care. Maze cohorts collect at least 1,024 decisions; other cohorts use `CycleTicks`. The explicit `Care` schedule retains the older obstacle/feeding/hazard/recovery mix. Every cohort uses a distinct seed and records its actual food and obstacle positions; a repeated food position fails the campaign. Food and routes vary in direction, distance, and lateral offset. It carries the actor, value head, and optimizer state forward, seals the latest checkpoint after each cycle, keeps provisional best receipts per lesson, and stops at its deadline or a failed handoff. `-Source` may also point to a sealed warm-up. `-MaxCycles 1 -CycleTicks 16` gives a small coordinator check. It never promotes a founder. The CLI can also run and resume individual bounded cycles. For a focused operator check, choose fresh output directories and run:
+`-Mode Campaign -Source target/founder-training/SEALED_CYCLE_DIRECTORY -DurationHours 8 -CycleTicks 256` rebuilds the release trainer from the current source, then runs one teacher-free lesson world per cohort. The default `VisionLanguage` schedule allocates 40% of cohorts to vision/maze, 40% to vocabulary reception/production, and 20% to feeding/hazard care. Maze cohorts collect at least 1,024 decisions; other cohorts use `CycleTicks`. The explicit `Care` schedule retains the older obstacle/feeding/hazard/recovery mix. Every cohort uses a distinct seed and records its actual food and obstacle positions; a repeated food position fails the campaign. Food and routes vary in direction, distance, and lateral offset. It carries the actor, value head, and optimizer state forward, seals the latest checkpoint after each cycle, keeps provisional care scores and separate frozen navigation/reception/production panels, and stops at its deadline or a failed handoff. `-Source` may also point to a sealed warm-up. `-MaxCycles 1 -CycleTicks 16` gives a small coordinator check. It never promotes a founder. The CLI can also run and resume individual bounded cycles. For a focused operator check, choose fresh output directories and run:
 
 ```powershell
 cargo run -p alife_game_app --features foundation-training --bin train_n2048_care -- --cycle target/founder-training/cycle-001 4
@@ -106,3 +106,32 @@ The teacher's action sequence is a causal contract, not a script of desired labe
 The teacher selects known world objects, while the learner sees physical object slots and sealed consequences, not the teacher's object labels. World-spawned food, hazards, and obstacles now retain distinct chemical ranges across spawn orders; other physical channels still vary by object. The 32-lesson corpus at `target/founder-training/demonstrations-20260924-006/manifest.json` balances eight examples per lesson, covers both obstacle sides and several fatigue levels, and requires hazard Avoid → Approach → Ingest and recovery Rest → Approach → Ingest sequences. These are demonstrations, not learned-behavior proof.
 
 The first overnight campaign completed 528 teacher-free PPO cohorts on 25 September 2026 and sealed `target/founder-training/campaign-20260925-070114-57b51372/cycle-0527-recovery`. Its obstacle lesson averaged 2.70 meals per cohort and had six zero-meal cohorts; these are training-world observations, not proof of route finding in held-out worlds. Two new rotated teacher routes reached and consumed food without blocked actions. A 16-decision teacher-free coordinator check sealed its handoff and distinct-position receipt, but had no meal and four blocked actions; it is not a competence test. The next terrain campaign must use the explicit adapted source described above, not resume the old object-slot checkpoint directly or use the coordinator check. The September 28 [vision, maze, and vocabulary run design](n2048-vision-maze-vocabulary-run-2026-09-28.md) supersedes the proposed next-run schedule here; [bounded integration evidence](n2048-prior-maze-speech-repairs-2026-09-28.md) now covers the added paths, while learned competence remains Unknown. No run is launched by that design. The 20-minute food-free interval followed by autonomous feeding remains a separate post-training behavior gate, not a reason to teach extended inactivity. The earlier [training regimen](n2048-care-training-regimen-2026-09-21.md) records the underlying method and implementation history.
+
+## Automatic behavior stages
+
+The VisionLanguage campaign starts at stage 0. Every 40 completed cohorts, while
+at least 20 minutes remain, it assesses the exported policy without a teacher or
+optimizer on nine fixed disjoint-seed worlds: three navigation, three reception,
+three production. Each group must pass at least two of three cases. Production
+requires exact meaningful emitted token sequences after the initial hearing
+exposure, not a matching first word or HUD translation. An assisted pass then
+requires two paired prior-off probes (navigation and production). A failure holds
+the stage. These small screens are progression checks, not statistical acceptance.
+
+Stage 0 uses small two-by-two maze trees and basic noun/play/hunger assessment;
+stage 1 uses three-by-three trees and look/get/tired cases; stage 2 adds food/toy
+subtype assessment. Demonstrations and training vary actual connectivity using
+two tree generators; mirrors and rotations alone do not count as diversity.
+Training vocabulary still samples all eighteen words. No score authorizes founder
+promotion. The food-free biology and player-visible acceptance gates remain.
+
+Panels and their source digests are recorded separately. Ranking compares scores
+only within the same stage and cannot exchange a language regression for meals.
+Status retains compact prior metrics; full deliveries stay in sealed receipts.
+The prior environment is restored after every panel, including exceptions.
+
+Exact saves retain bounded provider-private fade/context/active-hint state inside
+the existing cognitive checkpoint. A provider identity mismatch fails restore
+rather than silently changing the creature. In-flight requests are resubmitted;
+network requests themselves are not serialized. Disabling the prior intentionally
+ignores that private provider state. None of this private state enters a newborn.
