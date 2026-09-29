@@ -30,6 +30,35 @@ fn span_within(start:u32, count:u32, limit:u32) -> bool {
   return start <= limit && count <= limit - start;
 }
 
+fn innate_family_contribution(
+    header:GpuPerceptionHeader,
+    candidate_record:GpuCandidateRecord,
+    family:GpuDecoderFamilyRecord
+) -> f32 {
+  let mask = family.reserved0 & 0x1ffu;
+  let gain = bitcast<f32>(family.reserved1);
+  if (mask == 0u || gain == 0.0) { return 0.0; }
+  var urgency = 0.0;
+  for (var lane=0u; lane<9u; lane++) {
+    if ((mask & (1u << lane)) != 0u) {
+      urgency = max(urgency, bitcast<f32>(frame_payload_words[header.sensory_offset + 55u + lane]));
+    }
+  }
+  var cue = 1.0;
+  let cue_code = (family.reserved0 >> 16u) & 0xffu;
+  if (cue_code != 0u) {
+    let feature = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + cue_code - 1u]);
+    let signal = select(feature, -feature, (family.reserved0 & 0x02000000u) != 0u);
+    cue = clamp((signal - 0.4) / 0.6, 0.0, 1.0);
+  }
+  var reach = 1.0;
+  if ((family.reserved0 & 0x01000000u) != 0u) {
+    let distance = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + 2u]);
+    reach = clamp((0.25 - distance) / 0.15, 0.0, 1.0);
+  }
+  return max(0.0, urgency - 0.55) * gain * cue * reach;
+}
+
 @compute @workgroup_size(32)
 fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
   let header = load_perception_header(gid.y * ACTIVE_DISPATCH_ROW_WORDS);
@@ -61,7 +90,9 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (valid) { family = find_decoder_family(decoder, candidate_record.family); }
   valid = valid && family.family_raw == candidate_record.family
     && family.weight_index_count == family.decoder_synapse_count
-    && family.reserved0 == 0u && family.reserved1 == 0u
+    && (family.reserved0 & 0xfc00fe00u) == 0u
+    && ((family.reserved0 >> 16u) & 0xffu) <= decoder.feature_count
+    && finite_decode(bitcast<f32>(family.reserved1))
     && family.decoder_synapse_start >= brain.recurrent_synapse_count
     && span_within(family.decoder_synapse_start, family.decoder_synapse_count, brain.synapse_count)
     && family.weight_index_start >= brain.decoder_weight_indices_offset
@@ -76,6 +107,10 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
   valid = valid && final_side <= 1u;
   let activation_offset = select(brain.activation_a_offset, brain.activation_b_offset, final_side == 1u);
   var logit = bitcast<f32>(family.bias_bits);
+  if (valid) {
+    logit += innate_family_contribution(header, candidate_record, family);
+    valid = finite_decode(logit);
+  }
   var diagnostic_requested = false;
   var diagnostic_base = 0u;
   var diagnostic_synapse_count = 0u;

@@ -254,6 +254,9 @@ fn forward_candidate_logits(@builtin(global_invocation_id) gid:vec3<u32>) {
   let family = candidate_field(tick, candidate, 1u);
   let final_state = (tick + 1u) * h(4u) * h(1u);
   var logit = bitcast<f32>(meta_words[h(38u) + family]);
+  if (h(41u) != 0u) {
+    logit += bitcast<f32>(candidate_field(tick, candidate, 2u));
+  }
   var memory = 0.0;
   var cognitive = 0.0;
   let begin = meta_words[h(54u) + family];

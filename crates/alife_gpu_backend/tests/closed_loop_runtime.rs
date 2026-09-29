@@ -246,6 +246,109 @@ mod hardware {
         }
     }
 
+    #[test]
+    fn fresh_brain_prioritizes_cued_food_and_acute_danger() {
+        let mut backend = required_backend();
+        let capacity = BrainCapacityClass::n2048();
+        let phenotype = phenotype_for_capacity_at_maturation(
+            capacity,
+            0x5A7E_0003,
+            1.0,
+            SensorProfile::PrivilegedAffordanceV1,
+        );
+        let physiology = super::support::test_physiology(0x5A7E_0003, &phenotype).unwrap();
+        for (case, hunger, pain, expected) in [(0_u64, 0.98, 0.0, 2_u16), (1_u64, 0.0, 0.98, 3_u16)]
+        {
+            let organism = OrganismId(0x5A7E_0100 + case);
+            let handle = backend.insert_brain(organism, phenotype.clone()).unwrap();
+            let tick = Tick::new(20);
+            let base = perception_frame_for_profile_at_tick(
+                organism.raw(),
+                tick.raw(),
+                SensorProfile::PrivilegedAffordanceV1,
+                false,
+                1,
+            );
+            let mut drives = HomeostaticSnapshot::baseline(tick).drives;
+            drives.hunger = hunger;
+            drives.pain = pain;
+            let homeostasis = HomeostaticSnapshot::new(
+                tick,
+                drives,
+                HomeostaticSnapshot::baseline(tick).hormones,
+            )
+            .unwrap();
+            let mut food = CandidateFeatureVector::zero();
+            food.0[15] = 0.8;
+            let specs = [
+                (
+                    ActionKind::Idle,
+                    CandidateActionFamily::Idle,
+                    CandidateFeatureVector::zero(),
+                ),
+                (ActionKind::Move, CandidateActionFamily::Approach, food),
+                (ActionKind::Interact, CandidateActionFamily::Ingest, food),
+                (ActionKind::Move, CandidateActionFamily::Avoid, {
+                    let mut hazard = CandidateFeatureVector::zero();
+                    hazard.0[15] = -0.8;
+                    hazard
+                }),
+            ];
+            let candidates = specs
+                .into_iter()
+                .enumerate()
+                .map(|(index, (kind, family, features))| {
+                    ActionCandidate::new(
+                        index as u16,
+                        alife_core::ActionId(700 + index as u32),
+                        kind,
+                        family,
+                        CandidateObservationRef::None,
+                        ActionTarget::NONE,
+                        features,
+                        Confidence::new(1.0).unwrap(),
+                        NormalizedScalar::new(0.0).unwrap(),
+                        DurationTicks::new(1),
+                        DurationTicks::new(1),
+                    )
+                    .unwrap()
+                })
+                .collect();
+            let frame = PerceptionFrame::new(
+                organism,
+                tick,
+                SensorProfile::PrivilegedAffordanceV1,
+                base.sensory().clone(),
+                base.body(),
+                homeostasis,
+                candidates,
+                base.profile_provenance(),
+                Vec::new(),
+            )
+            .unwrap();
+            let (frame, recall) = super::support::empty_recall(&frame);
+            let memory = backend
+                .prepare_memory_context_upload(handle, &frame, &recall)
+                .unwrap();
+            let memory = super::support::bind_chemistry_receptor_effects(
+                memory,
+                &phenotype,
+                &physiology,
+                tick,
+            )
+            .unwrap();
+            let input =
+                alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &memory)
+                    .unwrap();
+            let batch =
+                alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(vec![input]).unwrap();
+            let result = backend.tick_memory_batch(&batch).unwrap().remove(0);
+            assert_eq!(result.selection.candidate_index, expected);
+            discard_tick(&mut backend, &result);
+            backend.remove_brain(handle).unwrap();
+        }
+    }
+
     #[cfg(feature = "training-rollout")]
     #[test]
     fn grounded_language_and_private_prior_reach_gpu_encoder_separately() {

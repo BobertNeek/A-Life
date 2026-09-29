@@ -539,8 +539,13 @@ impl GpuPhenotypeUpload {
                 decoder_synapse_count: row.decoder_synapse_count(),
                 weight_index_start: decoder_weight_index_word_base + local * 4,
                 weight_index_count: row.decoder_synapse_count(),
-                reserved0: 0,
-                reserved1: 0,
+                // The two existing family words carry gene-compiled innate
+                // drive salience; no second selector or world score is added.
+                reserved0: row.innate_drive_mask()
+                    | (u32::from(row.innate_cue_lane().map_or(0, |lane| lane + 1)) << 16)
+                    | (u32::from(row.innate_requires_reach()) << 24)
+                    | (u32::from(row.innate_cue_inverted()) << 25),
+                reserved1: row.innate_gain().to_bits(),
             });
             local = local
                 .checked_add(row.decoder_synapse_count())

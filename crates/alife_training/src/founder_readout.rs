@@ -73,7 +73,11 @@ impl ProductionReadoutExample {
                 || row.family != candidate.family
                 || row.target != candidate.target
                 || row.memory_context_delta != Some(0.0)
-                || row.decoder_family_bias.to_bits() != family.bias().to_bits()
+                || row.decoder_family_bias.to_bits()
+                    != (family.bias()
+                        + family
+                            .innate_contribution(frame.homeostasis().drives, candidate.features))
+                    .to_bits()
             {
                 return Err(invalid());
             }

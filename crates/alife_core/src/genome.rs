@@ -18,6 +18,8 @@ pub struct BrainGenome {
     pub species_seed: u64,
     pub brain_class_id: BrainClassId,
     pub genetic_prior_seed: u64,
+    #[serde(default, skip_serializing_if = "InnatePriorityGenes::is_default")]
+    pub innate_priority: InnatePriorityGenes,
     pub seeds: GenomeSeedSet,
     pub lobe_ratios: LobeRatioPlan,
     pub macro_connectome_masks: Vec<MacroConnectomeMask>,
@@ -33,6 +35,55 @@ pub struct BrainGenome {
     pub crossover: CrossoverPolicy,
     pub developmental_schedule: DevelopmentalSchedule,
     pub inheritance: InheritancePolicy,
+}
+
+/// Expressed diploid predispositions used by the neural action decoder at birth.
+/// Acquired action weights remain separate and can refine these priors.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct InnatePriorityGenes {
+    pub reflex_strength: f32,
+    pub food_attraction: f32,
+    pub hazard_aversion: f32,
+}
+
+impl Default for InnatePriorityGenes {
+    fn default() -> Self {
+        // Absent in older serialized brains: preserve their original decoder.
+        Self {
+            reflex_strength: 0.0,
+            food_attraction: 0.0,
+            hazard_aversion: 0.0,
+        }
+    }
+}
+
+impl InnatePriorityGenes {
+    const fn canonical_founder() -> Self {
+        Self {
+            reflex_strength: 0.48,
+            food_attraction: 0.58,
+            hazard_aversion: 0.62,
+        }
+    }
+
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+impl Validate for InnatePriorityGenes {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        for value in [
+            self.reflex_strength,
+            self.food_attraction,
+            self.hazard_aversion,
+        ] {
+            if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+                return Err(ScaffoldContractError::ScalarOutOfRange);
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Versioned bounded architecture genes expressed by the ordinary genome
@@ -465,6 +516,7 @@ impl BrainGenome {
             species_seed,
             brain_class_id,
             genetic_prior_seed: seeds.genetic_prior_seed,
+            innate_priority: InnatePriorityGenes::canonical_founder(),
             seeds,
             lobe_ratios: LobeRatioPlan::ClassDefault,
             macro_connectome_masks: if brain_class_id == crate::BrainCapacityClass::N2048_ID {
@@ -550,6 +602,7 @@ impl Validate for BrainGenome {
             lineage_id.validate()?;
         }
         self.seeds.validate_contract()?;
+        self.innate_priority.validate_contract()?;
         if self.genetic_prior_seed == 0 || self.genetic_prior_seed != self.seeds.genetic_prior_seed
         {
             return Err(ScaffoldContractError::InvalidId);

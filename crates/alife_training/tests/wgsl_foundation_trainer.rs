@@ -170,6 +170,7 @@ fn n2048_exact_graph_adamw_step_changes_only_the_masked_weight_and_exports() {
         candidates: vec![TrainingReplayCandidate {
             family: candidate.family,
             decoder_inputs,
+            innate_bias: 0.7,
         }],
     };
     let replay = TrainingSequence {
@@ -205,6 +206,7 @@ fn n2048_exact_graph_adamw_step_changes_only_the_masked_weight_and_exports() {
         .find(|f| f.family() == candidate.family)
         .unwrap()
         .bias();
+    expected += 0.7;
     let mut memory = 0.0;
     let mut cognitive = 0.0;
     for (synapse, weight) in phenotype.synapses().iter().zip(&uninterrupted.weights) {
@@ -590,6 +592,7 @@ fn verify_sampled_replay_gradients(
         candidates: vec![TrainingReplayCandidate {
             family: CandidateActionFamily::Approach,
             decoder_inputs,
+            innate_bias: 0.0,
         }],
     };
     assert!(tick.microstep_count >= 2);
@@ -794,6 +797,7 @@ fn n2048_speech_payload_head_trains_on_gpu_and_remains_exportable() {
         candidates: vec![TrainingReplayCandidate {
             family: CandidateActionFamily::Idle,
             decoder_inputs: [0.0; 54],
+            innate_bias: 0.0,
         }],
     };
     let replay = TrainingSequence {
@@ -1017,6 +1021,7 @@ fn n2048_ppo_and_imitation_gpu_objective_matches_joint_derivatives_and_partial_b
         TrainingReplayCandidate {
             family,
             decoder_inputs,
+            innate_bias: 0.0,
         }
     })
     .collect();

@@ -2166,6 +2166,7 @@ fn pack_replay_sequence(
                     * CANDIDATE_RECORD_WORDS;
             words[base] = 1;
             words[base + 1] = u32::from(candidate.family.raw());
+            words[base + 2] = candidate.innate_bias.to_bits();
             for (lane, value) in candidate.decoder_inputs.iter().enumerate() {
                 let field = if lane < 24 { 4 + lane } else { 32 + lane - 24 };
                 words[base + field] = value.to_bits();

@@ -6,10 +6,10 @@ use crate::{
     validate_finite, BiochemicalPhenotype, BrainCapacityClass, BrainClassId, BrainGenome,
     CriticalPeriod, CrossoverPolicy, DevelopmentStage, DevelopmentState, DevelopmentalMilestone,
     DevelopmentalSchedule, EndocrineProfile, EndocrineSnapshot, GenomeId, HomeostaticParameters,
-    InheritancePolicy, LanguageTokenId, LineageId, LobeKind, LobeRatioOverride, LobeRatioPlan,
-    MotorAffordanceGene, MotorAffordanceKind, MutationRates, NormalizedScalar,
-    ProjectionPlasticityMask, ScaffoldContractError, SchemaKind, SensorChannelGene,
-    SensorChannelKind, SensorLayoutGene, Tick, Validate,
+    InheritancePolicy, InnatePriorityGenes, LanguageTokenId, LineageId, LobeKind,
+    LobeRatioOverride, LobeRatioPlan, MotorAffordanceGene, MotorAffordanceKind, MutationRates,
+    NormalizedScalar, ProjectionPlasticityMask, ScaffoldContractError, SchemaKind,
+    SensorChannelGene, SensorChannelKind, SensorLayoutGene, Tick, Validate,
 };
 
 pub const CREATURE_GENOME_SCHEMA_VERSION: u16 = 3;
@@ -495,6 +495,16 @@ pub struct BiochemicalGraphChromosome {
 }
 
 impl BiochemicalGraphChromosome {
+    pub fn with_health_distress(mut self, side: AlleleSide) -> Result<Self, ScaffoldContractError> {
+        let homolog = match side {
+            AlleleSide::Maternal => &mut self.maternal,
+            AlleleSide::Paternal => &mut self.paternal,
+        };
+        *homolog = homolog.clone().with_health_distress()?;
+        self.validate_contract()?;
+        Ok(self)
+    }
+
     pub fn with_play_stimulation(
         mut self,
         side: AlleleSide,
@@ -1434,6 +1444,11 @@ fn express_brain_genome(
         genome = genome.with_plasticity_parameters(parameters)?;
     }
     genome.id = source.id;
+    genome.innate_priority = InnatePriorityGenes {
+        reflex_strength: source.predisposition.reflex_strength.expressed()?,
+        food_attraction: source.predisposition.food_attraction.expressed()?,
+        hazard_aversion: source.predisposition.hazard_aversion.expressed()?,
+    };
     genome.parent_genome_ids = source.parent_genome_ids.clone();
     genome.lineage_id = Some(source.lineage_id);
 

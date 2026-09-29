@@ -153,6 +153,8 @@ pub enum BiochemicalSourceLocus {
     PlayStimulation,
     PerceivedNovelty,
     Investigation,
+    /// Persistent loss of viability, distinct from the one-shot damage event.
+    HealthDeficit,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -971,6 +973,22 @@ impl BiochemicalPhenotype {
         Ok(self)
     }
 
+    /// Keep injury salient while health remains low. The emitter lives in the
+    /// inherited graph; an old saved graph is never rewritten on load.
+    pub(crate) fn with_health_distress(mut self) -> Result<Self, ScaffoldContractError> {
+        self.emitters.retain(|row| {
+            !(row.source == BiochemicalSourceLocus::HealthDeficit && row.target == ids::PAIN)
+        });
+        let mut distress = emitter(BiochemicalSourceLocus::HealthDeficit, ids::PAIN, 0.1);
+        // A mild scratch does not become a constant emergency through repeated
+        // release. Acute damage still supplies the immediate pain spike.
+        distress.threshold = 0.4;
+        distress.developmental_expression_floor = 1.0;
+        self.emitters.push(distress);
+        self.compile()?;
+        Ok(self)
+    }
+
     /// Inherited boredom circuit, separate from exploratory curiosity. Toy
     /// use can relieve an existing need; it cannot manufacture praise or food.
     pub(crate) fn with_play_stimulation(mut self) -> Result<Self, ScaffoldContractError> {
@@ -1767,6 +1785,7 @@ fn source_value(source: BiochemicalSourceLocus, body: BodyState, event: BodyEven
         BiochemicalSourceLocus::Basal => 1.0,
         BiochemicalSourceLocus::EnergyDeficit => 1.0 - body.energy,
         BiochemicalSourceLocus::Damage => event.damage,
+        BiochemicalSourceLocus::HealthDeficit => 1.0 - body.health,
         BiochemicalSourceLocus::TemperatureStress => body.temperature_stress,
         BiochemicalSourceLocus::Nutrition => event.nutrition,
         BiochemicalSourceLocus::SocialContact => event.social_contact,
@@ -1806,6 +1825,7 @@ fn emitter_release_count(source: BiochemicalSourceLocus, cadence_crossings: u32)
         | BiochemicalSourceLocus::Awake
         | BiochemicalSourceLocus::Sleeping
         | BiochemicalSourceLocus::EnergyDeficit
+        | BiochemicalSourceLocus::HealthDeficit
         | BiochemicalSourceLocus::TemperatureStress => cadence_crossings,
     }
 }
@@ -2000,4 +2020,80 @@ mod ids {
     pub const SLEEP_PRESSURE: ChemicalSpeciesId = ChemicalSpeciesId(18);
     pub const NUTRIENT: ChemicalSpeciesId = ChemicalSpeciesId(19);
     pub const SLEEP_STATE: ChemicalSpeciesId = ChemicalSpeciesId(20);
+}
+
+#[cfg(test)]
+mod health_distress_tests {
+    use super::BiochemicalGraphState;
+    use crate::{
+        AlleleSide, BiochemistryState, BodyEventDelta, BrainCapacityClass, CreatureGenome,
+        FoundationCompatibilityFamilyId, FoundationGeneticIdentity, FoundationId, Tick,
+    };
+
+    #[test]
+    fn inherited_low_health_keeps_pain_active_without_new_damage() {
+        let mut genome = CreatureGenome::early_mammal_founder(
+            0xD157_1255,
+            FoundationGeneticIdentity::new(
+                FoundationId::N512_V1.raw(),
+                1,
+                FoundationCompatibilityFamilyId::N512_FOUNDATION.raw(),
+                BrainCapacityClass::N512_ID,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        for side in [AlleleSide::Maternal, AlleleSide::Paternal] {
+            genome.chemistry.graph = genome
+                .chemistry
+                .graph
+                .clone()
+                .with_health_distress(side)
+                .unwrap();
+        }
+        let phenotype = genome.express().unwrap();
+        let graph = &phenotype.chemistry.biochemical;
+        let baseline = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+        let mut mild_body = baseline.body;
+        mild_body.set_health(0.8).unwrap();
+        let mut critical_body = baseline.body;
+        critical_body.set_health(0.1).unwrap();
+        let initial = BiochemicalGraphState::new(graph, Tick::ZERO, 0.0).unwrap();
+        let mut mild = initial;
+        let mut critical = initial;
+        for tick in 1..=64 {
+            mild = mild
+                .advance(
+                    Tick(tick),
+                    mild_body,
+                    BodyEventDelta::zero(),
+                    None,
+                    graph,
+                    0.0,
+                )
+                .unwrap()
+                .0;
+            critical = critical
+                .advance(
+                    Tick(tick),
+                    critical_body,
+                    BodyEventDelta::zero(),
+                    None,
+                    graph,
+                    0.0,
+                )
+                .unwrap()
+                .0;
+        }
+        let mild_pain = mild.derive_homeostasis(graph).unwrap().drives.pain;
+        let critical_pain = critical.derive_homeostasis(graph).unwrap().drives.pain;
+        assert!(
+            mild_pain < 0.55,
+            "mild injury should remain below emergency: {mild_pain}"
+        );
+        assert!(
+            critical_pain > 0.55,
+            "near-terminal health must cross the inherited emergency threshold: {critical_pain}"
+        );
+    }
 }

@@ -347,6 +347,13 @@ fn foundation_replay_sequence_with_upload(
             candidates.push(TrainingReplayCandidate {
                 family: candidate.family,
                 decoder_inputs,
+                innate_bias: phenotype
+                    .candidate_decoder()
+                    .families()
+                    .iter()
+                    .find(|family| family.family() == candidate.family)
+                    .ok_or_else(invalid)?
+                    .innate_contribution(step.frame.homeostasis().drives, candidate.features),
             });
         }
         ticks.push(TrainingReplayTick {

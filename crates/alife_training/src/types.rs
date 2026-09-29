@@ -113,6 +113,13 @@ pub struct TrainingReplayCandidate {
     pub family: CandidateActionFamily,
     #[serde(with = "decoder_input_array")]
     pub decoder_inputs: [f32; 54],
+    /// Fixed gene-compiled salience already present in production selection.
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub innate_bias: f32,
+}
+
+fn is_zero_f32(value: &f32) -> bool {
+    *value == 0.0
 }
 
 mod decoder_input_array {
@@ -241,7 +248,10 @@ impl TrainingSequence {
                 })
                 || tick.candidates.is_empty()
                 || tick.candidates.len() > alife_core::MAX_ACTION_CANDIDATES
-                || tick.candidates.iter().any(|c| !finite(&c.decoder_inputs))
+                || tick
+                    .candidates
+                    .iter()
+                    .any(|c| !finite(&c.decoder_inputs) || !c.innate_bias.is_finite())
             {
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }

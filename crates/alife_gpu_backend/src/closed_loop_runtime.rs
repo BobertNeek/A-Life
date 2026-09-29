@@ -2406,7 +2406,10 @@ fn build_selector_diagnostic(
                 .families()
                 .iter()
                 .find(|family| family.family() == candidate.family)
-                .map(|family| family.bias())
+                .map(|family| {
+                    family.bias()
+                        + family.innate_contribution(frame.homeostasis().drives, candidate.features)
+                })
                 .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
             let family_plan = phenotype
                 .candidate_decoder()

@@ -482,6 +482,13 @@ fn canonical_new_game_binds_every_subsystem_before_admission() {
         record.validate_contract().unwrap();
         assert_eq!(record.genome().id, founder.genome_id);
         assert_eq!(record.phenotype().source_genome_id, founder.genome_id);
+        assert!(record
+            .phenotype()
+            .chemistry
+            .biochemical
+            .emitters()
+            .iter()
+            .any(|emitter| emitter.source == alife_core::BiochemicalSourceLocus::HealthDeficit));
         assert_eq!(record.state_graph().organism_id, founder.organism_id);
         assert_eq!(record.embodiment().entity_id(), founder.world_entity_id);
         assert!(game

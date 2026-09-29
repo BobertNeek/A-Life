@@ -250,6 +250,7 @@ fn calibrate_inherited_founder_biochemistry(
             .graph
             .clone()
             .with_waking_recovery(allele)?
+            .with_health_distress(allele)?
             .with_player_reward(allele)?
             .with_play_stimulation(allele)?;
     }
