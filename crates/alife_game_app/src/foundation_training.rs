@@ -1064,8 +1064,24 @@ fn vocabulary_reception_choice(
         return frame.candidates().iter().find(|c| c.family == Family::Idle);
     }
     if family == Family::Avoid && range.is_none() && retreat_range.is_some_and(|r| r <= 4.0) {
-        // The first Flee faces the body away; keep retreating physically when
-        // the object leaves forward sight. This location stays teacher-private.
+        // Retreat toward the away heading even if crowding or occlusion hid
+        // the first Flee candidate. A blind forward step can approach instead.
+        // The planner's remembered position remains teacher-private.
+        if let Some(position) = known_position {
+            let body = frame.body().pose;
+            let heading = (body.translation.z - position.z).atan2(body.translation.x - position.x);
+            let facing = 2.0 * body.rotation.y.atan2(body.rotation.w);
+            let error = (heading - facing + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
+                - std::f32::consts::PI;
+            if error.abs() > 0.18 {
+                let primitive = if error > 0.0 {
+                    alife_world::HeadlessActionIds::TURN_LEFT
+                } else {
+                    alife_world::HeadlessActionIds::TURN_RIGHT
+                };
+                return frame.candidates().iter().find(|c| c.action_id == primitive);
+            }
+        }
         return frame
             .candidates()
             .iter()
