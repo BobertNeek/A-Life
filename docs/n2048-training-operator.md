@@ -4,6 +4,18 @@ Use PowerShell 7 from the authoritative repository root. The launcher has separa
 
 The next proposed [vision, maze, and vocabulary campaign](n2048-vision-maze-vocabulary-run-2026-09-28.md) must use the internal SLM prior during warmup and training, with deliberate dropout, and run headlessly at maximum sustainable speed. The launcher has explicit Care and VisionLanguage curricula. The [September 29 seven-repair report](n2048-seven-repairs-2026-09-29.md) records the current changes and preparation; the [September 28 evidence](n2048-prior-maze-speech-repairs-2026-09-28.md) is historical. No founder training campaign or scheduling is authorized by this operator update.
 
+The final September 29 headless diagnostic passed: `seven-repairs-corpus-20260929-03`
+contains 50 demonstrations/4,676 decisions covering eighteen words in both
+directions; `seven-repairs-warmup-20260929-03` sealed two diagnostic epochs;
+`seven-repairs-cycle-20260929-03` sealed a 32-decision teacher-free GPU update and
+native N2048 optimizer handoff. These directories live under `target/founder-training`.
+The dated report records source/binary identity, actual prior coverage and timings.
+They are unpromoted integration artifacts, not a fully warmed founder or permission
+to launch a campaign. The normal operator `status.json` retains campaign history;
+this bounded qualification did not overwrite it. Visible 1x toy/care acceptance
+remains pending foreground availability. Incomplete corpora ending in `-01`/`-02`
+must not be used for warmup.
+
 ## Tiny local prior trial (September 28)
 
 The selected small-model trial uses [Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B), converted by [ggml-org](https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF), in Q8_0. The downloaded file is 833,592,096 bytes, from revision `8fea620810c4afa23dd6443f999a48574c1611a3`, with SHA256 `37ae482d336108d23516fa35e8e0c4126688d81018b87178a18d752a1357814f`. It lives at `models/local/qwen3.5-0.8b-gguf/Qwen3.5-0.8B-Q8_0.gguf`. The previous Qwen3-4B model remains available. Qwen3-Embedding-0.6B is an embedding model, not a generative prior replacement.
