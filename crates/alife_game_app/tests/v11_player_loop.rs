@@ -36,7 +36,7 @@ fn player_loop_base_save(runtime: &GpuLiveBrainRuntime) -> PortableSaveFile {
         .iter()
         .map(|record| {
             let organism_id = record.organism_id();
-            let biochemistry = record.biochemistry().clone();
+            let biochemistry = *record.biochemistry();
             let genetic_fixed_digest = PortableAssetDigest::for_bytes(
                 &serde_json::to_vec(record.phenotype()).expect("canonical phenotype serializes"),
             )
@@ -136,7 +136,7 @@ fn focused_player_action_runtime() -> (
         BrainCapacityClass::N2048_ID,
     )
     .expect("valid N2048 foundation identity");
-    let genome = alife_core::CreatureGenome::early_mammal_founder(13_001, foundation.clone())
+    let genome = alife_core::CreatureGenome::early_mammal_founder(13_001, foundation)
         .expect("valid learner genome");
     let phenotype = genome.express().expect("valid learner phenotype");
     let biochemistry = alife_core::BiochemistryState::new(&phenotype, Tick::ZERO)
@@ -253,7 +253,7 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         BrainCapacityClass::N2048_ID,
     )
     .expect("valid N2048 foundation identity");
-    let genome = alife_core::CreatureGenome::early_mammal_founder(13_001, foundation.clone())
+    let genome = alife_core::CreatureGenome::early_mammal_founder(13_001, foundation)
         .expect("valid learner genome");
     let phenotype = genome.express().expect("valid learner phenotype");
     let biochemistry = alife_core::BiochemistryState::new(&phenotype, Tick::ZERO)
@@ -728,7 +728,6 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         .expect("publish the captured player-loop checkpoint");
     let durable = GpuDurableSaveManifest::open(&save_path, &asset_root)
         .expect("reopen the captured player-loop checkpoint");
-    let durable_asset_root = durable.asset_root().to_path_buf();
     let loaded = durable
         .load()
         .expect("reload the captured player-loop checkpoint");

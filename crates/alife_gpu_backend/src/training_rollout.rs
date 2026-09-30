@@ -227,7 +227,7 @@ pub(crate) fn build_receipt(
     {
         return Err(ScaffoldContractError::InvalidDecisionEvidence);
     }
-    if decoder_input_bits.len() % bits.len() != 0
+    if !decoder_input_bits.len().is_multiple_of(bits.len())
         || !(24..=64).contains(&(decoder_input_bits.len() / bits.len()))
     {
         return Err(ScaffoldContractError::InvalidDecisionEvidence);

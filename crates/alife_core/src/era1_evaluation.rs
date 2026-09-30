@@ -101,6 +101,8 @@ pub struct Era1TrialIdentity {
     pub seed: u64,
     pub organism_id: OrganismId,
     pub genome_id: GenomeId,
+    /// Maternal and paternal genome identities, which may be equal for two
+    /// distinct organisms. This receipt alone does not prove parent organisms.
     pub parent_genome_ids: Vec<GenomeId>,
     pub lineage_id: LineageId,
     pub generation: u32,

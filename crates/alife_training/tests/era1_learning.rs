@@ -157,7 +157,10 @@ fn exact_utterance_grounding_requires_matching_neural_target_and_sealed_success(
         "heard-token co-occurrence is exposure, not grounding"
     );
     ledger.observe_grounding_v2(receipt.clone()).unwrap();
-    assert_eq!(ledger.utterance_receipts_v2(), &[receipt.clone()]);
+    assert_eq!(
+        ledger.utterance_receipts_v2(),
+        std::slice::from_ref(&receipt)
+    );
     assert_eq!(ledger.entries().len(), 1);
     assert_eq!(ledger.entries()[0].token, receipt.token);
     assert_eq!(ledger.entries()[0].action, receipt.selected_action);

@@ -16,9 +16,7 @@ use alife_game_app::{
 };
 use alife_world::{AssetManifest, HeadlessActionIds, RuntimeConfig, WorldObjectKind};
 
-#[path = "../src/factorized_arbitration.rs"]
-mod factorized_arbitration;
-use factorized_arbitration::{
+use alife_core::{
     arbitrate_gpu_selected_command_into_factorized_bundle, channel_command_for_action,
     factorized_motor_channel_order,
 };

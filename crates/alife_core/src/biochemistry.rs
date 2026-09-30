@@ -145,6 +145,10 @@ impl BodyState {
         value
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "explicit prior state and genetic physiology parameters at the body-event boundary"
+    )]
     fn apply_event(
         self,
         previous_tick: Tick,

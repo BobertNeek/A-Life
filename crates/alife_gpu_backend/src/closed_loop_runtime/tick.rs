@@ -261,7 +261,7 @@ impl GpuClosedLoopBackend {
                                 translate_selector_diagnostic_enable_error(error);
                             if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut()
                             {
-                                capture.enable_error = Some(translated_error.clone());
+                                capture.enable_error = Some(translated_error);
                             }
                             if let Some(receipt) = error.receipt() {
                                 eprintln!("gpu_selector_diagnostic_error_receipt: {receipt}");
@@ -1278,7 +1278,7 @@ impl GpuClosedLoopBackend {
         self.next_dispatch_generation = next_dispatch_generation;
         self.completed_selection_count = next_completed_selection_count;
         self.completed_neural_timing = None;
-        if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
+        if let Some(capture) = selector_diagnostic_error_capture {
             capture.later_stage = Some(GpuRuntimeSelectorDiagnosticStage::ConvertPopulation);
         }
         self.pending_inference_timing = Some(PendingInferenceTiming {

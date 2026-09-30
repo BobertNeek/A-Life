@@ -407,7 +407,6 @@ impl PreparedCompositeBirth {
     }
 }
 
-#[allow(dead_code)]
 pub struct PreparedCompositeBirthBatch {
     items: Vec<PreparedCompositeBirth>,
     payloads: Vec<PreparedArchivePayload>,
@@ -525,7 +524,6 @@ struct PreparedArchivePayload {
     destinations: Vec<PreparedPayloadDestination>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 struct PreparedManifestObservation {
     digest: Blake3Digest,
@@ -535,7 +533,6 @@ struct PreparedManifestObservation {
     indexed: bool,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PreparedIndexedManifestRow {
     digest: Blake3Digest,
@@ -546,7 +543,6 @@ struct PreparedIndexedManifestRow {
     death_tick: Option<Tick>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 struct PreparedTargetObservation {
     source_run_id: String,
@@ -555,7 +551,6 @@ struct PreparedTargetObservation {
     final_manifest_files: Vec<PreparedManifestObservation>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 struct PreparedFinalFileObservation {
     destination: PreparedPayloadDestination,
@@ -567,7 +562,6 @@ struct PreparedFinalFileObservation {
     size_bytes: u64,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 struct PreparedArchiveObservation {
     archive_root: PathBuf,
@@ -1088,8 +1082,7 @@ impl LineageLibrary {
         }
         let foundation_manifest = foundation.manifest();
         if foundation_manifest.foundation_id().raw() != input.foundation.foundation_id
-            || u32::from(foundation_manifest.foundation_version().raw())
-                != u32::from(input.foundation.version)
+            || foundation_manifest.foundation_version().raw() != u32::from(input.foundation.version)
             || foundation_manifest.compatibility_family_id().raw()
                 != input.foundation.compatibility_family_id
         {
@@ -3252,7 +3245,7 @@ fn validate_foundation_identity(
             .is_some_and(|id| id.raw() == input.foundation.foundation_id)
         && abi
             .foundation_version()
-            .is_some_and(|version| u32::from(version.raw()) == u32::from(input.foundation.version))
+            .is_some_and(|version| version.raw() == u32::from(input.foundation.version))
         && abi
             .compatibility_family_id()
             .is_some_and(|family| family.raw() == input.foundation.compatibility_family_id)
@@ -3979,7 +3972,7 @@ fn parse_digest_hex(value: &str) -> Result<Blake3Digest, ArchiveError> {
         ));
     }
     let mut bytes = [0_u8; 32];
-    for (index, chunk) in value.as_bytes().chunks_exact(2).enumerate() {
+    for (index, chunk) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
         let text = std::str::from_utf8(chunk)
             .map_err(|_| ArchiveError::Integrity("invalid digest UTF-8".to_string()))?;
         bytes[index] = u8::from_str_radix(text, 16)

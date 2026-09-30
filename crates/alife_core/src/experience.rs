@@ -1744,7 +1744,7 @@ impl ExperiencePatch {
             pre_action.sequence_id,
             bundle,
             prediction_target.clone(),
-            cognitive_work.clone(),
+            cognitive_work,
         )?;
         Self::new_v11_from_parts(
             pre_action,
@@ -1769,7 +1769,7 @@ impl ExperiencePatch {
             pre_action.sequence_id,
             bundle,
             prediction_target.clone(),
-            cognitive_work.clone(),
+            cognitive_work,
         )?;
         Self::new_v12_from_parts(
             pre_action,
@@ -1794,7 +1794,7 @@ impl ExperiencePatch {
         decision.abi_version = V11_EXPERIENCE_ABI_VERSION;
         decision.selected_bundle = Some(bundle);
         decision.prediction_target = Some(prediction_target.clone());
-        decision.cognitive_work = Some(cognitive_work.clone());
+        decision.cognitive_work = Some(cognitive_work);
         Self::new_v11_from_parts(
             pre_action,
             decision,
@@ -1818,7 +1818,7 @@ impl ExperiencePatch {
         decision.abi_version = V12_EXPERIENCE_ABI_VERSION;
         decision.selected_bundle = Some(bundle);
         decision.prediction_target = Some(prediction_target.clone());
-        decision.cognitive_work = Some(cognitive_work.clone());
+        decision.cognitive_work = Some(cognitive_work);
         Self::new_v12_from_parts(
             pre_action,
             decision,

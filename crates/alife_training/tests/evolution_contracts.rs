@@ -1,4 +1,7 @@
-use alife_core::{BrainCapacityClass, BrainGenome, FoundationWeightAsset, SensorProfile};
+use alife_core::{
+    BrainCapacityClass, BrainGenome, DevelopmentState, FoundationWeightAsset, NormalizedScalar,
+    PhenotypeCompiler, SensorProfile, Tick,
+};
 use alife_training::{
     mutate_hardening_genome, pareto_front, HardeningEvaluation, HardeningFitness,
     HardeningMutationKind, HARDENING_DESCENDANTS_PER_FINALIST, HARDENING_NEWBORNS_PER_GENOME,
@@ -61,6 +64,41 @@ fn descendant_mutations_preserve_the_finalists_inherited_genome_changes() {
     );
     assert_eq!(descendant.parent_genome_ids, vec![finalist.id]);
     assert_eq!(descendant.lineage_id, finalist.lineage_id);
+}
+
+#[test]
+fn sparse_genetic_reseeding_changes_inherited_weights_without_changing_the_frozen_graph() {
+    let capacity = BrainCapacityClass::n2048();
+    let parent = BrainGenome::scaffold(77, capacity.id());
+    let child =
+        mutate_hardening_genome(&parent, HardeningMutationKind::SparseGeneticDelta, 992).unwrap();
+    let foundation =
+        FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
+    let compile = |genome: &BrainGenome| {
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        PhenotypeCompiler::compile_from_foundation_asset(
+            genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+            &foundation,
+        )
+        .unwrap()
+    };
+    let parent = compile(&parent);
+    let child = compile(&child);
+    assert_eq!(parent.synapses().len(), child.synapses().len());
+    assert!(parent
+        .synapses()
+        .iter()
+        .zip(child.synapses())
+        .all(|(a, b)| { a.source() == b.source() && a.target() == b.target() }));
+    assert!(parent
+        .synapses()
+        .iter()
+        .zip(child.synapses())
+        .any(|(a, b)| a.genetic_weight().to_bits() != b.genetic_weight().to_bits()));
 }
 
 #[test]

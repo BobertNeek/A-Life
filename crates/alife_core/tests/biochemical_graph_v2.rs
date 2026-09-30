@@ -45,7 +45,7 @@ fn player_praise_graph_keeps_the_dopamine_emitter() {
 
 fn mature_tick(phenotype: &alife_core::CreaturePhenotype) -> Tick {
     let maturation = u64::from(phenotype.development.maturation_duration_ticks);
-    Tick(((maturation + 119) / 120) * 120)
+    Tick(maturation.div_ceil(120) * 120)
 }
 
 #[test]

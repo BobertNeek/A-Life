@@ -421,9 +421,7 @@ impl PpoGpuObjective {
             return Err(invalid());
         }
         let (device, _) = session.backend().offline_training_device_queue()?;
-        if (u64::from(feature_count) + 1) * 20
-            > u64::from(device.limits().max_storage_buffer_binding_size)
-        {
+        if (u64::from(feature_count) + 1) * 20 > device.limits().max_storage_buffer_binding_size {
             return Err(invalid());
         }
         let make = |label, size, usage| {
@@ -956,16 +954,20 @@ impl PpoGpuObjective {
 /// joint entropy, policy loss, weighted value loss, clip indicator, ratio, valid.
 pub fn ppo_mean_kl(metrics: &[f32]) -> Result<f32, TrainingError> {
     if metrics.is_empty()
-        || metrics.len() % PPO_METRIC_WORDS != 0
+        || !metrics.len().is_multiple_of(PPO_METRIC_WORDS)
         || !metrics.iter().all(|value| value.is_finite())
         || metrics
-            .chunks_exact(PPO_METRIC_WORDS)
+            .as_chunks::<PPO_METRIC_WORDS>()
+            .0
+            .iter()
             .any(|row| row[7] != 1.0)
     {
         return Err(TrainingError::MalformedReadback);
     }
     let mean = metrics
-        .chunks_exact(PPO_METRIC_WORDS)
+        .as_chunks::<PPO_METRIC_WORDS>()
+        .0
+        .iter()
         .map(|row| row[1] as f64)
         .sum::<f64>()
         / (metrics.len() / PPO_METRIC_WORDS) as f64;
@@ -1223,7 +1225,9 @@ where
         let metrics =
             evaluate_ppo_window(trainer, state, &window, config, collection_policy_version)?;
         if metrics
-            .chunks_exact(PPO_METRIC_WORDS)
+            .as_chunks::<PPO_METRIC_WORDS>()
+            .0
+            .iter()
             .zip(window.batch.transitions())
             .any(|(row, old)| (row[0] - old.action.old_joint_log_probability).abs() > 1.0e-3)
         {
@@ -1465,7 +1469,7 @@ where
             let counts = (start..end)
                 .map(|index| load_window(index).map(|window| window.examples.len()))
                 .collect::<Result<Vec<_>, _>>()?;
-            if counts.iter().any(|count| *count == 0) {
+            if counts.contains(&0) {
                 return Err(invalid());
             }
             trainer.begin_gradient_accumulation((end - start) as u32)?;
@@ -1520,14 +1524,16 @@ where
 
 pub fn imitation_mean_loss(metrics: &[f32]) -> Result<f32, TrainingError> {
     if metrics.is_empty()
-        || metrics.len() % 4 != 0
+        || !metrics.len().is_multiple_of(4)
         || !metrics.iter().all(|x| x.is_finite())
-        || metrics.chunks_exact(4).any(|row| row[3] != 1.0)
+        || metrics.as_chunks::<4>().0.iter().any(|row| row[3] != 1.0)
     {
         return Err(TrainingError::MalformedReadback);
     }
     let loss = metrics
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|row| f64::from(row[1]))
         .sum::<f64>()
         / (metrics.len() / 4) as f64;
@@ -1561,8 +1567,8 @@ fn read_gpu_f32(
     if session.authority().consumer() != GpuSessionConsumerKind::Training
         || range.start >= range.end
         || range.end > source.size()
-        || range.start % 4 != 0
-        || range.end % 4 != 0
+        || !range.start.is_multiple_of(4)
+        || !range.end.is_multiple_of(4)
     {
         return Err(invalid());
     }

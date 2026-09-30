@@ -118,6 +118,10 @@ pub struct N512FounderProjectionReceipt {
 }
 
 impl N512FounderProjectionReceipt {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "projection receipt binds independently validated genetic and frozen ABI identities"
+    )]
     fn new(
         source_genome_id: GenomeId,
         lineage_id: LineageId,
@@ -633,6 +637,10 @@ struct ProjectionMaterial {
     overlay_seed: u64,
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "projection inputs preserve separate source, inheritance, and admission identities"
+)]
 fn projection_material(
     source_brain_genome: &BrainGenome,
     source_genome_id: GenomeId,

@@ -1197,7 +1197,12 @@ impl TopologicalMap {
             return None;
         }
 
-        let mut candidate: Option<((u16, u64, u64, u64), ConceptCellId, NormalizedScalar)> = None;
+        struct SplitCandidate {
+            rank: (u16, u64, u64, u64),
+            source: ConceptCellId,
+            salience: NormalizedScalar,
+        }
+        let mut candidate: Option<SplitCandidate> = None;
         for gap in &self.unresolved_gaps {
             if gap.source_concepts.len() != 2
                 || gap.prediction_error.raw() < CONTRADICTION_ERROR_THRESHOLD
@@ -1247,16 +1252,17 @@ impl TopologicalMap {
                     gap.id.raw(),
                     source_id.raw(),
                 );
-                if candidate
-                    .as_ref()
-                    .map_or(true, |(best_key, _, _)| key > *best_key)
-                {
-                    candidate = Some((key, source_id, gap.salience));
+                if candidate.as_ref().is_none_or(|best| key > best.rank) {
+                    candidate = Some(SplitCandidate {
+                        rank: key,
+                        source: source_id,
+                        salience: gap.salience,
+                    });
                 }
             }
         }
 
-        candidate.map(|(_, source_id, salience)| (source_id, salience))
+        candidate.map(|best| (best.source, best.salience))
     }
 
     fn lifecycle_merge_candidate(&self) -> Option<(ConceptCellId, ConceptCellId)> {

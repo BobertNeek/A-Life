@@ -232,9 +232,6 @@ mod gpu_authority_telemetry;
 pub use gpu_authority_telemetry::*;
 
 #[cfg(feature = "gpu-runtime")]
-mod factorized_arbitration;
-
-#[cfg(feature = "gpu-runtime")]
 mod gpu_live_runtime;
 #[cfg(feature = "gpu-runtime")]
 pub use gpu_live_runtime::*;

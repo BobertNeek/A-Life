@@ -1196,7 +1196,7 @@ impl PlasticityGenomeParameters {
             sleep_replay_rate,
             receptor_profile: crate::PlasticityReceptorProfile::try_new([
                 0.2 * modulator_sign,
-                -1.0 * modulator_sign,
+                -modulator_sign,
                 1.0 * modulator_sign,
                 -0.5 * modulator_sign,
                 0.2 * modulator_sign,

@@ -207,6 +207,10 @@ fn factorized_motor_channel_for_action(kind: ActionKind) -> Option<MotorChannel>
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "shared motor ABI keeps neural evidence and world candidates explicit"
+)]
 pub fn factorized_motor_bundle_for_candidates(
     organism_id: OrganismId,
     sequence_id: ExperienceSequenceId,

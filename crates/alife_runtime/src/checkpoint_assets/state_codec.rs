@@ -963,9 +963,7 @@ impl GpuCheckpointAssetStore {
                     row.activity_snapshot().clone(),
                 ),
                 None => {
-                    let backend = backend
-                        .as_deref_mut()
-                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                    let backend = backend.ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
                     (
                         self.capture_sleep_assets(
                             backend,

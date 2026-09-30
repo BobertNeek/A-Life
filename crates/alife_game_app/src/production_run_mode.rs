@@ -1,7 +1,5 @@
 //! Playback policy only: all modes execute the same authoritative world ticks.
 
-use crate::*;
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProductionRunMode {
@@ -30,7 +28,7 @@ impl ProductionRunMode {
     }
 }
 
-#[cfg(feature = "gpu-runtime")]
+#[cfg(all(feature = "gpu-runtime", feature = "bevy-app"))]
 pub(crate) fn run_headless_max_runtime(
     mut runtime: GpuLiveBrainRuntime,
     summary: &ProductionVoxelLaunchSummary,

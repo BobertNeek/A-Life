@@ -175,7 +175,7 @@ impl Nano512ReadoutTrainer {
         let session = GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Training);
         let (device, _) = session.backend().offline_training_device_queue()?;
         let limits = device.limits();
-        if coefficients.len() as u64 * 16 > u64::from(limits.max_storage_buffer_binding_size)
+        if coefficients.len() as u64 * 16 > limits.max_storage_buffer_binding_size
             || pairs.div_ceil(64) > limits.max_compute_workgroups_per_dimension
         {
             return Err(invalid());
@@ -319,7 +319,7 @@ impl Nano512ReadoutTrainer {
         self.dispatch(&mut encoder, &self.evaluate, self.pairs);
         queue.submit(Some(encoder.finish()));
         let values = self.readback(&self.metrics, u64::from(self.pairs) * 16)?;
-        Ok(values.chunks_exact(4).map(|v| v[0]).sum::<f32>() / self.pairs as f32)
+        Ok(values.as_chunks::<4>().0.iter().map(|v| v[0]).sum::<f32>() / self.pairs as f32)
     }
 
     pub fn export_candidate(

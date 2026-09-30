@@ -361,13 +361,12 @@ impl GpuLiveBrainRuntime {
             write.attach_exact_cognitive_state(store, &exact)?;
             exact_neural_captures = exact_neural_captures.saturating_add(1);
             manifest_entries.extend(write.manifest_entries);
-            let canonical_biochemistry = self
+            let canonical_biochemistry = *self
                 .world
                 .organism_registry()
                 .get(organism_id)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-                .biochemistry()
-                .clone();
+                .biochemistry();
             let creature = replacement
                 .creatures
                 .iter_mut()
@@ -417,7 +416,7 @@ impl GpuLiveBrainRuntime {
             {
                 return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
             }
-            let canonical_biochemistry = record.biochemistry().clone();
+            let canonical_biochemistry = *record.biochemistry();
             let creature = replacement
                 .creatures
                 .iter_mut()

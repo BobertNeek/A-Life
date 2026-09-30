@@ -12,6 +12,13 @@ These establish bounded training integration; held-out learned care remains open
 The obstacle handoff still recorded blocked decisions and no meal. See the
 [training regimen](n2048-care-training-regimen-2026-09-21.md) for acceptance criteria.
 
+The legacy `N2048EvolutionHardener`, `N2048ActiveBatteryRunner` (including its
+reproduction-intent helper), and `Era1TrialRunner` remain **Blocked** on canonical
+organism biology and receptor-gated learning integration. Their constructors now
+report this blocker before GPU initialization. This does not block the separate
+foundation trainer or the production organism loop. See the
+[September 30 commit-review validation](reviews/2026-09-30-validated-cleanup.md).
+
 ## Honest headline
 
 The GPU-authoritative organism loop starts inside the production voxel application. The renderer seeds its records from the selected save, then consumes tick-bound authoritative frames for movement, births, selection, follow state, and retirement. The source path is causally connected. Current-source rendered lifecycle and performance proof remain outstanding.

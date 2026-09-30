@@ -1348,6 +1348,10 @@ impl BiochemicalGraphState {
         Ok(self.concentrations[index])
     }
 
+    /// Decay and emitters publish into a staged state, then reactions execute
+    /// sequentially in inherited declaration order. Each reaction consumes the
+    /// preceding reaction's output. This bounded solver is order-dependent;
+    /// sorting or deduplicating reaction genes changes organism dynamics.
     pub fn advance(
         &self,
         next_tick: Tick,

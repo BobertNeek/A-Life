@@ -1911,7 +1911,7 @@ pub(crate) struct GpuFixedSlotRanges {
 }
 
 impl GpuFixedSlotRanges {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) const fn slot(&self) -> u32 {
         self.slot
     }
@@ -2310,7 +2310,7 @@ impl GpuFixedClassArenaPlan {
     pub(crate) const fn slot_capacity(&self) -> u32 {
         self.slot_capacity
     }
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) const fn strides(&self) -> GpuFixedSlotStrides {
         self.strides
     }
@@ -2454,10 +2454,6 @@ impl GpuFixedClassArenaPlan {
             return Err(GpuClosedLoopError::LayoutMismatch);
         }
         Ok(receipt)
-    }
-    #[allow(dead_code)]
-    pub(crate) const fn ownership_token(&self) -> u64 {
-        self.arena_ownership_token
     }
     pub(crate) fn slot_ranges(&self, slot: u32) -> Result<GpuFixedSlotRanges, GpuClosedLoopError> {
         if slot >= self.slot_capacity {
@@ -2885,7 +2881,7 @@ impl GpuFixedClassArenaPlan {
         })
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn validate_slot_handle(
         &self,
         slot: &GpuBrainSlot,
@@ -2937,7 +2933,7 @@ impl GpuFixedSlotUpload {
     pub(crate) const fn identity(&self) -> &GpuPhenotypeIdentityRecord {
         self.brain_slot.identity()
     }
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) const fn counts(&self) -> &GpuTypedCounts {
         self.brain_slot.typed_counts()
     }
@@ -3189,8 +3185,8 @@ impl GpuFixedSlotUpload {
         mut self,
         synapse: &AddLifetimeSynapse,
     ) -> Result<Self, GpuClosedLoopError> {
-        let old_record = self.brain_slot.record.clone();
-        let old_counts = self.brain_slot.counts.clone();
+        let old_record = self.brain_slot.record;
+        let old_counts = self.brain_slot.counts;
         let neuron_count = usize::try_from(old_record.neuron_count)
             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
         let synapse_count = usize::try_from(old_record.synapse_count)
@@ -3306,7 +3302,7 @@ impl GpuFixedSlotUpload {
                 .any(|value| *value as usize >= old_counts.route_metadata)
             || source_indices
                 .get(insertion..target_end)
-                .is_some_and(|span| span.iter().any(|value| *value == synapse.source))
+                .is_some_and(|span| span.contains(&synapse.source))
         {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
@@ -3895,8 +3891,7 @@ pub(crate) struct GpuFixedClassArenaBuffers {
     dispatch_header_words: wgpu::Buffer,
     frame_payload_words: wgpu::Buffer,
     mutable_state_words: wgpu::Buffer,
-    #[allow(dead_code)]
-    upload_staging: wgpu::Buffer,
+    _upload_staging: wgpu::Buffer,
     compact_readback: wgpu::Buffer,
     arena_ownership_token: u64,
     buffer_set_token: u64,
@@ -3984,7 +3979,7 @@ impl GpuFixedClassArenaBuffers {
                 sizes.mutable_state_words,
                 storage_mutable,
             ),
-            upload_staging: create_fixed_buffer(
+            _upload_staging: create_fixed_buffer(
                 device,
                 "closed-loop-runtime-upload-staging",
                 sizes.upload_staging,
@@ -4435,10 +4430,7 @@ impl GpuFixedClassArenaBuffers {
             &self.mutable_state_words,
         ]
     }
-    #[allow(dead_code)]
-    pub(crate) const fn upload_staging(&self) -> &wgpu::Buffer {
-        &self.upload_staging
-    }
+
     pub(crate) const fn compact_readback(&self) -> &wgpu::Buffer {
         &self.compact_readback
     }
@@ -4451,14 +4443,7 @@ impl GpuFixedClassArenaBuffers {
     pub(crate) const fn max_neurons(&self) -> u32 {
         self.max_neurons
     }
-    #[allow(dead_code)]
-    pub(crate) const fn slot_capacity(&self) -> u32 {
-        self.slot_capacity
-    }
-    #[allow(dead_code)]
-    pub(crate) const fn sizes(&self) -> GpuFixedArenaBufferSizes {
-        self.sizes
-    }
+
     pub(crate) fn dispatch_capacity_words(&self) -> usize {
         (self.sizes.dispatch_header_words / 4) as usize
     }

@@ -1,4 +1,5 @@
-//! Production GPU active-battery runner over grounded headless challenge worlds.
+//! Grounded N2048 active-battery contracts and a blocked legacy GPU runner.
+//! Canonical organism biology must be integrated before evaluation can run.
 
 use alife_core::{
     ActionKind, ActiveBatteryReceipt, ActiveChallengeKind, BrainCapacityClass, BrainGenome,
@@ -116,6 +117,7 @@ pub struct N2048ActiveBatteryRunner {
 
 impl N2048ActiveBatteryRunner {
     pub fn new_required() -> Result<Self, TrainingError> {
+        crate::require_canonical_training_biology("N2048 active battery and reproduction intent")?;
         let foundation =
             FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1)?;
         let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
@@ -377,7 +379,7 @@ impl N2048ActiveBatteryRunner {
                         });
                 if let Some((mate_organism_id, mate_entity_id)) = selected_mate {
                     let matches_expected = expected_mate_organism_id
-                        .map_or(true, |expected| expected == mate_organism_id);
+                        .is_none_or(|expected| expected == mate_organism_id);
                     let is_causal_contact = mate_organism_id != initiator_organism_id
                         && matches_expected
                         && patch.decision().selected_action.kind == ActionKind::Interact

@@ -2092,7 +2092,10 @@ fn mutate_discrete_allele<T: DiscreteDomain + 'static>(
     context: &mut ReproductionContext,
 ) {
     let values = T::values();
-    if values.len() < 2 || context.rng.next_unit() >= context.settings.discrete_mutation_rate {
+    if context.mutations.len() >= MAX_MUTATION_RECORDS
+        || values.len() < 2
+        || context.rng.next_unit() >= context.settings.discrete_mutation_rate
+    {
         return;
     }
     let before = allele.value;
@@ -2785,5 +2788,55 @@ fn nonzero_mix(mut value: u64) -> u64 {
         1
     } else {
         mixed
+    }
+}
+
+#[cfg(test)]
+mod mutation_journal_tests {
+    use super::*;
+
+    #[test]
+    fn discrete_mutation_stops_before_changing_an_allele_without_journal_capacity() {
+        let mut context = ReproductionContext::new(
+            77,
+            ReproductionSettings {
+                crossover_probability: 0.0,
+                max_segments: 1,
+                mutation_rate: 1.0,
+                discrete_mutation_rate: 1.0,
+                max_mutation_delta: 0.1,
+            },
+        );
+        let record = MutationRecord::Discrete {
+            chromosome: ChromosomeKind::Body,
+            locus_index: 0,
+            allele: AlleleSide::Maternal,
+            before: 0,
+            after: 1,
+        };
+        context.mutations.resize(MAX_MUTATION_RECORDS - 1, record);
+        let mut allele = DiscreteAllele::new(
+            StarterVocabularyProfile::Minimal,
+            AlleleDominance::Recessive,
+        );
+        mutate_discrete_allele(
+            &mut allele,
+            ChromosomeKind::Brain,
+            0,
+            AlleleSide::Maternal,
+            &mut context,
+        );
+        assert_ne!(allele.value, StarterVocabularyProfile::Minimal);
+        assert_eq!(context.mutations.len(), MAX_MUTATION_RECORDS);
+        let before = allele;
+        mutate_discrete_allele(
+            &mut allele,
+            ChromosomeKind::Brain,
+            0,
+            AlleleSide::Maternal,
+            &mut context,
+        );
+        assert_eq!(allele, before);
+        assert_eq!(context.mutations.len(), MAX_MUTATION_RECORDS);
     }
 }

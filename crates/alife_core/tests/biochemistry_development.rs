@@ -185,7 +185,7 @@ fn inherited_waking_fatigue_is_separate_from_food_and_recovery() {
 
 fn mature_tick(phenotype: &alife_core::CreaturePhenotype) -> Tick {
     let maturation = u64::from(phenotype.development.maturation_duration_ticks);
-    Tick(((maturation + 119) / 120) * 120)
+    Tick(maturation.div_ceil(120) * 120)
 }
 
 #[test]

@@ -176,7 +176,7 @@ impl RuntimeSemanticPrior {
         }
         if self
             .dropout_seed
-            .is_some_and(|seed| (seed ^ id.raw()) % 5 == 0)
+            .is_some_and(|seed| (seed ^ id.raw()).is_multiple_of(5))
         {
             if consume {
                 self.metrics.dropout_frames += 1;

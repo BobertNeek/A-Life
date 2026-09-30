@@ -49,25 +49,24 @@ use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkCounters}
 use alife_core::predictive::{GroundedSuccessorPredictor, SuccessorPrediction};
 use alife_core::sleep::{SleepReplayEvidence, SleepWorkReceipt};
 use alife_core::{
-    finalized_memory_attention_evidence, select_focal_targets, ActionKind,
-    ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
-    AttentionFrame, AttentionSelectionPolicy, BiochemistryState, Blake3Digest, BodyEventDelta,
-    BoundedReplayBatch, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
-    BrainWorkCounters, BrainWorkReceipt, CandidateObservationRef, CanonicalDigestBuilder,
-    CognitiveConceptActivation, CognitiveContextFrame, CognitiveGapActivation,
-    CognitiveMemoryExpectancy, CognitiveWorkReceipt, Confidence, ConsolidationDriverEvent,
-    ConsolidationIntent, ConsolidationState, DecisionSnapshot, DevelopmentState,
-    EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId, FinalizedMemoryAttentionEvidence,
-    FinalizedMemoryRecall, FoundationCompatibilityFamilyId, FoundationGeneticIdentity,
-    FoundationId, FoundationVersion, FoundationWeightApplication, FoundationWeightAsset,
-    HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition, LanguageGroundingLedger,
-    LegacyNano512CompatibilityReceipt, LineageId, MemoryBankConfig, MemoryCompactionCheckpoint,
-    MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState, MemoryUpdateReceipt,
-    MotorChannel, MotorCommandBundle, N512FounderFoundationProjection, NeuralActionSelection,
-    NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame, NeuralReceptorEffects,
-    NeuralReceptorFrame, NeuralReceptorPhenotype, NormalizedScalar, OrganismId, PassiveLifeEvent,
-    PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft, PhenotypeCompiler,
-    PhenotypeCompilerInputs, PhysicalContactKind, PostActionOutcome, PreActionSnapshot,
+    finalized_memory_attention_evidence, select_focal_targets, ArchiveCheckpointRetention,
+    ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt, AttentionFrame,
+    AttentionSelectionPolicy, BiochemistryState, Blake3Digest, BodyEventDelta, BoundedReplayBatch,
+    BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus, BrainWorkCounters,
+    BrainWorkReceipt, CandidateObservationRef, CanonicalDigestBuilder, CognitiveConceptActivation,
+    CognitiveContextFrame, CognitiveGapActivation, CognitiveMemoryExpectancy, CognitiveWorkReceipt,
+    Confidence, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState,
+    DecisionSnapshot, DevelopmentState, EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId,
+    FinalizedMemoryAttentionEvidence, FinalizedMemoryRecall, FoundationCompatibilityFamilyId,
+    FoundationGeneticIdentity, FoundationId, FoundationVersion, FoundationWeightApplication,
+    FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition,
+    LanguageGroundingLedger, LegacyNano512CompatibilityReceipt, LineageId, MemoryBankConfig,
+    MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState,
+    MemoryUpdateReceipt, MotorChannel, MotorCommandBundle, N512FounderFoundationProjection,
+    NeuralActionSelection, NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame,
+    NeuralReceptorEffects, NeuralReceptorFrame, NeuralReceptorPhenotype, NormalizedScalar,
+    OrganismId, PassiveLifeEvent, PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft,
+    PhenotypeCompiler, PhenotypeCompilerInputs, PostActionOutcome, PreActionSnapshot,
     PredictionTargetReceipt, PreparedMemoryRecall, ScaffoldContractError, SemanticStateVector,
     SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SignedValence,
     SleepConsolidationConfig, SleepConsolidator, SleepPhase, SleepState, SleepTransition, Tick,
@@ -108,7 +107,6 @@ use alife_world::{
 };
 use thiserror::Error;
 
-use crate::factorized_arbitration::channel_command_for_action;
 use crate::{
     curated_founder_materializer::{
         materialize_curated_founder_bundle, CuratedFounderMaterializationError,
@@ -127,6 +125,8 @@ use crate::{
     WorldEditCommand, WorldEditorConfig, CURATED_FOUNDER_RESET_POLICY, G03_LIVE_BRAIN_LOOP_SCHEMA,
     G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
 };
+#[cfg(test)]
+use alife_core::channel_command_for_action;
 
 #[derive(Debug, Clone, serde::Serialize)]
 struct ResidentCognition {
@@ -718,9 +718,7 @@ fn cleanup_restored_gpu_handle(
     let remove_result = backend
         .remove_brain(handle)
         .map_err(GameAppShellError::from);
-    if let Err(error) = discard_result {
-        return Err(error);
-    }
+    discard_result?;
     remove_result
 }
 
@@ -950,7 +948,9 @@ struct ExactCognitiveHostSnapshotV1 {
     private_semantic_prior: Option<Vec<u8>>,
 }
 
+#[derive(Default)]
 enum ExactPopulationCheckpointRuntimeWorkV1 {
+    #[default]
     Idle,
     Capture {
         transaction_id: u64,
@@ -997,12 +997,6 @@ enum ExactPopulationCheckpointRuntimeWorkV1 {
         failed: FailedExactPopulationCheckpointWorkerJoinV1,
     },
     Failed,
-}
-
-impl Default for ExactPopulationCheckpointRuntimeWorkV1 {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 struct ExactPopulationCheckpointWorkerSuccessV1 {
@@ -4143,7 +4137,7 @@ fn route_focal_candidates(
         draft.sensor_profile(),
         draft.sensory().clone(),
         draft.body(),
-        draft.homeostasis().clone(),
+        *draft.homeostasis(),
         candidates,
         draft.profile_provenance(),
         draft.grounded_object_slots().to_vec(),
@@ -5215,12 +5209,12 @@ impl GpuLiveBrainRuntime {
         let deterministic_seed = self.deterministic_seed;
         let brain_class = self.brain_class;
         let preserve_lineage_archive = self.lineage_library.is_some();
-        let homeostatic_parameters = self.homeostatic_parameters.clone();
+        let homeostatic_parameters = self.homeostatic_parameters;
         let cognitive_work_cost_policy = self.cognitive_work_cost_policy;
         let schedule_sleep = self.schedule_sleep;
         let observe_sidecars = self.observe_sidecars;
         let retain_sealed_patch_history = self.retain_sealed_patch_history;
-        let archive_learned_capture_policy = self.archive_learned_capture_policy.clone();
+        let archive_learned_capture_policy = self.archive_learned_capture_policy;
         let staged = Self::restore_loaded_save(
             backend,
             durable_manifest,
@@ -7534,7 +7528,7 @@ impl GpuLiveBrainRuntime {
         let receipt = self
             .retained_curated_founder_gpu_residency_receipt
             .as_ref()
-            .ok_or_else(|| reject())?;
+            .ok_or_else(&reject)?;
         if !receipt.submission_completed
             || receipt.generation_fingerprint != plan.fingerprint
             || receipt.backend_hardware_generation != self.backend.hardware_receipt().generation
@@ -8922,17 +8916,18 @@ impl GpuLiveBrainRuntime {
 
         let seal_started = Instant::now();
         let mut sealed = Vec::with_capacity(prepared.len());
-        for (_index, selection) in prepared.into_iter().enumerate() {
+        for selection in prepared {
             match self.seal_prepared_selection(selection, rollback) {
                 Ok(selection) => sealed.push(selection),
                 Err(error) => {
                     match rollback {
                         #[cfg(test)]
                         WorldMutationRollback::Local => {
+                            let first_unsealed = sealed.len();
                             if !sealed.is_empty() {
                                 self.commit_sealed_batch(sealed)?;
                             }
-                            self.discard_pending_transactions(&pending[_index..]);
+                            self.discard_pending_transactions(&pending[first_unsealed..]);
                         }
                         WorldMutationRollback::EnclosingStagedTick => {
                             self.discard_pending_transactions(&pending);
@@ -9929,7 +9924,7 @@ fn checkpoint_creature_save_state(
                     .creatures
                     .iter()
                     .find(|creature| creature.genome_id == *genome_id)
-                    .map(|creature| creature.appearance.clone())
+                    .map(|creature| creature.appearance)
             }),
         record
             .genome()
@@ -9940,7 +9935,7 @@ fn checkpoint_creature_save_state(
                     .creatures
                     .iter()
                     .find(|creature| creature.genome_id == *genome_id)
-                    .map(|creature| creature.appearance.clone())
+                    .map(|creature| creature.appearance)
             }),
     ) {
         (Some(parent_a), Some(parent_b)) => CreatureAppearanceGenome::offspring_from_parents(

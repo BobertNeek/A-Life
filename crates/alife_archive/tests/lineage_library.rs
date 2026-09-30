@@ -436,6 +436,7 @@ fn install_checked_player_legacy_nano512_v1_archive(root: &Path) -> Blake3Digest
 }
 
 const TEST_COMPOSITE_BIRTH_STAGE_LEASE_FILE: &str = ".composite-birth-stage-lease";
+#[cfg(windows)]
 const TEST_COMPOSITE_BIRTH_PUBLICATION_LEASE_FILE: &str = ".composite-birth-publication-lease";
 
 fn create_composite_birth_lease(root: &Path, file_name: &str) -> PathBuf {
@@ -448,6 +449,7 @@ fn release_composite_birth_lease(path: &Path) {
     fs::remove_file(path).unwrap();
 }
 
+#[cfg(windows)]
 fn wait_for_composite_birth_lease_ready(path: &Path) {
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
@@ -492,6 +494,7 @@ fn wait_for_batch_staging_directory(root: &Path) -> PathBuf {
     }
 }
 
+#[cfg(windows)]
 fn wait_for_staged_payload(root: &Path, staged_index: usize, digest: Blake3Digest) -> PathBuf {
     let expected_name = format!("payload-{staged_index:08}-{}", digest_hex_for_test(digest));
     let deadline = Instant::now() + Duration::from_secs(30);

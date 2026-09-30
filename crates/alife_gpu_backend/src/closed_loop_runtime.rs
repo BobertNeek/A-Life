@@ -2040,8 +2040,7 @@ fn run_curated_residency_transaction<P: CuratedResidencyTransactionPort>(
             .checked_add(
                 snapshot
                     .logical_slot_commit_bytes
-                    .checked_mul(u64::from(entry_count))
-                    .unwrap_or(u64::MAX),
+                    .saturating_mul(u64::from(entry_count)),
             )
             .is_none_or(|bytes| bytes > snapshot.logical_budget_bytes)
         || snapshot
@@ -2433,14 +2432,12 @@ fn build_selector_diagnostic(
                     ),
                     _ => (GpuSelectorCandidateValidity::InvalidLogit, None, None, None),
                 };
-            let (binding, contributions) = if validity == GpuSelectorCandidateValidity::Valid
-                && contribution_capture.is_some()
+            let (binding, contributions) = if let Some(contribution_capture) =
+                contribution_capture.filter(|_| validity == GpuSelectorCandidateValidity::Valid)
             {
                 *failure_field =
                     GpuRuntimeSelectorDiagnosticBuildFailureField::ContributionDetailWord;
-                let words = &contribution_capture
-                    .expect("checked sparse contribution capture")
-                    .synapse_words;
+                let words = &contribution_capture.synapse_words;
                 let first = 0;
                 let family_start = selector_detail_word(words, first, 19)?;
                 let family_count = selector_detail_word(words, first, 20)?;
@@ -2724,7 +2721,6 @@ fn compile_v11_slot_upload(
 pub struct GpuClosedLoopBackend {
     pub(crate) backend_instance_id: NonZeroU64,
     pub(crate) hardware: GpuHardwareReceipt,
-    #[allow(dead_code)]
     adapter: wgpu::Adapter,
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
@@ -2945,10 +2941,10 @@ impl GpuClosedLoopBackend {
             device_lost: Arc::clone(&self.device_lost),
             kernels: Arc::clone(&self.kernels),
             state: plan.state.clone(),
-            runtime_profile: self.runtime_profile.clone(),
-            runtime_budget: self.runtime_budget.clone(),
-            activity_policy: self.activity_policy.clone(),
-            admission: GpuAdmissionReceipt::empty(self.runtime_budget.clone()),
+            runtime_profile: self.runtime_profile,
+            runtime_budget: self.runtime_budget,
+            activity_policy: self.activity_policy,
+            admission: GpuAdmissionReceipt::empty(self.runtime_budget),
             class_buckets: BTreeMap::new(),
             slot_generation_watermarks: BTreeMap::new(),
             organisms: BTreeMap::new(),
@@ -3277,9 +3273,7 @@ impl GpuClosedLoopBackend {
             if source == target || base_pairs.contains(&(source, target)) {
                 continue;
             }
-            let Some(region) = u16::try_from(route).ok() else {
-                continue;
-            };
+            let region = route;
             structural_evidence.push(CoactivationEvidence {
                 region,
                 source,
@@ -3299,9 +3293,7 @@ impl GpuClosedLoopBackend {
                     {
                         continue;
                     }
-                    let Some(region) = u16::try_from(route).ok() else {
-                        break;
-                    };
+                    let region = route;
                     structural_evidence.push(CoactivationEvidence {
                         region,
                         source,
@@ -6412,7 +6404,7 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
         }
 
         self.backend.organisms.clear();
-        for (reservation, prepared) in reservations.iter().zip(staged.into_iter()) {
+        for (reservation, prepared) in reservations.iter().zip(staged) {
             {
                 let bucket = self
                     .backend

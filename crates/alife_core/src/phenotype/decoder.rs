@@ -203,10 +203,7 @@ impl CandidateDecoderPlan {
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
-        Ok(FACTORIZED_MOTOR_CHANNELS[..head_count]
-            .iter()
-            .copied()
-            .collect())
+        Ok(FACTORIZED_MOTOR_CHANNELS[..head_count].to_vec())
     }
 
     pub(super) fn try_new(

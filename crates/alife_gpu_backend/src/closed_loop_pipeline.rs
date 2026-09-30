@@ -1286,7 +1286,7 @@ impl GpuActiveBatchUpload {
             .copy_from_slice(header.words());
         Ok(())
     }
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn dispatch_generation(&self) -> u64 {
         self.headers.first().map_or(0, |header| {
             u64::from(header.dispatch_generation_lo)
@@ -2884,7 +2884,9 @@ impl GpuClosedLoopPipelines {
         }
         let mut records = Vec::with_capacity(entries.len());
         for (row, entry) in words
-            .chunks_exact(GPU_FAST_PLASTICITY_COMMIT_WORDS)
+            .as_chunks::<GPU_FAST_PLASTICITY_COMMIT_WORDS>()
+            .0
+            .iter()
             .zip(entries)
         {
             let record = match GpuFastPlasticityCommitRecord::from_words(row) {
@@ -3698,7 +3700,7 @@ impl GpuClosedLoopPipelines {
         let pending_records = match self.build_pending_eligibility_records(batch, &records) {
             Some(records) => records,
             None => {
-                if let Some(diagnostic) = diagnostic.as_deref_mut() {
+                if let Some(diagnostic) = diagnostic {
                     diagnostic.substage = Some(GpuDecodeMappedRecordsSubstage::PendingEligibility);
                 }
                 return Err(GpuClosedLoopError::SubmissionFailed);

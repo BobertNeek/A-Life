@@ -576,7 +576,7 @@ impl FoundationTrainer {
         let steps = u32::from(self.phenotype.microstep_count());
         let burn_in = self.gpu.layout.burn_in_steps / steps;
         let count = (self.gpu.layout.ticks - burn_in) * self.gpu.layout.candidate_capacity;
-        if adjoint_offset % 4 != 0
+        if !adjoint_offset.is_multiple_of(4)
             || adjoint_offset
                 .checked_add(u64::from(count) * 4)
                 .is_none_or(|end| end > adjoints.size())
@@ -1637,7 +1637,7 @@ impl TrainerGpuState {
             layout.training_words,
             meta.len() as u64,
         ] {
-            if words * 4 > u64::from(limits.max_storage_buffer_binding_size)
+            if words * 4 > limits.max_storage_buffer_binding_size
                 || words * 4 > limits.max_buffer_size
             {
                 return Err(ScaffoldContractError::PhenotypeCompile.into());

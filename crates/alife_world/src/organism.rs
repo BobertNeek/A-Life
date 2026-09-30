@@ -168,16 +168,13 @@ impl OrganismArchiveIdentity {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OrganismLifecycle {
+    #[default]
     Alive,
-    Dead { death_tick: Tick },
-}
-
-impl Default for OrganismLifecycle {
-    fn default() -> Self {
-        Self::Alive
-    }
+    Dead {
+        death_tick: Tick,
+    },
 }
 
 impl OrganismLifecycle {

@@ -2676,15 +2676,6 @@ fn contains_engine_local_runtime_token(value: &str) -> bool {
     .any(|needle| lower.contains(needle))
 }
 
-#[allow(dead_code)]
-fn _asset_index(manifest: &AssetManifest) -> BTreeMap<&str, &AssetManifestEntry> {
-    manifest
-        .entries
-        .iter()
-        .map(|entry| (entry.asset_id.as_str(), entry))
-        .collect()
-}
-
 #[cfg(test)]
 mod highlands_persistence_tests {
     use super::*;

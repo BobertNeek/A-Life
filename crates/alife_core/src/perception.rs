@@ -1010,15 +1010,12 @@ fn validate_context(
             }
         }
         PerceptionContextKind::EpisodicCandidateV1 => {
-            if values.is_empty()
-                || !values
-                    .chunks_exact(crate::MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE)
-                    .remainder()
-                    .is_empty()
-            {
+            let (rows, remainder) =
+                values.as_chunks::<{ crate::MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE }>();
+            if rows.is_empty() || !remainder.is_empty() {
                 return Err(ScaffoldContractError::InvalidPerceptionFrame);
             }
-            for row in values.chunks_exact(crate::MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE) {
+            for row in rows {
                 if row[..14]
                     .iter()
                     .any(|value| !value.is_finite() || !(-1.0..=1.0).contains(value))

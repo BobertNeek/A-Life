@@ -745,6 +745,7 @@ impl ProductionVoxelLaunchConfig {
         })
     }
 
+    #[cfg(feature = "bevy-app")]
     pub(crate) fn canonical_new_game_save_path(&self) -> Result<PathBuf, GameAppShellError> {
         let ProductionWorldSource::NewGame { seed } = self.world_source else {
             return Err(GameAppShellError::InvalidProductionFrontend {

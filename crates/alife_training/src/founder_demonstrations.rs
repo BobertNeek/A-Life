@@ -83,12 +83,11 @@ fn record_demonstration(
     };
     let mut inspected = !inspect_first;
     for _ in 0..32 {
-        let body_before = world
+        let body_before = *world
             .organism_registry()
             .get(organism)
             .ok_or(ScaffoldContractError::InvalidId)?
-            .biochemistry()
-            .clone();
+            .biochemistry();
         let observation = world.perception_frame_draft(
             organism,
             world.tick(),
