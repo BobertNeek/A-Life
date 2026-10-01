@@ -1497,6 +1497,97 @@ fn repeated_candidates_reuse_evidence_without_changing_candidate_keys() {
 }
 
 #[test]
+fn repeated_candidate_recall_is_isolated_between_organisms_and_calls() {
+    let config = MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap();
+    let mut sidecar = grounded_sidecar(config);
+    sidecar
+        .observe_sealed_patch(&poisoned_cyan_ingest_patch())
+        .unwrap();
+    let other_organism = OrganismId(812);
+    let source = grounded_draft(0.4);
+    let original = source.grounded_object_slots()[0];
+    let repeated_draft = |organism, tracked_object_id| {
+        let object = GroundedObjectSlotV1 {
+            tracked_object_id,
+            ..original
+        };
+        PerceptionFrameDraft::new(
+            organism,
+            TICK,
+            source.sensor_profile(),
+            SensorySnapshot::new(
+                organism,
+                TICK,
+                Vec3f::ZERO,
+                SensoryChannels::ZERO,
+                Default::default(),
+            )
+            .unwrap(),
+            source.body(),
+            *source.homeostasis(),
+            vec![candidate(&object, 0), candidate(&object, 1)],
+            source.profile_provenance(),
+            vec![object],
+        )
+        .unwrap()
+    };
+
+    // Exercise both individual lookup and category fallback after an owner's
+    // successful cached recall, with otherwise identical perception features.
+    for object_id in [original.tracked_object_id, TrackedObjectId(200)] {
+        let owner_draft = repeated_draft(ORGANISM, object_id);
+        let foreign_draft = repeated_draft(other_organism, object_id);
+        let owner_recall = sidecar.recall_frame(&owner_draft).unwrap();
+        assert!(owner_recall.context().candidates[0].target_source_count > 0);
+        assert!(owner_recall.context().candidates[0].family_source_count > 0);
+        assert!(owner_recall.context().candidates[0].family_value[2] > 0.0);
+        assert_eq!(
+            owner_recall.receipt().candidates[1].target_reused_from,
+            Some(0)
+        );
+        assert_eq!(
+            owner_recall.receipt().candidates[1].family_reused_from,
+            Some(0)
+        );
+        assert_eq!(
+            sidecar.recall_frame(&foreign_draft).unwrap_err(),
+            ScaffoldContractError::InvalidMemoryQuery
+        );
+        assert_eq!(
+            owner_recall.validate_for_draft(&foreign_draft).unwrap_err(),
+            ScaffoldContractError::InvalidMemoryQuery
+        );
+
+        // Even below the organism-owned sidecar facade, indexes and caches
+        // cannot borrow the owner's episode for another organism's query.
+        let foreign_recall = sidecar.bank().recall_frame(&foreign_draft).unwrap();
+        assert_eq!(foreign_recall.receipt().similarity_evaluations, 0);
+        for context in &foreign_recall.context().candidates {
+            assert_eq!(context.target_source_count, 0);
+            assert_eq!(context.family_source_count, 0);
+            assert_eq!(context.target_latent, [0.0; MEMORY_LATENT_V1_COUNT]);
+            assert_eq!(context.family_value, [0.0; MEMORY_VALUE_V1_COUNT]);
+            assert_eq!(context.target_confidence.raw(), 0.0);
+            assert_eq!(context.family_confidence.raw(), 0.0);
+            assert_eq!(context.best_target_source, None);
+            assert_eq!(context.best_family_source, None);
+        }
+        assert_eq!(
+            foreign_recall.receipt().candidates[1].target_reused_from,
+            Some(0)
+        );
+        assert_eq!(
+            foreign_recall.receipt().candidates[1].family_reused_from,
+            Some(0)
+        );
+        foreign_recall.validate_for_draft(&foreign_draft).unwrap();
+        let owner_again = sidecar.recall_frame(&owner_draft).unwrap();
+        assert_eq!(owner_again.context(), owner_recall.context());
+        assert_eq!(owner_again.receipt(), owner_recall.receipt());
+    }
+}
+
+#[test]
 fn boring_ticks_do_not_fill_or_refresh_memory_and_remain_replay_guarded() {
     let mut bank = empty_bank();
     bank.observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, -0.8, 0.9))
