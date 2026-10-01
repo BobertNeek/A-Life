@@ -4708,6 +4708,30 @@ impl GpuClosedLoopBackend {
         ))
     }
 
+    /// Admit an owned CPU encoding view without exposing device or neural state.
+    /// Call again before submission to reject changed slot metadata or device health.
+    pub fn memory_context_slot(
+        &mut self,
+        handle: GpuBrainHandle,
+        organism_id: OrganismId,
+        sensor_profile: SensorProfile,
+    ) -> Result<GpuBrainSlot, ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let resident = self
+            .class_buckets
+            .get(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .resident(handle)?;
+        if resident.ownership.organism_id != organism_id
+            || handle.organism_id != organism_id
+            || resident.ownership.sensor_profile != sensor_profile
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        Ok(resident.brain_slot.clone())
+    }
+
     pub fn prepare_memory_context_upload(
         &mut self,
         handle: GpuBrainHandle,

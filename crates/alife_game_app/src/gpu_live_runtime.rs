@@ -10,6 +10,7 @@ mod action_credit_food_tests;
 mod checkpoint_manifest_pruning_tests;
 mod checkpoint_poll;
 mod checkpoint_runtime;
+mod cpu_preparation;
 mod durability_hold;
 mod exact_population_checkpoint;
 #[cfg(feature = "foundation-training")]
@@ -30,6 +31,10 @@ mod semantic_prior;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod sleep_atomicity_tests;
 mod staged_tick;
+use cpu_preparation::{
+    preparation_worker_count, prepare_cpu_rows, CapturedCpuPreparation, CapturedLivePreparation,
+    CpuPreparationJob, CpuPreparationOutcome,
+};
 #[cfg(feature = "foundation-training")]
 pub use foundation_worlds::*;
 pub use semantic_prior::SemanticPriorMetrics;
@@ -13573,7 +13578,10 @@ mod tests {
         ));
     }
 
-    fn register_sealing_test_organism(world: &mut HeadlessWorld, organism_id: OrganismId) {
+    pub(super) fn register_sealing_test_organism(
+        world: &mut HeadlessWorld,
+        organism_id: OrganismId,
+    ) {
         let entity_id = world
             .organism_entity_ids()
             .into_iter()

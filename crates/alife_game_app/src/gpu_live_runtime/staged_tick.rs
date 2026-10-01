@@ -165,6 +165,17 @@ impl GpuLiveBrainRuntime {
                 })
                 .collect::<Result<Vec<_>, _>>()?
         };
+        let workers = preparation_worker_count(
+            scheduled_handles.len(),
+            thread::available_parallelism().map_or(1, usize::from),
+            self.semantic_prior.is_some()
+                && self.sensor_profile == SensorProfile::GroundedTerrainVisionV1,
+        );
+        let mut captured_rows = Vec::with_capacity(if workers == 2 {
+            scheduled_handles.len()
+        } else {
+            0
+        });
         let perception_index = self.world.build_perception_batch_index()?;
         self.performance_metrics.tick_preamble_wall_ns = self
             .performance_metrics
@@ -175,10 +186,7 @@ impl GpuLiveBrainRuntime {
         let mut sleep_eligibility_replay_wall_ns = 0_u64;
         let mut sleep_timing = SleepPreparationTiming::default();
         let mut grounded_perception_wall_ns = 0_u64;
-        let mut episodic_retrieval_wall_ns = 0_u64;
-        let mut attention_context_wall_ns = 0_u64;
-        let mut topology_concept_wall_ns = 0_u64;
-        let mut gpu_upload_wall_ns = 0_u64;
+        let mut cpu_timing = cpu_preparation::CpuPreparationTiming::default();
         let mut checkpoint_publication_wall_ns = 0_u64;
         for (raw, handle, world_entity_id) in scheduled_handles {
             let sleep_preparation_started = measure_preparation.then(Instant::now);
@@ -532,7 +540,7 @@ impl GpuLiveBrainRuntime {
             #[cfg(not(feature = "gpu-tests"))]
             let force_preparation_failure = false;
             let mut preparation_stage = "receptors";
-            let preparation = (|| -> Result<PreparedGpuBrainFrame, ScaffoldContractError> {
+            let preparation = (|| -> Result<CapturedLivePreparation, ScaffoldContractError> {
                 if force_preparation_failure {
                     return Err(ScaffoldContractError::InvalidMemoryQuery);
                 }
@@ -566,138 +574,48 @@ impl GpuLiveBrainRuntime {
                 };
                 grounded_perception_wall_ns = grounded_perception_wall_ns
                     .saturating_add(grounded_perception_started.map_or(0, elapsed_ns));
-                let episodic_retrieval_started = measure_preparation.then(Instant::now);
-                let memory = self
-                    .memories
-                    .get(&raw)
-                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-                let topology = self
-                    .topologies
-                    .get(&raw)
-                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-                let sequence_id = ExperienceSequenceId(resident.next_sequence);
-                sequence_id.validate()?;
-                preparation_stage = "baseline recall";
-                let prepared_recall = memory.recall_frame(&draft)?;
-                let baseline_context = cognitive_context_for_recall(
-                    OrganismId(raw),
-                    sequence_id,
-                    &prepared_recall,
-                    topology,
-                )?;
-                preparation_stage = "baseline attention evidence";
-                let baseline_prepared =
-                    prepared_recall.with_cognitive_context(baseline_context.clone())?;
-                let memory_evidence = baseline_prepared.attention_evidence_for_draft(&draft)?;
-                episodic_retrieval_wall_ns = episodic_retrieval_wall_ns
-                    .saturating_add(episodic_retrieval_started.map_or(0, elapsed_ns));
-                let attention_context_started = measure_preparation.then(Instant::now);
-                let mut peripheral_summaries =
-                    grounded_peripheral_summaries(draft.grounded_object_slots())?;
-                let topology_evidence = topology_evidence_for_draft(&draft, topology)?;
-                let body_need = resident
-                    .homeostasis
-                    .drives
-                    .to_array()
-                    .iter()
-                    .copied()
-                    .fold(0.0, f32::max);
-                apply_predecision_attention_evidence(
-                    &mut peripheral_summaries,
-                    body_need,
-                    &memory_evidence,
-                    &baseline_context,
-                    &topology_evidence,
-                    receptor_effects,
-                )?;
-                preparation_stage = "attention selection";
-                for summary in &mut peripheral_summaries {
-                    if let alife_core::StableFocusIdentity::TrackedObject(id) = summary.identity {
-                        summary.salience.novelty = NormalizedScalar::new(
-                            1.0 - memory.bank().object_familiarity(
-                                OrganismId(raw),
-                                id,
-                                memory.profile(),
-                            ),
-                        )?;
-                    }
-                }
-                let attention = select_focal_targets(
-                    OrganismId(raw),
-                    sequence_id,
-                    tick_before,
-                    &peripheral_summaries,
-                    resident.attention_hysteresis,
-                    attention_selection_policy_for(&resident.phenotype),
-                )?;
-                resident.attention_hysteresis = attention.hysteresis;
-                preparation_stage = "focal routing";
-                let routed_draft = route_focal_candidates(draft, &attention)?;
-                let novelty = attention
-                    .focal_targets
-                    .first()
-                    .and_then(|id| match id {
-                        alife_core::StableFocusIdentity::TrackedObject(object) => Some(
-                            1.0 - memory.bank().object_familiarity(
-                                OrganismId(raw),
-                                *object,
-                                memory.profile(),
-                            ),
-                        ),
-                        _ => None,
-                    })
-                    .unwrap_or(0.0);
-                let routed_draft = routed_draft.with_remembered_novelty(novelty)?;
-                attention_context_wall_ns = attention_context_wall_ns
-                    .saturating_add(attention_context_started.map_or(0, elapsed_ns));
-                let topology_concept_started = measure_preparation.then(Instant::now);
-                preparation_stage = "routed recall";
-                let routed_recall = memory.recall_frame(&routed_draft)?;
-                let cognitive_context = cognitive_context_for_recall(
-                    OrganismId(raw),
-                    sequence_id,
-                    &routed_recall,
-                    topology,
-                )?;
-                let cognitive_context =
-                    cognitive_context_with_attention(cognitive_context, attention)?;
-                preparation_stage = "cognitive projection";
-                let cognitive_projection = cognitive_projection_for_draft(
-                    &routed_draft,
-                    &routed_recall,
-                    sequence_id,
-                    &resident.predictor,
-                    &topology_evidence,
-                )?;
-                let cognitive_context =
-                    cognitive_context_with_projection(cognitive_context, cognitive_projection)?;
-                preparation_stage = "routed finalization";
-                let prepared_recall = routed_recall.with_cognitive_context(cognitive_context)?;
-                let (frame, memory_recall) = prepared_recall.finalize(routed_draft)?;
-                memory_recall.validate_for_frame(&frame)?;
-                topology_concept_wall_ns = topology_concept_wall_ns
-                    .saturating_add(topology_concept_started.map_or(0, elapsed_ns));
-                let gpu_upload_started = measure_preparation.then(Instant::now);
-                preparation_stage = "GPU memory upload";
-                let memory_upload = self
-                    .backend
-                    .prepare_memory_context_upload(handle, &frame, &memory_recall)?
-                    .bind_neural_receptor_effects(receptor_effects)
-                    .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
-                gpu_upload_wall_ns =
-                    gpu_upload_wall_ns.saturating_add(gpu_upload_started.map_or(0, elapsed_ns));
-                Ok(PreparedGpuBrainFrame {
+                Ok(CapturedLivePreparation {
                     handle,
                     world_entity_id,
-                    frame,
-                    memory_recall,
-                    memory_upload,
-                    neural_receptors,
-                    receptor_effects,
+                    input: CapturedCpuPreparation {
+                        draft,
+                        sequence_id: ExperienceSequenceId(resident.next_sequence),
+                        homeostasis: resident.homeostasis,
+                        hysteresis: resident.attention_hysteresis,
+                        policy: attention_selection_policy_for(&resident.phenotype),
+                        neural_receptors,
+                        receptor_effects,
+                    },
                 })
             })();
             match preparation {
-                Ok(prepared) => batch.push(prepared),
+                Ok(captured) => {
+                    if workers == 1 {
+                        let outcomes = self.prepare_captured_cpu_rows(
+                            std::slice::from_ref(&captured),
+                            1,
+                            measure_preparation,
+                        )?;
+                        let outcome = outcomes
+                            .into_iter()
+                            .next()
+                            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                        collect_preparation(
+                            self,
+                            captured,
+                            outcome,
+                            &mut CpuPreparationCollection {
+                                batch: &mut batch,
+                                summaries: &mut summaries_by_organism,
+                                tick_before,
+                                tick_after,
+                                timing: &mut cpu_timing,
+                            },
+                        )?;
+                    } else {
+                        captured_rows.push(captured);
+                    }
+                }
                 Err(error) => {
                     if std::env::var_os("ALIFE_FOUNDATION_PROFILE").is_some() {
                         eprintln!("foundation perception preparation failed at {tick_before:?} in {preparation_stage}: {error:?}");
@@ -714,6 +632,30 @@ impl GpuLiveBrainRuntime {
                         ),
                     );
                 }
+            }
+        }
+        if !captured_rows.is_empty() {
+            let outcomes = self.prepare_captured_cpu_rows(
+                &captured_rows,
+                preparation_worker_count(captured_rows.len(), workers, false),
+                measure_preparation,
+            )?;
+            if outcomes.len() != captured_rows.len() {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+            }
+            for (captured, outcome) in captured_rows.into_iter().zip(outcomes) {
+                collect_preparation(
+                    self,
+                    captured,
+                    outcome,
+                    &mut CpuPreparationCollection {
+                        batch: &mut batch,
+                        summaries: &mut summaries_by_organism,
+                        tick_before,
+                        tick_after,
+                        timing: &mut cpu_timing,
+                    },
+                )?;
             }
         }
         self.performance_metrics
@@ -750,21 +692,21 @@ impl GpuLiveBrainRuntime {
             .preparation_episodic_retrieval_wall_ns = self
             .performance_metrics
             .preparation_episodic_retrieval_wall_ns
-            .saturating_add(episodic_retrieval_wall_ns);
+            .saturating_add(cpu_timing.episodic_retrieval_wall_ns);
         self.performance_metrics
             .preparation_attention_context_wall_ns = self
             .performance_metrics
             .preparation_attention_context_wall_ns
-            .saturating_add(attention_context_wall_ns);
+            .saturating_add(cpu_timing.attention_context_wall_ns);
         self.performance_metrics
             .preparation_topology_concept_wall_ns = self
             .performance_metrics
             .preparation_topology_concept_wall_ns
-            .saturating_add(topology_concept_wall_ns);
+            .saturating_add(cpu_timing.topology_concept_wall_ns);
         self.performance_metrics.preparation_gpu_upload_wall_ns = self
             .performance_metrics
             .preparation_gpu_upload_wall_ns
-            .saturating_add(gpu_upload_wall_ns);
+            .saturating_add(cpu_timing.gpu_upload_wall_ns);
         self.performance_metrics
             .preparation_checkpoint_publication_wall_ns = self
             .performance_metrics
@@ -1134,5 +1076,202 @@ impl GpuLiveBrainRuntime {
             self.pending_recovery_sleep_edges.remove(&raw);
         }
         Ok(summaries_by_organism.into_values().collect())
+    }
+}
+
+impl GpuLiveBrainRuntime {
+    fn prepare_captured_cpu_rows(
+        &mut self,
+        captured: &[CapturedLivePreparation],
+        workers: usize,
+        measure: bool,
+    ) -> Result<Vec<CpuPreparationOutcome>, ScaffoldContractError> {
+        let slots = captured
+            .iter()
+            .map(|row| {
+                self.backend.memory_context_slot(
+                    row.handle,
+                    row.input.draft.organism_id(),
+                    row.input.draft.sensor_profile(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let jobs = captured
+            .iter()
+            .zip(&slots)
+            .map(|(row, slot)| {
+                let raw = row.input.draft.organism_id().raw();
+                CpuPreparationJob {
+                    input: &row.input,
+                    slot: slot.as_ref().ok(),
+                    memory: self.memories.get(&raw),
+                    topology: self.topologies.get(&raw),
+                    predictor: self.residents.get(&raw).map(|resident| &resident.predictor),
+                }
+            })
+            .collect::<Vec<_>>();
+        // Existing receipt leaves are additive serial intervals. Parallel row
+        // intervals overlap, so leave that suffix in the enclosing wall residual
+        // rather than subtracting a worker-duration sum from elapsed wall time.
+        let mut outcomes = prepare_cpu_rows(&jobs, workers, measure && workers == 1)?;
+        drop(jobs);
+        for ((row, slot), outcome) in captured.iter().zip(slots).zip(&mut outcomes) {
+            match slot {
+                Err(error) if outcome.stage == "GPU memory upload" => outcome.result = Err(error),
+                Ok(slot) => {
+                    if let Ok(prepared) = &outcome.result {
+                        let live = self.backend.memory_context_slot(
+                            row.handle,
+                            prepared.frame.organism_id(),
+                            prepared.frame.sensor_profile(),
+                        );
+                        if let Err(error) = readmit_cpu_slot(&slot, live) {
+                            outcome.stage = "GPU memory re-admission";
+                            outcome.result = Err(error);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(outcomes)
+    }
+}
+
+fn readmit_cpu_slot(
+    captured: &alife_gpu_backend::GpuBrainSlot,
+    live: Result<alife_gpu_backend::GpuBrainSlot, ScaffoldContractError>,
+) -> Result<(), ScaffoldContractError> {
+    if *captured == live? {
+        Ok(())
+    } else {
+        Err(ScaffoldContractError::BrainOwnershipMismatch)
+    }
+}
+
+struct CpuPreparationCollection<'a> {
+    batch: &'a mut Vec<PreparedGpuBrainFrame>,
+    summaries: &'a mut BTreeMap<u64, LiveBrainTickSummary>,
+    tick_before: Tick,
+    tick_after: Tick,
+    timing: &'a mut cpu_preparation::CpuPreparationTiming,
+}
+
+fn collect_preparation(
+    runtime: &mut GpuLiveBrainRuntime,
+    captured: CapturedLivePreparation,
+    outcome: CpuPreparationOutcome,
+    collection: &mut CpuPreparationCollection<'_>,
+) -> Result<(), ScaffoldContractError> {
+    let raw = captured.input.draft.organism_id().raw();
+    if let Some(hysteresis) = outcome.hysteresis {
+        runtime
+            .residents
+            .get_mut(&raw)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .attention_hysteresis = hysteresis;
+    }
+    collection.timing.episodic_retrieval_wall_ns = collection
+        .timing
+        .episodic_retrieval_wall_ns
+        .saturating_add(outcome.timing.episodic_retrieval_wall_ns);
+    collection.timing.attention_context_wall_ns = collection
+        .timing
+        .attention_context_wall_ns
+        .saturating_add(outcome.timing.attention_context_wall_ns);
+    collection.timing.topology_concept_wall_ns = collection
+        .timing
+        .topology_concept_wall_ns
+        .saturating_add(outcome.timing.topology_concept_wall_ns);
+    collection.timing.gpu_upload_wall_ns = collection
+        .timing
+        .gpu_upload_wall_ns
+        .saturating_add(outcome.timing.gpu_upload_wall_ns);
+    match outcome.result {
+        Ok(prepared) => collection.batch.push(PreparedGpuBrainFrame {
+            handle: captured.handle,
+            world_entity_id: captured.world_entity_id,
+            frame: prepared.frame,
+            memory_recall: prepared.memory_recall,
+            memory_upload: prepared.memory_upload,
+            neural_receptors: captured.input.neural_receptors,
+            receptor_effects: captured.input.receptor_effects,
+        }),
+        Err(error) => {
+            if std::env::var_os("ALIFE_FOUNDATION_PROFILE").is_some() {
+                eprintln!(
+                    "foundation perception preparation failed at {:?} in {}: {error:?}",
+                    collection.tick_before, outcome.stage
+                );
+            }
+            runtime
+                .last_memory_preparation_errors
+                .push((OrganismId(raw), error));
+            collection.summaries.insert(
+                raw,
+                GpuLiveBrainRuntime::preparation_failure_summary(
+                    OrganismId(raw),
+                    collection.tick_before,
+                    collection.tick_after,
+                    runtime.sealed_patch_count,
+                ),
+            );
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod cpu_admission_tests {
+    use super::*;
+
+    #[test]
+    fn cpu_re_admission_rejects_generation_offset_owner_token_and_device_loss() {
+        let organism = OrganismId(1);
+        let mut world = alife_world::HeadlessScenarioBuilder::new(77112)
+            .agent("agent", organism, Vec3f::ZERO)
+            .build()
+            .unwrap();
+        super::super::tests::register_sealing_test_organism(&mut world, organism);
+        let (phenotype, _) = GpuLiveBrainRuntime::compile_birth(
+            &world,
+            BrainScaleTier::Nano512,
+            SensorProfile::GroundedObjectSlotsV1,
+            organism,
+        )
+        .unwrap();
+        let mut bucket =
+            alife_gpu_backend::GpuClassBucketPlan::new(BrainCapacityClass::n512(), 2).unwrap();
+        let captured = bucket.insert_phenotype(0, 1, &phenotype).unwrap();
+        let different_offset = bucket.insert_phenotype(1, 1, &phenotype).unwrap();
+        assert_eq!(readmit_cpu_slot(&captured, Ok(captured.clone())), Ok(()));
+        assert_eq!(
+            readmit_cpu_slot(&captured, Ok(different_offset)),
+            Err(ScaffoldContractError::BrainOwnershipMismatch)
+        );
+        let mut other =
+            alife_gpu_backend::GpuClassBucketPlan::new(BrainCapacityClass::n512(), 2).unwrap();
+        let different_generation = other.insert_phenotype(0, 2, &phenotype).unwrap();
+        assert_eq!(
+            readmit_cpu_slot(&captured, Ok(different_generation)),
+            Err(ScaffoldContractError::BrainOwnershipMismatch)
+        );
+        let mut other =
+            alife_gpu_backend::GpuClassBucketPlan::new(BrainCapacityClass::n512(), 2).unwrap();
+        let foreign_bucket = other.insert_phenotype(0, 1, &phenotype).unwrap();
+        assert_eq!(captured.record(), foreign_bucket.record());
+        assert_eq!(captured.word_ranges(), foreign_bucket.word_ranges());
+        assert_ne!(captured, foreign_bucket);
+        assert_eq!(
+            readmit_cpu_slot(&captured, Ok(foreign_bucket)),
+            Err(ScaffoldContractError::BrainOwnershipMismatch)
+        );
+        assert_eq!(
+            readmit_cpu_slot(
+                &captured,
+                Err(ScaffoldContractError::NeuralBackendUnavailable)
+            ),
+            Err(ScaffoldContractError::NeuralBackendUnavailable)
+        );
     }
 }
