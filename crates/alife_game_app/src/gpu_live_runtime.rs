@@ -52,17 +52,19 @@ use std::{
 
 use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkCounters};
+#[cfg(test)]
+use alife_core::finalized_memory_attention_evidence;
 use alife_core::predictive::{GroundedSuccessorPredictor, SuccessorPrediction};
 use alife_core::sleep::{SleepReplayEvidence, SleepWorkReceipt};
 use alife_core::{
-    finalized_memory_attention_evidence, select_focal_targets, ArchiveCheckpointRetention,
-    ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt, AttentionFrame,
-    AttentionSelectionPolicy, BiochemistryState, Blake3Digest, BodyEventDelta, BoundedReplayBatch,
-    BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus, BrainWorkCounters,
-    BrainWorkReceipt, CandidateObservationRef, CanonicalDigestBuilder, CognitiveConceptActivation,
-    CognitiveContextFrame, CognitiveGapActivation, CognitiveMemoryExpectancy, CognitiveWorkReceipt,
-    Confidence, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState,
-    DecisionSnapshot, DevelopmentState, EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId,
+    select_focal_targets, ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy,
+    ArchiveRetirementReceipt, AttentionFrame, AttentionSelectionPolicy, BiochemistryState,
+    Blake3Digest, BodyEventDelta, BoundedReplayBatch, BrainCapacityClass, BrainGenome,
+    BrainScaleTier, BrainTickStatus, BrainWorkCounters, BrainWorkReceipt, CandidateObservationRef,
+    CanonicalDigestBuilder, CognitiveConceptActivation, CognitiveContextFrame,
+    CognitiveGapActivation, CognitiveMemoryExpectancy, CognitiveWorkReceipt, Confidence,
+    ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState, DecisionSnapshot,
+    DevelopmentState, EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId,
     FinalizedMemoryAttentionEvidence, FinalizedMemoryRecall, FoundationCompatibilityFamilyId,
     FoundationGeneticIdentity, FoundationId, FoundationVersion, FoundationWeightApplication,
     FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition,
@@ -10772,6 +10774,34 @@ mod tests {
         receptors.attention_gain = 1.5;
         receptors.projection_gain = 1.0;
         receptors.local_threshold_shift = 0.0;
+        // Compile the checked-in 54-lane extension for CPU upload construction only.
+        let asset = FoundationWeightAsset::decode_canonical(include_bytes!(
+            "../../../assets/founders/scaled-choice-nociceptive-v1/candidate.alife-foundation"
+        ))
+        .unwrap();
+        let manifest = asset.manifest();
+        let identity = FoundationGeneticIdentity::new(
+            manifest.foundation_id().raw(),
+            manifest.foundation_version().raw() as u16,
+            manifest.compatibility_family_id().raw(),
+            manifest.capacity_class_id(),
+        )
+        .unwrap();
+        let extension = alife_core::CognitiveChannelExtensionV1::try_new_v1(
+            identity,
+            alife_core::ActionCandidateCreditProfileV1::SignedChoiceReadouts,
+        )
+        .unwrap();
+        let candidate = alife_core::Nano512ActionCreditCandidateV2::new_with_cognitive_extension(
+            &asset, extension,
+        )
+        .unwrap();
+        let (phenotype, _) =
+            PhenotypeCompiler::compile_nano512_action_credit_candidate(&candidate).unwrap();
+        let mut bucket =
+            alife_gpu_backend::GpuClassBucketPlan::new(BrainCapacityClass::n512(), 1).unwrap();
+        let slot = bucket.insert_phenotype(0, 1, &phenotype).unwrap();
+        assert_eq!(slot.decoder_input_stride(), 54);
         let policy = AttentionSelectionPolicy {
             focal_capacity: 1,
             protected_minimum: 1,
@@ -10827,52 +10857,138 @@ mod tests {
             let recall = memory.recall_frame(&draft).unwrap();
             let context =
                 cognitive_context_for_recall(organism_id, sequence_id, &recall, topology).unwrap();
-            let (frame, finalized_recall) = recall
-                .with_cognitive_context(context.clone())
-                .unwrap()
-                .finalize(draft.clone())
-                .unwrap();
+            let prepared = recall.with_cognitive_context(context.clone()).unwrap();
+            let actual = prepared.attention_evidence_for_draft(&draft).unwrap();
+            let (frame, finalized_recall) = prepared.clone().finalize(draft.clone()).unwrap();
             finalized_recall.validate_for_frame(&frame).unwrap();
-            let memory_evidence = finalized_memory_attention_evidence(&finalized_recall).unwrap();
+            let expected = finalized_memory_attention_evidence(&finalized_recall).unwrap();
+            assert_eq!(actual, expected);
             let topology_evidence = topology_evidence_for_draft(&draft, topology).unwrap();
             assert_eq!(topology_evidence.len(), 2);
-            let mut summaries =
-                grounded_peripheral_summaries(draft.grounded_object_slots()).unwrap();
-            apply_predecision_attention_evidence(
-                &mut summaries,
-                0.0,
-                &memory_evidence,
-                &context,
-                &topology_evidence,
-                receptors,
-            )
-            .unwrap();
-            let attention = select_focal_targets(
-                organism_id,
-                sequence_id,
-                Tick::ZERO,
-                &summaries,
-                previous,
-                policy,
-            )
-            .unwrap();
-            let routed = route_focal_candidates(draft.clone(), &attention).unwrap();
-            let routed_recall = memory.recall_frame(&routed).unwrap();
-            let projection = cognitive_projection_for_draft(
-                &routed,
-                &routed_recall,
-                sequence_id,
-                &GroundedSuccessorPredictor::default(),
-                &topology_evidence,
-            )
-            .unwrap();
-            assert_eq!(
-                tracked_object_id_for_candidate(&routed, &routed.candidates()[0]).unwrap(),
-                match attention.focal_targets[0] {
-                    StableFocusIdentity::TrackedObject(id) => Some(id),
-                    _ => panic!("expected object focus"),
-                },
-            );
+            let mut results = Vec::new();
+            for memory_evidence in [expected, actual] {
+                let mut summaries =
+                    grounded_peripheral_summaries(draft.grounded_object_slots()).unwrap();
+                apply_predecision_attention_evidence(
+                    &mut summaries,
+                    0.0,
+                    &memory_evidence,
+                    &context,
+                    &topology_evidence,
+                    receptors,
+                )
+                .unwrap();
+                for summary in &mut summaries {
+                    if let StableFocusIdentity::TrackedObject(id) = summary.identity {
+                        summary.salience.novelty = NormalizedScalar::new(
+                            1.0 - memory.bank().object_familiarity(
+                                organism_id,
+                                id,
+                                memory.profile(),
+                            ),
+                        )
+                        .unwrap();
+                    }
+                }
+                let attention = select_focal_targets(
+                    organism_id,
+                    sequence_id,
+                    Tick::ZERO,
+                    &summaries,
+                    previous,
+                    policy,
+                )
+                .unwrap();
+                let novelty = attention
+                    .focal_targets
+                    .first()
+                    .and_then(|id| match id {
+                        StableFocusIdentity::TrackedObject(id) => Some(
+                            1.0 - memory.bank().object_familiarity(
+                                organism_id,
+                                *id,
+                                memory.profile(),
+                            ),
+                        ),
+                        _ => None,
+                    })
+                    .unwrap_or(0.0);
+                let routed = route_focal_candidates(draft.clone(), &attention)
+                    .unwrap()
+                    .with_remembered_novelty(novelty)
+                    .unwrap();
+                let routed_recall = memory.recall_frame(&routed).unwrap();
+                let routed_context = cognitive_context_for_recall(
+                    organism_id,
+                    sequence_id,
+                    &routed_recall,
+                    topology,
+                )
+                .unwrap();
+                let routed_context =
+                    cognitive_context_with_attention(routed_context, attention.clone()).unwrap();
+                let projection = cognitive_projection_for_draft(
+                    &routed,
+                    &routed_recall,
+                    sequence_id,
+                    &GroundedSuccessorPredictor::default(),
+                    &topology_evidence,
+                )
+                .unwrap();
+                assert_eq!(
+                    tracked_object_id_for_candidate(&routed, &routed.candidates()[0]).unwrap(),
+                    match attention.focal_targets[0] {
+                        StableFocusIdentity::TrackedObject(id) => Some(id),
+                        _ => panic!("expected object focus"),
+                    }
+                );
+                let routed_context =
+                    cognitive_context_with_projection(routed_context, projection.clone()).unwrap();
+                let (frame, finalized) = routed_recall
+                    .with_cognitive_context(routed_context)
+                    .unwrap()
+                    .finalize(routed)
+                    .unwrap();
+                finalized.validate_for_frame(&frame).unwrap();
+                let perception =
+                    alife_gpu_backend::GpuPerceptionUpload::try_from_frame(&frame, &slot, 0)
+                        .unwrap();
+                let upload = GpuMemoryContextUpload::try_from_finalized(
+                    &frame,
+                    &finalized,
+                    perception.frame_binding,
+                    &slot,
+                )
+                .unwrap()
+                .bind_neural_receptor_effects(receptors)
+                .unwrap();
+                assert!(!upload.cognitive_records.is_empty());
+                let words = upload
+                    .header
+                    .words()
+                    .iter()
+                    .copied()
+                    .chain(
+                        upload
+                            .records
+                            .iter()
+                            .flat_map(|row| row.words().iter().copied()),
+                    )
+                    .chain(
+                        upload
+                            .cognitive_records
+                            .iter()
+                            .flat_map(|row| row.words().iter().copied()),
+                    )
+                    .collect::<Vec<_>>();
+                results.push((
+                    summaries, attention, projection, frame, finalized, perception, upload, words,
+                ));
+            }
+            // Includes salience, hysteresis, reordered candidates, novelty,
+            // projection, final keys/receipts and literal perception/memory words.
+            assert_eq!(results[0], results[1]);
+            let (summaries, attention, projection, ..) = results.pop().unwrap();
             (summaries, attention, projection)
         };
         let (baseline, base_attention, _) = prepare(&make_topology(object_a, 0.0, 0.0));

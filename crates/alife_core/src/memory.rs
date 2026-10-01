@@ -141,6 +141,22 @@ pub struct PreparedMemoryRecall {
 }
 
 impl PreparedMemoryRecall {
+    /// Derive predecision attention evidence from this exact validated draft.
+    /// The routed neural frame must still be finalized before GPU dispatch.
+    pub fn attention_evidence_for_draft(
+        &self,
+        draft: &PerceptionFrameDraft,
+    ) -> Result<Vec<crate::FinalizedMemoryAttentionEvidence>, ScaffoldContractError> {
+        self.validate_for_draft(draft)?;
+        let mut evidence = Vec::with_capacity(self.candidate_queries.len());
+        for (query, candidate) in self.candidate_queries.iter().zip(&self.context.candidates) {
+            evidence.push(
+                crate::memory_query::memory_attention_evidence_for_candidate(query, candidate)?,
+            );
+        }
+        Ok(evidence)
+    }
+
     pub fn finalize(
         self,
         draft: PerceptionFrameDraft,
