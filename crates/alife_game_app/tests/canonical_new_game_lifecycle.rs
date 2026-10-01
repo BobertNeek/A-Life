@@ -135,6 +135,91 @@ fn new_game_base_save_matches_every_canonical_founder() {
     );
     let candidate_asset = configured.asset().unwrap();
     let manifest = candidate_asset.manifest();
+    let historical_bytes = include_bytes!(
+        "../../../assets/founders/scaled-choice-nociceptive-v1/historical/2026-09-08-scaled-choice-32416/candidate.alife-foundation"
+    );
+    assert_eq!(historical_bytes.len(), 7673);
+    assert_eq!(
+        blake3::hash(historical_bytes).to_hex().as_str(),
+        "570e3faa82f1f6fccdf1018b7736e057dce4c700d3b549e49747982dce4d0c77"
+    );
+    // Strict current admission rejects the archived obsolete ABI. These fixed
+    // offsets inspect only the fully pinned source file, not a legacy parser.
+    assert!(alife_core::FoundationWeightAsset::decode_canonical(historical_bytes).is_err());
+    assert_eq!(
+        &historical_bytes[7641..7673],
+        &[
+            162, 205, 184, 109, 162, 15, 136, 4, 200, 120, 232, 83, 105, 194, 153, 231, 150, 181,
+            202, 200, 230, 97, 59, 164, 174, 244, 52, 65, 167, 166, 238, 30,
+        ]
+    );
+    assert_eq!(&historical_bytes[441..445], &1799_u32.to_le_bytes());
+    let historical_weights: Vec<_> = historical_bytes[445..7641]
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|bytes| f32::from_bits(u32::from_le_bytes(*bytes)))
+        .collect();
+    assert_eq!(candidate_asset.weights().len(), 1799);
+    assert_eq!(historical_weights.len(), 1799);
+    for (old, current) in historical_weights.iter().zip(candidate_asset.weights()) {
+        assert_eq!(old.to_bits(), current.to_bits());
+    }
+    assert_eq!(&historical_bytes[36..68], manifest.layout_digest().bytes());
+    assert_eq!(
+        &historical_bytes[166..198],
+        manifest.route_abi_digest().bytes()
+    );
+    assert_eq!(
+        &historical_bytes[198..230],
+        manifest.plasticity_abi_digest().bytes()
+    );
+    assert_eq!(
+        &historical_bytes[230..262],
+        manifest.address_map_digest().bytes()
+    );
+    assert_eq!(
+        manifest.training_stage(),
+        alife_core::TrainingStageManifest::bootstrap()
+    );
+    assert_eq!(manifest.training_stage().curriculum_version(), 0);
+    assert_eq!(manifest.training_stage().evaluation_version(), 0);
+    assert_eq!(manifest.training_stage().completed_stage_count(), 0);
+    assert!(!manifest.promotion_receipt().is_promoted());
+    // Reconstruct with the current strict fixed-graph constructor. Equality
+    // checks decoder/provenance bindings, not just a self-consistent old digest.
+    let builtin =
+        alife_core::FoundationWeightAsset::builtin_nano512_v1(manifest.sensor_profile()).unwrap();
+    let baseline = alife_core::PhenotypeCompiler::compile_fixed_legacy_nano512_compatibility_asset(
+        manifest.sensor_profile(),
+        &builtin,
+    )
+    .unwrap()
+    .into_runtime_parts()
+    .0;
+    let rebuilt = alife_core::FoundationWeightAsset::from_nano512_readout_candidate(
+        &baseline,
+        historical_weights,
+        alife_core::TrainingStageManifest::bootstrap(),
+    )
+    .unwrap();
+    assert_eq!(candidate_asset, rebuilt);
+    assert_ne!(
+        candidate_asset.digest().bytes(),
+        &historical_bytes[7641..7673]
+    );
+    let current_bytes = candidate_asset.encode_canonical().unwrap();
+    assert_eq!(current_bytes.len(), historical_bytes.len());
+    let changed_ranges = [100..132, 262..306, 306..405, 405..437, 7641..7673];
+    for (offset, (old, current)) in historical_bytes.iter().zip(&current_bytes).enumerate() {
+        if !changed_ranges.iter().any(|range| range.contains(&offset)) {
+            assert_eq!(old, current, "unexpected changed wire byte at {offset}");
+        }
+    }
+    assert_eq!(
+        alife_core::FoundationWeightAsset::decode_canonical(&current_bytes).unwrap(),
+        rebuilt
+    );
     assert_eq!(
         record.genome().foundation,
         alife_core::FoundationGeneticIdentity::new(
@@ -148,8 +233,8 @@ fn new_game_base_save_matches_every_canonical_founder() {
     assert_eq!(
         configured.asset().unwrap().digest().bytes(),
         &[
-            162, 205, 184, 109, 162, 15, 136, 4, 200, 120, 232, 83, 105, 194, 153, 231, 150, 181,
-            202, 200, 230, 97, 59, 164, 174, 244, 52, 65, 167, 166, 238, 30,
+            104, 116, 104, 6, 37, 197, 185, 216, 126, 151, 243, 186, 126, 206, 183, 220, 47, 7,
+            179, 138, 47, 30, 187, 63, 130, 249, 2, 104, 54, 17, 237, 82,
         ]
     );
     let graph = record.genome().chemistry.graph.expressed();
@@ -207,13 +292,12 @@ fn production_new_game_source_builds_exact_runtime_before_scene_construction() {
     assert!(exact_before_preflight.world.disable_age_death);
     let bytes_before_preflight = std::fs::read(&summary.save_path).unwrap();
     assert_eq!(exact_before_preflight.creatures.len(), 4);
-    assert!(exact_before_preflight
-        .creatures
-        .iter()
-        .all(|creature| creature.gpu_brain.as_ref().is_some_and(|brain| {
+    assert!(exact_before_preflight.creatures.iter().all(|creature| {
+        creature.gpu_brain.as_ref().is_some_and(|brain| {
             brain.exact_cognitive_state.is_some()
                 && brain.legacy_nano512_compatibility_receipt.is_none()
-        })));
+        })
+    }));
     launch.app_launch.save_path = summary.save_path.clone();
     let repeated_preflight = run_production_voxel_frontend_preflight(&launch).unwrap();
     let exact_after_preflight = PortableSaveFile::from_json_file(&summary.save_path).unwrap();

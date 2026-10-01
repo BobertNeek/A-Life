@@ -63,8 +63,8 @@ fn scaled_choice_candidate() -> Result<alife_core::Nano512ActionCreditCandidateV
     ))?;
     if asset.digest().bytes()
         != &[
-            162, 205, 184, 109, 162, 15, 136, 4, 200, 120, 232, 83, 105, 194, 153, 231, 150, 181,
-            202, 200, 230, 97, 59, 164, 174, 244, 52, 65, 167, 166, 238, 30,
+            104, 116, 104, 6, 37, 197, 185, 216, 126, 151, 243, 186, 126, 206, 183, 220, 47, 7,
+            179, 138, 47, 30, 187, 63, 130, 249, 2, 104, 54, 17, 237, 82,
         ]
     {
         return Err(invalid_launch("bundled founder candidate digest mismatch"));
