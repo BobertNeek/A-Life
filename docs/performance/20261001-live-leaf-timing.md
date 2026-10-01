@@ -176,3 +176,39 @@ Bevy frontend build. The desktop Windows build remains the full-host check.
 No cloud GPU/device/hardware test, training campaign, main/CI merge, or PR was
 performed. Remaining hardware attribution is Unknown and belongs to the desktop
 owner. Rollback is reverting the diagnostic implementation commit.
+
+
+## Follow-up: complete receipt macro build limit
+
+The desktop owner reported that the complete `serde_json::json!` receipt macro
+exhausted the default Rust expansion-depth limit. The earlier temporary check
+compiled extracted new JSON sections, not the complete receipt macro, so it
+missed this build failure.
+
+The minimal repair adds `#![recursion_limit = "256"]` to
+`alife_game_app/src/lib.rs`. That file is included in this follow-up's ownership.
+This raises only the compiler's macro expansion budget; no runtime calls,
+timing fields, measurement values, validation, or simulation work change.
+Existing source and measurement evidence above is retained.
+
+The coordinator reports a successful desktop build with this sole repair at
+`bbd351dd585df338b8eb882e1ecc69bac5c0f9fd` on its combined A/B `31bb` and timing
+`4fee` source. That is supplied desktop evidence, not a cloud build of this
+exact branch. No desktop or GPU operation was run by this follow-up.
+
+After sourcing `/workspace/cloud-cpu-validation/env.sh`, cloud verification:
+
+- `cargo check -p alife_game_app --lib --no-default-features --features
+  production-voxel-frontend`: **Blocked**, exit 101 from `libudev-sys` because
+  `libudev.pc` is unavailable. This stops before the receipt writer is checked.
+- `cargo check -p alife_game_app --lib --no-default-features --features
+  gpu-runtime`: pass. This checks the crate attribute but excludes the graphical
+  receipt writer; it is not a substitute for a full renderer build.
+- Formatting, whitespace, and the existing documentation checker pass.
+- R2 separate-worker source review: the production diff is only the crate
+  attribute and a blank line; no blocking finding. Existing simulation tests
+  were not repeated for this compiler-only change.
+
+The full renderer build of the exact cloud successor remains **Blocked** by
+host dependencies. Rollback for this repair is removing the recursion-limit
+attribute; it requires no save, GPU ABI, or runtime migration.

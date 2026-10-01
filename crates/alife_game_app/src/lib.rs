@@ -4,6 +4,8 @@
 //! previous monolithic `lib.rs` into focused modules. Bevy construction remains
 //! behind the `bevy-app` feature and GPU runtime support remains optional.
 
+#![recursion_limit = "256"]
+
 mod prelude {
     pub(crate) use std::path::{Path, PathBuf};
 
