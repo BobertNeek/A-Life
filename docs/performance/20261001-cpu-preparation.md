@@ -5,9 +5,10 @@ included in candidate `a11dae6a5708bddf7d4255990f3bd4abaf12759a`.
 They do not measure that candidate's game frame time. Windows/RTX before/after
 performance and the 20 FPS/50-creature goal remain **Unknown**.
 
-The older receipts retain every structured sample, payload vector, source hash
-and outcome. Copied console mirrors were removed after exact field comparison;
-the original presentation remains in Git at `a11dae6a`.
+The older receipts retain every timing sample, parameter, source hash and outcome.
+Copied console mirrors were removed after exact field comparison. Reproducible
+payload dumps retain their lengths/digests; probes regenerate the words, and the
+original vectors remain in Git at `a11dae6a`.
 
 ## Results and measured sources
 
@@ -46,8 +47,8 @@ tick, renderer or training campaign ran.
 | Receptors | Core opt-level 2 test rlib; probe `rustc -O`; one GroundedObjectSlotsV1 N512 phenotype, 1,799 synapses | Three processes; 100 warmup calls; nine samples of 1,000 eight-call cohorts/process |
 
 Perception payload hashes, terrain serialized drafts and memory serialized
-frame/recall/key/receipt/context/bank proofs match before/after. Upload's complete
-u32 vectors match across six processes. Full host Debug text was not retained;
+frame/recall/key/receipt/context/bank proofs match before/after. The original upload
+comparison matched complete u32 vectors across six processes. Full host Debug text was not retained;
 its recorded lengths/hashes cannot be independently recomputed from JSON alone.
 Proof construction is outside timing. Eight calls do not mean eight live creatures.
 Observed medians are not statistical guarantees or population-scaling evidence.
