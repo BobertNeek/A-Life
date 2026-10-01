@@ -1639,6 +1639,9 @@ impl TopologicalMap {
                 gap_ids,
             },
         };
+        // The planned map is fully validated above. Reconstructing its fresh
+        // private diff is a development diagnostic, not observation work.
+        #[cfg(debug_assertions)]
         plan.validate_against(self)?;
         Ok(plan)
     }
@@ -2055,6 +2058,8 @@ impl Validate for TopologicalMap {
 }
 
 impl TopologyMutationPlan {
+    // Keep the complete diagnostic available to debug builds and unit tests.
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
     fn validate_against(&self, map: &TopologicalMap) -> Result<(), ScaffoldContractError> {
         if map.canonical_digest()? != self.expected_digest
             || map.counts() != self.expected_counts
@@ -3176,6 +3181,9 @@ fn replace_or_append_checked<T, I: Copy + PartialEq>(
 }
 
 fn commit_prevalidated_plan(map: &mut TopologicalMap, plan: TopologyMutationPlan) {
+    // No caller can change the map between private planning and commit.
+    // Checked replacement application below still enforces every target.
+    #[cfg(debug_assertions)]
     plan.validate_against(map)
         .expect("private topology mutation plan was validated before commit");
     apply_replacements_checked(map, &plan.replacements)
@@ -3679,5 +3687,89 @@ mod gap_portability_tests {
         .unwrap();
         assert_eq!(gap.source_concepts, vec![concept]);
         assert_eq!(domain_gap(&portable_gap(&gap)).unwrap(), gap);
+    }
+}
+
+#[cfg(test)]
+mod mutation_plan_tests {
+    use super::*;
+
+    fn valid_plan() -> (TopologicalMap, TopologyMutationPlan) {
+        let map = TopologicalMap::new(TopologicalMapConfig::default()).unwrap();
+        let mut planned = map.clone();
+        planned
+            .concepts
+            .push(ConceptCell::new(ConceptCellId(1), ConceptBindings::default()).unwrap());
+        planned.simplexes.push(
+            CognitiveSimplex::new(
+                CognitiveSimplexId(1),
+                vec![ConceptCellId(1)],
+                SignedValence(0.0),
+                NormalizedScalar(0.1),
+                NormalizedScalar(0.2),
+                Tick(1),
+            )
+            .unwrap(),
+        );
+        planned.next_concept_id = 2;
+        planned.next_simplex_id = 2;
+        planned.validate_contract().unwrap();
+        let signature = ConceptSignature::Action {
+            family: CandidateActionFamily::Idle,
+            action_id: ActionId(200),
+        };
+        let plan = TopologyMutationPlan {
+            expected_digest: map.canonical_digest().unwrap(),
+            final_digest: planned.canonical_digest().unwrap(),
+            expected_counts: map.counts(),
+            final_counts: planned.counts(),
+            expected_next_ids: map.next_ids(),
+            final_next_ids: planned.next_ids(),
+            primary_signature: signature.clone(),
+            action_signature: signature,
+            primary_bindings: ConceptBindings::default(),
+            action_bindings: ConceptBindings::default(),
+            replacements: diff_replacements(&map, &planned).unwrap(),
+            degradations: vec![],
+            update: TopologyUpdate {
+                primary_concept_id: ConceptCellId(1),
+                edge_ids: vec![],
+                simplex_id: CognitiveSimplexId(1),
+                gap_ids: vec![],
+            },
+        };
+        (map, plan)
+    }
+
+    #[test]
+    fn private_plan_diagnostic_rejects_stale_or_corrupted_provenance_without_mutation() {
+        let (map, plan) = valid_plan();
+        plan.validate_against(&map).unwrap();
+        let original = map.clone();
+        let edits: [fn(&mut TopologyMutationPlan); 6] = [
+            |p| p.expected_digest[0] ^= 1,
+            |p| p.final_digest[0] ^= 1,
+            |p| p.expected_next_ids.next_concept_id += 1,
+            |p| p.final_counts.concepts += 1,
+            |p| p.replacements.reverse(),
+            |p| {
+                if let TopologyReplacement::Simplex { expected_id, .. } = &mut p.replacements[1] {
+                    *expected_id = Some(CognitiveSimplexId(9));
+                } else {
+                    panic!("fixture requires simplex replacement");
+                }
+            },
+        ];
+        for edit in edits {
+            let mut invalid = plan.clone();
+            edit(&mut invalid);
+            assert!(invalid.validate_against(&map).is_err());
+            assert_eq!(map, original);
+        }
+        let mut committed = map;
+        commit_prevalidated_plan(&mut committed, plan);
+        committed.validate_contract().unwrap();
+        assert_eq!(committed.concepts().len(), 1);
+        assert_eq!(committed.simplexes().len(), 1);
     }
 }
