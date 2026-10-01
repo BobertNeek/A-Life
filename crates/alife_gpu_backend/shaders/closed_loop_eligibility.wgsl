@@ -68,6 +68,41 @@ fn receptor_is_valid(receptor:GpuPlasticityReceptorRecord) -> bool {
     && all(receptor.reserved == vec2<f32>(0.0));
 }
 
+fn replay_trace_clock_is_valid(learning:GpuSlotLearningStateRecord, tick:vec2<u32>) -> bool {
+  if (learning.replay_event_capacity == 0u || learning.replay_event_capacity > 65536u
+      || learning.replay_event_count > learning.replay_event_capacity
+      || learning.replay_cursor >= learning.replay_event_capacity
+      || (learning.replay_event_count < learning.replay_event_capacity
+        && learning.replay_cursor != learning.replay_event_count)
+      || !state_span_within(learning.replay_event_rows_offset, learning.replay_event_capacity * 28u)) {
+    return false;
+  }
+  if (learning.replay_event_count == 0u) { return true; }
+  let newest = select(learning.replay_cursor - 1u, learning.replay_event_capacity - 1u,
+    learning.replay_cursor == 0u);
+  let base = learning.replay_event_rows_offset + newest * 28u;
+  let anchor = vec2<u32>(load_state_u32(base + 2u), load_state_u32(base + 3u));
+  return !simulation_tick_less(tick, anchor);
+}
+
+fn trace_elapsed_ticks(brain:GpuBrainSlotRecord, header:GpuLearningHeader) -> vec2<u32> {
+  let state_base = load_state_u32(brain.extension_record_offset + 15u);
+  if (load_state_u32(state_base + 13u) == 0u) { return vec2<u32>(0u); }
+  let cursor = load_state_u32(state_base + 12u);
+  let capacity = load_state_u32(state_base + 14u);
+  let newest = select(cursor - 1u, capacity - 1u, cursor == 0u);
+  let base = load_state_u32(state_base + 17u) + newest * 28u;
+  let anchor = vec2<u32>(load_state_u32(base + 2u), load_state_u32(base + 3u));
+  let tick = vec2<u32>(frame_payload_words[header.outcome_offset + 16u],
+    frame_payload_words[header.outcome_offset + 17u]);
+  return simulation_tick_delta(tick, anchor);
+}
+
+fn trace_has_anchor(brain:GpuBrainSlotRecord) -> bool {
+  let state_base = load_state_u32(brain.extension_record_offset + 15u);
+  return load_state_u32(state_base + 13u) != 0u;
+}
+
 fn learning_contract_is_valid(
   header:GpuLearningHeader,
   brain:GpuBrainSlotRecord,
@@ -116,6 +151,11 @@ fn prevalidate_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (!state_span_within(extension.learning_state_offset, 24u)) { return; }
   let learning = load_slot_learning_state(extension);
   if (!learning_contract_is_valid(header, brain, extension, learning)) { return; }
+  let perception = load_perception_header(gid.y * ACTIVE_DISPATCH_ROW_WORDS);
+  let tick = vec2<u32>(perception.tick_lo, perception.tick_hi);
+  let pending_tick = vec2<u32>(frame_payload_words[header.outcome_offset + 16u],
+    frame_payload_words[header.outcome_offset + 17u]);
+  if (!all(tick == pending_tick) || !replay_trace_clock_is_valid(learning, tick)) { return; }
   let activity = load_activity_header(
     gid.y * ACTIVE_DISPATCH_ROW_WORDS + ACTIVITY_HEADER_OFFSET
   );
@@ -144,23 +184,26 @@ fn accumulate_recurrent_eligibility(@builtin(global_invocation_id) gid:vec3<u32>
   let staging_bases = bank_pair.staging_bases;
   let route_index = immutable_plan_words[brain.route_indices_offset + local_synapse];
   let route_mask_base = gid.y * ACTIVE_DISPATCH_ROW_WORDS + ACTIVITY_HEADER_OFFSET + 8u;
+  let extension_base = brain.extension_record_offset;
+  let metadata_base = load_state_u32(extension_base + 7u) + local_synapse * 8u;
+  let metadata = load_synapse_learning_metadata(metadata_base);
+  let receptor_base = load_state_u32(extension_base + 4u) + metadata.receptor_index * 16u;
+  let reference_decay = bitcast<f32>(immutable_plan_words[receptor_base]);
+  let eligibility_decay = eligibility_decay_for_ticks(reference_decay, trace_elapsed_ticks(brain, header));
   if (!route_enabled_at(route_mask_base, route_index)) {
     let previous = load_state_f32(active_bases.recurrent + local_synapse);
-    if (!finite_eligibility(previous)) {
+    let next = eligibility_decay * previous;
+    if (!finite_eligibility(previous) || !finite_eligibility(next)
+        || (!trace_has_anchor(brain) && previous != 0.0)) {
       atomicOr(
         &mutable_state_words[brain.diagnostic_offset + ELIGIBILITY_DIAGNOSTIC_LANE],
         ELIGIBILITY_DIAGNOSTIC_INVALID_VALUE
       );
       return;
     }
-    store_state_f32(staging_bases.recurrent + local_synapse, previous);
+    store_state_f32(staging_bases.recurrent + local_synapse, canonicalize_state_zero(next));
     return;
   }
-  let extension_base = brain.extension_record_offset;
-  let metadata_base = load_state_u32(extension_base + 7u) + local_synapse * 8u;
-  let metadata = load_synapse_learning_metadata(metadata_base);
-  let receptor_base = load_state_u32(extension_base + 4u) + metadata.receptor_index * 16u;
-  let eligibility_decay = bitcast<f32>(immutable_plan_words[receptor_base]);
   let post_activation_offset = select(
     brain.activation_a_offset,
     brain.activation_b_offset,
@@ -178,14 +221,15 @@ fn accumulate_recurrent_eligibility(@builtin(global_invocation_id) gid:vec3<u32>
   let local = load_state_f32(source) * load_state_f32(target_index);
   let previous = load_state_f32(active_index);
   let next = eligibility_decay * previous + local;
-  if (!finite_eligibility(local) || !finite_eligibility(previous) || !finite_eligibility(next)) {
+  if (!finite_eligibility(local) || !finite_eligibility(previous) || !finite_eligibility(next)
+      || (!trace_has_anchor(brain) && previous != 0.0)) {
     atomicOr(
       &mutable_state_words[brain.diagnostic_offset + ELIGIBILITY_DIAGNOSTIC_LANE],
       ELIGIBILITY_DIAGNOSTIC_INVALID_VALUE
     );
     return;
   }
-  store_state_f32(staging_index, clamp(next, -1.0, 1.0));
+  store_state_f32(staging_index, canonicalize_state_zero(clamp(next, -1.0, 1.0)));
 }
 
 @compute @workgroup_size(64)
@@ -202,7 +246,8 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
   let metadata_base = load_state_u32(extension_base + 6u) + local_synapse * 8u;
   let metadata = load_decoder_eligibility_metadata(metadata_base);
   let receptor_base = load_state_u32(extension_base + 4u) + metadata.receptor_index * 16u;
-  let eligibility_decay = bitcast<f32>(immutable_plan_words[receptor_base]);
+  let reference_decay = bitcast<f32>(immutable_plan_words[receptor_base]);
+  let eligibility_decay = eligibility_decay_for_ticks(reference_decay, trace_elapsed_ticks(brain, header));
   if (selection.status != 2u || selection.candidate_index >= header.candidate_count
       || selection.active_activation_side != header.active_activation_side) { return; }
   let selected = load_candidate(header.candidate_offset + selection.candidate_index * 8u);
@@ -279,14 +324,15 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
   }
   let previous = load_state_f32(active_index);
   let next = eligibility_decay * previous + local;
-  if (!finite_eligibility(local) || !finite_eligibility(previous) || !finite_eligibility(next)) {
+  if (!finite_eligibility(local) || !finite_eligibility(previous) || !finite_eligibility(next)
+      || (!trace_has_anchor(brain) && previous != 0.0)) {
     atomicOr(
       &mutable_state_words[brain.diagnostic_offset + ELIGIBILITY_DIAGNOSTIC_LANE],
       ELIGIBILITY_DIAGNOSTIC_INVALID_VALUE
     );
     return;
   }
-  store_state_f32(staging_index, clamp(next, -1.0, 1.0));
+  store_state_f32(staging_index, canonicalize_state_zero(clamp(next, -1.0, 1.0)));
 }
 
 @compute @workgroup_size(1)
