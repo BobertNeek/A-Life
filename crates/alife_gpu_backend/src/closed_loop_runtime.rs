@@ -6992,7 +6992,8 @@ mod curated_founder_gpu_cutover_tests {
         let manifest = foundation.manifest();
         let identity = FoundationGeneticIdentity::new(
             manifest.foundation_id().raw(),
-            manifest.foundation_version().raw(),
+            u16::try_from(manifest.foundation_version().raw())
+                .expect("fixture foundation version fits the genetic identity"),
             manifest.compatibility_family_id().raw(),
             BrainCapacityClass::N512_ID,
         )

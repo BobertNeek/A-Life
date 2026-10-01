@@ -13,25 +13,6 @@ fn exact_population_capture_failure_error(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn exact_capture_failure_keeps_generation_and_stage_context() {
-        let error = exact_population_capture_failure_error(
-            alife_gpu_backend::GpuExactPopulationCaptureFailureV1 {
-                capture_transaction_generation: 73,
-                stage: alife_gpu_backend::GpuExactPopulationCaptureFailureStageV1::MapCallback,
-            },
-        );
-        let message = error.to_string();
-
-        assert!(message.contains("73"));
-        assert!(message.contains("MapCallback"));
-    }
-}
-
 impl GpuLiveBrainRuntime {
     pub(super) fn poll_exact_population_checkpoint(&mut self) -> Result<(), GameAppShellError> {
         let work = std::mem::take(&mut self.exact_checkpoint_work);
@@ -734,5 +715,24 @@ impl GpuLiveBrainRuntime {
                 Ok(())
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exact_capture_failure_keeps_generation_and_stage_context() {
+        let error = exact_population_capture_failure_error(
+            alife_gpu_backend::GpuExactPopulationCaptureFailureV1 {
+                capture_transaction_generation: 73,
+                stage: alife_gpu_backend::GpuExactPopulationCaptureFailureStageV1::MapCallback,
+            },
+        );
+        let message = error.to_string();
+
+        assert!(message.contains("73"));
+        assert!(message.contains("MapCallback"));
     }
 }

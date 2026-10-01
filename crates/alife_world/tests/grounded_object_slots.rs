@@ -280,7 +280,7 @@ fn sixteen_slots_yield_four_complete_six_action_groups_and_never_a_partial_group
     assert_eq!(frame.candidates()[0].family, CandidateActionFamily::Idle);
     assert_eq!(frame.candidates()[1].family, CandidateActionFamily::Rest);
     assert_eq!(frame.candidates()[2].kind, alife_core::ActionKind::Vocalize);
-    for group in frame.candidates()[3..object_choices_end].chunks_exact(6) {
+    for group in frame.candidates()[3..object_choices_end].as_chunks::<6>().0 {
         assert_eq!(
             group
                 .iter()

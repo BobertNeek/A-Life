@@ -131,6 +131,9 @@ fn painful_memory_patch(
 }
 
 #[cfg(feature = "gpu-tests")]
+// Keep the independent organism, neural tick, and sealed-patch authorities
+// explicit in this fixture rather than hiding them in a shared test context.
+#[allow(clippy::too_many_arguments)]
 fn painful_patch_for_gpu_tick(
     handle: alife_gpu_backend::GpuBrainHandle,
     brain: &alife_core::BrainPhenotype,

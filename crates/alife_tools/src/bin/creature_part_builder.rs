@@ -792,7 +792,7 @@ fn render_audit_sheet(
         for part in &model.parts {
             let part_points = &points[point_offset..point_offset + part.positions.len()];
             point_offset += part.positions.len();
-            for (triangle_index, triangle) in part.indices.chunks_exact(3).enumerate() {
+            for (triangle_index, triangle) in part.indices.as_chunks::<3>().0.iter().enumerate() {
                 let vertices = [0_usize, 1, 2].map(|corner| part_points[triangle[corner] as usize]);
                 let color = audit_triangle_color(model, part.slot, vertices, triangle_index);
                 raster_audit_triangle(&mut image, &mut z_buffer, projection, vertices, color);
@@ -1513,7 +1513,7 @@ fn draw_part_triangles(
     color: [u8; 4],
     projection: PreviewProjection,
 ) {
-    for triangle in part.indices.chunks_exact(3) {
+    for triangle in part.indices.as_chunks::<3>().0 {
         let points = [0_usize, 1, 2].map(|corner| {
             let index = triangle[corner];
             let position = assembled_position(pack, slot, part.vertices[index as usize].position);

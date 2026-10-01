@@ -199,9 +199,7 @@ fn registered_world() -> (alife_world::HeadlessWorld, WorldEntityId) {
         Tick::ZERO,
     )
     .unwrap();
-    world
-        .replace_organism_registry_exact([organism].into_iter())
-        .unwrap();
+    world.replace_organism_registry_exact([organism]).unwrap();
     (world, entity_id)
 }
 
@@ -227,7 +225,7 @@ fn production_sensing_and_motor_execution_consume_embodiment_state() {
         .replace_embodiment_state(embodiment)
         .unwrap();
     calibrated_world
-        .replace_organism_registry_exact([calibrated_record].into_iter())
+        .replace_organism_registry_exact([calibrated_record])
         .unwrap();
 
     let baseline_sensory = baseline_world

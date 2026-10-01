@@ -223,9 +223,7 @@ fn replace_registry_accepts_the_exact_complete_agent_set() {
     let empty_signature = world.canonical_signature_digest().unwrap();
 
     world
-        .replace_organism_registry_exact(
-            [record(7, agent_a.raw()), record(8, agent_b.raw())].into_iter(),
-        )
+        .replace_organism_registry_exact([record(7, agent_a.raw()), record(8, agent_b.raw())])
         .unwrap();
 
     assert_eq!(world.organism_registry().len(), 2);
@@ -370,9 +368,7 @@ fn replace_registry_accepts_valid_biology_lifecycle_archive_state() {
         .link_life_manifest(Blake3Digest::from_bytes([2; 32]))
         .unwrap();
 
-    world
-        .replace_organism_registry_exact([changed].into_iter())
-        .unwrap();
+    world.replace_organism_registry_exact([changed]).unwrap();
     assert_eq!(world.organism_registry().len(), 1);
     assert_eq!(
         world

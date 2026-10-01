@@ -206,7 +206,7 @@ fn simulation_time_real_gpu_probe_preserves_reference_decay_and_attenuates_delay
         let values: &[f32] = bytemuck::cast_slice(&bytes);
         // Analytic fixture values, not a CPU execution of the neural kernel.
         let expected = [
-            1.0, 0.95, 0.77378094, 0.59873694, 0.35848592, 0.2635201, 1.0, 0.0, 1.0, 0.0, 6.0, 0.0,
+            1.0, 0.95, 0.77378094, 0.59873694, 0.3584859, 0.2635201, 1.0, 0.0, 1.0, 0.0, 6.0, 0.0,
             1.0, 0.38689047, 0.475, 0.0, 0.0,
         ];
         for (index, (&actual, expected)) in values.iter().zip(expected).enumerate() {

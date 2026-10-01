@@ -28,7 +28,7 @@ fn joint_non_global_executed_locomotion_accumulates_eligibility() {
             original.sensor_profile(),
             original.sensory().clone(),
             original.body(),
-            original.homeostasis().clone(),
+            *original.homeostasis(),
             candidates,
             original.profile_provenance(),
             original.grounded_object_slots().to_vec(),

@@ -326,7 +326,9 @@ fn r12_native_success_promotes_exactly_one_transaction() {
     assert_eq!(after.host_generations[5], before.host_generations[5] + 1);
     assert!(after
         .replay_spans
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .take(after.learning[16] as usize)
         .all(|span| span[2] == 1));
     println!("R12 success receipt={:?}", after.receipt);
@@ -491,6 +493,10 @@ fn controlled_learning_fixture(
     (genome, development, phenotype)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "fixture validates independent resident, compiler, physiology, frame, tick, and outcome authorities"
+)]
 fn sealed_measured_event(
     handle: alife_gpu_backend::GpuBrainHandle,
     brain: &alife_core::BrainPhenotype,
@@ -1823,7 +1829,7 @@ fn reward_and_pain_change_the_next_decision_in_opposite_directions() {
         support::test_physiology(42, &control_phenotype).unwrap(),
     ];
     let phenotype_for = |index: usize| {
-        if index % 2 == 0 {
+        if index.is_multiple_of(2) {
             &learning_phenotype
         } else {
             &control_phenotype
