@@ -1,0 +1,208 @@
+# Automatic code review, powered by Jules — matched to Codex's branch workflow.
+#
+# Codex never opens PRs; it pushes directly to codex/** branches. So this
+# workflow fires on:
+#   1. push that CREATES a branch under codex/** -> one review per new branch,
+#      covering the branch's full diff against main. Throttled to creation so
+#      Codex's rapid follow-up pushes don't each spawn a Jules session.
+#   2. pull_request opened/synchronize/reopened  -> kept for completeness.
+#   3. workflow_dispatch                         -> manual re-review of any branch.
+#
+# The review is posted as a commit comment on the branch head (PR comment for
+# PRs) — the same place Bob posts findings for Codex.
+#
+# One-time setup (already done): repo connected at https://jules.google.com,
+# JULES_API_KEY repo secret set.
+
+name: Jules review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: ['codex/**']
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to review (e.g. codex/training-readiness-20261001)'
+        required: true
+        type: string
+
+permissions:
+  contents: write # post commit comments on the branch head
+  pull-requests: write # post PR comments
+
+concurrency:
+  group: jules-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Pushes: only review newly created branches, not every follow-up push.
+    if: github.event_name != 'push' || github.event.created == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Resolve review target
+        id: target
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            MODE=pr
+            REF="${{ github.event.pull_request.head.ref }}"
+            SHA="${{ github.event.pull_request.head.sha }}"
+            BASE="${{ github.event.pull_request.base.ref }}"
+            DIFF_URL="https://github.com/$REPO/pull/${{ github.event.pull_request.number }}.diff"
+            TITLE="PR #${{ github.event.pull_request.number }} review"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            MODE=branch
+            REF="${{ inputs.branch }}"
+            SHA="$(gh api "repos/$REPO/commits/$REF" -q .sha)"
+            BASE="main"
+            DIFF_URL="https://github.com/$REPO/compare/main...$REF.diff"
+            TITLE="Branch $REF review (manual)"
+          else
+            MODE=branch
+            REF="${{ github.ref_name }}"
+            SHA="${{ github.sha }}"
+            BASE="main"
+            DIFF_URL="https://github.com/$REPO/compare/main...$REF.diff"
+            TITLE="Branch $REF review"
+          fi
+          {
+            echo "mode=$MODE"
+            echo "ref=$REF"
+            echo "sha=$SHA"
+            echo "base=$BASE"
+            echo "diff_url=$DIFF_URL"
+            echo "title=$TITLE"
+          } >> "$GITHUB_OUTPUT"
+          echo "Reviewing $MODE $REF @ $SHA"
+
+      - name: Create Jules review session
+        id: jules
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          DIFF_URL: ${{ steps.target.outputs.diff_url }}
+          REF: ${{ steps.target.outputs.ref }}
+          BASE: ${{ steps.target.outputs.base }}
+          TITLE: ${{ steps.target.outputs.title }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "$JULES_API_KEY" ]; then
+            echo "::error::JULES_API_KEY secret is not set. Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          SOURCE="$(curl -sS -H "X-Goog-Api-Key: $JULES_API_KEY" \
+            'https://jules.googleapis.com/v1alpha/sources?pageSize=100' | \
+            jq -r --arg repo "$REPO" \
+            '.sources[] | select((.githubRepo.owner + "/" + .githubRepo.repo) == $repo) | .name' | head -n 1)"
+          if [ -z "$SOURCE" ] || [ "$SOURCE" = "null" ]; then
+            echo "::error::No Jules source connected for $REPO. Connect it at https://jules.google.com first."
+            exit 1
+          fi
+          PROMPT="You are performing an automated code review of branch $REF in $REPO.
+          1. Fetch the diff of the branch against $BASE:
+             curl -sL $DIFF_URL
+          2. Review every changed hunk for:
+             - correctness bugs and logic errors
+             - non-exhaustive matches and unhandled enum variants
+             - dead code and unused items
+             - API misuse, type errors, off-by-one mistakes
+             - anything that would break 'cargo check --workspace --all-targets', clippy, or the test suite
+             - Rust specifics: ownership/borrow errors, missing error handling, panics on unwrap/expect in non-test code
+             - life-simulation code: behavior that would break believable emergent creature behavior
+               (physics/contact math, genetics, biochemistry, learning) — flag world bugs, not just test bugs
+          3. Be specific: file path and line number for each finding, with a brief quote of the offending code.
+          4. Skip style nitpicks unless they signal a real problem. No filler praise.
+          Write your review as plain markdown. Start with exactly one verdict line:
+          VERDICT: APPROVE or VERDICT: NEEDS WORK
+          Then a '## Findings' section listing each issue (or 'No issues found' if clean).
+          Review only. Do not open pull requests, push branches, or modify any code."
+          RESPONSE="$(curl -sS -X POST \
+            -H 'Content-Type: application/json' \
+            -H "X-Goog-Api-Key: $JULES_API_KEY" \
+            -d "$(jq -n --arg prompt "$PROMPT" --arg source "$SOURCE" \
+              --arg branch "$REF" --arg title "$TITLE" \
+              '{prompt: $prompt, title: $title, sourceContext: {source: $source, githubRepoContext: {startingBranch: $branch}}}')" \
+            'https://jules.googleapis.com/v1alpha/sessions')"
+          SESSION_NAME="$(echo "$RESPONSE" | jq -r '.name // empty')"
+          SESSION_URL="$(echo "$RESPONSE" | jq -r '.url // empty')"
+          if [ -z "$SESSION_NAME" ]; then
+            echo "::error::Failed to create Jules session: $RESPONSE"
+            exit 1
+          fi
+          echo "session_name=$SESSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "session_url=$SESSION_URL" >> "$GITHUB_OUTPUT"
+          echo "Created session: $SESSION_NAME ($SESSION_URL)"
+
+      - name: Wait for review to complete
+        id: wait
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          SESSION_NAME: ${{ steps.jules.outputs.session_name }}
+        run: |
+          set -euo pipefail
+          STATE=""
+          for i in $(seq 1 60); do
+            STATE="$(curl -sS -H "X-Goog-Api-Key: $JULES_API_KEY" \
+              "https://jules.googleapis.com/v1alpha/$SESSION_NAME" | jq -r '.state // empty')"
+            echo "Poll $i: state=$STATE"
+            case "$STATE" in
+              COMPLETED|FAILED|CANCELLED) break ;;
+            esac
+            sleep 20
+          done
+          echo "final_state=$STATE" >> "$GITHUB_OUTPUT"
+
+      - name: Post review comment
+        if: always()
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          SESSION_NAME: ${{ steps.jules.outputs.session_name }}
+          SESSION_URL: ${{ steps.jules.outputs.session_url }}
+          FINAL_STATE: ${{ steps.wait.outputs.final_state }}
+          MODE: ${{ steps.target.outputs.mode }}
+          SHA: ${{ steps.target.outputs.sha }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          REVIEW=""
+          if [ -n "$SESSION_NAME" ]; then
+            ACTIVITIES="$(curl -sS -H "X-Goog-Api-Key: $JULES_API_KEY" \
+              "https://jules.googleapis.com/v1alpha/$SESSION_NAME/activities?pageSize=100" || true)"
+            REVIEW="$(echo "$ACTIVITIES" | jq -r '
+              [.activities[]? | .. | objects
+              | (.description // .text // empty)
+              | select(type == "string")
+              | select(length > 80)] | last // empty')"
+          fi
+          {
+            echo "## Jules code review (automated)"
+            echo ""
+            if [ -n "$REVIEW" ]; then
+              echo "$REVIEW"
+            elif [ "$FINAL_STATE" = "COMPLETED" ]; then
+              echo "Jules finished the review, but the review text could not be extracted automatically."
+            else
+              echo "The Jules review did not complete (final state: ${FINAL_STATE:-unknown})."
+            fi
+            echo ""
+            echo "---"
+            if [ -n "$SESSION_URL" ] && [ "$SESSION_URL" != "null" ]; then
+              echo "*Automated review by Jules. [View the full session]($SESSION_URL)*"
+            else
+              echo "*Automated review by Jules.*"
+            fi
+          } > /tmp/review.md
+          if [ "$MODE" = "pr" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$REPO" -F /tmp/review.md
+          else
+            gh api --method POST "repos/$REPO/commits/$SHA/comments" -F body=@/tmp/review.md
+          fi
+          echo "Review comment posted."
