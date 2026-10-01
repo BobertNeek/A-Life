@@ -75,6 +75,7 @@ use crate::{
 mod camera_navigation;
 mod camera_terrain;
 mod creature_grounding;
+mod god_hand;
 mod graphics_capture;
 mod hearthling;
 mod highlands;
@@ -2153,7 +2154,8 @@ pub fn spawn_fvr03_production_voxel_scene(
     .add_systems(
         Update,
         (
-            handle_fvr03_mouse_selection.before(handle_fvr05_production_ux_input),
+            handle_fvr03_mouse_selection.before(god_hand::input),
+            god_hand::input.before(handle_fvr05_production_ux_input),
             handle_fvr03_camera_mode_input,
             camera_navigation::zoom_camera,
             handle_fvr04_camera_follow_input,
@@ -2183,7 +2185,8 @@ pub fn spawn_fvr03_production_voxel_scene(
     .add_systems(
         Update,
         (
-            sync_fvr04_selection_marker,
+            god_hand::highlight,
+            god_hand::animate.after(highlands::constrain_camera),
             sync_fvr11_creature_contact_shadows,
             sync_fvr04_camera_follow,
             camera_terrain::stream_camera_terrain.after(sync_fvr04_camera_follow),
@@ -2670,11 +2673,7 @@ fn prepare_fvr04_runtime_scene_candidate(
             }
         }
     }
-    let terrain_build = if runtime_state
-        .terrain
-        .as_ref()
-        .is_some_and(|t| t.binding() == alife_world::TerrainBinding::highlands())
-    {
+    let terrain_build = if highlands::has_baked_art(runtime_state.terrain.as_ref()) {
         TerrainMeshBuild {
             layers: Vec::new(),
             stats: crate::terrain_mesh::TerrainMeshStats {
@@ -3199,11 +3198,7 @@ fn spawn_fvr04_runtime_scene_candidate(
     } else {
         world.remove_resource::<creature_grounding::SelectedTerrain>();
     }
-    if runtime_state
-        .terrain
-        .as_ref()
-        .is_some_and(|t| t.binding() == alife_world::TerrainBinding::highlands())
-    {
+    if highlands::has_baked_art(runtime_state.terrain.as_ref()) {
         highlands::start(world);
     } else {
         world.remove_resource::<highlands::HighlandsActive>();
@@ -3237,6 +3232,7 @@ fn spawn_fvr04_runtime_scene_candidate(
         no_renderer_authority_over_world_actions_or_cognition: true,
     };
     let creature_scene = spawn_fvr04_prepared_creature_batch(world, creatures);
+    god_hand::spawn(world);
     spawn_fvr05_overlay_batches(world, overlay_spawns, &assets.overlay_materials);
     let polish = spawn_fvr07_production_visual_polish(
         world,
@@ -5455,7 +5451,7 @@ fn spawn_fvr05_production_ux_ui(app: &mut App) {
 }
 
 const V0_PLAYER_CONTROL_HINTS: &str =
-    "Click Select | E Food | G Move food | C Touch | J Play | K Praise | Enter Speak | Space Pause | F1 Help";
+    "Click Select | Hold Carry | Wheel Zoom | Edges Pan | E Food | C Touch | J Play | K Praise | Enter Speak | Space Pause | F1 Help";
 
 fn spawn_v0_player_experience_ui(app: &mut App) {
     app.world_mut().spawn((
@@ -5779,9 +5775,23 @@ fn handle_fvr03_mouse_selection(
     highland: Option<Res<creature_grounding::SelectedTerrain>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     surface: Res<creature_grounding::RenderedTerrainSurface>,
+    mut hand: ResMut<god_hand::HandInteraction>,
+    interactions: bevy::prelude::Query<&bevy::prelude::Interaction>,
+    #[cfg(feature = "gpu-runtime")] conversation: Option<Res<ProductionConversationLineageUiState>>,
 ) {
+    let blocked = interactions
+        .iter()
+        .any(|i| *i != bevy::prelude::Interaction::None);
+    #[cfg(feature = "gpu-runtime")]
+    let blocked = blocked
+        || conversation
+            .as_ref()
+            .is_some_and(|s| s.blocks_world_shortcuts());
     let hovered = (|| {
         let window = windows.single().ok()?;
+        if !window.focused || blocked {
+            return None;
+        }
         let cursor_position = window.cursor_position()?;
         let (camera, camera_transform) = cameras.single().ok()?;
         let ray = camera
@@ -5791,19 +5801,84 @@ fn handle_fvr03_mouse_selection(
             let p = terrain.0.surface().ray_hit(
                 Vec3f::new(ray.origin.x, ray.origin.y, ray.origin.z),
                 Vec3f::new(ray.direction.x, ray.direction.y, ray.direction.z),
-                2000.0,
+                10000.0,
             )?;
             Vec3::new(p.x, p.y, p.z)
         } else {
             let distance = ray.intersect_plane(Vec3::ZERO, InfinitePlane3d::default())?;
             ray.get_point(distance)
         };
+        hand.ground = Some(position);
         let tile = if highland.is_some() {
             VoxelTileCoord::new(position.x.floor() as i32, position.z.floor() as i32)
         } else {
             scene.tile_from_world_position(position)?
         };
-        let selected = scene.selectable_ref_at_tile(tile);
+        let selected = if frame.is_some() {
+            // Live bodies are picked below from their current world positions.
+            // Launch-time tile indexes must not select a creature after it moves.
+            StableVoxelObjectRef {
+                kind: StableVoxelRefKind::Tile,
+                stable_id: None,
+                chunk: VoxelChunkCoord::for_tile(16, tile),
+                tile: Some(tile),
+            }
+        } else {
+            scene.selectable_ref_at_tile(tile)
+        };
+        // Pick the actual elevated creature body, not the terrain tile behind
+        // its face. The same ray and positions work at every orthographic zoom.
+        let body = frame.as_ref().and_then(|frame| {
+            frame
+                .current
+                .objects()
+                .filter(|o| {
+                    !o.consumed
+                        && o.carried_by.is_none()
+                        && matches!(
+                            o.kind,
+                            WorldObjectKind::Agent
+                                | WorldObjectKind::Food
+                                | WorldObjectKind::Ball
+                                | WorldObjectKind::Token
+                        )
+                })
+                .filter_map(|o| {
+                    let p = world_position_for_render(o.position, highland.is_some());
+                    let samples: &[(f32, f32)] = if o.kind == WorldObjectKind::Agent {
+                        &[(0.35, 0.40), (0.90, 0.48), (1.35, 0.38)]
+                    } else {
+                        &[(0.30, 0.42)]
+                    };
+                    let nearest = samples
+                        .iter()
+                        .filter_map(|(lift, radius)| {
+                            let center = p + Vec3::Y * lift;
+                            let along = (center - ray.origin).dot(*ray.direction);
+                            let closest = ray.origin + *ray.direction * along;
+                            (along >= 0.0
+                                && along <= (position - ray.origin).length() + 0.5
+                                && closest.distance_squared(center) <= radius * radius)
+                                .then_some(along)
+                        })
+                        .min_by(f32::total_cmp)?;
+                    Some((nearest, o.id, o.kind, p))
+                })
+                .min_by(|a, b| a.0.total_cmp(&b.0))
+        });
+        if let Some((_, id, kind, p)) = body {
+            let tile = VoxelTileCoord::new(p.x.floor() as i32, p.z.floor() as i32);
+            return Some(StableVoxelObjectRef {
+                kind: if kind == WorldObjectKind::Agent {
+                    StableVoxelRefKind::Creature
+                } else {
+                    StableVoxelRefKind::Resource
+                },
+                stable_id: Some(id),
+                chunk: VoxelChunkCoord::for_tile(16, tile),
+                tile: Some(tile),
+            });
+        }
         // Creature selection keeps priority at its ground tile. Food picking
         // follows current canonical objects, rather than launch-time resources.
         if selected.kind == StableVoxelRefKind::Creature {
@@ -5847,6 +5922,9 @@ fn handle_fvr03_mouse_selection(
             }
         }))
     })();
+    if hovered.is_none() {
+        hand.ground = None;
+    }
     apply_fvr03_pointer_sample(
         &mut selection,
         hovered,

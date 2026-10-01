@@ -3,9 +3,18 @@
 use super::*;
 use crate::terrain_lighting::PRODUCTION_CAMERA_MAX_ZOOM;
 
+fn zoom_scale(scale: f32, wheel: f32, terrain_viewport_height: Option<f32>) -> f32 {
+    let maximum = terrain_viewport_height.map_or(PRODUCTION_CAMERA_MAX_ZOOM, |h| 1600.0 / h);
+    // Profiles use different base extents. Clamp the actual terrain view in metres
+    // so a low-end profile cannot zoom through the character-sized close view.
+    let minimum = terrain_viewport_height.map_or(0.35, |h| 9.8 / h);
+    (scale * (-wheel * 0.10).exp()).clamp(minimum, maximum)
+}
+
 pub(super) fn zoom_camera(
     mut wheel: bevy::prelude::MessageReader<bevy::input::mouse::MouseWheel>,
     windows: bevy::prelude::Query<&bevy::window::Window, With<bevy::window::PrimaryWindow>>,
+    terrain: Option<Res<creature_grounding::SelectedTerrain>>,
     mut cameras: bevy::prelude::Query<&mut Projection, With<Fvr03ProductionVoxelCamera>>,
 ) {
     let delta: f32 = wheel.read().map(|event| event.y).sum();
@@ -14,8 +23,17 @@ pub(super) fn zoom_camera(
     }
     for mut projection in &mut cameras {
         if let Projection::Orthographic(camera) = &mut *projection {
-            camera.scale =
-                (camera.scale * (-delta * 0.10).exp()).clamp(0.35, PRODUCTION_CAMERA_MAX_ZOOM);
+            let height = if terrain.is_some() {
+                match camera.scaling_mode {
+                    bevy::camera::ScalingMode::FixedVertical { viewport_height } => {
+                        Some(viewport_height)
+                    }
+                    _ => Some(32.0),
+                }
+            } else {
+                None
+            };
+            camera.scale = zoom_scale(camera.scale, delta, height);
         }
     }
 }
@@ -43,7 +61,10 @@ pub(super) fn pan_camera(
     windows: bevy::prelude::Query<&bevy::window::Window, With<bevy::window::PrimaryWindow>>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     mut follow: ResMut<Fvr04ProductionCreatureFollowResource>,
-    mut cameras: bevy::prelude::Query<&mut Transform, With<Fvr03ProductionVoxelCamera>>,
+    mut cameras: bevy::prelude::Query<
+        (&mut Transform, &Projection),
+        With<Fvr03ProductionVoxelCamera>,
+    >,
     #[cfg(feature = "gpu-runtime")] conversation: Option<
         Res<crate::ProductionConversationLineageUiState>,
     >,
@@ -86,12 +107,14 @@ pub(super) fn pan_camera(
     if axis == Vec2::ZERO {
         return;
     }
-    let distance = production_camera_extent(scene.profile_id) * 0.55 * time.delta_secs().min(0.05);
-    if distance <= 0.0 {
-        return;
-    }
     follow.enabled = false;
-    for mut camera in &mut cameras {
+    for (mut camera, projection) in &mut cameras {
+        let scale = match projection {
+            Projection::Orthographic(p) => p.scale,
+            _ => 1.0,
+        };
+        let distance =
+            production_camera_extent(scene.profile_id) * scale * 0.55 * time.delta_secs().min(0.05);
         let right = camera.rotation * Vec3::X;
         let forward = camera.rotation * Vec3::NEG_Z;
         let right = Vec3::new(right.x, 0.0, right.z).normalize_or_zero();
@@ -103,6 +126,23 @@ pub(super) fn pan_camera(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zoom_roundtrip_and_extremes_keep_a_valid_projection() {
+        let close = 1.0;
+        let wide = zoom_scale(close, -30.0, Some(30.0));
+        assert!(wide * 30.0 > 600.0);
+        assert!((zoom_scale(wide, 30.0, Some(30.0)) - close).abs() < 0.0001);
+        assert_eq!(zoom_scale(close, -10000.0, Some(30.0)) * 30.0, 1600.0);
+        for height in [9.8, 17.2, 30.0, 34.0, 40.0] {
+            assert!((zoom_scale(close, 10000.0, Some(height)) * height - 9.8).abs() < 1e-5);
+            assert!((zoom_scale(close, -10000.0, Some(height)) * height - 1600.0).abs() < 1e-3);
+        }
+        assert_eq!(
+            zoom_scale(close, -10000.0, None),
+            PRODUCTION_CAMERA_MAX_ZOOM
+        );
+    }
 
     #[test]
     fn window_edges_and_arrows_pan_without_diagonal_acceleration() {

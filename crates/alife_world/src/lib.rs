@@ -40,6 +40,8 @@ pub use procedural_chunks::*;
 pub use scenario::*;
 pub use speech::*;
 pub use terrain::{LocomotionLimits, TerrainData, TerrainState, WorldTerrain};
+mod island;
+pub use island::island_terrain;
 pub use tracked_objects::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

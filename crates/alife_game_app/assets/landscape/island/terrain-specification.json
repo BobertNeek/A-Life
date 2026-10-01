@@ -1,0 +1,28 @@
+{
+  "blender": "5.2.1 LTS",
+  "width": 321,
+  "depth": 385,
+  "origin_xz": [
+    -500,
+    -600
+  ],
+  "spacing_m": 3.125,
+  "chunks_xz": [
+    10,
+    12
+  ],
+  "triangles_by_lod": [
+    276480,
+    76800,
+    23040
+  ],
+  "skirt_depth_m": 20,
+  "props": 3716,
+  "collision_proxies": 1716,
+  "sea_level_m": 0,
+  "peak_height_m": 240.0,
+  "new_game_origin_xz": [
+    80,
+    250
+  ]
+}

@@ -1038,6 +1038,8 @@ pub struct WorldSaveState {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub pending_player_care: BTreeMap<u64, BodyEventDelta>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player_hold: Option<crate::headless::player_hand::PlayerHold>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub organism_records: Option<Vec<WorldOrganismRecord>>,
     #[serde(default)]
     pub ecology: EcologyState,
@@ -1224,6 +1226,8 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
             #[serde(default)]
             pending_player_care: BTreeMap<u64, BodyEventDelta>,
+            #[serde(default)]
+            player_hold: Option<crate::headless::player_hand::PlayerHold>,
             #[serde(default, deserialize_with = "deserialize_present_organism_records")]
             organism_records: Option<Vec<WorldOrganismRecord>>,
             #[serde(default)]
@@ -1311,6 +1315,7 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             audible_utterances: wire.audible_utterances,
             last_creature_utterance_ticks: wire.last_creature_utterance_ticks,
             pending_player_care: wire.pending_player_care,
+            player_hold: wire.player_hold,
             organism_records: wire.organism_records,
             ecology: wire.ecology,
             voxel_backend: wire.voxel_backend,
@@ -2088,6 +2093,7 @@ impl WorldSaveState {
             audible_utterances: parts.audible_utterances,
             last_creature_utterance_ticks: parts.last_creature_utterance_ticks,
             pending_player_care: parts.pending_player_care,
+            player_hold: parts.player_hold,
             organism_records,
             ecology: parts.ecology,
             voxel_backend: None,
@@ -2311,6 +2317,7 @@ impl WorldSaveState {
             audible_utterances: self.audible_utterances.clone(),
             last_creature_utterance_ticks: self.last_creature_utterance_ticks.clone(),
             pending_player_care: self.pending_player_care.clone(),
+            player_hold: self.player_hold.clone(),
             habitats: self.habitats.clone(),
             organism_records: self.organism_records.clone(),
         };
@@ -2737,5 +2744,38 @@ mod highlands_persistence_tests {
         value.as_object_mut().unwrap().remove("terrain");
         let restored: WorldSaveState = serde_json::from_value(value).unwrap();
         assert_eq!(restored.restore().unwrap().terrain_binding(), None);
+    }
+
+    #[test]
+    fn player_carry_save_roundtrip_validates_the_release_surface() {
+        let mut world = crate::HeadlessScenarioBuilder::new(93026)
+            .agent("walker", OrganismId(1), Vec3f::ZERO)
+            .build()
+            .unwrap();
+        world
+            .enable_terrain_for_new_game(crate::island_terrain(), Vec3f::new(80.0, 0.0, 250.0))
+            .unwrap();
+        let id = world.entity_id("walker").unwrap();
+        let original = world.entity(id).unwrap().position;
+        world.begin_player_hold(id).unwrap();
+        let saved = WorldSaveState::from_parts(world.persistence_parts());
+        let mut decoded: WorldSaveState =
+            serde_json::from_slice(&serde_json::to_vec(&saved).unwrap()).unwrap();
+        let mut restored = decoded.restore().unwrap();
+        assert_eq!(
+            restored.canonical_signature_digest().unwrap(),
+            world.canonical_signature_digest().unwrap()
+        );
+        restored.release_player_hold().unwrap();
+        assert_eq!(restored.entity(id).unwrap().position, original);
+        decoded.player_hold.as_mut().unwrap().last_ground.y += 1.0;
+        assert!(decoded.restore().is_err());
+        decoded.player_hold.as_mut().unwrap().last_ground = Vec3f::new(-500.0, 0.0, -600.0);
+        assert!(decoded.restore().is_err());
+        let mut legacy =
+            serde_json::to_value(WorldSaveState::from_parts(restored.persistence_parts())).unwrap();
+        legacy.as_object_mut().unwrap().remove("player_hold");
+        let legacy: WorldSaveState = serde_json::from_value(legacy).unwrap();
+        assert_eq!(legacy.restore().unwrap().player_held_object(), None);
     }
 }

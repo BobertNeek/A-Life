@@ -10,13 +10,19 @@ paths += sorted((ROOT / 'crates/alife_game_app/assets/landscape').glob('*.glb'))
 paths += [ROOT / 'crates/alife_game_app/assets/landscape/highlands/terrain-chunks.glb']
 paths += [ROOT / 'crates/alife_game_app/assets/landscape/highlands/props.json']
 paths += [ROOT / 'crates/alife_game_app/assets/landscape/ground-detail.png']
+paths += sorted((ROOT / 'crates/alife_game_app/assets/landscape/island').glob('*.glb'))
+paths += [ROOT / 'crates/alife_game_app/assets/landscape/island/props.json']
+paths += [ROOT / 'crates/alife_game_app/assets/hand/wizard-god-hand.glb']
 for path in paths:
     payload = path.read_bytes()
     digest = 0xcbf29ce484222325
-    for byte in payload:
+    # PortableAssetDigest canonicalizes text across Windows/Git line endings.
+    digest_payload = payload.replace(b'\r\n',b'\n').replace(b'\r',b'\n') if path.suffix=='.json' else payload
+    for byte in digest_payload:
         digest = ((digest ^ byte) * 0x100000001b3) & 0xffffffffffffffff
     entry = dict(data['entries'][0])
-    entry.update(asset_id='approved-' + path.stem.lower().replace('_', '-'),
+    suffix = ('island-' if path.parent.name=='island' else '') + path.stem.lower().replace('_', '-')
+    entry.update(asset_id='approved-' + suffix,
         author='A-Life approved Blender art', digest=f'fnv1a64:{digest:016x}',
         size_bytes=len(payload), local_path=path.relative_to(ROOT).as_posix(),
         usage_category='creatures' if 'hearthling' in path.name else 'environment-dressing',
@@ -37,6 +43,11 @@ for path in paths:
             date='2026-09-15',seed='mountainous-open-world-v2',tool='Blender-5.2.1-LTS')
         if path.name in {'terrain-chunks.glb','props.json'}:
             entry['generator']['config_path']='scripts/export_highlands_runtime.py'
+        if path.parent.name=='island':
+            entry['generator'].update(config_path='scripts/build_island_terrain.py' if path.name in {'terrain-chunks.glb','props.json'} else 'scripts/build_island_assets.py',
+                date='2026-09-30',seed='approved-island-blueprints',tool='Blender-5.2.1-LTS')
+        if path.parent.name=='hand':
+            entry['generator'].update(config_path='scripts/build_wizard_hand.py',date='2026-09-30',seed='approved-wiry-wizard-hand',tool='Blender-5.2.1-LTS')
     data['entries'].append(entry)
 manifest.write_text(json.dumps(data, indent=2) + '\n')
 print('Registered', len(paths), 'approved production assets')
