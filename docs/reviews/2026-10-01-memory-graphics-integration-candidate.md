@@ -105,7 +105,7 @@ incremental and dev/test debug output remain disabled. Build jobs were one for
 profile compilation and one/two for the focused CPU checks; tests were serial.
 
 The guards stop at less than 5 GiB free disk, more than 14 GiB total cgroup memory,
-or 30 minutes per command; none fired. Observed combined-check peak was about
+or 30 minutes per command; none fired. Observed initial combined-check peak was about
 12.42 GiB cgroup memory including cache, with at least 12.32 GiB disk free.
 Clean generated build pages were advised out of cache once; no source, saved
 data, cache file, or build artifact was deleted.
@@ -118,3 +118,33 @@ The narrow fix and separate renderer receipts remain under
 The final candidate is published only on its existing separate branch; original
 reviewed branches and the frozen repair branch are preserved. No main merge or
 PR is performed; the coordinator owns remote CI follow-up and subsequent review.
+
+## Full-workspace Rust 1.99 CI follow-up
+
+The coordinator reported two additional `needless_borrows_for_generic_args`
+diagnostics from the older `39121395` CI run, in the deterministic creature-part
+PNG decoder. Inspection confirmed both `map_err(&fail)` calls were still present
+in the published `3fa5b4445d00c6fdebe6a249af68d4f1e7bc032b` candidate. The earlier
+combined Clippy commands selected Core, World, backend and app; they did not
+cover the Tools crate.
+
+`b99ea6f29019014351006359879fb23d332d3917` changes only those two calls to
+`map_err(fail)`. The closure captures shared string references and is `Copy`, so
+passing it by value preserves lazy error construction, identical messages and
+its subsequent reuse. No validator, assertion or lint suppression changed.
+
+The exact CI workspace feature profile now passes strict Rust 1.99 Clippy:
+
+```sh
+cargo +1.99.0 clippy --locked --workspace --all-targets -- -D warnings
+```
+
+The source-bound receipt records a clean `b99ea6f2` worktree, exit zero, one build
+job, 125.059 seconds, about 9.24 GiB peak cgroup memory including cache and at
+least 12.20 GiB disk free. No guard fired. Format, quick boundaries and all 77
+documentation assertions also pass after this follow-up. The preceding CPU test
+and production-profile results retain their stated source revision; they were
+not rerun for this behavior-preserving two-line change. The final successor adds
+only this report after the checked code commit, and is published on the same
+candidate branch with an exact remote-SHA receipt. Main and the reviewed source
+branches remain preserved.
