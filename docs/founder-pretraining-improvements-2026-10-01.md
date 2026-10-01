@@ -133,33 +133,17 @@ admission and hungry/fatigued logits, then run a short care/navigation replay
 with sampling and with game argmax. Zero-meal diagnostics do not yet isolate the
 cause, and the CPU checks above do not prove that these changes solve it.
 
-## Next scoped fix: eligibility follows simulation time
+## Eligibility timing follow-up
 
-AOA-TIME-001/002/003/004/005 and AOA-LEARN-002 apply. Current WGSL decays by one
-factor per decision, regardless of elapsed world ticks. It copies inactive
-recurrent traces without decay. At the current 20 world ticks/s, .95 implies a
-13.51-decision half-life (0.676s only at one decision/tick). Slow/fast learning
-bands change rates, not this timescale.
+The original broader anchor-field proposal was superseded by the coordinated
+[simulation-time eligibility implementation](eligibility-simulation-time-2026-10-01.md).
+It reuses the newest committed replay timestamp, changes only five reserved
+production files, and adds no ABI or checkpoint fields. Both active and inactive
+traces decay over elapsed simulation ticks; weight credit and replay samples use
+actual outcome time. The .95 reference remains one current 0.05s world tick.
 
-Propose `decay_elapsed = decay_reference ^ elapsed_simulation_ticks` with the
-existing factor defined at one current world tick, explicit 0/1 edge handling,
-and a resident last-committed-trace tick. Decay all existing traces, including
-inactive routes; add local coactivation only for actual active work. Initialize
-an admission anchor at the actor's current simulation tick, persist it, advance
-it only on successful trace commit, and reset it with eligibility during sleep.
-A discarded transaction must leave the committed anchor unchanged. Use simulation
-elapsed time rather than render cadence, wall time or neural microstep count.
-This corrects timing semantics first; useful longer action-credit horizons remain
-an experiment, not a justified arbitrary new constant.
-
-Exact follow-up ownership to coordinate before edits: GPU
-`closed_loop_learning.rs`, `closed_loop_pipeline.rs`,
-`closed_loop_buffers/abi.rs`, `closed_loop_buffers/bucket.rs`,
-`closed_loop_runtime.rs`, `closed_loop_runtime/tick.rs`,
-`closed_loop_checkpoint.rs`, `closed_loop_sleep.rs`, plus shaders
-`closed_loop_abi.wgsl`, `closed_loop_eligibility.wgsl`, and
-`closed_loop_plasticity.wgsl` (commit the anchor with the trace). Existing GPU
-ABI/reflection tests must follow the header/state change. Desktop currently owns
-this pipeline/integration surface. Core/world clock adapters are needed only if
-the chosen implementation cannot consume the already authoritative frame tick.
-Timing is a proposal only; none of these files changed in this slice.
+That separate slice preserves origin-anchored banks across discard/save/restore,
+validates chronological replay admission, and leaves the current actor's state
+untouched here. CPU/Naga checks and independent review support its source
+contracts; numerical GPU execution and useful learned behavior remain unverified.
+The linked report contains focused desktop checks and exact scope limits.

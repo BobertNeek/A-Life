@@ -215,6 +215,13 @@ fn load_staging_eligibility_value_direct(
   return load_state_f32(index);
 }
 
+// Banks remain anchored at decision origin. Credit and replay samples are
+// evaluated at the actual outcome time without advancing that bank twice.
+fn eligibility_at_outcome(staged:f32, reference_decay:f32, outcome:GpuOutcomeCreditRecord) -> f32 {
+  let elapsed = simulation_tick_delta(outcome.outcome_tick, outcome.originating_tick);
+  return staged * eligibility_decay_for_ticks(reference_decay, elapsed);
+}
+
 fn evaluate_fast_plasticity_synapse(
   brain:GpuBrainSlotRecord,
   header:GpuLearningHeader,
@@ -244,9 +251,10 @@ fn evaluate_fast_plasticity_synapse(
   let lifetime = load_state_f32(active_lifetime_index);
   let fast = load_state_f32(active_fast_index);
   let outcome = load_outcome_credit(header.outcome_offset);
+  let credited_eligibility = eligibility_at_outcome(staging_eligibility, receptor.eligibility_decay, outcome);
   let local_third_factor = project_third_factor(receptor,outcome);
   let effective = genetic + lifetime + alpha*fast;
-  let delta = learning_rate*alpha*local_third_factor*staging_eligibility
+  let delta = learning_rate*alpha*local_third_factor*credited_eligibility
     - normalization_rate*post*post*effective;
   let next_fast = clamp(fast+delta,fast_min,fast_max);
   let guard =
@@ -291,11 +299,14 @@ fn fast_plasticity_replay_eligibility(
   extension:GpuBrainSlotExtensionRecord,
   learning:GpuSlotLearningStateRecord,
   context:u32,
+  outcome:GpuOutcomeCreditRecord,
 ) -> f32 {
   let span_base = learning.replay_span_offset + context*4u;
   let local_synapse = load_state_u32(span_base);
   let metadata = load_synapse_learning_metadata(extension.synapse_metadata_offset+local_synapse*8u);
-  return load_staging_eligibility_value(brain,extension,learning,metadata);
+  let receptor = load_plasticity_receptor(extension.receptor_offset + metadata.receptor_index*16u);
+  let staged = load_staging_eligibility_value(brain,extension,learning,metadata);
+  return eligibility_at_outcome(staged, receptor.eligibility_decay, outcome);
 }
 
 @compute @workgroup_size(1)
@@ -462,7 +473,8 @@ fn capture_fast_plasticity_replay(@builtin(global_invocation_id) gid:vec3<u32>) 
   if (span.guard != 0u) {
     nominate_plasticity_rejection(receipt_base, PLASTICITY_GUARD_REPLAY_SPAN, gid.x); return;
   }
-  let eligibility = fast_plasticity_replay_eligibility(brain,extension,learning,gid.x);
+  let outcome = load_outcome_credit(header.outcome_offset);
+  let eligibility = fast_plasticity_replay_eligibility(brain,extension,learning,gid.x,outcome);
   if (!finite_plasticity(eligibility)) {
     nominate_plasticity_rejection(receipt_base, PLASTICITY_GUARD_REPLAY_ELIGIBILITY, gid.x); return;
   }
@@ -494,7 +506,8 @@ fn finalize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
     } else if (replay_eligibility_context != PLASTICITY_GUARD_CONTEXT_EMPTY) {
       let extension = load_slot_extension(brain);
       let learning = load_slot_learning_state(extension);
-      let eligibility = fast_plasticity_replay_eligibility(brain,extension,learning,replay_eligibility_context);
+      let outcome = load_outcome_credit(header.outcome_offset);
+      let eligibility = fast_plasticity_replay_eligibility(brain,extension,learning,replay_eligibility_context,outcome);
       publish_plasticity_rejection(receipt_base,PLASTICITY_GUARD_REPLAY_ELIGIBILITY,bitcast<u32>(eligibility),0u,replay_eligibility_context);
     }
     return;

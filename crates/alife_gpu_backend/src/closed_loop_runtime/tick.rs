@@ -51,6 +51,13 @@ impl GpuClosedLoopBackend {
                 .bucket_index_for_handle(handle)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
             let resident = pool.resident(handle)?;
+            if resident
+                .last_throttle
+                .as_ref()
+                .is_some_and(|previous| previous.tick > frame.tick().raw())
+            {
+                return Err(ScaffoldContractError::NonMonotonicTick);
+            }
             #[cfg(feature = "training-rollout")]
             if let Some(action) = sampling.and_then(|configs| configs[index].demonstrator) {
                 action.validate_for_frame(frame, resident.brain_slot.record().reserved[0] & 255)?;

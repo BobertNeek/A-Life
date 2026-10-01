@@ -1245,11 +1245,48 @@ fn validate_checkpoint_parts(parts: &GpuBrainCheckpointParts) -> Result<(), Scaf
         validate_float_bits(bits)?;
     }
     validate_physical_replay(parts, synapse_count)?;
+    let (active_recurrent, active_decoder) = if parts.active_eligibility_bank == 0 {
+        (
+            &parts.recurrent_eligibility_bank_0_bits,
+            &parts.decoder_eligibility_bank_0_bits,
+        )
+    } else {
+        (
+            &parts.recurrent_eligibility_bank_1_bits,
+            &parts.decoder_eligibility_bank_1_bits,
+        )
+    };
+    // Admission/sleep may have no clock anchor only because their active traces
+    // are zero. A pending or discarded inactive bank need not be zero.
+    if parts.replay_journal_event_count == 0
+        && active_recurrent
+            .iter()
+            .chain(active_decoder)
+            .any(|bits| f32::from_bits(*bits) != 0.0)
+    {
+        return Err(ScaffoldContractError::LearningEvidenceMismatch);
+    }
+    if parts
+        .pending_eligibility
+        .is_some_and(|pending| pending.originating_tick() > parts.checkpoint_tick)
+    {
+        return Err(ScaffoldContractError::NonMonotonicTick);
+    }
     if let Some(key) = parts.last_learning_replay_key {
         key.organism_id.validate()?;
         key.sequence_id.validate()?;
         if key.organism_id != parts.organism_id || key.phenotype_hash != parts.phenotype_hash {
             return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
+        if parts.replay_journal_event_count != 0 {
+            let newest = if parts.replay_journal_cursor == 0 {
+                event_capacity - 1
+            } else {
+                parts.replay_journal_cursor as usize - 1
+            };
+            if join_pair(parts.replay_events[newest].sequence_id) != key.sequence_id.raw() {
+                return Err(ScaffoldContractError::LearningEvidenceMismatch);
+            }
         }
     }
     match parts.pending_eligibility {
@@ -1281,6 +1318,7 @@ fn validate_physical_replay(
         .map(|offset| (oldest + offset) % capacity)
         .collect::<Vec<_>>();
     let mut previous_sequence = None;
+    let mut previous_tick = None;
     for physical in &physical_order {
         let event = parts
             .replay_events
@@ -1290,7 +1328,17 @@ fn validate_physical_replay(
         if previous_sequence.is_some_and(|previous| previous >= sequence) {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
         }
+        let tick = Tick::new(join_pair(event.originating_tick));
+        if previous_tick.is_some_and(|previous| previous > tick)
+            || tick > parts.checkpoint_tick
+            || parts
+                .pending_eligibility
+                .is_some_and(|pending| tick > pending.originating_tick())
+        {
+            return Err(ScaffoldContractError::NonMonotonicTick);
+        }
         previous_sequence = Some(sequence);
+        previous_tick = Some(tick);
     }
     for event in &parts.replay_events {
         validate_float_values(&[
@@ -2937,6 +2985,252 @@ fn validate_pending_joint_payload(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn clock_checkpoint() -> GpuBrainCheckpointParts {
+        GpuBrainCheckpointParts {
+            schema_version: GPU_BRAIN_CHECKPOINT_SCHEMA_VERSION,
+            organism_id: OrganismId(1),
+            phenotype_hash: PhenotypeHash([1; 4]),
+            checkpoint_tick: Tick::new(1_000),
+            active_activation_side: 0,
+            logical_dispatch_generation: 1,
+            activation_a_bits: vec![0],
+            activation_b_bits: vec![0],
+            neuron_homeostasis_bits: vec![0; 2],
+            active_weight_generation: 1,
+            active_weight_bank: 0,
+            lifetime_bank_0_bits: vec![0; 2],
+            lifetime_bank_1_bits: vec![0; 2],
+            fast_bank_0_bits: vec![0; 2],
+            fast_bank_1_bits: vec![0; 2],
+            active_eligibility_generation: 1,
+            inactive_eligibility_generation: 0,
+            active_eligibility_bank: 0,
+            learning_transaction_generation: 1,
+            recurrent_eligibility_bank_0_bits: vec![0],
+            recurrent_eligibility_bank_1_bits: vec![0],
+            decoder_eligibility_bank_0_bits: vec![0],
+            decoder_eligibility_bank_1_bits: vec![0],
+            replay_journal_generation: 1,
+            replay_journal_cursor: 0,
+            replay_journal_event_count: 0,
+            replay_events: vec![GpuReplayEventRecord::zeroed(); 2],
+            replay_spans: vec![GpuReplaySynapseSpanRecord {
+                local_synapse_id: 0,
+                sample_start: 0,
+                sample_count: 0,
+                reserved: 0,
+            }],
+            replay_samples: vec![
+                crate::pack_replay_eligibility_sample(0, 0),
+                crate::pack_replay_eligibility_sample(1, 0),
+            ],
+            last_learning_replay_key: None,
+            pending_eligibility: None,
+        }
+    }
+
+    fn replay_event(sequence: u64, tick: u64) -> GpuReplayEventRecord {
+        GpuReplayEventRecord {
+            sequence_id: split_pair(sequence),
+            originating_tick: split_pair(tick),
+            frame_digest: [1; 8],
+            candidate_feature_digest: [1; 4],
+            action_id: 1,
+            family: u32::from(CandidateActionFamily::Idle.raw()),
+            ..GpuReplayEventRecord::zeroed()
+        }
+    }
+
+    fn anchor_checkpoint(parts: &mut GpuBrainCheckpointParts, sequence: u64, tick: u64) {
+        parts.replay_events[0] = replay_event(sequence, tick);
+        parts.replay_journal_cursor = 1;
+        parts.replay_journal_event_count = 1;
+        parts.replay_spans[0].sample_count = 1;
+    }
+
+    fn stage_checkpoint(parts: &mut GpuBrainCheckpointParts, tick: u64) {
+        parts.inactive_eligibility_generation = 2;
+        parts.pending_eligibility = Some(
+            PendingEligibilityRestoreParts::try_new(
+                1,
+                Tick::new(tick),
+                PerceptionFrameDigest([1; 4]),
+                0,
+                0,
+                ActionId(1),
+                CandidateActionFamily::Idle,
+                CandidateFeatureDigest([1; 2]),
+                1,
+                2,
+            )
+            .unwrap(),
+        );
+    }
+
+    #[test]
+    fn simulation_clock_admission_and_sleep_reset_allow_large_ticks_with_zero_active_traces() {
+        let mut parts = clock_checkpoint();
+        parts.checkpoint_tick = Tick::new(u64::MAX);
+        // Old physical slots are outside the empty journal after sleep/reset.
+        parts.replay_events[0] = replay_event(7, 900);
+        assert!(GpuBrainCheckpointSnapshot::try_from_parts(parts.clone()).is_ok());
+        stage_checkpoint(&mut parts, u64::MAX);
+        parts.recurrent_eligibility_bank_1_bits[0] = 0.5_f32.to_bits();
+        parts.decoder_eligibility_bank_1_bits[0] = 0.25_f32.to_bits();
+        assert!(GpuBrainCheckpointSnapshot::try_from_parts(parts).is_ok());
+    }
+
+    #[test]
+    fn simulation_clock_empty_journal_rejects_unanchored_active_traces_on_either_bank() {
+        for bank in [0, 1] {
+            for decoder in [false, true] {
+                let mut parts = clock_checkpoint();
+                parts.active_eligibility_bank = bank;
+                let traces = match (bank, decoder) {
+                    (0, false) => &mut parts.recurrent_eligibility_bank_0_bits,
+                    (0, true) => &mut parts.decoder_eligibility_bank_0_bits,
+                    (1, false) => &mut parts.recurrent_eligibility_bank_1_bits,
+                    _ => &mut parts.decoder_eligibility_bank_1_bits,
+                };
+                traces[0] = 0.5_f32.to_bits();
+                assert_eq!(
+                    GpuBrainCheckpointSnapshot::try_from_parts(parts),
+                    Err(ScaffoldContractError::LearningEvidenceMismatch)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn simulation_clock_discard_keeps_committed_anchor_and_allows_stale_inactive_trace() {
+        let mut parts = clock_checkpoint();
+        anchor_checkpoint(&mut parts, 1, 900);
+        parts.recurrent_eligibility_bank_0_bits[0] = 0.5_f32.to_bits();
+        parts.recurrent_eligibility_bank_1_bits[0] = 0.75_f32.to_bits();
+        stage_checkpoint(&mut parts, 950);
+        assert!(GpuBrainCheckpointSnapshot::try_from_parts(parts.clone()).is_ok());
+        parts.pending_eligibility = None;
+        parts.inactive_eligibility_generation = 0;
+        let restored = GpuBrainCheckpointSnapshot::try_from_parts(parts)
+            .unwrap()
+            .into_parts();
+        assert_eq!(join_pair(restored.replay_events[0].originating_tick), 900);
+        assert_eq!(
+            restored.recurrent_eligibility_bank_0_bits[0],
+            0.5_f32.to_bits()
+        );
+        assert_eq!(
+            restored.recurrent_eligibility_bank_1_bits[0],
+            0.75_f32.to_bits()
+        );
+    }
+
+    #[test]
+    fn simulation_clock_partial_journal_rejects_reversed_origins_and_future_anchor() {
+        let mut parts = clock_checkpoint();
+        anchor_checkpoint(&mut parts, 1, 1_001);
+        assert_eq!(
+            GpuBrainCheckpointSnapshot::try_from_parts(parts.clone()),
+            Err(ScaffoldContractError::NonMonotonicTick)
+        );
+        parts.replay_events[0] = replay_event(1, 901);
+        parts.replay_events.push(GpuReplayEventRecord::zeroed());
+        parts
+            .replay_samples
+            .push(crate::pack_replay_eligibility_sample(2, 0));
+        parts.replay_events[1] = replay_event(2, 900);
+        parts.replay_journal_cursor = 2;
+        parts.replay_journal_event_count = 2;
+        parts.replay_spans[0].sample_count = 2;
+        assert_eq!(
+            GpuBrainCheckpointSnapshot::try_from_parts(parts),
+            Err(ScaffoldContractError::NonMonotonicTick)
+        );
+    }
+
+    #[test]
+    fn simulation_clock_full_wrapped_journal_uses_physical_ring_order() {
+        let mut parts = clock_checkpoint();
+        parts.replay_events = vec![replay_event(3, 950), replay_event(2, 900)];
+        parts.replay_journal_cursor = 1;
+        parts.replay_journal_event_count = 2;
+        parts.replay_spans[0].sample_count = 2;
+        assert!(GpuBrainCheckpointSnapshot::try_from_parts(parts.clone()).is_ok());
+        parts.replay_events[0].originating_tick = split_pair(899);
+        assert_eq!(
+            GpuBrainCheckpointSnapshot::try_from_parts(parts),
+            Err(ScaffoldContractError::NonMonotonicTick)
+        );
+    }
+
+    #[test]
+    fn simulation_clock_pending_origin_is_between_latest_anchor_and_checkpoint() {
+        let mut parts = clock_checkpoint();
+        anchor_checkpoint(&mut parts, 1, 900);
+        for tick in [900, 950, 1_000] {
+            stage_checkpoint(&mut parts, tick);
+            assert!(GpuBrainCheckpointSnapshot::try_from_parts(parts.clone()).is_ok());
+        }
+        for tick in [899, 1_001] {
+            stage_checkpoint(&mut parts, tick);
+            assert_eq!(
+                GpuBrainCheckpointSnapshot::try_from_parts(parts.clone()),
+                Err(ScaffoldContractError::NonMonotonicTick)
+            );
+        }
+    }
+
+    #[test]
+    fn simulation_clock_exact_restore_preserves_high_tick_anchor_and_digest_binding() {
+        let mut parts = clock_checkpoint();
+        let tick = (1_u64 << 32) + 900;
+        parts.checkpoint_tick = Tick::new(tick + 1);
+        anchor_checkpoint(&mut parts, 1, tick);
+        parts.recurrent_eligibility_bank_0_bits[0] = 0.5_f32.to_bits();
+        let snapshot = GpuBrainCheckpointSnapshot::try_from_parts(parts).unwrap();
+        let digest = snapshot.canonical_digest();
+        let mut restored = snapshot.into_parts();
+        assert_eq!(join_pair(restored.replay_events[0].originating_tick), tick);
+        assert_eq!(
+            GpuBrainCheckpointSnapshot::try_from_parts(restored.clone())
+                .unwrap()
+                .canonical_digest(),
+            digest
+        );
+        restored.replay_events[0].originating_tick = split_pair(tick - 1);
+        assert_ne!(
+            GpuBrainCheckpointSnapshot::try_from_parts(restored)
+                .unwrap()
+                .canonical_digest(),
+            digest
+        );
+    }
+
+    #[test]
+    fn simulation_clock_nonempty_journal_binds_present_key_but_allows_growth_and_sleep() {
+        let mut parts = clock_checkpoint();
+        anchor_checkpoint(&mut parts, 7, 900);
+        // Research growth preserves the journal but intentionally clears its key.
+        assert!(GpuBrainCheckpointSnapshot::try_from_parts(parts.clone()).is_ok());
+        parts.last_learning_replay_key = Some(OutcomeCreditReplayKey {
+            organism_id: parts.organism_id,
+            phenotype_hash: parts.phenotype_hash,
+            sequence_id: alife_core::ExperienceSequenceId(7),
+        });
+        assert!(GpuBrainCheckpointSnapshot::try_from_parts(parts.clone()).is_ok());
+        parts.last_learning_replay_key.as_mut().unwrap().sequence_id =
+            alife_core::ExperienceSequenceId(8);
+        assert_eq!(
+            GpuBrainCheckpointSnapshot::try_from_parts(parts.clone()),
+            Err(ScaffoldContractError::LearningEvidenceMismatch)
+        );
+        // Sleep clears the physical journal while preserving replay protection.
+        parts.replay_journal_cursor = 0;
+        parts.replay_journal_event_count = 0;
+        parts.replay_spans[0].sample_count = 0;
+        assert!(GpuBrainCheckpointSnapshot::try_from_parts(parts).is_ok());
+    }
 
     #[test]
     fn learning_state_identity_includes_inactive_generation_and_replay_position() {

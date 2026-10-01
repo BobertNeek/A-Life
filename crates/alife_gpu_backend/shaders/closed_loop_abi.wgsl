@@ -10,6 +10,24 @@ const GPU_LEARNING_SCHEMA_VERSION:u32 = 3u;
 const GPU_SLEEP_SCHEMA_VERSION:u32 = 1u;
 const SELECTOR_RECEIPT_RECORD_WORDS:u32 = 29u;
 
+// Eligibility decay is referenced to one current 0.05s simulation tick.
+// Callers validate chronology before subtracting the authoritative u64 ticks.
+fn simulation_tick_less(a:vec2<u32>, b:vec2<u32>) -> bool {
+  return a.y < b.y || (a.y == b.y && a.x < b.x);
+}
+
+fn simulation_tick_delta(end:vec2<u32>, start:vec2<u32>) -> vec2<u32> {
+  return vec2<u32>(end.x - start.x, end.y - start.y - select(0u, 1u, end.x < start.x));
+}
+
+fn eligibility_decay_for_ticks(reference_decay:f32, elapsed:vec2<u32>) -> f32 {
+  if (all(elapsed == vec2<u32>(0u)) || reference_decay == 1.0) { return 1.0; }
+  if (reference_decay == 0.0) { return 0.0; }
+  if (all(elapsed == vec2<u32>(1u, 0u))) { return reference_decay; }
+  let ticks = f32(elapsed.y) * 4294967296.0 + f32(elapsed.x);
+  return pow(reference_decay, ticks);
+}
+
 struct GpuPerceptionHeader {
   schema_version:u32, class_id:u32, slot:u32, slot_generation:u32,
   neuron_count:u32, candidate_count:u32, microstep_count:u32, active_activation_side:u32,

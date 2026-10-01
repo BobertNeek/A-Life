@@ -1341,7 +1341,21 @@ fn recurrent_eligibility_obeys_the_validated_activity_route_mask() {
         "let route_index = immutable_plan_words[brain.route_indices_offset + local_synapse]"
     ));
     assert!(body.contains("if (!route_enabled_at(route_mask_base, route_index))"));
-    assert!(body.contains("store_state_f32(staging_bases.recurrent + local_synapse, previous)"));
+    let inactive = body
+        .split_once("if (!route_enabled_at(route_mask_base, route_index))")
+        .unwrap()
+        .1
+        .split_once("let post_activation_offset")
+        .unwrap()
+        .0;
+    assert!(inactive.contains("let next = eligibility_decay * previous"));
+    assert!(inactive.contains(
+        "store_state_f32(staging_bases.recurrent + local_synapse, canonicalize_state_zero(next))"
+    ));
+    assert!(
+        !inactive.contains("let local ="),
+        "inactive routes must not add coactivation"
+    );
 }
 
 #[test]
