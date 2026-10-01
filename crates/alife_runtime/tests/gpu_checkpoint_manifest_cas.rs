@@ -1,14 +1,17 @@
 //! Durable GPU checkpoint save-manifest compare-and-swap contracts.
 use std::{fs, path::Path};
 
-use alife_core::BrainScaleTier;
+use alife_core::{
+    BrainCapacityClass, BrainScaleTier, CreatureGenome, FoundationGeneticIdentity, OrganismId,
+    Tick, Vec3f,
+};
 use alife_runtime::{
     GpuDurableSaveManifest, GpuRuntimeError, GpuSaveManifestCasOutcome,
     GpuSleepTransactionJournalV2,
 };
 use alife_world::{
     persistence::{AssetManifest, PortableAssetDigest, PortableSaveFile, RuntimeConfig},
-    HeadlessScenarioBuilder,
+    HeadlessScenarioBuilder, WorldOrganismRecord,
 };
 
 fn copy_tree(source: &Path, destination: &Path) {
@@ -39,6 +42,41 @@ fn current_save(save_id: &str) -> PortableSaveFile {
     .unwrap()
 }
 
+fn current_organism_save(save_id: &str) -> PortableSaveFile {
+    let organism_id = OrganismId(1);
+    let mut world = HeadlessScenarioBuilder::new(73_127)
+        .agent("authority-fixture-agent", organism_id, Vec3f::ZERO)
+        .food("authority-fixture-food", Vec3f::new(1.0, 0.0, 0.0), 0.25)
+        .build()
+        .unwrap();
+    let genome = CreatureGenome::early_mammal_founder(
+        73_128,
+        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+    )
+    .unwrap();
+    let phenotype = genome.express().unwrap();
+    assert!(!phenotype.chemistry.biochemical.reactions().is_empty());
+    let record = WorldOrganismRecord::newborn(
+        organism_id,
+        world.entity_id("authority-fixture-agent").unwrap(),
+        genome,
+        phenotype,
+        Tick::ZERO,
+    )
+    .unwrap();
+    world.register_organism_record(record).unwrap();
+    let save = PortableSaveFile::from_headless_world(
+        save_id,
+        &world,
+        RuntimeConfig::deterministic_default(world.seed(), BrainScaleTier::Nano512),
+        AssetManifest::empty(),
+        Vec::new(),
+    )
+    .unwrap();
+    assert_eq!(save.world.organism_records.as_ref().unwrap().len(), 1);
+    save
+}
+
 fn authority_artifact_names(save_path: &Path) -> (String, String, u64) {
     let value: serde_json::Value = serde_json::from_slice(&fs::read(save_path).unwrap()).unwrap();
     let authority = &value["gpu_checkpoint_authority"];
@@ -54,13 +92,15 @@ fn authority_artifact_names(save_path: &Path) -> (String, String, u64) {
 
 #[test]
 fn save_manifest_compare_and_swap_is_atomic_idempotent_and_conflict_typed() {
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../alife_world/tests/fixtures/p34");
     let root = std::env::temp_dir().join(format!("alife-gpu-save-cas-{}", std::process::id()));
     if root.exists() {
         fs::remove_dir_all(&root).unwrap();
     }
-    copy_tree(&fixture, &root);
-    let durable = GpuDurableSaveManifest::open(root.join("tiny_save.json"), &root).unwrap();
+    fs::create_dir_all(&root).unwrap();
+    let save_path = root.join("current.json");
+    GpuDurableSaveManifest::publish_snapshot(&save_path, &root, &current_organism_save("base"))
+        .unwrap();
+    let durable = GpuDurableSaveManifest::open(&save_path, &root).unwrap();
     let loaded = durable.load().unwrap();
     let mut replacement = loaded.save.clone();
     replacement.save_id = "gpu-cas-replacement".to_string();
@@ -95,17 +135,12 @@ fn save_manifest_compare_and_swap_is_atomic_idempotent_and_conflict_typed() {
 
 #[test]
 fn manual_checkpoint_publish_atomically_creates_a_new_portable_save() {
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../alife_world/tests/fixtures/p34");
     let root = std::env::temp_dir().join(format!("alife-gpu-manual-save-{}", std::process::id()));
     if root.exists() {
         fs::remove_dir_all(&root).unwrap();
     }
-    copy_tree(&fixture, &root);
-    let source = GpuDurableSaveManifest::open(root.join("tiny_save.json"), &root)
-        .unwrap()
-        .load()
-        .unwrap()
-        .save;
+    fs::create_dir_all(&root).unwrap();
+    let source = current_organism_save("base");
     let mut replacement = source;
     replacement.save_id = "manual-gpu-checkpoint".to_string();
     let target = root.join("manual_checkpoint.json");
