@@ -35,11 +35,6 @@ fn fixture(label: &str) -> (PathBuf, GpuLiveBrainRuntime, AssetManifestEntry) {
     let mut assets = AssetManifest::empty();
     assets.entries.push(marker.clone());
     let readiness = label == "readiness";
-    let class = if readiness {
-        BrainScaleTier::Standard2048
-    } else {
-        BrainScaleTier::Nano512
-    };
     let founder = if readiness {
         crate::NewGameFounderSelection::N2048Candidate {
             asset_path: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -48,7 +43,9 @@ fn fixture(label: &str) -> (PathBuf, GpuLiveBrainRuntime, AssetManifestEntry) {
     } else {
         crate::NewGameFounderSelection::BuiltinNano512
     };
-    let mut config = RuntimeConfig::deterministic_default(31_117, class);
+    // The launch request uses the canonical base configuration. The explicit
+    // founder selection sets the resident class during New Game staging.
+    let mut config = RuntimeConfig::deterministic_default(31_117, BrainScaleTier::Nano512);
     config.features.gpu_backend_enabled = true;
     let mut runtime = crate::create_canonical_new_game_runtime_with_founder(
         crate::CanonicalNewGameLaunchRequest {
