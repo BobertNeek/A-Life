@@ -378,6 +378,7 @@ pub fn run_foundation_imitation_warmup(
         .ok_or("warm-up asset did not admit to the next cohort")?
         .before
         .phenotype
+        .as_ref()
         .clone();
     trainer.rebind_for_next_cohort(next_phenotype, trained.clone())?;
     let actor = trainer.checkpoint()?;
