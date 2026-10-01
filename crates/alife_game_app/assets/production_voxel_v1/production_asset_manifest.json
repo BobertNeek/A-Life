@@ -4536,7 +4536,7 @@
     {
       "asset_id": "approved-island-broadleaf",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:7068bae127a0af76",
+      "digest": "fnv1a64:06fbc9b126f20395",
       "external": false,
       "final_art": false,
       "generated": true,
@@ -4551,7 +4551,7 @@
       "local_path": "crates/alife_game_app/assets/landscape/island/Broadleaf.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 186124,
+      "size_bytes": 184640,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     },
@@ -4602,7 +4602,7 @@
     {
       "asset_id": "approved-island-conifer",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:154e50e00db4448d",
+      "digest": "fnv1a64:fbd0b770977bc2ef",
       "external": false,
       "final_art": false,
       "generated": true,
@@ -4617,7 +4617,7 @@
       "local_path": "crates/alife_game_app/assets/landscape/island/Conifer.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 123320,
+      "size_bytes": 112240,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     },
@@ -4690,7 +4690,7 @@
     {
       "asset_id": "approved-island-sapling",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:cfd06c918c683dd2",
+      "digest": "fnv1a64:3f1a39b373cccf11",
       "external": false,
       "final_art": false,
       "generated": true,
@@ -4705,7 +4705,7 @@
       "local_path": "crates/alife_game_app/assets/landscape/island/Sapling.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 127916,
+      "size_bytes": 127320,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     },

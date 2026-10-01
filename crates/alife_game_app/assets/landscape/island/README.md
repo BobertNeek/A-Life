@@ -45,3 +45,27 @@ The existing performance recorder also opens its speech and lineage capture UI.
 This run does not establish a graphics regression baseline or larger-population
 performance. Receipt: `target/artifacts/island-hand-implementation/island-hand-performance.json`,
 implementation revision `c050013d5cefe4760b019e46cb0ebb37d774f300`.
+
+The 2026-10-01 presentation refinement preserves near/middle tree geometry and
+all placements. Overview crowns now simplify connected envelopes of the authored
+crown groups; conifers retain their separate bough tiers. Triangle counts are
+88 / 172 / 56 for Broadleaf / Conifer / Sapling, within the previous 88 / 182 / 57
+budgets. Across four CPU silhouette views, coverage of the near silhouette is
+93-96% / 94-97% / 80-90%, respectively. Compare against the `e76e9e12` asset pack
+with `scripts/check_island_canopies.py --baseline <old-island-folder> --candidate
+crates/alife_game_app/assets/landscape/island --output <local-receipt-folder>`.
+
+Island runtime water uses the same two-triangle sea plane. A one-time 1024-square
+depth-color/foam texture samples the selected authoritative surface; a bounded
+dry-land distance mask fades shallow channel tint offshore. A 128-square normal
+tile repeats every 32 metres. Both textures have complete mip chains, with a
+combined RGBA payload of 5,679,784 bytes. They use ordinary StandardMaterial,
+without texture updates or additional geometry per frame. The old Highlands
+water material is retained. Terrain heights, collision proxies, camera/hand
+logic, Hearthling art, physiology, cognition, and headless scenarios are unchanged.
+
+Local paused Vulkan captures at 1280 x 720 compare the same eight-creature seed,
+overview, shoreline, grove, and 9.8 -> 1600 -> 9.8 metre views. These are visual
+checks, not simulation or GPU timing measurements. They do not establish an FPS
+gain. The reference's cliff profiles and denser forest placement remain separate
+work; this refinement does not alter the authoritative terrain or add vegetation.
