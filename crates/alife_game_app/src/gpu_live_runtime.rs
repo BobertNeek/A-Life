@@ -22,6 +22,8 @@ mod journal_capacity_tests;
 mod journal_worker_poll_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod nociception_food_tests;
+#[cfg(test)]
+mod persistence_response_comparison;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod recovery_sleep_tests;
 mod semantic_prior;
