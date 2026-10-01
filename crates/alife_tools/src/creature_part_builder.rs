@@ -2601,8 +2601,8 @@ fn decode_deterministic_rgba8_png(
     const FILTERED_BYTES: usize = HEIGHT * (1 + WIDTH * 4);
     let fail =
         |reason: String| CreaturePartBuilderError::Staging(format!("{kind} {label} {reason}"));
-    let compressed = deterministic_png_idat(bytes).map_err(&fail)?;
-    let filtered = inflate_zlib_bounded(&compressed, FILTERED_BYTES).map_err(&fail)?;
+    let compressed = deterministic_png_idat(bytes).map_err(fail)?;
+    let filtered = inflate_zlib_bounded(&compressed, FILTERED_BYTES).map_err(fail)?;
     if filtered.len() != FILTERED_BYTES {
         return Err(fail(format!(
             "has invalid decoded row length: expected {FILTERED_BYTES}, found {}",
