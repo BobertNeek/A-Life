@@ -315,6 +315,10 @@ fn clip(animation: CreatureAnimationState) -> usize {
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 fn ready(
     event: On<SceneInstanceReady>,
     mut commands: Commands,

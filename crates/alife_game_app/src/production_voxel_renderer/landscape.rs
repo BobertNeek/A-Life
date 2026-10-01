@@ -67,7 +67,7 @@ pub(super) fn spawn(
     let mut count = 0;
     for sample in &candidates {
         let hash = tile_hash(sample.tile);
-        if hash % 37 != 0 {
+        if !hash.is_multiple_of(37) {
             continue;
         }
         let anchor = Vec3::new(sample.center_x, sample.height, sample.center_z);
@@ -91,8 +91,7 @@ pub(super) fn spawn(
             };
             count += place(
                 world,
-                samples,
-                stride,
+                (samples, stride),
                 &scenes[choice],
                 paths[choice],
                 anchor,
@@ -104,8 +103,7 @@ pub(super) fn spawn(
                 if clear(shrub) {
                     count += place(
                         world,
-                        samples,
-                        stride,
+                        (samples, stride),
                         &scenes[6],
                         paths[6],
                         shrub,
@@ -115,11 +113,10 @@ pub(super) fn spawn(
                 }
                 let other = (choice + 1) % 3;
                 let second = anchor + Vec3::new(-2.0, 0.0, 1.4);
-                if hash % 3 == 0 && clear(second) {
+                if hash.is_multiple_of(3) && clear(second) {
                     count += place(
                         world,
-                        samples,
-                        stride,
+                        (samples, stride),
                         &scenes[other],
                         paths[other],
                         second,
@@ -135,8 +132,7 @@ pub(super) fn spawn(
             let position = anchor + Vec3::new(angle.cos() * radius, 0.0, angle.sin() * radius);
             count += place(
                 world,
-                samples,
-                stride,
+                (samples, stride),
                 &scenes[7],
                 paths[7],
                 position,
@@ -161,7 +157,7 @@ pub(super) fn spawn(
         .take(480)
     {
         let hash = tile_hash(sample.tile);
-        if hash % 3 != 0 {
+        if !hash.is_multiple_of(3) {
             continue;
         }
         let position = Vec3::new(
@@ -171,8 +167,7 @@ pub(super) fn spawn(
         );
         count += place(
             world,
-            samples,
-            stride,
+            (samples, stride),
             &scenes[7],
             paths[7],
             position,
@@ -189,8 +184,7 @@ fn tile_hash(tile: VoxelTileCoord) -> u32 {
 
 fn place(
     world: &mut World,
-    samples: &ProductionTerrainSampleMap,
-    stride: f32,
+    (samples, stride): (&ProductionTerrainSampleMap, f32),
     scene: &Handle<Scene>,
     name: &str,
     mut position: Vec3,

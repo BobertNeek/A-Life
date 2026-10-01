@@ -1864,6 +1864,10 @@ fn lineage_mapping_rejection_status(error: &LineageResetMappingError) -> String 
     )
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 pub(crate) fn handle_production_conversation_lineage_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut key_messages: MessageReader<KeyboardInput>,
@@ -1890,7 +1894,6 @@ pub(crate) fn handle_production_conversation_lineage_input(
             &keyboard,
             &selection,
             &creatures,
-            &ux,
             &mut runtime.runtime,
             &mut state,
             &reset_result,
@@ -2316,8 +2319,10 @@ fn translate_speech_unaided(
 fn translate_speech_assisted_with_fallback(
     request: &SpeechTranslationRequest,
 ) -> Result<(SpeechTranslationReceipt, Option<String>), String> {
-    let mut config = LlamaCppSpeechTranslationConfig::default();
-    config.timeout_ms = SLM_TRANSLATION_TIMEOUT_MS;
+    let config = LlamaCppSpeechTranslationConfig {
+        timeout_ms: SLM_TRANSLATION_TIMEOUT_MS,
+        ..Default::default()
+    };
     let assisted = LlamaCppSpeechTranslator::new(config)
         .map_err(|error| format!("invalid local SLM configuration: {error:?}"))
         .and_then(|translator| translator.translate(request));
@@ -2340,7 +2345,6 @@ fn handle_lineage_input(
     keyboard: &ButtonInput<KeyCode>,
     selection: &Fvr03ProductionVoxelSelectionResource,
     creatures: &Fvr04ProductionCreatureSceneResource,
-    _ux: &Fvr05ProductionUxStateResource,
     runtime: &mut crate::GpuLiveBrainRuntime,
     state: &mut ProductionConversationLineageUiState,
     reset_result: &ProductionCuratedFounderResetResultResource,
@@ -2889,6 +2893,10 @@ const fn on_off(enabled: bool) -> &'static str {
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 fn sync_production_lineage_laboratory_ui(
     state: Res<ProductionConversationLineageUiState>,
     layout: Res<LineageLabLayout>,

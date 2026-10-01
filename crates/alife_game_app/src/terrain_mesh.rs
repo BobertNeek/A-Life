@@ -744,12 +744,11 @@ fn smoothed_surface_corners(
                 count += 1.0;
             }
         }
-        let average = if count > 0.0 {
+        if count > 0.0 {
             total / count
         } else {
             sample.height
-        };
-        average
+        }
     });
     SurfaceCorners { heights }
 }
@@ -1254,8 +1253,8 @@ mod tests {
             assert_eq!(shared.len(), 2);
             for colors in shared.values() {
                 assert_eq!(colors.len(), 2);
-                for channel in 0..4 {
-                    assert!((colors[0][channel] - colors[1][channel]).abs() < 1e-6);
+                for (left, right) in colors[0].iter().zip(&colors[1]) {
+                    assert!((left - right).abs() < 1e-6);
                 }
             }
         }

@@ -151,16 +151,16 @@ impl LiveBrainPresentationFrame {
                 continue;
             };
             row.motor = Some(alife_world::PresentationMotorSnapshot {
-                action_kind: summary.selected_action_kind.clone(),
-                action_id: summary.selected_action_id.clone(),
-                target_entity: summary.target_entity.clone(),
+                action_kind: summary.selected_action_kind,
+                action_id: summary.selected_action_id,
+                target_entity: summary.target_entity,
             });
             row.outcome = Some(alife_world::PresentationOutcomeSnapshot {
                 patch_sealed: summary.patch_sealed,
                 patch_sequence_id: summary.patch_sequence_id,
                 patch_success: summary.patch_success,
-                physical_contact: summary.physical_contact.clone(),
-                action_failure: summary.action_failure.clone(),
+                physical_contact: summary.physical_contact,
+                action_failure: summary.action_failure,
             });
         }
     }
@@ -650,6 +650,10 @@ fn apply_presentation_retirements(
 }
 
 #[cfg(feature = "gpu-runtime")]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 fn tick_production_gpu_brain(
     time: Res<Time>,
     mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
@@ -844,7 +848,7 @@ pub fn build_production_voxel_frontend_app_shell(
     #[cfg(feature = "gpu-runtime")]
     {
         let (admitted, summary, runtime) = prepare_production_runtime(launch)?;
-        return build_production_voxel_frontend_app_shell_inner(&admitted, summary, runtime);
+        build_production_voxel_frontend_app_shell_inner(&admitted, summary, runtime)
     }
     #[cfg(not(feature = "gpu-runtime"))]
     {

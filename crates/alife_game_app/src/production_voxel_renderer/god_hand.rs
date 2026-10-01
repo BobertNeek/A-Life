@@ -87,6 +87,10 @@ fn ready(
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 pub(super) fn input(
     time: Res<Time<bevy::time::Real>>,
     mouse: Res<ButtonInput<MouseButton>>,
@@ -204,15 +208,15 @@ pub(super) fn input(
     }
 }
 
+type HandCameraFilter = (With<Fvr03ProductionVoxelCamera>, Without<GodHand>);
+type HandTransformFilter = (With<GodHand>, Without<Fvr03ProductionVoxelCamera>);
+
 pub(super) fn animate(
     time: Res<Time<bevy::time::Real>>,
     hand: Res<HandInteraction>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
-    cameras: Query<(&Transform, &Projection), (With<Fvr03ProductionVoxelCamera>, Without<GodHand>)>,
-    mut hands: Query<
-        (&mut Transform, &mut Visibility),
-        (With<GodHand>, Without<Fvr03ProductionVoxelCamera>),
-    >,
+    cameras: Query<(&Transform, &Projection), HandCameraFilter>,
+    mut hands: Query<(&mut Transform, &mut Visibility), HandTransformFilter>,
     mut windows: Query<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
     mut players: Query<(&mut AnimationPlayer, &mut HandPlayer)>,
 ) {
@@ -290,18 +294,10 @@ pub(super) fn animate(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn zoom_keeps_pointer_coverage_and_carry_world_scale() {
-        for extent in [9.8, 28.0, 400.0, 1600.0, 9.8] {
-            assert!((3.0 * pointer_scale(extent, false) / extent - 0.125).abs() < 0.0001);
-            assert_eq!(pointer_scale(extent, true), 1.0);
-        }
-    }
-}
-
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 pub(super) fn highlight(
     mut commands: Commands,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
@@ -351,6 +347,18 @@ pub(super) fn highlight(
             }
         } else if let Some(tint) = tint {
             handle.0 = tint.original.clone();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn zoom_keeps_pointer_coverage_and_carry_world_scale() {
+        for extent in [9.8, 28.0, 400.0, 1600.0, 9.8] {
+            assert!((3.0 * pointer_scale(extent, false) / extent - 0.125).abs() < 0.0001);
+            assert_eq!(pointer_scale(extent, true), 1.0);
         }
     }
 }

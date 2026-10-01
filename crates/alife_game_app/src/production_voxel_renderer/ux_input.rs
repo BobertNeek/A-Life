@@ -2,6 +2,10 @@
 
 use super::*;
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 pub(super) fn handle_fvr05_production_ux_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut windows: bevy::prelude::Query<&mut Window, With<PrimaryWindow>>,

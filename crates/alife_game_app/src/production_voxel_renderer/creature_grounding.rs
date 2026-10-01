@@ -47,7 +47,7 @@ impl RenderedTerrainSurface {
             else {
                 continue;
             };
-            for quad in positions.chunks_exact(4) {
+            for quad in positions.as_chunks::<4>().0 {
                 let tile = VoxelTileCoord::new(
                     (quad[0][0] + stride * 0.5 - 0.5).round() as i32,
                     (quad[0][2] + stride * 0.5 - 0.5).round() as i32,

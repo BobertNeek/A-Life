@@ -25,6 +25,10 @@ pub(super) struct CaptureView<'w, 's> {
     selection: Res<'w, Fvr03ProductionVoxelSelectionResource>,
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 pub(super) fn capture_player_view(
     keyboard: Res<ButtonInput<KeyCode>>,
     time: Res<Time<bevy::time::Real>>,

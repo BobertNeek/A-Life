@@ -5,6 +5,10 @@ use bevy::prelude::{Cuboid, Meshable, Query, Sphere};
 #[derive(Component)]
 pub(super) struct LiveCareObject(pub(super) WorldEntityId);
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 pub(super) fn sync_care_objects(
     mut commands: Commands,
     highlands: Option<Res<creature_grounding::SelectedTerrain>>,

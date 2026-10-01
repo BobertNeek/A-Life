@@ -2032,7 +2032,7 @@ fn dispatch_production_curated_founder_reset(
         return;
     }
     ux.pending_food_move = None;
-    dispatch_production_curated_founder_reset_core(&pending, &mut runtime.runtime, &mut *result);
+    dispatch_production_curated_founder_reset_core(&pending, &mut runtime.runtime, &mut result);
 }
 
 pub fn spawn_fvr03_production_voxel_scene(
@@ -2317,7 +2317,7 @@ fn load_fvr04_runtime_state(
 
 fn load_fvr04_runtime_state_from_save(
     save: &PortableSaveFile,
-    asset_root: &PathBuf,
+    asset_root: &Path,
     profile_id: ProductionFrontendProfileId,
     population: u16,
 ) -> Result<Fvr04RuntimeSceneState, GameAppShellError> {
@@ -2642,8 +2642,7 @@ fn prepare_fvr04_runtime_scene_candidate(
             procedural_config,
             &settings,
             chunk.coord,
-            &mut visible_tiles,
-            &mut tile_summaries_by_tile,
+            (&mut visible_tiles, &mut tile_summaries_by_tile),
             &mut material_counts,
             &mut terrain_samples,
         )?);
@@ -3338,8 +3337,10 @@ fn prepare_fvr03_chunk_tiles(
     procedural_config: ProceduralWorldConfig,
     settings: &Fvr03ProductionVoxelRendererSettings,
     chunk: VoxelChunkCoord,
-    visible_tiles: &mut BTreeSet<VoxelTileCoord>,
-    tile_summaries_by_tile: &mut BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
+    (visible_tiles, tile_summaries_by_tile): (
+        &mut BTreeSet<VoxelTileCoord>,
+        &mut BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
+    ),
     material_counts: &mut BTreeMap<Fvr03ProductionVoxelMaterialKind, usize>,
     terrain_samples: &mut ProductionTerrainSampleMap,
 ) -> Result<usize, GameAppShellError> {
@@ -3972,10 +3973,10 @@ fn fvr07_vfx_spawns(
     spawns
 }
 
-fn fvr07_tiles_for_vfx<'a>(
+fn fvr07_tiles_for_vfx(
     kind: Fvr07ProductionVfxKind,
-    tile_summaries: &'a BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
-) -> Vec<&'a Fvr05ProductionTileSummary> {
+    tile_summaries: &BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
+) -> Vec<&Fvr05ProductionTileSummary> {
     let mut tiles = tile_summaries
         .values()
         .filter(|tile| match kind {
@@ -3988,7 +3989,7 @@ fn fvr07_tiles_for_vfx<'a>(
                     tile.material,
                     Fvr03ProductionVoxelMaterialKind::Decay
                         | Fvr03ProductionVoxelMaterialKind::Resource
-                ) && fvr07_tile_hash(tile.tile) % 3 == 0
+                ) && fvr07_tile_hash(tile.tile).is_multiple_of(3)
             }
             Fvr07ProductionVfxKind::DangerHazardParticles => {
                 tile.hazard_pressure >= 0.30
@@ -4022,10 +4023,10 @@ fn fvr07_tiles_for_vfx<'a>(
     tiles
 }
 
-fn fvr07_creatures_for_vfx<'a>(
+fn fvr07_creatures_for_vfx(
     kind: Fvr07ProductionVfxKind,
-    creatures: &'a [Fvr04CreatureVisualRecord],
-) -> Vec<&'a Fvr04CreatureVisualRecord> {
+    creatures: &[Fvr04CreatureVisualRecord],
+) -> Vec<&Fvr04CreatureVisualRecord> {
     let mut candidates = creatures
         .iter()
         .filter(|creature| match kind {
@@ -4480,8 +4481,7 @@ fn fvr03_append_cuboid(
 }
 
 fn fvr04_creature_root_bundle(
-    stable_id: WorldEntityId,
-    organism_id: OrganismId,
+    (stable_id, organism_id): (WorldEntityId, OrganismId),
     tile: VoxelTileCoord,
     transform: Transform,
     mut visual: Fvr04ProductionCreatureVisualMarker,
@@ -4544,8 +4544,7 @@ fn spawn_fvr04_prepared_creature_batch(
         part_families.extend(recipe_families);
         let root = world
             .spawn(fvr04_creature_root_bundle(
-                visual.stable_id,
-                visual.organism_id,
+                (visual.stable_id, visual.organism_id),
                 creature.record.tile,
                 creature.root_transform,
                 creature.root_visual,
@@ -4580,7 +4579,7 @@ fn spawn_fvr04_prepared_creature_batch(
         let coat_material = creature.coat.material;
         scene_material_handles.insert(coat_material.id());
         hearthling::spawn(world, root, visual.appearance);
-        if let Some(mut entity) = world.get_entity_mut(root).ok() {
+        if let Ok(mut entity) = world.get_entity_mut(root) {
             let scale = hearthling::scale(visual.appearance);
             let mut marker = entity
                 .get_mut::<Fvr04ProductionCreatureVisualMarker>()
@@ -4774,7 +4773,7 @@ fn fvr04_live_creature_visual_record(
     }
     let (selected_action_kind, target_entity) =
         presentation.motor.as_ref().map_or((None, None), |motor| {
-            (motor.action_kind.clone(), motor.target_entity)
+            (motor.action_kind, motor.target_entity)
         });
     let target_position =
         target_entity.and_then(|target| frame.object(target).map(|object| object.position));
@@ -5756,6 +5755,10 @@ fn v0_need_bar(value: f32) -> String {
     format!("[{}{}]", "=".repeat(filled), "-".repeat(8 - filled))
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 fn handle_fvr03_mouse_selection(
     mouse: Res<ButtonInput<MouseButton>>,
     windows: bevy::prelude::Query<&Window, With<PrimaryWindow>>,
@@ -6002,15 +6005,22 @@ fn fvr05_overlay_modifier_pressed(keyboard: &ButtonInput<KeyCode>) -> bool {
     keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight)
 }
 
+type Fvr05PanelVisibilityQueries<'w, 's> = (
+    bevy::prelude::Query<'w, 's, &'static mut Visibility, With<Fvr05ProductionTopRuntimeBar>>,
+    bevy::prelude::Query<'w, 's, &'static mut Visibility, With<Fvr05ProductionLeftControlPanel>>,
+    bevy::prelude::Query<'w, 's, &'static mut Visibility, With<Fvr05ProductionRightInspectorPanel>>,
+    bevy::prelude::Query<
+        'w,
+        's,
+        &'static mut Visibility,
+        With<Fvr05ProductionBottomOverlayToolbar>,
+    >,
+    bevy::prelude::Query<'w, 's, &'static mut Visibility, With<Fvr05ProductionFooterStatusBar>>,
+);
+
 fn sync_fvr05_panel_visibility(
     ux: Res<Fvr05ProductionUxStateResource>,
-    mut panels: ParamSet<(
-        bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionTopRuntimeBar>>,
-        bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionLeftControlPanel>>,
-        bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionRightInspectorPanel>>,
-        bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionBottomOverlayToolbar>>,
-        bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionFooterStatusBar>>,
-    )>,
+    mut panels: ParamSet<Fvr05PanelVisibilityQueries>,
 ) {
     if !ux.is_changed() {
         return;
@@ -6214,6 +6224,10 @@ fn sync_fvr05_left_control_panel(
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 fn sync_fvr05_right_inspector_panel(
     ux: Res<Fvr05ProductionUxStateResource>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
@@ -6253,8 +6267,7 @@ fn sync_fvr05_right_inspector_panel(
         })
         .collect::<Vec<_>>()
         .join(" | ");
-    let selected_live =
-        selected_live_creature_object(selection.selected, frame.as_ref().map(|frame| &**frame));
+    let selected_live = selected_live_creature_object(selection.selected, frame.as_deref());
     let live_state = selected_live.and_then(|(stable_id, organism_id, tick, position)| {
         entity_map
             .bevy_entity(stable_id)
@@ -6274,7 +6287,7 @@ fn sync_fvr05_right_inspector_panel(
                 selection.selected,
                 &creatures,
                 live_state,
-                frame.as_ref().map(|frame| &**frame),
+                frame.as_deref(),
             ),
             ux.authority.compact_line()
         ),
@@ -6546,7 +6559,7 @@ fn sync_fvr04_creature_label(
         .bevy_entity(stable_id)
         .and_then(|entity| roots.get(entity).ok())
         .filter(|(root, visual, _)| {
-            let Some(frame) = frame.as_ref().map(|frame| &**frame) else {
+            let Some(frame) = frame.as_deref() else {
                 return false;
             };
             let Some(object) = frame.current.object(stable_id) else {
@@ -6867,6 +6880,10 @@ fn file_blake3_hex(path: &Path) -> Result<String, GameAppShellError> {
     Ok(hasher.finalize().to_hex().to_string())
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 fn request_fvr03_recorded_screenshot(
     mut commands: Commands,
     mut capture: ResMut<Fvr03ProductionVoxelScreenshotResource>,
@@ -7071,7 +7088,7 @@ fn fvr05_screenshot_step(index: usize) -> Option<(&'static str, Fvr05ProductionI
     }
 }
 
-fn fvr05_screenshot_path(base_path: &PathBuf, suffix: &str) -> PathBuf {
+fn fvr05_screenshot_path(base_path: &Path, suffix: &str) -> PathBuf {
     let parent = base_path
         .parent()
         .map(|path| path.to_path_buf())
@@ -7511,7 +7528,7 @@ mod tests {
             return;
         }
         order.0.push("reset-dispatch");
-        dispatch_production_curated_founder_reset_core(&pending, &mut *runtime, &mut *result);
+        dispatch_production_curated_founder_reset_core(&pending, &mut *runtime, &mut result);
     }
 
     #[cfg(feature = "gpu-runtime")]

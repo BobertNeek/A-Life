@@ -610,7 +610,6 @@ fn fvr03_stable_selection_returns_tile_coords_without_renderer_tokens() {
         .world()
         .resource::<Fvr03ProductionVoxelSelectionResource>()
         .selected
-        .clone()
         .expect("production voxel scene should select a stable tile at boot");
 
     assert!(matches!(
@@ -1536,7 +1535,8 @@ fn fvr04_live_creature_inspectors_report_current_authoritative_position_and_tick
         "world position: x={:.2} y={:.2} z={:.2}",
         11.25, 4.5, -12.75
     );
-    for text in [&fvr05_text] {
+    {
+        let text = &fvr05_text;
         assert!(
             text.contains("world tick: 42"),
             "missing live tick in: {text}"
@@ -1620,7 +1620,8 @@ fn fvr04_live_creature_inspectors_reject_stable_id_mismatch() {
         stable_id.raw()
     );
     let mismatched_position = "world position: x=19.25 y=5.50 z=-23.75";
-    for text in [&fvr05_text] {
+    {
+        let text = &fvr05_text;
         assert!(
             text.contains(&expected_unavailable),
             "stable-ID mismatch must be explicit in: {text}"
@@ -1895,7 +1896,7 @@ fn fvr09_material_palette_uses_natural_top_side_texture_slots_not_debug_colors()
         settings.material_palette_version,
         "fvr10-visible-surface-variation-v1"
     );
-    assert_eq!(settings.debug_primary_colors, false);
+    assert!(!settings.debug_primary_colors);
 
     let palette = settings.material_palette();
     for material in [

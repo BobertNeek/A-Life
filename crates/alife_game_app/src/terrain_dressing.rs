@@ -175,8 +175,7 @@ pub(crate) fn plan_production_terrain_dressing(
             cap,
             kind,
             &tile,
-            tile_stride,
-            minimum_floor,
+            (tile_stride, minimum_floor),
             cluster_id,
             occupied_tiles,
         );
@@ -201,8 +200,7 @@ pub(crate) fn plan_production_terrain_dressing(
             cap,
             kind,
             &tile,
-            tile_stride,
-            minimum_floor,
+            (tile_stride, minimum_floor),
             cluster_id,
             occupied_tiles,
         );
@@ -240,8 +238,7 @@ fn append_cluster(
     cap: usize,
     kind: Fvr07ProductionDressingKind,
     tile: &TerrainDressingTile,
-    tile_stride: u16,
-    minimum_floor: bool,
+    (tile_stride, minimum_floor): (u16, bool),
     cluster_id: u32,
     occupied_tiles: &BTreeSet<VoxelTileCoord>,
 ) {
@@ -452,7 +449,7 @@ fn biome_dressing_kind(tile: TerrainDressingTile) -> Fvr07ProductionDressingKind
         Fvr03ProductionVoxelMaterialKind::Stone => Fvr07ProductionDressingKind::LichenRock,
         Fvr03ProductionVoxelMaterialKind::Water => Fvr07ProductionDressingKind::ReedCluster,
         Fvr03ProductionVoxelMaterialKind::Soil | Fvr03ProductionVoxelMaterialKind::Sand => {
-            if hash % 4 == 0 {
+            if hash.is_multiple_of(4) {
                 Fvr07ProductionDressingKind::DeadLeafPatch
             } else {
                 Fvr07ProductionDressingKind::PebbleCluster
@@ -1305,8 +1302,7 @@ mod tests {
             8,
             Fvr07ProductionDressingKind::LeafPatch,
             &tile,
-            2,
-            false,
+            (2, false),
             1,
             &BTreeSet::new(),
         );

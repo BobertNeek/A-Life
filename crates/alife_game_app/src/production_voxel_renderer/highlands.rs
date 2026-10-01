@@ -207,6 +207,10 @@ pub(super) fn focus_on_surface(camera: &Transform, surface: &alife_world::Terrai
         .map(|p| Vec3::new(p.x, p.y, p.z))
         .unwrap_or_else(|| camera.translation + d * (-camera.translation.y / d.y.min(-0.01)))
 }
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 pub(super) fn update(
     mut commands: Commands,
     time: Res<Time>,
@@ -434,7 +438,7 @@ fn constrain_to_surface(
     height: f32,
     surface: &alife_world::TerrainSurface,
 ) {
-    let focus = focus_on_surface(&camera, surface);
+    let focus = focus_on_surface(camera, surface);
     let x = focus.x.clamp(
         surface.origin_x,
         surface.origin_x + (surface.width - 1) as f32 * surface.spacing,
