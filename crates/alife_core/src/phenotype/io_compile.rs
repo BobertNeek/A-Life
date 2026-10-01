@@ -80,25 +80,37 @@ pub(super) fn compile_encoder(
                 step = 1;
             }
         }
-        // These three life-relevant drives must never be absent merely because
-        // the inherited sensor-layout seed sampled other lanes first.
-        let essential = if gene.kind == SensorChannelKind::Interoception
-            && gene.target_lobe == LobeKind::InteroceptiveMotivational
-            && gene.receptor_count >= 3
-            && region.len >= 3
-        {
-            for (offset, lane) in [0_u16, 3, 7].into_iter().enumerate() {
-                let target = region.start + offset as u32;
-                occupied.insert((target, group.raw(), lane));
-                assignments.push(SensorEncoderAssignment::new(
-                    group, lane, target, 1.0, 0.0, -1.0, 1.0,
-                ));
-            }
-            3
+        // Cover distinct physical lanes before spending receptors on copies.
+        // In particular, bilateral smell and pose/displacement must not vanish
+        // because the inherited seed repeatedly sampled another lane.
+        let interoception = gene.kind == SensorChannelKind::Interoception
+            && gene.target_lobe == LobeKind::InteroceptiveMotivational;
+        let lanes = if interoception {
+            [0_u16, 3, 7, 1, 2, 4, 5, 6, 8]
+                .into_iter()
+                .chain(9..lane_end)
+                .collect::<Vec<_>>()
         } else {
-            0
+            (lane_start..lane_end).collect::<Vec<_>>()
         };
-        for _ in essential..gene.receptor_count {
+        let essential = usize::from(gene.receptor_count)
+            .min(lanes.len())
+            .min(region.len as usize);
+        let first_target = if interoception {
+            0
+        } else {
+            (splitmix64(seed) % u64::from(region.len)) as u32
+        };
+        for (offset, lane) in lanes.into_iter().take(essential).enumerate() {
+            let target = (0..region.len)
+                .map(|shift| region.start + (first_target + offset as u32 + shift) % region.len)
+                .find(|target| occupied.insert((*target, group.raw(), lane)))
+                .ok_or_else(compile_error)?;
+            assignments.push(SensorEncoderAssignment::new(
+                group, lane, target, 1.0, 0.0, -1.0, 1.0,
+            ));
+        }
+        for _ in essential..usize::from(gene.receptor_count) {
             let mut selected = None;
             for _ in 0..available {
                 let source_index = lane_start + (cursor % u32::from(lane_width)) as u16;
@@ -656,40 +668,42 @@ fn sensor_lanes(kind: SensorChannelKind) -> (SensorEncoderSourceGroup, u16, u16)
 }
 
 /// A small inherited prior inside the existing decoder. The world still gives
-/// every object the same unscored physical action candidates. Hunger can prime
-/// food-cued approach/ingestion; injury, fear, or heat can prime withdrawal.
+/// every object the same unscored physical action candidates. Hunger primes
+/// investigation before contact and taste-supported ingestion at contact;
+/// fatigue primes rest. Learned readouts can override these small dispositions.
 fn innate_priority_for_family(
     genome: &BrainGenome,
     family: CandidateActionFamily,
 ) -> (u32, f32, Option<u8>, bool, bool) {
     const HUNGER: u32 = 1 << 0;
+    const FATIGUE: u32 = 1 << 1;
     const FEAR: u32 = 1 << 2;
     const PAIN: u32 = 1 << 3;
     const TEMPERATURE: u32 = 1 << 7;
     const DANGER: u32 = FEAR | PAIN | TEMPERATURE;
     const EMERGENCY: u32 = HUNGER | DANGER;
-    // Grounded object-slot chemistry is a physical scent, not a food label.
+    // Object-slot chemistry is contact/taste, never distant food information.
     const OBJECT_CHEMICAL_CUE: u8 = 15;
     let genes = genome.innate_priority;
     let reflex = genes.reflex_strength;
     let (mask, gain, cue, invert, reach) = match family {
         CandidateActionFamily::Approach => (
             HUNGER,
-            112.0 * reflex * genes.food_attraction,
-            Some(OBJECT_CHEMICAL_CUE),
+            16.0 * reflex * genes.food_attraction,
+            Some(super::decoder::INNATE_NONCONTACT_CUE),
             false,
             false,
         ),
         CandidateActionFamily::Ingest => (
             HUNGER,
-            128.0 * reflex * genes.food_attraction,
+            24.0 * reflex * genes.food_attraction,
             Some(OBJECT_CHEMICAL_CUE),
             false,
             true,
         ),
         CandidateActionFamily::Avoid => (
             DANGER,
-            128.0 * reflex * genes.hazard_aversion,
+            24.0 * reflex * genes.hazard_aversion,
             Some(OBJECT_CHEMICAL_CUE),
             true,
             false,
@@ -697,8 +711,8 @@ fn innate_priority_for_family(
         CandidateActionFamily::Idle
         | CandidateActionFamily::Inspect
         | CandidateActionFamily::Contact
-        | CandidateActionFamily::Other => (EMERGENCY, -96.0 * reflex, None, false, false),
-        CandidateActionFamily::Rest => (HUNGER, -96.0 * reflex, None, false, false),
+        | CandidateActionFamily::Other => (EMERGENCY, -8.0 * reflex, None, false, false),
+        CandidateActionFamily::Rest => (FATIGUE, 8.0 * reflex, None, false, false),
     };
     if gain == 0.0 {
         (0, 0.0, None, false, false)
@@ -795,7 +809,9 @@ mod innate_priority_tests {
                 .with_innate_priority(mask, gain, cue, invert, reach)
         };
         let mut food = CandidateFeatureVector::zero();
+        food.0[1] = 1.0;
         food.0[15] = 0.8;
+        food.0[18] = 1.0;
         let rock = CandidateFeatureVector::zero();
         let mut drives = DriveSnapshot::baseline();
         let eat = family(&genome, CandidateActionFamily::Ingest);
@@ -807,10 +823,16 @@ mod innate_priority_tests {
         assert_eq!(eat.innate_contribution(drives, rock), 0.0);
         let mut far_food = food;
         far_food.0[2] = 0.5;
+        far_food.0[15] = 0.0;
+        far_food.0[18] = 0.0;
         assert_eq!(eat.innate_contribution(drives, far_food), 0.0);
         assert!(
             family(&genome, CandidateActionFamily::Approach).innate_contribution(drives, far_food)
                 > 0.0
+        );
+        assert_eq!(
+            family(&genome, CandidateActionFamily::Approach).innate_contribution(drives, food),
+            0.0
         );
         assert!(idle.innate_contribution(drives, food) < 0.0);
         drives.hunger = 0.0;
@@ -844,5 +866,114 @@ mod innate_priority_tests {
         parents.predisposition.reflex_strength = ContinuousLocus::mean(0.2, 0.8).unwrap();
         let expressed = parents.express().unwrap();
         assert_eq!(expressed.brain_genome.innate_priority.reflex_strength, 0.5);
+    }
+
+    #[test]
+    fn founder_encoder_covers_bilateral_smell_pose_motion_and_care_drives() {
+        for seed in 1..=8 {
+            let creature = CreatureGenome::early_mammal_founder(
+                seed,
+                FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N2048_ID).unwrap(),
+            )
+            .unwrap()
+            .express()
+            .unwrap();
+            for genome in [
+                BrainGenome::scaffold(seed, BrainCapacityClass::N2048_ID),
+                creature.brain_genome,
+            ] {
+                let development = DevelopmentState::new(
+                    genome.id,
+                    Tick::ZERO,
+                    NormalizedScalar::new(1.0).unwrap(),
+                );
+                let encoder = compile_encoder(
+                    &genome,
+                    &development,
+                    &N2048FoundationLayoutV1::lobe_layout(),
+                    SensorProfile::GroundedTerrainVisionV1,
+                )
+                .unwrap();
+                for (group, lanes) in [
+                    (SensorEncoderSourceGroup::SensoryChannel, 24..32),
+                    (SensorEncoderSourceGroup::Body, 3..13),
+                    (SensorEncoderSourceGroup::Homeostasis, 0..9),
+                ] {
+                    for lane in lanes {
+                        assert!(
+                            encoder
+                                .assignments()
+                                .iter()
+                                .any(|a| { a.source_group() == group && a.source_index() == lane }),
+                            "seed={seed}, group={group:?}, lane={lane}"
+                        );
+                    }
+                }
+                let smell_target = |lane| {
+                    encoder
+                        .assignments()
+                        .iter()
+                        .find(|a| {
+                            a.source_group() == SensorEncoderSourceGroup::SensoryChannel
+                                && a.source_index() == lane
+                        })
+                        .unwrap()
+                        .target_neuron()
+                };
+                assert_ne!(smell_target(24), smell_target(25));
+            }
+        }
+    }
+
+    #[test]
+    fn care_dispositions_are_grounded_small_and_overridable_by_bounded_readouts() {
+        let genome = BrainGenome::scaffold(0x5A7E_0003, BrainCapacityClass::N2048_ID);
+        let plan = |kind| {
+            let (mask, gain, cue, invert, reach) = innate_priority_for_family(&genome, kind);
+            CandidateDecoderFamilyPlan::new(kind, 0.0, 0, 0)
+                .with_innate_priority(mask, gain, cue, invert, reach)
+        };
+        let mut distant = CandidateFeatureVector::zero();
+        distant.0[1] = 1.0;
+        distant.0[2] = 0.5;
+        let mut hungry = DriveSnapshot::baseline();
+        hungry.hunger = 0.98;
+        let approach = plan(CandidateActionFamily::Approach);
+        assert!(approach.innate_contribution(hungry, distant) > 0.0);
+        // Distant chemistry is unavailable. A different visible shape receives
+        // the same investigative disposition, not an oracle food preference.
+        let mut different_shape = distant;
+        different_shape.0[12] = 1.0;
+        assert_eq!(
+            approach.innate_contribution(hungry, distant),
+            approach.innate_contribution(hungry, different_shape)
+        );
+        assert_eq!(
+            approach.innate_contribution(hungry, CandidateFeatureVector::zero()),
+            0.0
+        );
+        assert_eq!(
+            plan(CandidateActionFamily::Ingest).innate_contribution(hungry, distant),
+            0.0
+        );
+        let rest = plan(CandidateActionFamily::Rest);
+        assert_eq!(rest.innate_contribution(hungry, distant), 0.0);
+        let mut tired = DriveSnapshot::baseline();
+        tired.fatigue = 0.98;
+        let rest_gain = rest.innate_contribution(tired, distant);
+        assert!(rest_gain > 0.0);
+        // Existing N2048 basis: 16 motor units, alpha .25, fast bounds +/-2.
+        // These are decoder contrasts, not CPU inference or behavior evidence.
+        let learned_change = 16.0 * genome.alpha_mask.default_alpha.raw() * 1.0;
+        assert!(rest_gain - learned_change < 0.0);
+        assert!(rest_gain + learned_change > 0.0);
+        let mut urgent = tired;
+        urgent.hunger = 0.98;
+        let idle_gain = plan(CandidateActionFamily::Idle).innate_contribution(urgent, distant);
+        assert!(rest.innate_contribution(urgent, distant) - learned_change < idle_gain);
+        assert_eq!(
+            rest.innate_contribution(DriveSnapshot::baseline(), distant),
+            0.0
+        );
     }
 }

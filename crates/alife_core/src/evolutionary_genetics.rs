@@ -1191,12 +1191,16 @@ impl CreaturePhenotype {
         if maturation >= self.development.lobe_activation_maturation.raw() {
             enabled_lobes = LobeKind::CORE.to_vec();
         }
-        let mut active_sensor_channels = vec![SensorChannelKind::Interoception];
+        let mut active_sensor_channels = vec![
+            SensorChannelKind::Interoception,
+            SensorChannelKind::Proprioception,
+        ];
         if maturation >= self.development.sensor_activation_maturation.raw() {
             active_sensor_channels.extend([
                 SensorChannelKind::Vision,
                 SensorChannelKind::Hearing,
                 SensorChannelKind::Touch,
+                SensorChannelKind::Smell,
             ]);
         }
         let active_motor_affordances = self
@@ -1537,6 +1541,26 @@ fn express_brain_genome(
                 ),
                 target_lobe: LobeKind::PerceptualIntegration,
                 enabled_at_maturation: sensor_gate,
+            },
+            SensorChannelGene {
+                kind: SensorChannelKind::Smell,
+                receptor_count: scaled_receptor_count(
+                    16,
+                    body.sensory_acuity,
+                    receptor_sensitivity,
+                ),
+                target_lobe: LobeKind::PerceptualIntegration,
+                enabled_at_maturation: sensor_gate,
+            },
+            SensorChannelGene {
+                kind: SensorChannelKind::Proprioception,
+                receptor_count: scaled_receptor_count(
+                    26,
+                    body.sensory_acuity,
+                    receptor_sensitivity,
+                ),
+                target_lobe: LobeKind::PerceptualIntegration,
+                enabled_at_maturation: 0,
             },
         ],
     };
