@@ -5,6 +5,10 @@ growth from the live CPU preparation path. It preserves exact upload validation,
 all emitted payload words, and atomic overflow rejection. It does not establish
 a live Windows FPS or TPS improvement.
 
+Subsequent extraction of the existing Windows receipt identifies memory/cognitive
+preparation as dominant. See the [memory-validation receipt](20261001-memory-frame-validation.md)
+for that bounded follow-up; this allocation receipt retains its original scope.
+
 ## Source and ownership
 
 Branch: `codex/cloud-live-preparation-20261001`, based on

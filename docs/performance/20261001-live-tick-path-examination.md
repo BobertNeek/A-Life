@@ -1,10 +1,13 @@
 # Live tick path examination — 2026-10-01
 
-The dominant cause of the roughly 180 ms Windows live tick remains **Unknown**.
-The published 95.7% live-tick wall-time share includes GPU completion waits.
-It cannot attribute that time to CPU preparation. The existing receipt already
-records the internal stages needed to narrow the cause; another profiling
-framework is unnecessary.
+The coordinator's subsequently extracted Windows receipt identifies preparation
+as the dominant stage: **111.85 ms of 173.76 ms runtime wall time per tick**.
+Topology/concept, episodic retrieval, and GPU upload preparation account for
+46.56, 40.42, and 19.35 ms respectively. The bounded
+[memory-validation change](20261001-memory-frame-validation.md) targets repeated
+whole-frame scans inside those current paths. Leaf attribution and fresh RTX
+before/after proof remain unrun. The earlier source hypotheses below describe
+the investigation before the raw receipt's fields were supplied.
 
 ## Evidence and ownership
 
@@ -17,9 +20,14 @@ The coordinator additionally reports 1920×1080, i7-3770K/32 GB, 5.48 FPS,
 5.50 TPS, and all 330 frames above 100 ms. The
 [published island receipt summary](https://github.com/BobertNeek/A-Life/blob/e76e9e123e7dac767a360e9703f365cb1b07d7f4/crates/alife_game_app/assets/landscape/island/README.md#L40)
 is available; `target/artifacts/island-hand-implementation/island-hand-performance.json`
-and its exact launch command are absent in this cloud checkout. The measured
-run mode, save/founder, brain capacity, sensor profile, optional diagnostic
-environment, GPU timestamps, and internal stage totals therefore remain Unknown.
+and its exact launch command are absent in this cloud checkout. The coordinator
+has now supplied extracted timing fields and confirmed eight Nano512 brains and
+GroundedObjectSlotsV1 (profile 2). There were 331 ticks, 330 paired GPU timing
+samples, eight rows per batch, and no ordinary full snapshots, checkpoint
+captures, or sleep captures. Grounded perception cost 2.40 ms per tick and
+rollback copies 0.54 ms; the terrain gate does not address this object-slot run.
+The exact run mode, starting save/founder, and diagnostic environment remain
+Unknown. See the memory-validation receipt for the supplied stage totals.
 
 This examination owns this report and the isolated CPU probe/evidence under
 `docs/performance/evidence`. A subsequent bounded predicate change in
@@ -54,13 +62,15 @@ have separate receipt counters and must be assessed separately.
 
 ## Source-supported candidates for the dominant cost
 
-The ordering below is an examination priority, not a measured ranking.
+The ordering below was an examination priority before receipt extraction,
+not a measured ranking. The supplied totals now prioritize memory/cognitive
+preparation over GPU synchronization, terrain sensing, and rollback copies.
 Line references refer to published main.
 
 | Candidate | Source evidence | Existing receipt fields that distinguish it |
 | --- | --- | --- |
 | GPU inference/learning execution and completion | Inference encodes the cohort, submits once, and waits once across its chunks (`closed_loop_runtime/tick.rs:512`). Learning iterates class/chunk groups (`closed_loop_runtime.rs:4386`); each group submits, polls, and receives compact/timestamp mappings (`closed_loop_pipeline.rs:2840`). A successful single-class, single-chunk awake tick has an inference completion followed by a learning completion. These dependencies preserve selection, physiology, and learning order. | `internal_tick_stages.inference_transaction_ns`, `learning_transaction_ns`; `dispatch_batching`; `readback`; `gpu_stages.timestamp_samples`, `inference_ns`, `plasticity_ns`. |
-| Grounded perception and immutable phenotype work | Every dispatchable awake row compiles receptor expression and recomputes the immutable phenotype hash inside the grounded-perception timer (`staged_tick.rs:539–553`, `neural_receptors.rs:18`). For TerrainVision, object visibility and the 16-ray fan call `first_sight_hit`, which scans world objects and every terrain obstacle (`headless.rs:3108–3132`), then marches terrain heights at 0.25-unit spacing. GroundedObjectSlots bypasses these terrain sight rays. Nearby-candidate indexing does not accelerate the obstacle scans. Published island collision uses 1,716 proxies; the exact measured world's obstacle representation and sensor profile are Unknown. | `preparation_substages.grounded_perception_ns`, alongside episodic retrieval, attention, topology, and upload preparation. This timer includes both receptors and world sensing. |
+| Grounded perception and immutable phenotype work | Every dispatchable awake row compiles receptor expression and recomputes the immutable phenotype hash inside the grounded-perception timer (`staged_tick.rs:539–553`, `neural_receptors.rs:18`). For TerrainVision, object visibility and the 16-ray fan call `first_sight_hit`, which scans world objects and every terrain obstacle (`headless.rs:3108–3132`), then marches terrain heights at 0.25-unit spacing. GroundedObjectSlots bypasses these terrain sight rays. Nearby-candidate indexing does not accelerate the obstacle scans. Published island collision uses 1,716 proxies; the exact measured world's obstacle representation is Unknown. Subsequent extraction confirms GroundedObjectSlotsV1 and 2.40 ms grounded preparation in this run. | `preparation_substages.grounded_perception_ns`, alongside episodic retrieval, attention, topology, and upload preparation. This timer includes both receptors and world sensing. |
 | Transactional rollback copies | Before staged simulation, the runtime clones the authoritative world and resident map (`gpu_live_runtime.rs:240–243`, `7788–7812`). Cost can depend on resident memories and world contents. Removing these copies without replacing rollback would break atomicity. | `transactional_rollback_clone.world_clone_ns`, `residents_clone_ns`, `resident_rows`, `world_object_rows`, progress and zero-progress counts; `simulation.runtime_tick_wall_ns`. |
 | Body/world/cognitive validation and persistence | Canonical organism replacement, body/biochemistry sealing, memory compaction checkpoint construction, world advancement, synchronization, and durable sleep/checkpoint activity remain real simulation work. Current genetic digest proofs are already cached with `OnceLock`; repeated genome serialization is not a current hypothesis. | `internal_tick_stages` seal/authority/synchronize/persistence fields; `state_reference_hash`; `ordinary_full_snapshot`; `checkpoint_activity`; `sleep_durable_activity`; `sleep_journal_publication_stages`; zero-progress reasons. |
 
@@ -182,7 +192,8 @@ claimed by this report.
 - `bash scripts/docs_check.sh`: 77/77 assertions passed.
 - Independent Sol 6.1 source and artifact review (R2): no blocking findings.
 
-This examination does not establish the dominant runtime cause. The unresolved
-attribution requires the original stage receipt or the independent gameplay
-measurement above. The allocation and subsequent terrain range predicate
-changes retain separate CPU tests and evidence; no RTX improvement is claimed.
+The supplied receipt establishes the dominant preparation stage; it does not
+yet isolate every leaf within recall, projection, and validation. The allocation,
+terrain predicate, and memory-validation changes retain separate CPU evidence.
+No fresh RTX improvement is claimed. The existing-recorder command above remains
+the end-to-end measurement route after integration by the appropriate owners.

@@ -30,7 +30,10 @@ The indexed perception query collects neighboring spatial cells before this
 radius test. Those cells can contain objects beyond eight units, so this gate
 also applies to the current live indexed path. GroundedObjectSlots does not cast
 terrain sight rays; the CPU benefit is conditional on TerrainVision and nearby
-out-of-radius objects. The measured Windows save's profile remains Unknown.
+out-of-radius objects. Subsequent coordinator extraction identifies the measured
+Windows run as GroundedObjectSlotsV1, so this gate does not address that run.
+Its dominant preparation path is investigated in the
+[memory-validation receipt](20261001-memory-frame-validation.md).
 
 This slice owns that predicate and its evidence. Other world changes, graphics,
 training, launch operations, and the other CPU worker's files were not edited.
@@ -137,5 +140,5 @@ The [source examination](20261001-live-tick-path-examination.md#smallest-next-me
 specifies the minimum existing-recorder gameplay measurement if the original
 receipt cannot be recovered. Preserve identical graphics, starting save, and
 run mode for any later end-to-end comparison. This source optimization does
-not establish that the original save uses TerrainVision or contains many
-out-of-radius targets in neighboring cells.
+not claim an improvement for the original GroundedObjectSlots run or
+establish its out-of-radius target density.
