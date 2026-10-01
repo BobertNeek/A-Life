@@ -474,8 +474,8 @@ impl GpuSleepScheduler {
             SleepWorkDue::CONCEPT_GAP,
             SleepWorkDue::STRUCTURAL_GROWTH_PRUNING,
         ];
-        for index in 0..flags.len() {
-            if due.contains(flags[index]) {
+        for (index, flag) in flags.into_iter().enumerate() {
+            if due.contains(flag) {
                 self.last_sleep_work_ticks[index] = Some(tick);
             }
         }
@@ -486,6 +486,8 @@ impl GpuSleepScheduler {
         self.last_sleep_work_ticks = [None; 5];
     }
 
+    // Assemble one receipt from the scheduler's already resolved tick state.
+    #[allow(clippy::too_many_arguments)]
     fn event(
         &self,
         tick: Tick,

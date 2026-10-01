@@ -1250,9 +1250,9 @@ where
             trainer.begin_gradient_accumulation((end - start) as u32)?;
             let result = (|| -> Result<bool, TrainingError> {
                 let mut mean_kl = 0.0f64;
-                for index in start..end {
+                for (index, &sample_count) in counts.iter().enumerate().take(end).skip(start) {
                     let window = load_window(index)?;
-                    if window.batch.len() != counts[index] {
+                    if window.batch.len() != sample_count {
                         return Err(invalid());
                     }
                     let metrics = evaluate_ppo_window(
@@ -1262,9 +1262,9 @@ where
                         config,
                         collection_policy_version,
                     )?;
-                    let scale = counts[index] as f32 / samples as f32;
+                    let scale = sample_count as f32 / samples as f32;
                     mean_kl +=
-                        f64::from(ppo_mean_kl(&metrics)?) * counts[index] as f64 / samples as f64;
+                        f64::from(ppo_mean_kl(&metrics)?) * sample_count as f64 / samples as f64;
                     let objective = state.objective.as_ref().ok_or_else(invalid)?;
                     let mut encoder = new_encoder(trainer.session(), "ppo-accumulate")?;
                     if index == start {
@@ -1441,6 +1441,8 @@ pub struct ImitationTrainingWindow {
 
 /// Warmup on the same recurrent graph. Labels are only consumed by the GPU
 /// objective. Adam steps once per effective batch; value parameters stay frozen.
+// Preserve the caller API with its explicit batch and optimizer controls.
+#[allow(clippy::too_many_arguments)]
 pub fn train_recurrent_imitation<F>(
     trainer: &mut crate::FoundationTrainer,
     state: &mut PpoTrainingState,
