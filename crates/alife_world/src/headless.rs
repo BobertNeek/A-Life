@@ -2856,8 +2856,9 @@ impl HeadlessWorld {
             .filter(|object| object.id != observer.id && !object.consumed)
             .filter_map(|object| {
                 let measured_distance = distance(observer.position, object.position);
-                let in_sight = !terrain_vision || self.object_in_sight(observer, object);
-                (measured_distance <= HEADLESS_VISION_RADIUS && in_sight).then(|| {
+                (measured_distance <= HEADLESS_VISION_RADIUS
+                    && (!terrain_vision || self.object_in_sight(observer, object)))
+                .then(|| {
                     Ok((
                         measured_distance,
                         PhysicalObservedObject {
