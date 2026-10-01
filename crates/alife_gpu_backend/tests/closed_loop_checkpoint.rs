@@ -1058,7 +1058,7 @@ fn joint_pending_checkpoint_preserves_exact_confidence_and_legacy_pending_banks(
         template.sensor_profile(),
         template.sensory().clone(),
         template.body(),
-        template.homeostasis().clone(),
+        *template.homeostasis(),
         candidates,
         template.profile_provenance(),
         template.grounded_object_slots().to_vec(),

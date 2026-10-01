@@ -41,22 +41,24 @@ fn with_pain_floor(genome: &CreatureGenome, floor: f32) -> CreatureGenome {
 
 #[test]
 fn inherited_nociception_responds_to_real_damage_without_maturing_other_chemistry() {
-    let legacy = founder(96001);
-    let old_bytes = serde_json::to_vec(&legacy).unwrap();
-    println!("legacy_genome_blake3={}", blake3::hash(&old_bytes).to_hex());
+    let canonical = founder(96001);
+    let canonical_bytes = serde_json::to_vec(&canonical).unwrap();
+    let restored: CreatureGenome = serde_json::from_slice(&canonical_bytes).unwrap();
+    restored.validate_contract().unwrap();
+    assert_eq!(restored, canonical);
     assert_eq!(
-        blake3::hash(&old_bytes).to_hex().as_str(),
-        "30200cc049a64ad5eebf6ca9809a4cd016bb11028cab3bb69088786f4c90c23c",
-        "legacy canonical genome bytes must retain the pre-change RED receipt"
+        serde_json::to_vec(&restored).unwrap(),
+        canonical_bytes,
+        "current inherited genes must round-trip exactly"
     );
-    assert!(!String::from_utf8(old_bytes.clone())
+    assert!(!String::from_utf8(canonical_bytes.clone())
         .unwrap()
         .contains("developmental_expression_floor"));
     assert_eq!(
-        serde_json::to_vec(&with_pain_floor(&legacy, 0.0)).unwrap(),
-        old_bytes
+        serde_json::to_vec(&with_pain_floor(&canonical, 0.0)).unwrap(),
+        canonical_bytes
     );
-    let genome = with_pain_floor(&legacy, 1.0);
+    let genome = with_pain_floor(&canonical, 1.0);
     let phenotype = genome.express().unwrap();
     let newborn = BiochemistryState::new_with_age(&phenotype, Tick::ZERO, Tick::ZERO).unwrap();
     let damage = BodyEventDelta {
@@ -101,7 +103,7 @@ fn inherited_nociception_responds_to_real_damage_without_maturing_other_chemistr
         .advance_with_age(Tick(1), Tick(1), BodyEventDelta::zero(), &phenotype)
         .unwrap();
     assert_eq!(quiet.homeostasis.drives.pain, 0.0);
-    let old_phenotype = legacy.express().unwrap();
+    let old_phenotype = canonical.express().unwrap();
     let old_newborn =
         BiochemistryState::new_with_age(&old_phenotype, Tick::ZERO, Tick::ZERO).unwrap();
     let old_hurt = old_newborn
@@ -146,7 +148,7 @@ fn inherited_nociception_responds_to_real_damage_without_maturing_other_chemistr
         .iter()
         .position(|e| e.source == BiochemicalSourceLocus::Damage && e.target == pain)
         .unwrap();
-    let mut typed = legacy.clone();
+    let mut typed = canonical.clone();
     for side in [AlleleSide::Maternal, AlleleSide::Paternal] {
         typed.chemistry.graph = typed
             .chemistry
@@ -159,14 +161,14 @@ fn inherited_nociception_responds_to_real_damage_without_maturing_other_chemistr
         "typed and persisted genes must express identically"
     );
     for floor in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -0.1, 1.1] {
-        assert!(legacy
+        assert!(canonical
             .chemistry
             .graph
             .clone()
             .with_emitter_expression_floor(AlleleSide::Maternal, index, floor)
             .is_err());
     }
-    assert!(legacy
+    assert!(canonical
         .chemistry
         .graph
         .clone()

@@ -304,7 +304,11 @@ fn readiness_resume_preserves_external_actors_toys_and_private_prior() {
     let mut observations = Vec::new();
     let mut previous = None;
     while progressed < 96 && Instant::now() < deadline {
-        runtime.poll_persistence_for_shutdown().unwrap();
+        // Poll as a live tick does. Shutdown finalizes an AwaitingJournal
+        // checkpoint without promoting Completed sleep, consuming the permit
+        // this running recovery test needs for its next normal tick.
+        runtime.poll_sleep_journal_publication().unwrap();
+        runtime.poll_exact_population_checkpoint().unwrap();
         let state = runtime.residents[&organism.raw()].sleep_scheduler.state();
         // Completed neural work waits for its normal durable publication permit.
         if matches!(state.consolidation, ConsolidationState::Completed { .. })
