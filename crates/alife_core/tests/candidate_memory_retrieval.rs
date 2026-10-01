@@ -424,10 +424,30 @@ fn sequenced_patch_for_object(
     reward: f32,
     pain: f32,
 ) -> ExperiencePatch {
+    observation_patch(
+        &empty_bank(),
+        sequence_raw,
+        tick_raw,
+        object,
+        CandidateActionFamily::Ingest,
+        reward,
+        pain,
+        |_| {},
+    )
+}
+
+fn observation_patch(
+    recall_bank: &MemoryBank,
+    sequence_raw: u64,
+    tick_raw: u64,
+    object: GroundedObjectSlotV1,
+    family: CandidateActionFamily,
+    reward: f32,
+    pain: f32,
+    edit_outcome: impl FnOnce(&mut PostActionOutcome),
+) -> ExperiencePatch {
     let tick = Tick::new(tick_raw);
-    let sequence = ExperienceSequenceId(sequence_raw);
-    let tracked_raw = object.tracked_object_id.raw();
-    let candidate = candidate(&object, 0);
+    let candidate = candidate_for_family(&object, 0, family);
     let sensory = SensorySnapshot::new(
         ORGANISM,
         tick,
@@ -456,7 +476,24 @@ fn sequenced_patch_for_object(
         vec![object],
     )
     .unwrap();
-    let recall_bank = empty_bank();
+    observation_from_draft(recall_bank, sequence_raw, draft, reward, pain, edit_outcome)
+}
+
+fn observation_from_draft(
+    recall_bank: &MemoryBank,
+    sequence_raw: u64,
+    draft: PerceptionFrameDraft,
+    reward: f32,
+    pain: f32,
+    edit_outcome: impl FnOnce(&mut PostActionOutcome),
+) -> ExperiencePatch {
+    let tick = draft.tick();
+    let tick_raw = tick.raw();
+    let sequence = ExperienceSequenceId(sequence_raw);
+    let tracked_raw = draft
+        .grounded_object_slots()
+        .first()
+        .map_or(0, |object| object.tracked_object_id.raw());
     let (frame, finalized) = recall_bank
         .recall_frame(&draft)
         .unwrap()
@@ -501,7 +538,7 @@ fn sequenced_patch_for_object(
         frame,
     )
     .unwrap();
-    let outcome = PostActionOutcome::new(
+    let mut outcome = PostActionOutcome::new(
         ORGANISM,
         sequence,
         Tick::new(tick_raw + 1),
@@ -529,6 +566,7 @@ fn sequenced_patch_for_object(
         NormalizedScalar::new(pain.max(0.1)).unwrap(),
     )
     .unwrap();
+    edit_outcome(&mut outcome);
     ExperiencePatchBuilder::new(sequence)
         .record_pre_action(pre_action)
         .unwrap()
@@ -894,16 +932,20 @@ fn stopped_meal_recall_preserves_identity_and_similarity_boundaries() {
         wire["candidate_store"]["records"]["1"][field] = value;
         let foreign: MemoryBank = serde_json::from_value(wire).unwrap();
         let recall = foreign.recall_frame(&draft).unwrap();
+        let expected = u16::from(field == "tracked_object_id_raw");
         assert_eq!(
             recall.context().candidates[0].target_source_count,
-            0,
+            expected,
             "{field}"
         );
         assert_eq!(
             recall.context().candidates[0].family_source_count,
-            0,
+            expected,
             "{field}"
         );
+        if expected != 0 {
+            assert!(recall.context().candidates[0].family_confidence.raw() < 0.8);
+        }
     }
     let mut wire = original.clone();
     wire["candidate_store"]["records"]["1"]["organism_id_raw"] = serde_json::json!(812_u64);
@@ -1337,5 +1379,647 @@ fn portable_memory_restore_finishes_each_crash_phase_exactly_once() {
     assert_eq!(
         committed_restored.compaction_checkpoint(),
         staged_output_restored.compaction_checkpoint()
+    );
+}
+
+// A developer-only CPU measurement of the real recall API. This does not run
+// neurons or training and cannot establish game FPS or accelerator performance.
+#[test]
+#[ignore = "CPU memory microbenchmark; run explicitly with --ignored --nocapture"]
+fn memory_cpu_recall_microbenchmark() {
+    for distinct in [false, true] {
+        let config =
+            MemoryBankConfig::new(256, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap();
+        let mut bank = MemoryBank::new(config).unwrap();
+        bank.observe_sealed_patch(&poisoned_cyan_ingest_patch())
+            .unwrap();
+        let mut wire = serde_json::to_value(&bank).unwrap();
+        let template = wire["candidate_store"]["records"]["1"].clone();
+        for id in 1..=256_u64 {
+            let mut record = template.clone();
+            record["memory_id"] = serde_json::json!(id);
+            if distinct {
+                record["tracked_object_id_raw"] = serde_json::json!(71 + (id - 1) % 16);
+            }
+            wire["candidate_store"]["records"][id.to_string()] = record;
+        }
+        wire["candidate_store"]["next_memory_id"] = serde_json::json!(257_u64);
+        let bank: MemoryBank = serde_json::from_value(wire).unwrap();
+        let source = grounded_draft(0.4);
+        let original = source.grounded_object_slots()[0];
+        let objects = if distinct {
+            (0..16)
+                .map(|index| GroundedObjectSlotV1 {
+                    slot_index: index,
+                    tracked_object_id: TrackedObjectId(71 + u64::from(index)),
+                    ..original
+                })
+                .collect::<Vec<_>>()
+        } else {
+            vec![original]
+        };
+        let candidate_count = if distinct { 16 } else { 32 };
+        let candidates = (0..candidate_count)
+            .map(|index| candidate(&objects[if distinct { index as usize } else { 0 }], index))
+            .collect();
+        let draft = PerceptionFrameDraft::new(
+            ORGANISM,
+            TICK,
+            source.sensor_profile(),
+            source.sensory().clone(),
+            source.body(),
+            *source.homeostasis(),
+            candidates,
+            source.profile_provenance(),
+            objects,
+        )
+        .unwrap();
+        let mut samples = Vec::new();
+        for _ in 0..5 {
+            let started = std::time::Instant::now();
+            for _ in 0..100 {
+                std::hint::black_box(bank.recall_frame(std::hint::black_box(&draft)).unwrap());
+            }
+            samples.push(started.elapsed().as_micros());
+        }
+        samples.sort();
+        let receipt = bank.recall_frame(&draft).unwrap().receipt().clone();
+        eprintln!("memory CPU recall: 256 episodes, {candidate_count} {} candidates; median {} us/frame; samples_us={samples:?}; similarity_evaluations={}",
+            if distinct { "distinct" } else { "repeated" }, samples[2] / 100, receipt.similarity_evaluations);
+    }
+}
+
+#[test]
+fn repeated_candidates_reuse_evidence_without_changing_candidate_keys() {
+    let mut bank = empty_bank();
+    bank.observe_sealed_patch(&poisoned_cyan_ingest_patch())
+        .unwrap();
+    let source = grounded_draft(0.4);
+    let object = source.grounded_object_slots()[0];
+    let draft = PerceptionFrameDraft::new(
+        ORGANISM,
+        TICK,
+        source.sensor_profile(),
+        source.sensory().clone(),
+        source.body(),
+        *source.homeostasis(),
+        vec![
+            candidate(&object, 0),
+            candidate(&object, 1),
+            candidate_for_family(&object, 2, CandidateActionFamily::Avoid),
+        ],
+        source.profile_provenance(),
+        source.grounded_object_slots().to_vec(),
+    )
+    .unwrap();
+    let prepared = bank.recall_frame(&draft).unwrap();
+    assert_eq!(prepared.receipt().similarity_evaluations, 2);
+    assert_eq!(prepared.receipt().exact_bucket_reads, 3);
+    assert_eq!(prepared.receipt().candidates[1].target_reused_from, Some(0));
+    assert_eq!(prepared.receipt().candidates[1].family_reused_from, Some(0));
+    assert_eq!(prepared.receipt().candidates[2].target_reused_from, Some(0));
+    assert_eq!(prepared.receipt().candidates[2].family_reused_from, None);
+    assert_eq!(
+        prepared.context().candidates[0].family_value,
+        prepared.context().candidates[1].family_value
+    );
+    assert_eq!(
+        prepared.context().candidates[0].target_latent,
+        prepared.context().candidates[2].target_latent
+    );
+    let (frame, finalized) = prepared.finalize(draft).unwrap();
+    assert_ne!(
+        finalized.candidate_keys()[0].canonical_digest(),
+        finalized.candidate_keys()[1].canonical_digest()
+    );
+    finalized.validate_for_frame(&frame).unwrap();
+}
+
+#[test]
+fn boring_ticks_do_not_fill_or_refresh_memory_and_remain_replay_guarded() {
+    let mut bank = empty_bank();
+    bank.observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, -0.8, 0.9))
+        .unwrap();
+    let retained = serde_json::to_value(&bank).unwrap()["candidate_store"]["records"].clone();
+    let mut last = None;
+    for sequence in 2..=300 {
+        let patch = observation_patch(
+            &bank,
+            sequence,
+            sequence * 2,
+            slot(0, 10_000 + sequence, 0.4, [0.0, 0.8, 0.9]),
+            CandidateActionFamily::Approach,
+            0.0,
+            0.0,
+            |outcome| {
+                // Actual world routine movement profile, not a perfectly zero
+                // synthetic tick: movement cost alone is not an event.
+                outcome.physical.contact = PhysicalContactKind::Moved;
+                outcome.physical.energy_cost = NormalizedScalar::new(0.08).unwrap();
+                outcome.homeostatic_delta = HomeostaticDelta {
+                    drives: DriveDelta {
+                        brain_atp: -0.04,
+                        curiosity: 0.01,
+                        ..DriveDelta::zero()
+                    },
+                    hormones: EndocrineDelta::zero(),
+                };
+                outcome.energy_delta = SignedValence::new(-0.04).unwrap();
+                outcome.prediction_error = NormalizedScalar::new(0.08).unwrap();
+            },
+        );
+        let receipt = bank.observe_sealed_patch(&patch).unwrap();
+        assert_eq!(
+            receipt.kind,
+            alife_core::MemoryUpdateKind::IgnoredLowInformation
+        );
+        last = Some(patch);
+    }
+    assert_eq!(bank.len(), 1);
+    assert_eq!(
+        serde_json::to_value(&bank).unwrap()["candidate_store"]["records"],
+        retained
+    );
+    let snapshot = serde_json::to_vec(&bank).unwrap();
+    assert_eq!(
+        bank.observe_sealed_patch(&last.unwrap()).unwrap_err(),
+        ScaffoldContractError::MemoryReplayRejected
+    );
+    assert_eq!(serde_json::to_vec(&bank).unwrap(), snapshot);
+    let restored: MemoryBank = serde_json::from_slice(&snapshot).unwrap();
+    assert_eq!(
+        restored
+            .recall_frame(&cyan_amber_family_draft())
+            .unwrap()
+            .context(),
+        bank.recall_frame(&cyan_amber_family_draft())
+            .unwrap()
+            .context()
+    );
+}
+
+#[test]
+fn contradictory_outcomes_keep_distinct_episodes_through_compaction() {
+    let config = MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap();
+    let mut sidecar = grounded_sidecar(config);
+    sidecar
+        .observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, 0.8, 0.0))
+        .unwrap();
+    sidecar
+        .observe_sealed_patch(&sequenced_patch(2, 2, 71, 0.4, -0.8, 0.9))
+        .unwrap();
+    assert_eq!(
+        sidecar.bank().len(),
+        2,
+        "matching cues do not merge opposite outcomes"
+    );
+    let probe = probe_for_object(3, slot(0, 71, 0.4, [0.0, 0.8, 0.9]));
+    let recall = sidecar.recall_frame(&probe).unwrap();
+    assert!(recall.context().candidates[0].family_value[0] < -0.7);
+    assert!(recall.context().candidates[0].family_value[2] > 0.8);
+    assert_eq!(recall.context().candidates[0].family_source_count, 1);
+    let prepared = sidecar.prepare_compaction(1, 8, 1).unwrap();
+    sidecar.commit_compaction(prepared).unwrap();
+    assert_eq!(sidecar.bank().len(), 2);
+    let records =
+        serde_json::to_value(sidecar.bank()).unwrap()["candidate_store"]["records"].clone();
+    assert!(records
+        .as_object()
+        .unwrap()
+        .values()
+        .any(|r| r["family_value"][0].as_f64().unwrap() < 0.0));
+    assert!(records
+        .as_object()
+        .unwrap()
+        .values()
+        .any(|r| r["family_value"][0].as_f64().unwrap() > 0.0));
+    sidecar
+        .observe_sealed_patch(&sequenced_patch(3, 4, 71, 0.4, 0.8, 0.0))
+        .unwrap();
+    let reversed = sidecar
+        .recall_frame(&probe_for_object(5, slot(0, 71, 0.4, [0.0, 0.8, 0.9])))
+        .unwrap();
+    assert!(
+        reversed.context().candidates[0].family_value[0] > 0.7,
+        "new direct evidence updates expectation while retaining the harm episode"
+    );
+    assert_eq!(sidecar.bank().len(), 2);
+    let compression = sidecar.prepare_compaction(2, 1, 1).unwrap();
+    sidecar.commit_compaction(compression).unwrap();
+    assert_eq!(sidecar.bank().len(), 1);
+    assert!(
+        sidecar
+            .recall_frame(&probe_for_object(5, slot(0, 71, 0.4, [0.0, 0.8, 0.9])))
+            .unwrap()
+            .context()
+            .candidates[0]
+            .family_value[0]
+            > 0.7,
+        "compression cannot resurrect the obsolete poison expectation"
+    );
+}
+
+fn probe_for_object(tick: u64, object: GroundedObjectSlotV1) -> PerceptionFrameDraft {
+    let patch = sequenced_patch_for_object(10_000_000 + tick, tick, object, 0.0, 0.0);
+    let frame = patch.pre_action().perception();
+    PerceptionFrameDraft::new(
+        ORGANISM,
+        frame.tick(),
+        frame.sensor_profile(),
+        frame.sensory().clone(),
+        frame.body(),
+        *frame.homeostasis(),
+        frame.candidates().to_vec(),
+        frame.profile_provenance(),
+        frame.grounded_object_slots().to_vec(),
+    )
+    .unwrap()
+}
+
+#[test]
+fn perceptual_category_fallback_preserves_individual_poison_and_does_not_equate_fruit() {
+    let mut bank = empty_bank();
+    for sequence in 1..=3 {
+        bank.observe_sealed_patch(&sequenced_patch_for_object(
+            sequence,
+            sequence,
+            slot(0, 100 + sequence, 0.4, [0.0, 0.8, 0.9]),
+            0.8,
+            0.0,
+        ))
+        .unwrap();
+    }
+    let novel = slot(0, 200, 0.4, [0.0, 0.8, 0.9]);
+    let recall = bank.recall_frame(&probe_for_object(4, novel)).unwrap();
+    assert!(recall.context().candidates[0].family_value[0] > 0.7);
+    assert!(recall.context().candidates[0].family_confidence.raw() < 0.8);
+    assert_eq!(
+        bank.object_familiarity(
+            ORGANISM,
+            novel.tracked_object_id,
+            probe_for_object(4, novel).profile_provenance().identity()
+        ),
+        0.0,
+        "borrowing category evidence cannot create personal familiarity"
+    );
+    let poison = slot(0, 201, 0.4, [0.0, 0.8, 0.9]);
+    bank.observe_sealed_patch(&observation_patch(
+        &bank,
+        4,
+        4,
+        poison,
+        CandidateActionFamily::Ingest,
+        -0.8,
+        0.9,
+        |_| {},
+    ))
+    .unwrap();
+    let exception = bank.recall_frame(&probe_for_object(5, poison)).unwrap();
+    assert!(exception.context().candidates[0].family_value[0] < -0.7);
+    assert!(exception.context().candidates[0].family_value[2] > 0.8);
+    assert_eq!(exception.context().candidates[0].family_source_count, 1);
+    assert_eq!(exception.receipt().candidates[0].family_searched, 1);
+    for unrelated in [
+        slot(0, 202, 0.4, [0.9, 0.6, 0.1]),
+        GroundedObjectSlotV1 {
+            chemical: [-0.8, 0.5, 0.9],
+            ..novel
+        },
+        GroundedObjectSlotV1 {
+            shape: [0.9, 0.1, 0.1],
+            ..novel
+        },
+    ] {
+        let recalled = bank.recall_frame(&probe_for_object(5, unrelated)).unwrap();
+        assert_eq!(recalled.context().candidates[0].family_source_count, 0);
+        assert_eq!(recalled.context().candidates[0].target_source_count, 0);
+    }
+    let bytes = serde_json::to_vec(&bank).unwrap();
+    let restored: MemoryBank = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        restored
+            .recall_frame(&probe_for_object(5, poison))
+            .unwrap()
+            .context(),
+        exception.context()
+    );
+}
+
+#[test]
+fn unused_low_value_evidence_fades_but_strong_danger_and_reward_survive() {
+    let mut bank = empty_bank();
+    for (sequence, tracked, reward, pain) in
+        [(1, 71, 0.1, 0.0), (2, 72, -0.8, 0.9), (3, 73, 0.8, 0.0)]
+    {
+        bank.observe_sealed_patch(&sequenced_patch(sequence, 1, tracked, 0.4, reward, pain))
+            .unwrap();
+    }
+    for tracked in [71, 72, 73] {
+        let color = if tracked == 71 {
+            [0.0, 0.8, 0.9]
+        } else {
+            [0.2, 0.5, 0.8]
+        };
+        let object = slot(0, tracked, 0.4, color);
+        let recent = bank.recall_frame(&probe_for_object(2, object)).unwrap();
+        let old = bank
+            .recall_frame(&probe_for_object(65_537, object))
+            .unwrap();
+        let recent_confidence = recent.context().candidates[0].family_confidence.raw();
+        let old_confidence = old.context().candidates[0].family_confidence.raw();
+        if tracked == 71 {
+            assert!(old_confidence < recent_confidence * 0.25);
+        } else {
+            assert_eq!(old_confidence, recent_confidence);
+        }
+        assert_eq!(
+            old.context().candidates[0].family_value,
+            recent.context().candidates[0].family_value
+        );
+    }
+}
+
+#[test]
+fn corroborated_retrieval_refreshes_retention_without_amplifying_belief() {
+    let mut bank = empty_bank();
+    bank.observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, 0.1, 0.0))
+        .unwrap();
+    let object = slot(0, 71, 0.4, [0.0, 0.8, 0.9]);
+    let before = serde_json::to_value(&bank).unwrap()["candidate_store"]["records"]["1"].clone();
+    let old = bank
+        .recall_frame(&probe_for_object(65_537, object))
+        .unwrap();
+    let bytes = serde_json::to_vec(&bank).unwrap();
+    for _ in 0..20 {
+        bank.recall_frame(&probe_for_object(65_537, object))
+            .unwrap();
+    }
+    assert_eq!(
+        serde_json::to_vec(&bank).unwrap(),
+        bytes,
+        "recalling alone cannot strengthen evidence"
+    );
+    let patch = observation_patch(
+        &bank,
+        2,
+        65_537,
+        object,
+        CandidateActionFamily::Ingest,
+        0.1,
+        0.0,
+        |_| {},
+    );
+    bank.observe_sealed_patch(&patch).unwrap();
+    let after = serde_json::to_value(&bank).unwrap()["candidate_store"]["records"]["1"].clone();
+    assert!(after["salience_q16"].as_u64().unwrap() > before["salience_q16"].as_u64().unwrap());
+    assert_eq!(after["confidence"], before["confidence"]);
+    assert_eq!(after["family_value"], before["family_value"]);
+    let refreshed = bank
+        .recall_frame(&probe_for_object(65_538, object))
+        .unwrap();
+    assert!(
+        refreshed.context().candidates[0].family_confidence.raw()
+            > old.context().candidates[0].family_confidence.raw() * 3.0
+    );
+}
+
+#[test]
+fn low_value_events_cannot_displace_a_bank_of_strong_outcomes() {
+    let mut bank = MemoryBank::new(
+        MemoryBankConfig::new(2, 64, 2, 0.72, Confidence::new(0.0).unwrap()).unwrap(),
+    )
+    .unwrap();
+    bank.observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, -0.8, 0.9))
+        .unwrap();
+    bank.observe_sealed_patch(&sequenced_patch(2, 2, 72, 0.4, 0.8, 0.0))
+        .unwrap();
+    let retained = serde_json::to_value(&bank).unwrap()["candidate_store"]["records"].clone();
+    for sequence in 3..=100 {
+        let receipt = bank
+            .observe_sealed_patch(&sequenced_patch(
+                sequence,
+                sequence * 10_000,
+                10_000 + sequence,
+                0.4,
+                0.1,
+                0.0,
+            ))
+            .unwrap();
+        assert_eq!(
+            receipt.kind,
+            alife_core::MemoryUpdateKind::IgnoredLowerRetention
+        );
+    }
+    assert_eq!(bank.len(), 2);
+    assert_eq!(
+        serde_json::to_value(&bank).unwrap()["candidate_store"]["records"],
+        retained
+    );
+}
+
+#[test]
+fn later_approach_does_not_erase_ingest_target_evidence() {
+    let mut bank = empty_bank();
+    let object = slot(0, 71, 0.4, [0.0, 0.8, 0.9]);
+    bank.observe_sealed_patch(&sequenced_patch_for_object(1, 1, object, -0.8, 0.9))
+        .unwrap();
+    bank.observe_sealed_patch(&observation_patch(
+        &bank,
+        2,
+        2,
+        object,
+        CandidateActionFamily::Approach,
+        0.8,
+        0.0,
+        |_| {},
+    ))
+    .unwrap();
+    let recall = bank.recall_frame(&probe_for_object(3, object)).unwrap();
+    assert!(recall.context().candidates[0].target_latent[2] > 0.0);
+    assert_eq!(recall.context().candidates[0].target_source_count, 2);
+    assert!(recall.context().candidates[0].family_value[0] < -0.7);
+}
+
+fn zero_homeostasis(tick: Tick) -> HomeostaticSnapshot {
+    let mut wire = serde_json::to_value(HomeostaticSnapshot::baseline(tick)).unwrap();
+    for name in ["drives", "hormones"] {
+        for value in wire[name].as_object_mut().unwrap().values_mut() {
+            if let Some(values) = value.as_array_mut() {
+                for lane in values {
+                    *lane = serde_json::json!(0.0);
+                }
+            } else {
+                *value = serde_json::json!(0.0);
+            }
+        }
+    }
+    serde_json::from_value(wire).unwrap()
+}
+
+#[test]
+fn changed_context_cannot_replace_a_known_individual_exception_with_category_reward() {
+    let mut bank = empty_bank();
+    let poison = slot(0, 71, 0.4, [0.0, 0.8, 0.9]);
+    bank.observe_sealed_patch(&sequenced_patch_for_object(1, 1, poison, -0.8, 0.9))
+        .unwrap();
+    let source = probe_for_object(2, poison);
+    let mut selected = source.candidates()[0].clone();
+    selected.sensor_confidence = Confidence::new(0.0).unwrap();
+    let shifted = PerceptionFrameDraft::new(
+        ORGANISM,
+        source.tick(),
+        source.sensor_profile(),
+        source.sensory().clone(),
+        source.body(),
+        zero_homeostasis(source.tick()),
+        vec![selected],
+        source.profile_provenance(),
+        source.grounded_object_slots().to_vec(),
+    )
+    .unwrap();
+    // A different individual has good evidence in exactly this shifted state.
+    let mut good = poison;
+    good.tracked_object_id = TrackedObjectId(72);
+    let mut candidate = candidate(&good, 0);
+    candidate.sensor_confidence = Confidence::new(0.0).unwrap();
+    let good_draft = PerceptionFrameDraft::new(
+        ORGANISM,
+        source.tick(),
+        source.sensor_profile(),
+        source.sensory().clone(),
+        source.body(),
+        zero_homeostasis(source.tick()),
+        vec![candidate],
+        source.profile_provenance(),
+        vec![good],
+    )
+    .unwrap();
+    bank.observe_sealed_patch(&observation_from_draft(
+        &bank,
+        2,
+        good_draft,
+        0.8,
+        0.0,
+        |_| {},
+    ))
+    .unwrap();
+    let recall = bank.recall_frame(&shifted).unwrap();
+    assert_eq!(recall.context().candidates[0].family_source_count, 0);
+    assert_eq!(
+        recall.context().candidates[0].family_value,
+        [0.0; MEMORY_VALUE_V1_COUNT]
+    );
+    assert_eq!(
+        recall.receipt().candidates[0].family_searched,
+        1,
+        "known individual's namespace is checked without category scans"
+    );
+}
+
+#[test]
+fn repeated_untracked_look_is_not_perpetually_novel() {
+    let mut bank = empty_bank();
+    for sequence in 1..=20 {
+        let tick = Tick::new(sequence);
+        let mut channels = SensoryChannels::ZERO;
+        channels.novelty_signal = NormalizedScalar::new(0.7).unwrap();
+        let mut features = alife_core::CandidateFeatureVector::zero();
+        features.0[18] = 1.0;
+        let candidate = ActionCandidate::new(
+            0,
+            ActionId(200),
+            ActionKind::Look,
+            CandidateActionFamily::Inspect,
+            CandidateObservationRef::None,
+            ActionTarget::NONE,
+            features,
+            Confidence::new(0.9).unwrap(),
+            NormalizedScalar::new(0.0).unwrap(),
+            DurationTicks::new(1),
+            DurationTicks::new(2),
+        )
+        .unwrap();
+        let draft = PerceptionFrameDraft::new(
+            ORGANISM,
+            tick,
+            SensorProfile::GroundedTerrainVisionV1,
+            SensorySnapshot::new(ORGANISM, tick, Vec3f::ZERO, channels, Default::default())
+                .unwrap(),
+            BodySnapshot {
+                pose: Pose::IDENTITY,
+                velocity: Velocity::ZERO,
+            },
+            HomeostaticSnapshot::baseline(tick),
+            vec![candidate],
+            SensorProfileProvenance::new(
+                SensorProfile::GroundedTerrainVisionV1,
+                SensoryAbiVersion::CURRENT,
+                tick,
+            )
+            .unwrap(),
+            vec![],
+        )
+        .unwrap();
+        let patch = observation_from_draft(&bank, sequence, draft, 0.0, 0.0, |outcome| {
+            outcome.physical.contact = PhysicalContactKind::None;
+            outcome.homeostatic_delta = HomeostaticDelta::zero();
+            outcome.energy_delta = SignedValence::new(0.0).unwrap();
+            outcome.prediction_error = NormalizedScalar::new(0.0).unwrap();
+        });
+        let receipt = bank.observe_sealed_patch(&patch).unwrap();
+        if sequence > 1 {
+            assert_eq!(
+                receipt.kind,
+                alife_core::MemoryUpdateKind::IgnoredLowInformation
+            );
+        }
+    }
+    assert_eq!(bank.len(), 1);
+    assert_eq!(
+        serde_json::to_value(&bank).unwrap()["candidate_store"]["records"]["1"]
+            ["observation_count"],
+        1
+    );
+}
+
+#[test]
+fn saturated_bank_accepts_a_direct_reversal_without_displacing_unrelated_harm() {
+    let mut bank = MemoryBank::new(
+        MemoryBankConfig::new(2, 64, 2, 0.72, Confidence::new(0.0).unwrap()).unwrap(),
+    )
+    .unwrap();
+    bank.observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, -0.9, 0.9))
+        .unwrap();
+    bank.observe_sealed_patch(&sequenced_patch(2, 2, 72, 0.4, -0.9, 0.9))
+        .unwrap();
+    bank.observe_sealed_patch(&sequenced_patch(3, 3, 71, 0.4, 0.8, 0.0))
+        .unwrap();
+    let reversal = bank
+        .recall_frame(&probe_for_object(4, slot(0, 71, 0.4, [0.0, 0.8, 0.9])))
+        .unwrap();
+    assert!(reversal.context().candidates[0].family_value[0] > 0.7);
+    let unrelated = bank
+        .recall_frame(&probe_for_object(4, slot(0, 72, 0.4, [0.2, 0.5, 0.8])))
+        .unwrap();
+    assert!(unrelated.context().candidates[0].family_value[0] < -0.8);
+    assert_eq!(bank.len(), 2);
+}
+
+#[test]
+fn same_tick_outcome_order_uses_causal_sequence_after_merging() {
+    let mut bank = empty_bank();
+    bank.observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, 0.8, 0.0))
+        .unwrap();
+    bank.observe_sealed_patch(&sequenced_patch(2, 2, 71, 0.4, -0.8, 0.9))
+        .unwrap();
+    bank.observe_sealed_patch(&sequenced_patch(3, 2, 71, 0.4, 0.8, 0.0))
+        .unwrap();
+    let recall = bank
+        .recall_frame(&probe_for_object(3, slot(0, 71, 0.4, [0.0, 0.8, 0.9])))
+        .unwrap();
+    assert!(recall.context().candidates[0].family_value[0] > 0.7);
+    assert_eq!(
+        recall.context().candidates[0].best_family_source,
+        Some(alife_core::MemoryId(1))
     );
 }

@@ -1,3 +1,4 @@
+use super::candidate_index::has_category_cues;
 use super::*;
 
 use std::collections::BTreeSet;
@@ -77,7 +78,9 @@ pub(super) fn merge_candidate_records(
 ) -> Result<CandidateMemoryRecordV2, ScaffoldContractError> {
     retained.validate_contract()?;
     observation.validate_contract()?;
-    if retained.identity() != observation.identity() {
+    if retained.identity() != observation.identity()
+        || !compatible_memory_outcomes(retained, observation)
+    {
         return Err(ScaffoldContractError::InvalidMemoryQuery);
     }
     let old_count = retained.observation_count;
@@ -109,13 +112,20 @@ pub(super) fn merge_candidate_records(
     merged.salience_q16 = (f32::from(merged.salience_q16) * old_weight
         + f32::from(observation.salience_q16) * new_weight)
         .round() as u16;
-    merged.source_sequence_id = observation.source_sequence_id;
-    merged.last_tick = observation.last_tick;
+    merged.source_sequence_id = ExperienceSequenceId(
+        retained
+            .source_sequence_id
+            .raw()
+            .max(observation.source_sequence_id.raw()),
+    );
+    merged.first_tick = Tick::new(retained.first_tick.raw().min(observation.first_tick.raw()));
+    merged.last_tick = Tick::new(retained.last_tick.raw().max(observation.last_tick.raw()));
     merged.observation_count = new_count;
     merged.validate_contract()?;
     Ok(merged)
 }
 
+#[derive(Clone)]
 pub(super) struct TargetRecallResult {
     pub(super) values: [f32; MEMORY_LATENT_V1_COUNT],
     pub(super) confidence: Confidence,
@@ -124,8 +134,10 @@ pub(super) struct TargetRecallResult {
     pub(super) eligible: u32,
     pub(super) searched: u32,
     pub(super) matches: u16,
+    pub(super) category_read: bool,
 }
 
+#[derive(Clone)]
 pub(super) struct FamilyRecallResult {
     pub(super) values: [f32; MEMORY_VALUE_V1_COUNT],
     pub(super) confidence: Confidence,
@@ -134,6 +146,7 @@ pub(super) struct FamilyRecallResult {
     pub(super) eligible: u32,
     pub(super) searched: u32,
     pub(super) matches: u16,
+    pub(super) category_read: bool,
 }
 
 pub(super) fn recall_target_channel(
@@ -150,6 +163,7 @@ pub(super) fn recall_target_channel(
             eligible: 0,
             searched: 0,
             matches: 0,
+            category_read: false,
         });
     }
     let ids = collect_shortlist(
@@ -159,8 +173,8 @@ pub(super) fn recall_target_channel(
         exact_key.target_bins,
         MEMORY_TARGET_SEARCH_CAP,
     );
-    let eligible = ids.0;
-    let searched = u32::try_from(ids.1.len()).unwrap_or(u32::MAX);
+    let mut eligible = ids.0;
+    let mut searched = u32::try_from(ids.1.len()).unwrap_or(u32::MAX);
     let mut matches = ids
         .1
         .into_iter()
@@ -170,9 +184,32 @@ pub(super) fn recall_target_channel(
             (score >= MEMORY_MIN_SIMILARITY).then_some((id, score))
         })
         .collect::<Vec<_>>();
+    // A matching individual's episodes win. Only an unknown/mismatching
+    // individual may borrow evidence from equivalent observable properties.
+    let generalized = eligible == 0 && has_category_cues(query.features());
+    if generalized {
+        let key = exact_key.category_key(query.features());
+        let category_ids = store.target_category_index.get(&key);
+        eligible = eligible.saturating_add(category_ids.map_or(0, |ids| ids.len() as u32));
+        for id in category_ids
+            .into_iter()
+            .flatten()
+            .take(MEMORY_TARGET_SEARCH_CAP.saturating_sub(searched as usize))
+        {
+            searched += 1;
+            let record = &store.records[&id.raw()];
+            let score = target_similarity(query.features(), &record.query_features);
+            if score >= MEMORY_MIN_SIMILARITY
+                && equivalent_category_cues(query.features(), &record.query_features)
+            {
+                matches.push((*id, score));
+            }
+        }
+    }
     sort_and_truncate_matches(&mut matches);
     let (values, confidence, source_count, best_source) =
-        aggregate_target_matches(store, &matches)?;
+        aggregate_target_matches(store, &matches, query.tick())?;
+    let confidence = Confidence::new(confidence.raw() * if generalized { 0.75 } else { 1.0 })?;
     Ok(TargetRecallResult {
         values,
         confidence,
@@ -182,6 +219,7 @@ pub(super) fn recall_target_channel(
         searched,
         matches: u16::try_from(matches.len())
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?,
+        category_read: generalized,
     })
 }
 
@@ -203,8 +241,8 @@ pub(super) fn recall_family_channel(
         exact_key.target_bins,
         MEMORY_FAMILY_SEARCH_CAP,
     );
-    let eligible = ids.0;
-    let searched = u32::try_from(ids.1.len()).unwrap_or(u32::MAX);
+    let mut eligible = ids.0;
+    let mut searched = u32::try_from(ids.1.len()).unwrap_or(u32::MAX);
     let mut matches = ids
         .1
         .into_iter()
@@ -214,9 +252,32 @@ pub(super) fn recall_family_channel(
             (score >= MEMORY_MIN_SIMILARITY).then_some((id, score))
         })
         .collect::<Vec<_>>();
+    select_current_individual_outcome(store, &mut matches);
+    let generalized =
+        eligible == 0 && query.tracked_object_id().is_some() && has_category_cues(query.features());
+    if generalized {
+        let key = exact_key.category_key(query.features());
+        let category_ids = store.family_category_index.get(&key);
+        eligible = eligible.saturating_add(category_ids.map_or(0, |ids| ids.len() as u32));
+        for id in category_ids
+            .into_iter()
+            .flatten()
+            .take(MEMORY_FAMILY_SEARCH_CAP.saturating_sub(searched as usize))
+        {
+            searched += 1;
+            let record = &store.records[&id.raw()];
+            let score = family_similarity(query.features(), &record.query_features);
+            if score >= MEMORY_MIN_SIMILARITY
+                && equivalent_category_cues(query.features(), &record.query_features)
+            {
+                matches.push((*id, score));
+            }
+        }
+    }
     sort_and_truncate_matches(&mut matches);
     let (values, confidence, source_count, best_source) =
-        aggregate_family_matches(store, &matches)?;
+        aggregate_family_matches(store, &matches, query.tick())?;
+    let confidence = Confidence::new(confidence.raw() * if generalized { 0.75 } else { 1.0 })?;
     Ok(FamilyRecallResult {
         values,
         confidence,
@@ -226,6 +287,7 @@ pub(super) fn recall_family_channel(
         searched,
         matches: u16::try_from(matches.len())
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?,
+        category_read: generalized,
     })
 }
 
@@ -363,6 +425,7 @@ fn sort_and_truncate_matches(matches: &mut Vec<(MemoryId, f32)>) {
 fn aggregate_target_matches(
     store: &CandidateMemoryStoreV2,
     matches: &[(MemoryId, f32)],
+    tick: Tick,
 ) -> Result<
     (
         [f32; MEMORY_LATENT_V1_COUNT],
@@ -384,7 +447,7 @@ fn aggregate_target_matches(
         for (value, source) in output.iter_mut().zip(record.target_latent) {
             *value += source * weight;
         }
-        weighted_confidence += record.confidence * weight;
+        weighted_confidence += record.confidence * weight * retention_factor(record, tick);
     }
     let average_similarity = total / matches.len() as f32;
     Ok((
@@ -398,6 +461,7 @@ fn aggregate_target_matches(
 fn aggregate_family_matches(
     store: &CandidateMemoryStoreV2,
     matches: &[(MemoryId, f32)],
+    tick: Tick,
 ) -> Result<
     (
         [f32; MEMORY_VALUE_V1_COUNT],
@@ -419,7 +483,7 @@ fn aggregate_family_matches(
         for (value, source) in output.iter_mut().zip(record.family_value) {
             *value += source * weight;
         }
-        weighted_confidence += record.confidence * weight;
+        weighted_confidence += record.confidence * weight * retention_factor(record, tick);
     }
     let average_similarity = total / matches.len() as f32;
     Ok((
@@ -428,4 +492,156 @@ fn aggregate_family_matches(
         u16::try_from(matches.len()).map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?,
         matches.first().map(|(id, _)| *id),
     ))
+}
+
+// The target channel ignores action lanes, while family recall includes them.
+// Keep exact floats in frame-local cache keys so close quantized observations
+// cannot accidentally share evidence.
+pub(super) fn target_recall_features(query: &CandidateMemoryQueryV2) -> [u32; 66] {
+    std::array::from_fn(|lane| query.features()[if lane < 40 { lane } else { lane + 17 }].to_bits())
+}
+
+pub(super) fn compatible_memory_outcomes(
+    left: &CandidateMemoryRecordV2,
+    right: &CandidateMemoryRecordV2,
+) -> bool {
+    // Repeated appearance/action is not evidence that conflicting consequences
+    // are equivalent. Preserve reversals and painful individual exceptions.
+    left.family_value
+        .iter()
+        .zip(right.family_value)
+        .all(|(left, right)| (*left - right).abs() <= 0.2)
+        && left
+            .target_latent
+            .iter()
+            .zip(right.target_latent)
+            .all(|(left, right)| (*left - right).abs() <= 0.2)
+}
+
+pub(super) fn meaningful_memory_event(
+    patch: &ExperiencePatch,
+    record: &CandidateMemoryRecordV2,
+    first_matching_event: bool,
+) -> bool {
+    let (valence, pain, disappointment) = memory_consequence(patch.outcome());
+    valence.abs() >= 0.05
+        || pain >= 0.02
+        || (disappointment > 0.0 && patch.outcome().frustration_delta.raw() >= 0.15)
+        || record.target_latent[..4]
+            .iter()
+            .any(|value| value.abs() >= 0.1)
+        || record.target_latent[4].abs() >= 0.15
+        || patch.outcome().prediction_error.raw() >= 0.15
+        || matches!(
+            patch.outcome().physical.contact,
+            PhysicalContactKind::Consumed | PhysicalContactKind::Blocked
+        )
+        || (patch.outcome().physical.contact == PhysicalContactKind::Moved
+            && matches!(
+                patch.decision().selected_action.kind,
+                ActionKind::Interact | ActionKind::Hold
+            ))
+        || (first_matching_event
+            && matches!(
+                patch.decision().selected_action.kind,
+                ActionKind::Look | ActionKind::Inspect
+            )
+            && patch.pre_action().sensory().channels.novelty_signal.raw() >= 0.2)
+}
+
+fn equivalent_category_cues(query: &[f32], record: &[f32]) -> bool {
+    // Each property group must agree. A shared "fruit" affordance or large
+    // state similarity cannot conceal different colour or chemical evidence.
+    (6..18).chain(std::iter::once(21)).all(|lane| {
+        (query[MEMORY_TARGET_RANGE.start + lane] - record[MEMORY_TARGET_RANGE.start + lane]).abs()
+            <= 0.2
+    }) && (6..18).step_by(3).all(|lane| {
+        cosine_segment(
+            query,
+            record,
+            MEMORY_TARGET_RANGE.start + lane..MEMORY_TARGET_RANGE.start + lane + 3,
+        ) >= 0.9
+    })
+}
+
+// Tunable retention horizon, in simulation ticks. Strong measured danger/reward
+// is retained at full strength; unused low-value evidence loses confidence and
+// capacity priority. Reads do not mutate belief or persistence state.
+const LOW_VALUE_RETENTION_HALF_LIFE_TICKS: f32 = 16_384.0;
+
+pub(super) fn retention_factor(record: &CandidateMemoryRecordV2, tick: Tick) -> f32 {
+    if consequence_strength(record) >= 0.5 {
+        return 1.0;
+    }
+    let age = tick.raw().saturating_sub(record.last_tick.raw()) as f32;
+    (1.0 / (1.0 + age / LOW_VALUE_RETENTION_HALF_LIFE_TICKS)).max(0.05)
+}
+
+fn consequence_strength(record: &CandidateMemoryRecordV2) -> f32 {
+    record.family_value[0]
+        .abs()
+        .max(record.family_value[2])
+        .max(record.target_latent[2].abs())
+}
+
+pub(super) fn retention_priority(record: &CandidateMemoryRecordV2, tick: Tick) -> u16 {
+    let strength = consequence_strength(record);
+    if strength >= 0.5 {
+        32_768 + (strength * 32_767.0).round() as u16
+    } else {
+        (f32::from(record.salience_q16) * retention_factor(record, tick) * 0.499).round() as u16
+    }
+}
+
+pub(super) fn corroborated_retrieval(
+    patch: &ExperiencePatch,
+    observation: &CandidateMemoryRecordV2,
+) -> bool {
+    let frame = patch.pre_action().perception();
+    let offset = usize::from(
+        patch
+            .decision()
+            .episodic_key()
+            .unwrap()
+            .query()
+            .candidate_index(),
+    ) * crate::MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE;
+    let Some(lanes) = frame
+        .context()
+        .values()
+        .get(offset..offset + crate::MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE)
+    else {
+        return false;
+    };
+    lanes[15] > 0.0
+        && lanes[13] > 0.0
+        && lanes[8..12]
+            .iter()
+            .zip(observation.family_value)
+            .all(|(expected, measured)| (*expected - measured).abs() <= 0.2)
+}
+
+// Conflicting individual events remain stored, but a newer measured outcome
+// under essentially the same query is the current expectation. This supports
+// reversal without averaging a recent poison encounter into harmlessness.
+fn select_current_individual_outcome(
+    store: &CandidateMemoryStoreV2,
+    matches: &mut Vec<(MemoryId, f32)>,
+) {
+    let best_similarity = matches.iter().map(|(_, score)| *score).fold(0.0, f32::max);
+    let Some((anchor, _)) = matches
+        .iter()
+        .filter(|(_, score)| *score >= best_similarity - 0.02)
+        .max_by_key(|(id, _)| {
+            (
+                store.records[&id.raw()].last_tick.raw(),
+                store.records[&id.raw()].source_sequence_id.raw(),
+                id.raw(),
+            )
+        })
+    else {
+        return;
+    };
+    let anchor = &store.records[&anchor.raw()];
+    matches.retain(|(id, _)| compatible_memory_outcomes(anchor, &store.records[&id.raw()]));
 }

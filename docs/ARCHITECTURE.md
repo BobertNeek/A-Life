@@ -58,6 +58,20 @@ For each admitted organism, the production live runtime:
 8. seals the outcome and applies GPU learning, memory, and topology updates;
 9. advances the world after the batch.
 
+Core episodic recall reuses exact target and action-family queries within one
+immutable frame. Each candidate retains its own sealed decision key; work
+receipts identify reused channels and count actual searches. Candidate memory
+admits consequences, surprises, manipulation, blocked attempts, and first novel
+inspection rather than routine movement ticks. Conflicting individual outcomes
+remain separate, with current same-context evidence preserved during bounded
+compression. Unknown individuals may borrow discounted evidence from matching
+observable colour, material, shape, chemical, and temperature cues; known
+individual namespaces never fall back to category evidence. Low-value unused
+memories lose confidence and eviction priority, while strong danger/reward is
+protected. Corroborating measured outcomes refresh retention without increasing
+belief through recall alone. These mechanisms supply evidence to WGSL neural
+arbitration.
+
 GPU unavailability is typed unavailability. CPU reference helpers do not take over the production neural policy.
 
 ## Inherited biochemical learning signals
