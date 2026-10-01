@@ -290,3 +290,58 @@ fn portable_topology_asset_roundtrips_replay_guard_and_rejects_tampering() {
         alife_core::ScaffoldContractError::InvalidMemoryQuery
     );
 }
+
+#[test]
+fn mismatched_profile_and_missing_episodic_key_are_rejected_without_map_mutation() {
+    let patch = tracked_patch(7, 1, 71);
+    let profile = SensorProfileProvenance::new(
+        SensorProfile::GroundedTerrainVisionV1,
+        SensoryAbiVersion::CURRENT,
+        Tick::ZERO,
+    )
+    .unwrap()
+    .identity();
+    let mut foreign_profile =
+        TopologySidecar::new_profiled(OrganismId(7), profile, tiny_config()).unwrap();
+    let before = foreign_profile.map().clone();
+    let receipt = foreign_profile.observe_sealed_patch(&patch);
+    assert!(receipt.rejected_invalid);
+    assert_eq!(foreign_profile.map(), &before);
+    assert_eq!(receipt.before_digest, receipt.after_digest);
+
+    let frame = patch.pre_action().perception();
+    let decision = DecisionSnapshot::from_neural_selection(
+        patch.header().sequence_id,
+        PhenotypeHash([1, 2, 3, 4]),
+        1,
+        1,
+        frame,
+        NeuralActionSelection {
+            candidate_index: 0,
+            logit: 0.7,
+            confidence: Confidence(0.8),
+            active_tiles: 8,
+            active_synapses: 64,
+        },
+        frame.candidates()[0]
+            .to_command(OrganismId(7), Confidence(0.8))
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(decision.episodic_key().is_none());
+    let missing_key = ExperiencePatchBuilder::new(patch.header().sequence_id)
+        .record_pre_action(patch.pre_action().clone())
+        .unwrap()
+        .record_decision(decision)
+        .unwrap()
+        .record_outcome(patch.outcome().clone())
+        .unwrap()
+        .seal()
+        .unwrap();
+    let mut sidecar = grounded_sidecar(7);
+    let before = sidecar.map().clone();
+    let receipt = sidecar.observe_sealed_patch(&missing_key);
+    assert!(receipt.rejected_invalid);
+    assert_eq!(sidecar.map(), &before);
+    assert_eq!(receipt.before_digest, receipt.after_digest);
+}
