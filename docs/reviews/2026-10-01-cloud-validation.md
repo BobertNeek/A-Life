@@ -7,6 +7,45 @@ The [CPU performance record](../performance/20261001-cpu-preparation.md) retains
 measurement conditions and links to source-bound samples/probes; no game-speed
 claim follows from the tests below.
 
+## Production two-worker successor
+
+Combined source `c9d324a51b01a48d533fe875c0fe9110a7224144` extends serial
+checkpoint `0a7fa449` with reviewed worker source `f03d2dc3` and evidence
+`e540e820`, picked cleanly as `b24417ca` and `c9d324a5`. Finalization is already
+present as `03003006`; prerequisite `1c53224a` was not duplicated. All crates,
+assets, manifests and workflow bytes match reviewed `f03d2dc3`. The original
+[worker report](../performance/20261001-two-worker-production.md) and its
+314-line raw receipt match `e540e820` exactly. The separate paired serial
+comparison below retains its original sources, inputs and scope.
+
+Worker/failure tests, metadata re-admission and existing app attention each
+pass in debug and true release: 11 executions per profile. Core query/retrieval,
+three-factor learning and perception-digest suites pass 54 checks; backend
+buffer/memory contracts pass 43. The explicit ignored release runner smoke
+also passes: **120 passing executions, zero failures**, with three intentionally
+ignored executions in the normal selections. The actual CPU runner completes
+72 timed batches and 1,908 complete typed owner comparisons, including exact
+upload metadata. A separate initial pass checks once-only row visits. No device
+is created. Its new raw
+samples are retained separately; the original timing table is unchanged.
+
+Strict Rust 1.99 workspace, production/GPU-test all-target and release app
+all-target Clippy pass with `-D warnings`. Normal app and `foundation-training`
+library compilation pass; no training runs. Format, full Core dependency/source
+boundaries, 77/77 documentation assertions and local links pass. Debug workspace
+package output was cleaned to prevent stale shared-target reuse; release uses
+the isolated target, with a fresh executable/profile/source-hash receipt.
+One build job and serial tests were used. No guard fired; observed memory stays
+below 11 GiB and disk above 10.16 GiB, including the pre-cleanup measurement.
+
+The eligible suffix uses one child plus the caller; fewer than eight dispatchable
+rows, one CPU, active terrain-prior polling and thread-creation failure retain
+their documented serial paths. Ordered publication, full metadata re-admission,
+panic joining and controlled restoration remain in the reviewed source. Tests
+do not establish live GPU recovery, nonempty resident restoration, provider
+lifecycle or whole admitted tick performance. Main integration and successor
+remote CI remain coordinator-owned; GPU/Windows gameplay and FPS remain Unknown.
+
 ## Finalization and serial comparison checkpoint
 
 Source `d9724dfa03bb367809f35ae66900de55dd843f83` extends `ad49a325` with

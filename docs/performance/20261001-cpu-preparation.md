@@ -24,6 +24,8 @@ uses one scoped child plus the caller for eligible CPU preparation. Serial
 housekeeping, draft capture and ordered backend/commit authority remain intact;
 live terrain priors retain interleaved serial preparation. Its CPU checks and
 measurements cannot certify Windows/RTX performance.
+The [combined validation](../reviews/2026-10-01-cloud-validation.md#production-two-worker-successor)
+preserves that reviewed source and original receipt after the serial checkpoint.
 
 ## Integrated serial guard comparison
 
