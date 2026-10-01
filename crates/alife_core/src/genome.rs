@@ -1226,7 +1226,9 @@ impl PlasticityGenomeParameters {
                 0.2, -1.0, 1.0, -0.5, 0.2, 0.0, 0.5, -0.5,
             ])
             .expect("canonical receptor profile is bounded"),
-            action_candidate_credit_profile: None,
+            action_candidate_credit_profile: Some(
+                ActionCandidateCreditProfileV1::SignedChoiceReadouts,
+            ),
             fast_min: -2.0,
             fast_max: 2.0,
             sleep_staging_rate: 0.5,
@@ -1607,6 +1609,18 @@ impl SensorLayoutGene {
                 SensorChannelGene {
                     kind: SensorChannelKind::Touch,
                     receptor_count: 24,
+                    target_lobe: LobeKind::PerceptualIntegration,
+                    enabled_at_maturation: 0,
+                },
+                SensorChannelGene {
+                    kind: SensorChannelKind::Smell,
+                    receptor_count: 16,
+                    target_lobe: LobeKind::PerceptualIntegration,
+                    enabled_at_maturation: 0,
+                },
+                SensorChannelGene {
+                    kind: SensorChannelKind::Proprioception,
+                    receptor_count: 26,
                     target_lobe: LobeKind::PerceptualIntegration,
                     enabled_at_maturation: 0,
                 },
