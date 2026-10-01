@@ -1726,10 +1726,59 @@ mod tests {
         crate::tests::fixtures::current_scene_save(&gpu_alpha_fixture_root(), 30)
     }
 
-    fn fvr05_test_launch() -> ProductionVoxelLaunchConfig {
-        let root = gpu_alpha_fixture_root();
+    struct Fvr05LaunchFixture {
+        root: PathBuf,
+    }
+
+    impl Drop for Fvr05LaunchFixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn fvr05_test_launch() -> (Fvr05LaunchFixture, ProductionVoxelLaunchConfig) {
+        static NEXT_FIXTURE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let fixture = Fvr05LaunchFixture {
+            root: std::env::temp_dir().join(format!(
+                "alife-fvr05-launch-{}-{nonce}-{}",
+                std::process::id(),
+                NEXT_FIXTURE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            )),
+        };
+        let root = fixture.root.join("crates/alife_game_app");
+        fs::create_dir_all(&root).unwrap();
         let app_launch = AppShellLaunchConfig::from_p34_fixture_root(&root);
-        ProductionVoxelLaunchConfig {
+        // These are new, untrained canonical founders, not a migration of the
+        // historical tiny save or a fabricated acquired GPU checkpoint.
+        let config =
+            RuntimeConfig::from_json_file(gpu_alpha_fixture_root().join("tiny_config.json"))
+                .unwrap();
+        let staged = stage_phase3_new_game(CanonicalNewGameLaunchRequest {
+            world_seed: config.deterministic_seed,
+            population: 30,
+            disable_age_death: false,
+            save_path: app_launch.save_path.clone(),
+            asset_root: root.clone(),
+            config,
+            assets: AssetManifest::empty(),
+        })
+        .unwrap();
+        staged.save.to_json_file(&app_launch.save_path).unwrap();
+        fs::write(
+            &app_launch.config_path,
+            serde_json::to_vec_pretty(&staged.save.config).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            &app_launch.asset_manifest_path,
+            serde_json::to_vec_pretty(&staged.save.assets).unwrap(),
+        )
+        .unwrap();
+        let launch = ProductionVoxelLaunchConfig {
             manifest_path: root.join("environment_manifest.json"),
             scenario_id: Some(PRODUCTION_VOXEL_SCENARIO_ID.to_string()),
             app_launch,
@@ -1748,7 +1797,107 @@ mod tests {
             record_performance: false,
             developer_overlay: false,
             ui_settings_path: None,
+        };
+        (fixture, launch)
+    }
+
+    #[test]
+    fn fvr06_launch_file_boundary_restores_current_owned_untrained_founders() {
+        let source_root = gpu_alpha_fixture_root();
+        let source_paths = [
+            "tiny_save.json",
+            "tiny_config.json",
+            "tiny_asset_manifest.json",
+            "assets/tiny_generated_weights_ref.json",
+        ];
+        let source_bytes = source_paths
+            .iter()
+            .map(|path| fs::read(source_root.join(path)).unwrap())
+            .collect::<Vec<_>>();
+        let (fixture, launch) = fvr05_test_launch();
+        let fixture_root = fixture.root.clone();
+        assert!(launch.app_launch.save_path.starts_with(&fixture_root));
+        assert_ne!(
+            launch.app_launch.save_path,
+            source_root.join("tiny_save.json")
+        );
+        let config = RuntimeConfig::from_json_file(&launch.app_launch.config_path).unwrap();
+        let assets = AssetManifest::from_json_file(&launch.app_launch.asset_manifest_path).unwrap();
+        let save = PortableSaveFile::from_json_file(&launch.app_launch.save_path).unwrap();
+        assert_eq!(save.config, config);
+        assert_eq!(save.assets, assets);
+        save.validate_with_asset_root(&launch.app_launch.asset_root)
+            .unwrap();
+        let restored = save.restore_headless_world().unwrap();
+        restored.validate_organism_bindings().unwrap();
+        assert_eq!(restored.organism_registry().len(), 30);
+        assert_eq!(save.creatures.len(), 30);
+        let profile = alife_core::SensorProfile::GroundedObjectSlotsV1;
+        let foundation = alife_core::FoundationWeightAsset::builtin_nano512_v1(profile).unwrap();
+        for creature in &save.creatures {
+            let record = restored
+                .organism_registry()
+                .get(creature.organism_id)
+                .unwrap();
+            assert_eq!(record.genome().id, creature.genome_id);
+            assert_eq!(record.biochemistry().source_genome_id, creature.genome_id);
+            assert_eq!(record.biochemistry().homeostasis, creature.mind.homeostasis);
+            record
+                .biochemistry()
+                .graph_state()
+                .validate_against(&record.phenotype().chemistry.biochemical)
+                .unwrap();
+            let projection = alife_core::N512FounderFoundationProjection::compile(
+                record.phenotype(),
+                profile,
+                &foundation,
+            )
+            .unwrap();
+            assert_eq!(projection.source_genome_id(), creature.genome_id);
+            assert_eq!(creature.mind.memory_record_count, 0);
+            assert_eq!(creature.mind.concept_count, 0);
+            assert_eq!(creature.weights.lifetime_consolidated_entries, 0);
+            assert_eq!(creature.weights.h_operational_entries, 0);
+            assert_eq!(creature.weights.h_shadow_entries, 0);
+            assert!(creature.learning.last_consolidated_tick.is_none());
+            assert!(creature.weights.generated_weight_asset_id.is_none());
+            assert!(creature.gpu_brain.is_none());
         }
+        let production = production_voxel_save_with_population(
+            &save,
+            &launch.app_launch.asset_root,
+            launch.profile_id,
+            launch.effective_population(),
+        )
+        .unwrap();
+        let visible = visible_world_from_save(&production).unwrap();
+        compare_visible_world_to_headless(&visible).unwrap();
+        assert_eq!(visible.kind_count(WorldObjectKind::Agent), 30);
+        assert_eq!(
+            production
+                .require_voxel_backend()
+                .unwrap()
+                .creature_anchors
+                .len(),
+            30
+        );
+        assert_eq!(production.creatures, save.creatures);
+        assert_eq!(
+            production.world.organism_records,
+            save.world.organism_records
+        );
+        let roundtrip_path = fixture_root.join("cpu-roundtrip.json");
+        production.to_json_file(&roundtrip_path).unwrap();
+        let roundtrip = PortableSaveFile::from_json_file(&roundtrip_path).unwrap();
+        roundtrip
+            .validate_with_asset_root(&launch.app_launch.asset_root)
+            .unwrap();
+        assert_eq!(roundtrip, production);
+        for (path, before) in source_paths.iter().zip(source_bytes) {
+            assert_eq!(fs::read(source_root.join(path)).unwrap(), before);
+        }
+        drop(fixture);
+        assert!(!fixture_root.exists());
     }
 
     fn fvr05_test_diagnostics(
@@ -1854,7 +2003,7 @@ mod tests {
 
     #[test]
     fn fvr05_ux_settings_roundtrip_excludes_engine_tokens_and_preserves_profile() {
-        let launch = fvr05_test_launch();
+        let (_fixture, launch) = fvr05_test_launch();
         let diagnostics = fvr05_test_diagnostics(&launch);
         let metadata = fvr05_test_save_metadata();
         let settings =
@@ -1867,10 +2016,7 @@ mod tests {
         assert!(!lower.contains("entity("));
         assert!(!lower.contains("renderer"));
 
-        let path = std::env::temp_dir().join(format!(
-            "alife_fvr05_ux_settings_{}.json",
-            std::process::id()
-        ));
+        let path = _fixture.root.join("ux_settings_roundtrip.json");
         settings.to_json_file(&path).unwrap();
         let roundtrip = Fvr05ProductionUxSettings::from_json_file(&path).unwrap();
         let _ = std::fs::remove_file(path);
@@ -1908,7 +2054,7 @@ mod tests {
 
     #[test]
     fn fvr08_package_launch_artifacts_are_rooted_next_to_packaged_manifest() {
-        let mut launch = fvr05_test_launch();
+        let (_fixture, mut launch) = fvr05_test_launch();
         let package_root = PathBuf::from(
             "target/artifacts/fvr08_package_path_test/alife-production-voxel-windows",
         );
@@ -1939,7 +2085,7 @@ mod tests {
     #[test]
     #[cfg(feature = "gpu-runtime")]
     fn fvr06_preflight_persists_gpu_runtime_descriptor_without_engine_tokens() {
-        let mut launch = fvr05_test_launch();
+        let (_fixture, mut launch) = fvr05_test_launch();
         launch.profile_id = ProductionFrontendProfileId::MinimumSettings30x30;
         launch.population = Some(30);
         launch.graphics_backend = "existing".to_string();
@@ -1983,7 +2129,7 @@ mod tests {
             FVR06_GPU_RUNTIME_STATE_SCHEMA
         );
 
-        let save = gpu_alpha_save();
+        let save = PortableSaveFile::from_json_file(&launch.app_launch.save_path).unwrap();
         let production = production_voxel_save_with_population(
             &save,
             &launch.app_launch.asset_root,
@@ -1996,7 +2142,7 @@ mod tests {
         production
             .validate_with_asset_root(&launch.app_launch.asset_root)
             .unwrap();
-        let path = std::env::temp_dir().join("alife_fvr06_gpu_runtime_state_roundtrip.json");
+        let path = _fixture.root.join("gpu_runtime_state_roundtrip.json");
         production.to_json_file(&path).unwrap();
         let roundtrip = PortableSaveFile::from_json_file(&path).unwrap();
         roundtrip
@@ -2047,8 +2193,10 @@ mod tests {
 
     #[test]
     #[cfg(feature = "gpu-runtime")]
-    fn fvr06_record_performance_writes_real_gpu_gameplay_receipt_for_30_creatures() {
-        let mut launch = fvr05_test_launch();
+    fn fvr06_record_performance_serializes_preflight_receipt_metadata_for_30_creatures() {
+        // Preflight records descriptor/file metadata. This test does not
+        // execute a neural GPU tick or establish measured gameplay evidence.
+        let (_fixture, mut launch) = fvr05_test_launch();
         launch.profile_id = ProductionFrontendProfileId::MinimumSettings30x30;
         launch.population = Some(30);
         launch.graphics_backend = "existing".to_string();
@@ -2059,14 +2207,7 @@ mod tests {
             fixture_artifact_dir.join("MinimumSettings30x30_production_gpu_runtime_save.json");
         let fixture_gameplay_receipt_path =
             fixture_artifact_dir.join("MinimumSettings30x30_production_gpu_gameplay_receipt.json");
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let artifact_root = std::env::temp_dir().join(format!(
-            "alife-fvr06-performance-receipt-{}-{nonce}",
-            std::process::id()
-        ));
+        let artifact_root = _fixture.root.join("performance-receipt");
         launch.manifest_path =
             artifact_root.join("crates/alife_game_app/environment_manifest.json");
 
