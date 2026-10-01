@@ -201,6 +201,47 @@ impl SensorEncoderPlan {
             Err(ScaffoldContractError::PhenotypeCompile)
         }
     }
+
+    pub(super) fn validate_n2048_growth(
+        &self,
+        phenotype: &BrainPhenotype,
+        source: &BrainPhenotype,
+        source_inputs: &PhenotypeCompilerInputs,
+    ) -> Result<(), ScaffoldContractError> {
+        let source_capacity = super::BrainCapacityClass::n2048();
+        source_inputs.validate_against(&source_capacity)?;
+        source.validate_against(&source_capacity)?;
+        if source.compiler_inputs_digest() != source_inputs.canonical_digest()
+            || source.lobe_layout() != &crate::N2048FoundationLayoutV1::lobe_layout()
+            || phenotype.brain_class_id() != super::BrainCapacityClass::N4096_RESEARCH_ID
+            || phenotype.lobe_layout() != &super::N4096ResearchLayoutV1::lobe_layout()?
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        source
+            .sensor_encoder()
+            .validate_against_inputs(source, source_inputs)?;
+        self.validate_against(phenotype)?;
+        let assignments = source
+            .sensor_encoder()
+            .assignments()
+            .iter()
+            .map(|assignment| {
+                let mut mapped = *assignment;
+                mapped.target_neuron = super::migration::remap_packed_neuron(
+                    assignment.target_neuron(),
+                    source.lobe_layout(),
+                    phenotype.lobe_layout(),
+                )?;
+                Ok(mapped)
+            })
+            .collect::<Result<Vec<_>, ScaffoldContractError>>()?;
+        let expected = Self::try_new(source.sensor_profile(), assignments)?;
+        if self != &expected {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Ok(())
+    }
     fn validate_shape(&self) -> Result<(), ScaffoldContractError> {
         if self.schema_version != ENCODER_SCHEMA_VERSION
             || SensorProfile::try_from_raw(self.sensor_profile.raw()).is_err()
@@ -314,5 +355,51 @@ impl<'de> Deserialize<'de> for SensorEncoderPlan {
         };
         value.validate_local().map_err(D::Error::custom)?;
         Ok(value)
+    }
+}
+
+#[cfg(test)]
+mod growth_tests {
+    use super::*;
+    use crate::{
+        BrainCapacityClass, BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler,
+        PhenotypeGrowthMigration, Tick,
+    };
+
+    #[test]
+    fn growth_encoder_rejects_a_valid_plan_rebound_to_expansion() {
+        let capacity = BrainCapacityClass::n2048();
+        let genome = BrainGenome::scaffold(0x4096_2048, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        let inputs = PhenotypeCompilerInputs::try_new(
+            genome,
+            &capacity,
+            development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let source = PhenotypeCompiler::compile_validated(&inputs, &capacity).unwrap();
+        let grown = PhenotypeGrowthMigration::compile_n2048_to_n4096(&source, &inputs).unwrap();
+        let target = &grown.phenotype;
+        let mut assignments = target.sensor_encoder().assignments().to_vec();
+        let region = target
+            .lobe_layout()
+            .lobe_by_neuron_index(assignments[0].target_neuron())
+            .unwrap();
+        assignments[0].target_neuron = region.start + region.len / 2;
+        assignments.sort_by_key(|assignment| {
+            (
+                assignment.target_neuron(),
+                assignment.source_group().raw(),
+                assignment.source_index(),
+            )
+        });
+        let rebound = SensorEncoderPlan::try_new(target.sensor_profile(), assignments).unwrap();
+        rebound.validate_against(target).unwrap();
+        assert_eq!(
+            rebound.validate_n2048_growth(target, &source, &inputs),
+            Err(ScaffoldContractError::PhenotypeCompile)
+        );
     }
 }

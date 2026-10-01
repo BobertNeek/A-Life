@@ -225,6 +225,12 @@ impl PhenotypeGrowthMigration {
         let mut families = Vec::with_capacity(8);
         for raw in 0_u8..8 {
             let family = CandidateActionFamily::try_from_raw(raw)?;
+            let source_family = source
+                .candidate_decoder()
+                .families()
+                .iter()
+                .find(|plan| plan.family() == family)
+                .ok_or_else(compile_error)?;
             let family_start = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
             let mut rows = Vec::with_capacity(896);
             for (old_index, old) in source.synapses().iter().enumerate() {
@@ -281,12 +287,21 @@ impl PhenotypeGrowthMigration {
                 }
                 synapses.push(row);
             }
-            families.push(CandidateDecoderFamilyPlan::new(
-                family,
-                0.0,
-                family_start,
-                u32::try_from(synapses.len()).map_err(|_| compile_error())? - family_start,
-            ));
+            families.push(
+                CandidateDecoderFamilyPlan::new(
+                    family,
+                    source_family.bias(),
+                    family_start,
+                    u32::try_from(synapses.len()).map_err(|_| compile_error())? - family_start,
+                )
+                .with_innate_priority(
+                    source_family.innate_drive_mask(),
+                    source_family.innate_gain(),
+                    source_family.innate_cue_lane(),
+                    source_family.innate_cue_inverted(),
+                    source_family.innate_requires_reach(),
+                ),
+            );
         }
         let memory_channel = MemoryChannelPlan::try_new_v1(8_192)?;
         let candidate = CandidateDecoderPlan::try_new(
@@ -487,7 +502,9 @@ impl PhenotypeGrowthMigration {
                 replay_capture_synapse_count: replay.global_synapse_ids().len() as u32,
             },
         };
-        let phenotype = BrainPhenotype::try_new(
+        let phenotype = BrainPhenotype::try_new_for_n2048_growth(
+            source,
+            source_inputs,
             &target_inputs,
             &target_capacity,
             N4096ResearchLayoutV1::NEURON_COUNT,
@@ -545,7 +562,7 @@ fn remap_synapse(
     Ok(row)
 }
 
-fn remap_packed_neuron(
+pub(super) fn remap_packed_neuron(
     packed: u32,
     source_layout: &LobeLayout,
     target_layout: &LobeLayout,

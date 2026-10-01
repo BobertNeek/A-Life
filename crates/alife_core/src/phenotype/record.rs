@@ -412,6 +412,93 @@ impl BrainPhenotype {
         plasticity_plan_digest: [u64; 4],
         budgets: CompiledBudgets,
     ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_encoder_origin(
+            inputs,
+            capacity,
+            neuron_count,
+            microstep_count,
+            lobe_layout,
+            projections,
+            synapses,
+            neuron_dynamics,
+            sensor_encoder,
+            decoder,
+            speech_decoder,
+            memory_decoder,
+            plasticity_receptors,
+            replay_capture_plan,
+            sleep_consolidation_plan,
+            plasticity_plan_digest,
+            budgets,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn try_new_for_n2048_growth(
+        source: &BrainPhenotype,
+        source_inputs: &PhenotypeCompilerInputs,
+        inputs: &PhenotypeCompilerInputs,
+        capacity: &BrainCapacityClass,
+        neuron_count: u32,
+        microstep_count: u8,
+        lobe_layout: LobeLayout,
+        projections: Vec<CompiledProjection>,
+        synapses: Vec<CompiledSynapse>,
+        neuron_dynamics: Vec<NeuronDynamics>,
+        sensor_encoder: SensorEncoderPlan,
+        decoder: CandidateDecoderPlan,
+        speech_decoder: Option<AuxiliaryDecoderPlan>,
+        memory_decoder: Option<AuxiliaryDecoderPlan>,
+        plasticity_receptors: Vec<PlasticityReceptorPlan>,
+        replay_capture_plan: ReplayCapturePlan,
+        sleep_consolidation_plan: SleepConsolidationPlan,
+        plasticity_plan_digest: [u64; 4],
+        budgets: CompiledBudgets,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new_with_encoder_origin(
+            inputs,
+            capacity,
+            neuron_count,
+            microstep_count,
+            lobe_layout,
+            projections,
+            synapses,
+            neuron_dynamics,
+            sensor_encoder,
+            decoder,
+            speech_decoder,
+            memory_decoder,
+            plasticity_receptors,
+            replay_capture_plan,
+            sleep_consolidation_plan,
+            plasticity_plan_digest,
+            budgets,
+            Some((source, source_inputs)),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn try_new_with_encoder_origin(
+        inputs: &PhenotypeCompilerInputs,
+        capacity: &BrainCapacityClass,
+        neuron_count: u32,
+        microstep_count: u8,
+        lobe_layout: LobeLayout,
+        projections: Vec<CompiledProjection>,
+        synapses: Vec<CompiledSynapse>,
+        neuron_dynamics: Vec<NeuronDynamics>,
+        sensor_encoder: SensorEncoderPlan,
+        decoder: CandidateDecoderPlan,
+        speech_decoder: Option<AuxiliaryDecoderPlan>,
+        memory_decoder: Option<AuxiliaryDecoderPlan>,
+        plasticity_receptors: Vec<PlasticityReceptorPlan>,
+        replay_capture_plan: ReplayCapturePlan,
+        sleep_consolidation_plan: SleepConsolidationPlan,
+        plasticity_plan_digest: [u64; 4],
+        budgets: CompiledBudgets,
+        growth_source: Option<(&BrainPhenotype, &PhenotypeCompilerInputs)>,
+    ) -> Result<Self, ScaffoldContractError> {
         inputs.validate_against(capacity)?;
         let persistent_address_map =
             PersistentAddressMap::compile(&lobe_layout, &projections, &synapses)?;
@@ -477,9 +564,14 @@ impl BrainPhenotype {
             budgets,
             phenotype_hash: PhenotypeHash([0; 4]),
         };
-        value
-            .sensor_encoder
-            .validate_against_inputs(&value, inputs)?;
+        match growth_source {
+            Some((source, source_inputs)) => value
+                .sensor_encoder
+                .validate_n2048_growth(&value, source, source_inputs)?,
+            None => value
+                .sensor_encoder
+                .validate_against_inputs(&value, inputs)?,
+        }
         value.phenotype_hash = value.recompute_phenotype_hash()?;
         value.validate_against(capacity)?;
         Ok(value)
