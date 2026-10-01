@@ -10,8 +10,8 @@ use crate::{
     ScaffoldContractError, SensorProfile, Validate,
 };
 
-const INPUTS_SCHEMA_VERSION: u16 = 5;
-const INPUTS_DOMAIN: &[u8] = b"alife.phenotype.compiler-inputs.v5";
+const INPUTS_SCHEMA_VERSION: u16 = 6;
+const INPUTS_DOMAIN: &[u8] = b"alife.phenotype.compiler-inputs.v6";
 
 /// An explicit non-default application of immutable foundation weights.
 ///
@@ -357,7 +357,7 @@ impl PhenotypeCompilerInputs {
         }
         let language_codebook = self.foundation_abi_selection.language_codebook();
         if let Some(asset) = &self.n2048_candidate_asset {
-            // Optional extension preserves all pre-existing input digests.
+            // Bind the exact candidate asset in addition to its ABI selection.
             d.write_bytes(b"n2048-exact-candidate-v1");
             d.write_bytes(asset.digest().bytes());
         }
@@ -396,6 +396,12 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             canonical_digest: [u64; 4],
         }
         let w = Wire::deserialize(deserializer)?;
+        if w.schema_version != INPUTS_SCHEMA_VERSION {
+            return Err(D::Error::custom(format!(
+                "unsupported compiler-input schema version {}; expected {}",
+                w.schema_version, INPUTS_SCHEMA_VERSION
+            )));
+        }
         let value = Self {
             schema_version: w.schema_version,
             genome: w.genome,
@@ -453,6 +459,9 @@ fn encode_genome(
     d.write_u64(g.species_seed);
     d.write_u16(g.brain_class_id.raw());
     d.write_u64(g.genetic_prior_seed);
+    d.write_f32(g.innate_priority.reflex_strength)?;
+    d.write_f32(g.innate_priority.food_attraction)?;
+    d.write_f32(g.innate_priority.hazard_aversion)?;
     for seed in [
         g.seeds.species_seed,
         g.seeds.genome_id_seed,
