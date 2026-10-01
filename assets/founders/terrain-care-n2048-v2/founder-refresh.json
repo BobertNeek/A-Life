@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "source_asset_digest": "8a10a0a5eb350f4a24f1c9535e4e4b8f1e10240da905a32a9b0c1b5a0719c6d9",
+  "target_asset_digest": "b83c0a689fd6c672c4826dd06f9ea4463587c840139579b2b3c063c91028dab4",
+  "source_decoder_digest": [
+    3577242407912716161,
+    3046519763989307366,
+    12972010682103829919,
+    12818649914195333385
+  ],
+  "target_decoder_digest": [
+    12606469634236878895,
+    4550520160609249454,
+    5078059968671100591,
+    4381160948267843131
+  ],
+  "source_compiler_inputs_digest": [
+    13421131063412373818,
+    2708807016148647871,
+    15028515490817591617,
+    7938841600796113786
+  ],
+  "target_compiler_inputs_digest": [
+    17918232944509350375,
+    14886071135714028072,
+    6693789402844304548,
+    17788748619340038616
+  ],
+  "founder_seed_base": 539363617,
+  "preserved_neuron_count": 2048,
+  "preserved_weight_count": 32768,
+  "optimizer_reset": true,
+  "value_state_reset": true,
+  "promoted": false
+}

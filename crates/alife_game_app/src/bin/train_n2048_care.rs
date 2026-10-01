@@ -6,7 +6,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args_os().skip(1);
     let mode = args
         .next()
-        .ok_or("usage: train_n2048_care --pilot|--teacher-pilot|--cycle OUTPUT_DIRECTORY [TICKS] [--seed N] [--food-after-world-tick N] | --resume-cycle PREVIOUS_DIRECTORY OUTPUT_DIRECTORY [TICKS] [--seed N]")?;
+        .ok_or("usage: train_n2048_care --pilot|--teacher-pilot|--cycle OUTPUT_DIRECTORY [TICKS] [--seed N] [--food-after-world-tick N] | --resume-cycle PREVIOUS_DIRECTORY OUTPUT_DIRECTORY [TICKS] [--seed N] | --refresh-terrain-founder SOURCE_DIRECTORY OUTPUT_DIRECTORY")?;
+    if mode == "--refresh-terrain-founder" {
+        let source = std::path::PathBuf::from(args.next().ok_or("missing terrain source")?);
+        let output =
+            std::path::PathBuf::from(args.next().ok_or("missing founder revision output")?);
+        if args.next().is_some() {
+            return Err("unexpected founder revision argument".into());
+        }
+        let receipt = alife_game_app::refresh_terrain_founder(&source, &output)?;
+        println!("{}", serde_json::to_string_pretty(&receipt)?);
+        return Ok(());
+    }
     if mode == "--teacher-adapted" {
         let source = std::path::PathBuf::from(args.next().ok_or("missing adaptation source")?);
         let output = std::path::PathBuf::from(args.next().ok_or("missing teacher output")?);

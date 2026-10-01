@@ -37,6 +37,22 @@ function Publish-State {
     Atomic-Json (Join-Path $run 'status.json') $state
     Atomic-Json $latest $state
 }
+function Assert-PriorHealth($Receipt, [string]$Context) {
+    if ($env:ALIFE_SLM_PRIOR -eq 'off') { return }
+    $prior = $Receipt.semantic_prior
+    if ($null -eq $prior -or $prior.failures -gt 0 -or $prior.prime_timeouts -gt 0) {
+        throw "${Context}: configured semantic prior was unavailable or failed; inspect its receipt before continuing."
+    }
+    # Deliberate whole-cohort dropout has no requests or delivered hints. A
+    # missing or timed-out provider must never be mistaken for that dropout.
+    $dropout = $prior.dropout_frames -gt 0 -and $prior.requests -eq 0 -and $prior.cache_hits -eq 0
+    if ($prior.delivered_frames -lt 1 -and -not $dropout) {
+        throw "${Context}: configured semantic prior delivered no grounded hints."
+    }
+    if ($env:ALIFE_SLM_PRIOR_MODEL -and $prior.model -ne $env:ALIFE_SLM_PRIOR_MODEL) {
+        throw "${Context}: semantic prior model differs from the requested model."
+    }
+}
 function Run-Command([string]$Program, [string[]]$Arguments, [string]$Log, [switch]$OneTest, [datetime]$DeadlineUtc = [datetime]::MaxValue) {
     if ([DateTime]::UtcNow -ge $DeadlineUtc) { throw [TimeoutException]::new('Wall-time budget exhausted before child launch.') }
     $info = [Diagnostics.ProcessStartInfo]::new($Program)
@@ -129,6 +145,13 @@ function Invoke-Campaign {
     $state.executableSha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
     $state.deadlineUtc = $deadline.ToString('o')
     Publish-State
+    # Measure the starting animal before spending the collection window. This
+    # uses the same frozen worlds as later comparisons, without promotion or
+    # requiring it to have already mastered every skill the campaign teaches.
+    $state['startingBehavior'] = Invoke-BehaviorPanel $exe $sourcePath 0 $collectionDeadline -FinalAssessment -Tag 'starting'
+    if (@($state.startingBehavior.scores | Where-Object { $_ -gt 0 }).Count -eq 0) {
+        throw 'Starting founder showed no held-out navigation, request contrast, speech, or care competence. Strengthen imitation before a campaign.'
+    }
     $previous = $sourcePath
     $index = 0
     while ([DateTime]::UtcNow -lt $collectionDeadline -and $index -lt $MaxCycles) {
@@ -160,6 +183,7 @@ function Invoke-Campaign {
             $receipt.training_ticks -lt 1 -or $receipt.new_asset_digest -notmatch '^[0-9a-f]{64}$') {
             throw "Cycle $index did not seal a valid next-cohort handoff."
         }
+        Assert-PriorHealth $receipt "Cycle $index"
         $scenario = Get-Content -Raw -LiteralPath (Join-Path $directory 'scenario.json') | ConvertFrom-Json
         if ($scenario.world_seed -ne $seed -or $scenario.lesson -ne $lesson -or
             @($scenario.food_position).Count -ne 3) {
@@ -273,6 +297,7 @@ function Invoke-BehaviorPanel([string]$Exe, [string]$Checkpoint, [int]$Index, [d
                 if ($receipt.teacher_mode -or $receipt.source_asset_digest -ne $identity.digest -or
                     $receipt.seed -ne $seed -or $receipt.founder_seed_base -ne $identity.founderSeed -or
                     $receipt.lesson -ne $lesson) {throw 'Frozen panel source/scenario mismatch.'}
+                Assert-PriorHealth $receipt "Frozen $lesson case $case"
                 if ($group -eq 1) {$contrastReceipts += $receipt}
                 $rows += [ordered]@{group=$group;case=$case;seed=$seed;passed=($receipt.lesson_completed -eq $true);
                     meals=$receipt.consumed_events;targetActions=$receipt.vocabulary_target_actions;

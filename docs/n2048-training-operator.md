@@ -44,10 +44,17 @@ tiredness, slowed sleep metabolism, and player praise). Source assets, saved
 individuals, and old receipts remain unchanged. Campaign `-Source` accepts the
 adaptation directory. It is an unpromoted candidate.
 
-The verified adapted checkpoint is bundled at
-`assets/founders/terrain-care-n2048-v1`. Use that directory, or a sealed terrain
-warm-up/cycle derived from it, for the next campaign. Do not resume the old
-object-slot checkpoint directly into these lessons.
+The legacy adapted checkpoint is bundled at
+`assets/founders/terrain-care-n2048-v1`. Its decoder predates inherited survival
+salience and fails current exact candidate admission. After rebuilding, explicitly
+revise it with `train_n2048_care --refresh-terrain-founder SOURCE NEW_DIRECTORY`.
+This validates the legacy source, preserves all 32,768 weight bits and synapse
+coordinates, records both decoder identities in `founder-refresh.json`, and checks
+ordinary strict admission and exact compiler reconstruction. The new candidate is
+unpromoted; optimizer and value state reset. Source files and saved individuals
+are retained. Use the revised directory for fresh lessons and warm-up; previous
+corpora do not match its new identity. This founder revision does not establish
+admission of descendants whose inherited decoder genes differ.
 
 Fresh training uses GroundedTerrainVisionV1. Candidate New Game launches derive
 their sensing profile from the selected asset; the legacy builtin Nano512 option
@@ -61,7 +68,7 @@ field (relative to the manifest, or an absolute path); replay still checks every
 demonstration's founder identity and foundation digest. Do not feed the old
 object-slot corpus into terrain warm-up.
 
-After rebuilding the release CLI, `scripts/collect_n2048_care_lessons.ps1 -Source assets/founders/terrain-care-n2048-v1 -Output target/founder-training/NEW_CORPUS`
+After rebuilding and revising the source, `scripts/collect_n2048_care_lessons.ps1 -Source REVISED_DIRECTORY -Output target/founder-training/NEW_CORPUS`
 defaults to the 86-demonstration `VisionLanguage` corpus: 14 care/vision/maze lessons,
 36 reception lessons, and 36 production lessons. Each direction visits all eighteen
 words twice, including real hunger/tiredness and food/toy subtypes.
@@ -166,6 +173,17 @@ within each replay window, normalized over their actually supervised outputs.
 One completed verb therefore receives the same positive budget as repeated noun
 labels in another comparable window. Labels still require physical grounding;
 there are no fabricated extra utterances. `warmup.json` records the normalization.
+
+Warmup now gives each complete demonstration one loss budget across all its
+windows, interleaves lesson categories, and retains the full-batch gradient
+divisor for a partial final batch. A campaign measures its starting asset in
+the existing frozen behavior panel before collecting cohorts and stops if all
+four skill scores are zero. Short calibration, demonstration collection and
+warmup remain available for an untrained source. When the prior is enabled,
+campaign and assisted-panel receipts must show delivery without provider
+failures or prime timeouts; intentional whole-cohort dropout is distinguished
+from an unavailable provider. These checks protect the collection budget;
+they do not establish acquired behavior or founder promotion.
 
 The offline teacher, warm-up, cycle, and frozen evaluation worlds now admit the
 same grounded terrain rule as the playable game. This converts canonical legacy

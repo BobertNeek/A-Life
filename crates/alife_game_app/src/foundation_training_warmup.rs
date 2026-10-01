@@ -40,6 +40,8 @@ pub struct FoundationWarmupReceipt {
     pub epochs: u32,
     #[serde(default)]
     pub speech_loss_normalization: String,
+    #[serde(default)]
+    pub episode_loss_normalization: String,
     pub losses: Vec<f32>,
     pub next_cohort_optimizer_rebound: bool,
 }
@@ -64,6 +66,50 @@ fn lesson_index(lesson: FoundationTeacherLesson) -> usize {
         FoundationTeacherLesson::VocabularyReception => 6,
         FoundationTeacherLesson::VocabularyProduction => 7,
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ImitationSpan {
+    demo: usize,
+    burn_start: usize,
+    start: usize,
+    end: usize,
+    episode_weight: f32,
+}
+
+fn imitation_spans(lessons: &[(FoundationTeacherLesson, usize)]) -> Vec<ImitationSpan> {
+    let mut categories = [const { Vec::new() }; 8];
+    for (demo, (lesson, _)) in lessons.iter().enumerate() {
+        categories[lesson_index(*lesson)].push(demo);
+    }
+    let mut demo_order = Vec::with_capacity(lessons.len());
+    for round in 0..categories.iter().map(Vec::len).max().unwrap_or(0) {
+        for category in &categories {
+            if let Some(demo) = category.get(round) {
+                demo_order.push(*demo);
+            }
+        }
+    }
+    let mut spans = Vec::new();
+    // Visit the first window of each lesson before later windows of a long
+    // lesson. Category round-robin also mixes a category-grouped manifest.
+    for start in (0..lessons.iter().map(|(_, len)| *len).max().unwrap_or(0)).step_by(256) {
+        for &demo in &demo_order {
+            let length = lessons[demo].1;
+            if start >= length {
+                continue;
+            }
+            let end = (start + 256).min(length);
+            spans.push(ImitationSpan {
+                demo,
+                burn_start: start.saturating_sub(128),
+                start,
+                end,
+                episode_weight: (end - start) as f32 / length as f32,
+            });
+        }
+    }
+    spans
 }
 
 fn imitation_example(
@@ -180,6 +226,7 @@ pub fn run_foundation_imitation_warmup(
     let mut category_counts = vec![0usize; 8];
     let mut seen_seeds = HashSet::new();
     let mut demos = Vec::with_capacity(32);
+    let mut lessons = Vec::with_capacity(manifest.pilots.len());
     let mut record_count = 0;
     let mut expected_source: Option<FoundationReplaySource> = None;
     for entry in &manifest.pilots {
@@ -227,6 +274,7 @@ pub fn run_foundation_imitation_warmup(
         {
             return Err("speech labels are not bound to the captured demonstration".into());
         }
+        lessons.push((lesson, references.len()));
         demos.push((directory.join("replay"), references, labels.targets));
     }
     if let Some(expected) = &manifest.category_counts {
@@ -236,17 +284,7 @@ pub fn run_foundation_imitation_warmup(
     }
     let expected_source = expected_source.ok_or("warm-up has no replay source")?;
     let budget = FoundationReplayBudget::default();
-    let mut spans = Vec::new();
-    for (demo, (_, references, _)) in demos.iter().enumerate() {
-        for start in (0..references.len()).step_by(256) {
-            spans.push((
-                demo,
-                start.saturating_sub(128),
-                start,
-                (start + 256).min(references.len()),
-            ));
-        }
-    }
+    let spans = imitation_spans(&lessons);
     let mut state = PpoTrainingState::default();
     let losses = train_recurrent_imitation(
         &mut trainer,
@@ -257,7 +295,13 @@ pub fn run_foundation_imitation_warmup(
         1.0,
         1.0,
         |index| {
-            let (demo, burn_start, start, end) = spans[index];
+            let ImitationSpan {
+                demo,
+                burn_start,
+                start,
+                end,
+                episode_weight,
+            } = spans[index];
             let (directory, references, targets) = &demos[demo];
             let replay = load_foundation_replay_window(
                 directory,
@@ -284,6 +328,7 @@ pub fn run_foundation_imitation_warmup(
             Ok(ImitationTrainingWindow {
                 sequence: replay.sequence,
                 examples,
+                episode_weight,
                 speech_targets: targets[burn_start..end]
                     .iter()
                     .enumerate()
@@ -347,6 +392,8 @@ pub fn run_foundation_imitation_warmup(
         epochs,
         speech_loss_normalization:
             "equal positive/silence budgets per replay window; normalized active outputs".into(),
+        episode_loss_normalization:
+            "loss-row fraction per demonstration; category/window round-robin; fixed full-batch gradient divisor; losses are actual-weight batch means".into(),
         losses,
         next_cohort_optimizer_rebound: true,
     };
@@ -355,4 +402,40 @@ pub fn run_foundation_imitation_warmup(
         serde_json::to_vec_pretty(&receipt)?,
     )?;
     Ok(receipt)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn long_demonstrations_keep_one_loss_budget_and_mix_with_short_lessons() {
+        use FoundationTeacherLesson::{Feeding, MazeNavigation, VocabularyReception};
+        let lessons = [
+            (Feeding, 58),
+            (Feeding, 100),
+            (MazeNavigation, 900),
+            (VocabularyReception, 20),
+        ];
+        let spans = imitation_spans(&lessons);
+        assert_eq!(
+            spans.iter().take(4).map(|s| s.demo).collect::<Vec<_>>(),
+            [0, 2, 3, 1]
+        );
+        for (demo, (_, length)) in lessons.iter().enumerate() {
+            let windows = spans.iter().filter(|s| s.demo == demo).collect::<Vec<_>>();
+            let weight: f32 = windows.iter().map(|s| s.episode_weight).sum();
+            assert!((weight - 1.0).abs() < 1.0e-6);
+            assert_eq!(
+                windows.iter().map(|s| s.end - s.start).sum::<usize>(),
+                *length
+            );
+            assert_eq!(windows.first().unwrap().start, 0);
+            assert_eq!(windows.last().unwrap().end, *length);
+            for pair in windows.windows(2) {
+                assert_eq!(pair[0].end, pair[1].start);
+                assert_eq!(pair[1].start - pair[1].burn_start, 128);
+            }
+        }
+    }
 }

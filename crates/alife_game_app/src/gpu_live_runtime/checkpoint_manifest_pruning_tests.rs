@@ -34,10 +34,24 @@ fn fixture(label: &str) -> (PathBuf, GpuLiveBrainRuntime, AssetManifestEntry) {
     };
     let mut assets = AssetManifest::empty();
     assets.entries.push(marker.clone());
-    let mut config = RuntimeConfig::deterministic_default(31_117, BrainScaleTier::Nano512);
+    let readiness = label == "readiness";
+    let class = if readiness {
+        BrainScaleTier::Standard2048
+    } else {
+        BrainScaleTier::Nano512
+    };
+    let founder = if readiness {
+        crate::NewGameFounderSelection::N2048Candidate {
+            asset_path: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../assets/founders/terrain-care-n2048-v2/trained.alife-foundation"),
+        }
+    } else {
+        crate::NewGameFounderSelection::BuiltinNano512
+    };
+    let mut config = RuntimeConfig::deterministic_default(31_117, class);
     config.features.gpu_backend_enabled = true;
-    let mut runtime =
-        crate::create_canonical_new_game_runtime(crate::CanonicalNewGameLaunchRequest {
+    let mut runtime = crate::create_canonical_new_game_runtime_with_founder(
+        crate::CanonicalNewGameLaunchRequest {
             world_seed: 31_117,
             population: if label == "readiness" { 1 } else { 4 },
             disable_age_death: false,
@@ -45,18 +59,22 @@ fn fixture(label: &str) -> (PathBuf, GpuLiveBrainRuntime, AssetManifestEntry) {
             asset_root,
             config,
             assets,
-        })
-        .unwrap()
-        .runtime;
+        },
+        founder,
+    )
+    .unwrap()
+    .runtime;
     println!(
         "MANIFEST_ROOTS_GPU_ADAPTER={} EVIDENCE={}",
         runtime.authority_telemetry().adapter,
         root.display()
     );
-    assert!(matches!(
-        runtime.tick_outcome().unwrap(),
-        GpuLiveTickOutcome::Progressed(_)
-    ));
+    if !readiness {
+        assert!(matches!(
+            runtime.tick_outcome().unwrap(),
+            GpuLiveTickOutcome::Progressed(_)
+        ));
+    }
     (root, runtime, marker)
 }
 
@@ -219,7 +237,7 @@ fn async_checkpoint_manifest_drops_stale_roots_and_preserves_old_save() {
 
 #[test]
 fn readiness_resume_preserves_external_actors_toys_and_private_prior() {
-    let (_root, mut runtime, _marker) = fixture("readiness");
+    let (root, mut runtime, _marker) = fixture("readiness");
     let organism = runtime.world.organism_entity_ids()[0].0;
     let position = runtime.world.object_snapshots()[0].position;
     let teacher = runtime
@@ -240,6 +258,123 @@ fn readiness_resume_preserves_external_actors_toys_and_private_prior() {
         .unwrap();
     prior.seed_resume_check(organism.raw(), runtime.world.tick().raw());
     runtime.semantic_prior = Some(prior);
+    let handle = runtime.handles[&organism.raw()];
+    assert_eq!(handle.class_id(), BrainCapacityClass::N2048_ID);
+    let initial_fast = runtime
+        .backend
+        .read_active_fast_weights_for_test(handle)
+        .unwrap();
+    let mut learning_transactions = 0;
+    let mut reported_fast_changes = 0;
+    let acquisition_deadline = Instant::now() + Duration::from_secs(60);
+    for _ in 0..8 {
+        readiness_tick(&mut runtime, acquisition_deadline);
+        for receipt in runtime.last_learning_receipts() {
+            if receipt.handle.organism_id() == organism {
+                learning_transactions += 1;
+                reported_fast_changes += receipt.fast_weights_changed;
+            }
+        }
+    }
+    let learned_fast = runtime
+        .backend
+        .read_active_fast_weights_for_test(handle)
+        .unwrap();
+    let learned_lifetime = runtime
+        .backend
+        .read_active_lifetime_weights_for_test(handle)
+        .unwrap();
+    let learned_changes = initial_fast
+        .iter()
+        .zip(&learned_fast)
+        .filter(|(a, b)| a.to_bits() != b.to_bits())
+        .count();
+    assert!(
+        learning_transactions > 0 && reported_fast_changes > 0 && learned_changes > 0,
+        "ordinary N2048 GPU outcomes must produce measured acquired weights: transactions={learning_transactions}, reported_changes={reported_fast_changes}, measured_changes={learned_changes}"
+    );
+    assert!(runtime.memories[&organism.raw()].bank().len() > 0);
+
+    // This is an explicit public recovery request, not induced biological sleep.
+    let before_sleep = runtime.residents[&organism.raw()].sleep_scheduler.state();
+    let transition = runtime.request_recovery_sleep(organism).unwrap();
+    assert_eq!(transition.from, SleepPhase::Awake);
+    let deadline = Instant::now() + Duration::from_secs(120);
+    let mut progressed = 0;
+    let mut saw_submitted = false;
+    let mut saw_completed = false;
+    let mut observations = Vec::new();
+    let mut previous = None;
+    while progressed < 96 && Instant::now() < deadline {
+        runtime.poll_persistence_for_shutdown().unwrap();
+        let state = runtime.residents[&organism.raw()].sleep_scheduler.state();
+        // Completed neural work waits for its normal durable publication permit.
+        if matches!(state.consolidation, ConsolidationState::Completed { .. })
+            && !runtime
+                .durable_completed_sleep_permitted_ids_for_test()
+                .contains(&organism)
+        {
+            thread::sleep(Duration::from_millis(1));
+            continue;
+        }
+        if matches!(
+            runtime.tick_outcome().unwrap(),
+            GpuLiveTickOutcome::Progressed(_)
+        ) {
+            progressed += 1;
+        }
+        let state = runtime.residents[&organism.raw()].sleep_scheduler.state();
+        saw_submitted |= matches!(state.consolidation, ConsolidationState::Submitted { .. });
+        saw_completed |= matches!(state.consolidation, ConsolidationState::Completed { .. });
+        if previous != Some(state) {
+            observations.push(serde_json::json!({"tick":runtime.world.tick(),"state":state}));
+            previous = Some(state);
+        }
+        if state.phase == SleepPhase::Awake
+            && state.last_consolidated_cycle_id == before_sleep.last_consolidated_cycle_id + 1
+        {
+            break;
+        }
+        thread::sleep(Duration::from_millis(1));
+    }
+    let after_sleep = runtime.residents[&organism.raw()].sleep_scheduler.state();
+    let slept_lifetime = runtime
+        .backend
+        .read_active_lifetime_weights_for_test(handle)
+        .unwrap();
+    let consolidated_changes = learned_lifetime
+        .iter()
+        .zip(&slept_lifetime)
+        .filter(|(a, b)| a.to_bits() != b.to_bits())
+        .count();
+    std::fs::write(root.join("readiness-learning-sleep.json"), serde_json::to_vec_pretty(
+        &serde_json::json!({
+            "brain_class":"N2048", "sleep_trigger":"public request_recovery_sleep",
+            "prior_coverage":"deterministically seeded private state; no service-delivery claim",
+            "learning_transactions":learning_transactions, "reported_fast_changes":reported_fast_changes,
+            "measured_fast_entries_changed":learned_changes,
+            "measured_lifetime_entries_changed":consolidated_changes,
+            "before_sleep":before_sleep,"after_sleep":after_sleep,"progressed_ticks":progressed,
+            "saw_submitted":saw_submitted,"saw_completed":saw_completed,"observations":observations,
+        })).unwrap()).unwrap();
+    assert!(saw_submitted && saw_completed);
+    assert_eq!(
+        after_sleep.phase,
+        SleepPhase::Awake,
+        "bounded recovery must actually wake"
+    );
+    assert_eq!(
+        after_sleep.cycles_completed,
+        before_sleep.cycles_completed + 1
+    );
+    assert_eq!(
+        after_sleep.last_consolidated_cycle_id,
+        before_sleep.last_consolidated_cycle_id + 1
+    );
+    assert!(
+        consolidated_changes > 0,
+        "measured waking learning must reach lifetime GPU weights"
+    );
     let world = runtime.world.canonical_signature_digest().unwrap();
     let biology = *runtime
         .world
@@ -253,8 +388,31 @@ fn readiness_resume_preserves_external_actors_toys_and_private_prior() {
         .unwrap()
         .snapshot(organism.raw())
         .unwrap();
-    capture(&mut runtime, CaptureKind::Async);
-    let mut restored = runtime.restored_clone_from_durability_for_test().unwrap();
+    let saved = capture(&mut runtime, CaptureKind::Async);
+    let neural = runtime
+        .backend
+        .snapshot_brain(handle, runtime.world.tick())
+        .unwrap();
+    let (manifest, loaded) =
+        GpuDurableSaveManifest::open_loaded(&root.join("live.json"), &root.join("assets")).unwrap();
+    assert_eq!(loaded.save, saved);
+    let mut restored = GpuLiveBrainRuntime::restore_loaded_save(
+        runtime.new_staging_like_live().unwrap(),
+        manifest,
+        loaded,
+        saved.deterministic_seed,
+        saved.config.brain_class,
+    )
+    .unwrap();
+    let restored_handle = restored.handles[&organism.raw()];
+    assert_eq!(restored_handle.class_id(), BrainCapacityClass::N2048_ID);
+    assert_eq!(
+        restored
+            .backend
+            .snapshot_brain(restored_handle, restored.world.tick())
+            .unwrap(),
+        neural
+    );
     assert_eq!(restored.world.canonical_signature_digest().unwrap(), world);
     assert_eq!(
         *restored
@@ -279,10 +437,50 @@ fn readiness_resume_preserves_external_actors_toys_and_private_prior() {
     assert_eq!(restored.handles.len(), runtime.handles.len());
     assert!(runtime.memories.get(&organism.raw()).unwrap().bank().len() > 0);
     assert_eq!(restored.memories, runtime.memories);
+    assert_eq!(restored.topologies, runtime.topologies);
+    assert_eq!(
+        restored.residents[&organism.raw()].sleep_scheduler.state(),
+        after_sleep
+    );
 
-    assert!(matches!(
-        restored.tick_outcome().unwrap(),
-        GpuLiveTickOutcome::Progressed(_)
-    ));
+    let next_deadline = Instant::now() + Duration::from_secs(60);
+    readiness_tick(&mut runtime, next_deadline);
+    readiness_tick(&mut restored, next_deadline);
+    assert_eq!(
+        restored.last_sealed_patches, runtime.last_sealed_patches,
+        "the first ordinary post-wake response must match uninterrupted life"
+    );
+    assert_eq!(
+        restored.world.canonical_signature_digest().unwrap(),
+        runtime.world.canonical_signature_digest().unwrap()
+    );
+    assert_eq!(restored.memories, runtime.memories);
+    assert_eq!(
+        restored
+            .backend
+            .snapshot_brain(restored_handle, restored.world.tick())
+            .unwrap(),
+        runtime
+            .backend
+            .snapshot_brain(handle, runtime.world.tick())
+            .unwrap()
+    );
     assert!(!restored.handles.contains_key(&9000001));
+    println!("READINESS_N2048 learned_fast_changes={learned_changes} consolidated_lifetime_changes={consolidated_changes} sleep_trigger=public_recovery exact_neural_world_memory_restore=true next_response_equal=true EVIDENCE={}", root.display());
+}
+
+fn readiness_tick(runtime: &mut GpuLiveBrainRuntime, deadline: Instant) {
+    loop {
+        assert!(
+            Instant::now() < deadline,
+            "bounded readiness tick did not progress"
+        );
+        match runtime.tick_outcome().unwrap() {
+            GpuLiveTickOutcome::Progressed(_) => return,
+            GpuLiveTickOutcome::NoProgress(_) => {
+                runtime.poll_persistence_for_shutdown().unwrap();
+                thread::sleep(Duration::from_millis(1));
+            }
+        }
+    }
 }

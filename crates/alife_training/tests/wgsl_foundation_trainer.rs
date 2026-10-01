@@ -978,9 +978,9 @@ fn n2048_curriculum_stage_trains_and_evaluates_256_held_out_gpu_episodes() {
 #[test]
 fn n2048_ppo_and_imitation_gpu_objective_matches_joint_derivatives_and_partial_batches() {
     use alife_training::{
-        train_recurrent_ppo_cohort, ImitationExample, ImitationTarget, PpoBatch, PpoBoundary,
-        PpoConfig, PpoGpuObjective, PpoJointAction, PpoReplayRow, PpoTrainingState,
-        PpoTrainingWindow, PpoTransition,
+        train_recurrent_imitation, train_recurrent_ppo_cohort, ImitationExample, ImitationTarget,
+        ImitationTrainingWindow, PpoBatch, PpoBoundary, PpoConfig, PpoGpuObjective, PpoJointAction,
+        PpoReplayRow, PpoTrainingState, PpoTrainingWindow, PpoTransition,
     };
     let genome = BrainGenome::scaffold(0x9900_2048, BrainCapacityClass::n2048().id());
     let development =
@@ -1238,7 +1238,7 @@ fn n2048_ppo_and_imitation_gpu_objective_matches_joint_derivatives_and_partial_b
             .upload(trainer.session(), &batch, &[row], config, 1, 7)
             .unwrap();
         objective
-            .upload_auxiliary_targets(trainer.session(), &batch, &[example.target], 1.0)
+            .upload_auxiliary_targets(trainer.session(), &batch, &[example.target.clone()], 1.0)
             .unwrap();
         let mut encoder = device.create_command_encoder(&Default::default());
         objective.encode_evaluate(&mut encoder).unwrap();
@@ -1302,6 +1302,49 @@ fn n2048_ppo_and_imitation_gpu_objective_matches_joint_derivatives_and_partial_b
         old_logp.to_bits(),
         "updates must never rewrite the recorded behavior likelihood"
     );
+    // The same loss in a half-weight tail keeps half the gradient, rather
+    // than being renormalized to a full batch. Check optimizer moments, since
+    // Adam's first parameter update can hide gradient-scale errors.
+    let mut weighted = Vec::new();
+    for weights in [vec![0.25, 0.75], vec![0.5]] {
+        trainer.restore_checkpoint(&frozen).unwrap();
+        let mut imitation_state = PpoTrainingState::default();
+        let losses = train_recurrent_imitation(
+            &mut trainer,
+            &mut imitation_state,
+            weights.len(),
+            2,
+            1,
+            1.0,
+            0.1,
+            |index| {
+                Ok(ImitationTrainingWindow {
+                    sequence: sequence.clone(),
+                    examples: vec![example.clone()],
+                    speech_targets: vec![None],
+                    episode_weight: weights[index],
+                })
+            },
+        )
+        .unwrap();
+        let checkpoint = trainer.checkpoint().unwrap();
+        assert_eq!(checkpoint.optimizer_step, 1);
+        assert_eq!(
+            imitation_state
+                .checkpoint(trainer.session())
+                .unwrap()
+                .optimizer_step,
+            0
+        );
+        weighted.push((checkpoint, losses[0]));
+    }
+    let full = &weighted[0].0;
+    let tail = &weighted[1].0;
+    let index = weight as usize;
+    assert!(full.first_moment[index].abs() > 1.0e-8);
+    assert!((tail.first_moment[index] / full.first_moment[index] - 0.5).abs() < 1.0e-5);
+    assert!((tail.second_moment[index] / full.second_moment[index] - 0.25).abs() < 1.0e-5);
+    assert!((weighted[0].1 - weighted[1].1).abs() < 1.0e-6);
 }
 
 fn ppo_contract_read(

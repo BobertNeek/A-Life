@@ -135,6 +135,247 @@ pub struct FoundationAdaptationReceipt {
     pub founder_biology_calibration: u16,
 }
 
+/// Explicit newborn-prior revision; source bytes and personal saves are untouched.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct FoundationFounderRefreshReceipt {
+    pub schema_version: u16,
+    pub source_asset_digest: String,
+    pub target_asset_digest: String,
+    pub source_decoder_digest: [u64; 4],
+    pub target_decoder_digest: [u64; 4],
+    pub source_compiler_inputs_digest: [u64; 4],
+    pub target_compiler_inputs_digest: [u64; 4],
+    pub founder_seed_base: u64,
+    pub preserved_neuron_count: u32,
+    pub preserved_weight_count: usize,
+    pub optimizer_reset: bool,
+    pub value_state_reset: bool,
+    pub promoted: bool,
+}
+
+/// Deliberately revise a sealed legacy terrain prior for current inherited
+/// founder salience. Strict candidate admission remains the acceptance gate.
+pub fn refresh_terrain_founder(
+    previous: &Path,
+    output: &Path,
+) -> Result<FoundationFounderRefreshReceipt> {
+    let receipt: FoundationAdaptationReceipt =
+        serde_json::from_slice(&std::fs::read(previous.join("adaptation.json"))?)?;
+    let source = FoundationWeightAsset::decode_canonical(&std::fs::read(
+        previous.join("trained.alife-foundation"),
+    )?)?;
+    let (target, adaptation, refresh) =
+        prepare_terrain_founder_refresh(previous, &receipt, &source)?;
+    let asset_bytes = target.encode_canonical()?;
+    let adaptation_bytes = serde_json::to_vec_pretty(&adaptation)?;
+    let refresh_bytes = serde_json::to_vec_pretty(&refresh)?;
+    // create_dir rejects existing destinations, including the immutable source.
+    std::fs::create_dir(output)?;
+    std::fs::write(output.join("trained.alife-foundation"), asset_bytes)?;
+    std::fs::write(output.join("adaptation.json"), adaptation_bytes)?;
+    std::fs::write(output.join("founder-refresh.json"), refresh_bytes)?;
+    Ok(refresh)
+}
+
+fn prepare_terrain_founder_refresh(
+    previous: &Path,
+    receipt: &FoundationAdaptationReceipt,
+    source: &FoundationWeightAsset,
+) -> Result<(
+    FoundationWeightAsset,
+    FoundationAdaptationReceipt,
+    FoundationFounderRefreshReceipt,
+)> {
+    let capacity = alife_core::BrainCapacityClass::n2048();
+    let profile = SensorProfile::GroundedTerrainVisionV1;
+    if receipt.founder_seed_base == 0
+        || receipt.policy_version == 0
+        || receipt.founder_biology_calibration != 2
+        || !receipt.optimizer_reset
+        || receipt.preserved_weight_count != 32_768
+        || source.weights().len() != 32_768
+        || source.manifest().capacity_class_id() != capacity.id()
+        || source.manifest().sensor_profile() != profile
+        || digest(source) != receipt.adapted_asset_digest
+    {
+        return Err(
+            "founder revision requires a sealed calibration-2 legacy terrain source".into(),
+        );
+    }
+    let mut config = alife_world::CanonicalNewGameConfig::phase3(receipt.founder_seed_base, 1)?;
+    config.brain_class = BrainScaleTier::Standard2048;
+    config.founder_seed_base = receipt.founder_seed_base;
+    config.sensor_profile = profile;
+    let game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, source)?;
+    let record = game
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .ok_or("source founder missing")?;
+    let genome = record.phenotype().brain_genome.clone();
+    let development = crate::gpu_live_runtime::foundation_construction_development(
+        &genome,
+        &capacity,
+        &record
+            .phenotype()
+            .development_state_at(alife_core::Tick::ZERO)?,
+    )?;
+    // This local copy reconstructs the source decoder identity. The current
+    // inherited founder genome and all source files remain intact.
+    let mut legacy_genome = genome.clone();
+    legacy_genome.innate_priority = alife_core::InnatePriorityGenes::default();
+    let (old, old_inputs) = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
+        legacy_genome,
+        development.clone(),
+        source.clone(),
+    )?;
+    let target = alife_core::PhenotypeCompiler::compile_testing_procedural_baseline(
+        &genome,
+        &capacity,
+        &development,
+        profile,
+    )?;
+    if old.candidate_decoder().canonical_digest() == target.candidate_decoder().canonical_digest()
+        || old.persistent_address_map() != target.persistent_address_map()
+        || old.synapses().len() != target.synapses().len()
+        || old.neuron_dynamics() != target.neuron_dynamics()
+        || old.sensor_encoder() != target.sensor_encoder()
+        || old.synapses().iter().zip(target.synapses()).any(|(a, b)| {
+            a.source() != b.source()
+                || a.target() != b.target()
+                || a.route_index() != b.route_index()
+                || a.kind() != b.kind()
+                || a.alpha().to_bits() != b.alpha().to_bits()
+                || a.receptor_index() != b.receptor_index()
+        })
+    {
+        return Err(
+            "founder revision must change only supported inherited decoder metadata".into(),
+        );
+    }
+    let revised = FoundationWeightAsset::from_trained_weights(
+        &target,
+        source.weights().to_vec(),
+        source.manifest().training_stage(),
+    )?;
+    let (admitted, inputs) = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
+        genome,
+        development,
+        revised.clone(),
+    )?;
+    let restored_inputs: alife_core::PhenotypeCompilerInputs =
+        serde_json::from_slice(&serde_json::to_vec(&inputs)?)?;
+    if restored_inputs != inputs
+        || alife_core::PhenotypeCompiler::compile_validated(&restored_inputs, &capacity)?
+            != admitted
+        || revised.manifest().promotion_receipt().is_promoted()
+        || admitted
+            .synapses()
+            .iter()
+            .zip(source.weights())
+            .any(|(synapse, weight)| synapse.genetic_weight().to_bits() != weight.to_bits())
+        || revised
+            .weights()
+            .iter()
+            .zip(source.weights())
+            .any(|(a, b)| a.to_bits() != b.to_bits())
+    {
+        return Err("founder revision failed exact weight or compiler-resume acceptance".into());
+    }
+    let source_asset_digest = digest(source);
+    let target_asset_digest = digest(&revised);
+    let refresh = FoundationFounderRefreshReceipt {
+        schema_version: 1,
+        source_asset_digest: source_asset_digest.clone(),
+        target_asset_digest: target_asset_digest.clone(),
+        source_decoder_digest: old.candidate_decoder().canonical_digest(),
+        target_decoder_digest: admitted.candidate_decoder().canonical_digest(),
+        source_compiler_inputs_digest: old_inputs.canonical_digest(),
+        target_compiler_inputs_digest: inputs.canonical_digest(),
+        founder_seed_base: receipt.founder_seed_base,
+        preserved_neuron_count: admitted.neuron_count(),
+        preserved_weight_count: source.weights().len(),
+        optimizer_reset: true,
+        value_state_reset: true,
+        promoted: false,
+    };
+    let adaptation = FoundationAdaptationReceipt {
+        source_directory: previous.to_path_buf(),
+        source_asset_digest,
+        adapted_asset_digest: target_asset_digest,
+        founder_seed_base: receipt.founder_seed_base,
+        policy_version: receipt
+            .policy_version
+            .checked_add(1)
+            .ok_or("policy version overflow")?,
+        preserved_weight_count: source.weights().len(),
+        optimizer_reset: true,
+        founder_biology_calibration: receipt.founder_biology_calibration,
+    };
+    Ok((revised, adaptation, refresh))
+}
+
+#[cfg(test)]
+mod founder_refresh_tests {
+    use super::*;
+
+    fn sealed_source() -> (
+        std::path::PathBuf,
+        FoundationAdaptationReceipt,
+        FoundationWeightAsset,
+    ) {
+        let directory = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/founders/terrain-care-n2048-v1");
+        let receipt =
+            serde_json::from_slice(&std::fs::read(directory.join("adaptation.json")).unwrap())
+                .unwrap();
+        let source = FoundationWeightAsset::decode_canonical(
+            &std::fs::read(directory.join("trained.alife-foundation")).unwrap(),
+        )
+        .unwrap();
+        (directory, receipt, source)
+    }
+
+    #[test]
+    fn n2048_terrain_founder_refresh_preserves_weights_and_strict_resume() {
+        let (directory, receipt, source) = sealed_source();
+        let original_bytes = source.encode_canonical().unwrap();
+        let (revised, adaptation, refresh) =
+            prepare_terrain_founder_refresh(&directory, &receipt, &source).unwrap();
+        assert_eq!(source.encode_canonical().unwrap(), original_bytes);
+        assert_eq!(refresh.source_asset_digest, receipt.adapted_asset_digest);
+        assert_eq!(refresh.target_asset_digest, adaptation.adapted_asset_digest);
+        assert_ne!(refresh.source_asset_digest, refresh.target_asset_digest);
+        assert_ne!(refresh.source_decoder_digest, refresh.target_decoder_digest);
+        assert_eq!(refresh.preserved_neuron_count, 2_048);
+        assert_eq!(refresh.preserved_weight_count, 32_768);
+        assert!(refresh.optimizer_reset && refresh.value_state_reset);
+        assert!(!refresh.promoted);
+        assert!(source
+            .weights()
+            .iter()
+            .zip(revised.weights())
+            .all(|(a, b)| { a.to_bits() == b.to_bits() }));
+        assert_eq!(
+            FoundationWeightAsset::decode_canonical(&revised.encode_canonical().unwrap()).unwrap(),
+            revised
+        );
+        // A current revision cannot enter the authenticated legacy-source path.
+        assert!(prepare_terrain_founder_refresh(&directory, &adaptation, &revised).is_err());
+    }
+
+    #[test]
+    fn n2048_terrain_founder_refresh_rejects_unsealed_receipt() {
+        let (directory, mut receipt, source) = sealed_source();
+        receipt.adapted_asset_digest = "0".repeat(64);
+        assert!(prepare_terrain_founder_refresh(&directory, &receipt, &source).is_err());
+        receipt.adapted_asset_digest = digest(&source);
+        receipt.founder_biology_calibration = 1;
+        assert!(prepare_terrain_founder_refresh(&directory, &receipt, &source).is_err());
+    }
+}
+
 /// Explicit candidate migration. Personal state is absent, and the source is
 /// immutable. Changing observations invalidates old optimizer/value statistics.
 pub fn adapt_foundation_to_terrain(

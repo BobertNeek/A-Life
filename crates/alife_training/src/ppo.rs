@@ -1434,6 +1434,9 @@ pub struct ImitationTrainingWindow {
     pub sequence: crate::TrainingSequence,
     pub examples: Vec<ImitationExample>,
     pub speech_targets: Vec<Option<crate::ReplaySpeechTarget>>,
+    /// Fraction of one demonstration's loss assigned to this window.
+    /// All windows of a demonstration sum to one.
+    pub episode_weight: f32,
 }
 
 /// Warmup on the same recurrent graph. Labels are only consumed by the GPU
@@ -1467,17 +1470,23 @@ where
         for start in (0..window_count).step_by(effective_batch_size) {
             let end = (start + effective_batch_size).min(window_count);
             let counts = (start..end)
-                .map(|index| load_window(index).map(|window| window.examples.len()))
+                .map(|index| {
+                    load_window(index).map(|window| (window.examples.len(), window.episode_weight))
+                })
                 .collect::<Result<Vec<_>, _>>()?;
-            if counts.contains(&0) {
+            if counts
+                .iter()
+                .any(|(count, weight)| *count == 0 || !weight.is_finite() || *weight <= 0.0)
+            {
                 return Err(invalid());
             }
             trainer.begin_gradient_accumulation((end - start) as u32)?;
             let result = (|| -> Result<(), TrainingError> {
                 let mut loss = 0.0f64;
+                let mut loss_weight = 0.0f64;
                 for index in start..end {
                     let window = load_window(index)?;
-                    if window.examples.len() != counts[index - start] {
+                    if (window.examples.len(), window.episode_weight) != counts[index - start] {
                         return Err(invalid());
                     }
                     trainer.prepare_replay(&window.sequence)?;
@@ -1500,17 +1509,19 @@ where
                         &objective.output,
                         objective.imitation_metric_bytes(),
                     )?;
-                    // Each demonstration is one curriculum episode. Equal
-                    // episode weight keeps a short feeding lesson from being
-                    // drowned by longer hazard or recovery trajectories.
-                    let scale = 1.0 / (end - start) as f32;
-                    loss += f64::from(imitation_mean_loss(&metrics)?) * f64::from(scale);
+                    // Splitting a long episode must not multiply its loss budget.
+                    // Keep the full-batch divisor for the tail as well, so its
+                    // remaining episodes do not receive amplified gradients.
+                    let scale = window.episode_weight / effective_batch_size as f32;
+                    loss += f64::from(imitation_mean_loss(&metrics)?)
+                        * f64::from(window.episode_weight);
+                    loss_weight += f64::from(window.episode_weight);
                     let encoder = new_encoder(trainer.session(), "imitation-accumulate")?;
                     trainer.accumulate_replay_gradients(encoder, &objective.output, 0, scale)?;
                 }
                 let encoder = new_encoder(trainer.session(), "imitation-effective-batch-update")?;
                 trainer.apply_accumulated_gradients(encoder)?;
-                losses.push(loss as f32);
+                losses.push((loss / loss_weight) as f32);
                 Ok(())
             })();
             if let Err(error) = result {
