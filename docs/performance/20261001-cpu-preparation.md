@@ -5,6 +5,10 @@ included in candidate `a11dae6a5708bddf7d4255990f3bd4abaf12759a`.
 They do not measure that candidate's game frame time. Windows/RTX before/after
 performance and the 20 FPS/50-creature goal remain **Unknown**.
 
+The older receipts retain every structured sample, payload vector, source hash
+and outcome. Copied console mirrors were removed after exact field comparison;
+the original presentation remains in Git at `a11dae6a`.
+
 ## Results and measured sources
 
 Each receipt retains exact commits, source/probe/executable hashes, individual

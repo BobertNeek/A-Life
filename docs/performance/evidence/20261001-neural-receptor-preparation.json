@@ -7,24 +7,8 @@
   "profile": "GroundedObjectSlotsV1",
   "neurons": 512,
   "synapses": 1799,
-  "phenotype_hash_words": [
-    6065064667413789549,
-    13546277938225041666,
-    911374632553786748,
-    4734672017039105409
-  ],
-  "expression": [
-    0.4375,
-    0.34375,
-    0.625,
-    0.4375,
-    0.625,
-    0.4375,
-    0.4375,
-    0.375,
-    0.5,
-    0.75
-  ],
+  "phenotype_hash_words": [6065064667413789549, 13546277938225041666, 911374632553786748, 4734672017039105409],
+  "expression": [0.4375, 0.34375, 0.625, 0.4375, 0.625, 0.4375, 0.4375, 0.375, 0.5, 0.75],
   "method": {
     "processes": 3,
     "warmup_compile_calls_per_process": 100,
@@ -36,140 +20,26 @@
   "min_compile_ns_per_eight_rows": 894752,
   "max_compile_ns_per_eight_rows": 993219,
   "limitations": [
-    "Repeated calls use the same immutable phenotype and warmed process; not eight live residents or the exact Windows save.",
-    "Copy-only numbers exclude production cache lookup, construction/invalidation, and fresh chemistry projection; no implemented-cache speedup claimed.",
-    "GroundedTerrainVisionV1 was excluded because builtin_nano512_v1 rejects it; exact measured save sensor profile/capacity remains Unknown.",
-    "No main/candidate live benchmark or RTX proof."
+    "Repeated calls use the same immutable phenotype and warmed process; not eight live residents or the exact Windows save.", "Copy-only numbers exclude production cache lookup, construction/invalidation, and fresh chemistry projection; no implemented-cache speedup claimed.", "GroundedTerrainVisionV1 was excluded because builtin_nano512_v1 rejects it; exact measured save sensor profile/capacity remains Unknown.", "No main/candidate live benchmark or RTX proof."
   ],
   "probe_sha256": "33794b882ce3554134910495267152fd0d83dd529aa236b96f830ad8a080e23e",
   "executable_sha256": "96cf247fcc3e0b7f45a8fc473384ffabb9122808ee456f15a79fcf833f54f7a7",
   "source_blobs": {
-    "crates/alife_core/src/neural_receptors.rs": {
-      "e76e9e12": "633225748c1574334066d5317325aad5ca9f9925",
-      "ad99ac1c": "633225748c1574334066d5317325aad5ca9f9925",
-      "f8ccfb13": "633225748c1574334066d5317325aad5ca9f9925"
-    },
-    "crates/alife_core/src/canonical_digest.rs": {
-      "e76e9e12": "6a794212cb68b0b640f4164b5dcb5ab5bcf5cdc8",
-      "ad99ac1c": "6a794212cb68b0b640f4164b5dcb5ab5bcf5cdc8",
-      "f8ccfb13": "6a794212cb68b0b640f4164b5dcb5ab5bcf5cdc8"
-    },
-    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": {
-      "e76e9e12": "eddf6482896bcc45b9696eae428ded0db2d48e84",
-      "ad99ac1c": "eddf6482896bcc45b9696eae428ded0db2d48e84",
-      "f8ccfb13": "eddf6482896bcc45b9696eae428ded0db2d48e84"
-    },
-    "crates/alife_game_app/src/bevy_shell.rs": {
-      "e76e9e12": "089abb6a253a001854a358c4a2f1d504663b1d20",
-      "ad99ac1c": "089abb6a253a001854a358c4a2f1d504663b1d20",
-      "f8ccfb13": "089abb6a253a001854a358c4a2f1d504663b1d20"
-    },
-    "crates/alife_gpu_backend/src/closed_loop_pipeline.rs": {
-      "e76e9e12": "445ba59de5c299d1cd819af41f9e04643bc6fad0",
-      "ad99ac1c": "445ba59de5c299d1cd819af41f9e04643bc6fad0",
-      "f8ccfb13": "445ba59de5c299d1cd819af41f9e04643bc6fad0"
-    },
-    "crates/alife_gpu_backend/src/closed_loop_activity.rs": {
-      "e76e9e12": "af12a1513d71bfb9ed1ad8c4e02a7a40ef3a4f28",
-      "ad99ac1c": "af12a1513d71bfb9ed1ad8c4e02a7a40ef3a4f28",
-      "f8ccfb13": "af12a1513d71bfb9ed1ad8c4e02a7a40ef3a4f28"
-    },
-    "crates/alife_game_app/src/production_voxel_renderer/performance_receipt.rs": {
-      "e76e9e12": "a61f100be26623f1ddf1c4787325212ac706e326",
-      "ad99ac1c": "a61f100be26623f1ddf1c4787325212ac706e326",
-      "f8ccfb13": "a61f100be26623f1ddf1c4787325212ac706e326"
-    }
+    "crates/alife_core/src/neural_receptors.rs": {"e76e9e12": "633225748c1574334066d5317325aad5ca9f9925", "ad99ac1c": "633225748c1574334066d5317325aad5ca9f9925", "f8ccfb13": "633225748c1574334066d5317325aad5ca9f9925"},
+    "crates/alife_core/src/canonical_digest.rs": {"e76e9e12": "6a794212cb68b0b640f4164b5dcb5ab5bcf5cdc8", "ad99ac1c": "6a794212cb68b0b640f4164b5dcb5ab5bcf5cdc8", "f8ccfb13": "6a794212cb68b0b640f4164b5dcb5ab5bcf5cdc8"},
+    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": {"e76e9e12": "eddf6482896bcc45b9696eae428ded0db2d48e84", "ad99ac1c": "eddf6482896bcc45b9696eae428ded0db2d48e84", "f8ccfb13": "eddf6482896bcc45b9696eae428ded0db2d48e84"},
+    "crates/alife_game_app/src/bevy_shell.rs": {"e76e9e12": "089abb6a253a001854a358c4a2f1d504663b1d20", "ad99ac1c": "089abb6a253a001854a358c4a2f1d504663b1d20", "f8ccfb13": "089abb6a253a001854a358c4a2f1d504663b1d20"},
+    "crates/alife_gpu_backend/src/closed_loop_pipeline.rs": {"e76e9e12": "445ba59de5c299d1cd819af41f9e04643bc6fad0", "ad99ac1c": "445ba59de5c299d1cd819af41f9e04643bc6fad0", "f8ccfb13": "445ba59de5c299d1cd819af41f9e04643bc6fad0"},
+    "crates/alife_gpu_backend/src/closed_loop_activity.rs": {"e76e9e12": "af12a1513d71bfb9ed1ad8c4e02a7a40ef3a4f28", "ad99ac1c": "af12a1513d71bfb9ed1ad8c4e02a7a40ef3a4f28", "f8ccfb13": "af12a1513d71bfb9ed1ad8c4e02a7a40ef3a4f28"},
+    "crates/alife_game_app/src/production_voxel_renderer/performance_receipt.rs": {"e76e9e12": "a61f100be26623f1ddf1c4787325212ac706e326", "ad99ac1c": "a61f100be26623f1ddf1c4787325212ac706e326", "f8ccfb13": "a61f100be26623f1ddf1c4787325212ac706e326"}
   },
   "unchanged_function_sha256": {
-    "crates/alife_world/src/headless.rs::fn first_sight_hit(": {
-      "e76e9e12": "1104c204872f11ce84a1731494bd56a5a5286b0e449aee1778b5e88dc2373cf3",
-      "ad99ac1c": "1104c204872f11ce84a1731494bd56a5a5286b0e449aee1778b5e88dc2373cf3",
-      "f8ccfb13": "1104c204872f11ce84a1731494bd56a5a5286b0e449aee1778b5e88dc2373cf3"
-    },
-    "crates/alife_core/src/phenotype/record.rs::pub fn recompute_phenotype_hash(": {
-      "e76e9e12": "5bae59c71aa6b148b36aa5cde1916d0039e6617b97cf815013e596a2b6160307",
-      "ad99ac1c": "5bae59c71aa6b148b36aa5cde1916d0039e6617b97cf815013e596a2b6160307",
-      "f8ccfb13": "5bae59c71aa6b148b36aa5cde1916d0039e6617b97cf815013e596a2b6160307"
-    }
+    "crates/alife_world/src/headless.rs::fn first_sight_hit(": {"e76e9e12": "1104c204872f11ce84a1731494bd56a5a5286b0e449aee1778b5e88dc2373cf3", "ad99ac1c": "1104c204872f11ce84a1731494bd56a5a5286b0e449aee1778b5e88dc2373cf3", "f8ccfb13": "1104c204872f11ce84a1731494bd56a5a5286b0e449aee1778b5e88dc2373cf3"},
+    "crates/alife_core/src/phenotype/record.rs::pub fn recompute_phenotype_hash(": {"e76e9e12": "5bae59c71aa6b148b36aa5cde1916d0039e6617b97cf815013e596a2b6160307", "ad99ac1c": "5bae59c71aa6b148b36aa5cde1916d0039e6617b97cf815013e596a2b6160307", "f8ccfb13": "5bae59c71aa6b148b36aa5cde1916d0039e6617b97cf815013e596a2b6160307"}
   },
   "runs": [
-    {
-      "process": 1,
-      "raw_stdout": "profile=GroundedObjectSlotsV1 neuron_count=512 synapse_count=1799 phenotype_hash=PhenotypeHash([6065064667413789549, 13546277938225041666, 911374632553786748, 4734672017039105409]) expression=[0.4375, 0.34375, 0.625, 0.4375, 0.625, 0.4375, 0.4375, 0.375, 0.5, 0.75] compile_ns_per_eight_rows=[993219, 940976, 949567, 939679, 902328, 922470, 935040, 987183, 917281] reuse_ns_per_eight_rows=[7, 7, 7, 8, 7, 7, 7, 7, 7]\n",
-      "compile_ns_per_eight_rows": [
-        993219,
-        940976,
-        949567,
-        939679,
-        902328,
-        922470,
-        935040,
-        987183,
-        917281
-      ],
-      "copy_only_ns_per_eight_rows": [
-        7,
-        7,
-        7,
-        8,
-        7,
-        7,
-        7,
-        7,
-        7
-      ]
-    },
-    {
-      "process": 2,
-      "raw_stdout": "profile=GroundedObjectSlotsV1 neuron_count=512 synapse_count=1799 phenotype_hash=PhenotypeHash([6065064667413789549, 13546277938225041666, 911374632553786748, 4734672017039105409]) expression=[0.4375, 0.34375, 0.625, 0.4375, 0.625, 0.4375, 0.4375, 0.375, 0.5, 0.75] compile_ns_per_eight_rows=[940207, 942475, 910052, 901659, 901990, 924646, 913227, 958185, 947840] reuse_ns_per_eight_rows=[7, 7, 7, 7, 7, 7, 7, 7, 7]\n",
-      "compile_ns_per_eight_rows": [
-        940207,
-        942475,
-        910052,
-        901659,
-        901990,
-        924646,
-        913227,
-        958185,
-        947840
-      ],
-      "copy_only_ns_per_eight_rows": [
-        7,
-        7,
-        7,
-        7,
-        7,
-        7,
-        7,
-        7,
-        7
-      ]
-    },
-    {
-      "process": 3,
-      "raw_stdout": "profile=GroundedObjectSlotsV1 neuron_count=512 synapse_count=1799 phenotype_hash=PhenotypeHash([6065064667413789549, 13546277938225041666, 911374632553786748, 4734672017039105409]) expression=[0.4375, 0.34375, 0.625, 0.4375, 0.625, 0.4375, 0.4375, 0.375, 0.5, 0.75] compile_ns_per_eight_rows=[935385, 918688, 897348, 911214, 907778, 894752, 930865, 895893, 898944] reuse_ns_per_eight_rows=[7, 7, 7, 7, 7, 7, 7, 7, 7]\n",
-      "compile_ns_per_eight_rows": [
-        935385,
-        918688,
-        897348,
-        911214,
-        907778,
-        894752,
-        930865,
-        895893,
-        898944
-      ],
-      "copy_only_ns_per_eight_rows": [
-        7,
-        7,
-        7,
-        7,
-        7,
-        7,
-        7,
-        7,
-        7
-      ]
-    }
+    {"process": 1, "compile_ns_per_eight_rows": [993219, 940976, 949567, 939679, 902328, 922470, 935040, 987183, 917281], "copy_only_ns_per_eight_rows": [7, 7, 7, 8, 7, 7, 7, 7, 7]},
+    {"process": 2, "compile_ns_per_eight_rows": [940207, 942475, 910052, 901659, 901990, 924646, 913227, 958185, 947840], "copy_only_ns_per_eight_rows": [7, 7, 7, 7, 7, 7, 7, 7, 7]},
+    {"process": 3, "compile_ns_per_eight_rows": [935385, 918688, 897348, 911214, 907778, 894752, 930865, 895893, 898944], "copy_only_ns_per_eight_rows": [7, 7, 7, 7, 7, 7, 7, 7, 7]}
   ]
 }
