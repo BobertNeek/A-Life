@@ -1,5 +1,6 @@
 //! In-engine screenshots, also usable when Windows desktop capture is unavailable.
 use super::*;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::{Query, ViewVisibility};
 use std::io::Write;
 
@@ -14,6 +15,14 @@ pub(super) struct CaptureSession {
     traced_frames: u32,
     interval: f64,
     maximum: u32,
+}
+
+#[derive(SystemParam)]
+pub(super) struct CaptureView<'w, 's> {
+    cameras:
+        Query<'w, 's, (&'static Transform, &'static Projection), With<Fvr03ProductionVoxelCamera>>,
+    hand: Option<Res<'w, god_hand::HandInteraction>>,
+    selection: Res<'w, Fvr03ProductionVoxelSelectionResource>,
 }
 
 pub(super) fn capture_player_view(
@@ -40,11 +49,14 @@ pub(super) fn capture_player_view(
     #[cfg(feature = "gpu-runtime")] runtime: Option<NonSend<ProductionGpuBrainRuntimeResource>>,
     meshes: Res<Assets<Mesh>>,
     visible_meshes: Query<(&Mesh3d, &ViewVisibility)>,
-    cameras: Query<(&Transform, &Projection), With<Fvr03ProductionVoxelCamera>>,
-    hand: Option<Res<god_hand::HandInteraction>>,
-    selection: Res<Fvr03ProductionVoxelSelectionResource>,
+    view: CaptureView,
     mut commands: Commands,
 ) {
+    let CaptureView {
+        cameras,
+        hand,
+        selection,
+    } = view;
     if !session.initialized {
         session.directory = std::env::var_os("ALIFE_GRAPHICS_CAPTURE_DIR").map(PathBuf::from);
         if let Some(path) = std::env::var_os("ALIFE_ACTION_TRACE_PATH") {

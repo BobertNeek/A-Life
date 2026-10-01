@@ -747,17 +747,6 @@ impl Fvr03ProductionVoxelSceneResource {
             })
     }
 
-    fn world_position_for_selection(&self, selection: StableVoxelObjectRef) -> Option<Vec3> {
-        if let Some(stable_id) = selection.stable_id {
-            if let Some(position) = self.selection_positions_by_raw_id.get(&stable_id.raw()) {
-                return Some(*position);
-            }
-        }
-        selection
-            .tile
-            .map(|tile| Vec3::new(tile.x as f32 + 0.5, 1.46, tile.z as f32 + 0.5))
-    }
-
     fn tile_summary_for_selection(
         &self,
         selection: Option<StableVoxelObjectRef>,
@@ -6392,68 +6381,6 @@ fn handle_fvr03_camera_mode_input(
             orthographic.scaling_mode = ScalingMode::FixedVertical {
                 viewport_height: extent,
             };
-        }
-    }
-}
-
-fn sync_fvr04_selection_marker(
-    scene: Res<Fvr03ProductionVoxelSceneResource>,
-    surface: Res<creature_grounding::RenderedTerrainSurface>,
-    selection: Res<Fvr03ProductionVoxelSelectionResource>,
-    entity_map: Res<BevyEntityMap>,
-    roots: bevy::prelude::Query<
-        (&ProductionCreatureAssemblyRoot, &Transform),
-        Without<Fvr03ProductionVoxelSelectionMarker>,
-    >,
-    mut markers: bevy::prelude::Query<
-        (&mut Transform, &mut Visibility),
-        With<Fvr03ProductionVoxelSelectionMarker>,
-    >,
-) {
-    let Some(selected) = selection.selected else {
-        for (_, mut visibility) in &mut markers {
-            if *visibility != Visibility::Hidden {
-                *visibility = Visibility::Hidden;
-            }
-        }
-        return;
-    };
-    let position = if selected.kind == StableVoxelRefKind::Creature {
-        selected.stable_id.and_then(|stable_id| {
-            let entity = entity_map.bevy_entity(stable_id)?;
-            roots
-                .get(entity)
-                .ok()
-                .filter(|(root, _)| root.stable_id == stable_id)
-                .map(|(_, transform)| transform.translation)
-        })
-    } else {
-        scene.world_position_for_selection(selected)
-    };
-    let Some(position) = position else {
-        for (_, mut visibility) in &mut markers {
-            if *visibility != Visibility::Hidden {
-                *visibility = Visibility::Hidden;
-            }
-        }
-        return;
-    };
-    for (mut transform, mut visibility) in &mut markers {
-        let y = surface.height(position).unwrap_or(position.y) + 0.045;
-        let next_translation = Vec3::new(position.x, y, position.z);
-        let h = |offset| surface.height(position + offset).unwrap_or(y - 0.045);
-        let normal = Vec3::new(
-            h(Vec3::NEG_X * 0.3) - h(Vec3::X * 0.3),
-            0.6,
-            h(Vec3::NEG_Z * 0.3) - h(Vec3::Z * 0.3),
-        )
-        .normalize();
-        transform.rotation = Quat::from_rotation_arc(Vec3::Y, normal);
-        if transform.translation != next_translation {
-            transform.translation = next_translation;
-        }
-        if *visibility != Visibility::Visible {
-            *visibility = Visibility::Visible;
         }
     }
 }
