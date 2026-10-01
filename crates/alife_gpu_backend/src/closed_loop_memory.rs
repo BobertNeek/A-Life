@@ -91,6 +91,9 @@ impl GpuMemoryContextUpload {
             .validate_for_frame(frame)
             .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
         let upload = Self::build_local(frame, recall, perception_binding, slot)?;
+        // Inputs and encoded bounds are checked above. Rebuilding this fresh
+        // upload for an exact self-comparison is a development diagnostic.
+        #[cfg(debug_assertions)]
         upload.validate_against(frame, recall, slot)?;
         Ok(upload)
     }

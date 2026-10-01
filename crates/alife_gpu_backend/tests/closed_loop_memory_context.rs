@@ -4,16 +4,15 @@ mod support;
 
 #[cfg(feature = "gpu-tests")]
 use alife_core::{
-    BiochemistryState, BodyEventDelta, BrainGenome, DecisionSnapshot, DevelopmentState,
-    EndocrineDelta, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
-    HomeostaticDelta, JointMotorCondition, JointPhysicalOutcome, MeasuredPhysiologyTransition,
-    NeuralActionSelection, NormalizedScalar, OutcomeCreditPacket, PhenotypeCompiler,
-    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, PreActionSnapshot,
-    PredictionTargetReceipt, SemanticStateVector, SignedValence, Tick, Vec3f,
+    BiochemistryState, BodyEventDelta, JointMotorCondition, JointPhysicalOutcome,
+    MeasuredPhysiologyTransition, OutcomeCreditPacket, PhenotypeCompiler, PredictionTargetReceipt,
 };
 use alife_core::{
-    BrainCapacityClass, Confidence, DecoderHeadKind, MemoryBank, MemoryBankConfig,
-    PerceptionFrameDraft, SensorProfile,
+    BrainCapacityClass, BrainGenome, Confidence, DecisionSnapshot, DecoderHeadKind,
+    DevelopmentState, EndocrineDelta, ExperiencePatch, ExperiencePatchBuilder,
+    ExperienceSequenceId, HomeostaticDelta, MemoryBank, MemoryBankConfig, NeuralActionSelection,
+    NormalizedScalar, PerceptionFrameDraft, PhysicalActionOutcome, PhysicalContactKind,
+    PostActionOutcome, PreActionSnapshot, SensorProfile, SignedValence, Tick, Vec3f,
 };
 use alife_gpu_backend::{
     GpuBrainSlotExtensionRecord, GpuBufferAccess, GpuCandidateMemoryRecord,
@@ -29,7 +28,6 @@ use alife_gpu_backend::{
     GpuClosedLoopTick,
 };
 
-#[cfg(feature = "gpu-tests")]
 fn memory_draft_from_frame(frame: &alife_core::PerceptionFrame) -> PerceptionFrameDraft {
     PerceptionFrameDraft::new(
         frame.organism_id(),
@@ -45,7 +43,6 @@ fn memory_draft_from_frame(frame: &alife_core::PerceptionFrame) -> PerceptionFra
     .unwrap()
 }
 
-#[cfg(feature = "gpu-tests")]
 fn painful_memory_patch(
     frame: &alife_core::PerceptionFrame,
     recall: &alife_core::FinalizedMemoryRecall,
@@ -762,6 +759,233 @@ fn finalized_memory_upload_binds_base_context_final_and_perception_header_identi
         GpuMemoryContextUpload::try_from_finalized(&frame, &recall, foreign_binding, &slot,)
             .is_err()
     );
+}
+
+// Use the existing checked-in Nano512 extension fixture without changing live
+// admission or the experimental fixture owned by the foundation worker.
+fn cognitive_memory_slot() -> alife_gpu_backend::GpuBrainSlot {
+    let asset = alife_core::FoundationWeightAsset::decode_canonical(include_bytes!(
+        "../../../assets/founders/scaled-choice-nociceptive-v1/candidate.alife-foundation"
+    ))
+    .unwrap();
+    let manifest = asset.manifest();
+    let identity = alife_core::FoundationGeneticIdentity::new(
+        manifest.foundation_id().raw(),
+        manifest.foundation_version().raw() as u16,
+        manifest.compatibility_family_id().raw(),
+        manifest.capacity_class_id(),
+    )
+    .unwrap();
+    let extension = alife_core::CognitiveChannelExtensionV1::try_new_v1(
+        identity,
+        alife_core::ActionCandidateCreditProfileV1::SignedChoiceReadouts,
+    )
+    .unwrap();
+    let candidate =
+        alife_core::Nano512ActionCreditCandidateV2::new_with_cognitive_extension(&asset, extension)
+            .unwrap();
+    let (phenotype, _) =
+        alife_core::PhenotypeCompiler::compile_nano512_action_credit_candidate(&candidate).unwrap();
+    let mut bucket = GpuClassBucketPlan::new(BrainCapacityClass::n512(), 1).unwrap();
+    let slot = bucket.insert_phenotype(0, 1, &phenotype).unwrap();
+    assert_eq!(slot.decoder_input_stride(), 54);
+    slot
+}
+
+fn populated_projected_memory(
+    predicted_successor: Vec<f32>,
+) -> (
+    alife_core::PerceptionFrame,
+    alife_core::FinalizedMemoryRecall,
+) {
+    let initial =
+        support::perception_frame_for_profile(811, SensorProfile::GroundedObjectSlotsV1, true, 2);
+    let (initial, empty) = support::empty_recall(&initial);
+    let phenotype = support::phenotype_for_capacity_at_maturation(
+        BrainCapacityClass::n512(),
+        0xC600_0003,
+        0.35,
+        SensorProfile::GroundedObjectSlotsV1,
+    );
+    let mut bank = MemoryBank::new(
+        MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap(),
+    )
+    .unwrap();
+    bank.observe_sealed_patch(&painful_memory_patch(
+        &initial,
+        &empty,
+        phenotype.brain_class_id(),
+        phenotype.phenotype_hash(),
+    ))
+    .unwrap();
+    let source = support::perception_frame_for_profile_at_tick(
+        811,
+        initial.tick().raw() + 2,
+        SensorProfile::GroundedObjectSlotsV1,
+        true,
+        2,
+    );
+    let draft = memory_draft_from_frame(&source);
+    let mut cognitive = alife_core::CognitiveContextFrame::empty(
+        source.organism_id(),
+        ExperienceSequenceId(9_002),
+        source.tick(),
+    )
+    .unwrap();
+    let state = alife_core::SemanticStateVector::new(vec![0.4; 13]).unwrap();
+    let motor = alife_core::JointMotorCondition::new(vec![alife_core::MotorChannelFactor {
+        channel: alife_core::MotorChannel::Locomotion,
+        primitive: alife_core::ActionId(200),
+        intensity: 0.8,
+        duration_ticks: 2,
+        direction: Vec3f::new(1.0, 0.0, 0.0),
+        stand_off_distance: 0.0,
+        confidence: 0.9,
+        target: None,
+        payload: Vec::new(),
+        coordination_group: 0,
+    }])
+    .unwrap();
+    let mut prediction = alife_core::GroundedSuccessorPredictor::default()
+        .predict(&state, &motor)
+        .unwrap();
+    prediction.source_digest = draft.base_digest().0;
+    prediction.predicted_successor = predicted_successor;
+    cognitive.cognitive_projection =
+        Some(alife_core::cognitive_context::CognitiveProjectionFrame {
+            schema_version: alife_core::cognitive_context::CognitiveProjectionFrame::SCHEMA_VERSION,
+            base_frame_digest: draft.base_digest(),
+            candidates: draft
+                .candidates()
+                .iter()
+                .map(
+                    |candidate| alife_core::cognitive_context::CognitiveCandidateInput {
+                        candidate_index: candidate.candidate_index,
+                        candidate_feature_digest: candidate.feature_digest().unwrap(),
+                        tracked_object_id: None,
+                        prediction: prediction.clone(),
+                        forecast_available: true,
+                        concept_match: NormalizedScalar::new(0.2).unwrap(),
+                        gap_match: NormalizedScalar::new(0.3).unwrap(),
+                        prior_residual: NormalizedScalar::new(0.4).unwrap(),
+                    },
+                )
+                .collect(),
+            objects: Vec::new(),
+        });
+    bank.recall_frame(&draft)
+        .unwrap()
+        .with_cognitive_context(cognitive)
+        .unwrap()
+        .finalize(draft)
+        .unwrap()
+}
+
+#[test]
+fn populated_memory_upload_preserves_projection_and_rejects_tampered_payloads() {
+    let slot = cognitive_memory_slot();
+    let (frame, recall) = populated_projected_memory(vec![0.6; 13]);
+    let perception = GpuPerceptionUpload::try_from_frame(&frame, &slot, 0).unwrap();
+    let upload = GpuMemoryContextUpload::try_from_finalized(
+        &frame,
+        &recall,
+        perception.frame_binding,
+        &slot,
+    )
+    .unwrap();
+    upload.validate_against(&frame, &recall, &slot).unwrap();
+    assert!(upload
+        .records
+        .iter()
+        .any(|row| row.source_counts_packed != 0));
+    assert!(upload.records.iter().any(|row| row.family_value[0] < 0.0));
+    assert_eq!(upload.cognitive_records.len(), frame.candidates().len());
+    for row in &upload.cognitive_records {
+        assert_eq!(row.schema_version, 1);
+        assert_eq!(&row.values[..13], &[0.6; 13]);
+        assert_eq!(&row.values[13..], &[0.2, 0.3, 0.4, 1.0, 0.0]);
+    }
+    let mutations: [fn(&mut GpuMemoryContextUpload); 7] = [
+        |upload| upload.header.slot_generation += 1,
+        |upload| upload.header.perception_header_index += 1,
+        |upload| upload.records[0].target_latent[0] = f32::NAN,
+        |upload| upload.records[0].candidate_index += 1,
+        |upload| {
+            upload.records.pop();
+        },
+        |upload| upload.cognitive_records[0].values[0] = f32::NAN,
+        |upload| {
+            upload.cognitive_records.pop();
+        },
+    ];
+    for mutate in mutations {
+        let mut tampered = upload.clone();
+        mutate(&mut tampered);
+        assert!(tampered.validate_against(&frame, &recall, &slot).is_err());
+    }
+}
+
+#[test]
+fn memory_upload_constructor_rejects_foreign_bindings_and_frames() {
+    let slot = cognitive_memory_slot();
+    let (frame, recall) = populated_projected_memory(vec![0.6; 13]);
+    let perception = GpuPerceptionUpload::try_from_frame(&frame, &slot, 0).unwrap();
+    let mutations: [fn(&mut alife_gpu_backend::GpuPerceptionFrameBinding); 7] = [
+        |binding| binding.slot += 1,
+        |binding| binding.slot_generation += 1,
+        |binding| binding.tick = Tick::new(binding.tick.raw() + 1),
+        |binding| binding.candidate_count += 1,
+        |binding| binding.base_frame_digest = alife_core::PerceptionBaseDigest([9; 4]),
+        |binding| binding.context_digest = alife_core::PerceptionContextDigest([9; 4]),
+        |binding| binding.final_frame_digest = alife_core::PerceptionFrameDigest([9; 4]),
+    ];
+    for mutate in mutations {
+        let mut foreign = perception.frame_binding;
+        mutate(&mut foreign);
+        assert!(
+            GpuMemoryContextUpload::try_from_finalized(&frame, &recall, foreign, &slot).is_err()
+        );
+    }
+    let foreign =
+        support::perception_frame_for_profile(812, SensorProfile::GroundedObjectSlotsV1, true, 2);
+    assert!(GpuMemoryContextUpload::try_from_finalized(
+        &foreign,
+        &recall,
+        perception.frame_binding,
+        &slot,
+    )
+    .is_err());
+}
+
+#[test]
+fn memory_upload_constructor_retains_projection_finite_and_width_checks() {
+    let slot = cognitive_memory_slot();
+    for (successor, expected_error) in [
+        (
+            vec![f32::NAN; 13],
+            alife_gpu_backend::GpuClosedLoopError::NonFinitePayload,
+        ),
+        (
+            vec![0.6; 14],
+            alife_gpu_backend::GpuClosedLoopError::MalformedUpload,
+        ),
+    ] {
+        let (frame, recall) = populated_projected_memory(successor);
+        // These input types admit forecast vectors; encoding enforces the GPU
+        // lane width and finiteness even when release self-diagnostics are off.
+        recall.validate_for_frame(&frame).unwrap();
+        let perception = GpuPerceptionUpload::try_from_frame(&frame, &slot, 0).unwrap();
+        assert_eq!(
+            GpuMemoryContextUpload::try_from_finalized(
+                &frame,
+                &recall,
+                perception.frame_binding,
+                &slot,
+            )
+            .unwrap_err(),
+            expected_error,
+        );
+    }
 }
 
 #[cfg(feature = "gpu-tests")]
