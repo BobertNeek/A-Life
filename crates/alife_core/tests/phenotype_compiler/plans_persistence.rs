@@ -1071,7 +1071,17 @@ fn shared_sensor_lane_ranges_allocate_unique_vision_and_glyph_coordinates() {
     let development =
         DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
     let phenotype = compile_genome(&genome, &development, SensorProfile::PrivilegedAffordanceV1);
-    assert_eq!(phenotype.sensor_encoder().assignments().len(), 120);
+    let expected_receptors = genome
+        .sensor_layout
+        .channels
+        .iter()
+        .filter(|gene| sensor_gene_is_active(gene, &development))
+        .map(|gene| usize::from(gene.receptor_count))
+        .sum::<usize>();
+    assert_eq!(
+        phenotype.sensor_encoder().assignments().len(),
+        expected_receptors,
+    );
     let keys = phenotype
         .sensor_encoder()
         .assignments()
@@ -1091,6 +1101,12 @@ fn shared_sensor_lane_ranges_allocate_unique_vision_and_glyph_coordinates() {
 fn shared_sensor_lane_ranges_allocate_unique_smell_and_taste_coordinates() {
     let capacity = BrainCapacityClass::n512();
     let mut genome = BrainGenome::scaffold(0x5E45_1002, capacity.id());
+    genome.sensor_layout.channels.retain(|gene| {
+        !matches!(
+            gene.kind,
+            SensorChannelKind::Smell | SensorChannelKind::Taste
+        )
+    });
     for kind in [SensorChannelKind::Smell, SensorChannelKind::Taste] {
         genome.sensor_layout.channels.push(SensorChannelGene {
             kind,

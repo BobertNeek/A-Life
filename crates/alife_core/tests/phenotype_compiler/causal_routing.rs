@@ -228,6 +228,13 @@ mod task3_causal_genome_and_routing_red_tests {
             .all(|alpha| (*alpha - 0.75).abs() < f32::EPSILON));
     }
 
+    fn prepare_sensor_gene(genome: &mut BrainGenome, _: &mut DevelopmentState) {
+        genome
+            .sensor_layout
+            .channels
+            .retain(|gene| gene.kind != SensorChannelKind::Proprioception);
+    }
+
     fn mutate_sensor_gene(genome: &mut BrainGenome, _: &mut DevelopmentState) {
         genome.sensor_layout.channels.push(SensorChannelGene {
             kind: SensorChannelKind::Proprioception,
@@ -358,7 +365,7 @@ mod task3_causal_genome_and_routing_red_tests {
             },
             CausalCase {
                 name: "sensor gene",
-                prepare: no_fixture_change,
+                prepare: prepare_sensor_gene,
                 mutate: mutate_sensor_gene,
                 assert_expected_change: assert_sensor_gene_change,
             },
@@ -402,6 +409,29 @@ mod task3_causal_genome_and_routing_red_tests {
     }
 
     type InvalidGenomeMutation = fn(&mut BrainGenome);
+
+    #[test]
+    fn duplicate_sensor_modality_and_target_remain_rejected() {
+        for kind in [
+            SensorChannelKind::Vision,
+            SensorChannelKind::Smell,
+            SensorChannelKind::Proprioception,
+        ] {
+            let (mut genome, development) = fixture();
+            compile_ok(&genome, &development);
+            let gene = *genome
+                .sensor_layout
+                .channels
+                .iter()
+                .find(|gene| gene.kind == kind)
+                .unwrap();
+            genome.sensor_layout.channels.push(gene);
+            assert!(
+                compile_result(&genome, &development).is_err(),
+                "accepted duplicate {kind:?}"
+            );
+        }
+    }
 
     struct InvalidGenomeCase {
         name: &'static str,
