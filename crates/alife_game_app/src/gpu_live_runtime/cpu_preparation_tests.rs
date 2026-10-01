@@ -5,6 +5,9 @@ use alife_core::{HysteresisState, StableFocusIdentity, TrackedObjectId};
 use alife_world::HeadlessScenarioBuilder;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+#[path = "terrain_hint_tests.rs"]
+mod terrain_hint_tests;
+
 struct OwnerFixture {
     input: CapturedCpuPreparation,
     memory: MemorySidecarState,
@@ -14,36 +17,101 @@ struct OwnerFixture {
 
 impl OwnerFixture {
     fn new(owner: u64, learned: bool) -> Self {
+        Self::profiled(
+            owner,
+            learned,
+            SensorProfile::GroundedObjectSlotsV1,
+            BrainScaleTier::Nano512,
+        )
+    }
+
+    fn terrain(owner: u64, learned: bool) -> Self {
+        Self::profiled(
+            owner,
+            learned,
+            SensorProfile::GroundedTerrainVisionV1,
+            BrainScaleTier::Standard2048,
+        )
+    }
+
+    fn profiled(
+        owner: u64,
+        learned: bool,
+        sensor_profile: SensorProfile,
+        brain_class: BrainScaleTier,
+    ) -> Self {
         let organism = OrganismId(owner);
-        // Same established two-food scenario as the object-bound attention test.
+        // Keep the established object-slot scenario; TerrainVision only sees
+        // the forward cone, so both distinct foods must lie ahead of its gaze.
+        let food_b = if sensor_profile == SensorProfile::GroundedTerrainVisionV1 {
+            Vec3f::new(2.0, 0.0, -1.0)
+        } else {
+            Vec3f::new(-2.0, 0.0, 0.0)
+        };
         let mut world = HeadlessScenarioBuilder::new(77_112)
             .agent("agent", organism, Vec3f::ZERO)
             .food("food-a", Vec3f::new(4.0, 0.0, 0.0), 0.8)
-            .food("food-b", Vec3f::new(-2.0, 0.0, 0.0), 0.8)
+            .food("food-b", food_b, 0.8)
             .build()
             .unwrap();
-        super::super::tests::register_sealing_test_organism(&mut world, organism);
+        if brain_class == BrainScaleTier::Nano512 {
+            super::super::tests::register_sealing_test_organism(&mut world, organism);
+        } else {
+            let (asset, _) = terrain_reference_foundation();
+            let manifest = asset.manifest();
+            let identity = FoundationGeneticIdentity::new(
+                manifest.foundation_id().raw(),
+                manifest.foundation_version().raw() as u16,
+                manifest.compatibility_family_id().raw(),
+                BrainCapacityClass::N2048_ID,
+            )
+            .unwrap();
+            let genome = alife_core::CreatureGenome::early_mammal_founder(9_308, identity).unwrap();
+            let phenotype = genome.express().unwrap();
+            let biology = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+            let entity = world.organism_entity_ids()[0].1;
+            world
+                .register_organism_record(
+                    WorldOrganismRecord::new(
+                        organism,
+                        entity,
+                        genome,
+                        phenotype,
+                        biology,
+                        Tick::ZERO,
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+        }
         let draft = world
             .perception_frame_draft(
                 organism,
                 Tick::ZERO,
-                SensorProfile::GroundedObjectSlotsV1,
+                sensor_profile,
                 HomeostaticSnapshot::baseline(Tick::ZERO),
             )
             .unwrap();
+        assert_eq!(draft.grounded_object_slots().len(), 2);
         let object_b = draft
             .grounded_object_slots()
             .iter()
-            .find(|s| s.bearing[1] < 0.0)
+            .find(|s| {
+                if sensor_profile == SensorProfile::GroundedTerrainVisionV1 {
+                    s.bearing[0] < 0.0
+                } else {
+                    s.bearing[1] < 0.0
+                }
+            })
             .unwrap()
             .tracked_object_id;
-        let (phenotype, _) = GpuLiveBrainRuntime::compile_birth(
-            &world,
-            BrainScaleTier::Nano512,
-            SensorProfile::GroundedObjectSlotsV1,
-            organism,
-        )
-        .unwrap();
+        let phenotype = if brain_class == BrainScaleTier::Nano512 {
+            GpuLiveBrainRuntime::compile_birth(&world, brain_class, sensor_profile, organism)
+                .unwrap()
+                .0
+        } else {
+            terrain_reference_foundation().1
+        };
         let canonical = world.organism_registry().get(organism).unwrap();
         let mut neural_receptors = canonical
             .biochemistry()
@@ -171,6 +239,53 @@ impl OwnerFixture {
     }
 }
 
+fn terrain_reference_foundation() -> (FoundationWeightAsset, alife_core::BrainPhenotype) {
+    // Same native CPU construction as initial_n2048_care_asset. Builtins reject
+    // TerrainVision; do not relabel an object-slot asset or use obsolete metadata.
+    let capacity = BrainCapacityClass::n2048();
+    let genome = BrainGenome::scaffold(77_112, capacity.id());
+    let development = DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar(1.0));
+    let native = PhenotypeCompiler::compile_testing_procedural_baseline(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::GroundedTerrainVisionV1,
+    )
+    .unwrap();
+    let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&native).unwrap();
+    let (phenotype, inputs) =
+        PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset.clone())
+            .unwrap();
+    assert_eq!(
+        PhenotypeCompiler::compile_validated(&inputs, &capacity).unwrap(),
+        phenotype
+    );
+    assert_eq!(
+        phenotype.sensor_profile(),
+        SensorProfile::GroundedTerrainVisionV1
+    );
+    (asset, phenotype)
+}
+
+fn terrain_slots(count: usize) -> Vec<GpuBrainSlot> {
+    let (_, phenotype) = terrain_reference_foundation();
+    let mut bucket =
+        alife_gpu_backend::GpuClassBucketPlan::new(BrainCapacityClass::n2048(), count as u32)
+            .unwrap();
+    (0..count)
+        .map(|index| {
+            let slot = bucket
+                .insert_phenotype(index as u32, 1, &phenotype)
+                .unwrap();
+            assert_eq!(
+                slot.record().class_id,
+                u32::from(BrainCapacityClass::N2048_ID.raw())
+            );
+            slot
+        })
+        .collect()
+}
+
 fn canonical_slots(count: usize) -> Vec<GpuBrainSlot> {
     let asset = FoundationWeightAsset::decode_canonical(include_bytes!(
         "../../../../assets/founders/scaled-choice-nociceptive-v1/candidate.alife-foundation"
@@ -273,18 +388,17 @@ fn assert_once(faults: &PreparationFaults) {
 }
 
 #[test]
-fn worker_policy_preserves_live_prior_polling_and_bounds_workers() {
+fn worker_policy_bounds_workers_after_serial_hint_capture() {
     for rows in [8, 16, 50, 1_000] {
         for available in [2, 4, 64] {
-            assert_eq!(preparation_worker_count(rows, available, false), 2);
-            assert_eq!(preparation_worker_count(rows, available, true), 1);
+            assert_eq!(preparation_worker_count(rows, available), 2);
         }
     }
     for rows in 0..8 {
-        assert_eq!(preparation_worker_count(rows, 64, false), 1);
+        assert_eq!(preparation_worker_count(rows, 64), 1);
     }
     for available in [0, 1] {
-        assert_eq!(preparation_worker_count(50, available, false), 1);
+        assert_eq!(preparation_worker_count(50, available), 1);
     }
 }
 
