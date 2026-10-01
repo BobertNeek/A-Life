@@ -1,0 +1,731 @@
+{
+  "scope": "CPU-only indexed perception draft preparation in synthetic world; no neural phenotype/device/dispatch or authoritative live tick",
+  "baseline_source_head": "3e8f3578dd7f2c967cce5ebd8fdf3dfee27ba618",
+  "baseline_headless_blob": "5f5c3df2772adfe22a45ab0c3ddaf3e890f190df",
+  "patched_headless_blob": "3a7b219225d7d8e8d3618645e536f7709fbdaa0d",
+  "host": "AMD EPYC 9V74 under KVM, Linux 6.18.44; five exposed CPUs; taskset CPU 0",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "build": "test-profile alife_core/alife_world rlibs at existing opt-level 2, lean debug settings; probe rustc --edition=2021 -O",
+  "probe_sha256": "4b237465a06cdd12339319700580a70d69fe6d2532bf5d7f5392bbff175054d2",
+  "method": {
+    "alternating_variant_order": [
+      [
+        "baseline",
+        "patched"
+      ],
+      [
+        "patched",
+        "baseline"
+      ],
+      [
+        "baseline",
+        "patched"
+      ]
+    ],
+    "processes_per_variant": 3,
+    "warmup_cohorts_per_case": 20,
+    "samples_per_process_per_case": 5,
+    "cohorts_per_sample": 20,
+    "rows_per_cohort": 8
+  },
+  "fixture": {
+    "seed": 60012,
+    "observers": 8,
+    "observer_x_spacing": 0.05,
+    "heightfield": "81x81 flat, origin(-24,-24), spacing1",
+    "obstacles": 1716,
+    "near_occluder": [
+      2,
+      -0.15,
+      2.25,
+      0.15,
+      0,
+      2
+    ],
+    "other_obstacles": "1715 boxes at x,z >=25; not actual island geometry",
+    "targets": [
+      "near visible(3,2)",
+      "near occluded(4,0)",
+      "exact radius(0,8)",
+      "outside radius(0,8.0001)"
+    ],
+    "far_target_counts": [
+      0,
+      32,
+      128
+    ],
+    "far_targets": "x=9+0.4*(i%16),z=0.4*(i/16); neighboring cells and gaze cone"
+  },
+  "limitations": [
+    "Synthetic preparation calls on warmed cloud CPU, not Windows/RTX proof or exact island save.",
+    "Full serialized draft BLAKE3 hashes and lengths match before/after for all six cases; boundary objects and occluder are included.",
+    "GroundedObjectSlots bypasses terrain sight rays; timing variation in that control is not evidence of avoided GPU/simulation work.",
+    "No receptor cache, GPU batching/synchronization change, reduced neural work, or cadence/population change."
+  ],
+  "summary": [
+    {
+      "profile": "GroundedObjectSlotsV1",
+      "far_count": 0,
+      "samples_per_variant": 15,
+      "baseline": {
+        "median_ns": 512695,
+        "min_ns": 484508,
+        "max_ns": 637499
+      },
+      "patched": {
+        "median_ns": 520635,
+        "min_ns": 489273,
+        "max_ns": 565479
+      },
+      "draft_bytes": 152053,
+      "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4",
+      "observed_median_reduction_percent": -1.5486790391948446
+    },
+    {
+      "profile": "GroundedObjectSlotsV1",
+      "far_count": 32,
+      "samples_per_variant": 15,
+      "baseline": {
+        "median_ns": 546673,
+        "min_ns": 501945,
+        "max_ns": 660241
+      },
+      "patched": {
+        "median_ns": 538314,
+        "min_ns": 504467,
+        "max_ns": 703452
+      },
+      "draft_bytes": 152053,
+      "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4",
+      "observed_median_reduction_percent": 1.5290676510455015
+    },
+    {
+      "profile": "GroundedObjectSlotsV1",
+      "far_count": 128,
+      "samples_per_variant": 15,
+      "baseline": {
+        "median_ns": 545125,
+        "min_ns": 506768,
+        "max_ns": 722826
+      },
+      "patched": {
+        "median_ns": 537739,
+        "min_ns": 513304,
+        "max_ns": 852147
+      },
+      "draft_bytes": 152053,
+      "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4",
+      "observed_median_reduction_percent": 1.3549185966521438
+    },
+    {
+      "profile": "GroundedTerrainVisionV1",
+      "far_count": 0,
+      "samples_per_variant": 15,
+      "baseline": {
+        "median_ns": 1575748,
+        "min_ns": 1512094,
+        "max_ns": 1985532
+      },
+      "patched": {
+        "median_ns": 1463924,
+        "min_ns": 1381578,
+        "max_ns": 1847530
+      },
+      "draft_bytes": 112191,
+      "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f",
+      "observed_median_reduction_percent": 7.096566202209997
+    },
+    {
+      "profile": "GroundedTerrainVisionV1",
+      "far_count": 32,
+      "samples_per_variant": 15,
+      "baseline": {
+        "median_ns": 3477288,
+        "min_ns": 3362109,
+        "max_ns": 4420023
+      },
+      "patched": {
+        "median_ns": 1545382,
+        "min_ns": 1420257,
+        "max_ns": 1927491
+      },
+      "draft_bytes": 112191,
+      "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f",
+      "observed_median_reduction_percent": 55.557837027016454
+    },
+    {
+      "profile": "GroundedTerrainVisionV1",
+      "far_count": 128,
+      "samples_per_variant": 15,
+      "baseline": {
+        "median_ns": 10277293,
+        "min_ns": 9713011,
+        "max_ns": 11039379
+      },
+      "patched": {
+        "median_ns": 1603530,
+        "min_ns": 1546921,
+        "max_ns": 1986717
+      },
+      "draft_bytes": 112191,
+      "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f",
+      "observed_median_reduction_percent": 84.3973505474642
+    }
+  ],
+  "variants": {
+    "baseline": {
+      "executable_sha256": "413637fb178ed230ed0ef21b979855dac395eed5dc504a19359c09207fb994af",
+      "runs": [
+        {
+          "process": 1,
+          "raw_stdout": "profile=GroundedObjectSlotsV1 far_count=0 obstacles=1716 samples_ns_per_eight_rows=[537433, 500408, 508363, 503805, 498366] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedObjectSlotsV1 far_count=32 obstacles=1716 samples_ns_per_eight_rows=[558456, 508210, 505290, 501945, 602882] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedObjectSlotsV1 far_count=128 obstacles=1716 samples_ns_per_eight_rows=[506768, 529928, 535549, 533142, 508054] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedTerrainVisionV1 far_count=0 obstacles=1716 samples_ns_per_eight_rows=[1518207, 1541464, 1566365, 1665839, 1580519] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\nprofile=GroundedTerrainVisionV1 far_count=32 obstacles=1716 samples_ns_per_eight_rows=[3477288, 3479411, 3383395, 3441715, 3428361] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\nprofile=GroundedTerrainVisionV1 far_count=128 obstacles=1716 samples_ns_per_eight_rows=[9942120, 10209928, 10277293, 9869211, 10410184] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\n",
+          "cases": [
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 0,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                537433,
+                500408,
+                508363,
+                503805,
+                498366
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 32,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                558456,
+                508210,
+                505290,
+                501945,
+                602882
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 128,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                506768,
+                529928,
+                535549,
+                533142,
+                508054
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 0,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                1518207,
+                1541464,
+                1566365,
+                1665839,
+                1580519
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 32,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                3477288,
+                3479411,
+                3383395,
+                3441715,
+                3428361
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 128,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                9942120,
+                10209928,
+                10277293,
+                9869211,
+                10410184
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            }
+          ]
+        },
+        {
+          "process": 2,
+          "raw_stdout": "profile=GroundedObjectSlotsV1 far_count=0 obstacles=1716 samples_ns_per_eight_rows=[512695, 494221, 508538, 517822, 484508] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedObjectSlotsV1 far_count=32 obstacles=1716 samples_ns_per_eight_rows=[512569, 562165, 616441, 620084, 660241] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedObjectSlotsV1 far_count=128 obstacles=1716 samples_ns_per_eight_rows=[603994, 722826, 598558, 656589, 524614] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedTerrainVisionV1 far_count=0 obstacles=1716 samples_ns_per_eight_rows=[1669804, 1512094, 1562658, 1536760, 1575748] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\nprofile=GroundedTerrainVisionV1 far_count=32 obstacles=1716 samples_ns_per_eight_rows=[3405034, 3492176, 3463546, 3363474, 3362109] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\nprofile=GroundedTerrainVisionV1 far_count=128 obstacles=1716 samples_ns_per_eight_rows=[9846673, 9713011, 10372708, 10154672, 10053461] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\n",
+          "cases": [
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 0,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                512695,
+                494221,
+                508538,
+                517822,
+                484508
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 32,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                512569,
+                562165,
+                616441,
+                620084,
+                660241
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 128,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                603994,
+                722826,
+                598558,
+                656589,
+                524614
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 0,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                1669804,
+                1512094,
+                1562658,
+                1536760,
+                1575748
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 32,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                3405034,
+                3492176,
+                3463546,
+                3363474,
+                3362109
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 128,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                9846673,
+                9713011,
+                10372708,
+                10154672,
+                10053461
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            }
+          ]
+        },
+        {
+          "process": 3,
+          "raw_stdout": "profile=GroundedObjectSlotsV1 far_count=0 obstacles=1716 samples_ns_per_eight_rows=[637499, 612244, 556827, 527733, 537508] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedObjectSlotsV1 far_count=32 obstacles=1716 samples_ns_per_eight_rows=[521302, 517252, 546673, 531370, 556420] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedObjectSlotsV1 far_count=128 obstacles=1716 samples_ns_per_eight_rows=[586243, 545125, 601076, 559176, 528478] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedTerrainVisionV1 far_count=0 obstacles=1716 samples_ns_per_eight_rows=[1643825, 1837439, 1671130, 1985532, 1570754] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\nprofile=GroundedTerrainVisionV1 far_count=32 obstacles=1716 samples_ns_per_eight_rows=[3611945, 3614937, 3800930, 4420023, 4108712] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\nprofile=GroundedTerrainVisionV1 far_count=128 obstacles=1716 samples_ns_per_eight_rows=[10868791, 10835435, 10693792, 10962648, 11039379] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\n",
+          "cases": [
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 0,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                637499,
+                612244,
+                556827,
+                527733,
+                537508
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 32,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                521302,
+                517252,
+                546673,
+                531370,
+                556420
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 128,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                586243,
+                545125,
+                601076,
+                559176,
+                528478
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 0,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                1643825,
+                1837439,
+                1671130,
+                1985532,
+                1570754
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 32,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                3611945,
+                3614937,
+                3800930,
+                4420023,
+                4108712
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 128,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                10868791,
+                10835435,
+                10693792,
+                10962648,
+                11039379
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            }
+          ]
+        }
+      ],
+      "retained_executable_path": "/tmp/alife-range-gate-baseline"
+    },
+    "patched": {
+      "executable_sha256": "c13d4bdc14d610ec953362753e2cbc115ad0c3be0df579c096113af446ae29c9",
+      "runs": [
+        {
+          "process": 1,
+          "raw_stdout": "profile=GroundedObjectSlotsV1 far_count=0 obstacles=1716 samples_ns_per_eight_rows=[540952, 529285, 523769, 565479, 532047] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedObjectSlotsV1 far_count=32 obstacles=1716 samples_ns_per_eight_rows=[514098, 504467, 520355, 528931, 526399] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedObjectSlotsV1 far_count=128 obstacles=1716 samples_ns_per_eight_rows=[513304, 520778, 531550, 694589, 536031] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedTerrainVisionV1 far_count=0 obstacles=1716 samples_ns_per_eight_rows=[1416870, 1396683, 1463924, 1435872, 1443535] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\nprofile=GroundedTerrainVisionV1 far_count=32 obstacles=1716 samples_ns_per_eight_rows=[1524195, 1545382, 1597683, 1454774, 1420257] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\nprofile=GroundedTerrainVisionV1 far_count=128 obstacles=1716 samples_ns_per_eight_rows=[1593180, 1603530, 1557040, 1546921, 1548378] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\n",
+          "cases": [
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 0,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                540952,
+                529285,
+                523769,
+                565479,
+                532047
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 32,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                514098,
+                504467,
+                520355,
+                528931,
+                526399
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 128,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                513304,
+                520778,
+                531550,
+                694589,
+                536031
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 0,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                1416870,
+                1396683,
+                1463924,
+                1435872,
+                1443535
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 32,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                1524195,
+                1545382,
+                1597683,
+                1454774,
+                1420257
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 128,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                1593180,
+                1603530,
+                1557040,
+                1546921,
+                1548378
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            }
+          ]
+        },
+        {
+          "process": 2,
+          "raw_stdout": "profile=GroundedObjectSlotsV1 far_count=0 obstacles=1716 samples_ns_per_eight_rows=[504011, 489273, 494350, 520635, 503379] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedObjectSlotsV1 far_count=32 obstacles=1716 samples_ns_per_eight_rows=[614264, 610709, 543091, 604834, 703452] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedObjectSlotsV1 far_count=128 obstacles=1716 samples_ns_per_eight_rows=[552972, 852147, 567070, 540676, 540337] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedTerrainVisionV1 far_count=0 obstacles=1716 samples_ns_per_eight_rows=[1465241, 1503594, 1421840, 1384070, 1381578] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\nprofile=GroundedTerrainVisionV1 far_count=32 obstacles=1716 samples_ns_per_eight_rows=[1466653, 1667682, 1535285, 1431274, 1486640] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\nprofile=GroundedTerrainVisionV1 far_count=128 obstacles=1716 samples_ns_per_eight_rows=[1613352, 1652743, 1601459, 1650775, 1558107] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\n",
+          "cases": [
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 0,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                504011,
+                489273,
+                494350,
+                520635,
+                503379
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 32,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                614264,
+                610709,
+                543091,
+                604834,
+                703452
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 128,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                552972,
+                852147,
+                567070,
+                540676,
+                540337
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 0,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                1465241,
+                1503594,
+                1421840,
+                1384070,
+                1381578
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 32,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                1466653,
+                1667682,
+                1535285,
+                1431274,
+                1486640
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 128,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                1613352,
+                1652743,
+                1601459,
+                1650775,
+                1558107
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            }
+          ]
+        },
+        {
+          "process": 3,
+          "raw_stdout": "profile=GroundedObjectSlotsV1 far_count=0 obstacles=1716 samples_ns_per_eight_rows=[502400, 549712, 526670, 495362, 509185] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedObjectSlotsV1 far_count=32 obstacles=1716 samples_ns_per_eight_rows=[524847, 534553, 541597, 591576, 538314] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedObjectSlotsV1 far_count=128 obstacles=1716 samples_ns_per_eight_rows=[520407, 540802, 515723, 537739, 536932] draft_bytes=152053 draft_blake3=9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4\nprofile=GroundedTerrainVisionV1 far_count=0 obstacles=1716 samples_ns_per_eight_rows=[1506046, 1766600, 1494631, 1501398, 1847530] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\nprofile=GroundedTerrainVisionV1 far_count=32 obstacles=1716 samples_ns_per_eight_rows=[1882158, 1624816, 1807225, 1619473, 1927491] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\nprofile=GroundedTerrainVisionV1 far_count=128 obstacles=1716 samples_ns_per_eight_rows=[1595947, 1639865, 1714676, 1986717, 1713428] draft_bytes=112191 draft_blake3=772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f\n",
+          "cases": [
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 0,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                502400,
+                549712,
+                526670,
+                495362,
+                509185
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 32,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                524847,
+                534553,
+                541597,
+                591576,
+                538314
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedObjectSlotsV1",
+              "far_count": 128,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                520407,
+                540802,
+                515723,
+                537739,
+                536932
+              ],
+              "draft_bytes": 152053,
+              "draft_blake3": "9eb9c0839dd6e67524fa7a6bb69a5afbdc99ab1025494c996c5e7336ed11a8a4"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 0,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                1506046,
+                1766600,
+                1494631,
+                1501398,
+                1847530
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 32,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                1882158,
+                1624816,
+                1807225,
+                1619473,
+                1927491
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            },
+            {
+              "profile": "GroundedTerrainVisionV1",
+              "far_count": 128,
+              "obstacles": 1716,
+              "samples_ns_per_eight_rows": [
+                1595947,
+                1639865,
+                1714676,
+                1986717,
+                1713428
+              ],
+              "draft_bytes": 112191,
+              "draft_blake3": "772b2e01f0847e429fe960d68f7f0f5884ab5ae10132b8001f1477d6f7dc917f"
+            }
+          ]
+        }
+      ],
+      "retained_executable_path": "/tmp/alife-range-gate-patched"
+    }
+  },
+  "implementation_source_head": "163ec10b156ced439faca4aa9753501ae57da6af",
+  "implementation_tree": "7dc94e52f95b7c7e38ad061186f86151947e1575"
+}
