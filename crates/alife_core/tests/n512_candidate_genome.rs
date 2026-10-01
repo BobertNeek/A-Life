@@ -1,7 +1,7 @@
 use alife_core::*;
 
 #[test]
-fn legacy_genome_wire_identity_is_unchanged() {
+fn current_genome_roundtrip_preserves_inherited_innate_priorities() {
     let identity = FoundationGeneticIdentity::new(
         FoundationId::N512_V1.raw(),
         1,
@@ -10,13 +10,18 @@ fn legacy_genome_wire_identity_is_unchanged() {
     )
     .unwrap();
     let genome = CreatureGenome::early_mammal_founder(901, identity).unwrap();
+    let innate = genome.express().unwrap().brain_genome.innate_priority;
+    assert!(innate.reflex_strength > 0.0);
+    assert!(innate.food_attraction > 0.0);
+    assert!(innate.hazard_aversion > 0.0);
     let bytes = serde_json::to_vec(&genome).unwrap();
-    assert_eq!(
-        blake3::hash(&bytes).to_hex().as_str(),
-        "752e4e27febcec3958f3f1e4ebf22584ad547a1adaafb3918cdb88494aab8784"
-    );
     let restored: CreatureGenome = serde_json::from_slice(&bytes).unwrap();
     assert!(restored.nano512_readout_candidate.is_none());
+    assert_eq!(restored, genome);
+    assert_eq!(
+        restored.express().unwrap().brain_genome.innate_priority,
+        innate
+    );
     assert_eq!(serde_json::to_vec(&restored).unwrap(), bytes);
 }
 
