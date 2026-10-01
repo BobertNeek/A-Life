@@ -12,6 +12,8 @@ use alife_world::{
     HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord,
 };
 
+type JsonCorruptionCase = (&'static str, Box<dyn Fn(&mut serde_json::Value)>);
+
 fn record(organism_id: u64, world_entity_id: u64) -> WorldOrganismRecord {
     let genome = CreatureGenome::early_mammal_founder(
         0xE10_3200 + organism_id,
@@ -51,7 +53,7 @@ fn world_with_nontrivial_registry() -> HeadlessWorld {
         .unwrap();
 
     world
-        .replace_organism_registry_exact([dead, record(8, agent_b.raw())].into_iter())
+        .replace_organism_registry_exact([dead, record(8, agent_b.raw())])
         .unwrap();
     world
 }
@@ -113,7 +115,14 @@ fn creature_save_state() -> CreatureSaveState {
 }
 
 fn bound_creature_save_state(world: &HeadlessWorld) -> CreatureSaveState {
-    let record = world.organism_registry().get(OrganismId(7)).unwrap();
+    bound_creature_save_state_for(world, OrganismId(7))
+}
+
+fn bound_creature_save_state_for(
+    world: &HeadlessWorld,
+    organism_id: OrganismId,
+) -> CreatureSaveState {
+    let record = world.organism_registry().get(organism_id).unwrap();
     let biochemistry = record.biochemistry();
     CreatureSaveState {
         organism_id: record.organism_id(),
@@ -173,9 +182,12 @@ fn serialized_world(world: &HeadlessWorld) -> serde_json::Value {
 
 fn serialized_world_with_registry() -> serde_json::Value {
     let world = world_with_nontrivial_registry();
-    let mut value = serialized_world(&world);
-    value["world"]["organism_records"] = serde_json::to_value(registry_records(&world)).unwrap();
-    value
+    let creatures = world
+        .organism_registry()
+        .iter()
+        .map(|record| bound_creature_save_state_for(&world, record.organism_id()))
+        .collect();
+    serde_json::to_value(save_with_creatures(&world, creatures)).unwrap()
 }
 
 fn serialized_registry_ids(value: &serde_json::Value) -> Option<Vec<u64>> {
@@ -207,6 +219,13 @@ fn assert_validation_rejected(value: serde_json::Value, label: &str) {
         error.to_string().contains("world organism record"),
         "corruption case {label} failed outside the creature/world binding seam: {error}"
     );
+    let restore_error = save
+        .restore_headless_world()
+        .expect_err("corrupt creature summary unexpectedly restored");
+    assert!(
+        restore_error.to_string().contains("world organism record"),
+        "corruption case {label} failed outside the restore binding seam: {restore_error}"
+    );
 }
 
 #[test]
@@ -219,7 +238,7 @@ fn portable_save_round_trip_binds_creature_summary_to_world_record() {
         .validate_with_asset_root(".")
         .unwrap();
 
-    let cases: [(&str, Box<dyn Fn(&mut serde_json::Value)>); 6] = [
+    let cases: [JsonCorruptionCase; 6] = [
         (
             "missing matching organism record",
             Box::new(|value| {
@@ -308,14 +327,10 @@ fn registry_insertion_order_has_identical_json_and_restored_identity() {
     let mut reverse = base;
 
     forward
-        .replace_organism_registry_exact(
-            [record(7, agent_a.raw()), record(8, agent_b.raw())].into_iter(),
-        )
+        .replace_organism_registry_exact([record(7, agent_a.raw()), record(8, agent_b.raw())])
         .unwrap();
     reverse
-        .replace_organism_registry_exact(
-            [record(8, agent_b.raw()), record(7, agent_a.raw())].into_iter(),
-        )
+        .replace_organism_registry_exact([record(8, agent_b.raw()), record(7, agent_a.raw())])
         .unwrap();
 
     let forward_json = serde_json::to_string(&save(&forward)).unwrap();
@@ -404,16 +419,54 @@ fn absent_registry_field_is_legacy_empty_without_changing_world_object_identity(
 }
 
 #[test]
-fn present_empty_registry_is_authoritative_and_rejects_legacy_agents() {
-    let mut value = serialized_world(&world_with_agents());
+fn present_empty_registry_is_authoritative_and_rejects_declared_creatures() {
+    let mut value = serialized_world_with_registry();
     value["world"]["organism_records"] = serde_json::json!([]);
-    assert_rejected(value, "present empty registry with Agent objects");
+    assert_rejected(value, "present empty registry with declared creatures");
+}
+
+#[test]
+fn registered_creatures_restore_with_an_unregistered_embodied_teacher() {
+    let mut world = world_with_nontrivial_registry();
+    let teacher_id = world
+        .spawn_social_agent("teacher", OrganismId(9), Vec3f::new(6.0, 0.0, 0.0), 0.5)
+        .unwrap();
+    world.grounded_teacher_actor(teacher_id).unwrap();
+    let creatures = [OrganismId(7), OrganismId(8)]
+        .map(|id| bound_creature_save_state_for(&world, id))
+        .to_vec();
+    let original = save_with_creatures(&world, creatures);
+    let restored = PortableSaveFile::from_json_str(&serde_json::to_string(&original).unwrap())
+        .unwrap()
+        .restore_headless_world()
+        .unwrap();
+
+    assert_eq!(restored.object_snapshots(), world.object_snapshots());
+    assert_eq!(registry_records(&restored), registry_records(&world));
+    assert!(restored.organism_registry().get(OrganismId(9)).is_none());
+    restored.grounded_teacher_actor(teacher_id).unwrap();
+    assert_eq!(restored.habitat_authority(), &original.world.habitats);
+}
+
+#[test]
+fn declared_creatures_cannot_lose_records_through_typed_restore_or_legacy_habitat_migration() {
+    let world = world_with_nontrivial_registry();
+    let creatures = [OrganismId(7), OrganismId(8)]
+        .map(|id| bound_creature_save_state_for(&world, id))
+        .to_vec();
+    let mut typed = save_with_creatures(&world, creatures);
+    typed.world.organism_records.as_mut().unwrap().pop();
+    assert!(typed.restore_headless_world().is_err());
+
+    let mut value = serde_json::to_value(typed).unwrap();
+    value["world"].as_object_mut().unwrap().remove("habitats");
+    assert_rejected(value, "missing record after legacy habitat migration");
 }
 
 #[test]
 fn malformed_present_registry_records_are_rejected_before_restore() {
     let valid = serialized_world_with_registry();
-    let cases: [(&str, Box<dyn Fn(&mut serde_json::Value)>); 11] = [
+    let cases: [JsonCorruptionCase; 11] = [
         (
             "explicit null registry field",
             Box::new(|value| {
