@@ -218,6 +218,8 @@ impl WorldEditCommand {
 #[derive(Debug, Clone)]
 pub struct WorldEditorSession {
     world: HeadlessWorld,
+    source_save: Option<PortableSaveFile>,
+    source_asset_root: Option<PathBuf>,
     mode: WorldEditorMode,
     config: WorldEditorConfig,
     undo_stack: Vec<HeadlessWorld>,
@@ -233,12 +235,28 @@ impl WorldEditorSession {
         }
         Ok(Self {
             world,
+            source_save: None,
+            source_asset_root: None,
             mode: WorldEditorMode::Simulation,
             config,
             undo_stack: Vec::new(),
             edits_applied: Vec::new(),
             rejected_edits: 0,
         })
+    }
+
+    /// Keep exact acquired state and dependency references attached to the
+    /// loaded organisms while the editor changes their surrounding world.
+    pub fn from_portable_save(
+        save: &PortableSaveFile,
+        asset_root: impl AsRef<Path>,
+        config: WorldEditorConfig,
+    ) -> Result<Self, GameAppShellError> {
+        save.validate_with_asset_root(asset_root.as_ref())?;
+        let mut session = Self::new(save.restore_headless_world()?, config)?;
+        session.source_save = Some(save.clone());
+        session.source_asset_root = Some(asset_root.as_ref().to_path_buf());
+        Ok(session)
     }
 
     pub const fn mode(&self) -> WorldEditorMode {
@@ -347,6 +365,49 @@ impl WorldEditorSession {
     }
 
     pub fn save_portable(&self, save_id: &str) -> Result<PortableSaveFile, GameAppShellError> {
+        if let Some(source) = &self.source_save {
+            let mut save = source.clone();
+            for record in self.world.organism_registry().iter() {
+                let creature = save
+                    .creatures
+                    .iter_mut()
+                    .find(|creature| creature.organism_id == record.organism_id())
+                    .ok_or(PersistenceError::InvalidConfig {
+                        field: "creature.organism_id",
+                        message: "editor save requires the existing organism's cognitive summary",
+                    })?;
+                if creature.genome_id != record.genome().id
+                    || creature.brain_class.default_class_id()
+                        != record.genome().foundation.brain_class_id
+                {
+                    return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+                }
+                // These are read-only projections of organism authority. The
+                // saved memory, weights, GPU checkpoint, and dependencies stay
+                // attached to the original individual (AOA-PERSIST-001/002).
+                creature.development_tick = record.biochemistry().development.last_update_tick;
+                creature.mind.tick = record.biochemistry().tick;
+                creature.mind.homeostasis = record.biochemistry().homeostasis;
+            }
+            save.replace_headless_world_snapshot(&self.world)?;
+            save.save_id = save_id.to_string();
+            if let Some(runtime) = &mut save.gpu_runtime {
+                runtime.last_safe_checkpoint.save_id = save.save_id.clone();
+            }
+            save.validate_with_asset_root(
+                self.source_asset_root
+                    .as_deref()
+                    .ok_or(ScaffoldContractError::MissingPhaseData)?,
+            )?;
+            return Ok(save);
+        }
+        if self.world.organism_registry().iter().next().is_some() {
+            return Err(PersistenceError::InvalidConfig {
+                field: "creature.mind",
+                message: "populated editor saves require the source cognitive summaries and assets",
+            }
+            .into());
+        }
         let config =
             RuntimeConfig::deterministic_default(self.world.seed(), BrainScaleTier::Nano512);
         let save = PortableSaveFile::from_headless_world(
@@ -626,9 +687,12 @@ pub fn run_player_sandbox_editor_smoke(
 ) -> Result<PlayerSandboxEditorSmokeSummary, GameAppShellError> {
     let selection = select_environment_scenario(manifest_path, scenario_id)?;
     let source_save = PortableSaveFile::from_json_file(&selection.launch.save_path)?;
-    let world = source_save.restore_headless_world()?;
-    let initial_object_count = world.object_count();
-    let mut session = WorldEditorSession::new(world, WorldEditorConfig::default())?;
+    let mut session = WorldEditorSession::from_portable_save(
+        &source_save,
+        &selection.launch.asset_root,
+        WorldEditorConfig::default(),
+    )?;
+    let initial_object_count = session.world().object_count();
 
     let edit_mode_required = session
         .apply_edit(WorldEditCommand::place_food(
@@ -696,10 +760,7 @@ pub fn run_player_sandbox_editor_smoke(
         .ok_or(ScaffoldContractError::MissingPhaseData)?;
 
     let edited_save = session.save_portable("ca11-player-sandbox-edited")?;
-    let edited_json = edited_save.to_json_string_pretty()?;
-    let restored = PortableSaveFile::from_json_str(&edited_json)?.restore_headless_world()?;
-    let saved_roundtrip_signature = restored.stable_signature();
-    if let Some(path) = output_path {
+    let (loaded, saved_json_bytes) = if let Some(path) = output_path {
         if let Some(parent) = path
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
@@ -707,7 +768,19 @@ pub fn run_player_sandbox_editor_smoke(
             std::fs::create_dir_all(parent).map_err(PersistenceError::Io)?;
         }
         edited_save.to_json_file(path)?;
-    }
+        (
+            PortableSaveFile::from_json_file(path)?,
+            std::fs::read(path)?.len(),
+        )
+    } else {
+        // This serialization verifies an internal roundtrip; it is not an
+        // inline export payload. File exports use the file-save API above.
+        let json = serde_json::to_string_pretty(&edited_save)?;
+        (PortableSaveFile::from_json_str(&json)?, json.len())
+    };
+    loaded.validate_with_asset_root(&selection.launch.asset_root)?;
+    let restored = loaded.restore_headless_world()?;
+    let saved_roundtrip_signature = restored.stable_signature();
 
     let summary = PlayerSandboxEditorSmokeSummary {
         schema: CA11_PLAYER_SANDBOX_EDITOR_SCHEMA,
@@ -723,7 +796,7 @@ pub fn run_player_sandbox_editor_smoke(
         removed_obstacle: true,
         edit_mode_required,
         saved_roundtrip_signature,
-        saved_json_bytes: edited_json.len(),
+        saved_json_bytes,
         output_written: output_path.is_some(),
         player_status_lines: vec![
             "Sandbox editor paused simulation before applying edits.".to_string(),
@@ -739,6 +812,211 @@ pub fn run_player_sandbox_editor_smoke(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn populated_save() -> (PortableSaveFile, PathBuf) {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../alife_world/tests/fixtures/production_voxel");
+        (crate::tests::fixtures::current_scene_save(&root, 3), root)
+    }
+
+    fn checkpoint_metadata(save: &PortableSaveFile) -> alife_world::persistence::GpuBrainSaveState {
+        use alife_core::{
+            BrainActivityPolicyV1, BrainCapacityClass, MemoryBankConfig, MemorySidecarState,
+            PhenotypeHash, SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SleepState,
+            TopologicalMapConfig, TopologySidecar,
+        };
+        use alife_world::persistence::{
+            GpuBrainAssetRef, GpuBrainSaveState, GpuSleepAssetState, MemorySidecarSaveState,
+            ThrottleReplaySaveState, TopologySidecarSaveSummary,
+            GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
+        };
+
+        let organism_id = save.creatures[0].organism_id;
+        let profile = SensorProfileIdentity {
+            profile_id: SensorProfile::GroundedObjectSlotsV1.into(),
+            profile_schema_version: 1,
+            sensory_abi_version: SensoryAbiVersion::CURRENT.raw(),
+        };
+        // This CPU test exercises preservation of metadata and references; it
+        // does not interpret the referenced payload as live neural tensors.
+        let entry = &save.assets.entries[0];
+        let reference = GpuBrainAssetRef {
+            asset_id: entry.asset_id.clone(),
+            digest: entry.digest.clone(),
+        };
+        let memory = MemorySidecarState::new_profiled(
+            organism_id,
+            profile,
+            MemoryBankConfig::new(64, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap(),
+        )
+        .unwrap();
+        let topology =
+            TopologySidecar::new_profiled(organism_id, profile, TopologicalMapConfig::default())
+                .unwrap();
+        let historical: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../alife_world/tests/fixtures/p34/tiny_save.json"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let policy = BrainActivityPolicyV1::production_v1();
+        GpuBrainSaveState {
+            schema_version: GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
+            organism_id,
+            phenotype_hash: PhenotypeHash([1, 2, 3, 4]),
+            capacity_class_id: BrainCapacityClass::N512_ID,
+            sensor_profile: profile,
+            immutable_phenotype: reference.clone(),
+            phenotype_compiler_inputs: reference.clone(),
+            live_structural_topology: Some(reference.clone()),
+            legacy_nano512_compatibility_receipt: None,
+            active_weight_generation: 7,
+            active_weight_bank: 1,
+            active_eligibility_bank: 1,
+            learning_transaction_generation: 3,
+            lifetime_weights: reference.clone(),
+            fast_weights: reference.clone(),
+            eligibility: reference.clone(),
+            replay_journal: reference.clone(),
+            replay_journal_generation: 2,
+            replay_journal_cursor: 0,
+            replay_journal_event_count: 0,
+            activation_state: reference.clone(),
+            neuron_homeostasis: reference.clone(),
+            checkpoint_tick: save.world.tick,
+            exact_cognitive_state: Some(reference.clone()),
+            last_learning_replay_key: None,
+            pending_eligibility: None,
+            pending_experience_transaction: None,
+            memory: MemorySidecarSaveState::from_sidecar(&memory, reference.clone(), None, None)
+                .unwrap(),
+            topology: TopologySidecarSaveSummary::from_sidecar(&topology, reference.clone())
+                .unwrap(),
+            tracked_objects: alife_world::TrackedObjectRegistry::new(save.world.seed, 1_024)
+                .unwrap()
+                .save_state(organism_id)
+                .unwrap(),
+            language_grounding: Default::default(),
+            life_statistics: None,
+            sleep: SleepState::awake_at(save.world.tick),
+            sleep_assets: GpuSleepAssetState::default(),
+            backend_provenance: serde_json::from_value(
+                historical["creatures"][0]["gpu_brain"]["backend_provenance"].clone(),
+            )
+            .unwrap(),
+            runtime_profile_id: 1,
+            runtime_profile_digest: [31, 32, 33, 34],
+            activity_policy_version: policy.policy_version,
+            activity_policy_digest: policy.policy_digest,
+            throttle_replay: ThrottleReplaySaveState::bootstrap(reference).unwrap(),
+        }
+    }
+
+    #[test]
+    fn populated_editor_save_preserves_organisms_acquired_state_and_asset_references() {
+        let (mut source, asset_root) = populated_save();
+        source.creatures[0].weights.lifetime_consolidated_entries = 3;
+        source.creatures[0].weights.h_operational_entries = 2;
+        source.creatures[0].weights.h_shadow_entries = 1;
+        source.creatures[0].learning.last_consolidated_tick = Some(source.world.tick);
+        source.creatures[0].gpu_brain = Some(checkpoint_metadata(&source));
+        source.validate_with_asset_root(&asset_root).unwrap();
+        let mut session = WorldEditorSession::from_portable_save(
+            &source,
+            &asset_root,
+            WorldEditorConfig::default(),
+        )
+        .unwrap();
+        session.enter_editor();
+        let added_food = session
+            .apply_edit(WorldEditCommand::place_food(
+                "preservation-test-food",
+                Vec3f::new(1.2, 0.0, 0.0),
+                0.7,
+            ))
+            .unwrap()
+            .unwrap();
+        let saved = session
+            .save_portable("editor-preserved-individuals")
+            .unwrap();
+        assert_eq!(saved.creatures, source.creatures);
+        assert_eq!(saved.world.organism_records, source.world.organism_records);
+        assert_eq!(saved.world.habitats, source.world.habitats);
+        assert_eq!(saved.world.voxel_backend, source.world.voxel_backend);
+        assert_eq!(saved.config, source.config);
+        assert_eq!(saved.assets, source.assets);
+        assert_eq!(saved.school, source.school);
+        assert_eq!(saved.adapter_remap, source.adapter_remap);
+        assert_eq!(
+            saved.generated_weight_asset_refs,
+            source.generated_weight_asset_refs
+        );
+        assert_eq!(
+            saved.etf_prototype_asset_refs,
+            source.etf_prototype_asset_refs
+        );
+        assert_eq!(source.world.objects.len() + 1, saved.world.objects.len());
+        assert!(saved
+            .world
+            .objects
+            .iter()
+            .any(|object| object.id == added_food));
+        assert!(matches!(
+            saved.to_json_string_pretty(),
+            Err(PersistenceError::HugeInlinePayload { .. })
+        ));
+
+        let output = std::env::temp_dir().join(format!(
+            "alife-editor-preserved-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        saved.to_json_file(&output).unwrap();
+        let loaded = PortableSaveFile::from_json_file(&output).unwrap();
+        loaded.validate_with_asset_root(&asset_root).unwrap();
+        assert_eq!(loaded, saved);
+        let restored = loaded.restore_headless_world().unwrap();
+        assert_eq!(restored.object_count(), saved.world.objects.len());
+        for record in source.world.organism_records.as_ref().unwrap() {
+            assert_eq!(
+                restored.organism_registry().get(record.organism_id()),
+                Some(record)
+            );
+        }
+        std::fs::remove_file(output).unwrap();
+    }
+
+    #[test]
+    fn populated_editor_without_source_cognition_rejects_export() {
+        let (source, _) = populated_save();
+        let session = WorldEditorSession::new(
+            source.restore_headless_world().unwrap(),
+            WorldEditorConfig::default(),
+        )
+        .unwrap();
+        assert!(matches!(
+            session.save_portable("missing-source-cognition"),
+            Err(GameAppShellError::Persistence(
+                PersistenceError::InvalidConfig {
+                    field: "creature.mind",
+                    ..
+                }
+            ))
+        ));
+    }
+
+    #[test]
+    fn synthetic_editor_without_authoritative_organisms_keeps_its_existing_smoke_path() {
+        let summary = run_world_editor_smoke().unwrap();
+        assert!(summary.simulation_resumed);
+        assert!(summary.resumed_patch_sealed);
+        assert!(!summary.saved_roundtrip_signature.is_empty());
+    }
 
     #[test]
     fn failed_world_edit_preserves_world_and_undo_history() {
