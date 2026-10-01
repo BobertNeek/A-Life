@@ -2253,7 +2253,7 @@ fn prepared_attention_preserves_finalized_evidence_across_candidates_and_memory_
 }
 
 #[test]
-fn prepared_attention_rejects_changed_draft_routing_novelty_and_cognitive_owner() {
+fn prepared_attention_and_finalization_reject_changed_draft_and_cognitive_owner() {
     let draft = grounded_draft(0.4);
     let bank = empty_bank();
     let prepared = bank.recall_frame(&draft).unwrap();
@@ -2283,6 +2283,10 @@ fn prepared_attention_rejects_changed_draft_routing_novelty_and_cognitive_owner(
             prepared.attention_evidence_for_draft(&changed).unwrap_err(),
             ScaffoldContractError::InvalidMemoryQuery
         );
+        assert_eq!(
+            prepared.clone().finalize(changed.clone()).unwrap_err(),
+            ScaffoldContractError::InvalidMemoryQuery
+        );
         bank.recall_frame(&changed)
             .unwrap()
             .attention_evidence_for_draft(&changed)
@@ -2293,6 +2297,10 @@ fn prepared_attention_rejects_changed_draft_routing_novelty_and_cognitive_owner(
         let mismatched = prepared.clone().with_cognitive_context(context).unwrap();
         assert_eq!(
             mismatched.attention_evidence_for_draft(&draft).unwrap_err(),
+            ScaffoldContractError::InvalidMemoryQuery
+        );
+        assert_eq!(
+            mismatched.finalize(draft.clone()).unwrap_err(),
             ScaffoldContractError::InvalidMemoryQuery
         );
     }

@@ -183,6 +183,9 @@ impl PreparedMemoryRecall {
             receipt: self.receipt,
             cognitive_context: self.cognitive_context,
         };
+        // Draft, context, receipt and every key are checked above. Revalidating
+        // this freshly constructed private result is a debug diagnostic.
+        #[cfg(debug_assertions)]
         finalized.validate_for_frame(&frame)?;
         Ok((frame, finalized))
     }
