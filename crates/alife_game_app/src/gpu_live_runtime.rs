@@ -7596,7 +7596,7 @@ impl GpuLiveBrainRuntime {
         let receipt = self
             .retained_curated_founder_gpu_residency_receipt
             .as_ref()
-            .ok_or_else(&reject)?;
+            .ok_or_else(reject)?;
         if !receipt.submission_completed
             || receipt.generation_fingerprint != plan.fingerprint
             || receipt.backend_hardware_generation != self.backend.hardware_receipt().generation
