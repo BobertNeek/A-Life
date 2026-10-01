@@ -2360,6 +2360,10 @@ fn selector_detail_f32(
     Ok(f32::from_bits(selector_detail_word(words, base, offset)?))
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "selector diagnostics bind captured GPU evidence to frame, phenotype, slot, bank, and dispatch with explicit failure outputs"
+)]
 fn build_selector_diagnostic(
     frame: &PerceptionFrame,
     phenotype: &BrainPhenotype,

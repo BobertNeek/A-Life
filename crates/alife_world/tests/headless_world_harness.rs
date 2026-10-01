@@ -215,13 +215,15 @@ fn movement_sweeps_obstacles_between_clear_endpoints() {
             .unwrap()
     };
 
-    let crossing_start = Vec3f::new(-0.5, 0.0, 0.95);
+    // Both endpoints are outside the sphere, but this one 20 Hz movement
+    // interval crosses its surface between them.
+    let crossing_start = Vec3f::new(-0.05, 0.0, 0.999);
     let mut crossing = HeadlessScenarioBuilder::new(124)
         .agent("agent", organism(), crossing_start)
         .obstacle("blocker", Vec3f::ZERO, 1.0)
         .build()
         .unwrap();
-    let crossing_result = move_to(&mut crossing, Vec3f::new(0.5, 0.0, 0.95));
+    let crossing_result = move_to(&mut crossing, Vec3f::new(0.05, 0.0, 0.999));
     assert!(!crossing_result.execution.succeeded);
     assert_eq!(
         crossing_result.execution.failure,
@@ -237,7 +239,7 @@ fn movement_sweeps_obstacles_between_clear_endpoints() {
 
     let mut endpoint_blocked = HeadlessScenarioBuilder::new(125)
         .agent("agent", organism(), Vec3f::ZERO)
-        .obstacle("blocker", pos(1.0, 0.0), 0.5)
+        .obstacle("blocker", pos(0.8, 0.0), 0.5)
         .build()
         .unwrap();
     let endpoint_result = move_to(&mut endpoint_blocked, pos(1.0, 0.0));
@@ -263,7 +265,7 @@ fn movement_sweeps_obstacles_between_clear_endpoints() {
             .entity(clear.entity_id("agent").unwrap())
             .unwrap()
             .position,
-        pos(1.0, 0.0)
+        pos(0.1, 0.0)
     );
 }
 
@@ -297,6 +299,8 @@ fn food_biology_and_hazard_pain_are_measured_without_host_reward() {
     let mut world = world_with_food_and_hazard();
     let berry = world.entity_id("berry").unwrap();
     let thorn = world.entity_id("thorn").unwrap();
+    // Start outside contact and enter it within one 0.1-unit world interval.
+    world.editor_move_object(thorn, pos(0.0, 0.8)).unwrap();
 
     let food = world
         .apply_command(&HeadlessWorldCommand::eat(organism(), berry).unwrap())
@@ -439,7 +443,7 @@ fn carried_object_follows_carrier_across_move_and_save_restore() {
         .unwrap();
     assert!(grabbed.execution.succeeded);
 
-    world
+    let moved = world
         .apply_command(&command(
             ActionKind::Move.canonical_id(),
             ActionKind::Move,
@@ -447,12 +451,13 @@ fn carried_object_follows_carrier_across_move_and_save_restore() {
             Some(pos(1.0, 0.0)),
         ))
         .unwrap();
-    assert_eq!(world.entity(agent).unwrap().position, pos(1.0, 0.0));
-    assert_eq!(world.entity(berry).unwrap().position, pos(1.5, 0.25));
+    assert!(moved.execution.succeeded);
+    assert_eq!(world.entity(agent).unwrap().position, pos(0.1, 0.0));
+    assert_eq!(world.entity(berry).unwrap().position, pos(0.6, 0.25));
     assert_eq!(world.entity(berry).unwrap().carried_by, Some(organism()));
     assert_eq!(
         world.entity(berry).unwrap().grounded_physical.velocity,
-        pos(1.0, 0.0)
+        moved.execution.physical.displacement
     );
 
     let save = PortableSaveFile::from_headless_world(
@@ -467,10 +472,19 @@ fn carried_object_follows_carrier_across_move_and_save_restore() {
         .unwrap()
         .restore_headless_world()
         .unwrap();
-    assert_eq!(restored.entity(berry).unwrap().position, pos(1.5, 0.25));
+    assert_eq!(
+        restored.entity(agent).unwrap().position,
+        world.entity(agent).unwrap().position
+    );
+    assert_eq!(
+        restored.entity(berry).unwrap().position,
+        world.entity(berry).unwrap().position
+    );
     assert_eq!(restored.entity(berry).unwrap().carried_by, Some(organism()));
 
-    restored
+    let before_agent = restored.entity(agent).unwrap().position;
+    let before_berry = restored.entity(berry).unwrap().position;
+    let resumed = restored
         .apply_command(&command(
             ActionKind::Move.canonical_id(),
             ActionKind::Move,
@@ -478,9 +492,28 @@ fn carried_object_follows_carrier_across_move_and_save_restore() {
             Some(pos(2.0, 0.0)),
         ))
         .unwrap();
-    assert_eq!(restored.entity(agent).unwrap().position, pos(2.0, 0.0));
-    assert_eq!(restored.entity(berry).unwrap().position, pos(2.5, 0.25));
+    assert!(resumed.execution.succeeded);
+    let displacement = resumed.execution.physical.displacement;
+    assert_eq!(displacement, pos(0.1, 0.0));
+    assert_eq!(
+        restored.entity(agent).unwrap().position,
+        pos(
+            before_agent.x + displacement.x,
+            before_agent.z + displacement.z
+        )
+    );
+    assert_eq!(
+        restored.entity(berry).unwrap().position,
+        pos(
+            before_berry.x + displacement.x,
+            before_berry.z + displacement.z
+        )
+    );
     assert_eq!(restored.entity(berry).unwrap().carried_by, Some(organism()));
+    assert_eq!(
+        restored.entity(berry).unwrap().grounded_physical.velocity,
+        displacement
+    );
 }
 
 #[test]

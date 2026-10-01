@@ -10,6 +10,8 @@ const HASH_B: [u64; 4] = [21, 22, 23, 24];
 const SOURCE_COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 const SOURCE_TREE: &str = "89abcdef0123456789abcdef0123456789abcdef";
 
+type ReceiptMutation = Box<dyn Fn(&mut Era1TrialReceipt)>;
+
 fn offspring_identity() -> Era1TrialIdentity {
     Era1TrialIdentity {
         seed: 41,
@@ -84,7 +86,7 @@ fn exact_gpu_offspring_receipt_validates_and_unknown_stays_unknown() {
 
 #[test]
 fn receipt_rejects_wrong_authority_identity_and_fabricated_measurement() {
-    let mutations: Vec<Box<dyn Fn(&mut Era1TrialReceipt)>> = vec![
+    let mutations: Vec<ReceiptMutation> = vec![
         Box::new(|receipt| receipt.identity.seed = 0),
         Box::new(|receipt| receipt.identity.organism_id = OrganismId::INVALID),
         Box::new(|receipt| receipt.identity.brain_class_id = BrainClassId(2)),

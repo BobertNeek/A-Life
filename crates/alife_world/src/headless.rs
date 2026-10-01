@@ -537,24 +537,7 @@ impl WorldObject {
     }
 
     fn blocks_segment(&self, start: Vec3f, end: Vec3f) -> bool {
-        let segment = subtract(end, start);
-        let segment_length_squared =
-            segment.x * segment.x + segment.y * segment.y + segment.z * segment.z;
-        let closest_point = if segment_length_squared == 0.0 {
-            start
-        } else {
-            let from_start = subtract(self.position, start);
-            let projection =
-                (from_start.x * segment.x + from_start.y * segment.y + from_start.z * segment.z)
-                    / segment_length_squared;
-            let clamped_projection = projection.clamp(0.0, 1.0);
-            Vec3f::new(
-                start.x + segment.x * clamped_projection,
-                start.y + segment.y * clamped_projection,
-                start.z + segment.z * clamped_projection,
-            )
-        };
-        self.blocks_position(closest_point)
+        self.blocks_position(closest_point_on_segment(self.position, start, end))
     }
 }
 
@@ -4159,7 +4142,7 @@ impl HeadlessWorld {
                     .get(&target.raw())
                     .map(|object| {
                         (
-                            distance(agent_position, object.position) <= EAT_RADIUS,
+                            self.physical_contact_reachable(agent_position, object.position),
                             !object.consumed
                                 && object.organism_id.is_none_or(|organism_id| {
                                     self.organism_registry
@@ -4557,7 +4540,12 @@ impl HeadlessWorld {
             .filter(|(id, object)| {
                 **id != agent_id.raw()
                     && !object.consumed
-                    && distance(object.position, destination) <= object.radius
+                    && (distance(object.position, destination) <= object.radius
+                        || (object.kind == WorldObjectKind::Hazard
+                            && distance(
+                                object.position,
+                                closest_point_on_segment(object.position, start, destination),
+                            ) <= object.radius))
             })
             .map(|(id, _)| WorldEntityId(*id))
             .collect::<Vec<_>>();
@@ -6541,6 +6529,25 @@ fn physical(
     Ok(outcome)
 }
 
+fn closest_point_on_segment(point: Vec3f, start: Vec3f, end: Vec3f) -> Vec3f {
+    let segment = subtract(end, start);
+    let segment_length_squared =
+        segment.x * segment.x + segment.y * segment.y + segment.z * segment.z;
+    if segment_length_squared == 0.0 {
+        return start;
+    }
+    let from_start = subtract(point, start);
+    let projection =
+        (from_start.x * segment.x + from_start.y * segment.y + from_start.z * segment.z)
+            / segment_length_squared;
+    let clamped_projection = projection.clamp(0.0, 1.0);
+    Vec3f::new(
+        start.x + segment.x * clamped_projection,
+        start.y + segment.y * clamped_projection,
+        start.z + segment.z * clamped_projection,
+    )
+}
+
 fn distance(a: Vec3f, b: Vec3f) -> f32 {
     let dx = a.x - b.x;
     let dy = a.y - b.y;
@@ -8012,6 +8019,52 @@ mod task_3_2a_tests {
         assert_eq!(hazard_receipt.action_result.body_event.damage, hazard_pain);
         assert_eq!(hazard_receipt.biology_after.tick, Tick(1));
         assert_ne!(hazard_receipt.biology_after, hazard_receipt.biology_before);
+
+        let mut blocked_world = HeadlessScenarioBuilder::new(32_023)
+            .agent("agent", ORGANISM_ID, Vec3f::ZERO)
+            .hazard("hazard-target", Vec3f::new(1.0, 0.0, 0.0), hazard_pain)
+            .obstacle("wall", Vec3f::new(0.5, 0.0, 0.7), 0.75)
+            .build()
+            .unwrap();
+        let blocked_agent = blocked_world.entity_id("agent").unwrap();
+        let blocked_target = blocked_world.entity_id("hazard-target").unwrap();
+        blocked_world
+            .register_organism_record(record(blocked_agent))
+            .unwrap();
+        let blocked_command = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            ActionKind::Inspect.canonical_id(),
+            ActionKind::Inspect,
+            Some(blocked_target),
+            None,
+        )
+        .unwrap();
+
+        let blocked_receipt = blocked_world
+            .apply_registered_neural_command(&blocked_command, blocked_agent, Tick(1), None, false)
+            .unwrap();
+
+        assert!(blocked_receipt.action_result.execution.succeeded);
+        assert_eq!(
+            blocked_receipt.action_result.execution.physical.contact,
+            PhysicalContactKind::None
+        );
+        assert!(blocked_receipt.action_result.touched_entities.is_empty());
+        assert_eq!(blocked_receipt.action_result.body_event.damage, 0.0);
+        assert_eq!(
+            blocked_receipt.action_result.observation.pain_delta.raw(),
+            0.0
+        );
+        assert_eq!(
+            blocked_receipt
+                .action_result
+                .observation
+                .homeostatic_delta
+                .drives
+                .curiosity,
+            -0.03
+        );
+        assert_eq!(blocked_receipt.biology_after.tick, Tick(1));
     }
 
     #[test]

@@ -208,6 +208,10 @@ fn log_probability(
     Ok(result)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "training receipt binds dispatch and weight generations to captured logits, decoder inputs, and sampled motor selections"
+)]
 pub(crate) fn build_receipt(
     frame: &PerceptionFrame,
     dispatch_generation: u64,

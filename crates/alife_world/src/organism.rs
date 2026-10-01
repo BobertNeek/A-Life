@@ -76,6 +76,10 @@ fn initial_memory_digest(organism_id: OrganismId) -> [u64; 4] {
     digest.finish256()
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "canonical lifecycle digest keeps organism identity, lifecycle, sleep seal, and archive preimage fields explicit"
+)]
 fn lifecycle_persistence_digest(
     organism_id: OrganismId,
     world_entity_id: WorldEntityId,

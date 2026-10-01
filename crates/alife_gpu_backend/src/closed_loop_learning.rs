@@ -254,6 +254,10 @@ pub struct GpuAuthorityReceiptV1 {
 }
 
 impl GpuAuthorityReceiptV1 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "authority receipt binds pending eligibility, commit generations, and sealed outcome identity separately"
+    )]
     pub(crate) fn from_backend_validated(
         handle: crate::GpuBrainHandle,
         pending: &PendingEligibilityReceipt,

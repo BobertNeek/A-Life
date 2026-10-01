@@ -825,7 +825,7 @@ fn poison_pain(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
     let organism = OrganismId(1802);
     let layout = vec![
         agent("agent", organism, pos(0.0, 0.0)),
-        hazard("poison", pos(1.0, 0.0), 0.8),
+        hazard("poison", pos(0.8, 0.0), 0.8),
     ];
     let world = world_from_layout(seed, &layout)?;
     let steps = vec![
@@ -931,7 +931,7 @@ fn obstacle_frustration(seed: u64) -> Result<ScenarioFixture, ScaffoldContractEr
     let organism = OrganismId(1803);
     let layout = vec![
         agent("agent", organism, pos(0.0, 0.0)),
-        obstacle("wall", pos(1.0, 0.0), 0.8),
+        obstacle("wall", pos(0.85, 0.0), 0.8),
     ];
     let world = world_from_layout(seed, &layout)?;
     let steps = vec![ScenarioStep {
@@ -972,8 +972,8 @@ fn obstacle_frustration(seed: u64) -> Result<ScenarioFixture, ScaffoldContractEr
                 reward: ExpectedDirection::Zero,
                 hunger_delta: ExpectedDirection::Zero,
                 fear_delta: ExpectedDirection::Zero,
-                pain_delta: ExpectedDirection::Positive,
-                cortisol_delta: ExpectedDirection::Positive,
+                pain_delta: ExpectedDirection::Zero,
+                cortisol_delta: ExpectedDirection::Zero,
                 frustration: ExpectedDirection::Positive,
                 energy: ExpectedDirection::Negative,
                 prediction_error: ExpectedDirection::Positive,

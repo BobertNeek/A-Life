@@ -194,6 +194,10 @@ impl GpuMemoryContextUpload {
         Ok(())
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "batch rebasing validates frame and slot identity plus four distinct shader ABI offsets"
+    )]
     pub(crate) fn rebase_for_batch(
         &mut self,
         frame: &PerceptionFrame,

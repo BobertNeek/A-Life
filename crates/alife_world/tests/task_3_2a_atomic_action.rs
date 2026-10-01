@@ -145,7 +145,7 @@ fn registered_move_transaction_advances_authoritative_biology_once() {
     );
     assert_eq!(
         world.entity(agent).unwrap().position,
-        Vec3f::new(0.5, 0.0, 0.0)
+        Vec3f::new(0.1, 0.0, 0.0)
     );
     assert_eq!(receipt.action_result.body_event.nutrition, 0.0);
     assert_eq!(receipt.action_result.body_event.damage, 0.0);
@@ -189,7 +189,7 @@ fn registered_food_transaction_reports_actual_nutrition() {
 fn registered_hazard_contact_reports_measured_damage() {
     let mut world = HeadlessScenarioBuilder::new(32_003)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
-        .hazard("hazard", Vec3f::new(1.0, 0.0, 0.0), 0.7)
+        .hazard("hazard", Vec3f::new(0.8, 0.0, 0.0), 0.7)
         .build()
         .unwrap();
     let agent = world.entity_id("agent").unwrap();
@@ -229,7 +229,7 @@ fn stored_object_radius_bounds_grounded_contact_and_movement_collision() {
                 label: "radius-hazard".to_string(),
                 kind: WorldObjectKind::Hazard,
                 organism_id: None,
-                position: Vec3f::new(1.0, 0.0, 0.0),
+                position: Vec3f::new(0.85, 0.0, 0.0),
                 nutrition: 0.0,
                 hazard_pain: 0.2,
                 radius,
@@ -288,6 +288,77 @@ fn stored_object_radius_bounds_grounded_contact_and_movement_collision() {
 }
 
 #[test]
+fn movement_sweeps_hazards_only_along_the_executed_segment() {
+    for blocked in [false, true] {
+        let mut scenario =
+            HeadlessScenarioBuilder::new(32_032).agent("agent", ORGANISM_ID, Vec3f::ZERO);
+        if blocked {
+            // The solid surface crosses the path before the hazard surface;
+            // both movement endpoints remain outside the solid sphere.
+            scenario = scenario.obstacle("wall", Vec3f::new(0.05, 0.0, 0.749), 0.75);
+        }
+        let mut world = scenario.build().unwrap();
+        let agent = world.entity_id("agent").unwrap();
+        let hazard = world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "grazed-hazard".to_string(),
+                kind: WorldObjectKind::Hazard,
+                organism_id: None,
+                position: Vec3f::new(0.05, 0.0, 0.095),
+                nutrition: 0.0,
+                hazard_pain: 0.2,
+                radius: 0.1,
+                token_id: None,
+            })
+            .unwrap();
+        let hazard_object = world.entity(hazard).unwrap();
+        let target = Vec3f::new(0.1, 0.0, 0.0);
+        for endpoint in [Vec3f::ZERO, target] {
+            let delta = Vec3f::new(
+                endpoint.x - hazard_object.position.x,
+                endpoint.y - hazard_object.position.y,
+                endpoint.z - hazard_object.position.z,
+            );
+            assert!(
+                (delta.x * delta.x + delta.y * delta.y + delta.z * delta.z).sqrt()
+                    > hazard_object.radius
+            );
+        }
+        register(&mut world, agent);
+
+        let receipt = world
+            .apply_registered_command(&move_command(target), agent, Tick(1))
+            .unwrap();
+
+        assert_eq!(receipt.biology_after.tick, Tick(1));
+        if blocked {
+            assert!(!receipt.action_result.execution.succeeded);
+            assert_eq!(
+                receipt.action_result.execution.physical.contact,
+                PhysicalContactKind::Blocked
+            );
+            assert_eq!(world.entity(agent).unwrap().position, Vec3f::ZERO);
+            assert_eq!(receipt.action_result.body_event.damage, 0.0);
+            assert!(!receipt.action_result.touched_entities.contains(&hazard));
+        } else {
+            assert!(receipt.action_result.execution.succeeded);
+            assert_eq!(
+                receipt.action_result.execution.physical.contact,
+                PhysicalContactKind::Collision
+            );
+            assert_eq!(world.entity(agent).unwrap().position, target);
+            assert_eq!(
+                receipt.action_result.execution.physical.target_entity,
+                Some(hazard)
+            );
+            assert_eq!(receipt.action_result.touched_entities, vec![hazard]);
+            assert_eq!(receipt.action_result.body_event.damage, 0.2);
+            assert_eq!(receipt.action_result.body_event.energy, -0.08);
+        }
+    }
+}
+
+#[test]
 fn incidental_hazard_contact_preserves_factorized_action_outcome() {
     let mut world = HeadlessScenarioBuilder::new(32_031)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
@@ -297,6 +368,7 @@ fn incidental_hazard_contact_preserves_factorized_action_outcome() {
         .unwrap();
     let agent = world.entity_id("agent").unwrap();
     let food = world.entity_id("food").unwrap();
+    let hazard = world.entity_id("hazard").unwrap();
     register(&mut world, agent);
     let channel = ChannelCommand::new(
         MotorChannel::Manipulation,
@@ -310,11 +382,23 @@ fn incidental_hazard_contact_preserves_factorized_action_outcome() {
         0,
     )
     .unwrap();
+    let locomotion = ChannelCommand::new(
+        MotorChannel::Locomotion,
+        ActionKind::Move.canonical_id(),
+        Some(ActionTarget::new(None, Some(Vec3f::new(0.1, 0.0, 0.0)))),
+        Vec3f::ZERO,
+        Intensity::new(1.0).unwrap(),
+        DurationTicks::new(1),
+        0.0,
+        Confidence::new(1.0).unwrap(),
+        0,
+    )
+    .unwrap();
     let bundle = MotorCommandBundle::new(
         ORGANISM_ID,
         ExperienceSequenceId::new(1).unwrap(),
         Tick::ZERO,
-        vec![channel],
+        vec![locomotion, channel],
     )
     .unwrap();
 
@@ -323,9 +407,28 @@ fn incidental_hazard_contact_preserves_factorized_action_outcome() {
     assert!(receipt.succeeded);
     assert_eq!(
         receipt.joint.execution.contact,
-        PhysicalContactKind::Consumed
+        PhysicalContactKind::Collision
     );
-    assert_eq!(receipt.joint.execution.target_entity, Some(food));
+    assert_eq!(receipt.joint.execution.target_entity, Some(hazard));
+    let manipulation = receipt
+        .channel_receipts
+        .iter()
+        .find(|channel| channel.command.channel == MotorChannel::Manipulation)
+        .unwrap();
+    assert_eq!(manipulation.physical.contact, PhysicalContactKind::Consumed);
+    assert_eq!(manipulation.physical.target_entity, Some(food));
+    assert_eq!(
+        receipt
+            .channel_receipts
+            .iter()
+            .find(|channel| channel.command.channel == MotorChannel::Locomotion)
+            .unwrap()
+            .physical
+            .contact,
+        PhysicalContactKind::Collision
+    );
+    // Movement and persistent contact observe the same hazard, so the joint
+    // biological interval records its injury once.
     assert_eq!(receipt.body_event.damage, 0.2);
     assert_eq!(receipt.body_event.nutrition, 0.6);
 }
@@ -362,8 +465,8 @@ fn cognitive_energy_setter_preserves_routed_body_projection() {
 fn registered_hazard_and_agent_contact_preserves_hazard_observation_and_social_event() {
     let mut world = HeadlessScenarioBuilder::new(32_004)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
-        .hazard("hazard", Vec3f::new(1.0, 0.0, 0.0), 0.7)
-        .social_agent("other", OrganismId(8), Vec3f::new(1.0, 0.0, 0.0), -1.4)
+        .hazard("hazard", Vec3f::new(0.8, 0.0, 0.0), 0.7)
+        .social_agent("other", OrganismId(8), Vec3f::new(0.8, 0.0, 0.0), 1.0)
         .build()
         .unwrap();
     let agent = world.entity_id("agent").unwrap();
@@ -398,7 +501,7 @@ fn registered_hazard_and_agent_contact_preserves_hazard_observation_and_social_e
 fn registered_approach_contact_reports_social_affinity_magnitude() {
     let mut world = HeadlessScenarioBuilder::new(32_006)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
-        .social_agent("other", OrganismId(8), Vec3f::new(0.5, 0.0, 0.0), -0.6)
+        .social_agent("other", OrganismId(8), Vec3f::new(0.5, 0.0, 0.0), 0.6)
         .build()
         .unwrap();
     let agent = world.entity_id("agent").unwrap();
@@ -434,7 +537,17 @@ fn registered_specialized_events_preserve_physical_and_physiological_fields() {
             Tick(1),
         )
         .unwrap();
-    assert_eq!(rest.action_result.body_event.energy, 0.08);
+    // Rest provides recovery without supplying nutrients or free body energy.
+    assert_eq!(rest.action_result.body_event.energy, 0.0);
+    assert!(
+        rest.action_result
+            .observation
+            .homeostatic_delta
+            .drives
+            .fatigue
+            < 0.0
+    );
+    assert!(rest.biology_after.body.sleeping);
     assert_eq!(rest.action_result.observation.reward_valence.raw(), 0.0);
     assert_eq!(rest.action_result.body_event.damage, 0.0);
     assert_eq!(rest.action_result.body_event.temperature_stress, 0.0);
@@ -445,7 +558,7 @@ fn registered_specialized_events_preserve_physical_and_physiological_fields() {
 
     let mut hazard_world = HeadlessScenarioBuilder::new(32_007)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
-        .hazard("hazard", Vec3f::new(1.0, 0.0, 0.0), 0.7)
+        .hazard("hazard", Vec3f::new(0.8, 0.0, 0.0), 0.7)
         .build()
         .unwrap();
     let hazard_agent = hazard_world.entity_id("agent").unwrap();
@@ -480,8 +593,8 @@ fn registered_specialized_events_preserve_physical_and_physiological_fields() {
         0.0
     );
 
-    for (seed, affinity, expected_energy) in
-        [(32_008, 0.6_f32, -0.02_f32), (32_009, -0.6_f32, -0.04_f32)]
+    for (seed, affinity, expected_contact) in
+        [(32_008, 0.6_f32, 0.6_f32), (32_009, -0.6_f32, 0.0_f32)]
     {
         let mut social_world = HeadlessScenarioBuilder::new(seed)
             .agent("agent", ORGANISM_ID, Vec3f::ZERO)
@@ -497,11 +610,11 @@ fn registered_specialized_events_preserve_physical_and_physiological_fields() {
                 Tick(1),
             )
             .unwrap();
-        assert_eq!(social.action_result.body_event.energy, expected_energy);
+        assert_eq!(social.action_result.body_event.energy, -0.02);
         assert_eq!(social.action_result.observation.reward_valence.raw(), 0.0);
         assert_eq!(
             social.action_result.body_event.social_contact,
-            affinity.abs()
+            expected_contact
         );
         assert_eq!(social.action_result.body_event.damage, 0.0);
         assert_eq!(social.action_result.body_event.temperature_stress, 0.0);
@@ -546,7 +659,7 @@ fn registered_zero_only_event_profiles_keep_unmodeled_fields_zero() {
 
     let mut blocked_world = HeadlessScenarioBuilder::new(32_011)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
-        .obstacle("obstacle", Vec3f::new(1.0, 0.0, 0.0), 0.5)
+        .obstacle("obstacle", Vec3f::new(0.8, 0.0, 0.0), 0.5)
         .build()
         .unwrap();
     let blocked_agent = blocked_world.entity_id("agent").unwrap();
