@@ -16,6 +16,11 @@ unchanged in the successor. The later [topology comparison](20261001-topology-pr
 times observations separately and excludes that attention chain. These independent
 measurements cannot be combined into a frame-speedup estimate.
 
+The [fresh-recall comparison and bounded preparation prototype](20261001-parallel-preparation.md)
+uses source `e8d5633e` and separate fixtures. Only the fresh-result diagnostic
+guard enters production; threaded timings describe an evidence-only prototype.
+Live preparation remains serial.
+
 ## Results and measured sources
 
 Each receipt retains exact commits, source/probe/executable hashes, individual

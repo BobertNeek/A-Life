@@ -7,6 +7,31 @@ The [CPU performance record](../performance/20261001-cpu-preparation.md) retains
 measurement conditions and links to source-bound samples/probes; no game-speed
 claim follows from the tests below.
 
+## Fresh-recall successor
+
+The successor extends green `dc3e916e` with reviewed source `e8d5633e` and
+evidence `61edc70b`, picked without conflicts as `b92fca07` and `a807a6b8`.
+The production diff is three added lines in `memory.rs`: the fresh private
+result self-check becomes a debug diagnostic. Public validators stay strict;
+live runtime, staged preparation and backend ordering remain serial and unchanged.
+
+Checks bind source `a807a6b8010025ca760f23f86eee705653bebed8`. Core passes
+45 tests in debug and 45 in true release, with the developer benchmark ignored
+in each profile. App attention/upload equivalence, 14 backend memory-context
+tests and tier-1/tier-10 headless smoke also pass: **106 passing executions,
+zero test failures**. Strict Rust 1.99 workspace, production/GPU-test all-target
+and release Core all-target Clippy pass with `-D warnings`. Format, static
+boundaries, documentation assertions (77/77) and changed local links pass.
+Jobs/tests were one/serial; memory peaked below 10.88 GiB, disk stayed above
+11.44 GiB and no guard fired. Final edits change documentation/formatting only.
+
+The [source-bound comparison](../performance/20261001-parallel-preparation.md),
+probe and builder are unchanged; JSON is lossless formatting from 3,003 to
+949 lines, retaining every field and ordered sample. Threaded code remains
+evidence-only. Performance was not remeasured; prototype throughput does not
+establish production parallelism, frame rate or responsiveness. Successor remote
+CI and GPU/Windows gameplay remain separately owned.
+
 ## Topology successor
 
 The successor extends `851c3a6ffcc498d6b2b3e9a43969cc57aa1308ec` with reviewed
