@@ -61,9 +61,8 @@ pub const CA11_PLAYER_SANDBOX_EDITOR_SCHEMA_VERSION: u16 = 1;
 pub const CA12_APP_BUNDLE_MANIFEST_SCHEMA: &str = "alife.ca12.app_bundle_manifest.v1";
 pub const CA12_APP_BUNDLE_MANIFEST_SCHEMA_VERSION: u16 = 1;
 pub const CA12_MAX_BUNDLE_FILE_BYTES: u64 = 128 * 1024;
-pub const CA12_MAX_BUNDLE_ASSET_BYTES: u64 = 768 * 1024;
 /// Metadata packs referenced by the CA12 bundle may describe many bounded assets
-/// while individual runtime fixtures remain subject to the smaller file cap.
+/// while runtime configs and WGSL remain subject to the smaller metadata cap.
 pub const CA12_MAX_REFERENCED_MANIFEST_BYTES: u64 = 256 * 1024;
 pub const CA12_MAX_BUNDLE_ENTRIES: usize = 32;
 pub const CA13_DOUBLE_BUFFERED_SCHEDULER_SCHEMA: &str =

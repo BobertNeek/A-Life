@@ -55,7 +55,10 @@ pub struct AppBundleIngestionSummary {
     pub production_voxel_generated_assets: usize,
     pub production_voxel_asset_manifest_validated: bool,
     pub required_entries: usize,
+    /// Largest admitted file, including canonical portable saves that have no
+    /// packaging byte cap. Approved art has its own independent size authority.
     pub largest_file_bytes: u64,
+    pub largest_production_asset_bytes: u64,
     pub missing_required_rejected: bool,
     pub shader_discovery_complete: bool,
     pub large_binary_assets_committed: bool,
@@ -76,7 +79,9 @@ impl AppBundleIngestionSummary {
             || self.production_voxel_generated_assets == 0
             || !self.production_voxel_asset_manifest_validated
             || self.required_entries == 0
-            || self.largest_file_bytes > CA12_MAX_BUNDLE_ASSET_BYTES
+            || self.largest_production_asset_bytes == 0
+            || self.largest_production_asset_bytes > self.largest_file_bytes
+            || self.largest_production_asset_bytes > FVR07_MAX_COMMITTED_ASSET_BYTES
             || !self.missing_required_rejected
             || !self.shader_discovery_complete
             || self.large_binary_assets_committed
@@ -119,6 +124,7 @@ pub fn validate_app_bundle_manifest(
 ) -> Result<AppBundleIngestionSummary, GameAppShellError> {
     let manifest_path = manifest_path.as_ref();
     let root = ca12_workspace_root();
+    tiny_file_size(manifest_path)?;
     let manifest: AppBundleManifest = read_json(manifest_path)?;
     let summary = validate_app_bundle_manifest_inner(&root, manifest_path, &manifest)?;
 
@@ -165,19 +171,18 @@ fn validate_app_bundle_manifest_inner(
 
     let mut largest_file_bytes = tiny_file_size(manifest_path)?;
     let environment_manifest_path = resolve_workspace_path(root, &manifest.environment_manifest)?;
+    largest_file_bytes = largest_file_bytes.max(tiny_file_size(&environment_manifest_path)?);
     let environment_manifest = EnvironmentManifest::from_json_file(&environment_manifest_path)?;
     environment_manifest.validate(&environment_manifest_path)?;
-    largest_file_bytes = largest_file_bytes.max(tiny_file_size(&environment_manifest_path)?);
 
     let production_voxel_asset_path =
         resolve_workspace_path(root, &manifest.production_voxel_asset_manifest)?;
+    largest_file_bytes = largest_file_bytes.max(bounded_file_size(
+        &production_voxel_asset_path,
+        CA12_MAX_REFERENCED_MANIFEST_BYTES,
+    )?);
     let production_voxel_assets = validate_production_assets(&production_voxel_asset_path)?;
-    largest_file_bytes = largest_file_bytes
-        .max(bounded_file_size(
-            &production_voxel_asset_path,
-            CA12_MAX_REFERENCED_MANIFEST_BYTES,
-        )?)
-        .max(production_voxel_assets.largest_asset_bytes);
+    largest_file_bytes = largest_file_bytes.max(production_voxel_assets.largest_asset_bytes);
 
     let mut ids = BTreeSet::new();
     let mut required_entries = 0;
@@ -196,8 +201,7 @@ fn validate_app_bundle_manifest_inner(
             }
             continue;
         }
-        validate_bundle_entry_kind(entry, &path)?;
-        largest_file_bytes = largest_file_bytes.max(tiny_file_size(&path)?);
+        largest_file_bytes = largest_file_bytes.max(validate_bundle_entry_kind(entry, &path)?);
         large_binary_assets_committed |= has_binary_like_extension(&path);
     }
 
@@ -250,12 +254,14 @@ fn validate_app_bundle_manifest_inner(
             && production_voxel_assets.no_renderer_authority,
         required_entries,
         largest_file_bytes,
+        largest_production_asset_bytes: production_voxel_assets.largest_asset_bytes,
         missing_required_rejected: false,
         shader_discovery_complete,
         large_binary_assets_committed,
         player_visible_status: vec![
             "App bundle manifest is versioned and validated.".to_string(),
-            "WGSL shader assets are discovered from the committed shader directory.".to_string(),
+            "The production WGSL shader bundle is complete and validated."
+                .to_string(),
             "FVR08 production voxel route is the default environment entry and loads real saved config/assets."
                 .to_string(),
             "FVR07 production voxel assets are manifest-validated with license, digest, source, and VFX budget metadata."
@@ -267,7 +273,16 @@ fn validate_app_bundle_manifest_inner(
 fn validate_bundle_entry_kind(
     entry: &AppBundleEntry,
     path: &Path,
-) -> Result<(), GameAppShellError> {
+) -> Result<u64, GameAppShellError> {
+    let bytes = match entry.kind.as_str() {
+        "runtime-config" => bounded_file_size(path, CA12_MAX_BUNDLE_FILE_BYTES)?,
+        "asset-manifest" => bounded_file_size(path, CA12_MAX_REFERENCED_MANIFEST_BYTES)?,
+        // P34 file saves retain full population/organism authority and have no
+        // fixed file-byte cap. Their canonical loader and typed validators below
+        // own admission; the inline save-slot transport limit does not apply.
+        "portable-save" => std::fs::metadata(path)?.len(),
+        _ => return Err(ScaffoldContractError::MissingPhaseData.into()),
+    };
     match entry.kind.as_str() {
         "runtime-config" => {
             RuntimeConfig::from_json_file(path)?.validate()?;
@@ -288,7 +303,7 @@ fn validate_bundle_entry_kind(
         }
         _ => return Err(ScaffoldContractError::MissingPhaseData.into()),
     }
-    Ok(())
+    Ok(bytes)
 }
 
 fn validate_entry(
@@ -325,7 +340,12 @@ fn discover_workspace_shaders(root: &Path) -> Result<Vec<PathBuf>, GameAppShellE
     let mut shaders = Vec::new();
     for entry in std::fs::read_dir(shader_root)? {
         let path = entry?.path();
-        if path.extension().and_then(|ext| ext.to_str()) == Some("wgsl") {
+        // This source is owned solely by the backend's `training-rollout`
+        // feature-gated module and is appended by its offline shader_source
+        // transformation. It is not part of the normal game shader bundle.
+        if path.extension().and_then(|ext| ext.to_str()) == Some("wgsl")
+            && path.file_name().and_then(|name| name.to_str()) != Some("training_rollout.wgsl")
+        {
             shaders.push(path);
         }
     }
