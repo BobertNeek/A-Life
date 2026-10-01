@@ -91,7 +91,7 @@ fn r06_transition(condition: JointMotorCondition, target: Vec<f32>) -> Predictio
 fn r06_assert_identity_change(changed: alife_core::ChannelCommand) {
     let original = r06_command(MotorChannel::Vocal, 100, 7);
     assert_ne!(
-        r06_condition(&[original.clone()])
+        r06_condition(std::slice::from_ref(&original))
             .canonical_digest()
             .unwrap(),
         r06_condition(&[changed]).canonical_digest().unwrap()
@@ -143,7 +143,7 @@ fn r06_equal_length_payloads_learn_distinct_successors() {
 
 fn r06_assert_stable_channel(existing: MotorChannel, extra: MotorChannel) {
     let known = r06_command(existing, 100, 7);
-    let target = r06_transition(r06_condition(&[known.clone()]), vec![0.9, 0.1]);
+    let target = r06_transition(r06_condition(std::slice::from_ref(&known)), vec![0.9, 0.1]);
     let mut predictor = GroundedSuccessorPredictor::default();
     for _ in 0..32 {
         predictor.observe(&target).unwrap();
