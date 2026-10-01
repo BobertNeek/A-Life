@@ -407,7 +407,9 @@ fn distance_then_entity_order_is_stable_and_caps_at_five_objects() {
     assert_eq!(MAX_ACTION_CANDIDATES, 32);
     assert_eq!(frame.candidates().len(), 3 + 5 * 5);
     let retained_targets = frame.candidates()[3..]
-        .chunks_exact(5)
+        .as_chunks::<5>()
+        .0
+        .iter()
         .map(|family_group| {
             assert!(family_group
                 .iter()
@@ -469,7 +471,7 @@ fn every_retained_object_gets_the_same_five_mechanical_families() {
     ];
 
     assert_eq!(frame.candidates().len(), 3 + 4 * expected.len());
-    for family_group in frame.candidates()[3..].chunks_exact(5) {
+    for family_group in frame.candidates()[3..].as_chunks::<5>().0 {
         let target_entity = family_group[0].target.entity;
         assert!(target_entity.is_some());
         assert!(family_group

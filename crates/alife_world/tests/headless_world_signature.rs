@@ -271,9 +271,7 @@ fn canonical_signature_registry_is_current_and_included_in_world_identity() {
     let empty = world.canonical_signature_digest().unwrap();
 
     world
-        .replace_organism_registry_exact(
-            [record(1, resident_a.raw()), record(2, resident_b.raw())].into_iter(),
-        )
+        .replace_organism_registry_exact([record(1, resident_a.raw()), record(2, resident_b.raw())])
         .unwrap();
     let registered = world.canonical_signature_digest().unwrap();
 
@@ -295,14 +293,10 @@ fn canonical_signature_registry_order_is_input_order_independent() {
     let mut reverse = world;
 
     forward
-        .replace_organism_registry_exact(
-            [record(1, resident_a.raw()), record(2, resident_b.raw())].into_iter(),
-        )
+        .replace_organism_registry_exact([record(1, resident_a.raw()), record(2, resident_b.raw())])
         .unwrap();
     reverse
-        .replace_organism_registry_exact(
-            [record(2, resident_b.raw()), record(1, resident_a.raw())].into_iter(),
-        )
+        .replace_organism_registry_exact([record(2, resident_b.raw()), record(1, resident_a.raw())])
         .unwrap();
 
     assert_eq!(
@@ -317,7 +311,7 @@ fn canonical_signature_registry_changes_when_only_biology_lifecycle_archive_chan
     let mut changed = base.clone();
     let initial = record(1, resident_a.raw());
     let unchanged = record(2, resident_b.raw());
-    base.replace_organism_registry_exact([initial.clone(), unchanged.clone()].into_iter())
+    base.replace_organism_registry_exact([initial.clone(), unchanged.clone()])
         .unwrap();
 
     let mut changed_record = initial;
@@ -332,7 +326,7 @@ fn canonical_signature_registry_changes_when_only_biology_lifecycle_archive_chan
         .link_life_manifest(Blake3Digest::from_bytes([2; 32]))
         .unwrap();
     changed
-        .replace_organism_registry_exact([changed_record, unchanged].into_iter())
+        .replace_organism_registry_exact([changed_record, unchanged])
         .unwrap();
 
     assert_eq!(base.object_snapshots(), changed.object_snapshots());

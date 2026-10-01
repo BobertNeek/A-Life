@@ -107,6 +107,9 @@ fn fatigue_rest_scenario_does_not_invoke_cpu_sleep_authority() {
     assert_eq!(patch.decision().selected_action.kind, ActionKind::Rest);
     assert!(patch.pre_action().homeostasis().drives.fatigue >= 0.9);
     assert!(patch.outcome().homeostatic_delta.drives.fatigue < 0.0);
+    // Reference rest reports regulation without manufacturing body energy.
+    assert_eq!(patch.outcome().energy_delta.raw(), 0.0);
+    assert_eq!(patch.outcome().reward_valence.raw(), 0.0);
     assert_eq!(run.sleep_phase, SleepPhase::Awake);
     assert!(!run.sleep_transition_observed);
     assert_eq!(run.sleep_cycle_count, 0);
@@ -119,6 +122,13 @@ fn curiosity_contradiction_scenario_raises_gap_bias_without_bypassing_arbitratio
     let run = run(ScenarioName::CuriosityContradiction);
     let patch = run.first_patch();
 
+    assert_eq!(
+        run.failures,
+        vec![Some(ReferenceActionFailure::MissingAffordance)]
+    );
+    assert!(!patch.outcome().success);
+    assert_eq!(patch.outcome().physical.contact, PhysicalContactKind::None);
+    assert_eq!(patch.outcome().homeostatic_delta.hormones.cortisol, 0.0);
     assert!(patch.outcome().prediction_error.raw() >= 0.8);
     assert!(patch.outcome().contradiction_observed);
     assert!(patch.outcome().homeostatic_delta.drives.curiosity > 0.0);

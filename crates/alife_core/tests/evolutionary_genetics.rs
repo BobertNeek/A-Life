@@ -519,8 +519,10 @@ fn homologous_chemistry_and_brain_settings_recombine_and_survive_extreme_mutatio
     assert!(legacy_json["brain"].get("construction").is_none());
     let restored: CreatureGenome = serde_json::from_value(legacy_json).unwrap();
     assert_eq!(restored.express().unwrap(), mother.express().unwrap());
-    let mut profile = BiologicalValueProfile::default();
-    profile.energy = 0.8;
+    let profile = BiologicalValueProfile {
+        energy: 0.8,
+        ..BiologicalValueProfile::default()
+    };
     for side in [AlleleSide::Maternal, AlleleSide::Paternal] {
         mother.chemistry.graph = mother
             .chemistry

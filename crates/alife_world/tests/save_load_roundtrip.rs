@@ -519,6 +519,9 @@ fn legacy_world_objects_migrate_by_canonical_order_and_resave_current_identity()
         object.remove("grounded_physical");
         object.remove("tracking_provenance");
         object.remove("tracking_key");
+        object.remove("body_yaw");
+        object.remove("head_yaw");
+        object.remove("optical_opacity");
     }
     let mut reversed = canonical.clone();
     reversed["world"]["objects"]
@@ -530,12 +533,18 @@ fn legacy_world_objects_migrate_by_canonical_order_and_resave_current_identity()
     let reversed_loaded = PortableSaveFile::from_json_str(&reversed.to_string()).unwrap();
 
     assert_eq!(canonical_loaded.world, reversed_loaded.world);
+    let mut partial_legacy = canonical.clone();
+    partial_legacy["world"]["objects"][0]["body_yaw"] = serde_json::json!(0.0);
+    assert!(PortableSaveFile::from_json_str(&partial_legacy.to_string()).is_err());
     assert_eq!(
         canonical_loaded.world.next_spawn_sequence,
         canonical_loaded.world.objects.len() as u64 + 1
     );
     for (index, object) in canonical_loaded.world.objects.iter().enumerate() {
         assert_eq!(object.tracking_provenance.spawn_sequence, index as u64 + 1);
+        assert_eq!(object.body_yaw, 0.0);
+        assert_eq!(object.head_yaw, 0.0);
+        assert_eq!(object.optical_opacity, 1.0);
         assert_eq!(
             object.tracking_key,
             object.tracking_provenance.canonical_key()
@@ -548,6 +557,9 @@ fn legacy_world_objects_migrate_by_canonical_order_and_resave_current_identity()
         assert!(object.get("grounded_physical").is_some());
         assert!(object.get("tracking_provenance").is_some());
         assert!(object.get("tracking_key").is_some());
+        assert_eq!(object["body_yaw"], serde_json::json!(0.0));
+        assert_eq!(object["head_yaw"], serde_json::json!(0.0));
+        assert_eq!(object["optical_opacity"], serde_json::json!(1.0));
     }
 }
 
@@ -566,6 +578,20 @@ fn current_world_objects_reject_tampered_or_partial_tracking_identity() {
     let mut tampered = current.clone();
     tampered["world"]["objects"][0]["tracking_key"][0] = serde_json::json!(0);
     assert!(PortableSaveFile::from_json_str(&tampered.to_string()).is_err());
+
+    // Current saves require all gaze and opacity fields; legacy defaults must
+    // not conceal missing current-schema state.
+    for field in ["body_yaw", "head_yaw", "optical_opacity"] {
+        let mut partial_gaze = current.clone();
+        partial_gaze["world"]["objects"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove(field);
+        assert!(
+            PortableSaveFile::from_json_str(&partial_gaze.to_string()).is_err(),
+            "current save accepted missing {field}"
+        );
+    }
 
     let mut partial = current;
     partial["world"]["objects"][0]

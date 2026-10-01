@@ -398,9 +398,9 @@ fn signed_choice_readouts_change_only_memory_credit_and_preserve_legacy_identity
     // Unit regression inputs only; the runtime still derives credit from outcomes.
     for lanes in [
         [
-            0.342110008,
+            0.342_11,
             0.040599972,
-            -0.003060920,
+            -0.003_060_92,
             0.0,
             0.0,
             0.0,
@@ -408,7 +408,7 @@ fn signed_choice_readouts_change_only_memory_credit_and_preserve_legacy_identity
             0.0,
         ],
         [
-            0.282640517,
+            0.282_640_52,
             0.011600018,
             -0.002724667,
             0.0,
