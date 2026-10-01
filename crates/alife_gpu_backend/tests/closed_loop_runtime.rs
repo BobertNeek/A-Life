@@ -399,6 +399,10 @@ mod hardware {
                     .expect("language tick binding");
             let batch = alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(vec![input])
                 .expect("language batch");
+            let before = backend
+                .capture_training_state(handle, frame.tick())
+                .expect("pre-dispatch training snapshot");
+            let retained_words = before.mutable_words.clone();
             let tick = backend
                 .tick_memory_batch(&batch)
                 .expect("language GPU dispatch")
@@ -406,6 +410,18 @@ mod hardware {
             let state = backend
                 .capture_training_state(handle, frame.tick())
                 .unwrap();
+            assert!(std::sync::Arc::ptr_eq(&before.phenotype, &state.phenotype));
+            assert_eq!(state.phenotype.as_ref(), &phenotype);
+            assert_ne!(before.mutable_words.as_ptr(), state.mutable_words.as_ptr());
+            assert_ne!(before.mutable_words, state.mutable_words);
+            assert_eq!(before.mutable_words, retained_words);
+            if index == 0 {
+                eprintln!(
+                    "training capture: full_mutable_snapshot_bytes={}, compiled_synapses={}; immutable graph shared across pre/post dispatch",
+                    state.mutable_words.len() * std::mem::size_of::<u32>(),
+                    state.phenotype.synapses().len(),
+                );
+            }
             let range = state.brain_slot.word_ranges().encoded_input_words.clone();
             encoded.push(
                 state.mutable_words[(range.start - state.mutable_word_base) as usize

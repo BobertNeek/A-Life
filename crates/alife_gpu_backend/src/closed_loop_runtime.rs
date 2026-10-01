@@ -1704,6 +1704,8 @@ struct GpuBrainSlotOwnership {
 pub(crate) struct ResidentBrainSlot {
     ownership: GpuBrainSlotOwnership,
     pub(crate) phenotype: BrainPhenotype,
+    #[cfg(feature = "training-rollout")]
+    training_phenotype: Option<TrainingPhenotypeCache>,
     pub(crate) brain_slot: GpuBrainSlot,
     pub(crate) ranges: GpuFixedSlotRanges,
     pub(crate) active_eligibility_bank: u8,
@@ -1730,6 +1732,32 @@ pub(crate) struct ResidentBrainSlot {
     pub(crate) learning_sequence_guard: LearningSequenceGuard,
     pub(crate) pending_eligibility: Option<PendingEligibilityReceipt>,
     pub(crate) pending_eligibility_record: Option<GpuPendingEligibilityRecord>,
+}
+
+#[cfg(feature = "training-rollout")]
+struct TrainingPhenotypeCache {
+    handle: GpuBrainHandle,
+    phenotype: Arc<BrainPhenotype>,
+}
+
+#[cfg(feature = "training-rollout")]
+fn shared_training_phenotype(
+    cache: &mut Option<TrainingPhenotypeCache>,
+    handle: GpuBrainHandle,
+    phenotype: &BrainPhenotype,
+) -> Arc<BrainPhenotype> {
+    // A replacement or changed compiled graph cannot rewrite an older capture.
+    // The cache lives with the resident, so retirement releases its ownership.
+    if cache
+        .as_ref()
+        .is_none_or(|cached| cached.handle != handle || cached.phenotype.as_ref() != phenotype)
+    {
+        *cache = Some(TrainingPhenotypeCache {
+            handle,
+            phenotype: Arc::new(phenotype.clone()),
+        });
+    }
+    Arc::clone(&cache.as_ref().expect("training phenotype cached").phenotype)
 }
 
 struct PreparedLearningApply {
@@ -4770,16 +4798,16 @@ impl GpuClosedLoopBackend {
         let (mut snapshot, ranges) = {
             let bucket = self
                 .class_buckets
-                .get(&handle.class_id.raw())
+                .get_mut(&handle.class_id.raw())
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-                .bucket_for_handle(handle)?;
-            let resident = bucket.slots[handle.slot as usize]
-                .as_ref()
-                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                .bucket_for_handle_mut(handle)?;
             let side = bucket
                 .pipelines
                 .slot_active_side(handle.slot, handle.generation)
                 .map_err(map_gpu_contract_error)?;
+            let resident = bucket.slots[handle.slot as usize]
+                .as_mut()
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
             (
                 crate::training_rollout::GpuTrainingStateSnapshot {
                     handle,
@@ -4788,7 +4816,11 @@ impl GpuClosedLoopBackend {
                     active_activation_side: side,
                     active_weight_generation: resident.active_weight_generation,
                     active_weight_bank: resident.active_weight_bank,
-                    phenotype: resident.phenotype.clone(),
+                    phenotype: shared_training_phenotype(
+                        &mut resident.training_phenotype,
+                        handle,
+                        &resident.phenotype,
+                    ),
                     brain_slot: resident.brain_slot.clone(),
                     v11: resident.v11.checkpoint(),
                     mutable_word_base: resident.ranges.mutable_state_words.start,
@@ -5373,6 +5405,8 @@ impl GpuClosedLoopBackend {
                 sensor_profile: phenotype.sensor_profile(),
             },
             phenotype: phenotype.clone(),
+            #[cfg(feature = "training-rollout")]
+            training_phenotype: None,
             brain_slot: upload.brain_slot().clone(),
             ranges: upload.ranges().clone(),
             active_eligibility_generation: 1,
@@ -6175,6 +6209,8 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
                 sensor_profile: entry.phenotype.sensor_profile(),
             },
             phenotype: entry.phenotype.clone(),
+            #[cfg(feature = "training-rollout")]
+            training_phenotype: None,
             brain_slot: upload.brain_slot().clone(),
             ranges: upload.ranges().clone(),
             active_eligibility_generation: 1,
@@ -6966,6 +7002,56 @@ mod curated_founder_gpu_cutover_tests {
             &foundation,
         )
         .expect("fixture phenotype is valid")
+    }
+
+    #[cfg(feature = "training-rollout")]
+    #[test]
+    fn training_capture_shares_only_the_same_resident_immutable_phenotype() {
+        let phenotype = test_phenotype(1);
+        let handle = GpuBrainHandle {
+            backend_instance_id: NonZeroU64::new(1).unwrap(),
+            class_id: phenotype.brain_class_id(),
+            slot: 0,
+            generation: 1,
+            organism_id: OrganismId(1),
+            phenotype_hash: phenotype.phenotype_hash(),
+        };
+        let mut cache = None;
+        let first = shared_training_phenotype(&mut cache, handle, &phenotype);
+        let second = shared_training_phenotype(&mut cache, handle, &phenotype);
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(first.as_ref(), &phenotype);
+
+        // A reused slot has a distinct residency, even with the same graph.
+        let replacement_handle = GpuBrainHandle {
+            generation: 2,
+            ..handle
+        };
+        let replacement = shared_training_phenotype(&mut cache, replacement_handle, &phenotype);
+        assert!(!Arc::ptr_eq(&first, &replacement));
+        assert_eq!(first.as_ref(), &phenotype);
+
+        // Guard graph identity as well as the capability's generation. A new
+        // compiler input must not mutate any already-captured graph.
+        let capacity = BrainCapacityClass::n512();
+        let genome = BrainGenome::scaffold(0x4E35_3132_5F00_0002, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        let changed = PhenotypeCompiler::compile_testing_procedural_baseline(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::PrivilegedAffordanceV1,
+        )
+        .unwrap();
+        assert_ne!(changed, phenotype);
+        let changed_capture = shared_training_phenotype(&mut cache, replacement_handle, &changed);
+        assert!(!Arc::ptr_eq(&replacement, &changed_capture));
+        assert_eq!(changed_capture.as_ref(), &changed);
+        assert_eq!(replacement.as_ref(), &phenotype);
+        drop(cache);
+        assert_eq!(Arc::strong_count(&changed_capture), 1);
+        assert_eq!(first.as_ref(), &phenotype);
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]

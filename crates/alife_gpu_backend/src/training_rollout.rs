@@ -1,6 +1,7 @@
 //! Training-only behavior-policy evidence. Neural logits and samples originate on GPU.
 use alife_core::{ActionKind, PerceptionFrame, PerceptionFrameDigest, ScaffoldContractError};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 pub(crate) const TRAINING_PAYLOAD_TAG: u32 = 0x8000_0000;
 
@@ -15,7 +16,8 @@ pub struct GpuTrainingStateSnapshot {
     pub active_activation_side: u8,
     pub active_weight_generation: u64,
     pub active_weight_bank: u8,
-    pub phenotype: alife_core::BrainPhenotype,
+    /// Immutable compiled graph shared by captures from the same residency.
+    pub phenotype: Arc<alife_core::BrainPhenotype>,
     pub brain_slot: crate::GpuBrainSlot,
     pub v11: crate::GpuV11Checkpoint,
     pub mutable_word_base: u32,

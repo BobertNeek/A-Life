@@ -959,7 +959,7 @@ fn run_foundation_training_cycle_from(
         food_available_elapsed_seconds = Some(started.elapsed().as_secs_f64());
     }
     std::fs::write(output.join("phase.txt"), "first-capture")?;
-    let phenotype = first[0].before.phenotype.clone();
+    let phenotype = first[0].before.phenotype.as_ref().clone();
     let mask = if let Some(checkpoint) = &restored_actor {
         checkpoint.stage_mask.clone()
     } else {
@@ -1464,7 +1464,10 @@ fn run_foundation_training_cycle_from(
     if !next_cohort_tick_captured {
         return Err("trained asset next cohort did not produce a decision".into());
     }
-    trainer.rebind_for_next_cohort(next_steps[0].before.phenotype.clone(), admitted_asset)?;
+    trainer.rebind_for_next_cohort(
+        next_steps[0].before.phenotype.as_ref().clone(),
+        admitted_asset,
+    )?;
     let next_cohort_optimizer_rebound = true;
     std::fs::write(
         output.join("actor-checkpoint.json"),

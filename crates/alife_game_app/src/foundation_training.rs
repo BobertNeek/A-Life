@@ -203,7 +203,7 @@ pub fn foundation_replay_sequence(
 ) -> Result<TrainingSequence> {
     let first = steps.first().ok_or_else(invalid)?;
     let upload = alife_gpu_backend::closed_loop_buffers::GpuPhenotypeUpload::try_from(
-        &first.before.phenotype,
+        first.before.phenotype.as_ref(),
     )?;
     foundation_replay_sequence_with_upload(steps, burn_in_ticks, &upload)
 }
@@ -1834,7 +1834,7 @@ fn run_foundation_training_pilot_with_request(
     if lesson_completed == Some(false) && teacher_mode {
         return Err("teacher lesson did not complete its measured world outcome".into());
     }
-    let phenotype = steps[0].before.phenotype.clone();
+    let phenotype = steps[0].before.phenotype.as_ref().clone();
     let ids: Vec<u32> = (0..phenotype.synapses().len() as u32).collect();
     let mask = StageTrainableMask::from_synapse_indices(&phenotype, &ids)?;
     // Reuse the same physical adapter/device context, with a Training consumer.
@@ -1860,7 +1860,7 @@ fn run_foundation_training_pilot_with_request(
         let mut writer = FoundationReplayWriter::new(
             &output.join("replay"),
             source.clone(),
-            steps[0].before.phenotype.clone(),
+            steps[0].before.phenotype.as_ref().clone(),
             &asset,
             FoundationReplayBudget::default(),
         )?;
@@ -3105,8 +3105,8 @@ impl FoundationReplayWriter {
     }
 
     pub fn append(&mut self, step: &FoundationTrainingStep) -> Result<FoundationReplayRecordRef> {
-        if step.before.phenotype != self.phenotype
-            || step.after_inference.phenotype != self.phenotype
+        if step.before.phenotype.as_ref() != &self.phenotype
+            || step.after_inference.phenotype.as_ref() != &self.phenotype
         {
             return Err("frozen genetic actor changed within a replay life".into());
         }
