@@ -826,15 +826,42 @@ fn decoder_serialized_identity_contains_no_raw_entity_id_lane() {
     );
     let family_rows = decoder["families"].as_array().unwrap();
     assert_eq!(family_rows.len(), 8);
-    for row in family_rows {
+    for (row, family_plan) in family_rows
+        .iter()
+        .zip(phenotype.candidate_decoder().families())
+    {
+        let mut expected_keys = BTreeSet::from([
+            "family",
+            "bias",
+            "innate_drive_mask",
+            "innate_gain",
+            "decoder_synapse_start",
+            "decoder_synapse_count",
+        ]);
+        // Founder priorities serialize only the non-default cue/reach fields.
+        match family_plan.family() {
+            CandidateActionFamily::Approach => {
+                expected_keys.insert("innate_cue_lane");
+            }
+            CandidateActionFamily::Ingest => {
+                expected_keys.insert("innate_cue_lane");
+                expected_keys.insert("innate_requires_reach");
+            }
+            CandidateActionFamily::Avoid => {
+                expected_keys.insert("innate_cue_lane");
+                expected_keys.insert("innate_cue_inverted");
+            }
+            CandidateActionFamily::Idle
+            | CandidateActionFamily::Inspect
+            | CandidateActionFamily::Contact
+            | CandidateActionFamily::Rest
+            | CandidateActionFamily::Other => {}
+        }
         assert_eq!(
             decoder_wire_keys(row),
-            BTreeSet::from([
-                "family",
-                "bias",
-                "decoder_synapse_start",
-                "decoder_synapse_count",
-            ]),
+            expected_keys,
+            "wrong serialized identity fields for {:?}",
+            family_plan.family(),
         );
     }
 

@@ -170,8 +170,10 @@ mod task3_capacity_budget_red_tests {
                 ExpectedClassBudget {
                     id: BrainCapacityClass::N2048_ID,
                     neurons: 2_048,
-                    total_synapses: 32_768,
-                    recurrent_synapses: 24_576,
+                    // Capacity includes 64 lifetime structural edges; the frozen
+                    // foundation still compiles 32,768 total / 24,576 recurrent.
+                    total_synapses: 32_832,
+                    recurrent_synapses: 24_640,
                     action_decoder_synapses: 4_096,
                     memory_decoder_synapses: 4_096,
                     active_tiles: 192,

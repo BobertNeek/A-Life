@@ -497,16 +497,18 @@ fn carried_object_follows_carrier_across_move_and_save_restore() {
     assert_eq!(displacement, pos(0.1, 0.0));
     assert_eq!(
         restored.entity(agent).unwrap().position,
-        pos(
+        Vec3f::new(
             before_agent.x + displacement.x,
-            before_agent.z + displacement.z
+            before_agent.y + displacement.y,
+            before_agent.z + displacement.z,
         )
     );
     assert_eq!(
         restored.entity(berry).unwrap().position,
-        pos(
+        Vec3f::new(
             before_berry.x + displacement.x,
-            before_berry.z + displacement.z
+            before_berry.y + displacement.y,
+            before_berry.z + displacement.z,
         )
     );
     assert_eq!(restored.entity(berry).unwrap().carried_by, Some(organism()));

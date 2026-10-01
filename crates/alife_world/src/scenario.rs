@@ -1037,7 +1037,7 @@ fn fatigue_sleep(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
         sensory(vec![], vec![], None, 0),
         steps,
         expectations(
-            "fatigue selects rest; GPU sleep remains owned by the live scheduler",
+            "reference rest relieves fatigue without emitting synthetic energy; GPU sleep remains owned by the live scheduler",
             false,
             ExpectedPatchFields {
                 patch_index: 0,
@@ -1053,7 +1053,9 @@ fn fatigue_sleep(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                 pain_delta: ExpectedDirection::Zero,
                 cortisol_delta: ExpectedDirection::Zero,
                 frustration: ExpectedDirection::Zero,
-                energy: ExpectedDirection::Positive,
+                // The reference observation supplies no energy; registered
+                // biology accounts for upkeep and repair separately.
+                energy: ExpectedDirection::Zero,
                 prediction_error: ExpectedDirection::Positive,
                 contradiction: false,
                 requires_food_salience_bias: false,
@@ -1136,12 +1138,16 @@ fn curiosity_contradiction(seed: u64) -> Result<ScenarioFixture, ScaffoldContrac
                 expected_action_id: Some(HeadlessActionIds::EAT),
                 expected_target_label: Some("sealed_box"),
                 expected_success: false,
-                expected_contact: Some(PhysicalContactKind::Blocked),
+                // Solid geometry prevents contact with the box's center; the
+                // rejected ingest reports no touch, unlike blocked locomotion.
+                expected_contact: Some(PhysicalContactKind::None),
                 reward: ExpectedDirection::Zero,
                 hunger_delta: ExpectedDirection::Zero,
                 fear_delta: ExpectedDirection::Zero,
                 pain_delta: ExpectedDirection::Zero,
-                cortisol_delta: ExpectedDirection::Positive,
+                // Missing affordance creates disappointment, not a synthetic
+                // endocrine event in this reference fixture.
+                cortisol_delta: ExpectedDirection::Zero,
                 frustration: ExpectedDirection::Positive,
                 energy: ExpectedDirection::Negative,
                 prediction_error: ExpectedDirection::Positive,
