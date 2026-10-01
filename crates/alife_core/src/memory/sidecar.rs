@@ -57,6 +57,8 @@ pub struct PortableMemoryBankAssetV2 {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MemoryUpdateKind {
+    IgnoredLowInformation,
+    IgnoredLowerRetention,
     Inserted {
         inserted: MemoryId,
     },
@@ -1062,6 +1064,8 @@ fn memory_bank_from_portable(
         target_index: std::collections::BTreeMap::new(),
         family_namespace_index: std::collections::BTreeMap::new(),
         target_namespace_index: std::collections::BTreeMap::new(),
+        family_category_index: std::collections::BTreeMap::new(),
+        target_category_index: std::collections::BTreeMap::new(),
     };
     candidate_store.validate_for_capacity(config.capacity)?;
     if candidate_store.digest(config.capacity)? != asset.active_bank_digest {

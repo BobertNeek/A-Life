@@ -83,6 +83,8 @@ pub struct CandidateMemoryRecallReceipt {
     pub family_eligible: u32,
     pub family_searched: u32,
     pub family_matches: u16,
+    pub target_reused_from: Option<u16>,
+    pub family_reused_from: Option<u16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -213,6 +215,28 @@ impl PreparedMemoryRecall {
             let expected = MemoryQueryEncoderV2::encode_validated_candidate(draft, candidate)?;
             let (target_key, family_key) = keys_for_query(query);
             let receipt = &self.receipt.candidates[index];
+            for (source, target_channel) in [
+                (receipt.target_reused_from, true),
+                (receipt.family_reused_from, false),
+            ] {
+                if let Some(source) = source {
+                    let source = usize::from(source);
+                    if source >= index {
+                        return Err(ScaffoldContractError::InvalidMemoryQuery);
+                    }
+                    let original = &self.candidate_queries[source];
+                    let (original_target, original_family) = keys_for_query(original);
+                    let same = if target_channel {
+                        original_target == target_key
+                            && target_recall_features(original) == target_recall_features(query)
+                    } else {
+                        original_family == family_key && original.features() == query.features()
+                    };
+                    if !same {
+                        return Err(ScaffoldContractError::InvalidMemoryQuery);
+                    }
+                }
+            }
             if *query != expected
                 || usize::from(query.candidate_index()) != index
                 || receipt.query_digest != query.canonical_digest()
@@ -226,7 +250,14 @@ impl PreparedMemoryRecall {
             .receipt
             .candidates
             .iter()
-            .map(|candidate| candidate.target_searched + candidate.family_searched)
+            .map(|candidate| {
+                candidate
+                    .target_reused_from
+                    .map_or(candidate.target_searched, |_| 0)
+                    + candidate
+                        .family_reused_from
+                        .map_or(candidate.family_searched, |_| 0)
+            })
             .sum::<u32>();
         if similarity_evaluations != self.receipt.similarity_evaluations {
             return Err(ScaffoldContractError::InvalidMemoryQuery);
@@ -872,6 +903,21 @@ impl MemoryBank {
             .validate_contract()
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
         let profile = draft.profile_provenance().identity();
+        // Cache only within this immutable draft. IDs/digests retain provenance;
+        // equality of actual features, not quantized bins, establishes reuse.
+        let mut target_counts = [0_u16; crate::MAX_GROUNDED_OBJECT_SLOTS + 1];
+        let mut family_counts = [[0_u16; 8]; crate::MAX_GROUNDED_OBJECT_SLOTS + 1];
+        let target_slot = |candidate: &crate::ActionCandidate| match candidate.observation {
+            crate::CandidateObservationRef::ObjectSlot(slot) => usize::from(slot),
+            crate::CandidateObservationRef::None => crate::MAX_GROUNDED_OBJECT_SLOTS,
+        };
+        for candidate in draft.candidates() {
+            let slot = target_slot(candidate);
+            target_counts[slot] += 1;
+            family_counts[slot][usize::from(candidate.family.raw())] += 1;
+        }
+        let mut target_cache = std::collections::BTreeMap::new();
+        let mut family_cache = std::collections::BTreeMap::new();
         let mut candidate_queries = Vec::with_capacity(draft.candidates().len());
         let mut candidate_contexts = Vec::with_capacity(draft.candidates().len());
         let mut candidate_receipts = Vec::with_capacity(draft.candidates().len());
@@ -884,21 +930,53 @@ impl MemoryBank {
             let query = MemoryQueryEncoderV2::encode_validated_candidate(draft, candidate)?;
             let (target_bucket, family_bucket) = keys_for_query(&query);
             let has_target = query.tracked_object_id().is_some();
-            exact_bucket_reads = exact_bucket_reads.saturating_add(if has_target { 2 } else { 1 });
-            let family_neighbors = neighbor_family_keys(&family_bucket).len().saturating_sub(1);
-            let target_neighbors = if has_target {
-                neighbor_target_keys(&target_bucket).len().saturating_sub(1)
-            } else {
-                0
+            let slot = target_slot(candidate);
+            let target_cache_key = (target_counts[slot] > 1)
+                .then(|| (target_bucket.clone(), target_recall_features(&query)));
+            let family_cache_key = (family_counts[slot][usize::from(candidate.family.raw())] > 1)
+                .then(|| (family_bucket.clone(), query.features().map(f32::to_bits)));
+            let (target, target_reused_from) = match target_cache_key
+                .as_ref()
+                .and_then(|key| target_cache.get(key))
+            {
+                Some((index, result)) => (Clone::clone(result), Some(*index)),
+                None => {
+                    let result =
+                        recall_target_channel(&self.candidate_store, &query, &target_bucket)?;
+                    if has_target {
+                        exact_bucket_reads = exact_bucket_reads.saturating_add(1);
+                        neighbor_bucket_reads = neighbor_bucket_reads.saturating_add(
+                            neighbor_target_keys(&target_bucket).len().saturating_sub(1) as u32
+                                + u32::from(result.category_read),
+                        );
+                    }
+                    similarity_evaluations = similarity_evaluations.saturating_add(result.searched);
+                    if let Some(key) = target_cache_key {
+                        target_cache.insert(key, (candidate.candidate_index, result.clone()));
+                    }
+                    (result, None)
+                }
             };
-            neighbor_bucket_reads = neighbor_bucket_reads.saturating_add(
-                u32::try_from(family_neighbors + target_neighbors).unwrap_or(u32::MAX),
-            );
-            let target = recall_target_channel(&self.candidate_store, &query, &target_bucket)?;
-            let family = recall_family_channel(&self.candidate_store, &query, &family_bucket)?;
-            similarity_evaluations = similarity_evaluations
-                .saturating_add(target.searched)
-                .saturating_add(family.searched);
+            let (family, family_reused_from) = match family_cache_key
+                .as_ref()
+                .and_then(|key| family_cache.get(key))
+            {
+                Some((index, result)) => (Clone::clone(result), Some(*index)),
+                None => {
+                    let result =
+                        recall_family_channel(&self.candidate_store, &query, &family_bucket)?;
+                    exact_bucket_reads = exact_bucket_reads.saturating_add(1);
+                    neighbor_bucket_reads = neighbor_bucket_reads.saturating_add(
+                        neighbor_family_keys(&family_bucket).len().saturating_sub(1) as u32
+                            + u32::from(result.category_read),
+                    );
+                    similarity_evaluations = similarity_evaluations.saturating_add(result.searched);
+                    if let Some(key) = family_cache_key {
+                        family_cache.insert(key, (candidate.candidate_index, result.clone()));
+                    }
+                    (result, None)
+                }
+            };
             if target.eligible > target.searched {
                 degradations.push(MemoryRecallDegradation::SearchShortlisted {
                     candidate_index: candidate.candidate_index,
@@ -937,6 +1015,8 @@ impl MemoryBank {
                 family_eligible: family.eligible,
                 family_searched: family.searched,
                 family_matches: family.matches,
+                target_reused_from,
+                family_reused_from,
             });
             candidate_queries.push(query);
         }
@@ -1010,29 +1090,43 @@ impl MemoryBank {
         let candidate_record = candidate_record_from_patch(candidate_memory_id, patch)?;
         let (target_key, family_key) = keys_for_query(query);
 
-        let merge_id = self
+        let mut merge_id: Option<MemoryId> = None;
+        let mut contradiction_id: Option<MemoryId> = None;
+        for id in self
             .candidate_store
             .family_index
             .get(&family_key)
             .into_iter()
             .flatten()
             .take(MEMORY_FAMILY_SEARCH_CAP)
-            .filter_map(|id| {
-                self.candidate_store
-                    .records
-                    .get(&id.raw())
-                    .filter(|record| {
-                        record.identity() == candidate_record.identity()
-                            && family_similarity(
-                                &candidate_record.query_features,
-                                &record.query_features,
-                            ) >= MEMORY_MERGE_SIMILARITY
-                    })
-                    .map(|_| *id)
-            })
-            .min_by_key(|id| id.raw());
+        {
+            let record = &self.candidate_store.records[&id.raw()];
+            if record.identity() != candidate_record.identity()
+                || family_similarity(&candidate_record.query_features, &record.query_features)
+                    < MEMORY_MERGE_SIMILARITY
+            {
+                continue;
+            }
+            let selected = if compatible_memory_outcomes(record, &candidate_record) {
+                &mut merge_id
+            } else {
+                &mut contradiction_id
+            };
+            if selected.is_none_or(|previous| id.raw() < previous.raw()) {
+                *selected = Some(*id);
+            }
+        }
+        let first_matching_event = if query.tracked_object_id().is_some() {
+            !self
+                .candidate_store
+                .family_namespace_index
+                .contains_key(&family_key.namespace_key())
+        } else {
+            !self.candidate_store.family_index.contains_key(&family_key)
+        };
 
         enum MutationPlan {
+            Ignore,
             Merge {
                 memory_id: MemoryId,
                 old: CandidateMemoryRecordV2,
@@ -1051,77 +1145,104 @@ impl MemoryBank {
             },
         }
 
-        let (kind, plan) = if let Some(memory_id) = merge_id {
-            let old = self.candidate_store.records[&memory_id.raw()].clone();
-            let merged = merge_candidate_records(&old, &candidate_record)?;
-            let merge_count = self
-                .candidate_store
-                .merge_count
-                .checked_add(1)
-                .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
-            (
-                MemoryUpdateKind::Merged { into: memory_id },
-                MutationPlan::Merge {
-                    memory_id,
-                    old,
-                    merged,
-                    merge_count,
-                },
-            )
-        } else {
-            let next_memory_id = self
-                .candidate_store
-                .next_memory_id
-                .checked_add(1)
-                .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
-            if self.candidate_store.records.len() == self.config.capacity {
-                let removed = self
+        let (kind, plan) =
+            if !meaningful_memory_event(patch, &candidate_record, first_matching_event) {
+                (
+                    MemoryUpdateKind::IgnoredLowInformation,
+                    MutationPlan::Ignore,
+                )
+            } else if let Some(memory_id) = merge_id {
+                let old = self.candidate_store.records[&memory_id.raw()].clone();
+                let mut merged = merge_candidate_records(&old, &candidate_record)?;
+                // Measured agreement with evidence actually present before this
+                // decision refreshes retention, never belief confidence/value.
+                if corroborated_retrieval(patch, &candidate_record) {
+                    merged.salience_q16 = old
+                        .salience_q16
+                        .max(candidate_record.salience_q16)
+                        .saturating_add(u16::MAX / 16);
+                }
+                let merge_count = self
                     .candidate_store
-                    .records
-                    .values()
-                    .min_by_key(|record| {
-                        (
-                            record.salience_q16,
-                            record.last_tick.raw(),
-                            record.memory_id.raw(),
-                        )
-                    })
-                    .cloned()
-                    .ok_or(ScaffoldContractError::InvalidMemoryQuery)?;
-                let eviction_count = self
-                    .candidate_store
-                    .eviction_count
+                    .merge_count
                     .checked_add(1)
                     .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
                 (
-                    MemoryUpdateKind::Evicted {
-                        removed: removed.memory_id,
-                        inserted: candidate_memory_id,
-                    },
-                    MutationPlan::EvictAndInsert {
-                        removed,
-                        record: candidate_record,
-                        next_memory_id,
-                        eviction_count,
+                    MemoryUpdateKind::Merged { into: memory_id },
+                    MutationPlan::Merge {
+                        memory_id,
+                        old,
+                        merged,
+                        merge_count,
                     },
                 )
             } else {
-                (
-                    MemoryUpdateKind::Inserted {
-                        inserted: candidate_memory_id,
-                    },
-                    MutationPlan::Insert {
-                        record: candidate_record,
-                        next_memory_id,
-                    },
-                )
-            }
-        };
+                let next_memory_id = self
+                    .candidate_store
+                    .next_memory_id
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+                if self.candidate_store.records.len() == self.config.capacity {
+                    // A direct reversal at capacity replaces its own earlier
+                    // conflicting episode; unrelated strong memories keep their
+                    // protection. Below capacity both exceptions remain stored.
+                    let removed = contradiction_id
+                        .and_then(|id| self.candidate_store.records.get(&id.raw()))
+                        .or_else(|| {
+                            self.candidate_store.records.values().min_by_key(|record| {
+                                (
+                                    retention_priority(record, query.tick()),
+                                    record.last_tick.raw(),
+                                    record.memory_id.raw(),
+                                )
+                            })
+                        })
+                        .cloned()
+                        .ok_or(ScaffoldContractError::InvalidMemoryQuery)?;
+                    let eviction_count = self
+                        .candidate_store
+                        .eviction_count
+                        .checked_add(1)
+                        .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+                    if contradiction_id != Some(removed.memory_id)
+                        && retention_priority(&candidate_record, query.tick())
+                            < retention_priority(&removed, query.tick())
+                    {
+                        (
+                            MemoryUpdateKind::IgnoredLowerRetention,
+                            MutationPlan::Ignore,
+                        )
+                    } else {
+                        (
+                            MemoryUpdateKind::Evicted {
+                                removed: removed.memory_id,
+                                inserted: candidate_memory_id,
+                            },
+                            MutationPlan::EvictAndInsert {
+                                removed,
+                                record: candidate_record,
+                                next_memory_id,
+                                eviction_count,
+                            },
+                        )
+                    }
+                } else {
+                    (
+                        MemoryUpdateKind::Inserted {
+                            inserted: candidate_memory_id,
+                        },
+                        MutationPlan::Insert {
+                            record: candidate_record,
+                            next_memory_id,
+                        },
+                    )
+                }
+            };
 
         let record_count_after = match &plan {
-            MutationPlan::Merge { .. } | MutationPlan::EvictAndInsert { .. } => {
-                self.candidate_store.records.len()
-            }
+            MutationPlan::Ignore
+            | MutationPlan::Merge { .. }
+            | MutationPlan::EvictAndInsert { .. } => self.candidate_store.records.len(),
             MutationPlan::Insert { .. } => self
                 .candidate_store
                 .records
@@ -1141,6 +1262,7 @@ impl MemoryBank {
         let previous_eviction_count = self.candidate_store.eviction_count;
 
         match &plan {
+            MutationPlan::Ignore => {}
             MutationPlan::Merge {
                 memory_id,
                 old,
@@ -1209,6 +1331,7 @@ impl MemoryBank {
                     }
                 }
                 match &plan {
+                    MutationPlan::Ignore => {}
                     MutationPlan::Merge { memory_id, old, .. } => {
                         self.candidate_store
                             .records
@@ -1299,6 +1422,7 @@ impl MemoryBank {
         for record in records {
             if let Some(previous) = folded.last_mut() {
                 if previous.identity() == record.identity()
+                    && compatible_memory_outcomes(previous, &record)
                     && family_similarity(&previous.query_features, &record.query_features)
                         >= MEMORY_MERGE_SIMILARITY
                 {
@@ -1309,10 +1433,46 @@ impl MemoryBank {
             }
             folded.push(record);
         }
+        // Compression must not resurrect an obsolete expectation. Compare
+        // only a bounded set of newer records in the same exact namespace;
+        // distinct contexts and other individuals keep ordinary retention.
+        folded.sort_by_key(|record| {
+            std::cmp::Reverse((
+                record.last_tick.raw(),
+                record.source_sequence_id.raw(),
+                record.memory_id.raw(),
+            ))
+        });
+        let mut newer_by_identity =
+            std::collections::BTreeMap::<candidate_index::MemoryRecordIdentity, Vec<usize>>::new();
+        let mut superseded = std::collections::BTreeSet::new();
+        for (index, record) in folded.iter().enumerate() {
+            let newer = newer_by_identity.entry(record.identity()).or_default();
+            if newer.iter().any(|newer_index| {
+                let other = &folded[*newer_index];
+                !compatible_memory_outcomes(record, other)
+                    && family_similarity(&record.query_features, &other.query_features)
+                        >= MEMORY_MERGE_SIMILARITY
+            }) {
+                superseded.insert(record.memory_id.raw());
+            }
+            if newer.len() < MEMORY_FAMILY_SEARCH_CAP {
+                newer.push(index);
+            }
+        }
+        let newest_tick = folded
+            .iter()
+            .map(|record| record.last_tick)
+            .max_by_key(|tick| tick.raw())
+            .unwrap_or(Tick::new(0));
         folded.sort_by(|left, right| {
-            right
-                .salience_q16
-                .cmp(&left.salience_q16)
+            superseded
+                .contains(&left.memory_id.raw())
+                .cmp(&superseded.contains(&right.memory_id.raw()))
+                .then_with(|| {
+                    retention_priority(right, newest_tick)
+                        .cmp(&retention_priority(left, newest_tick))
+                })
                 .then_with(|| right.last_tick.raw().cmp(&left.last_tick.raw()))
                 .then_with(|| right.observation_count.cmp(&left.observation_count))
                 .then_with(|| left.memory_id.raw().cmp(&right.memory_id.raw()))
@@ -1749,8 +1909,10 @@ impl MemoryBank {
 mod candidate_recall;
 
 use candidate_recall::{
-    candidate_record_from_patch, family_similarity, merge_candidate_records, neighbor_family_keys,
-    neighbor_target_keys, recall_family_channel, recall_target_channel,
+    candidate_record_from_patch, compatible_memory_outcomes, corroborated_retrieval,
+    family_similarity, meaningful_memory_event, merge_candidate_records, neighbor_family_keys,
+    neighbor_target_keys, recall_family_channel, recall_target_channel, retention_priority,
+    target_recall_features,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -162,6 +162,10 @@ pub(super) struct CandidateMemoryStoreV2 {
     pub(super) family_namespace_index: BTreeMap<MemoryBucketKey, Vec<MemoryId>>,
     #[serde(skip, default)]
     pub(super) target_namespace_index: BTreeMap<TargetMemoryBucketKey, Vec<MemoryId>>,
+    #[serde(skip, default)]
+    pub(super) family_category_index: BTreeMap<MemoryBucketKey, Vec<MemoryId>>,
+    #[serde(skip, default)]
+    pub(super) target_category_index: BTreeMap<TargetMemoryBucketKey, Vec<MemoryId>>,
 }
 
 impl Default for CandidateMemoryStoreV2 {
@@ -177,6 +181,8 @@ impl Default for CandidateMemoryStoreV2 {
             target_index: BTreeMap::new(),
             family_namespace_index: BTreeMap::new(),
             target_namespace_index: BTreeMap::new(),
+            family_category_index: BTreeMap::new(),
+            target_category_index: BTreeMap::new(),
         }
     }
 }
@@ -236,6 +242,8 @@ impl<'de> Deserialize<'de> for CandidateMemoryStoreV2 {
             target_index: BTreeMap::new(),
             family_namespace_index: BTreeMap::new(),
             target_namespace_index: BTreeMap::new(),
+            family_category_index: BTreeMap::new(),
+            target_category_index: BTreeMap::new(),
         };
         store.rebuild_indices();
         Ok(store)
@@ -337,6 +345,8 @@ impl CandidateMemoryStoreV2 {
             .expect("validated candidate memory record exists");
         let family_key = record.family_key();
         let target_key = record.target_key();
+        let category_features = record.query_features.clone();
+        let tracked = record.tracked_object_id_raw != 0;
         if record.tracked_object_id_raw != 0 {
             let family_namespace = family_key.namespace_key();
             let target_namespace = target_key.namespace_key();
@@ -360,6 +370,30 @@ impl CandidateMemoryStoreV2 {
                 .insert(family_namespace, family_ids);
             self.target_namespace_index
                 .insert(target_namespace, target_ids);
+        }
+        if tracked && has_category_cues(&category_features) {
+            let family_category = family_key.category_key(&category_features);
+            let target_category = target_key.category_key(&category_features);
+            let mut family_ids = self
+                .family_category_index
+                .remove(&family_category)
+                .unwrap_or_default();
+            let mut target_ids = self
+                .target_category_index
+                .remove(&target_category)
+                .unwrap_or_default();
+            if !family_ids.contains(&memory_id) {
+                family_ids.push(memory_id);
+            }
+            if !target_ids.contains(&memory_id) {
+                target_ids.push(memory_id);
+            }
+            self.rank_index_ids(&mut family_ids);
+            self.rank_index_ids(&mut target_ids);
+            self.family_category_index
+                .insert(family_category, family_ids);
+            self.target_category_index
+                .insert(target_category, target_ids);
         }
         self.insert_family_index_id(family_key, memory_id);
         self.insert_target_index_id(target_key, memory_id);
@@ -398,6 +432,12 @@ impl CandidateMemoryStoreV2 {
                 })
                 .then_with(|| {
                     right_record
+                        .source_sequence_id
+                        .raw()
+                        .cmp(&left_record.source_sequence_id.raw())
+                })
+                .then_with(|| {
+                    right_record
                         .observation_count
                         .cmp(&left_record.observation_count)
                 })
@@ -407,6 +447,20 @@ impl CandidateMemoryStoreV2 {
 
     pub(super) fn remove_record_from_indices(&mut self, record: &CandidateMemoryRecordV2) {
         let family_key = record.family_key();
+        let category = family_key.category_key(&record.query_features);
+        if let Some(ids) = self.family_category_index.get_mut(&category) {
+            ids.retain(|id| *id != record.memory_id);
+            if ids.is_empty() {
+                self.family_category_index.remove(&category);
+            }
+        }
+        let category = record.target_key().category_key(&record.query_features);
+        if let Some(ids) = self.target_category_index.get_mut(&category) {
+            ids.retain(|id| *id != record.memory_id);
+            if ids.is_empty() {
+                self.target_category_index.remove(&category);
+            }
+        }
         let family_namespace = family_key.namespace_key();
         if let Some(ids) = self.family_namespace_index.get_mut(&family_namespace) {
             ids.retain(|id| *id != record.memory_id);
@@ -441,6 +495,8 @@ impl CandidateMemoryStoreV2 {
         self.target_index.clear();
         self.family_namespace_index.clear();
         self.target_namespace_index.clear();
+        self.family_category_index.clear();
+        self.target_category_index.clear();
         let ids = self
             .records
             .keys()
@@ -454,6 +510,14 @@ impl CandidateMemoryStoreV2 {
 }
 
 impl MemoryBucketKey {
+    pub(super) fn category_key(&self, features: &[f32]) -> Self {
+        Self {
+            tracked_object_id_raw: 0,
+            target_bins: category_bins(features),
+            ..self.clone()
+        }
+    }
+
     pub(super) fn namespace_key(&self) -> Self {
         Self {
             target_bins: [0; CANDIDATE_FEATURE_COUNT],
@@ -477,6 +541,14 @@ impl MemoryBucketKey {
 }
 
 impl TargetMemoryBucketKey {
+    pub(super) fn category_key(&self, features: &[f32]) -> Self {
+        Self {
+            tracked_object_id_raw: 0,
+            target_bins: category_bins(features),
+            ..self.clone()
+        }
+    }
+
     pub(super) fn namespace_key(&self) -> Self {
         Self {
             target_bins: [0; CANDIDATE_FEATURE_COUNT],
@@ -537,4 +609,27 @@ pub(super) fn keys_for_query(
         target_bins: bins,
     };
     (target, family)
+}
+
+// Observable appearance/material/shape/chemistry and temperature describe a
+// conservative perceptual category. Position, motion, contact, proprioception,
+// and object identities cannot become shared category knowledge.
+fn category_bins(features: &[f32]) -> [i8; CANDIDATE_FEATURE_COUNT] {
+    let mut bins = [0; CANDIDATE_FEATURE_COUNT];
+    for lane in (6..18).chain(std::iter::once(21)) {
+        bins[lane] = (features[MEMORY_TARGET_RANGE.start + lane] * 4.0).round() as i8;
+    }
+    bins
+}
+
+pub(super) fn has_category_cues(features: &[f32]) -> bool {
+    (6..18)
+        .step_by(3)
+        .filter(|lane| {
+            features[MEMORY_TARGET_RANGE.start + lane..MEMORY_TARGET_RANGE.start + lane + 3]
+                .iter()
+                .any(|value| value.abs() >= 0.05)
+        })
+        .count()
+        >= 2
 }
