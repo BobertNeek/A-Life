@@ -353,6 +353,22 @@ fn committed_report_recomputes_source_receipts_and_unknown_gate_outcome() {
         assert!(serde_json::from_str::<Era1CommittedPromotionReport>(&encoded).is_err());
         return;
     }
+    let legacy_genome = &value["evolution"]["generations"][0]["births"][0]["genome"];
+    if value["artifact_binding"]["producing_source_commit"].as_str()
+        == Some("cb3c8dd85ff2707a84ecb96fb8addd417b7d0021")
+        && legacy_genome["chemistry"].get("graph").is_none()
+    {
+        // This retained measured report predates authoritative biochemical graph
+        // genes. Its source receipts cannot be rewritten into current evidence.
+        assert!(legacy_genome["chemistry"].is_object());
+        let error = serde_json::from_str::<Era1CommittedPromotionReport>(&encoded).unwrap_err();
+        assert!(error.to_string().contains("missing field `graph`"));
+        assert_eq!(value["trial_receipts"].as_array().unwrap().len(), 2_640);
+        assert_eq!(value["matrix_coverage"].as_array().unwrap().len(), 55);
+        assert_eq!(value["promotion"]["verdict"], "Blocked");
+        assert_eq!(value["promotion"]["plateau"]["status"], "Unknown");
+        return;
+    }
     let report: Era1CommittedPromotionReport = serde_json::from_str(&encoded).unwrap();
 
     validate_committed_era1_promotion_report(&report).unwrap();

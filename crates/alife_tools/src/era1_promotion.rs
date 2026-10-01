@@ -1246,16 +1246,12 @@ fn load_or_run_trial_evidence(
     let cache_bytes = serde_json::to_vec(&cache_input)
         .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
     let cache_key = blake3::hash(&cache_bytes).to_hex().to_string();
-    let cache_path = cache_root.join(format!("{cache_key}.json.gz"));
-    let cache_entry_exists = cache_path.is_file();
-    if cache_entry_exists {
-        let cached: Result<Era1TrialRunEvidence, Era1EvolutionError> = (|| {
-            let file = File::open(&cache_path)
-                .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
-            let evidence: Era1TrialRunEvidence = serde_json::from_reader(GzDecoder::new(file))
-                .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+    load_or_run_validated_cache_entry(
+        cache_root,
+        &cache_key,
+        |evidence| {
             validate_cached_trial(
-                &evidence,
+                evidence,
                 birth,
                 manifest,
                 ability,
@@ -1263,7 +1259,48 @@ fn load_or_run_trial_evidence(
                 partition,
                 source_commit,
                 source_tree,
-            )?;
+            )
+        },
+        || {
+            let request = Era1TrialRunRequest::new(
+                birth.organism_id,
+                birth.generation,
+                &birth.genome,
+                manifest,
+                ability,
+                control,
+                partition,
+                source_commit,
+                source_tree,
+            )
+            .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+            runner
+                .run(request)
+                .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))
+        },
+    )
+}
+
+// Keep the cache codec independent of the producer. Production always supplies
+// validate_cached_trial; CPU tests exercise this boundary with non-evidence data.
+fn load_or_run_validated_cache_entry<T>(
+    cache_root: &Path,
+    cache_key: &str,
+    validate: impl Fn(&T) -> Result<(), Era1EvolutionError>,
+    produce: impl FnOnce() -> Result<T, Era1EvolutionError>,
+) -> Result<T, Era1EvolutionError>
+where
+    T: Serialize + serde::de::DeserializeOwned,
+{
+    let cache_path = cache_root.join(format!("{cache_key}.json.gz"));
+    let cache_entry_exists = cache_path.is_file();
+    if cache_entry_exists {
+        let cached: Result<T, Era1EvolutionError> = (|| {
+            let file = File::open(&cache_path)
+                .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+            let evidence: T = serde_json::from_reader(GzDecoder::new(file))
+                .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+            validate(&evidence)?;
             Ok(evidence)
         })();
         if let Ok(evidence) = cached {
@@ -1273,31 +1310,8 @@ fn load_or_run_trial_evidence(
 
     fs::create_dir_all(cache_root)
         .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
-    let request = Era1TrialRunRequest::new(
-        birth.organism_id,
-        birth.generation,
-        &birth.genome,
-        manifest,
-        ability,
-        control,
-        partition,
-        source_commit,
-        source_tree,
-    )
-    .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
-    let evidence = runner
-        .run(request)
-        .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
-    validate_cached_trial(
-        &evidence,
-        birth,
-        manifest,
-        ability,
-        control,
-        partition,
-        source_commit,
-        source_tree,
-    )?;
+    let evidence = produce()?;
+    validate(&evidence)?;
 
     if cache_entry_exists {
         return Ok(evidence);
@@ -1603,137 +1617,126 @@ fn format_blake3(digest: alife_core::Blake3Digest) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::era1_evolution::{Era1AcquiredStateEvidence, Era1BirthReceipt};
+    use std::cell::Cell;
+
+    // This payload tests cache identity and codec integrity only. It contains no
+    // trial receipt, GPU result, training output, or promotion evidence.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    struct CacheContractFixture {
+        request_digest: [u8; 32],
+        payload: Vec<u8>,
+        payload_digest: [u8; 32],
+    }
+
+    fn cache_fixture() -> CacheContractFixture {
+        let payload = b"non-evidence cache codec fixture".to_vec();
+        CacheContractFixture {
+            request_digest: *blake3::hash(b"cache fixture request").as_bytes(),
+            payload_digest: *blake3::hash(&payload).as_bytes(),
+            payload,
+        }
+    }
+
+    fn validate_cache_fixture(value: &CacheContractFixture) -> Result<(), Era1EvolutionError> {
+        let expected = cache_fixture();
+        if value.request_digest != expected.request_digest
+            || value.payload_digest != *blake3::hash(&value.payload).as_bytes()
+        {
+            return Err(Era1EvolutionError::TrialEvidence(
+                "cache fixture identity or payload digest mismatch".to_string(),
+            ));
+        }
+        Ok(())
+    }
 
     #[test]
     fn trial_cache_miss_then_digest_identical_hit_reuses_validated_evidence() {
-        let foundation = FoundationGeneticIdentity::new(
-            0x4E32_3034_385F_5631,
-            1,
-            0x4E32_3034_385F_FA11,
-            BrainCapacityClass::N2048_ID,
-        )
-        .unwrap();
-        let genome = CreatureGenome::early_mammal_founder(0xE1CA_C4E0, foundation).unwrap();
-        let inherited_starter_tokens = genome.express().unwrap().predisposition.starter_tokens;
-        let birth = Era1BirthReceipt {
-            generation: 0,
-            lineage_slot: 0,
-            organism_id: OrganismId(20_001),
-            genome,
-            inherited_starter_tokens,
-            acquired_state: Era1AcquiredStateEvidence::default(),
-        };
-        let manifest = Era1TrialManifest::new(
-            0xE1CA_5001,
-            Era1WorldFamily::ForagingHazardMaze,
-            birth.organism_id,
-            OrganismId(30_001),
-            OrganismId(30_002),
-            0xE1CA_6001,
-            true,
-            birth.inherited_starter_tokens[0].raw(),
-        )
-        .unwrap();
         let cache = tempfile::tempdir().unwrap();
-        let mut runner = Era1TrialRunner::new_required().unwrap();
-        let first = load_or_run_trial_evidence(
+        let expected = cache_fixture();
+        let cache_key = blake3::Hash::from_bytes(expected.request_digest)
+            .to_hex()
+            .to_string();
+        let calls = Cell::new(0);
+        let produce = || {
+            calls.set(calls.get() + 1);
+            Ok(expected.clone())
+        };
+        let first = load_or_run_validated_cache_entry(
             cache.path(),
-            &mut runner,
-            &birth,
-            &manifest,
-            Era1Ability::FlexibleForaging,
-            Era1Control::Intact,
-            Era1EvidencePartition::HeldOutTransfer,
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            &cache_key,
+            validate_cache_fixture,
+            produce,
         )
         .unwrap();
-        let cached_files = fs::read_dir(cache.path()).unwrap().count();
-        let second = load_or_run_trial_evidence(
+        let cache_path = cache.path().join(format!("{cache_key}.json.gz"));
+        let first_bytes = fs::read(&cache_path).unwrap();
+        let second = load_or_run_validated_cache_entry(
             cache.path(),
-            &mut runner,
-            &birth,
-            &manifest,
-            Era1Ability::FlexibleForaging,
-            Era1Control::Intact,
-            Era1EvidencePartition::HeldOutTransfer,
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            &cache_key,
+            validate_cache_fixture,
+            || panic!("validated cache hit must not invoke the producer"),
         )
         .unwrap();
+        assert_eq!(first, expected);
         assert_eq!(first, second);
-        assert_eq!(cached_files, 1);
+        assert_eq!(calls.get(), 1);
+        assert_eq!(fs::read(&cache_path).unwrap(), first_bytes);
+        assert_eq!(fs::read_dir(cache.path()).unwrap().count(), 1);
+
+        // A decodable cache entry must still pass identity/digest validation.
+        let mut invalid = expected.clone();
+        invalid.payload_digest[0] ^= 1;
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
+        serde_json::to_writer(&mut encoder, &invalid).unwrap();
+        let invalid_bytes = encoder.finish().unwrap();
+        fs::write(&cache_path, &invalid_bytes).unwrap();
+        let recovered = load_or_run_validated_cache_entry(
+            cache.path(),
+            &cache_key,
+            validate_cache_fixture,
+            produce,
+        )
+        .unwrap();
+        assert_eq!(recovered, expected);
+        assert_eq!(calls.get(), 2);
+        assert_eq!(fs::read(&cache_path).unwrap(), invalid_bytes);
         assert_eq!(fs::read_dir(cache.path()).unwrap().count(), 1);
     }
 
     #[test]
     fn unreadable_trial_cache_entry_is_a_miss_and_is_preserved() {
-        let foundation = FoundationGeneticIdentity::new(
-            0x4E32_3034_385F_5631,
-            1,
-            0x4E32_3034_385F_FA11,
-            BrainCapacityClass::N2048_ID,
-        )
-        .unwrap();
-        let genome = CreatureGenome::early_mammal_founder(0xE1CA_C4E0, foundation).unwrap();
-        let inherited_starter_tokens = genome.express().unwrap().predisposition.starter_tokens;
-        let birth = Era1BirthReceipt {
-            generation: 0,
-            lineage_slot: 0,
-            organism_id: OrganismId(20_001),
-            genome,
-            inherited_starter_tokens,
-            acquired_state: Era1AcquiredStateEvidence::default(),
-        };
-        let manifest = Era1TrialManifest::new(
-            0xE1CA_5001,
-            Era1WorldFamily::ForagingHazardMaze,
-            birth.organism_id,
-            OrganismId(30_001),
-            OrganismId(30_002),
-            0xE1CA_6001,
-            true,
-            birth.inherited_starter_tokens[0].raw(),
-        )
-        .unwrap();
         let cache = tempfile::tempdir().unwrap();
-        let mut runner = Era1TrialRunner::new_required().unwrap();
-        load_or_run_trial_evidence(
+        let expected = cache_fixture();
+        let cache_key = blake3::Hash::from_bytes(expected.request_digest)
+            .to_hex()
+            .to_string();
+        let calls = Cell::new(0);
+        let produce = || {
+            calls.set(calls.get() + 1);
+            Ok(expected.clone())
+        };
+        load_or_run_validated_cache_entry(
             cache.path(),
-            &mut runner,
-            &birth,
-            &manifest,
-            Era1Ability::FlexibleForaging,
-            Era1Control::Intact,
-            Era1EvidencePartition::HeldOutTransfer,
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            &cache_key,
+            validate_cache_fixture,
+            produce,
         )
         .unwrap();
-        let cache_path = fs::read_dir(cache.path())
-            .unwrap()
-            .next()
-            .unwrap()
-            .unwrap()
-            .path();
+        let cache_path = cache.path().join(format!("{cache_key}.json.gz"));
         let mut corrupt_bytes = vec![0_u8; 128];
         corrupt_bytes[..10].copy_from_slice(&[0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0x04, 0xff]);
         fs::write(&cache_path, &corrupt_bytes).unwrap();
 
-        load_or_run_trial_evidence(
+        let recovered = load_or_run_validated_cache_entry(
             cache.path(),
-            &mut runner,
-            &birth,
-            &manifest,
-            Era1Ability::FlexibleForaging,
-            Era1Control::Intact,
-            Era1EvidencePartition::HeldOutTransfer,
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            &cache_key,
+            validate_cache_fixture,
+            produce,
         )
         .unwrap();
 
+        assert_eq!(recovered, expected);
+        assert_eq!(calls.get(), 2);
         assert_eq!(fs::read(&cache_path).unwrap(), corrupt_bytes);
         assert_eq!(fs::read_dir(cache.path()).unwrap().count(), 1);
     }
