@@ -6,6 +6,7 @@ mod support;
 use alife_core::{
     BiochemistryState, BodyEventDelta, JointMotorCondition, JointPhysicalOutcome,
     MeasuredPhysiologyTransition, OutcomeCreditPacket, PhenotypeCompiler, PredictionTargetReceipt,
+    SemanticStateVector,
 };
 use alife_core::{
     BrainCapacityClass, BrainGenome, Confidence, DecisionSnapshot, DecoderHeadKind,
