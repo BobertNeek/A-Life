@@ -48,14 +48,19 @@ Windows frame time or establish an RTX improvement.
 
 ## Checks
 
+The subsequent [CPU CI policy validation](2026-10-01-cloud-cpu-ci-policy-and-consolidation.md)
+corrects the earlier filter classification: five of the 130 names were CPU-safe
+optional-diagnostic/file tests. The 125 remaining names require hardware.
+The historical run totals below remain unchanged; the successor retains those
+five tests and uses the normal unfiltered workspace suite.
+
 The four-gap boundary passed 469 CPU tests across 73 targets: zero failures,
-14 ignored, and 32 actual GPU tests filtered. Strict workspace Clippy passed.
+14 ignored, and 32 test names filtered. Strict workspace Clippy passed.
 An independent read-only review found no actionable source or evidence blockers.
 
 At the combined boundary:
 
-- **644 CPU tests passed across 97 targets; zero failed; 14 ignored; 130 actual
-  GPU tests filtered** using the existing audited explicit test-name list.
+- **644 CPU tests passed across 97 targets; zero failed; 14 ignored; 130 test names filtered** using the existing audited explicit test-name list.
 - All five original positive failures passed; their useful assertions remain.
 - Full populated save authority, acquired/GPU metadata references, larger file
   roundtrips, inline transport rejection, missing/oversized metadata, shader
