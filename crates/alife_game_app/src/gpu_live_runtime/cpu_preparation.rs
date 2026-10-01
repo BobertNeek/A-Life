@@ -49,10 +49,10 @@ pub(super) struct CpuPreparationOutcome {
     pub timing: CpuPreparationTiming,
 }
 
-// A live asynchronous terrain prior retains interleaved polling, including the
-// CPU interval between owners. No worker may request or consume a hint.
-pub(super) fn preparation_worker_count(rows: usize, available: usize, live_prior: bool) -> usize {
-    if rows >= 8 && available >= 2 && !live_prior {
+// Hints are captured serially into each owned draft before a worker sees it.
+// No worker may request, poll or consume a hint, including serial spawn fallback.
+pub(super) fn preparation_worker_count(rows: usize, available: usize) -> usize {
+    if rows >= 8 && available >= 2 {
         2
     } else {
         1

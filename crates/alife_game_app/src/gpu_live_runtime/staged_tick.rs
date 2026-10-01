@@ -168,8 +168,6 @@ impl GpuLiveBrainRuntime {
         let workers = preparation_worker_count(
             scheduled_handles.len(),
             thread::available_parallelism().map_or(1, usize::from),
-            self.semantic_prior.is_some()
-                && self.sensor_profile == SensorProfile::GroundedTerrainVisionV1,
         );
         let mut captured_rows = Vec::with_capacity(if workers == 2 {
             scheduled_handles.len()
@@ -567,6 +565,10 @@ impl GpuLiveBrainRuntime {
                     resident.homeostasis,
                     &perception_index,
                 )?;
+                // This is the owner's hint snapshot boundary for this attempt.
+                // Poll once in roster order, freeze the returned context in the
+                // owned draft, and leave replies arriving after this point for
+                // a later preparation. Workers never receive the prior actor.
                 let draft = if let Some(prior) = self.semantic_prior.as_mut() {
                     prior.prepare(draft, ExperienceSequenceId(resident.next_sequence))?
                 } else {
@@ -637,7 +639,7 @@ impl GpuLiveBrainRuntime {
         if !captured_rows.is_empty() {
             let outcomes = self.prepare_captured_cpu_rows(
                 &captured_rows,
-                preparation_worker_count(captured_rows.len(), workers, false),
+                preparation_worker_count(captured_rows.len(), workers),
                 measure_preparation,
             )?;
             if outcomes.len() != captured_rows.len() {
