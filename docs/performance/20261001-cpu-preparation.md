@@ -10,6 +10,10 @@ Copied console mirrors were removed after exact field comparison. Reproducible
 payload dumps retain their lengths/digests; probes regenerate the words, and the
 original vectors remain in Git at `a11dae6a`.
 
+The subsequent [prepared-attention comparison](20261001-attention-preparation.md)
+has separate fixtures and source `770ef12a`; its report, samples and probe remain
+unchanged in the successor. Later topology measurements are separately owned.
+
 ## Results and measured sources
 
 Each receipt retains exact commits, source/probe/executable hashes, individual

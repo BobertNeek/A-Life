@@ -7,7 +7,30 @@ The [CPU performance record](../performance/20261001-cpu-preparation.md) retains
 measurement conditions and links to source-bound samples/probes; no game-speed
 claim follows from the tests below.
 
-## Current checks
+## Prepared-attention successor
+
+The successor combines reviewed attention source
+`471c55dfc2a29e760669e8bb6252865464e064fa` with the documentation cleanup.
+All five attention source files and its three evidence files match that original
+byte-for-byte; later topology work is excluded. Checks bind
+`b242d2c315b1a46007597603d654db521888141d`, or its source-identical `771b9ef3`
+before the final documentation-only payload trim.
+
+Affected CPU checks pass: retrieval 35, queries 7, perception digests 3, app
+attention/upload equivalence 1, backend memory 14 in each assertion mode and
+headless benchmark smoke 1: **75 passing executions, zero failures, one ignored
+developer benchmark**. Strict Rust 1.99 workspace CI Clippy and Core/World/backend/
+app production/GPU-test all-target Clippy both pass with `-D warnings`.
+Formatting, static boundaries, documentation assertions (77/77) and changed
+local links pass. Peak observed cgroup memory was 10.27 GiB; disk stayed above
+11.92 GiB. One build job and serial tests were used; no guard fired.
+
+No performance benchmark was repeated for integration. The attention owner’s
+separate [CPU evidence](../performance/20261001-attention-preparation.md) retains
+its original limits. Current full-workspace/hardware execution remains separate
+from these focused checks; the subsequent report edit changes documentation only.
+
+## Base checks
 
 Tests and four-package CPU/production Clippy bind code
 `87c19312a34bb602198ddcda40c3c8690030138f`. The later Tools change
@@ -47,7 +70,8 @@ passed strict Rust 1.99 production all-target Clippy. Only function-scoped Bevy
 injected-parameter allowances were used; no broad suppression or assertion
 removal. Reviewed memory ends at `33982d3988f9dd0ca319d7bf2d84996bd5ee2f7e`;
 its six picks matched original stable patch IDs, with the upload change once.
-Timing diagnostics and the later prepared-recall performance slice are excluded.
+Timing diagnostics are excluded; the prepared-attention successor above extends
+this tested base.
 
 The repair baseline fixes populated canonical saves, approved bundle admission,
 full-distance founder demonstrations and the explicit scaled N512 founder
@@ -97,7 +121,7 @@ compile uses locally extracted official Debian libudev development files through
 `setup-native-udev.sh`; no ALSA dependency was required for these features.
 
 Guards are 5 GiB free disk, 14 GiB cgroup memory and 30 minutes/command.
-Latest combined checks peaked at 12.42 GiB including cache; the final full-workspace
+Base combined checks peaked at 12.42 GiB including cache; their final full-workspace
 Clippy took 125.059 seconds, peaked at 9.23 GiB and left at least 12.20 GiB free.
 No final guard fired. A tool-session refresh lost a handle while Cargo continued;
 the existing process was monitored instead of duplicating work.
