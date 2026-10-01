@@ -1,7 +1,38 @@
 use alife_core::*;
 
+fn assert_choice_to_action_only_receptor(
+    kind: CompiledSynapseKind,
+    before: &PlasticityReceptorPlan,
+    after: &PlasticityReceptorPlan,
+) -> bool {
+    let signed = [0.0, -1.0, 1.0, -0.5, 0.2, 0.0, 0.5, -0.5];
+    let memory_changes = before.is_delta_enabled()
+        && matches!(kind, CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::MemoryContext);
+    let mut expected = serde_json::to_value(before).unwrap();
+    if memory_changes {
+        // Current founders sign both action-scoring readouts. Action-only V2
+        // restores surprise credit on MemoryContext, while ActionCandidate stays signed.
+        assert_eq!(before.receptor_profile().weights(), &signed);
+        let profile =
+            PlasticityReceptorProfile::try_new([0.2, -1.0, 1.0, -0.5, 0.2, 0.0, 0.5, -0.5])
+                .unwrap();
+        expected["receptor_profile"] = serde_json::to_value(profile).unwrap();
+        assert_ne!(before, after, "enabled memory credit must change");
+    } else if before.is_delta_enabled()
+        && matches!(kind, CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate)
+    {
+        assert_eq!(before.receptor_profile().weights(), &signed);
+    }
+    assert_eq!(
+        expected,
+        serde_json::to_value(after).unwrap(),
+        "only MemoryContext prediction credit may change; preserve unrelated heads, rates, Oja, eligibility, bounds and roles"
+    );
+    memory_changes
+}
+
 #[test]
-fn inherited_action_credit_profile_changes_only_action_receptor_coefficients() {
+fn founder_action_only_credit_changes_only_memory_prediction_coefficients() {
     let capacity = BrainCapacityClass::n512();
     let genome = BrainGenome::scaffold(96001, capacity.id());
     let development =
@@ -14,12 +45,24 @@ fn inherited_action_credit_profile_changes_only_action_receptor_coefficients() {
     )
     .unwrap();
     let old = PhenotypeCompiler::compile_validated(&old_inputs, &capacity).unwrap();
+    assert_eq!(
+        genome
+            .plasticity_parameters()
+            .action_candidate_credit_profile(),
+        Some(ActionCandidateCreditProfileV1::SignedChoiceReadouts)
+    );
     // Compare current founder behavior. Retired founder/hash snapshots are
     // not an admission requirement for this unreleased candidate.
     let mut wire = serde_json::to_value(&genome).unwrap();
     wire["plasticity_parameters"]["action_candidate_credit_profile"] =
         serde_json::json!("SignedConsequences");
     let opted: BrainGenome = serde_json::from_value(wire).unwrap();
+    assert_eq!(
+        opted
+            .plasticity_parameters()
+            .action_candidate_credit_profile(),
+        Some(ActionCandidateCreditProfileV1::SignedConsequences)
+    );
     let inputs = PhenotypeCompilerInputs::try_new(
         opted,
         &capacity,
@@ -31,6 +74,7 @@ fn inherited_action_credit_profile_changes_only_action_receptor_coefficients() {
     assert_ne!(old_inputs.canonical_digest(), inputs.canonical_digest());
     assert_eq!(old.synapses().len(), phenotype.synapses().len());
     let mut actions = 0;
+    let mut memory_rows = 0;
     for (before, after) in old.synapses().iter().zip(phenotype.synapses()) {
         let mut before_wire = serde_json::to_value(before).unwrap();
         let mut after_wire = serde_json::to_value(after).unwrap();
@@ -46,17 +90,11 @@ fn inherited_action_credit_profile_changes_only_action_receptor_coefficients() {
         let a = &old.plasticity_receptors()[usize::from(before.receptor_index())];
         let b = &phenotype.plasticity_receptors()[usize::from(after.receptor_index())];
         let action = matches!(after.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate);
-        if action && a.is_delta_enabled() {
-            actions += 1;
-            assert_eq!(
-                b.receptor_profile().weights(),
-                &[0.0, -1.0, 1.0, -0.5, 0.2, 0.0, 0.5, -0.5]
-            );
-        } else {
-            assert_eq!(a, b, "non-action learning changed");
-        }
+        actions += usize::from(action && a.is_delta_enabled());
+        memory_rows += usize::from(assert_choice_to_action_only_receptor(after.kind(), a, b));
     }
     assert!(actions > 0);
+    assert!(memory_rows > 0);
 }
 
 fn candidate() -> FoundationWeightAsset {
@@ -80,7 +118,7 @@ fn candidate() -> FoundationWeightAsset {
 }
 
 #[test]
-fn v2_reuses_exact_v1_weights_and_changes_only_action_profiles_and_bound_identities() {
+fn action_only_v2_reuses_exact_v1_weights_and_changes_only_memory_credit_and_bound_identities() {
     let asset = candidate();
     let bytes = asset.encode_canonical().unwrap();
     let (v1, old_inputs) = PhenotypeCompiler::compile_nano512_readout_candidate(&asset).unwrap();
@@ -95,6 +133,20 @@ fn v2_reuses_exact_v1_weights_and_changes_only_action_profiles_and_bound_identit
     assert_eq!(restored.asset().unwrap().encode_canonical().unwrap(), bytes);
     let (v2, inputs) =
         PhenotypeCompiler::compile_nano512_action_credit_candidate(&restored).unwrap();
+    assert_eq!(
+        old_inputs
+            .genome()
+            .plasticity_parameters()
+            .action_candidate_credit_profile(),
+        Some(ActionCandidateCreditProfileV1::SignedChoiceReadouts)
+    );
+    assert_eq!(
+        inputs
+            .genome()
+            .plasticity_parameters()
+            .action_candidate_credit_profile(),
+        Some(ActionCandidateCreditProfileV1::SignedConsequences)
+    );
     asset.validate_against(&v1).unwrap();
     asset.validate_against(&v2).unwrap();
     assert_ne!(v1.phenotype_hash(), v2.phenotype_hash());
@@ -109,6 +161,7 @@ fn v2_reuses_exact_v1_weights_and_changes_only_action_profiles_and_bound_identit
         inputs.foundation_abi().foundation_weight_asset()
     );
     assert_eq!(v1.synapses().len(), v2.synapses().len());
+    let mut memory_rows = 0;
     for (a, b) in v1.synapses().iter().zip(v2.synapses()) {
         let mut old_synapse = serde_json::to_value(a).unwrap();
         let mut new_synapse = serde_json::to_value(b).unwrap();
@@ -127,21 +180,13 @@ fn v2_reuses_exact_v1_weights_and_changes_only_action_profiles_and_bound_identit
         assert_eq!(a.genetic_weight().to_bits(), b.genetic_weight().to_bits());
         let before = &v1.plasticity_receptors()[usize::from(a.receptor_index())];
         let after = &v2.plasticity_receptors()[usize::from(b.receptor_index())];
-        let mut expected = serde_json::to_value(before).unwrap();
-        if before.is_delta_enabled()
-            && matches!(a.kind(), CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate)
-        {
-            expected["receptor_profile"] = serde_json::to_value(
-                ActionCandidateCreditProfileV1::SignedConsequences.receptor_profile(),
-            )
-            .unwrap();
-        }
-        assert_eq!(
-            expected,
-            serde_json::to_value(after).unwrap(),
-            "unintended learning rate, Oja, eligibility, bound or role change"
-        );
+        memory_rows += usize::from(assert_choice_to_action_only_receptor(
+            a.kind(),
+            before,
+            after,
+        ));
     }
+    assert!(memory_rows > 0);
     let mut before = serde_json::to_value(&v1).unwrap();
     let mut after = serde_json::to_value(&v2).unwrap();
     for field in [
