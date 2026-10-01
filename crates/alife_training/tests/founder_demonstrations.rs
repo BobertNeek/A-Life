@@ -4,7 +4,8 @@ use alife_training::record_founder_demonstration;
 #[test]
 fn sampling_teacher_uses_observed_reach_without_an_inspection_phase() {
     for (x, family) in [
-        (3.0, CandidateActionFamily::Approach),
+        (4.0, CandidateActionFamily::Approach),
+        (-7.9, CandidateActionFamily::Approach),
         (0.5, CandidateActionFamily::Ingest),
     ] {
         let demo =
@@ -28,9 +29,17 @@ fn sampling_teacher_uses_observed_reach_without_an_inspection_phase() {
 
 #[test]
 fn demonstration_records_real_approach_inspection_ingestion_and_bodily_consequence() {
-    for (seed, x) in [(91001, 2.0), (91002, -4.0), (91003, 0.5)] {
+    for (seed, x) in [(91001, 2.0), (91002, -4.0), (91003, 0.5), (91004, 7.9)] {
         let demo = record_founder_demonstration(seed, Vec3f::new(x, 0.0, 0.0)).unwrap();
         assert!(!demo.steps.is_empty());
+        assert!(demo.steps.len() <= alife_training::MAX_TRAINING_SEQUENCE_TICKS);
+        if x.abs() >= 4.0 {
+            assert!(demo.steps.len() > 32, "retain the entire physical approach");
+        }
+        for pair in demo.steps.windows(2) {
+            assert_eq!(pair[0].position_after, pair[1].position_before);
+            assert_eq!(pair[0].body_after, pair[1].body_before);
+        }
         let mut inspected = false;
         let mut approached = false;
         for step in &demo.steps {
@@ -78,4 +87,9 @@ fn demonstration_records_real_approach_inspection_ingestion_and_bodily_consequen
             PhysicalContactKind::Consumed
         );
     }
+}
+
+#[test]
+fn demonstration_requires_an_observed_target_before_executing_teacher_commands() {
+    assert!(record_founder_demonstration(91005, Vec3f::new(9.0, 0.0, 0.0)).is_err());
 }

@@ -4,7 +4,7 @@ use alife_core::*;
 use alife_world::{HeadlessScenarioBuilder, WorldOrganismRecord};
 use serde::{Deserialize, Serialize};
 
-use crate::TrainingError;
+use crate::{TrainingError, MAX_TRAINING_SEQUENCE_TICKS};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FounderDemonstrationStep {
@@ -82,7 +82,9 @@ fn record_demonstration(
         steps: Vec::new(),
     };
     let mut inspected = !inspect_first;
-    for _ in 0..32 {
+    let terminal_steps = 1 + usize::from(inspect_first);
+    let mut step_budget = terminal_steps;
+    while result.steps.len() < step_budget {
         let body_before = *world
             .organism_registry()
             .get(organism)
@@ -95,11 +97,11 @@ fn record_demonstration(
             body_before.homeostasis,
         )?;
         let report = world.sensory_report(organism, world.tick())?;
-        let target = report
+        let visible_target = report
             .visible_entities
             .first()
-            .ok_or(ScaffoldContractError::MissingPhaseData)?
-            .id;
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        let target = visible_target.id;
         let family = if !report.contact_entities.contains(&target) {
             CandidateActionFamily::Approach
         } else if !inspected {
@@ -127,6 +129,32 @@ fn record_demonstration(
         )?;
         if !receipt.action_result.execution.succeeded {
             return Err(ScaffoldContractError::InvalidActionDecision.into());
+        }
+        if family == CandidateActionFamily::Approach {
+            let displacement = receipt.action_result.execution.physical.displacement;
+            let measured_step = displacement
+                .to_array()
+                .iter()
+                .map(|component| component * component)
+                .sum::<f32>()
+                .sqrt();
+            if !measured_step.is_finite() || measured_step <= 0.0 {
+                return Err(ScaffoldContractError::InvalidActionDecision.into());
+            }
+            if result.steps.is_empty() {
+                // The open, single-object fixture approaches at the measured
+                // physical interval rate. Reserve enough intervals to cover the
+                // initial distance plus the complete inspection/ingestion tail.
+                // The replay contract bounds the sequence; a fixed 32-tick
+                // window would cut off farther visible targets before contact.
+                let approach_steps = (visible_target.distance / measured_step).ceil();
+                if !approach_steps.is_finite()
+                    || approach_steps > (MAX_TRAINING_SEQUENCE_TICKS - terminal_steps) as f32
+                {
+                    return Err(ScaffoldContractError::MissingPhaseData.into());
+                }
+                step_budget = approach_steps as usize + terminal_steps;
+            }
         }
         world.advance_tick();
         let consumed =
