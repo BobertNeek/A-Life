@@ -60,7 +60,10 @@ function Run-Command([string]$Program, [string[]]$Arguments, [string]$Log, [swit
     $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true
     foreach ($argument in $Arguments) { $info.ArgumentList.Add($argument) }
     $info.Environment['CARGO_BUILD_JOBS'] = '2'
-    $info.Environment['CARGO_NET_OFFLINE'] = 'true'; $info.Environment['CARGO_TARGET_DIR'] = (Join-Path $repo 'target')
+    $info.Environment['CARGO_NET_OFFLINE'] = 'true'
+    $info.Environment['CARGO_TARGET_DIR'] = if ($env:CARGO_TARGET_DIR) {
+        [IO.Path]::GetFullPath($env:CARGO_TARGET_DIR)
+    } else { Join-Path $repo 'target' }
     $stdout = [IO.File]::Open("$Log.stdout.log", 'CreateNew', 'Write', 'Read')
     $stderr = [IO.File]::Open("$Log.stderr.log", 'CreateNew', 'Write', 'Read')
     $process = [Diagnostics.Process]::new(); $process.StartInfo = $info
@@ -132,6 +135,13 @@ function Invoke-Campaign {
     Publish-State
     Run-Command 'cargo' @('build', '--release', '--offline', '--locked', '-j', '2', '-p', 'alife_game_app',
         '--features', 'foundation-training', '--bin', 'train_n2048_care') (Join-Path $run 'build') -DeadlineUtc $collectionDeadline
+    if ($env:CARGO_TARGET_DIR) {
+        $builtExe = Join-Path ([IO.Path]::GetFullPath($env:CARGO_TARGET_DIR)) 'release/train_n2048_care.exe'
+        if ([IO.Path]::GetFullPath($builtExe) -ne [IO.Path]::GetFullPath($exe)) {
+            [IO.Directory]::CreateDirectory((Split-Path -Parent $exe)) | Out-Null
+            Copy-Item -LiteralPath $builtExe -Destination $exe -Force
+        }
+    }
     if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Release trainer was not built.' }
     # Preserve care while adding longer navigation and both language directions.
     $lessons = if ($Curriculum -eq 'Care') {

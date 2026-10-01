@@ -290,7 +290,9 @@ fn prepare_terrain_founder_refresh(
         || target.neuron_count() != 2_048
         || target.synapses().len() != source.weights().len()
     {
-        return Err("founder rebind would change frozen N2048 coordinates or weight binding".into());
+        return Err(
+            "founder rebind would change frozen N2048 coordinates or weight binding".into(),
+        );
     }
     let revised = FoundationWeightAsset::from_trained_weights(
         &target,
