@@ -8107,6 +8107,18 @@ impl GpuLiveBrainRuntime {
         move_food_in_world(&mut self.world, source, position)
     }
 
+    pub fn begin_player_hold(&mut self, source: WorldEntityId) -> Result<Vec3f, GameAppShellError> {
+        Ok(self.world.begin_player_hold(source)?)
+    }
+
+    pub fn move_player_hold(&mut self, ground: Vec3f) -> Result<Vec3f, GameAppShellError> {
+        Ok(self.world.move_player_hold(ground)?)
+    }
+
+    pub fn release_player_hold(&mut self) -> Result<Option<WorldEntityId>, GameAppShellError> {
+        Ok(self.world.release_player_hold()?)
+    }
+
     pub fn provide_player_care(
         &mut self,
         organism: OrganismId,

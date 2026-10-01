@@ -126,7 +126,10 @@ pub fn stage_phase3_new_game_with_founder(
             alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?
         }
     };
-    game.world.enable_highlands_for_new_game()?;
+    game.world.enable_terrain_for_new_game(
+        alife_world::island_terrain(),
+        alife_core::Vec3f::new(80.0, 0.0, 250.0),
+    )?;
     game.world
         .set_age_death_disabled_for_new_game(request.disable_age_death)?;
     if game.world.organism_registry().len() != usize::from(request.population)

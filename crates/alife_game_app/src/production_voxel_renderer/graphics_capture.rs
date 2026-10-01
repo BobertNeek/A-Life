@@ -12,6 +12,8 @@ pub(super) struct CaptureSession {
     action_trace: Option<fs::File>,
     traced_tick: Option<u64>,
     traced_frames: u32,
+    interval: f64,
+    maximum: u32,
 }
 
 pub(super) fn capture_player_view(
@@ -26,6 +28,9 @@ pub(super) fn capture_player_view(
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     meshes: Res<Assets<Mesh>>,
     visible_meshes: Query<(&Mesh3d, &ViewVisibility)>,
+    cameras: Query<(&Transform, &Projection), With<Fvr03ProductionVoxelCamera>>,
+    hand: Option<Res<god_hand::HandInteraction>>,
+    selection: Res<Fvr03ProductionVoxelSelectionResource>,
     mut commands: Commands,
 ) {
     if !session.initialized {
@@ -41,6 +46,16 @@ pub(super) fn capture_player_view(
             }
         }
         session.next_at = 2.0;
+        session.maximum = std::env::var("ALIFE_GRAPHICS_CAPTURE_MAX_FRAMES")
+            .ok()
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(256)
+            .clamp(1, 4096);
+        session.interval = std::env::var("ALIFE_GRAPHICS_CAPTURE_INTERVAL_SECONDS")
+            .ok()
+            .and_then(|s| s.parse::<f64>().ok())
+            .filter(|v| v.is_finite() && *v >= 0.125)
+            .unwrap_or(0.125);
         session.initialized = true;
     }
     // Passive, bounded debug evidence. No extra neural readback or simulation changes.
@@ -119,7 +134,7 @@ pub(super) fn capture_player_view(
         }
     }
     let automatic = session.directory.is_some()
-        && session.count < 96
+        && session.count < session.maximum
         && time.elapsed_secs_f64() >= session.next_at
         && !players.is_empty();
     if !keyboard.just_pressed(KeyCode::F12) && !automatic {
@@ -143,6 +158,13 @@ pub(super) fn capture_player_view(
     };
     let receipt = serde_json::json!({
         "terrain_binding": highlands.as_ref().map(|t| t.0.binding()),
+        "camera": cameras.iter().next().map(|(t,p)| serde_json::json!({
+            "position":t.translation.to_array(),"rotation":t.rotation.to_array(),
+            "view_height_m":highlands::view_height(p),
+            "focus":highlands.as_ref().map(|s| highlands::focus_on_surface(t,s.0.surface()).to_array()),
+        })),
+        "selected_object": selection.selected.and_then(|s|s.stable_id).map(|id|id.raw()),
+        "hand": hand.as_ref().map(|h|serde_json::json!({"held":h.held.map(|id|id.raw()),"contact":h.position.map(|p|p.to_array())})),
         "visible_mesh_primitives": visible_meshes.iter().filter(|(_,v)| v.get()).count(),
         "visible_mesh_triangles_before_batching": visible_meshes.iter().filter(|(_,v)| v.get())
             .filter_map(|(m,_)| meshes.get(&m.0)).map(|m| m.indices().map_or(m.count_vertices(),|i| i.len())/3).sum::<usize>(),
@@ -169,5 +191,5 @@ pub(super) fn capture_player_view(
         .spawn(Screenshot::primary_window())
         .observe(save_to_disk(directory.join(format!("{name}.png"))));
     session.count += 1;
-    session.next_at = time.elapsed_secs_f64() + 0.125;
+    session.next_at = time.elapsed_secs_f64() + session.interval;
 }

@@ -92,6 +92,7 @@ impl RenderedTerrainSurface {
 }
 
 pub(super) fn ground_creatures(
+    hand: Option<Res<god_hand::HandInteraction>>,
     surface_mesh: Res<RenderedTerrainSurface>,
     mut roots: bevy::prelude::Query<
         (
@@ -105,6 +106,12 @@ pub(super) fn ground_creatures(
     parts: bevy::prelude::Query<(&Transform, &Aabb), Without<ProductionCreatureAssemblyRoot>>,
 ) {
     for (mut root, visual, children, hearthling) in &mut roots {
+        if hand
+            .as_ref()
+            .is_some_and(|h| h.held == Some(visual.stable_id))
+        {
+            continue;
+        }
         let mut lowest = f32::INFINITY;
         let mut surface = surface_mesh
             .height(root.translation)

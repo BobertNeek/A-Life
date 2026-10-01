@@ -329,6 +329,45 @@ impl TerrainSurface {
         Some(Vec3f::new(end.x, self.height(end.x, end.z)?, end.z))
     }
     pub fn ray_hit(&self, origin: Vec3f, direction: Vec3f, max_distance: f32) -> Option<Vec3f> {
+        if origin.validate().is_err()
+            || direction.validate().is_err()
+            || !max_distance.is_finite()
+            || max_distance <= 0.0
+        {
+            return None;
+        }
+        // Clip against the horizontal sample bounds before marching. A distant
+        // overview camera must honor its requested ray range, not a 2 km cap.
+        let mut enter: f32 = 0.0;
+        let mut exit = max_distance;
+        for (o, d, lo, hi) in [
+            (
+                origin.x,
+                direction.x,
+                self.origin_x,
+                self.origin_x + (self.width - 1) as f32 * self.spacing,
+            ),
+            (
+                origin.z,
+                direction.z,
+                self.origin_z,
+                self.origin_z + (self.depth - 1) as f32 * self.spacing,
+            ),
+        ] {
+            if d.abs() < 1e-8 {
+                if o < lo || o > hi {
+                    return None;
+                }
+            } else {
+                let a = (lo - o) / d;
+                let b = (hi - o) / d;
+                enter = enter.max(a.min(b));
+                exit = exit.min(a.max(b));
+            }
+        }
+        if exit < enter {
+            return None;
+        }
         let point = |t: f32| {
             Vec3f::new(
                 origin.x + direction.x * t,
@@ -337,8 +376,8 @@ impl TerrainSurface {
             )
         };
         let mut previous = None;
-        for i in 0..=((max_distance.min(2000.0) / 1.25).ceil() as usize) {
-            let t = i as f32 * 1.25;
+        for i in 0..=(((exit - enter) / 1.25).ceil() as usize) {
+            let t = (enter + i as f32 * 1.25).min(exit);
             let p = point(t);
             let Some(h) = self.height(p.x, p.z) else {
                 previous = None;

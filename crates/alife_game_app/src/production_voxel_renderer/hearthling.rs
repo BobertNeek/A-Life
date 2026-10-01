@@ -263,6 +263,7 @@ fn ready(
 }
 
 pub(super) fn animate(
+    hand: Option<Res<god_hand::HandInteraction>>,
     time: Res<Time>,
     ux: Res<Fvr05ProductionUxStateResource>,
     mut players: Query<(&mut AnimationPlayer, &mut HearthlingPlayer)>,
@@ -296,7 +297,11 @@ pub(super) fn animate(
         let delta = transform.translation - visual.previous_position;
         visual.previous_position = transform.translation;
         let distance = Vec2::new(delta.x, delta.z).length();
-        visual.moved = !ux.settings.paused && distance > f32::EPSILON;
+        visual.moved = !ux.settings.paused
+            && distance > f32::EPSILON
+            && !hand
+                .as_ref()
+                .is_some_and(|h| h.held == Some(marker.stable_id));
         if visual.moved {
             visual.walk_seconds = advance_walk(
                 distance,
@@ -314,7 +319,12 @@ pub(super) fn animate(
         };
         // Actual displacement can outlast a selected Move action (or be blocked
         // despite it). Pose cadence follows the presented world displacement.
-        let next = if ux.settings.paused {
+        let next = if hand
+            .as_ref()
+            .is_some_and(|h| h.held == Some(marker.stable_id))
+        {
+            0
+        } else if ux.settings.paused {
             model.state
         } else if visual.moved {
             1

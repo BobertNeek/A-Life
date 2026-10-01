@@ -1,0 +1,23 @@
+{
+  "blender": "5.2.1 LTS",
+  "skin_triangles": 10500,
+  "bones": 16,
+  "poses": [
+    "Hover",
+    "Point",
+    "Grab",
+    "Carry",
+    "Release"
+  ],
+  "units": "metres",
+  "palm_width_m": 0.99,
+  "palm_depth_m": 0.33,
+  "overall_length_m": 3,
+  "fingers_m": {
+    "Index": 1.55,
+    "Middle": 1.65,
+    "Ring": 1.58,
+    "Little": 1.25,
+    "Thumb_MCP_to_tip": 0.86
+  }
+}

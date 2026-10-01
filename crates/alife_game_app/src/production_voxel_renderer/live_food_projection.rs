@@ -3,7 +3,7 @@ use super::*;
 use bevy::prelude::{Cuboid, Meshable, Query, Sphere};
 
 #[derive(Component)]
-pub(super) struct LiveCareObject(WorldEntityId);
+pub(super) struct LiveCareObject(pub(super) WorldEntityId);
 
 pub(super) fn sync_care_objects(
     mut commands: Commands,
@@ -37,7 +37,7 @@ pub(super) fn sync_care_objects(
         let rendered = world_position_for_render(position, highlands.is_some());
         let ground = Vec3::new(rendered.x, 0.0, rendered.z);
         let height = if highlands.is_some() {
-            surface.height(ground).unwrap_or(rendered.y)
+            rendered.y
         } else {
             surface.height(ground).unwrap_or(0.44) + rendered.y
         };

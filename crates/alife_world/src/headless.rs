@@ -686,6 +686,7 @@ pub struct HeadlessWorld {
     speech: SpatialSpeechBus,
     last_creature_utterance_ticks: BTreeMap<u64, Tick>,
     pending_player_care: BTreeMap<u64, BodyEventDelta>,
+    player_hold: Option<player_hand::PlayerHold>,
     tracked_objects: TrackedObjectRegistry,
     habitats: HabitatAuthority,
     organism_registry: WorldOrganismRegistry,
@@ -694,6 +695,8 @@ pub struct HeadlessWorld {
     #[cfg(test)]
     injected_tick_late_failure_after_first_organism: bool,
 }
+
+pub(crate) mod player_hand;
 
 /// A world-validated embodied endpoint for learner-visible teacher signals.
 /// The raw teacher speech/cue mutators are private so production callers must
@@ -782,6 +785,7 @@ pub(crate) struct HeadlessWorldPersistenceParts {
     pub audible_utterances: Vec<AudibleUtterance>,
     pub last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
     pub pending_player_care: BTreeMap<u64, BodyEventDelta>,
+    pub player_hold: Option<player_hand::PlayerHold>,
     pub habitats: HabitatAuthority,
     pub organism_records: Option<Vec<WorldOrganismRecord>>,
 }
@@ -904,6 +908,7 @@ impl HeadlessWorld {
             speech: SpatialSpeechBus::default(),
             last_creature_utterance_ticks: BTreeMap::new(),
             pending_player_care: BTreeMap::new(),
+            player_hold: None,
             tracked_objects: TrackedObjectRegistry::new(
                 seed,
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
@@ -1819,6 +1824,12 @@ impl HeadlessWorld {
         }
 
         digest.write_sequence_len(self.objects.len());
+        if let Some(hold) = &self.player_hold {
+            digest.write_bytes(b"player-hold-v1");
+            digest.write_bytes(
+                &serde_json::to_vec(hold).map_err(|_| ScaffoldContractError::InvalidId)?,
+            );
+        }
         for object in self.objects.values() {
             write_world_object_signature(&mut digest, object)?;
         }
@@ -2494,6 +2505,7 @@ impl HeadlessWorld {
             ecology: self.ecology.clone(),
             audible_utterances: self.speech.snapshot(),
             pending_player_care: self.pending_player_care.clone(),
+            player_hold: self.player_hold.clone(),
             last_creature_utterance_ticks: self
                 .last_creature_utterance_ticks
                 .iter()
@@ -2507,6 +2519,26 @@ impl HeadlessWorld {
     pub(crate) fn from_persistence_parts(
         parts: HeadlessWorldPersistenceParts,
     ) -> Result<Self, ScaffoldContractError> {
+        if let Some(hold) = &parts.player_hold {
+            hold.last_ground.validate()?;
+            let object = parts
+                .objects
+                .iter()
+                .find(|o| o.id == hold.object_id)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            if object.consumed
+                || object.carried_by.is_some()
+                || !matches!(
+                    object.kind,
+                    WorldObjectKind::Agent
+                        | WorldObjectKind::Food
+                        | WorldObjectKind::Ball
+                        | WorldObjectKind::Token
+                )
+            {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
         let terrain = crate::WorldTerrain::restore(parts.terrain, parts.terrain_state.as_ref())?;
         let max_present_organism_id = parts
             .objects
@@ -2633,6 +2665,7 @@ impl HeadlessWorld {
             ecology: parts.ecology,
             speech: SpatialSpeechBus::restore(parts.audible_utterances, parts.tick)?,
             pending_player_care: parts.pending_player_care,
+            player_hold: parts.player_hold,
             last_creature_utterance_ticks: parts
                 .last_creature_utterance_ticks
                 .into_iter()
@@ -2652,6 +2685,7 @@ impl HeadlessWorld {
         if has_authoritative_organism_records {
             world.validate_complete_organism_bindings(true)?;
         }
+        world.validate_player_hold()?;
         Ok(world)
     }
 
@@ -4483,6 +4517,16 @@ impl HeadlessWorld {
         agent_id: WorldEntityId,
         intent: MoveIntent,
     ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+        if self.player_held_object() == Some(agent_id) {
+            return self.finish_action(
+                command,
+                false,
+                Some(ReferenceActionFailure::Blocked),
+                physical(PhysicalContactKind::Blocked, None, Vec3f::ZERO, 0.0)?,
+                OutcomeProfile::blocked(),
+                vec![],
+            );
+        }
         let start = self
             .objects
             .get(&agent_id.raw())
@@ -5059,6 +5103,12 @@ impl HeadlessWorld {
     }
 
     fn rebuild_ecology_metrics(&mut self) {
+        if self.player_hold.as_ref().is_some_and(|hold| {
+            self.entity(hold.object_id)
+                .is_none_or(|o| o.consumed || o.carried_by.is_some())
+        }) {
+            self.player_hold = None;
+        }
         let object_kinds = self
             .objects
             .values()
