@@ -274,13 +274,26 @@ fn ca12_app_bundle_manifest_rejects_missing_required_entries() {
 #[test]
 fn ca12_app_bundle_manifest_rejects_missing_shader_assets() {
     let fixtures = CurrentAppFixtures::new();
-    let source = std::fs::read_to_string(fixtures.bundle_manifest()).unwrap();
-    let broken = source.replace(
-        "crates/alife_gpu_backend/shaders/closed_loop_recurrent.wgsl",
-        "crates/alife_gpu_backend/shaders/missing_recurrent.wgsl",
-    );
+    let mut broken: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(fixtures.bundle_manifest()).unwrap()).unwrap();
+    // A valid config/asset bundle isolates the missing-shader contract. The
+    // full-bundle test separately covers authoritative portable-save entries.
+    broken["entries"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|entry| entry["kind"] != "portable-save");
+    let shader = broken["shader_assets"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|shader| {
+            shader["relative_path"] == "crates/alife_gpu_backend/shaders/closed_loop_recurrent.wgsl"
+        })
+        .unwrap();
+    shader["relative_path"] =
+        serde_json::json!("crates/alife_gpu_backend/shaders/missing_recurrent.wgsl");
     let path = std::env::temp_dir().join("alife_ca12_broken_shader_manifest.json");
-    std::fs::write(&path, broken).unwrap();
+    std::fs::write(&path, serde_json::to_vec_pretty(&broken).unwrap()).unwrap();
     let err = validate_app_bundle_manifest(&path).unwrap_err().to_string();
     assert!(err.contains("required shader asset is missing"));
     let _ = std::fs::remove_file(&path);
