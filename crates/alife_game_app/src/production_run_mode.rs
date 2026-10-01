@@ -1,5 +1,11 @@
 //! Playback policy only: all modes execute the same authoritative world ticks.
 
+#[cfg(all(feature = "gpu-runtime", feature = "bevy-app"))]
+use crate::{
+    GameAppShellError, GpuLiveBrainRuntime, GpuLiveNoProgressReason, GpuLiveTickOutcome,
+    GpuManualCheckpointStatus, ProductionVoxelLaunchSummary,
+};
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProductionRunMode {

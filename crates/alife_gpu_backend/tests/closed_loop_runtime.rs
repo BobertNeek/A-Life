@@ -21,33 +21,6 @@ fn pipeline_source() -> String {
     .expect("the GPU closed-loop pipeline source must be available")
 }
 
-fn without_rust_comments(source: &str) -> String {
-    let bytes = source.as_bytes();
-    let mut result = String::with_capacity(source.len());
-    let mut cursor = 0;
-    let mut block_depth = 0_u32;
-    while cursor < bytes.len() {
-        if block_depth == 0 && bytes[cursor..].starts_with(b"//") {
-            while cursor < bytes.len() && bytes[cursor] != b'\n' {
-                cursor += 1;
-            }
-        } else if bytes[cursor..].starts_with(b"/*") {
-            block_depth += 1;
-            cursor += 2;
-        } else if block_depth > 0 && bytes[cursor..].starts_with(b"*/") {
-            block_depth -= 1;
-            cursor += 2;
-        } else {
-            if block_depth == 0 {
-                result.push(bytes[cursor] as char);
-            }
-            cursor += 1;
-        }
-    }
-    assert_eq!(block_depth, 0, "unterminated block comment");
-    result
-}
-
 #[test]
 fn required_gpu_api_is_public_without_constructing_a_device() {
     let _factory: fn(GpuRuntimeProfile) -> Result<GpuClosedLoopBackend, ScaffoldContractError> =
@@ -100,73 +73,6 @@ fn product_runtime_has_no_cpu_execution_or_fallback_boundary() {
         assert!(
             !source.contains(forbidden),
             "forbidden runtime token: {forbidden}"
-        );
-    }
-}
-
-#[test]
-fn runtime_structurally_includes_the_real_crate_private_unit_test_module() {
-    let runtime = without_rust_comments(&runtime_source());
-    assert!(runtime.contains("#[cfg(test)]"));
-    assert!(runtime.contains("#[path = \"../tests/support/closed_loop_runtime_private.rs\"]"));
-    assert!(runtime.contains("mod task7_private_tests;"));
-
-    let private_tests = fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/support/closed_loop_runtime_private.rs"
-    ))
-    .unwrap();
-    let private_tests = without_rust_comments(&private_tests);
-    for required_test in [
-        "fn unavailable_gpu_returns_typed_error_instead_of_cpu_fallback()",
-        "fn software_adapter_is_rejected_without_device_request()",
-        "fn stale_gpu_layout_is_rejected_before_slot_allocation()",
-        "fn hardware_receipt_digests_are_canonical_complete_deterministic_and_sensitive()",
-        "fn backend_and_receipt_allocators_are_independent_checked_and_nonzero()",
-        "fn removal_scrubs_every_reserved_range_before_slot_reuse()",
-        "fn maximum_slot_generation_retires_permanently_instead_of_wrapping()",
-        "fn failed_scrub_marks_device_lost_and_never_frees_or_reuses_the_slot()",
-        "fn save_rebind_requires_explicit_matching_organism_ownership()",
-        "fn unsupported_n32k_class_rejects_before_arena_allocation()",
-        "fn tampered_frame_digest_rejects_before_upload_or_counter_mutation()",
-    ] {
-        let position = private_tests.find(required_test).unwrap();
-        assert!(private_tests[..position].ends_with("#[test]\n"));
-    }
-    assert!(
-        private_tests.contains("GpuClosedLoopBackend::new_with_factory(&UnavailableGpuFactory)")
-    );
-    assert!(private_tests.contains("factory.device_request_count()"));
-    assert!(private_tests.contains("validate_required_gpu_layout_version("));
-    let compact_private_tests = private_tests
-        .chars()
-        .filter(|character| !character.is_whitespace())
-        .collect::<String>();
-    for required_behavior_call in [
-        "canonical_limit_words_for_test(&limits)",
-        "CanonicalDigestBuilder::new(b\"alife.gpu.hardware.driver.v1\")",
-        "CanonicalDigestBuilder::new(b\"alife.gpu.hardware.features.v1\")",
-        "CanonicalDigestBuilder::new(b\"alife.gpu.hardware.limits.v1\")",
-        "expected_driver.write_sequence_len(2)",
-        "expected_driver.write_utf8(\"driver\")",
-        "expected_features.write_sequence_len(4)",
-        "expected_limits.write_sequence_len(expected_limit_words.len())",
-        "canonical_driver_digest(\"driver\",\"info\")",
-        "canonical_feature_digest(requested,enabled)",
-        "with_runtime_allocation_state_for_test(41,91,||",
-        "next_backend_instance_id()",
-        "next_hardware_receipt_generation()",
-        "with_runtime_allocation_state_for_test(u64::MAX,u64::MAX,||",
-        "fill_every_reserved_range(first,0xa5a5_a5a5)",
-        "insert_fixture_with_generation(OrganismId(1),PhenotypeHash([1;4]),u32::MAX)",
-        "fail_next_scrub_after_submit()",
-        "rebind_fixture_for_restore(OrganismId(7),PhenotypeHash([7;4]))",
-        "validate_class(BrainClassId(5))",
-        "validate_frame_digest(expected,tampered)",
-    ] {
-        assert!(
-            compact_private_tests.contains(required_behavior_call),
-            "missing executable private behavior call: {required_behavior_call}"
         );
     }
 }

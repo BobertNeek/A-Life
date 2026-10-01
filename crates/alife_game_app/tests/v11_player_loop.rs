@@ -728,6 +728,8 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
         .expect("publish the captured player-loop checkpoint");
     let durable = GpuDurableSaveManifest::open(&save_path, &asset_root)
         .expect("reopen the captured player-loop checkpoint");
+    #[cfg(feature = "bevy-app")]
+    let durable_asset_root = durable.asset_root().to_path_buf();
     let loaded = durable
         .load()
         .expect("reload the captured player-loop checkpoint");

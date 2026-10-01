@@ -155,3 +155,44 @@ physiology and receptor evidence; apply or discard the matching pending GPU
 eligibility transaction; preserve cleanup/rollback on every error. Keep a
 two-tick RTX 3050 causal gate before attempting a whole battery or generation.
 Then decide reaction solver semantics and structural graph mutation separately.
+
+## Codex integration review on Windows — 2026-09-30
+
+Reviewed the cleanup commit `65cc8e2a8a2a4c5192865d74988821b25af15d82`
+independently before integrating the full gameplay branch into `main`.
+
+- Fixed two cleanup regressions exposed by the graphical feature combination:
+  `production_run_mode.rs` lost six required imports when its wildcard import
+  was removed, and the Bevy checkpoint test in `v11_player_loop.rs` still needs
+  the durable asset root that cleanup deleted. Both now use explicit feature
+  guards. The Windows app all-feature, all-target compilation passes.
+- Deleted `runtime_structurally_includes_the_real_crate_private_unit_test_module`
+  and its unused comment-stripping helper. This retired Task 7 check inspected
+  other tests' names and source strings; the 14 actual private runtime tests
+  remain registered and pass. The four host runtime tests also pass.
+- Updated two stale enum-boundary assertions to include the already implemented
+  `HeardLanguage`, `SemanticPrior`, and `Look` variants. Unknown values are still
+  rejected; the three affected ABI-mapping tests pass.
+- Simplified the waking/recovery emitter exclusion predicate without changing
+  which emitters it retains. This removes two strict Clippy diagnostics on the
+  Windows Rust 1.96 toolchain.
+- Checked public commit, PR-review, and issue comments again. The additional
+  [CI diagnosis on the cleanup commit](https://github.com/BobertNeek/A-Life/commit/65cc8e2a8a2a4c5192865d74988821b25af15d82#commitcomment-202822663)
+  correctly identifies that a failed test step skips subsequent checks. CI now
+  runs benchmark, Clippy, boundary, and docs checks after successful compilation
+  even if tests fail, while honoring cancellation. The full workspace test
+  command and its failure status remain intact. Workflow YAML parses locally;
+  the changed scheduling still requires a GitHub Actions run.
+
+Windows verification includes 102 distinct passing focused tests: 58 core
+library/genetics/Era 1/chemistry tests, seven training-contract tests, three
+enum-mapping tests, 14 private runtime tests, four host runtime tests, and 16
+WGSL parsing/reflection/contract tests. Strict core-library Clippy, formatting,
+core boundaries, docs checks, and the hearthling asset check also pass.
+
+The broad-suite failure counts above belong to the Work thread's original
+Linux runs; they are not a new Windows full-suite result. Existing full-suite
+failures and the documented biology, graph-evolution, and neural-signal gaps
+remain unresolved. N4096 growth remains research-only and its CI failure is
+not grounds to delete its persistent-address migration test. No new rendered
+playtest or physical-GPU execution is claimed by this integration review.

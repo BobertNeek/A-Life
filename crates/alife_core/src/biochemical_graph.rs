@@ -914,11 +914,12 @@ impl BiochemicalPhenotype {
     pub(crate) fn with_waking_recovery(mut self) -> Result<Self, ScaffoldContractError> {
         use ids::*;
         self.emitters.retain(|row| {
-            !(row.target == FATIGUE && row.source == BiochemicalSourceLocus::EnergyDeficit)
-                && !(row.source == BiochemicalSourceLocus::SleepRecovery && row.target == BRAIN_ATP)
-                && !(row.target == SLEEP_STATE)
-                && !(row.source == BiochemicalSourceLocus::Awake
-                    && matches!(row.target, FATIGUE | SLEEP_PRESSURE))
+            row.target != SLEEP_STATE
+                && !((row.target == FATIGUE && row.source == BiochemicalSourceLocus::EnergyDeficit)
+                    || (row.source == BiochemicalSourceLocus::SleepRecovery
+                        && row.target == BRAIN_ATP)
+                    || (row.source == BiochemicalSourceLocus::Awake
+                        && matches!(row.target, FATIGUE | SLEEP_PRESSURE)))
         });
         // Availability must not collapse at ordinary reserves merely because
         // sleeping no longer supplies a direct ATP boost. This sensitivity is

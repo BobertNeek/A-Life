@@ -24,19 +24,24 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Check
+        id: check
         run: cargo check --workspace --all-targets
 
       - name: Test
         run: cargo test --workspace --all-targets
 
       - name: Benchmark smoke
+        if: ${{ !cancelled() && steps.check.outcome == 'success' }}
         run: cargo test -p alife_tools --test benchmark_tiers benchmark_tiers_smoke_runs_tier_1_and_10_without_bevy_or_gpu
 
       - name: Clippy
+        if: ${{ !cancelled() && steps.check.outcome == 'success' }}
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Core boundaries
+        if: ${{ !cancelled() && steps.check.outcome == 'success' }}
         run: bash scripts/check_core_boundaries.sh
 
       - name: Docs checks
+        if: ${{ !cancelled() && steps.check.outcome == 'success' }}
         run: bash scripts/docs_check.sh
