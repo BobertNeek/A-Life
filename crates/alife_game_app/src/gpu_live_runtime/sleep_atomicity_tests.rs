@@ -93,15 +93,18 @@ fn production_progress(
 
 // One large staged-tick instantiation for all fault closures keeps this native
 // test module inexpensive to rebuild without changing production dispatch.
-fn tick_with_fault(
-    runtime: &mut GpuLiveBrainRuntime,
-    progress: &mut dyn FnMut(
+type SleepFaultProgress<'a> = dyn FnMut(
         &mut GpuClosedLoopBackend,
         GpuBrainHandle,
         OrganismId,
         SleepState,
         Option<ConsolidationIntent>,
-    ) -> SleepProgressResult,
+    ) -> SleepProgressResult
+    + 'a;
+
+fn tick_with_fault(
+    runtime: &mut GpuLiveBrainRuntime,
+    progress: &mut SleepFaultProgress<'_>,
 ) -> Result<GpuLiveTickOutcome, GameAppShellError> {
     runtime.tick_with_sleep_progress_outcome(progress)
 }

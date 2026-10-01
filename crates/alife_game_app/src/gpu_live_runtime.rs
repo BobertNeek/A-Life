@@ -9807,9 +9807,7 @@ impl GpuLiveBrainRuntime {
             .creatures
             .iter()
             .filter_map(|creature| {
-                let Some(brain) = creature.gpu_brain.as_ref() else {
-                    return None;
-                };
+                let brain = creature.gpu_brain.as_ref()?;
                 (matches!(
                     brain.sleep.consolidation,
                     ConsolidationState::Completed { .. }

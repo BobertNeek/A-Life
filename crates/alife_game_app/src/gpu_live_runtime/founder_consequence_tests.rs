@@ -348,7 +348,7 @@ pub(super) fn candidate_base_save(
         .iter()
         .map(|record| {
             let organism_id = record.organism_id();
-            let biochemistry = record.biochemistry().clone();
+            let biochemistry = *record.biochemistry();
             let genetic_fixed_digest = PortableAssetDigest::for_bytes(
                 &serde_json::to_vec(record.phenotype()).expect("canonical phenotype serializes"),
             )

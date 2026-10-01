@@ -296,7 +296,7 @@ fn readiness_resume_preserves_external_actors_toys_and_private_prior() {
         learning_transactions > 0 && reported_fast_changes > 0 && learned_changes > 0,
         "ordinary N2048 GPU outcomes must produce measured acquired weights: transactions={learning_transactions}, reported_changes={reported_fast_changes}, measured_changes={learned_changes}"
     );
-    assert!(runtime.memories[&organism.raw()].bank().len() > 0);
+    assert!(runtime.memories[&organism.raw()].bank().fast_len() > 0);
 
     // This is an explicit public recovery request, not induced biological sleep.
     let before_sleep = runtime.residents[&organism.raw()].sleep_scheduler.state();
@@ -401,7 +401,7 @@ fn readiness_resume_preserves_external_actors_toys_and_private_prior() {
         .snapshot_brain(handle, runtime.world.tick())
         .unwrap();
     let (manifest, loaded) =
-        GpuDurableSaveManifest::open_loaded(&root.join("live.json"), &root.join("assets")).unwrap();
+        GpuDurableSaveManifest::open_loaded(root.join("live.json"), root.join("assets")).unwrap();
     assert_eq!(loaded.save, saved);
     let mut restored = GpuLiveBrainRuntime::restore_loaded_save(
         runtime.new_staging_like_live().unwrap(),
@@ -442,7 +442,15 @@ fn readiness_resume_preserves_external_actors_toys_and_private_prior() {
     assert_eq!(restored.world.entity_id("readiness-teacher"), Some(teacher));
     assert!(!restored.handles.contains_key(&9000001));
     assert_eq!(restored.handles.len(), runtime.handles.len());
-    assert!(runtime.memories.get(&organism.raw()).unwrap().bank().len() > 0);
+    assert!(
+        runtime
+            .memories
+            .get(&organism.raw())
+            .unwrap()
+            .bank()
+            .fast_len()
+            > 0
+    );
     assert_eq!(restored.memories, runtime.memories);
     assert_eq!(restored.topologies, runtime.topologies);
     assert_eq!(

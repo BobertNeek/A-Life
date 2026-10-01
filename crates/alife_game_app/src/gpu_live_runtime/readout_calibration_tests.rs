@@ -254,7 +254,7 @@ fn capture_pair(
                 false,
             )
             .unwrap();
-        legality.push(outcome.action_result.execution.clone());
+        legality.push(outcome.action_result.execution);
         assert!(outcome.action_result.execution.succeeded);
         assert_eq!(
             outcome.action_result.execution.physical.contact,

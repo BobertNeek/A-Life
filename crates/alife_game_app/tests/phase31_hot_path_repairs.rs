@@ -520,7 +520,12 @@ fn phase31_async_journal_publication_survives_later_cycles_then_drains() {
         }
         // Match production's bounded catch-up shape: four immediate tick
         // attempts followed by one render-frame interval.
-        if fixture.runtime.world_tick_for_test().raw() % 4 == 0 {
+        if fixture
+            .runtime
+            .world_tick_for_test()
+            .raw()
+            .is_multiple_of(4)
+        {
             std::thread::park_timeout(Duration::from_millis(16));
         }
         let (_, work) = fixture.runtime.exact_checkpoint_state_for_test();

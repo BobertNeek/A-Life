@@ -1198,7 +1198,13 @@ fn n2048_ppo_and_imitation_gpu_objective_matches_joint_derivatives_and_partial_b
             "positive return must increase detached value bias"
         );
         objective
-            .upload_imitation(trainer.session(), &[example.clone()], &[row], 1.0, 1.0)
+            .upload_imitation(
+                trainer.session(),
+                std::slice::from_ref(&example),
+                &[row],
+                1.0,
+                1.0,
+            )
             .unwrap();
         let mut encoder = device.create_command_encoder(&Default::default());
         objective.encode_imitation(&mut encoder, false).unwrap();
@@ -1238,7 +1244,12 @@ fn n2048_ppo_and_imitation_gpu_objective_matches_joint_derivatives_and_partial_b
             .upload(trainer.session(), &batch, &[row], config, 1, 7)
             .unwrap();
         objective
-            .upload_auxiliary_targets(trainer.session(), &batch, &[example.target.clone()], 1.0)
+            .upload_auxiliary_targets(
+                trainer.session(),
+                &batch,
+                std::slice::from_ref(&example.target),
+                1.0,
+            )
             .unwrap();
         let mut encoder = device.create_command_encoder(&Default::default());
         objective.encode_evaluate(&mut encoder).unwrap();
