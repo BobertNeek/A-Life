@@ -254,6 +254,51 @@ fn dynamic_upload_rebases_once_and_validates_in_its_explicit_offset_domain() {
 }
 
 #[test]
+fn dynamic_upload_rebase_overflow_leaves_every_field_unchanged() {
+    let capacity = BrainCapacityClass::n512();
+    let phenotype = compile(capacity.id(), 41);
+    let mut bucket = GpuClassBucketPlan::new(capacity, 1).unwrap();
+    let slot = bucket.insert_phenotype(0, 7, &phenotype).unwrap();
+    let frame = perception_fixture();
+    let valid = GpuPerceptionUpload::try_from_frame(&frame, &slot, 0).unwrap();
+
+    let mut dispatch_overflow = valid.clone();
+    assert_eq!(
+        dispatch_overflow.rebase(u32::MAX, 0),
+        Err(GpuClosedLoopError::ArithmeticOverflow)
+    );
+    assert_eq!(dispatch_overflow, valid);
+
+    let mut sensory_overflow = valid.clone();
+    sensory_overflow.header.sensory_offset = u32::MAX;
+    let before = sensory_overflow.clone();
+    assert_eq!(
+        sensory_overflow.rebase(0, 1),
+        Err(GpuClosedLoopError::ArithmeticOverflow)
+    );
+    assert_eq!(sensory_overflow, before);
+
+    // The first feature offset fits exactly; the later candidate overflows.
+    let mut feature_overflow = valid.clone();
+    let frame_base = u32::MAX - valid.candidates[0].feature_offset;
+    assert_eq!(
+        feature_overflow.rebase(128, frame_base),
+        Err(GpuClosedLoopError::ArithmeticOverflow)
+    );
+    assert_eq!(feature_overflow, valid);
+
+    let mut boundary = valid.clone();
+    boundary
+        .rebase(
+            128,
+            u32::MAX - valid.candidates.last().unwrap().feature_offset,
+        )
+        .unwrap();
+    assert_eq!(boundary.candidates.last().unwrap().feature_offset, u32::MAX);
+    boundary.validate_against(&frame, &slot).unwrap();
+}
+
+#[test]
 fn matching_slot_and_header_with_stale_v1_layout_are_rejected() {
     let capacity = BrainCapacityClass::n512();
     let phenotype = compile(capacity.id(), 41);

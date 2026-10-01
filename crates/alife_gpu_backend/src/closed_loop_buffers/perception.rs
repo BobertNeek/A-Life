@@ -4,7 +4,7 @@ use alife_core::{
 
 use super::{
     GpuBrainSlot, GpuBrainSlotRecord, GpuCandidateRecord, GpuClosedLoopError, GpuPerceptionHeader,
-    GPU_CLOSED_LOOP_LAYOUT_VERSION,
+    GPU_CANDIDATE_RECORD_BYTES, GPU_CLOSED_LOOP_LAYOUT_VERSION, GPU_PERCEPTION_HEADER_BYTES,
 };
 use crate::closed_loop_memory::GpuPerceptionFrameBinding;
 
@@ -94,7 +94,11 @@ impl GpuPerceptionUpload {
                 effort_q16: (candidate.required_effort.raw() * 65535.0).round() as u32,
             });
         }
-        let mut dispatch_header_words = header.words().to_vec();
+        let mut dispatch_header_words = Vec::with_capacity(
+            (GPU_PERCEPTION_HEADER_BYTES + candidates.len() * GPU_CANDIDATE_RECORD_BYTES)
+                / std::mem::size_of::<u32>(),
+        );
+        dispatch_header_words.extend_from_slice(header.words());
         for candidate in &candidates {
             dispatch_header_words.extend_from_slice(candidate.words());
         }
@@ -205,19 +209,17 @@ impl GpuPerceptionUpload {
             .sensory_offset
             .checked_add(frame_word_base)
             .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
-        let feature_offsets = self
-            .candidates
-            .iter()
-            .map(|row| {
-                row.feature_offset
-                    .checked_add(frame_word_base)
-                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        // Validate every addition before mutation, preserving atomic rejection
+        // without allocating temporary offsets for each live tick.
+        for row in &self.candidates {
+            row.feature_offset
+                .checked_add(frame_word_base)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        }
         self.header.candidate_offset = candidate_offset;
         self.header.sensory_offset = sensory_offset;
-        for (row, feature_offset) in self.candidates.iter_mut().zip(feature_offsets) {
-            row.feature_offset = feature_offset;
+        for row in &mut self.candidates {
+            row.feature_offset += frame_word_base;
         }
         self.frame_binding.perception_header_index = dispatch_word_base;
         self.dispatch_header_words.clear();
