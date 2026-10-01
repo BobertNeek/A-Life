@@ -2,6 +2,8 @@
 
 Production source `f03d2dc3b53cb4e2139f1f0d1c50f15b92138d72` implements the split proposed by the earlier CPU admission audit. Its base is coherent candidate `ad49a32558233f6cdabf974eb7361ce0364ffbdd`, plus the already reviewed finalization patch (`4eed7acc` cherry-picked here as `1c53224a`). Parent integration is separate. No desktop, GPU device, neural training, provider or hardware campaign is part of this receipt. The requested 20 FPS/50 creatures and sustainable 20 TPS with bounded debt remain **Unknown**.
 
+The later [TerrainVision hint-boundary extension](20261001-terrain-hint-workers.md) supersedes the prior-presence serial fallback described below. These source-bound measurements and their original scope remain unchanged.
+
 ## Contract and ownership
 
 Mode 1 Micro-Spec, R2 independent Sol6.1 review. The established admission design serves as the bounded contract; there is no task queue, generic executor, new dependency or persistent worker pool.
