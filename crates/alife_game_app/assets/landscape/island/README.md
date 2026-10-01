@@ -30,3 +30,18 @@ Omit `--no-review` to render material and actual polygon-edge reviews. Original
 approved concepts must be present under the dated `target/artifacts/art-review`
 folders when rebuilding from scratch; copies are embedded in the delivered
 Blender files. Measurements and budgets are also in the specification JSON.
+
+Verification on 2026-10-01: Blender source reload retained all five hand poses;
+asset validation accepted all 218 registrations. Rendered terrain samples matched
+the authoritative heightfield within 0.000001 metres. Native mouse checks covered
+9.8 -> 1600 -> 9.8 metre zoom, unchanged ground focus, current-position picking,
+creature and ball carry, grounded release, and edge scrolling.
+
+The optimized Balanced1080p/Vulkan run with eight creatures on an RTX 3050
+measured 330 frames in 60.18 seconds (about 5.5 FPS). Simulation tick work consumed
+95.7% of recorded frame time. The remaining renderer/present/uninstrumented
+residual averaged 6.82 ms per frame; that is not an isolated GPU render timing.
+The existing performance recorder also opens its speech and lineage capture UI.
+This run does not establish a graphics regression baseline or larger-population
+performance. Receipt: `target/artifacts/island-hand-implementation/island-hand-performance.json`,
+implementation revision `c050013d5cefe4760b019e46cb0ebb37d774f300`.
