@@ -110,7 +110,9 @@ fn biochemical_graph_topology_is_expressed_from_heritable_graph_genes() {
         expressed.chemistry.biochemical.reactions()[0]
             .rate
             .to_bits(),
-        (original * 0.5).to_bits()
+        // Only the maternal allele changed; diploid expression retains the
+        // original paternal rate and averages both inherited values.
+        ((original * 0.5 + original) * 0.5).to_bits()
     );
 }
 
