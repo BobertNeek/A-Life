@@ -1,6 +1,7 @@
 use alife_core::{
-    BrainCapacityClass, BrainGenome, DevelopmentState, FoundationWeightAsset, NormalizedScalar,
-    PhenotypeCompiler, SensorProfile, Tick,
+    ActionCandidateCreditProfileV1, BrainCapacityClass, BrainGenome, DevelopmentState,
+    FoundationWeightAsset, NormalizedScalar, PhenotypeCompiler, PlasticityGenomeParameters,
+    SensorProfile, Tick,
 };
 use alife_training::{
     mutate_hardening_genome, pareto_front, HardeningEvaluation, HardeningFitness,
@@ -64,6 +65,64 @@ fn descendant_mutations_preserve_the_finalists_inherited_genome_changes() {
     );
     assert_eq!(descendant.parent_genome_ids, vec![finalist.id]);
     assert_eq!(descendant.lineage_id, finalist.lineage_id);
+}
+
+#[test]
+fn receptor_mutations_preserve_inherited_action_credit_scope() {
+    let founder = BrainGenome::scaffold(77, BrainCapacityClass::N2048_ID);
+    let source = *founder.plasticity_parameters();
+    let unscoped = PlasticityGenomeParameters::try_new(
+        source.eligibility_decay(),
+        source.base_learning_rate(),
+        source.normalization_rate(),
+        source.sleep_replay_rate(),
+        source.receptor_profile(),
+        source.fast_bounds().0,
+        source.fast_bounds().1,
+        source.sleep_staging_rate(),
+        source.sleep_weight_limit(),
+        source.sleep_fast_decay_rate(),
+    )
+    .unwrap();
+
+    for profile in [
+        None,
+        Some(ActionCandidateCreditProfileV1::SignedConsequences),
+        Some(ActionCandidateCreditProfileV1::SignedChoiceReadouts),
+    ] {
+        let parameters = match profile {
+            Some(profile) => unscoped
+                .with_action_candidate_credit_profile(profile)
+                .unwrap(),
+            None => unscoped,
+        };
+        let parent = founder
+            .clone()
+            .with_plasticity_parameters(parameters)
+            .unwrap();
+        for mutation in [
+            HardeningMutationKind::PlasticityReceptor,
+            HardeningMutationKind::BiochemicalSensitivity,
+        ] {
+            let child = mutate_hardening_genome(&parent, mutation, 993).unwrap();
+            let child_parameters = child.plasticity_parameters();
+            assert_eq!(
+                child_parameters.action_candidate_credit_profile(),
+                profile,
+                "{mutation:?} discarded inherited {profile:?}",
+            );
+            assert_ne!(
+                child_parameters.receptor_profile(),
+                parameters.receptor_profile()
+            );
+            assert_eq!(
+                child_parameters.eligibility_decay(),
+                parameters.eligibility_decay()
+            );
+            assert_eq!(child_parameters.fast_bounds(), parameters.fast_bounds());
+            assert_eq!(parent.plasticity_parameters(), &parameters);
+        }
+    }
 }
 
 #[test]

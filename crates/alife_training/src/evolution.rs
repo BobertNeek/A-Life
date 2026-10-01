@@ -189,20 +189,22 @@ pub fn mutate_hardening_genome(
             let source = *child.plasticity_parameters();
             let mut receptor_weights = *source.receptor_profile().weights();
             receptor_weights[6] = (receptor_weights[6] + 0.05).min(2.0);
-            child = child.with_plasticity_parameters(
-                alife_core::PlasticityGenomeParameters::try_new(
-                    source.eligibility_decay(),
-                    (source.base_learning_rate() * 1.1).min(1.0),
-                    source.normalization_rate(),
-                    source.sleep_replay_rate(),
-                    alife_core::PlasticityReceptorProfile::try_new(receptor_weights)?,
-                    source.fast_bounds().0,
-                    source.fast_bounds().1,
-                    source.sleep_staging_rate(),
-                    source.sleep_weight_limit(),
-                    source.sleep_fast_decay_rate(),
-                )?,
+            let mut parameters = alife_core::PlasticityGenomeParameters::try_new(
+                source.eligibility_decay(),
+                (source.base_learning_rate() * 1.1).min(1.0),
+                source.normalization_rate(),
+                source.sleep_replay_rate(),
+                alife_core::PlasticityReceptorProfile::try_new(receptor_weights)?,
+                source.fast_bounds().0,
+                source.fast_bounds().1,
+                source.sleep_staging_rate(),
+                source.sleep_weight_limit(),
+                source.sleep_fast_decay_rate(),
             )?;
+            if let Some(profile) = source.action_candidate_credit_profile() {
+                parameters = parameters.with_action_candidate_credit_profile(profile)?;
+            }
+            child = child.with_plasticity_parameters(parameters)?;
         }
         HardeningMutationKind::AlphaPlasticity => {
             child.alpha_mask.default_alpha =
@@ -215,20 +217,22 @@ pub fn mutate_hardening_genome(
             let source = *child.plasticity_parameters();
             let mut receptor_weights = *source.receptor_profile().weights();
             receptor_weights[7] = (receptor_weights[7] - 0.05).max(-2.0);
-            child = child.with_plasticity_parameters(
-                alife_core::PlasticityGenomeParameters::try_new(
-                    source.eligibility_decay(),
-                    source.base_learning_rate(),
-                    source.normalization_rate(),
-                    source.sleep_replay_rate(),
-                    alife_core::PlasticityReceptorProfile::try_new(receptor_weights)?,
-                    source.fast_bounds().0,
-                    source.fast_bounds().1,
-                    source.sleep_staging_rate(),
-                    source.sleep_weight_limit(),
-                    source.sleep_fast_decay_rate(),
-                )?,
+            let mut parameters = alife_core::PlasticityGenomeParameters::try_new(
+                source.eligibility_decay(),
+                source.base_learning_rate(),
+                source.normalization_rate(),
+                source.sleep_replay_rate(),
+                alife_core::PlasticityReceptorProfile::try_new(receptor_weights)?,
+                source.fast_bounds().0,
+                source.fast_bounds().1,
+                source.sleep_staging_rate(),
+                source.sleep_weight_limit(),
+                source.sleep_fast_decay_rate(),
             )?;
+            if let Some(profile) = source.action_candidate_credit_profile() {
+                parameters = parameters.with_action_candidate_credit_profile(profile)?;
+            }
+            child = child.with_plasticity_parameters(parameters)?;
         }
         HardeningMutationKind::DevelopmentalGate => {
             child.developmental_schedule.sleep_pressure_maturation_gate =
