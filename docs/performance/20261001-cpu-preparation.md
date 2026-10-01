@@ -18,8 +18,12 @@ measurements cannot be combined into a frame-speedup estimate.
 
 The [fresh-recall comparison and bounded preparation prototype](20261001-parallel-preparation.md)
 uses source `e8d5633e` and separate fixtures. Only the fresh-result diagnostic
-guard enters production; threaded timings describe an evidence-only prototype.
-Live preparation remains serial.
+guard entered that measured production revision; its threaded timings remain an
+evidence-only prototype. The successor [bounded production split](20261001-two-worker-production.md)
+uses one scoped child plus the caller for eligible CPU preparation. Serial
+housekeeping, draft capture and ordered backend/commit authority remain intact;
+live terrain priors retain interleaved serial preparation. Its CPU checks and
+measurements cannot certify Windows/RTX performance.
 
 ## Integrated serial guard comparison
 

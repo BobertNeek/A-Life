@@ -1,0 +1,314 @@
+{
+  "kind": "Dated CPU release unit-test measurement of the implemented production preparation runner",
+  "source_commit": "f03d2dc3b53cb4e2139f1f0d1c50f15b92138d72",
+  "build": {
+    "source_commit": "f03d2dc3b53cb4e2139f1f0d1c50f15b92138d72",
+    "source_sha256": {
+      "crates/alife_game_app/src/gpu_live_runtime.rs": "f4ff9dbf7454f0d3fd08444da7113db3d4ad39cb7e5661acaa6ea9d90b05440b",
+      "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": "a44bb7ff61dfc8e36cc97dae94f977ce9c85f55b52883cf1aa2ae1c497488443",
+      "crates/alife_game_app/src/gpu_live_runtime/cpu_preparation.rs": "8910857afe6d9e824dae9a4877fabad6e93ee8e33af270248943fad70966dbc0",
+      "crates/alife_game_app/src/gpu_live_runtime/cpu_preparation_tests.rs": "e5502cc9d2930f2fb7af5360dd327826351774c4776bd018c49a983bdf13deea",
+      "crates/alife_gpu_backend/src/closed_loop_runtime.rs": "22e79e86f5232c249b2cf610023351b10b9e4e36e65eb20508d2ee9503c6d41b",
+      "crates/alife_core/src/memory.rs": "1b341aa48ca3865a9742d1008fc034293edb4e2dad6638a27d41e28f4bd34ebc"
+    },
+    "test_artifact": {
+      "reason": "compiler-artifact",
+      "package_id": "path+file:///workspace/A-Life-two-worker-production/crates/alife_game_app#0.1.0",
+      "manifest_path": "/workspace/A-Life-two-worker-production/crates/alife_game_app/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "alife_game_app",
+        "src_path": "/workspace/A-Life-two-worker-production/crates/alife_game_app/src/lib.rs",
+        "edition": "2021",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "features": [
+        "default",
+        "gpu-runtime"
+      ],
+      "filenames": [
+        "/workspace/A-Life/target/cloud-cpu/release/deps/alife_game_app-ff198f4eae3b0a02"
+      ],
+      "executable": "/workspace/A-Life/target/cloud-cpu/release/deps/alife_game_app-ff198f4eae3b0a02",
+      "fresh": false
+    },
+    "retained_executable": "/tmp/alife-two-worker-production-test",
+    "executable_sha256": "bccddb9aef52ae50401f11668b3184bc8540617a190b571a17f1eed92f75b697",
+    "cargo_artifacts_sha256": "57b7ee56cb058bbab76ae0e2ce26ab130e2c254628119a6af00345fe39dd3188",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+  },
+  "host": {
+    "os_kernel": "Linux 6.18.44/KVM",
+    "cpu_model": "AMD EPYC 9V74",
+    "exposed_cpus": 5,
+    "cgroup_cpu_max": "400000 100000",
+    "affinity": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "isolation_guarantee": false
+  },
+  "fixture": {
+    "owner_ids": "1 + 7 * index",
+    "candidates": 26,
+    "actual_retained_records_per_owner": 64,
+    "world_fixture": "Established two-food scenario, immutable draft retimed to tick1000; candidate copies have distinct indices/action IDs",
+    "topology": "Empty; selective concept/gap tests are separate",
+    "predictor": "Acquired state after an owner-bound target receipt observation",
+    "hysteresis": "Warm, focal capacity1",
+    "cpu_slot": "Existing canonical N512/54-lane asset metadata only; not a promotion or live resident"
+  },
+  "timing": {
+    "processes": 1,
+    "samples_per_mode_per_cohort": 9,
+    "mode_order": "1/2 then2/1 alternating by round",
+    "warmup": "One serial reference and one two-worker equality pass per cohort",
+    "included": "Actual production runner, bounded draft clone, full CPU preparation/encoding, output allocation, scoped thread creation/join and controlled error boundaries. Test-only fault checks inactive.",
+    "excluded": "Fixture/input and slot snapshot construction, equality proofs, backend admission/re-admission, housekeeping, world derivation, neural inference/readback/learning, sealing, lifecycle, persistence and rendering."
+  },
+  "proof": {
+    "timed_batches": 72,
+    "timed_complete_typed_row_comparisons": 1908,
+    "full_typed_equality_includes_upload_host_metadata": true,
+    "retained_initial_reference_outside_timing": true,
+    "visited_once_probe": "Separate two-worker pass per cohort verifies one job visit; every timed output matches the serial reference.",
+    "gpu_or_provider_created": false,
+    "fps_or_tps_proven": false
+  },
+  "whole_process": {
+    "argv": [
+      "/tmp/alife-two-worker-production-test",
+      "gpu_live_runtime::cpu_preparation::tests::production_runner_cpu_timing_evidence",
+      "--exact",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "affinity": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "whole_process_wall_ns": 11491875835,
+    "whole_process_user_cpu_seconds": 11.867555,
+    "whole_process_system_cpu_seconds": 0.099913,
+    "whole_process_peak_rss_kib": 104844,
+    "exit_code": 0,
+    "scope": "Whole test process includes fixtures, class metadata allocation, retained references, proof comparisons and console output; not timed-stage CPU/RSS."
+  },
+  "raw_sha256": {
+    "/tmp/alife-two-worker-production-run.log": "e80637ab47c1b36290622cf785332c5bdd9c1a9253015789c86f2ebce01eba04",
+    "/tmp/alife-two-worker-production-time.json": "4507cc0021b1b536b6d8823303d7340acdfcb1a5105b25821fe44c25d40c7ca4"
+  },
+  "cases": [
+    {
+      "candidates": 26,
+      "device_created": false,
+      "full_trace_equal": true,
+      "median_ns": [
+        8036006,
+        4770821
+      ],
+      "owners": 8,
+      "retained_records": 64,
+      "row_visits_once": true,
+      "runner": "production_prepare_cpu_rows",
+      "samples_ns": [
+        [
+          7882635,
+          8117410,
+          8036006,
+          8125081,
+          7920471,
+          8219383,
+          7926721,
+          7936747,
+          8238202
+        ],
+        [
+          4892195,
+          5356005,
+          4770821,
+          4931815,
+          4535184,
+          4533292,
+          4466512,
+          4797261,
+          4523648
+        ]
+      ],
+      "range_ns": [
+        [
+          7882635,
+          8238202
+        ],
+        [
+          4466512,
+          5356005
+        ]
+      ],
+      "wall_reduction_percent": 40.63193830367972
+    },
+    {
+      "candidates": 26,
+      "device_created": false,
+      "full_trace_equal": true,
+      "median_ns": [
+        17588595,
+        9414791
+      ],
+      "owners": 16,
+      "retained_records": 64,
+      "row_visits_once": true,
+      "runner": "production_prepare_cpu_rows",
+      "samples_ns": [
+        [
+          18149082,
+          17254841,
+          17588595,
+          18944685,
+          18950965,
+          17264695,
+          17280259,
+          17603017,
+          17292237
+        ],
+        [
+          11942802,
+          9797198,
+          9414791,
+          9267348,
+          9435261,
+          8860262,
+          8607860,
+          9516905,
+          9231574
+        ]
+      ],
+      "range_ns": [
+        [
+          17254841,
+          18950965
+        ],
+        [
+          8607860,
+          11942802
+        ]
+      ],
+      "wall_reduction_percent": 46.47218268429059
+    },
+    {
+      "candidates": 26,
+      "device_created": false,
+      "full_trace_equal": true,
+      "median_ns": [
+        32566846,
+        17641979
+      ],
+      "owners": 32,
+      "retained_records": 64,
+      "row_visits_once": true,
+      "runner": "production_prepare_cpu_rows",
+      "samples_ns": [
+        [
+          33837139,
+          32373895,
+          32665495,
+          33261613,
+          33279790,
+          32216378,
+          32417882,
+          32566846,
+          32512253
+        ],
+        [
+          17577283,
+          22155289,
+          16640731,
+          17520357,
+          18000260,
+          17641979,
+          16651237,
+          17937825,
+          17847369
+        ]
+      ],
+      "range_ns": [
+        [
+          32216378,
+          33837139
+        ],
+        [
+          16640731,
+          22155289
+        ]
+      ],
+      "wall_reduction_percent": 45.82840782309715
+    },
+    {
+      "candidates": 26,
+      "device_created": false,
+      "full_trace_equal": true,
+      "median_ns": [
+        55194110,
+        27538320
+      ],
+      "owners": 50,
+      "retained_records": 64,
+      "row_visits_once": true,
+      "runner": "production_prepare_cpu_rows",
+      "samples_ns": [
+        [
+          53904851,
+          53467830,
+          56347622,
+          56545422,
+          57247532,
+          53221037,
+          54923811,
+          55845213,
+          55194110
+        ],
+        [
+          27378219,
+          26253790,
+          28981562,
+          27389897,
+          28277067,
+          27538320,
+          28474195,
+          26798913,
+          45347206
+        ]
+      ],
+      "range_ns": [
+        [
+          53221037,
+          57247532
+        ],
+        [
+          26253790,
+          45347206
+        ]
+      ],
+      "wall_reduction_percent": 50.10641534033251
+    }
+  ]
+}
