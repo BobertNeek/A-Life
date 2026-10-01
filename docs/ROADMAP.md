@@ -1,6 +1,6 @@
 # Roadmap
 
-Updated 20 September 2026. The immediate priority is the persistent creature game
+Updated 1 October 2026. The immediate priority is the persistent creature game
 described in section 1.1 of the controlling v2.0 architecture: care, useful
 learning, and save/load first; breeding and practical breed promotion next.
 
@@ -107,6 +107,47 @@ Exit gate for each production class and population profile:
 - populations 1, 10, 50, 100, 250, and 500 measured for both sensor profiles where required;
 - admission, throttling, save migration, soak, and replay gates pass;
 - N4096 remains research-only until its own equivalence and rollback gate passes.
+
+### Current performance todo: 50 individuals at 20 FPS
+
+Target i7-3770K / 32 GB / RTX 3050 8 GB at 1080p, with the current 20 Hz
+simulation/cognition schedule, stable gameplay, useful learning, and exact
+save/load. Follow the [bounded optimization plan](performance/20261001-fifty-creature-optimization-plan.md).
+These tasks are candidates, not a claim that this target has been reached.
+
+- [ ] **Dual baseline/routed memory recall and finalization — measured on older
+  source.** Keep memory-sensitive attention; prepare only its required evidence
+  before routing and finalize the neural frame once. Then consider exact,
+  organism-local reuse across the two recall passes. Re-measure the integrated
+  memory source; its new within-frame reuse has synthetic CPU evidence only.
+- [ ] **Serial CPU preparation per creature — source-supported.** Separate
+  mutation from pure preparation, use a bounded worker pool on one tick-bound
+  view, and collect results in stable organism order. Measure 1/2/3 workers;
+  retain ordered world outcomes and GPU-authoritative action selection.
+- [ ] **Allocation, copies, and layout — measured synthetic seams, live remainder
+  hypothetical.** Reuse scratch capacity, compile immutable receptor plans at
+  admission, share versioned topology summaries, and examine topology's repeated
+  full-map clone/reconstruction. Keep atomic mutation, corruption, and learning
+  guards; reserve exact reference equality for focused qualification where safe.
+- [ ] **World queries/population scaling — hypothetical remaining bottleneck.**
+  The per-tick spatial index already exists. Measure dense neighborhoods,
+  visibility/speech/obstacle queries and index rebuild cost before extending it;
+  preserve grounded, unscored candidates and deterministic ties.
+- [ ] **CPU/GPU transfer and completion waits — source-supported, cost Unknown.**
+  GPU inference is already batched. Measure payload bytes, repacking, host wait
+  and class/chunk learning submissions; use stable arenas and overlap only
+  independent work, preserving sealed outcomes and pending eligibility.
+- [ ] **Rendering blocked by simulation — source-supported.** Evaluate a runtime
+  worker publishing bounded, read-only committed presentation frames; validate
+  pause/save/load/lifecycle and snapshot age. Report FPS, TPS, and due/completed
+  cognitive work separately so faster presentation cannot conceal slow cognition.
+- [ ] Run paired 8/16/32/50-population benchmarks on the integrated release
+  source, then a short care/learning/sleep/fresh-process restore scenario. Mark
+  target-hardware proof **Unknown** until an authorized run supplies receipts.
+
+The [deep-planning skill review](reviews/2026-10-01-deep-planning-skill.md)
+records the recovered original and focused repository revision used for this
+analysis. Existing game milestones and architecture authority remain intact.
 
 ## 6. Release gate
 
