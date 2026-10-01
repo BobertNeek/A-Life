@@ -385,7 +385,7 @@ fn privileged_feature_lanes_have_exact_geometry_affordance_evidence_and_reserved
 }
 
 #[test]
-fn distance_then_entity_order_is_stable_and_caps_at_five_objects() {
+fn distance_then_entity_order_is_stable_and_caps_at_four_complete_object_groups() {
     let mut world = HeadlessScenarioBuilder::new(99)
         .agent("agent", ORGANISM, pos(0.0, 0.0))
         .food("id2_d3", pos(3.0, 0.0), 0.5)
@@ -405,10 +405,12 @@ fn distance_then_entity_order_is_stable_and_caps_at_five_objects() {
     );
 
     assert_eq!(MAX_ACTION_CANDIDATES, 32);
-    assert_eq!(frame.candidates().len(), 3 + 5 * 5);
-    let retained_targets = frame.candidates()[3..]
-        .as_chunks::<5>()
-        .0
+    // PLAY adds a sixth operation to each complete object group. Three
+    // intrinsic opportunities leave room for four such groups in the ABI.
+    assert_eq!(frame.candidates().len(), 3 + 4 * 6);
+    let (object_groups, remainder) = frame.candidates()[3..].as_chunks::<6>();
+    assert!(remainder.is_empty());
+    let retained_targets = object_groups
         .iter()
         .map(|family_group| {
             assert!(family_group
@@ -419,16 +421,17 @@ fn distance_then_entity_order_is_stable_and_caps_at_five_objects() {
         .collect::<Vec<_>>();
     assert_eq!(
         retained_targets,
-        ["id8_d0_5", "id3_d1", "id4_d1", "id5_d2", "id7_d2"]
-            .map(|label| world.entity_id(label).unwrap())
+        ["id8_d0_5", "id3_d1", "id4_d1", "id5_d2"].map(|label| world.entity_id(label).unwrap())
     );
+    // The final retained object wins the equal-distance entity-ID tie.
+    assert!(!retained_targets.contains(&world.entity_id("id7_d2").unwrap()));
     assert!(!retained_targets.contains(&world.entity_id("id2_d3").unwrap()));
     assert!(!retained_targets.contains(&world.entity_id("id6_d4").unwrap()));
     assert!(!retained_targets.contains(&world.entity_id("id9_d5").unwrap()));
 }
 
 #[test]
-fn every_retained_object_gets_the_same_five_mechanical_families() {
+fn every_retained_object_gets_the_same_six_mechanical_operations() {
     let mut world = HeadlessScenarioBuilder::new(13)
         .agent("agent", ORGANISM, pos(0.0, 0.0))
         .food("food", pos(1.0, 0.0), 0.5)
@@ -468,10 +471,17 @@ fn every_retained_object_gets_the_same_five_mechanical_families() {
             ActionKind::Interact,
             CandidateActionFamily::Contact,
         ),
+        (
+            HeadlessActionIds::PLAY,
+            ActionKind::Interact,
+            CandidateActionFamily::Contact,
+        ),
     ];
 
     assert_eq!(frame.candidates().len(), 3 + 4 * expected.len());
-    for family_group in frame.candidates()[3..].as_chunks::<5>().0 {
+    let (object_groups, remainder) = frame.candidates()[3..].as_chunks::<6>();
+    assert!(remainder.is_empty());
+    for family_group in object_groups {
         let target_entity = family_group[0].target.entity;
         assert!(target_entity.is_some());
         assert!(family_group
@@ -486,6 +496,16 @@ fn every_retained_object_gets_the_same_five_mechanical_families() {
                 .map(|candidate| (candidate.action_id, candidate.kind, candidate.family))
                 .collect::<Vec<_>>(),
             expected
+        );
+        assert_eq!(
+            family_group[4].features.0[alife_core::CONTACT_ACTIVATION_FEATURE_LANE],
+            0.0,
+            "GRAB must remain a distinct Contact operation"
+        );
+        assert_eq!(
+            family_group[5].features.0[alife_core::CONTACT_ACTIVATION_FEATURE_LANE],
+            1.0,
+            "PLAY must carry its unscored activation descriptor"
         );
     }
 }
@@ -590,8 +610,8 @@ fn teacher_token_adds_teacher_affordance_without_changing_candidate_transport() 
         .iter()
         .filter(|candidate| candidate.target.entity == Some(teacher_token))
         .collect::<Vec<_>>();
-    assert_eq!(ordinary_token_candidates.len(), 5);
-    assert_eq!(teacher_token_candidates.len(), 5);
+    assert_eq!(ordinary_token_candidates.len(), 6);
+    assert_eq!(teacher_token_candidates.len(), 6);
     for candidate in ordinary_token_candidates {
         assert_eq!(candidate.features.0[glyph_lane], 1.0);
         assert_eq!(candidate.features.0[teacher_lane], 0.0);
