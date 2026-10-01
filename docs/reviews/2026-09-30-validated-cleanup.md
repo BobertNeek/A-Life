@@ -161,11 +161,13 @@ Then decide reaction solver semantics and structural graph mutation separately.
 Reviewed the cleanup commit `65cc8e2a8a2a4c5192865d74988821b25af15d82`
 independently before integrating the full gameplay branch into `main`.
 
-- Fixed two cleanup regressions exposed by the graphical feature combination:
+- Fixed three cleanup regressions exposed by optional feature combinations:
   `production_run_mode.rs` lost six required imports when its wildcard import
   was removed, and the Bevy checkpoint test in `v11_player_loop.rs` still needs
-  the durable asset root that cleanup deleted. Both now use explicit feature
-  guards. The Windows app all-feature, all-target compilation passes.
+  the durable asset root that cleanup deleted. The GPU-enabled tools lifecycle
+  test also lost its world-signature schema-version import. All three now use
+  explicit feature guards. Windows all-feature, all-target workspace compilation
+  passes with the locked dependencies.
 - Deleted `runtime_structurally_includes_the_real_crate_private_unit_test_module`
   and its unused comment-stripping helper. This retired Task 7 check inspected
   other tests' names and source strings; the 14 actual private runtime tests
