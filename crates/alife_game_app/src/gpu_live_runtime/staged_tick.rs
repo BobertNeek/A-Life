@@ -585,14 +585,10 @@ impl GpuLiveBrainRuntime {
                     &prepared_recall,
                     topology,
                 )?;
-                preparation_stage = "baseline finalization";
-                let baseline_prepared = prepared_recall
-                    .clone()
-                    .with_cognitive_context(baseline_context.clone())?;
-                let (baseline_frame, baseline_recall) =
-                    baseline_prepared.finalize(draft.clone())?;
-                baseline_recall.validate_for_frame(&baseline_frame)?;
-                let memory_evidence = finalized_memory_attention_evidence(&baseline_recall)?;
+                preparation_stage = "baseline attention evidence";
+                let baseline_prepared =
+                    prepared_recall.with_cognitive_context(baseline_context.clone())?;
+                let memory_evidence = baseline_prepared.attention_evidence_for_draft(&draft)?;
                 episodic_retrieval_wall_ns = episodic_retrieval_wall_ns
                     .saturating_add(episodic_retrieval_started.map_or(0, elapsed_ns));
                 let attention_context_started = measure_preparation.then(Instant::now);

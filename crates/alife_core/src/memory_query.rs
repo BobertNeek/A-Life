@@ -76,37 +76,47 @@ pub fn finalized_memory_attention_evidence(
     let mut evidence = Vec::with_capacity(keys.len());
     for (key, candidate) in keys.iter().zip(&context.candidates) {
         key.validate_contract()?;
-        if key.query().candidate_index() != candidate.candidate_index {
-            return Err(ScaffoldContractError::InvalidMemoryQuery);
-        }
-        let confidence = candidate
-            .target_confidence
-            .raw()
-            .max(candidate.family_confidence.raw());
-        let source_count = candidate
-            .target_source_count
-            .max(candidate.family_source_count);
-        let signal = candidate
-            .target_latent
-            .iter()
-            .chain(candidate.family_value.iter())
-            .copied()
-            .map(f32::abs)
-            .fold(0.0, f32::max);
-        let source_support = f32::from(source_count) / f32::from(MEMORY_CONTEXT_V1_MAX_SOURCES);
-        let salience = NormalizedScalar::new(
-            (confidence * 0.6 + source_support * 0.2 + signal * 0.2).clamp(0.0, 1.0),
-        )?;
-        let entry = FinalizedMemoryAttentionEvidence {
-            tracked_object_id: key.query().tracked_object_id(),
-            salience,
-            confidence: Confidence::new(confidence)?,
-            source_count,
-        };
-        entry.validate_contract()?;
-        evidence.push(entry);
+        evidence.push(memory_attention_evidence_for_candidate(
+            key.query(),
+            candidate,
+        )?);
     }
     Ok(evidence)
+}
+
+pub(crate) fn memory_attention_evidence_for_candidate(
+    query: &CandidateMemoryQueryV2,
+    candidate: &CandidateMemoryContextV1,
+) -> Result<FinalizedMemoryAttentionEvidence, ScaffoldContractError> {
+    if query.candidate_index() != candidate.candidate_index {
+        return Err(ScaffoldContractError::InvalidMemoryQuery);
+    }
+    let confidence = candidate
+        .target_confidence
+        .raw()
+        .max(candidate.family_confidence.raw());
+    let source_count = candidate
+        .target_source_count
+        .max(candidate.family_source_count);
+    let signal = candidate
+        .target_latent
+        .iter()
+        .chain(candidate.family_value.iter())
+        .copied()
+        .map(f32::abs)
+        .fold(0.0, f32::max);
+    let source_support = f32::from(source_count) / f32::from(MEMORY_CONTEXT_V1_MAX_SOURCES);
+    let salience = NormalizedScalar::new(
+        (confidence * 0.6 + source_support * 0.2 + signal * 0.2).clamp(0.0, 1.0),
+    )?;
+    let entry = FinalizedMemoryAttentionEvidence {
+        tracked_object_id: query.tracked_object_id(),
+        salience,
+        confidence: Confidence::new(confidence)?,
+        source_count,
+    };
+    entry.validate_contract()?;
+    Ok(entry)
 }
 
 #[repr(u16)]

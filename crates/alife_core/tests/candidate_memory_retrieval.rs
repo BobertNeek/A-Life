@@ -2115,3 +2115,186 @@ fn same_tick_outcome_order_uses_causal_sequence_after_merging() {
         Some(alife_core::MemoryId(1))
     );
 }
+
+#[test]
+fn prepared_attention_preserves_finalized_evidence_across_candidates_and_memory_states() {
+    let source = grounded_draft(0.4);
+    let mut learned = empty_bank();
+    learned
+        .observe_sealed_patch(&poisoned_cyan_ingest_patch())
+        .unwrap();
+    // A rewarding same-category individual must not replace the known harmful one.
+    let mut conflicting = learned.clone();
+    conflicting
+        .observe_sealed_patch(&sequenced_patch_for_object(
+            102,
+            37,
+            slot(0, 72, 0.4, [0.0, 0.8, 0.9]),
+            0.8,
+            0.0,
+        ))
+        .unwrap();
+    for bank in [empty_bank(), learned, conflicting] {
+        let bank_before = serde_json::to_value(&bank).unwrap();
+        for organism in [ORGANISM, OrganismId(812)] {
+            for count in [2, 8, 26] {
+                let mut objects = source.grounded_object_slots().to_vec();
+                // An unknown but similar individual exercises category fallback.
+                objects.push(GroundedObjectSlotV1 {
+                    slot_index: 2,
+                    tracked_object_id: TrackedObjectId(901),
+                    ..objects[0]
+                });
+                let mut candidates = (0..count)
+                    .map(|index| {
+                        candidate_for_family(
+                            &objects[index % 3],
+                            index as u16,
+                            if index % 2 == 0 {
+                                CandidateActionFamily::Ingest
+                            } else {
+                                CandidateActionFamily::Avoid
+                            },
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                // Target-free attention evidence must preserve None identity.
+                candidates[count - 1] = ActionCandidate::new(
+                    (count - 1) as u16,
+                    ActionId(500),
+                    ActionKind::Idle,
+                    CandidateActionFamily::Idle,
+                    CandidateObservationRef::None,
+                    ActionTarget::NONE,
+                    alife_core::CandidateFeatureVector::zero(),
+                    Confidence::new(0.9).unwrap(),
+                    NormalizedScalar::new(0.0).unwrap(),
+                    DurationTicks::new(1),
+                    DurationTicks::new(2),
+                )
+                .unwrap();
+                let draft = PerceptionFrameDraft::new(
+                    organism,
+                    TICK,
+                    source.sensor_profile(),
+                    SensorySnapshot::new(
+                        organism,
+                        TICK,
+                        Vec3f::ZERO,
+                        SensoryChannels::ZERO,
+                        Default::default(),
+                    )
+                    .unwrap(),
+                    source.body(),
+                    *source.homeostasis(),
+                    candidates,
+                    source.profile_provenance(),
+                    objects,
+                )
+                .unwrap();
+                for novelty in [0.0, 0.75] {
+                    let draft = draft.clone().with_remembered_novelty(novelty).unwrap();
+                    let prepared = bank.recall_frame(&draft).unwrap();
+                    for cognitive in [false, true] {
+                        let prepared = if cognitive {
+                            let mut context = alife_core::CognitiveContextFrame::empty(
+                                organism,
+                                sequence(),
+                                TICK,
+                            )
+                            .unwrap();
+                            if let Some(candidate) = prepared
+                                .context()
+                                .candidates
+                                .iter()
+                                .find(|candidate| candidate.best_family_source.is_some())
+                            {
+                                context.memory.expectancies.push(
+                                    alife_core::CognitiveMemoryExpectancy {
+                                        memory_id: candidate.best_family_source.unwrap(),
+                                        expected_valence: SignedValence::new(
+                                            candidate.family_value[0],
+                                        )
+                                        .unwrap(),
+                                        confidence: NormalizedScalar::new(
+                                            candidate.family_confidence.raw(),
+                                        )
+                                        .unwrap(),
+                                    },
+                                );
+                            }
+                            prepared.clone().with_cognitive_context(context).unwrap()
+                        } else {
+                            prepared.clone()
+                        };
+                        let actual = prepared.attention_evidence_for_draft(&draft).unwrap();
+                        let (frame, finalized) = prepared.finalize(draft.clone()).unwrap();
+                        finalized.validate_for_frame(&frame).unwrap();
+                        assert_eq!(
+                            actual,
+                            alife_core::finalized_memory_attention_evidence(&finalized).unwrap()
+                        );
+                        assert_eq!(actual.len(), count);
+                        assert_eq!(actual[count - 1].tracked_object_id, None);
+                        if organism != ORGANISM || bank.is_empty() {
+                            assert!(actual.iter().all(|entry| entry.salience.raw() == 0.0
+                                && entry.source_count == 0
+                                && entry.confidence.raw() == 0.0));
+                        } else if novelty == 0.0 {
+                            assert!(actual[0].source_count > 0);
+                            assert!(actual[0].salience.raw() > 0.0);
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(serde_json::to_value(&bank).unwrap(), bank_before);
+    }
+}
+
+#[test]
+fn prepared_attention_rejects_changed_draft_routing_novelty_and_cognitive_owner() {
+    let draft = grounded_draft(0.4);
+    let bank = empty_bank();
+    let prepared = bank.recall_frame(&draft).unwrap();
+    let mut reordered = draft.candidates().to_vec();
+    reordered.reverse();
+    for (index, candidate) in reordered.iter_mut().enumerate() {
+        candidate.candidate_index = index as u16;
+    }
+    let reordered = PerceptionFrameDraft::new(
+        ORGANISM,
+        TICK,
+        draft.sensor_profile(),
+        draft.sensory().clone(),
+        draft.body(),
+        *draft.homeostasis(),
+        reordered,
+        draft.profile_provenance(),
+        draft.grounded_object_slots().to_vec(),
+    )
+    .unwrap();
+    for changed in [
+        grounded_draft(0.2),
+        reordered,
+        draft.clone().with_remembered_novelty(0.75).unwrap(),
+    ] {
+        assert_eq!(
+            prepared.attention_evidence_for_draft(&changed).unwrap_err(),
+            ScaffoldContractError::InvalidMemoryQuery
+        );
+        bank.recall_frame(&changed)
+            .unwrap()
+            .attention_evidence_for_draft(&changed)
+            .unwrap();
+    }
+    for (organism, tick) in [(OrganismId(812), TICK), (ORGANISM, Tick::new(41))] {
+        let context = alife_core::CognitiveContextFrame::empty(organism, sequence(), tick).unwrap();
+        let mismatched = prepared.clone().with_cognitive_context(context).unwrap();
+        assert_eq!(
+            mismatched.attention_evidence_for_draft(&draft).unwrap_err(),
+            ScaffoldContractError::InvalidMemoryQuery
+        );
+    }
+    prepared.attention_evidence_for_draft(&draft).unwrap();
+}
