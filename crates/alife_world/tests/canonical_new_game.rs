@@ -417,6 +417,14 @@ fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() 
         silenced.homeostasis.drives.curiosity,
         neutral.homeostasis.drives.curiosity
     );
+    // Save summaries describe the current authoritative biology after play.
+    let mut creatures = game.creatures;
+    for creature in &mut creatures {
+        let record = world.organism_registry().get(creature.organism_id).unwrap();
+        creature.mind.tick = record.biochemistry().tick;
+        creature.mind.homeostasis = record.biochemistry().homeostasis;
+        creature.development_tick = record.biochemistry().development.last_update_tick;
+    }
     let save = alife_world::PortableSaveFile::from_headless_world(
         "variety",
         &world,
@@ -425,7 +433,7 @@ fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() 
             alife_core::BrainScaleTier::Nano512,
         ),
         alife_world::AssetManifest::empty(),
-        game.creatures,
+        creatures,
     )
     .unwrap();
     let restored =
@@ -589,7 +597,8 @@ fn canonical_new_game_meadow_is_safe_until_actual_hazard_contact() {
     game.world.try_advance_tick().unwrap();
 
     let mut hazard_step = None;
-    for tick in 2..=32 {
+    // Allow thirty seconds of physical walking at the 20 Hz world cadence.
+    for tick in 2..=u64::from(alife_world::WORLD_TICKS_PER_SECOND) * 30 {
         let step = game
             .world
             .apply_registered_command(&command, founder.world_entity_id, Tick(tick))

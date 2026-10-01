@@ -214,7 +214,16 @@ fn new_game_inherited_turnover_preserves_legacy_identity_and_food_reserves() {
     assert!((0.3..0.55).contains(&provisioned.homeostasis.drives.hunger));
     assert!(provisioned.homeostasis.drives.hunger < low.homeostasis.drives.hunger);
     assert!(low.homeostasis.drives.hunger < depleted.homeostasis.drives.hunger);
-    assert!(low.homeostasis.drives.fatigue > provisioned.homeostasis.drives.fatigue);
+    // The inherited waking circuit accumulates fatigue through awake time;
+    // depleted food reserves raise hunger without making sleep a food source.
+    assert_eq!(
+        low.homeostasis.drives.fatigue,
+        provisioned.homeostasis.drives.fatigue
+    );
+    assert_eq!(
+        depleted.homeostasis.drives.fatigue,
+        provisioned.homeostasis.drives.fatigue
+    );
     assert_eq!(provisioned.body.health, 1.0);
     assert!(
         provisioned.body.energy < 0.7925,

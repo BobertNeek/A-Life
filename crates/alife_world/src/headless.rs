@@ -283,9 +283,18 @@ mod terrain_vision_tests {
         )
         .unwrap();
         assert!(world.apply_command(&step).unwrap().execution.succeeded);
-        let before = world.agent_for(OrganismId(1)).unwrap().position;
-        assert!(!world.apply_command(&step).unwrap().execution.succeeded);
-        assert_eq!(world.agent_for(OrganismId(1)).unwrap().position, before);
+        // At 20 ticks/s a walking interval covers 0.1 units. Reach the
+        // obstacle through actual successful intervals before testing collision.
+        let mut collided = false;
+        for _ in 0..WORLD_TICKS_PER_SECOND {
+            let before = world.agent_for(OrganismId(1)).unwrap().position;
+            if !world.apply_command(&step).unwrap().execution.succeeded {
+                assert_eq!(world.agent_for(OrganismId(1)).unwrap().position, before);
+                collided = true;
+                break;
+            }
+        }
+        assert!(collided, "walking must reach the occluding obstacle");
     }
 
     #[test]
@@ -7615,13 +7624,27 @@ mod task_6_factorized_motor_tests {
 
     #[test]
     fn factorized_joint_outcome_retains_independent_contact_and_transfer_identities() {
-        let (mut world, agent, food, bundle) = prepared_world();
+        let (mut world, agent, food, mut bundle) = prepared_world();
+        // Keep ingestion reachable beside the body while locomotion collides
+        // ahead. A blocker on the food path now correctly blocks ingestion too.
+        world
+            .editor_move_object(food, Vec3f::new(0.0, 0.0, 0.5))
+            .unwrap();
+        let locomotion = bundle
+            .channels
+            .iter_mut()
+            .find(|command| command.channel == MotorChannel::Locomotion)
+            .unwrap();
+        locomotion.primitive = HeadlessActionIds::STEP_FORWARD;
+        locomotion.target = None;
         let blocker = world
             .editor_spawn_object(WorldEditorSpawnSpec {
                 label: "blocker".to_string(),
                 kind: WorldObjectKind::Obstacle,
                 organism_id: None,
-                position: Vec3f::new(0.5, 0.0, 0.0),
+                // Solid object reach is at least 0.75 units. Keep its
+                // surface ahead of the body, outside the lateral food path.
+                position: Vec3f::new(0.8, 0.0, 0.0),
                 nutrition: 0.0,
                 hazard_pain: 0.0,
                 radius: 0.1,
@@ -7629,6 +7652,11 @@ mod task_6_factorized_motor_tests {
             })
             .unwrap();
 
+        assert!(world.physical_contact_reachable(Vec3f::ZERO, world.entity(food).unwrap().position));
+        assert_eq!(
+            world.blocking_object_between(Vec3f::ZERO, Vec3f::new(MOVE_STEP, 0.0, 0.0)),
+            Some(blocker),
+        );
         let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
 
         assert!(!receipt.succeeded);
@@ -8438,10 +8466,11 @@ mod task_3_2a_tests {
             label: "terminal-hazard".to_owned(),
             kind: WorldObjectKind::Hazard,
             organism_id: None,
-            position: Vec3f::new(1.0, 0.0, 0.0),
+            // One walking interval contacts only the low organism.
+            position: Vec3f::new(0.05, 0.0, 0.0),
             nutrition: 0.0,
             hazard_pain: 1.0,
-            radius: 0.75,
+            radius: 0.075,
             token_id: None,
         };
         let forward_hazard = forward.editor_spawn_object(hazard_spec.clone()).unwrap();

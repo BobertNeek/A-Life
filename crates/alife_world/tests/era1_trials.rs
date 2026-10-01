@@ -188,11 +188,19 @@ fn hazard_avoidance_acquisition_senses_only_hazards_then_restores_full_maze() {
             HomeostaticSnapshot::baseline(Tick::new(ERA1_ACQUISITION_END_TICK)),
         )
         .unwrap();
-    let visible_kinds = later_phase
-        .candidates()
+    // Six actions per object leave room for four complete candidate groups.
+    // Phase restoration is a sensing/world property, independent of that cap.
+    let snapshot = world
+        .physical_observation_snapshot(SUBJECT, Tick::new(ERA1_ACQUISITION_END_TICK))
+        .unwrap();
+    assert_eq!(
+        later_phase.grounded_object_slots().len(),
+        snapshot.visible.len()
+    );
+    let visible_kinds = snapshot
+        .visible
         .iter()
-        .filter_map(|candidate| candidate.target.entity)
-        .map(|target| world.entity(target).unwrap().kind)
+        .map(|object| world.entity(object.transport_entity).unwrap().kind)
         .collect::<Vec<_>>();
     assert!(visible_kinds.contains(&WorldObjectKind::Food));
     assert!(visible_kinds.contains(&WorldObjectKind::Obstacle));

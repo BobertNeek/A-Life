@@ -93,7 +93,8 @@ fn resource_regrowth_is_deterministic_and_preserves_bounds() {
 fn hazard_zone_pressure_is_negative_bounded_and_visible_to_sensory_report() {
     let mut world = ecology_world();
     let creature = world.entity_id("creature").unwrap();
-    world.editor_move_object(creature, pos(1.5, 0.0)).unwrap();
+    // The hazard field begins at x=2; one 0.1-unit interval crosses it.
+    world.editor_move_object(creature, pos(1.95, 0.0)).unwrap();
 
     let before = world.sensory_report(organism(), Tick::ZERO).unwrap();
     assert_eq!(before.ecology.terrain_kind, Some(TerrainZoneKind::Meadow));
