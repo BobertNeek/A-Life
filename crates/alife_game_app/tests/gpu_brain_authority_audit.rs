@@ -34,8 +34,8 @@ fn production_sources_retain_only_the_gpu_neural_execution_path() {
     let authority_scanner = repository_root.join("scripts/run_gpu_closed_loop_gates.ps1");
     let world_lib = fs::read_to_string(repository_root.join("crates/alife_world/src/lib.rs"))
         .expect("world crate root must be readable");
-    assert!(world_lib.contains("mod legacy_neural_policy_v1;"));
-    assert!(!world_lib.contains("pub mod legacy_neural_policy_v1;"));
+    assert!(!private_legacy.exists());
+    assert!(!world_lib.contains("mod legacy_neural_policy_v1;"));
 
     let forbidden_compact = [
         ["cpu", "shadow"].concat(),
@@ -62,7 +62,7 @@ fn production_sources_retain_only_the_gpu_neural_execution_path() {
 
     let mut violations = Vec::new();
     for path in files {
-        if path == private_legacy || path == authority_scanner {
+        if path == authority_scanner {
             continue;
         }
         let source = fs::read_to_string(&path)

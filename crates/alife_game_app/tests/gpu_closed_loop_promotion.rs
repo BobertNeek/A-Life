@@ -57,7 +57,7 @@ fn committed_gate_script_has_the_exact_order_and_rust_receipt_writer() {
     assert!(script.contains("ConvertTo-WindowsCommandLineArgument"));
     assert!(!script.contains(".ArgumentList.Add"));
     assert!(script.contains("authority-scan-v1"));
-    assert!(script.contains("legacy_neural_policy_v1.rs"));
+    assert!(!script.contains("legacy_neural_policy_v1.rs"));
 }
 
 #[test]

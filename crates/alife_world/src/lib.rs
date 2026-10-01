@@ -11,7 +11,6 @@ pub mod grounded_sensing;
 pub mod habitat;
 pub mod headless;
 pub mod highlands;
-mod legacy_neural_policy_v1;
 pub mod new_game;
 pub mod organism;
 pub mod persistence;
