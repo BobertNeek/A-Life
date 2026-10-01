@@ -62,6 +62,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
 
 Use a focused `cargo test -p <crate> <filter>` when a Rust behavior changes. Do not launch a second Cargo build while another shared-target build is active.
 
+Source-bound historical evidence tests require complete Git history. CI uses
+`actions/checkout` with `fetch-depth: 0`; for a shallow local checkout, run
+`git fetch --unshallow` before those tests. The validator still checks the exact
+producer revision's source blobs and tree, and rejects altered reports.
+
 Default workspace tests are CPU-safe: they retain shader validation, portable
 state, admission/receipt contracts, and typed failure checks without requiring
 a real neural GPU. Optional adapter diagnostics may report honest unavailability
