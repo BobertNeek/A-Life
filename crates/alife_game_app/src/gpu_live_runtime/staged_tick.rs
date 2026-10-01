@@ -176,8 +176,17 @@ impl GpuLiveBrainRuntime {
         let mut sleep_timing = SleepPreparationTiming::default();
         let mut grounded_perception_wall_ns = 0_u64;
         let mut episodic_retrieval_wall_ns = 0_u64;
+        let mut baseline_recall_wall_ns = 0_u64;
+        let mut baseline_context_wall_ns = 0_u64;
+        let mut baseline_finalize_wall_ns = 0_u64;
+        let mut baseline_validate_evidence_wall_ns = 0_u64;
         let mut attention_context_wall_ns = 0_u64;
         let mut topology_concept_wall_ns = 0_u64;
+        let mut routed_recall_wall_ns = 0_u64;
+        let mut routed_context_wall_ns = 0_u64;
+        let mut cognitive_projection_wall_ns = 0_u64;
+        let mut routed_finalize_wall_ns = 0_u64;
+        let mut routed_validate_wall_ns = 0_u64;
         let mut gpu_upload_wall_ns = 0_u64;
         let mut checkpoint_publication_wall_ns = 0_u64;
         for (raw, handle, world_entity_id) in scheduled_handles {
@@ -578,21 +587,39 @@ impl GpuLiveBrainRuntime {
                 let sequence_id = ExperienceSequenceId(resident.next_sequence);
                 sequence_id.validate()?;
                 preparation_stage = "baseline recall";
+                let leaf_started = measure_preparation.then(Instant::now);
                 let prepared_recall = memory.recall_frame(&draft)?;
+                let baseline_recall_ns = leaf_started.map_or(0, elapsed_ns);
+                let leaf_started = measure_preparation.then(Instant::now);
                 let baseline_context = cognitive_context_for_recall(
                     OrganismId(raw),
                     sequence_id,
                     &prepared_recall,
                     topology,
                 )?;
+                let baseline_context_ns = leaf_started.map_or(0, elapsed_ns);
                 preparation_stage = "baseline finalization";
+                let leaf_started = measure_preparation.then(Instant::now);
                 let baseline_prepared = prepared_recall
                     .clone()
                     .with_cognitive_context(baseline_context.clone())?;
                 let (baseline_frame, baseline_recall) =
                     baseline_prepared.finalize(draft.clone())?;
+                let baseline_finalize_ns = leaf_started.map_or(0, elapsed_ns);
+                let leaf_started = measure_preparation.then(Instant::now);
                 baseline_recall.validate_for_frame(&baseline_frame)?;
                 let memory_evidence = finalized_memory_attention_evidence(&baseline_recall)?;
+                let baseline_validate_evidence_ns = leaf_started.map_or(0, elapsed_ns);
+                if measure_preparation {
+                    baseline_recall_wall_ns =
+                        baseline_recall_wall_ns.saturating_add(baseline_recall_ns);
+                    baseline_context_wall_ns =
+                        baseline_context_wall_ns.saturating_add(baseline_context_ns);
+                    baseline_finalize_wall_ns =
+                        baseline_finalize_wall_ns.saturating_add(baseline_finalize_ns);
+                    baseline_validate_evidence_wall_ns = baseline_validate_evidence_wall_ns
+                        .saturating_add(baseline_validate_evidence_ns);
+                }
                 episodic_retrieval_wall_ns = episodic_retrieval_wall_ns
                     .saturating_add(episodic_retrieval_started.map_or(0, elapsed_ns));
                 let attention_context_started = measure_preparation.then(Instant::now);
@@ -656,7 +683,10 @@ impl GpuLiveBrainRuntime {
                     .saturating_add(attention_context_started.map_or(0, elapsed_ns));
                 let topology_concept_started = measure_preparation.then(Instant::now);
                 preparation_stage = "routed recall";
+                let leaf_started = measure_preparation.then(Instant::now);
                 let routed_recall = memory.recall_frame(&routed_draft)?;
+                let routed_recall_ns = leaf_started.map_or(0, elapsed_ns);
+                let leaf_started = measure_preparation.then(Instant::now);
                 let cognitive_context = cognitive_context_for_recall(
                     OrganismId(raw),
                     sequence_id,
@@ -665,7 +695,9 @@ impl GpuLiveBrainRuntime {
                 )?;
                 let cognitive_context =
                     cognitive_context_with_attention(cognitive_context, attention)?;
+                let routed_context_ns = leaf_started.map_or(0, elapsed_ns);
                 preparation_stage = "cognitive projection";
+                let leaf_started = measure_preparation.then(Instant::now);
                 let cognitive_projection = cognitive_projection_for_draft(
                     &routed_draft,
                     &routed_recall,
@@ -675,10 +707,26 @@ impl GpuLiveBrainRuntime {
                 )?;
                 let cognitive_context =
                     cognitive_context_with_projection(cognitive_context, cognitive_projection)?;
+                let cognitive_projection_ns = leaf_started.map_or(0, elapsed_ns);
                 preparation_stage = "routed finalization";
+                let leaf_started = measure_preparation.then(Instant::now);
                 let prepared_recall = routed_recall.with_cognitive_context(cognitive_context)?;
                 let (frame, memory_recall) = prepared_recall.finalize(routed_draft)?;
+                let routed_finalize_ns = leaf_started.map_or(0, elapsed_ns);
+                let leaf_started = measure_preparation.then(Instant::now);
                 memory_recall.validate_for_frame(&frame)?;
+                let routed_validate_ns = leaf_started.map_or(0, elapsed_ns);
+                if measure_preparation {
+                    routed_recall_wall_ns = routed_recall_wall_ns.saturating_add(routed_recall_ns);
+                    routed_context_wall_ns =
+                        routed_context_wall_ns.saturating_add(routed_context_ns);
+                    cognitive_projection_wall_ns =
+                        cognitive_projection_wall_ns.saturating_add(cognitive_projection_ns);
+                    routed_finalize_wall_ns =
+                        routed_finalize_wall_ns.saturating_add(routed_finalize_ns);
+                    routed_validate_wall_ns =
+                        routed_validate_wall_ns.saturating_add(routed_validate_ns);
+                }
                 topology_concept_wall_ns = topology_concept_wall_ns
                     .saturating_add(topology_concept_started.map_or(0, elapsed_ns));
                 let gpu_upload_started = measure_preparation.then(Instant::now);
@@ -769,6 +817,48 @@ impl GpuLiveBrainRuntime {
             .performance_metrics
             .preparation_gpu_upload_wall_ns
             .saturating_add(gpu_upload_wall_ns);
+        if measure_preparation {
+            self.performance_metrics.preparation_baseline_recall_wall_ns = self
+                .performance_metrics
+                .preparation_baseline_recall_wall_ns
+                .saturating_add(baseline_recall_wall_ns);
+            self.performance_metrics
+                .preparation_baseline_context_wall_ns = self
+                .performance_metrics
+                .preparation_baseline_context_wall_ns
+                .saturating_add(baseline_context_wall_ns);
+            self.performance_metrics
+                .preparation_baseline_finalize_wall_ns = self
+                .performance_metrics
+                .preparation_baseline_finalize_wall_ns
+                .saturating_add(baseline_finalize_wall_ns);
+            self.performance_metrics
+                .preparation_baseline_validate_evidence_wall_ns = self
+                .performance_metrics
+                .preparation_baseline_validate_evidence_wall_ns
+                .saturating_add(baseline_validate_evidence_wall_ns);
+            self.performance_metrics.preparation_routed_recall_wall_ns = self
+                .performance_metrics
+                .preparation_routed_recall_wall_ns
+                .saturating_add(routed_recall_wall_ns);
+            self.performance_metrics.preparation_routed_context_wall_ns = self
+                .performance_metrics
+                .preparation_routed_context_wall_ns
+                .saturating_add(routed_context_wall_ns);
+            self.performance_metrics
+                .preparation_cognitive_projection_wall_ns = self
+                .performance_metrics
+                .preparation_cognitive_projection_wall_ns
+                .saturating_add(cognitive_projection_wall_ns);
+            self.performance_metrics.preparation_routed_finalize_wall_ns = self
+                .performance_metrics
+                .preparation_routed_finalize_wall_ns
+                .saturating_add(routed_finalize_wall_ns);
+            self.performance_metrics.preparation_routed_validate_wall_ns = self
+                .performance_metrics
+                .preparation_routed_validate_wall_ns
+                .saturating_add(routed_validate_wall_ns);
+        }
         self.performance_metrics
             .preparation_checkpoint_publication_wall_ns = self
             .performance_metrics
@@ -835,6 +925,7 @@ impl GpuLiveBrainRuntime {
             self.record_gpu_tick_metrics(&[])?;
             Vec::new()
         } else {
+            let input_rows_started = measure_preparation.then(Instant::now);
             let memory_inputs = batch
                 .iter()
                 .map(|prepared| {
@@ -848,7 +939,21 @@ impl GpuLiveBrainRuntime {
                 .map_err(|error| GameAppShellError::InvalidProductionFrontend {
                     message: format!("neural input preparation failed: {error}"),
                 })?;
+            if let Some(started) = input_rows_started {
+                self.performance_metrics.neural_input_rows_wall_ns = self
+                    .performance_metrics
+                    .neural_input_rows_wall_ns
+                    .saturating_add(elapsed_ns(started));
+            }
+            let input_batch_started = measure_preparation.then(Instant::now);
             let memory_batch = GpuClosedLoopMemoryBatchInput::try_new(memory_inputs)?;
+            if let Some(started) = input_batch_started {
+                self.performance_metrics
+                    .neural_input_batch_validation_wall_ns = self
+                    .performance_metrics
+                    .neural_input_batch_validation_wall_ns
+                    .saturating_add(elapsed_ns(started));
+            }
             let inference_rows = u64::try_from(batch.len()).unwrap_or(u64::MAX);
             #[cfg(feature = "foundation-training")]
             let before_training = if self.training_sampling.is_some() {

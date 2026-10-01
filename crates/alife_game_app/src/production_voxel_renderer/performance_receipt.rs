@@ -191,6 +191,8 @@ pub(super) fn write_phase31_performance_receipt(
             "tick_preamble_ns": runtime_delta.tick_preamble_wall_ns,
             "perception_sleep_preparation_ns": runtime_delta.perception_sleep_preparation_wall_ns,
             "sleep_promotion_ns": runtime_delta.sleep_promotion_wall_ns,
+            "neural_input_rows_ns": runtime_delta.neural_input_rows_wall_ns,
+            "neural_input_batch_validation_ns": runtime_delta.neural_input_batch_validation_wall_ns,
             "inference_transaction_ns": runtime_delta.inference_transaction_wall_ns,
             "selection_prepare_ns": runtime_delta.selection_prepare_wall_ns,
             "seal_world_body_biochemistry_ns": runtime_delta.seal_world_body_biochemistry_wall_ns,
@@ -225,6 +227,25 @@ pub(super) fn write_phase31_performance_receipt(
             "gpu_upload_preparation_ns": runtime_delta.preparation_gpu_upload_wall_ns,
             "checkpoint_publication_preparation_ns": runtime_delta.preparation_checkpoint_publication_wall_ns,
             "other_and_instrumentation_residual_ns": preparation_residual_ns
+        },
+        "preparation_leaf_stages": {
+            "episodic_retrieval": {
+                "recall_ns": runtime_delta.preparation_baseline_recall_wall_ns,
+                "context_ns": runtime_delta.preparation_baseline_context_wall_ns,
+                "finalize_ns": runtime_delta.preparation_baseline_finalize_wall_ns,
+                "validate_and_attention_evidence_ns": runtime_delta.preparation_baseline_validate_evidence_wall_ns
+            },
+            "topology_concept": {
+                "routed_recall_ns": runtime_delta.preparation_routed_recall_wall_ns,
+                "context_with_attention_ns": runtime_delta.preparation_routed_context_wall_ns,
+                "projection_with_context_ns": runtime_delta.preparation_cognitive_projection_wall_ns,
+                "finalize_ns": runtime_delta.preparation_routed_finalize_wall_ns,
+                "validate_ns": runtime_delta.preparation_routed_validate_wall_ns
+            }
+        },
+        "topology_observation_substages": {
+            "observe_sealed_patch_ns": runtime_delta.sidecar_topology_observe_wall_ns,
+            "advance_lifecycle_ns": runtime_delta.sidecar_topology_lifecycle_wall_ns
         },
         "transactional_rollback_clone": {
             "calls": runtime_delta.rollback_clone_calls,

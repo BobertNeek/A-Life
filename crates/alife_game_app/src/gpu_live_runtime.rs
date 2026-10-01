@@ -2558,14 +2558,25 @@ pub struct GpuLivePerformanceMetrics {
     pub preparation_sleep_consolidation_wall_ns: u64,
     pub preparation_grounded_perception_wall_ns: u64,
     pub preparation_episodic_retrieval_wall_ns: u64,
+    pub preparation_baseline_recall_wall_ns: u64,
+    pub preparation_baseline_context_wall_ns: u64,
+    pub preparation_baseline_finalize_wall_ns: u64,
+    pub preparation_baseline_validate_evidence_wall_ns: u64,
     pub preparation_attention_context_wall_ns: u64,
     pub preparation_topology_concept_wall_ns: u64,
+    pub preparation_routed_recall_wall_ns: u64,
+    pub preparation_routed_context_wall_ns: u64,
+    pub preparation_cognitive_projection_wall_ns: u64,
+    pub preparation_routed_finalize_wall_ns: u64,
+    pub preparation_routed_validate_wall_ns: u64,
     pub preparation_gpu_upload_wall_ns: u64,
     pub preparation_checkpoint_publication_wall_ns: u64,
     pub sleep_promotion_wall_ns: u64,
     pub inference_batches: u64,
     pub inference_rows: u64,
     pub inference_transaction_wall_ns: u64,
+    pub neural_input_rows_wall_ns: u64,
+    pub neural_input_batch_validation_wall_ns: u64,
     pub selection_readback_calls: u64,
     pub selection_readback_bytes: u64,
     pub learning_batches: u64,
@@ -2578,6 +2589,8 @@ pub struct GpuLivePerformanceMetrics {
     pub sealed_commit_total_wall_ns: u64,
     pub sidecar_memory_wall_ns: u64,
     pub sidecar_topology_wall_ns: u64,
+    pub sidecar_topology_observe_wall_ns: u64,
+    pub sidecar_topology_lifecycle_wall_ns: u64,
     pub cognitive_authority_seal_wall_ns: u64,
     pub ordinary_snapshot_calls: u64,
     pub ordinary_snapshot_bytes: u64,
@@ -2724,8 +2737,21 @@ impl GpuLivePerformanceMetrics {
                 preparation_grounded_perception_wall_ns
             ),
             preparation_episodic_retrieval_wall_ns: delta!(preparation_episodic_retrieval_wall_ns),
+            preparation_baseline_recall_wall_ns: delta!(preparation_baseline_recall_wall_ns),
+            preparation_baseline_context_wall_ns: delta!(preparation_baseline_context_wall_ns),
+            preparation_baseline_finalize_wall_ns: delta!(preparation_baseline_finalize_wall_ns),
+            preparation_baseline_validate_evidence_wall_ns: delta!(
+                preparation_baseline_validate_evidence_wall_ns
+            ),
             preparation_attention_context_wall_ns: delta!(preparation_attention_context_wall_ns),
             preparation_topology_concept_wall_ns: delta!(preparation_topology_concept_wall_ns),
+            preparation_routed_recall_wall_ns: delta!(preparation_routed_recall_wall_ns),
+            preparation_routed_context_wall_ns: delta!(preparation_routed_context_wall_ns),
+            preparation_cognitive_projection_wall_ns: delta!(
+                preparation_cognitive_projection_wall_ns
+            ),
+            preparation_routed_finalize_wall_ns: delta!(preparation_routed_finalize_wall_ns),
+            preparation_routed_validate_wall_ns: delta!(preparation_routed_validate_wall_ns),
             preparation_gpu_upload_wall_ns: delta!(preparation_gpu_upload_wall_ns),
             preparation_checkpoint_publication_wall_ns: delta!(
                 preparation_checkpoint_publication_wall_ns
@@ -2734,6 +2760,8 @@ impl GpuLivePerformanceMetrics {
             inference_batches: delta!(inference_batches),
             inference_rows: delta!(inference_rows),
             inference_transaction_wall_ns: delta!(inference_transaction_wall_ns),
+            neural_input_rows_wall_ns: delta!(neural_input_rows_wall_ns),
+            neural_input_batch_validation_wall_ns: delta!(neural_input_batch_validation_wall_ns),
             selection_readback_calls: delta!(selection_readback_calls),
             selection_readback_bytes: delta!(selection_readback_bytes),
             learning_batches: delta!(learning_batches),
@@ -2746,6 +2774,8 @@ impl GpuLivePerformanceMetrics {
             sealed_commit_total_wall_ns: delta!(sealed_commit_total_wall_ns),
             sidecar_memory_wall_ns: delta!(sidecar_memory_wall_ns),
             sidecar_topology_wall_ns: delta!(sidecar_topology_wall_ns),
+            sidecar_topology_observe_wall_ns: delta!(sidecar_topology_observe_wall_ns),
+            sidecar_topology_lifecycle_wall_ns: delta!(sidecar_topology_lifecycle_wall_ns),
             cognitive_authority_seal_wall_ns: delta!(cognitive_authority_seal_wall_ns),
             ordinary_snapshot_calls: delta!(ordinary_snapshot_calls),
             ordinary_snapshot_bytes: delta!(ordinary_snapshot_bytes),
@@ -9522,9 +9552,23 @@ impl GpuLiveBrainRuntime {
             let organism_id = selection.handle.organism_id();
             let disposition = match self.topologies.get_mut(&organism_id.raw()) {
                 Some(sidecar) if sidecar.organism_id() == organism_id => {
+                    let observe_started = self.performance_measurement_enabled.then(Instant::now);
                     let receipt = sidecar.observe_sealed_patch(&selection.patch);
+                    if let Some(started) = observe_started {
+                        self.performance_metrics.sidecar_topology_observe_wall_ns = self
+                            .performance_metrics
+                            .sidecar_topology_observe_wall_ns
+                            .saturating_add(elapsed_ns(started));
+                    }
+                    let lifecycle_started = self.performance_measurement_enabled.then(Instant::now);
                     let _lifecycle_result =
                         sidecar.advance_lifecycle(selection.patch.outcome().outcome_tick);
+                    if let Some(started) = lifecycle_started {
+                        self.performance_metrics.sidecar_topology_lifecycle_wall_ns = self
+                            .performance_metrics
+                            .sidecar_topology_lifecycle_wall_ns
+                            .saturating_add(elapsed_ns(started));
+                    }
                     TopologyObservationDisposition::Observed(Box::new(receipt))
                 }
                 _ => TopologyObservationDisposition::RejectedMissingOwner { organism_id },
