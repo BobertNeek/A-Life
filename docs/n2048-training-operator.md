@@ -77,6 +77,11 @@ have a 1,024-decision cap, vocabulary 64, and other lessons 128. Meal lessons st
 when they eat; vocabulary records hearing, named actions, and speaking opportunities.
 Use `-Curriculum Care` explicitly for the earlier balanced 32-lesson care corpus.
 All records and separate speech labels bind to the same inherited asset and compiler.
+Collection pins the Git revision and executable hash and stops if either changes.
+Keep the checkout and executable fixed until collection completes. Compact replay
+schema 2 always writes candidate innate-bias fields, including zero values. Schema
+1 records are rejected before body decoding; regenerate those corpora with the
+rebuilt executable instead of rewriting their bytes or relaxing identity checks.
 
 The September 28 language/prior encoder changes the compiled phenotype identity,
 while retaining the 32,768 inherited weight coordinates. Recollect demonstrations

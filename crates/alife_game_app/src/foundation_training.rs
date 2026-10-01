@@ -2826,7 +2826,21 @@ pub fn verify_foundation_replay_step(
 pub const FOUNDATION_REPLAY_HOST_LIMIT_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 pub const FOUNDATION_REPLAY_DISK_LIMIT_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 const FOUNDATION_REPLAY_RECORD_LIMIT_BYTES: u64 = 256 * 1024 * 1024;
-const FOUNDATION_REPLAY_SCHEMA: u32 = 1;
+// Schema 2 always encodes candidate innate_bias, including zero. Schema 1's
+// omitted positional fields cannot be recovered without guessing recorded data.
+const FOUNDATION_REPLAY_SCHEMA: u32 = 2;
+
+fn deserialize_replay_schema<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<u32, D::Error> {
+    let schema = <u32 as serde::Deserialize>::deserialize(deserializer)?;
+    if schema != FOUNDATION_REPLAY_SCHEMA {
+        return Err(serde::de::Error::custom(format!(
+            "unsupported compact replay schema {schema}; expected {FOUNDATION_REPLAY_SCHEMA}; regenerate the recorded corpus"
+        )));
+    }
+    Ok(schema)
+}
 
 /// Recorded provenance, not authentication. The caller obtains the checkpoint
 /// digest from the actual frozen actor, and keeps that actor pinned for the life.
@@ -2991,6 +3005,7 @@ impl ReplayContinuity {
 /// outcome. It contains no full mutable GPU allocation or second world state.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FoundationReplayRecord {
+    #[serde(deserialize_with = "deserialize_replay_schema")]
     schema: u32,
     pub source: FoundationReplaySource,
     pub record_index: u64,
@@ -3454,4 +3469,152 @@ pub fn load_foundation_replay_window(
     window.sequence.burn_in_ticks = burn_in_ticks;
     window.sequence.validate_for(phenotype)?;
     Ok(window)
+}
+
+#[cfg(test)]
+mod compact_replay_codec_tests {
+    use super::*;
+
+    fn candidates(biases: &[f32]) -> Vec<alife_training::TrainingReplayCandidate> {
+        biases
+            .iter()
+            .enumerate()
+            .map(
+                |(index, innate_bias)| alife_training::TrainingReplayCandidate {
+                    family: alife_core::CandidateActionFamily::Idle,
+                    decoder_inputs: std::array::from_fn(|lane| (index * 54 + lane) as f32 / 64.0),
+                    innate_bias: *innate_bias,
+                },
+            )
+            .collect()
+    }
+
+    #[test]
+    fn compact_replay_codec_reproduces_legacy_zero_bias_field_omission() {
+        #[derive(serde::Serialize)]
+        struct LegacyCandidate {
+            family: alife_core::CandidateActionFamily,
+            decoder_inputs: Vec<f32>,
+            #[serde(skip_serializing_if = "is_zero")]
+            innate_bias: f32,
+        }
+        fn is_zero(value: &f32) -> bool {
+            *value == 0.0
+        }
+        let candidate = candidates(&[0.0]).remove(0);
+        let legacy = LegacyCandidate {
+            family: candidate.family,
+            decoder_inputs: candidate.decoder_inputs.to_vec(),
+            innate_bias: candidate.innate_bias,
+        };
+        let json = serde_json::to_vec(&legacy).unwrap();
+        let json_decoded: alife_training::TrainingReplayCandidate =
+            serde_json::from_slice(&json).unwrap();
+        assert_eq!(json_decoded, candidate);
+        let bytes = bincode::serde::encode_to_vec(legacy, bincode::config::standard()).unwrap();
+        assert!(
+            bincode::serde::decode_from_slice::<alife_training::TrainingReplayCandidate, _>(
+                &bytes,
+                bincode::config::standard(),
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn compact_replay_codec_preserves_mixed_candidate_bias_bits_and_following_fields() {
+        #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+        struct Probe {
+            #[serde(deserialize_with = "deserialize_replay_schema")]
+            schema: u32,
+            sequence: TrainingSequence,
+            following: u64,
+        }
+        for biases in [&[0.0][..], &[0.375][..], &[0.0, 0.375, -0.0, -0.625][..]] {
+            let probe = Probe {
+                schema: FOUNDATION_REPLAY_SCHEMA,
+                sequence: TrainingSequence {
+                    phenotype_hash: alife_core::PhenotypeHash([17; 4]),
+                    initial: alife_training::TrainingInitialState {
+                        activations: vec![0.25, -0.0],
+                        activity_ema: vec![0.5, 0.0],
+                        metabolic_load: vec![0.75, 1.0],
+                        dendrites: Default::default(),
+                    },
+                    ticks: vec![alife_training::TrainingReplayTick {
+                        encoded_inputs: vec![1.0, -0.0],
+                        projection_gain: 0.5,
+                        local_threshold_shift: -0.25,
+                        microstep_count: 1,
+                        enabled_routes: vec![true, false],
+                        effective_weight_offsets: vec![0.125, -0.0],
+                        structural_synapses: Vec::new(),
+                        candidates: candidates(biases),
+                    }],
+                    burn_in_ticks: 0,
+                    memory_candidate_gain: 0.5,
+                },
+                following: 0xDEAD_BEEF_1234_5678,
+            };
+            let mut encoder = zstd::stream::write::Encoder::new(Vec::new(), 3).unwrap();
+            bincode::serde::encode_into_std_write(
+                &probe,
+                &mut encoder,
+                bincode::config::standard(),
+            )
+            .unwrap();
+            let bytes = encoder.finish().unwrap();
+            let mut decoder = zstd::stream::read::Decoder::new(bytes.as_slice()).unwrap();
+            let decoded: Probe =
+                bincode::serde::decode_from_std_read(&mut decoder, bincode::config::standard())
+                    .unwrap();
+            assert_eq!(decoded, probe);
+            assert_eq!(
+                bincode::serde::encode_to_vec(&decoded, bincode::config::standard()).unwrap(),
+                bincode::serde::encode_to_vec(&probe, bincode::config::standard()).unwrap(),
+                "every numeric bit and following field must survive compact replay"
+            );
+            for (expected, actual) in probe.sequence.ticks[0]
+                .candidates
+                .iter()
+                .zip(&decoded.sequence.ticks[0].candidates)
+            {
+                assert_eq!(actual.innate_bias.to_bits(), expected.innate_bias.to_bits());
+                assert_eq!(
+                    actual.decoder_inputs.map(f32::to_bits),
+                    expected.decoder_inputs.map(f32::to_bits)
+                );
+            }
+            assert_eq!(
+                decoded
+                    .sequence
+                    .initial
+                    .activations
+                    .iter()
+                    .map(|v| v.to_bits())
+                    .collect::<Vec<_>>(),
+                probe
+                    .sequence
+                    .initial
+                    .activations
+                    .iter()
+                    .map(|v| v.to_bits())
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn compact_replay_codec_rejects_old_schema_before_decoding_the_body() {
+        // A header alone proves rejection precedes the missing/corrupt body.
+        let bytes = bincode::serde::encode_to_vec(1u32, bincode::config::standard()).unwrap();
+        let error = bincode::serde::decode_from_slice::<FoundationReplayRecord, _>(
+            &bytes,
+            bincode::config::standard(),
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("unsupported compact replay schema 1"));
+    }
 }

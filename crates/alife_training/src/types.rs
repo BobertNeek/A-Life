@@ -114,12 +114,10 @@ pub struct TrainingReplayCandidate {
     #[serde(with = "decoder_input_array")]
     pub decoder_inputs: [f32; 54],
     /// Fixed gene-compiled salience already present in production selection.
-    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    // Positional compact replay codecs require this field even when zero.
+    // The default retains backward reading of older JSON replay fixtures.
+    #[serde(default)]
     pub innate_bias: f32,
-}
-
-fn is_zero_f32(value: &f32) -> bool {
-    *value == 0.0
 }
 
 mod decoder_input_array {

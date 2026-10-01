@@ -7007,7 +7007,17 @@ mod curated_founder_gpu_cutover_tests {
     #[cfg(feature = "training-rollout")]
     #[test]
     fn training_capture_shares_only_the_same_resident_immutable_phenotype() {
-        let phenotype = test_phenotype(1);
+        let capacity = BrainCapacityClass::n512();
+        let genome = BrainGenome::scaffold(0x4E35_3132_5F00_0001, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        let phenotype = PhenotypeCompiler::compile_testing_procedural_baseline(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::PrivilegedAffordanceV1,
+        )
+        .unwrap();
         let handle = GpuBrainHandle {
             backend_instance_id: NonZeroU64::new(1).unwrap(),
             class_id: phenotype.brain_class_id(),
