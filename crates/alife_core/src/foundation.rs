@@ -772,6 +772,10 @@ impl FoundationManifest {
         self.address_map_digest
     }
 
+    pub const fn action_decoder_digest(&self) -> [u64; 4] {
+        self.action_decoder_digest
+    }
+
     pub const fn weight_asset(&self) -> FoundationWeightAssetRef {
         self.weight_asset
     }

@@ -38,8 +38,13 @@ fn fixture(label: &str) -> (PathBuf, GpuLiveBrainRuntime, AssetManifestEntry) {
     let world_seed = if readiness { 539_363_617 } else { 31_117 };
     let founder = if readiness {
         crate::NewGameFounderSelection::N2048Candidate {
-            asset_path: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../../assets/founders/terrain-care-n2048-v2/trained.alife-foundation"),
+            asset_path: std::env::var_os("ALIFE_READINESS_FOUNDER_ASSET")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+                        "../../assets/founders/terrain-care-n2048-v3/trained.alife-foundation",
+                    )
+                }),
         }
     } else {
         crate::NewGameFounderSelection::BuiltinNano512

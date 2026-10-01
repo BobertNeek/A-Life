@@ -143,7 +143,7 @@ pub struct FoundationFounderRefreshReceipt {
     pub target_asset_digest: String,
     pub source_decoder_digest: [u64; 4],
     pub target_decoder_digest: [u64; 4],
-    pub source_compiler_inputs_digest: [u64; 4],
+    pub source_compiler_inputs_digest: Option<[u64; 4]>,
     pub target_compiler_inputs_digest: [u64; 4],
     pub founder_seed_base: u64,
     pub preserved_neuron_count: u32,
@@ -151,10 +151,27 @@ pub struct FoundationFounderRefreshReceipt {
     pub optimizer_reset: bool,
     pub value_state_reset: bool,
     pub promoted: bool,
+    #[serde(default)]
+    pub source_weight_only: bool,
+    #[serde(default)]
+    pub source_optimizer_reset: bool,
+    #[serde(default)]
+    pub metadata_rebuilt: bool,
+    #[serde(default)]
+    pub source_policy_version: u64,
+    #[serde(default)]
+    pub target_policy_version: u64,
+    #[serde(default)]
+    pub preserved_address_map_digest: Option<alife_core::Blake3Digest>,
 }
 
-/// Deliberately revise a sealed legacy terrain prior for current inherited
-/// founder salience. Strict candidate admission remains the acceptance gate.
+const TERRAIN_REBIND_SOURCE_DIGEST: &str =
+    "b83c0a689fd6c672c4826dd06f9ea4463587c840139579b2b3c063c91028dab4";
+const TERRAIN_REBIND_SOURCE_PARENT_DIGEST: &str =
+    "8a10a0a5eb350f4a24f1c9535e4e4b8f1e10240da905a32a9b0c1b5a0719c6d9";
+
+/// Rebind the selected v2 weight-only prior to the current founder design.
+/// Personal and optimizer state cannot enter this explicit metadata revision.
 pub fn refresh_terrain_founder(
     previous: &Path,
     output: &Path,
@@ -188,19 +205,53 @@ fn prepare_terrain_founder_refresh(
 )> {
     let capacity = alife_core::BrainCapacityClass::n2048();
     let profile = SensorProfile::GroundedTerrainVisionV1;
-    if receipt.founder_seed_base == 0
-        || receipt.policy_version == 0
+    if receipt.founder_seed_base != 539_363_617
+        || receipt.policy_version != 530
         || receipt.founder_biology_calibration != 2
         || !receipt.optimizer_reset
         || receipt.preserved_weight_count != 32_768
         || source.weights().len() != 32_768
         || source.manifest().capacity_class_id() != capacity.id()
         || source.manifest().sensor_profile() != profile
+        || receipt.source_asset_digest != TERRAIN_REBIND_SOURCE_PARENT_DIGEST
+        || receipt.adapted_asset_digest != TERRAIN_REBIND_SOURCE_DIGEST
         || digest(source) != receipt.adapted_asset_digest
+        || source.manifest().promotion_receipt().is_promoted()
     {
-        return Err(
-            "founder revision requires a sealed calibration-2 legacy terrain source".into(),
-        );
+        return Err("founder rebind requires the sealed weight-only terrain v2 source".into());
+    }
+    // This command accepts only the selected asset package. An actor, value,
+    // personal save, or any other checkpoint needs a separate state transfer.
+    for entry in std::fs::read_dir(previous)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_file()
+            || !matches!(
+                entry.file_name().to_str(),
+                Some(
+                    "trained.alife-foundation"
+                        | "adaptation.json"
+                        | "founder-refresh.json"
+                        | "README.md"
+                )
+            )
+        {
+            return Err("founder rebind rejects mutable checkpoints or extra package files".into());
+        }
+    }
+    let source_revision: FoundationFounderRefreshReceipt =
+        serde_json::from_slice(&std::fs::read(previous.join("founder-refresh.json"))?)?;
+    if source_revision.schema_version != 1
+        || source_revision.source_asset_digest != TERRAIN_REBIND_SOURCE_PARENT_DIGEST
+        || source_revision.target_asset_digest != TERRAIN_REBIND_SOURCE_DIGEST
+        || source_revision.target_decoder_digest != source.manifest().action_decoder_digest()
+        || source_revision.founder_seed_base != receipt.founder_seed_base
+        || source_revision.preserved_neuron_count != 2_048
+        || source_revision.preserved_weight_count != source.weights().len()
+        || !source_revision.optimizer_reset
+        || !source_revision.value_state_reset
+        || source_revision.promoted
+    {
+        return Err("founder rebind source revision receipt is not sealed".into());
     }
     let mut config = alife_world::CanonicalNewGameConfig::phase3(receipt.founder_seed_base, 1)?;
     config.brain_class = BrainScaleTier::Standard2048;
@@ -221,38 +272,25 @@ fn prepare_terrain_founder_refresh(
             .phenotype()
             .development_state_at(alife_core::Tick::ZERO)?,
     )?;
-    // This local copy reconstructs the source decoder identity. The current
-    // inherited founder genome and all source files remain intact.
-    let mut legacy_genome = genome.clone();
-    legacy_genome.innate_priority = alife_core::InnatePriorityGenes::default();
-    let (old, old_inputs) = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
-        legacy_genome,
-        development.clone(),
-        source.clone(),
-    )?;
     let target = alife_core::PhenotypeCompiler::compile_testing_procedural_baseline(
         &genome,
         &capacity,
         &development,
         profile,
     )?;
-    if old.candidate_decoder().canonical_digest() == target.candidate_decoder().canonical_digest()
-        || old.persistent_address_map() != target.persistent_address_map()
-        || old.synapses().len() != target.synapses().len()
-        || old.neuron_dynamics() != target.neuron_dynamics()
-        || old.sensor_encoder() != target.sensor_encoder()
-        || old.synapses().iter().zip(target.synapses()).any(|(a, b)| {
-            a.source() != b.source()
-                || a.target() != b.target()
-                || a.route_index() != b.route_index()
-                || a.kind() != b.kind()
-                || a.alpha().to_bits() != b.alpha().to_bits()
-                || a.receptor_index() != b.receptor_index()
-        })
+    let target_binding = alife_core::FoundationAbiBinding::canonical_for_capacity(&capacity)?;
+    let manifest = source.manifest();
+    if target.lobe_layout() != &alife_core::N2048FoundationLayoutV1::lobe_layout()
+        || manifest.layout_digest() != target_binding.layout_digest()
+        || manifest.route_abi_digest() != target.route_abi_digest()
+        || manifest.plasticity_abi_digest() != target.plasticity_abi_digest()
+        || manifest.address_map_digest() != target.persistent_address_map().digest()
+        || manifest.weight_asset() != source.asset_ref()
+        || manifest.weight_asset().weight_count() as usize != target.synapses().len()
+        || target.neuron_count() != 2_048
+        || target.synapses().len() != source.weights().len()
     {
-        return Err(
-            "founder revision must change only supported inherited decoder metadata".into(),
-        );
+        return Err("founder rebind would change frozen N2048 coordinates or weight binding".into());
     }
     let revised = FoundationWeightAsset::from_trained_weights(
         &target,
@@ -286,19 +324,25 @@ fn prepare_terrain_founder_refresh(
     let source_asset_digest = digest(source);
     let target_asset_digest = digest(&revised);
     let refresh = FoundationFounderRefreshReceipt {
-        schema_version: 1,
+        schema_version: 2,
         source_asset_digest: source_asset_digest.clone(),
         target_asset_digest: target_asset_digest.clone(),
-        source_decoder_digest: old.candidate_decoder().canonical_digest(),
+        source_decoder_digest: source.manifest().action_decoder_digest(),
         target_decoder_digest: admitted.candidate_decoder().canonical_digest(),
-        source_compiler_inputs_digest: old_inputs.canonical_digest(),
+        source_compiler_inputs_digest: None,
         target_compiler_inputs_digest: inputs.canonical_digest(),
         founder_seed_base: receipt.founder_seed_base,
         preserved_neuron_count: admitted.neuron_count(),
         preserved_weight_count: source.weights().len(),
-        optimizer_reset: true,
-        value_state_reset: true,
+        optimizer_reset: false,
+        value_state_reset: false,
         promoted: false,
+        source_weight_only: true,
+        source_optimizer_reset: receipt.optimizer_reset,
+        metadata_rebuilt: true,
+        source_policy_version: receipt.policy_version,
+        target_policy_version: receipt.policy_version + 1,
+        preserved_address_map_digest: Some(admitted.persistent_address_map().digest()),
     };
     let adaptation = FoundationAdaptationReceipt {
         source_directory: previous.to_path_buf(),
@@ -310,7 +354,9 @@ fn prepare_terrain_founder_refresh(
             .checked_add(1)
             .ok_or("policy version overflow")?,
         preserved_weight_count: source.weights().len(),
-        optimizer_reset: true,
+        // Retain the source's documented fresh-training handoff marker; this
+        // rebind performed no optimizer reset or mutable-state transfer.
+        optimizer_reset: receipt.optimizer_reset,
         founder_biology_calibration: receipt.founder_biology_calibration,
     };
     Ok((revised, adaptation, refresh))
@@ -326,7 +372,7 @@ mod founder_refresh_tests {
         FoundationWeightAsset,
     ) {
         let directory = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../assets/founders/terrain-care-n2048-v1");
+            .join("../../assets/founders/terrain-care-n2048-v2");
         let receipt =
             serde_json::from_slice(&std::fs::read(directory.join("adaptation.json")).unwrap())
                 .unwrap();
@@ -340,17 +386,47 @@ mod founder_refresh_tests {
     #[test]
     fn n2048_terrain_founder_refresh_preserves_weights_and_strict_resume() {
         let (directory, receipt, source) = sealed_source();
-        let original_bytes = source.encode_canonical().unwrap();
+        let original_bytes = std::fs::read(directory.join("trained.alife-foundation")).unwrap();
         let (revised, adaptation, refresh) =
             prepare_terrain_founder_refresh(&directory, &receipt, &source).unwrap();
         assert_eq!(source.encode_canonical().unwrap(), original_bytes);
+        assert_eq!(
+            std::fs::read(directory.join("trained.alife-foundation")).unwrap(),
+            original_bytes
+        );
         assert_eq!(refresh.source_asset_digest, receipt.adapted_asset_digest);
         assert_eq!(refresh.target_asset_digest, adaptation.adapted_asset_digest);
         assert_ne!(refresh.source_asset_digest, refresh.target_asset_digest);
         assert_ne!(refresh.source_decoder_digest, refresh.target_decoder_digest);
         assert_eq!(refresh.preserved_neuron_count, 2_048);
         assert_eq!(refresh.preserved_weight_count, 32_768);
-        assert!(refresh.optimizer_reset && refresh.value_state_reset);
+        assert!(!refresh.optimizer_reset && !refresh.value_state_reset);
+        assert!(refresh.source_weight_only && refresh.source_optimizer_reset);
+        assert!(refresh.metadata_rebuilt);
+        assert_eq!(refresh.schema_version, 2);
+        assert_eq!(refresh.source_compiler_inputs_digest, None);
+        assert_eq!(refresh.source_policy_version, 530);
+        assert_eq!(refresh.target_policy_version, 531);
+        assert_eq!(
+            refresh.preserved_address_map_digest,
+            Some(source.manifest().address_map_digest())
+        );
+        assert_eq!(
+            source.manifest().layout_digest(),
+            revised.manifest().layout_digest()
+        );
+        assert_eq!(
+            source.manifest().route_abi_digest(),
+            revised.manifest().route_abi_digest()
+        );
+        assert_eq!(
+            source.manifest().plasticity_abi_digest(),
+            revised.manifest().plasticity_abi_digest()
+        );
+        assert_eq!(
+            source.manifest().address_map_digest(),
+            revised.manifest().address_map_digest()
+        );
         assert!(!refresh.promoted);
         assert!(source
             .weights()
@@ -361,7 +437,7 @@ mod founder_refresh_tests {
             FoundationWeightAsset::decode_canonical(&revised.encode_canonical().unwrap()).unwrap(),
             revised
         );
-        // A current revision cannot enter the authenticated legacy-source path.
+        // Only the explicitly selected source can enter this rebind operation.
         assert!(prepare_terrain_founder_refresh(&directory, &adaptation, &revised).is_err());
     }
 
@@ -373,6 +449,41 @@ mod founder_refresh_tests {
         receipt.adapted_asset_digest = digest(&source);
         receipt.founder_biology_calibration = 1;
         assert!(prepare_terrain_founder_refresh(&directory, &receipt, &source).is_err());
+        receipt.founder_biology_calibration = 2;
+        receipt.policy_version = 529;
+        assert!(prepare_terrain_founder_refresh(&directory, &receipt, &source).is_err());
+        receipt.policy_version = 530;
+        receipt.founder_seed_base += 1;
+        assert!(prepare_terrain_founder_refresh(&directory, &receipt, &source).is_err());
+        receipt.founder_seed_base -= 1;
+
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let package = std::env::temp_dir().join(format!(
+            "alife-founder-rebind-rejection-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&package).unwrap();
+        for name in [
+            "trained.alife-foundation",
+            "adaptation.json",
+            "founder-refresh.json",
+            "README.md",
+        ] {
+            std::fs::copy(directory.join(name), package.join(name)).unwrap();
+        }
+        for name in ["actor-checkpoint.json", "value-checkpoint.json"] {
+            std::fs::write(package.join(name), b"{}").unwrap();
+            let rejection = prepare_terrain_founder_refresh(&package, &receipt, &source)
+                .unwrap_err()
+                .to_string();
+            assert!(rejection.contains("rejects mutable checkpoints"));
+            std::fs::remove_file(package.join(name)).unwrap();
+        }
+        // This directory was created exclusively by this test under temp_dir.
+        std::fs::remove_dir_all(package).unwrap();
     }
 }
 
