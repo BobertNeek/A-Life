@@ -21,6 +21,55 @@ uses source `e8d5633e` and separate fixtures. Only the fresh-result diagnostic
 guard enters production; threaded timings describe an evidence-only prototype.
 Live preparation remains serial.
 
+## Integrated serial guard comparison
+
+The [combined receipt](evidence/20261001-integrated-serial-preparation.json) and
+[checked builder](evidence/20261001-integrated-serial-build.py) compare coherent
+`dc3e916e` before both guards with `d9724dfa` containing reviewed `e8d5633e`
+fresh-recall and `4eed7acc` finalization guards. They measure the two changes
+together on identical inputs; the earlier isolated percentages are not added.
+
+For 26 candidates and 64 actually retained records:
+
+| Independent owners | Helper wall before → after ms | Process CPU before → after ms |
+| ---: | ---: | ---: |
+| 8 | 10.743 → 7.973 | 10.742 → 7.970 |
+| 16 | 20.830 → 16.579 | 20.830 → 16.575 |
+| 32 | 39.964 → 32.957 | 39.962 → 32.956 |
+| 50 | 63.954 → 49.095 | 63.939 → 49.091 |
+
+Two sequential before→after/after→before process pairs retain nine samples each:
+18 per source/case across 24 cases (2/26 candidates, 0/64/256 records,
+8/16/32/50 owners). All 864 timed batches and 22,896 full typed instance checks
+pass; serialized input and core-result/payload hashes match all four processes.
+Host-only upload binding/digest/offset metadata is compared in typed same-process
+equality and derived from matching frame/slot fixtures, rather than serialized
+into the cross-process proof. Banks/topologies stay unchanged. Proofs and output
+destruction are outside timers; result allocation/ordered collection is inside.
+
+The timer includes both recalls/contexts, attention/routing/novelty, projection,
+finalization, retained public guards and CPU upload encoding. It excludes world/
+sensor/receptor derivation, sleep/hints/resident mutation, backend admission,
+topology observation, GPU work, sealing/save/lifecycle and rendering. The separate
+public-validator attribution is outside the helper timer. The successor's two
+50-owner process medians are 50.008 and 48.735 ms; **live tick/frame throughput
+and 20 FPS with 50 creatures remain Unknown**. No production threading ran.
+
+Linux EPYC/KVM, four-core quota, affinity 0–3 and Rust 1.98.1 release/opt-level 3
+were used for every process. No local build ran during sampling; other host
+tenants are uncontrolled. RSS/high-water samples include fixtures, retained
+reference/results and allocator history; they do not prove memory savings.
+An initial shared-target successor reused baseline rlibs and was rejected before
+timing. The accepted successor uses an isolated target and distinct Core/executable
+hashes. Library hashes are build-time identities; executables were preserved.
+
+Reproduce in the two source worktrees using separate `CARGO_TARGET_DIR` values.
+Emit artifacts with `cargo +stable build --locked --release -p alife_core -p alife_world -p alife_gpu_backend --message-format=json`. From each worktree,
+run the absolute path to the checked builder with the artifact JSONL and a unique
+executable path. Preserve executables/manifests, then run `taskset -c 0-3` in
+before, after, after, before order. The builder pins existing fixture/probe inputs,
+asserts unchanged preparation/proof functions and removes the threading screen.
+
 ## Results and measured sources
 
 Each receipt retains exact commits, source/probe/executable hashes, individual

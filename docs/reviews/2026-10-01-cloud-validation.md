@@ -7,6 +7,32 @@ The [CPU performance record](../performance/20261001-cpu-preparation.md) retains
 measurement conditions and links to source-bound samples/probes; no game-speed
 claim follows from the tests below.
 
+## Finalization and serial comparison checkpoint
+
+Source `d9724dfa03bb367809f35ae66900de55dd843f83` extends `ad49a325` with
+reviewed finalization `4eed7acc` and evidence `7a8de010`, picked as `03003006`
+and `d9724dfa`. The earlier fresh-recall guard is retained exactly once.
+The five stale draft/owner/tick rejection cases now also exercise finalization.
+Core debug/release each pass 45 tests; app attention/upload and 14 backend
+memory-context checks pass: **105 passing executions, zero test failures**,
+with the developer benchmark ignored in each Core profile. Strict Rust 1.99
+workspace, production/GPU-test all-target and release Core Clippy pass.
+Format, static boundaries, 77/77 documentation assertions and local links pass.
+
+The [paired serial comparison](../performance/20261001-cpu-preparation.md#integrated-serial-guard-comparison)
+measures both guards together against `dc3e916e`: all 864 batches/22,896 typed
+instance checks and 24 input/result hashes match. At 50 owners/26 candidates/
+64 records, helper wall is 63.954→49.095 ms and process CPU 63.939→49.091 ms;
+this excludes live admission, topology observation, GPU and rendering work.
+No performance percentages were stacked. The original report/probe/builder
+are unchanged; original JSON formatting is 7,357→1,103 lines with no lost data.
+
+The comparison link-search path was corrected without rebuilding libraries.
+An attempted shared-target successor reused baseline rlibs and was rejected
+before any timing; accepted successor artifacts use an isolated directory and
+distinct hashes. No guard fired; memory stayed below 12.13 GiB and disk above
+10.16 GiB. This checkpoint remains serial; later worker integration is separate.
+
 ## Fresh-recall successor
 
 The successor extends green `dc3e916e` with reviewed source `e8d5633e` and
