@@ -2748,7 +2748,7 @@ fn validate_semantic_mask_png_bytes(
     let pixels = decode_deterministic_rgba8_png(label, "semantic mask", bytes)?;
     let mut semantic_colors = BTreeSet::new();
     let mut microdetail = BTreeSet::new();
-    for pixel in pixels.chunks_exact(4) {
+    for pixel in pixels.as_chunks::<4>().0 {
         if pixel[3] == 0 {
             continue;
         }
@@ -2783,7 +2783,12 @@ fn validate_anatomy_mask_png_bytes(
     let anatomy = decode_deterministic_rgba8_png(label, "anatomy mask", anatomy_bytes)?;
     let (required, allowed) = anatomy_channels_for_slot(logical_slot);
     let mut used = BTreeSet::new();
-    for (semantic_pixel, anatomy_pixel) in semantic.chunks_exact(4).zip(anatomy.chunks_exact(4)) {
+    for (&semantic_pixel, &anatomy_pixel) in semantic
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(anatomy.as_chunks::<4>().0)
+    {
         if (semantic_pixel[3] > 0) != (anatomy_pixel[3] > 0) {
             return Err(fail(format!(
                 "anatomy mask {label} occupancy does not match its semantic mask"
@@ -3264,10 +3269,10 @@ pub fn sha256_hex(input: &[u8]) -> String {
     }
     padded.extend_from_slice(&bit_len.to_be_bytes());
     let mut hash = INITIAL;
-    for chunk in padded.chunks_exact(64) {
+    for chunk in padded.as_chunks::<64>().0 {
         let mut words = [0_u32; 64];
-        for (index, bytes) in chunk.chunks_exact(4).enumerate() {
-            words[index] = u32::from_be_bytes(bytes.try_into().unwrap());
+        for (index, bytes) in chunk.as_chunks::<4>().0.iter().enumerate() {
+            words[index] = u32::from_be_bytes(*bytes);
         }
         for index in 16..64 {
             let s0 = words[index - 15].rotate_right(7)
@@ -3808,7 +3813,7 @@ fn emit_named_obj(pack: &SlicedCreaturePartPack) -> Vec<u8> {
                 vertex.normal[0] as f32, vertex.normal[1] as f32, vertex.normal[2] as f32
             ));
         }
-        for triangle in part.indices.chunks_exact(3) {
+        for triangle in part.indices.as_chunks::<3>().0 {
             output.push('f');
             for index in triangle {
                 let global = vertex_offset + index;
@@ -4030,7 +4035,7 @@ f 22/1/1 23/2/1 24/3/1
             .parts
             .iter()
             .flat_map(|(slot, part)| {
-                part.indices.chunks_exact(3).map(|triangle| {
+                part.indices.as_chunks::<3>().0.iter().map(|triangle| {
                     triangle_area(std::array::from_fn(|corner| {
                         from_socket_local_position(
                             *slot,

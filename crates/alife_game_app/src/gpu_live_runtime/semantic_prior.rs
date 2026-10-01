@@ -151,6 +151,7 @@ impl RuntimeSemanticPrior {
     ) -> Result<PerceptionFrameDraft, alife_core::ScaffoldContractError> {
         self.prepare_inner(draft, sequence, true)
     }
+    #[cfg(feature = "foundation-training")]
     pub fn prime(
         &mut self,
         draft: PerceptionFrameDraft,
@@ -158,6 +159,7 @@ impl RuntimeSemanticPrior {
     ) -> Result<(), alife_core::ScaffoldContractError> {
         self.prepare_inner(draft, sequence, false).map(|_| ())
     }
+    #[cfg(feature = "foundation-training")]
     pub fn pending(&self, id: u64) -> bool {
         self.lives
             .get(&id)

@@ -2,6 +2,13 @@
 
 use super::*;
 
+// Exact journal capture preserves both the publication promotions and their
+// organism-owned neural authorities as one returned transaction payload.
+pub(super) type ExactCheckpointJournalWritesV1 = (
+    Vec<ExactPopulationCheckpointJournalPromotionV1>,
+    Vec<(u64, SleepJournalNeuralAuthority)>,
+);
+
 impl GpuLiveBrainRuntime {
     fn sleep_journal_pending_capacity(&self) -> Result<usize, ScaffoldContractError> {
         self.prospective_sleep_journal_capacity(self.handles.len())
@@ -712,6 +719,8 @@ impl GpuLiveBrainRuntime {
             )
     }
 
+    // The terminal shutdown predicate is consumed by the desktop drain loop.
+    #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
     pub(crate) fn persistence_terminal_for_shutdown(&self) -> bool {
         self.persistence_idle_for_shutdown() || self.persistence_failed_for_shutdown()
     }
@@ -896,13 +905,7 @@ impl GpuLiveBrainRuntime {
     pub(super) fn take_exact_checkpoint_journal_writes(
         &mut self,
         permit: &DurableCompletedCheckpointPermitV1,
-    ) -> Result<
-        (
-            Vec<ExactPopulationCheckpointJournalPromotionV1>,
-            Vec<(u64, SleepJournalNeuralAuthority)>,
-        ),
-        GameAppShellError,
-    > {
+    ) -> Result<ExactCheckpointJournalWritesV1, GameAppShellError> {
         let entries = self.pending_exact_sleep_journal_entries.clone();
         let mut captured_targets = BTreeMap::new();
         let mut follow_up_required = false;

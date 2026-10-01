@@ -1,5 +1,9 @@
 //! GPU-authoritative live cognition for the explicit neural policy.
 
+// Crate-private reset, presentation, and performance entrypoints below have
+// production callers in the `bevy-app` host. Their item-scoped dead-code
+// allowances keep the `gpu-runtime` CPU build available without that host.
+
 #[cfg(all(test, feature = "gpu-tests"))]
 mod action_credit_food_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
@@ -1128,6 +1132,9 @@ struct SleepJournalPublicationWorkerOwnerV1 {
     incremental_entry_count: usize,
 }
 
+// The final worker message stays owned inline through polling and shutdown;
+// keep this ownership boundary unchanged during lint-only cleanup.
+#[allow(clippy::large_enum_variant)]
 enum SleepJournalPublicationWorkerPollV1 {
     Pending,
     Ready(SleepJournalPublicationWorkerFinalV1),
@@ -1930,6 +1937,7 @@ impl GpuLiveCheckpointDurability {
         self.durable_reference()
     }
 
+    #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
     fn refresh_published(
         &mut self,
         expected_digest: &str,
@@ -2676,6 +2684,7 @@ const fn no_progress_reason_for_checkpoint_stage(
 }
 
 impl GpuLivePerformanceMetrics {
+    #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
     pub(crate) fn delta_from(self, before: Self) -> Self {
         macro_rules! delta {
             ($field:ident) => {
@@ -2836,6 +2845,7 @@ fn record_optional_elapsed_ns(field: &mut u64, started: Option<Instant>) {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 pub(crate) enum CuratedFounderGpuResidencyState {
     NotStarted,
     Pending,
@@ -2866,6 +2876,7 @@ struct CuratedFounderGpuResidencyPlan {
 }
 
 impl CuratedFounderGpuResidencyPlan {
+    #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
     fn from_accepted_operation(
         operation: &CuratedFounderDurableOperation,
         publication: &CuratedFounderDurablePublicationReceipt,
@@ -2947,6 +2958,7 @@ fn curated_founder_gpu_residency_plan_fingerprint(
 }
 
 #[derive(Debug, Error)]
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 pub(crate) enum CuratedFounderResetRuntimeError {
     #[error("curated founder reset requires the runtime-owned durable save boundary")]
     MissingDurability,
@@ -2996,11 +3008,13 @@ pub(crate) enum CuratedFounderResetRuntimeError {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 pub(crate) struct CuratedFounderResetAttempt {
     publication: CuratedFounderDurableOperationAttempt,
     gpu_residency: CuratedFounderGpuResidencyState,
 }
 
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 impl CuratedFounderResetAttempt {
     pub(crate) const fn publication_status(&self) -> CuratedFounderPublicationStatus {
         self.publication.status()
@@ -3042,6 +3056,7 @@ impl CuratedFounderResetAttempt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 pub(crate) struct CuratedFounderResetRuntimeEvidence {
     pub(crate) status: CuratedFounderPublicationStatus,
     pub(crate) save_state: CuratedFounderSaveState,
@@ -3053,6 +3068,7 @@ pub(crate) struct CuratedFounderResetRuntimeEvidence {
     pub(crate) archive_count: usize,
 }
 
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 impl CuratedFounderResetRuntimeEvidence {
     fn from_attempt(result: &CuratedFounderResetAttempt) -> Self {
         Self {
@@ -3068,15 +3084,18 @@ impl CuratedFounderResetRuntimeEvidence {
     }
 }
 
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 pub(crate) type CuratedFounderResetRuntimeResult =
     Result<CuratedFounderResetRuntimeEvidence, CuratedFounderResetRuntimeError>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 pub(crate) struct LiveAgentResetIntent {
     pub(crate) final_agents: Vec<CuratedFounderAgentInput>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 pub(crate) enum CuratedFounderResetDispatchRejection {
     MultipleCommands,
     RetainedOperationPending,
@@ -3085,6 +3104,7 @@ pub(crate) enum CuratedFounderResetDispatchRejection {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 pub(crate) enum CuratedFounderResetDispatchResult {
     Idle,
     PreCommitRejected {
@@ -3116,15 +3136,21 @@ pub(crate) enum CuratedFounderResetDispatchResult {
     },
 }
 
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 pub(crate) trait CuratedFounderResetRuntimePort {
+    // Preserve inline publication/recovery evidence in the error contract.
+    #[allow(clippy::result_large_err)]
     fn dispatch_attempt(
         &mut self,
         intent: LiveAgentResetIntent,
     ) -> CuratedFounderResetRuntimeResult;
 
+    // Preserve inline publication/recovery evidence in the error contract.
+    #[allow(clippy::result_large_err)]
     fn dispatch_retry(&mut self) -> CuratedFounderResetRuntimeResult;
 }
 
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 pub(crate) fn project_curated_founder_reset_result(
     result: CuratedFounderResetRuntimeResult,
 ) -> CuratedFounderResetDispatchResult {
@@ -3174,6 +3200,7 @@ pub(crate) fn project_curated_founder_reset_result(
     }
 }
 
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 fn project_curated_founder_reset_runtime_error(
     error: CuratedFounderResetRuntimeError,
 ) -> CuratedFounderResetDispatchResult {
@@ -3247,6 +3274,7 @@ fn project_curated_founder_reset_runtime_error(
     }
 }
 
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 fn project_post_publication_failure(
     evidence: CuratedFounderResetRuntimeEvidence,
     phase: &str,
@@ -3391,6 +3419,7 @@ pub struct GpuLiveBrainRuntime {
     exact_checkpoint_work: ExactPopulationCheckpointRuntimeWorkV1,
     lineage_library: Option<LineageLibrary>,
     lineage_run_id: Option<String>,
+    #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
     retained_curated_founder_operation: Option<CuratedFounderDurableOperation>,
     retained_curated_founder_gpu_residency_plan: Option<CuratedFounderGpuResidencyPlan>,
     retained_curated_founder_gpu_residency_receipt: Option<GpuCuratedResidencyReceipt>,
@@ -3475,6 +3504,7 @@ pub enum GpuManualCheckpointRequestDisposition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 pub(crate) struct LiveRuntimeSaveAuthorityView {
     pub save_id: String,
     pub deterministic_seed: u64,
@@ -3505,9 +3535,11 @@ pub struct CuratedFirstGpuActionTestEvidence {
     pub sealed_patch_count: usize,
 }
 
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 type CuratedFounderDurableRefresh =
     fn(&mut GpuLiveCheckpointDurability, &str) -> Result<(), GameAppShellError>;
 
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 fn curated_founder_gpu_residency_state(
     retained_plan: &Option<CuratedFounderGpuResidencyPlan>,
 ) -> CuratedFounderGpuResidencyState {
@@ -3517,6 +3549,9 @@ fn curated_founder_gpu_residency_state(
         .unwrap_or(CuratedFounderGpuResidencyState::NotStarted)
 }
 
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
+// Preserve inline publication/recovery evidence in the error contract.
+#[allow(clippy::result_large_err)]
 fn attempt_curated_founder_reset_with_owned_authorities(
     checkpoint_durability: &mut Option<GpuLiveCheckpointDurability>,
     lineage_library: &mut Option<LineageLibrary>,
@@ -3538,6 +3573,11 @@ fn attempt_curated_founder_reset_with_owned_authorities(
     )
 }
 
+#[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
+// Preserve inline publication/recovery evidence in the error contract.
+#[allow(clippy::result_large_err)]
+// Keep the separately owned world, persistence, archive, and retry authorities explicit.
+#[allow(clippy::too_many_arguments)]
 fn attempt_curated_founder_reset_with_owned_authorities_and_refresh(
     checkpoint_durability: &mut Option<GpuLiveCheckpointDurability>,
     lineage_library: &mut Option<LineageLibrary>,
@@ -3778,6 +3818,8 @@ where
     Ok(())
 }
 
+// Archive attachment validates and commits these distinct runtime authorities together.
+#[allow(clippy::too_many_arguments)]
 fn attach_lineage_archive_with_owned_authorities(
     checkpoint_durability: Option<&GpuLiveCheckpointDurability>,
     sensor_profile: SensorProfile,
@@ -4460,6 +4502,8 @@ fn grounded_successor_state(
     grounded_semantic_state(position, velocity, &biology_after.homeostasis)
 }
 
+// Preserve the exact factorized motor-selection inputs forwarded to the core contract.
+#[allow(clippy::too_many_arguments)]
 fn factorized_motor_bundle_for_candidates(
     organism_id: OrganismId,
     sequence_id: ExperienceSequenceId,
@@ -5268,6 +5312,9 @@ impl GpuLiveBrainRuntime {
         })
     }
 
+    #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
+    // Preserve inline publication/recovery evidence in the error contract.
+    #[allow(clippy::result_large_err)]
     fn build_live_agent_reset_request(
         &self,
         intent: LiveAgentResetIntent,
@@ -5317,6 +5364,9 @@ impl GpuLiveBrainRuntime {
         })
     }
 
+    #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
+    // Preserve inline publication/recovery evidence in the error contract.
+    #[allow(clippy::result_large_err)]
     pub(crate) fn attempt_live_agent_reset(
         &mut self,
         intent: LiveAgentResetIntent,
@@ -5325,6 +5375,9 @@ impl GpuLiveBrainRuntime {
         self.attempt_curated_founder_reset(request)
     }
 
+    #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
+    // Preserve inline publication/recovery evidence in the error contract.
+    #[allow(clippy::result_large_err)]
     pub(crate) fn attempt_curated_founder_reset(
         &mut self,
         request: CuratedFounderResetRequest,
@@ -5351,6 +5404,9 @@ impl GpuLiveBrainRuntime {
         Ok(result)
     }
 
+    #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
+    // Preserve inline publication/recovery evidence in the error contract.
+    #[allow(clippy::result_large_err)]
     pub(crate) fn retry_curated_founder_reset(
         &mut self,
     ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
@@ -5379,6 +5435,9 @@ impl GpuLiveBrainRuntime {
     /// Consumes the retained exact 4a projection only after every app-side
     /// resident and sidecar candidate is ready. The four maps publish only
     /// after the backend returns a completed residency receipt.
+    #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
+    // Preserve inline publication/recovery evidence in the error contract.
+    #[allow(clippy::result_large_err)]
     pub(crate) fn commit_retained_curated_founder_gpu_residency(
         &mut self,
         publication: Option<&CuratedFounderResetAttempt>,
@@ -5547,6 +5606,9 @@ impl GpuLiveBrainRuntime {
         Ok(receipt)
     }
 
+    #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
+    // Preserve inline publication/recovery evidence in the error contract.
+    #[allow(clippy::result_large_err)]
     fn note_curated_founder_durable_checkpoint(
         &mut self,
         result: &CuratedFounderResetAttempt,
@@ -5885,6 +5947,7 @@ impl GpuLiveBrainRuntime {
 
     /// Setup-only priming for max-speed collection. No world tick, neural
     /// dispatch or learned state advances while the provider prepares a hint.
+    #[cfg(feature = "foundation-training")]
     pub(crate) fn prime_foundation_semantic_prior(&mut self) -> Result<(), GameAppShellError> {
         let Some(prior) = self.semantic_prior.as_mut() else {
             return Ok(());
@@ -6718,6 +6781,9 @@ impl GpuLiveBrainRuntime {
         Ok(host)
     }
 
+    // Retain the exact V11-only constructor during this lint-only cleanup.
+    // Live persistence uses the private-prior-aware constructor above.
+    #[allow(dead_code)]
     fn exact_cognitive_state_for_checkpoint_with_v11(
         organism_id: OrganismId,
         resident: &ResidentCognition,
@@ -7603,6 +7669,7 @@ impl GpuLiveBrainRuntime {
         result
     }
 
+    #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
     pub(crate) fn live_cognitive_presentation_snapshots(
         &self,
         summaries: &[LiveBrainTickSummary],
@@ -7927,6 +7994,7 @@ impl GpuLiveBrainRuntime {
         &self.manual_checkpoint_status
     }
 
+    #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
     pub(crate) fn live_save_authority_view(
         &self,
     ) -> Result<LiveRuntimeSaveAuthorityView, GameAppShellError> {
@@ -8081,6 +8149,11 @@ impl GpuLiveBrainRuntime {
         self.world.clone()
     }
 
+    // Both the desktop host and offline training host borrow this view.
+    #[cfg_attr(
+        not(any(feature = "bevy-app", feature = "foundation-training")),
+        allow(dead_code)
+    )]
     pub(crate) const fn world(&self) -> &HeadlessWorld {
         &self.world
     }
@@ -11217,7 +11290,7 @@ mod tests {
         );
 
         let source_record = restored_record.clone();
-        let mut sleepy_biochemistry = source_record.biochemistry().clone();
+        let mut sleepy_biochemistry = *source_record.biochemistry();
         let mut drives = sleepy_biochemistry.homeostasis.drives;
         drives.fatigue = 0.99;
         let mut hormones = sleepy_biochemistry.homeostasis.hormones;
@@ -11896,6 +11969,8 @@ mod tests {
         ));
     }
 
+    // Preserve inline publication/recovery evidence in the error contract.
+    #[allow(clippy::result_large_err)]
     fn run_curated_runtime_authority(
         fixture: &mut CuratedRuntimeAuthorityFixture,
         retained_operation: &mut Option<CuratedFounderDurableOperation>,
@@ -11914,6 +11989,8 @@ mod tests {
         )
     }
 
+    // Preserve inline publication/recovery evidence in the error contract.
+    #[allow(clippy::result_large_err)]
     fn run_curated_runtime_authority_with_plan(
         fixture: &mut CuratedRuntimeAuthorityFixture,
         retained_operation: &mut Option<CuratedFounderDurableOperation>,
@@ -11932,6 +12009,8 @@ mod tests {
         )
     }
 
+    // Preserve inline publication/recovery evidence in the error contract.
+    #[allow(clippy::result_large_err)]
     fn run_curated_runtime_authority_with_refresh_failure(
         fixture: &mut CuratedRuntimeAuthorityFixture,
         retained_operation: &mut Option<CuratedFounderDurableOperation>,
@@ -12339,6 +12418,26 @@ mod tests {
                 .sort_by_key(|agent| agent.final_population_slot);
             fixture.request.final_agents.truncate(2);
             fixture.request.target_population = 2;
+
+            // Exact registry replacement covers the complete Agent cohort.
+            // Keep the two-founder request, live world, and durable source in sync.
+            fixture
+                .world
+                .remove_agent_entity(WorldEntityId(CURATED_RUNTIME_WORLD_ENTITY_IDS[2]))
+                .unwrap();
+            fixture
+                .source_save
+                .replace_headless_world_snapshot(&fixture.world)
+                .unwrap();
+            GpuDurableSaveManifest::publish_snapshot(
+                &fixture.durable_save_path,
+                &fixture.asset_root,
+                &fixture.source_save,
+            )
+            .unwrap();
+            let durability = fixture.durability.as_mut().unwrap();
+            durability.published = durability.durable_manifest.load().unwrap();
+            assert_eq!(fixture.world.organism_entity_ids().len(), 2);
         }
 
         fn assert_plan_matches_accepted_bundle(
@@ -12641,7 +12740,7 @@ mod tests {
     fn gpu_restore_resident_identity_uses_world_record_and_admits_exact_legacy_checkpoint() {
         let organism_id = OrganismId::new(77).unwrap();
         let sensor_profile = SensorProfile::PrivilegedAffordanceV1;
-        let mut world = HeadlessScenarioBuilder::new(0x3_3B_00_0001)
+        let mut world = HeadlessScenarioBuilder::new(0x0003_3B00_0001)
             .agent("record-authority", organism_id, Vec3f::ZERO)
             .build()
             .unwrap();
@@ -12661,7 +12760,7 @@ mod tests {
         )
         .unwrap();
         let genome =
-            alife_core::CreatureGenome::early_mammal_founder(0x3_3B_00_0011, foundation).unwrap();
+            alife_core::CreatureGenome::early_mammal_founder(0x0003_3B00_0011, foundation).unwrap();
         let phenotype = genome.express().unwrap();
         let biochemistry = alife_core::BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
         world
@@ -12701,7 +12800,7 @@ mod tests {
 
         let record = world.organism_registry().get(organism_id).unwrap();
         let (_, scaffold_genome, _) = compile_gpu_birth_components(
-            0x3_3B_00_0001,
+            0x0003_3B00_0001,
             BrainScaleTier::Nano512,
             organism_id,
             world.tick(),
@@ -12815,10 +12914,15 @@ mod tests {
             .foundation_payload_digest()
             .is_some());
         let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id()).unwrap();
+        // Birth returns live development; immutable topology uses its normalized
+        // construction projection, just as the production compiler path does.
+        assert_eq!(development.maturation, NormalizedScalar::new(0.35).unwrap());
+        let construction_development =
+            foundation_construction_development(&genome, &capacity, &development).unwrap();
         let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
             genome,
             &capacity,
-            development,
+            construction_development,
             SensorProfile::PrivilegedAffordanceV1,
             phenotype.foundation_abi_selection().clone(),
         )
@@ -12832,16 +12936,21 @@ mod tests {
 
     #[test]
     fn checked_in_n2048_assets_decode_for_every_production_sensor_profile() {
-        for (index, profile) in [
-            SensorProfile::PrivilegedAffordanceV1,
-            SensorProfile::GroundedObjectSlotsV1,
+        // The privileged asset is bootstrap/ablation; the grounded asset is the
+        // trained, promoted payload documented in assets/brain_foundations/README.md.
+        for (index, (profile, completed_stages, promoted)) in [
+            (SensorProfile::PrivilegedAffordanceV1, 0, false),
+            (SensorProfile::GroundedObjectSlotsV1, 9, true),
         ]
         .into_iter()
         .enumerate()
         {
             let asset = alife_core::FoundationWeightAsset::builtin_n2048_v1(profile).unwrap();
-            assert_eq!(asset.manifest().training_stage().completed_stage_count(), 9);
-            assert!(!asset.manifest().promotion_receipt().is_promoted());
+            assert_eq!(
+                asset.manifest().training_stage().completed_stage_count(),
+                completed_stages
+            );
+            assert_eq!(asset.manifest().promotion_receipt().is_promoted(), promoted);
             assert!(!asset.weights().is_empty());
             let (phenotype, _, _) = compile_gpu_birth_components(
                 0xB17A_DA7B,
@@ -13414,12 +13523,11 @@ mod tests {
             .find(|(bound_organism_id, _)| *bound_organism_id == organism_id)
             .map(|(_, world_entity_id)| world_entity_id)
             .unwrap();
-        let biology_before = world
+        let biology_before = *world
             .organism_registry()
             .get(organism_id)
             .unwrap()
-            .biochemistry()
-            .clone();
+            .biochemistry();
         let normal = world
             .perception_frame(
                 organism_id,

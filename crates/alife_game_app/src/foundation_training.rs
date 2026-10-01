@@ -2767,7 +2767,7 @@ fn compare_replay_values(
     Ok(maximum)
 }
 
-/// One exact parity gate at a new waking segment, including structural growth.
+/// Verify exact GPU rollout/replay agreement at a new waking segment, including structural growth.
 /// This is deliberately run once per sleep boundary, not on every collection tick.
 pub fn verify_foundation_replay_step(
     trainer: &mut FoundationTrainer,

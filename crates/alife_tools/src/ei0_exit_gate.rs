@@ -195,6 +195,9 @@ pub struct Ei0LifecycleGateReport {
 /// required biochemical graph and must not be promoted into current runtime
 /// state by inventing one.
 #[derive(Debug, Clone)]
+// Keep the public Current(CreatureGenome) construction and pattern-match API;
+// historical evidence owns its exact raw JSON separately.
+#[allow(clippy::large_enum_variant)]
 pub enum Ei0GenomeEvidence {
     Current(CreatureGenome),
     HistoricalV1(Box<RawValue>),

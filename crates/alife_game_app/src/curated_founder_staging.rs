@@ -1,3 +1,8 @@
+// The private durable staging graph is called by curated reset dispatch in the
+// `bevy-app` production host. Keep it compiled for CPU persistence tests when
+// that host is absent, while retaining dead-code checking for desktop builds.
+#![cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -807,6 +812,8 @@ fn prepare_curated_founder_reset(
     })
 }
 
+// Errors retain full archive/publication receipts for exact retry and recovery.
+#[allow(clippy::result_large_err)]
 fn publish_curated_founder_operation_durably(
     operation: &CuratedFounderDurableOperation,
     durable_manifest: &GpuDurableSaveManifest,
@@ -1023,6 +1030,8 @@ fn retry_cas_for_equivalent_source_generation(
 }
 
 #[cfg(test)]
+// Errors retain full archive/publication receipts for exact retry and recovery.
+#[allow(clippy::result_large_err)]
 fn publish_curated_founder_reset_durably(
     stage: &CuratedFounderResetStage,
     bundle: &CuratedFounderBundle,
@@ -1266,6 +1275,8 @@ fn verify_archive_receipt_rows(
     Ok(())
 }
 
+// Verify every independent durable save, world, registry, and archive identity.
+#[allow(clippy::too_many_arguments)]
 fn verify_durable_reload(
     durable_manifest: &GpuDurableSaveManifest,
     canonical_asset_root: &Path,
@@ -1714,6 +1725,8 @@ fn validate_bundle_entry(
 
 #[cfg(test)]
 mod tests {
+    type MutationCase<T> = (&'static str, fn(&mut T));
+
     use std::{
         collections::BTreeMap,
         fs,
@@ -2223,7 +2236,7 @@ mod tests {
 
     #[test]
     fn curated_stage_rejects_bundle_or_record_identity_mismatch() {
-        let cases: &[(&str, fn(&mut CuratedFounderBundle))] = &[
+        let cases: &[MutationCase<CuratedFounderBundle>] = &[
             ("bundle-plan-entry", |bundle| {
                 bundle.entries[1].plan_entry.lineage_id = bundle.entries[0].plan_entry.lineage_id;
             }),
@@ -2270,7 +2283,7 @@ mod tests {
 
     #[test]
     fn curated_stage_rejects_duplicate_or_conflicting_ids() {
-        let cases: &[(&str, fn(&mut CuratedFounderPlan))] = &[
+        let cases: &[MutationCase<CuratedFounderPlan>] = &[
             ("duplicate-world-entity", |plan| {
                 plan.entries[1].world_entity_id = plan.entries[0].world_entity_id;
             }),
@@ -2355,7 +2368,7 @@ mod tests {
 
     #[test]
     fn curated_stage_rejects_wrong_world_save_or_checkpoint_identity() {
-        let cases: &[(&str, fn(&mut PortableSaveFile))] = &[
+        let cases: &[MutationCase<PortableSaveFile>] = &[
             ("wrong-save-id", |save| {
                 save.save_id = "wrong-save".to_string()
             }),

@@ -103,6 +103,8 @@ impl ExactPopulationCheckpointCoordinatorV1 {
         self.stage = ExactPopulationCheckpointStageV1::Encoding;
     }
 
+    // Read-only evidence accessor used by coordinator and GPU feature tests.
+    #[cfg(any(test, feature = "gpu-tests"))]
     pub(super) const fn checkpoint_needed_after_current(&self) -> bool {
         self.checkpoint_needed_after_current
     }
