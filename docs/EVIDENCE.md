@@ -93,6 +93,10 @@ those records refer to the originating machine and are not committed artifacts.
 
 ## Retained design and review context
 
+- [October 1 CPU preparation measurements](performance/20261001-cpu-preparation.md):
+  source-bound synthetic comparisons, retained samples and reproduction inputs.
+- [October 1 cloud candidate validation](reviews/2026-10-01-cloud-validation.md):
+  current CPU/compiler results, earlier failures and unrun hardware checks.
 - [Exact-population checkpoint decision](performance/exact-population-checkpoint-design.md):
   historical transaction and failure rationale.
 - [Recovered review outcomes](reviews/2026-09-11-recovered-review-outcomes.md):
