@@ -88,6 +88,7 @@ mod performance_receipt;
 mod phase31_performance_health;
 #[cfg(feature = "gpu-runtime")]
 mod phase31_slow_frame_ranking;
+mod terrain_water;
 mod ux_input;
 use crate::{
     creature_visual_snapshot_from_parts_with_appearance,

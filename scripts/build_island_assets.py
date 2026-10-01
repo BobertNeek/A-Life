@@ -2,7 +2,7 @@
 
 Blender CLI: --background --factory-startup --python scripts/build_island_assets.py
 Each prop has an origin at ground level, applied scale, one shared vertex-colour
-material and two mesh LODs. The editable source includes reference-image empties.
+material and three mesh LODs. The editable source includes reference-image empties.
 """
 import json
 import math
@@ -29,6 +29,7 @@ TARGETS = {
 class Geometry:
     def __init__(self):
         self.v, self.f, self.c = [], [], []
+        self.crowns = []
 
     def tube(self, points, radii, color, sides=8):
         base = len(self.v)
@@ -61,6 +62,7 @@ class Geometry:
             p=Vector(center)+Vector(tuple(v.co[k]*size[k]*(1+.13*n) for k in range(3)))
             self.v.append(tuple(p));self.c.append(tuple(c*(.8+.18*n+.13*v.co.z) for c in color))
         for f in bm.faces:self.f.append(tuple(base+v.index for v in f.verts))
+        self.crowns.append(list(range(base, len(self.v))))
         bm.free()
 
     def leaf(self, base, tip, width, color, segments=3):
@@ -179,6 +181,62 @@ def rock(kind):
     return g
 
 
+def overview_tree(near, geometry, kind, collection):
+    """Simplify connected canopy envelopes, rather than erasing leaf shells.
+
+    Preserve the authored crown groups and conifer tiers at the existing L2
+    triangle budget. Tiny leaves and branches inside crowns need no far mesh.
+    """
+    import bmesh
+    groups = {}
+    for index, indices in enumerate(geometry.crowns):
+        if index == len(geometry.crowns)-1:
+            key = 'top'
+        elif kind == 'Conifer':
+            key = index // 12
+        else:
+            center = sum((near.data.vertices[i].co for i in indices), Vector()) / len(indices)
+            key = (center.x >= 0, center.y >= 0)
+        groups.setdefault(key, []).extend(indices)
+    # The first four rings are the original trunk, with ten vertices per ring.
+    groups['trunk'] = list(range(40))
+    pieces = []
+    colors = near.data.color_attributes['ArtColor'].data
+    for key, indices in groups.items():
+        bm = bmesh.new()
+        source = bm.verts.layers.int.new('source')
+        for i in indices:
+            v = bm.verts.new(near.data.vertices[i].co)
+            v[source] = i
+        bmesh.ops.convex_hull(bm, input=list(bm.verts), use_existing_faces=False)
+        unused = [v for v in bm.verts if not v.link_faces]
+        if unused:bmesh.ops.delete(bm, geom=unused, context='VERTS')
+        bm.verts.ensure_lookup_table();bm.verts.index_update()
+        vertices = [tuple(v.co) for v in bm.verts]
+        tint = [tuple(colors[v[source]].color[:3]) for v in bm.verts]
+        faces = [tuple(v.index for v in f.verts) for f in bm.faces]
+        bm.free()
+        piece = mesh('Overview crown envelope', vertices, faces, near.data.materials[0],
+                     tint, key != 'trunk', collection)
+        triangles = sum(len(p.vertices)-2 for p in piece.data.polygons)
+        budget = (16 if kind == 'Sapling' else 18) if key == 'trunk' else (8 if kind == 'Sapling' else 14)
+        bpy.ops.object.select_all(action='DESELECT')
+        piece.select_set(True);bpy.context.view_layer.objects.active=piece
+        dec=piece.modifiers.new('Preserve complete crown envelope','DECIMATE')
+        dec.ratio=min(1, budget / triangles)
+        bpy.ops.object.modifier_apply(modifier=dec.name)
+        piece.select_set(False);pieces.append(piece)
+    bpy.ops.object.select_all(action='DESELECT')
+    for piece in pieces:piece.select_set(True)
+    bpy.context.view_layer.objects.active=pieces[0]
+    bpy.ops.object.join()
+    distant=pieces[0];distant.name=kind+'_L2';distant.data.name=distant.name
+    distant.select_set(False)
+    budget={'Broadleaf':88,'Conifer':182,'Sapling':57}[kind]
+    assert sum(len(p.vertices)-2 for p in distant.data.polygons) <= budget
+    return distant
+
+
 def build():
     OUT.mkdir(parents=True,exist_ok=True);REVIEW.mkdir(parents=True,exist_ok=True)
     for ob in list(bpy.data.objects):bpy.data.objects.remove(ob,do_unlink=True)
@@ -199,10 +257,13 @@ def build():
         dec=lod.modifiers.new('Distant silhouette','DECIMATE');dec.ratio=.22 if kind in ('Broadleaf','Conifer','Sapling') else .45
         bpy.ops.object.modifier_apply(modifier=dec.name)
         lod.select_set(False)
-        distant=ob.copy();distant.data=ob.data.copy();distant.name=kind+'_L2';distant.data.name=distant.name;source.objects.link(distant)
-        bpy.context.view_layer.objects.active=distant;distant.select_set(True)
-        dec=distant.modifiers.new('Overview silhouette','DECIMATE');dec.ratio=.025 if kind in ('Broadleaf','Conifer','Sapling') else .20
-        bpy.ops.object.modifier_apply(modifier=dec.name);distant.select_set(False)
+        if kind in ('Broadleaf','Conifer','Sapling'):
+            distant=overview_tree(ob,g,kind,source)
+        else:
+            distant=ob.copy();distant.data=ob.data.copy();distant.name=kind+'_L2';distant.data.name=distant.name;source.objects.link(distant)
+            bpy.context.view_layer.objects.active=distant;distant.select_set(True)
+            dec=distant.modifiers.new('Overview silhouette','DECIMATE');dec.ratio=.20
+            bpy.ops.object.modifier_apply(modifier=dec.name);distant.select_set(False)
         export([ob,lod,distant],OUT/(kind+'.glb'),export_animations=False)
         distant.location=positions[kind];distant.hide_render=True;distant.hide_set(True)
         ob.location=positions[kind];lod.location=positions[kind];lod.hide_render=True;lod.hide_set(True)
@@ -212,6 +273,7 @@ def build():
                        'far_triangles':sum(len(p.vertices)-2 for p in lod.data.polygons),
                        'overview_triangles':sum(len(p.vertices)-2 for p in distant.data.polygons)}
     scene.camera=camera('Asset library',(27,-38,26),(2,0,4),32)
+    bpy.context.preferences.filepaths.save_version=0
     bpy.ops.wm.save_as_mainfile(filepath=str(OUT/'island-assets.blend'))
     if '--no-review' not in sys.argv:
         render(scene.camera,REVIEW/'asset-library-material.png',(1400,1000))

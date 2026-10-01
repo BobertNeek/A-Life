@@ -145,21 +145,33 @@ pub(super) fn start(world: &mut World) {
         terrain,
         props: handles,
         pack,
-        surface,
+        surface: surface.clone(),
         spawned: false,
         next_update: 0.0,
     });
-    let mesh = world
-        .resource_mut::<Assets<Mesh>>()
-        .add(Plane3d::default().mesh().size(size.x, size.y));
+    let (mesh, material) = match pack {
+        Pack::Island => {
+            let (mesh, mut material, images) = terrain_water::island_water(&surface, size, center);
+            let [shore, ripple] =
+                images.map(|image| world.resource_mut::<Assets<Image>>().add(image));
+            material.base_color_texture = Some(shore);
+            material.normal_map_texture = Some(ripple);
+            (mesh, material)
+        }
+        Pack::Highlands => (
+            Plane3d::default().mesh().size(size.x, size.y).build(),
+            StandardMaterial {
+                base_color: Color::linear_rgb(0.025, 0.24, 0.33),
+                perceptual_roughness: 0.28,
+                reflectance: 0.42,
+                ..default()
+            },
+        ),
+    };
+    let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
     let water = world
         .resource_mut::<Assets<StandardMaterial>>()
-        .add(StandardMaterial {
-            base_color: Color::linear_rgb(0.025, 0.24, 0.33),
-            perceptual_roughness: 0.28,
-            reflectance: 0.42,
-            ..default()
-        });
+        .add(material);
     world.spawn((
         Name::new("Approved terrain water"),
         Mesh3d(mesh),

@@ -20,7 +20,7 @@
       ],
       "near_triangles": 3456,
       "far_triangles": 668,
-      "overview_triangles": 182
+      "overview_triangles": 172
     },
     "Sapling": {
       "width_depth_height_m": [
@@ -30,7 +30,7 @@
       ],
       "near_triangles": 3124,
       "far_triangles": 672,
-      "overview_triangles": 57
+      "overview_triangles": 56
     },
     "BerryBush": {
       "width_depth_height_m": [
