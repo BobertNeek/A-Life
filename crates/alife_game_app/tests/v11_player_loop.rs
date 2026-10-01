@@ -2,7 +2,7 @@
 //!
 //! The fixture reaches a grounded teacher token, a coherent production GPU
 //! tick, bounded recovery sleep, and managed breeding with canonical archives.
-#![cfg(feature = "gpu-runtime")]
+#![cfg(feature = "gpu-tests")]
 
 use std::fs;
 

@@ -8948,7 +8948,7 @@ impl GpuLiveBrainRuntime {
         self.process_selection_batch_with_rollback(rows, WorldMutationRollback::EnclosingStagedTick)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "gpu-tests"))]
     fn process_selection_batch(
         &mut self,
         rows: Vec<(PreparedGpuBrainFrame, GpuClosedLoopTick)>,
@@ -9926,17 +9926,17 @@ impl GpuLiveBrainRuntime {
             .force_learning_rejections_for_test(rejection_count);
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "gpu-tests"))]
     pub(crate) fn handle_for(&self, organism_id: OrganismId) -> Option<GpuBrainHandle> {
         self.handles.get(&organism_id.raw()).copied()
     }
 
-    #[cfg(any(test, feature = "foundation-training"))]
+    #[cfg(any(all(test, feature = "gpu-tests"), feature = "foundation-training"))]
     pub(crate) fn world_mut(&mut self) -> &mut HeadlessWorld {
         &mut self.world
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "gpu-tests"))]
     pub(crate) fn test_tick_retired_handle(
         &mut self,
         handle: GpuBrainHandle,
@@ -10355,11 +10355,15 @@ mod tests {
     };
     use alife_archive::{LineageLibrary, LineageLibraryConfig};
     use alife_core::{
-        ActionTarget, AttentionSelectionPolicy, BrainCapacityClass, CandidateActionFamily,
-        Confidence, ExperienceSequenceId, FoundationGeneticIdentity, FoundationWeightAsset,
-        GenomeId, HysteresisState, NormalizedScalar, OrganismId, OutcomeCreditPacket,
-        PeripheralSummary, PreActionBrainEvidence, SalienceComponents, SensorProfile,
-        StableFocusIdentity, Tick, TrackedObjectId, Vec3f, WorldEntityId,
+        ActionTarget, AttentionSelectionPolicy, BrainCapacityClass, Confidence,
+        ExperienceSequenceId, FoundationGeneticIdentity, FoundationWeightAsset, GenomeId,
+        HysteresisState, NormalizedScalar, OrganismId, SensorProfile, StableFocusIdentity, Tick,
+        TrackedObjectId, Vec3f, WorldEntityId,
+    };
+    #[cfg(feature = "gpu-tests")]
+    use alife_core::{
+        CandidateActionFamily, OutcomeCreditPacket, PeripheralSummary, PreActionBrainEvidence,
+        SalienceComponents,
     };
     use alife_runtime::{GpuDurableSaveManifest, GpuSessionAuthority, GpuSessionConsumerKind};
     use alife_world::{
@@ -10906,6 +10910,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn v11_attention_causally_changes_finalized_upload_and_holds_top_k_primary() {
         let organism_id = OrganismId(1);
         let seed = 77_111;
@@ -11163,6 +11168,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn v11_authoritative_admission_real_runtime() {
         let organism_id = OrganismId(1);
         let seed = 7_701;
@@ -11446,6 +11452,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "gpu-tests")]
     struct NoProgressSleepDriver;
 
     const CURATED_RUNTIME_WORLD_SEED: u64 = 0xA11F_E3E2_3C3A_0001;
@@ -13049,6 +13056,7 @@ mod tests {
         assert!(n1024.foundation_abi().foundation_payload_digest().is_none());
     }
 
+    #[cfg(feature = "gpu-tests")]
     impl GpuSleepConsolidationDriver for NoProgressSleepDriver {
         fn progress(
             &mut self,
@@ -13062,10 +13070,12 @@ mod tests {
     }
 
     #[derive(Default)]
+    #[cfg(feature = "gpu-tests")]
     struct CompletingSleepDriver {
         intents: Vec<alife_core::ConsolidationIntent>,
     }
 
+    #[cfg(feature = "gpu-tests")]
     impl GpuSleepConsolidationDriver for CompletingSleepDriver {
         fn progress(
             &mut self,
@@ -13148,6 +13158,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn live_runtime_binds_canonical_atp_before_each_neural_dispatch() {
         // A bare Agent is not an admitted organism. Use the ordinary New Game
         // route, including its registered genotype and archive dependencies.
@@ -13206,6 +13217,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn organism_despawn_retires_its_gpu_handle_before_slot_reuse() {
         let backend = GpuClosedLoopBackend::new_required(
             alife_gpu_backend::GpuRuntimeProfile::production_v1(),
@@ -13238,6 +13250,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn fatigued_runtime_enters_sleep_before_gpu_dispatch_and_emits_no_action() {
         let backend = GpuClosedLoopBackend::new_required(
             alife_gpu_backend::GpuRuntimeProfile::production_v1(),
@@ -13279,6 +13292,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn mixed_sleeping_and_awake_residents_dispatch_only_the_awake_brain() {
         let backend = GpuClosedLoopBackend::new_required(
             alife_gpu_backend::GpuRuntimeProfile::production_v1(),
@@ -13317,6 +13331,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn completed_sleep_cycle_wakes_once_and_dispatch_resumes_next_tick() {
         let backend = GpuClosedLoopBackend::new_required(
             alife_gpu_backend::GpuRuntimeProfile::production_v1(),
@@ -13385,6 +13400,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn gpu_tick_executes_and_seals_neural_evidence_before_world_advance() {
         let backend = GpuClosedLoopBackend::new_required(
             alife_gpu_backend::GpuRuntimeProfile::production_v1(),
@@ -13831,6 +13847,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn failed_sealing_discards_the_exact_pending_eligibility_and_next_tick_recovers() {
         let backend = GpuClosedLoopBackend::new_required(
             alife_gpu_backend::GpuRuntimeProfile::production_v1(),
@@ -13895,6 +13912,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn tampered_selected_candidate_is_rejected_before_world_execution() {
         let backend = GpuClosedLoopBackend::new_required(
             alife_gpu_backend::GpuRuntimeProfile::production_v1(),
@@ -13970,6 +13988,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn failed_batch_sealing_clears_every_abandoned_pending_transaction() {
         let backend = GpuClosedLoopBackend::new_required(
             alife_gpu_backend::GpuRuntimeProfile::production_v1(),
@@ -14001,6 +14020,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn world_illegality_is_sealed_as_negative_credit_and_learned() {
         let backend = GpuClosedLoopBackend::new_required(
             alife_gpu_backend::GpuRuntimeProfile::production_v1(),

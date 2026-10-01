@@ -1288,6 +1288,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gpu-tests")]
     fn paired_memory_probe_is_valid_for_every_promoted_class_and_profile() {
         for sensor_profile in [
             SensorProfile::GroundedObjectSlotsV1,

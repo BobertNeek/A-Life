@@ -3,10 +3,13 @@
 
 use std::{fs, path::Path};
 
+#[cfg(feature = "gpu-tests")]
 use alife_core::{BrainCapacityClass, PolicyBackend, SensorProfile};
+#[cfg(feature = "gpu-tests")]
 use alife_game_app::{run_gpu_closed_loop_acceptance, GpuClosedLoopAcceptanceOptions};
 
 #[test]
+#[cfg(feature = "gpu-tests")]
 fn production_receipt_has_one_gpu_neural_authority() {
     let receipt = run_gpu_closed_loop_acceptance(GpuClosedLoopAcceptanceOptions {
         capacity: BrainCapacityClass::n512(),

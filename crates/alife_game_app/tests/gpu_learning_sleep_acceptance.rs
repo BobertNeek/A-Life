@@ -1,4 +1,4 @@
-#![cfg(feature = "gpu-runtime")]
+#![cfg(feature = "gpu-tests")]
 
 use alife_core::{BrainCapacityClass, PolicyBackend};
 use alife_game_app::{

@@ -1,5 +1,5 @@
 //! Real-hardware gate for candidate-conditioned memory in the production GPU loop.
-#![cfg(feature = "gpu-runtime")]
+#![cfg(feature = "gpu-tests")]
 
 use std::collections::BTreeMap;
 

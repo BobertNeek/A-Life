@@ -1,5 +1,5 @@
 //! Real-hardware ordering gate for the production world-to-GPU learning loop.
-#![cfg(feature = "gpu-runtime")]
+#![cfg(feature = "gpu-tests")]
 
 use alife_core::{BrainScaleTier, OrganismId, Vec3f};
 use alife_game_app::{GpuLiveBrainRuntime, LiveBrainCausalStage};

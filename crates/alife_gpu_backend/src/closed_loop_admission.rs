@@ -200,7 +200,9 @@ impl GpuRuntimeBudget {
         Ok(budget)
     }
 
-    #[cfg(feature = "gpu-tests")]
+    /// Synthetic admission limits for developer contract fixtures; no adapter
+    /// is requested and this budget is not hardware admission evidence.
+    #[cfg(feature = "test-support")]
     pub fn minimum_for_testing(
         profile: GpuRuntimeProfile,
         execution: &BrainExecutionBudget,

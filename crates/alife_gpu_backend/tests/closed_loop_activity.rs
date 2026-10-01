@@ -5,11 +5,14 @@ mod support;
 use alife_core::{
     BrainActivityPolicyV1, BrainCapacityClass, BrainDispatchIdentity, BrainWorkCounters,
     BrainWorkReceipt, GpuPressureSample, GpuPressureSampleInput, NeuralThrottleDecision,
-    NeuralThrottleLevel, OrganismId, SensorProfile, Tick, BRAIN_ATP_BASAL_DEBIT_Q16,
-    BRAIN_ATP_Q16_MAX,
+    NeuralThrottleLevel, OrganismId, SensorProfile,
 };
+#[cfg(feature = "gpu-tests")]
+use alife_core::{Tick, BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX};
+#[cfg(feature = "gpu-tests")]
+use alife_gpu_backend::GpuActivityRestoreInput;
 use alife_gpu_backend::{
-    derive_executed_work, GpuActivityDispatchHeader, GpuActivityRestoreInput, GpuClassBucketPlan,
+    derive_executed_work, GpuActivityDispatchHeader, GpuClassBucketPlan,
     CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL, CLOSED_LOOP_RECURRENT_WGSL,
     GPU_ACTIVITY_DISPATCH_HEADER_WORDS,
 };

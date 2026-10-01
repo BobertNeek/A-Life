@@ -1,4 +1,4 @@
-#![cfg(feature = "gpu-runtime")]
+#![cfg(feature = "gpu-tests")]
 
 use alife_core::{BrainScaleTier, OrganismId, OutcomeCreditPacket, Vec3f};
 use alife_game_app::GpuLiveBrainRuntime;

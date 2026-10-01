@@ -1,6 +1,8 @@
 #![cfg(feature = "gpu-runtime")]
 
-use alife_core::{BrainCapacityClass, PolicyBackend, SensorProfile};
+#[cfg(feature = "gpu-tests")]
+use alife_core::PolicyBackend;
+use alife_core::{BrainCapacityClass, SensorProfile};
 use alife_game_app::{run_gpu_closed_loop_acceptance, GpuClosedLoopAcceptanceOptions};
 
 fn test_options() -> GpuClosedLoopAcceptanceOptions {
@@ -13,6 +15,7 @@ fn test_options() -> GpuClosedLoopAcceptanceOptions {
 }
 
 #[test]
+#[cfg(feature = "gpu-tests")]
 fn gpu_closed_loop_slice_a_receipt_is_authoritative() {
     let receipt = run_gpu_closed_loop_acceptance(test_options()).unwrap();
 
@@ -60,6 +63,7 @@ fn gpu_closed_loop_slice_a_receipt_is_authoritative() {
 }
 
 #[test]
+#[cfg(feature = "gpu-tests")]
 fn gpu_closed_loop_slice_a_sustains_sixty_four_neural_ticks() {
     for capacity in [
         BrainCapacityClass::n512(),
@@ -80,6 +84,7 @@ fn gpu_closed_loop_slice_a_sustains_sixty_four_neural_ticks() {
 }
 
 #[test]
+#[cfg(feature = "gpu-tests")]
 fn gpu_closed_loop_slice_a_receipt_round_trips_and_rejects_tampering() {
     let receipt = run_gpu_closed_loop_acceptance(test_options()).unwrap();
     let encoded = serde_json::to_vec(&receipt).unwrap();

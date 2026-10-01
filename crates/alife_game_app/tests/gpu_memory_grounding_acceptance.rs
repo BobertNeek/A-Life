@@ -1,4 +1,4 @@
-#![cfg(feature = "gpu-runtime")]
+#![cfg(feature = "gpu-tests")]
 
 use std::sync::OnceLock;
 

@@ -62,6 +62,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
 
 Use a focused `cargo test -p <crate> <filter>` when a Rust behavior changes. Do not launch a second Cargo build while another shared-target build is active.
 
+Default workspace tests are CPU-safe: they retain shader validation, portable
+state, admission/receipt contracts, and typed failure checks without requiring
+a real neural GPU. Optional adapter diagnostics may report honest unavailability
+in preflight/file-boundary tests. Tests that require neural hardware use the explicit
+`gpu-tests` feature. On a suitable Vulkan machine, use
+`cargo test -p alife_game_app --features "gpu-runtime gpu-tests"` or
+`cargo test -p alife_gpu_backend --features gpu-tests`; the existing
+`scripts/run_gpu_closed_loop_gates.ps1` commands opt in as well.
+`--all-features` also opts into hardware tests. The backend's `test-support`
+feature exposes synthetic admission-budget fixtures for CPU contract tests;
+those fixtures do not establish real adapter admission or GPU performance.
+
 Release-oriented checks may also require:
 
 ```powershell
