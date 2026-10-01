@@ -276,10 +276,21 @@ fn candidate_family_raw_mapping_is_stable_and_total() {
         assert_eq!(family.raw(), raw);
     }
     assert!(CandidateActionFamily::try_from_raw(8).is_err());
-    assert_eq!(SensorProfile::PrivilegedAffordanceV1.raw(), 1);
-    assert_eq!(SensorProfile::GroundedObjectSlotsV1.raw(), 2);
-    assert!(SensorProfile::try_from_raw(0).is_err());
-    assert!(SensorProfile::try_from_raw(3).is_err());
+}
+
+#[test]
+fn sensor_profile_raw_mapping_is_stable_and_total() {
+    for (raw, profile) in [
+        (1, SensorProfile::PrivilegedAffordanceV1),
+        (2, SensorProfile::GroundedObjectSlotsV1),
+        (3, SensorProfile::GroundedTerrainVisionV1),
+    ] {
+        assert_eq!(profile.raw(), raw);
+        assert_eq!(SensorProfile::try_from_raw(raw).unwrap(), profile);
+    }
+    for raw in std::iter::once(0).chain(4..=u16::MAX) {
+        assert!(SensorProfile::try_from_raw(raw).is_err());
+    }
 }
 
 #[test]
