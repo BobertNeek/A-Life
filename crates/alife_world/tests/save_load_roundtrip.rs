@@ -320,48 +320,6 @@ fn typed_unavailable_gpu_runtime_state_is_valid_and_stops_learned_actions() {
     assert!(state.validate().is_ok());
 }
 
-fn load_runtime_config_value(test_name: &str, value: &serde_json::Value) -> RuntimeConfig {
-    let root = temp_root(test_name);
-    let path = root.join("runtime_config.json");
-    fs::write(&path, serde_json::to_vec_pretty(value).unwrap()).unwrap();
-    RuntimeConfig::from_json_file(path).unwrap()
-}
-
-fn legacy_runtime_config(
-    requested: &str,
-    gpu_feature_enabled: bool,
-    fallback_to_cpu: bool,
-) -> serde_json::Value {
-    let mut value: serde_json::Value =
-        serde_json::from_str(include_str!("fixtures/p34/tiny_config.json")).unwrap();
-    let object = value.as_object_mut().unwrap();
-    replace_brain_policy_with_legacy_backend(
-        object,
-        requested,
-        gpu_feature_enabled,
-        fallback_to_cpu,
-    );
-    value
-}
-
-fn replace_brain_policy_with_legacy_backend(
-    config: &mut serde_json::Map<String, serde_json::Value>,
-    requested: &str,
-    gpu_feature_enabled: bool,
-    fallback_to_cpu: bool,
-) {
-    config.remove("brain_policy");
-    config.insert(
-        "backend".to_string(),
-        serde_json::json!({
-            "requested": requested,
-            "gpu_feature_enabled": gpu_feature_enabled,
-            "fallback_to_cpu": fallback_to_cpu,
-            "validation_required": true
-        }),
-    );
-}
-
 #[test]
 fn tiny_save_load_round_trip_restores_stable_world_and_summaries() {
     let mut world = fixture_world();
@@ -795,66 +753,79 @@ fn current_runtime_config_serializes_only_explicit_policy_intent() {
 }
 
 #[test]
-fn legacy_cpu_reference_migrates_to_explicit_heuristic_policy() {
-    let legacy = legacy_runtime_config("CpuReference", true, false);
-    let migrated = load_runtime_config_value("legacy_cpu_policy", &legacy);
-
-    assert_eq!(
-        migrated.brain_policy.policy,
-        PolicyBackend::HeuristicBaseline
-    );
-    assert!(!migrated.brain_policy.policy.requires_gpu());
-    assert_no_runtime_fallback_keys(&serde_json::to_value(migrated).unwrap());
-}
-
-#[test]
-fn legacy_gpu_selections_migrate_to_neural_without_runtime_switching() {
-    for requested in ["GpuStatic", "GpuPlastic", "GpuFull"] {
-        let legacy = legacy_runtime_config(requested, false, true);
-        let migrated = load_runtime_config_value(&format!("legacy_{requested}"), &legacy);
-
-        assert_eq!(
-            migrated.brain_policy.policy,
-            PolicyBackend::NeuralClosedLoopGpu,
-            "legacy selection {requested}"
-        );
-        assert!(migrated.brain_policy.policy.requires_gpu());
-        assert_no_runtime_fallback_keys(&serde_json::to_value(migrated).unwrap());
+fn current_runtime_config_round_trips_both_explicit_policies() {
+    for policy in [
+        PolicyBackend::NeuralClosedLoopGpu,
+        PolicyBackend::HeuristicBaseline,
+    ] {
+        let mut expected = RuntimeConfig::deterministic_default(99, BrainScaleTier::Nano512);
+        expected.brain_policy.policy = policy;
+        expected.validate().unwrap();
+        let bytes = serde_json::to_vec(&expected).unwrap();
+        let restored: RuntimeConfig = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(restored, expected);
+        assert_eq!(serde_json::to_vec(&restored).unwrap(), bytes);
     }
 }
 
 #[test]
-fn legacy_policy_nested_in_portable_save_migrates_without_runtime_switching() {
+fn runtime_config_requires_explicit_current_policy() {
+    let mut value = serde_json::to_value(RuntimeConfig::deterministic_default(
+        99,
+        BrainScaleTier::Nano512,
+    ))
+    .unwrap();
+    value.as_object_mut().unwrap().remove("brain_policy");
+    let error = serde_json::from_value::<RuntimeConfig>(value).unwrap_err();
+    assert!(error.to_string().contains("missing field `brain_policy`"));
+}
+
+#[test]
+fn runtime_config_rejects_retired_backend_flags_with_or_without_current_policy() {
+    for has_current_policy in [false, true] {
+        let mut value = serde_json::to_value(RuntimeConfig::deterministic_default(
+            99,
+            BrainScaleTier::Nano512,
+        ))
+        .unwrap();
+        if !has_current_policy {
+            value.as_object_mut().unwrap().remove("brain_policy");
+        }
+        value["backend"] = serde_json::json!({
+            "requested": "GpuFull",
+            "gpu_feature_enabled": false,
+            "fallback_to_cpu": true,
+            "validation_required": true
+        });
+        let error = serde_json::from_value::<RuntimeConfig>(value).unwrap_err();
+        assert!(error.to_string().contains("unknown field `backend`"));
+    }
+}
+
+#[test]
+fn portable_save_rejects_retired_backend_config() {
     let current_save = PortableSaveFile::from_headless_world(
-        "legacy-nested-policy",
+        "retired-backend-rejection",
         &fixture_world(),
         RuntimeConfig::deterministic_default(4242, BrainScaleTier::Nano512),
         fixture_manifest(),
         vec![fixture_creature()],
     )
     .unwrap();
-    for (requested, expected) in [
-        ("CpuReference", PolicyBackend::HeuristicBaseline),
-        ("GpuFull", PolicyBackend::NeuralClosedLoopGpu),
-    ] {
-        let mut value = serde_json::to_value(&current_save).unwrap();
-        let config = value
-            .get_mut("config")
-            .and_then(serde_json::Value::as_object_mut)
-            .unwrap();
-        replace_brain_policy_with_legacy_backend(config, requested, false, true);
-
-        let migrated = PortableSaveFile::from_json_str(&value.to_string()).unwrap();
-        assert_eq!(
-            migrated.config.brain_policy.policy, expected,
-            "legacy nested selection {requested}"
-        );
-        assert_eq!(
-            migrated.config.brain_policy.policy.requires_gpu(),
-            expected == PolicyBackend::NeuralClosedLoopGpu
-        );
-        assert_no_runtime_fallback_keys(&serde_json::to_value(migrated).unwrap());
-    }
+    let mut value = serde_json::to_value(&current_save).unwrap();
+    let config = value["config"].as_object_mut().unwrap();
+    config.remove("brain_policy");
+    config.insert(
+        "backend".to_string(),
+        serde_json::json!({
+            "requested": "GpuFull",
+            "gpu_feature_enabled": false,
+            "fallback_to_cpu": true,
+            "validation_required": true
+        }),
+    );
+    let error = PortableSaveFile::from_json_str(&value.to_string()).unwrap_err();
+    assert!(error.to_string().contains("unknown field `backend`"));
 }
 
 #[test]

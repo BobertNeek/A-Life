@@ -25,7 +25,6 @@ use crate::{
     grounded_sensing::GroundedPhysicalProperties,
     habitat::{HabitatAuthority, HabitatAuthorityError, HabitatId},
     headless::{HeadlessWorld, HeadlessWorldPersistenceParts, WorldObject, WorldObjectKind},
-    legacy_neural_policy_v1::LegacyBackendConfigV1,
     organism::{OrganismRegistryError, WorldOrganismRecord, WorldOrganismRegistry},
     persistent_voxel::{
         migrated_voxel_backend_for_world, PersistentVoxelProfileId, PersistentVoxelWorldSaveState,
@@ -711,7 +710,8 @@ pub struct LoggingConfig {
     pub relative_log_path: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RuntimeConfig {
     pub schema: String,
     pub schema_version: u16,
@@ -726,68 +726,6 @@ pub struct RuntimeConfig {
     pub logging: LoggingConfig,
     pub asset_root: String,
     pub save_root: String,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RuntimeConfigWire {
-    schema: String,
-    schema_version: u16,
-    deterministic_seed: u64,
-    brain_class: BrainScaleTier,
-    benchmark_population_tier: u16,
-    #[serde(default)]
-    brain_policy: Option<BrainPolicyConfig>,
-    #[serde(default)]
-    backend: Option<LegacyBackendConfigV1>,
-    features: FeatureFlagConfig,
-    school: SchoolConfig,
-    semantic: SemanticAdapterConfig,
-    gpu_limits: GpuLimitsConfig,
-    logging: LoggingConfig,
-    asset_root: String,
-    save_root: String,
-}
-
-impl<'de> Deserialize<'de> for RuntimeConfig {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let wire = RuntimeConfigWire::deserialize(deserializer)?;
-        let brain_policy = match (wire.brain_policy, wire.backend) {
-            (Some(policy), None) => policy,
-            (None, Some(legacy)) => BrainPolicyConfig {
-                schema_version: BRAIN_POLICY_CONFIG_SCHEMA_VERSION,
-                policy: legacy.migrate_policy(),
-            },
-            (Some(_), Some(_)) => {
-                return Err(D::Error::custom(
-                    "runtime config cannot contain both brain_policy and legacy backend",
-                ));
-            }
-            (None, None) => {
-                return Err(D::Error::custom(
-                    "runtime config requires brain_policy or legacy backend",
-                ));
-            }
-        };
-        Ok(Self {
-            schema: wire.schema,
-            schema_version: wire.schema_version,
-            deterministic_seed: wire.deterministic_seed,
-            brain_class: wire.brain_class,
-            benchmark_population_tier: wire.benchmark_population_tier,
-            brain_policy,
-            features: wire.features,
-            school: wire.school,
-            semantic: wire.semantic,
-            gpu_limits: wire.gpu_limits,
-            logging: wire.logging,
-            asset_root: wire.asset_root,
-            save_root: wire.save_root,
-        })
-    }
 }
 
 impl RuntimeConfig {

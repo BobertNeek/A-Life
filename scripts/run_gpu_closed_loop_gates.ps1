@@ -116,9 +116,8 @@ function Invoke-AuthorityScan {
         $exitCode = $rgExit
     }
     else {
-        $bad = @($raw | Where-Object { $_ -notmatch 'crates[\\/]alife_world[\\/]src[\\/]legacy_neural_policy_v1.rs:' })
-        if ($bad.Count -ne 0) {
-            [System.IO.File]::WriteAllText($StderrPath, (($bad -join "`n") + "`n"), [System.Text.UTF8Encoding]::new($false))
+        if ($raw.Count -ne 0) {
+            [System.IO.File]::WriteAllText($StderrPath, (($raw -join "`n") + "`n"), [System.Text.UTF8Encoding]::new($false))
             [System.IO.File]::WriteAllText($StdoutPath, '', [System.Text.UTF8Encoding]::new($false))
             $exitCode = 1
         }
