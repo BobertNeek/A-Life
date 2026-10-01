@@ -736,6 +736,67 @@ mod tests {
     use super::*;
 
     #[test]
+    fn founder_choice_readouts_use_signed_consequences_without_removing_predictive_recurrence() {
+        let capacity = BrainCapacityClass::n2048();
+        let genome = BrainGenome::scaffold(0x5A7E_0004, capacity.id());
+        let development = DevelopmentState::new(
+            genome.id,
+            crate::Tick::ZERO,
+            crate::NormalizedScalar::new(1.0).unwrap(),
+        );
+        let phenotype = super::super::PhenotypeCompiler::compile_testing_procedural_baseline(
+            &genome,
+            &capacity,
+            &development,
+            crate::SensorProfile::GroundedTerrainVisionV1,
+        )
+        .unwrap();
+        let signed = crate::ActionCandidateCreditProfileV1::SignedChoiceReadouts.receptor_profile();
+        let surprise_with_injury =
+            crate::NeuromodulatoryFrame::try_new([1.0, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+                .unwrap();
+        assert!(signed.project(&surprise_with_injury).unwrap() < 0.0);
+        assert!(
+            genome
+                .plasticity_parameters()
+                .receptor_profile()
+                .project(&surprise_with_injury)
+                .unwrap()
+                > 0.0
+        );
+        let mut choice_count = 0;
+        for synapse in phenotype.synapses() {
+            let receptor = phenotype.plasticity_receptors()[usize::from(synapse.receptor_index())];
+            match synapse.kind() {
+                CompiledSynapseKind::Decoder(c)
+                    if matches!(
+                        c.head(),
+                        super::super::DecoderHeadKind::ActionCandidate
+                            | super::super::DecoderHeadKind::MemoryContext
+                    ) =>
+                {
+                    assert_eq!(receptor.receptor_profile(), signed);
+                    choice_count += 1;
+                }
+                CompiledSynapseKind::Recurrent => {
+                    assert_eq!(
+                        receptor.receptor_profile(),
+                        genome.plasticity_parameters().receptor_profile()
+                    );
+                }
+                _ => {}
+            }
+        }
+        assert_eq!(choice_count, 3_072 + 4_096);
+        let wire = serde_json::to_vec(&genome).unwrap();
+        let restored: BrainGenome = serde_json::from_slice(&wire).unwrap();
+        assert_eq!(
+            restored.plasticity_parameters(),
+            genome.plasticity_parameters()
+        );
+    }
+
+    #[test]
     fn disabled_receptor_has_exactly_zero_delta_rates() {
         let receptor = PlasticityReceptorPlan::try_new(
             0.95,

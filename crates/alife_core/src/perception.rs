@@ -163,8 +163,19 @@ impl Validate for BodySnapshot {
 pub struct CandidateFeatureVector(pub [f32; CANDIDATE_FEATURE_COUNT]);
 
 impl CandidateFeatureVector {
+    pub const INTRINSIC_ACTION_BASIS_LANE: usize = 23;
+
     pub const fn zero() -> Self {
         Self([0.0; CANDIDATE_FEATURE_COUNT])
+    }
+
+    /// Describe a targetless action opportunity without assigning a score.
+    /// Object candidates retain the physical meaning of these same lanes.
+    pub fn with_intrinsic_action_basis(mut self, kind: ActionKind) -> Self {
+        self.0[Self::INTRINSIC_ACTION_BASIS_LANE] = 1.0;
+        self.0[21] = f32::from(matches!(kind, ActionKind::Rest | ActionKind::Hold));
+        self.0[22] = f32::from(kind == ActionKind::Vocalize);
+        self
     }
 
     pub fn validate(&self) -> Result<(), ScaffoldContractError> {
@@ -910,63 +921,83 @@ fn validate_frame_base(
                 return Err(ScaffoldContractError::InvalidPerceptionFrame);
             }
             for candidate in candidates {
+                let mut intrinsic_grounding = candidate.features;
+                if candidate.observation == CandidateObservationRef::None
+                    && intrinsic_grounding.0[CandidateFeatureVector::INTRINSIC_ACTION_BASIS_LANE]
+                        == 1.0
+                {
+                    let basis =
+                        CandidateFeatureVector::zero().with_intrinsic_action_basis(candidate.kind);
+                    if intrinsic_grounding.0[21..] != basis.0[21..] {
+                        return Err(ScaffoldContractError::InvalidPerceptionFrame);
+                    }
+                    // Validate the unchanged physical primitive separately from
+                    // its exact, unscored action-opportunity descriptor.
+                    intrinsic_grounding.0[21..].fill(0.0);
+                }
                 match (candidate.family, candidate.observation) {
                     (CandidateActionFamily::Idle, CandidateObservationRef::None) => {}
                     (CandidateActionFamily::Rest, CandidateObservationRef::None)
                         if candidate.kind == ActionKind::Rest
                             && candidate.target == ActionTarget::NONE
-                            && candidate.features == CandidateFeatureVector::zero() => {}
+                            && intrinsic_grounding == CandidateFeatureVector::zero() => {}
                     (CandidateActionFamily::Other, CandidateObservationRef::None)
                         if candidate.kind == ActionKind::Vocalize
                             && candidate.target == ActionTarget::NONE
-                            && candidate.features == CandidateFeatureVector::zero() => {}
+                            && intrinsic_grounding == CandidateFeatureVector::zero() => {}
                     (CandidateActionFamily::Contact, CandidateObservationRef::None)
                         if candidate.kind == ActionKind::Interact
                             && candidate.target == ActionTarget::NONE
-                            && candidate.features == CandidateFeatureVector::zero() => {}
+                            && intrinsic_grounding == CandidateFeatureVector::zero() => {}
                     (CandidateActionFamily::Approach, CandidateObservationRef::None)
                         if candidate.kind == ActionKind::Move
                             && candidate.target == ActionTarget::NONE
-                            && candidate.features == CandidateFeatureVector::zero() => {}
+                            && intrinsic_grounding == CandidateFeatureVector::zero() => {}
                     (CandidateActionFamily::Approach, CandidateObservationRef::None)
                         if sensor_profile == SensorProfile::GroundedTerrainVisionV1
                             && candidate.kind == ActionKind::Move
                             && candidate.target == ActionTarget::NONE
-                            && candidate.features.0[0] == 0.0
-                            && candidate.features.0[1] == 1.0
-                            && candidate.features.0[2..19]
+                            && intrinsic_grounding.0[0] == 0.0
+                            && intrinsic_grounding.0[1] == 1.0
+                            && intrinsic_grounding.0[2..19]
                                 .iter()
                                 .all(|value| *value == 0.0)
-                            && candidate.features.0[19] == 1.0
-                            && candidate.features.0[20..].iter().all(|value| *value == 0.0) => {}
+                            && intrinsic_grounding.0[19] == 1.0
+                            && intrinsic_grounding.0[20..]
+                                .iter()
+                                .all(|value| *value == 0.0) => {}
                     (CandidateActionFamily::Other, CandidateObservationRef::None)
                         if candidate.kind == ActionKind::Hold
                             && candidate.target == ActionTarget::NONE
-                            && candidate.features == CandidateFeatureVector::zero() => {}
+                            && intrinsic_grounding == CandidateFeatureVector::zero() => {}
                     (CandidateActionFamily::Inspect, CandidateObservationRef::None)
                         if sensor_profile == SensorProfile::GroundedTerrainVisionV1
                             && candidate.kind == ActionKind::Look
                             && candidate.target == ActionTarget::NONE
-                            && candidate.features.0[18] == 1.0
-                            && candidate.features.0[2..18]
+                            && intrinsic_grounding.0[18] == 1.0
+                            && intrinsic_grounding.0[2..18]
                                 .iter()
                                 .all(|value| *value == 0.0)
-                            && candidate.features.0[19..].iter().all(|value| *value == 0.0)
+                            && intrinsic_grounding.0[19..]
+                                .iter()
+                                .all(|value| *value == 0.0)
                             && matches!(
-                                (candidate.features.0[0], candidate.features.0[1]),
+                                (intrinsic_grounding.0[0], intrinsic_grounding.0[1]),
                                 (1.0, 0.0) | (-1.0, 0.0) | (0.0, 1.0) | (0.0, 0.0)
                             ) => {}
                     (CandidateActionFamily::Inspect, CandidateObservationRef::None)
                         if sensor_profile == SensorProfile::GroundedTerrainVisionV1
                             && candidate.kind == ActionKind::Look
                             && candidate.target == ActionTarget::NONE
-                            && candidate.features.0[2..19]
+                            && intrinsic_grounding.0[2..19]
                                 .iter()
                                 .all(|value| *value == 0.0)
-                            && candidate.features.0[19] == 1.0
-                            && candidate.features.0[20..].iter().all(|value| *value == 0.0)
+                            && intrinsic_grounding.0[19] == 1.0
+                            && intrinsic_grounding.0[20..]
+                                .iter()
+                                .all(|value| *value == 0.0)
                             && matches!(
-                                (candidate.features.0[0], candidate.features.0[1]),
+                                (intrinsic_grounding.0[0], intrinsic_grounding.0[1]),
                                 (1.0, 0.0) | (-1.0, 0.0)
                             ) => {}
                     (CandidateActionFamily::Idle, CandidateObservationRef::ObjectSlot(_))

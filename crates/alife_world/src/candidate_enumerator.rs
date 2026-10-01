@@ -26,7 +26,6 @@ pub const CANDIDATE_FEATURE_AFFORDANCE_COUNT: usize = 10;
 pub const CANDIDATE_FEATURE_CONTACT_LANE: usize = 16;
 pub const CANDIDATE_FEATURE_EVIDENCE_LANE: usize = 17;
 pub const CANDIDATE_FEATURE_RESERVED_START_LANE: usize = 18;
-
 // Same Contact head, distinct motor operation. The feature describes the
 // attempted action, never a hidden object kind or successful outcome.
 fn interaction_features(
@@ -216,7 +215,7 @@ impl GroundedCandidateEnumerator {
                     family,
                     CandidateObservationRef::None,
                     ActionTarget::NONE,
-                    CandidateFeatureVector(features),
+                    CandidateFeatureVector(features).with_intrinsic_action_basis(kind),
                     Confidence::new(1.0)?,
                     NormalizedScalar::new(0.1)?,
                     DurationTicks::new(1),
@@ -243,7 +242,8 @@ impl GroundedCandidateEnumerator {
                     CandidateActionFamily::Inspect,
                     CandidateObservationRef::None,
                     ActionTarget::NONE,
-                    CandidateFeatureVector(look_features),
+                    CandidateFeatureVector(look_features)
+                        .with_intrinsic_action_basis(ActionKind::Look),
                     Confidence::new(1.0)?,
                     NormalizedScalar::new(0.02)?,
                     DurationTicks::new(1),
@@ -331,7 +331,7 @@ impl GroundedCandidateEnumerator {
             CandidateActionFamily::Approach,
             CandidateObservationRef::None,
             ActionTarget::NONE,
-            CandidateFeatureVector::zero(),
+            CandidateFeatureVector::zero().with_intrinsic_action_basis(ActionKind::Move),
             Confidence::new(1.0)?,
             NormalizedScalar::new(0.0)?,
             DurationTicks::new(1),
@@ -345,7 +345,7 @@ impl GroundedCandidateEnumerator {
             CandidateActionFamily::Contact,
             CandidateObservationRef::None,
             ActionTarget::NONE,
-            CandidateFeatureVector::zero(),
+            CandidateFeatureVector::zero().with_intrinsic_action_basis(ActionKind::Interact),
             Confidence::new(1.0)?,
             NormalizedScalar::new(0.0)?,
             DurationTicks::new(1),
@@ -359,7 +359,7 @@ impl GroundedCandidateEnumerator {
             CandidateActionFamily::Other,
             CandidateObservationRef::None,
             ActionTarget::NONE,
-            CandidateFeatureVector::zero(),
+            CandidateFeatureVector::zero().with_intrinsic_action_basis(ActionKind::Hold),
             Confidence::new(1.0)?,
             NormalizedScalar::new(0.0)?,
             DurationTicks::new(1),
@@ -385,7 +385,7 @@ fn push_intrinsic_candidates(
             family,
             CandidateObservationRef::None,
             ActionTarget::NONE,
-            CandidateFeatureVector::zero(),
+            CandidateFeatureVector::zero().with_intrinsic_action_basis(kind),
             Confidence::new(1.0)?,
             NormalizedScalar::new(effort)?,
             DurationTicks::new(1),
@@ -502,4 +502,93 @@ fn add(left: Vec3f, right: Vec3f) -> Vec3f {
 
 fn length(value: Vec3f) -> f32 {
     (value.x * value.x + value.y * value.y + value.z * value.z).sqrt()
+}
+
+#[cfg(test)]
+mod founder_basis_tests {
+    use super::*;
+    use crate::HeadlessScenarioBuilder;
+    use alife_core::{HomeostaticSnapshot, OrganismId, Tick};
+
+    #[test]
+    fn intrinsic_choices_have_learning_support_without_changing_object_evidence() {
+        let mut world = HeadlessScenarioBuilder::new(60_011)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .food("food", Vec3f::new(3.0, 0.0, 0.0), 0.6)
+            .build()
+            .unwrap();
+        let frame = world
+            .perception_frame_draft(
+                OrganismId(1),
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap();
+        for candidate in frame.candidates() {
+            if candidate.target == ActionTarget::NONE {
+                assert_eq!(
+                    candidate.features.0[CandidateFeatureVector::INTRINSIC_ACTION_BASIS_LANE],
+                    1.0
+                );
+            } else if let CandidateObservationRef::ObjectSlot(index) = candidate.observation {
+                let slot = frame
+                    .grounded_object_slots()
+                    .iter()
+                    .find(|s| s.slot_index == index)
+                    .unwrap();
+                assert_eq!(
+                    candidate.features.0[CandidateFeatureVector::INTRINSIC_ACTION_BASIS_LANE],
+                    slot.terrain[1]
+                );
+                assert_eq!(candidate.features.0[15], 0.0, "distant taste stays absent");
+            }
+        }
+        assert!(frame
+            .sensory()
+            .channels
+            .smell_chemistry
+            .iter()
+            .any(|v| *v > 0.0));
+        let rest = frame
+            .candidates()
+            .iter()
+            .find(|c| c.family == CandidateActionFamily::Rest)
+            .unwrap();
+        let vocal = frame
+            .candidates()
+            .iter()
+            .find(|c| c.kind == ActionKind::Vocalize)
+            .unwrap();
+        let hold = frame
+            .candidates()
+            .iter()
+            .find(|c| c.action_id == HeadlessActionIds::NO_POSTURE)
+            .unwrap();
+        assert_eq!(vocal.family, hold.family);
+        assert_ne!(vocal.features, hold.features);
+        // d(logit)/d(weight) = motor * feature is now nonzero for a nonzero
+        // motor activation, so both offline and local action learning can act.
+        assert_ne!(
+            0.5 * rest.features.0[CandidateFeatureVector::INTRINSIC_ACTION_BASIS_LANE],
+            0.0
+        );
+        let mut forged = frame.candidates().to_vec();
+        forged[usize::from(rest.candidate_index)].features.0[22] = 1.0;
+        assert_eq!(
+            alife_core::PerceptionFrameDraft::new(
+                frame.organism_id(),
+                frame.tick(),
+                frame.sensor_profile(),
+                frame.sensory().clone(),
+                frame.body(),
+                frame.homeostasis().clone(),
+                forged,
+                frame.profile_provenance(),
+                frame.grounded_object_slots().to_vec(),
+            ),
+            Err(ScaffoldContractError::InvalidPerceptionFrame),
+            "the action descriptor cannot fabricate a different opportunity",
+        );
+    }
 }
