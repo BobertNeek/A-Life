@@ -103,6 +103,21 @@ pub(super) struct HearthlingVisual {
     feedback: OutcomeFeedback,
 }
 
+impl HearthlingVisual {
+    pub(super) fn capture_feedback(&self) -> serde_json::Value {
+        serde_json::json!({
+            "last_confirmed_ingestion_tick": self.feedback.last_ingestion_tick,
+            "last_emitted_utterance_id": self.feedback.last_utterance_id,
+            "ingestion_remaining_seconds": self.feedback.ingestion_remaining,
+            "speech_remaining_seconds": self.feedback.speech_remaining,
+            "ingestion_duration_seconds": INGESTION_FEEDBACK_SECONDS,
+            "speech_duration_seconds": SPEECH_FEEDBACK_SECONDS,
+            "ingestion_source": "sealed_matching_organism_manipulation_eat_consumed_receipt",
+            "speech_source": "active_nonempty_creature_audible_utterance_matching_speaker",
+        })
+    }
+}
+
 #[derive(Component)]
 pub(super) struct HearthlingPlayer {
     root: Entity,
@@ -146,10 +161,20 @@ struct HearthlingSource(Handle<Gltf>);
 pub(super) struct InheritedBoneScale(Vec3);
 
 #[derive(Component)]
-struct HearthlingPoseBone {
+pub(super) struct HearthlingPoseBone {
     root: Entity,
     part: ExpressionBone,
     bind_rotation: Quat,
+}
+
+impl HearthlingPoseBone {
+    pub(super) fn capture_root(&self) -> Entity {
+        self.root
+    }
+
+    pub(super) fn capture_bind_rotation(&self) -> [f32; 4] {
+        self.bind_rotation.to_array()
+    }
 }
 
 #[derive(Clone, Copy)]

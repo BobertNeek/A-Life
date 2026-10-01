@@ -19,11 +19,23 @@ pub(super) fn capture_player_view(
     time: Res<Time<bevy::time::Real>>,
     mut session: Local<CaptureSession>,
     ux: Res<Fvr05ProductionUxStateResource>,
-    roots: bevy::prelude::Query<(&Fvr04ProductionCreatureVisualMarker, &Transform)>,
+    roots: bevy::prelude::Query<(
+        Entity,
+        &Fvr04ProductionCreatureVisualMarker,
+        &Transform,
+        Option<&hearthling::HearthlingVisual>,
+    )>,
+    bones: Query<(
+        &hearthling::HearthlingPoseBone,
+        &Name,
+        &Transform,
+        &GlobalTransform,
+    )>,
     players: bevy::prelude::Query<&bevy::prelude::AnimationPlayer>,
     surface: Res<creature_grounding::RenderedTerrainSurface>,
     highlands: Option<Res<creature_grounding::SelectedTerrain>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    #[cfg(feature = "gpu-runtime")] runtime: Option<NonSend<ProductionGpuBrainRuntimeResource>>,
     meshes: Res<Assets<Mesh>>,
     visible_meshes: Query<(&Mesh3d, &ViewVisibility)>,
     mut commands: Commands,
@@ -43,6 +55,19 @@ pub(super) fn capture_player_view(
         session.next_at = 2.0;
         session.initialized = true;
     }
+    // Fetch existing world speech only when writing evidence, without GPU readback.
+    let active_utterances = || {
+        #[cfg(feature = "gpu-runtime")]
+        {
+            runtime
+                .as_ref()
+                .map_or_else(Vec::new, |r| r.runtime.active_utterances())
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
+        {
+            Vec::<alife_world::AudibleUtterance>::new()
+        }
+    };
     // Passive, bounded debug evidence. No extra neural readback or simulation changes.
     if session.action_trace.is_some() && session.traced_frames < 10_000 {
         if let Some(frame) = frame.as_ref() {
@@ -78,6 +103,7 @@ pub(super) fn capture_player_view(
                     });
                     serde_json::json!({
                         "organism_id": s.organism_id.raw(),
+                        "stable_id": object.map(|o| o.id.raw()),
                         "tick_before": s.world_tick_before.raw(), "tick_after": s.world_tick_after.raw(),
                         "status": format!("{:?}", s.status),
                         "action": s.selected_action_kind.map(|v| format!("{v:?}")),
@@ -104,6 +130,7 @@ pub(super) fn capture_player_view(
                 }).collect::<Vec<_>>();
                 let receipt = serde_json::json!({
                     "world_tick": tick, "elapsed_seconds": time.elapsed_secs_f64(), "actions": rows,
+                    "active_utterances": active_utterances(),
                     "food": frame.current.objects().filter(|o| o.kind == WorldObjectKind::Food).map(|o| serde_json::json!({
                         "id": o.id.raw(), "position": [o.position.x, o.position.y, o.position.z], "consumed": o.consumed,
                         "carried_by": o.carried_by.map(|id| id.raw()),
@@ -150,13 +177,36 @@ pub(super) fn capture_player_view(
         "last_player_action": ux.last_action,
         "last_player_error": ux.last_error,
         "world_tick": frame.as_ref().map(|f| f.current.authoritative_world_tick.raw()),
+        "active_utterances": active_utterances(),
         "food": frame.as_ref().map(|f| f.current.objects().filter(|o| o.kind == WorldObjectKind::Food).map(|o| serde_json::json!({
             "id":o.id.raw(), "position":[o.position.x,o.position.y,o.position.z], "consumed":o.consumed,
         })).collect::<Vec<_>>()),
         "animation_players": players.iter().count(),
         "clip_times": players.iter().map(|p| p.playing_animations().map(|(_,a)| a.seek_time()).collect::<Vec<_>>()).collect::<Vec<_>>(),
-        "creatures": roots.iter().map(|(v,t)| serde_json::json!({
-            "stable_id":v.stable_id.raw(), "state":format!("{:?}",v.animation),
+        "creatures": roots.iter().map(|(root,v,t,visual)| serde_json::json!({
+            "stable_id":v.stable_id.raw(), "organism_id":v.organism_id.raw(),
+            "state":format!("{:?}",v.animation), "expression":v.expression.label(),
+            "physiology":frame.as_ref().and_then(|f| f.current.organism(v.stable_id))
+                .filter(|o| o.organism_id == v.organism_id).map(|o| {
+                    let h = &o.biochemistry.homeostasis;
+                    serde_json::json!({
+                        "sleep_phase":format!("{:?}",o.sleep_phase),
+                        "hunger":h.drives.hunger, "fatigue":h.drives.fatigue,
+                        "fear":h.drives.fear, "pain":h.drives.pain,
+                        "curiosity":h.drives.curiosity, "brain_atp":h.drives.brain_atp,
+                        "sleep_pressure":h.hormones.sleep_pressure,
+                    })
+                }),
+            "outcome_feedback":visual.map(hearthling::HearthlingVisual::capture_feedback),
+            "overlays_suppressed_for_sleep":v.animation == CreatureAnimationState::Sleeping,
+            "body_yaw":v.body_yaw, "head_yaw":v.head_yaw,
+            "articulated_pose":bones.iter().filter(|(bone,_,_,_)| bone.capture_root() == root)
+                .map(|(bone,name,local,global)| serde_json::json!({
+                    "name":name.as_str(), "bind_rotation":bone.capture_bind_rotation(),
+                    "local_translation":local.translation.to_array(),
+                    "local_rotation":local.rotation.to_array(), "local_scale":local.scale.to_array(),
+                    "world_matrix":global.to_matrix().to_cols_array_2d(),
+                })).collect::<Vec<_>>(),
             "position":t.translation.to_array(), "rotation":t.rotation.to_array(),
             "authoritative_position":frame.as_ref().and_then(|f|f.current.object(v.stable_id))
                 .map(|o|[o.position.x,o.position.y,o.position.z]),

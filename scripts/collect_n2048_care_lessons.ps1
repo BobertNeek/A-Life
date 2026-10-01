@@ -12,6 +12,9 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $exe = Join-Path $repo 'target/release/train_n2048_care.exe'
 if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Build the release training CLI first.' }
 $sourcePath = (Resolve-Path -LiteralPath $Source).Path
+$sourceRevision = (& git -C $repo rev-parse HEAD) -join ''
+if ($LASTEXITCODE -ne 0 -or -not $sourceRevision) { throw 'Could not pin collection source revision.' }
+$executableSha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
 $adaptation = Get-Content -Raw -LiteralPath (Join-Path $sourcePath 'adaptation.json') | ConvertFrom-Json
 $FounderSeedBase = [ulong]$adaptation.founder_seed_base
 if ($FounderSeedBase -eq 0 -or -not $adaptation.optimizer_reset -or
@@ -41,6 +44,11 @@ try {
         }
     }
     for ($index = 0; $index -lt $schedule.Count; $index++) {
+        $currentRevision = (& git -C $repo rev-parse HEAD) -join ''
+        if ($LASTEXITCODE -ne 0 -or $currentRevision -ne $sourceRevision -or
+            (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash -ne $executableSha256) {
+            throw 'Collection source revision or executable changed. Preserve this partial corpus and restart under one fixed checkpoint.'
+        }
         $lesson = $schedule[$index]
         $ordinal = $counts[$lesson]
         # Thirteen alternates route parity and visits all eighteen lesson vocabulary tokens.

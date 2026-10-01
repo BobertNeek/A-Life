@@ -198,6 +198,7 @@ pub fn run_foundation_imitation_warmup(
         .ok_or("warm-up source cohort did not capture a decision")?
         .before
         .phenotype
+        .as_ref()
         .clone();
     let ids = phenotype
         .synapses()
@@ -311,7 +312,11 @@ pub fn run_foundation_imitation_warmup(
                 &phenotype,
                 budget,
             )
-            .map_err(|_| {
+            .map_err(|error| {
+                eprintln!(
+                    "warm-up replay load: demo={demo}, records={burn_start}..{end}, burn_in={}, error={error}",
+                    start - burn_start,
+                );
                 alife_training::TrainingError::from(
                     alife_core::ScaffoldContractError::InvalidDecisionEvidence,
                 )
@@ -320,7 +325,10 @@ pub fn run_foundation_imitation_warmup(
                 .iter()
                 .map(imitation_example)
                 .collect::<Result<Vec<_>>>()
-                .map_err(|_| {
+                .map_err(|error| {
+                    eprintln!(
+                        "warm-up imitation targets: demo={demo}, records={start}..{end}, error={error}"
+                    );
                     alife_training::TrainingError::from(
                         alife_core::ScaffoldContractError::InvalidDecisionEvidence,
                     )

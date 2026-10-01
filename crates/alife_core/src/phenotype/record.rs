@@ -565,9 +565,11 @@ impl BrainPhenotype {
             phenotype_hash: PhenotypeHash([0; 4]),
         };
         match growth_source {
-            Some((source, source_inputs)) => value
-                .sensor_encoder
-                .validate_n2048_growth(&value, source, source_inputs)?,
+            Some((source, source_inputs)) => {
+                value
+                    .sensor_encoder
+                    .validate_n2048_growth(&value, source, source_inputs)?
+            }
             None => value
                 .sensor_encoder
                 .validate_against_inputs(&value, inputs)?,
