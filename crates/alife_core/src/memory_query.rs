@@ -249,6 +249,15 @@ impl CandidateMemoryQueryV2 {
         frame
             .validate_contract()
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
+        self.validate_against_validated_frame(frame, candidate)
+    }
+
+    /// The enclosing recall validator has validated this immutable frame.
+    pub(crate) fn validate_against_validated_frame(
+        &self,
+        frame: &PerceptionFrame,
+        candidate: &ActionCandidate,
+    ) -> Result<(), ScaffoldContractError> {
         let expected = MemoryQueryEncoderV2::encode_from_frame(frame, candidate)?;
         if &expected == self {
             Ok(())
@@ -469,6 +478,14 @@ impl MemoryQueryEncoderV2 {
         draft
             .validate_contract()
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
+        Self::encode_validated_candidate(draft, candidate)
+    }
+
+    /// The enclosing recall operation has validated this immutable draft.
+    pub(crate) fn encode_validated_candidate(
+        draft: &PerceptionFrameDraft,
+        candidate: &ActionCandidate,
+    ) -> Result<CandidateMemoryQueryV2, ScaffoldContractError> {
         encode_query(
             draft.organism_id(),
             draft.tick(),

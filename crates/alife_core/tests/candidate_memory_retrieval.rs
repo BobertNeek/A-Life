@@ -639,6 +639,60 @@ fn empty_recall_finalizes_exact_candidate_keys_and_rejects_a_changed_draft() {
 }
 
 #[test]
+fn populated_recall_keys_match_singular_queries_and_reject_changed_context() {
+    let mut bank = empty_bank();
+    bank.observe_sealed_patch(&poisoned_cyan_ingest_patch())
+        .unwrap();
+    let draft = cyan_amber_family_draft();
+    let expected_queries = draft
+        .candidates()
+        .iter()
+        .map(|candidate| {
+            alife_core::MemoryQueryEncoderV2::encode_candidate(&draft, candidate).unwrap()
+        })
+        .collect::<Vec<_>>();
+    let prepared = bank.recall_frame(&draft).unwrap();
+    assert!(prepared.context().candidates[0].target_source_count > 0);
+    let mut cognitive =
+        alife_core::CognitiveContextFrame::empty(ORGANISM, sequence(), TICK).unwrap();
+    let recalled = &prepared.context().candidates[0];
+    cognitive
+        .memory
+        .expectancies
+        .push(alife_core::CognitiveMemoryExpectancy {
+            memory_id: recalled.best_family_source.unwrap(),
+            expected_valence: SignedValence::new(recalled.family_value[0]).unwrap(),
+            confidence: NormalizedScalar::new(recalled.family_confidence.raw()).unwrap(),
+        });
+    let prepared = prepared.with_cognitive_context(cognitive.clone()).unwrap();
+    let (frame, finalized) = prepared.finalize(draft.clone()).unwrap();
+    finalized.validate_for_frame(&frame).unwrap();
+    assert_eq!(finalized.cognitive_context(), Some(&cognitive));
+    for ((key, expected), candidate) in finalized
+        .candidate_keys()
+        .iter()
+        .zip(&expected_queries)
+        .zip(frame.candidates())
+    {
+        assert_eq!(key.query(), expected);
+        key.query()
+            .validate_against_frame(&frame, candidate)
+            .unwrap();
+    }
+
+    let changed_draft = draft.with_remembered_novelty(0.75).unwrap();
+    let (changed_frame, _) = bank
+        .recall_frame(&changed_draft)
+        .unwrap()
+        .finalize(changed_draft)
+        .unwrap();
+    assert_eq!(
+        finalized.validate_for_frame(&changed_frame),
+        Err(ScaffoldContractError::InvalidMemoryQuery)
+    );
+}
+
+#[test]
 fn sealed_neural_decision_accepts_only_its_selected_finalized_memory_key() {
     let bank = empty_bank();
     let draft = grounded_draft(0.4);
