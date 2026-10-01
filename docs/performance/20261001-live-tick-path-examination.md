@@ -21,9 +21,11 @@ and its exact launch command are absent in this cloud checkout. The measured
 run mode, save/founder, brain capacity, sensor profile, optional diagnostic
 environment, GPU timestamps, and internal stage totals therefore remain Unknown.
 
-This follow-up owns only this report and the isolated CPU probe/evidence under
-`docs/performance/evidence`. It adds no runtime changes. The previous allocation
-fix is documented in [its receipt](20261001-live-perception-preparation.md).
+This examination owns this report and the isolated CPU probe/evidence under
+`docs/performance/evidence`. A subsequent bounded predicate change in
+`alife_world/src/headless.rs` is documented separately in the
+[terrain sight range receipt](20261001-terrain-sight-range-gate.md). The previous
+allocation fix is documented in [its receipt](20261001-live-perception-preparation.md).
 Graphics, operational launch source, sandbox save summaries, training budgets,
 experimental N512 fixtures, and bundle/shader discovery remain with their owners.
 No merge, PR, local task, hardware test, or GPU training campaign was performed.
@@ -131,6 +133,14 @@ Rollback cloning is measured outside the staged internal tick body, so do not
 assume the internal stage sum covers all runtime tick wall time. The graphical
 live stage also includes presentation-frame publication after the runtime tick.
 
+For the independent desktop graphics task, this read-only command extracts the
+existing attribution fields without changing the app or running training:
+
+```powershell
+$receipt = Get-Content target/artifacts/island-hand-implementation/island-hand-performance.json -Raw | ConvertFrom-Json
+$receipt | Select-Object source_head, build, profile, population, resolution, backend, adapter, measurement_seconds, frame, simulation, internal_tick_stages, preparation_substages, gpu_stages, dispatch_batching, transactional_rollback_clone, state_reference_hash, ordinary_full_snapshot, checkpoint_activity, sleep_durable_activity | ConvertTo-Json -Depth 12
+```
+
 If that receipt cannot resolve attribution, the minimum independent gameplay
 benchmark uses the existing release recorder: five seconds warmup, sixty seconds
 measurement, then bounded persistence drain. It is separate from training and
@@ -172,7 +182,7 @@ claimed by this report.
 - `bash scripts/docs_check.sh`: 77/77 assertions passed.
 - Independent Sol 6.1 source and artifact review (R2): no blocking findings.
 
-No additional runtime optimization was implemented in this follow-up. The
-unresolved attribution requires the original stage receipt or the independent
-gameplay measurement above. The previously published allocation fix retains
-its separate CPU tests and evidence; no RTX improvement is claimed for it.
+This examination does not establish the dominant runtime cause. The unresolved
+attribution requires the original stage receipt or the independent gameplay
+measurement above. The allocation and subsequent terrain range predicate
+changes retain separate CPU tests and evidence; no RTX improvement is claimed.
