@@ -117,10 +117,11 @@ Rules:
 The formula-derived performance ledger used by its focused test lives at
 `crates/alife_tools/tests/fixtures/P04_5_performance_contract.md`.
 
-Retired Alpha, True 2.5D, milestone smoke, and release-report helpers live under
-`archive/legacy_true25d`, `archive/legacy_app_milestones`, and `archive/legacy_pass2`. They are historical
-references. They are not Cargo targets, supported commands, package inputs, or
-active documentation authorities.
+Remaining retired source snapshots and example assets live under
+`archive/legacy_true25d` and `archive/legacy_app_milestones`. They are historical
+references, not Cargo targets, supported commands, package inputs, or active
+documentation authorities. Removed Pass 2 runners and milestone release-report
+wrappers remain available in Git history.
 
 ## Architecture boundaries
 
