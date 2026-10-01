@@ -404,7 +404,8 @@ mod tests {
     #[test]
     fn curated_founder_materializer_rejects_forged_plan_before_output() {
         let plan = plan_for_profile(SensorProfile::PrivilegedAffordanceV1, 3);
-        let cases: &[(&str, fn(&mut CuratedFounderPlan))] = &[
+        type PlanMutation = fn(&mut CuratedFounderPlan);
+        let cases: &[(&str, PlanMutation)] = &[
             ("world entity ID", |plan| {
                 plan.entries[0].world_entity_id = WorldEntityId(90_001)
             }),

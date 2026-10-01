@@ -46,9 +46,11 @@ fn production_capacity_ids_have_exact_logical_ceilings() {
         (
             BrainCapacityClass::n2048(),
             2_048,
-            32_768,
+            // The inherited graph stays fixed; execution also reserves 64
+            // bounded lifetime structural edges (MAX_STRUCTURAL_EDGES).
+            32_832,
             192,
-            24_576,
+            24_640,
             4_096,
             4_096,
         ),

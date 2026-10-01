@@ -582,7 +582,7 @@ mod founder_basis_tests {
                 frame.sensor_profile(),
                 frame.sensory().clone(),
                 frame.body(),
-                frame.homeostasis().clone(),
+                *frame.homeostasis(),
                 forged,
                 frame.profile_provenance(),
                 frame.grounded_object_slots().to_vec(),

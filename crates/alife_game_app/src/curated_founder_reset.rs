@@ -645,6 +645,8 @@ fn validate_checked_foundation(
     Ok(())
 }
 
+// Keep every persisted identity and provenance field explicit in the seed preimage.
+#[allow(clippy::too_many_arguments)]
 fn derive_conception_seed(
     policy_label: &str,
     seed_domain_version: &str,

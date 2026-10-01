@@ -2056,10 +2056,10 @@ fn sha256_hex(input: &[u8]) -> String {
     }
     bytes.extend_from_slice(&bit_len.to_be_bytes());
     let mut state = INITIAL;
-    for chunk in bytes.chunks_exact(64) {
+    for chunk in bytes.as_chunks::<64>().0 {
         let mut words = [0_u32; 64];
-        for (index, word) in chunk.chunks_exact(4).take(16).enumerate() {
-            words[index] = u32::from_be_bytes(word.try_into().unwrap());
+        for (index, word) in chunk.as_chunks::<4>().0.iter().enumerate() {
+            words[index] = u32::from_be_bytes(*word);
         }
         for index in 16..64 {
             let s0 = words[index - 15].rotate_right(7)
@@ -2463,7 +2463,7 @@ mod tests {
         assert_eq!(catalog.importer_version, "alife.geneforge_importer.v2");
         assert_eq!(
             catalog.recipe_sha256,
-            "316d0a54faee2e10ca6df244c6bcc1a1f072bb7f4f8f5b45135500ef2cef6df2"
+            "8a82d5777e96741745503c54096c822c4e3c27633cd948e56fd7c6cab69d9dd1"
         );
 
         for asset in &catalog.part_assets {

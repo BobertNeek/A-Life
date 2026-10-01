@@ -1557,7 +1557,12 @@ mod tests {
         assert_eq!((first.width, first.height), (256, 256));
         assert_eq!(first.rgba.len(), CREATURE_COAT_RGBA_BYTES);
         assert_eq!(first, second);
-        assert!(first.rgba.chunks_exact(4).all(|pixel| pixel[3] == 255));
+        assert!(first
+            .rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|pixel| pixel[3] == 255));
     }
 
     #[test]

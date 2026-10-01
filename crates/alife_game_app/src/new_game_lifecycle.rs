@@ -1,8 +1,6 @@
-use std::{
-    collections::BTreeSet,
-    fs,
-    path::{Path, PathBuf},
-};
+#[cfg(feature = "gpu-runtime")]
+use std::{collections::BTreeSet, path::Path};
+use std::{fs, path::PathBuf};
 
 #[cfg(feature = "gpu-runtime")]
 use alife_archive::LineageLibraryConfig;
@@ -352,15 +350,31 @@ fn invalid_launch(message: &str) -> GameAppShellError {
 mod tests {
     use super::*;
     use alife_core::{
-        BrainCapacityClass, BrainGenome, DevelopmentState, NormalizedScalar, OrganismId,
-        PhenotypeCompiler, Tick, TrainingStageManifest,
+        BrainCapacityClass, DevelopmentState, NormalizedScalar, OrganismId, PhenotypeCompiler,
+        Tick, TrainingStageManifest,
     };
 
     #[test]
     fn n2048_new_game_save_reload_preserves_exact_candidate_and_class() {
         let seed = 240_826;
         let capacity = BrainCapacityClass::n2048();
-        let genome = BrainGenome::scaffold(seed, capacity.id());
+        // Build the candidate on this founder's expressed graph, so reload
+        // validates the same inherited coordinates and decoder ABI.
+        let mut founder_config = CanonicalNewGameConfig::phase3(seed, 1).unwrap();
+        founder_config.brain_class = BrainScaleTier::Standard2048;
+        let initial_founder = alife_world::create_canonical_new_game_with_n2048_candidate(
+            &founder_config,
+            &FoundationWeightAsset::builtin_n2048_v1(founder_config.sensor_profile).unwrap(),
+        )
+        .unwrap();
+        let genome = initial_founder
+            .world
+            .organism_registry()
+            .get(OrganismId(1))
+            .unwrap()
+            .phenotype()
+            .brain_genome
+            .clone();
         let development =
             DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
         let native = PhenotypeCompiler::compile_testing_procedural_baseline(
