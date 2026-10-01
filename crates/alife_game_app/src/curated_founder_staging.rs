@@ -1154,8 +1154,7 @@ fn build_archive_receipt_rows(
     committed
         .entries()
         .iter()
-        .enumerate()
-        .map(|(_batch_index, entry)| {
+        .map(|entry| {
             let plan_entry = bundle
                 .entries
                 .iter()

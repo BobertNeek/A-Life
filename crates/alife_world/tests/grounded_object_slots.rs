@@ -5,10 +5,27 @@ use alife_core::{
 use alife_world::{
     AssetManifest, GroundedPhysicalProperties, HeadlessActionIds, HeadlessScenarioBuilder,
     PhysicalTrackingProvenance, PortableSaveFile, RuntimeConfig, StablePhysicalDescriptor,
-    TrackedObjectRegistry,
+    TrackedObjectRegistry, WorldObjectKind,
 };
 
 const ORGANISM: OrganismId = OrganismId(1);
+
+#[test]
+fn new_objects_keep_kind_specific_chemistry_across_spawn_order() {
+    for sequence in [1, 2, 5, 40, 4_000] {
+        let food =
+            GroundedPhysicalProperties::deterministic_for_kind(WorldObjectKind::Food, sequence);
+        let hazard =
+            GroundedPhysicalProperties::deterministic_for_kind(WorldObjectKind::Hazard, sequence);
+        let obstacle =
+            GroundedPhysicalProperties::deterministic_for_kind(WorldObjectKind::Obstacle, sequence);
+        assert!(food.chemical[0] >= 0.75);
+        assert!(hazard.chemical[0] <= -0.75);
+        assert!(obstacle.chemical[0].abs() <= 0.2);
+        assert!(food.validate_contract().is_ok());
+        assert!(hazard.validate_contract().is_ok());
+    }
+}
 
 fn assert_grounded_horizontal_bearing(offset: Vec3f, expected: [f32; 2]) {
     let observer = Vec3f::new(1.0, 0.25, -2.0);
@@ -37,6 +54,35 @@ fn assert_grounded_horizontal_bearing(offset: Vec3f, expected: [f32; 2]) {
         .find(|c| c.family == CandidateActionFamily::Ingest)
         .unwrap();
     assert_eq!(&candidate.features.0[..2], &slot.bearing);
+}
+
+#[test]
+fn looking_straight_at_food_after_approach_keeps_the_terrain_frame_valid() {
+    for angle in [0.218827_f32, -1.2, -0.7, 0.35, 0.9, 2.1] {
+        let mut world = HeadlessScenarioBuilder::new(4309)
+            .agent("agent", ORGANISM, Vec3f::new(3.0, 0.0, 0.0))
+            .food(
+                "food",
+                Vec3f::new(3.0 + 4.0 * angle.cos(), 0.0, 4.0 * angle.sin()),
+                0.6,
+            )
+            .build()
+            .unwrap();
+        let food = world.entity_id("food").unwrap();
+        world
+            .apply_command(&alife_world::HeadlessWorldCommand::approach(ORGANISM, food).unwrap())
+            .unwrap();
+        let frame = world
+            .perception_frame(
+                ORGANISM,
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap();
+        assert!(!frame.grounded_object_slots().is_empty());
+        assert!((frame.grounded_object_slots()[0].bearing[1] - 1.0).abs() < 1e-6);
+    }
 }
 
 #[test]
@@ -227,11 +273,12 @@ fn sixteen_slots_yield_five_complete_family_groups_and_never_a_partial_group() {
     let frame = grounded_draft(&mut world, Tick::new(5));
 
     assert_eq!(frame.grounded_object_slots().len(), 16);
-    assert_eq!(frame.candidates().len(), 3 + 5 * 5);
+    let object_choices_end = 3 + 5 * 5;
+    assert_eq!(frame.candidates().len(), object_choices_end + 3);
     assert_eq!(frame.candidates()[0].family, CandidateActionFamily::Idle);
     assert_eq!(frame.candidates()[1].family, CandidateActionFamily::Rest);
     assert_eq!(frame.candidates()[2].kind, alife_core::ActionKind::Vocalize);
-    for group in frame.candidates()[3..].chunks_exact(5) {
+    for group in frame.candidates()[3..object_choices_end].chunks_exact(5) {
         assert_eq!(
             group
                 .iter()
@@ -243,6 +290,24 @@ fn sixteen_slots_yield_five_complete_family_groups_and_never_a_partial_group() {
             .iter()
             .all(|candidate| candidate.observation == group[0].observation));
     }
+    assert_eq!(
+        frame.candidates()[object_choices_end..]
+            .iter()
+            .map(|candidate| candidate.action_id)
+            .collect::<Vec<_>>(),
+        vec![
+            HeadlessActionIds::NO_LOCOMOTION,
+            HeadlessActionIds::NO_MANIPULATION,
+            HeadlessActionIds::NO_POSTURE
+        ],
+    );
+    assert!(frame.candidates()[object_choices_end..]
+        .iter()
+        .all(
+            |candidate| candidate.target == alife_core::ActionTarget::NONE
+                && candidate.features == alife_core::CandidateFeatureVector::zero()
+                && candidate.observation == alife_core::CandidateObservationRef::None
+        ));
 }
 
 #[test]

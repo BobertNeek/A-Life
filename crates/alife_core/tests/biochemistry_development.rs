@@ -17,9 +17,175 @@ fn phenotype() -> alife_core::CreaturePhenotype {
     .unwrap()
 }
 
+#[test]
+fn inherited_waking_fatigue_is_separate_from_food_and_recovery() {
+    let mut genome = CreatureGenome::early_mammal_founder(
+        0xE10_8001,
+        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+    )
+    .unwrap();
+    let legacy = genome.express().unwrap();
+    let legacy_state = BiochemistryState::new(&legacy, Tick(600)).unwrap();
+    assert_eq!(
+        legacy_state
+            .graph_state()
+            .locomotor_capacity(&legacy.chemistry.biochemical)
+            .unwrap(),
+        None
+    );
+    for side in [
+        alife_core::AlleleSide::Maternal,
+        alife_core::AlleleSide::Paternal,
+    ] {
+        genome.chemistry.graph = genome
+            .chemistry
+            .graph
+            .clone()
+            .with_waking_recovery(side)
+            .unwrap();
+    }
+    let genome: CreatureGenome =
+        serde_json::from_str(&serde_json::to_string(&genome).unwrap()).unwrap();
+    let phenotype = genome.express().unwrap();
+    let young = BiochemistryState::new(&phenotype, Tick::ZERO)
+        .unwrap()
+        .advance(
+            Tick(1),
+            BodyEventDelta {
+                sleep_recovery: 1.0,
+                ..BodyEventDelta::zero()
+            },
+            &phenotype,
+        )
+        .unwrap();
+    assert!(
+        young
+            .graph_state()
+            .sleep_metabolic_rate(&phenotype.chemistry.biochemical)
+            .unwrap()
+            .unwrap()
+            < 0.2
+    );
+    let tick = mature_tick(&phenotype);
+    let start = BiochemistryState::new(&phenotype, tick).unwrap();
+    let mut fed = start;
+    let mut hungry = start;
+    fed.body.set_energy(1.0).unwrap();
+    hungry.body.set_energy(0.1).unwrap();
+    for offset in 1..=120 {
+        fed = fed
+            .advance(
+                Tick(tick.raw() + offset),
+                BodyEventDelta::zero(),
+                &phenotype,
+            )
+            .unwrap();
+        hungry = hungry
+            .advance(
+                Tick(tick.raw() + offset),
+                BodyEventDelta::zero(),
+                &phenotype,
+            )
+            .unwrap();
+    }
+    assert_eq!(
+        fed.homeostasis.drives.fatigue,
+        hungry.homeostasis.drives.fatigue
+    );
+    assert!(fed.homeostasis.drives.fatigue > start.homeostasis.drives.fatigue);
+    assert!(hungry.homeostasis.drives.hunger > fed.homeostasis.drives.hunger);
+    let mut ordinary_reserve = start;
+    ordinary_reserve.body.set_energy(0.5).unwrap();
+    for offset in 1..=120 {
+        ordinary_reserve = ordinary_reserve
+            .advance(
+                Tick(tick.raw() + offset),
+                BodyEventDelta::zero(),
+                &phenotype,
+            )
+            .unwrap();
+    }
+    assert!(ordinary_reserve.homeostasis.drives.brain_atp > 0.25);
+    let meal = hungry
+        .advance(
+            Tick(tick.raw() + 121),
+            BodyEventDelta {
+                nutrition: 0.5,
+                ..BodyEventDelta::zero()
+            },
+            &phenotype,
+        )
+        .unwrap();
+    assert!(meal.body.energy > hungry.body.energy);
+    assert!(meal.homeostasis.drives.hunger < hungry.homeostasis.drives.hunger);
+    assert!(meal.homeostasis.drives.fatigue >= hungry.homeostasis.drives.fatigue);
+    let rested = hungry
+        .advance(
+            Tick(tick.raw() + 121),
+            BodyEventDelta {
+                sleep_recovery: 1.0,
+                ..BodyEventDelta::zero()
+            },
+            &phenotype,
+        )
+        .unwrap();
+    assert!(rested.homeostasis.drives.fatigue < hungry.homeostasis.drives.fatigue);
+    assert!(rested.body.energy <= hungry.body.energy);
+    let mut asleep = hungry;
+    let mut awake = hungry;
+    for offset in 121..=132 {
+        asleep = asleep
+            .advance(
+                Tick(tick.raw() + offset),
+                BodyEventDelta {
+                    sleep_recovery: 1.0,
+                    ..BodyEventDelta::zero()
+                },
+                &phenotype,
+            )
+            .unwrap();
+        awake = awake
+            .advance(
+                Tick(tick.raw() + offset),
+                BodyEventDelta::zero(),
+                &phenotype,
+            )
+            .unwrap();
+    }
+    assert!(asleep.body.energy <= hungry.body.energy);
+    assert!(asleep.body.energy > awake.body.energy);
+    let sleeping_rate = asleep
+        .graph_state()
+        .sleep_metabolic_rate(&phenotype.chemistry.biochemical)
+        .unwrap()
+        .unwrap();
+    assert!(sleeping_rate > 0.0 && sleeping_rate < 0.2);
+    assert!(!phenotype
+        .chemistry
+        .biochemical
+        .emitters()
+        .iter()
+        .any(
+            |row| row.source == alife_core::BiochemicalSourceLocus::SleepRecovery
+                && row.target == alife_core::ChemicalSpeciesId(7)
+        ));
+    assert!(
+        rested
+            .graph_state()
+            .locomotor_capacity(&phenotype.chemistry.biochemical)
+            .unwrap()
+            .unwrap()
+            > hungry
+                .graph_state()
+                .locomotor_capacity(&phenotype.chemistry.biochemical)
+                .unwrap()
+                .unwrap()
+    );
+}
+
 fn mature_tick(phenotype: &alife_core::CreaturePhenotype) -> Tick {
     let maturation = u64::from(phenotype.development.maturation_duration_ticks);
-    Tick(((maturation + 119) / 120) * 120)
+    Tick(maturation.div_ceil(120) * 120)
 }
 
 #[test]
@@ -174,7 +340,7 @@ fn sleep_recovery_lowers_fatigue_and_sleep_pressure() {
         .advance(
             Tick(tick.raw() + 12),
             BodyEventDelta {
-                energy: -0.80,
+                energy: -0.40,
                 damage: 0.20,
                 ..BodyEventDelta::zero()
             },
@@ -197,7 +363,9 @@ fn sleep_recovery_lowers_fatigue_and_sleep_pressure() {
         recovered.homeostasis.hormones.sleep_pressure
             < strained.homeostasis.hormones.sleep_pressure
     );
-    assert!(recovered.body.energy > strained.body.energy);
+    // Sleep relieves fatigue and permits reserve-paid repair; it is not food.
+    assert!(recovered.body.energy <= strained.body.energy);
+    assert!(recovered.body.health >= strained.body.health);
 }
 
 #[test]
@@ -218,7 +386,9 @@ fn puberty_health_and_mating_opportunity_gate_reproduction() {
     assert!(!juvenile.reproduction.ready);
 
     let adult_tick = Tick(4_080);
-    let adult = BiochemistryState::new(&phenotype, Tick(4_000))
+    // Keep the encounter short enough that this fixture remains ATP-sufficient.
+    // A long unfed batch also exercises metabolic exhaustion, a different gate.
+    let adult = BiochemistryState::new(&phenotype, Tick(4_076))
         .unwrap()
         .advance(
             adult_tick,
@@ -232,27 +402,22 @@ fn puberty_health_and_mating_opportunity_gate_reproduction() {
     assert!(adult.reproduction.puberty_reached);
     assert!(adult.reproduction.ready);
 
-    let injured_once = adult
-        .advance(
-            Tick(4_081),
-            BodyEventDelta {
-                damage: 1.0,
-                ..BodyEventDelta::zero()
-            },
-            &phenotype,
-        )
-        .unwrap();
-    let injured = injured_once
-        .advance(
-            Tick(4_200),
-            BodyEventDelta {
-                damage: 1.0,
-                mating_opportunity: 1.0,
-                ..BodyEventDelta::zero()
-            },
-            &phenotype,
-        )
-        .unwrap();
+    // Sustained damage outruns reserve-paid repair. Two isolated hits separated
+    // by a long recovery batch are not necessarily disabling injury.
+    let mut injured = adult;
+    for tick in (4090..=4200).step_by(10) {
+        injured = injured
+            .advance(
+                Tick(tick),
+                BodyEventDelta {
+                    damage: 1.0,
+                    mating_opportunity: 1.0,
+                    ..BodyEventDelta::zero()
+                },
+                &phenotype,
+            )
+            .unwrap();
+    }
     assert!(!injured.reproduction.healthy_enough);
     assert!(!injured.reproduction.ready);
 }

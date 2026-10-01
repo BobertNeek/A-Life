@@ -868,8 +868,7 @@ impl BrainPhenotype {
             .map_or(0, AuxiliaryDecoderPlan::decoder_synapse_count);
         if candidate_count.checked_add(speech_count)
             != Some(self.budgets.global.action_decoder_synapses)
-            || memory_count
-                .checked_add(cognitive_count)
+            || memory_count.checked_add(cognitive_count)
                 != Some(self.budgets.global.memory_decoder_synapses)
             || !memory_channel_valid
             || (n2048

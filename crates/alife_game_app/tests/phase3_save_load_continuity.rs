@@ -146,6 +146,7 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
     let created = create_canonical_new_game_runtime(CanonicalNewGameLaunchRequest {
         world_seed: seed,
         population: 4,
+        disable_age_death: false,
         save_path: root.join("canonical-new-game.json"),
         asset_root: asset_root.clone(),
         config,

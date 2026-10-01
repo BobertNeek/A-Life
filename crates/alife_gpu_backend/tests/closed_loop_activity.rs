@@ -656,19 +656,59 @@ fn runtime_uses_prior_gpu_timestamps_and_debits_exact_atp_once() {
         SensorProfile::GroundedObjectSlotsV1,
     );
     let mut brain = support::GpuTestBrain::from_phenotype(OrganismId(1), phenotype).unwrap();
+    let initial = brain.backend.snapshot_activity_state(brain.handle).unwrap();
+    for invalid in [f32::NAN, f32::INFINITY, -0.01, 1.01] {
+        assert!(brain
+            .backend
+            .bind_world_brain_atp_tick(brain.handle, 500, invalid)
+            .is_err());
+        assert_eq!(
+            brain.backend.snapshot_activity_state(brain.handle).unwrap(),
+            initial
+        );
+    }
     let first_world_atp = brain
         .backend
-        .charge_world_brain_atp_tick(brain.handle, 500, false)
+        .bind_world_brain_atp_tick(brain.handle, 500, 0.75)
+        .unwrap();
+    assert_eq!(first_world_atp, 49_151);
+    assert!(brain
+        .backend
+        .next_bounded_activity_is_affordable(brain.handle)
+        .unwrap());
+    assert_eq!(
+        brain
+            .backend
+            .bind_world_brain_atp_tick(brain.handle, 500, 1.0),
+        Ok(first_world_atp)
+    );
+    // Restoring an exact pre-dispatch boundary must preserve the bound cursor
+    // and budget; a duplicate bind after restore still cannot refill it.
+    let bound = brain.backend.snapshot_activity_state(brain.handle).unwrap();
+    brain
+        .backend
+        .restore_activity_state(
+            brain.handle,
+            GpuActivityRestoreInput {
+                next_sequence_cursor: bound.next_sequence_cursor,
+                checkpoint_tick: 500,
+                next_completed_gpu_time_ns: bound.next_completed_gpu_time_ns,
+                brain_atp_q16: bound.brain_atp_q16,
+                last_world_atp_tick: bound.last_world_atp_tick,
+                record: None,
+            },
+        )
         .unwrap();
     assert_eq!(
-        first_world_atp,
-        BRAIN_ATP_Q16_MAX - BRAIN_ATP_BASAL_DEBIT_Q16
+        brain.backend.snapshot_activity_state(brain.handle).unwrap(),
+        bound
     );
     assert_eq!(
         brain
             .backend
-            .charge_world_brain_atp_tick(brain.handle, 500, false),
-        Ok(first_world_atp)
+            .bind_world_brain_atp_tick(brain.handle, 500, 1.0)
+            .unwrap(),
+        first_world_atp
     );
     let first_frame = support::perception_frame_for_profile_at_tick(
         1,
@@ -678,6 +718,25 @@ fn runtime_uses_prior_gpu_timestamps_and_debits_exact_atp_once() {
         2,
     );
     let first = brain.tick(&first_frame).unwrap();
+    assert!(first.work.atp_debit_q16 > 0);
+    assert_eq!(
+        brain
+            .backend
+            .bind_world_brain_atp_tick(brain.handle, 500, 1.0)
+            .unwrap(),
+        first.work.atp_after_q16
+    );
+    let before_rejected_tick = brain.backend.snapshot_activity_state(brain.handle).unwrap();
+    for invalid_tick in [499, 502] {
+        assert!(brain
+            .backend
+            .bind_world_brain_atp_tick(brain.handle, invalid_tick, 1.0)
+            .is_err());
+        assert_eq!(
+            brain.backend.snapshot_activity_state(brain.handle).unwrap(),
+            before_rejected_tick
+        );
+    }
     assert_eq!(first.pressure.source_dispatch_generation, 0);
     assert_eq!(first.pressure.completed_gpu_time_ns, 0);
     assert_eq!(first.work.atp_before_q16, first_world_atp);
@@ -695,15 +754,9 @@ fn runtime_uses_prior_gpu_timestamps_and_debits_exact_atp_once() {
         .unwrap();
     let second_world_atp = brain
         .backend
-        .charge_world_brain_atp_tick(brain.handle, 501, false)
+        .bind_world_brain_atp_tick(brain.handle, 501, 0.5)
         .unwrap();
-    assert_eq!(
-        second_world_atp,
-        first
-            .work
-            .atp_after_q16
-            .saturating_sub(BRAIN_ATP_BASAL_DEBIT_Q16)
-    );
+    assert_eq!(second_world_atp, 32_767);
 
     let second_frame = support::perception_frame_for_profile_at_tick(
         1,
@@ -724,6 +777,21 @@ fn runtime_uses_prior_gpu_timestamps_and_debits_exact_atp_once() {
         brain.backend.brain_atp_q16(brain.handle).unwrap(),
         second.work.atp_after_q16
     );
+    brain
+        .backend
+        .discard_pending_eligibility(second.handle, second.pending_eligibility.identity())
+        .unwrap();
+    assert_eq!(
+        brain
+            .backend
+            .bind_world_brain_atp_tick(brain.handle, 502, 0.0)
+            .unwrap(),
+        0
+    );
+    assert!(!brain
+        .backend
+        .next_bounded_activity_is_affordable(brain.handle)
+        .unwrap());
 }
 
 #[cfg(feature = "gpu-tests")]

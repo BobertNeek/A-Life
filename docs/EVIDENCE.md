@@ -82,11 +82,28 @@ Allowed claim: EI1 produced substantial, source-bound GPU evidence and an honest
 
 Prohibited inference: receipt count proves positive learning, transfer, control superiority, plateau, promotion, or authorization for a larger brain.
 
-## Current open evidence
+## Current care and training records
 
-The current source has no complete receipt for:
+The [core game-loop plan](core-game-loop-plan-2026-09-20.md),
+[training regimen](n2048-care-training-regimen-2026-09-21.md), and
+[operator guide](n2048-training-operator.md) record the recent bounded checks.
+Teacher demonstrations, warm-up completion, and successful PPO handoffs do not
+establish held-out learning, retention, or autonomous care. Raw `target/` paths in
+those records refer to the originating machine and are not committed artifacts.
 
-- live GPU-selected action to authoritative world change to voxel transform;
+## Retained design and review context
+
+- [Exact-population checkpoint decision](performance/exact-population-checkpoint-design.md):
+  historical transaction and failure rationale.
+- [Recovered review outcomes](reviews/2026-09-11-recovered-review-outcomes.md):
+  closed campaign dispositions and two unresolved design questions; static review only.
+
+## Open product evidence
+
+The September 2 baseline listed the gaps below. Later bounded checks are linked
+above; none should be read as a complete current-HEAD product certification.
+
+- complete rendered player-loop behavior beyond bounded care trials;
 - autonomous production birth/death/reproduction with archive and visible spawn/despawn;
 - truthful pause and atomic live load;
 - fresh-process player-loop restoration;

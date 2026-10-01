@@ -80,7 +80,25 @@ pub(super) fn compile_encoder(
                 step = 1;
             }
         }
-        for _ in 0..gene.receptor_count {
+        // These three life-relevant drives must never be absent merely because
+        // the inherited sensor-layout seed sampled other lanes first.
+        let essential = if gene.kind == SensorChannelKind::Interoception
+            && gene.target_lobe == LobeKind::InteroceptiveMotivational
+            && gene.receptor_count >= 3
+            && region.len >= 3
+        {
+            for (offset, lane) in [0_u16, 3, 7].into_iter().enumerate() {
+                let target = region.start + offset as u32;
+                occupied.insert((target, group.raw(), lane));
+                assignments.push(SensorEncoderAssignment::new(
+                    group, lane, target, 1.0, 0.0, -1.0, 1.0,
+                ));
+            }
+            3
+        } else {
+            0
+        };
+        for _ in essential..gene.receptor_count {
             let mut selected = None;
             for _ in 0..available {
                 let source_index = lane_start + (cursor % u32::from(lane_width)) as u16;
@@ -102,6 +120,46 @@ pub(super) fn compile_encoder(
                 -1.0,
                 1.0,
             ));
+        }
+    }
+    // Private language/prior ports share the ordinary learned association region.
+    // Token IDs are encoded as bits, never treated as neuron addresses.
+    if profile == SensorProfile::GroundedTerrainVisionV1
+        && genome.sensor_layout.channels.iter().any(|gene| {
+            gene.kind == SensorChannelKind::Hearing
+                && gene.receptor_count > 0
+                && gene.enabled_at_maturation as f32 <= development.maturation.raw() * 100.0
+                && (development.active_sensor_channels.is_empty()
+                    || development.active_sensor_channels.contains(&gene.kind))
+        })
+    {
+        if let Some(region) = layout
+            .region(LobeKind::MultimodalAssociation)
+            .filter(|r| r.enabled)
+        {
+            let base = (splitmix64(genome.seeds.sensor_layout_seed ^ 0x4C41_4E47)
+                % u64::from(region.len)) as u32;
+            let mut step = ((splitmix64(genome.seeds.sensor_layout_seed ^ 0x5052_494F)
+                % u64::from(region.len)) as u32)
+                | 1;
+            while gcd_u32(step, region.len) != 1 {
+                step = (step + 2) % region.len;
+                if step == 0 {
+                    step = 1;
+                }
+            }
+            for group in [
+                SensorEncoderSourceGroup::HeardLanguage,
+                SensorEncoderSourceGroup::SemanticPrior,
+            ] {
+                for lane in 0..128_u16 {
+                    let port_lane = (u32::from(group.raw()) - 4) * 128 + u32::from(lane);
+                    let target = region.start + (base + port_lane * step) % region.len;
+                    assignments.push(SensorEncoderAssignment::new(
+                        group, lane, target, 0.5, 0.0, -1.0, 1.0,
+                    ));
+                }
+            }
         }
     }
     assignments.sort_by_key(|assignment| {
@@ -231,12 +289,11 @@ pub(super) fn compile_decoders(
         }
         let count =
             start + u32::try_from(synapses.len()).map_err(|_| compile_error())? - family_start;
-        family_plans.push(CandidateDecoderFamilyPlan::new(
-            family,
-            0.0,
-            family_start,
-            count,
-        ));
+        let (mask, gain, cue, invert, reach) = innate_priority_for_family(genome, family);
+        family_plans.push(
+            CandidateDecoderFamilyPlan::new(family, 0.0, family_start, count)
+                .with_innate_priority(mask, gain, cue, invert, reach),
+        );
     }
     let len = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
     if len == 0 || len > capacity.execution().max_action_decoder_synapses() {
@@ -405,12 +462,11 @@ fn compile_n2048_decoders(
         }
         let count =
             start + u32::try_from(synapses.len()).map_err(|_| compile_error())? - family_start;
-        family_plans.push(CandidateDecoderFamilyPlan::new(
-            family,
-            0.0,
-            family_start,
-            count,
-        ));
+        let (mask, gain, cue, invert, reach) = innate_priority_for_family(genome, family);
+        family_plans.push(
+            CandidateDecoderFamilyPlan::new(family, 0.0, family_start, count)
+                .with_innate_priority(mask, gain, cue, invert, reach),
+        );
     }
     let candidate_count = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
     if candidate_count != crate::N2048FoundationLayoutV1::CANDIDATE_DECODER_SYNAPSE_COUNT {
@@ -599,6 +655,58 @@ fn sensor_lanes(kind: SensorChannelKind) -> (SensorEncoderSourceGroup, u16, u16)
     }
 }
 
+/// A small inherited prior inside the existing decoder. The world still gives
+/// every object the same unscored physical action candidates. Hunger can prime
+/// food-cued approach/ingestion; injury, fear, or heat can prime withdrawal.
+fn innate_priority_for_family(
+    genome: &BrainGenome,
+    family: CandidateActionFamily,
+) -> (u32, f32, Option<u8>, bool, bool) {
+    const HUNGER: u32 = 1 << 0;
+    const FEAR: u32 = 1 << 2;
+    const PAIN: u32 = 1 << 3;
+    const TEMPERATURE: u32 = 1 << 7;
+    const DANGER: u32 = FEAR | PAIN | TEMPERATURE;
+    const EMERGENCY: u32 = HUNGER | DANGER;
+    // Grounded object-slot chemistry is a physical scent, not a food label.
+    const OBJECT_CHEMICAL_CUE: u8 = 15;
+    let genes = genome.innate_priority;
+    let reflex = genes.reflex_strength;
+    let (mask, gain, cue, invert, reach) = match family {
+        CandidateActionFamily::Approach => (
+            HUNGER,
+            112.0 * reflex * genes.food_attraction,
+            Some(OBJECT_CHEMICAL_CUE),
+            false,
+            false,
+        ),
+        CandidateActionFamily::Ingest => (
+            HUNGER,
+            128.0 * reflex * genes.food_attraction,
+            Some(OBJECT_CHEMICAL_CUE),
+            false,
+            true,
+        ),
+        CandidateActionFamily::Avoid => (
+            DANGER,
+            128.0 * reflex * genes.hazard_aversion,
+            Some(OBJECT_CHEMICAL_CUE),
+            true,
+            false,
+        ),
+        CandidateActionFamily::Idle
+        | CandidateActionFamily::Inspect
+        | CandidateActionFamily::Contact
+        | CandidateActionFamily::Other => (EMERGENCY, -96.0 * reflex, None, false, false),
+        CandidateActionFamily::Rest => (HUNGER, -96.0 * reflex, None, false, false),
+    };
+    if gain == 0.0 {
+        (0, 0.0, None, false, false)
+    } else {
+        (mask, gain, cue, invert, reach)
+    }
+}
+
 pub(super) fn genetic_weight(seed: u64, route: u16, source: u32, target: u32) -> f32 {
     let bits =
         splitmix64(seed ^ (u64::from(route) << 48) ^ (u64::from(source) << 16) ^ u64::from(target));
@@ -650,4 +758,91 @@ const fn gcd_u32(mut a: u32, mut b: u32) -> u32 {
 
 const fn compile_error() -> ScaffoldContractError {
     ScaffoldContractError::PhenotypeCompile
+}
+
+#[cfg(test)]
+mod innate_priority_tests {
+    use super::*;
+    use crate::{
+        BrainCapacityClass, CandidateFeatureVector, ContinuousLocus, CreatureGenome, DriveSnapshot,
+        FoundationGeneticIdentity, N2048FoundationLayoutV1, NormalizedScalar, Tick,
+    };
+
+    #[test]
+    fn inherited_survival_path_uses_real_drives_and_food_cue() {
+        let mut genome = BrainGenome::scaffold(0x5A7E_0001, BrainCapacityClass::N2048_ID);
+        let layout = N2048FoundationLayoutV1::lobe_layout();
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        let encoder = compile_encoder(
+            &genome,
+            &development,
+            &layout,
+            SensorProfile::GroundedTerrainVisionV1,
+        )
+        .unwrap();
+        let interoceptive = layout.region(LobeKind::InteroceptiveMotivational).unwrap();
+        for (offset, lane) in [0_u16, 3, 7].into_iter().enumerate() {
+            assert!(encoder.assignments().iter().any(|a| {
+                a.source_group() == SensorEncoderSourceGroup::Homeostasis
+                    && a.source_index() == lane
+                    && a.target_neuron() == interoceptive.start + offset as u32
+            }));
+        }
+        let family = |genome: &BrainGenome, kind| {
+            let (mask, gain, cue, invert, reach) = innate_priority_for_family(genome, kind);
+            CandidateDecoderFamilyPlan::new(kind, 0.0, 0, 0)
+                .with_innate_priority(mask, gain, cue, invert, reach)
+        };
+        let mut food = CandidateFeatureVector::zero();
+        food.0[15] = 0.8;
+        let rock = CandidateFeatureVector::zero();
+        let mut drives = DriveSnapshot::baseline();
+        let eat = family(&genome, CandidateActionFamily::Ingest);
+        let avoid = family(&genome, CandidateActionFamily::Avoid);
+        let idle = family(&genome, CandidateActionFamily::Idle);
+        assert_eq!(eat.innate_contribution(drives, food), 0.0);
+        drives.hunger = 0.98;
+        assert!(eat.innate_contribution(drives, food) > 0.0);
+        assert_eq!(eat.innate_contribution(drives, rock), 0.0);
+        let mut far_food = food;
+        far_food.0[2] = 0.5;
+        assert_eq!(eat.innate_contribution(drives, far_food), 0.0);
+        assert!(
+            family(&genome, CandidateActionFamily::Approach).innate_contribution(drives, far_food)
+                > 0.0
+        );
+        assert!(idle.innate_contribution(drives, food) < 0.0);
+        drives.hunger = 0.0;
+        drives.pain = 0.98;
+        let mut hazard = rock;
+        hazard.0[15] = -0.8;
+        assert!(avoid.innate_contribution(drives, hazard) > 0.0);
+        assert_eq!(avoid.innate_contribution(drives, food), 0.0);
+        drives.pain = 0.0;
+        drives.temperature_stress = 0.98;
+        assert!(avoid.innate_contribution(drives, hazard) > 0.0);
+        genome.innate_priority.reflex_strength = 0.0;
+        assert_eq!(
+            family(&genome, CandidateActionFamily::Avoid).innate_contribution(drives, rock),
+            0.0
+        );
+
+        let mut legacy_wire = serde_json::to_value(&genome).unwrap();
+        legacy_wire
+            .as_object_mut()
+            .unwrap()
+            .remove("innate_priority");
+        let legacy: BrainGenome = serde_json::from_value(legacy_wire).unwrap();
+        assert_eq!(legacy.innate_priority.reflex_strength, 0.0);
+
+        let mut parents = CreatureGenome::early_mammal_founder(
+            0x5A7E_0002,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N2048_ID).unwrap(),
+        )
+        .unwrap();
+        parents.predisposition.reflex_strength = ContinuousLocus::mean(0.2, 0.8).unwrap();
+        let expressed = parents.express().unwrap();
+        assert_eq!(expressed.brain_genome.innate_priority.reflex_strength, 0.5);
+    }
 }

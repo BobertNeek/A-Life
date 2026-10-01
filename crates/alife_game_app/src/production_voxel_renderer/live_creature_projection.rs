@@ -3,7 +3,7 @@
 use super::*;
 
 pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
-    let highlands = world.contains_resource::<highlands::HighlandsActive>();
+    let highlands = world.contains_resource::<creature_grounding::SelectedTerrain>();
     if !world.contains_resource::<LiveBrainPresentationFrameResource>() {
         return;
     }
@@ -88,6 +88,9 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                         if visual.base_translation != projected.translation {
                             visual.base_translation = projected.translation;
                         }
+
+                        visual.body_yaw = object.body_yaw;
+                        visual.head_yaw = object.head_yaw;
 
                         if let Some(row) = frame.current.organism(root.stable_id) {
                             let selected_action_kind =

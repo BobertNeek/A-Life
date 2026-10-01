@@ -602,8 +602,9 @@ impl MemoryRecord {
             PhysicalContactKind::None => 0.0,
             _ => 1.0,
         };
-        let positive_reward = outcome.reward_valence.raw().max(0.0);
-        let negative_reward = (-outcome.reward_valence.raw()).max(0.0);
+        let (valence, pain, disappointment) = memory_consequence(outcome);
+        let positive_reward = valence.max(0.0);
+        let negative_reward = (-valence).max(0.0);
         let social_bias = social_biases(pre_action);
         let record = Self {
             memory_id,
@@ -611,7 +612,7 @@ impl MemoryRecord {
             source_sequence_id: pre_action.sequence_id,
             source_tick: pre_action.tick,
             features: legacy_diagnostic_features(patch, max_feature_len)?,
-            expected_valence: outcome.reward_valence,
+            expected_valence: SignedValence::new(valence)?,
             predicted_drive_delta: outcome.homeostatic_delta.drives,
             outcome_summary: MemoryOutcomeSummary {
                 success_likelihood: NormalizedScalar(if outcome.success { 1.0 } else { 0.0 }),
@@ -621,11 +622,7 @@ impl MemoryRecord {
                 energy_delta: outcome.energy_delta,
             },
             affordance_bias: NormalizedScalar::new(max_affordance(pre_action))?,
-            danger_bias: NormalizedScalar::new(
-                negative_reward
-                    .max(outcome.pain_delta.raw())
-                    .max(outcome.frustration_delta.raw()),
-            )?,
+            danger_bias: NormalizedScalar::new(negative_reward.max(pain).max(disappointment))?,
             safety_bias: NormalizedScalar::new(if outcome.success {
                 positive_reward.max(0.25)
             } else {
@@ -640,6 +637,25 @@ impl MemoryRecord {
         };
         record.validate_contract()?;
         Ok(record)
+    }
+}
+
+// New biological experience uses the same inherited consequence components as
+// action credit. Old records/patches retain their historical diagnostic values.
+fn memory_consequence(outcome: &crate::PostActionOutcome) -> (f32, f32, f32) {
+    match outcome.measured_physiology.as_ref() {
+        Some(physiology) => {
+            let pain = physiology.aversive_value();
+            let disappointment = (outcome.frustration_delta.raw()
+                * physiology.before.value_profile().disappointment)
+                .clamp(0.0, 1.0);
+            (outcome.experienced_valence().raw(), pain, disappointment)
+        }
+        None => (
+            outcome.reward_valence.raw(),
+            outcome.pain_delta.raw(),
+            outcome.frustration_delta.raw(),
+        ),
     }
 }
 
@@ -787,6 +803,48 @@ impl MemoryBank {
 
     pub fn lifetime_len(&self) -> usize {
         self.lifetime_records.len()
+    }
+
+    /// Familiarity derives from retained episodes, never a parallel interaction
+    /// counter. The existing target index bounds work independently of bank
+    /// capacity. Eviction/forgetting can make an object novel again.
+    pub fn object_familiarity(
+        &self,
+        organism: OrganismId,
+        object: crate::TrackedObjectId,
+        profile: crate::SensorProfileIdentity,
+    ) -> f32 {
+        let key = TargetMemoryBucketKey {
+            organism_id_raw: organism.raw(),
+            profile_id_raw: profile.profile_id.raw(),
+            profile_schema_version: profile.profile_schema_version,
+            sensory_abi_version_raw: profile.sensory_abi_version,
+            query_version_raw: crate::MemoryQueryVersion::StateActionTargetV2.raw(),
+            tracked_object_id_raw: object.raw(),
+            target_bins: [0; CANDIDATE_FEATURE_COUNT],
+        };
+        let observations = self
+            .candidate_store
+            .target_namespace_index
+            .get(&key)
+            .into_iter()
+            .flatten()
+            .take(MEMORY_TARGET_SEARCH_CAP)
+            .filter_map(|id| self.candidate_store.records.get(&id.raw()))
+            .filter(|r| {
+                r.organism_id_raw == organism.raw()
+                    && r.tracked_object_id_raw == object.raw()
+                    && matches!(
+                        ActionKind::try_from_raw(r.action_kind_raw),
+                        Ok(ActionKind::Look
+                            | ActionKind::Inspect
+                            | ActionKind::Interact
+                            | ActionKind::Hold)
+                    )
+            })
+            .map(|r| r.observation_count)
+            .fold(0_u32, u32::saturating_add);
+        1.0 - 1.0 / (1.0 + observations as f32)
     }
 
     pub fn lifetime_records(&self) -> &[MemoryRecord] {
@@ -1540,11 +1598,13 @@ impl MemoryBank {
             || source_sequences.len() != resolved_memory_ids.len()
             || max_records_after == 0
             || max_records_after > self.config.capacity
-            || source_sequences.len() > max_records_after
         {
             return Err(ScaffoldContractError::MemoryModeConflict);
         }
 
+        // Candidate memory bounded its retained records during observation;
+        // this path only resolves their identities. The legacy lifetime
+        // promotion limit cannot cap the number of replay events.
         let mut seen_sequences = std::collections::BTreeSet::new();
         let mut seen_memory_ids = std::collections::BTreeSet::new();
         let mut joined = Vec::new();

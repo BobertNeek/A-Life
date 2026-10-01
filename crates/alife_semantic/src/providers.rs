@@ -3,13 +3,17 @@
 use alife_core::{GaussianContextRef, ScaffoldContractError, SemanticContextRef, Vec3f};
 
 use crate::{
-    build_gaussian_context, build_semantic_context, EgocentricBinGrid, EgocentricBinHasher,
     GaussianClusterObservation, SemanticCodeDescriptor, SemanticConceptBinding,
     SemanticProviderCapabilityManifest,
 };
 
 use crate::{
     MAX_GAUSSIAN_CONTEXT_CLUSTERS, MAX_SEMANTIC_CODE_COUNT, MAX_SEMANTIC_CONTEXT_BINDINGS,
+};
+
+#[cfg(feature = "fake-semantic-provider")]
+use crate::{
+    build_gaussian_context, build_semantic_context, EgocentricBinGrid, EgocentricBinHasher,
 };
 
 /// A small, explicit request object for optional context synthesis.
@@ -67,7 +71,7 @@ impl SemanticContextRequest {
         self
     }
 
-    #[allow(dead_code)]
+    #[cfg(feature = "fake-semantic-provider")]
     fn gaussian_bin_hash(&self) -> u64 {
         EgocentricBinHasher::new().hash(self.observer_offset, EgocentricBinGrid::default())
     }
@@ -91,7 +95,7 @@ pub trait SemanticContextProvider {
 }
 
 /// Keep adapters small and deterministic; this helper performs full conversion.
-#[allow(dead_code)]
+#[cfg(feature = "fake-semantic-provider")]
 pub(crate) fn synthesize_context_bundle(
     request: &SemanticContextRequest,
 ) -> Result<SemanticContextBundle, ScaffoldContractError> {

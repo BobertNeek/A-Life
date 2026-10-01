@@ -6,6 +6,7 @@ use alife_core::{
 use alife_world::{
     persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
     HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord,
+    HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION,
 };
 
 fn record(organism_id: u64, world_entity_id: u64) -> WorldOrganismRecord {
@@ -76,6 +77,34 @@ fn canonical_signature_distinguishes_same_seed_wrong_and_later_worlds() {
     assert_ne!(
         original.canonical_signature_digest().unwrap(),
         later_world.canonical_signature_digest().unwrap()
+    );
+}
+
+#[test]
+fn canonical_signature_binds_optional_terrain_identity() {
+    let mut source_world = HeadlessScenarioBuilder::new(44_002).build().unwrap();
+    source_world.enable_highlands_for_new_game().unwrap();
+    let terrain_save = save(&source_world);
+    let terrain_world = terrain_save.clone().restore_headless_world().unwrap();
+    let terrain_clone = terrain_save.clone().restore_headless_world().unwrap();
+
+    let mut terrainless_save = terrain_save;
+    terrainless_save.world.terrain = None;
+    terrainless_save.world.terrain_state = None;
+    let terrainless_world = terrainless_save.restore_headless_world().unwrap();
+
+    let terrain_signature = terrain_world.canonical_signature_digest().unwrap();
+    assert_eq!(
+        terrain_signature.schema_version,
+        HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION
+    );
+    assert_eq!(
+        terrain_signature,
+        terrain_clone.canonical_signature_digest().unwrap()
+    );
+    assert_ne!(
+        terrain_signature,
+        terrainless_world.canonical_signature_digest().unwrap()
     );
 }
 
@@ -222,7 +251,7 @@ fn canonical_signature_includes_future_organism_identity_state() {
 }
 
 #[test]
-fn canonical_signature_registry_is_v4_and_included_in_world_identity() {
+fn canonical_signature_registry_is_current_and_included_in_world_identity() {
     let (mut world, resident_a, resident_b) = world_with_two_agents();
     let empty = world.canonical_signature_digest().unwrap();
 
@@ -233,8 +262,14 @@ fn canonical_signature_registry_is_v4_and_included_in_world_identity() {
         .unwrap();
     let registered = world.canonical_signature_digest().unwrap();
 
-    assert_eq!(empty.schema_version, 4);
-    assert_eq!(registered.schema_version, 4);
+    assert_eq!(
+        empty.schema_version,
+        HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION
+    );
+    assert_eq!(
+        registered.schema_version,
+        HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION
+    );
     assert_ne!(empty, registered);
 }
 

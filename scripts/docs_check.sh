@@ -112,8 +112,6 @@ require_text docs/REFERENCE.md 'CPU neural helpers: reference, test, or develope
 require_text docs/REFERENCE.md 'N4096 | Research-only migration/equivalence class' 'N4096 research boundary'
 require_text docs/REFERENCE.md 'author creature thought or raw speech' 'SLM authority boundary'
 require_text docs/AGENTS.md 'single normative A-Life architecture' 'single documentation authority set'
-require_text docs/brain/ALife_Adaptive_Brain_Architecture_Spec_v1.1.md 'SUPERSEDED / HISTORICAL' 'v1.1 historical notice'
-require_text docs/brain/ALife_Adaptive_Brain_Architecture_Compliance_v1.1.md 'SUPERSEDED / HISTORICAL' 'v1.1 compliance historical notice'
 require_text crates/alife_core/AGENTS.md 'Never equate a language token ID with a neuron or packed GPU offset.' 'core language boundary'
 require_text crates/alife_gpu_backend/AGENTS.md 'Neural `Vocalize` payload selection remains GPU-authoritative.' 'GPU speech authority'
 require_text crates/alife_school/AGENTS.md 'Run language mastery gates with SLM translation disabled.' 'school evaluation boundary'

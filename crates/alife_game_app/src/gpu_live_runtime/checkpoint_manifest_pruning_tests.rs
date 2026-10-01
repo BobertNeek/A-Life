@@ -39,7 +39,8 @@ fn fixture(label: &str) -> (PathBuf, GpuLiveBrainRuntime, AssetManifestEntry) {
     let mut runtime =
         crate::create_canonical_new_game_runtime(crate::CanonicalNewGameLaunchRequest {
             world_seed: 31_117,
-            population: 4,
+            population: if label == "readiness" { 1 } else { 4 },
+            disable_age_death: false,
             save_path: root.join("live.json"),
             asset_root,
             config,
@@ -214,4 +215,74 @@ fn portable_checkpoint_manifest_drops_stale_roots_and_preserves_old_save() {
 #[test]
 fn async_checkpoint_manifest_drops_stale_roots_and_preserves_old_save() {
     assert_current_roots_and_retained_generation(CaptureKind::Async, "async");
+}
+
+#[test]
+fn readiness_resume_preserves_external_actors_toys_and_private_prior() {
+    let (_root, mut runtime, _marker) = fixture("readiness");
+    let organism = runtime.world.organism_entity_ids()[0].0;
+    let position = runtime.world.object_snapshots()[0].position;
+    let teacher = runtime
+        .world
+        .spawn_social_agent("readiness-teacher", OrganismId(9000001), position, 0.75)
+        .unwrap();
+    runtime
+        .world
+        .spawn_toy("readiness-ball", position, true)
+        .unwrap();
+    runtime
+        .world
+        .spawn_toy("readiness-station", position, false)
+        .unwrap();
+    // No server request is needed to exercise the real fading controller.
+    let mut prior = semantic_prior::RuntimeSemanticPrior::from_environment(31117, false)
+        .unwrap()
+        .unwrap();
+    prior.seed_resume_check(organism.raw(), runtime.world.tick().raw());
+    runtime.semantic_prior = Some(prior);
+    let world = runtime.world.canonical_signature_digest().unwrap();
+    let biology = *runtime
+        .world
+        .organism_registry()
+        .get(organism)
+        .unwrap()
+        .biochemistry();
+    let prior = runtime
+        .semantic_prior
+        .as_ref()
+        .unwrap()
+        .snapshot(organism.raw())
+        .unwrap();
+    capture(&mut runtime, CaptureKind::Async);
+    let mut restored = runtime.restored_clone_from_durability_for_test().unwrap();
+    assert_eq!(restored.world.canonical_signature_digest().unwrap(), world);
+    assert_eq!(
+        *restored
+            .world
+            .organism_registry()
+            .get(organism)
+            .unwrap()
+            .biochemistry(),
+        biology
+    );
+    assert_eq!(
+        restored
+            .semantic_prior
+            .as_ref()
+            .unwrap()
+            .snapshot(organism.raw())
+            .unwrap(),
+        prior
+    );
+    assert_eq!(restored.world.entity_id("readiness-teacher"), Some(teacher));
+    assert!(!restored.handles.contains_key(&9000001));
+    assert_eq!(restored.handles.len(), runtime.handles.len());
+    assert!(runtime.memories.get(&organism.raw()).unwrap().bank().len() > 0);
+    assert_eq!(restored.memories, runtime.memories);
+
+    assert!(matches!(
+        restored.tick_outcome().unwrap(),
+        GpuLiveTickOutcome::Progressed(_)
+    ));
+    assert!(!restored.handles.contains_key(&9000001));
 }

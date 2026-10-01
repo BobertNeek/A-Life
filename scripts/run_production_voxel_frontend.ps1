@@ -2,6 +2,12 @@ param(
     [ValidateSet("dev", "release")]
     [string]$BuildProfile = "release",
     [string]$Manifest = "",
+    [switch]$NewGame,
+    [string]$Founder = "",
+    [string]$UiSettings = "",
+    [ValidateSet("1x", "max", "headless-max")]
+    [string]$RunMode = "1x",
+    [UInt64]$Seed = 0,
     [switch]$DryRun,
     [switch]$PreviewCommand,
     [ValidateRange(0, 120)]
@@ -23,6 +29,9 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $FeatureList = "production-voxel-frontend"
+if ($RecordPerformance -and $BuildProfile -ne "release") {
+    throw "Performance recording requires the optimized release build."
+}
 # Use -DryRun to execute the application's real preflight without opening a window.
 # Use -PreviewCommand to print the Cargo command without executing it.
 
@@ -43,9 +52,31 @@ $AppArgs = @(
     "--brain-policy", $BrainPolicy,
     "--graphics-backend", $GraphicsBackend
 )
+$AppArgs += @("--run-mode", $RunMode)
 
 if ($Manifest) {
     $AppArgs += @("--manifest", $Manifest)
+}
+
+if ($NewGame) {
+    if ($DryRun) {
+        throw "New Game needs a live launch; -DryRun only checks an existing save."
+    }
+    if ($Seed -eq 0) {
+        $Seed = [UInt64][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    }
+    $AppArgs += @("--new-game", "--seed", "$Seed")
+} elseif ($Seed -ne 0) {
+    throw "-Seed requires -NewGame."
+}
+
+if ($Founder) {
+    if (-not $NewGame) { throw "-Founder requires -NewGame." }
+    $AppArgs += @("--founder", $Founder)
+}
+
+if ($UiSettings) {
+    $AppArgs += @("--ui-settings", $UiSettings)
 }
 
 if ($Population -gt 0) {

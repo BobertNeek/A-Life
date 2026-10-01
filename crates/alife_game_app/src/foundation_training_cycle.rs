@@ -1,0 +1,1279 @@
+//! A bounded, real-world actor update and next-cohort admission gate.
+//! The ordinary GPU runtime owns perception, action, biology, and legality.
+
+use std::{path::Path, time::Instant};
+
+use alife_core::{
+    BrainScaleTier, FoundationWeightAsset, ScaffoldContractError, SensorProfile,
+    TrainingStageManifest,
+};
+use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile, GpuTrainingSamplingConfig};
+use alife_training::{
+    train_recurrent_ppo_cohort, AdamWConfig, FoundationTrainer, PpoBatch, PpoBoundary, PpoConfig,
+    PpoJointAction, PpoTrainingState, PpoTrainingWindow, PpoTransition, StageTrainableMask,
+};
+
+use crate::{
+    configure_foundation_scenario, foundation_replay_source, initial_n2048_care_asset,
+    load_foundation_replay_window, verify_foundation_replay_step, FoundationReplayBudget,
+    FoundationReplayWriter, FoundationTeacherLesson, FoundationWarmupReceipt,
+    GpuDurableSaveManifest, GpuLiveBrainRuntime,
+};
+
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+const BIOLOGICAL_OBJECTIVE_VERSION: u16 = 2;
+fn legacy_objective_version() -> u16 {
+    1
+}
+
+fn training_receptor_profile(
+    phenotype: &alife_core::CreaturePhenotype,
+) -> alife_core::PlasticityReceptorProfile {
+    let genes = phenotype.brain_genome.plasticity_parameters();
+    genes.action_candidate_credit_profile().map_or_else(
+        || genes.receptor_profile(),
+        |profile| profile.receptor_profile(),
+    )
+}
+
+fn training_biological_value(
+    transition: &alife_core::MeasuredPhysiologyTransition,
+    phenotype: &alife_core::CreaturePhenotype,
+) -> Result<f32> {
+    let receptors = transition.before.neural_receptor_frame(phenotype)?;
+    let sample = alife_core::NeuromodulatorSample::from_components(
+        0.0,
+        transition.aversive_value(),
+        transition.homeostatic_improvement(),
+        0.0,
+        0.0,
+    )?
+    .with_biochemical_receptors(&receptors)?;
+    Ok(training_receptor_profile(phenotype).project(&sample.frame())?)
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct FoundationCycleReceipt {
+    #[serde(default = "legacy_objective_version")]
+    pub biological_objective_version: u16,
+    #[serde(default)]
+    pub objective_state_reset: bool,
+    pub seed: u64,
+    #[serde(default)]
+    pub founder_seed_base: u64,
+    pub policy_version: u64,
+    pub training_ticks: usize,
+    #[serde(default)]
+    pub requested_training_ticks: usize,
+    #[serde(default)]
+    pub terminal_death_tick: Option<u64>,
+    #[serde(default)]
+    pub delayed_food_gate_passed: bool,
+    #[serde(default)]
+    pub world_ticks_elapsed: u64,
+    #[serde(default)]
+    pub consumed_events: u64,
+    #[serde(default)]
+    pub blocked_actions: u64,
+    #[serde(default)]
+    pub collision_actions: u64,
+    #[serde(default)]
+    pub avoid_actions: u64,
+    #[serde(default)]
+    pub rest_recovery_actions: u64,
+    #[serde(default)]
+    pub food_available_world_tick: Option<u64>,
+    #[serde(default)]
+    pub lesson: Option<FoundationTeacherLesson>,
+    #[serde(default)]
+    pub first_consumed_world_tick: Option<u64>,
+    #[serde(default)]
+    pub food_available_elapsed_seconds: Option<f64>,
+    #[serde(default)]
+    pub first_consumed_elapsed_seconds: Option<f64>,
+    #[serde(default)]
+    pub initial_energy: f32,
+    #[serde(default)]
+    pub minimum_energy: f32,
+    #[serde(default)]
+    pub final_energy: f32,
+    #[serde(default)]
+    pub sleep_gap_reward_total: f32,
+    #[serde(default)]
+    pub semantic_prior: Option<crate::gpu_live_runtime::SemanticPriorMetrics>,
+    #[serde(default)]
+    pub speech_target_rows: usize,
+    pub collection_seconds: f64,
+    pub update_seconds: f64,
+    pub old_asset_digest: String,
+    pub new_asset_digest: String,
+    pub actor_optimizer_step: u32,
+    pub value_optimizer_step: u32,
+    pub completed_epochs: u32,
+    pub next_cohort_tick_captured: bool,
+    pub next_cohort_optimizer_rebound: bool,
+}
+
+fn digest(asset: &FoundationWeightAsset) -> String {
+    asset
+        .digest()
+        .bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct FoundationAdaptationReceipt {
+    pub source_directory: std::path::PathBuf,
+    pub source_asset_digest: String,
+    pub adapted_asset_digest: String,
+    pub founder_seed_base: u64,
+    pub policy_version: u64,
+    pub preserved_weight_count: usize,
+    pub optimizer_reset: bool,
+    pub founder_biology_calibration: u16,
+}
+
+/// Explicit candidate migration. Personal state is absent, and the source is
+/// immutable. Changing observations invalidates old optimizer/value statistics.
+pub fn adapt_foundation_to_terrain(
+    previous: &Path,
+    output: &Path,
+) -> Result<FoundationAdaptationReceipt> {
+    let receipt: FoundationCycleReceipt =
+        serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
+    let source = FoundationWeightAsset::decode_canonical(&std::fs::read(
+        previous.join("trained.alife-foundation"),
+    )?)?;
+    if !receipt.next_cohort_optimizer_rebound
+        || digest(&source) != receipt.new_asset_digest
+        || source.manifest().sensor_profile() != SensorProfile::GroundedObjectSlotsV1
+    {
+        return Err("adaptation requires a sealed grounded-object source cohort".into());
+    }
+    let founder_seed_base = if receipt.founder_seed_base == 0 {
+        receipt.seed
+    } else {
+        receipt.founder_seed_base
+    };
+    let mut config = alife_world::CanonicalNewGameConfig::phase3(receipt.seed, 1)?;
+    config.brain_class = BrainScaleTier::Standard2048;
+    config.founder_seed_base = founder_seed_base;
+    let game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &source)?;
+    let record = game
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .ok_or("source founder missing")?;
+    let genome = record.phenotype().brain_genome.clone();
+    let development = crate::gpu_live_runtime::foundation_construction_development(
+        &genome,
+        &alife_core::BrainCapacityClass::n2048(),
+        &record
+            .phenotype()
+            .development_state_at(alife_core::Tick::ZERO)?,
+    )?;
+    let (old, _) = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
+        genome.clone(),
+        development.clone(),
+        source.clone(),
+    )?;
+    let target = alife_core::PhenotypeCompiler::compile_testing_procedural_baseline(
+        &genome,
+        &alife_core::BrainCapacityClass::n2048(),
+        &development,
+        SensorProfile::GroundedTerrainVisionV1,
+    )?;
+    if old.persistent_address_map().digest() != target.persistent_address_map().digest()
+        || old.synapses().len() != target.synapses().len()
+        || old.synapses().iter().zip(target.synapses()).any(|(a, b)| {
+            a.source() != b.source()
+                || a.target() != b.target()
+                || a.route_index() != b.route_index()
+                || a.kind() != b.kind()
+        })
+    {
+        return Err("terrain adaptation changed inherited synapse coordinates".into());
+    }
+    let adapted = FoundationWeightAsset::from_trained_weights(
+        &target,
+        source.weights().to_vec(),
+        source.manifest().training_stage(),
+    )?;
+    if adapted.weights().len() != source.weights().len()
+        || adapted
+            .weights()
+            .iter()
+            .zip(source.weights())
+            .any(|(a, b)| a.to_bits() != b.to_bits())
+    {
+        return Err("terrain adaptation changed inherited weight bits".into());
+    }
+    let mut target_config = config;
+    target_config.sensor_profile = SensorProfile::GroundedTerrainVisionV1;
+    alife_world::create_canonical_new_game_with_n2048_candidate(&target_config, &adapted)?;
+    let result = FoundationAdaptationReceipt {
+        source_directory: previous.to_path_buf(),
+        source_asset_digest: digest(&source),
+        adapted_asset_digest: digest(&adapted),
+        founder_seed_base,
+        policy_version: receipt
+            .policy_version
+            .checked_add(1)
+            .ok_or("policy version overflow")?,
+        preserved_weight_count: source.weights().len(),
+        optimizer_reset: true,
+        founder_biology_calibration: 2,
+    };
+    std::fs::create_dir(output)?;
+    std::fs::write(
+        output.join("trained.alife-foundation"),
+        adapted.encode_canonical()?,
+    )?;
+    std::fs::write(
+        output.join("adaptation.json"),
+        serde_json::to_vec_pretty(&result)?,
+    )?;
+    Ok(result)
+}
+
+fn organism_energy(runtime: &GpuLiveBrainRuntime, organism: alife_core::OrganismId) -> Result<f32> {
+    Ok(runtime
+        .world()
+        .organism_registry()
+        .get(organism)
+        .ok_or("training organism missing from world")?
+        .biochemistry()
+        .body
+        .energy)
+}
+
+fn consumed(step: &crate::FoundationTrainingStep) -> bool {
+    let outcome = step.patch.outcome();
+    outcome.physical.contact == alife_core::PhysicalContactKind::Consumed
+        || outcome.joint.as_ref().is_some_and(|joint| {
+            joint.channel_outcomes.iter().any(|channel| {
+                channel.physical.contact == alife_core::PhysicalContactKind::Consumed
+            })
+        })
+}
+
+fn joint_action(behavior: &alife_gpu_backend::GpuTrainingRolloutReceipt) -> Result<PpoJointAction> {
+    let count = u16::try_from(behavior.forced_motor_slots.len())?;
+    let action = PpoJointAction {
+        candidate_count: count,
+        representative_mask: behavior.representative_mask,
+        motor_masks: behavior.motor_masks,
+        representative: behavior.representative_index,
+        forced_slots: behavior
+            .forced_motor_slots
+            .iter()
+            .copied()
+            .map(Some)
+            .collect(),
+        motor_candidates: behavior.motor_indices.map(|i| (i != u16::MAX).then_some(i)),
+        old_joint_log_probability: behavior.on_policy_log_probability()?,
+        temperature: behavior.sampling.temperature,
+    };
+    action.validate(behavior.sampling.temperature)?;
+    Ok(action)
+}
+
+/// A single pinned-policy cohort. The extra captured decision supplies the
+/// actual next-state value for a time-limit truncation; it is not trained on.
+pub fn run_foundation_training_cycle(
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from(output, seed, training_ticks, None, None, None)
+}
+
+/// A scenario gate: food is out of reach until an explicit world tick. Biology
+/// and the organism's policy are unchanged throughout the interval.
+pub fn run_foundation_training_cycle_with_food_delay(
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    food_available_world_tick: u64,
+) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from(
+        output,
+        seed,
+        training_ticks,
+        None,
+        Some(food_available_world_tick),
+        None,
+    )
+}
+
+/// Continue from an exactly rebound, sealed previous cycle. The saved optimizer
+/// and value head are restored before using any newly collected decision.
+pub fn resume_foundation_training_cycle(
+    previous: &Path,
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from(output, seed, training_ticks, Some(previous), None, None)
+}
+
+pub fn resume_foundation_training_cycle_with_food_delay(
+    previous: &Path,
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    food_available_world_tick: u64,
+) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from(
+        output,
+        seed,
+        training_ticks,
+        Some(previous),
+        Some(food_available_world_tick),
+        None,
+    )
+}
+
+/// Collect policy actions in the same world layout used by a teacher lesson.
+/// The teacher is absent; all decisions and outcomes come from the live brain.
+pub fn run_foundation_training_cycle_with_lesson(
+    previous: Option<&Path>,
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    lesson: FoundationTeacherLesson,
+) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from(output, seed, training_ticks, previous, None, Some(lesson))
+}
+
+fn run_foundation_training_cycle_from(
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    previous: Option<&Path>,
+    food_available_world_tick: Option<u64>,
+    lesson: Option<FoundationTeacherLesson>,
+) -> Result<FoundationCycleReceipt> {
+    if seed == 0 || !(1..=36_000).contains(&training_ticks) {
+        return Err("cycle needs a nonzero seed and 1..=36000 training ticks".into());
+    }
+    if food_available_world_tick == Some(0) {
+        return Err("food availability tick must be positive".into());
+    }
+    if food_available_world_tick.is_some() && lesson.is_some() {
+        return Err("a delayed food gate cannot be combined with a lesson layout".into());
+    }
+    std::fs::create_dir(output)?;
+    let mut objective_state_reset = false;
+    let (asset, policy_version, restored_actor, restored_value, founder_seed_base) =
+        if let Some(previous) = previous {
+            if previous.join("adaptation.json").is_file() {
+                let receipt: FoundationAdaptationReceipt =
+                    serde_json::from_slice(&std::fs::read(previous.join("adaptation.json"))?)?;
+                let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
+                    previous.join("trained.alife-foundation"),
+                )?)?;
+                if digest(&asset) != receipt.adapted_asset_digest
+                    || !receipt.optimizer_reset
+                    || receipt.founder_biology_calibration != 2
+                    || asset.manifest().sensor_profile() != SensorProfile::GroundedTerrainVisionV1
+                    || receipt.preserved_weight_count != asset.weights().len()
+                {
+                    return Err("invalid explicit terrain adaptation handoff".into());
+                }
+                objective_state_reset = true;
+                (
+                    asset,
+                    receipt.policy_version,
+                    None,
+                    None,
+                    receipt.founder_seed_base,
+                )
+            } else if previous.join("warmup.json").is_file() {
+                let receipt: FoundationWarmupReceipt =
+                    serde_json::from_slice(&std::fs::read(previous.join("warmup.json"))?)?;
+                if !receipt.next_cohort_optimizer_rebound
+                    || receipt.demonstration_count == 0
+                    || receipt.category_counts.iter().sum::<usize>() != receipt.demonstration_count
+                {
+                    return Err("previous warm-up is not a balanced sealed handoff".into());
+                }
+                let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
+                    previous.join("trained.alife-foundation"),
+                )?)?;
+                if digest(&asset) != receipt.trained_asset_digest {
+                    return Err("warm-up exported asset does not match its receipt".into());
+                }
+                let actor: alife_training::FoundationTrainerCheckpoint = serde_json::from_slice(
+                    &std::fs::read(previous.join("actor-checkpoint.json"))?,
+                )?;
+                let value: alife_training::PpoValueHeadCheckpoint = serde_json::from_slice(
+                    &std::fs::read(previous.join("value-checkpoint.json"))?,
+                )?;
+                if actor.source_foundation_digest != asset.digest()
+                    || actor.optimizer_step != receipt.actor_optimizer_step
+                    || actor.weights.len() != asset.weights().len()
+                    || actor
+                        .weights
+                        .iter()
+                        .zip(asset.weights())
+                        .any(|(trained, exported)| trained.to_bits() != exported.to_bits())
+                    || value.last_updated_policy_version.is_some()
+                    || value.optimizer_step != 0
+                {
+                    return Err("warm-up optimizer/value checkpoint does not match actor".into());
+                }
+                (
+                    asset,
+                    1,
+                    Some(actor),
+                    Some(value),
+                    receipt.founder_seed_base,
+                )
+            } else {
+                let receipt: FoundationCycleReceipt =
+                    serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
+                if receipt.biological_objective_version > BIOLOGICAL_OBJECTIVE_VERSION {
+                    return Err("previous cohort uses a newer biological objective".into());
+                }
+                objective_state_reset =
+                    receipt.biological_objective_version != BIOLOGICAL_OBJECTIVE_VERSION;
+                if !receipt.next_cohort_optimizer_rebound {
+                    return Err("previous cycle is not an exact sealed cohort handoff".into());
+                }
+                let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
+                    previous.join("trained.alife-foundation"),
+                )?)?;
+                if digest(&asset) != receipt.new_asset_digest {
+                    return Err("previous exported asset does not match its receipt".into());
+                }
+                let actor: alife_training::FoundationTrainerCheckpoint = serde_json::from_slice(
+                    &std::fs::read(previous.join("actor-checkpoint.json"))?,
+                )?;
+                let value: alife_training::PpoValueHeadCheckpoint = serde_json::from_slice(
+                    &std::fs::read(previous.join("value-checkpoint.json"))?,
+                )?;
+                if actor.source_foundation_digest != asset.digest()
+                    || actor.weights.len() != asset.weights().len()
+                    || actor
+                        .weights
+                        .iter()
+                        .zip(asset.weights())
+                        .any(|(trained, exported)| trained.to_bits() != exported.to_bits())
+                    || value.last_updated_policy_version != Some(receipt.policy_version)
+                {
+                    return Err(
+                        "previous optimizer/value checkpoint does not match exported actor".into(),
+                    );
+                }
+                let founder_seed_base = if receipt.founder_seed_base == 0 {
+                    receipt.seed
+                } else {
+                    receipt.founder_seed_base
+                };
+                (
+                    asset,
+                    receipt
+                        .policy_version
+                        .checked_add(1)
+                        .ok_or("policy version overflow")?,
+                    if objective_state_reset {
+                        None
+                    } else {
+                        Some(actor)
+                    },
+                    if objective_state_reset {
+                        None
+                    } else {
+                        Some(value)
+                    },
+                    founder_seed_base,
+                )
+            }
+        } else {
+            (initial_n2048_care_asset(seed)?, 0, None, None, seed)
+        };
+    if lesson.is_some()
+        && asset.manifest().sensor_profile() != SensorProfile::GroundedTerrainVisionV1
+    {
+        return Err("navigation curriculum requires explicit --adapt-terrain before resuming an old founder".into());
+    }
+    std::fs::write(
+        output.join("initial.alife-foundation"),
+        asset.encode_canonical()?,
+    )?;
+    std::fs::write(output.join("phase.txt"), "source-written")?;
+
+    let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
+    config.brain_class = BrainScaleTier::Standard2048;
+    config.founder_seed_base = founder_seed_base;
+    config.sensor_profile = asset.manifest().sensor_profile();
+    let mut game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
+    crate::foundation_training::ground_foundation_training_world(&mut game.world)?;
+    game.world.set_age_death_disabled_for_new_game(true)?;
+    let mut scenario = if lesson.is_some() {
+        Some(configure_foundation_scenario(
+            &mut game.world,
+            seed,
+            lesson,
+            None,
+            true,
+        )?)
+    } else {
+        None
+    };
+    if let Some(scenario) = &mut scenario {
+        scenario.repeat_vocabulary = lesson != Some(FoundationTeacherLesson::VocabularyProduction);
+    }
+    let mut creatures = game.creatures;
+    // Recovery preconditioning advances ordinary world biology before the
+    // durable base is published. Keep the New Game save summaries in step
+    // with that same organism record, as the normal checkpoint path does.
+    for creature in &mut creatures {
+        let biochemistry = game
+            .world
+            .organism_registry()
+            .get(creature.organism_id)
+            .ok_or("scenario founder is missing from the world")?
+            .biochemistry();
+        creature.development_tick = biochemistry.development.last_update_tick;
+        creature.mind.tick = biochemistry.tick;
+        creature.mind.homeostasis = biochemistry.homeostasis;
+    }
+    let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
+    let mut runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
+        backend,
+        game.world,
+        seed,
+        BrainScaleTier::Standard2048,
+        config.sensor_profile,
+        alife_archive::LineageLibraryConfig::profile_default(output.join("lineage")),
+        format!("n2048-cycle-{seed}"),
+        alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
+        GpuTrainingSamplingConfig {
+            seed: (seed as u32) ^ (policy_version as u32).wrapping_mul(0x9e37_79b9),
+            counter: 0,
+            temperature: 1.0,
+            demonstrator: None,
+        },
+    )?;
+    let delayed_food = if food_available_world_tick.is_some() {
+        let food_id = runtime
+            .world()
+            .entity_id("food-01")
+            .ok_or("training world is missing its food resource")?;
+        let original_position = runtime
+            .world()
+            .entity(food_id)
+            .ok_or("training food resource is missing")?
+            .position;
+        // Keep food in the legal world but far beyond the founder's practical
+        // reach during the gate. Horizontal world coordinates are X and Z.
+        let hidden_position =
+            runtime.move_player_food(food_id, alife_core::Vec3f::new(390.0, 0.0, 340.0))?;
+        Some((food_id, original_position, hidden_position))
+    } else {
+        None
+    };
+    let scenario_position = |label| -> Result<[f32; 3]> {
+        let entity = runtime
+            .world()
+            .entity_id(label)
+            .ok_or("scenario object is missing")?;
+        Ok(runtime
+            .world()
+            .entity(entity)
+            .ok_or("scenario object is missing")?
+            .position
+            .to_array())
+    };
+    std::fs::write(
+        output.join("scenario.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "world_seed": seed,
+            "founder_seed_base": founder_seed_base,
+            "food_available_world_tick": food_available_world_tick,
+            "sensor_profile": config.sensor_profile,
+            "gate_closed_world_tick": scenario.as_ref().and_then(|setup| setup.closing_gate).map(|_| 2),
+            "gate_closed_position": scenario.as_ref().and_then(|setup| setup.closing_gate).map(|(_, position)| position.to_array()),
+            "lesson": lesson,
+            "maze_walls": scenario.as_ref().map(|s|s.maze_walls.iter().map(|(id,p)|(id.raw(),p.to_array())).collect::<Vec<_>>()),
+            "vocabulary_token": scenario.as_ref().and_then(|s|s.vocabulary_token),
+            "vocabulary_target": scenario.as_ref().and_then(|s|s.vocabulary_target).map(|id|id.raw()),
+            "food_position": scenario_position("food-01")?,
+            "blocker_position": scenario_position("obstacle-01")?,
+            "waypoint_position": scenario_position("obstacle-02")?,
+            "hazard_position": scenario_position("hazard-01")?,
+            "food_hidden_position": delayed_food.map(|(_, _, position)| position.to_array()),
+            "food_original_position": delayed_food.map(|(_, position, _)| position.to_array()),
+            "age_death_disabled": true,
+        }))?,
+    )?;
+    // Sleep transitions use the same durable neural authority as an ordinary
+    // New Game. Without an exact base, the sleep journal has no publisher.
+    let asset_root = output.join("world-assets");
+    std::fs::create_dir(&asset_root)?;
+    let save_path = output.join("world.json");
+    let mut runtime_config =
+        alife_world::RuntimeConfig::deterministic_default(seed, BrainScaleTier::Standard2048);
+    runtime_config.features.gpu_backend_enabled = true;
+    let base = alife_world::PortableSaveFile::from_headless_world(
+        format!("n2048-cycle-{seed}"),
+        runtime.world(),
+        runtime_config,
+        alife_world::AssetManifest::empty(),
+        creatures,
+    )?;
+    base.validate_with_asset_root(&asset_root)?;
+    runtime.attach_durable_checkpoint_boundary(&save_path, &asset_root, base)?;
+    let exact = runtime.capture_portable_checkpoint()?;
+    let published = GpuDurableSaveManifest::publish_snapshot(&save_path, &asset_root, &exact)?;
+    if published.save != exact {
+        return Err("cycle exact checkpoint changed during publication".into());
+    }
+    runtime.rebind_durable_checkpoint_boundary(&save_path, &asset_root, &exact)?;
+    if std::env::var_os("ALIFE_FOUNDATION_PROFILE").is_some() {
+        runtime.set_performance_measurement_enabled(true);
+    }
+    std::fs::write(output.join("phase.txt"), "runtime-admitted")?;
+
+    let organism_id = runtime
+        .world()
+        .organism_registry()
+        .iter()
+        .next()
+        .ok_or("new training world has no founder")?
+        .organism_id();
+    let initial_energy = organism_energy(&runtime, organism_id)?;
+    let organism_phenotype = runtime
+        .world()
+        .organism_registry()
+        .get(organism_id)
+        .ok_or("training founder is missing")?
+        .phenotype()
+        .clone();
+    let mut minimum_energy = initial_energy;
+    let mut consumed_events = 0_u64;
+    let mut first_consumed_world_tick = None;
+    let mut food_available_elapsed_seconds = None;
+    let mut first_consumed_elapsed_seconds = None;
+    let mut food_hidden = delayed_food.is_some();
+
+    let started = Instant::now();
+    let mut production_tick_seconds = 0.0_f64;
+    let mut replay_append_seconds = 0.0_f64;
+    let tick_started = Instant::now();
+    if let Some(scenario) = &scenario {
+        crate::close_foundation_navigation_gate(&mut runtime, scenario)?;
+    }
+    runtime.prime_foundation_semantic_prior()?;
+    runtime.tick().map_err(|e| {
+        let _ = std::fs::write(
+            output.join("runtime-performance-failed.json"),
+            serde_json::to_vec_pretty(&runtime.performance_metrics()).unwrap_or_default(),
+        );
+        format!("cycle production tick 0: {e}")
+    })?;
+    production_tick_seconds += tick_started.elapsed().as_secs_f64();
+    let mut first = runtime.take_foundation_training_steps();
+    if first.len() != 1 {
+        return Err(format!(
+            "cycle tick 0: expected one waking decision, got {}",
+            first.len()
+        )
+        .into());
+    }
+    if first[0].frame.organism_id() != organism_id {
+        return Err("first training capture belongs to a different organism".into());
+    }
+    minimum_energy = minimum_energy.min(
+        first[0]
+            .patch
+            .outcome()
+            .measured_physiology
+            .ok_or("first sealed training patch has no measured physiology")?
+            .after
+            .body
+            .energy,
+    );
+    if consumed(&first[0]) {
+        if food_hidden {
+            return Err("food was consumed before the scenario made it available".into());
+        }
+        consumed_events += 1;
+        first_consumed_world_tick = Some(first[0].patch.outcome().outcome_tick.raw());
+        first_consumed_elapsed_seconds = Some(started.elapsed().as_secs_f64());
+    }
+    if food_hidden && runtime.world().tick().raw() >= food_available_world_tick.unwrap_or(u64::MAX)
+    {
+        if consumed_events != 0 {
+            return Err("food was consumed before the scenario made it available".into());
+        }
+        let (food_id, original_position, _) = delayed_food.ok_or("missing delayed food")?;
+        runtime.move_player_food(food_id, original_position)?;
+        food_hidden = false;
+        food_available_elapsed_seconds = Some(started.elapsed().as_secs_f64());
+    }
+    std::fs::write(output.join("phase.txt"), "first-capture")?;
+    let phenotype = first[0].before.phenotype.clone();
+    let mask = if let Some(checkpoint) = &restored_actor {
+        checkpoint.stage_mask.clone()
+    } else {
+        StageTrainableMask::from_synapse_indices(
+            &phenotype,
+            &(0..phenotype.synapses().len() as u32).collect::<Vec<_>>(),
+        )?
+    };
+    let staging = runtime.new_staging_like_live()?;
+    let mut trainer = FoundationTrainer::from_session(
+        alife_runtime::GpuAuthoritativeSession::new(
+            staging,
+            alife_runtime::GpuSessionConsumerKind::Training,
+        ),
+        phenotype.clone(),
+        asset.clone(),
+        mask,
+        AdamWConfig::default(),
+    )?;
+    if let Some(checkpoint) = &restored_actor {
+        trainer.restore_checkpoint(checkpoint)?;
+    }
+    let initial_checkpoint = serde_json::to_vec(&trainer.checkpoint()?)?;
+    let source = foundation_replay_source(&phenotype, &asset, policy_version, &initial_checkpoint)?;
+    let budget = FoundationReplayBudget::default();
+    let replay_dir = output.join("replay");
+    let mut writer = FoundationReplayWriter::new(
+        &replay_dir,
+        source.clone(),
+        phenotype.clone(),
+        &asset,
+        budget,
+    )?;
+    std::fs::write(output.join("phase.txt"), "replay-writer-ready")?;
+    let mut references = Vec::with_capacity(training_ticks + 1);
+    let speech_label = |frame: &alife_core::PerceptionFrame,
+                        previous: Option<&alife_core::ExperiencePatch>| {
+        crate::foundation_training::grounded_speech_label(
+            frame,
+            scenario.as_ref().and_then(|s| s.vocabulary_token),
+            scenario.as_ref().and_then(|s| s.vocabulary_noun),
+            scenario.as_ref().and_then(|s| s.vocabulary_target),
+            previous,
+            lesson == Some(FoundationTeacherLesson::VocabularyProduction),
+        )
+    };
+    let mut speech_targets = Vec::with_capacity(training_ticks + 1);
+    let append_started = Instant::now();
+    speech_targets.push(speech_label(&first[0].frame, None));
+    let mut last_speech_patch = first[0].patch.clone();
+    references.push(writer.append(&first.remove(0))?);
+    replay_append_seconds += append_started.elapsed().as_secs_f64();
+    let mut gap = false;
+    let (mut terminal_biology, mut terminal_death_tick) =
+        if let Some(record) = runtime.world().organism_registry().get(organism_id) {
+            (
+                (!record.lifecycle().is_alive()).then_some(*record.biochemistry()),
+                record.lifecycle().death_tick().map(|tick| tick.raw()),
+            )
+        } else {
+            let death_tick = runtime
+                .archive_retirement_receipt(organism_id)
+                .ok_or("first captured organism missing without archived retirement")?
+                .death_tick
+                .raw();
+            let biology = runtime
+                .take_foundation_terminal_biology(organism_id)
+                .ok_or("first archived death lacks terminal biology")?;
+            if biology.tick.raw() != death_tick {
+                return Err("first archived death tick disagrees with terminal biology".into());
+            }
+            (Some(biology), Some(death_tick))
+        };
+    let mut stalled_since = Instant::now();
+    let mut last_stall_reason = None;
+    let world_tick_limit = training_ticks
+        .checked_mul(8)
+        .and_then(|n| n.checked_add(4_096))
+        .ok_or("cycle world-tick limit overflow")?;
+    while references.len() <= training_ticks && terminal_biology.is_none() {
+        budget.check_additional(64 * 1024 * 1024)?;
+        let before = runtime.world().tick().raw();
+        if before as usize >= world_tick_limit {
+            return Err("cycle reached its world-tick limit before enough waking decisions".into());
+        }
+        let tick_started = Instant::now();
+        if let Some(scenario) = &scenario {
+            crate::close_foundation_navigation_gate(&mut runtime, scenario)?;
+        }
+        let tick_outcome = runtime.tick_outcome().map_err(|e| {
+            let _ = std::fs::write(
+                output.join("runtime-performance-failed.json"),
+                serde_json::to_vec_pretty(&runtime.performance_metrics()).unwrap_or_default(),
+            );
+            format!("cycle production tick after {before}: {e}")
+        })?;
+        production_tick_seconds += tick_started.elapsed().as_secs_f64();
+        let after = runtime.world().tick().raw();
+        if after != before && after % 64 == 0 {
+            std::fs::write(
+                output.join("phase.txt"),
+                format!(
+                    "collecting world_tick={after} waking_records={}",
+                    references.len()
+                ),
+            )?;
+            std::fs::write(
+                output.join("progress.json"),
+                serde_json::to_vec_pretty(&serde_json::json!({
+                    "world_tick": after,
+                    "waking_records": references.len(),
+                    "biology": runtime.world().organism_registry().get(organism_id).map(|record| record.biochemistry()),
+                    "checkpoint": runtime.exact_checkpoint_performance_state(),
+                "retained_learning": format!("{:?}", runtime.retained_learning_recovery(organism_id)),
+                "tick_outcome": format!("{tick_outcome:?}"),
+                "preparation_errors": format!("{:?}", runtime.last_memory_preparation_errors()),
+                "authority": format!("{:?}", runtime.authority_telemetry()),
+                }))?,
+            )?;
+        }
+        if after == before {
+            let reason = format!("{tick_outcome:?}");
+            if last_stall_reason.as_ref() != Some(&reason) {
+                std::fs::write(
+                    output.join("stall.json"),
+                    serde_json::to_vec_pretty(&serde_json::json!({
+                        "world_tick": before,
+                        "reason": reason,
+                    "performance": runtime.performance_metrics(),
+                    "checkpoint": runtime.exact_checkpoint_performance_state(),
+                    "biology": runtime.world().organism_registry().get(organism_id).map(|record| record.biochemistry()),
+                    }))?,
+                )?;
+                last_stall_reason = Some(reason);
+            }
+            if stalled_since.elapsed().as_secs() > 300 {
+                return Err(format!(
+                    "cycle made no world progress for five minutes: {last_stall_reason:?}"
+                )
+                .into());
+            }
+            std::thread::yield_now();
+            continue;
+        }
+        if after != before + 1 {
+            return Err("cycle world advanced by more than one tick".into());
+        }
+        if let Some(record) = runtime.world().organism_registry().get(organism_id) {
+            if !record.lifecycle().is_alive() {
+                terminal_biology = Some(*record.biochemistry());
+                terminal_death_tick = record.lifecycle().death_tick().map(|tick| tick.raw());
+            }
+            minimum_energy = minimum_energy.min(record.biochemistry().body.energy);
+        } else {
+            let death_tick = runtime
+                .archive_retirement_receipt(organism_id)
+                .ok_or("cycle organism missing without an archived retirement")?
+                .death_tick
+                .raw();
+            let biology = runtime
+                .take_foundation_terminal_biology(organism_id)
+                .ok_or("archived death lacks the world-owned terminal biology")?;
+            if biology.tick.raw() != death_tick {
+                return Err("archived death tick disagrees with terminal biology".into());
+            }
+            minimum_energy = minimum_energy.min(biology.body.energy);
+            terminal_biology = Some(biology);
+            terminal_death_tick = Some(death_tick);
+        }
+        let was_food_hidden = food_hidden;
+        if terminal_biology.is_none()
+            && food_hidden
+            && after >= food_available_world_tick.unwrap_or(u64::MAX)
+        {
+            if consumed_events != 0 {
+                return Err("food was consumed before the scenario made it available".into());
+            }
+            let (food_id, original_position, _) = delayed_food.ok_or("missing delayed food")?;
+            runtime.move_player_food(food_id, original_position)?;
+            food_hidden = false;
+            food_available_elapsed_seconds = Some(started.elapsed().as_secs_f64());
+        }
+        stalled_since = Instant::now();
+        last_stall_reason = None;
+        let mut captured = runtime.take_foundation_training_steps();
+        if captured.is_empty() {
+            if !runtime.last_memory_preparation_errors().is_empty() {
+                return Err(format!(
+                    "cycle perception preparation failed at world tick {after}: {:?}",
+                    runtime.last_memory_preparation_errors()
+                )
+                .into());
+            }
+            if terminal_biology.is_some() {
+                break;
+            }
+            gap = true;
+            continue;
+        }
+        if captured.len() != 1 {
+            return Err(format!("cycle world tick {after}: expected at most one decision").into());
+        }
+        if gap {
+            verify_foundation_replay_step(&mut trainer, &captured[0])?;
+            writer.start_segment()?;
+            gap = false;
+        }
+        if consumed(&captured[0]) {
+            if was_food_hidden {
+                return Err("food was consumed before the scenario made it available".into());
+            }
+            consumed_events += 1;
+            if first_consumed_world_tick.is_none() {
+                first_consumed_world_tick = Some(captured[0].patch.outcome().outcome_tick.raw());
+                first_consumed_elapsed_seconds = Some(started.elapsed().as_secs_f64());
+            }
+        }
+        let append_started = Instant::now();
+        speech_targets.push(speech_label(&captured[0].frame, Some(&last_speech_patch)));
+        last_speech_patch = captured[0].patch.clone();
+        references.push(writer.append(&captured.remove(0))?);
+        replay_append_seconds += append_started.elapsed().as_secs_f64();
+        if terminal_biology.is_some() {
+            break;
+        }
+    }
+    let collection_seconds = started.elapsed().as_secs_f64();
+    let train_rows = references.len() - usize::from(terminal_biology.is_none());
+    if train_rows == 0 {
+        return Err("cycle has no complete training transition".into());
+    }
+    let delayed_food_gate_passed = food_available_world_tick.is_some_and(|available| {
+        terminal_biology.is_none()
+            && !food_hidden
+            && first_consumed_world_tick.is_some_and(|meal| meal > available)
+            && food_available_elapsed_seconds.is_some()
+    });
+    let world_ticks_elapsed = runtime.world().tick().raw();
+    let final_energy = if let Some(biology) = terminal_biology {
+        biology.body.energy
+    } else {
+        organism_energy(&runtime, organism_id)?
+    };
+    std::fs::write(
+        output.join("timing.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "production_tick_seconds": production_tick_seconds,
+            "replay_append_seconds": replay_append_seconds,
+            "collection_total_seconds": collection_seconds,
+        }))?,
+    )?;
+    std::fs::write(
+        output.join("runtime-performance.json"),
+        serde_json::to_vec_pretty(&runtime.performance_metrics())?,
+    )?;
+    std::fs::write(output.join("phase.txt"), "collection-complete")?;
+    std::fs::write(
+        output.join("replay-manifest.json"),
+        serde_json::to_vec(&references)?,
+    )?;
+    let mut value = if let Some(checkpoint) = restored_value {
+        PpoTrainingState::from_checkpoint(checkpoint)?
+    } else {
+        PpoTrainingState::default()
+    };
+    // The exact production start state is stored at every replay row. Predict
+    // old values before any update in bounded chunks; keep only scalar targets.
+    let mut values = Vec::with_capacity(references.len());
+    let mut actions_rewards: Vec<(PpoJointAction, f32)> = Vec::with_capacity(train_rows);
+    let mut previous_physiology_after = None;
+    let mut sleep_gap_reward_total = 0.0_f32;
+    let mut blocked_actions = 0_u64;
+    let mut collision_actions = 0_u64;
+    let mut avoid_actions = 0_u64;
+    let mut rest_recovery_actions = 0_u64;
+    let ppo_config = PpoConfig::default();
+    let mut segment_start = 0;
+    while segment_start < references.len() {
+        let segment = references[segment_start].segment;
+        let segment_end = references[segment_start..]
+            .iter()
+            .position(|reference| reference.segment != segment)
+            .map_or(references.len(), |offset| segment_start + offset);
+        for (chunk, refs) in references[segment_start..segment_end]
+            .chunks(512)
+            .enumerate()
+        {
+            let window =
+                load_foundation_replay_window(&replay_dir, refs, 0, &source, &phenotype, budget)?;
+            values.extend(value.predict_values(&mut trainer, &window.sequence)?);
+            for (row, (behavior, patch)) in window.behavior.iter().zip(&window.patches).enumerate()
+            {
+                let index = segment_start + chunk * 512 + row;
+                let physiology = patch
+                    .outcome()
+                    .measured_physiology
+                    .ok_or("sealed training patch has no measured physiology")?;
+                if index > 0 && references[index].tick > references[index - 1].tick + 1 {
+                    let gap = alife_core::MeasuredPhysiologyTransition::new(
+                        previous_physiology_after.ok_or("sleep gap has no prior physiology")?,
+                        physiology.before,
+                    )?;
+                    let gap_seconds =
+                        (references[index].tick - references[index - 1].tick - 1) as f64 / 20.0;
+                    let discount = (-std::f64::consts::LN_2 * gap_seconds
+                        / f64::from(ppo_config.discount_half_life_seconds))
+                    .exp() as f32;
+                    let delayed = training_biological_value(&gap, &organism_phenotype)? * discount;
+                    actions_rewards[index - 1].1 =
+                        (actions_rewards[index - 1].1 + delayed).clamp(-1.0, 1.0);
+                    sleep_gap_reward_total += delayed;
+                }
+                previous_physiology_after = Some(physiology.after);
+                if index == train_rows {
+                    break; // Real next state is a value bootstrap, never a loss row.
+                }
+                let outcome = patch.outcome();
+                let contacts = std::iter::once(outcome.physical.contact).chain(
+                    outcome.joint.iter().flat_map(|joint| {
+                        joint
+                            .channel_outcomes
+                            .iter()
+                            .map(|channel| channel.physical.contact)
+                    }),
+                );
+                let mut blocked = false;
+                let mut collision = false;
+                for contact in contacts {
+                    blocked |= contact == alife_core::PhysicalContactKind::Blocked;
+                    collision |= contact == alife_core::PhysicalContactKind::Collision;
+                }
+                blocked_actions += u64::from(blocked);
+                collision_actions += u64::from(collision);
+                let family = patch.decision().neural_evidence()?.action_family;
+                avoid_actions += u64::from(family == alife_core::CandidateActionFamily::Avoid);
+                rest_recovery_actions += u64::from(
+                    family == alife_core::CandidateActionFamily::Rest
+                        && physiology.after.homeostasis.drives.fatigue
+                            <= physiology.before.homeostasis.drives.fatigue - 0.02,
+                );
+                let receptors = physiology
+                    .before
+                    .neural_receptor_frame(&organism_phenotype)?;
+                let modulator = alife_core::OutcomeCreditPacket::from_sealed_patch(patch)?
+                    .with_biochemical_receptors(&receptors)?
+                    .modulator();
+                actions_rewards.push((
+                    joint_action(behavior)?,
+                    training_receptor_profile(&organism_phenotype).project(&modulator.frame())?,
+                ));
+            }
+        }
+        segment_start = segment_end;
+    }
+    if values.len() != references.len() {
+        return Err("GPU value prediction count does not match decisions".into());
+    }
+    if actions_rewards.len() != train_rows {
+        return Err("PPO action/reward count does not match training decisions".into());
+    }
+    if let Some(terminal) = terminal_biology {
+        let before = previous_physiology_after.ok_or("terminal life has no sealed physiology")?;
+        let transition = alife_core::MeasuredPhysiologyTransition::new(before, terminal)?;
+        let elapsed = (terminal.tick.raw() - before.tick.raw()) as f64 / 20.0;
+        let discount = (-std::f64::consts::LN_2 * elapsed
+            / f64::from(ppo_config.discount_half_life_seconds))
+        .exp() as f32;
+        let delayed = training_biological_value(&transition, &organism_phenotype)? * discount;
+        let final_reward = &mut actions_rewards
+            .last_mut()
+            .ok_or("terminal life has no trainable action")?
+            .1;
+        *final_reward = (*final_reward + delayed).clamp(-1.0, 1.0);
+        sleep_gap_reward_total += delayed;
+    }
+    let mut transitions = Vec::with_capacity(train_rows);
+    for (tick, (action, reward)) in actions_rewards.into_iter().enumerate() {
+        let terminal = terminal_death_tick.is_some() && tick + 1 == train_rows;
+        transitions.push(PpoTransition {
+            policy_version,
+            trajectory_id: seed,
+            step: tick as u64,
+            action,
+            reward,
+            old_value: values[tick],
+            next_value: if terminal { 0.0 } else { values[tick + 1] },
+            elapsed_seconds: (if terminal {
+                terminal_death_tick.ok_or("missing terminal death tick")?
+            } else {
+                references[tick + 1].tick
+            } - references[tick].tick) as f32
+                / 20.0,
+            boundary: if terminal {
+                PpoBoundary::Terminated
+            } else if tick + 1 == train_rows {
+                PpoBoundary::Truncated
+            } else {
+                PpoBoundary::Continuing
+            },
+        });
+    }
+    let batch = PpoBatch::from_rollout(policy_version, transitions, ppo_config)?;
+    let started = Instant::now();
+    let mut spans = Vec::new();
+    let mut segment_start = 0;
+    while segment_start < train_rows {
+        let segment = references[segment_start].segment;
+        let segment_end = references[segment_start..train_rows]
+            .iter()
+            .position(|reference| reference.segment != segment)
+            .map_or(train_rows, |offset| segment_start + offset);
+        for start in (segment_start..segment_end).step_by(256) {
+            let end = (start + 256).min(segment_end);
+            let burn_start = start.saturating_sub(128).max(segment_start);
+            spans.push((burn_start, start, end));
+        }
+        segment_start = segment_end;
+    }
+    let update = train_recurrent_ppo_cohort(
+        &mut trainer,
+        &mut value,
+        spans.len(),
+        8,
+        |index| {
+            let (burn_start, start, end) = spans[index];
+            let replay = load_foundation_replay_window(
+                &replay_dir,
+                &references[burn_start..end],
+                start - burn_start,
+                &source,
+                &phenotype,
+                budget,
+            )
+            .map_err(|_| {
+                alife_training::TrainingError::from(ScaffoldContractError::InvalidDecisionEvidence)
+            })?;
+            Ok(PpoTrainingWindow {
+                speech_targets: speech_targets[burn_start..end]
+                    .iter()
+                    .enumerate()
+                    .map(|(i, t)| if i < start - burn_start { None } else { *t })
+                    .collect(),
+                sequence: replay.sequence,
+                batch: batch.window(start..end)?,
+                auxiliary: None,
+            })
+        },
+        ppo_config,
+        policy_version,
+    )?;
+    std::fs::write(output.join("phase.txt"), "update-complete")?;
+    let update_seconds = started.elapsed().as_secs_f64();
+    if update.actor_optimizer_step == 0 || update.value_optimizer_step == 0 {
+        return Err("cycle completed without an actor and value update".into());
+    }
+    let completed_stage_count =
+        u16::try_from(policy_version.checked_add(1).ok_or("stage overflow")?)?;
+    let trained =
+        trainer.export_candidate(TrainingStageManifest::new(1, 1, completed_stage_count))?;
+    std::fs::write(
+        output.join("trained.alife-foundation"),
+        trained.encode_canonical()?,
+    )?;
+    // A newly born cohort must accept the exact exported native asset through
+    // the same admission path as a regular game, then produce a GPU decision.
+    // The exported asset is keyed to this native founder genome. A successor
+    // world may be fresh, but must use the same genotype for exact admission.
+    let mut next_config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
+    next_config.brain_class = BrainScaleTier::Standard2048;
+    next_config.founder_seed_base = founder_seed_base;
+    next_config.sensor_profile = trained.manifest().sensor_profile();
+    let bytes = std::fs::read(output.join("trained.alife-foundation"))?;
+    let admitted_asset = FoundationWeightAsset::decode_canonical(&bytes)?;
+    if admitted_asset.digest() != trained.digest() {
+        return Err("exported asset digest changed on disk".into());
+    }
+    let mut next_game =
+        alife_world::create_canonical_new_game_with_n2048_candidate(&next_config, &admitted_asset)?;
+    crate::foundation_training::ground_foundation_training_world(&mut next_game.world)?;
+    next_game.world.set_age_death_disabled_for_new_game(true)?;
+    let next_backend = runtime.new_staging_like_live()?;
+    let mut next_runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
+        next_backend,
+        next_game.world,
+        seed,
+        BrainScaleTier::Standard2048,
+        next_config.sensor_profile,
+        alife_archive::LineageLibraryConfig::profile_default(output.join("next-lineage")),
+        format!("n2048-cycle-next-{}", seed + 1),
+        alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
+        GpuTrainingSamplingConfig {
+            seed: (seed as u32)
+                ^ ((policy_version as u32).wrapping_add(1)).wrapping_mul(0x9e37_79b9),
+            counter: 0,
+            temperature: 1.0,
+            demonstrator: None,
+        },
+    )?;
+    next_runtime.tick()?;
+    let next_steps = next_runtime.take_foundation_training_steps();
+    let next_cohort_tick_captured = next_steps.len() == 1;
+    if !next_cohort_tick_captured {
+        return Err("trained asset next cohort did not produce a decision".into());
+    }
+    trainer.rebind_for_next_cohort(next_steps[0].before.phenotype.clone(), admitted_asset)?;
+    let next_cohort_optimizer_rebound = true;
+    std::fs::write(
+        output.join("actor-checkpoint.json"),
+        serde_json::to_vec(&trainer.checkpoint()?)?,
+    )?;
+    std::fs::write(
+        output.join("value-checkpoint.json"),
+        serde_json::to_vec(&value.checkpoint(trainer.session())?)?,
+    )?;
+    std::fs::write(output.join("phase.txt"), "next-cohort-admitted")?;
+    let receipt = FoundationCycleReceipt {
+        biological_objective_version: BIOLOGICAL_OBJECTIVE_VERSION,
+        objective_state_reset,
+        seed,
+        founder_seed_base,
+        policy_version,
+        training_ticks: train_rows,
+        requested_training_ticks: training_ticks,
+        terminal_death_tick,
+        delayed_food_gate_passed,
+        world_ticks_elapsed,
+        consumed_events,
+        blocked_actions,
+        collision_actions,
+        avoid_actions,
+        rest_recovery_actions,
+        food_available_world_tick,
+        lesson,
+        first_consumed_world_tick,
+        food_available_elapsed_seconds,
+        first_consumed_elapsed_seconds,
+        initial_energy,
+        minimum_energy,
+        final_energy,
+        sleep_gap_reward_total,
+        semantic_prior: runtime.semantic_prior_metrics().cloned(),
+        speech_target_rows: speech_targets[..train_rows].iter().flatten().count(),
+        collection_seconds,
+        update_seconds,
+        old_asset_digest: digest(&asset),
+        new_asset_digest: digest(&trained),
+        actor_optimizer_step: update.actor_optimizer_step,
+        value_optimizer_step: update.value_optimizer_step,
+        completed_epochs: update.completed_epochs,
+        next_cohort_tick_captured,
+        next_cohort_optimizer_rebound,
+    };
+    std::fs::write(
+        output.join("cycle.json"),
+        serde_json::to_vec_pretty(&receipt)?,
+    )?;
+    Ok(receipt)
+}

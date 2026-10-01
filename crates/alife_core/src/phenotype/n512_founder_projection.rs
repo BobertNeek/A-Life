@@ -118,6 +118,10 @@ pub struct N512FounderProjectionReceipt {
 }
 
 impl N512FounderProjectionReceipt {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "projection receipt binds independently validated genetic and frozen ABI identities"
+    )]
     fn new(
         source_genome_id: GenomeId,
         lineage_id: LineageId,
@@ -633,6 +637,10 @@ struct ProjectionMaterial {
     overlay_seed: u64,
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "projection inputs preserve separate source, inheritance, and admission identities"
+)]
 fn projection_material(
     source_brain_genome: &BrainGenome,
     source_genome_id: GenomeId,
@@ -777,7 +785,13 @@ fn digest_provenance(
             } => {
                 digest.write_u8(1);
                 digest.write_u8(chromosome_kind_raw(*chromosome));
-                digest.write_u8(*locus_index);
+                if *locus_index < 255 {
+                    digest.write_u8(*locus_index as u8);
+                } else {
+                    // Extended construction-gene address; legacy loci keep exact bytes.
+                    digest.write_u8(255);
+                    digest.write_u16(*locus_index);
+                }
                 digest.write_u8(allele_side_raw(*allele));
                 digest.write_f32(*before)?;
                 digest.write_f32(*after)?;
@@ -793,7 +807,13 @@ fn digest_provenance(
             } => {
                 digest.write_u8(2);
                 digest.write_u8(chromosome_kind_raw(*chromosome));
-                digest.write_u8(*locus_index);
+                if *locus_index < 255 {
+                    digest.write_u8(*locus_index as u8);
+                } else {
+                    // Extended construction-gene address; legacy loci keep exact bytes.
+                    digest.write_u8(255);
+                    digest.write_u16(*locus_index);
+                }
                 digest.write_u8(allele_side_raw(*allele));
                 digest.write_u16(*before);
                 digest.write_u16(*after);

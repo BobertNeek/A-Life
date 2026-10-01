@@ -272,7 +272,7 @@ fn portable_save_round_trip_binds_creature_summary_to_world_record() {
 
 #[test]
 fn registered_agents_survive_portable_json_restore_with_exact_identity_and_signature() {
-    let world = world_with_nontrivial_registry();
+    let mut world = world_with_nontrivial_registry();
     let expected_records = registry_records(&world);
     let expected_signature = world.canonical_signature_digest().unwrap();
 
@@ -281,7 +281,7 @@ fn registered_agents_survive_portable_json_restore_with_exact_identity_and_signa
     let serialized_ids = serialized_registry_ids(&json);
     assert_eq!(serialized_ids, Some(vec![7, 8]));
 
-    let restored = PortableSaveFile::from_json_str(&encoded)
+    let mut restored = PortableSaveFile::from_json_str(&encoded)
         .unwrap()
         .restore_headless_world()
         .unwrap();
@@ -289,6 +289,13 @@ fn registered_agents_survive_portable_json_restore_with_exact_identity_and_signa
     assert_eq!(
         restored.canonical_signature_digest().unwrap(),
         expected_signature
+    );
+    world.try_advance_tick().unwrap();
+    restored.try_advance_tick().unwrap();
+    assert_eq!(registry_records(&restored), registry_records(&world));
+    assert_eq!(
+        restored.canonical_signature_digest().unwrap(),
+        world.canonical_signature_digest().unwrap()
     );
 }
 

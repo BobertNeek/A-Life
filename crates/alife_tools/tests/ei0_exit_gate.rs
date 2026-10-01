@@ -18,7 +18,7 @@ use alife_tools::ei0_exit_gate::{
     run_ei0_exit_gate_and_write, validate_committed_ei0_exit_gate_report, Ei0EvidenceStatus,
     Ei0ExitGateError, Ei0ExitGateReport,
 };
-use alife_world::{HabitatActor, HabitatMode, HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION};
+use alife_world::{HabitatActor, HabitatMode};
 
 fn temp_root(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(

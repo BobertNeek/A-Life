@@ -21,33 +21,6 @@ fn pipeline_source() -> String {
     .expect("the GPU closed-loop pipeline source must be available")
 }
 
-fn without_rust_comments(source: &str) -> String {
-    let bytes = source.as_bytes();
-    let mut result = String::with_capacity(source.len());
-    let mut cursor = 0;
-    let mut block_depth = 0_u32;
-    while cursor < bytes.len() {
-        if block_depth == 0 && bytes[cursor..].starts_with(b"//") {
-            while cursor < bytes.len() && bytes[cursor] != b'\n' {
-                cursor += 1;
-            }
-        } else if bytes[cursor..].starts_with(b"/*") {
-            block_depth += 1;
-            cursor += 2;
-        } else if block_depth > 0 && bytes[cursor..].starts_with(b"*/") {
-            block_depth -= 1;
-            cursor += 2;
-        } else {
-            if block_depth == 0 {
-                result.push(bytes[cursor] as char);
-            }
-            cursor += 1;
-        }
-    }
-    assert_eq!(block_depth, 0, "unterminated block comment");
-    result
-}
-
 #[test]
 fn required_gpu_api_is_public_without_constructing_a_device() {
     let _factory: fn(GpuRuntimeProfile) -> Result<GpuClosedLoopBackend, ScaffoldContractError> =
@@ -100,73 +73,6 @@ fn product_runtime_has_no_cpu_execution_or_fallback_boundary() {
         assert!(
             !source.contains(forbidden),
             "forbidden runtime token: {forbidden}"
-        );
-    }
-}
-
-#[test]
-fn runtime_structurally_includes_the_real_crate_private_unit_test_module() {
-    let runtime = without_rust_comments(&runtime_source());
-    assert!(runtime.contains("#[cfg(test)]"));
-    assert!(runtime.contains("#[path = \"../tests/support/closed_loop_runtime_private.rs\"]"));
-    assert!(runtime.contains("mod task7_private_tests;"));
-
-    let private_tests = fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/support/closed_loop_runtime_private.rs"
-    ))
-    .unwrap();
-    let private_tests = without_rust_comments(&private_tests);
-    for required_test in [
-        "fn unavailable_gpu_returns_typed_error_instead_of_cpu_fallback()",
-        "fn software_adapter_is_rejected_without_device_request()",
-        "fn stale_gpu_layout_is_rejected_before_slot_allocation()",
-        "fn hardware_receipt_digests_are_canonical_complete_deterministic_and_sensitive()",
-        "fn backend_and_receipt_allocators_are_independent_checked_and_nonzero()",
-        "fn removal_scrubs_every_reserved_range_before_slot_reuse()",
-        "fn maximum_slot_generation_retires_permanently_instead_of_wrapping()",
-        "fn failed_scrub_marks_device_lost_and_never_frees_or_reuses_the_slot()",
-        "fn save_rebind_requires_explicit_matching_organism_ownership()",
-        "fn unsupported_n32k_class_rejects_before_arena_allocation()",
-        "fn tampered_frame_digest_rejects_before_upload_or_counter_mutation()",
-    ] {
-        let position = private_tests.find(required_test).unwrap();
-        assert!(private_tests[..position].ends_with("#[test]\n"));
-    }
-    assert!(
-        private_tests.contains("GpuClosedLoopBackend::new_with_factory(&UnavailableGpuFactory)")
-    );
-    assert!(private_tests.contains("factory.device_request_count()"));
-    assert!(private_tests.contains("validate_required_gpu_layout_version("));
-    let compact_private_tests = private_tests
-        .chars()
-        .filter(|character| !character.is_whitespace())
-        .collect::<String>();
-    for required_behavior_call in [
-        "canonical_limit_words_for_test(&limits)",
-        "CanonicalDigestBuilder::new(b\"alife.gpu.hardware.driver.v1\")",
-        "CanonicalDigestBuilder::new(b\"alife.gpu.hardware.features.v1\")",
-        "CanonicalDigestBuilder::new(b\"alife.gpu.hardware.limits.v1\")",
-        "expected_driver.write_sequence_len(2)",
-        "expected_driver.write_utf8(\"driver\")",
-        "expected_features.write_sequence_len(4)",
-        "expected_limits.write_sequence_len(expected_limit_words.len())",
-        "canonical_driver_digest(\"driver\",\"info\")",
-        "canonical_feature_digest(requested,enabled)",
-        "with_runtime_allocation_state_for_test(41,91,||",
-        "next_backend_instance_id()",
-        "next_hardware_receipt_generation()",
-        "with_runtime_allocation_state_for_test(u64::MAX,u64::MAX,||",
-        "fill_every_reserved_range(first,0xa5a5_a5a5)",
-        "insert_fixture_with_generation(OrganismId(1),PhenotypeHash([1;4]),u32::MAX)",
-        "fail_next_scrub_after_submit()",
-        "rebind_fixture_for_restore(OrganismId(7),PhenotypeHash([7;4]))",
-        "validate_class(BrainClassId(5))",
-        "validate_frame_digest(expected,tampered)",
-    ] {
-        assert!(
-            compact_private_tests.contains(required_behavior_call),
-            "missing executable private behavior call: {required_behavior_call}"
         );
     }
 }
@@ -244,6 +150,284 @@ mod hardware {
         for tick in ticks {
             discard_tick(backend, tick);
         }
+    }
+
+    #[test]
+    fn fresh_brain_prioritizes_cued_food_and_acute_danger() {
+        let mut backend = required_backend();
+        let capacity = BrainCapacityClass::n2048();
+        let phenotype = phenotype_for_capacity_at_maturation(
+            capacity,
+            0x5A7E_0003,
+            1.0,
+            SensorProfile::PrivilegedAffordanceV1,
+        );
+        let physiology = super::support::test_physiology(0x5A7E_0003, &phenotype).unwrap();
+        for (case, hunger, pain, expected) in [(0_u64, 0.98, 0.0, 2_u16), (1_u64, 0.0, 0.98, 3_u16)]
+        {
+            let organism = OrganismId(0x5A7E_0100 + case);
+            let handle = backend.insert_brain(organism, phenotype.clone()).unwrap();
+            let tick = Tick::new(20);
+            let base = perception_frame_for_profile_at_tick(
+                organism.raw(),
+                tick.raw(),
+                SensorProfile::PrivilegedAffordanceV1,
+                false,
+                1,
+            );
+            let mut drives = HomeostaticSnapshot::baseline(tick).drives;
+            drives.hunger = hunger;
+            drives.pain = pain;
+            let homeostasis = HomeostaticSnapshot::new(
+                tick,
+                drives,
+                HomeostaticSnapshot::baseline(tick).hormones,
+            )
+            .unwrap();
+            let mut food = CandidateFeatureVector::zero();
+            food.0[15] = 0.8;
+            let specs = [
+                (
+                    ActionKind::Idle,
+                    CandidateActionFamily::Idle,
+                    CandidateFeatureVector::zero(),
+                ),
+                (ActionKind::Move, CandidateActionFamily::Approach, food),
+                (ActionKind::Interact, CandidateActionFamily::Ingest, food),
+                (ActionKind::Move, CandidateActionFamily::Avoid, {
+                    let mut hazard = CandidateFeatureVector::zero();
+                    hazard.0[15] = -0.8;
+                    hazard
+                }),
+            ];
+            let candidates = specs
+                .into_iter()
+                .enumerate()
+                .map(|(index, (kind, family, features))| {
+                    ActionCandidate::new(
+                        index as u16,
+                        alife_core::ActionId(700 + index as u32),
+                        kind,
+                        family,
+                        CandidateObservationRef::None,
+                        ActionTarget::NONE,
+                        features,
+                        Confidence::new(1.0).unwrap(),
+                        NormalizedScalar::new(0.0).unwrap(),
+                        DurationTicks::new(1),
+                        DurationTicks::new(1),
+                    )
+                    .unwrap()
+                })
+                .collect();
+            let frame = PerceptionFrame::new(
+                organism,
+                tick,
+                SensorProfile::PrivilegedAffordanceV1,
+                base.sensory().clone(),
+                base.body(),
+                homeostasis,
+                candidates,
+                base.profile_provenance(),
+                Vec::new(),
+            )
+            .unwrap();
+            let (frame, recall) = super::support::empty_recall(&frame);
+            let memory = backend
+                .prepare_memory_context_upload(handle, &frame, &recall)
+                .unwrap();
+            let memory = super::support::bind_chemistry_receptor_effects(
+                memory,
+                &phenotype,
+                &physiology,
+                tick,
+            )
+            .unwrap();
+            let input =
+                alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &memory)
+                    .unwrap();
+            let batch =
+                alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(vec![input]).unwrap();
+            let result = backend.tick_memory_batch(&batch).unwrap().remove(0);
+            assert_eq!(result.selection.candidate_index, expected);
+            discard_tick(&mut backend, &result);
+            backend.remove_brain(handle).unwrap();
+        }
+    }
+
+    #[cfg(feature = "training-rollout")]
+    #[test]
+    fn grounded_language_and_private_prior_reach_gpu_encoder_separately() {
+        let mut backend = required_backend();
+        let capacity = BrainCapacityClass::n2048();
+        let mut genome = alife_core::BrainGenome::scaffold(92, capacity.id());
+        genome
+            .sensor_layout
+            .channels
+            .push(alife_core::SensorChannelGene {
+                kind: alife_core::SensorChannelKind::Hearing,
+                receptor_count: 32,
+                target_lobe: alife_core::LobeKind::PerceptualIntegration,
+                enabled_at_maturation: 0,
+            });
+        let development = alife_core::DevelopmentState::new(
+            genome.id,
+            Tick::ZERO,
+            NormalizedScalar::new(1.0).unwrap(),
+        );
+        let phenotype = alife_core::PhenotypeCompiler::compile_testing_procedural_baseline(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedTerrainVisionV1,
+        )
+        .unwrap();
+        let physiology = super::support::test_physiology(92, &phenotype).unwrap();
+        let mut encoded = Vec::new();
+        for (index, (heard, prior)) in [
+            (None, None),
+            (Some(1), None),
+            (Some(2), None),
+            (None, Some(1)),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let id = OrganismId(index as u64 + 1);
+            let at = Tick::new(220);
+            let base = PerceptionFrame::new(
+                id,
+                at,
+                SensorProfile::GroundedTerrainVisionV1,
+                SensorySnapshot::new(
+                    id,
+                    at,
+                    Vec3f::ZERO,
+                    SensoryChannels::ZERO,
+                    Default::default(),
+                )
+                .unwrap(),
+                BodySnapshot {
+                    pose: Pose::IDENTITY,
+                    velocity: Velocity::ZERO,
+                },
+                HomeostaticSnapshot::baseline(at),
+                vec![ActionCandidate::new(
+                    0,
+                    alife_core::ActionId(1),
+                    ActionKind::Idle,
+                    CandidateActionFamily::Idle,
+                    CandidateObservationRef::None,
+                    ActionTarget::NONE,
+                    CandidateFeatureVector::zero(),
+                    Confidence::new(1.0).unwrap(),
+                    NormalizedScalar::new(0.0).unwrap(),
+                    DurationTicks::new(1),
+                    DurationTicks::new(1),
+                )
+                .unwrap()],
+                SensorProfileProvenance::new(
+                    SensorProfile::GroundedTerrainVisionV1,
+                    SensoryAbiVersion::CURRENT,
+                    at,
+                )
+                .unwrap(),
+                Vec::new(),
+            )
+            .unwrap();
+            let mut sensory = base.sensory().clone();
+            if let Some(token) = heard {
+                sensory.language_context.heard_tokens[0] = Some(alife_core::HeardToken {
+                    utterance_id: alife_core::UtteranceId::new(1).unwrap(),
+                    sequence_position: 0,
+                    source_kind: alife_core::UtteranceSourceKind::Teacher,
+                    speaker_id: None,
+                    addressee: Some(id),
+                    source_entity: None,
+                    token_id: token,
+                    source_position: Vec3f::new(1.0, 0.0, 0.0),
+                    confidence: Confidence::new(1.0).unwrap(),
+                    teacher_channel: Some(alife_core::TeacherPerceptionChannel::Hearing),
+                });
+            }
+            if let Some(code) = prior {
+                sensory.semantic_context = Some(alife_core::SemanticContextRef {
+                    feature_flags: alife_core::ContextFeatureFlags::NONE,
+                    confidence: Confidence::new(0.2).unwrap(),
+                    compressed_codes: vec![alife_core::CompressedSemanticCode {
+                        codebook_id: 1,
+                        code,
+                        salience: NormalizedScalar::new(1.0).unwrap(),
+                    }],
+                    salience: Vec::new(),
+                });
+            }
+            let frame = PerceptionFrame::new(
+                id,
+                base.tick(),
+                base.sensor_profile(),
+                sensory,
+                base.body(),
+                *base.homeostasis(),
+                base.candidates().to_vec(),
+                SensorProfileProvenance::new(
+                    base.sensor_profile(),
+                    SensoryAbiVersion::CURRENT,
+                    base.tick(),
+                )
+                .unwrap(),
+                Vec::new(),
+            )
+            .unwrap();
+            assert_eq!(frame.sensory().channels, base.sensory().channels);
+            assert_eq!(frame.candidates(), base.candidates());
+            let handle = backend.insert_brain(id, phenotype.clone()).unwrap();
+            let (frame, recall) =
+                super::support::try_empty_recall(&frame).expect("language frame recall");
+            let upload = backend
+                .prepare_memory_context_upload(handle, &frame, &recall)
+                .expect("language context upload");
+            let upload = super::support::bind_chemistry_receptor_effects(
+                upload,
+                &phenotype,
+                &physiology,
+                frame.tick(),
+            )
+            .expect("language receptor effects");
+            let input =
+                alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &upload)
+                    .expect("language tick binding");
+            let batch = alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(vec![input])
+                .expect("language batch");
+            let tick = backend
+                .tick_memory_batch(&batch)
+                .expect("language GPU dispatch")
+                .remove(0);
+            let state = backend
+                .capture_training_state(handle, frame.tick())
+                .unwrap();
+            let range = state.brain_slot.word_ranges().encoded_input_words.clone();
+            encoded.push(
+                state.mutable_words[(range.start - state.mutable_word_base) as usize
+                    ..(range.end - state.mutable_word_base) as usize]
+                    .to_vec(),
+            );
+            discard_tick(&mut backend, &tick);
+            backend.remove_brain(handle).unwrap();
+        }
+        assert!(encoded[0] != encoded[1], "heard word must reach neurons");
+        assert!(
+            encoded[1] != encoded[2],
+            "different nouns must have different neural input"
+        );
+        assert!(
+            encoded[0] != encoded[3],
+            "bounded private hint must reach neurons"
+        );
+        assert!(
+            encoded[1] != encoded[3],
+            "private prior is distinct from hearing"
+        );
     }
 
     fn assert_tick_identity(

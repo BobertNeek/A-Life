@@ -15,6 +15,7 @@ pub(super) fn fixture(label: &str) -> GpuLiveBrainRuntime {
         crate::create_canonical_new_game_runtime(crate::CanonicalNewGameLaunchRequest {
             world_seed: 31_117,
             population: alife_world::PHASE3_MIN_POPULATION,
+            disable_age_death: false,
             save_path: root.join("save.json"),
             asset_root: root.join("assets"),
             config,

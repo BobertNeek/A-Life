@@ -105,8 +105,9 @@ use crate::{
         ProductionTerrainDressingSpawn, TerrainDressingLibrary, TerrainDressingTile,
     },
     terrain_lighting::{
-        production_camera_extent, production_camera_transform, production_shadow_cascade_count,
-        production_shadow_maximum_distance, spawn_production_terrain_camera,
+        production_camera_extent, production_camera_transform, production_follow_camera_transform,
+        production_shadow_cascade_count, production_shadow_maximum_distance,
+        spawn_production_terrain_camera, PRODUCTION_SHADOW_MINIMUM_DISTANCE,
     },
     terrain_materials::{create_production_terrain_material_library, TerrainMaterialLibrary},
     terrain_water::install_animated_water_material,
@@ -545,6 +546,12 @@ pub struct Fvr04CreatureExpressionSample {
     pub brain_class_id: Option<u16>,
     pub brain_neuron_count: Option<u32>,
     pub hunger: f32,
+    pub body_energy: Option<f32>,
+    pub praise_signal: f32,
+    /// Last confirmed response, retained for legibility after a brief tick.
+    /// Presentation only; never selects an action or changes chemistry.
+    pub last_response: Option<&'static str>,
+    pub last_attempt_blocked: bool,
     pub fatigue: f32,
     pub fear: f32,
     pub cortisol: f32,
@@ -1055,6 +1062,8 @@ pub struct Fvr04ProductionCreatureVisualMarker {
     pub base_scale: Vec3,
     pub local_bounds: CreatureVisualBounds,
     pub surface_height: f32,
+    pub body_yaw: f32,
+    pub head_yaw: f32,
     pub phase: f32,
 }
 
@@ -1379,7 +1388,7 @@ impl Fvr04CreatureSpawnContext {
 
 #[derive(Debug, Clone)]
 struct Fvr04RuntimeSceneState {
-    terrain: Option<alife_world::TerrainBinding>,
+    terrain: Option<alife_world::WorldTerrain>,
     backend: PersistentVoxelWorldBackend,
     snapshot: PersistentVoxelWorldSnapshot,
     creatures: Vec<Fvr04CreatureVisualRecord>,
@@ -1505,6 +1514,8 @@ struct Fvr07ProductionPolishSummary {
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct Fvr05ProductionUxStateResource {
     pub settings: Fvr05ProductionUxSettings,
+    /// Derived from completed authoritative intervals, never persisted as policy.
+    pub animation_speed: f32,
     pub debug_mode: bool,
     pub show_help: bool,
     pub ui_settings_path: PathBuf,
@@ -1526,6 +1537,8 @@ pub struct Fvr05ProductionUxStateResource {
     pub gpu_runtime_state: GpuRuntimeSaveState,
     pub last_action: String,
     pub last_error: Option<String>,
+    // Pending input only: the object remains in the authoritative world.
+    pending_food_move: Option<WorldEntityId>,
     #[cfg(feature = "gpu-runtime")]
     last_manual_checkpoint_status: Option<crate::GpuManualCheckpointStatus>,
 }
@@ -1541,6 +1554,7 @@ impl Fvr05ProductionUxStateResource {
         }
         Self {
             settings,
+            animation_speed: 0.0,
             debug_mode: summary.developer_overlay,
             show_help: false,
             ui_settings_path: summary.ui_settings_path.clone(),
@@ -1574,6 +1588,7 @@ impl Fvr05ProductionUxStateResource {
             gpu_runtime_state: summary.gpu_runtime_state.clone(),
             last_action: "Ready: production voxel world loaded from validated save".to_string(),
             last_error: summary.ui_settings_load_error.clone(),
+            pending_food_move: None,
             #[cfg(feature = "gpu-runtime")]
             last_manual_checkpoint_status: None,
         }
@@ -1808,6 +1823,7 @@ fn clear_production_load_focus(world: &mut World) {
     if let Some(mut ux) = world.get_resource_mut::<Fvr05ProductionUxStateResource>() {
         ux.settings.selected_stable_id = None;
         ux.settings.follow_selection = false;
+        ux.pending_food_move = None;
     }
 
     let profile_id = world
@@ -1940,7 +1956,7 @@ fn apply_production_runtime_load(world: &mut World) {
         } else {
             RuntimePlaybackState::Running
         };
-        let speed_ticks = candidate_settings.simulation_speed.round().clamp(1.0, 5.0) as u32;
+        let mode = candidate_settings.playback_mode();
 
         {
             let mut live_runtime = world
@@ -1956,7 +1972,7 @@ fn apply_production_runtime_load(world: &mut World) {
         world.insert_resource(candidate_frame);
         world
             .resource_mut::<ProductionGpuBrainTickScheduleResource>()
-            .reset_after_load(playback, speed_ticks);
+            .reset_after_load(playback, mode);
         {
             let mut ux = world.resource_mut::<Fvr05ProductionUxStateResource>();
             ux.settings = candidate_settings;
@@ -2018,11 +2034,13 @@ fn dispatch_production_curated_founder_reset(
     mut commands: MessageReader<ProductionCuratedFounderResetCommand>,
     mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
     mut result: ResMut<ProductionCuratedFounderResetResultResource>,
+    mut ux: ResMut<Fvr05ProductionUxStateResource>,
 ) {
     let pending = commands.read().cloned().collect::<Vec<_>>();
     if pending.is_empty() {
         return;
     }
+    ux.pending_food_move = None;
     dispatch_production_curated_founder_reset_core(&pending, &mut runtime.runtime, &mut *result);
 }
 
@@ -2113,7 +2131,10 @@ pub fn spawn_fvr03_production_voxel_scene(
     configure_production_voxel_presentation_schedule(app);
     app.add_systems(
         bevy::prelude::PostUpdate,
-        hearthling::apply_inherited_proportions
+        (
+            hearthling::apply_inherited_proportions,
+            hearthling::apply_head_direction,
+        )
             .after(bevy::app::AnimationSystems)
             .before(bevy::transform::TransformSystems::Propagate),
     );
@@ -2125,14 +2146,14 @@ pub fn spawn_fvr03_production_voxel_scene(
         Update,
         (
             project_live_world_to_fvr04_creature_roots,
-            live_food_projection::sync_food,
+            live_food_projection::sync_care_objects,
         )
             .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
     )
     .add_systems(
         Update,
         (
-            handle_fvr03_mouse_selection,
+            handle_fvr03_mouse_selection.before(handle_fvr05_production_ux_input),
             handle_fvr03_camera_mode_input,
             camera_navigation::zoom_camera,
             handle_fvr04_camera_follow_input,
@@ -2332,7 +2353,10 @@ fn load_fvr04_runtime_state_from_save(
     }
     let creatures = fvr04_creature_visual_records_from_save(&production_save, &snapshot)?;
     Ok(Fvr04RuntimeSceneState {
-        terrain: production_save.world.terrain,
+        terrain: alife_world::WorldTerrain::restore(
+            production_save.world.terrain,
+            production_save.world.terrain_state.as_ref(),
+        )?,
         backend,
         snapshot,
         creatures,
@@ -2382,6 +2406,20 @@ fn fvr04_creature_visual_records_from_save(
                     organism_id.raw()
                 ),
             })?;
+        let appearance = save
+            .world
+            .organism_records
+            .as_ref()
+            .and_then(|records| {
+                records
+                    .iter()
+                    .find(|record| record.organism_id() == organism_id)
+            })
+            .map_or(creature.appearance, |record| {
+                creature
+                    .appearance
+                    .with_body_phenotype(&record.phenotype().body)
+            });
         let position = object.position;
         let rendered = world_position_for_render(position, save.world.terrain.is_some());
         let tile = VoxelTileCoord::new(rendered.x.floor() as i32, rendered.z.floor() as i32);
@@ -2394,7 +2432,7 @@ fn fvr04_creature_visual_records_from_save(
             &creature.mind.homeostasis,
             fvr04_sleep_phase_from_creature_save(creature),
             None,
-            creature.appearance,
+            appearance,
         )?;
         records.push(Fvr04CreatureVisualRecord {
             stable_ref: StableVoxelObjectRef {
@@ -2617,22 +2655,26 @@ fn prepare_fvr04_runtime_scene_candidate(
             &mut terrain_samples,
         )?);
     }
-    if runtime_state.terrain.is_some() {
+    if let Some(terrain) = runtime_state.terrain.as_ref() {
         for sample in terrain_samples.values_mut() {
-            if let Some(height) = alife_world::highlands().height(sample.center_x, sample.center_z)
-            {
+            if let Some(height) = terrain.surface().height(sample.center_x, sample.center_z) {
                 sample.height = height;
             }
         }
         for summary in tile_summaries_by_tile.values_mut() {
-            if let Some(height) =
-                alife_world::highlands().height(summary.tile.x as f32, summary.tile.z as f32)
+            if let Some(height) = terrain
+                .surface()
+                .height(summary.tile.x as f32, summary.tile.z as f32)
             {
                 summary.height_units = height;
             }
         }
     }
-    let terrain_build = if runtime_state.terrain.is_some() {
+    let terrain_build = if runtime_state
+        .terrain
+        .as_ref()
+        .is_some_and(|t| t.binding() == alife_world::TerrainBinding::highlands())
+    {
         TerrainMeshBuild {
             layers: Vec::new(),
             stats: crate::terrain_mesh::TerrainMeshStats {
@@ -2645,6 +2687,8 @@ fn prepare_fvr04_runtime_scene_candidate(
                 max_vertices_per_source_tile: 0,
             },
         }
+    } else if let Some(terrain) = runtime_state.terrain.as_ref() {
+        crate::terrain_mesh::build_heightfield_meshes(terrain.surface())
     } else {
         build_production_terrain_meshes(
             &terrain_samples,
@@ -2865,6 +2909,8 @@ fn prepare_fvr04_creature_batch(
                     base_scale,
                     local_bounds,
                     surface_height,
+                    body_yaw: 0.0,
+                    head_yaw: 0.0,
                     phase,
                 },
             });
@@ -2982,7 +3028,7 @@ fn spawn_fvr04_prepared_lighting(world: &mut World, lighting: Fvr04PreparedLight
             light,
             bevy::light::CascadeShadowConfigBuilder {
                 num_cascades: lighting.shadow_cascades,
-                minimum_distance: 0.1,
+                minimum_distance: PRODUCTION_SHADOW_MINIMUM_DISTANCE,
                 maximum_distance: lighting.shadow_maximum_distance,
                 first_cascade_far_bound: 28.0,
                 overlap_proportion: 0.18,
@@ -3148,7 +3194,16 @@ fn spawn_fvr04_runtime_scene_candidate(
     } = candidate;
     let snapshot = &runtime_state.snapshot;
     let selected = fvr04_runtime_scene_selection(&runtime_state, &visible_tiles);
-    if runtime_state.terrain.is_some() {
+    if let Some(terrain) = runtime_state.terrain.as_ref() {
+        world.insert_resource(creature_grounding::SelectedTerrain(terrain.clone()));
+    } else {
+        world.remove_resource::<creature_grounding::SelectedTerrain>();
+    }
+    if runtime_state
+        .terrain
+        .as_ref()
+        .is_some_and(|t| t.binding() == alife_world::TerrainBinding::highlands())
+    {
         highlands::start(world);
     } else {
         world.remove_resource::<highlands::HighlandsActive>();
@@ -3388,13 +3443,14 @@ fn spawn_fvr11_layered_terrain_meshes(
             .map(|layer| &layer.mesh),
         f32::from(settings.tile_stride.max(1)),
     ));
-    if world.contains_resource::<highlands::HighlandsActive>() {
-        world
-            .resource_mut::<creature_grounding::RenderedTerrainSurface>()
-            .enable_highlands();
-    }
+    let selected = world
+        .get_resource::<creature_grounding::SelectedTerrain>()
+        .map(|t| t.0.surface().clone());
+    world
+        .resource_mut::<creature_grounding::RenderedTerrainSurface>()
+        .set_surface(selected);
     let terrain_stats = build.stats.clone();
-    if !world.contains_resource::<highlands::HighlandsActive>() {
+    if !world.contains_resource::<creature_grounding::SelectedTerrain>() {
         landscape::spawn(
             world,
             terrain_samples,
@@ -4557,6 +4613,10 @@ fn spawn_fvr04_prepared_creature_batch(
             brain_class_id: creature.record.brain_class_id,
             brain_neuron_count: creature.record.brain_neuron_count,
             hunger: visual.cues.hunger.value,
+            body_energy: None,
+            praise_signal: 0.0,
+            last_response: None,
+            last_attempt_blocked: false,
             fatigue: visual.cues.fatigue.value,
             fear: visual.cues.fear.value,
             cortisol: visual.endocrine.cortisol,
@@ -4746,7 +4806,8 @@ fn fvr04_live_creature_visual_record(
             presentation.genome.id,
             presentation.organism_id.raw() as usize,
             world_seed,
-        ),
+        )
+        .with_body_phenotype(&presentation.phenotype.body),
     )
     .ok()?;
     let cognitive = frame.cognitive_for_organism(organism_id);
@@ -4822,10 +4883,7 @@ fn animate_fvr04_creatures(
     >,
 ) {
     let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
-    let speed = ux
-        .as_ref()
-        .map(|ux| ux.settings.simulation_speed)
-        .unwrap_or(1.0);
+    let speed = ux.as_ref().map(|ux| ux.animation_speed).unwrap_or(1.0);
     let seconds =
         advance_fvr04_animation_phase(*animation_seconds, time.delta_secs(), speed, paused);
     *animation_seconds = seconds;
@@ -4861,10 +4919,7 @@ fn animate_fvr04_creature_parts(
     )>,
 ) {
     let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
-    let speed = ux
-        .as_ref()
-        .map(|ux| ux.settings.simulation_speed)
-        .unwrap_or(1.0);
+    let speed = ux.as_ref().map(|ux| ux.animation_speed).unwrap_or(1.0);
     let seconds =
         advance_fvr04_animation_phase(*animation_seconds, time.delta_secs(), speed, paused);
     *animation_seconds = seconds;
@@ -4938,16 +4993,24 @@ fn live_agent_ground_position(
 
 fn sync_fvr11_creature_contact_shadows(
     mut commands: Commands,
-    highlands: Option<Res<highlands::HighlandsActive>>,
+    highlands: Option<Res<creature_grounding::SelectedTerrain>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
+    entity_map: Res<BevyEntityMap>,
+    roots: bevy::prelude::Query<
+        &Transform,
+        (
+            With<ProductionCreatureAssemblyRoot>,
+            Without<crate::Fvr11ProductionContactShadow>,
+        ),
+    >,
     mut shadows: bevy::prelude::Query<(
         Entity,
         &mut Transform,
         &mut crate::Fvr11ProductionContactShadow,
     )>,
 ) {
-    let Some(frame) = frame.filter(|frame| frame.is_changed()) else {
+    let Some(frame) = frame else {
         return;
     };
     for (entity, mut transform, mut shadow) in &mut shadows {
@@ -4961,6 +5024,11 @@ fn sync_fvr11_creature_contact_shadows(
             continue;
         };
         shadow.tile = tile;
+        // Fallback shadows follow the displayed stride between world ticks too.
+        let position = entity_map
+            .bevy_entity(stable_id)
+            .and_then(|root| roots.get(root).ok())
+            .map_or(position, |root| root.translation);
         transform.translation.x = position.x;
         transform.translation.z = position.z;
         if let Some(summary) = scene.tile_summaries_by_tile.get(&tile) {
@@ -4972,7 +5040,7 @@ fn sync_fvr11_creature_contact_shadows(
 #[cfg(not(feature = "vfx-hanabi"))]
 fn sync_fvr07_attached_fallback_vfx(
     mut commands: Commands,
-    highlands: Option<Res<highlands::HighlandsActive>>,
+    highlands: Option<Res<creature_grounding::SelectedTerrain>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     mut markers: bevy::prelude::Query<(Entity, &mut Transform, &mut Fvr07ProductionGpuVfxMarker)>,
 ) {
@@ -5003,7 +5071,7 @@ fn sync_fvr07_attached_fallback_vfx(
 #[cfg(feature = "vfx-hanabi")]
 fn sync_fvr07_attached_hanabi_vfx(
     mut commands: Commands,
-    highlands: Option<Res<highlands::HighlandsActive>>,
+    highlands: Option<Res<creature_grounding::SelectedTerrain>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     mut emitters: bevy::prelude::Query<(Entity, &mut Transform, &Fvr07ProductionHanabiVfxEmitter)>,
 ) {
@@ -5040,10 +5108,7 @@ fn animate_fvr07_production_vfx(
     )>,
 ) {
     let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
-    let speed = ux
-        .as_ref()
-        .map(|ux| ux.settings.simulation_speed)
-        .unwrap_or(1.0);
+    let speed = ux.as_ref().map(|ux| ux.animation_speed).unwrap_or(1.0);
     let seconds =
         advance_fvr04_animation_phase(*animation_seconds, time.delta_secs(), speed, paused);
     *animation_seconds = seconds;
@@ -5160,9 +5225,11 @@ fn fvr04_live_learning_explanation(
     let sleep_phase = fvr04_sleep_phase_text(current_row.sleep_phase);
 
     format!(
-        "LEARNING EXPLANATION\norganism {} | stable world {}\naction: previous {} -> current {}\nmeasured joint outcome: {}\nsleep current: {} | work units: {}\nupdates previous: {}\nupdates current: {}",
+        "LEARNING EXPLANATION\norganism {} | stable world {}\nbody heading: {:.0} deg | head offset: {:.0} deg\naction: previous {} -> current {}\nmeasured joint outcome: {}\nsleep current: {} | work units: {}\nupdates previous: {}\nupdates current: {}",
         organism_id.raw(),
         stable_id.raw(),
+        current_row.object.body_yaw.to_degrees(),
+        current_row.object.head_yaw.to_degrees(),
         previous_action,
         current_action,
         outcome_change,
@@ -5387,6 +5454,9 @@ fn spawn_fvr05_production_ux_ui(app: &mut App) {
     ));
 }
 
+const V0_PLAYER_CONTROL_HINTS: &str =
+    "Click Select | E Food | G Move food | C Touch | J Play | K Praise | Enter Speak | Space Pause | F1 Help";
+
 fn spawn_v0_player_experience_ui(app: &mut App) {
     app.world_mut().spawn((
         Name::new("A-Life V0 player status chip"),
@@ -5429,7 +5499,7 @@ fn spawn_v0_player_experience_ui(app: &mut App) {
     ));
     app.world_mut().spawn((
         Name::new("A-Life V0 player control strip"),
-        Text::new("F1 Help"),
+        Text::new(V0_PLAYER_CONTROL_HINTS),
         TextFont {
             font_size: 13.0,
             ..default()
@@ -5458,8 +5528,8 @@ fn sync_v0_player_status_chip(
     }
     let playback = if ux.settings.paused {
         " | Paused".to_string()
-    } else if ux.settings.simulation_speed != 1.0 {
-        format!(" | {:.0}x", ux.settings.simulation_speed)
+    } else if ux.settings.playback_mode() != crate::ProductionRunMode::OneX {
+        format!(" | {}", ux.settings.playback_mode().label())
     } else {
         String::new()
     };
@@ -5513,9 +5583,9 @@ fn sync_v0_player_control_strip(
         return;
     }
     let mut text = if ux.show_help {
-        "F1 Close help | Space Pause | 1/2/3 Speed | S Save | L Load\nClick Select | E Place food on selected ground | Enter Speak | Y Lineage\nArrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
+        "F1 Close help | Space Pause | 1 1x | 2 Max | 3 Headless max (closes window) | S Save | L Load\nClick Select | E Food on ground | G Move food | C Gentle touch | J Offer play | K Praise reward\nEnter Speak | Y Lineage | Arrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
     } else {
-        "F1 Help".to_string()
+        V0_PLAYER_CONTROL_HINTS.to_string()
     };
     if ux.debug_mode {
         text.push_str(" | F3 Exit debug");
@@ -5528,15 +5598,76 @@ fn sync_v0_player_control_strip(
     let simulation_failed = false;
     if simulation_failed {
         text.push_str("\nSimulation stopped. F3 for details.");
-    } else if ux.last_error.is_some() {
-        text.push_str("\nAction failed. F3 for details.");
+    } else if let Some(error) = ux.last_error.as_deref() {
+        // Show only bounded, player-facing explanations here. The original
+        // error and action (including paths) remain in the debug panel.
+        let message = match error {
+            "select a visible terrain tile first" => {
+                "Click a ground tile, then press E to place food."
+            }
+            "select a living creature first" => {
+                "Click a creature, or press PgUp/PgDn, before giving care."
+            }
+            "GPU runtime unavailable" => "Care tools are unavailable. F3 has details.",
+            "select loose food to move" => {
+                "Click loose food, then press G to choose it for moving."
+            }
+            "select ground for food move" => {
+                "Click a ground tile, then press G to move the chosen food."
+            }
+            "food move source unavailable" => {
+                "That food is no longer loose. Choose another food to move."
+            }
+            _ if ux.last_action.starts_with("Food move") => {
+                "Food wasn't moved. Choose another ground tile; F3 has details."
+            }
+            _ if ux.last_action.starts_with("Food placement") => {
+                "Food wasn't placed. Try another ground tile; F3 has details."
+            }
+            _ if ux.last_action.starts_with("Load") => {
+                "The save couldn't be loaded. Your current world is unchanged. F3 has details."
+            }
+            _ if ux.last_action == "UX settings save failed" => {
+                "Settings couldn't be saved. F3 has details."
+            }
+            _ if ux.last_action == "Save failed"
+                || ux.last_action.starts_with("GPU checkpoint save failed") =>
+            {
+                "The world wasn't saved. Press S to retry; F3 has details."
+            }
+            _ => "The last action couldn't finish. F3 has details.",
+        };
+        text.push('\n');
+        text.push_str(message);
     } else {
+        if ux.last_action == "Food placed" {
+            text.push_str("\nFood placed on the selected ground.");
+        } else if ux.last_action == "Food moved" {
+            text.push_str("\nFood moved to the selected ground.");
+        } else if ux.last_action == "Food move cancelled" {
+            text.push_str("\nFood move cancelled.");
+        } else if ux.last_action.starts_with("Gentle touch offered") {
+            text.push_str("\nGentle touch queued for the selected creature.");
+        } else if ux.last_action.starts_with("Praise reward offered") {
+            text.push_str("\nPraise queued for the selected creature.");
+        } else if ux.last_action.starts_with("Plaything offered") {
+            text.push_str("\nPlaything offered. The creature can investigate or ignore it.");
+        }
+        if ux.settings.paused
+            && (ux.last_action.starts_with("Gentle touch offered")
+                || ux.last_action.starts_with("Praise reward offered"))
+        {
+            text.push_str(" Resume with Space to deliver the stimulus.");
+        }
         #[cfg(feature = "gpu-runtime")]
         match ux.last_manual_checkpoint_status.as_ref() {
             Some(crate::GpuManualCheckpointStatus::Queued { .. }) => text.push_str(" | Saving..."),
             Some(crate::GpuManualCheckpointStatus::Complete { .. }) => text.push_str(" | Saved"),
             _ => {}
         }
+    }
+    if ux.pending_food_move.is_some() && !ux.debug_mode {
+        text.push_str("\nFood chosen to move: click ground, then G. Esc cancels.");
     }
     for mut strip in &mut strips {
         strip.0 = text.clone();
@@ -5545,15 +5676,71 @@ fn sync_v0_player_control_strip(
 
 fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample) -> String {
     let display_name = v0_player_creature_name(&sample.display_label, sample.stable_id.raw());
-    format!(
-        "{display_name}\n{} | {}\n\nHunger  {}\nEnergy  {}\nSafety  {}\nSleepiness  {}",
+    let mut text = format!(
+        "{display_name}\n{} | {}\n\nHunger  {}\nEnergy  {}\nTiredness  {}\nSafety  {}\nSleepiness  {}\nPraise  {}",
         sample.animation.label(),
         sample.expression.label(),
         v0_need_bar(sample.hunger),
-        v0_need_bar(1.0 - sample.fatigue),
+        sample.body_energy.map(v0_need_bar).unwrap_or_else(|| "unavailable".to_string()),
+        v0_need_bar(sample.fatigue),
         v0_need_bar(1.0 - sample.fear),
         v0_need_bar(sample.sleep_pressure),
-    )
+        v0_need_bar(sample.praise_signal),
+    );
+    if sample.last_attempt_blocked {
+        text.push_str("\nCurrent attempt blocked");
+    }
+    if let Some(response) = sample.last_response {
+        text.push_str("\n\nLast response: ");
+        text.push_str(response);
+    }
+    text
+}
+
+/// Report consequences from the existing sealed world receipt, not intentions.
+#[cfg(feature = "gpu-runtime")]
+pub(crate) fn v0_confirmed_creature_response(
+    row: &alife_world::WorldOrganismPresentationRow,
+    previous: Option<&alife_world::WorldOrganismPresentationRow>,
+    target: Option<&alife_world::WorldObject>,
+) -> Option<&'static str> {
+    use alife_core::{ActionKind, PhysicalContactKind, ReferenceActionFailure};
+    let outcome = row.outcome.as_ref().filter(|outcome| outcome.patch_sealed);
+    if let Some(outcome) = outcome {
+        // A different motor channel can fail in the same sealed bundle.
+        // Consumption is still a physical fact in that aggregate receipt.
+        if outcome.physical_contact == Some(PhysicalContactKind::Consumed) {
+            return Some("Ate food");
+        }
+    }
+    if let Some(previous) = previous.filter(|previous| previous.organism_id == row.organism_id) {
+        let current = &row.biochemistry.homeostasis.hormones;
+        let prior = &previous.biochemistry.homeostasis.hormones;
+        if current.extension[0] > prior.extension[0] + 0.01 {
+            return Some("Praise signal rose");
+        }
+        if current.oxytocin > prior.oxytocin + 0.01 {
+            return Some("Comfort signal rose");
+        }
+    }
+    if let Some(outcome) = outcome {
+        if outcome.patch_success == Some(false)
+            && (outcome.physical_contact == Some(PhysicalContactKind::Blocked)
+                || outcome.action_failure == Some(ReferenceActionFailure::Blocked))
+        {
+            return Some("Attempt blocked");
+        }
+        if outcome.patch_success == Some(true)
+            && target.is_some_and(|target| target.label == "player-plaything")
+        {
+            // The aggregate contact can belong to another motor channel.
+            // Do not attribute it to this representative target.
+            if row.motor.as_ref().and_then(|motor| motor.action_kind) == Some(ActionKind::Inspect) {
+                return Some("Inspected plaything");
+            }
+        }
+    }
+    None
 }
 
 fn v0_player_creature_name(label: &str, stable_id: u64) -> String {
@@ -5589,7 +5776,9 @@ fn handle_fvr03_mouse_selection(
     cameras: bevy::prelude::Query<(&Camera, &GlobalTransform), With<Fvr03ProductionVoxelCamera>>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     mut selection: ResMut<Fvr03ProductionVoxelSelectionResource>,
-    highland: Option<Res<highlands::HighlandsActive>>,
+    highland: Option<Res<creature_grounding::SelectedTerrain>>,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    surface: Res<creature_grounding::RenderedTerrainSurface>,
 ) {
     let hovered = (|| {
         let window = windows.single().ok()?;
@@ -5598,8 +5787,8 @@ fn handle_fvr03_mouse_selection(
         let ray = camera
             .viewport_to_world(camera_transform, cursor_position)
             .ok()?;
-        let position = if highland.is_some() {
-            let p = alife_world::highlands().ray_hit(
+        let position = if let Some(terrain) = highland.as_ref() {
+            let p = terrain.0.surface().ray_hit(
                 Vec3f::new(ray.origin.x, ray.origin.y, ray.origin.z),
                 Vec3f::new(ray.direction.x, ray.direction.y, ray.direction.z),
                 2000.0,
@@ -5614,7 +5803,49 @@ fn handle_fvr03_mouse_selection(
         } else {
             scene.tile_from_world_position(position)?
         };
-        Some(scene.selectable_ref_at_tile(tile))
+        let selected = scene.selectable_ref_at_tile(tile);
+        // Creature selection keeps priority at its ground tile. Food picking
+        // follows current canonical objects, rather than launch-time resources.
+        if selected.kind == StableVoxelRefKind::Creature {
+            return Some(selected);
+        }
+        let food = frame.as_ref().and_then(|frame| {
+            frame
+                .current
+                .objects()
+                .filter(|object| {
+                    object.kind == WorldObjectKind::Food
+                        && !object.consumed
+                        && object.carried_by.is_none()
+                })
+                .filter_map(|object| {
+                    let rendered = world_position_for_render(object.position, highland.is_some());
+                    let ground = Vec3::new(rendered.x, 0.0, rendered.z);
+                    // Match the existing food projection's center.
+                    let height = if highland.is_some() {
+                        surface.height(ground).unwrap_or(rendered.y)
+                    } else {
+                        surface.height(ground).unwrap_or(0.44) + rendered.y
+                    };
+                    let center = ground + Vec3::Y * (height + 0.30);
+                    let along = (center - ray.origin).dot(*ray.direction);
+                    let closest = ray.origin + *ray.direction * along;
+                    (along >= 0.0
+                        && along <= (position - ray.origin).length() + 0.42
+                        && closest.distance_squared(center) <= 0.42_f32.powi(2))
+                    .then_some((along, object.id, ground))
+                })
+                .min_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.raw().cmp(&b.1.raw())))
+        });
+        Some(food.map_or(selected, |(_, stable_id, ground)| {
+            let tile = VoxelTileCoord::new(ground.x.floor() as i32, ground.z.floor() as i32);
+            StableVoxelObjectRef {
+                kind: StableVoxelRefKind::Resource,
+                stable_id: Some(stable_id),
+                chunk: VoxelChunkCoord::for_tile(16, tile),
+                tile: Some(tile),
+            }
+        }))
     })();
     apply_fvr03_pointer_sample(
         &mut selection,
@@ -5882,7 +6113,7 @@ fn sync_fvr05_left_control_panel(
         .map(|error| format!("\nERROR\n{error}\n"))
         .unwrap_or_default();
     let text = format!(
-        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1/2/3 speed\n[ ] adjust speed\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\nShift+1-3, 4-9, B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nLIVE / STARTUP ESTIMATES\nlive creatures {}\nstartup chunks loaded {}\nstartup chunks resident {}\nstartup tiles sampled {}\nstartup mesher {} quads {} face reduction {:.2}x\nconfigured remesh budget {} snapshot dirty {} estimated cached {} deferred {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
+        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1 1x | 2 Max | 3 Headless max\nHeadless closes the window; stop file path prints in launch log\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\nShift+1-3, 4-9, B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nRUN MODE\n{}\n\nLIVE / STARTUP ESTIMATES\nlive creatures {}\nstartup chunks loaded {}\nstartup chunks resident {}\nstartup tiles sampled {}\nstartup mesher {} quads {} face reduction {:.2}x\nconfigured remesh budget {} snapshot dirty {} estimated cached {} deferred {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
         if ux.settings.paused {
             "paused"
         } else {
@@ -5891,7 +6122,7 @@ fn sync_fvr05_left_control_panel(
         ux.settings.follow_selection,
         ux.settings.pause_on_focus_loss,
         ux.settings.show_overlays,
-        ux.settings.simulation_speed,
+        ux.settings.playback_mode().label(),
         scene.creature_render_count,
         scene.visible_chunk_count,
         scene.resident_chunk_count,
@@ -6247,7 +6478,7 @@ fn sync_fvr04_camera_follow(
     let target = position;
     let extent = production_camera_extent(scene.profile_id);
     for (mut transform, camera) in &mut cameras {
-        let next_transform = fvr04_follow_camera_transform(camera.mode, extent, target);
+        let next_transform = production_follow_camera_transform(camera.mode, extent, target);
         if *transform != next_transform {
             *transform = next_transform;
         }
@@ -6349,23 +6580,6 @@ fn sync_fvr04_creature_label(
             *visibility = Visibility::Visible;
         }
     }
-}
-
-fn fvr04_follow_camera_transform(
-    mode: Fvr03ProductionVoxelCameraMode,
-    extent: f32,
-    target: Vec3,
-) -> Transform {
-    let offset = match mode {
-        Fvr03ProductionVoxelCameraMode::OrthographicIsometric => {
-            Vec3::new(extent * 0.44, extent * 0.38, extent * 0.72)
-        }
-        Fvr03ProductionVoxelCameraMode::Orbit => {
-            Vec3::new(extent * 0.72, extent * 0.52, extent * 0.94)
-        }
-    };
-    let focus = target + Vec3::Y * 0.70;
-    Transform::from_translation(focus + offset).looking_at(focus, Vec3::Y)
 }
 
 #[cfg(feature = "gpu-runtime")]
@@ -6988,6 +7202,89 @@ mod tests {
     use super::*;
     use alife_core::{OrganismId, Tick, WorldEntityId};
     use alife_world::{HeadlessScenarioBuilder, WorldObjectKind};
+
+    #[cfg(feature = "gpu-runtime")]
+    #[test]
+    fn care_feedback_requires_confirmed_consequences() {
+        use alife_core::{
+            BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity, PhysicalContactKind,
+            ReferenceActionFailure,
+        };
+        use alife_world::{PresentationOutcomeSnapshot, WorldOrganismRecord};
+        let id = OrganismId(1);
+        let mut world = HeadlessScenarioBuilder::new(21)
+            .agent("agent", id, Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let entity = world.entity_id("agent").unwrap();
+        let genome = CreatureGenome::early_mammal_founder(
+            21,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        world
+            .register_organism_record(
+                WorldOrganismRecord::newborn(id, entity, genome, phenotype, Tick::ZERO).unwrap(),
+            )
+            .unwrap();
+        let mut row = world.presentation_snapshot().organisms.remove(0);
+        let prior = row.clone();
+        row.outcome = Some(PresentationOutcomeSnapshot {
+            patch_sealed: false,
+            patch_sequence_id: Some(1),
+            patch_success: Some(true),
+            physical_contact: Some(PhysicalContactKind::Consumed),
+            action_failure: None,
+        });
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&prior), None),
+            None
+        );
+        row.outcome.as_mut().unwrap().patch_sealed = true;
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&prior), None),
+            Some("Ate food")
+        );
+        row.outcome.as_mut().unwrap().patch_success = Some(false);
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&prior), None),
+            Some("Ate food")
+        );
+        let outcome = row.outcome.as_mut().unwrap();
+        outcome.patch_success = Some(false);
+        outcome.physical_contact = Some(PhysicalContactKind::Blocked);
+        outcome.action_failure = Some(ReferenceActionFailure::Blocked);
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&prior), None),
+            Some("Attempt blocked")
+        );
+        row.biochemistry.homeostasis.hormones.extension[0] += 0.2;
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&prior), None),
+            Some("Praise signal rose")
+        );
+        row.outcome = None;
+        let peak = row.clone();
+        row.biochemistry.homeostasis.hormones.extension[0] *= 0.25;
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&peak), None),
+            None
+        );
+        row.biochemistry.homeostasis.hormones.extension[0] =
+            prior.biochemistry.homeostasis.hormones.extension[0];
+        row.biochemistry.homeostasis.hormones.oxytocin += 0.2;
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&prior), None),
+            Some("Comfort signal rose")
+        );
+        let mut foreign = prior.clone();
+        foreign.organism_id = OrganismId(2);
+        assert_eq!(
+            v0_confirmed_creature_response(&row, Some(&foreign), None),
+            None
+        );
+    }
 
     #[cfg(feature = "gpu-runtime")]
     use crate::bevy_shell::{

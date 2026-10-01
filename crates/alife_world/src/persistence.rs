@@ -11,8 +11,8 @@ use std::{
 
 use alife_core::{
     require_complete_v3_organism_state, require_version, ArchitectureMigrationError,
-    BrainCapacityClass, BrainScaleTier, CreatureGenome, FoundationWeightAsset, GenomeId,
-    HomeostaticSnapshot, MemoryId, OrganismId, PackedExperienceFrame, PhenotypeCompiler,
+    BodyEventDelta, BrainCapacityClass, BrainScaleTier, CreatureGenome, FoundationWeightAsset,
+    GenomeId, HomeostaticSnapshot, MemoryId, OrganismId, PackedExperienceFrame, PhenotypeCompiler,
     PhenotypeHash, PolicyBackend, ScaffoldContractError, SchemaKind, SchemaVersions, SensorProfile,
     TeacherPerceptionChannel, Tick, Validate, Vec3f, WorldEntityId,
 };
@@ -53,7 +53,7 @@ pub const BRAIN_POLICY_CONFIG_SCHEMA_VERSION: u16 = 1;
 pub const P34_MAX_INLINE_SAVE_BYTES: u64 = 64 * 1024;
 pub const FVR06_GPU_RUNTIME_STATE_SCHEMA: &str = "alife.fvr06.gpu_runtime_state.v1";
 pub const FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION: u16 = 1;
-pub const WORLD_OBJECT_SAVE_SCHEMA_VERSION: u16 = 1;
+pub const WORLD_OBJECT_SAVE_SCHEMA_VERSION: u16 = 2;
 
 #[derive(Debug, Error)]
 pub enum PersistenceError {
@@ -1061,6 +1061,9 @@ pub struct WorldObjectSaveState {
     pub kind: WorldObjectKind,
     pub organism_id: Option<OrganismId>,
     pub position: Vec3f,
+    pub body_yaw: f32,
+    pub head_yaw: f32,
+    pub optical_opacity: f32,
     pub radius: f32,
     pub nutrition: f32,
     pub hazard_pain: f32,
@@ -1077,8 +1080,12 @@ pub struct WorldObjectSaveState {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct WorldSaveState {
     pub seed: u64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub disable_age_death: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terrain: Option<crate::TerrainBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terrain_state: Option<crate::TerrainState>,
     pub tick: Tick,
     pub next_entity_id: u64,
     pub next_organism_id: u64,
@@ -1090,6 +1097,8 @@ pub struct WorldSaveState {
     pub audible_utterances: Vec<AudibleUtterance>,
     #[serde(default)]
     pub last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub pending_player_care: BTreeMap<u64, BodyEventDelta>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub organism_records: Option<Vec<WorldOrganismRecord>>,
     #[serde(default)]
@@ -1110,6 +1119,12 @@ struct WorldObjectSaveWire {
     kind: WorldObjectKind,
     organism_id: Option<OrganismId>,
     position: Vec3f,
+    #[serde(default)]
+    body_yaw: Option<f32>,
+    #[serde(default)]
+    head_yaw: Option<f32>,
+    #[serde(default)]
+    optical_opacity: Option<f32>,
     radius: f32,
     nutrition: f32,
     hazard_pain: f32,
@@ -1139,7 +1154,7 @@ impl WorldObjectSaveWire {
             self.tracking_key,
         ) {
             (
-                Some(WORLD_OBJECT_SAVE_SCHEMA_VERSION),
+                Some(1 | WORLD_OBJECT_SAVE_SCHEMA_VERSION),
                 Some(physical),
                 Some(provenance),
                 Some(key),
@@ -1165,13 +1180,28 @@ impl WorldObjectSaveWire {
                 };
                 let key = provenance.canonical_key();
                 (
-                    GroundedPhysicalProperties::deterministic_default(canonical_spawn_sequence),
+                    GroundedPhysicalProperties::deterministic_for_kind(
+                        self.kind,
+                        canonical_spawn_sequence,
+                    ),
                     provenance,
                     key,
                 )
             }
             (Some(_), _, _, _) => return Err("unsupported world-object save schema"),
             _ => return Err("partial grounded world-object provenance is forbidden"),
+        };
+        let (body_yaw, head_yaw, optical_opacity) = match (
+            self.schema_version,
+            self.body_yaw,
+            self.head_yaw,
+            self.optical_opacity,
+        ) {
+            (Some(WORLD_OBJECT_SAVE_SCHEMA_VERSION), Some(body), Some(head), Some(opacity)) => {
+                (body, head, opacity)
+            }
+            (Some(1) | None, None, None, None) => (0.0, 0.0, 1.0),
+            _ => return Err("partial gaze or opacity state is forbidden"),
         };
         Ok(WorldObjectSaveState {
             schema_version: WORLD_OBJECT_SAVE_SCHEMA_VERSION,
@@ -1180,6 +1210,9 @@ impl WorldObjectSaveWire {
             kind: self.kind,
             organism_id: self.organism_id,
             position: self.position,
+            body_yaw,
+            head_yaw,
+            optical_opacity,
             radius: self.radius,
             nutrition: self.nutrition,
             hazard_pain: self.hazard_pain,
@@ -1232,7 +1265,11 @@ impl<'de> Deserialize<'de> for WorldSaveState {
         struct Wire {
             seed: u64,
             #[serde(default)]
+            disable_age_death: bool,
+            #[serde(default)]
             terrain: Option<crate::TerrainBinding>,
+            #[serde(default)]
+            terrain_state: Option<crate::TerrainState>,
             tick: Tick,
             next_entity_id: u64,
             #[serde(default)]
@@ -1247,6 +1284,8 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             next_utterance_id: Option<u64>,
             #[serde(default)]
             last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
+            #[serde(default)]
+            pending_player_care: BTreeMap<u64, BodyEventDelta>,
             #[serde(default, deserialize_with = "deserialize_present_organism_records")]
             organism_records: Option<Vec<WorldOrganismRecord>>,
             #[serde(default)]
@@ -1321,7 +1360,9 @@ impl<'de> Deserialize<'de> for WorldSaveState {
         let habitat_authority_was_missing = wire.habitats.is_none();
         let state = Self {
             seed: wire.seed,
+            disable_age_death: wire.disable_age_death,
             terrain: wire.terrain,
+            terrain_state: wire.terrain_state,
             tick: wire.tick,
             next_entity_id: wire.next_entity_id,
             next_organism_id,
@@ -1331,6 +1372,7 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             last_touched_entities: wire.last_touched_entities,
             audible_utterances: wire.audible_utterances,
             last_creature_utterance_ticks: wire.last_creature_utterance_ticks,
+            pending_player_care: wire.pending_player_care,
             organism_records: wire.organism_records,
             ecology: wire.ecology,
             voxel_backend: wire.voxel_backend,
@@ -2089,7 +2131,9 @@ impl WorldSaveState {
         }
         Self {
             seed: parts.seed,
+            disable_age_death: parts.disable_age_death,
             terrain: parts.terrain,
+            terrain_state: parts.terrain_state,
             tick: parts.tick,
             next_entity_id: parts.next_entity_id,
             next_organism_id: parts.next_organism_id,
@@ -2103,6 +2147,7 @@ impl WorldSaveState {
             last_touched_entities: parts.last_touched_entities,
             audible_utterances: parts.audible_utterances,
             last_creature_utterance_ticks: parts.last_creature_utterance_ticks,
+            pending_player_care: parts.pending_player_care,
             organism_records,
             ecology: parts.ecology,
             voxel_backend: None,
@@ -2162,7 +2207,10 @@ impl WorldSaveState {
             .map(|record| record.organism_id().raw())
             .collect::<BTreeSet<_>>();
         let agent_ids = agent_bindings.keys().copied().collect::<BTreeSet<_>>();
-        if registered_ids != agent_ids {
+        // External embodied teachers remain ordinary Agent objects, without
+        // biological/neural registration. Every registered life still binds
+        // exactly once; extra objects must not become implicit newborns.
+        if !registered_ids.is_subset(&agent_ids) {
             return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
         }
         for record in registry.iter() {
@@ -2185,9 +2233,7 @@ impl WorldSaveState {
                 message: "world seed must be nonzero",
             });
         }
-        if let Some(terrain) = self.terrain {
-            terrain.validate()?;
-        }
+        crate::WorldTerrain::restore(self.terrain, self.terrain_state.as_ref())?;
         let mut ids = BTreeSet::new();
         let mut labels = BTreeSet::new();
         let mut max_id = 0_u64;
@@ -2262,6 +2308,25 @@ impl WorldSaveState {
             }
         }
         self.validate_organism_records()?;
+        for (id, event) in &self.pending_player_care {
+            event.validate_contract()?;
+            if !self.organism_records.as_ref().is_some_and(|records| {
+                records.iter().any(|record| {
+                    record.organism_id().raw() == *id && record.lifecycle().is_alive()
+                })
+            }) || event.energy != 0.0
+                || event.damage != 0.0
+                || event.temperature_stress != 0.0
+                || event.nutrition != 0.0
+                || event.play_stimulation != 0.0
+                || event.perceived_novelty != 0.0
+                || event.investigation != 0.0
+                || event.sleep_recovery != 0.0
+                || event.mating_opportunity != 0.0
+            {
+                return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            }
+        }
         let habitat_creatures = self
             .habitats
             .memberships()
@@ -2277,7 +2342,9 @@ impl WorldSaveState {
         self.validate()?;
         let parts = HeadlessWorldPersistenceParts {
             seed: self.seed,
+            disable_age_death: self.disable_age_death,
             terrain: self.terrain,
+            terrain_state: self.terrain_state.clone(),
             tick: self.tick,
             next_entity_id: self.next_entity_id,
             next_organism_id: self.next_organism_id,
@@ -2293,6 +2360,7 @@ impl WorldSaveState {
             ecology: self.ecology.clone(),
             audible_utterances: self.audible_utterances.clone(),
             last_creature_utterance_ticks: self.last_creature_utterance_ticks.clone(),
+            pending_player_care: self.pending_player_care.clone(),
             habitats: self.habitats.clone(),
             organism_records: self.organism_records.clone(),
         };
@@ -2304,7 +2372,7 @@ impl WorldObjectSaveState {
     fn validate(&self) -> Result<(), PersistenceError> {
         if self.schema_version != WORLD_OBJECT_SAVE_SCHEMA_VERSION {
             return Err(PersistenceError::SchemaVersion {
-                schema: "alife.world_object.v1",
+                schema: "alife.world_object.v2",
                 expected: WORLD_OBJECT_SAVE_SCHEMA_VERSION,
                 actual: self.schema_version,
             });
@@ -2320,6 +2388,16 @@ impl WorldObjectSaveState {
             id.validate()?;
         }
         self.position.validate()?;
+        if !self.body_yaw.is_finite()
+            || !self.head_yaw.is_finite()
+            || self.head_yaw.abs() > 70.0_f32.to_radians()
+            || !self.optical_opacity.is_finite()
+            || !(0.0..=1.0).contains(&self.optical_opacity)
+        {
+            return Err(PersistenceError::Contract(
+                ScaffoldContractError::ScalarOutOfRange,
+            ));
+        }
         self.grounded_physical.validate_contract()?;
         self.tracking_provenance.validate_contract()?;
         if self.tracking_key != self.tracking_provenance.canonical_key() {
@@ -2359,6 +2437,9 @@ impl From<WorldObject> for WorldObjectSaveState {
             kind: value.kind,
             organism_id: value.organism_id,
             position: value.position,
+            body_yaw: value.body_yaw,
+            head_yaw: value.head_yaw,
+            optical_opacity: value.optical_opacity,
             radius: value.radius,
             nutrition: value.nutrition,
             hazard_pain: value.hazard_pain,
@@ -2382,6 +2463,9 @@ impl From<WorldObjectSaveState> for WorldObject {
             kind: value.kind,
             organism_id: value.organism_id,
             position: value.position,
+            body_yaw: value.body_yaw,
+            head_yaw: value.head_yaw,
+            optical_opacity: value.optical_opacity,
             radius: value.radius,
             nutrition: value.nutrition,
             hazard_pain: value.hazard_pain,
@@ -2592,18 +2676,95 @@ fn contains_engine_local_runtime_token(value: &str) -> bool {
     .any(|needle| lower.contains(needle))
 }
 
-#[allow(dead_code)]
-fn _asset_index(manifest: &AssetManifest) -> BTreeMap<&str, &AssetManifestEntry> {
-    manifest
-        .entries
-        .iter()
-        .map(|entry| (entry.asset_id.as_str(), entry))
-        .collect()
-}
-
 #[cfg(test)]
 mod highlands_persistence_tests {
     use super::*;
+    #[test]
+    fn custom_terrain_save_reloads_geometry_limits_and_signature() {
+        let data = crate::TerrainData {
+            width: 2,
+            depth: 2,
+            origin_x: 1000.0,
+            origin_z: 2000.0,
+            spacing: 10.0,
+            heights: vec![7.0, 8.0, 7.0, 8.0],
+            obstacles: vec![[1005.0, 2000.0, 1005.1, 2010.0, 7.0, 10.0]],
+            water_level: Some(3.0),
+        };
+        let limits = crate::LocomotionLimits {
+            body_radius: 0.4,
+            ..Default::default()
+        };
+        let mut world = crate::HeadlessScenarioBuilder::new(71)
+            .agent("walker", OrganismId(1), Vec3f::ZERO)
+            .build()
+            .unwrap();
+        world
+            .enable_terrain_for_new_game(
+                crate::WorldTerrain::new(data.clone(), limits).unwrap(),
+                Vec3f::new(1001.0, 0.0, 2001.0),
+            )
+            .unwrap();
+        // Scenario agents without full organism records normalize the legacy
+        // organism allocator during save. Start from that canonical baseline.
+        world = HeadlessWorld::from_persistence_parts(world.persistence_parts()).unwrap();
+        let saved = WorldSaveState::from_parts(world.persistence_parts());
+        let mut decoded: WorldSaveState =
+            serde_json::from_slice(&serde_json::to_vec(&saved).unwrap()).unwrap();
+        let mut restored = decoded.restore().unwrap();
+        assert_eq!(restored.terrain_binding(), world.terrain_binding());
+        assert_eq!(restored.terrain().unwrap().surface().data(), data);
+        assert_eq!(restored.terrain().unwrap().limits(), limits);
+        assert_eq!(
+            restored.canonical_signature_digest().unwrap(),
+            world.canonical_signature_digest().unwrap()
+        );
+        let command = alife_core::ActionCommand::structured(
+            OrganismId(1),
+            alife_core::ActionKind::Move.canonical_id(),
+            alife_core::ActionKind::Move,
+            alife_core::ActionTarget::new(None, Some(Vec3f::new(1001.3, 7.13, 2001.0))),
+            alife_core::Intensity::new(1.0).unwrap(),
+            alife_core::DurationTicks::new(1),
+            alife_core::Confidence::new(0.9).unwrap(),
+            0,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            world.apply_command(&command).unwrap(),
+            restored.apply_command(&command).unwrap()
+        );
+        assert_eq!(
+            world
+                .entity(world.entity_id("walker").unwrap())
+                .unwrap()
+                .position,
+            restored
+                .entity(restored.entity_id("walker").unwrap())
+                .unwrap()
+                .position
+        );
+        let start = Vec3f::new(1004.0, 7.4, 2001.0);
+        assert!(restored
+            .terrain()
+            .unwrap()
+            .resolve_move(start, Vec3f::new(1006.0, 0.0, 2001.0))
+            .is_none());
+        decoded
+            .terrain_state
+            .as_mut()
+            .unwrap()
+            .data
+            .as_mut()
+            .unwrap()
+            .heights[0] += 1.0;
+        assert!(decoded.restore().is_err());
+        decoded.terrain = None;
+        assert!(decoded.restore().is_err());
+    }
     #[test]
     fn highlands_binding_roundtrips_and_rejects_incompatible_geometry() {
         let mut world = crate::HeadlessScenarioBuilder::new(71).build().unwrap();

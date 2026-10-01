@@ -22,7 +22,7 @@ pub(super) fn capture_player_view(
     roots: bevy::prelude::Query<(&Fvr04ProductionCreatureVisualMarker, &Transform)>,
     players: bevy::prelude::Query<&bevy::prelude::AnimationPlayer>,
     surface: Res<creature_grounding::RenderedTerrainSurface>,
-    highlands: Option<Res<highlands::HighlandsActive>>,
+    highlands: Option<Res<creature_grounding::SelectedTerrain>>,
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     meshes: Res<Assets<Mesh>>,
     visible_meshes: Query<(&Mesh3d, &ViewVisibility)>,
@@ -52,19 +52,53 @@ pub(super) fn capture_player_view(
                     let object = frame.current.objects().find(|o| o.organism_id == Some(s.organism_id));
                     let organism = object.and_then(|o| frame.current.organism(o.id));
                     let target = s.target_entity.and_then(|id| frame.current.object(id));
+                    let motor_execution = s.motor_execution.as_ref().map(|trace| {
+                        let receipts = trace.channel_receipts.iter().map(|receipt| {
+                            let target = receipt.command.target
+                                .and_then(|binding| binding.entity)
+                                .and_then(|id| frame.current.object(id));
+                            serde_json::json!({
+                                "executed_command": &receipt.command,
+                                "observation": receipt.observation,
+                                "physical": receipt.physical,
+                                // This is the presentation snapshot after the whole tick,
+                                // not a claim about position at an individual channel boundary.
+                                "target_state_after_tick": target.map(|target| serde_json::json!({
+                                    "id": target.id.raw(), "kind": format!("{:?}", target.kind),
+                                    "position": [target.position.x, target.position.y, target.position.z],
+                                    "consumed": target.consumed,
+                                    "carried_by": target.carried_by.map(|id| id.raw()),
+                                })),
+                            })
+                        }).collect::<Vec<_>>();
+                        serde_json::json!({
+                            "requested_channels": &trace.requested_channels,
+                            "channel_receipts": receipts,
+                        })
+                    });
                     serde_json::json!({
                         "organism_id": s.organism_id.raw(),
                         "tick_before": s.world_tick_before.raw(), "tick_after": s.world_tick_after.raw(),
                         "status": format!("{:?}", s.status),
                         "action": s.selected_action_kind.map(|v| format!("{v:?}")),
                         "action_id": s.selected_action_id.map(|v| v.raw()),
+                        // Legacy action/target fields name the representative candidate;
+                        // only motor_execution describes every executed channel.
+                        "action_scope": "representative_candidate",
+                        "motor_execution": motor_execution,
                         "target_id": s.target_entity.map(|v| v.raw()),
                         "target_kind": target.map(|o| format!("{:?}", o.kind)),
                         "target_position": target.map(|o| [o.position.x, o.position.y, o.position.z]),
                         "position": object.map(|o| [o.position.x, o.position.y, o.position.z]),
                         "sleep_phase": organism.map(|o| format!("{:?}", o.sleep_phase)),
+                        "body_energy": organism.map(|o| o.biochemistry.body.energy),
+                        "hunger": organism.map(|o| o.biochemistry.homeostasis.drives.hunger),
+                        "comfort_signal": organism.map(|o| o.biochemistry.homeostasis.hormones.oxytocin),
+                        "praise_signal": organism.map(|o| o.biochemistry.homeostasis.hormones.extension[0]),
+                        "learning_updates": s.learning_updates,
                         "sealed": s.patch_sealed, "success": s.patch_success,
                         "contact": s.physical_contact.map(|v| format!("{v:?}")),
+                        "outcome_scope": "aggregate_joint_motor_outcome",
                         "failure": s.action_failure.as_ref().map(|v| format!("{v:?}")),
                     })
                 }).collect::<Vec<_>>();
@@ -72,6 +106,7 @@ pub(super) fn capture_player_view(
                     "world_tick": tick, "elapsed_seconds": time.elapsed_secs_f64(), "actions": rows,
                     "food": frame.current.objects().filter(|o| o.kind == WorldObjectKind::Food).map(|o| serde_json::json!({
                         "id": o.id.raw(), "position": [o.position.x, o.position.y, o.position.z], "consumed": o.consumed,
+                        "carried_by": o.carried_by.map(|id| id.raw()),
                     })).collect::<Vec<_>>(),
                 });
                 if let Err(error) = writeln!(session.action_trace.as_mut().unwrap(), "{receipt}") {
@@ -107,11 +142,13 @@ pub(super) fn capture_player_view(
         format!("view-{stamp}")
     };
     let receipt = serde_json::json!({
-        "terrain_binding": highlands.as_ref().map(|_| alife_world::TerrainBinding::highlands()),
+        "terrain_binding": highlands.as_ref().map(|t| t.0.binding()),
         "visible_mesh_primitives": visible_meshes.iter().filter(|(_,v)| v.get()).count(),
         "visible_mesh_triangles_before_batching": visible_meshes.iter().filter(|(_,v)| v.get())
             .filter_map(|(m,_)| meshes.get(&m.0)).map(|m| m.indices().map_or(m.count_vertices(),|i| i.len())/3).sum::<usize>(),
         "paused": ux.settings.paused, "elapsed_seconds": time.elapsed_secs_f64(),
+        "last_player_action": ux.last_action,
+        "last_player_error": ux.last_error,
         "world_tick": frame.as_ref().map(|f| f.current.authoritative_world_tick.raw()),
         "food": frame.as_ref().map(|f| f.current.objects().filter(|o| o.kind == WorldObjectKind::Food).map(|o| serde_json::json!({
             "id":o.id.raw(), "position":[o.position.x,o.position.y,o.position.z], "consumed":o.consumed,

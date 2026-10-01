@@ -1,6 +1,7 @@
 //! One bounded V2 choice probe using the unchanged V1 trained genetic weights.
 use super::nociception_food_tests::{assert_choices, run_food_life};
 use super::*;
+use alife_core::PhysicalContactKind;
 use alife_core::{ActionCandidateCreditProfileV1, Nano512ActionCreditCandidateV2};
 
 #[path = "readout_calibration_tests.rs"]

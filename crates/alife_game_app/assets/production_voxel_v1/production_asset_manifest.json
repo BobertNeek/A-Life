@@ -4118,7 +4118,7 @@
     {
       "asset_id": "approved-hearthling",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:a0dbdb971d391486",
+      "digest": "fnv1a64:affe2be312e23f17",
       "external": false,
       "final_art": false,
       "generated": true,
@@ -4133,7 +4133,7 @@
       "local_path": "crates/alife_game_app/assets/creatures/hearthling/hearthling.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 3086228,
+      "size_bytes": 3089688,
       "source": "generated:approved-blender-model",
       "usage_category": "creatures"
     },

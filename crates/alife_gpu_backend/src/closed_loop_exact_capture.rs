@@ -211,11 +211,6 @@ impl GpuExactPopulationCaptureV1 {
     pub const fn bytes_copied(&self) -> u64 {
         self.bytes_copied
     }
-
-    #[allow(dead_code)]
-    pub(crate) fn into_rows(self) -> Vec<GpuExactPopulationCaptureRowV1> {
-        self.rows
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

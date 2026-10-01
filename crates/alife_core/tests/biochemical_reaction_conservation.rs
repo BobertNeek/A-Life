@@ -122,6 +122,29 @@ fn assert_close(actual: f32, expected: f32) {
     );
 }
 
+#[test]
+fn reaction_declaration_order_is_part_of_inherited_simulation_dynamics() {
+    let species = vec![material(1, 0.0), material(2, 0.0), material(3, 0.0)];
+    let producer = reaction(&[(1, 1.0)], &[(2, 1.0)], 0.5);
+    let consumer = reaction(&[(2, 1.0)], &[(3, 1.0)], 0.5);
+    let forward = graph(species.clone(), vec![producer.clone(), consumer.clone()]);
+    let reversed = graph(species, vec![consumer, producer]);
+    let a = advance_to(&forward, state_with(&forward, &[1.0, 0.0, 0.0]), 1);
+    let b = advance_to(&reversed, state_with(&reversed, &[1.0, 0.0, 0.0]), 1);
+    assert_close(concentration(&forward, &a, 2), 0.25);
+    assert_close(concentration(&forward, &a, 3), 0.25);
+    assert_close(concentration(&reversed, &b, 2), 0.5);
+    assert_close(concentration(&reversed, &b, 3), 0.0);
+    assert_close(total_material(&forward, &a), 1.0);
+    assert_close(total_material(&reversed, &b), 1.0);
+    let restored: BiochemicalPhenotype =
+        serde_json::from_slice(&serde_json::to_vec(&forward).unwrap()).unwrap();
+    assert_eq!(
+        advance_to(&restored, state_with(&restored, &[1.0, 0.0, 0.0]), 1),
+        a
+    );
+}
+
 fn assert_limits(graph: &BiochemicalPhenotype, state: &BiochemicalGraphState) {
     for species in graph.species() {
         let value = concentration(graph, state, species.id.0);

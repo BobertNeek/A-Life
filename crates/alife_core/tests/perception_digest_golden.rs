@@ -280,12 +280,13 @@ fn digest_enum_raw_mappings_are_stable_and_reject_unknown_values() {
         ActionKind::Vocalize,
         ActionKind::Write,
         ActionKind::Gesture,
+        ActionKind::Look,
     ];
     for (raw, kind) in kinds.into_iter().enumerate() {
         assert_eq!(kind.raw(), raw as u8);
         assert_eq!(ActionKind::try_from_raw(raw as u8).unwrap(), kind);
     }
-    assert!(ActionKind::try_from_raw(9).is_err());
+    assert!(ActionKind::try_from_raw(10).is_err());
 
     for (raw, channel) in TeacherPerceptionChannel::ALL.into_iter().enumerate() {
         assert_eq!(channel.raw(), raw as u8);

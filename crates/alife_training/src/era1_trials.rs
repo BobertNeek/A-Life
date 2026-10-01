@@ -1,4 +1,5 @@
-//! GPU-authoritative causal trial loop for the Era 1 Norn-plus battery.
+//! Era 1 causal trial contracts and a blocked legacy GPU runner.
+//! Canonical organism biology must be integrated before evaluation can run.
 
 use alife_core::{
     ActionCommand, ActionKind, BiochemistryState, BrainCapacityClass, BrainGenome,
@@ -423,7 +424,7 @@ impl Era1TrialRunEvidence {
                 || neural_evidence.action_family != step.selected_family
                 || step.sealed_patch.outcome().success != step.outcome_success
             {
-                return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
             }
             if let Some(diagnostic) = &step.selector_diagnostic {
                 diagnostic.validate_for_step(
@@ -573,6 +574,7 @@ pub struct Era1TrialRunner {
 
 impl Era1TrialRunner {
     pub fn new_required() -> Result<Self, TrainingError> {
+        crate::require_canonical_training_biology("Era 1 causal trial runner")?;
         let foundation =
             FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1)?;
         let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;

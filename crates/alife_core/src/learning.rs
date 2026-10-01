@@ -194,8 +194,15 @@ impl NeuromodulatorSample {
     ) -> Result<Self, ScaffoldContractError> {
         receptors.validate_contract()?;
         let mut lanes = *self.frame.lanes();
-        lanes[6] = receptors.activation_for(NeuralReceptorClass::PlasticityAppetitive);
-        lanes[7] = receptors.activation_for(NeuralReceptorClass::PlasticityAversive);
+        // Hormonal tone modulates a causally measured consequence; merely
+        // having baseline dopamine or cortisol is not an action's reward.
+        let appetitive = self.homeostatic_improvement.max(0.0);
+        let aversive = (self.pain.max(0.0)
+            + (-self.homeostatic_improvement).max(0.0)
+            + self.frustration.max(0.0))
+        .clamp(0.0, 1.0);
+        lanes[6] = appetitive * receptors.activation_for(NeuralReceptorClass::PlasticityAppetitive);
+        lanes[7] = aversive * receptors.activation_for(NeuralReceptorClass::PlasticityAversive);
         self.frame = NeuromodulatoryFrame::try_new(lanes)?;
         Ok(self)
     }
@@ -297,9 +304,10 @@ impl OutcomeCreditPacket {
             .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
         let modulator = NeuromodulatorSample::from_components(
             outcome.prediction_error.raw(),
-            physiology.aversive_harm(),
-            homeostatic_improvement(physiology),
-            outcome.frustration_delta.raw(),
+            physiology.aversive_value(),
+            physiology.homeostatic_improvement(),
+            (outcome.frustration_delta.raw() * physiology.before.value_profile().disappointment)
+                .clamp(0.0, 1.0),
             0.0,
         )?;
         Ok(Self {
@@ -498,19 +506,6 @@ impl LearningSequenceGuard {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FastWeightSemantics {
     ImmediateThreeFactor,
-}
-
-fn homeostatic_improvement(physiology: &crate::MeasuredPhysiologyTransition) -> f32 {
-    let drives = physiology.homeostatic_delta.drives;
-    // Lower aversive drives and higher ATP/energy are improvements. Curiosity,
-    // reproductive drive, pain, and extension channels are excluded here:
-    // curiosity is represented by novelty, pain has its own negative factor,
-    // and the remaining channels have no universal good direction.
-    let oriented_sum = -drives.hunger - drives.fatigue - drives.fear - drives.loneliness
-        + drives.brain_atp
-        - drives.temperature_stress
-        + physiology.energy_delta.raw();
-    (oriented_sum / 7.0).clamp(-1.0, 1.0)
 }
 
 /// Validate a packet's learning ABI before backend upload.

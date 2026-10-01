@@ -760,6 +760,10 @@ pub struct SleepWorkReceipt {
 }
 
 impl SleepWorkReceipt {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "sleep work receipt validates each independently measured counter"
+    )]
     fn new(
         tick: Tick,
         status: SleepWorkStatus,

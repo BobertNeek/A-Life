@@ -1,11 +1,11 @@
 //! Contract tests for deterministic, compiler-owned production phenotypes.
 
+use alife_core::genome::CognitiveArchitectureGenomeParameters;
 use alife_core::{
     BrainCapacityClass, BrainClassId, BrainGenome, BrainScaleTier, ContinuousLocus, CreatureGenome,
     DevelopmentState, FoundationGeneticIdentity, LegacyBrainClassAdapter, NormalizedScalar,
     PhenotypeCompiler, SensorProfile, Tick, CANDIDATE_FEATURE_COUNT,
 };
-use alife_core::genome::CognitiveArchitectureGenomeParameters;
 
 fn compile(class_id: BrainClassId, seed: u64) -> alife_core::BrainPhenotype {
     let capacity = BrainCapacityClass::production_for_id(class_id).unwrap();
@@ -113,7 +113,10 @@ fn heritable_cognitive_architecture_compiles_into_phenotype_plan() {
     assert_eq!(after.cognitive_architecture().active_concept_limit(), 24);
     assert_eq!(after.cognitive_architecture().predictor_capacity(), 32);
     assert_eq!(after.cognitive_architecture().structural_edit_budget(), 2);
-    assert_ne!(before.compiler_inputs_digest(), after.compiler_inputs_digest());
+    assert_ne!(
+        before.compiler_inputs_digest(),
+        after.compiler_inputs_digest()
+    );
     assert_ne!(before.phenotype_hash(), after.phenotype_hash());
 }
 

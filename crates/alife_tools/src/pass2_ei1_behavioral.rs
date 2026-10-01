@@ -160,7 +160,7 @@ pub fn run_planned_manifest(
             taught_token,
         )
         .map_err(core_failure)?;
-        let genome = CreatureGenome::early_mammal_founder(seed ^ 0xE11_000, foundation.clone())
+        let genome = CreatureGenome::early_mammal_founder(seed ^ 0xE11_000, foundation)
             .map_err(core_failure)?;
         let request = Era1TrialRunRequest::new(
             subject,

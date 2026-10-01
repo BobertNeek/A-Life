@@ -16,9 +16,7 @@ use alife_game_app::{
 };
 use alife_world::{AssetManifest, HeadlessActionIds, RuntimeConfig, WorldObjectKind};
 
-#[path = "../src/factorized_arbitration.rs"]
-mod factorized_arbitration;
-use factorized_arbitration::{
+use alife_core::{
     arbitrate_gpu_selected_command_into_factorized_bundle, channel_command_for_action,
     factorized_motor_channel_order,
 };
@@ -43,6 +41,7 @@ fn new_game_request(label: &str) -> CanonicalNewGameLaunchRequest {
     CanonicalNewGameLaunchRequest {
         world_seed: 240_825,
         population: 4,
+        disable_age_death: false,
         save_path: root.join("phase3-save.json"),
         asset_root: root.join("assets"),
         config,

@@ -1,0 +1,10 @@
+{
+  "source_directory": "target/founder-training/campaign-20260925-070114-57b51372/cycle-0527-recovery",
+  "source_asset_digest": "aa79a8558cac439b372cb978f99889db701ad653f85c8f8a67cca4ac1a4a336c",
+  "adapted_asset_digest": "8a10a0a5eb350f4a24f1c9535e4e4b8f1e10240da905a32a9b0c1b5a0719c6d9",
+  "founder_seed_base": 539363617,
+  "policy_version": 529,
+  "preserved_weight_count": 32768,
+  "optimizer_reset": true,
+  "founder_biology_calibration": 2
+}

@@ -34,9 +34,16 @@ for side in ['L', 'R']:
     offset = 28 + length + view.get('byteOffset', 0) + accessor.get('byteOffset', 0)
     positions = [struct.unpack_from('<3f', data, offset + i * view.get('byteStride', 12))
                  for i in range(accessor['count'])]
-    assert abs(max(p[2] for p in positions) - min(p[2] for p in positions) - 0.48) < 1e-5
+    assert abs(max(p[2] for p in positions) - min(p[2] for p in positions) - 0.72) < 1e-5
     assert len(positions) == 73
     assert all(abs(positions[i][2] - positions[i + 24][2]) < 1e-5 for i in range(49))
+    # During stance, body advance plus local foot travel must cancel. A sinusoid
+    # can pass the range/loop checks above while visibly skating in both directions.
+    start = 0 if side == 'L' else 12
+    planted = positions[start:start + 13]
+    assert max(p[1] for p in planted) - min(p[1] for p in planted) < 1e-5
+    for i, p in enumerate(planted):
+        assert abs(p[2] + .06 * i - planted[0][2]) < 1e-5
 for animation in gltf['animations']:
     assert len(animation['channels']) > 20
     assert all(gltf['accessors'][s['input']]['max'][0] > 0 for s in animation['samplers'])
@@ -47,7 +54,9 @@ for animation in gltf['animations']:
     assert {'head', 'ear.L', 'ear.R', 'tail.00'} <= scaled_bones
     rotating_bones = {gltf['nodes'][c['target']['node']].get('name')
                       for c in animation['channels'] if c['target']['path'] == 'rotation'}
-    assert {'lid_upper.L', 'lid_lower.L', 'lid_upper.R', 'lid_lower.R'} <= rotating_bones
+    # Gaze replaces the authored head yaw after sampling. Keep a rotation track
+    # in every clip so the head's nod/roll always start from that frame's pose.
+    assert {'head', 'lid_upper.L', 'lid_lower.L', 'lid_upper.R', 'lid_lower.R'} <= rotating_bones
 triangles = sum(gltf['accessors'][p['indices']]['count'] // 3
                 for m in gltf['meshes'] for p in m['primitives'])
 assert triangles <= 32768, triangles

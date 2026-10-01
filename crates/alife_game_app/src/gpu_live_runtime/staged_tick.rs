@@ -16,6 +16,10 @@ impl GpuLiveBrainRuntime {
             Option<ConsolidationIntent>,
         ) -> SleepProgressResult,
     {
+        #[cfg(feature = "foundation-training")]
+        self.last_foundation_training_steps.clear();
+        #[cfg(feature = "foundation-training")]
+        self.last_foundation_terminal_biology.clear();
         let preamble_started = Instant::now();
         let curated_first_tick_resident = match self.curated_first_tick_residency_gate() {
             Ok(receipt) => receipt.and_then(|receipt| receipt.ordered_residents.first().cloned()),
@@ -28,6 +32,9 @@ impl GpuLiveBrainRuntime {
         let curated_first_tick = curated_first_tick_resident.is_some();
         self.retire_dead_organisms()?;
         self.reconcile_population()?;
+        if let Some(prior) = self.semantic_prior.as_mut() {
+            prior.retain_lives(&self.handles);
+        }
         self.last_sealed_patches
             .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
         self.restored_replay_patches
@@ -198,18 +205,31 @@ impl GpuLiveBrainRuntime {
                 .get(&raw)
                 .is_some_and(|durable| *durable == sleep_before);
             let allow_sleep_progress = !completed_waiting_for_durable_permit;
-            // Fixed continuous-wake lab protocols suppress sleep phases but
-            // keep the production work-cost ledger. Applying the existing
-            // sleep-rate recovery prevents ecology energy exhaustion from
-            // truncating their bounded neural measurement windows.
             match brain_atp_world_tick_mode(
                 phase_before,
                 self.schedule_sleep,
                 completed_waiting_for_durable_permit,
             ) {
                 BrainAtpWorldTickMode::Charge { recover } => {
-                    self.backend
-                        .charge_world_brain_atp_tick(handle, tick_before.raw(), recover)?;
+                    if self.schedule_sleep {
+                        // Chemistry owns availability. The backend projects it
+                        // into a tick-bound budget; measured cognitive work is
+                        // charged against canonical body reserve separately.
+                        self.backend.bind_world_brain_atp_tick(
+                            handle,
+                            tick_before.raw(),
+                            record.biochemistry().homeostasis.drives.brain_atp,
+                        )?;
+                    } else {
+                        // Explicit continuous-wake lab protocols retain the
+                        // old budget policy and sleep-rate recovery so bounded
+                        // neural measurements are not truncated by exhaustion.
+                        self.backend.charge_world_brain_atp_tick(
+                            handle,
+                            tick_before.raw(),
+                            recover,
+                        )?;
+                    }
                 }
                 BrainAtpWorldTickMode::DurabilityHold => {
                     self.backend
@@ -511,6 +531,7 @@ impl GpuLiveBrainRuntime {
             let force_preparation_failure = self.forced_memory_preparation_failures.remove(&raw);
             #[cfg(not(feature = "gpu-tests"))]
             let force_preparation_failure = false;
+            let mut preparation_stage = "receptors";
             let preparation = (|| -> Result<PreparedGpuBrainFrame, ScaffoldContractError> {
                 if force_preparation_failure {
                     return Err(ScaffoldContractError::InvalidMemoryQuery);
@@ -530,6 +551,7 @@ impl GpuLiveBrainRuntime {
                 let receptor_phenotype = NeuralReceptorPhenotype::compile(&resident.phenotype)?;
                 let receptor_effects =
                     NeuralReceptorEffects::from_frame(&neural_receptors, &receptor_phenotype)?;
+                preparation_stage = "grounded draft";
                 let draft = self.world.perception_frame_draft_indexed(
                     OrganismId(raw),
                     tick_before,
@@ -537,6 +559,11 @@ impl GpuLiveBrainRuntime {
                     resident.homeostasis,
                     &perception_index,
                 )?;
+                let draft = if let Some(prior) = self.semantic_prior.as_mut() {
+                    prior.prepare(draft, ExperienceSequenceId(resident.next_sequence))?
+                } else {
+                    draft
+                };
                 grounded_perception_wall_ns = grounded_perception_wall_ns
                     .saturating_add(grounded_perception_started.map_or(0, elapsed_ns));
                 let episodic_retrieval_started = measure_preparation.then(Instant::now);
@@ -550,6 +577,7 @@ impl GpuLiveBrainRuntime {
                     .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
                 let sequence_id = ExperienceSequenceId(resident.next_sequence);
                 sequence_id.validate()?;
+                preparation_stage = "baseline recall";
                 let prepared_recall = memory.recall_frame(&draft)?;
                 let baseline_context = cognitive_context_for_recall(
                     OrganismId(raw),
@@ -557,6 +585,7 @@ impl GpuLiveBrainRuntime {
                     &prepared_recall,
                     topology,
                 )?;
+                preparation_stage = "baseline finalization";
                 let baseline_prepared = prepared_recall
                     .clone()
                     .with_cognitive_context(baseline_context.clone())?;
@@ -569,6 +598,7 @@ impl GpuLiveBrainRuntime {
                 let attention_context_started = measure_preparation.then(Instant::now);
                 let mut peripheral_summaries =
                     grounded_peripheral_summaries(draft.grounded_object_slots())?;
+                let topology_evidence = topology_evidence_for_draft(&draft, topology)?;
                 let body_need = resident
                     .homeostasis
                     .drives
@@ -581,8 +611,21 @@ impl GpuLiveBrainRuntime {
                     body_need,
                     &memory_evidence,
                     &baseline_context,
+                    &topology_evidence,
                     receptor_effects,
                 )?;
+                preparation_stage = "attention selection";
+                for summary in &mut peripheral_summaries {
+                    if let alife_core::StableFocusIdentity::TrackedObject(id) = summary.identity {
+                        summary.salience.novelty = NormalizedScalar::new(
+                            1.0 - memory.bank().object_familiarity(
+                                OrganismId(raw),
+                                id,
+                                memory.profile(),
+                            ),
+                        )?;
+                    }
+                }
                 let attention = select_focal_targets(
                     OrganismId(raw),
                     sequence_id,
@@ -592,10 +635,27 @@ impl GpuLiveBrainRuntime {
                     attention_selection_policy_for(&resident.phenotype),
                 )?;
                 resident.attention_hysteresis = attention.hysteresis;
+                preparation_stage = "focal routing";
                 let routed_draft = route_focal_candidates(draft, &attention)?;
+                let novelty = attention
+                    .focal_targets
+                    .first()
+                    .and_then(|id| match id {
+                        alife_core::StableFocusIdentity::TrackedObject(object) => Some(
+                            1.0 - memory.bank().object_familiarity(
+                                OrganismId(raw),
+                                *object,
+                                memory.profile(),
+                            ),
+                        ),
+                        _ => None,
+                    })
+                    .unwrap_or(0.0);
+                let routed_draft = routed_draft.with_remembered_novelty(novelty)?;
                 attention_context_wall_ns = attention_context_wall_ns
                     .saturating_add(attention_context_started.map_or(0, elapsed_ns));
                 let topology_concept_started = measure_preparation.then(Instant::now);
+                preparation_stage = "routed recall";
                 let routed_recall = memory.recall_frame(&routed_draft)?;
                 let cognitive_context = cognitive_context_for_recall(
                     OrganismId(raw),
@@ -605,21 +665,24 @@ impl GpuLiveBrainRuntime {
                 )?;
                 let cognitive_context =
                     cognitive_context_with_attention(cognitive_context, attention)?;
+                preparation_stage = "cognitive projection";
                 let cognitive_projection = cognitive_projection_for_draft(
                     &routed_draft,
                     &routed_recall,
                     sequence_id,
                     &resident.predictor,
-                    topology,
+                    &topology_evidence,
                 )?;
                 let cognitive_context =
                     cognitive_context_with_projection(cognitive_context, cognitive_projection)?;
+                preparation_stage = "routed finalization";
                 let prepared_recall = routed_recall.with_cognitive_context(cognitive_context)?;
                 let (frame, memory_recall) = prepared_recall.finalize(routed_draft)?;
                 memory_recall.validate_for_frame(&frame)?;
                 topology_concept_wall_ns = topology_concept_wall_ns
                     .saturating_add(topology_concept_started.map_or(0, elapsed_ns));
                 let gpu_upload_started = measure_preparation.then(Instant::now);
+                preparation_stage = "GPU memory upload";
                 let memory_upload = self
                     .backend
                     .prepare_memory_context_upload(handle, &frame, &memory_recall)?
@@ -640,6 +703,9 @@ impl GpuLiveBrainRuntime {
             match preparation {
                 Ok(prepared) => batch.push(prepared),
                 Err(error) => {
+                    if std::env::var_os("ALIFE_FOUNDATION_PROFILE").is_some() {
+                        eprintln!("foundation perception preparation failed at {tick_before:?} in {preparation_stage}: {error:?}");
+                    }
                     self.last_memory_preparation_errors
                         .push((OrganismId(raw), error));
                     summaries_by_organism.insert(
@@ -784,20 +850,90 @@ impl GpuLiveBrainRuntime {
                 })?;
             let memory_batch = GpuClosedLoopMemoryBatchInput::try_new(memory_inputs)?;
             let inference_rows = u64::try_from(batch.len()).unwrap_or(u64::MAX);
+            #[cfg(feature = "foundation-training")]
+            let before_training = if self.training_sampling.is_some() {
+                batch
+                    .iter()
+                    .map(|prepared| {
+                        self.backend
+                            .capture_training_state(prepared.handle, prepared.frame.tick())
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+            } else {
+                Vec::new()
+            };
             let inference_started = Instant::now();
-            #[cfg(all(test, feature = "gpu-tests"))]
+            #[cfg(all(test, feature = "gpu-tests", not(feature = "foundation-training")))]
             let gpu_ticks = super::action_credit_food_tests::tick_with_selector_capture(
                 &mut self.backend,
                 &memory_batch,
                 &batch,
             )?;
-            #[cfg(not(all(test, feature = "gpu-tests")))]
+            #[cfg(all(
+                not(all(test, feature = "gpu-tests")),
+                not(feature = "foundation-training")
+            ))]
             let gpu_ticks = self
                 .backend
                 .tick_memory_batch(&memory_batch)
                 .map_err(|error| GameAppShellError::InvalidProductionFrontend {
                     message: format!("neural execution failed: {error}"),
                 })?;
+            #[cfg(feature = "foundation-training")]
+            let gpu_ticks = if let Some(sampling) = self.training_sampling {
+                let count = u32::try_from(batch.len())
+                    .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
+                let next_counter = sampling
+                    .counter
+                    .checked_add(count)
+                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                let mut configs = Vec::with_capacity(batch.len());
+                for (index, prepared) in batch.iter().enumerate() {
+                    let demonstrator = match self.training_demonstrator.as_mut() {
+                        Some(teacher) => Some(teacher(
+                            &prepared.frame,
+                            self.backend
+                                .training_enabled_motor_channels(prepared.handle)?,
+                        )?),
+                        None => sampling.demonstrator,
+                    };
+                    configs.push(alife_gpu_backend::GpuTrainingSamplingConfig {
+                        counter: sampling.counter + index as u32,
+                        demonstrator,
+                        ..sampling
+                    });
+                }
+                self.training_sampling
+                    .as_mut()
+                    .expect("training enabled")
+                    .counter = next_counter;
+                self.backend
+                    .tick_memory_batch_training(&memory_batch, &configs)?
+            } else {
+                self.backend.tick_memory_batch(&memory_batch)?
+            };
+            #[cfg(feature = "foundation-training")]
+            let mut training_rows = Vec::new();
+            #[cfg(feature = "foundation-training")]
+            for ((prepared, gpu_tick), before) in batch.iter().zip(&gpu_ticks).zip(before_training)
+            {
+                let behavior = gpu_tick
+                    .training_rollout
+                    .clone()
+                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                let after = self
+                    .backend
+                    .capture_training_state(prepared.handle, prepared.frame.tick())?;
+                training_rows.push((
+                    prepared.frame.clone(),
+                    prepared.memory_upload.clone(),
+                    before,
+                    after,
+                    behavior,
+                    gpu_tick.work.clone(),
+                    gpu_tick.throttle.clone(),
+                ));
+            }
             self.performance_metrics.inference_batches =
                 self.performance_metrics.inference_batches.saturating_add(1);
             self.performance_metrics.inference_rows = self
@@ -815,10 +951,48 @@ impl GpuLiveBrainRuntime {
             }
             self.record_gpu_tick_metrics(&gpu_ticks)?;
             let rows = batch.into_iter().zip(gpu_ticks).collect();
-            self.process_selection_batch_in_staged_tick(rows)
+            let summaries = self
+                .process_selection_batch_in_staged_tick(rows)
                 .map_err(|error| GameAppShellError::InvalidProductionFrontend {
                     message: format!("selected action processing failed: {error}"),
-                })?
+                })?;
+            #[cfg(feature = "foundation-training")]
+            for (frame, memory_upload, before, after_inference, behavior, work, throttle) in
+                training_rows
+            {
+                let patch = self
+                    .last_sealed_patches
+                    .iter()
+                    .find(|patch| {
+                        patch.header().organism_id == frame.organism_id()
+                            && patch.outcome().outcome_tick == tick_after
+                    })
+                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?
+                    .clone();
+                if !self.last_learning_receipts.iter().any(|receipt| {
+                    receipt.handle.organism_id() == frame.organism_id()
+                        && receipt.dispatch_generation == behavior.dispatch_generation
+                        && receipt.sequence_id == patch.header().sequence_id
+                }) || before.active_weight_generation != behavior.active_weight_generation
+                    || after_inference.active_weight_generation != behavior.active_weight_generation
+                    || after_inference.logical_dispatch_generation != behavior.dispatch_generation
+                {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+                }
+                self.last_foundation_training_steps
+                    .push(FoundationTrainingStep {
+                        outcome_credit: alife_core::OutcomeCreditPacket::from_sealed_patch(&patch)?,
+                        frame,
+                        memory_upload,
+                        before,
+                        after_inference,
+                        behavior,
+                        work,
+                        throttle,
+                        patch,
+                    });
+            }
+            summaries
         };
         for summary in awake_summaries {
             summaries_by_organism.insert(summary.organism_id.raw(), summary);

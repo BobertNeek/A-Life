@@ -24,10 +24,57 @@ use crate::{GpuDurableSaveManifest, GpuLiveBrainRuntime};
 pub struct CanonicalNewGameLaunchRequest {
     pub world_seed: u64,
     pub population: u16,
+    pub disable_age_death: bool,
     pub save_path: PathBuf,
     pub asset_root: PathBuf,
     pub config: RuntimeConfig,
     pub assets: AssetManifest,
+}
+
+/// Explicit launch choice. Experimental candidates are never the default and
+/// loaded individuals always use their saved genome, not this selection.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum NewGameFounderSelection {
+    #[default]
+    BuiltinNano512,
+    ScaledChoiceNociceptiveV1,
+    N2048Candidate {
+        asset_path: PathBuf,
+    },
+}
+
+impl NewGameFounderSelection {
+    pub fn parse(value: &str) -> Result<Self, GameAppShellError> {
+        match value {
+            "builtin-nano512" => Ok(Self::BuiltinNano512),
+            "scaled-choice-nociceptive-v1" => Ok(Self::ScaledChoiceNociceptiveV1),
+            _ if value.starts_with("n2048:") && value.len() > "n2048:".len() => {
+                Ok(Self::N2048Candidate {
+                    asset_path: PathBuf::from(&value["n2048:".len()..]),
+                })
+            }
+            _ => Err(invalid_launch("unknown New Game founder selection")),
+        }
+    }
+}
+
+fn scaled_choice_candidate() -> Result<alife_core::Nano512ActionCreditCandidateV2, GameAppShellError>
+{
+    let asset = FoundationWeightAsset::decode_canonical(include_bytes!(
+        "../../../assets/founders/scaled-choice-nociceptive-v1/candidate.alife-foundation"
+    ))?;
+    if asset.digest().bytes()
+        != &[
+            162, 205, 184, 109, 162, 15, 136, 4, 200, 120, 232, 83, 105, 194, 153, 231, 150, 181,
+            202, 200, 230, 97, 59, 164, 174, 244, 52, 65, 167, 166, 238, 30,
+        ]
+    {
+        return Err(invalid_launch("bundled founder candidate digest mismatch"));
+    }
+    Ok(alife_core::Nano512ActionCreditCandidateV2::new(
+        &asset,
+        alife_core::ActionCandidateCreditProfileV1::SignedChoiceReadouts,
+    )?)
 }
 
 #[derive(Debug, Clone)]
@@ -51,15 +98,37 @@ pub struct CanonicalNewGameLaunchResult {
 pub fn stage_phase3_new_game(
     request: CanonicalNewGameLaunchRequest,
 ) -> Result<StagedCanonicalNewGame, GameAppShellError> {
+    stage_phase3_new_game_with_founder(request, NewGameFounderSelection::default())
+}
+
+pub fn stage_phase3_new_game_with_founder(
+    request: CanonicalNewGameLaunchRequest,
+    founder: NewGameFounderSelection,
+) -> Result<StagedCanonicalNewGame, GameAppShellError> {
     validate_stage_request(&request)?;
 
-    let foundation =
-        FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1)?;
-    let mut game = create_canonical_new_game(
-        &CanonicalNewGameConfig::phase3(request.world_seed, request.population)?,
-        &foundation,
-    )?;
+    let mut config = CanonicalNewGameConfig::phase3(request.world_seed, request.population)?;
+    let mut game = match founder {
+        NewGameFounderSelection::BuiltinNano512 => create_canonical_new_game(
+            &config,
+            &FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1)?,
+        )?,
+        NewGameFounderSelection::ScaledChoiceNociceptiveV1 => {
+            alife_world::create_canonical_new_game_with_nociceptive_candidate(
+                &config,
+                &scaled_choice_candidate()?,
+            )?
+        }
+        NewGameFounderSelection::N2048Candidate { asset_path } => {
+            config.brain_class = BrainScaleTier::Standard2048;
+            let asset = FoundationWeightAsset::decode_canonical(&fs::read(asset_path)?)?;
+            config.sensor_profile = asset.manifest().sensor_profile();
+            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?
+        }
+    };
     game.world.enable_highlands_for_new_game()?;
+    game.world
+        .set_age_death_disabled_for_new_game(request.disable_age_death)?;
     if game.world.organism_registry().len() != usize::from(request.population)
         || game.creatures.len() != usize::from(request.population)
         || game.receipt.founders.len() != usize::from(request.population)
@@ -69,10 +138,12 @@ pub fn stage_phase3_new_game(
         ));
     }
 
+    let mut runtime_config = request.config;
+    runtime_config.brain_class = config.brain_class;
     let save = PortableSaveFile::from_headless_world(
         format!("phase3-new-game-{}", request.world_seed),
         &game.world,
-        request.config,
+        runtime_config,
         request.assets,
         game.creatures,
     )?;
@@ -91,22 +162,44 @@ pub fn stage_phase3_new_game(
 pub fn create_canonical_new_game_runtime(
     request: CanonicalNewGameLaunchRequest,
 ) -> Result<CanonicalNewGameLaunchResult, GameAppShellError> {
-    create_canonical_new_game_runtime_inner(request, false)
+    create_canonical_new_game_runtime_with_founder(request, NewGameFounderSelection::default())
+}
+
+#[cfg(feature = "gpu-runtime")]
+pub fn create_canonical_new_game_runtime_with_founder(
+    request: CanonicalNewGameLaunchRequest,
+    founder: NewGameFounderSelection,
+) -> Result<CanonicalNewGameLaunchResult, GameAppShellError> {
+    create_canonical_new_game_runtime_inner(request, founder, false)
 }
 
 #[cfg(feature = "gpu-tests")]
 pub fn create_canonical_new_game_runtime_with_forced_late_failure_for_test(
     request: CanonicalNewGameLaunchRequest,
 ) -> Result<CanonicalNewGameLaunchResult, GameAppShellError> {
-    create_canonical_new_game_runtime_inner(request, true)
+    create_canonical_new_game_runtime_inner(request, NewGameFounderSelection::default(), true)
 }
 
 #[cfg(feature = "gpu-runtime")]
 fn create_canonical_new_game_runtime_inner(
     request: CanonicalNewGameLaunchRequest,
+    founder: NewGameFounderSelection,
     force_late_failure_for_test: bool,
 ) -> Result<CanonicalNewGameLaunchResult, GameAppShellError> {
-    let staged = stage_phase3_new_game(request)?;
+    let brain_class = match &founder {
+        NewGameFounderSelection::N2048Candidate { .. } => BrainScaleTier::Standard2048,
+        _ => BrainScaleTier::Nano512,
+    };
+    let staged = stage_phase3_new_game_with_founder(request, founder)?;
+    let sensor_profile = staged
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .and_then(|record| record.genome().n2048_foundation_candidate.as_ref())
+        .map_or(SensorProfile::GroundedObjectSlotsV1, |asset| {
+            asset.manifest().sensor_profile()
+        });
     let staging_path = staging_save_path(&staged.save_path)?;
     let archive_root = lineage_archive_root(&staged.save_path)?;
     if staging_path.exists() || archive_root.exists() {
@@ -129,8 +222,8 @@ fn create_canonical_new_game_runtime_inner(
             backend,
             staged.world,
             staged.save.deterministic_seed,
-            BrainScaleTier::Nano512,
-            SensorProfile::GroundedObjectSlotsV1,
+            brain_class,
+            sensor_profile,
             LineageLibraryConfig::profile_default(&archive_root),
             format!("phase3-new-game-{}", staged.save.deterministic_seed),
             ArchiveLearnedCapturePolicy::GeneticOnly,
@@ -252,6 +345,128 @@ fn validate_stage_request(
 fn invalid_launch(message: &str) -> GameAppShellError {
     GameAppShellError::InvalidProductionFrontend {
         message: message.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alife_core::{
+        BrainCapacityClass, BrainGenome, DevelopmentState, NormalizedScalar, OrganismId,
+        PhenotypeCompiler, Tick, TrainingStageManifest,
+    };
+
+    #[test]
+    fn n2048_new_game_save_reload_preserves_exact_candidate_and_class() {
+        let seed = 240_826;
+        let capacity = BrainCapacityClass::n2048();
+        let genome = BrainGenome::scaffold(seed, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        let native = PhenotypeCompiler::compile_testing_procedural_baseline(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let source = FoundationWeightAsset::from_phenotype_for_genetic_birth(&native).unwrap();
+        let (baseline, _) = PhenotypeCompiler::compile_n2048_foundation_candidate(
+            genome,
+            development,
+            source.clone(),
+        )
+        .unwrap();
+        let mut weights = source.weights().to_vec();
+        weights[0] = f32::from_bits(weights[0].to_bits() ^ 1);
+        let candidate = FoundationWeightAsset::from_trained_weights(
+            &baseline,
+            weights,
+            TrainingStageManifest::bootstrap(),
+        )
+        .unwrap();
+        assert_ne!(candidate.digest(), source.digest());
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alife-n2048-new-game-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&root).unwrap();
+        let candidate_path = root.join("candidate.alife-foundation");
+        fs::write(&candidate_path, candidate.encode_canonical().unwrap()).unwrap();
+        let mut config = RuntimeConfig::deterministic_default(seed, BrainScaleTier::Nano512);
+        config.features.gpu_backend_enabled = true;
+        let staged = stage_phase3_new_game_with_founder(
+            CanonicalNewGameLaunchRequest {
+                world_seed: seed,
+                population: 1,
+                disable_age_death: true,
+                save_path: root.join("world.json"),
+                asset_root: root.clone(),
+                config,
+                assets: AssetManifest::empty(),
+            },
+            NewGameFounderSelection::parse(&format!("n2048:{}", candidate_path.display())).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(staged.save.config.brain_class, BrainScaleTier::Standard2048);
+        assert_eq!(
+            staged.save.creatures[0].brain_class,
+            BrainScaleTier::Standard2048
+        );
+        staged.save.to_json_file(&staged.save_path).unwrap();
+        // Loading must depend on the saved genome, not the original CLI asset path.
+        fs::remove_file(&candidate_path).unwrap();
+        let loaded = PortableSaveFile::from_json_file(&staged.save_path).unwrap();
+        loaded.validate_with_asset_root(&root).unwrap();
+        assert_eq!(loaded.config.brain_class, BrainScaleTier::Standard2048);
+        let world = loaded.restore_headless_world().unwrap();
+        assert!(world.age_death_disabled());
+        assert_eq!(
+            world.canonical_signature_digest().unwrap(),
+            staged.world.canonical_signature_digest().unwrap()
+        );
+        let admission = world
+            .organism_registry()
+            .get(OrganismId(1))
+            .unwrap()
+            .authoritative_admission_at(world.tick())
+            .unwrap();
+        let restored_asset = admission.genome.n2048_foundation_candidate.unwrap();
+        assert_eq!(
+            restored_asset.encode_canonical().unwrap(),
+            candidate.encode_canonical().unwrap()
+        );
+        let brain_genome = admission.phenotype.brain_genome;
+        let development = DevelopmentState::new(
+            brain_genome.id,
+            Tick::ZERO,
+            NormalizedScalar::new(1.0).unwrap(),
+        );
+        let (compiled, _) = PhenotypeCompiler::compile_n2048_foundation_candidate(
+            brain_genome,
+            development,
+            restored_asset,
+        )
+        .unwrap();
+        assert_eq!(compiled.brain_class_id(), BrainCapacityClass::N2048_ID);
+        assert_eq!(
+            compiled
+                .synapses()
+                .iter()
+                .map(|synapse| synapse.genetic_weight().to_bits())
+                .collect::<Vec<_>>(),
+            candidate
+                .weights()
+                .iter()
+                .map(|weight| weight.to_bits())
+                .collect::<Vec<_>>()
+        );
+        fs::remove_file(&staged.save_path).unwrap();
+        fs::remove_dir(&root).unwrap();
     }
 }
 
@@ -378,7 +593,7 @@ fn remove_transaction_file(path: &Path) -> Result<(), GameAppShellError> {
         Ok(_) => {
             return Err(invalid_launch(
                 "New Game manifest rollback target is not a file",
-            ))
+            ));
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
@@ -396,7 +611,7 @@ fn remove_transaction_tree(path: &Path) -> Result<(), GameAppShellError> {
         Ok(_) => {
             return Err(invalid_launch(
                 "New Game lineage rollback target is not a directory",
-            ))
+            ));
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),

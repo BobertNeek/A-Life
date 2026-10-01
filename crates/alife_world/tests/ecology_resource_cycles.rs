@@ -120,6 +120,27 @@ fn hazard_zone_pressure_is_negative_bounded_and_visible_to_sensory_report() {
 
 #[test]
 fn spawn_policy_and_world_caps_are_deterministic_and_bounded() {
+    let mut namespaces = HeadlessScenarioBuilder::new(8_081)
+        .terrain_zone(
+            1,
+            "grove",
+            TerrainZoneKind::Grove,
+            pos(0.0, 0.0),
+            2.0,
+            0.9,
+            0.0,
+        )
+        .resource_spawn_policy("seed", 1, 1, 2, 0.4)
+        .resource_spawn_policy("seed-food", 1, 1, 1, 0.4)
+        .build()
+        .unwrap();
+    namespaces.try_advance_tick().unwrap();
+    namespaces.try_advance_tick().unwrap();
+    assert!(
+        namespaces.entity_id("seed-1").is_some(),
+        "a different rule's food must not consume this rule's quota"
+    );
+    assert!(namespaces.entity_id("seed-food-0").is_some());
     let config = EcologyConfig {
         max_world_objects: 3,
         max_resource_records: 2,
@@ -194,6 +215,31 @@ fn save_load_preserves_ecology_state_and_resource_lifecycle() {
 #[test]
 fn invalid_or_unsupported_ecology_inputs_are_rejected() {
     let mut world = ecology_world();
+    let policy = ResourceSpawnPolicy {
+        label_prefix: "bounded".to_string(),
+        zone_id: EcologyZoneId(1),
+        interval_ticks: 1,
+        max_active: 1,
+        nutrition: 0.5,
+        next_spawn_tick: Tick::ZERO,
+        spawned_count: 0,
+    };
+    let mut ecology = world.ecology().clone();
+    ecology.config.max_resource_records = 2;
+    ecology.add_spawn_policy(policy.clone()).unwrap();
+    let before = ecology.clone();
+    let mut duplicate = policy.clone();
+    duplicate.zone_id = EcologyZoneId(2);
+    assert!(ecology.add_spawn_policy(duplicate).is_err());
+    assert_eq!(ecology, before);
+    let mut second = policy.clone();
+    second.label_prefix = "second".to_string();
+    ecology.add_spawn_policy(second).unwrap();
+    let mut excess = policy;
+    excess.label_prefix = "excess".to_string();
+    assert!(ecology.add_spawn_policy(excess.clone()).is_err());
+    ecology.spawn_policies.push(excess);
+    assert!(ecology.validate().is_err());
     assert!(world
         .add_resource_spawn_policy(ResourceSpawnPolicy {
             label_prefix: String::new(),

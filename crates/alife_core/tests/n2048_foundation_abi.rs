@@ -589,6 +589,47 @@ fn production_n2048_birth_rejects_missing_or_mismatched_foundation_asset_before_
 }
 
 #[test]
+fn explicit_n2048_candidate_preserves_exact_weights_and_compiler_resume_identity() {
+    let capacity = BrainCapacityClass::n2048();
+    let genome = BrainGenome::scaffold(0xF0A0_CA11, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+    let baseline = PhenotypeCompiler::compile_testing_procedural_baseline(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+    )
+    .unwrap();
+    let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&baseline).unwrap();
+    let (candidate, inputs) =
+        PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset.clone())
+            .unwrap();
+    assert_eq!(
+        candidate
+            .synapses()
+            .iter()
+            .map(|s| s.genetic_weight().to_bits())
+            .collect::<Vec<_>>(),
+        asset
+            .weights()
+            .iter()
+            .map(|w| w.to_bits())
+            .collect::<Vec<_>>()
+    );
+    let bytes = serde_json::to_vec(&inputs).unwrap();
+    let restored: alife_core::PhenotypeCompilerInputs = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(restored, inputs);
+    assert_eq!(
+        PhenotypeCompiler::compile_validated(&restored, &capacity).unwrap(),
+        candidate
+    );
+    let mut forged = serde_json::to_value(&inputs).unwrap();
+    forged["n2048_candidate_asset"]["weights"][0] = serde_json::json!(0.123456);
+    assert!(serde_json::from_value::<alife_core::PhenotypeCompilerInputs>(forged).is_err());
+}
+
+#[test]
 fn one_n2048_foundation_asset_reuses_stable_addresses_across_distinct_genomes() {
     let capacity = BrainCapacityClass::n2048();
     let foundation_genome = BrainGenome::scaffold(0xF0A0_DA73, capacity.id());

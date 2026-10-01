@@ -158,6 +158,7 @@ dependencies = [
  "bevy_asset_loader",
  "bevy_egui",
  "bevy_hanabi",
+ "bincode",
  "blake3",
  "image",
  "serde",
@@ -165,6 +166,7 @@ dependencies = [
  "thiserror 2.0.18",
  "wgpu 27.0.1",
  "windows-sys 0.61.2",
+ "zstd",
 ]
 
 [[package]]

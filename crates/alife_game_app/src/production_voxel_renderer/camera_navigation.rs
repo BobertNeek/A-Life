@@ -1,6 +1,7 @@
 //! Camera input in game-window coordinates, independent of monitor layout.
 
 use super::*;
+use crate::terrain_lighting::PRODUCTION_CAMERA_MAX_ZOOM;
 
 pub(super) fn zoom_camera(
     mut wheel: bevy::prelude::MessageReader<bevy::input::mouse::MouseWheel>,
@@ -13,7 +14,8 @@ pub(super) fn zoom_camera(
     }
     for mut projection in &mut cameras {
         if let Projection::Orthographic(camera) = &mut *projection {
-            camera.scale = (camera.scale * (-delta * 0.10).exp()).clamp(0.35, 3.5);
+            camera.scale =
+                (camera.scale * (-delta * 0.10).exp()).clamp(0.35, PRODUCTION_CAMERA_MAX_ZOOM);
         }
     }
 }

@@ -371,11 +371,12 @@ impl Default for ProductionCuratedFounderResetResultResource {
 }
 
 #[cfg(feature = "gpu-runtime")]
-#[derive(Debug, Clone, PartialEq, Eq, Resource)]
+#[derive(Debug, Clone, PartialEq, Resource)]
 pub(crate) struct ProductionGpuBrainTickScheduleResource {
     startup_render_frames_remaining: u8,
     playback: RuntimePlaybackState,
-    run_speed_ticks: u32,
+    run_mode: crate::ProductionRunMode,
+    animation_speed: f32,
     step_pending: bool,
     scheduler: crate::DoubleBufferedGraphicalScheduler,
     scheduler_attempts: u64,
@@ -388,6 +389,7 @@ pub(crate) struct ProductionGpuBrainTickScheduleResource {
 #[cfg(feature = "gpu-runtime")]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct ProductionGpuTickPerformanceCounters {
+    pub run_mode: crate::ProductionRunMode,
     pub fixed_tick_hz: u32,
     pub frames_observed: u64,
     pub completed_ticks: u64,
@@ -405,7 +407,8 @@ impl ProductionGpuBrainTickScheduleResource {
         Self {
             startup_render_frames_remaining: startup_render_frames,
             playback: RuntimePlaybackState::Running,
-            run_speed_ticks: 1,
+            run_mode: crate::ProductionRunMode::OneX,
+            animation_speed: 0.0,
             step_pending: false,
             scheduler: crate::DoubleBufferedGraphicalScheduler::default(),
             scheduler_attempts: 0,
@@ -419,11 +422,11 @@ impl ProductionGpuBrainTickScheduleResource {
     fn new_with_playback(
         startup_render_frames: u8,
         playback: RuntimePlaybackState,
-        run_speed_ticks: u32,
+        run_mode: crate::ProductionRunMode,
     ) -> Self {
         let mut schedule = Self::new(startup_render_frames);
         schedule.playback = playback;
-        schedule.run_speed_ticks = run_speed_ticks.clamp(1, crate::S02_MAX_RUN_TICKS_PER_UPDATE);
+        schedule.run_mode = run_mode;
         schedule
     }
 
@@ -453,26 +456,50 @@ impl ProductionGpuBrainTickScheduleResource {
         self.playback = RuntimePlaybackState::Paused;
     }
 
-    /// Updates the running rate without changing the paused/running state.
-    pub(crate) fn set_running_speed(&mut self, ticks: u32) {
-        self.run_speed_ticks = ticks.clamp(1, crate::S02_MAX_RUN_TICKS_PER_UPDATE);
+    /// Mode switches discard wall-clock debt; acceleration never invents missed time.
+    pub(crate) fn set_run_mode(&mut self, mode: crate::ProductionRunMode) {
+        self.run_mode = mode;
+        self.scheduler.accumulator_micros = 0;
     }
 
-    pub(crate) fn reset_after_load(&mut self, playback: RuntimePlaybackState, speed_ticks: u32) {
-        *self =
-            Self::new_with_playback(PRODUCTION_GPU_STARTUP_RENDER_FRAMES, playback, speed_ticks);
+    pub(crate) fn reset_after_load(
+        &mut self,
+        playback: RuntimePlaybackState,
+        mode: crate::ProductionRunMode,
+    ) {
+        *self = Self::new_with_playback(PRODUCTION_GPU_STARTUP_RENDER_FRAMES, playback, mode);
     }
 
     pub(crate) fn is_paused(&self) -> bool {
         self.playback == RuntimePlaybackState::Paused
     }
 
-    pub(crate) fn speed_ticks(&self) -> u32 {
-        self.run_speed_ticks
+    pub(crate) fn run_mode(&self) -> crate::ProductionRunMode {
+        self.run_mode
+    }
+    pub(crate) fn animation_speed(&self) -> f32 {
+        self.animation_speed
+    }
+
+    fn observe_frame(&mut self, delta_seconds: f32) -> Result<u32, GameAppShellError> {
+        let max_mode = self.run_mode != crate::ProductionRunMode::OneX;
+        let plan = self.scheduler.observe_render_frame(
+            if max_mode { 0.0 } else { delta_seconds },
+            self.playback,
+            1,
+        )?;
+        Ok(
+            if max_mode && self.playback == RuntimePlaybackState::Running {
+                crate::CA13_MAX_CATCH_UP_TICKS_PER_FRAME
+            } else {
+                plan.ticks_to_run
+            },
+        )
     }
 
     pub(crate) fn performance_counters(&self) -> ProductionGpuTickPerformanceCounters {
         ProductionGpuTickPerformanceCounters {
+            run_mode: self.run_mode,
             fixed_tick_hz: self.scheduler.config.fixed_tick_hz,
             frames_observed: self.scheduler.frames_observed,
             completed_ticks: self.scheduler.ticks_executed,
@@ -662,12 +689,10 @@ fn tick_production_gpu_brain(
         }
     }
 
+    schedule.animation_speed = 0.0;
     let playback = schedule.playback;
-    let speed = schedule.run_speed_ticks;
-    let plan = match schedule
-        .scheduler
-        .observe_render_frame(time.delta_secs(), playback, speed)
-    {
+    let max_mode = schedule.run_mode != crate::ProductionRunMode::OneX;
+    let scheduled_ticks = match schedule.observe_frame(time.delta_secs()) {
         Ok(plan) => plan,
         Err(error) => {
             schedule.failed = true;
@@ -682,14 +707,14 @@ fn tick_production_gpu_brain(
         return;
     }
     let (planned_ticks, consume_step) =
-        production_tick_decision(playback, schedule.step_pending, plan.ticks_to_run);
+        production_tick_decision(playback, schedule.step_pending, scheduled_ticks);
     if consume_step {
         schedule.step_pending = false;
     }
-    let (ticks_to_run, paced_deferred_ticks) = if consume_step {
+    let (ticks_to_run, paced_deferred_ticks) = if consume_step || max_mode {
         (planned_ticks, 0)
     } else {
-        let max_ticks_this_frame = schedule.run_speed_ticks;
+        let max_ticks_this_frame = 1;
         match schedule
             .scheduler
             .pace_planned_ticks(planned_ticks, max_ticks_this_frame)
@@ -709,6 +734,7 @@ fn tick_production_gpu_brain(
         .deferred_catch_up_ticks
         .saturating_add(u64::from(paced_deferred_ticks));
 
+    let frame_started = Instant::now();
     for attempt_index in 0..ticks_to_run {
         schedule.scheduler_attempts = schedule.scheduler_attempts.saturating_add(1);
         let tick_summaries = match runtime.runtime.tick_outcome() {
@@ -720,7 +746,7 @@ fn tick_production_gpu_brain(
                     schedule.checkpoint_publication_waits.saturating_add(1);
                 if consume_step {
                     schedule.step_pending = true;
-                } else {
+                } else if !max_mode {
                     let unspent = ticks_to_run.saturating_sub(attempt_index);
                     if let Err(error) = schedule.scheduler.preserve_unspent_planned_ticks(unspent) {
                         schedule.failed = true;
@@ -775,6 +801,8 @@ fn tick_production_gpu_brain(
             );
             return;
         }
+        schedule.animation_speed +=
+            1.0 / (crate::CA13_FIXED_SIM_TICK_HZ as f32 * time.delta_secs().max(f32::EPSILON));
         let retired_ids = runtime.runtime.take_presentation_retirements();
         apply_presentation_retirements(
             &mut commands,
@@ -802,6 +830,11 @@ fn tick_production_gpu_brain(
                 return;
             }
         }
+        // Yield to controls/rendering between bounded batches. No multiplier or
+        // wall-time target limits Max speed; slow hardware still yields every tick.
+        if max_mode && frame_started.elapsed() >= Duration::from_millis(8) {
+            break;
+        }
     }
 }
 
@@ -810,73 +843,86 @@ pub fn build_production_voxel_frontend_app_shell(
 ) -> Result<(App, crate::ProductionVoxelLaunchSummary), GameAppShellError> {
     #[cfg(feature = "gpu-runtime")]
     {
-        if let crate::ProductionWorldSource::NewGame { seed } = launch.world_source {
-            let save_path = launch.canonical_new_game_save_path()?;
-            let save_directory =
-                save_path
-                    .parent()
-                    .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
-                        message: "canonical New Game save path requires a parent directory"
-                            .to_string(),
-                    })?;
-            std::fs::create_dir_all(save_directory)?;
-            let assets =
-                alife_world::AssetManifest::from_json_file(&launch.app_launch.asset_manifest_path)?;
-            assets.validate_with_root(&launch.app_launch.asset_root)?;
-            let mut config = alife_world::RuntimeConfig::deterministic_default(
-                seed,
-                alife_core::BrainScaleTier::Nano512,
-            );
-            config.features.gpu_backend_enabled = true;
-            let created =
-                crate::create_canonical_new_game_runtime(crate::CanonicalNewGameLaunchRequest {
-                    world_seed: seed,
-                    population: launch.effective_population(),
-                    save_path,
-                    asset_root: launch.app_launch.asset_root.clone(),
-                    config,
-                    assets,
-                })?;
-            let exact_save = created.exact_save.clone();
-            let mut admitted_launch = launch.clone();
-            admitted_launch.app_launch.save_path = created.save_path;
-            let summary = crate::run_production_voxel_frontend_preflight(&admitted_launch)?;
-            let persisted = PortableSaveFile::from_json_file(&summary.save_path)?;
-            if persisted != exact_save {
-                return Err(GameAppShellError::InvalidProductionFrontend {
-                    message: "production New Game preflight changed the exact canonical save"
-                        .to_string(),
-                });
-            }
-            return build_production_voxel_frontend_app_shell_inner(
-                &admitted_launch,
-                summary,
-                created.runtime,
-            );
-        }
-
-        let summary = crate::run_production_voxel_frontend_preflight(launch)?;
-        let runtime_launch = prepare_production_gpu_runtime_launch(launch, &summary)?;
-        let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required(
-            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
-        )
-        .map_err(|error| GameAppShellError::NeuralBackendUnavailable {
-            message: error.to_string(),
-        })?;
-        let mut runtime = crate::GpuLiveBrainRuntime::from_p34_launch(backend, &runtime_launch)?;
-        runtime.attach_lineage_archive(
-            alife_archive::LineageLibraryConfig::profile_default(
-                crate::production_conversation_lineage_ui::default_lineage_root(),
-            ),
-            alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
-        )?;
-        return build_production_voxel_frontend_app_shell_inner(launch, summary, runtime);
+        let (admitted, summary, runtime) = prepare_production_runtime(launch)?;
+        return build_production_voxel_frontend_app_shell_inner(&admitted, summary, runtime);
     }
     #[cfg(not(feature = "gpu-runtime"))]
     {
         let summary = crate::run_production_voxel_frontend_preflight(launch)?;
         build_production_voxel_frontend_app_shell_inner(launch, summary)
     }
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn prepare_production_runtime(
+    launch: &ProductionVoxelLaunchConfig,
+) -> Result<
+    (
+        ProductionVoxelLaunchConfig,
+        ProductionVoxelLaunchSummary,
+        crate::GpuLiveBrainRuntime,
+    ),
+    GameAppShellError,
+> {
+    if let crate::ProductionWorldSource::NewGame { seed } = launch.world_source {
+        let save_path = launch.canonical_new_game_save_path()?;
+        let save_directory =
+            save_path
+                .parent()
+                .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
+                    message: "canonical New Game save path requires a parent directory".to_string(),
+                })?;
+        std::fs::create_dir_all(save_directory)?;
+        let assets =
+            alife_world::AssetManifest::from_json_file(&launch.app_launch.asset_manifest_path)?;
+        assets.validate_with_root(&launch.app_launch.asset_root)?;
+        let mut config = alife_world::RuntimeConfig::deterministic_default(
+            seed,
+            alife_core::BrainScaleTier::Nano512,
+        );
+        config.features.gpu_backend_enabled = true;
+        let created = crate::create_canonical_new_game_runtime_with_founder(
+            crate::CanonicalNewGameLaunchRequest {
+                world_seed: seed,
+                population: launch.effective_population(),
+                disable_age_death: launch.disable_age_death.unwrap_or(true),
+                save_path,
+                asset_root: launch.app_launch.asset_root.clone(),
+                config,
+                assets,
+            },
+            launch.new_game_founder.clone(),
+        )?;
+        let exact_save = created.exact_save.clone();
+        let mut admitted_launch = launch.clone();
+        admitted_launch.app_launch.save_path = created.save_path;
+        let summary = crate::run_production_voxel_frontend_preflight(&admitted_launch)?;
+        let persisted = PortableSaveFile::from_json_file(&summary.save_path)?;
+        if persisted != exact_save {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "production New Game preflight changed the exact canonical save"
+                    .to_string(),
+            });
+        }
+        return Ok((admitted_launch, summary, created.runtime));
+    }
+
+    let summary = crate::run_production_voxel_frontend_preflight(launch)?;
+    let runtime_launch = prepare_production_gpu_runtime_launch(launch, &summary)?;
+    let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required(
+        alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+    )
+    .map_err(|error| GameAppShellError::NeuralBackendUnavailable {
+        message: error.to_string(),
+    })?;
+    let mut runtime = crate::GpuLiveBrainRuntime::from_p34_launch(backend, &runtime_launch)?;
+    runtime.attach_lineage_archive(
+        alife_archive::LineageLibraryConfig::profile_default(
+            crate::production_conversation_lineage_ui::default_lineage_root(),
+        ),
+        alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
+    )?;
+    Ok((launch.clone(), summary, runtime))
 }
 
 #[cfg(feature = "gpu-runtime")]
@@ -896,10 +942,9 @@ fn build_production_voxel_frontend_app_shell_inner(
     #[cfg(feature = "gpu-runtime")]
     let initial_runtime_settings = {
         let start_paused = launch.app_launch.start_paused || summary.ui_settings.paused;
-        let speed_ticks = (summary.ui_settings.simulation_speed.round() as u32)
-            .clamp(1, crate::S02_MAX_RUN_TICKS_PER_UPDATE);
+        let mode = summary.ui_settings.playback_mode();
         summary.ui_settings.paused = start_paused;
-        summary.ui_settings.simulation_speed = speed_ticks as f32;
+        summary.ui_settings.run_mode = Some(mode);
         if start_paused && summary.state_trace.last() == Some(&crate::ProductionAppState::Running) {
             summary.state_trace.push(crate::ProductionAppState::Paused);
         }
@@ -909,7 +954,7 @@ fn build_production_voxel_frontend_app_shell_inner(
             } else {
                 RuntimePlaybackState::Running
             },
-            speed_ticks,
+            mode,
         )
     };
     let mut app = App::new();
@@ -925,7 +970,9 @@ fn build_production_voxel_frontend_app_shell_inner(
         app.add_message::<bevy::input::mouse::MouseWheel>();
         app.add_message::<bevy::window::WindowFocused>();
     } else {
-        let present_mode = if launch.record_performance {
+        let present_mode = if launch.record_performance
+            || summary.ui_settings.playback_mode() == crate::ProductionRunMode::MaxSpeed
+        {
             PresentMode::Immediate
         } else {
             PresentMode::AutoVsync
@@ -1116,6 +1163,26 @@ fn reconcile_production_presentation(
         sample.topology_update_count =
             cognitive.and_then(|snapshot| snapshot.topology_update_count);
         sample.hunger = homeostasis.drives.hunger;
+        sample.body_energy = Some(row.biochemistry.body.energy);
+        sample.praise_signal = homeostasis.hormones.extension[0];
+        sample.last_attempt_blocked = row.outcome.as_ref().is_some_and(|outcome| {
+            outcome.patch_sealed
+                && outcome.patch_success == Some(false)
+                && (outcome.physical_contact == Some(alife_core::PhysicalContactKind::Blocked)
+                    || outcome.action_failure == Some(alife_core::ReferenceActionFailure::Blocked))
+        });
+        if let Some(response) = crate::production_voxel_renderer::v0_confirmed_creature_response(
+            row,
+            frame.previous.organism(sample.stable_id),
+            row.motor
+                .as_ref()
+                .and_then(|motor| motor.target_entity)
+                .and_then(|target| frame.current.object(target)),
+        ) {
+            if response != "Attempt blocked" {
+                sample.last_response = Some(response);
+            }
+        }
         sample.fatigue = homeostasis.drives.fatigue;
         sample.fear = homeostasis.drives.fear;
         sample.cortisol = homeostasis.hormones.cortisol;
@@ -1178,11 +1245,85 @@ fn production_voxel_asset_root() -> String {
         .to_string()
 }
 
+#[cfg(feature = "gpu-runtime")]
+struct ProductionHeadlessHandoff(
+    std::rc::Rc<
+        std::cell::RefCell<Option<(crate::GpuLiveBrainRuntime, ProductionVoxelLaunchSummary)>>,
+    >,
+);
+
+#[cfg(feature = "gpu-runtime")]
+fn handoff_production_to_headless(world: &mut bevy::prelude::World) {
+    use crate::production_voxel_renderer::Fvr05ProductionUxStateResource;
+    if world
+        .resource::<Fvr05ProductionUxStateResource>()
+        .settings
+        .playback_mode()
+        != crate::ProductionRunMode::HeadlessMaxSpeed
+    {
+        return;
+    }
+    let mut summary = world
+        .resource::<ProductionVoxelFrontendResource>()
+        .summary
+        .clone();
+    summary.ui_settings = world
+        .resource::<Fvr05ProductionUxStateResource>()
+        .settings
+        .clone();
+    let stop_path =
+        std::path::Path::new(&summary.ui_settings.runtime_save_path).with_extension("stop");
+    if stop_path.exists() {
+        let mut ux = world.resource_mut::<Fvr05ProductionUxStateResource>();
+        ux.last_error = Some(format!(
+            "Remove the existing headless stop file before starting: {}",
+            stop_path.display()
+        ));
+        ux.settings.run_mode = Some(crate::ProductionRunMode::OneX);
+        world
+            .resource_mut::<ProductionGpuBrainTickScheduleResource>()
+            .set_run_mode(crate::ProductionRunMode::OneX);
+        return;
+    }
+    if let Some(runtime) = world.remove_non_send_resource::<ProductionGpuBrainRuntimeResource>() {
+        let handoff = world.non_send_resource::<ProductionHeadlessHandoff>();
+        *handoff.0.borrow_mut() = Some((runtime.runtime, summary));
+        world.write_message(AppExit::Success);
+    }
+}
+
 pub fn run_production_voxel_frontend_window(
     launch: &crate::ProductionVoxelLaunchConfig,
 ) -> Result<crate::ProductionVoxelLaunchSummary, GameAppShellError> {
+    #[cfg(feature = "gpu-runtime")]
+    let (mut app, mut summary) = {
+        let (admitted, summary, runtime) = prepare_production_runtime(launch)?;
+        if summary.ui_settings.playback_mode() == crate::ProductionRunMode::HeadlessMaxSpeed {
+            crate::production_run_mode::run_headless_max_runtime(
+                runtime,
+                &summary,
+                launch.smoke_seconds.map(|s| Duration::from_secs(s as u64)),
+            )?;
+            return Ok(summary);
+        }
+        build_production_voxel_frontend_app_shell_inner(&admitted, summary, runtime)?
+    };
+    #[cfg(not(feature = "gpu-runtime"))]
     let (mut app, mut summary) = build_production_voxel_frontend_app_shell(launch)?;
+    #[cfg(feature = "gpu-runtime")]
+    let handoff = std::rc::Rc::new(std::cell::RefCell::new(None));
+    #[cfg(feature = "gpu-runtime")]
+    app.insert_non_send_resource(ProductionHeadlessHandoff(handoff.clone()))
+        .add_systems(bevy::prelude::Last, handoff_production_to_headless);
     require_successful_production_app_exit(app.run())?;
+    #[cfg(feature = "gpu-runtime")]
+    if let Some((runtime, headless_summary)) = handoff.borrow_mut().take() {
+        crate::production_run_mode::run_headless_max_runtime(
+            runtime,
+            &headless_summary,
+            launch.smoke_seconds.map(|s| Duration::from_secs(s as u64)),
+        )?;
+    }
     if summary.state_trace.last() != Some(&crate::ProductionAppState::Shutdown) {
         summary
             .state_trace
@@ -1228,20 +1369,39 @@ mod production_schedule_regression_tests {
     use crate::RuntimePlaybackState;
 
     #[test]
-    fn configured_pause_and_speed_survive_scheduler_initialization() {
+    fn care_pacing_preserves_clock_pause_step_and_unpaced_modes() {
         let mut schedule = ProductionGpuBrainTickScheduleResource::new_with_playback(
             12,
             RuntimePlaybackState::Paused,
-            3,
+            crate::ProductionRunMode::MaxSpeed,
         );
-
         assert!(schedule.is_paused());
-        assert_eq!(schedule.speed_ticks(), 3);
-
-        schedule.set_running_speed(2);
-
+        assert_eq!(schedule.run_mode(), crate::ProductionRunMode::MaxSpeed);
+        schedule.set_run_mode(crate::ProductionRunMode::OneX);
         assert!(schedule.is_paused());
-        assert_eq!(schedule.speed_ticks(), 2);
+        assert_eq!(schedule.run_mode(), crate::ProductionRunMode::OneX);
+        assert_eq!(schedule.observe_frame(30.0).unwrap(), 0);
+        schedule.toggle_playback();
+        let mut normal_ticks = 0;
+        for _ in 0..60 {
+            normal_ticks += schedule.observe_frame(1.0 / 60.0).unwrap();
+        }
+        assert_eq!(normal_ticks, 20);
+        schedule.set_run_mode(crate::ProductionRunMode::MaxSpeed);
+        assert_eq!(schedule.scheduler.accumulator_micros, 0);
+        assert_eq!(schedule.observe_frame(0.0).unwrap(), 4);
+        assert_eq!(schedule.observe_frame(30.0).unwrap(), 4);
+        schedule.queue_step();
+        let scheduled = schedule.observe_frame(30.0).unwrap();
+        assert_eq!(
+            super::production_tick_decision(schedule.playback, schedule.step_pending, scheduled),
+            (1, true)
+        );
+        schedule.set_run_mode(crate::ProductionRunMode::HeadlessMaxSpeed);
+        assert!(schedule.is_paused());
+        assert_eq!(schedule.observe_frame(0.0).unwrap(), 0);
+        schedule.toggle_playback();
+        assert_eq!(schedule.observe_frame(0.0).unwrap(), 4);
     }
 }
 
@@ -1276,6 +1436,7 @@ mod live_presentation_regression_tests {
             patch_success: Some(true),
             physical_contact: None,
             action_failure: None,
+            motor_execution: None,
             sealed_patch_count: 1,
             packed_record_count: 1,
             memory_updates: 0,

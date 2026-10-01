@@ -453,9 +453,9 @@ impl GpuSleepScheduler {
         ];
         let mut due = SleepWorkDue::empty();
         for index in 0..periods.len() {
-            if previous[index].map_or(true, |last| {
-                tick.raw().saturating_sub(last.raw()) >= periods[index]
-            }) {
+            if previous[index]
+                .is_none_or(|last| tick.raw().saturating_sub(last.raw()) >= periods[index])
+            {
                 due.insert(flags[index]);
             }
         }

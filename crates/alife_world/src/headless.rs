@@ -61,19 +61,384 @@ const DEFAULT_ORGANISM_ID_START: u64 = 1;
 const DEFAULT_HEARING_RADIUS: f32 = 6.0;
 pub(crate) const HEADLESS_CONTACT_RADIUS: f32 = 0.75;
 const EAT_RADIUS: f32 = 1.25;
-const MOVE_STEP: f32 = 1.0;
+/// Physical interval shared by graphical and unpaced hosts. Acceleration changes
+/// how quickly intervals execute, never the displacement within an interval.
+pub const WORLD_TICKS_PER_SECOND: u32 = 20;
+const WALK_SPEED_UNITS_PER_SECOND: f32 = 2.0;
+const MOVE_STEP: f32 = WALK_SPEED_UNITS_PER_SECOND / WORLD_TICKS_PER_SECOND as f32;
+const HEAD_SWIVEL_LIMIT: f32 = 70.0_f32.to_radians();
+const HEAD_SWIVEL_STEP: f32 = 20.0_f32.to_radians();
+const VISION_HALF_ANGLE: f32 = 110.0_f32.to_radians();
+const VISION_EYE_HEIGHT: f32 = 1.0;
+const VISION_RAY_PITCH: f32 = -0.18;
 const MAX_VISIBLE_ENTITIES: usize = 16;
 const VOCAL_TOKEN_ID_BASE: u32 = 400_000;
-const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
+pub const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
 const PROMPTED_SPEECH_COOLDOWN_TICKS: u64 = 8;
-const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v4";
+const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v7";
 /// Current schema required by every fresh headless-world signature receipt.
-pub const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 4;
+///
+/// Version 7 additionally binds gaze and optical opacity.
+pub const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 7;
 
 fn map_organism_registry_error(error: OrganismRegistryError) -> ScaffoldContractError {
     match error {
         OrganismRegistryError::InvalidRecord(error) => error,
         _ => ScaffoldContractError::InvalidId,
+    }
+}
+
+#[cfg(test)]
+mod terrain_vision_tests {
+    use super::*;
+
+    #[test]
+    fn solid_reach_blocks_grab_and_eat_even_when_transparent() {
+        for terrain_wall in [false, true] {
+            for opacity in [0.0, 1.0] {
+                let mut world = HeadlessScenarioBuilder::new(60_010)
+                    .agent("observer", OrganismId(1), Vec3f::ZERO)
+                    .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.6)
+                    .build()
+                    .unwrap();
+                let food = world.entity_id("food").unwrap();
+                if terrain_wall {
+                    world
+                        .enable_terrain_for_new_game(
+                            crate::WorldTerrain::new(
+                                crate::TerrainData {
+                                    width: 3,
+                                    depth: 3,
+                                    origin_x: -1.0,
+                                    origin_z: -1.0,
+                                    spacing: 1.0,
+                                    heights: vec![0.0; 9],
+                                    obstacles: vec![[0.4, -0.1, 0.6, 0.1, 0.0, 2.0]],
+                                    water_level: None,
+                                },
+                                crate::LocomotionLimits::default(),
+                            )
+                            .unwrap(),
+                            Vec3f::ZERO,
+                        )
+                        .unwrap();
+                } else {
+                    world
+                        .insert_object(SpawnSpec {
+                            label: "wall",
+                            kind: WorldObjectKind::Obstacle,
+                            organism_id: None,
+                            position: Vec3f::new(0.5, 0.0, 0.0),
+                            nutrition: 0.0,
+                            hazard_pain: 0.0,
+                            token_id: None,
+                            social_affinity: 0.0,
+                            teacher_channel: None,
+                        })
+                        .unwrap();
+                    let wall = world.entity_id("wall").unwrap();
+                    world.editor_set_optical_opacity(wall, opacity).unwrap();
+                }
+                for (id, kind) in [
+                    (HeadlessActionIds::GRAB, ActionKind::Interact),
+                    (HeadlessActionIds::EAT, ActionKind::Interact),
+                ] {
+                    let command =
+                        HeadlessWorldCommand::structured(OrganismId(1), id, kind, Some(food), None)
+                            .unwrap();
+                    let blocked = world.apply_command(&command).unwrap();
+                    assert!(!blocked.execution.succeeded);
+                    assert_eq!(
+                        blocked.execution.physical.contact,
+                        PhysicalContactKind::None
+                    );
+                    assert!(!world.objects[&food.raw()].consumed);
+                    assert_eq!(world.objects[&food.raw()].carried_by, None);
+                }
+            }
+        }
+        let mut clear = HeadlessScenarioBuilder::new(60_011)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.6)
+            .build()
+            .unwrap();
+        let food = clear.entity_id("food").unwrap();
+        // Offering a held meal is legal; grabbing another's possession is separate.
+        clear.objects.get_mut(&food.raw()).unwrap().carried_by = Some(OrganismId(2));
+        let eat = HeadlessWorldCommand::eat(OrganismId(1), food).unwrap();
+        assert!(clear.apply_command(&eat).unwrap().execution.succeeded);
+        assert_eq!(clear.objects[&food.raw()].carried_by, None);
+        assert!(!clear.apply_command(&eat).unwrap().execution.succeeded);
+    }
+
+    fn seen(world: &HeadlessWorld, target: WorldEntityId) -> bool {
+        let observer = world.agent_for(OrganismId(1)).unwrap();
+        world
+            .physical_observation_snapshot_from_objects(
+                OrganismId(1),
+                Tick::ZERO,
+                observer,
+                world.objects.values(),
+                true,
+            )
+            .unwrap()
+            .visible
+            .iter()
+            .any(|object| object.transport_entity == target)
+    }
+
+    #[test]
+    fn gaze_opaque_barriers_and_transparency_change_actual_sight() {
+        let mut world = HeadlessScenarioBuilder::new(60_001)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .obstacle("barrier", Vec3f::new(2.0, 0.0, 0.0), 0.5)
+            .food("ahead", Vec3f::new(4.0, 0.0, 0.0), 0.6)
+            .food("behind", Vec3f::new(-4.0, 0.0, 0.0), 0.6)
+            .build()
+            .unwrap();
+        let barrier = world.entity_id("barrier").unwrap();
+        let ahead = world.entity_id("ahead").unwrap();
+        let behind = world.entity_id("behind").unwrap();
+        assert!(seen(&world, barrier));
+        assert!(!seen(&world, ahead));
+        assert!(!seen(&world, behind));
+
+        world.editor_set_optical_opacity(barrier, 0.0).unwrap();
+        assert!(seen(&world, ahead));
+        assert!(seen(&world, barrier));
+
+        let frame = world
+            .perception_frame(
+                OrganismId(1),
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap();
+        let looks = frame
+            .candidates()
+            .iter()
+            .filter(|candidate| {
+                matches!(
+                    candidate.action_id,
+                    HeadlessActionIds::LOOK_LEFT
+                        | HeadlessActionIds::LOOK_RIGHT
+                        | HeadlessActionIds::LOOK_CENTER
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(looks.len(), 3);
+        assert_ne!(looks[0].features, looks[1].features);
+        assert_ne!(looks[0].features, looks[2].features);
+        assert_ne!(looks[1].features, looks[2].features);
+
+        let look = HeadlessWorldCommand::structured(
+            OrganismId(1),
+            HeadlessActionIds::LOOK_LEFT,
+            ActionKind::Look,
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(world.apply_command(&look).unwrap().execution.succeeded);
+        assert!(world.agent_for(OrganismId(1)).unwrap().head_yaw > 0.0);
+        assert!(!seen(&world, behind));
+    }
+
+    #[test]
+    fn terrain_obstacle_hides_food_and_shortens_depth_rays() {
+        let mut world = HeadlessScenarioBuilder::new(60_002)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .food("food", Vec3f::new(4.0, 0.0, 0.0), 0.6)
+            .build()
+            .unwrap();
+        let terrain = crate::WorldTerrain::new(
+            crate::TerrainData {
+                width: 17,
+                depth: 17,
+                origin_x: -8.0,
+                origin_z: -8.0,
+                spacing: 1.0,
+                heights: vec![0.0; 17 * 17],
+                obstacles: vec![[1.5, -1.0, 2.0, 1.0, 0.0, 2.0]],
+                water_level: None,
+            },
+            crate::LocomotionLimits::default(),
+        )
+        .unwrap();
+        world
+            .enable_terrain_for_new_game(terrain, Vec3f::ZERO)
+            .unwrap();
+        let food = world.entity_id("food").unwrap();
+        let observer = world.agent_for(OrganismId(1)).unwrap();
+        let blocked = world.terrain_vision_fan(observer);
+        assert!(!seen(&world, food));
+        assert!(blocked[7] < 0.5 || blocked[8] < 0.5);
+        let step = HeadlessWorldCommand::structured(
+            OrganismId(1),
+            HeadlessActionIds::STEP_FORWARD,
+            ActionKind::Move,
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(world.apply_command(&step).unwrap().execution.succeeded);
+        let before = world.agent_for(OrganismId(1)).unwrap().position;
+        assert!(!world.apply_command(&step).unwrap().execution.succeeded);
+        assert_eq!(world.agent_for(OrganismId(1)).unwrap().position, before);
+    }
+
+    #[test]
+    fn blind_exploration_primitives_survive_motor_translation_and_collision() {
+        let mut world = HeadlessScenarioBuilder::new(60_003)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let observer = world.entity_id("observer").unwrap();
+        world.objects.get_mut(&observer.raw()).unwrap().head_yaw = 0.35;
+        let frame = world
+            .perception_frame(
+                OrganismId(1),
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap();
+        assert!(frame.grounded_object_slots().is_empty());
+        for (id, channel) in [
+            (HeadlessActionIds::STEP_FORWARD, MotorChannel::Locomotion),
+            (HeadlessActionIds::TURN_LEFT, MotorChannel::Orientation),
+            (HeadlessActionIds::HOLD_GAZE, MotorChannel::Orientation),
+        ] {
+            let candidate = frame
+                .candidates()
+                .iter()
+                .find(|candidate| candidate.action_id == id)
+                .unwrap();
+            assert_eq!(candidate.target, alife_core::ActionTarget::NONE);
+            let command = candidate
+                .to_command(OrganismId(1), Confidence::new(1.0).unwrap())
+                .unwrap();
+            let channel = alife_core::channel_command_for_action(channel, &command).unwrap();
+            let translated = legacy_action_for_motor_channel(OrganismId(1), &channel).unwrap();
+            assert_eq!(translated.action_id, id);
+            let result = world.execute_command(&translated).unwrap();
+            assert!(result.execution.succeeded);
+        }
+        assert!(world.agent_for(OrganismId(1)).unwrap().position.x > 0.0);
+        assert!(world.agent_for(OrganismId(1)).unwrap().body_yaw > 0.0);
+        assert_eq!(world.agent_for(OrganismId(1)).unwrap().head_yaw, 0.35);
+        let mut crowded = HeadlessScenarioBuilder::new(60_004)
+            .agent("observer", OrganismId(1), Vec3f::new(0.1, 0.0, 0.0))
+            .food("a", Vec3f::new(3.0, 0.0, 0.0), 0.5)
+            .food("b", Vec3f::new(3.0, 0.0, 1.0), 0.5)
+            .food("c", Vec3f::new(3.0, 0.0, -1.0), 0.5)
+            .food("d", Vec3f::new(4.0, 0.0, 0.0), 0.5)
+            .build()
+            .unwrap();
+        let draft = crowded
+            .perception_frame_draft(
+                OrganismId(1),
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap();
+        let frame = draft
+            .clone()
+            .finalize(PerceptionContextBlock::empty())
+            .unwrap();
+        assert!(frame.candidates().len() <= alife_core::MAX_ACTION_CANDIDATES);
+        frame.validate_contract().unwrap();
+        for candidate in frame.candidates() {
+            let query =
+                alife_core::MemoryQueryEncoderV2::encode_candidate(&draft, candidate).unwrap();
+            query.validate_against_frame(&frame, candidate).unwrap();
+            let restored: alife_core::CandidateMemoryQueryV2 =
+                serde_json::from_str(&serde_json::to_string(&query).unwrap()).unwrap();
+            assert_eq!(query, restored);
+        }
+        assert_ne!(frame.body().pose.translation, Vec3f::ZERO);
+        assert_eq!(
+            frame
+                .body()
+                .neural_projection(frame.sensor_profile())
+                .pose
+                .translation,
+            Vec3f::ZERO
+        );
+    }
+
+    #[test]
+    fn biological_capacity_limits_translation_without_changing_intent() {
+        let genome = alife_core::CreatureGenome::early_mammal_founder(
+            60_006,
+            alife_core::FoundationGeneticIdentity::new(
+                10,
+                1,
+                7,
+                alife_core::BrainCapacityClass::N512_ID,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let embodiment = alife_core::EmbodimentState::from_phenotype(
+            WorldEntityId(1),
+            Tick::ZERO,
+            &genome.express().unwrap(),
+        )
+        .unwrap();
+        let action = HeadlessWorldCommand::structured(
+            OrganismId(1),
+            HeadlessActionIds::STEP_FORWARD,
+            ActionKind::Move,
+            None,
+            None,
+        )
+        .unwrap();
+        let command =
+            alife_core::channel_command_for_action(MotorChannel::Locomotion, &action).unwrap();
+        let normal = adapt_motor_channel_to_embodiment(&command, &embodiment, None).unwrap();
+        let weak = adapt_motor_channel_to_embodiment(&command, &embodiment, Some(0.25)).unwrap();
+        assert_eq!(weak.primitive, normal.primitive);
+        assert_eq!(weak.target, normal.target);
+        assert_eq!(weak.intensity.raw(), normal.intensity.raw() * 0.25);
+        let stopped = adapt_motor_channel_to_embodiment(&command, &embodiment, Some(0.0)).unwrap();
+        assert_eq!(stopped.intensity.raw(), 0.0);
+    }
+
+    #[test]
+    fn scent_and_touch_survive_occlusion_without_creating_hidden_targets() {
+        let mut world = HeadlessScenarioBuilder::new(60_005)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .food("food", Vec3f::new(-2.0, 0.0, 2.0), 0.5)
+            .obstacle("contact", Vec3f::new(-0.5, 0.0, -0.2), 0.1)
+            .build()
+            .unwrap();
+        let contact = world.entity_id("contact").unwrap();
+        world
+            .objects
+            .get_mut(&contact.raw())
+            .unwrap()
+            .grounded_physical
+            .chemical = [0.0; 3];
+        let frame = world
+            .perception_frame(
+                OrganismId(1),
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap();
+        assert!(frame.grounded_object_slots().is_empty());
+        assert!(frame
+            .candidates()
+            .iter()
+            .all(|candidate| candidate.target.entity.is_none()));
+        let channels = &frame.sensory().channels;
+        assert!(channels.smell_chemistry[0] > channels.smell_chemistry[1]);
+        assert!(channels.smell_chemistry[1] > 0.0);
+        assert!(channels.tactile_contact[0] > 0.0);
     }
 }
 
@@ -89,8 +454,19 @@ pub struct HeadlessActionIds;
 impl HeadlessActionIds {
     pub const APPROACH: ActionId = ActionId(101);
     pub const FLEE: ActionId = ActionId(102);
+    pub const NO_LOCOMOTION: ActionId = ActionId(103);
+    pub const NO_POSTURE: ActionId = ActionId(104);
+    pub const STEP_FORWARD: ActionId = ActionId(105);
     pub const EAT: ActionId = ActionId(210);
     pub const GRAB: ActionId = ActionId(211);
+    pub const NO_MANIPULATION: ActionId = ActionId(212);
+    pub const PLAY: ActionId = ActionId(213);
+    pub const LOOK_LEFT: ActionId = ActionId(601);
+    pub const LOOK_RIGHT: ActionId = ActionId(602);
+    pub const LOOK_CENTER: ActionId = ActionId(603);
+    pub const TURN_LEFT: ActionId = ActionId(604);
+    pub const TURN_RIGHT: ActionId = ActionId(605);
+    pub const HOLD_GAZE: ActionId = ActionId(606);
 }
 
 #[derive(
@@ -102,6 +478,8 @@ pub enum WorldObjectKind {
     Hazard,
     Obstacle,
     Token,
+    Ball,
+    ActivityToy,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -111,6 +489,12 @@ pub struct WorldObject {
     pub kind: WorldObjectKind,
     pub organism_id: Option<OrganismId>,
     pub position: Vec3f,
+    /// World-owned body heading in the horizontal X/Z plane.
+    pub body_yaw: f32,
+    /// Gaze offset from body heading, chosen through Orientation commands.
+    pub head_yaw: f32,
+    /// Optical opacity is independent of movement blocking.
+    pub optical_opacity: f32,
     pub radius: f32,
     pub nutrition: f32,
     pub hazard_pain: f32,
@@ -135,6 +519,7 @@ impl WorldObject {
             WorldObjectKind::Food => AffordanceBits::FOOD,
             WorldObjectKind::Hazard => AffordanceBits::HAZARD,
             WorldObjectKind::Obstacle => AffordanceBits::RESOURCE,
+            WorldObjectKind::Ball | WorldObjectKind::ActivityToy => AffordanceBits::RESOURCE,
             WorldObjectKind::Token => {
                 let mut affordances = AffordanceBits::GLYPH_OR_WRITING;
                 if self.teacher_channel.is_some() {
@@ -286,7 +671,8 @@ pub struct WorldEditorSpawnSpec {
 #[derive(Debug, Clone)]
 pub struct HeadlessWorld {
     seed: u64,
-    terrain: Option<crate::TerrainBinding>,
+    disable_age_death: bool,
+    terrain: Option<crate::WorldTerrain>,
     tick: Tick,
     next_entity_id: u64,
     next_organism_id: u64,
@@ -299,6 +685,7 @@ pub struct HeadlessWorld {
     ecology: EcologyState,
     speech: SpatialSpeechBus,
     last_creature_utterance_ticks: BTreeMap<u64, Tick>,
+    pending_player_care: BTreeMap<u64, BodyEventDelta>,
     tracked_objects: TrackedObjectRegistry,
     habitats: HabitatAuthority,
     organism_registry: WorldOrganismRegistry,
@@ -381,7 +768,9 @@ pub struct HeadlessPerceptionBatchIndex {
 #[derive(Debug, Clone)]
 pub(crate) struct HeadlessWorldPersistenceParts {
     pub seed: u64,
+    pub disable_age_death: bool,
     pub terrain: Option<crate::TerrainBinding>,
+    pub terrain_state: Option<crate::TerrainState>,
     pub tick: Tick,
     pub next_entity_id: u64,
     pub next_organism_id: u64,
@@ -392,6 +781,7 @@ pub(crate) struct HeadlessWorldPersistenceParts {
     pub ecology: EcologyState,
     pub audible_utterances: Vec<AudibleUtterance>,
     pub last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
+    pub pending_player_care: BTreeMap<u64, BodyEventDelta>,
     pub habitats: HabitatAuthority,
     pub organism_records: Option<Vec<WorldOrganismRecord>>,
 }
@@ -415,25 +805,59 @@ struct MatingOpportunityReport {
 }
 
 impl HeadlessWorld {
+    pub const fn age_death_disabled(&self) -> bool {
+        self.disable_age_death
+    }
+
+    /// Temporary New Game program option; biological aging still advances.
+    pub fn set_age_death_disabled_for_new_game(
+        &mut self,
+        disabled: bool,
+    ) -> Result<(), ScaffoldContractError> {
+        if self.tick != Tick::ZERO {
+            return Err(ScaffoldContractError::NonMonotonicTick);
+        }
+        self.disable_age_death = disabled;
+        Ok(())
+    }
+
     pub fn terrain_binding(&self) -> Option<crate::TerrainBinding> {
-        self.terrain
+        self.terrain.as_ref().map(crate::WorldTerrain::binding)
+    }
+
+    pub fn terrain(&self) -> Option<&crate::WorldTerrain> {
+        self.terrain.as_ref()
     }
 
     /// New-game placement only. Existing saves never silently change geography.
     pub fn enable_highlands_for_new_game(&mut self) -> Result<(), ScaffoldContractError> {
+        self.enable_terrain_for_new_game(
+            crate::WorldTerrain::highlands(),
+            Vec3f::new(32.0, 0.0, 70.0),
+        )
+    }
+
+    /// Convert the existing flat scenario's X/Y layout into this heightfield's
+    /// X/Z plane. Placement is transactional; movement never searches for routes.
+    pub fn enable_terrain_for_new_game(
+        &mut self,
+        terrain: crate::WorldTerrain,
+        origin: Vec3f,
+    ) -> Result<(), ScaffoldContractError> {
+        origin.validate()?;
         if self.tick != Tick::ZERO || self.terrain.is_some() {
             return Err(ScaffoldContractError::InvalidId);
         }
-        let surface = crate::highlands();
+        let surface = terrain.surface();
         let place = |p: Vec3f| -> Result<Vec3f, ScaffoldContractError> {
-            let x = 32.0 + p.x;
-            let z = 70.0 + p.y;
+            let x = origin.x + p.x;
+            let z = origin.z + p.y;
             for ring in 0..25 {
                 for direction in 0..8 {
                     let angle = direction as f32 * std::f32::consts::TAU / 8.0;
                     let x = x + angle.cos() * ring as f32 * 0.4;
                     let z = z + angle.sin() * ring as f32 * 0.4;
-                    if surface.walkable(x, z) {
+                    if terrain.walkable(x, z) {
                         return Ok(Vec3f::new(x, surface.height(x, z).unwrap(), z));
                     }
                 }
@@ -457,7 +881,7 @@ impl HeadlessWorld {
         for (zone, p) in self.ecology.zones.iter_mut().zip(zone_positions) {
             zone.center = p;
         }
-        self.terrain = Some(crate::TerrainBinding::highlands());
+        self.terrain = Some(terrain);
         self.rebuild_ecology_metrics();
         Ok(())
     }
@@ -465,6 +889,7 @@ impl HeadlessWorld {
     pub fn new(seed: u64) -> Self {
         Self {
             seed,
+            disable_age_death: false,
             terrain: None,
             tick: Tick::ZERO,
             next_entity_id: DEFAULT_ENTITY_ID_START,
@@ -478,6 +903,7 @@ impl HeadlessWorld {
             ecology: EcologyState::default(),
             speech: SpatialSpeechBus::default(),
             last_creature_utterance_ticks: BTreeMap::new(),
+            pending_player_care: BTreeMap::new(),
             tracked_objects: TrackedObjectRegistry::new(
                 seed,
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
@@ -521,6 +947,51 @@ impl HeadlessWorld {
 
     pub const fn tick(&self) -> Tick {
         self.tick
+    }
+
+    /// The Hand supplies a local physical stimulus, not an action selection.
+    /// Repeated input before one biological boundary cannot stack its dose.
+    pub fn queue_player_care(
+        &mut self,
+        organism: OrganismId,
+        source: Vec3f,
+        praise: bool,
+    ) -> Result<(), ScaffoldContractError> {
+        source.validate()?;
+        let record = self
+            .organism_registry
+            .get(organism)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let body = self
+            .objects
+            .get(&record.world_entity_id().raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let reach = if praise {
+            HEADLESS_VISION_RADIUS
+        } else {
+            HEADLESS_CONTACT_RADIUS
+        };
+        if !record.lifecycle().is_alive()
+            || distance(source, body.position) > reach
+            || if praise {
+                self.blocking_object_between(source, body.position)
+                    .is_some()
+            } else {
+                !self.physical_contact_reachable(source, body.position)
+            }
+        {
+            return Err(ScaffoldContractError::InvalidActionDecision);
+        }
+        let event = self
+            .pending_player_care
+            .entry(organism.raw())
+            .or_insert_with(BodyEventDelta::zero);
+        if praise {
+            event.player_reward = 1.0;
+        } else {
+            event.social_contact = 0.25;
+        }
+        Ok(())
     }
 
     pub fn habitat_authority(&self) -> &HabitatAuthority {
@@ -665,6 +1136,28 @@ impl HeadlessWorld {
             eligible_pairs,
             mating_organism_ids,
         } = candidate.collect_mating_opportunities(next_tick)?;
+        // Both responses use the same pre-update biology snapshot. Traverse pairs
+        // once, rather than rescanning every pair for every living organism.
+        let mut mate_responses = BTreeMap::<u64, f32>::new();
+        for pair in &eligible_pairs {
+            let first = candidate
+                .organism_registry
+                .get(pair.maternal_id)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            let second = candidate
+                .organism_registry
+                .get(pair.paternal_id)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            for (own, other) in [(first, second), (second, first)] {
+                let response = own.phenotype().reproduction.mate_response(
+                    own.phenotype(),
+                    other.phenotype(),
+                    other.biochemistry().body.health,
+                );
+                let stored = mate_responses.entry(own.organism_id().raw()).or_default();
+                *stored = stored.max(response);
+            }
+        }
 
         #[cfg(test)]
         let mut advanced_organism = false;
@@ -679,7 +1172,10 @@ impl HeadlessWorld {
                 tick if tick == current_tick => {
                     let ambient_event = if mating_organism_ids.contains(&organism_id.raw()) {
                         BodyEventDelta {
-                            mating_opportunity: 1.0,
+                            mating_opportunity: mate_responses
+                                .get(&organism_id.raw())
+                                .copied()
+                                .unwrap_or(0.0),
                             ..BodyEventDelta::zero()
                         }
                     } else {
@@ -690,6 +1186,13 @@ impl HeadlessWorld {
                         body_events
                             .get(&organism_id.raw())
                             .copied()
+                            .unwrap_or_else(BodyEventDelta::zero),
+                    );
+                    let body_event = combine_body_event(
+                        body_event,
+                        candidate
+                            .pending_player_care
+                            .remove(&organism_id.raw())
                             .unwrap_or_else(BodyEventDelta::zero),
                     );
                     candidate
@@ -718,10 +1221,11 @@ impl HeadlessWorld {
                     .get(organism_id)
                     .ok_or(ScaffoldContractError::InvalidId)?;
                 let age_ticks = record.age_at(next_tick)?.raw();
-                PassiveBodyUpkeepPolicy::is_terminal(
+                PassiveBodyUpkeepPolicy::is_terminal_with_age_death(
                     &record.biochemistry().body,
                     age_ticks,
                     record.phenotype(),
+                    !candidate.disable_age_death,
                 )
             };
             if terminal {
@@ -770,7 +1274,27 @@ impl HeadlessWorld {
                     .ok_or(ScaffoldContractError::InvalidId)?;
                 let maternal_age = maternal.age_at(next_tick)?;
                 let paternal_age = paternal.age_at(next_tick)?;
-                if maternal.lifecycle().is_alive()
+                let cadence = u64::from(
+                    maternal
+                        .biochemistry()
+                        .cadence
+                        .reproduction_ticks
+                        .max(paternal.biochemistry().cadence.reproduction_ticks),
+                );
+                let trial = conception_trial(
+                    candidate.seed,
+                    pair.maternal_id,
+                    pair.paternal_id,
+                    next_tick,
+                );
+                let fertility = (maternal.phenotype().reproduction.fertility
+                    * paternal.phenotype().reproduction.fertility)
+                    .sqrt();
+                let refreshed = cadence > 0
+                    && (maternal_age.raw() % cadence == 0 || paternal_age.raw() % cadence == 0);
+                if refreshed
+                    && trial < fertility
+                    && maternal.lifecycle().is_alive()
                     && paternal.lifecycle().is_alive()
                     && maternal.biochemistry().is_reproduction_ready_at(
                         next_tick,
@@ -824,44 +1348,83 @@ impl HeadlessWorld {
                 .get(paternal_id)
                 .ok_or(ScaffoldContractError::InvalidId)?
                 .genome();
-            let child_genome = alife_core::CreatureGenome::reproduce(
+            let conception = alife_core::CreatureGenome::reproduce(
                 maternal_genome,
                 paternal_genome,
                 conception_seed,
-            )?;
-            let child_phenotype = child_genome.express()?;
-            let child_id = OrganismId(candidate.next_organism_id);
-            child_id.validate()?;
-            candidate.next_organism_id = child_id
-                .raw()
-                .checked_add(1)
-                .ok_or(ScaffoldContractError::InvalidId)?;
-            let midpoint = Vec3f::new(
-                (maternal_position.x + paternal_position.x) * 0.5,
-                (maternal_position.y + paternal_position.y) * 0.5,
-                (maternal_position.z + paternal_position.z) * 0.5,
-            );
-            midpoint.validate()?;
-            let child_label = format!("organism-{}", child_id.raw());
-            let child_entity_id =
-                candidate.spawn_social_agent(&child_label, child_id, midpoint, 0.0)?;
-            let child_record = WorldOrganismRecord::newborn(
-                child_id,
-                child_entity_id,
-                child_genome,
-                child_phenotype,
-                next_tick,
             )
-            .map_err(map_organism_registry_error)?;
-            candidate.register_organism_record(child_record)?;
-            let mut child_habitats = candidate.habitats.clone();
-            child_habitats
-                .register_creature(child_id, habitat_id, next_tick)
-                .map_err(|_| ScaffoldContractError::InvalidId)?;
-            candidate
-                .replace_habitat_authority(child_habitats)
-                .map_err(|_| ScaffoldContractError::InvalidId)?;
-            candidate.validate_complete_organism_bindings()?;
+            .and_then(|genome| {
+                let phenotype = genome.express()?;
+                Ok((genome, phenotype))
+            });
+            let conception = match conception {
+                Ok(child) => Some(child),
+                Err(
+                    ScaffoldContractError::InvalidGeneticBounds
+                    | ScaffoldContractError::IncompatibleGeneticClass
+                    | ScaffoldContractError::MutationOverflow,
+                ) => None,
+                Err(error) => return Err(error),
+            };
+            if let Some((child_genome, child_phenotype)) = conception {
+                let child_id = OrganismId(candidate.next_organism_id);
+                child_id.validate()?;
+                candidate.next_organism_id = child_id
+                    .raw()
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                let midpoint = Vec3f::new(
+                    (maternal_position.x + paternal_position.x) * 0.5,
+                    (maternal_position.y + paternal_position.y) * 0.5,
+                    (maternal_position.z + paternal_position.z) * 0.5,
+                );
+                midpoint.validate()?;
+                let child_label = format!("organism-{}", child_id.raw());
+                let child_entity_id =
+                    candidate.spawn_social_agent(&child_label, child_id, midpoint, 0.0)?;
+                let mut child_record = WorldOrganismRecord::newborn(
+                    child_id,
+                    child_entity_id,
+                    child_genome,
+                    child_phenotype,
+                    next_tick,
+                )
+                .map_err(map_organism_registry_error)?;
+                // Investment transfers actual reserves from parents into the newborn.
+                // It does not instruct either brain to perform parental care.
+                let mut provision = 0.0;
+                for parent_id in [maternal_id, paternal_id] {
+                    let parent = candidate
+                        .organism_registry
+                        .get(parent_id)
+                        .ok_or(ScaffoldContractError::InvalidId)?;
+                    let requested = (0.20
+                        + 0.30 * parent.phenotype().reproduction.parental_investment)
+                        .min((parent.biochemistry().body.energy - 0.20).max(0.0));
+                    provision += candidate
+                        .organism_registry
+                        .with_biology_mut(parent_id, |biology| {
+                            biology
+                                .body
+                                .debit_energy_pro_rata(requested)
+                                .map_err(OrganismRegistryError::InvalidRecord)
+                        })
+                        .map_err(map_organism_registry_error)?;
+                }
+                // Newborn chemistry is initialized from its genes, not parent's state.
+                child_record
+                    .set_birth_energy(provision.min(1.0))
+                    .map_err(map_organism_registry_error)?;
+                candidate.register_organism_record(child_record)?;
+                let mut child_habitats = candidate.habitats.clone();
+                child_habitats
+                    .register_creature(child_id, habitat_id, next_tick)
+                    .map_err(|_| ScaffoldContractError::InvalidId)?;
+                candidate
+                    .replace_habitat_authority(child_habitats)
+                    .map_err(|_| ScaffoldContractError::InvalidId)?;
+                candidate.validate_complete_organism_bindings(true)?;
+            }
         }
 
         candidate.speech.retire_expired(candidate.tick);
@@ -908,12 +1471,31 @@ impl HeadlessWorld {
         alive_organism_ids
     }
 
+    fn inherited_word_gain(&self, organism: OrganismId, token: u32) -> f32 {
+        self.organism_registry.get(organism).map_or(1.0, |record| {
+            if record
+                .phenotype()
+                .predisposition
+                .starter_tokens
+                .iter()
+                .any(|code| u32::from(code.raw()) == token)
+            {
+                1.0
+            } else {
+                0.85
+            }
+        })
+    }
+
     fn eligible_mating_pair(
         &self,
         maternal_id: OrganismId,
         paternal_id: OrganismId,
         next_tick: Tick,
     ) -> Result<Option<EligibleMatingPair>, ScaffoldContractError> {
+        if maternal_id == paternal_id {
+            return Ok(None);
+        }
         let maternal = self
             .organism_registry
             .get(maternal_id)
@@ -935,7 +1517,20 @@ impl HeadlessWorld {
         }
         let maternal_expressed_brain_class = maternal.genome().expressed_brain_class()?;
         let paternal_expressed_brain_class = paternal.genome().expressed_brain_class()?;
-        if maternal.genome().id == paternal.genome().id
+        if maternal
+            .genome()
+            .n2048_foundation_candidate
+            .as_ref()
+            .map(|asset| asset.digest())
+            != paternal
+                .genome()
+                .n2048_foundation_candidate
+                .as_ref()
+                .map(|asset| asset.digest())
+            || maternal.genome().nano512_readout_candidate
+                != paternal.genome().nano512_readout_candidate
+            || maternal.genome().nano512_action_credit_candidate_v2
+                != paternal.genome().nano512_action_credit_candidate_v2
             || maternal.genome().foundation.compatibility_family_id
                 != paternal.genome().foundation.compatibility_family_id
             || maternal.genome().foundation.brain_class_id
@@ -976,11 +1571,16 @@ impl HeadlessWorld {
         }))
     }
 
-    fn has_mating_opportunity(
+    fn mating_response(
         &self,
         organism_id: OrganismId,
         next_tick: Tick,
-    ) -> Result<bool, ScaffoldContractError> {
+    ) -> Result<f32, ScaffoldContractError> {
+        let own = self
+            .organism_registry
+            .get(organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let mut strongest = 0.0_f32;
         for partner_id in self.alive_organism_ids() {
             if partner_id.raw() == organism_id.raw() {
                 continue;
@@ -994,10 +1594,18 @@ impl HeadlessWorld {
                 .eligible_mating_pair(maternal_id, paternal_id, next_tick)?
                 .is_some()
             {
-                return Ok(true);
+                let other = self
+                    .organism_registry
+                    .get(partner_id)
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                strongest = strongest.max(own.phenotype().reproduction.mate_response(
+                    own.phenotype(),
+                    other.phenotype(),
+                    other.biochemistry().body.health,
+                ));
             }
         }
-        Ok(false)
+        Ok(strongest)
     }
 
     pub fn advance_tick(&mut self) -> Tick {
@@ -1197,6 +1805,18 @@ impl HeadlessWorld {
         digest.write_u64(self.next_organism_id);
         digest.write_u64(self.next_spawn_sequence);
         digest.write_u64(self.next_utterance_id);
+        match self.terrain.as_ref() {
+            Some(terrain) => {
+                digest.write_some();
+                digest.write_u16(terrain.binding().version);
+                digest.write_u64(terrain.binding().digest);
+                let limits = terrain.limits();
+                write_f32_bits(&mut digest, limits.body_radius);
+                write_f32_bits(&mut digest, limits.max_slope);
+                write_f32_bits(&mut digest, limits.max_wading_depth);
+            }
+            None => digest.write_none(),
+        }
 
         digest.write_sequence_len(self.objects.len());
         for object in self.objects.values() {
@@ -1224,6 +1844,13 @@ impl HeadlessWorld {
             digest.write_u64(*organism_id);
             digest.write_u64(tick.raw());
         }
+        if !self.pending_player_care.is_empty() {
+            digest.write_bytes(b"player-care-v1");
+            digest.write_bytes(
+                &serde_json::to_vec(&self.pending_player_care)
+                    .map_err(|_| ScaffoldContractError::InvalidId)?,
+            );
+        }
 
         let organisms = self.organism_entity_ids();
         digest.write_sequence_len(organisms.len());
@@ -1232,6 +1859,11 @@ impl HeadlessWorld {
             digest.write_bytes(
                 &serde_json::to_vec(&tracked).map_err(|_| ScaffoldContractError::InvalidId)?,
             );
+        }
+        // Keep legacy/default signatures byte-identical; explicitly bind the
+        // opt-in rule when it changes this world's future lifecycle behavior.
+        if self.disable_age_death {
+            digest.write_bytes(b"alife.world.disable-age-death.v1");
         }
         Ok(HeadlessWorldSignatureDigest {
             schema_version: HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION,
@@ -1266,6 +1898,25 @@ impl HeadlessWorld {
 
     pub fn object_snapshots(&self) -> Vec<WorldObject> {
         self.objects.values().cloned().collect()
+    }
+
+    pub(crate) fn set_food_nutrition(
+        &mut self,
+        id: WorldEntityId,
+        nutrition: f32,
+    ) -> Result<(), ScaffoldContractError> {
+        let object = self
+            .objects
+            .get_mut(&id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if object.kind != WorldObjectKind::Food
+            || !nutrition.is_finite()
+            || !(0.0..=1.0).contains(&nutrition)
+        {
+            return Err(ScaffoldContractError::InvalidActionDecision);
+        }
+        object.nutrition = nutrition;
+        Ok(())
     }
 
     pub fn build_perception_batch_index(
@@ -1486,7 +2137,7 @@ impl HeadlessWorld {
         if let Some(next_organism_id) = replacement_next_organism_id {
             replacement.next_organism_id = replacement.next_organism_id.max(next_organism_id);
         }
-        replacement.validate_complete_organism_bindings()?;
+        replacement.validate_complete_organism_bindings(false)?;
         *self = replacement;
         Ok(())
     }
@@ -1522,7 +2173,10 @@ impl HeadlessWorld {
             .map_err(map_organism_registry_error)
     }
 
-    fn validate_complete_organism_bindings(&self) -> Result<(), ScaffoldContractError> {
+    fn validate_complete_organism_bindings(
+        &self,
+        allow_external_actors: bool,
+    ) -> Result<(), ScaffoldContractError> {
         self.validate_organism_bindings()?;
 
         let mut agent_cohort = BTreeMap::new();
@@ -1543,16 +2197,16 @@ impl HeadlessWorld {
             .map(|record| record.organism_id().raw())
             .collect::<BTreeSet<_>>();
         let cohort_ids = agent_cohort.keys().copied().collect::<BTreeSet<_>>();
-        if registered_ids != cohort_ids {
+        if if allow_external_actors {
+            !registered_ids.is_subset(&cohort_ids)
+        } else {
+            registered_ids != cohort_ids
+        } {
             return Err(ScaffoldContractError::InvalidId);
         }
 
-        for (organism_id, world_entity_id) in agent_cohort {
-            let record = self
-                .organism_registry
-                .get(OrganismId(organism_id))
-                .ok_or(ScaffoldContractError::InvalidId)?;
-            if record.world_entity_id() != world_entity_id {
+        for record in self.organism_registry.iter() {
+            if agent_cohort.get(&record.organism_id().raw()) != Some(&record.world_entity_id()) {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
@@ -1726,15 +2380,16 @@ impl HeadlessWorld {
     ) -> Result<(), ScaffoldContractError> {
         id.validate()?;
         position.validate()?;
-        if self.terrain.is_some() {
-            position.y = crate::highlands()
+        if let Some(terrain) = self.terrain.as_ref() {
+            position.y = terrain
+                .surface()
                 .height(position.x, position.z)
                 .ok_or(ScaffoldContractError::InvalidId)?;
             if self
                 .objects
                 .get(&id.raw())
                 .is_some_and(|o| o.kind == WorldObjectKind::Agent)
-                && !crate::highlands().walkable(position.x, position.z)
+                && !terrain.walkable(position.x, position.z)
             {
                 return Err(ScaffoldContractError::InvalidId);
             }
@@ -1755,6 +2410,22 @@ impl HeadlessWorld {
             self.move_carried_objects(carrier, displacement);
         }
         self.rebuild_ecology_metrics();
+        Ok(())
+    }
+
+    pub fn editor_set_optical_opacity(
+        &mut self,
+        id: WorldEntityId,
+        opacity: f32,
+    ) -> Result<(), ScaffoldContractError> {
+        id.validate()?;
+        if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        self.objects
+            .get_mut(&id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .optical_opacity = opacity;
         Ok(())
     }
 
@@ -1810,7 +2481,9 @@ impl HeadlessWorld {
             });
         HeadlessWorldPersistenceParts {
             seed: self.seed,
-            terrain: self.terrain,
+            disable_age_death: self.disable_age_death,
+            terrain: self.terrain_binding(),
+            terrain_state: self.terrain.as_ref().map(crate::WorldTerrain::state),
             tick: self.tick,
             next_entity_id: self.next_entity_id,
             next_organism_id,
@@ -1820,6 +2493,7 @@ impl HeadlessWorld {
             last_touched_entities: self.last_touched_entities.clone(),
             ecology: self.ecology.clone(),
             audible_utterances: self.speech.snapshot(),
+            pending_player_care: self.pending_player_care.clone(),
             last_creature_utterance_ticks: self
                 .last_creature_utterance_ticks
                 .iter()
@@ -1833,9 +2507,7 @@ impl HeadlessWorld {
     pub(crate) fn from_persistence_parts(
         parts: HeadlessWorldPersistenceParts,
     ) -> Result<Self, ScaffoldContractError> {
-        if let Some(terrain) = parts.terrain {
-            terrain.validate()?;
-        }
+        let terrain = crate::WorldTerrain::restore(parts.terrain, parts.terrain_state.as_ref())?;
         let max_present_organism_id = parts
             .objects
             .iter()
@@ -1927,9 +2599,28 @@ impl HeadlessWorld {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
+        for (id, event) in &parts.pending_player_care {
+            event.validate_contract()?;
+            if !organism_registry
+                .get(OrganismId(*id))
+                .is_some_and(|record| record.lifecycle().is_alive())
+                || event.energy != 0.0
+                || event.damage != 0.0
+                || event.temperature_stress != 0.0
+                || event.nutrition != 0.0
+                || event.play_stimulation != 0.0
+                || event.perceived_novelty != 0.0
+                || event.investigation != 0.0
+                || event.sleep_recovery != 0.0
+                || event.mating_opportunity != 0.0
+            {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
         let world = Self {
             seed: parts.seed,
-            terrain: parts.terrain,
+            disable_age_death: parts.disable_age_death,
+            terrain,
             tick: parts.tick,
             next_entity_id: parts.next_entity_id,
             next_organism_id: parts.next_organism_id,
@@ -1941,6 +2632,7 @@ impl HeadlessWorld {
             last_action_result: None,
             ecology: parts.ecology,
             speech: SpatialSpeechBus::restore(parts.audible_utterances, parts.tick)?,
+            pending_player_care: parts.pending_player_care,
             last_creature_utterance_ticks: parts
                 .last_creature_utterance_ticks
                 .into_iter()
@@ -1958,7 +2650,7 @@ impl HeadlessWorld {
             injected_tick_late_failure_after_first_organism: false,
         };
         if has_authoritative_organism_records {
-            world.validate_complete_organism_bindings()?;
+            world.validate_complete_organism_bindings(true)?;
         }
         Ok(world)
     }
@@ -2026,22 +2718,67 @@ impl HeadlessWorld {
                     Vec::new(),
                 )
             }
-            SensorProfile::GroundedObjectSlotsV1 => {
-                let snapshot = match index {
-                    Some(index) => {
+            SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1 => {
+                let terrain_vision = profile == SensorProfile::GroundedTerrainVisionV1;
+                let snapshot = match (index, terrain_vision) {
+                    (Some(index), true) => {
+                        let observer = self.indexed_agent_for(organism_id, index)?;
+                        self.physical_observation_snapshot_from_objects(
+                            organism_id,
+                            tick,
+                            observer,
+                            self.indexed_nearby_objects(observer, index)?.into_iter(),
+                            true,
+                        )?
+                    }
+                    (None, true) => {
+                        let observer = self.agent_for(organism_id)?;
+                        self.physical_observation_snapshot_from_objects(
+                            organism_id,
+                            tick,
+                            observer,
+                            self.objects.values(),
+                            true,
+                        )?
+                    }
+                    (Some(index), false) => {
                         self.physical_observation_snapshot_indexed(organism_id, tick, index)?
                     }
-                    None => self.physical_observation_snapshot(organism_id, tick)?,
+                    (None, false) => self.physical_observation_snapshot(organism_id, tick)?,
                 };
-                let grounded =
+                let mut grounded =
                     GroundedSensorExtractor::extract(&snapshot, &mut self.tracked_objects)?;
-                let candidates = GroundedCandidateEnumerator.enumerate_candidates(&grounded)?;
+                let embodiment = self
+                    .organism_registry
+                    .get(organism_id)
+                    .map(WorldOrganismRecord::embodiment);
+                if terrain_vision {
+                    grounded.calibrate(embodiment)?;
+                }
+                let candidates =
+                    GroundedCandidateEnumerator.enumerate_candidates(&grounded, profile)?;
                 let (mut sensory, body, slots, _transports) = grounded.into_parts();
+                if terrain_vision {
+                    let observer = self.agent_for(organism_id)?;
+                    sensory.channels.visual_affordance = self.terrain_vision_fan(observer);
+                    self.grounded_nonvisual_channels(observer, &mut sensory)?;
+                }
                 let heard = self
                     .speech
                     .heard_tokens(organism_id, body.pose.translation, tick)?;
                 let mut language_context = LanguageContextSnapshot::default();
-                for (index, token) in heard.into_iter().take(MAX_HEARD_TOKENS).enumerate() {
+                for (index, mut token) in heard.into_iter().take(MAX_HEARD_TOKENS).enumerate() {
+                    if terrain_vision {
+                        let gain = embodiment
+                            .map_or(1.0, |body| body.sensor_gain(SensorCapability::Hearing));
+                        token.confidence =
+                            Confidence::new((token.confidence.raw() * gain).clamp(0.0, 1.0))?;
+                    }
+                    token.confidence = Confidence::new(
+                        (token.confidence.raw()
+                            * self.inherited_word_gain(organism_id, token.token_id))
+                        .clamp(0.0, 1.0),
+                    )?;
                     sensory.channels.auditory_acoustic[0] =
                         sensory.channels.auditory_acoustic[0].max(token.confidence.raw());
                     language_context.teacher_channel_marker = language_context
@@ -2081,6 +2818,7 @@ impl HeadlessWorld {
             tick,
             observer,
             self.objects.values(),
+            false,
         )
     }
 
@@ -2097,6 +2835,7 @@ impl HeadlessWorld {
             tick,
             observer,
             self.indexed_nearby_objects(observer, index)?.into_iter(),
+            false,
         )
     }
 
@@ -2106,10 +2845,16 @@ impl HeadlessWorld {
         tick: Tick,
         observer: &WorldObject,
         objects: impl Iterator<Item = &'a WorldObject>,
+        terrain_vision: bool,
     ) -> Result<PhysicalObservationSnapshot, ScaffoldContractError> {
+        let gaze_yaw = observer.body_yaw + observer.head_yaw;
         let observer_pose = Pose {
             translation: observer.position,
-            rotation: Quatf::IDENTITY,
+            rotation: if terrain_vision {
+                Quatf::new(0.0, (gaze_yaw * 0.5).sin(), 0.0, (gaze_yaw * 0.5).cos())
+            } else {
+                Quatf::IDENTITY
+            },
         };
         let observer_velocity = Velocity {
             linear: observer.grounded_physical.velocity,
@@ -2119,7 +2864,8 @@ impl HeadlessWorld {
             .filter(|object| object.id != observer.id && !object.consumed)
             .filter_map(|object| {
                 let measured_distance = distance(observer.position, object.position);
-                (measured_distance <= HEADLESS_VISION_RADIUS).then(|| {
+                let in_sight = !terrain_vision || self.object_in_sight(observer, object);
+                (measured_distance <= HEADLESS_VISION_RADIUS && in_sight).then(|| {
                     Ok((
                         measured_distance,
                         PhysicalObservedObject {
@@ -2127,7 +2873,18 @@ impl HeadlessWorld {
                             tracking_provenance: object.tracking_provenance,
                             tracking_key: object.tracking_key,
                             position: object.position,
-                            properties: object.grounded_physical,
+                            properties: {
+                                let mut properties = object.grounded_physical;
+                                if terrain_vision
+                                    && !self.physical_contact_reachable(
+                                        observer.position,
+                                        object.position,
+                                    )
+                                {
+                                    properties.chemical[2] = 0.0;
+                                }
+                                properties
+                            },
                             contact: measured_distance <= object.radius,
                             confidence: Confidence::new(
                                 proximity_salience(measured_distance, HEADLESS_VISION_RADIUS)
@@ -2153,6 +2910,223 @@ impl HeadlessWorld {
         };
         snapshot.validate_contract()?;
         Ok(snapshot)
+    }
+
+    /// Two local samples of four physical odor bands. No source identity,
+    /// object kind, exact bearing, or target is returned to cognition.
+    fn grounded_nonvisual_channels(
+        &self,
+        observer: &WorldObject,
+        sensory: &mut SensorySnapshot,
+    ) -> Result<(), ScaffoldContractError> {
+        let record = observer
+            .organism_id
+            .and_then(|id| self.organism_registry.get(id));
+        let gain =
+            |capability| record.map_or(1.0, |record| record.embodiment().sensor_gain(capability));
+        let yaw = observer.body_yaw + observer.head_yaw;
+        if let Some(event) = observer
+            .organism_id
+            .and_then(|id| self.pending_player_care.get(&id.raw()))
+        {
+            sensory.channels.tactile_contact[0] = event.social_contact;
+            sensory.channels.auditory_acoustic[1] = event.player_reward;
+        }
+        let lateral = Vec3f::new(-yaw.sin() * 0.25, 0.0, yaw.cos() * 0.25);
+        let samples = [
+            add(observer.position, lateral),
+            subtract(observer.position, lateral),
+        ];
+        for object in self
+            .objects
+            .values()
+            .filter(|object| object.id != observer.id && !object.consumed)
+        {
+            for (side, sample) in samples.iter().enumerate() {
+                let attenuation =
+                    proximity_salience(distance(*sample, object.position), HEADLESS_VISION_RADIUS);
+                for (component, chemical) in
+                    object.grounded_physical.chemical.iter().take(2).enumerate()
+                {
+                    let band = component * 2 + usize::from(*chemical < 0.0);
+                    sensory.channels.smell_chemistry[band * 2 + side] +=
+                        chemical.abs() * attenuation;
+                }
+            }
+            // Contact has its own physical range. Turning away does not remove it.
+            if distance(observer.position, object.position)
+                <= object.radius.max(HEADLESS_CONTACT_RADIUS)
+            {
+                sensory.channels.tactile_contact[0] = 1.0;
+                let heat = object.grounded_physical.surface_temperature;
+                sensory.channels.tactile_contact[3] =
+                    sensory.channels.tactile_contact[3].max(heat.max(0.0));
+                sensory.channels.tactile_contact[4] =
+                    sensory.channels.tactile_contact[4].max((-heat).max(0.0));
+            }
+            if object.carried_by == observer.organism_id && observer.organism_id.is_some() {
+                sensory.channels.tactile_contact[2] = 1.0;
+            }
+        }
+        let ground = self.terrain.as_ref().map_or(Some(0.0), |terrain| {
+            terrain
+                .surface()
+                .height(observer.position.x, observer.position.z)
+        });
+        sensory.channels.tactile_contact[1] =
+            f32::from(ground.is_some_and(|height| (observer.position.y - height).abs() <= 0.1));
+        if let Some(record) = record {
+            sensory.channels.pain_signal = NormalizedScalar::new(
+                (record.biochemistry().body.injury * gain(SensorCapability::Interoception))
+                    .clamp(0.0, 1.0),
+            )?;
+        }
+        if let Some(action) = self.last_action_result.as_ref().filter(|action| {
+            Some(action.command.organism_id) == observer.organism_id
+                && action.execution.succeeded
+                && classify_action(&action.command) == HeadlessAction::Eat
+        }) {
+            if let Some(food) = action
+                .command
+                .target_entity
+                .and_then(|id| self.objects.get(&id.raw()))
+            {
+                let taste = food.grounded_physical.chemical[2] * gain(SensorCapability::Chemical);
+                sensory.channels.tactile_contact[5] = taste.max(0.0);
+                sensory.channels.tactile_contact[6] = (-taste).max(0.0);
+            }
+        }
+        for value in &mut sensory.channels.smell_chemistry {
+            *value = (*value * gain(SensorCapability::Chemical)).clamp(0.0, 1.0);
+        }
+        for value in &mut sensory.channels.tactile_contact {
+            *value = (*value * gain(SensorCapability::Touch)).clamp(0.0, 1.0);
+        }
+        Ok(())
+    }
+
+    fn object_in_sight(&self, observer: &WorldObject, target: &WorldObject) -> bool {
+        let relative = subtract(target.position, observer.position);
+        let bearing = relative.z.atan2(relative.x);
+        let gaze = observer.body_yaw + observer.head_yaw;
+        let angular_delta = (bearing - gaze + std::f32::consts::PI)
+            .rem_euclid(std::f32::consts::TAU)
+            - std::f32::consts::PI;
+        if angular_delta.abs() > VISION_HALF_ANGLE {
+            return false;
+        }
+        let eye = Vec3f::new(
+            observer.position.x,
+            observer.position.y + VISION_EYE_HEIGHT,
+            observer.position.z,
+        );
+        let target_point = Vec3f::new(
+            target.position.x,
+            target.position.y + target.radius * 0.5,
+            target.position.z,
+        );
+        let to_target = subtract(target_point, eye);
+        let range = distance(eye, target_point);
+        if range <= target.radius {
+            return true;
+        }
+        let direction = scale(to_target, 1.0 / range);
+        self.first_sight_hit(eye, direction, range, observer.id, Some(target.id))
+            .is_none_or(|hit| hit >= range - target.radius * 0.25)
+    }
+
+    /// The new grounded profile uses the existing 16 visual lanes as a
+    /// profile-bound fan of nearest solid-surface ranges, not food labels.
+    fn terrain_vision_fan(
+        &self,
+        observer: &WorldObject,
+    ) -> [f32; SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT] {
+        let mut rays = [1.0; SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT];
+        let eye = Vec3f::new(
+            observer.position.x,
+            observer.position.y + VISION_EYE_HEIGHT,
+            observer.position.z,
+        );
+        for (index, range) in rays.iter_mut().enumerate() {
+            let fraction = index as f32 / (SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT - 1) as f32;
+            let yaw =
+                observer.body_yaw + observer.head_yaw + (2.0 * fraction - 1.0) * VISION_HALF_ANGLE;
+            let direction = normalize(Vec3f::new(yaw.cos(), VISION_RAY_PITCH, yaw.sin()));
+            if let Some(hit) =
+                self.first_sight_hit(eye, direction, HEADLESS_VISION_RADIUS, observer.id, None)
+            {
+                *range = (hit / HEADLESS_VISION_RADIUS).clamp(0.0, 1.0);
+            }
+        }
+        rays
+    }
+
+    fn first_sight_hit(
+        &self,
+        origin: Vec3f,
+        direction: Vec3f,
+        max_range: f32,
+        observer: WorldEntityId,
+        target: Option<WorldEntityId>,
+    ) -> Option<f32> {
+        let mut nearest = max_range;
+        let mut found = false;
+        for object in self.objects.values() {
+            if object.id == observer
+                || Some(object.id) == target
+                || object.consumed
+                || object.optical_opacity <= 0.0
+            {
+                continue;
+            }
+            let center = Vec3f::new(
+                object.position.x,
+                object.position.y + object.radius * 0.5,
+                object.position.z,
+            );
+            if let Some(hit) = sight_sphere_hit(origin, direction, center, object.radius, nearest) {
+                nearest = hit;
+                found = true;
+            }
+        }
+        if let Some(terrain) = self.terrain.as_ref() {
+            for bounds in &terrain.surface().obstacles {
+                if let Some(hit) = sight_box_hit(origin, direction, *bounds, nearest) {
+                    nearest = hit;
+                    found = true;
+                }
+            }
+        }
+        let mut previous = 0.0;
+        let mut distance_along = 0.25;
+        while distance_along <= nearest {
+            let point = add(origin, scale(direction, distance_along));
+            let ground = self.terrain.as_ref().map_or(Some(0.0), |terrain| {
+                terrain.surface().height(point.x, point.z)
+            });
+            if ground.is_some_and(|height| point.y <= height) {
+                let mut low = previous;
+                let mut high = distance_along;
+                for _ in 0..8 {
+                    let middle = (low + high) * 0.5;
+                    let point = add(origin, scale(direction, middle));
+                    let surface = self.terrain.as_ref().map_or(Some(0.0), |terrain| {
+                        terrain.surface().height(point.x, point.z)
+                    });
+                    if surface.is_some_and(|height| point.y <= height) {
+                        high = middle;
+                    } else {
+                        low = middle;
+                    }
+                }
+                nearest = high;
+                found = true;
+                break;
+            }
+            previous = distance_along;
+            distance_along += 0.25;
+        }
+        found.then_some(nearest)
     }
 
     pub fn perception_frame(
@@ -2245,6 +3219,9 @@ impl HeadlessWorld {
                         HEADLESS_CONTACT_RADIUS * 2.0,
                     ));
                 }
+                WorldObjectKind::Ball | WorldObjectKind::ActivityToy => {
+                    visual[2] = visual[2].max(salience);
+                }
                 WorldObjectKind::Obstacle => {
                     visual[2] = visual[2].max(salience);
                     tactile[0] = tactile[0].max(if visible.distance <= HEADLESS_CONTACT_RADIUS {
@@ -2322,6 +3299,12 @@ impl HeadlessWorld {
             }
         }
 
+        for token in vocal_tokens.iter_mut().flatten() {
+            token.confidence = Confidence::new(
+                (token.confidence.raw() * self.inherited_word_gain(organism_id, token.token_id))
+                    .clamp(0.0, 1.0),
+            )?;
+        }
         if !contact_entities.is_empty() {
             tactile[1] = 1.0;
         }
@@ -2422,7 +3405,7 @@ impl HeadlessWorld {
         world_entity_id: WorldEntityId,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
         let before = self.clone();
-        let result = self.apply_registered_motor_bundle_inner(bundle, world_entity_id, None);
+        let result = self.apply_registered_motor_bundle_inner(bundle, world_entity_id, None, None);
         if let Err(error) = result {
             *self = before;
             return Err(error);
@@ -2438,7 +3421,7 @@ impl HeadlessWorld {
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
         let before = self.clone();
         let result =
-            self.apply_registered_motor_bundle_inner(bundle, world_entity_id, Some(neural));
+            self.apply_registered_motor_bundle_inner(bundle, world_entity_id, Some(neural), None);
         if let Err(error) = result {
             *self = before;
             return Err(error);
@@ -2457,7 +3440,34 @@ impl HeadlessWorld {
         world_entity_id: WorldEntityId,
         neural: &NeuralEmissionFrame,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
-        self.apply_registered_motor_bundle_inner(bundle, world_entity_id, Some(neural))
+        self.apply_registered_motor_bundle_inner(bundle, world_entity_id, Some(neural), None)
+    }
+
+    /// Organism-owned perception/memory evidence modulates inherited chemistry;
+    /// it supplies no reward or action. The enclosing runtime owns rollback.
+    pub fn apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
+        &mut self,
+        bundle: &MotorCommandBundle,
+        world_entity_id: WorldEntityId,
+        neural: &NeuralEmissionFrame,
+        novelty: f32,
+        object_novelty: &[(WorldEntityId, f32)],
+    ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
+        if !novelty.is_finite()
+            || !(0.0..=1.0).contains(&novelty)
+            || object_novelty.len() > bundle.channels.len()
+            || object_novelty.iter().any(|(id, value)| {
+                id.raw() == 0 || !value.is_finite() || !(0.0..=1.0).contains(value)
+            })
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange.into());
+        }
+        self.apply_registered_motor_bundle_inner(
+            bundle,
+            world_entity_id,
+            Some(neural),
+            Some((novelty, object_novelty)),
+        )
     }
 
     fn apply_registered_motor_bundle_inner(
@@ -2465,6 +3475,7 @@ impl HeadlessWorld {
         bundle: &MotorCommandBundle,
         world_entity_id: WorldEntityId,
         neural: Option<&NeuralEmissionFrame>,
+        novelty: Option<(f32, &[(WorldEntityId, f32)])>,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
         let outcome_tick = self.validate_registered_motor_bundle(bundle, world_entity_id)?;
         let embodiment = self
@@ -2478,6 +3489,20 @@ impl HeadlessWorld {
             .get(bundle.organism_id)
             .ok_or(ScaffoldContractError::InvalidId)?
             .biochemistry();
+        let phenotype = self
+            .organism_registry
+            .get(bundle.organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .phenotype();
+        let locomotor_capacity = biology_before
+            .graph_state()
+            .locomotor_capacity(&phenotype.chemistry.biochemical)?
+            .map(|chemical| {
+                let organ = biology_before.body.organ(alife_core::OrganKind::Locomotor);
+                let reserve = (organ.energy / (0.5 + 0.5 * phenotype.body.metabolic_efficiency))
+                    .clamp(0.0, 1.0);
+                chemical * reserve * organ.integrity
+            });
         let initial_position = self
             .objects
             .get(&world_entity_id.raw())
@@ -2488,13 +3513,15 @@ impl HeadlessWorld {
         let mut channels = bundle
             .channels
             .iter()
-            .map(|command| adapt_motor_channel_to_embodiment(command, &embodiment))
+            .map(|command| {
+                adapt_motor_channel_to_embodiment(command, &embodiment, locomotor_capacity)
+            })
             .collect::<Result<Vec<_>, _>>()?;
         channels.sort_by_key(|command| motor_channel_order(command.channel));
         let mut executed = Vec::with_capacity(channels.len());
         for channel in &channels {
             let command = legacy_action_for_motor_channel(bundle.organism_id, channel)?;
-            let result = if channel.channel == MotorChannel::Vocal {
+            let mut result = if channel.channel == MotorChannel::Vocal {
                 match decode_vocal_channel_payload(channel)? {
                     Some((payload, prompted)) => {
                         self.apply_neural_command(&command, Some(payload), prompted)?
@@ -2504,6 +3531,24 @@ impl HeadlessWorld {
             } else {
                 self.execute_command(&command)?
             };
+            if let Some((_, objects)) = novelty {
+                let interaction_novelty = objects
+                    .iter()
+                    .find(|(id, _)| Some(*id) == result.command.target_entity)
+                    .map_or(0.0, |(_, value)| *value);
+                if result.execution.succeeded
+                    && matches!(
+                        classify_action(&result.command),
+                        HeadlessAction::Inspect
+                            | HeadlessAction::Play
+                            | HeadlessAction::Grab
+                            | HeadlessAction::Eat
+                    )
+                {
+                    result.body_event.investigation = interaction_novelty;
+                    result.body_event.play_stimulation *= 1.0 - interaction_novelty;
+                }
+            }
             executed.push((Some(channel.clone()), result));
         }
 
@@ -2522,15 +3567,20 @@ impl HeadlessWorld {
         let action_and_hazard_event = hazard_contact.map_or(action_body_event, |(_, pain)| {
             merge_hazard_contact_body_event(action_body_event, pain)
         });
-        let ambient_event = if self.has_mating_opportunity(bundle.organism_id, outcome_tick)? {
-            BodyEventDelta {
-                mating_opportunity: 1.0,
-                ..BodyEventDelta::zero()
-            }
-        } else {
-            BodyEventDelta::zero()
+        let ambient_event = BodyEventDelta {
+            mating_opportunity: self.mating_response(bundle.organism_id, outcome_tick)?,
+            ..BodyEventDelta::zero()
         };
         let body_event = combine_body_event(ambient_event, action_and_hazard_event);
+        let mut body_event = combine_body_event(
+            body_event,
+            self.pending_player_care
+                .remove(&bundle.organism_id.raw())
+                .unwrap_or_else(BodyEventDelta::zero),
+        );
+        if let Some((novelty, _)) = novelty {
+            body_event.perceived_novelty = novelty;
+        }
         body_event.validate_contract()?;
         if let Some(neural) = neural {
             self.organism_registry
@@ -2732,13 +3782,20 @@ impl HeadlessWorld {
     ) -> Result<HeadlessActionBiologyReceipt, ScaffoldContractError> {
         let biology_before =
             self.validate_registered_action(command, world_entity_id, outcome_tick)?;
-        let action_result = match mode {
+        let mut action_result = match mode {
             RegisteredCommandMode::Legacy => self.apply_command(command)?,
             RegisteredCommandMode::Neural {
                 speech_payload,
                 prompted,
             } => self.apply_neural_command(command, speech_payload, prompted)?,
         };
+        action_result.body_event = combine_body_event(
+            action_result.body_event,
+            self.pending_player_care
+                .remove(&command.organism_id.raw())
+                .unwrap_or_else(BodyEventDelta::zero),
+        );
+        self.last_action_result = Some(action_result.clone());
         self.organism_registry
             .advance_biology(command.organism_id, outcome_tick, action_result.body_event)
             .map_err(map_organism_registry_error)?;
@@ -2893,12 +3950,13 @@ impl HeadlessWorld {
         mut spec: SpawnSpec<'_>,
     ) -> Result<WorldEntityId, ScaffoldContractError> {
         spec.position.validate()?;
-        if self.terrain.is_some() {
-            spec.position.y = crate::highlands()
+        if let Some(terrain) = self.terrain.as_ref() {
+            spec.position.y = terrain
+                .surface()
                 .height(spec.position.x, spec.position.z)
                 .ok_or(ScaffoldContractError::InvalidId)?;
             if spec.kind == WorldObjectKind::Agent
-                && !crate::highlands().walkable(spec.position.x, spec.position.z)
+                && !terrain.walkable(spec.position.x, spec.position.z)
             {
                 return Err(ScaffoldContractError::InvalidId);
             }
@@ -2916,6 +3974,17 @@ impl HeadlessWorld {
             return Err(ScaffoldContractError::InvalidId);
         }
         let id = WorldEntityId(self.next_entity_id);
+        // Reserve supplied external actor identities immediately, so a future
+        // birth and a save/load normalization cannot reuse or change them.
+        let next_organism_id = match spec.organism_id {
+            Some(organism) => self.next_organism_id.max(
+                organism
+                    .raw()
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::InvalidId)?,
+            ),
+            None => self.next_organism_id,
+        };
         let next_entity_id = self
             .next_entity_id
             .checked_add(1)
@@ -2943,6 +4012,9 @@ impl HeadlessWorld {
             kind: spec.kind,
             organism_id: spec.organism_id,
             position: spec.position,
+            body_yaw: 0.0,
+            head_yaw: 0.0,
+            optical_opacity: 1.0,
             radius: HEADLESS_CONTACT_RADIUS,
             nutrition: spec.nutrition.clamp(0.0, 1.0),
             hazard_pain: spec.hazard_pain.clamp(0.0, 1.0),
@@ -2951,11 +4023,15 @@ impl HeadlessWorld {
             teacher_channel: spec.teacher_channel,
             consumed: false,
             carried_by: None,
-            grounded_physical: GroundedPhysicalProperties::deterministic_default(spawn_sequence),
+            grounded_physical: GroundedPhysicalProperties::deterministic_for_kind(
+                spec.kind,
+                spawn_sequence,
+            ),
             tracking_provenance,
             tracking_key,
         };
         self.next_entity_id = next_entity_id;
+        self.next_organism_id = next_organism_id;
         self.next_spawn_sequence = next_spawn_sequence;
         self.objects.insert(id.raw(), object);
         self.labels.insert(spec.label.to_string(), id);
@@ -2977,6 +4053,30 @@ impl HeadlessWorld {
                 OutcomeProfile::idle(),
                 Vec::new(),
             ),
+            HeadlessAction::NoManipulation => self.finish_action(
+                *command,
+                true,
+                None,
+                physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.0)?,
+                OutcomeProfile::no_manipulation(),
+                Vec::new(),
+            ),
+            HeadlessAction::NoLocomotion => self.finish_action(
+                *command,
+                true,
+                None,
+                physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.0)?,
+                OutcomeProfile::no_manipulation(),
+                Vec::new(),
+            ),
+            HeadlessAction::NoPosture => self.finish_action(
+                *command,
+                true,
+                None,
+                physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.0)?,
+                OutcomeProfile::no_manipulation(),
+                Vec::new(),
+            ),
             HeadlessAction::Rest => self.finish_action(
                 *command,
                 true,
@@ -2985,6 +4085,65 @@ impl HeadlessWorld {
                 OutcomeProfile::rest(),
                 Vec::new(),
             ),
+            HeadlessAction::LookLeft | HeadlessAction::LookRight | HeadlessAction::LookCenter => {
+                let agent = self
+                    .objects
+                    .get_mut(&agent_id.raw())
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                agent.head_yaw = match action {
+                    HeadlessAction::LookLeft => (agent.head_yaw
+                        + HEAD_SWIVEL_STEP * command.intensity.raw())
+                    .min(HEAD_SWIVEL_LIMIT),
+                    HeadlessAction::LookRight => (agent.head_yaw
+                        - HEAD_SWIVEL_STEP * command.intensity.raw())
+                    .max(-HEAD_SWIVEL_LIMIT),
+                    HeadlessAction::LookCenter => 0.0,
+                    _ => unreachable!(),
+                };
+                self.finish_action(
+                    *command,
+                    true,
+                    None,
+                    physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.005)?,
+                    OutcomeProfile::look(),
+                    Vec::new(),
+                )
+            }
+            HeadlessAction::TurnLeft | HeadlessAction::TurnRight => {
+                let agent = self
+                    .objects
+                    .get_mut(&agent_id.raw())
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                let sign = if matches!(action, HeadlessAction::TurnLeft) {
+                    1.0
+                } else {
+                    -1.0
+                };
+                agent.body_yaw = (agent.body_yaw
+                    + sign * HEAD_SWIVEL_STEP * command.intensity.raw()
+                    + std::f32::consts::PI)
+                    .rem_euclid(std::f32::consts::TAU)
+                    - std::f32::consts::PI;
+                self.finish_action(
+                    *command,
+                    true,
+                    None,
+                    physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.01)?,
+                    OutcomeProfile::look(),
+                    Vec::new(),
+                )
+            }
+            HeadlessAction::HoldGaze => self.finish_action(
+                *command,
+                true,
+                None,
+                physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.0)?,
+                OutcomeProfile::no_manipulation(),
+                Vec::new(),
+            ),
+            HeadlessAction::StepForward => {
+                self.execute_move(*command, agent_id, MoveIntent::Forward)
+            }
             HeadlessAction::Inspect => {
                 let target = match self.require_target(command) {
                     Ok(target) => target,
@@ -3046,6 +4205,7 @@ impl HeadlessWorld {
             HeadlessAction::Approach => self.execute_move(*command, agent_id, MoveIntent::Approach),
             HeadlessAction::Flee => self.execute_move(*command, agent_id, MoveIntent::Flee),
             HeadlessAction::Grab => self.execute_grab(*command, agent_id),
+            HeadlessAction::Play => self.execute_play(*command, agent_id),
             HeadlessAction::Vocalize => {
                 let token = self.emit_vocalization_token(command.organism_id)?;
                 self.finish_action(
@@ -3058,6 +4218,64 @@ impl HeadlessWorld {
                 )
             }
         }
+    }
+
+    fn execute_play(
+        &mut self,
+        command: ActionCommand,
+        agent_id: WorldEntityId,
+    ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+        let target = match self.require_target(&command) {
+            Ok(target) => target,
+            Err(_) => return self.invalid_target(command, command.target_entity),
+        };
+        let agent = self
+            .objects
+            .get(&agent_id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let toy = self
+            .objects
+            .get(&target.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let effector = self
+            .organism_registry
+            .get(command.organism_id)
+            .is_none_or(|record| {
+                record
+                    .embodiment()
+                    .effector_gain(EffectorCapability::Manipulation)
+                    > 0.0
+            });
+        if !effector
+            || toy.consumed
+            || !matches!(
+                toy.kind,
+                WorldObjectKind::Ball | WorldObjectKind::ActivityToy
+            )
+            || toy.carried_by.is_some_and(|id| id != command.organism_id)
+            || !self.physical_contact_reachable(agent.position, toy.position)
+        {
+            return self.finish_action(
+                command,
+                false,
+                Some(ReferenceActionFailure::MissingAffordance),
+                physical(PhysicalContactKind::None, Some(target), Vec3f::ZERO, 0.06)?,
+                OutcomeProfile::missing_affordance(),
+                Vec::new(),
+            );
+        }
+        // A voluntary physical activation. Stimulation is a measured event;
+        // the inherited emitter/receptor/value circuit determines its effect.
+        let mut profile = OutcomeProfile::grab();
+        profile.body_event.play_stimulation = command.intensity.raw();
+        self.finish_action(
+            command,
+            true,
+            None,
+            physical(PhysicalContactKind::Touch, Some(target), Vec3f::ZERO, 0.06)?,
+            profile,
+            vec![target],
+        )
     }
 
     fn execute_grab(
@@ -3104,11 +4322,14 @@ impl HeadlessWorld {
             });
         let target_is_mobile = matches!(
             target_kind,
-            WorldObjectKind::Food | WorldObjectKind::Hazard | WorldObjectKind::Token
+            WorldObjectKind::Food
+                | WorldObjectKind::Hazard
+                | WorldObjectKind::Token
+                | WorldObjectKind::Ball
         );
         let target_is_self = target == agent_id || target_organism == Some(command.organism_id);
         let owned_by_other = target_carried_by.is_some_and(|owner| owner != command.organism_id);
-        let within_reach = distance(agent_position, target_position) <= EAT_RADIUS;
+        let within_reach = self.physical_contact_reachable(agent_position, target_position);
         if !has_manipulation_effector
             || !target_is_live
             || !target_is_mobile
@@ -3129,7 +4350,13 @@ impl HeadlessWorld {
             .objects
             .get_mut(&target.raw())
             .ok_or(ScaffoldContractError::InvalidId)?;
-        object.carried_by = Some(command.organism_id);
+        // Contact is reversible: the same legal target releases what this
+        // organism already holds. A painful carried object must be escapable.
+        object.carried_by = if target_carried_by == Some(command.organism_id) {
+            None
+        } else {
+            Some(command.organism_id)
+        };
         self.finish_action(
             command,
             true,
@@ -3184,42 +4411,55 @@ impl HeadlessWorld {
             return self.invalid_target(command, Some(target));
         };
         let agent = self.agent_for(command.organism_id)?;
-        if distance(agent.position, target_position) > EAT_RADIUS {
+        if !self.physical_contact_reachable(agent.position, target_position) {
             return self.finish_action(
                 command,
                 false,
                 Some(ReferenceActionFailure::MissingAffordance),
-                physical(
-                    PhysicalContactKind::Blocked,
-                    Some(target),
-                    Vec3f::ZERO,
-                    0.04,
-                )?,
+                physical(PhysicalContactKind::None, Some(target), Vec3f::ZERO, 0.04)?,
                 OutcomeProfile::missing_affordance(),
-                vec![target],
+                Vec::new(),
             );
         }
-        let Some(object) = self.objects.get_mut(&target.raw()) else {
+        let Some(object) = self.objects.get(&target.raw()) else {
             return self.invalid_target(command, Some(target));
         };
         if object.kind != WorldObjectKind::Food || object.consumed {
+            let consumed = object.consumed;
+            let kind = object.kind;
+            let hazard_pain = object.hazard_pain;
+            let touched = (!consumed).then_some(target).into_iter().collect();
+            let profile = if kind == WorldObjectKind::Hazard && !consumed {
+                OutcomeProfile::hazard(hazard_pain)
+            } else {
+                OutcomeProfile::missing_affordance()
+            };
             return self.finish_action(
                 command,
                 false,
                 Some(ReferenceActionFailure::MissingAffordance),
                 physical(
-                    PhysicalContactKind::Blocked,
+                    if consumed {
+                        PhysicalContactKind::None
+                    } else {
+                        PhysicalContactKind::Touch
+                    },
                     Some(target),
                     Vec3f::ZERO,
                     0.04,
                 )?,
-                OutcomeProfile::missing_affordance(),
-                vec![target],
+                profile,
+                touched,
             );
         }
+        let object = self
+            .objects
+            .get_mut(&target.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
         let nutrition = object.nutrition;
         let pain = object.hazard_pain;
         object.consumed = true;
+        object.carried_by = None;
         self.ecology.record_consumed(target, self.tick);
         self.rebuild_ecology_metrics();
         self.finish_action(
@@ -3250,6 +4490,17 @@ impl HeadlessWorld {
             .position;
         let max_step = MOVE_STEP * command.intensity.raw();
         let destination = match intent {
+            MoveIntent::Forward => {
+                let yaw = self
+                    .objects
+                    .get(&agent_id.raw())
+                    .expect("agent exists")
+                    .body_yaw;
+                Some(add(
+                    start,
+                    Vec3f::new(yaw.cos() * max_step, 0.0, yaw.sin() * max_step),
+                ))
+            }
             MoveIntent::Absolute => command
                 .target_position
                 .or_else(|| {
@@ -3271,8 +4522,8 @@ impl HeadlessWorld {
             return self.invalid_target(command, command.target_entity);
         };
         destination.validate()?;
-        if self.terrain.is_some() {
-            let Some(grounded) = crate::highlands().resolve_move(start, destination) else {
+        if let Some(terrain) = self.terrain.as_ref() {
+            let Some(grounded) = terrain.resolve_move(start, destination) else {
                 return self.finish_action(
                     command,
                     false,
@@ -3319,6 +4570,9 @@ impl HeadlessWorld {
         let displacement = subtract(destination, start);
         if let Some(agent) = self.objects.get_mut(&agent_id.raw()) {
             agent.position = destination;
+            if displacement.x.hypot(displacement.z) > f32::EPSILON {
+                agent.body_yaw = displacement.z.atan2(displacement.x);
+            }
         }
         self.move_carried_objects(command.organism_id, displacement);
         let zone_hazard = self
@@ -3446,9 +4700,9 @@ impl HeadlessWorld {
             command,
             false,
             Some(ReferenceActionFailure::ActionRejected),
-            physical(PhysicalContactKind::Blocked, target, Vec3f::ZERO, 0.03)?,
+            physical(PhysicalContactKind::None, target, Vec3f::ZERO, 0.03)?,
             OutcomeProfile::invalid_target(),
-            target.into_iter().collect(),
+            Vec::new(),
         )
     }
 
@@ -3593,6 +4847,30 @@ impl HeadlessWorld {
         })
     }
 
+    /// Contact legality uses solid geometry, independently of gaze and opacity.
+    fn physical_contact_reachable(&self, start: Vec3f, end: Vec3f) -> bool {
+        let length = distance(start, end);
+        if length > EAT_RADIUS || self.blocking_object_between(start, end).is_some() {
+            return false;
+        }
+        let Some(terrain) = self.terrain.as_ref() else {
+            return true;
+        };
+        if length <= f32::EPSILON {
+            return !terrain
+                .surface()
+                .obstacles
+                .iter()
+                .any(|bounds| sight_box_hit(start, Vec3f::ZERO, *bounds, 0.0).is_some());
+        }
+        let direction = scale(subtract(end, start), 1.0 / length);
+        !terrain
+            .surface()
+            .obstacles
+            .iter()
+            .any(|bounds| sight_box_hit(start, direction, *bounds, length).is_some())
+    }
+
     fn hazard_contact_at(&self, position: Vec3f) -> Option<(WorldEntityId, f32)> {
         self.objects
             .values()
@@ -3675,13 +4953,17 @@ impl HeadlessWorld {
             if self.tick.raw() < policy.next_spawn_tick.raw() {
                 continue;
             }
+            let generated_prefix = format!("{}-", policy.label_prefix);
             let active_for_prefix = self
                 .objects
                 .values()
                 .filter(|object| {
                     object.kind == WorldObjectKind::Food
                         && !object.consumed
-                        && object.label.starts_with(&policy.label_prefix)
+                        && object
+                            .label
+                            .strip_prefix(&generated_prefix)
+                            .is_some_and(|suffix| suffix.parse::<u32>().is_ok())
                 })
                 .count();
             if active_for_prefix >= policy.max_active
@@ -3699,7 +4981,7 @@ impl HeadlessWorld {
             };
             let label = format!("{}-{}", policy.label_prefix, policy.spawned_count);
             let mut position = deterministic_zone_position(&zone, policy.spawned_count);
-            if self.terrain.is_some() {
+            if let Some(terrain) = self.terrain.as_ref() {
                 position.z = zone.center.z + position.y - zone.center.y;
                 position.y = zone.center.y;
                 // Keep a blocked sample from permanently starving this spawn policy.
@@ -3708,7 +4990,7 @@ impl HeadlessWorld {
                     .find_map(|fraction| {
                         let x = zone.center.x + (position.x - zone.center.x) * fraction;
                         let z = zone.center.z + (position.z - zone.center.z) * fraction;
-                        crate::highlands()
+                        terrain
                             .walkable(x, z)
                             .then_some(Vec3f::new(x, position.y, z))
                     });
@@ -3814,9 +5096,14 @@ fn write_world_object_signature(
         WorldObjectKind::Hazard => 2,
         WorldObjectKind::Obstacle => 3,
         WorldObjectKind::Token => 4,
+        WorldObjectKind::Ball => 5,
+        WorldObjectKind::ActivityToy => 6,
     });
     write_optional_u64(digest, object.organism_id.map(OrganismId::raw));
     write_vec3_bits(digest, object.position);
+    write_f32_bits(digest, object.body_yaw);
+    write_f32_bits(digest, object.head_yaw);
+    write_f32_bits(digest, object.optical_opacity);
     write_f32_bits(digest, object.radius);
     write_f32_bits(digest, object.nutrition);
     write_f32_bits(digest, object.hazard_pain);
@@ -4026,6 +5313,15 @@ impl HeadlessScenarioBuilder {
         if let Some(id) = self.world.entity_id(label) {
             if let Some(object) = self.world.objects.get_mut(&id.raw()) {
                 object.radius = radius.max(0.1);
+            }
+        }
+        self
+    }
+
+    pub fn toy(mut self, label: &str, position: Vec3f, movable: bool) -> Self {
+        if self.error.is_none() {
+            if let Err(error) = self.world.spawn_toy(label, position, movable) {
+                self.error = Some(error);
             }
         }
         self
@@ -4461,13 +5757,24 @@ impl ReferenceOutcomeObserver for SharedOutcomeObserver {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HeadlessAction {
     Idle,
+    NoManipulation,
+    NoLocomotion,
+    NoPosture,
     Rest,
+    LookLeft,
+    LookRight,
+    LookCenter,
+    TurnLeft,
+    TurnRight,
+    StepForward,
+    HoldGaze,
     Inspect,
     Move,
     Approach,
     Flee,
     Eat,
     Grab,
+    Play,
     Vocalize,
 }
 
@@ -4481,13 +5788,22 @@ enum RegisteredCommandMode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MoveIntent {
+    Forward,
     Absolute,
     Approach,
     Flee,
 }
 
 fn classify_action(command: &ActionCommand) -> HeadlessAction {
-    if command.action_id == HeadlessActionIds::EAT {
+    if command.action_id == HeadlessActionIds::STEP_FORWARD {
+        HeadlessAction::StepForward
+    } else if command.action_id == HeadlessActionIds::TURN_LEFT {
+        HeadlessAction::TurnLeft
+    } else if command.action_id == HeadlessActionIds::TURN_RIGHT {
+        HeadlessAction::TurnRight
+    } else if command.action_id == HeadlessActionIds::HOLD_GAZE {
+        HeadlessAction::HoldGaze
+    } else if command.action_id == HeadlessActionIds::EAT {
         HeadlessAction::Eat
     } else if command.action_id == HeadlessActionIds::APPROACH {
         HeadlessAction::Approach
@@ -4495,11 +5811,26 @@ fn classify_action(command: &ActionCommand) -> HeadlessAction {
         HeadlessAction::Flee
     } else if command.action_id == HeadlessActionIds::GRAB {
         HeadlessAction::Grab
+    } else if command.action_id == HeadlessActionIds::PLAY {
+        HeadlessAction::Play
+    } else if command.action_id == HeadlessActionIds::NO_MANIPULATION {
+        HeadlessAction::NoManipulation
+    } else if command.action_id == HeadlessActionIds::NO_LOCOMOTION {
+        HeadlessAction::NoLocomotion
+    } else if command.action_id == HeadlessActionIds::NO_POSTURE {
+        HeadlessAction::NoPosture
+    } else if command.action_id == HeadlessActionIds::LOOK_LEFT {
+        HeadlessAction::LookLeft
+    } else if command.action_id == HeadlessActionIds::LOOK_RIGHT {
+        HeadlessAction::LookRight
+    } else if command.action_id == HeadlessActionIds::LOOK_CENTER {
+        HeadlessAction::LookCenter
     } else {
         match command.kind {
             ActionKind::Idle => HeadlessAction::Idle,
             ActionKind::Rest => HeadlessAction::Rest,
             ActionKind::Inspect => HeadlessAction::Inspect,
+            ActionKind::Look => HeadlessAction::LookCenter,
             ActionKind::Move => HeadlessAction::Move,
             ActionKind::Hold | ActionKind::Interact => HeadlessAction::Grab,
             ActionKind::Vocalize | ActionKind::Write | ActionKind::Gesture => {
@@ -4535,9 +5866,19 @@ fn effector_capability_for_motor_channel(command: &ChannelCommand) -> EffectorCa
     }
 }
 
+fn conception_trial(seed: u64, maternal: OrganismId, paternal: OrganismId, tick: Tick) -> f32 {
+    let mut bits =
+        seed ^ maternal.raw().rotate_left(17) ^ paternal.raw().rotate_left(31) ^ tick.raw();
+    bits = (bits ^ (bits >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    bits = (bits ^ (bits >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    bits ^= bits >> 31;
+    (bits >> 40) as f32 / (1_u32 << 24) as f32
+}
+
 fn adapt_motor_channel_to_embodiment(
     command: &ChannelCommand,
     embodiment: &EmbodimentState,
+    locomotor_capacity: Option<f32>,
 ) -> Result<ChannelCommand, HeadlessMotorTransactionError> {
     let capability = effector_capability_for_motor_channel(command);
     let mut gain = embodiment.effector_gain(capability);
@@ -4553,7 +5894,12 @@ fn adapt_motor_channel_to_embodiment(
         gain *= embodiment.proprioceptive_gain();
     }
     let mut adapted = command.clone();
-    adapted.intensity = Intensity::new((adapted.intensity.raw() * gain).clamp(0.0, 1.0))?;
+    let intensity = (adapted.intensity.raw() * gain).clamp(0.0, 1.0);
+    adapted.intensity = Intensity::new(if capability == EffectorCapability::Translation {
+        intensity * locomotor_capacity.unwrap_or(1.0)
+    } else {
+        intensity
+    })?;
     adapted.validate_contract()?;
     Ok(adapted)
 }
@@ -4599,19 +5945,27 @@ fn legacy_action_for_motor_channel(
         MotorChannel::Locomotion => (
             if command.primitive == HeadlessActionIds::APPROACH
                 || command.primitive == HeadlessActionIds::FLEE
+                || command.primitive == HeadlessActionIds::NO_LOCOMOTION
+                || command.primitive == HeadlessActionIds::STEP_FORWARD
             {
                 command.primitive
             } else {
                 ActionKind::Move.canonical_id()
             },
             ActionKind::Move,
-            command
-                .target
-                .unwrap_or_else(|| alife_core::ActionTarget::new(None, Some(command.direction))),
+            if command.primitive == HeadlessActionIds::NO_LOCOMOTION {
+                alife_core::ActionTarget::NONE
+            } else {
+                command
+                    .target
+                    .unwrap_or_else(|| alife_core::ActionTarget::new(None, Some(command.direction)))
+            },
         ),
         MotorChannel::Manipulation => (
             if command.primitive == HeadlessActionIds::EAT
                 || command.primitive == HeadlessActionIds::GRAB
+                || command.primitive == HeadlessActionIds::PLAY
+                || command.primitive == HeadlessActionIds::NO_MANIPULATION
             {
                 command.primitive
             } else {
@@ -4622,9 +5976,13 @@ fn legacy_action_for_motor_channel(
             } else {
                 ActionKind::Interact
             },
-            command
-                .target
-                .unwrap_or_else(|| alife_core::ActionTarget::new(None, Some(command.direction))),
+            if command.primitive == HeadlessActionIds::NO_MANIPULATION {
+                alife_core::ActionTarget::NONE
+            } else {
+                command
+                    .target
+                    .unwrap_or_else(|| alife_core::ActionTarget::new(None, Some(command.direction)))
+            },
         ),
         MotorChannel::Vocal => (
             ActionKind::Vocalize.canonical_id(),
@@ -4646,10 +6004,32 @@ fn legacy_action_for_motor_channel(
             ActionKind::Inspect,
             command.target.unwrap_or(alife_core::ActionTarget::NONE),
         ),
+        MotorChannel::Posture if command.primitive == HeadlessActionIds::NO_POSTURE => (
+            HeadlessActionIds::NO_POSTURE,
+            ActionKind::Hold,
+            alife_core::ActionTarget::NONE,
+        ),
         MotorChannel::Posture => {
             return Err(HeadlessMotorTransactionError::UnsupportedChannel(
                 command.channel,
             ));
+        }
+        MotorChannel::Orientation
+            if matches!(
+                command.primitive,
+                HeadlessActionIds::LOOK_LEFT
+                    | HeadlessActionIds::LOOK_RIGHT
+                    | HeadlessActionIds::LOOK_CENTER
+                    | HeadlessActionIds::TURN_LEFT
+                    | HeadlessActionIds::TURN_RIGHT
+                    | HeadlessActionIds::HOLD_GAZE
+            ) =>
+        {
+            (
+                command.primitive,
+                ActionKind::Look,
+                alife_core::ActionTarget::NONE,
+            )
         }
         MotorChannel::Orientation | MotorChannel::SpeciesSpecific(_) => {
             return Err(HeadlessMotorTransactionError::UnsupportedChannel(
@@ -4679,6 +6059,10 @@ fn combine_body_event(total: BodyEventDelta, event: BodyEventDelta) -> BodyEvent
         temperature_stress: (total.temperature_stress + event.temperature_stress).clamp(0.0, 1.0),
         nutrition: (total.nutrition + event.nutrition).clamp(0.0, 1.0),
         social_contact: (total.social_contact + event.social_contact).clamp(0.0, 1.0),
+        player_reward: (total.player_reward + event.player_reward).clamp(0.0, 1.0),
+        play_stimulation: (total.play_stimulation + event.play_stimulation).clamp(0.0, 1.0),
+        perceived_novelty: (total.perceived_novelty + event.perceived_novelty).clamp(0.0, 1.0),
+        investigation: (total.investigation + event.investigation).clamp(0.0, 1.0),
         sleep_recovery: (total.sleep_recovery + event.sleep_recovery).clamp(0.0, 1.0),
         mating_opportunity: (total.mating_opportunity + event.mating_opportunity).clamp(0.0, 1.0),
     }
@@ -4777,7 +6161,14 @@ fn validate_persisted_object(object: &WorldObject) -> Result<(), ScaffoldContrac
     if !object.radius.is_finite() || object.radius <= 0.0 {
         return Err(ScaffoldContractError::ScalarOutOfRange);
     }
-    for value in [object.nutrition, object.hazard_pain, object.social_affinity] {
+    for value in [
+        object.nutrition,
+        object.hazard_pain,
+        object.social_affinity,
+        object.body_yaw,
+        object.head_yaw,
+        object.optical_opacity,
+    ] {
         if !value.is_finite() {
             return Err(ScaffoldContractError::NonFiniteFloat);
         }
@@ -4785,6 +6176,8 @@ fn validate_persisted_object(object: &WorldObject) -> Result<(), ScaffoldContrac
     if !(0.0..=1.0).contains(&object.nutrition)
         || !(0.0..=1.0).contains(&object.hazard_pain)
         || !(-1.0..=1.0).contains(&object.social_affinity)
+        || object.head_yaw.abs() > HEAD_SWIVEL_LIMIT
+        || !(0.0..=1.0).contains(&object.optical_opacity)
     {
         return Err(ScaffoldContractError::ScalarOutOfRange);
     }
@@ -4803,6 +6196,30 @@ struct OutcomeProfile {
 }
 
 impl OutcomeProfile {
+    fn look() -> Self {
+        Self::new(
+            DriveDelta::zero(),
+            EndocrineDelta::zero(),
+            0.0,
+            0.0,
+            -0.002,
+            0.0,
+            false,
+        )
+    }
+
+    fn no_manipulation() -> Self {
+        Self::new(
+            DriveDelta::zero(),
+            EndocrineDelta::zero(),
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            false,
+        )
+    }
+
     fn idle() -> Self {
         Self::new(
             DriveDelta::zero(),
@@ -4829,7 +6246,9 @@ impl OutcomeProfile {
             },
             0.0,
             0.0,
-            0.08,
+            // Rest relieves fatigue through sleep_recovery below. It supplies
+            // no nutrients; basal upkeep and tissue repair still spend reserve.
+            0.0,
             0.05,
             false,
         )
@@ -4933,16 +6352,12 @@ impl OutcomeProfile {
     fn blocked() -> Self {
         Self::new(
             DriveDelta {
-                pain: 0.05,
                 brain_atp: -0.03,
                 ..DriveDelta::zero()
             },
-            EndocrineDelta {
-                cortisol: 0.08,
-                ..EndocrineDelta::zero()
-            },
-            0.45,
-            0.05,
+            EndocrineDelta::zero(),
+            1.0,
+            0.0,
             -0.03,
             0.6,
             true,
@@ -4956,12 +6371,8 @@ impl OutcomeProfile {
                 brain_atp: -0.02,
                 ..DriveDelta::zero()
             },
-            EndocrineDelta {
-                cortisol: 0.1,
-                dopamine: -0.05,
-                ..EndocrineDelta::zero()
-            },
-            0.65,
+            EndocrineDelta::zero(),
+            1.0,
             0.0,
             -0.02,
             0.85,
@@ -4976,11 +6387,8 @@ impl OutcomeProfile {
                 brain_atp: -0.01,
                 ..DriveDelta::zero()
             },
-            EndocrineDelta {
-                cortisol: 0.08,
-                ..EndocrineDelta::zero()
-            },
-            0.7,
+            EndocrineDelta::zero(),
+            1.0,
             0.0,
             -0.01,
             0.9,
@@ -5023,55 +6431,30 @@ impl OutcomeProfile {
     }
 
     fn social_contact(affinity: f32) -> Self {
-        let affinity = affinity.clamp(-1.0, 1.0);
-        if affinity >= 0.0 {
-            Self::new(
-                DriveDelta {
-                    loneliness: -0.08 * affinity,
-                    brain_atp: -0.02,
-                    ..DriveDelta::zero()
-                },
-                EndocrineDelta {
-                    oxytocin: 0.08 * affinity,
-                    serotonin: 0.03 * affinity,
-                    ..EndocrineDelta::zero()
-                },
-                0.02,
-                0.0,
-                -0.02,
-                0.15,
-                false,
-            )
-            .with_body_event(BodyEventDelta {
-                social_contact: affinity.abs(),
-                ..BodyEventDelta::zero()
-            })
-        } else {
-            let fear = affinity.abs();
-            Self::new(
-                DriveDelta {
-                    fear: 0.18 * fear,
-                    pain: 0.02 * fear,
-                    brain_atp: -0.04,
-                    ..DriveDelta::zero()
-                },
-                EndocrineDelta {
-                    adrenaline: 0.12 * fear,
-                    cortisol: 0.10 * fear,
-                    oxytocin: -0.04 * fear,
-                    ..EndocrineDelta::zero()
-                },
-                0.20 * fear,
-                0.02 * fear,
-                -0.04,
-                0.35,
-                true,
-            )
-            .with_body_event(BodyEventDelta {
-                social_contact: fear,
-                ..BodyEventDelta::zero()
-            })
-        }
+        // A negative affinity label is not a physical attack. It must neither
+        // manufacture fear nor turn into positive affiliative contact via abs.
+        let affinity = affinity.clamp(0.0, 1.0);
+        Self::new(
+            DriveDelta {
+                loneliness: -0.08 * affinity,
+                brain_atp: -0.02,
+                ..DriveDelta::zero()
+            },
+            EndocrineDelta {
+                oxytocin: 0.08 * affinity,
+                serotonin: 0.03 * affinity,
+                ..EndocrineDelta::zero()
+            },
+            0.0,
+            0.0,
+            -0.02,
+            0.15,
+            false,
+        )
+        .with_body_event(BodyEventDelta {
+            social_contact: affinity,
+            ..BodyEventDelta::zero()
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -5107,7 +6490,7 @@ impl OutcomeProfile {
     }
 
     fn with_social_contact(mut self, affinity: f32) -> Self {
-        self.body_event.social_contact = affinity.clamp(-1.0, 1.0).abs();
+        self.body_event.social_contact = affinity.clamp(0.0, 1.0);
         self
     }
 }
@@ -5165,6 +6548,63 @@ fn distance(a: Vec3f, b: Vec3f) -> f32 {
     (dx * dx + dy * dy + dz * dz).sqrt()
 }
 
+fn add(a: Vec3f, b: Vec3f) -> Vec3f {
+    Vec3f::new(a.x + b.x, a.y + b.y, a.z + b.z)
+}
+
+fn scale(value: Vec3f, factor: f32) -> Vec3f {
+    Vec3f::new(value.x * factor, value.y * factor, value.z * factor)
+}
+
+fn normalize(value: Vec3f) -> Vec3f {
+    let length = distance(value, Vec3f::ZERO);
+    scale(value, 1.0 / length)
+}
+
+fn sight_sphere_hit(
+    origin: Vec3f,
+    direction: Vec3f,
+    center: Vec3f,
+    radius: f32,
+    max_range: f32,
+) -> Option<f32> {
+    let relative = subtract(origin, center);
+    let projection = relative.x * direction.x + relative.y * direction.y + relative.z * direction.z;
+    let offset = relative.x * relative.x + relative.y * relative.y + relative.z * relative.z
+        - radius * radius;
+    let discriminant = projection * projection - offset;
+    if discriminant < 0.0 {
+        return None;
+    }
+    let hit = (-projection - discriminant.sqrt()).max(0.0);
+    (hit <= max_range).then_some(hit)
+}
+
+fn sight_box_hit(origin: Vec3f, direction: Vec3f, bounds: [f32; 6], max_range: f32) -> Option<f32> {
+    let mut entry = 0.0_f32;
+    let mut exit = max_range;
+    for (position, velocity, minimum, maximum) in [
+        (origin.x, direction.x, bounds[0], bounds[2]),
+        (origin.y, direction.y, bounds[4], bounds[5]),
+        (origin.z, direction.z, bounds[1], bounds[3]),
+    ] {
+        if velocity.abs() <= f32::EPSILON {
+            if position < minimum || position > maximum {
+                return None;
+            }
+        } else {
+            let near = (minimum - position) / velocity;
+            let far = (maximum - position) / velocity;
+            entry = entry.max(near.min(far));
+            exit = exit.min(near.max(far));
+            if entry > exit {
+                return None;
+            }
+        }
+    }
+    Some(entry)
+}
+
 fn perception_cell(position: Vec3f) -> (i32, i32, i32) {
     let scale = 1.0 / HEADLESS_VISION_RADIUS;
     (
@@ -5216,6 +6656,42 @@ fn step_away(start: Vec3f, target: Vec3f, step: f32) -> Vec3f {
             start.y + delta.y / length * step,
             start.z + delta.z / length * step,
         )
+    }
+}
+
+#[cfg(test)]
+mod biochemical_outcome_tests {
+    use super::*;
+
+    #[test]
+    fn failures_report_disappointment_not_injury_and_affinity_is_not_threat() {
+        let genes = alife_core::BiologicalValueProfile::default();
+        for profile in [
+            OutcomeProfile::blocked(),
+            OutcomeProfile::missing_affordance(),
+            OutcomeProfile::invalid_target(),
+        ] {
+            assert_eq!(profile.frustration, 1.0); // An observed failed attempt, not a punishment magnitude.
+            assert_eq!(profile.body_event.damage, 0.0);
+            assert_eq!(profile.pain, 0.0);
+            assert_eq!(profile.homeostatic_delta.hormones, EndocrineDelta::zero());
+            assert!(profile.frustration * genes.disappointment < genes.injury * 0.1);
+        }
+        for affinity in [-1.0, 0.0, 0.5] {
+            let profile = OutcomeProfile::social_contact(affinity);
+            assert_eq!(profile.body_event.social_contact, affinity.max(0.0));
+            assert_eq!(profile.body_event.damage, 0.0);
+            assert_eq!(profile.homeostatic_delta.drives.fear, 0.0);
+            assert_eq!(profile.homeostatic_delta.drives.pain, 0.0);
+            assert_eq!(profile.frustration, 0.0);
+            assert_eq!(
+                OutcomeProfile::grab()
+                    .with_social_contact(affinity)
+                    .body_event
+                    .social_contact,
+                affinity.max(0.0)
+            );
+        }
     }
 }
 
@@ -5388,6 +6864,70 @@ mod task_6_factorized_motor_tests {
             Some(ORGANISM_ID)
         );
 
+        let initial_position = world.agent_for(ORGANISM_ID).unwrap().position;
+        let neutral_locomotion = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            HeadlessActionIds::NO_LOCOMOTION,
+            ActionKind::Move,
+            None,
+            None,
+        )
+        .unwrap();
+        let still_result = world.apply_command(&neutral_locomotion).unwrap();
+        assert!(still_result.execution.succeeded);
+        assert_eq!(
+            world.agent_for(ORGANISM_ID).unwrap().position,
+            initial_position
+        );
+        let neutral_posture = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            HeadlessActionIds::NO_POSTURE,
+            ActionKind::Hold,
+            None,
+            None,
+        )
+        .unwrap();
+        let posture_result = world.apply_command(&neutral_posture).unwrap();
+        assert!(posture_result.execution.succeeded);
+        assert_eq!(
+            posture_result.execution.physical.contact,
+            PhysicalContactKind::None
+        );
+
+        let neutral_manipulation = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            HeadlessActionIds::NO_MANIPULATION,
+            ActionKind::Interact,
+            None,
+            None,
+        )
+        .unwrap();
+        let neutral_result = world.apply_command(&neutral_manipulation).unwrap();
+        assert!(neutral_result.execution.succeeded);
+        assert_eq!(
+            neutral_result.execution.physical.contact,
+            PhysicalContactKind::None
+        );
+        assert_eq!(
+            world.entity(near_food).unwrap().carried_by,
+            Some(ORGANISM_ID)
+        );
+
+        let release_result = world.apply_command(&nearby_grab).unwrap();
+        assert!(release_result.execution.succeeded);
+        assert_eq!(world.entity(near_food).unwrap().carried_by, None);
+        assert!(
+            world
+                .apply_command(&nearby_grab)
+                .unwrap()
+                .execution
+                .succeeded
+        );
+        assert_eq!(
+            world.entity(near_food).unwrap().carried_by,
+            Some(ORGANISM_ID)
+        );
+
         world.objects.get_mut(&near_food.raw()).unwrap().carried_by = Some(OrganismId(99));
         let ownership_result = world.apply_command(&nearby_grab).unwrap();
         assert!(!ownership_result.execution.succeeded);
@@ -5489,17 +7029,17 @@ mod task_6_factorized_motor_tests {
             );
             assert_eq!(
                 world.entity(agent).unwrap().grounded_physical.velocity,
-                Vec3f::new(1.0, 0.0, 0.0),
+                Vec3f::new(0.1, 0.0, 0.0),
                 "{label}"
             );
             assert_eq!(
                 world.entity(neighbor).unwrap().position,
-                Vec3f::new(1.5, 0.0, 0.0),
+                Vec3f::new(0.6, 0.0, 0.0),
                 "{label}"
             );
             assert_eq!(
                 world.entity(neighbor).unwrap().grounded_physical.velocity,
-                Vec3f::new(1.0, 0.0, 0.0),
+                Vec3f::new(0.1, 0.0, 0.0),
                 "{label}"
             );
             assert_eq!(
@@ -5535,7 +7075,7 @@ mod task_6_factorized_motor_tests {
         let mut blocked_world = HeadlessScenarioBuilder::new(36_004)
             .agent("agent", ORGANISM_ID, Vec3f::ZERO)
             .food("neighbor", Vec3f::new(0.5, 0.0, 0.0), 0.6)
-            .obstacle("blocker", Vec3f::new(2.0, 0.0, 0.0), 0.5)
+            .obstacle("blocker", Vec3f::new(0.2, 0.0, 0.0), 0.05)
             .build()
             .unwrap();
         let blocked_agent = blocked_world.entity_id("agent").unwrap();
@@ -5575,6 +7115,25 @@ mod task_6_factorized_motor_tests {
             relative_velocity(&mut blocked_world, blocked_neighbor),
             [0.0, 0.0, 0.0]
         );
+
+        // Twenty physical intervals are one simulated second in every host.
+        let mut walking = HeadlessScenarioBuilder::new(36_005)
+            .agent("agent", ORGANISM_ID, Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let walker = walking.entity_id("agent").unwrap();
+        let forward = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            HeadlessActionIds::STEP_FORWARD,
+            ActionKind::Move,
+            None,
+            None,
+        )
+        .unwrap();
+        for _ in 0..20 {
+            walking.apply_command(&forward).unwrap();
+        }
+        assert!((walking.entity(walker).unwrap().position.x - 2.0).abs() < 0.00001);
 
         let (mut bundle_world, agent, food, _) = prepared_world();
         let grab = HeadlessWorldCommand::structured(
@@ -5628,7 +7187,7 @@ mod task_6_factorized_motor_tests {
             .unwrap();
         assert_eq!(
             receipt.joint.execution.displacement,
-            Vec3f::new(1.0, 0.0, 0.0)
+            Vec3f::new(0.1, 0.0, 0.0)
         );
         assert_eq!(
             bundle_world
@@ -5636,11 +7195,11 @@ mod task_6_factorized_motor_tests {
                 .unwrap()
                 .grounded_physical
                 .velocity,
-            Vec3f::new(1.0, 0.0, 0.0)
+            Vec3f::new(0.1, 0.0, 0.0)
         );
         assert_eq!(
             bundle_world.entity(food).unwrap().position,
-            Vec3f::new(2.0, 0.0, 0.0)
+            Vec3f::new(1.1, 0.0, 0.0)
         );
         assert_eq!(
             bundle_world
@@ -5648,7 +7207,7 @@ mod task_6_factorized_motor_tests {
                 .unwrap()
                 .grounded_physical
                 .velocity,
-            Vec3f::new(1.0, 0.0, 0.0)
+            Vec3f::new(0.1, 0.0, 0.0)
         );
     }
 
@@ -6241,6 +7800,122 @@ mod task_3_2a_tests {
             Tick::ZERO,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn eat_reports_only_physical_contact_that_the_attempt_reached() {
+        struct EatCase {
+            seed: u64,
+            label: Option<&'static str>,
+            kind: Option<WorldObjectKind>,
+            position: Vec3f,
+            expected_success: bool,
+            expected_contact: PhysicalContactKind,
+            expected_touched: bool,
+            expected_consumed: bool,
+            expected_nutrition: f32,
+            expected_damage: f32,
+        }
+
+        for case in [
+            EatCase {
+                seed: 32_041,
+                label: Some("distant-food"),
+                kind: Some(WorldObjectKind::Food),
+                position: Vec3f::new(3.0, 0.0, 0.0),
+                expected_success: false,
+                expected_contact: PhysicalContactKind::None,
+                expected_touched: false,
+                expected_consumed: false,
+                expected_nutrition: 0.0,
+                expected_damage: 0.0,
+            },
+            EatCase {
+                seed: 32_042,
+                label: None,
+                kind: None,
+                position: Vec3f::ZERO,
+                expected_success: false,
+                expected_contact: PhysicalContactKind::None,
+                expected_touched: false,
+                expected_consumed: false,
+                expected_nutrition: 0.0,
+                expected_damage: 0.0,
+            },
+            EatCase {
+                seed: 32_043,
+                label: Some("nearby-hazard"),
+                kind: Some(WorldObjectKind::Hazard),
+                position: Vec3f::new(1.0, 0.0, 0.0),
+                expected_success: false,
+                expected_contact: PhysicalContactKind::Touch,
+                expected_touched: true,
+                expected_consumed: false,
+                expected_nutrition: 0.0,
+                expected_damage: 0.7,
+            },
+            EatCase {
+                seed: 32_044,
+                label: Some("legal-food"),
+                kind: Some(WorldObjectKind::Food),
+                position: Vec3f::new(1.0, 0.0, 0.0),
+                expected_success: true,
+                expected_contact: PhysicalContactKind::Consumed,
+                expected_touched: true,
+                expected_consumed: true,
+                expected_nutrition: 0.6,
+                expected_damage: 0.0,
+            },
+        ] {
+            let mut scenario =
+                HeadlessScenarioBuilder::new(case.seed).agent("agent", ORGANISM_ID, Vec3f::ZERO);
+            if let (Some(label), Some(kind)) = (case.label, case.kind) {
+                scenario = match kind {
+                    WorldObjectKind::Food => scenario.food(label, case.position, 0.6),
+                    WorldObjectKind::Hazard => scenario.hazard(label, case.position, 0.7),
+                    _ => unreachable!("eat contact table only uses food and hazards"),
+                };
+            }
+            let mut world = scenario.build().unwrap();
+            let target = case
+                .label
+                .map(|label| world.entity_id(label).unwrap())
+                .or(Some(WorldEntityId(999)));
+            let command = HeadlessWorldCommand::structured(
+                ORGANISM_ID,
+                HeadlessActionIds::EAT,
+                ActionKind::Interact,
+                target,
+                None,
+            )
+            .unwrap();
+
+            let result = world.apply_command(&command).unwrap();
+
+            assert_eq!(result.execution.succeeded, case.expected_success);
+            assert_eq!(
+                result.execution.physical.contact,
+                case.expected_contact,
+                "{}",
+                case.label.unwrap_or("missing-target")
+            );
+            assert_eq!(result.execution.physical.target_entity, target);
+            let expected_touched = case
+                .expected_touched
+                .then_some(target.unwrap())
+                .into_iter()
+                .collect::<Vec<_>>();
+            assert_eq!(result.touched_entities, expected_touched);
+            assert_eq!(world.last_touched_entities, result.touched_entities);
+            assert_eq!(result.body_event.nutrition, case.expected_nutrition);
+            assert_eq!(result.body_event.damage, case.expected_damage);
+            if let Some(target) = case.label.map(|label| world.entity_id(label).unwrap()) {
+                assert_eq!(
+                    world.entity(target).unwrap().is_consumed(),
+                    case.expected_consumed
+                );
+            }
+        }
     }
 
     #[test]
@@ -6931,6 +8606,58 @@ mod task_3_2a_tests {
                 .unwrap()
         };
 
+        let mut age_disabled = forward.clone();
+        age_disabled.disable_age_death = true;
+        assert_ne!(
+            age_disabled.canonical_signature_digest().unwrap(),
+            forward.canonical_signature_digest().unwrap()
+        );
+        age_disabled.try_advance_tick().unwrap();
+        for (organism_id, expected_biology) in [
+            (TASK_4_1_LOW_ORGANISM, expected_low_biology),
+            (TASK_4_1_HIGH_ORGANISM, expected_high_biology),
+        ] {
+            let record = task_4_1_record_state(&age_disabled, organism_id);
+            assert!(record.lifecycle().is_alive());
+            assert_eq!(record.age_at(next_tick).unwrap(), next_tick);
+            assert_eq!(record.biochemistry(), &expected_biology);
+        }
+        // Already-sealed biology at the next tick still retires on depleted
+        // reserves or failed organs, independently of the disabled age cap.
+        let terminal_tick = Tick::new(next_tick.raw() + 1);
+        for organism_id in [TASK_4_1_LOW_ORGANISM, TASK_4_1_HIGH_ORGANISM] {
+            let record = task_4_1_record_state(&age_disabled, organism_id);
+            let mut biology = alife_core::BiochemistryState::new_with_age(
+                record.phenotype(),
+                terminal_tick,
+                record.age_at(terminal_tick).unwrap(),
+            )
+            .unwrap();
+            if organism_id == TASK_4_1_LOW_ORGANISM {
+                biology.body.set_energy(0.0).unwrap();
+                assert!(biology.body.health > 0.0);
+            } else {
+                biology.body.set_health(0.0).unwrap();
+                assert!(biology.body.energy > 0.0);
+            }
+            age_disabled
+                .organism_registry
+                .with_biology_mut(organism_id, |current| {
+                    *current = biology;
+                    Ok(())
+                })
+                .unwrap();
+        }
+        age_disabled.try_advance_tick().unwrap();
+        for organism_id in [TASK_4_1_LOW_ORGANISM, TASK_4_1_HIGH_ORGANISM] {
+            assert_eq!(
+                task_4_1_record_state(&age_disabled, organism_id)
+                    .lifecycle()
+                    .death_tick(),
+                Some(terminal_tick)
+            );
+        }
+
         let mut late_failure = forward.clone();
         let before_failure_tick = late_failure.tick();
         let before_failure_low = task_4_1_record_state(&late_failure, TASK_4_1_LOW_ORGANISM);
@@ -7152,7 +8879,7 @@ mod task_4_3a2_tests {
     const COMPATIBILITY_FAMILY_ID: u64 = 7;
 
     fn founder(seed: u64, compatibility_family_id: u64) -> alife_core::CreatureGenome {
-        alife_core::CreatureGenome::early_mammal_founder(
+        let mut genome = alife_core::CreatureGenome::early_mammal_founder(
             seed,
             alife_core::FoundationGeneticIdentity::new(
                 FOUNDATION_ID,
@@ -7162,7 +8889,9 @@ mod task_4_3a2_tests {
             )
             .unwrap(),
         )
-        .unwrap()
+        .unwrap();
+        genome.reproduction.fertility = alife_core::ContinuousLocus::mean(1.0, 1.0).unwrap();
+        genome
     }
 
     fn prepared_world(
@@ -7183,8 +8912,26 @@ mod task_4_3a2_tests {
         maternal_birth_tick: Tick,
         paternal_birth_tick: Tick,
     ) -> (HeadlessWorld, Tick) {
-        let maternal_genome = founder(0xE10_43A1, COMPATIBILITY_FAMILY_ID);
-        let paternal_genome = founder(0xE10_43B3, paternal_compatibility_family_id);
+        prepared_world_with_genes(
+            paternal_position,
+            paternal_compatibility_family_id,
+            maternal_birth_tick,
+            paternal_birth_tick,
+            |_| {},
+        )
+    }
+
+    fn prepared_world_with_genes(
+        paternal_position: Vec3f,
+        paternal_compatibility_family_id: u64,
+        maternal_birth_tick: Tick,
+        paternal_birth_tick: Tick,
+        mut edit: impl FnMut(&mut alife_core::CreatureGenome),
+    ) -> (HeadlessWorld, Tick) {
+        let mut maternal_genome = founder(0xE10_43A1, COMPATIBILITY_FAMILY_ID);
+        let mut paternal_genome = founder(0xE10_43B3, paternal_compatibility_family_id);
+        edit(&mut maternal_genome);
+        edit(&mut paternal_genome);
         let maternal_phenotype = maternal_genome.express().unwrap();
         let paternal_phenotype = paternal_genome.express().unwrap();
         let reproduction_period =
@@ -7275,11 +9022,105 @@ mod task_4_3a2_tests {
     }
 
     #[test]
+    fn inherited_fertility_and_investment_change_actual_births_and_reserves() {
+        let prepare = |fertility, investment| {
+            prepared_world_with_genes(
+                Vec3f::new(0.5, 0.0, 0.0),
+                COMPATIBILITY_FAMILY_ID,
+                Tick::ZERO,
+                Tick::ZERO,
+                |genome| {
+                    genome.reproduction.fertility =
+                        alife_core::ContinuousLocus::mean(fertility, fertility).unwrap();
+                    genome.reproduction.parental_investment =
+                        alife_core::ContinuousLocus::mean(investment, investment).unwrap();
+                },
+            )
+            .0
+        };
+        let mut infertile = prepare(0.0, 0.0);
+        infertile.try_advance_tick().unwrap();
+        assert_eq!(infertile.organism_registry().iter().count(), 2);
+        let (mut nonviable, next_tick) = prepared_world_with_genes(
+            Vec3f::new(0.5, 0.0, 0.0),
+            COMPATIBILITY_FAMILY_ID,
+            Tick::ZERO,
+            Tick::ZERO,
+            |genome| {
+                genome.brain.brain_class.paternal.value = alife_core::BrainCapacityClass::N1024_ID;
+            },
+        );
+        assert_eq!(nonviable.try_advance_tick().unwrap(), next_tick);
+        assert_eq!(nonviable.organism_registry().iter().count(), 2);
+        let mut low = prepare(1.0, 0.0);
+        let mut high = prepare(1.0, 1.0);
+        let child_id = OrganismId(low.next_organism_id);
+        low.try_advance_tick().unwrap();
+        high.try_advance_tick().unwrap();
+        let low_energy = low
+            .organism_registry()
+            .get(child_id)
+            .unwrap()
+            .biochemistry()
+            .body
+            .energy;
+        let high_energy = high
+            .organism_registry()
+            .get(child_id)
+            .unwrap()
+            .biochemistry()
+            .body
+            .energy;
+        assert!(high_energy > low_energy);
+        for parent_id in [MATERNAL_ID, PATERNAL_ID] {
+            assert!(
+                high.organism_registry()
+                    .get(parent_id)
+                    .unwrap()
+                    .biochemistry()
+                    .body
+                    .energy
+                    < low
+                        .organism_registry()
+                        .get(parent_id)
+                        .unwrap()
+                        .biochemistry()
+                        .body
+                        .energy
+            );
+        }
+        let draws = (1..=1000)
+            .map(|seed| conception_trial(seed, MATERNAL_ID, PATERNAL_ID, Tick(120)))
+            .collect::<Vec<_>>();
+        let low_chance = draws.iter().filter(|draw| **draw < 0.1).count();
+        let high_chance = draws.iter().filter(|draw| **draw < 0.9).count();
+        assert!(low_chance > 50 && low_chance < 150 && high_chance > 850 && high_chance < 950);
+        let own = founder(77, COMPATIBILITY_FAMILY_ID).express().unwrap();
+        let mut health = own.reproduction.clone();
+        health.mate_preference =
+            alife_core::DiscreteExpression::Single(alife_core::MatePreference::Health);
+        assert!(health.mate_response(&own, &own, 0.9) > health.mate_response(&own, &own, 0.2));
+    }
+
+    #[test]
     fn nearby_ready_compatible_parents_create_one_deterministic_newborn() {
         let (mut forward, next_tick) =
             prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID);
         let (mut replay, replay_next_tick) =
             prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID);
+        for (own_id, other_id) in [(MATERNAL_ID, PATERNAL_ID), (PATERNAL_ID, MATERNAL_ID)] {
+            let own = forward.organism_registry().get(own_id).unwrap();
+            let other = forward.organism_registry().get(other_id).unwrap();
+            let expected = own.phenotype().reproduction.mate_response(
+                own.phenotype(),
+                other.phenotype(),
+                other.biochemistry().body.health,
+            );
+            assert_eq!(
+                forward.mating_response(own_id, next_tick).unwrap(),
+                expected
+            );
+        }
         let expected_child_id = OrganismId(forward.next_organism_id);
         let maternal_genome_id = forward
             .organism_registry()
@@ -7312,6 +9153,24 @@ mod task_4_3a2_tests {
             vec![maternal_genome_id, paternal_genome_id]
         );
         assert_eq!(child.phenotype(), &child.genome().express().unwrap());
+        let parents_before =
+            records(&prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID).0);
+        let transferred: f32 = parents_before
+            .iter()
+            .map(|parent| {
+                parent.biochemistry().body.energy
+                    - forward
+                        .organism_registry()
+                        .get(parent.organism_id())
+                        .unwrap()
+                        .biochemistry()
+                        .body
+                        .energy
+            })
+            .sum();
+        // Upkeep is separate; the child's reserve is actual parental provision.
+        assert!(child.biochemistry().body.energy > 0.0);
+        assert!(child.biochemistry().body.energy <= transferred);
         assert_eq!(child.biochemistry().development.age_ticks, Tick::ZERO);
         assert_eq!(child.birth_tick(), next_tick);
         assert!(child.lifecycle().is_alive());
@@ -7340,6 +9199,54 @@ mod task_4_3a2_tests {
         assert_eq!(
             forward.canonical_signature_digest().unwrap(),
             replay.canonical_signature_digest().unwrap()
+        );
+    }
+
+    #[test]
+    fn distinct_cloned_founders_remain_eligible_for_a_real_birth() {
+        let mut first: Option<alife_core::CreatureGenome> = None;
+        let (mut world, next_tick) = prepared_world_with_genes(
+            Vec3f::new(0.5, 0.0, 0.0),
+            COMPATIBILITY_FAMILY_ID,
+            Tick::ZERO,
+            Tick::ZERO,
+            |genome| {
+                if let Some(template) = &first {
+                    *genome = template.clone();
+                } else {
+                    first = Some(genome.clone());
+                }
+            },
+        );
+        let shared_id = world
+            .organism_registry()
+            .get(MATERNAL_ID)
+            .unwrap()
+            .genome()
+            .id;
+        assert_eq!(
+            world
+                .organism_registry()
+                .get(PATERNAL_ID)
+                .unwrap()
+                .genome()
+                .id,
+            shared_id
+        );
+        assert!(world
+            .eligible_mating_pair(MATERNAL_ID, MATERNAL_ID, next_tick)
+            .unwrap()
+            .is_none());
+        assert!(world
+            .eligible_mating_pair(MATERNAL_ID, PATERNAL_ID, next_tick)
+            .unwrap()
+            .is_some());
+        let newborn_id = OrganismId(world.next_organism_id);
+        world.try_advance_tick().unwrap();
+        let newborn = world.organism_registry().get(newborn_id).unwrap();
+        assert_eq!(
+            newborn.genome().parent_genome_ids,
+            vec![shared_id, shared_id]
         );
     }
 

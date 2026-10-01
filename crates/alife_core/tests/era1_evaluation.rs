@@ -89,7 +89,10 @@ fn receipt_rejects_wrong_authority_identity_and_fabricated_measurement() {
         Box::new(|receipt| receipt.identity.organism_id = OrganismId::INVALID),
         Box::new(|receipt| receipt.identity.brain_class_id = BrainClassId(2)),
         Box::new(|receipt| receipt.identity.parent_genome_ids.clear()),
-        Box::new(|receipt| receipt.identity.parent_genome_ids[1] = GenomeId(101)),
+        Box::new(|receipt| receipt.identity.parent_genome_ids[0] = receipt.identity.genome_id),
+        Box::new(|receipt| receipt.identity.parent_genome_ids[1] = receipt.identity.genome_id),
+        Box::new(|receipt| receipt.identity.parent_genome_ids[0] = GenomeId::INVALID),
+        Box::new(|receipt| receipt.identity.parent_genome_ids[1] = GenomeId::INVALID),
         Box::new(|receipt| receipt.policy_backend = PolicyBackend::HeuristicBaseline),
         Box::new(|receipt| receipt.sensor_profile = SensorProfile::PrivilegedAffordanceV1),
         Box::new(|receipt| receipt.world_digest = [0; 4]),
@@ -122,6 +125,15 @@ fn receipt_rejects_wrong_authority_identity_and_fabricated_measurement() {
             "mutation was accepted"
         );
     }
+}
+
+#[test]
+fn offspring_receipt_accepts_distinct_parents_with_the_same_genome() {
+    // Genome identity is not organism identity. Identical-genome founders may
+    // mate; world eligibility separately rejects organism-level self-mating.
+    let mut receipt = valid_receipt();
+    receipt.identity.parent_genome_ids[1] = receipt.identity.parent_genome_ids[0];
+    receipt.validate_contract().unwrap();
 }
 
 #[test]

@@ -167,6 +167,8 @@ pub(super) fn write_phase31_performance_receipt(
             "ranked_worst_first": metrics.slow_frames
         },
         "simulation": {
+            "run_mode": scheduler_final.run_mode.label(),
+            "wall_time_paced": scheduler_final.run_mode == crate::ProductionRunMode::OneX,
             "configured_tps": scheduler_final.fixed_tick_hz,
             "achieved_tps": completed_world_ticks as f64 / elapsed_seconds,
             "completed_world_ticks": completed_world_ticks,

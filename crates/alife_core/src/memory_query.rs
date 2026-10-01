@@ -24,7 +24,11 @@ pub const MEMORY_ACTION_KIND_RANGE: Range<usize> = 40..49;
 pub const MEMORY_ACTION_FAMILY_RANGE: Range<usize> = 49..57;
 pub const MEMORY_TARGET_RANGE: Range<usize> = 57..81;
 pub const MEMORY_PROFILE_RANGE: Range<usize> = 81..83;
-pub const MEMORY_RESERVED_RANGE: Range<usize> = 83..96;
+// Consume formerly reserved lanes without shifting any legacy feature or
+// widening the frozen 96-value query. Old query bytes and digests stay exact.
+pub const MEMORY_LOOK_KIND_LANE: usize = 83;
+pub const MEMORY_TERRAIN_VISION_PROFILE_LANE: usize = 84;
+pub const MEMORY_RESERVED_RANGE: Range<usize> = 85..96;
 pub const MEMORY_LATENT_V1_COUNT: usize = 8;
 pub const MEMORY_VALUE_V1_COUNT: usize = 4;
 pub const MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE: usize = 16;
@@ -553,15 +557,19 @@ fn encode_query(
         body.velocity.angular.y.clamp(-1.0, 1.0),
         body.velocity.angular.z.clamp(-1.0, 1.0),
     ]);
-    features[MEMORY_ACTION_KIND_RANGE.start + usize::from(candidate.kind.raw())] = 1.0;
+    if candidate.kind == ActionKind::Look {
+        features[MEMORY_LOOK_KIND_LANE] = 1.0;
+    } else {
+        features[MEMORY_ACTION_KIND_RANGE.start + usize::from(candidate.kind.raw())] = 1.0;
+    }
     features[MEMORY_ACTION_FAMILY_RANGE.start + usize::from(candidate.family.raw())] = 1.0;
     features[MEMORY_TARGET_RANGE].copy_from_slice(&candidate.features.0);
-    let profile_offset = match profile.profile_id.raw() {
-        1 => 0,
-        2 => 1,
+    match profile.profile_id.raw() {
+        1 => features[MEMORY_PROFILE_RANGE.start] = 1.0,
+        2 => features[MEMORY_PROFILE_RANGE.start + 1] = 1.0,
+        3 => features[MEMORY_TERRAIN_VISION_PROFILE_LANE] = 1.0,
         _ => return Err(ScaffoldContractError::InvalidMemoryQuery),
     };
-    features[MEMORY_PROFILE_RANGE.start + profile_offset] = 1.0;
 
     CandidateMemoryQueryV2::try_new(EncodedCandidateMemoryQueryV2 {
         organism_id,
@@ -625,14 +633,41 @@ fn validate_query_fields(query: &CandidateMemoryQueryV2) -> Result<(), ScaffoldC
     {
         return Err(ScaffoldContractError::InvalidMemoryQuery);
     }
-    require_exact_one_hot(
-        &query.features[MEMORY_ACTION_KIND_RANGE],
-        usize::from(query.action_kind.raw()),
-    )?;
+    if query.action_kind == ActionKind::Look {
+        if query.features[MEMORY_ACTION_KIND_RANGE]
+            .iter()
+            .any(|value| *value != 0.0)
+            || query.features[MEMORY_LOOK_KIND_LANE] != 1.0
+        {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+    } else {
+        require_exact_one_hot(
+            &query.features[MEMORY_ACTION_KIND_RANGE],
+            usize::from(query.action_kind.raw()),
+        )?;
+        if query.features[MEMORY_LOOK_KIND_LANE] != 0.0 {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+    }
     require_exact_one_hot(
         &query.features[MEMORY_ACTION_FAMILY_RANGE],
         usize::from(query.action_family.raw()),
     )?;
+    if query.profile.profile_id.raw() == 3 {
+        return if query.features[MEMORY_PROFILE_RANGE]
+            .iter()
+            .all(|value| *value == 0.0)
+            && query.features[MEMORY_TERRAIN_VISION_PROFILE_LANE] == 1.0
+        {
+            Ok(())
+        } else {
+            Err(ScaffoldContractError::InvalidMemoryQuery)
+        };
+    }
+    if query.features[MEMORY_TERRAIN_VISION_PROFILE_LANE] != 0.0 {
+        return Err(ScaffoldContractError::InvalidMemoryQuery);
+    }
     let profile_index = match query.profile.profile_id.raw() {
         1 => 0,
         2 => 1,

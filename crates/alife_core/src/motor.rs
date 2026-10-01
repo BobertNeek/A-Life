@@ -39,7 +39,7 @@ impl MotorChannel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BoundedMotorPayload {
     pub values: Vec<u32>,
 }
@@ -49,12 +49,6 @@ impl BoundedMotorPayload {
         let payload = Self { values };
         payload.validate_contract()?;
         Ok(payload)
-    }
-}
-
-impl Default for BoundedMotorPayload {
-    fn default() -> Self {
-        Self { values: Vec::new() }
     }
 }
 

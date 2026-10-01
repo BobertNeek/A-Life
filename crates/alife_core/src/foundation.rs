@@ -920,6 +920,9 @@ impl FoundationWeightAsset {
                 env!("CARGO_MANIFEST_DIR"),
                 "/../../assets/brain_foundations/n512-v1-grounded.alife-foundation"
             )),
+            SensorProfile::GroundedTerrainVisionV1 => {
+                return Err(ScaffoldContractError::SensorProfileMismatch);
+            }
         };
         Self::decode_canonical(bytes)
     }
@@ -934,6 +937,9 @@ impl FoundationWeightAsset {
                 env!("CARGO_MANIFEST_DIR"),
                 "/../../assets/brain_foundations/n2048-v1-grounded.alife-foundation"
             )),
+            SensorProfile::GroundedTerrainVisionV1 => {
+                return Err(ScaffoldContractError::SensorProfileMismatch);
+            }
         };
         Self::decode_canonical(bytes)
     }
@@ -1084,10 +1090,12 @@ impl FoundationWeightAsset {
         }
         let expected_weight_count = match phenotype.foundation_abi() {
             crate::FoundationAbiSelection::Nano512ActionCreditCandidateV2(candidate)
-                if candidate.cognitive_channel_extension().is_some() => self
-                    .weights
+                if candidate.cognitive_channel_extension().is_some() =>
+            {
+                self.weights
                     .len()
-                    .checked_add(crate::COGNITIVE_CHANNEL_TOTAL_SYNAPSES as usize),
+                    .checked_add(crate::COGNITIVE_CHANNEL_TOTAL_SYNAPSES as usize)
+            }
             _ => Some(self.weights.len()),
         };
         if expected_weight_count != Some(phenotype.synapses().len())

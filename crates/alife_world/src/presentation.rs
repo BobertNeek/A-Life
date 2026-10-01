@@ -115,7 +115,7 @@ impl HeadlessWorld {
                     biochemistry,
                     body: biochemistry.body,
                     birth_tick: record.birth_tick(),
-                    lifecycle: record.lifecycle().clone(),
+                    lifecycle: record.lifecycle(),
                     sleep_phase: record.sleep_phase(),
                     sleep_phase_tick: record.sleep_phase_tick(),
                     sleep_cycle_id: record.sleep_cycle_id(),

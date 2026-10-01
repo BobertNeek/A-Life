@@ -23,7 +23,7 @@ impl CameraTerrainStream {
 }
 
 pub(super) fn stream_camera_terrain(world: &mut World) {
-    if world.contains_resource::<highlands::HighlandsActive>() {
+    if world.contains_resource::<creature_grounding::SelectedTerrain>() {
         return;
     }
     let Some(stream) = world.get_resource::<CameraTerrainStream>() else {

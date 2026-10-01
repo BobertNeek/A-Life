@@ -363,10 +363,21 @@ impl BrainCapacityClass {
     }
 
     pub const fn n2048() -> Self {
+        // The fixed genetic layout fills 32,768 synapses. Reserve physical GPU
+        // room for the bounded lifetime structural edges without changing the
+        // inherited foundation coordinates.
+        const STRUCTURAL_RESERVE: u32 = crate::MAX_STRUCTURAL_EDGES as u32;
         Self {
             id: Self::N2048_ID,
             execution: BrainExecutionBudget::production(
-                2_048, 32_768, 24_576, 4_096, 4_096, 192, 128, 8_192,
+                2_048,
+                32_768 + STRUCTURAL_RESERVE,
+                24_576 + STRUCTURAL_RESERVE,
+                4_096,
+                4_096,
+                192,
+                128,
+                8_192,
             ),
         }
     }

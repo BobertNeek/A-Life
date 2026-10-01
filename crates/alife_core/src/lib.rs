@@ -125,10 +125,10 @@ pub use brain_class::{
 pub use canonical_digest::CanonicalDigestBuilder;
 pub use checkpoint::{BrainCheckpointMode, BRAIN_CHECKPOINT_MODE_SCHEMA_VERSION};
 pub use chemistry::{
-    ChemistryModulation, DriveDelta, DriveSnapshot, EndocrineDelta, EndocrineProfile,
-    EndocrineSnapshot, HomeostaticCadence, HomeostaticCadenceBand, HomeostaticDelta,
-    HomeostaticParameters, HomeostaticSnapshot, RecoveryAssessment, RecoveryTrigger,
-    DRIVE_EXTENSION_SLOTS, ENDOCRINE_EXTENSION_SLOTS,
+    BiologicalValueProfile, ChemistryModulation, DriveDelta, DriveSnapshot, EndocrineDelta,
+    EndocrineProfile, EndocrineSnapshot, HomeostaticCadence, HomeostaticCadenceBand,
+    HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot, RecoveryAssessment,
+    RecoveryTrigger, DRIVE_EXTENSION_SLOTS, ENDOCRINE_EXTENSION_SLOTS,
 };
 pub use cognitive_context::{
     CognitiveBudgetView, CognitiveConceptActivation, CognitiveConceptView, CognitiveContextFrame,
@@ -173,13 +173,14 @@ pub use evidence_digest::{
 };
 pub use evolutionary_genetics::{
     AlleleDominance, AlleleSide, BiochemicalGraphChromosome, BodyChromosome, BodyFrame,
-    BodyPhenotype, BrainChromosome, ChemistryChromosome, ChemistryPhenotype, ChromosomeKind,
-    ChromosomeRecombinationRecord, ContinuousLocus, CreatureGenome, CreaturePhenotype,
-    DevelopmentChromosome, DevelopmentPhenotype, DiscreteAllele, DiscreteExpression, DiscreteLocus,
-    FoundationGeneticIdentity, GeneticLineageProvenance, MatePreference, MutationRecord,
-    PredispositionChromosome, PredispositionPhenotype, ReproductionChromosome,
-    ReproductionPhenotype, StarterVocabularyProfile, CREATURE_GENOME_SCHEMA_VERSION,
-    MAX_CROSSOVER_SEGMENTS, MAX_MUTATION_DELTA, MAX_MUTATION_RECORDS,
+    BodyPhenotype, BrainChromosome, BrainConstructionChromosome, ChemistryChromosome,
+    ChemistryPhenotype, ChromosomeKind, ChromosomeRecombinationRecord, ContinuousLocus,
+    CreatureGenome, CreaturePhenotype, DevelopmentChromosome, DevelopmentPhenotype, DiscreteAllele,
+    DiscreteExpression, DiscreteLocus, FoundationGeneticIdentity, GeneticLineageProvenance,
+    MatePreference, MutationRecord, PredispositionChromosome, PredispositionPhenotype,
+    ReproductionChromosome, ReproductionPhenotype, StarterVocabularyProfile,
+    CREATURE_GENOME_SCHEMA_VERSION, MAX_CROSSOVER_SEGMENTS, MAX_MUTATION_DELTA,
+    MAX_MUTATION_RECORDS,
 };
 pub use experience::{
     ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,
@@ -199,14 +200,14 @@ pub use genome::{
     AlphaMask, AlphaStoragePolicy, BrainGenome, CriticalPeriod, CrossoverPolicy, DevelopmentStage,
     DevelopmentState, DevelopmentalMilestone, DevelopmentalSchedule, DriveThresholdGene,
     DriveThresholdKind, EffectiveWeightSample, EndocrineConstantGene, EndocrineConstantKind,
-    GenomeSeedSet, HOperational, HShadow, InheritancePolicy, LifetimeConsolidationDelta,
-    LobeAlphaOverride, LobeRatioOverride, LobeRatioPlan, LobeRatioRegistryRef, MacroConnectomeMask,
-    MotorAffordanceGene, MotorAffordanceKind, MutationRates, PlasticityGenomeParameters,
-    PlasticityMask, ProjectionAlphaOverride, ProjectionKey, ProjectionPlasticityMask,
-    SensorChannelGene, SensorChannelKind, SensorLayoutGene, SparseDensityPrior, SynapseAddress,
-    SynapseAlphaOverride, TileAddress, TileAlphaOverride, WEffective, WGeneticFixed,
-    WLifetimeConsolidated, WeightLayerDescriptor, WeightLayerKind, WeightSplitContract,
-    WeightStorageSemantics,
+    GenomeSeedSet, HOperational, HShadow, InheritancePolicy, InnatePriorityGenes,
+    LifetimeConsolidationDelta, LobeAlphaOverride, LobeRatioOverride, LobeRatioPlan,
+    LobeRatioRegistryRef, MacroConnectomeMask, MotorAffordanceGene, MotorAffordanceKind,
+    MutationRates, PlasticityGenomeParameters, PlasticityMask, ProjectionAlphaOverride,
+    ProjectionKey, ProjectionPlasticityMask, SensorChannelGene, SensorChannelKind,
+    SensorLayoutGene, SparseDensityPrior, SynapseAddress, SynapseAlphaOverride, TileAddress,
+    TileAlphaOverride, WEffective, WGeneticFixed, WLifetimeConsolidated, WeightLayerDescriptor,
+    WeightLayerKind, WeightSplitContract, WeightStorageSemantics,
 };
 pub use grounding::{
     GroundedObjectSlotV1, SensorProfileId, SensorProfileIdentity, SensorProfileProvenance,
@@ -303,7 +304,7 @@ pub use perception::{
     CandidateFeatureVector, CandidateObservationRef, NeuralActionSelection, PerceptionBaseDigest,
     PerceptionContextBlock, PerceptionContextDigest, PerceptionContextKind, PerceptionFrame,
     PerceptionFrameDigest, PerceptionFrameDraft, PolicyBackend, SensorProfile,
-    CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
+    CANDIDATE_FEATURE_COUNT, CONTACT_ACTIVATION_FEATURE_LANE, MAX_ACTION_CANDIDATES,
 };
 pub use phenotype::{
     AuxiliaryDecoderPlan, BrainCapacityClass, BrainExecutionBudget, BrainPhenotype,
@@ -384,6 +385,8 @@ pub use traits::{
     SEMANTIC_PRIOR_MAX_GAIN, SEMANTIC_PRIOR_MAX_LEXICON_BIAS_SLOTS,
     SEMANTIC_PRIOR_MAX_PACKET_TICKS,
 };
+
+pub use language::{basic_vocabulary_bindings, BASIC_VOCABULARY_V1, FOUNDATION_LESSON_VOCABULARY};
 pub use units::{
     Confidence, DurationTicks, FixedPointScale, Intensity, NormalizedScalar, Seconds,
     SignedValence, Tick,

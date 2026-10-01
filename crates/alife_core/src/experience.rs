@@ -1285,6 +1285,18 @@ impl MeasuredPhysiologyTransition {
             .max(self.before.body.health - self.after.body.health)
             .max(0.0)
     }
+
+    /// The same oriented biological value used by sealed action credit.
+    pub fn homeostatic_improvement(&self) -> f32 {
+        self.before
+            .value_profile()
+            .value_change(self.homeostatic_delta, self.energy_delta.raw())
+    }
+
+    /// Genetic sensitivity changes valuation, never the measured injury.
+    pub fn aversive_value(&self) -> f32 {
+        (self.before.value_profile().injury * self.aversive_harm()).clamp(0.0, 1.0)
+    }
 }
 
 impl Validate for MeasuredPhysiologyTransition {
@@ -1293,6 +1305,9 @@ impl Validate for MeasuredPhysiologyTransition {
         self.after.validate_contract()?;
         if self.before.source_genome_id != self.after.source_genome_id {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        if self.before.value_profile() != self.after.value_profile() {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
         }
         Tick::validate_monotonic(self.before.tick, self.after.tick)?;
         let expected = measured_homeostatic_delta(self.before.homeostasis, self.after.homeostasis)?;
@@ -1484,6 +1499,22 @@ impl PostActionOutcome {
         self.measured_physiology = Some(transition);
         self.validate_contract()?;
         Ok(self)
+    }
+
+    /// A signed memory summary of the measured, genetically valued consequence.
+    /// This does not replace the distinct neuromodulatory learning lanes.
+    pub fn experienced_valence(&self) -> SignedValence {
+        match self.measured_physiology.as_ref() {
+            Some(physiology) => SignedValence::new(
+                (physiology.homeostatic_improvement()
+                    - physiology.aversive_value()
+                    - self.frustration_delta.raw()
+                        * physiology.before.value_profile().disappointment)
+                    .clamp(-1.0, 1.0),
+            )
+            .expect("validated biological value is finite and bounded"),
+            None => self.reward_valence,
+        }
     }
 }
 
@@ -1713,7 +1744,7 @@ impl ExperiencePatch {
             pre_action.sequence_id,
             bundle,
             prediction_target.clone(),
-            cognitive_work.clone(),
+            cognitive_work,
         )?;
         Self::new_v11_from_parts(
             pre_action,
@@ -1738,7 +1769,7 @@ impl ExperiencePatch {
             pre_action.sequence_id,
             bundle,
             prediction_target.clone(),
-            cognitive_work.clone(),
+            cognitive_work,
         )?;
         Self::new_v12_from_parts(
             pre_action,
@@ -1763,7 +1794,7 @@ impl ExperiencePatch {
         decision.abi_version = V11_EXPERIENCE_ABI_VERSION;
         decision.selected_bundle = Some(bundle);
         decision.prediction_target = Some(prediction_target.clone());
-        decision.cognitive_work = Some(cognitive_work.clone());
+        decision.cognitive_work = Some(cognitive_work);
         Self::new_v11_from_parts(
             pre_action,
             decision,
@@ -1787,7 +1818,7 @@ impl ExperiencePatch {
         decision.abi_version = V12_EXPERIENCE_ABI_VERSION;
         decision.selected_bundle = Some(bundle);
         decision.prediction_target = Some(prediction_target.clone());
-        decision.cognitive_work = Some(cognitive_work.clone());
+        decision.cognitive_work = Some(cognitive_work);
         Self::new_v12_from_parts(
             pre_action,
             decision,

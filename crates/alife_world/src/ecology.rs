@@ -294,6 +294,7 @@ impl EcologyState {
         self.config.validate()?;
         if self.zones.len() > self.config.max_zones
             || self.resources.len() > self.config.max_resource_records
+            || self.spawn_policies.len() > self.config.max_resource_records
         {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
@@ -313,9 +314,10 @@ impl EcologyState {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
+        let mut prefixes = BTreeSet::new();
         for policy in &self.spawn_policies {
             policy.validate()?;
-            if !zone_ids.contains(&policy.zone_id.raw()) {
+            if !zone_ids.contains(&policy.zone_id.raw()) || !prefixes.insert(&policy.label_prefix) {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
@@ -365,6 +367,17 @@ impl EcologyState {
         policy: ResourceSpawnPolicy,
     ) -> Result<(), ScaffoldContractError> {
         policy.validate()?;
+        if self.spawn_policies.len() >= self.config.max_resource_records {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        if !self.zones.iter().any(|zone| zone.id == policy.zone_id)
+            || self
+                .spawn_policies
+                .iter()
+                .any(|existing| existing.label_prefix == policy.label_prefix)
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
         self.spawn_policies.push(policy);
         self.spawn_policies.sort_by(|a, b| {
             a.zone_id

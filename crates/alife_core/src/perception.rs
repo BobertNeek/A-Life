@@ -16,6 +16,9 @@ use crate::{
 };
 
 pub const CANDIDATE_FEATURE_COUNT: usize = 24;
+/// Contact operation: 0 grips/releases, 1 activates. This describes attempted
+/// motor use, never whether the target is a toy or whether it will succeed.
+pub const CONTACT_ACTIVATION_FEATURE_LANE: usize = 20;
 pub const MAX_ACTION_CANDIDATES: usize = 32;
 
 const PERCEPTION_BASE_DOMAIN: &[u8] = b"alife.perception.base.v1";
@@ -29,6 +32,7 @@ pub enum SensorProfile {
     #[default]
     PrivilegedAffordanceV1 = 1,
     GroundedObjectSlotsV1 = 2,
+    GroundedTerrainVisionV1 = 3,
 }
 
 impl SensorProfile {
@@ -40,6 +44,7 @@ impl SensorProfile {
         match raw {
             1 => Ok(Self::PrivilegedAffordanceV1),
             2 => Ok(Self::GroundedObjectSlotsV1),
+            3 => Ok(Self::GroundedTerrainVisionV1),
             _ => Err(ScaffoldContractError::SensorProfileMismatch),
         }
     }
@@ -95,7 +100,7 @@ impl CandidateActionFamily {
             (self, kind),
             (Self::Idle, ActionKind::Idle)
                 | (Self::Rest, ActionKind::Rest)
-                | (Self::Inspect, ActionKind::Inspect)
+                | (Self::Inspect, ActionKind::Inspect | ActionKind::Look)
                 | (Self::Approach | Self::Avoid, ActionKind::Move)
                 | (Self::Contact | Self::Ingest, ActionKind::Interact)
                 | (
@@ -112,7 +117,7 @@ impl CandidateActionFamily {
         match kind {
             ActionKind::Idle => Self::Idle,
             ActionKind::Rest => Self::Rest,
-            ActionKind::Inspect => Self::Inspect,
+            ActionKind::Inspect | ActionKind::Look => Self::Inspect,
             ActionKind::Move => Self::Approach,
             ActionKind::Interact => Self::Contact,
             ActionKind::Hold | ActionKind::Gesture | ActionKind::Vocalize | ActionKind::Write => {
@@ -132,6 +137,17 @@ pub enum CandidateObservationRef {
 pub struct BodySnapshot {
     pub pose: Pose,
     pub velocity: Velocity,
+}
+
+impl BodySnapshot {
+    /// Neural observation only; authoritative poses and causal receipts keep
+    /// their real coordinates. Terrain vision does not include an innate GPS.
+    pub fn neural_projection(mut self, profile: SensorProfile) -> Self {
+        if profile == SensorProfile::GroundedTerrainVisionV1 {
+            self.pose.translation = Vec3f::ZERO;
+        }
+        self
+    }
 }
 
 impl Validate for BodySnapshot {
@@ -456,6 +472,41 @@ impl PerceptionFrameDraft {
             context,
             frame_digest,
         })
+    }
+
+    /// Attach private, bounded semantic input before recall/finalization. Ordinary
+    /// sight, hearing, candidates and world object slots remain unchanged.
+    pub fn with_semantic_context(
+        mut self,
+        context: Option<crate::SemanticContextRef>,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.sensory.semantic_context = context;
+        Self::new(
+            self.organism_id,
+            self.tick,
+            self.sensor_profile,
+            self.sensory,
+            self.body,
+            self.homeostasis,
+            self.candidates,
+            self.profile_provenance,
+            self.grounded_object_slots,
+        )
+    }
+
+    pub fn with_remembered_novelty(mut self, novelty: f32) -> Result<Self, ScaffoldContractError> {
+        self.sensory.channels.novelty_signal = crate::NormalizedScalar::new(novelty)?;
+        Self::new(
+            self.organism_id,
+            self.tick,
+            self.sensor_profile,
+            self.sensory,
+            self.body,
+            self.homeostasis,
+            self.candidates,
+            self.profile_provenance,
+            self.grounded_object_slots,
+        )
     }
 }
 
@@ -847,12 +898,13 @@ fn validate_frame_base(
                 return Err(ScaffoldContractError::InvalidPerceptionFrame);
             }
         }
-        SensorProfile::GroundedObjectSlotsV1 => {
-            if sensory
-                .channels
-                .visual_affordance
-                .iter()
-                .any(|value| *value != 0.0)
+        SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1 => {
+            if (sensor_profile == SensorProfile::GroundedObjectSlotsV1
+                && sensory
+                    .channels
+                    .visual_affordance
+                    .iter()
+                    .any(|value| *value != 0.0))
                 || sensory.channels.nearby_affordances.raw() != 0
             {
                 return Err(ScaffoldContractError::InvalidPerceptionFrame);
@@ -868,6 +920,55 @@ fn validate_frame_base(
                         if candidate.kind == ActionKind::Vocalize
                             && candidate.target == ActionTarget::NONE
                             && candidate.features == CandidateFeatureVector::zero() => {}
+                    (CandidateActionFamily::Contact, CandidateObservationRef::None)
+                        if candidate.kind == ActionKind::Interact
+                            && candidate.target == ActionTarget::NONE
+                            && candidate.features == CandidateFeatureVector::zero() => {}
+                    (CandidateActionFamily::Approach, CandidateObservationRef::None)
+                        if candidate.kind == ActionKind::Move
+                            && candidate.target == ActionTarget::NONE
+                            && candidate.features == CandidateFeatureVector::zero() => {}
+                    (CandidateActionFamily::Approach, CandidateObservationRef::None)
+                        if sensor_profile == SensorProfile::GroundedTerrainVisionV1
+                            && candidate.kind == ActionKind::Move
+                            && candidate.target == ActionTarget::NONE
+                            && candidate.features.0[0] == 0.0
+                            && candidate.features.0[1] == 1.0
+                            && candidate.features.0[2..19]
+                                .iter()
+                                .all(|value| *value == 0.0)
+                            && candidate.features.0[19] == 1.0
+                            && candidate.features.0[20..].iter().all(|value| *value == 0.0) => {}
+                    (CandidateActionFamily::Other, CandidateObservationRef::None)
+                        if candidate.kind == ActionKind::Hold
+                            && candidate.target == ActionTarget::NONE
+                            && candidate.features == CandidateFeatureVector::zero() => {}
+                    (CandidateActionFamily::Inspect, CandidateObservationRef::None)
+                        if sensor_profile == SensorProfile::GroundedTerrainVisionV1
+                            && candidate.kind == ActionKind::Look
+                            && candidate.target == ActionTarget::NONE
+                            && candidate.features.0[18] == 1.0
+                            && candidate.features.0[2..18]
+                                .iter()
+                                .all(|value| *value == 0.0)
+                            && candidate.features.0[19..].iter().all(|value| *value == 0.0)
+                            && matches!(
+                                (candidate.features.0[0], candidate.features.0[1]),
+                                (1.0, 0.0) | (-1.0, 0.0) | (0.0, 1.0) | (0.0, 0.0)
+                            ) => {}
+                    (CandidateActionFamily::Inspect, CandidateObservationRef::None)
+                        if sensor_profile == SensorProfile::GroundedTerrainVisionV1
+                            && candidate.kind == ActionKind::Look
+                            && candidate.target == ActionTarget::NONE
+                            && candidate.features.0[2..19]
+                                .iter()
+                                .all(|value| *value == 0.0)
+                            && candidate.features.0[19] == 1.0
+                            && candidate.features.0[20..].iter().all(|value| *value == 0.0)
+                            && matches!(
+                                (candidate.features.0[0], candidate.features.0[1]),
+                                (1.0, 0.0) | (-1.0, 0.0)
+                            ) => {}
                     (CandidateActionFamily::Idle, CandidateObservationRef::ObjectSlot(_))
                     | (_, CandidateObservationRef::None) => {
                         return Err(ScaffoldContractError::InvalidPerceptionFrame);
@@ -876,7 +977,14 @@ fn validate_frame_base(
                         let slot = grounded_object_slots
                             .get(usize::from(slot_index))
                             .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
-                        if candidate.features != slot.candidate_features()? {
+                        let mut observed_features = candidate.features;
+                        if candidate.family == CandidateActionFamily::Contact
+                            && candidate.kind == ActionKind::Interact
+                            && observed_features.0[CONTACT_ACTIVATION_FEATURE_LANE] == 1.0
+                        {
+                            observed_features.0[CONTACT_ACTIVATION_FEATURE_LANE] = 0.0;
+                        }
+                        if observed_features != slot.candidate_features()? {
                             return Err(ScaffoldContractError::InvalidPerceptionFrame);
                         }
                     }
@@ -902,15 +1010,12 @@ fn validate_context(
             }
         }
         PerceptionContextKind::EpisodicCandidateV1 => {
-            if values.is_empty()
-                || !values
-                    .chunks_exact(crate::MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE)
-                    .remainder()
-                    .is_empty()
-            {
+            let (rows, remainder) =
+                values.as_chunks::<{ crate::MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE }>();
+            if rows.is_empty() || !remainder.is_empty() {
                 return Err(ScaffoldContractError::InvalidPerceptionFrame);
             }
-            for row in values.chunks_exact(crate::MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE) {
+            for row in rows {
                 if row[..14]
                     .iter()
                     .any(|value| !value.is_finite() || !(-1.0..=1.0).contains(value))

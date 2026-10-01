@@ -184,9 +184,11 @@ pub(crate) fn allocate_checkpoint_output(
     plan: CheckpointDecodePlan,
 ) -> Result<Vec<u8>, ArchiveError> {
     let mut output = Vec::new();
-    output.try_reserve_exact(plan.output_capacity).map_err(|error| {
-        ArchiveError::Integrity(format!("checkpoint output allocation failed: {error}"))
-    })?;
+    output
+        .try_reserve_exact(plan.output_capacity)
+        .map_err(|error| {
+            ArchiveError::Integrity(format!("checkpoint output allocation failed: {error}"))
+        })?;
     Ok(output)
 }
 
@@ -405,7 +407,6 @@ impl PreparedCompositeBirth {
     }
 }
 
-#[allow(dead_code)]
 pub struct PreparedCompositeBirthBatch {
     items: Vec<PreparedCompositeBirth>,
     payloads: Vec<PreparedArchivePayload>,
@@ -523,7 +524,6 @@ struct PreparedArchivePayload {
     destinations: Vec<PreparedPayloadDestination>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 struct PreparedManifestObservation {
     digest: Blake3Digest,
@@ -533,7 +533,6 @@ struct PreparedManifestObservation {
     indexed: bool,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PreparedIndexedManifestRow {
     digest: Blake3Digest,
@@ -544,7 +543,6 @@ struct PreparedIndexedManifestRow {
     death_tick: Option<Tick>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 struct PreparedTargetObservation {
     source_run_id: String,
@@ -553,7 +551,6 @@ struct PreparedTargetObservation {
     final_manifest_files: Vec<PreparedManifestObservation>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 struct PreparedFinalFileObservation {
     destination: PreparedPayloadDestination,
@@ -565,7 +562,6 @@ struct PreparedFinalFileObservation {
     size_bytes: u64,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 struct PreparedArchiveObservation {
     archive_root: PathBuf,
@@ -1086,8 +1082,7 @@ impl LineageLibrary {
         }
         let foundation_manifest = foundation.manifest();
         if foundation_manifest.foundation_id().raw() != input.foundation.foundation_id
-            || u32::from(foundation_manifest.foundation_version().raw())
-                != u32::from(input.foundation.version)
+            || foundation_manifest.foundation_version().raw() != u32::from(input.foundation.version)
             || foundation_manifest.compatibility_family_id().raw()
                 != input.foundation.compatibility_family_id
         {
@@ -1974,17 +1969,13 @@ impl LineageLibrary {
             compressed_pages.push(compressed);
             page_refs.push(page_ref);
         }
-        let total_compressed_bytes = page_refs
-            .iter()
-            .try_fold(0_u64, |total, page| {
-                total
-                    .checked_add(u64::from(page.compressed_bytes))
-                    .ok_or_else(|| {
-                        ArchiveError::Integrity(
-                            "checkpoint compressed byte count overflow".to_string(),
-                        )
-                    })
-            })?;
+        let total_compressed_bytes = page_refs.iter().try_fold(0_u64, |total, page| {
+            total
+                .checked_add(u64::from(page.compressed_bytes))
+                .ok_or_else(|| {
+                    ArchiveError::Integrity("checkpoint compressed byte count overflow".to_string())
+                })
+        })?;
         let digest = digest_bytes(bytes);
         let reference = ArchiveCheckpointRef {
             digest,
@@ -3254,7 +3245,7 @@ fn validate_foundation_identity(
             .is_some_and(|id| id.raw() == input.foundation.foundation_id)
         && abi
             .foundation_version()
-            .is_some_and(|version| u32::from(version.raw()) == u32::from(input.foundation.version))
+            .is_some_and(|version| version.raw() == u32::from(input.foundation.version))
         && abi
             .compatibility_family_id()
             .is_some_and(|family| family.raw() == input.foundation.compatibility_family_id)
@@ -3365,9 +3356,7 @@ fn archive_reparse_point_flags(is_symlink: bool, file_attributes: u32) -> bool {
 
 #[cfg(test)]
 mod archive_path_tests {
-    fn checkpoint_reference(
-        pages: Vec<super::ArchivePageRef>,
-    ) -> super::ArchiveCheckpointRef {
+    fn checkpoint_reference(pages: Vec<super::ArchivePageRef>) -> super::ArchiveCheckpointRef {
         super::ArchiveCheckpointRef {
             digest: super::Blake3Digest::from_bytes([1; 32]),
             retention: super::ArchiveCheckpointRetention::Pinned,
@@ -3494,8 +3483,7 @@ mod archive_path_tests {
             uncompressed_bytes: u32::try_from(super::ARCHIVE_PAGE_BYTES).unwrap(),
         };
         let decoded_page_count = usize::try_from(
-            super::MAX_CHECKPOINT_DECODED_BYTES
-                / u64::try_from(super::ARCHIVE_PAGE_BYTES).unwrap()
+            super::MAX_CHECKPOINT_DECODED_BYTES / u64::try_from(super::ARCHIVE_PAGE_BYTES).unwrap()
                 + 1,
         )
         .unwrap();
@@ -3511,13 +3499,11 @@ mod archive_path_tests {
             uncompressed_bytes: 1,
         };
         let compressed_page_count = usize::try_from(
-            super::MAX_CHECKPOINT_COMPRESSED_BYTES
-                / super::MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES
+            super::MAX_CHECKPOINT_COMPRESSED_BYTES / super::MAX_CHECKPOINT_PAGE_COMPRESSED_BYTES
                 + 1,
         )
         .unwrap();
-        let compressed =
-            checkpoint_reference(vec![compressed_page; compressed_page_count]);
+        let compressed = checkpoint_reference(vec![compressed_page; compressed_page_count]);
         let compressed_error = super::checkpoint_decode_plan(&compressed).unwrap_err();
         assert!(compressed_error
             .to_string()
@@ -3530,10 +3516,9 @@ mod archive_path_tests {
             "alife-archive-checkpoint-roundtrip-{}",
             super::TEMP_SEQUENCE.fetch_add(1, super::Ordering::Relaxed)
         ));
-        let library = super::LineageLibrary::open(super::LineageLibraryConfig::profile_default(
-            &root,
-        ))
-        .unwrap();
+        let library =
+            super::LineageLibrary::open(super::LineageLibraryConfig::profile_default(&root))
+                .unwrap();
         let bytes = (0..(super::ARCHIVE_PAGE_BYTES * 2 + 137))
             .map(|index| (index % 251) as u8)
             .collect::<Vec<_>>();
@@ -3987,7 +3972,7 @@ fn parse_digest_hex(value: &str) -> Result<Blake3Digest, ArchiveError> {
         ));
     }
     let mut bytes = [0_u8; 32];
-    for (index, chunk) in value.as_bytes().chunks_exact(2).enumerate() {
+    for (index, chunk) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
         let text = std::str::from_utf8(chunk)
             .map_err(|_| ArchiveError::Integrity("invalid digest UTF-8".to_string()))?;
         bytes[index] = u8::from_str_radix(text, 16)

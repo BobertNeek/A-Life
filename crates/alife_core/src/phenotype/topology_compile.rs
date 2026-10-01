@@ -182,7 +182,7 @@ fn compile_n2048_foundation(
         || masks.len() != specs.len()
         || densities.len() != specs.len()
         || capacity.execution().max_recurrent_synapses()
-            != crate::N2048FoundationLayoutV1::RECURRENT_SYNAPSE_COUNT
+            < crate::N2048FoundationLayoutV1::RECURRENT_SYNAPSE_COUNT
     {
         return Err(compile_error());
     }

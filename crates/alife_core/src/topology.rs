@@ -695,13 +695,15 @@ impl UnresolvedGap {
     #[allow(clippy::too_many_arguments)]
     fn new(
         id: UnresolvedGapId,
-        source_concepts: Vec<ConceptCellId>,
+        mut source_concepts: Vec<ConceptCellId>,
         contradiction_type: ContradictionType,
         prediction_error: NormalizedScalar,
         curiosity_voltage: NormalizedScalar,
         salience: NormalizedScalar,
         tick: Tick,
     ) -> Result<Self, ScaffoldContractError> {
+        source_concepts.sort_by_key(|concept| concept.raw());
+        source_concepts.dedup();
         let gap = Self {
             id,
             source_concepts,
@@ -783,6 +785,7 @@ impl Validate for UnresolvedGap {
         for id in &self.source_concepts {
             id.validate()?;
         }
+        ensure_unique_raw(self.source_concepts.iter().map(|id| id.raw()))?;
         NormalizedScalar::new(self.prediction_error.raw())?;
         NormalizedScalar::new(self.curiosity_voltage.raw())?;
         NormalizedScalar::new(self.salience.raw())?;
@@ -1194,7 +1197,12 @@ impl TopologicalMap {
             return None;
         }
 
-        let mut candidate: Option<((u16, u64, u64, u64), ConceptCellId, NormalizedScalar)> = None;
+        struct SplitCandidate {
+            rank: (u16, u64, u64, u64),
+            source: ConceptCellId,
+            salience: NormalizedScalar,
+        }
+        let mut candidate: Option<SplitCandidate> = None;
         for gap in &self.unresolved_gaps {
             if gap.source_concepts.len() != 2
                 || gap.prediction_error.raw() < CONTRADICTION_ERROR_THRESHOLD
@@ -1244,16 +1252,17 @@ impl TopologicalMap {
                     gap.id.raw(),
                     source_id.raw(),
                 );
-                if candidate
-                    .as_ref()
-                    .map_or(true, |(best_key, _, _)| key > *best_key)
-                {
-                    candidate = Some((key, source_id, gap.salience));
+                if candidate.as_ref().is_none_or(|best| key > best.rank) {
+                    candidate = Some(SplitCandidate {
+                        rank: key,
+                        source: source_id,
+                        salience: gap.salience,
+                    });
                 }
             }
         }
 
-        candidate.map(|(_, source_id, salience)| (source_id, salience))
+        candidate.map(|best| (best.source, best.salience))
     }
 
     fn lifecycle_merge_candidate(&self) -> Option<(ConceptCellId, ConceptCellId)> {
@@ -1593,7 +1602,7 @@ impl TopologicalMap {
         )?;
         let simplex_id = planned.push_simplex(
             vec![primary_concept_id, action_concept_id],
-            patch.outcome().reward_valence,
+            patch.outcome().experienced_valence(),
             patch.outcome().prediction_error,
             salience,
             tick,
@@ -1859,7 +1868,9 @@ impl TopologicalMap {
             None
         };
 
-        let source_concepts = vec![source_concept, action_concept];
+        let mut source_concepts = vec![source_concept, action_concept];
+        source_concepts.sort_by_key(|id| id.raw());
+        source_concepts.dedup();
 
         let Some(contradiction_type) = contradiction_type else {
             let mut resolved = Vec::new();
@@ -3405,10 +3416,10 @@ fn bindings_from_patch(
     action_bindings.action_families.push(action_family);
     primary_bindings
         .emotions
-        .record(outcome.reward_valence, outcome.prediction_error)?;
+        .record(outcome.experienced_valence(), outcome.prediction_error)?;
     action_bindings
         .emotions
-        .record(outcome.reward_valence, outcome.prediction_error)?;
+        .record(outcome.experienced_valence(), outcome.prediction_error)?;
 
     if let Some(tracked) = decision
         .episodic_key()
@@ -3493,7 +3504,7 @@ fn patch_salience(patch: &ExperiencePatch) -> Result<NormalizedScalar, ScaffoldC
     let outcome_salience = outcome
         .prediction_error
         .raw()
-        .max(outcome.reward_valence.raw().abs());
+        .max(outcome.experienced_valence().raw().abs());
     NormalizedScalar::new(drive_salience.max(sensory_salience).max(outcome_salience))
 }
 
@@ -3646,5 +3657,27 @@ fn merge_location_samples(
 fn push_unique<T: Copy + PartialEq>(target: &mut Vec<T>, value: T) {
     if !target.contains(&value) && target.len() < MAX_BINDING_REFS {
         target.push(value);
+    }
+}
+
+#[cfg(test)]
+mod gap_portability_tests {
+    use super::*;
+
+    #[test]
+    fn repeated_concept_gap_sources_roundtrip_through_portable_form() {
+        let concept = ConceptCellId(7);
+        let gap = UnresolvedGap::new(
+            UnresolvedGapId(1),
+            vec![concept, concept],
+            ContradictionType::PredictionError,
+            NormalizedScalar::new(0.8).unwrap(),
+            NormalizedScalar::new(0.6).unwrap(),
+            NormalizedScalar::new(0.5).unwrap(),
+            Tick::new(1),
+        )
+        .unwrap();
+        assert_eq!(gap.source_concepts, vec![concept]);
+        assert_eq!(domain_gap(&portable_gap(&gap)).unwrap(), gap);
     }
 }

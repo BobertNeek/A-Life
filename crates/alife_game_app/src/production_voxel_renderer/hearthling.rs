@@ -4,10 +4,10 @@ use bevy::{camera::primitives::Aabb, gltf::Gltf, prelude::*, scene::SceneInstanc
 
 const PATH: &str = "creatures/hearthling/hearthling.glb";
 
-// export_hearthling.py: each foot travels from -0.24 to +0.24 model units.
-// Two steps cover 0.96 units per 24-frame cycle. The GLB contains three cycles,
+// export_hearthling.py: each foot travels from -0.36 to +0.36 model units.
+// Two steps cover 1.44 units per 24-frame cycle. The GLB contains three cycles,
 // sampled at 24 fps starting at frame 1, rather than at time zero.
-const WALK_CYCLE_DISTANCE: f32 = 0.96;
+const WALK_CYCLE_DISTANCE: f32 = 1.44;
 const WALK_CLIP_START: f32 = 1.0 / 24.0;
 const WALK_CLIP_SECONDS: f32 = 3.0;
 
@@ -25,7 +25,6 @@ struct SharedHearthlingAssets {
 pub(super) struct HearthlingVisual {
     appearance: CreatureAppearanceGenome,
     previous_position: Vec3,
-    facing: Quat,
     walk_seconds: f32,
     moved: bool,
 }
@@ -50,7 +49,6 @@ pub(super) fn spawn(world: &mut World, root: Entity, appearance: CreatureAppeara
         HearthlingVisual {
             appearance,
             previous_position,
-            facing: Quat::IDENTITY,
             walk_seconds: 0.0,
             moved: false,
         },
@@ -71,6 +69,33 @@ struct HearthlingSource(Handle<Gltf>);
 
 #[derive(Component)]
 pub(super) struct InheritedBoneScale(Vec3);
+
+#[derive(Component)]
+pub(super) struct HearthlingHead(Entity);
+
+fn body_rotation(world_yaw: f32) -> Quat {
+    // World yaw zero faces +X; the exported character faces +Z.
+    Quat::from_rotation_y(std::f32::consts::FRAC_PI_2 - world_yaw)
+}
+
+fn head_rotation(sampled: Quat, world_head_yaw: f32) -> Quat {
+    // Keep the authored nod/roll, replacing its idle yaw with the chosen gaze.
+    let twist = Quat::from_xyzw(0.0, sampled.y, 0.0, sampled.w).normalize();
+    (sampled * twist.inverse()) * Quat::from_rotation_y(-world_head_yaw)
+}
+
+pub(super) fn apply_head_direction(
+    roots: Query<&Fvr04ProductionCreatureVisualMarker>,
+    mut heads: Query<(&mut Transform, &HearthlingHead)>,
+) {
+    // Every authored clip samples head rotation, even while paused, so this
+    // projection replaces that frame's yaw rather than accumulating rotations.
+    for (mut transform, head) in &mut heads {
+        if let Ok(marker) = roots.get(head.0) {
+            transform.rotation = head_rotation(transform.rotation, marker.head_yaw);
+        }
+    }
+}
 
 pub(super) fn apply_inherited_proportions(mut bones: Query<(&mut Transform, &InheritedBoneScale)>) {
     // All three authored clips sample scale on these bones, including at speed zero.
@@ -157,6 +182,9 @@ fn ready(
     let mut mesh_count = 0;
     for entity in children.iter_descendants(event.entity) {
         if let Ok(name) = names.get(entity) {
+            if name.as_str() == "head" {
+                commands.entity(entity).insert(HearthlingHead(root));
+            }
             let ear = f32::from(visual.appearance.ear_muzzle_trait) / 15.0;
             let tail = f32::from(visual.appearance.tail_trait) / 15.0;
             let scale = match name.as_str() {
@@ -244,24 +272,41 @@ pub(super) fn animate(
         &Fvr04ProductionCreatureVisualMarker,
     )>,
 ) {
-    for (mut transform, mut visual, _) in &mut transforms {
+    for (mut transform, mut visual, marker) in &mut transforms {
+        // World ticks supply targets; render frames supply the visible stride.
+        // Only the display transform is smoothed, never the organism position.
+        let target = marker.base_translation;
+        let blend = 1.0 - (-30.0 * time.delta_secs().min(0.1)).exp();
+        if !ux.settings.paused {
+            transform.translation.x =
+                visual.previous_position.x + (target.x - visual.previous_position.x) * blend;
+            transform.translation.z =
+                visual.previous_position.z + (target.z - visual.previous_position.z) * blend;
+            if Vec2::new(
+                target.x - transform.translation.x,
+                target.z - transform.translation.z,
+            )
+            .length_squared()
+                < 0.000001
+            {
+                transform.translation.x = target.x;
+                transform.translation.z = target.z;
+            }
+        }
         let delta = transform.translation - visual.previous_position;
         visual.previous_position = transform.translation;
         let distance = Vec2::new(delta.x, delta.z).length();
         visual.moved = !ux.settings.paused && distance > f32::EPSILON;
         if visual.moved {
-            visual.facing = Quat::from_rotation_y(delta.x.atan2(delta.z));
             visual.walk_seconds = advance_walk(
                 distance,
                 transform.scale.z.abs().max(f32::EPSILON),
                 visual.walk_seconds,
             );
         }
-        if !ux.settings.paused {
-            transform.rotation = transform
-                .rotation
-                .slerp(visual.facing, 1.0 - (-10.0 * time.delta_secs()).exp());
-        }
+        // Turning in place is a real action too. Heading must never be
+        // inferred from displacement, which can be blocked or sideways.
+        transform.rotation = body_rotation(marker.body_yaw);
     }
     for (mut player, mut model) in &mut players {
         let Ok((_, visual, marker)) = transforms.get(model.root) else {
@@ -269,8 +314,14 @@ pub(super) fn animate(
         };
         // Actual displacement can outlast a selected Move action (or be blocked
         // despite it). Pose cadence follows the presented world displacement.
-        let next = if visual.moved {
+        let next = if ux.settings.paused {
+            model.state
+        } else if visual.moved {
             1
+        } else if marker.animation == CreatureAnimationState::Moving {
+            // A blocked Move is not a walking pose, and inter-tick frames must
+            // not restart idle while the displayed creature is still moving.
+            0
         } else {
             clip(marker.animation)
         };
@@ -285,7 +336,7 @@ pub(super) fn animate(
         let speed = if ux.settings.paused {
             0.0
         } else {
-            ux.settings.simulation_speed
+            ux.animation_speed
         };
         for (_, active) in player.playing_animations_mut() {
             if next == 1 {
@@ -306,6 +357,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn world_heading_and_chosen_gaze_replace_animation_yaw_without_drift() {
+        for yaw in [0.0, 0.7, -1.2, std::f32::consts::PI] {
+            let forward = body_rotation(yaw) * Vec3::Z;
+            assert!(forward.abs_diff_eq(Vec3::new(yaw.cos(), 0.0, yaw.sin()), 1e-6));
+            let chosen = head_rotation(Quat::from_rotation_y(0.15), yaw);
+            let gaze = body_rotation(0.0) * chosen * Vec3::Z;
+            assert!(gaze.abs_diff_eq(Vec3::new(yaw.cos(), 0.0, yaw.sin()), 1e-6));
+            let nod = Quat::from_rotation_x(0.35) * Quat::from_rotation_y(0.15);
+            let once = head_rotation(nod, yaw);
+            let twice = head_rotation(once, yaw);
+            assert!(once.abs_diff_eq(twice, 1e-6));
+        }
+    }
+
+    #[test]
     fn one_step_tracks_authored_foot_travel_at_each_inherited_size() {
         for mass in 0..alife_world::CREATURE_APPEARANCE_GENE_BUCKETS {
             let appearance = CreatureAppearanceGenome {
@@ -313,7 +379,7 @@ mod tests {
                 ..Default::default()
             };
             let forward_scale = scale(appearance).z;
-            let seconds = advance_walk(0.48 * forward_scale, forward_scale, 0.0);
+            let seconds = advance_walk(0.72 * forward_scale, forward_scale, 0.0);
             assert!((seconds - 0.5).abs() < 1e-6);
         }
     }

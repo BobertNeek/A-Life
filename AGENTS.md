@@ -11,9 +11,7 @@ rules. Prefer the more specific rule unless it conflicts with v2.0.
 
 - A-Life v2.0 is the single normative architecture. Earlier specifications,
   recovery designs, plans, and compliance matrices are historical material.
-- Preserve the v2.0 categories: LOCKED GOAL, LOCKED CAPABILITY, LOCKED
-  INVARIANT, LOCKED INTERFACE, REFERENCE MECHANISM, TUNABLE DEFAULT, DEFERRED
-  CAPABILITY, and RESEARCH. Follow its conflict precedence.
+- Follow the categories and conflict precedence defined in v2.0.
 - Current types, engines, GPU layouts, brain sizes, constants, and other
   implementation choices are not architecture unless v2.0 explicitly locks
   their semantics.
@@ -24,9 +22,11 @@ rules. Prefer the more specific rule unless it conflicts with v2.0.
 
 ## Working style
 
-Use the global working preferences. Read only documentation relevant to the touched behavior. Update affected docs and run the relevant existing checks. Preserve unrelated work.
+Read only documentation relevant to the touched behavior. Update affected docs and run the relevant existing checks. Preserve unrelated work.
 
 If in doubt, WWCD — What Would Creatures Do? Use Creatures 3 / Docking Station to guide open gameplay decisions.
+
+Think through how systems should act step by step before committing them to code. Really go through the cause and effect of what it should do and when, in your mind, before you write the code. You should understand end to end how it’s going to act.
 
 ## Current implementation guardrails
 
@@ -51,20 +51,8 @@ Use `scripts/check.ps1`, `scripts/check_core_boundaries.ps1`, and
 `scripts/docs_check.ps1` for the relevant checks. If calling Bash directly,
 use the explicit Git Bash path. Plain `bash` may invoke unavailable WSL.
 
-## Graphify
+## Optional code navigation
 
-Graphify is optional and must not be a prerequisite for Cargo commands.
-On Windows, use `scripts/graphify.ps1` to find the installed executable even
-when it is absent from PATH.
-
-- Run `scripts/graphify.ps1 update --no-cluster` to build or refresh the code
-  graph. This performs structural extraction without an LLM.
-- Once `graphify-out/graph.json` exists, use
-  `scripts/graphify.ps1 query "<question>"`, `path "<A>" "<B>"`, or
-  `explain "<concept>"` for focused questions.
-- Use `graphify-out/wiki/index.md` for broad navigation when available. Read
-  `graphify-out/GRAPH_REPORT.md` only when focused queries are insufficient.
-- Generated files under `graphify-out/` are ignored. Check source files
-  directly when graph results are stale or incomplete.
-- Refresh an existing graph when this task relies on graph results that the changes made stale.
-- When the user requests `/graphify`, follow the available Graphify skill.
+Graphify is optional, never a prerequisite for Cargo. See
+[Development](docs/DEVELOPMENT.md#optional-code-navigation) for usage.
+Check source directly when graph results are stale or incomplete.

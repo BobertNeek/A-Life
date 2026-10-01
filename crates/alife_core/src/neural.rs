@@ -794,8 +794,10 @@ pub fn finalize_cpu_activations(
         &mut state.accumulators,
         &state.dendritic_branches,
     )?;
-    let mut report = NeuralUpdateReport::default();
-    report.dendritic_work = dendritic_work;
+    let mut report = NeuralUpdateReport {
+        dendritic_work,
+        ..Default::default()
+    };
     for (activation, accumulator) in state.activations.iter_mut().zip(&mut state.accumulators) {
         let raw = validate_finite(*accumulator)?;
         let activated = match config.function {

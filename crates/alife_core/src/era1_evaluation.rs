@@ -101,6 +101,8 @@ pub struct Era1TrialIdentity {
     pub seed: u64,
     pub organism_id: OrganismId,
     pub genome_id: GenomeId,
+    /// Maternal and paternal genome identities, which may be equal for two
+    /// distinct organisms. This receipt alone does not prove parent organisms.
     pub parent_genome_ids: Vec<GenomeId>,
     pub lineage_id: LineageId,
     pub generation: u32,
@@ -131,8 +133,7 @@ impl Validate for Era1TrialIdentity {
                 let paternal = self.parent_genome_ids[1];
                 maternal.validate()?;
                 paternal.validate()?;
-                if maternal == paternal || maternal == self.genome_id || paternal == self.genome_id
-                {
+                if maternal == self.genome_id || paternal == self.genome_id {
                     return Err(ScaffoldContractError::InvalidId);
                 }
             }

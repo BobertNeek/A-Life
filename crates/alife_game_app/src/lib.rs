@@ -43,6 +43,9 @@ mod prelude {
 mod schema;
 pub use schema::*;
 
+mod production_run_mode;
+pub use production_run_mode::*;
+
 mod app_shell;
 pub use app_shell::*;
 
@@ -135,7 +138,19 @@ pub use environment_launcher::*;
 mod production_voxel_frontend;
 pub use production_voxel_frontend::*;
 
+#[cfg(feature = "foundation-training")]
+mod foundation_training;
+#[cfg(feature = "foundation-training")]
+mod foundation_training_cycle;
+#[cfg(feature = "foundation-training")]
+mod foundation_training_warmup;
 mod new_game_lifecycle;
+#[cfg(feature = "foundation-training")]
+pub use foundation_training::*;
+#[cfg(feature = "foundation-training")]
+pub use foundation_training_cycle::*;
+#[cfg(feature = "foundation-training")]
+pub use foundation_training_warmup::*;
 pub use new_game_lifecycle::*;
 
 mod curated_founder_reset;
@@ -215,9 +230,6 @@ pub use gpu_product_telemetry::*;
 
 mod gpu_authority_telemetry;
 pub use gpu_authority_telemetry::*;
-
-#[cfg(feature = "gpu-runtime")]
-mod factorized_arbitration;
 
 #[cfg(feature = "gpu-runtime")]
 mod gpu_live_runtime;

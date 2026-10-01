@@ -252,7 +252,7 @@ impl GpuV11CausalState {
         let architecture = phenotype.cognitive_architecture_plan();
         let structural_edit_budget = u16::from(architecture.structural_edit_budget().max(1));
         let structural_config = StructuralPlasticityConfig {
-            max_candidates_per_region: architecture.structural_candidate_budget().max(1).min(8),
+            max_candidates_per_region: architecture.structural_candidate_budget().clamp(1, 8),
             max_regions: 1,
             max_accepted_per_phase: structural_edit_budget.min(4),
             max_structural_edges: structural_edit_budget.saturating_mul(4).clamp(1, 64),
@@ -515,7 +515,7 @@ impl GpuV11CausalState {
                         target: item.target,
                         route: edge.route,
                         initial_weight: edge.weight,
-                        evidence: item.clone(),
+                        evidence: *item,
                     })
             });
             next.pending_lifetime_synapse = accepted;

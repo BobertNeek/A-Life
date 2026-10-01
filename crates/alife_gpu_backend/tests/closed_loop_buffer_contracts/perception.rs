@@ -23,6 +23,46 @@ fn perception_upload_translates_the_validated_same_tick_frame_without_scores() {
     let mut bucket = GpuClassBucketPlan::new(capacity, 1).unwrap();
     let slot = bucket.insert_phenotype(0, 7, &phenotype).unwrap();
     let frame = perception_fixture();
+    let mut body = frame.body();
+    body.pose.translation = alife_core::Vec3f::new(4.0, 0.0, -3.0);
+    let profile = alife_core::SensorProfile::GroundedTerrainVisionV1;
+    let terrain_frame = alife_core::PerceptionFrame::new(
+        frame.organism_id(),
+        frame.tick(),
+        profile,
+        frame.sensory().clone(),
+        body,
+        *frame.homeostasis(),
+        vec![alife_core::ActionCandidate::new(
+            0,
+            alife_core::ActionKind::Idle.canonical_id(),
+            alife_core::ActionKind::Idle,
+            alife_core::CandidateActionFamily::Idle,
+            CandidateObservationRef::None,
+            alife_core::ActionTarget::NONE,
+            alife_core::CandidateFeatureVector::zero(),
+            alife_core::Confidence::new(1.0).unwrap(),
+            alife_core::NormalizedScalar::new(0.0).unwrap(),
+            alife_core::DurationTicks::new(1),
+            alife_core::DurationTicks::new(1),
+        )
+        .unwrap()],
+        alife_core::SensorProfileProvenance::new(
+            profile,
+            alife_core::SensoryAbiVersion::CURRENT,
+            frame.tick(),
+        )
+        .unwrap(),
+        vec![],
+    )
+    .unwrap();
+    let terrain_upload = GpuPerceptionUpload::try_from_frame(&terrain_frame, &slot, 0).unwrap();
+    let body_offset = terrain_frame.sensory().channels.as_flat_array().len();
+    assert_eq!(
+        &terrain_upload.frame_payload_words[body_offset..body_offset + 3],
+        &[0, 0, 0]
+    );
+    assert_eq!(terrain_frame.body(), body);
     let upload = GpuPerceptionUpload::try_from_frame(&frame, &slot, 0).unwrap();
 
     assert_eq!(

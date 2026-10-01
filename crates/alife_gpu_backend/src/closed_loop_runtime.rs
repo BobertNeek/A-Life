@@ -663,6 +663,8 @@ pub struct GpuClosedLoopTick {
     pub compact_readback_bytes: usize,
     pub hardware_receipt_generation: u64,
     pub selector_diagnostic: Option<GpuSelectorDiagnosticReceipt>,
+    #[cfg(feature = "training-rollout")]
+    pub training_rollout: Option<crate::GpuTrainingRolloutReceipt>,
 }
 
 pub const GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION: u16 = 3;
@@ -2038,8 +2040,7 @@ fn run_curated_residency_transaction<P: CuratedResidencyTransactionPort>(
             .checked_add(
                 snapshot
                     .logical_slot_commit_bytes
-                    .checked_mul(u64::from(entry_count))
-                    .unwrap_or(u64::MAX),
+                    .saturating_mul(u64::from(entry_count)),
             )
             .is_none_or(|bytes| bytes > snapshot.logical_budget_bytes)
         || snapshot
@@ -2404,7 +2405,10 @@ fn build_selector_diagnostic(
                 .families()
                 .iter()
                 .find(|family| family.family() == candidate.family)
-                .map(|family| family.bias())
+                .map(|family| {
+                    family.bias()
+                        + family.innate_contribution(frame.homeostasis().drives, candidate.features)
+                })
                 .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
             let family_plan = phenotype
                 .candidate_decoder()
@@ -2428,14 +2432,12 @@ fn build_selector_diagnostic(
                     ),
                     _ => (GpuSelectorCandidateValidity::InvalidLogit, None, None, None),
                 };
-            let (binding, contributions) = if validity == GpuSelectorCandidateValidity::Valid
-                && contribution_capture.is_some()
+            let (binding, contributions) = if let Some(contribution_capture) =
+                contribution_capture.filter(|_| validity == GpuSelectorCandidateValidity::Valid)
             {
                 *failure_field =
                     GpuRuntimeSelectorDiagnosticBuildFailureField::ContributionDetailWord;
-                let words = &contribution_capture
-                    .expect("checked sparse contribution capture")
-                    .synapse_words;
+                let words = &contribution_capture.synapse_words;
                 let first = 0;
                 let family_start = selector_detail_word(words, first, 19)?;
                 let family_count = selector_detail_word(words, first, 20)?;
@@ -2719,7 +2721,6 @@ fn compile_v11_slot_upload(
 pub struct GpuClosedLoopBackend {
     pub(crate) backend_instance_id: NonZeroU64,
     pub(crate) hardware: GpuHardwareReceipt,
-    #[allow(dead_code)]
     adapter: wgpu::Adapter,
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
@@ -2757,6 +2758,15 @@ pub struct GpuClosedLoopBackend {
     pub(crate) next_sleep_job_id: u64,
     pub(crate) sleep_jobs: BTreeMap<u64, crate::GpuSleepJobState>,
     pub(crate) committed_sleep: BTreeMap<(u16, u32, u32, u64), crate::GpuSleepConsolidationReceipt>,
+    #[cfg(feature = "training-rollout")]
+    training_structural_cache: BTreeMap<(u16, u32, u32, u64), TrainingStructuralCache>,
+}
+
+#[cfg(feature = "training-rollout")]
+struct TrainingStructuralCache {
+    slot: GpuBrainSlot,
+    structural: alife_core::StructuralPlasticityState,
+    synapses: Vec<crate::training_rollout::GpuTrainingStructuralSynapse>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -2901,6 +2911,8 @@ impl GpuClosedLoopBackend {
             next_sleep_job_id: 1,
             sleep_jobs: BTreeMap::new(),
             committed_sleep: BTreeMap::new(),
+            #[cfg(feature = "training-rollout")]
+            training_structural_cache: BTreeMap::new(),
         })
     }
 
@@ -2929,10 +2941,10 @@ impl GpuClosedLoopBackend {
             device_lost: Arc::clone(&self.device_lost),
             kernels: Arc::clone(&self.kernels),
             state: plan.state.clone(),
-            runtime_profile: self.runtime_profile.clone(),
-            runtime_budget: self.runtime_budget.clone(),
-            activity_policy: self.activity_policy.clone(),
-            admission: GpuAdmissionReceipt::empty(self.runtime_budget.clone()),
+            runtime_profile: self.runtime_profile,
+            runtime_budget: self.runtime_budget,
+            activity_policy: self.activity_policy,
+            admission: GpuAdmissionReceipt::empty(self.runtime_budget),
             class_buckets: BTreeMap::new(),
             slot_generation_watermarks: BTreeMap::new(),
             organisms: BTreeMap::new(),
@@ -2958,6 +2970,8 @@ impl GpuClosedLoopBackend {
             next_sleep_job_id: plan.next_sleep_job_id,
             sleep_jobs: BTreeMap::new(),
             committed_sleep: BTreeMap::new(),
+            #[cfg(feature = "training-rollout")]
+            training_structural_cache: BTreeMap::new(),
         })
     }
 
@@ -3259,9 +3273,7 @@ impl GpuClosedLoopBackend {
             if source == target || base_pairs.contains(&(source, target)) {
                 continue;
             }
-            let Some(region) = u16::try_from(route).ok() else {
-                continue;
-            };
+            let region = route;
             structural_evidence.push(CoactivationEvidence {
                 region,
                 source,
@@ -3281,9 +3293,7 @@ impl GpuClosedLoopBackend {
                     {
                         continue;
                     }
-                    let Some(region) = u16::try_from(route).ok() else {
-                        break;
-                    };
+                    let region = route;
                     structural_evidence.push(CoactivationEvidence {
                         region,
                         source,
@@ -3797,7 +3807,46 @@ impl GpuClosedLoopBackend {
         Ok(())
     }
 
-    /// Charges the exact world-owned ATP term before neural dispatch.
+    /// Binds the current canonical biochemical BrainATP signal as this world's
+    /// per-tick neural affordability budget. This is a derived projection, not
+    /// another material reserve: actual work pays body energy in the world.
+    /// Work receipts still debit this budget exactly within the tick. A repeated
+    /// binding cannot refill it after a dispatch or alter a restored boundary.
+    pub fn bind_world_brain_atp_tick(
+        &mut self,
+        handle: GpuBrainHandle,
+        world_tick: u64,
+        canonical_brain_atp: f32,
+    ) -> Result<u32, ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        if !canonical_brain_atp.is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        if !(0.0..=1.0).contains(&canonical_brain_atp) {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        let pool = self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let resident = pool.resident_mut(handle)?;
+        if let Some(last) = resident.last_world_atp_tick {
+            if last == world_tick {
+                return Ok(resident.brain_atp_q16);
+            }
+            if last.checked_add(1) != Some(world_tick) {
+                return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+            }
+        }
+        // Round available capacity down; never authorize work beyond the signal.
+        resident.brain_atp_q16 =
+            (f64::from(canonical_brain_atp) * f64::from(BRAIN_ATP_Q16_MAX)).floor() as u32;
+        resident.last_world_atp_tick = Some(world_tick);
+        Ok(resident.brain_atp_q16)
+    }
+
+    /// Applies the explicit legacy/laboratory ATP policy before neural dispatch.
     ///
     /// The monotonic tick guard makes basal cost replay-safe. Sleep recovery is
     /// a distinct credit in the same fixed-point transaction and never alters
@@ -4689,6 +4738,188 @@ impl GpuClosedLoopBackend {
         self.tick_inputs(&inputs, None)
     }
 
+    #[cfg(feature = "training-rollout")]
+    pub fn training_enabled_motor_channels(
+        &self,
+        handle: GpuBrainHandle,
+    ) -> Result<u32, ScaffoldContractError> {
+        self.validate_handle_backend(handle)?;
+        Ok(self
+            .class_buckets
+            .get(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .resident(handle)?
+            .brain_slot
+            .record()
+            .reserved[0]
+            & 255)
+    }
+
+    #[cfg(feature = "training-rollout")]
+    pub fn capture_training_state(
+        &mut self,
+        handle: GpuBrainHandle,
+        tick: alife_core::Tick,
+    ) -> Result<crate::training_rollout::GpuTrainingStateSnapshot, ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let (mut snapshot, ranges) = {
+            let bucket = self
+                .class_buckets
+                .get(&handle.class_id.raw())
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .bucket_for_handle(handle)?;
+            let resident = bucket.slots[handle.slot as usize]
+                .as_ref()
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let side = bucket
+                .pipelines
+                .slot_active_side(handle.slot, handle.generation)
+                .map_err(map_gpu_contract_error)?;
+            (
+                crate::training_rollout::GpuTrainingStateSnapshot {
+                    handle,
+                    tick: tick.raw(),
+                    logical_dispatch_generation: resident.logical_dispatch_generation,
+                    active_activation_side: side,
+                    active_weight_generation: resident.active_weight_generation,
+                    active_weight_bank: resident.active_weight_bank,
+                    phenotype: resident.phenotype.clone(),
+                    brain_slot: resident.brain_slot.clone(),
+                    v11: resident.v11.checkpoint(),
+                    mutable_word_base: resident.ranges.mutable_state_words.start,
+                    mutable_words: Vec::new(),
+                    structural_synapses: Vec::new(),
+                },
+                resident.ranges.clone(),
+            )
+        };
+        snapshot.mutable_words = self.read_slot_mutable_words(handle, &ranges)?;
+        let inherited = snapshot.phenotype.synapses().len();
+        let live = snapshot.brain_slot.record().synapse_count as usize;
+        if live > inherited {
+            let key = (
+                handle.class_id.raw(),
+                handle.slot,
+                handle.generation,
+                handle.organism_id.raw(),
+            );
+            if let Some(cached) = self.training_structural_cache.get(&key) {
+                if cached.slot == snapshot.brain_slot
+                    && cached.structural == snapshot.v11.structural
+                {
+                    snapshot.structural_synapses = cached.synapses.clone();
+                    return Ok(snapshot);
+                }
+            }
+            let bucket = self
+                .class_buckets
+                .get(&handle.class_id.raw())
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .bucket_for_handle(handle)?;
+            let plan = crate::closed_loop_sleep::read_gpu_words(
+                &self.device,
+                &self.queue,
+                bucket.buffers.neural_buffers()[2],
+                ranges.layout.target_offset_words.start
+                    ..ranges.layout.route_index_words.start
+                        + snapshot.brain_slot.record().recurrent_synapse_count,
+                "training-structural-plan-readback",
+                None,
+            )?;
+            let weights = crate::closed_loop_sleep::read_gpu_words(
+                &self.device,
+                &self.queue,
+                bucket.buffers.neural_buffers()[3],
+                ranges.layout.genetic_weight_words.start
+                    ..ranges.layout.alpha_words.start + snapshot.brain_slot.record().synapse_count,
+                "training-structural-weight-readback",
+                None,
+            )?;
+            let plan_base = ranges.layout.target_offset_words.start;
+            let weight_base = ranges.layout.genetic_weight_words.start;
+            let recurrent = snapshot.brain_slot.record().recurrent_synapse_count;
+            for target in 0..snapshot.brain_slot.record().neuron_count {
+                let offset = |word: u32| -> Result<usize, ScaffoldContractError> {
+                    usize::try_from(word - plan_base)
+                        .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)
+                };
+                let begin = *plan
+                    .get(offset(ranges.layout.target_offset_words.start + target)?)
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                let end = *plan
+                    .get(offset(
+                        ranges.layout.target_offset_words.start + target + 1,
+                    )?)
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                if end > recurrent || begin > end {
+                    return Err(ScaffoldContractError::NeuralBackendUnavailable);
+                }
+                for cursor in begin..end {
+                    let alpha = *weights
+                        .get((ranges.layout.alpha_words.start + cursor - weight_base) as usize)
+                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                    if alpha != (-0.0_f32).to_bits() {
+                        continue;
+                    }
+                    let source = *plan
+                        .get(offset(ranges.layout.source_index_words.start + cursor)?)
+                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                    let route = *plan
+                        .get(offset(ranges.layout.route_index_words.start + cursor)?)
+                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                    let genetic = *weights
+                        .get(
+                            (ranges.layout.genetic_weight_words.start + cursor - weight_base)
+                                as usize,
+                        )
+                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                    snapshot.structural_synapses.push(
+                        crate::training_rollout::GpuTrainingStructuralSynapse {
+                            slot_index: cursor,
+                            source,
+                            target,
+                            route,
+                            genetic_weight: f32::from_bits(genetic),
+                            alpha: f32::from_bits(alpha),
+                        },
+                    );
+                }
+            }
+            if snapshot.structural_synapses.len() != live - inherited {
+                return Err(ScaffoldContractError::NeuralBackendUnavailable);
+            }
+            self.training_structural_cache.insert(
+                key,
+                TrainingStructuralCache {
+                    slot: snapshot.brain_slot.clone(),
+                    structural: snapshot.v11.structural.clone(),
+                    synapses: snapshot.structural_synapses.clone(),
+                },
+            );
+        }
+        Ok(snapshot)
+    }
+
+    /// Explicit training request; ordinary ticks always retain production argmax.
+    #[cfg(feature = "training-rollout")]
+    pub fn tick_memory_batch_training(
+        &mut self,
+        batch: &GpuClosedLoopMemoryBatchInput<'_>,
+        sampling: &[crate::GpuTrainingSamplingConfig],
+    ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
+        let inputs = batch
+            .members
+            .iter()
+            .map(|member| GpuRuntimeTickInput {
+                handle: member.handle,
+                frame: member.frame,
+                memory_upload: Some(member.memory_upload),
+            })
+            .collect::<Vec<_>>();
+        self.tick_inputs_with_selector_diagnostic_capture(&inputs, None, None, Some(sampling))
+    }
+
     pub fn tick_memory_batch_with_selector_diagnostics(
         &mut self,
         batch: &GpuClosedLoopMemoryBatchInput<'_>,
@@ -4708,6 +4939,8 @@ impl GpuClosedLoopBackend {
             &inputs,
             Some(requested_candidate_indices),
             Some(&mut capture),
+            #[cfg(feature = "training-rollout")]
+            None,
         ) {
             Ok(ticks) => Ok(ticks),
             Err(error) => match capture.enable_error {
@@ -4744,6 +4977,8 @@ impl GpuClosedLoopBackend {
         self.tick_inputs_with_selector_diagnostic_capture(
             batch,
             selector_diagnostic_candidate_indices,
+            None,
+            #[cfg(feature = "training-rollout")]
             None,
         )
     }
@@ -6169,7 +6404,7 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
         }
 
         self.backend.organisms.clear();
-        for (reservation, prepared) in reservations.iter().zip(staged.into_iter()) {
+        for (reservation, prepared) in reservations.iter().zip(staged) {
             {
                 let bucket = self
                     .backend

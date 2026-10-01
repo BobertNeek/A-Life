@@ -310,6 +310,96 @@ fn poisoned_cyan_ingest_patch() -> ExperiencePatch {
         .unwrap()
 }
 
+#[test]
+fn measured_meal_and_blocked_attempt_keep_biological_value_in_memory() {
+    let phenotype = alife_core::CreatureGenome::early_mammal_founder(
+        321,
+        alife_core::FoundationGeneticIdentity::new(
+            10,
+            1,
+            7,
+            alife_core::BrainCapacityClass::N512_ID,
+        )
+        .unwrap(),
+    )
+    .unwrap()
+    .express()
+    .unwrap();
+    let mut hungry = alife_core::BiochemistryState::new(&phenotype, Tick(37)).unwrap();
+    hungry.body.set_energy(0.1).unwrap();
+    for tick in 38..=40 {
+        hungry = hungry
+            .advance(Tick(tick), alife_core::BodyEventDelta::zero(), &phenotype)
+            .unwrap();
+    }
+    for meal in [true, false] {
+        let after = hungry
+            .advance(
+                Tick(41),
+                alife_core::BodyEventDelta {
+                    nutrition: if meal { 0.6 } else { 0.0 },
+                    ..alife_core::BodyEventDelta::zero()
+                },
+                &phenotype,
+            )
+            .unwrap();
+        let physiology = alife_core::MeasuredPhysiologyTransition::new(hungry, after).unwrap();
+        let mut outcome = outcome();
+        outcome.success = meal;
+        outcome.frustration_delta = NormalizedScalar::new(if meal { 0.0 } else { 1.0 }).unwrap();
+        outcome.physical.contact = if meal {
+            PhysicalContactKind::Consumed
+        } else {
+            PhysicalContactKind::None
+        };
+        let outcome = outcome.with_measured_physiology(physiology).unwrap();
+        assert_eq!(outcome.reward_valence.raw(), 0.0);
+        let mut bank = empty_bank();
+        let draft = grounded_draft(0.4);
+        let (frame, finalized) = bank.recall_frame(&draft).unwrap().finalize(draft).unwrap();
+        let decision = neural_decision(&frame, 0)
+            .with_finalized_memory_recall(&frame, &finalized, 0)
+            .unwrap();
+        let patch = ExperiencePatchBuilder::new(sequence())
+            .record_pre_action(pre_action(frame))
+            .unwrap()
+            .record_decision(decision)
+            .unwrap()
+            .record_outcome(outcome)
+            .unwrap()
+            .seal()
+            .unwrap();
+        bank.observe_sealed_patch(&patch).unwrap();
+        let recall = bank.recall_frame(&grounded_draft(0.4)).unwrap();
+        let recalled = &recall.context().candidates[0];
+        if meal {
+            assert!(
+                recalled.target_latent[0] < 0.0,
+                "hunger relief stays a negative drive change"
+            );
+            assert!(
+                recalled.family_value[0] > 0.0,
+                "the remembered experience is positive"
+            );
+        } else {
+            assert!(recalled.family_value[0] < 0.0);
+            assert!(
+                recalled.family_value[2] < 0.25,
+                "a blocked attempt is disappointment, not injury"
+            );
+        }
+        let restored: MemoryBank =
+            serde_json::from_value(serde_json::to_value(&bank).unwrap()).unwrap();
+        assert_eq!(
+            restored
+                .recall_frame(&grounded_draft(0.4))
+                .unwrap()
+                .context(),
+            recall.context()
+        );
+    }
+}
+
 fn sequenced_patch(
     sequence_raw: u64,
     tick_raw: u64,
@@ -628,12 +718,29 @@ fn memory_bank_roundtrip_rebuilds_indices_and_preserves_recall() {
         .unwrap();
     let probe = cyan_amber_family_draft();
     let before = bank.recall_frame(&probe).unwrap();
+    let profile = probe.profile_provenance().identity();
+    assert_eq!(
+        bank.object_familiarity(ORGANISM, TrackedObjectId(71), profile),
+        0.5
+    );
+    assert_eq!(
+        bank.object_familiarity(ORGANISM, TrackedObjectId(72), profile),
+        0.0
+    );
+    assert_eq!(
+        bank.object_familiarity(OrganismId(812), TrackedObjectId(71), profile),
+        0.0
+    );
     let restored: MemoryBank =
         serde_json::from_value(serde_json::to_value(&bank).unwrap()).unwrap();
     let after = restored.recall_frame(&probe).unwrap();
 
     assert_eq!(after.context(), before.context());
     assert_eq!(after.receipt(), before.receipt());
+    assert_eq!(
+        restored.object_familiarity(ORGANISM, TrackedObjectId(71), profile),
+        0.5
+    );
 }
 
 fn stopped_meal_fixture() -> (MemoryBank, PerceptionFrameDraft) {
@@ -1052,8 +1159,11 @@ fn portable_memory_assets_roundtrip_private_indices_and_reject_tampering() {
     .unwrap()
     .identity();
     let mut sidecar = MemorySidecarState::new_profiled(ORGANISM, profile, config).unwrap();
+    let mut object = slot(0, 71, 0.4, [0.0, 0.8, 0.9]);
+    // A valid physical reading can carry signed zero from ordinary arithmetic.
+    object.relative_velocity[0] = -0.0;
     sidecar
-        .observe_sealed_patch(&sequenced_patch(1, 2, 71, 0.4, -1.0, 1.0))
+        .observe_sealed_patch(&sequenced_patch_for_object(1, 2, object, -1.0, 1.0))
         .unwrap();
     let before = sidecar
         .recall_frame(&cyan_amber_family_draft())
@@ -1062,6 +1172,8 @@ fn portable_memory_assets_roundtrip_private_indices_and_reject_tampering() {
         .bank_digest;
 
     let active = sidecar.export_active_bank().unwrap();
+    // Relative velocity occupies target feature lane 3 (query lane 60).
+    assert_eq!(active.records[0].query_feature_bits[60], 0);
     assert_eq!(active.organism_id_raw, ORGANISM.raw());
     assert_eq!(active.profile, profile);
     assert_eq!(active.records.len(), 1);

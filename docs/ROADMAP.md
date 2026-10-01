@@ -1,34 +1,48 @@
 # Roadmap
 
-The roadmap is ordered by causal dependency. A later phase does not compensate for an earlier missing authority link.
+Updated 20 September 2026. The immediate priority is the persistent creature game
+described in section 1.1 of the controlling v2.0 architecture: care, useful
+learning, and save/load first; breeding and practical breed promotion next.
 
-## 1. Prove live GPU-to-voxel projection
+The [core game loop delivery plan](core-game-loop-plan-2026-09-20.md) contains the
+current sequence, source findings, Docking Station lessons, and exit criteria.
+It also sets the minimum-test rule: use the smallest relevant existing check,
+combine acceptance into one evolving play scenario, and expand only for a
+concrete failure. This is a plan, not evidence of completed gameplay.
 
-The read-only presentation adapter keyed by stable organism and world entity IDs is implemented. Refresh its source-bound Vulkan and rendered evidence.
+## 1. Establish the ordinary production baseline
+
+Live GPU-to-voxel projection is implemented in source. Check it inside the actual
+care scenario, starting with one creature and a fresh save. Preserve existing
+saves. Repair the first observed break rather than repeating a broad audit.
 
 Exit gate:
 
 - a real GPU-selected action changes the authoritative world;
 - the matching voxel entity receives the resulting transform or visibility change;
 - renderer code cannot write world truth;
-- one receipt binds input, GPU selection, world outcome, and render update;
-- before/after rendered evidence shows the same organism.
+- existing causal output and a short recording show the same organism through
+  input, selection, world outcome, and presentation.
 
-## 2. Autonomous production lifecycle
+## 2. Deliver the first playable care loop
 
-Connect birth, ageing, reproduction, death, and lineage archive transactions to the active GPU schedule.
+Validate a capable founder and connect its explicit identity to ordinary New
+Game, birth, archive, and restore. Make reachable food, eating, rest, and recovery
+work on the production terrain. Provide direct care tools, readable needs and
+consequences, and contextual help in the player view.
 
 Exit gate:
 
-- a multi-tick production run creates and retires organisms without a test harness calling the transaction directly;
-- birth archive precedes GPU insertion;
-- final seal and life archive precede GPU retirement and despawn;
-- stable IDs, GPU slots, lineage, and visible entities agree after each transition;
-- save/restore across the lifecycle preserves authority.
+- care produces visible, real physiological consequences;
+- one grounded lesson changes later independent behavior;
+- natural sleep and fresh-process save/load preserve the same individual and
+  its acquired ability;
+- ordinary controls demonstrate the connected loop, not only its components.
 
-## 3. Truthful player controls
+### Controls and continuity throughout
 
-Bind pause, speed, load, save, selection, follow, and new-world commands to the same live runtime and projection.
+Pause, speed, load, save, selection, follow, and new-world commands use the same
+live runtime and projection. Preserve them during every gameplay change.
 
 Exit gate:
 
@@ -38,9 +52,34 @@ Exit gate:
 - controls report unavailable neural hardware honestly;
 - disabled or diagnostic-only features are visibly labelled.
 
-## 4. Repair EI1
+## 3. Deliver a small community and generational play
+
+Extend the working loop to the default six creatures, with useful objects,
+sustainable resources, readable social behavior, and measured performance.
+
+Autonomous production lifecycle has existing world/runtime hooks. Complete the
+ordinary experience of reproduction, inherited variation, development, death,
+and lasting lineage records.
+
+Exit gate:
+
+- viable offspring have fresh identities and meaningful inherited differences;
+- birth archive precedes GPU admission, and final life archive precedes retirement;
+- stable IDs, GPU residents, and visible entities agree across lifecycle changes;
+- restarting restores the same family and lineage;
+- explicit named breed promotion retains a useful skill in a fresh descendant,
+  clears personal records, and leaves the source individual unchanged.
+
+Follow the [approved promotion scope](reviews/2026-09-11-breed-promotion-scope.md).
+Ordinary mating must not silently copy an acquired adult mind.
+
+## 4. Advance EI1 research separately
 
 Treat the retained `Blocked` corpus as diagnosis, not promotion.
+
+This research promotion gate does not block repairing a small interaction or
+establishing the first playable care loop. Gameplay progress does not itself
+promote EI1.
 
 Exit gate:
 
@@ -54,21 +93,12 @@ Exit gate:
 
 If measured ability still fails, retain `Blocked` and improve the training design rather than relabelling the evidence.
 
-## 5. Prove the player loop
-
-Demonstrate the product, not only its components.
-
-Exit gate:
-
-- player input reaches the live world;
-- a creature perceives, selects, acts, and learns through the GPU path;
-- the world changes and the renderer shows that change;
-- speech, selection, inspection, save, load, sleep, birth, and death use the same identities;
-- fresh-process and real-input checks produce causal and rendered evidence.
-
-## 6. Scale by measurement
+## 5. Scale by measurement when larger profiles are the target
 
 Keep brain class and population capacity as separate decisions.
+
+Measure the initial supported population in the ordinary play session. Broad
+population studies are separate work, not a prerequisite for the care milestone.
 
 Exit gate for each production class and population profile:
 
@@ -78,7 +108,7 @@ Exit gate for each production class and population profile:
 - admission, throttling, save migration, soak, and replay gates pass;
 - N4096 remains research-only until its own equivalence and rollback gate passes.
 
-## 7. Release gate
+## 6. Release gate
 
 Release only after the product path is the proven path.
 

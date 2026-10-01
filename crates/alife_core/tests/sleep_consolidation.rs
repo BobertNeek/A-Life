@@ -876,7 +876,7 @@ fn sleep_receipt_accepts_multiple_replay_events_merged_into_one_memory() {
                 alife_core::ExperienceSequenceId(2),
             ],
             &[first_memory_id, second_memory_id],
-            2,
+            1,
         )
         .unwrap();
     assert_eq!(promoted, vec![first_memory_id]);

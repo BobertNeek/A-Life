@@ -69,7 +69,7 @@ pub const CA12_MAX_BUNDLE_ENTRIES: usize = 32;
 pub const CA13_DOUBLE_BUFFERED_SCHEDULER_SCHEMA: &str =
     "alife.ca13.double_buffered_graphical_scheduler.v1";
 pub const CA13_DOUBLE_BUFFERED_SCHEDULER_SCHEMA_VERSION: u16 = 1;
-pub const CA13_FIXED_SIM_TICK_HZ: u32 = 20;
+pub const CA13_FIXED_SIM_TICK_HZ: u32 = alife_world::WORLD_TICKS_PER_SECOND;
 pub const CA13_TARGET_RENDER_FRAME_HZ: u32 = 60;
 pub const CA13_MAX_CATCH_UP_TICKS_PER_FRAME: u32 = 4;
 pub const CA13_MAX_ACCUMULATOR_MICROS: u64 = 250_000;

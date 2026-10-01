@@ -4,8 +4,8 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
-    CandidateActionFamily, CanonicalDigestBuilder, LobeKind, MotorChannel, ScaffoldContractError,
-    CANDIDATE_FEATURE_COUNT,
+    CandidateActionFamily, CandidateFeatureVector, CanonicalDigestBuilder, DriveSnapshot, LobeKind,
+    MotorChannel, ScaffoldContractError, CANDIDATE_FEATURE_COUNT,
 };
 
 use super::{BrainPhenotype, CompiledSynapseKind, DecoderHeadKind, MemoryChannelPlan};
@@ -13,6 +13,18 @@ use super::{BrainPhenotype, CompiledSynapseKind, DecoderHeadKind, MemoryChannelP
 const DECODER_SCHEMA_VERSION: u16 = 1;
 const DECODER_DOMAIN: &[u8] = b"alife.phenotype.candidate-decoder.v1";
 const FAMILY_COUNT: usize = 8;
+
+fn is_zero_u32(value: &u32) -> bool {
+    *value == 0
+}
+
+fn is_zero_f32(value: &f32) -> bool {
+    *value == 0.0
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
+}
 
 pub const FACTORIZED_MOTOR_CHANNEL_COUNT: usize = 4;
 
@@ -27,6 +39,16 @@ const FACTORIZED_MOTOR_CHANNELS: [MotorChannel; FACTORIZED_MOTOR_CHANNEL_COUNT] 
 pub struct CandidateDecoderFamilyPlan {
     family: CandidateActionFamily,
     bias: f32,
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    innate_drive_mask: u32,
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    innate_gain: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    innate_cue_lane: Option<u8>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    innate_cue_inverted: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    innate_requires_reach: bool,
     decoder_synapse_start: u32,
     decoder_synapse_count: u32,
 }
@@ -37,6 +59,65 @@ impl CandidateDecoderFamilyPlan {
     }
     pub const fn bias(&self) -> f32 {
         self.bias
+    }
+    pub const fn innate_drive_mask(&self) -> u32 {
+        self.innate_drive_mask
+    }
+    pub const fn innate_gain(&self) -> f32 {
+        self.innate_gain
+    }
+    pub const fn innate_cue_lane(&self) -> Option<u8> {
+        self.innate_cue_lane
+    }
+    pub const fn innate_cue_inverted(&self) -> bool {
+        self.innate_cue_inverted
+    }
+    pub const fn innate_requires_reach(&self) -> bool {
+        self.innate_requires_reach
+    }
+    /// Innate salience is a gene-compiled part of this decoder, not a world score.
+    pub fn innate_contribution(
+        &self,
+        drives: DriveSnapshot,
+        features: CandidateFeatureVector,
+    ) -> f32 {
+        let urgency = drives
+            .to_array()
+            .iter()
+            .enumerate()
+            .filter(|(lane, _)| self.innate_drive_mask & (1 << lane) != 0)
+            .map(|(_, value)| *value)
+            .fold(0.0_f32, f32::max);
+        let cue = self.innate_cue_lane.map_or(1.0, |lane| {
+            let signal = features.0[usize::from(lane)];
+            let signal = if self.innate_cue_inverted {
+                -signal
+            } else {
+                signal
+            };
+            ((signal - 0.4) / 0.6).clamp(0.0, 1.0)
+        });
+        let reach = if self.innate_requires_reach {
+            ((0.25 - features.0[2]) / 0.15).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        (urgency - 0.55).max(0.0) * self.innate_gain * cue * reach
+    }
+    pub(super) const fn with_innate_priority(
+        mut self,
+        drive_mask: u32,
+        gain: f32,
+        cue_lane: Option<u8>,
+        cue_inverted: bool,
+        requires_reach: bool,
+    ) -> Self {
+        self.innate_drive_mask = drive_mask;
+        self.innate_gain = gain;
+        self.innate_cue_lane = cue_lane;
+        self.innate_cue_inverted = cue_inverted;
+        self.innate_requires_reach = requires_reach;
+        self
     }
     pub const fn decoder_synapse_start(&self) -> u32 {
         self.decoder_synapse_start
@@ -53,6 +134,11 @@ impl CandidateDecoderFamilyPlan {
         Self {
             family,
             bias,
+            innate_drive_mask: 0,
+            innate_gain: 0.0,
+            innate_cue_lane: None,
+            innate_cue_inverted: false,
+            innate_requires_reach: false,
             decoder_synapse_start,
             decoder_synapse_count,
         }
@@ -117,10 +203,7 @@ impl CandidateDecoderPlan {
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
-        Ok(FACTORIZED_MOTOR_CHANNELS[..head_count]
-            .iter()
-            .copied()
-            .collect())
+        Ok(FACTORIZED_MOTOR_CHANNELS[..head_count].to_vec())
     }
 
     pub(super) fn try_new(
@@ -237,6 +320,19 @@ impl CandidateDecoderPlan {
             let raw = u8::try_from(raw).map_err(|_| ScaffoldContractError::PhenotypeCompile)?;
             if row.family.raw() != raw
                 || row.bias.to_bits() != 0.0_f32.to_bits()
+                || row.innate_drive_mask & !0x1ff != 0
+                || !row.innate_gain.is_finite()
+                || row.innate_gain.abs() > 128.0
+                || row
+                    .innate_cue_lane
+                    .is_some_and(|lane| usize::from(lane) >= CANDIDATE_FEATURE_COUNT)
+                || (row.innate_cue_inverted && row.innate_cue_lane.is_none())
+                || (row.innate_drive_mask == 0
+                    && (row.innate_gain != 0.0
+                        || row.innate_cue_lane.is_some()
+                        || row.innate_cue_inverted
+                        || row.innate_requires_reach))
+                || (row.innate_drive_mask != 0 && row.innate_gain == 0.0)
                 || row.decoder_synapse_start != cursor
             {
                 return Err(ScaffoldContractError::PhenotypeCompile);
@@ -274,6 +370,13 @@ impl CandidateDecoderPlan {
         for row in &self.families {
             digest.write_u8(row.family.raw());
             digest.write_f32(row.bias)?;
+            if row.innate_drive_mask != 0 {
+                digest.write_u32(row.innate_drive_mask);
+                digest.write_f32(row.innate_gain)?;
+                digest.write_u8(row.innate_cue_lane.map_or(0, |lane| lane + 1));
+                digest.write_bool(row.innate_cue_inverted);
+                digest.write_bool(row.innate_requires_reach);
+            }
             digest.write_u32(row.decoder_synapse_start);
             digest.write_u32(row.decoder_synapse_count);
         }

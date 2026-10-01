@@ -23,6 +23,22 @@ pub struct DevelopmentalPriorController {
 }
 
 impl DevelopmentalPriorController {
+    pub fn validate_resume(&self, tick: Tick) -> Result<(), ScaffoldContractError> {
+        if self.last_probe_exposure > self.unaided_exposures
+            || self.consecutive_passing_probes > PASSING_PROBES_TO_ZERO
+            || self
+                .last_reactivation_tick
+                .is_some_and(|t| t.raw() > tick.raw())
+            || self.active_reactivation_until.is_some_and(|until| {
+                self.last_reactivation_tick.is_none_or(|at| {
+                    until.raw() != at.raw().saturating_add(NOVELTY_REACTIVATION_TICKS)
+                })
+            })
+        {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        Ok(())
+    }
     pub const fn unaided_exposures(&self) -> u32 {
         self.unaided_exposures
     }

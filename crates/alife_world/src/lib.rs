@@ -4,6 +4,7 @@ use alife_core::{ActionAbiVersion, ActionCommand, SensoryAbiVersion};
 
 pub mod appearance;
 pub mod candidate_enumerator;
+pub mod care_objects;
 pub mod ecology;
 pub mod era1_trials;
 pub mod grounded_sensing;
@@ -23,12 +24,14 @@ pub mod tracked_objects;
 
 pub use appearance::*;
 pub use candidate_enumerator::*;
+pub use care_objects::*;
 pub use ecology::*;
 pub use era1_trials::*;
 pub use grounded_sensing::*;
 pub use habitat::*;
 pub use headless::*;
-pub use highlands::{highlands, HighlandsSurface, TerrainBinding};
+pub use highlands::{highlands, HighlandsSurface, TerrainBinding, TerrainSurface};
+mod terrain;
 pub use new_game::*;
 pub use organism::*;
 pub use persistence::*;
@@ -37,6 +40,7 @@ pub use presentation::*;
 pub use procedural_chunks::*;
 pub use scenario::*;
 pub use speech::*;
+pub use terrain::{LocomotionLimits, TerrainData, TerrainState, WorldTerrain};
 pub use tracked_objects::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,3 +68,5 @@ impl WorldContractManifest {
 pub trait ActionLegalityChecker {
     fn check_action(&self, action: &ActionCommand) -> ActionLegality;
 }
+
+pub use headless::SPONTANEOUS_SPEECH_COOLDOWN_TICKS;

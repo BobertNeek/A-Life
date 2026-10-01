@@ -98,6 +98,36 @@ impl GroundedPhysicalProperties {
         }
     }
 
+    /// Give newly spawned objects a stable, physical chemical cue across
+    /// different spawn orders. Other channels retain per-object variation.
+    /// The brain receives this chemistry, never the world object's kind.
+    pub fn deterministic_for_kind(kind: crate::WorldObjectKind, spawn_sequence: u64) -> Self {
+        let mut properties = Self::deterministic_default(spawn_sequence);
+        let variation = properties.chemical[0].abs() * 0.2;
+        properties.chemical[0] = match kind {
+            crate::WorldObjectKind::Food => 0.75 + variation,
+            crate::WorldObjectKind::Hazard => -0.75 - variation,
+            crate::WorldObjectKind::Obstacle => properties.chemical[0] * 0.2,
+            crate::WorldObjectKind::Agent => 0.35 + properties.chemical[0] * 0.1,
+            crate::WorldObjectKind::Token => -0.35 + properties.chemical[0] * 0.1,
+            crate::WorldObjectKind::Ball | crate::WorldObjectKind::ActivityToy => 0.0,
+        };
+        if matches!(
+            kind,
+            crate::WorldObjectKind::Ball | crate::WorldObjectKind::ActivityToy
+        ) {
+            properties.color = [0.1 + properties.color[0] * 0.1, 0.35, 0.9];
+            properties.material = [0.2, 0.8, 0.2];
+            properties.shape = if kind == crate::WorldObjectKind::Ball {
+                [0.8; 3]
+            } else {
+                [0.9, 0.65, 0.6]
+            };
+            properties.chemical = [0.0; 3];
+        }
+        properties
+    }
+
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         self.velocity.validate()?;
         if !unit_values_valid(&self.color)
@@ -216,6 +246,37 @@ pub struct GroundedSensingFrame {
 }
 
 impl GroundedSensingFrame {
+    /// Calibrate the observed view after identity tracking, so a body's changing
+    /// sensitivity does not change the physical descriptor used for identity.
+    pub(crate) fn calibrate(
+        &mut self,
+        embodiment: Option<&alife_core::EmbodimentState>,
+    ) -> Result<(), ScaffoldContractError> {
+        let gain = |capability| embodiment.map_or(1.0, |body| body.sensor_gain(capability));
+        for slot in &mut self.slots {
+            slot.confidence = Confidence::new(
+                (slot.confidence.raw() * gain(alife_core::SensorCapability::Vision))
+                    .clamp(0.0, 1.0),
+            )?;
+            for chemical in &mut slot.chemical {
+                // Source-specific chemistry is a contact/taste observation.
+                // Distant smell is the anonymous bilateral field, not chemical GPS.
+                *chemical =
+                    (*chemical * slot.contact * gain(alife_core::SensorCapability::Chemical))
+                        .clamp(-1.0, 1.0);
+            }
+            slot.temperature *= slot.contact;
+            slot.contact =
+                (slot.contact * gain(alife_core::SensorCapability::Touch)).clamp(0.0, 1.0);
+            if let Some(body) = embodiment {
+                for value in &mut slot.proprioception {
+                    *value = (*value * body.proprioceptive_gain()).clamp(0.0, 1.0);
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn sensory(&self) -> &SensorySnapshot {
         &self.sensory
     }
@@ -302,10 +363,25 @@ impl GroundedSensorExtractor {
         let mut slots = Vec::with_capacity(tracked.len());
         let mut transports = Vec::with_capacity(tracked.len());
         for (slot_index, tracked) in tracked.into_iter().enumerate() {
-            // Game space is Y-up; horizontal bearing keeps [sin, cos] in X/Z.
+            // Game space is Y-up. The observer pose is the sensing pose, so
+            // bearings rotate with its gaze while V1 identity poses are intact.
             let planar = tracked.relative.x.hypot(tracked.relative.z);
+            let yaw = 2.0
+                * snapshot
+                    .observer_pose
+                    .rotation
+                    .y
+                    .atan2(snapshot.observer_pose.rotation.w);
+            let (sine, cosine) = yaw.sin_cos();
+            let forward = tracked.relative.x * cosine + tracked.relative.z * sine;
+            let left = tracked.relative.z * cosine - tracked.relative.x * sine;
             let bearing = if planar > f32::EPSILON {
-                [tracked.relative.z / planar, tracked.relative.x / planar]
+                // Rotation can overshoot the normalized range by an f32 ULP.
+                // Bound the sensor output without relaxing frame validation.
+                [
+                    (left / planar).clamp(-1.0, 1.0),
+                    (forward / planar).clamp(-1.0, 1.0),
+                ]
             } else {
                 [0.0, 1.0]
             };

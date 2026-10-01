@@ -147,6 +147,14 @@ pub enum BiochemicalSourceLocus {
     SocialContact,
     SleepRecovery,
     MatingOpportunity,
+    Awake,
+    Sleeping,
+    PlayerReward,
+    PlayStimulation,
+    PerceivedNovelty,
+    Investigation,
+    /// Persistent loss of viability, distinct from the one-shot damage event.
+    HealthDeficit,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -245,6 +253,8 @@ pub enum BiochemicalTargetLocus {
     Autonomic(u8),
     OrganEnergyUse,
     OrganRepair,
+    LocomotorCapacity,
+    SleepMetabolicRate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -428,6 +438,11 @@ impl Validate for NeuralReceptorFrame {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(try_from = "BiochemicalPhenotypeWire")]
 pub struct BiochemicalPhenotype {
+    #[serde(
+        default,
+        skip_serializing_if = "crate::chemistry::BiologicalValueProfile::is_default"
+    )]
+    value_profile: crate::chemistry::BiologicalValueProfile,
     schema_version: u16,
     species_budget: usize,
     reaction_budget: usize,
@@ -444,6 +459,8 @@ pub struct BiochemicalPhenotype {
 // once on load; private source fields cannot invalidate them during simulation.
 #[derive(Deserialize)]
 struct BiochemicalPhenotypeWire {
+    #[serde(default)]
+    value_profile: crate::chemistry::BiologicalValueProfile,
     schema_version: u16,
     species_budget: usize,
     reaction_budget: usize,
@@ -458,6 +475,7 @@ impl TryFrom<BiochemicalPhenotypeWire> for BiochemicalPhenotype {
     type Error = ScaffoldContractError;
     fn try_from(wire: BiochemicalPhenotypeWire) -> Result<Self, Self::Error> {
         let mut value = Self {
+            value_profile: wire.value_profile,
             schema_version: wire.schema_version,
             species_budget: wire.species_budget,
             reaction_budget: wire.reaction_budget,
@@ -482,6 +500,8 @@ struct CompiledBiochemistry {
     receptor_groups: Vec<ReceptorGroup>,
     organ_energy_group: Option<usize>,
     organ_repair_group: Option<usize>,
+    locomotor_capacity_group: Option<usize>,
+    sleep_metabolic_group: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -499,6 +519,230 @@ struct ReceptorGroup {
 }
 
 impl BiochemicalPhenotype {
+    /// Recombine only homologous parameters. Wiring, species bounds, and budgets
+    /// remain a coherent inherited graph; no runtime concentrations are involved.
+    pub(crate) fn map_homologous_parameters(
+        &self,
+        other: &Self,
+        mut map: impl FnMut(f32, f32, f32, f32) -> Result<f32, ScaffoldContractError>,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.validate_contract()?;
+        other.validate_contract()?;
+        let homologous = self.species.len() == other.species.len()
+            && self.species.iter().zip(&other.species).all(|(a, b)| {
+                a.id == b.id
+                    && a.kind == b.kind
+                    && a.compartment == b.compartment
+                    && a.minimum == b.minimum
+                    && a.maximum == b.maximum
+            })
+            && self.reactions.len() == other.reactions.len()
+            && self.reactions.iter().zip(&other.reactions).all(|(a, b)| {
+                a.rate_control == b.rate_control
+                    && a.reactants == b.reactants
+                    && a.products == b.products
+            })
+            && self.emitters.len() == other.emitters.len()
+            && self.emitters.iter().zip(&other.emitters).all(|(a, b)| {
+                a.source == b.source
+                    && a.target == b.target
+                    && a.cadence_ticks == b.cadence_ticks
+                    && a.response == b.response
+                    && a.inverted == b.inverted
+            })
+            && self.receptors.len() == other.receptors.len()
+            && self.receptors.iter().zip(&other.receptors).all(|(a, b)| {
+                a.source == b.source && a.target == b.target && a.digital == b.digital
+            })
+            && self.neuroemitters.len() == other.neuroemitters.len()
+            && self
+                .neuroemitters
+                .iter()
+                .zip(&other.neuroemitters)
+                .all(|(a, b)| a.source == b.source && a.target == b.target);
+        // Unmatched topology is an intact structural allele, not a half-built organ.
+        let other = if homologous { other } else { self };
+        let mut child = self.clone();
+        for (a, b) in child.species.iter_mut().zip(&other.species) {
+            a.baseline = map(a.baseline, b.baseline, a.minimum, a.maximum)?;
+            a.decay_retention = map(a.decay_retention, b.decay_retention, 0.0, 1.0)?;
+        }
+        for (a, b) in child.reactions.iter_mut().zip(&other.reactions) {
+            a.rate = map(a.rate, b.rate, 0.0, 1.0)?;
+        }
+        for (a, b) in child.emitters.iter_mut().zip(&other.emitters) {
+            a.threshold = map(a.threshold, b.threshold, 0.0, 1.0)?;
+            a.gain = map(a.gain, b.gain, -1.0, 1.0)?;
+            a.developmental_expression_floor = map(
+                a.developmental_expression_floor,
+                b.developmental_expression_floor,
+                0.0,
+                1.0,
+            )?;
+        }
+        for (a, b) in child.receptors.iter_mut().zip(&other.receptors) {
+            a.threshold = map(a.threshold, b.threshold, 0.0, 1.0)?;
+            a.gain = map(a.gain, b.gain, -2.0, 2.0)?;
+            a.nominal = map(a.nominal, b.nominal, 0.0, 1.0)?;
+        }
+        for (a, b) in child.neuroemitters.iter_mut().zip(&other.neuroemitters) {
+            a.threshold = map(a.threshold, b.threshold, 0.0, 1.0)?;
+            a.gain = map(a.gain, b.gain, -1.0, 1.0)?;
+        }
+        for (a, b) in child
+            .value_profile
+            .drives
+            .iter_mut()
+            .zip(other.value_profile.drives)
+        {
+            *a = map(*a, b, -2.0, 2.0)?;
+        }
+        for (a, b) in child
+            .value_profile
+            .hormones
+            .iter_mut()
+            .zip(other.value_profile.hormones)
+        {
+            *a = map(*a, b, -2.0, 2.0)?;
+        }
+        child.value_profile.energy = map(
+            child.value_profile.energy,
+            other.value_profile.energy,
+            -2.0,
+            2.0,
+        )?;
+        child.value_profile.injury = map(
+            child.value_profile.injury,
+            other.value_profile.injury,
+            0.0,
+            2.0,
+        )?;
+        child.value_profile.disappointment = map(
+            child.value_profile.disappointment,
+            other.value_profile.disappointment,
+            0.0,
+            1.0,
+        )?;
+        child.compile()?;
+        Ok(child)
+    }
+
+    /// Default-centered modifiers compile chromosome traits into the same graph
+    /// that owns physiology. They do not create a second endocrine simulation.
+    pub(crate) fn with_chromosome_traits(
+        &self,
+        chemistry: &crate::ChemistryPhenotype,
+        temperament: &crate::PredispositionPhenotype,
+    ) -> Result<Self, ScaffoldContractError> {
+        use ids::*;
+        let center = crate::ContinuousLocus::midpoint_value;
+        let scale = |value: f32, reference: f32| (value - reference).exp2();
+        let stress = scale(chemistry.stress_baseline, center(0.18, 0.24));
+        let reward = scale(chemistry.reward_sensitivity, center(0.50, 0.58));
+        let bond = scale(chemistry.bonding_sensitivity, center(0.46, 0.54));
+        let production = scale(chemistry.hormone_production, center(0.45, 0.52));
+        let decay = scale(chemistry.hormone_decay, center(0.50, 0.57));
+        let is_hormone = |id| {
+            matches!(
+                id,
+                ADRENALINE
+                    | CORTISOL
+                    | DOPAMINE
+                    | OXYTOCIN
+                    | SEROTONIN
+                    | ACETYLCHOLINE
+                    | LEARNING_SIGNAL
+                    | DEVELOPMENT_SIGNAL
+                    | SLEEP_PRESSURE
+            )
+        };
+        let mut result = self.clone();
+        for chemical in &mut result.species {
+            // Metabolic material reserves are not hormone production.
+            if chemical.kind == ChemicalSpeciesKind::Regulatory {
+                let gain = match chemical.id {
+                    FEAR | ADRENALINE | CORTISOL => stress,
+                    LONELINESS | OXYTOCIN | SEROTONIN => bond,
+                    CURIOSITY => scale(temperament.novelty_bias, center(0.45, 0.53)),
+                    _ => 1.0,
+                };
+                let gain = gain
+                    * if is_hormone(chemical.id) {
+                        production
+                    } else {
+                        1.0
+                    };
+                chemical.baseline =
+                    (chemical.baseline * gain).clamp(chemical.minimum, chemical.maximum);
+                chemical.decay_retention = chemical.decay_retention.powf(decay);
+            }
+        }
+        for emitter in &mut result.emitters {
+            let mut gain = if is_hormone(emitter.target) {
+                production
+            } else {
+                1.0
+            };
+            if matches!(emitter.target, ADRENALINE | CORTISOL | FEAR) {
+                gain *= stress;
+            }
+            if emitter.source == BiochemicalSourceLocus::SocialContact {
+                gain *= bond * scale(temperament.social_attention, center(0.42, 0.50));
+            }
+            if emitter.target == FEAR {
+                gain *= scale(temperament.hazard_aversion, center(0.58, 0.66));
+            }
+            emitter.gain = (emitter.gain * gain).clamp(-1.0, 1.0);
+        }
+        for emitter in &mut result.neuroemitters {
+            if is_hormone(emitter.target) {
+                emitter.gain = (emitter.gain * production).clamp(-1.0, 1.0);
+            }
+        }
+        for receptor in &mut result.receptors {
+            match receptor.target {
+                BiochemicalTargetLocus::Drive(DriveChannel::Hunger) => {
+                    receptor.threshold = (receptor.threshold
+                        + (chemistry.hunger_threshold - center(0.38, 0.44)))
+                    .clamp(0.0, 1.0);
+                    receptor.gain = (receptor.gain
+                        * scale(temperament.food_attraction, center(0.54, 0.62)))
+                    .clamp(-2.0, 2.0);
+                }
+                BiochemicalTargetLocus::Drive(DriveChannel::Fatigue) => {
+                    receptor.threshold = (receptor.threshold
+                        + (chemistry.fatigue_threshold - center(0.66, 0.72)))
+                    .clamp(0.0, 1.0);
+                }
+                BiochemicalTargetLocus::Drive(DriveChannel::Fear) => {
+                    receptor.gain = (receptor.gain
+                        * scale(temperament.hazard_aversion, center(0.58, 0.66)))
+                    .clamp(-2.0, 2.0);
+                }
+                BiochemicalTargetLocus::Neural(NeuralReceptorClass::PlasticityAppetitive) => {
+                    receptor.gain = (receptor.gain * reward).clamp(-2.0, 2.0);
+                }
+                _ => {}
+            }
+        }
+        result.compile()?;
+        Ok(result)
+    }
+
+    pub const fn value_profile(&self) -> crate::chemistry::BiologicalValueProfile {
+        self.value_profile
+    }
+
+    pub(crate) fn with_value_profile(
+        &self,
+        profile: crate::chemistry::BiologicalValueProfile,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut value = self.clone();
+        value.value_profile = profile;
+        value.compile()?;
+        Ok(value)
+    }
+
     fn compile(&mut self) -> Result<(), ScaffoldContractError> {
         self.validate_contract()?;
         let mut compiled = CompiledBiochemistry::default();
@@ -565,6 +809,12 @@ impl BiochemicalPhenotype {
             match receptor.target {
                 BiochemicalTargetLocus::OrganEnergyUse => compiled.organ_energy_group = Some(slot),
                 BiochemicalTargetLocus::OrganRepair => compiled.organ_repair_group = Some(slot),
+                BiochemicalTargetLocus::LocomotorCapacity => {
+                    compiled.locomotor_capacity_group = Some(slot)
+                }
+                BiochemicalTargetLocus::SleepMetabolicRate => {
+                    compiled.sleep_metabolic_group = Some(slot)
+                }
                 _ => {}
             }
         }
@@ -629,6 +879,199 @@ impl BiochemicalPhenotype {
         Ok(value)
     }
 
+    pub(crate) fn with_emitter_gain(
+        &self,
+        emitter_index: usize,
+        gain: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut value = self.clone();
+        value
+            .emitters
+            .get_mut(emitter_index)
+            .ok_or(ScaffoldContractError::InvalidGeneticBounds)?
+            .gain = gain;
+        value.compile()?;
+        Ok(value)
+    }
+
+    pub(crate) fn with_receptor_nominal(
+        &self,
+        receptor_index: usize,
+        nominal: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut value = self.clone();
+        value
+            .receptors
+            .get_mut(receptor_index)
+            .ok_or(ScaffoldContractError::InvalidGeneticBounds)?
+            .nominal = nominal;
+        value.compile()?;
+        Ok(value)
+    }
+
+    /// Install an explicit inherited waking/recovery circuit. Legacy reference
+    /// recipes and loaded concentrations remain unchanged until callers opt in.
+    pub(crate) fn with_waking_recovery(mut self) -> Result<Self, ScaffoldContractError> {
+        use ids::*;
+        self.emitters.retain(|row| {
+            row.target != SLEEP_STATE
+                && !((row.target == FATIGUE && row.source == BiochemicalSourceLocus::EnergyDeficit)
+                    || (row.source == BiochemicalSourceLocus::SleepRecovery
+                        && row.target == BRAIN_ATP)
+                    || (row.source == BiochemicalSourceLocus::Awake
+                        && matches!(row.target, FATIGUE | SLEEP_PRESSURE)))
+        });
+        // Availability must not collapse at ordinary reserves merely because
+        // sleeping no longer supplies a direct ATP boost. This sensitivity is
+        // an inherited emitter parameter; actual neural work still pays reserve.
+        for row in &mut self.emitters {
+            if row.source == BiochemicalSourceLocus::EnergyDeficit && row.target == BRAIN_ATP {
+                row.gain = -0.02;
+            }
+        }
+        self.species.retain(|row| row.id != SLEEP_STATE);
+        self.species.push(regulatory(SLEEP_STATE, 0.0, 0.0));
+        self.species.sort_by_key(|row| row.id);
+        let mut sleeping = emitter(BiochemicalSourceLocus::Sleeping, SLEEP_STATE, 1.0);
+        sleeping.developmental_expression_floor = 1.0;
+        self.emitters.push(sleeping);
+        for id in [FATIGUE, SLEEP_PRESSURE] {
+            let row = self
+                .species
+                .iter_mut()
+                .find(|row| row.id == id)
+                .ok_or(ScaffoldContractError::InvalidGeneticBounds)?;
+            row.decay_retention = 0.99995;
+            self.emitters
+                .push(emitter(BiochemicalSourceLocus::Awake, id, 0.00007));
+        }
+        self.receptors.retain(|row| {
+            !matches!(
+                row.target,
+                BiochemicalTargetLocus::LocomotorCapacity
+                    | BiochemicalTargetLocus::SleepMetabolicRate
+            )
+        });
+        self.receptors.push(BiochemicalReceptor {
+            source: FATIGUE,
+            target: BiochemicalTargetLocus::LocomotorCapacity,
+            threshold: 0.0,
+            gain: -1.0,
+            nominal: 1.0,
+            digital: false,
+        });
+        self.receptors.push(BiochemicalReceptor {
+            source: SLEEP_STATE,
+            target: BiochemicalTargetLocus::SleepMetabolicRate,
+            threshold: 0.0,
+            gain: -0.9,
+            nominal: 1.0,
+            digital: false,
+        });
+        self.receptors
+            .sort_by_key(|row| (target_order(row.target), row.source));
+        self.compile()?;
+        Ok(self)
+    }
+
+    /// Keep injury salient while health remains low. The emitter lives in the
+    /// inherited graph; an old saved graph is never rewritten on load.
+    pub(crate) fn with_health_distress(mut self) -> Result<Self, ScaffoldContractError> {
+        self.emitters.retain(|row| {
+            !(row.source == BiochemicalSourceLocus::HealthDeficit && row.target == ids::PAIN)
+        });
+        let mut distress = emitter(BiochemicalSourceLocus::HealthDeficit, ids::PAIN, 0.1);
+        // A mild scratch does not become a constant emergency through repeated
+        // release. Acute damage still supplies the immediate pain spike.
+        distress.threshold = 0.4;
+        distress.developmental_expression_floor = 1.0;
+        self.emitters.push(distress);
+        self.compile()?;
+        Ok(self)
+    }
+
+    /// Inherited boredom circuit, separate from exploratory curiosity. Toy
+    /// use can relieve an existing need; it cannot manufacture praise or food.
+    pub(crate) fn with_play_stimulation(mut self) -> Result<Self, ScaffoldContractError> {
+        let boredom = ChemicalSpeciesId(22);
+        self.species.retain(|row| row.id != boredom);
+        self.species.push(regulatory(boredom, 0.0, 1.0));
+        self.species.sort_by_key(|row| row.id);
+        self.emitters.retain(|row| row.target != boredom);
+        for (source, gain) in [
+            (BiochemicalSourceLocus::Awake, 0.0002),
+            (BiochemicalSourceLocus::PlayStimulation, -0.2),
+        ] {
+            let mut release = emitter(source, boredom, gain);
+            release.developmental_expression_floor = 1.0;
+            self.emitters.push(release);
+        }
+        self.receptors
+            .retain(|row| row.target != BiochemicalTargetLocus::Drive(DriveChannel::Extension0));
+        self.receptors.push(BiochemicalReceptor {
+            source: boredom,
+            target: BiochemicalTargetLocus::Drive(DriveChannel::Extension0),
+            threshold: 0.0,
+            gain: 1.0,
+            nominal: 0.0,
+            digital: false,
+        });
+        self.value_profile.drives[9] = -0.08;
+        self.emitters.retain(|row| {
+            !matches!(
+                row.source,
+                BiochemicalSourceLocus::PerceivedNovelty | BiochemicalSourceLocus::Investigation
+            )
+        });
+        for (source, gain) in [
+            (BiochemicalSourceLocus::PerceivedNovelty, 0.04),
+            (BiochemicalSourceLocus::Investigation, -0.08),
+        ] {
+            let mut release = emitter(source, ids::CURIOSITY, gain);
+            release.developmental_expression_floor = 1.0;
+            self.emitters.push(release);
+        }
+        self.receptors
+            .sort_by_key(|row| (target_order(row.target), row.source));
+        self.compile()?;
+        Ok(self)
+    }
+
+    pub(crate) fn with_player_reward(mut self) -> Result<Self, ScaffoldContractError> {
+        // Newborns can receive care before mature regulatory expression.
+        for row in &mut self.emitters {
+            if row.source == BiochemicalSourceLocus::SocialContact {
+                row.developmental_expression_floor = 1.0;
+            }
+        }
+        let praise = ChemicalSpeciesId(21);
+        self.species.retain(|row| row.id != praise);
+        self.species.push(regulatory(praise, 0.0, 0.25));
+        self.species.sort_by_key(|row| row.id);
+        self.emitters.retain(|row| {
+            row.source != BiochemicalSourceLocus::PlayerReward || row.target != praise
+        });
+        let mut release = emitter(BiochemicalSourceLocus::PlayerReward, praise, 0.6);
+        release.developmental_expression_floor = 1.0;
+        self.emitters.push(release);
+        self.receptors.retain(|row| {
+            row.target != BiochemicalTargetLocus::Endocrine(EndocrineChannel::Extension0)
+        });
+        self.receptors.push(BiochemicalReceptor {
+            source: praise,
+            target: BiochemicalTargetLocus::Endocrine(EndocrineChannel::Extension0),
+            threshold: 0.0,
+            gain: 1.0,
+            nominal: 0.0,
+            digital: false,
+        });
+        self.value_profile.hormones[9] = 0.3;
+        self.receptors
+            .sort_by_key(|row| (target_order(row.target), row.source));
+        self.compile()?;
+        Ok(self)
+    }
+
     pub(crate) fn early_mammal_reference(
         endocrine: EndocrineProfile,
         brain_atp_baseline: f32,
@@ -683,8 +1126,12 @@ impl BiochemicalPhenotype {
             emitter(BiochemicalSourceLocus::Damage, CORTISOL, 0.65),
             emitter(BiochemicalSourceLocus::Nutrition, NUTRIENT, 0.80),
             emitter(BiochemicalSourceLocus::Nutrition, HUNGER, -0.30),
+            emitter(BiochemicalSourceLocus::Nutrition, DOPAMINE, 0.12),
+            emitter(BiochemicalSourceLocus::Nutrition, DEVELOPMENT_SIGNAL, 0.08),
+            emitter(BiochemicalSourceLocus::PlayerReward, DOPAMINE, 0.18),
             emitter(BiochemicalSourceLocus::SocialContact, LONELINESS, -0.60),
             emitter(BiochemicalSourceLocus::SocialContact, OXYTOCIN, 0.45),
+            emitter(BiochemicalSourceLocus::SocialContact, SEROTONIN, 0.12),
             emitter(BiochemicalSourceLocus::SleepRecovery, FATIGUE, -0.70),
             emitter(BiochemicalSourceLocus::SleepRecovery, PAIN, -0.45),
             emitter(BiochemicalSourceLocus::SleepRecovery, SLEEP_PRESSURE, -0.75),
@@ -754,6 +1201,12 @@ impl BiochemicalPhenotype {
                 gain: 0.25,
             },
             Neuroemitter {
+                source: NeuralEmissionClass::PredictionResidual,
+                target: LEARNING_SIGNAL,
+                threshold: 0.0,
+                gain: 0.20,
+            },
+            Neuroemitter {
                 source: NeuralEmissionClass::MotorCommitment,
                 target: ACETYLCHOLINE,
                 threshold: 0.0,
@@ -781,6 +1234,7 @@ impl BiochemicalPhenotype {
             emitters,
             receptors,
             neuroemitters,
+            value_profile: crate::chemistry::BiologicalValueProfile::default(),
             compiled: Arc::default(),
         };
         value.compile()?;
@@ -794,6 +1248,7 @@ impl BiochemicalPhenotype {
 
 impl Validate for BiochemicalPhenotype {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.value_profile.validate_contract()?;
         if self.schema_version != BIOCHEMICAL_GRAPH_SCHEMA_VERSION
             || self.species.is_empty()
             || self.species.len() > self.species_budget
@@ -894,6 +1349,10 @@ impl BiochemicalGraphState {
         Ok(self.concentrations[index])
     }
 
+    /// Decay and emitters publish into a staged state, then reactions execute
+    /// sequentially in inherited declaration order. Each reaction consumes the
+    /// preceding reaction's output. This bounded solver is order-dependent;
+    /// sorting or deduplicating reaction genes changes organism dynamics.
     pub fn advance(
         &self,
         next_tick: Tick,
@@ -1070,6 +1529,28 @@ impl BiochemicalGraphState {
             evaluate(phenotype.compiled.organ_energy_group),
             evaluate(phenotype.compiled.organ_repair_group),
         ))
+    }
+
+    /// None preserves exact legacy motor behavior. A present receptor supplies
+    /// capacity only; it cannot select or replace the organism's movement intent.
+    pub fn locomotor_capacity(
+        &self,
+        phenotype: &BiochemicalPhenotype,
+    ) -> Result<Option<f32>, ScaffoldContractError> {
+        self.validate_against(phenotype)?;
+        Ok(phenotype.compiled.locomotor_capacity_group.map(|index| {
+            receptor_group_signal(self, phenotype, &phenotype.compiled.receptor_groups[index])
+        }))
+    }
+
+    pub fn sleep_metabolic_rate(
+        &self,
+        phenotype: &BiochemicalPhenotype,
+    ) -> Result<Option<f32>, ScaffoldContractError> {
+        self.validate_against(phenotype)?;
+        Ok(phenotype.compiled.sleep_metabolic_group.map(|index| {
+            receptor_group_signal(self, phenotype, &phenotype.compiled.receptor_groups[index])
+        }))
     }
 
     pub fn neural_receptor_frame(
@@ -1320,11 +1801,18 @@ fn source_value(source: BiochemicalSourceLocus, body: BodyState, event: BodyEven
         BiochemicalSourceLocus::Basal => 1.0,
         BiochemicalSourceLocus::EnergyDeficit => 1.0 - body.energy,
         BiochemicalSourceLocus::Damage => event.damage,
+        BiochemicalSourceLocus::HealthDeficit => 1.0 - body.health,
         BiochemicalSourceLocus::TemperatureStress => body.temperature_stress,
         BiochemicalSourceLocus::Nutrition => event.nutrition,
         BiochemicalSourceLocus::SocialContact => event.social_contact,
         BiochemicalSourceLocus::SleepRecovery => event.sleep_recovery,
         BiochemicalSourceLocus::MatingOpportunity => event.mating_opportunity,
+        BiochemicalSourceLocus::Awake => f32::from(!body.sleeping),
+        BiochemicalSourceLocus::Sleeping => f32::from(body.sleeping),
+        BiochemicalSourceLocus::PlayerReward => event.player_reward,
+        BiochemicalSourceLocus::PlayStimulation => event.play_stimulation,
+        BiochemicalSourceLocus::PerceivedNovelty => event.perceived_novelty,
+        BiochemicalSourceLocus::Investigation => event.investigation,
     }
     .clamp(0.0, 1.0)
 }
@@ -1344,9 +1832,16 @@ fn emitter_release_count(source: BiochemicalSourceLocus, cadence_crossings: u32)
         | BiochemicalSourceLocus::Nutrition
         | BiochemicalSourceLocus::SocialContact
         | BiochemicalSourceLocus::SleepRecovery
-        | BiochemicalSourceLocus::MatingOpportunity => 1,
+        | BiochemicalSourceLocus::MatingOpportunity
+        | BiochemicalSourceLocus::PlayerReward
+        | BiochemicalSourceLocus::PlayStimulation
+        | BiochemicalSourceLocus::PerceivedNovelty
+        | BiochemicalSourceLocus::Investigation => 1,
         BiochemicalSourceLocus::Basal
+        | BiochemicalSourceLocus::Awake
+        | BiochemicalSourceLocus::Sleeping
         | BiochemicalSourceLocus::EnergyDeficit
+        | BiochemicalSourceLocus::HealthDeficit
         | BiochemicalSourceLocus::TemperatureStress => cadence_crossings,
     }
 }
@@ -1513,6 +2008,8 @@ const fn target_order(target: BiochemicalTargetLocus) -> u8 {
         BiochemicalTargetLocus::Autonomic(_) => 4,
         BiochemicalTargetLocus::OrganEnergyUse => 5,
         BiochemicalTargetLocus::OrganRepair => 6,
+        BiochemicalTargetLocus::LocomotorCapacity => 7,
+        BiochemicalTargetLocus::SleepMetabolicRate => 8,
     }
 }
 
@@ -1538,4 +2035,81 @@ mod ids {
     pub const DEVELOPMENT_SIGNAL: ChemicalSpeciesId = ChemicalSpeciesId(17);
     pub const SLEEP_PRESSURE: ChemicalSpeciesId = ChemicalSpeciesId(18);
     pub const NUTRIENT: ChemicalSpeciesId = ChemicalSpeciesId(19);
+    pub const SLEEP_STATE: ChemicalSpeciesId = ChemicalSpeciesId(20);
+}
+
+#[cfg(test)]
+mod health_distress_tests {
+    use super::BiochemicalGraphState;
+    use crate::{
+        AlleleSide, BiochemistryState, BodyEventDelta, BrainCapacityClass, CreatureGenome,
+        FoundationCompatibilityFamilyId, FoundationGeneticIdentity, FoundationId, Tick,
+    };
+
+    #[test]
+    fn inherited_low_health_keeps_pain_active_without_new_damage() {
+        let mut genome = CreatureGenome::early_mammal_founder(
+            0xD157_1255,
+            FoundationGeneticIdentity::new(
+                FoundationId::N512_V1.raw(),
+                1,
+                FoundationCompatibilityFamilyId::N512_FOUNDATION.raw(),
+                BrainCapacityClass::N512_ID,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        for side in [AlleleSide::Maternal, AlleleSide::Paternal] {
+            genome.chemistry.graph = genome
+                .chemistry
+                .graph
+                .clone()
+                .with_health_distress(side)
+                .unwrap();
+        }
+        let phenotype = genome.express().unwrap();
+        let graph = &phenotype.chemistry.biochemical;
+        let baseline = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+        let mut mild_body = baseline.body;
+        mild_body.set_health(0.8).unwrap();
+        let mut critical_body = baseline.body;
+        critical_body.set_health(0.1).unwrap();
+        let initial = BiochemicalGraphState::new(graph, Tick::ZERO, 0.0).unwrap();
+        let mut mild = initial;
+        let mut critical = initial;
+        for tick in 1..=64 {
+            mild = mild
+                .advance(
+                    Tick(tick),
+                    mild_body,
+                    BodyEventDelta::zero(),
+                    None,
+                    graph,
+                    0.0,
+                )
+                .unwrap()
+                .0;
+            critical = critical
+                .advance(
+                    Tick(tick),
+                    critical_body,
+                    BodyEventDelta::zero(),
+                    None,
+                    graph,
+                    0.0,
+                )
+                .unwrap()
+                .0;
+        }
+        let mild_pain = mild.derive_homeostasis(graph).unwrap().drives.pain;
+        let critical_pain = critical.derive_homeostasis(graph).unwrap().drives.pain;
+        assert!(
+            mild_pain < 0.55,
+            "mild injury should remain below emergency: {mild_pain}"
+        );
+        assert!(
+            critical_pain > 0.55,
+            "near-terminal health must cross the inherited emergency threshold: {critical_pain}"
+        );
+    }
 }

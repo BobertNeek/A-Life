@@ -217,7 +217,7 @@ pub(super) fn update(
 }
 
 pub(super) fn constrain_camera(
-    active: Option<Res<HighlandsActive>>,
+    active: Option<Res<creature_grounding::SelectedTerrain>>,
     mut cameras: Query<(&mut Transform, &mut Projection), With<Fvr03ProductionVoxelCamera>>,
 ) {
     if active.is_none() {
@@ -229,9 +229,21 @@ pub(super) fn constrain_camera(
                 p.far = 1800.0;
             }
         }
-        camera.translation.x = camera.translation.x.clamp(-398.0, 398.0);
-        camera.translation.z = camera.translation.z.clamp(-698.0, 348.0);
-        if let Some(h) = alife_world::highlands().height(camera.translation.x, camera.translation.z)
+        let surface = active.as_ref().unwrap().0.surface();
+        camera.translation.x = camera.translation.x.clamp(
+            surface.origin_x,
+            surface.origin_x + (surface.width - 1) as f32 * surface.spacing,
+        );
+        camera.translation.z = camera.translation.z.clamp(
+            surface.origin_z,
+            surface.origin_z + (surface.depth - 1) as f32 * surface.spacing,
+        );
+        if let Some(h) = active
+            .as_ref()
+            .unwrap()
+            .0
+            .surface()
+            .height(camera.translation.x, camera.translation.z)
         {
             camera.translation.y = camera.translation.y.max(h + 2.0);
         }

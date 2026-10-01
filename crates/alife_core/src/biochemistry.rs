@@ -145,6 +145,10 @@ impl BodyState {
         value
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "explicit prior state and genetic physiology parameters at the body-event boundary"
+    )]
     fn apply_event(
         self,
         previous_tick: Tick,
@@ -154,9 +158,11 @@ impl BodyState {
         max_catch_up_steps: u32,
         energy_use: Option<f32>,
         repair_signal: Option<f32>,
+        sleep_metabolic_rate: f32,
     ) -> Self {
         let injury_gain = event.damage * (1.0 - phenotype.body.injury_resistance);
-        let recovery = event.sleep_recovery;
+        let turnover = phenotype.body.metabolic_turnover;
+        let recovery = event.sleep_recovery * turnover;
         let temperature_stress = clamp01(
             self.temperature_stress
                 + event.temperature_stress * (1.0 - phenotype.body.temperature_tolerance)
@@ -190,28 +196,40 @@ impl BodyState {
                 }
                 _ => event.nutrition * phenotype.body.metabolic_efficiency * 0.15,
             };
-            let periodic_upkeep =
-                organ.energetic_cost * 0.01 * cadence_steps as f32 * energy_use.unwrap_or(1.0);
-            // Legacy genomes without repair receptors retain their old sleep response.
-            // Chemical repair spends existing reserve; it cannot create energy by healing.
-            let sleep_energy = if repair_signal.is_none() {
-                recovery * organ.repair_capacity * 0.2
-            } else {
-                0.0
-            };
-            organ.energy = clamp01(
-                organ.energy + event_share + nutrition_gain + sleep_energy - periodic_upkeep,
-            );
+            let periodic_upkeep = organ.energetic_cost
+                * 0.01
+                * cadence_steps as f32
+                * energy_use.unwrap_or(1.0)
+                * match organ.kind {
+                    OrganKind::NeuralSupport => {
+                        (crate::ContinuousLocus::midpoint_value(0.52, 0.60)
+                            - phenotype.chemistry.brain_atp_efficiency)
+                            .exp2()
+                    }
+                    OrganKind::Locomotor => (crate::ContinuousLocus::midpoint_value(0.50, 0.57)
+                        - phenotype.body.movement_efficiency)
+                        .exp2(),
+                    _ => 1.0,
+                }
+                * turnover
+                * sleep_metabolic_rate;
+            // Sleep is not nutrition, including for genomes without repair receptors.
+            organ.energy = clamp01(organ.energy + event_share + nutrition_gain - periodic_upkeep);
             if let Some(signal) = repair_signal {
-                let repair = (signal * organ.repair_capacity * cadence_steps as f32)
+                let repair = (signal * organ.repair_capacity * cadence_steps as f32 * turnover)
                     .min(organ.damage.max(1.0 - organ.integrity))
                     .min(organ.energy);
                 organ.damage = clamp01(organ.damage - repair);
                 organ.integrity = clamp01(organ.integrity + repair);
                 organ.energy -= repair;
             } else {
-                organ.damage = clamp01(organ.damage - recovery * organ.repair_capacity);
-                organ.integrity = clamp01(organ.integrity + recovery * 0.15);
+                // The legacy repair path also pays from existing local reserve.
+                let repair = (recovery * organ.repair_capacity)
+                    .min(organ.damage.max(1.0 - organ.integrity))
+                    .min(organ.energy);
+                organ.damage = clamp01(organ.damage - repair);
+                organ.integrity = clamp01(organ.integrity + repair);
+                organ.energy -= repair;
             }
             organ.temperature_stress = if organ.kind == OrganKind::Thermoregulatory {
                 temperature_stress
@@ -377,6 +395,14 @@ pub struct BodyEventDelta {
     pub temperature_stress: f32,
     pub nutrition: f32,
     pub social_contact: f32,
+    #[serde(default, skip_serializing_if = "is_zero_player_reward")]
+    pub player_reward: f32,
+    #[serde(default, skip_serializing_if = "is_zero_player_reward")]
+    pub play_stimulation: f32,
+    #[serde(default, skip_serializing_if = "is_zero_player_reward")]
+    pub perceived_novelty: f32,
+    #[serde(default, skip_serializing_if = "is_zero_player_reward")]
+    pub investigation: f32,
     pub sleep_recovery: f32,
     pub mating_opportunity: f32,
 }
@@ -389,6 +415,10 @@ impl BodyEventDelta {
             temperature_stress: 0.0,
             nutrition: 0.0,
             social_contact: 0.0,
+            player_reward: 0.0,
+            play_stimulation: 0.0,
+            perceived_novelty: 0.0,
+            investigation: 0.0,
             sleep_recovery: 0.0,
             mating_opportunity: 0.0,
         }
@@ -403,16 +433,25 @@ impl Validate for BodyEventDelta {
             self.temperature_stress,
             self.nutrition,
             self.social_contact,
+            self.player_reward,
+            self.play_stimulation,
+            self.perceived_novelty,
+            self.investigation,
             self.sleep_recovery,
             self.mating_opportunity,
         ])
     }
 }
 
+fn is_zero_player_reward(value: &f32) -> bool {
+    *value == 0.0
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PassiveBodyUpkeepPolicy;
 
 impl PassiveBodyUpkeepPolicy {
+    pub const REFERENCE_LIFETIME_TICKS: u32 = 1_824;
     pub const ADULT_LIFETIME_BASE_MULTIPLIER: f32 = 2.0;
     pub const NO_FOOD_RESERVE_FRACTION: f32 = 0.55;
     pub const MATURATION_RESERVE_BUFFER: f32 = 1.25;
@@ -423,15 +462,25 @@ impl PassiveBodyUpkeepPolicy {
 
     pub fn maximum_lifespan_ticks(phenotype: &CreaturePhenotype) -> u64 {
         rounded_ticks(
-            f64::from(phenotype.development.maturation_duration_ticks)
+            f64::from(Self::REFERENCE_LIFETIME_TICKS)
                 * f64::from(Self::ADULT_LIFETIME_BASE_MULTIPLIER + phenotype.body.lifespan_scale),
         )
     }
 
     pub fn is_terminal(body: &BodyState, age_ticks: u64, phenotype: &CreaturePhenotype) -> bool {
+        Self::is_terminal_with_age_death(body, age_ticks, phenotype, true)
+    }
+
+    /// The development override affects only the age threshold, never physiology.
+    pub fn is_terminal_with_age_death(
+        body: &BodyState,
+        age_ticks: u64,
+        phenotype: &CreaturePhenotype,
+        age_death_enabled: bool,
+    ) -> bool {
         body.health <= 0.0
             || body.energy <= 0.0
-            || age_ticks >= Self::maximum_lifespan_ticks(phenotype)
+            || (age_death_enabled && age_ticks >= Self::maximum_lifespan_ticks(phenotype))
     }
 
     pub fn body_load(phenotype: &CreaturePhenotype) -> f32 {
@@ -441,11 +490,11 @@ impl PassiveBodyUpkeepPolicy {
     }
 
     pub fn reserve_horizon_ticks(phenotype: &CreaturePhenotype) -> u64 {
-        let maturation_ticks = f64::from(phenotype.development.maturation_duration_ticks);
+        let reference_ticks = f64::from(Self::REFERENCE_LIFETIME_TICKS);
         let maximum_lifespan_ticks = Self::maximum_lifespan_ticks(phenotype) as f64;
         let body_load = f64::from(Self::body_load(phenotype).max(f32::EPSILON));
         rounded_ticks(
-            (f64::from(Self::MATURATION_RESERVE_BUFFER) * maturation_ticks).max(
+            (f64::from(Self::MATURATION_RESERVE_BUFFER) * reference_ticks).max(
                 f64::from(Self::NO_FOOD_RESERVE_FRACTION) * maximum_lifespan_ticks / body_load,
             ),
         )
@@ -606,6 +655,13 @@ impl Validate for ReproductionReadiness {
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct BiochemistryState {
+    // A snapshot of inherited valuation makes sealed credit reproducible without
+    // a registry lookup. It cannot drift independently of the phenotype.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::chemistry::BiologicalValueProfile::is_default"
+    )]
+    value_profile: crate::chemistry::BiologicalValueProfile,
     pub source_genome_id: GenomeId,
     pub tick: Tick,
     pub body: BodyState,
@@ -652,6 +708,7 @@ impl BiochemistryState {
         )?;
         let value = Self {
             source_genome_id: phenotype.source_genome_id,
+            value_profile: phenotype.chemistry.biochemical.value_profile(),
             tick,
             body,
             homeostasis,
@@ -727,8 +784,25 @@ impl BiochemistryState {
             .organ_regulation(&phenotype.chemistry.biochemical)?;
         let upkeep =
             PassiveBodyUpkeepPolicy::upkeep_event(phenotype, self.cadence, metabolic_steps);
+        // Chemical state from the preceding interval regulates basal/organ
+        // expenditure. Wake resumes normal expenditure immediately. Actual
+        // measured cognitive work is debited separately, never discounted here.
+        let sleep_metabolic_rate = if event.sleep_recovery > 0.0 {
+            self.graph_state
+                .sleep_metabolic_rate(&phenotype.chemistry.biochemical)?
+                .unwrap_or(1.0)
+        } else {
+            1.0
+        };
+        // Nutrition is the material food input (applied independently per organ).
+        // Signed energy is metabolic effort/recovery, including composite world
+        // events, and follows the same inherited clock as upkeep and repair.
+        let turnover = phenotype.body.metabolic_turnover;
         let event = BodyEventDelta {
-            energy: signed_clamp(event.energy + upkeep.energy * energy_use.unwrap_or(1.0)),
+            energy: signed_clamp(
+                (event.energy + upkeep.energy * energy_use.unwrap_or(1.0) * sleep_metabolic_rate)
+                    * turnover,
+            ),
             ..event
         };
         let body = self.body.apply_event(
@@ -739,6 +813,7 @@ impl BiochemistryState {
             self.cadence.max_catch_up_steps,
             energy_use,
             repair_signal,
+            sleep_metabolic_rate,
         );
         body.validate_contract()?;
         let development = if development_steps > 0 {
@@ -777,6 +852,7 @@ impl BiochemistryState {
         };
         let value = Self {
             source_genome_id: self.source_genome_id,
+            value_profile: self.value_profile,
             tick: next_tick,
             body,
             homeostasis,
@@ -820,7 +896,9 @@ impl BiochemistryState {
         phenotype: &CreaturePhenotype,
     ) -> Result<(), ScaffoldContractError> {
         self.validate_contract()?;
-        if self.source_genome_id != phenotype.source_genome_id {
+        if self.source_genome_id != phenotype.source_genome_id
+            || self.value_profile != phenotype.chemistry.biochemical.value_profile()
+        {
             return Err(ScaffoldContractError::InvalidId);
         }
         self.graph_state
@@ -829,6 +907,10 @@ impl BiochemistryState {
 
     pub const fn graph_state(&self) -> &BiochemicalGraphState {
         &self.graph_state
+    }
+
+    pub const fn value_profile(&self) -> crate::chemistry::BiologicalValueProfile {
+        self.value_profile
     }
 
     pub const fn biochemical_work(&self) -> BiochemicalWorkReceipt {
@@ -846,6 +928,7 @@ impl BiochemistryState {
 
 impl Validate for BiochemistryState {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.value_profile.validate_contract()?;
         self.source_genome_id.validate()?;
         self.body.validate_contract()?;
         self.homeostasis.validate_contract()?;
@@ -919,7 +1002,53 @@ fn signed_clamp(value: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity};
+    use crate::{
+        BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity, MeasuredPhysiologyTransition,
+    };
+
+    #[test]
+    fn food_relief_is_greater_when_biology_is_hungry_than_when_sated() {
+        let genome = CreatureGenome::early_mammal_founder(
+            0xE10_3201,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N2048_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let initial = BiochemistryState::new(&phenotype, Tick(600)).unwrap();
+        let food = BodyEventDelta {
+            energy: 0.3,
+            nutrition: 0.6,
+            ..BodyEventDelta::zero()
+        };
+
+        // Both states emerge through the ordinary chemistry and metabolism.
+        // The same food is then compared with doing nothing from each state.
+        let mut sated = initial;
+        let mut hungry = initial;
+        hungry.body.set_energy(0.1).unwrap();
+        for tick in 601..=603 {
+            sated = sated.advance(Tick(tick), food, &phenotype).unwrap();
+            hungry = hungry
+                .advance(Tick(tick), BodyEventDelta::zero(), &phenotype)
+                .unwrap();
+        }
+        assert!(hungry.homeostasis.drives.hunger > 0.5);
+        assert!(sated.homeostasis.drives.hunger <= 0.05);
+
+        let reward = |before: BiochemistryState, event: BodyEventDelta| {
+            let after = before.advance(Tick(604), event, &phenotype).unwrap();
+            MeasuredPhysiologyTransition::new(before, after)
+                .unwrap()
+                .homeostatic_improvement()
+        };
+        let sated_food_relief = reward(sated, food) - reward(sated, BodyEventDelta::zero());
+        let hungry_food_relief = reward(hungry, food) - reward(hungry, BodyEventDelta::zero());
+        assert!(
+            hungry_food_relief > sated_food_relief + 0.02,
+            "hungry relief {hungry_food_relief} should exceed sated relief {sated_food_relief}"
+        );
+        assert!(reward(hungry, food) > reward(sated, food));
+    }
 
     #[test]
     fn inherited_chemical_controls_change_upkeep_and_pay_for_repair() {
@@ -972,6 +1101,7 @@ mod tests {
                 MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
                 Some(energy),
                 Some(repair),
+                1.0,
             )
         };
         assert!(run(0.25, 0.0).energy > run(1.0, 0.0).energy);
@@ -985,9 +1115,33 @@ mod tests {
             MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
             Some(1.0),
             Some(1.0),
+            1.0,
         );
         assert_eq!(after.health, exhausted.health);
         assert_eq!(after.energy, 0.0);
+
+        // No-receptor legacy bodies cannot turn sleep into food or free tissue.
+        let sleeping = |body: BodyState| {
+            body.apply_event(
+                Tick(601),
+                Tick(613),
+                BodyEventDelta {
+                    sleep_recovery: 1.0,
+                    ..BodyEventDelta::zero()
+                },
+                &phenotype,
+                MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
+                Some(0.0),
+                None,
+                1.0,
+            )
+        };
+        let recovered = sleeping(body);
+        assert!(recovered.health > body.health);
+        assert!(recovered.energy < body.energy);
+        let recovered = sleeping(exhausted);
+        assert_eq!(recovered.health, exhausted.health);
+        assert_eq!(recovered.energy, 0.0);
     }
 
     #[test]

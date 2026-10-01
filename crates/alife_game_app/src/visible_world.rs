@@ -213,6 +213,10 @@ pub const fn placeholder_for_kind(
             VisiblePlaceholderShape::ObstacleCube,
             VisibleMaterialKind::Obstacle,
         ),
+        WorldObjectKind::Ball | WorldObjectKind::ActivityToy => (
+            VisiblePlaceholderShape::FoodSphere,
+            VisibleMaterialKind::Token,
+        ),
         WorldObjectKind::Token => (
             VisiblePlaceholderShape::TokenBillboard,
             VisibleMaterialKind::Token,

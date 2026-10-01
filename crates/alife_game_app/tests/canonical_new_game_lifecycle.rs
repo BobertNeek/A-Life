@@ -13,15 +13,11 @@ use alife_core::{
 };
 #[cfg(feature = "production-voxel-frontend")]
 use alife_game_app::{
-    bevy_shell::{
-        build_production_voxel_frontend_app_shell, LiveBrainPresentationFrameResource,
-    },
+    bevy_shell::{build_production_voxel_frontend_app_shell, LiveBrainPresentationFrameResource},
     default_environment_manifest_path, run_production_voxel_frontend_preflight,
     LiveBrainCausalStage, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
     ProductionWorldSource,
 };
-#[cfg(feature = "production-voxel-frontend")]
-use bevy::time::TimeUpdateStrategy;
 #[cfg(feature = "gpu-tests")]
 use alife_game_app::{
     create_canonical_new_game_runtime,
@@ -37,6 +33,8 @@ use alife_world::PortableSaveFile;
 #[cfg(feature = "gpu-tests")]
 use alife_world::WorldOrganismRecord;
 use alife_world::{AssetManifest, RuntimeConfig};
+#[cfg(feature = "production-voxel-frontend")]
+use bevy::time::TimeUpdateStrategy;
 
 fn phase3_request(population: u16) -> CanonicalNewGameLaunchRequest {
     let root = std::env::temp_dir().join(format!(
@@ -48,6 +46,7 @@ fn phase3_request(population: u16) -> CanonicalNewGameLaunchRequest {
     CanonicalNewGameLaunchRequest {
         world_seed: 240_824,
         population,
+        disable_age_death: false,
         save_path: root.join("phase3-save.json"),
         asset_root: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."),
         config,
@@ -58,6 +57,17 @@ fn phase3_request(population: u16) -> CanonicalNewGameLaunchRequest {
 #[test]
 fn new_game_base_save_matches_every_canonical_founder() {
     let staged = stage_phase3_new_game(phase3_request(6)).unwrap();
+    assert!(!staged.world.age_death_disabled());
+    let legacy_json = serde_json::to_value(&staged.save).unwrap();
+    assert!(legacy_json["world"].get("disable_age_death").is_none());
+    let legacy_decoded: alife_world::PortableSaveFile =
+        serde_json::from_value(legacy_json).unwrap();
+    let legacy_restored = legacy_decoded.restore_headless_world().unwrap();
+    assert!(!legacy_restored.age_death_disabled());
+    assert_eq!(
+        legacy_restored.canonical_signature_digest().unwrap(),
+        staged.world.canonical_signature_digest().unwrap()
+    );
 
     assert_eq!(staged.save.creatures.len(), 6);
     assert_eq!(
@@ -74,6 +84,95 @@ fn new_game_base_save_matches_every_canonical_founder() {
     staged
         .save
         .validate_with_asset_root(&staged.asset_root)
+        .unwrap();
+
+    use alife_core::{
+        ActionCandidateCreditProfileV1, BiochemicalDriveChannel, BiochemicalSourceLocus,
+        BiochemicalTargetLocus, FoundationId, OrganismId,
+    };
+    use alife_game_app::{stage_phase3_new_game_with_founder, NewGameFounderSelection};
+    for record in staged.world.organism_registry().iter() {
+        assert!(record.genome().nano512_action_credit_candidate_v2.is_none());
+        assert!(record.genome().nano512_readout_candidate.is_none());
+        assert_eq!(
+            record.genome().foundation.foundation_id,
+            FoundationId::N512_V1.raw()
+        );
+    }
+    let mut candidate_request = phase3_request(1);
+    candidate_request.disable_age_death = true;
+    let candidate = stage_phase3_new_game_with_founder(
+        candidate_request,
+        NewGameFounderSelection::ScaledChoiceNociceptiveV1,
+    )
+    .unwrap();
+    // Exercise the actual save representation, not a separately rebuilt genome.
+    let decoded: alife_world::PortableSaveFile =
+        serde_json::from_slice(&serde_json::to_vec(&candidate.save).unwrap()).unwrap();
+    let restored = decoded.restore_headless_world().unwrap();
+    assert!(decoded.world.disable_age_death);
+    assert!(restored.age_death_disabled());
+    assert_eq!(
+        restored.canonical_signature_digest().unwrap(),
+        candidate.world.canonical_signature_digest().unwrap()
+    );
+    let original = candidate
+        .world
+        .organism_registry()
+        .get(OrganismId(1))
+        .unwrap();
+    let record = restored.organism_registry().get(OrganismId(1)).unwrap();
+    assert_eq!(record, original);
+    let configured = record
+        .genome()
+        .nano512_action_credit_candidate_v2
+        .as_ref()
+        .unwrap();
+    assert!(record.genome().nano512_readout_candidate.is_none());
+    assert_eq!(
+        configured.action_profile(),
+        ActionCandidateCreditProfileV1::SignedChoiceReadouts
+    );
+    let candidate_asset = configured.asset().unwrap();
+    let manifest = candidate_asset.manifest();
+    assert_eq!(
+        record.genome().foundation,
+        alife_core::FoundationGeneticIdentity::new(
+            manifest.foundation_id().raw(),
+            manifest.foundation_version().raw() as u16,
+            manifest.compatibility_family_id().raw(),
+            manifest.capacity_class_id(),
+        )
+        .unwrap()
+    );
+    assert_eq!(
+        configured.asset().unwrap().digest().bytes(),
+        &[
+            162, 205, 184, 109, 162, 15, 136, 4, 200, 120, 232, 83, 105, 194, 153, 231, 150, 181,
+            202, 200, 230, 97, 59, 164, 174, 244, 52, 65, 167, 166, 238, 30,
+        ]
+    );
+    let graph = record.genome().chemistry.graph.expressed();
+    let pain = graph
+        .receptors()
+        .iter()
+        .find(|receptor| {
+            receptor.target == BiochemicalTargetLocus::Drive(BiochemicalDriveChannel::Pain)
+        })
+        .unwrap()
+        .source;
+    assert_eq!(
+        graph
+            .emitters()
+            .iter()
+            .find(|emitter| emitter.source == BiochemicalSourceLocus::Damage
+                && emitter.target == pain)
+            .unwrap()
+            .developmental_expression_floor,
+        1.0
+    );
+    decoded
+        .validate_with_asset_root(&candidate.asset_root)
         .unwrap();
 }
 
@@ -105,6 +204,7 @@ fn production_new_game_source_builds_exact_runtime_before_scene_construction() {
     assert_eq!(summary.effective_population, 4);
     assert!(summary.save_path.starts_with(&root));
     let exact_before_preflight = PortableSaveFile::from_json_file(&summary.save_path).unwrap();
+    assert!(exact_before_preflight.world.disable_age_death);
     let bytes_before_preflight = std::fs::read(&summary.save_path).unwrap();
     assert_eq!(exact_before_preflight.creatures.len(), 4);
     assert!(exact_before_preflight
@@ -119,14 +219,19 @@ fn production_new_game_source_builds_exact_runtime_before_scene_construction() {
     let exact_after_preflight = PortableSaveFile::from_json_file(&summary.save_path).unwrap();
     assert_eq!(repeated_preflight.save_path, summary.save_path);
     assert_eq!(exact_after_preflight, exact_before_preflight);
-    assert_eq!(std::fs::read(&summary.save_path).unwrap(), bytes_before_preflight);
+    assert_eq!(
+        std::fs::read(&summary.save_path).unwrap(),
+        bytes_before_preflight
+    );
 
     let initial_tick = app
         .world()
         .resource::<LiveBrainPresentationFrameResource>()
         .current
         .authoritative_world_tick;
-    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(34)));
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+        34,
+    )));
     let expected_causal_stages = vec![
         LiveBrainCausalStage::EvaluateSleep,
         LiveBrainCausalStage::AdvanceSleep,
@@ -175,8 +280,8 @@ fn production_new_game_source_builds_exact_runtime_before_scene_construction() {
                     .cognitive_for_organism(row.organism_id)
                     .is_some_and(|cognitive| cognitive.consolidation_state_raw == Some(5))
             });
-        saw_awake_after_sleep |= saw_committed_waking
-            && all_sleep_phase(alife_core::SleepPhase::Awake.raw());
+        saw_awake_after_sleep |=
+            saw_committed_waking && all_sleep_phase(alife_core::SleepPhase::Awake.raw());
         if !frame.tick_summaries.is_empty()
             && frame
                 .tick_summaries
@@ -187,7 +292,10 @@ fn production_new_game_source_builds_exact_runtime_before_scene_construction() {
             break;
         }
     }
-    assert!(saw_automatic_sleep, "production runtime skipped automatic sleep");
+    assert!(
+        saw_automatic_sleep,
+        "production runtime skipped automatic sleep"
+    );
     assert!(
         saw_committed_waking,
         "production sleep never durably committed before waking"

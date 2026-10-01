@@ -125,8 +125,13 @@ impl EmbodimentState {
             .clamp(8.0, MAX_BODY_SCHEMA_VALUES as f32) as usize;
         let adapter_id = phenotype.source_genome_id.0 ^ entity_id.raw().rotate_left(23);
         let sensory_calibration = (phenotype.body.sensory_acuity * 2.0 - 1.0).clamp(-1.0, 1.0);
-        let effector_controllability =
-            (phenotype.body.movement_efficiency * 2.0 - 1.0).clamp(-1.0, 1.0);
+        let effector_controllability = ((phenotype.body.movement_efficiency
+            * (phenotype.predisposition.reflex_strength
+                - crate::ContinuousLocus::midpoint_value(0.44, 0.52))
+            .exp2())
+            * 2.0
+            - 1.0)
+            .clamp(-1.0, 1.0);
         let body_schema_value = (phenotype.body.size_scale * 2.0 - 1.0).clamp(-1.0, 1.0);
         let value = Self {
             schema_version: EMBODIMENT_STATE_SCHEMA_VERSION,

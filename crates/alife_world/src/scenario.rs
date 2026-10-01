@@ -1495,6 +1495,11 @@ fn world_from_layout(
                 }
             }
             WorldObjectKind::Food => builder.food(object.label, object.position, object.nutrition),
+            WorldObjectKind::Ball | WorldObjectKind::ActivityToy => builder.toy(
+                object.label,
+                object.position,
+                object.kind == WorldObjectKind::Ball,
+            ),
             WorldObjectKind::Hazard => {
                 builder.hazard(object.label, object.position, object.hazard_pain)
             }

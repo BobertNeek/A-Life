@@ -19,6 +19,9 @@ pub const PHASE3_MAX_POPULATION: u16 = 8;
 pub struct CanonicalNewGameConfig {
     pub schema_version: u16,
     pub world_seed: u64,
+    /// Defaults to world_seed; explicit candidate cohorts may keep one
+    /// inherited graph while varying the world's deterministic seed.
+    pub founder_seed_base: u64,
     pub founder_count: u16,
     pub brain_class: BrainScaleTier,
     pub sensor_profile: SensorProfile,
@@ -34,6 +37,7 @@ impl CanonicalNewGameConfig {
         Ok(Self {
             schema_version: PHASE3_NEW_GAME_SCHEMA_VERSION,
             world_seed,
+            founder_seed_base: world_seed,
             founder_count,
             brain_class: BrainScaleTier::Nano512,
             sensor_profile: SensorProfile::GroundedObjectSlotsV1,
@@ -70,14 +74,56 @@ pub fn create_canonical_new_game(
     foundation: &FoundationWeightAsset,
 ) -> Result<CanonicalNewGame, ScaffoldContractError> {
     validate_phase3_inputs(config, foundation)?;
+    create_new_game_inner(config, foundation, None)
+}
 
+/// Explicit N2048 experiment using the same ecology and inherited physiology.
+/// The asset remains bound into each genome for archive and exact restore.
+pub fn create_canonical_new_game_with_n2048_candidate(
+    config: &CanonicalNewGameConfig,
+    foundation: &FoundationWeightAsset,
+) -> Result<CanonicalNewGame, ScaffoldContractError> {
+    let mut expected = CanonicalNewGameConfig::phase3(config.world_seed, config.founder_count)?;
+    expected.brain_class = BrainScaleTier::Standard2048;
+    expected.founder_seed_base = config.founder_seed_base;
+    expected.sensor_profile = foundation.manifest().sensor_profile();
+    if config.founder_seed_base == 0
+        || *config != expected
+        || foundation.manifest().capacity_class_id() != BrainCapacityClass::N2048_ID
+        || foundation.manifest().sensor_profile() != config.sensor_profile
+    {
+        return Err(ScaffoldContractError::PhenotypeCompile);
+    }
+    foundation.encode_canonical()?;
+    create_new_game_inner(config, foundation, None)
+}
+
+/// Explicit experimental founder: candidate cognition and inherited pain sensing
+/// from birth. This does not change builtin admission or copy acquired state.
+pub fn create_canonical_new_game_with_nociceptive_candidate(
+    config: &CanonicalNewGameConfig,
+    candidate: &alife_core::Nano512ActionCreditCandidateV2,
+) -> Result<CanonicalNewGame, ScaffoldContractError> {
+    let foundation = FoundationWeightAsset::builtin_nano512_v1(config.sensor_profile)?;
+    validate_phase3_inputs(config, &foundation)?;
+    if candidate.source().sensor_profile() != config.sensor_profile {
+        return Err(ScaffoldContractError::PhenotypeCompile);
+    }
+    create_new_game_inner(config, &foundation, Some(candidate))
+}
+
+fn create_new_game_inner(
+    config: &CanonicalNewGameConfig,
+    foundation: &FoundationWeightAsset,
+    candidate: Option<&alife_core::Nano512ActionCreditCandidateV2>,
+) -> Result<CanonicalNewGame, ScaffoldContractError> {
     let manifest = foundation.manifest();
     let foundation_identity = FoundationGeneticIdentity::new(
         manifest.foundation_id().raw(),
         u16::try_from(manifest.foundation_version().raw())
             .map_err(|_| ScaffoldContractError::InvalidId)?,
         manifest.compatibility_family_id().raw(),
-        BrainCapacityClass::N512_ID,
+        config.brain_class.default_class_id(),
     )?;
     let mut world = HeadlessWorld::new(config.world_seed);
     let mut habitats = HabitatAuthority::default();
@@ -88,14 +134,34 @@ pub fn create_canonical_new_game(
         let ordinal = u64::from(slot) + 1;
         let organism_id = OrganismId(ordinal);
         let founder_seed = config
-            .world_seed
+            .founder_seed_base
             .checked_mul(16)
             .and_then(|seed| seed.checked_add(ordinal))
             .ok_or(ScaffoldContractError::InvalidId)?;
         let world_label = format!("founder-{ordinal:02}");
         let position = founder_position(slot);
-        let genome =
+        let mut genome =
             alife_core::CreatureGenome::early_mammal_founder(founder_seed, foundation_identity)?;
+        // Founder reserve economics are inherited biology, not a survival timer.
+        // The allele midpoint expresses ~1/400 legacy turnover; ordinary genetic
+        // recombination/mutation can make descendants faster or slower.
+        let turnover_log2 = (1.0_f32 / 400.0).log2();
+        genome.body.metabolic_turnover_log2 = alife_core::ContinuousLocus::with_bounds(
+            turnover_log2 - 0.1,
+            turnover_log2 + 0.1,
+            -10.0,
+            0.0,
+            0.5,
+        )?;
+        calibrate_inherited_founder_biochemistry(&mut genome)?;
+        if let Some(candidate) = candidate {
+            genome = genome.with_nano512_action_credit_candidate(candidate.clone())?;
+            enable_inherited_newborn_nociception(&mut genome)?;
+        }
+        if config.brain_class == BrainScaleTier::Standard2048 {
+            genome = genome.with_n2048_foundation_candidate(foundation.clone())?;
+            enable_inherited_newborn_nociception(&mut genome)?;
+        }
         let phenotype = genome.express()?;
         let world_entity_id = world.spawn_social_agent(&world_label, organism_id, position, 0.0)?;
         let record = WorldOrganismRecord::newborn(
@@ -106,7 +172,7 @@ pub fn create_canonical_new_game(
             Tick::ZERO,
         )
         .map_err(|_| ScaffoldContractError::InvalidId)?;
-        let creature = initial_creature_save(&record, slot, founder_seed)?;
+        let creature = initial_creature_save(&record, slot, founder_seed, config.brain_class)?;
         let receipt = CanonicalFounderReceipt {
             organism_id,
             world_entity_id,
@@ -139,6 +205,90 @@ pub fn create_canonical_new_game(
     })
 }
 
+fn calibrate_inherited_founder_biochemistry(
+    genome: &mut alife_core::CreatureGenome,
+) -> Result<(), ScaffoldContractError> {
+    use alife_core::{
+        AlleleSide, BiochemicalDriveChannel, BiochemicalSourceLocus, BiochemicalTargetLocus,
+    };
+    let graph = genome.chemistry.graph.expressed();
+    let hunger = graph
+        .receptors()
+        .iter()
+        .find(|receptor| {
+            receptor.target == BiochemicalTargetLocus::Drive(BiochemicalDriveChannel::Hunger)
+        })
+        .ok_or(ScaffoldContractError::PhenotypeCompile)?
+        .source;
+    let hunger_emitter = graph
+        .emitters()
+        .iter()
+        .position(|emitter| {
+            emitter.source == BiochemicalSourceLocus::EnergyDeficit && emitter.target == hunger
+        })
+        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+    let repair_receptor = graph
+        .receptors()
+        .iter()
+        .position(|receptor| receptor.target == BiochemicalTargetLocus::OrganRepair)
+        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+    for allele in [AlleleSide::Maternal, AlleleSide::Paternal] {
+        genome.chemistry.graph = genome
+            .chemistry
+            .graph
+            .clone()
+            // At full expression: .25 baseline + .03*(1-energy)/.04 decay.
+            // Starting reserves produce ~.41 hunger, not a saturated signal.
+            .with_emitter_gain(allele, hunger_emitter, 0.03)?
+            // Repair remains reserve-paid and damage-limited after acute pain
+            // fades (including during Rest); it cannot heal without reserve.
+            .with_receptor_nominal(allele, repair_receptor, 0.02)?;
+    }
+    for allele in [AlleleSide::Maternal, AlleleSide::Paternal] {
+        genome.chemistry.graph = genome
+            .chemistry
+            .graph
+            .clone()
+            .with_waking_recovery(allele)?
+            .with_health_distress(allele)?
+            .with_player_reward(allele)?
+            .with_play_stimulation(allele)?;
+    }
+    Ok(())
+}
+
+fn enable_inherited_newborn_nociception(
+    genome: &mut alife_core::CreatureGenome,
+) -> Result<(), ScaffoldContractError> {
+    use alife_core::{
+        AlleleSide, BiochemicalDriveChannel, BiochemicalSourceLocus, BiochemicalTargetLocus,
+    };
+    let graph = genome.chemistry.graph.expressed();
+    let pain = graph
+        .receptors()
+        .iter()
+        .find(|receptor| {
+            receptor.target == BiochemicalTargetLocus::Drive(BiochemicalDriveChannel::Pain)
+        })
+        .ok_or(ScaffoldContractError::PhenotypeCompile)?
+        .source;
+    let emitter = graph
+        .emitters()
+        .iter()
+        .position(|emitter| {
+            emitter.source == BiochemicalSourceLocus::Damage && emitter.target == pain
+        })
+        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+    for allele in [AlleleSide::Maternal, AlleleSide::Paternal] {
+        genome.chemistry.graph = genome
+            .chemistry
+            .graph
+            .clone()
+            .with_emitter_expression_floor(allele, emitter, 1.0)?;
+    }
+    Ok(())
+}
+
 fn spawn_phase3_ecology(world: &mut HeadlessWorld) -> Result<(), ScaffoldContractError> {
     let meadow = EcologyZoneId(1);
     world.add_terrain_zone(TerrainZone::new(
@@ -148,7 +298,7 @@ fn spawn_phase3_ecology(world: &mut HeadlessWorld) -> Result<(), ScaffoldContrac
         Vec3f::ZERO,
         12.0,
         0.8,
-        0.2,
+        0.0,
     )?)?;
 
     let food_id = world.editor_spawn_object(WorldEditorSpawnSpec {
@@ -161,13 +311,16 @@ fn spawn_phase3_ecology(world: &mut HeadlessWorld) -> Result<(), ScaffoldContrac
         radius: 0.45,
         token_id: None,
     })?;
+    world.set_food_variety(food_id, crate::FoodVariety::from_seed(world.seed()))?;
     world.track_resource_lifecycle(food_id, meadow, 48, 240)?;
+    world.spawn_toy("meadow-ball", Vec3f::new(4.0, 0.0, 0.0), true)?;
+    world.spawn_toy("meadow-activity-toy", Vec3f::new(-4.0, 0.0, 0.0), false)?;
 
     world.editor_spawn_object(WorldEditorSpawnSpec {
         label: "hazard-01".to_string(),
         kind: WorldObjectKind::Hazard,
         organism_id: None,
-        position: founder_position(1),
+        position: Vec3f::new(9.0, 6.0, 0.0),
         nutrition: 0.0,
         hazard_pain: 0.12,
         radius: 0.8,
@@ -214,6 +367,7 @@ fn initial_creature_save(
     record: &WorldOrganismRecord,
     slot: u16,
     founder_seed: u64,
+    brain_class: BrainScaleTier,
 ) -> Result<CreatureSaveState, ScaffoldContractError> {
     let biochemistry = record.biochemistry();
     let genome_bytes =
@@ -221,12 +375,13 @@ fn initial_creature_save(
     Ok(CreatureSaveState {
         organism_id: record.organism_id(),
         genome_id: record.genome().id,
-        brain_class: BrainScaleTier::Nano512,
+        brain_class,
         development_tick: biochemistry.development.last_update_tick,
         appearance: CreatureAppearanceGenome::founder_for_species(
             u8::try_from(slot).map_err(|_| ScaffoldContractError::InvalidId)?,
             founder_seed,
-        ),
+        )
+        .with_body_phenotype(&record.phenotype().body),
         mind: CreatureMindSaveSummary {
             tick: biochemistry.tick,
             homeostasis: biochemistry.homeostasis,

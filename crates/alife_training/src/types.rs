@@ -2,12 +2,265 @@
 
 use alife_core::{
     BrainPhenotype, CandidateActionFamily, CandidateFeatureVector, CompiledSynapseKind,
-    ScaffoldContractError, SpeechDecoderLayoutV1, Validate, CANDIDATE_FEATURE_COUNT,
+    ScaffoldContractError, SpeechDecoderLayoutV1, Validate,
 };
 
 pub const TRAINING_SEQUENCE_TICKS: usize = 32;
+pub const MAX_TRAINING_SEQUENCE_TICKS: usize = 2048;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Equal positive/silence loss budgets per replay window. A single physically
+/// completed verb must not be diluted by dozens of waiting/silence frames.
+/// Relative label weights remain meaningful within each class; missing classes
+/// receive no budget. Only the 18 positive or two silence outputs are supervised.
+pub fn replay_speech_loss_scales(targets: &[Option<ReplaySpeechTarget>]) -> [f32; 2] {
+    let mut mass = [0.0_f32; 2];
+    for target in targets.iter().flatten() {
+        mass[usize::from(target.token.is_none())] += target.weight * target.len() as f32;
+    }
+    let classes = mass.iter().filter(|m| **m > 0.0).count().max(1) as f32;
+    [0, 1].map(|class| {
+        if mass[class] > 0.0 {
+            1.0 / (classes * mass[class] * if class == 0 { 18.0 } else { 2.0 })
+        } else {
+            0.0
+        }
+    })
+}
+
+/// Grounded bounded utterance label, never an input or policy probability.
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub struct ReplaySpeechTarget {
+    /// None teaches silence; it is not a reserved or fabricated language token.
+    pub token: Option<u16>,
+    #[serde(default)]
+    pub continuation: [u16; 5],
+    pub act: alife_core::SpeechActKind,
+    pub weight: f32,
+}
+impl ReplaySpeechTarget {
+    pub fn validate(self) -> Result<(), ScaffoldContractError> {
+        if self.token.is_some_and(|token| token == 0 || token >= 256)
+            || self.continuation.iter().any(|token| *token >= 256)
+            || (self.token.is_none() && self.continuation != [0; 5])
+            || self
+                .continuation
+                .windows(2)
+                .any(|pair| pair[0] == 0 && pair[1] != 0)
+            || !self.weight.is_finite()
+            || self.weight <= 0.0
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        Ok(())
+    }
+    pub fn logits(self) -> [f32; 32] {
+        self.step_logits(0)
+    }
+    pub fn len(self) -> usize {
+        if self.token.is_none() {
+            1
+        } else {
+            1 + self.continuation.iter().take_while(|v| **v != 0).count()
+        }
+    }
+    pub fn step_logits(self, step: usize) -> [f32; 32] {
+        let mut logits = [0.0; 32];
+        let token = if step == 0 {
+            self.token
+        } else {
+            self.continuation.get(step - 1).copied().filter(|v| *v != 0)
+        };
+        let Some(token) = token else {
+            logits[16] = -0.8;
+            logits[17] = 0.8;
+            return logits;
+        };
+        logits[..8].fill(-0.8);
+        logits[self.act.raw() as usize] = 0.8;
+        for bit in 0..8 {
+            logits[8 + bit] = if token & (1 << bit) != 0 { 0.8 } else { -0.8 };
+        }
+        logits[16] = 0.8;
+        logits[17] = if step + 1 == self.len() { 0.8 } else { -0.8 };
+        logits
+    }
+    pub fn output_weight(self, output: usize) -> f32 {
+        if self.token.is_none() && !matches!(output, 16 | 17) {
+            0.0
+        } else if output >= 18 {
+            // Recurrent controls learn through later tokens, not zero clamps.
+            0.0
+        } else {
+            self.weight
+        }
+    }
+}
+
+/// Detached production state at a replay boundary. These are real runtime
+/// snapshots, not hidden teacher inputs. Gradients stop at this boundary.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TrainingInitialState {
+    pub activations: Vec<f32>,
+    pub activity_ema: Vec<f32>,
+    pub metabolic_load: Vec<f32>,
+    pub dendrites: alife_core::DendriticBranchSet,
+}
+
+/// One production decoder candidate, including confidence-weighted memory
+/// lanes (24..36) and cognitive projection lanes (36..54).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TrainingReplayCandidate {
+    pub family: CandidateActionFamily,
+    #[serde(with = "decoder_input_array")]
+    pub decoder_inputs: [f32; 54],
+    /// Fixed gene-compiled salience already present in production selection.
+    #[serde(default, skip_serializing_if = "is_zero_f32")]
+    pub innate_bias: f32,
+}
+
+fn is_zero_f32(value: &f32) -> bool {
+    *value == 0.0
+}
+
+mod decoder_input_array {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S: Serializer>(values: &[f32; 54], serializer: S) -> Result<S::Ok, S::Error> {
+        values.as_slice().serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<[f32; 54], D::Error> {
+        Vec::<f32>::deserialize(deserializer)?
+            .try_into()
+            .map_err(|values: Vec<f32>| {
+                serde::de::Error::invalid_length(values.len(), &"exactly 54 decoder inputs")
+            })
+    }
+}
+
+/// A frozen ordinary-runtime context. Lifetime/fast weights, chemistry,
+/// memory and activity decisions are detached; their evolution is not BPTT.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TrainingReplayTick {
+    /// The final production sensor-encoder output, including receptor effects.
+    pub encoded_inputs: Vec<f32>,
+    pub projection_gain: f32,
+    pub local_threshold_shift: f32,
+    pub microstep_count: u32,
+    pub enabled_routes: Vec<bool>,
+    /// Per compiled synapse: lifetime + alpha * fast, in canonical synapse order.
+    pub effective_weight_offsets: Vec<f32>,
+    /// Live structural edges are fixed context, never trainable genetic weights.
+    pub structural_synapses: Vec<TrainingFrozenSynapse>,
+    pub candidates: Vec<TrainingReplayCandidate>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TrainingFrozenSynapse {
+    pub source: u32,
+    pub target: u32,
+    pub route: u32,
+    pub cadence: u32,
+    pub effective_weight: f32,
+}
+
+/// Fixed-topology, frozen-context replay with a detached burn-in boundary.
+/// Production collection must supply every context; there is no neutral default.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TrainingSequence {
+    pub phenotype_hash: alife_core::PhenotypeHash,
+    pub initial: TrainingInitialState,
+    pub ticks: Vec<TrainingReplayTick>,
+    pub burn_in_ticks: usize,
+    pub memory_candidate_gain: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrainingReplayEvaluation {
+    pub candidate_logits: Vec<Vec<f32>>,
+    pub final_activations: Vec<Vec<f32>>,
+    pub final_activity_ema: Vec<Vec<f32>>,
+    pub final_metabolic_load: Vec<Vec<f32>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrainingGradientProbe {
+    pub objective: f64,
+    pub gradients: Vec<f32>,
+}
+
+impl TrainingSequence {
+    pub fn validate_for(&self, phenotype: &BrainPhenotype) -> Result<(), ScaffoldContractError> {
+        let n = phenotype.neuron_count() as usize;
+        let finite = |xs: &[f32]| xs.iter().all(|x| x.is_finite());
+        if self.ticks.is_empty()
+            || self.ticks.len() > MAX_TRAINING_SEQUENCE_TICKS
+            || self.phenotype_hash != phenotype.phenotype_hash()
+            || self.burn_in_ticks >= self.ticks.len()
+            || self.initial.activations.len() != n
+            || self.initial.activity_ema.len() != n
+            || self.initial.metabolic_load.len() != n
+            || !finite(&self.initial.activations)
+            || !self
+                .initial
+                .activity_ema
+                .iter()
+                .chain(&self.initial.metabolic_load)
+                .all(|x| x.is_finite() && (0.0..=1.0).contains(x))
+            || !self.memory_candidate_gain.is_finite()
+            || self.memory_candidate_gain < 0.0
+            || self.memory_candidate_gain
+                != phenotype
+                    .candidate_decoder()
+                    .memory_channel()
+                    .map_or(0.0, |p| p.max_candidate_gain())
+            || phenotype
+                .projections()
+                .iter()
+                .any(|p| p.delay_microsteps() != 0)
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        self.initial
+            .dendrites
+            .validate_for_neuron_count(phenotype.neuron_count())?;
+        for tick in &self.ticks {
+            if tick.encoded_inputs.len() != n
+                || !finite(&tick.encoded_inputs)
+                || !tick.projection_gain.is_finite()
+                || !tick.local_threshold_shift.is_finite()
+                || tick.microstep_count > u32::from(phenotype.microstep_count())
+                || tick.enabled_routes.len() != phenotype.projections().len()
+                || tick.effective_weight_offsets.len() != phenotype.synapses().len()
+                || !finite(&tick.effective_weight_offsets)
+                || tick.structural_synapses.len() > alife_core::MAX_STRUCTURAL_EDGES
+                || tick.structural_synapses.iter().any(|edge| {
+                    edge.source >= phenotype.neuron_count()
+                        || edge.target >= phenotype.neuron_count()
+                        || edge.route as usize >= phenotype.projections().len()
+                        || edge.cadence
+                            != u32::from(
+                                phenotype.projections()[edge.route as usize]
+                                    .update_cadence()
+                                    .raw(),
+                            )
+                        || !edge.effective_weight.is_finite()
+                })
+                || tick.candidates.is_empty()
+                || tick.candidates.len() > alife_core::MAX_ACTION_CANDIDATES
+                || tick
+                    .candidates
+                    .iter()
+                    .any(|c| !finite(&c.decoder_inputs) || !c.innate_bias.is_finite())
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AdamWConfig {
     pub learning_rate: f32,
     pub beta1: f32,
@@ -240,7 +493,7 @@ impl TrainingSequence32 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct StageTrainableMask {
     words: Vec<u32>,
 }
@@ -335,6 +588,32 @@ pub struct TrainingStepReceipt {
     pub trained_weight_count: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TrainingStepStatistics {
+    pub optimizer_step: u32,
+    pub loss_before: f32,
+    pub loss_after: Option<f32>,
+    pub unclipped_gradient_norm: f32,
+    pub trained_weight_count: u32,
+}
+
+/// Offline optimizer checkpoint. Organism saves never contain Adam state.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FoundationTrainerCheckpoint {
+    pub schema_version: u32,
+    pub phenotype_hash: alife_core::PhenotypeHash,
+    pub source_foundation_digest: alife_core::Blake3Digest,
+    pub optimizer_step: u32,
+    pub config: AdamWConfig,
+    pub stage_mask: StageTrainableMask,
+    pub weights: Vec<f32>,
+    pub first_moment: Vec<f32>,
+    pub second_moment: Vec<f32>,
+    /// Schema 2: successful Adam updates per weight, unchanged while frozen.
+    pub update_ages: Vec<u32>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SequenceEvaluation {
     mean_loss: f32,
@@ -392,4 +671,4 @@ impl SequenceEvaluation {
     }
 }
 
-pub(crate) const CANDIDATE_RECORD_WORDS: usize = 4 + CANDIDATE_FEATURE_COUNT + 8;
+pub(crate) const CANDIDATE_RECORD_WORDS: usize = 64;

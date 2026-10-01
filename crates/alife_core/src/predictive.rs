@@ -935,6 +935,10 @@ impl Validate for GroundedSuccessorPredictor {
 }
 
 impl PredictionTargetReceipt {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "sealed successor receipt binds action, world states, and provenance separately"
+    )]
     pub fn for_successor(
         organism_id: OrganismId,
         experience_sequence: ExperienceSequenceId,

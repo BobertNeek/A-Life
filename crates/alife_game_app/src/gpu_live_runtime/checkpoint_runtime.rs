@@ -27,7 +27,9 @@ impl GpuLiveBrainRuntime {
                 self.world
                     .organism_registry()
                     .get(*organism_id)
-                    .is_none_or(|record| record.lifecycle().is_alive())
+                    // Unregistered embodied actors (such as the nursery
+                    // teacher) are perceived world objects, not GPU residents.
+                    .is_some_and(|record| record.lifecycle().is_alive())
             })
             .map(|(organism_id, _)| organism_id.raw())
             .collect()
@@ -359,13 +361,12 @@ impl GpuLiveBrainRuntime {
             write.attach_exact_cognitive_state(store, &exact)?;
             exact_neural_captures = exact_neural_captures.saturating_add(1);
             manifest_entries.extend(write.manifest_entries);
-            let canonical_biochemistry = self
+            let canonical_biochemistry = *self
                 .world
                 .organism_registry()
                 .get(organism_id)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-                .biochemistry()
-                .clone();
+                .biochemistry();
             let creature = replacement
                 .creatures
                 .iter_mut()
@@ -415,7 +416,7 @@ impl GpuLiveBrainRuntime {
             {
                 return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
             }
-            let canonical_biochemistry = record.biochemistry().clone();
+            let canonical_biochemistry = *record.biochemistry();
             let creature = replacement
                 .creatures
                 .iter_mut()
@@ -458,7 +459,7 @@ impl GpuLiveBrainRuntime {
                         last_error_code: recovery.last_error.slug(),
                     }
                 }),
-                exact_cognitive_state: Self::exact_cognitive_host_snapshot(
+                exact_cognitive_state: self.exact_cognitive_host_snapshot_with_prior(
                     organism_id,
                     resident,
                     checkpoint_tick,
@@ -754,6 +755,11 @@ impl GpuLiveBrainRuntime {
             }
             if self.pending_sleep_journal_entries.is_empty() {
                 return Ok(());
+            }
+            // An ephemeral runtime cannot publish a queued sleep transition.
+            // Re-enqueueing it without a durable base would spin forever.
+            if self.checkpoint_durability.is_none() {
+                return Err(ScaffoldContractError::MissingPhaseData.into());
             }
             let pending = std::mem::take(&mut self.pending_sleep_journal_entries);
             self.start_sleep_journal_publication(pending)?;

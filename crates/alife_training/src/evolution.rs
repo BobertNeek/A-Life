@@ -1,4 +1,5 @@
-//! Production-GPU evolutionary hardening for the trained N2048 foundation.
+//! N2048 evolutionary hardening contracts and a blocked legacy GPU evaluator.
+//! Canonical organism biology must be integrated before evaluation can run.
 
 use std::cmp::Ordering;
 
@@ -253,6 +254,7 @@ impl N2048EvolutionHardener {
         {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
+        crate::require_canonical_training_biology("N2048 foundation hardening")?;
         let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
         let session = GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Evolution);
         Ok(Self {

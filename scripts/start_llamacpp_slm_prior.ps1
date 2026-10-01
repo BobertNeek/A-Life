@@ -1,10 +1,16 @@
 param(
     [string]$LlamaServerPath = "",
     [string]$ModelPath = "",
+    [ValidatePattern('^[A-Za-z0-9_.-]+$')]
+    [string]$ModelAlias = "alife-qwen3.5-0.8b-prior",
     [ValidateRange(1, 65535)]
     [int]$Port = 18081,
-    [int]$ContextSize = 4096,
+    [int]$ContextSize = 2048,
     [int]$GpuLayers = 999,
+    [ValidateRange(0, 128)]
+    [int]$Threads = 4,
+    [ValidateRange(1, 16)]
+    [int]$ParallelSlots = 1,
     [switch]$PrintOnly
 )
 
@@ -12,7 +18,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($ModelPath)) {
-    $ModelPath = Join-Path $repoRoot "models\local\qwen3-4b-gguf\Qwen3-4B-Q4_K_M.gguf"
+    $ModelPath = Join-Path $repoRoot "models\local\qwen3.5-0.8b-gguf\Qwen3.5-0.8B-Q8_0.gguf"
 }
 
 function Resolve-LlamaServer {
@@ -64,13 +70,18 @@ $arguments = @(
     "-m", $model,
     "--host", "127.0.0.1",
     "--port", "$Port",
-    "--alias", "alife-qwen3-4b-prior",
+    "--alias", $ModelAlias,
     "-c", "$ContextSize",
     "--reasoning", "off",
-    "--reasoning-format", "none",
+    # Parse the template's empty think tags separately so JSON grammar stays valid.
+    "--reasoning-format", "deepseek",
     "--reasoning-budget", "0",
-    "--n-gpu-layers", "$GpuLayers"
+    "--n-gpu-layers", "$GpuLayers",
+    "--parallel", "$ParallelSlots"
 )
+if ($Threads -gt 0) {
+    $arguments += @("--threads", "$Threads", "--threads-batch", "$Threads")
+}
 
 function Format-CommandArgument {
     param([string]$Value)

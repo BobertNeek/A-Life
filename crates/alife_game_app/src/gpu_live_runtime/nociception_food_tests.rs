@@ -1,6 +1,7 @@
 //! Bounded ordinary-game food-choice probe for the opt-in inherited pain floor.
 
 use super::*;
+use alife_core::PhysicalContactKind;
 use alife_core::{
     CandidateActionFamily, CompiledSynapseKind, DecoderHeadKind, OutcomeCreditPacket,
 };

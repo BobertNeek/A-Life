@@ -28,6 +28,7 @@ pub enum BevyActionKind {
     Vocalize,
     Write,
     Gesture,
+    Look,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -177,6 +178,16 @@ pub fn plan_action_command(
     let kind = classify_action(command);
     let step = context.movement_step_meters * command.intensity.raw();
     match kind {
+        // Gaze is applied by the authoritative world; this adapter never turns
+        // the body or translates a look into locomotion.
+        BevyActionKind::Look => Ok(successful_plan(
+            command,
+            context,
+            kind,
+            command.target_entity.and_then(|id| context.target(id)),
+            Vec3::ZERO,
+            false,
+        )),
         BevyActionKind::Idle
         | BevyActionKind::Rest
         | BevyActionKind::Vocalize
@@ -320,6 +331,7 @@ fn classify_action(command: &ActionCommand) -> BevyActionKind {
             ActionKind::Vocalize => BevyActionKind::Vocalize,
             ActionKind::Write => BevyActionKind::Write,
             ActionKind::Gesture => BevyActionKind::Gesture,
+            ActionKind::Look => BevyActionKind::Look,
         }
     }
 }

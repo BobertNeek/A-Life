@@ -158,6 +158,9 @@ pub struct Fvr05ProductionUxSettings {
     pub enabled_overlays: Vec<Fvr05ProductionOverlayKind>,
     pub camera_mode: String,
     pub paused: bool,
+    /// Missing in older settings: migrate accelerated multipliers to Max speed.
+    #[serde(default)]
+    pub run_mode: Option<crate::ProductionRunMode>,
     pub simulation_speed: f32,
     pub follow_selection: bool,
     pub show_menu: bool,
@@ -174,6 +177,14 @@ pub struct Fvr05ProductionUxSettings {
 }
 
 impl Fvr05ProductionUxSettings {
+    pub fn playback_mode(&self) -> crate::ProductionRunMode {
+        self.run_mode.unwrap_or(if self.simulation_speed > 1.0 {
+            crate::ProductionRunMode::MaxSpeed
+        } else {
+            crate::ProductionRunMode::OneX
+        })
+    }
+
     pub fn default_for_launch(
         launch: &ProductionVoxelLaunchConfig,
         diagnostics: &ProductionRuntimeDiagnostics,
@@ -192,6 +203,7 @@ impl Fvr05ProductionUxSettings {
             ),
             camera_mode: "orthographic-isometric".to_string(),
             paused: false,
+            run_mode: Some(launch.run_mode.unwrap_or_default()),
             simulation_speed: 1.0,
             follow_selection: true,
             show_menu: false,
@@ -672,12 +684,17 @@ pub struct ProductionVoxelLaunchConfig {
     pub app_launch: AppShellLaunchConfig,
     pub profile_id: ProductionFrontendProfileId,
     pub world_source: ProductionWorldSource,
+    pub new_game_founder: crate::NewGameFounderSelection,
+    /// New Game override; None uses the current no-age-cap product default.
+    /// Existing worlds always retain their saved setting.
+    pub disable_age_death: Option<bool>,
     pub population: Option<u16>,
     pub resolution: (u32, u32),
     pub gpu_mode: GraphicalBrainPolicyMode,
     pub require_gpu: bool,
     pub graphics_backend: String,
     pub smoke_seconds: Option<u32>,
+    pub run_mode: Option<crate::ProductionRunMode>,
     pub dry_run: bool,
     pub record_performance: bool,
     pub developer_overlay: bool,
@@ -705,12 +722,15 @@ impl ProductionVoxelLaunchConfig {
             app_launch,
             profile_id,
             world_source: ProductionWorldSource::LoadExisting,
+            new_game_founder: crate::NewGameFounderSelection::default(),
+            disable_age_death: None,
             population: None,
             resolution: budget.output_resolution,
             gpu_mode: GraphicalBrainPolicyMode::GpuRequired,
             require_gpu: false,
             graphics_backend: default_production_graphics_backend(),
             smoke_seconds: None,
+            run_mode: None,
             dry_run: false,
             record_performance: false,
             developer_overlay: false,
@@ -725,6 +745,7 @@ impl ProductionVoxelLaunchConfig {
         })
     }
 
+    #[cfg(feature = "bevy-app")]
     pub(crate) fn canonical_new_game_save_path(&self) -> Result<PathBuf, GameAppShellError> {
         let ProductionWorldSource::NewGame { seed } = self.world_source else {
             return Err(GameAppShellError::InvalidProductionFrontend {
@@ -1174,6 +1195,29 @@ pub fn run_production_voxel_frontend_dry_run(
 pub fn run_production_voxel_frontend_preflight(
     launch: &ProductionVoxelLaunchConfig,
 ) -> Result<ProductionVoxelLaunchSummary, GameAppShellError> {
+    if launch.record_performance
+        && launch.run_mode == Some(crate::ProductionRunMode::HeadlessMaxSpeed)
+    {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: "graphical performance recording cannot run in headless mode".to_string(),
+        });
+    }
+    if matches!(launch.world_source, ProductionWorldSource::LoadExisting)
+        && launch.disable_age_death.is_some()
+    {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: "age-death overrides require New Game; loading preserves the saved world rule"
+                .to_string(),
+        });
+    }
+    if matches!(launch.world_source, ProductionWorldSource::LoadExisting)
+        && launch.new_game_founder != crate::NewGameFounderSelection::BuiltinNano512
+    {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: "founder selection requires New Game; saved individuals keep their own genome"
+                .to_string(),
+        });
+    }
     let budget = launch.profile_id.budget();
     let population = launch.effective_population();
     if population == 0 {
@@ -1238,7 +1282,13 @@ pub fn run_production_voxel_frontend_preflight(
             (launch_config, production_save, gpu_runtime_state)
         }
         ProductionWorldSource::NewGame { seed } => {
-            validate_exact_canonical_new_game_save(&save, seed, population)?;
+            let founder_class = match launch.new_game_founder {
+                crate::NewGameFounderSelection::N2048Candidate { .. } => {
+                    alife_core::BrainScaleTier::Standard2048
+                }
+                _ => alife_core::BrainScaleTier::Nano512,
+            };
+            validate_exact_canonical_new_game_save(&save, seed, population, founder_class)?;
             let config = save.config.clone();
             let gpu_runtime_state = fvr06_gpu_runtime_save_state(launch, &runtime, &config, &save)?;
             (config, save, gpu_runtime_state)
@@ -1312,8 +1362,16 @@ pub fn run_production_voxel_frontend_preflight(
         .ui_settings_path
         .clone()
         .unwrap_or_else(|| fvr05_default_ui_settings_path_for_launch(launch));
-    let (ui_settings, ui_settings_load_error) =
+    let (mut ui_settings, ui_settings_load_error) =
         load_fvr05_ui_settings_or_default(&ui_settings_path, &default_ui_settings);
+    ui_settings.run_mode = Some(
+        launch
+            .run_mode
+            .unwrap_or_else(|| ui_settings.playback_mode()),
+    );
+    // Legacy multiplier remains readable for old settings, but is no longer a
+    // playback control or an animation clock.
+    ui_settings.simulation_speed = 1.0;
     let debug_authority = Fvr05ProductionDebugAuthorityReport::production_read_only();
     debug_authority.validate()?;
 
@@ -1377,6 +1435,7 @@ fn validate_exact_canonical_new_game_save(
     save: &PortableSaveFile,
     requested_seed: u64,
     requested_population: u16,
+    founder_class: alife_core::BrainScaleTier,
 ) -> Result<(), GameAppShellError> {
     let population = usize::from(requested_population);
     let organism_count = save
@@ -1401,7 +1460,7 @@ fn validate_exact_canonical_new_game_save(
     if requested_seed == 0
         || save.deterministic_seed != requested_seed
         || save.config.deterministic_seed != requested_seed
-        || save.config.brain_class != alife_core::BrainScaleTier::Nano512
+        || save.config.brain_class != founder_class
         || !save.config.features.gpu_backend_enabled
         || population == 0
         || organism_count != population
@@ -1676,12 +1735,15 @@ mod tests {
             app_launch,
             profile_id: ProductionFrontendProfileId::MinSpecComfort1080p,
             world_source: ProductionWorldSource::LoadExisting,
+            new_game_founder: crate::NewGameFounderSelection::default(),
+            disable_age_death: None,
             population: Some(30),
             resolution: (1920, 1080),
             gpu_mode: GraphicalBrainPolicyMode::GpuRequired,
             require_gpu: false,
             graphics_backend: "existing".to_string(),
             smoke_seconds: None,
+            run_mode: None,
             dry_run: true,
             record_performance: false,
             developer_overlay: false,
@@ -1820,6 +1882,28 @@ mod tests {
         assert!(roundtrip
             .enabled_overlays
             .contains(&Fvr05ProductionOverlayKind::BackendTiming));
+        assert_eq!(roundtrip.playback_mode(), crate::ProductionRunMode::OneX);
+        let mut legacy: serde_json::Value = serde_json::from_str(&json).unwrap();
+        legacy.as_object_mut().unwrap().remove("run_mode");
+        legacy["simulation_speed"] = serde_json::json!(3.0);
+        let migrated = Fvr05ProductionUxSettings::from_json_str(&legacy.to_string()).unwrap();
+        assert_eq!(migrated.playback_mode(), crate::ProductionRunMode::MaxSpeed);
+        for mode in [
+            crate::ProductionRunMode::OneX,
+            crate::ProductionRunMode::MaxSpeed,
+            crate::ProductionRunMode::HeadlessMaxSpeed,
+        ] {
+            let mut explicit = settings.clone();
+            explicit.run_mode = Some(mode);
+            assert_eq!(
+                Fvr05ProductionUxSettings::from_json_str(
+                    &explicit.to_json_string_pretty().unwrap()
+                )
+                .unwrap()
+                .playback_mode(),
+                mode
+            );
+        }
     }
 
     #[test]
@@ -2105,6 +2189,7 @@ mod tests {
         let staged = stage_phase3_new_game(CanonicalNewGameLaunchRequest {
             world_seed: 4242,
             population: 4,
+            disable_age_death: false,
             save_path: root.join("fvr05-current-canonical-not-written.json"),
             asset_root: root.clone(),
             config,

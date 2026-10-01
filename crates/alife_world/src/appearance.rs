@@ -226,6 +226,13 @@ impl Default for CreatureAppearanceGenome {
 }
 
 impl CreatureAppearanceGenome {
+    /// Project the authoritative organism genes into the existing visual buckets.
+    /// Saved cosmetic details remain intact; hue and body size have one owner.
+    pub fn with_body_phenotype(mut self, body: &alife_core::BodyPhenotype) -> Self {
+        self.palette_family = (body.appearance_hue * 15.0).round().clamp(0.0, 15.0) as u8;
+        self.body_mass_trait = (body.size_scale * 15.0).round().clamp(0.0, 15.0) as u8;
+        self
+    }
     pub fn founder_for_species(species_archetype: u8, seed: u64) -> Self {
         let species_archetype = species_archetype % CREATURE_APPEARANCE_SPECIES_COUNT;
         Self {
