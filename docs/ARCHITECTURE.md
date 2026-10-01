@@ -59,7 +59,9 @@ For each admitted organism, the production live runtime:
 9. advances the world after the batch.
 
 Core episodic recall reuses exact target and action-family queries within one
-immutable frame. Each candidate retains its own sealed decision key; work
+creature's immutable decision frame. Its caches exist only for that recall call;
+individual and perceptual-category lookup keys retain the organism ID. This
+reuse does not transfer memories between creatures. Each candidate retains its own sealed decision key; work
 receipts identify reused channels and count actual searches. Candidate memory
 admits consequences, surprises, manipulation, blocked attempts, and first novel
 inspection rather than routine movement ticks. Conflicting individual outcomes
