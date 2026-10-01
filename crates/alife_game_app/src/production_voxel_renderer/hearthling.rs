@@ -10,6 +10,79 @@ const PATH: &str = "creatures/hearthling/hearthling.glb";
 const WALK_CYCLE_DISTANCE: f32 = 1.44;
 const WALK_CLIP_START: f32 = 1.0 / 24.0;
 const WALK_CLIP_SECONDS: f32 = 3.0;
+const INGESTION_FEEDBACK_SECONDS: f32 = 0.60;
+const SPEECH_FEEDBACK_SECONDS: f32 = 0.45;
+
+#[derive(Default)]
+struct OutcomeFeedback {
+    last_ingestion_tick: Option<u64>,
+    last_utterance_id: Option<u64>,
+    ingestion_remaining: f32,
+    speech_remaining: f32,
+}
+
+impl OutcomeFeedback {
+    fn advance(&mut self, seconds: f32, paused: bool) {
+        if !paused {
+            self.ingestion_remaining = (self.ingestion_remaining - seconds).max(0.0);
+            self.speech_remaining = (self.speech_remaining - seconds).max(0.0);
+        }
+    }
+
+    fn observe(&mut self, ingestion_tick: Option<u64>, utterance_id: Option<u64>) {
+        if let Some(tick) =
+            ingestion_tick.filter(|tick| self.last_ingestion_tick.is_none_or(|last| *tick > last))
+        {
+            self.last_ingestion_tick = Some(tick);
+            self.ingestion_remaining = INGESTION_FEEDBACK_SECONDS;
+        }
+        if let Some(id) =
+            utterance_id.filter(|id| self.last_utterance_id.is_none_or(|last| *id > last))
+        {
+            self.last_utterance_id = Some(id);
+            self.speech_remaining = SPEECH_FEEDBACK_SECONDS;
+        }
+    }
+}
+
+fn confirmed_consumption(receipt: &alife_world::HeadlessMotorChannelReceipt) -> bool {
+    receipt.command.channel == alife_core::MotorChannel::Manipulation
+        && receipt.command.primitive == alife_world::HeadlessActionIds::EAT
+        && receipt.physical.contact == alife_core::PhysicalContactKind::Consumed
+}
+
+fn confirmed_ingestion_tick(
+    summary: &LiveBrainTickSummary,
+    organism: OrganismId,
+    current_tick: u64,
+) -> Option<u64> {
+    (summary.organism_id == organism
+        && summary.patch_sealed
+        && summary.world_tick_after.raw() <= current_tick
+        && summary
+            .motor_execution
+            .as_ref()
+            .is_some_and(|trace| trace.channel_receipts.iter().any(confirmed_consumption)))
+    .then_some(summary.world_tick_after.raw())
+}
+
+fn emitted_utterance_id(
+    utterances: &[alife_world::AudibleUtterance],
+    organism: OrganismId,
+    current_tick: u64,
+) -> Option<u64> {
+    utterances
+        .iter()
+        .filter(|utterance| {
+            utterance.source_kind == alife_core::UtteranceSourceKind::Creature
+                && utterance.speaker_id == Some(organism)
+                && utterance.emitted_tick.raw() <= current_tick
+                && utterance.expires_after_tick.raw() >= current_tick
+                && !utterance.tokens.is_empty()
+        })
+        .map(|utterance| utterance.utterance_id.raw())
+        .max()
+}
 
 fn advance_walk(distance: f32, forward_scale: f32, seconds: f32) -> f32 {
     (seconds + distance / (WALK_CYCLE_DISTANCE * forward_scale)).rem_euclid(WALK_CLIP_SECONDS)
@@ -27,6 +100,7 @@ pub(super) struct HearthlingVisual {
     previous_position: Vec3,
     walk_seconds: f32,
     moved: bool,
+    feedback: OutcomeFeedback,
 }
 
 #[derive(Component)]
@@ -51,6 +125,7 @@ pub(super) fn spawn(world: &mut World, root: Entity, appearance: CreatureAppeara
             previous_position,
             walk_seconds: 0.0,
             moved: false,
+            feedback: OutcomeFeedback::default(),
         },
         HearthlingSource(gltf),
     ));
@@ -71,7 +146,91 @@ struct HearthlingSource(Handle<Gltf>);
 pub(super) struct InheritedBoneScale(Vec3);
 
 #[derive(Component)]
-pub(super) struct HearthlingHead(Entity);
+struct HearthlingPoseBone {
+    root: Entity,
+    part: ExpressionBone,
+    bind_rotation: Quat,
+}
+
+#[derive(Clone, Copy)]
+enum ExpressionBone {
+    Head,
+    Ear(f32),
+    Lid(f32),
+}
+
+fn expression_rotation(
+    sampled: Quat,
+    bind: Quat,
+    part: ExpressionBone,
+    expression: CreatureExpressionState,
+    animation: CreatureAnimationState,
+) -> Quat {
+    // The seated sleep clip already closes the eyes and lowers the head/ears.
+    if animation == CreatureAnimationState::Sleeping {
+        return sampled;
+    }
+    match (part, expression) {
+        (ExpressionBone::Lid(closed_angle), CreatureExpressionState::Tired) => {
+            // Leave authored blinks intact. Set a minimum partial closure rather
+            // than adding rotation, which would drive a blink through the globe.
+            let relative = bind.inverse() * sampled;
+            let angle = 2.0 * relative.x.atan2(relative.w);
+            let minimum = closed_angle * 0.28;
+            if angle * closed_angle.signum() >= minimum.abs() {
+                sampled
+            } else {
+                bind * Quat::from_rotation_x(minimum)
+            }
+        }
+        (ExpressionBone::Head, CreatureExpressionState::Tired) => {
+            sampled * Quat::from_rotation_x(0.10)
+        }
+        (ExpressionBone::Head, CreatureExpressionState::Pained) => {
+            sampled * Quat::from_rotation_x(0.18)
+        }
+        (ExpressionBone::Head, CreatureExpressionState::Afraid) => {
+            sampled * Quat::from_rotation_x(-0.10)
+        }
+        (ExpressionBone::Ear(_), CreatureExpressionState::Afraid) => {
+            sampled * Quat::from_rotation_x(-0.35)
+        }
+        (ExpressionBone::Ear(side), CreatureExpressionState::Pained) => {
+            sampled * Quat::from_rotation_z(side * 0.22)
+        }
+        _ => sampled,
+    }
+}
+
+fn outcome_rotation(
+    sampled: Quat,
+    part: ExpressionBone,
+    feedback: &OutcomeFeedback,
+    animation: CreatureAnimationState,
+) -> Quat {
+    if animation == CreatureAnimationState::Sleeping {
+        return sampled;
+    }
+    // One smooth, bounded acknowledgment of a measured outcome, not chewing
+    // or lip sync. The rig has no jaw or authored feeding/speech clip.
+    let pulse = |remaining: f32, duration: f32| {
+        if remaining <= 0.0 || remaining >= duration {
+            0.0
+        } else {
+            (std::f32::consts::PI * remaining / duration).sin()
+        }
+    };
+    let ate = pulse(feedback.ingestion_remaining, INGESTION_FEEDBACK_SECONDS);
+    let spoke = pulse(feedback.speech_remaining, SPEECH_FEEDBACK_SECONDS);
+    if ate == 0.0 && spoke == 0.0 {
+        return sampled;
+    }
+    match part {
+        ExpressionBone::Head => sampled * Quat::from_rotation_x(0.20 * ate - 0.08 * spoke),
+        ExpressionBone::Ear(_) => sampled * Quat::from_rotation_x(0.10 * spoke),
+        ExpressionBone::Lid(_) => sampled,
+    }
+}
 
 fn body_rotation(world_yaw: f32) -> Quat {
     // World yaw zero faces +X; the exported character faces +Z.
@@ -85,14 +244,26 @@ fn head_rotation(sampled: Quat, world_head_yaw: f32) -> Quat {
 }
 
 pub(super) fn apply_head_direction(
-    roots: Query<&Fvr04ProductionCreatureVisualMarker>,
-    mut heads: Query<(&mut Transform, &HearthlingHead)>,
+    roots: Query<(&Fvr04ProductionCreatureVisualMarker, &HearthlingVisual)>,
+    mut bones: Query<(&mut Transform, &HearthlingPoseBone)>,
 ) {
-    // Every authored clip samples head rotation, even while paused, so this
-    // projection replaces that frame's yaw rather than accumulating rotations.
-    for (mut transform, head) in &mut heads {
-        if let Ok(marker) = roots.get(head.0) {
-            transform.rotation = head_rotation(transform.rotation, marker.head_yaw);
+    // Every authored clip samples these rotations, even while paused. Start
+    // from that frame's pose so inherited gaze/expression never accumulates.
+    for (mut transform, bone) in &mut bones {
+        if let Ok((marker, visual)) = roots.get(bone.root) {
+            let sampled = match bone.part {
+                ExpressionBone::Head => head_rotation(transform.rotation, marker.head_yaw),
+                _ => transform.rotation,
+            };
+            let expression = expression_rotation(
+                sampled,
+                bone.bind_rotation,
+                bone.part,
+                marker.expression,
+                marker.animation,
+            );
+            transform.rotation =
+                outcome_rotation(expression, bone.part, &visual.feedback, marker.animation);
         }
     }
 }
@@ -135,6 +306,7 @@ fn ready(
     mut players: Query<&mut AnimationPlayer>,
     mesh_materials: Query<&MeshMaterial3d<StandardMaterial>>,
     names: Query<&Name>,
+    transforms: Query<&Transform>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let Ok(parent) = parents.get(event.entity) else {
@@ -182,8 +354,21 @@ fn ready(
     let mut mesh_count = 0;
     for entity in children.iter_descendants(event.entity) {
         if let Ok(name) = names.get(entity) {
-            if name.as_str() == "head" {
-                commands.entity(entity).insert(HearthlingHead(root));
+            let part = match name.as_str() {
+                "head" => Some(ExpressionBone::Head),
+                "ear.L" => Some(ExpressionBone::Ear(1.0)),
+                "ear.R" => Some(ExpressionBone::Ear(-1.0)),
+                // Closure angles are authored in scripts/hearthling_eyes.py.
+                "lid_upper.L" | "lid_upper.R" => Some(ExpressionBone::Lid(1.07)),
+                "lid_lower.L" | "lid_lower.R" => Some(ExpressionBone::Lid(-1.02)),
+                _ => None,
+            };
+            if let (Some(part), Ok(transform)) = (part, transforms.get(entity)) {
+                commands.entity(entity).insert(HearthlingPoseBone {
+                    root,
+                    part,
+                    bind_rotation: transform.rotation,
+                });
             }
             let ear = f32::from(visual.appearance.ear_muzzle_trait) / 15.0;
             let tail = f32::from(visual.appearance.tail_trait) / 15.0;
@@ -265,6 +450,8 @@ fn ready(
 pub(super) fn animate(
     time: Res<Time>,
     ux: Res<Fvr05ProductionUxStateResource>,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    #[cfg(feature = "gpu-runtime")] runtime: Option<NonSend<ProductionGpuBrainRuntimeResource>>,
     mut players: Query<(&mut AnimationPlayer, &mut HearthlingPlayer)>,
     mut transforms: Query<(
         &mut Transform,
@@ -272,7 +459,42 @@ pub(super) fn animate(
         &Fvr04ProductionCreatureVisualMarker,
     )>,
 ) {
+    let new_frame = frame.as_ref().is_some_and(|frame| frame.is_changed());
+    // World speech is already CPU-side authoritative state. Read once per
+    // changed frame, never from requested vocal commands or translated text.
+    #[cfg(feature = "gpu-runtime")]
+    let utterances = if new_frame {
+        runtime
+            .as_ref()
+            .map_or_else(Vec::new, |runtime| runtime.runtime.active_utterances())
+    } else {
+        Vec::new()
+    };
+    #[cfg(not(feature = "gpu-runtime"))]
+    let utterances = Vec::new();
     for (mut transform, mut visual, marker) in &mut transforms {
+        visual
+            .feedback
+            .advance(time.delta_secs(), ux.settings.paused);
+        if new_frame {
+            if let Some(frame) = frame.as_ref().filter(|frame| {
+                frame.current.organism(marker.stable_id).is_some_and(|row| {
+                    row.organism_id == marker.organism_id && row.lifecycle.is_alive()
+                })
+            }) {
+                let tick = frame.current.authoritative_world_tick.raw();
+                let ingestion = frame
+                    .current
+                    .tick_summaries
+                    .iter()
+                    .filter_map(|summary| {
+                        confirmed_ingestion_tick(summary, marker.organism_id, tick)
+                    })
+                    .max();
+                let utterance = emitted_utterance_id(&utterances, marker.organism_id, tick);
+                visual.feedback.observe(ingestion, utterance);
+            }
+        }
         // World ticks supply targets; render frames supply the visible stride.
         // Only the display transform is smoothed, never the organism position.
         let target = marker.base_translation;
@@ -355,6 +577,269 @@ pub(super) fn animate(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn outcome_feedback_deduplicates_events_freezes_on_pause_and_returns_to_sampled_pose() {
+        let mut feedback = OutcomeFeedback::default();
+        let sampled = Quat::from_rotation_y(0.3);
+        assert!(outcome_rotation(
+            sampled,
+            ExpressionBone::Head,
+            &feedback,
+            CreatureAnimationState::Idle
+        )
+        .abs_diff_eq(sampled, 1e-6));
+        feedback.observe(Some(10), Some(20));
+        feedback.advance(0.15, false);
+        let ingestion = feedback.ingestion_remaining;
+        let speech = feedback.speech_remaining;
+        feedback.observe(Some(10), Some(20));
+        feedback.observe(Some(9), Some(19));
+        assert_eq!(feedback.ingestion_remaining, ingestion);
+        assert_eq!(feedback.speech_remaining, speech);
+        feedback.advance(10.0, true);
+        assert_eq!(feedback.ingestion_remaining, ingestion);
+        assert_eq!(feedback.speech_remaining, speech);
+        assert!(!outcome_rotation(
+            sampled,
+            ExpressionBone::Head,
+            &feedback,
+            CreatureAnimationState::Idle
+        )
+        .abs_diff_eq(sampled, 1e-6));
+        assert_eq!(
+            outcome_rotation(
+                sampled,
+                ExpressionBone::Head,
+                &feedback,
+                CreatureAnimationState::Sleeping
+            ),
+            sampled
+        );
+        feedback.advance(10.0, false);
+        assert!(outcome_rotation(
+            sampled,
+            ExpressionBone::Head,
+            &feedback,
+            CreatureAnimationState::Idle
+        )
+        .abs_diff_eq(sampled, 1e-6));
+        feedback.observe(Some(11), Some(21));
+        assert_eq!(feedback.ingestion_remaining, INGESTION_FEEDBACK_SECONDS);
+        assert_eq!(feedback.speech_remaining, SPEECH_FEEDBACK_SECONDS);
+    }
+
+    #[test]
+    fn ingestion_feedback_requires_a_matching_sealed_consumption_receipt() {
+        let organism = OrganismId(1);
+        let eat = alife_world::HeadlessWorldCommand::eat(organism, WorldEntityId(2)).unwrap();
+        let command =
+            alife_core::channel_command_for_action(alife_core::MotorChannel::Manipulation, &eat)
+                .unwrap();
+        let receipt = alife_world::HeadlessMotorChannelReceipt {
+            command: command.clone(),
+            observation: None,
+            physical: alife_core::PhysicalActionOutcome {
+                contact: alife_core::PhysicalContactKind::Consumed,
+                target_entity: Some(WorldEntityId(2)),
+                displacement: alife_core::Vec3f::ZERO,
+                collision_normal: None,
+                energy_cost: alife_core::NormalizedScalar::new(0.02).unwrap(),
+            },
+        };
+        let mut summary = LiveBrainTickSummary {
+            schema: crate::G03_LIVE_BRAIN_LOOP_SCHEMA,
+            schema_version: crate::G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
+            organism_id: organism,
+            tick_before: Tick::new(9),
+            tick_after: Tick::new(10),
+            world_tick_before: Tick::new(9),
+            world_tick_after: Tick::new(10),
+            status: alife_core::BrainTickStatus::SafeIdle,
+            selected_action_kind: Some(alife_core::ActionKind::Move),
+            selected_action_id: None,
+            target_entity: None,
+            patch_sealed: true,
+            patch_sequence_id: Some(10),
+            patch_success: Some(false),
+            physical_contact: Some(alife_core::PhysicalContactKind::Blocked),
+            action_failure: None,
+            motor_execution: Some(crate::LiveMotorExecutionTrace {
+                requested_channels: vec![command],
+                channel_receipts: vec![receipt.clone()],
+            }),
+            sealed_patch_count: 1,
+            packed_record_count: 0,
+            memory_updates: 0,
+            topology_updates: 0,
+            learning_updates: 0,
+            invalid_or_rejected_action_count: 0,
+            last_diagnostic: None,
+            causal_stages: Vec::new(),
+        };
+        // Another channel may fail: actual ingestion still happened.
+        assert_eq!(confirmed_ingestion_tick(&summary, organism, 10), Some(10));
+        assert_eq!(confirmed_ingestion_tick(&summary, OrganismId(3), 10), None);
+        assert_eq!(confirmed_ingestion_tick(&summary, organism, 9), None);
+        summary.patch_sealed = false;
+        assert_eq!(confirmed_ingestion_tick(&summary, organism, 10), None);
+        summary.patch_sealed = true;
+        summary
+            .motor_execution
+            .as_mut()
+            .unwrap()
+            .channel_receipts
+            .clear();
+        assert_eq!(confirmed_ingestion_tick(&summary, organism, 10), None);
+        let mut blocked = receipt.clone();
+        blocked.physical.contact = alife_core::PhysicalContactKind::Blocked;
+        assert!(!confirmed_consumption(&blocked));
+        let mut grab = receipt;
+        grab.command.primitive = alife_world::HeadlessActionIds::GRAB;
+        assert!(!confirmed_consumption(&grab));
+    }
+
+    #[test]
+    fn speech_feedback_requires_an_active_emitted_creature_utterance_from_the_same_individual() {
+        let mut utterance = alife_world::AudibleUtterance {
+            utterance_id: alife_core::UtteranceId::new(5).unwrap(),
+            source_kind: alife_core::UtteranceSourceKind::Creature,
+            speaker_id: Some(OrganismId(1)),
+            addressee: None,
+            source_position: alife_core::Vec3f::ZERO,
+            tokens: vec![alife_core::LanguageTokenId::new(7).unwrap()],
+            confidence: alife_core::Confidence::new(1.0).unwrap(),
+            teacher_channel: None,
+            emitted_tick: Tick::new(10),
+            expires_after_tick: Tick::new(11),
+        };
+        let event = |value: &alife_world::AudibleUtterance, organism, tick| {
+            emitted_utterance_id(std::slice::from_ref(value), organism, tick)
+        };
+        assert_eq!(event(&utterance, OrganismId(1), 10), Some(5));
+        assert_eq!(event(&utterance, OrganismId(2), 10), None);
+        assert_eq!(event(&utterance, OrganismId(1), 9), None);
+        assert_eq!(event(&utterance, OrganismId(1), 12), None);
+        utterance.source_kind = alife_core::UtteranceSourceKind::Player;
+        assert_eq!(event(&utterance, OrganismId(1), 10), None);
+        utterance.source_kind = alife_core::UtteranceSourceKind::Teacher;
+        assert_eq!(event(&utterance, OrganismId(1), 10), None);
+    }
+
+    #[test]
+    fn expression_preserves_neutral_and_authored_sleep_poses() {
+        let sampled = Quat::from_rotation_y(0.3) * Quat::from_rotation_x(0.2);
+        for part in [
+            ExpressionBone::Head,
+            ExpressionBone::Ear(1.0),
+            ExpressionBone::Lid(1.07),
+        ] {
+            assert_eq!(
+                expression_rotation(
+                    sampled,
+                    Quat::IDENTITY,
+                    part,
+                    CreatureExpressionState::Neutral,
+                    CreatureAnimationState::Idle
+                ),
+                sampled
+            );
+            for expression in [
+                CreatureExpressionState::Tired,
+                CreatureExpressionState::Pained,
+                CreatureExpressionState::Afraid,
+            ] {
+                assert_eq!(
+                    expression_rotation(
+                        sampled,
+                        Quat::IDENTITY,
+                        part,
+                        expression,
+                        CreatureAnimationState::Sleeping
+                    ),
+                    sampled
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn tired_expression_closes_open_lids_without_overclosing_authored_blinks() {
+        let bind = Quat::from_rotation_x(-0.02839);
+        for closed in [1.07, -1.02] {
+            let part = ExpressionBone::Lid(closed);
+            let tired = expression_rotation(
+                bind,
+                bind,
+                part,
+                CreatureExpressionState::Tired,
+                CreatureAnimationState::Idle,
+            );
+            assert!(tired.abs_diff_eq(bind * Quat::from_rotation_x(closed * 0.28), 1e-6));
+            for amount in [0.5, 1.0] {
+                let blink = bind * Quat::from_rotation_x(closed * amount);
+                assert_eq!(
+                    expression_rotation(
+                        blink,
+                        bind,
+                        part,
+                        CreatureExpressionState::Tired,
+                        CreatureAnimationState::Idle
+                    ),
+                    blink
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn expression_posture_uses_each_fresh_animation_sample_and_recovers_to_neutral() {
+        let frames = [Quat::from_rotation_z(0.04), Quat::from_rotation_z(-0.03)];
+        for sampled in frames {
+            let projected = expression_rotation(
+                sampled,
+                Quat::IDENTITY,
+                ExpressionBone::Head,
+                CreatureExpressionState::Pained,
+                CreatureAnimationState::Idle,
+            );
+            let nod = sampled.inverse() * projected;
+            assert!(nod.abs_diff_eq(Quat::from_rotation_x(0.18), 1e-6));
+            assert_eq!(
+                expression_rotation(
+                    sampled,
+                    Quat::IDENTITY,
+                    ExpressionBone::Head,
+                    CreatureExpressionState::Neutral,
+                    CreatureAnimationState::Idle
+                ),
+                sampled
+            );
+        }
+        let left = expression_rotation(
+            Quat::IDENTITY,
+            Quat::IDENTITY,
+            ExpressionBone::Ear(1.0),
+            CreatureExpressionState::Pained,
+            CreatureAnimationState::Idle,
+        );
+        let right = expression_rotation(
+            Quat::IDENTITY,
+            Quat::IDENTITY,
+            ExpressionBone::Ear(-1.0),
+            CreatureExpressionState::Pained,
+            CreatureAnimationState::Idle,
+        );
+        assert!(left.abs_diff_eq(right.inverse(), 1e-6));
+        let afraid = expression_rotation(
+            Quat::IDENTITY,
+            Quat::IDENTITY,
+            ExpressionBone::Ear(1.0),
+            CreatureExpressionState::Afraid,
+            CreatureAnimationState::Idle,
+        );
+        assert!(afraid.abs_diff_eq(Quat::from_rotation_x(-0.35), 1e-6));
+    }
 
     #[test]
     fn world_heading_and_chosen_gaze_replace_animation_yaw_without_drift() {
