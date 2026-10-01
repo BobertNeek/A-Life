@@ -10,13 +10,7 @@
     "combined_source_tree": "6e631ecb7c342d9a6f4f1884735c5c0158da1a13",
     "backend_original_implementation_commit": "ffeea2528d0475541ff1078a3510762538d71c5e",
     "backend_local_implementation_commit": "a21c21d7cce5da42abfeadc03ddcca1af64a81c3",
-    "source_sha256": {
-      "crates/alife_core/src/memory.rs": "66a01c798eef188567a870a90b9a4f1baf4b969c2289466a6454e41e25c12bdb",
-      "crates/alife_core/src/memory/candidate_index.rs": "ef6d16c587185e5f623329faa834f2dc60fcba560bcfd110b83f7045b9706ef3",
-      "crates/alife_core/src/memory/candidate_recall.rs": "78905317b49e0fcbab714e72dea9ead30716055f6cb49ce404a7e1bfcddad35b",
-      "crates/alife_core/src/memory/sidecar.rs": "a37594a6c16d693a0fde6855e775d95a63b0c3839820a6066e102e0ca6456579",
-      "crates/alife_core/tests/candidate_memory_retrieval.rs": "817c1e5e082b4ad9f604c104de18761e67df96ebdc5986fc47a768741aa1c197"
-    },
+    "source_sha256": {"crates/alife_core/src/memory.rs": "66a01c798eef188567a870a90b9a4f1baf4b969c2289466a6454e41e25c12bdb", "crates/alife_core/src/memory/candidate_index.rs": "ef6d16c587185e5f623329faa834f2dc60fcba560bcfd110b83f7045b9706ef3", "crates/alife_core/src/memory/candidate_recall.rs": "78905317b49e0fcbab714e72dea9ead30716055f6cb49ce404a7e1bfcddad35b", "crates/alife_core/src/memory/sidecar.rs": "a37594a6c16d693a0fde6855e775d95a63b0c3839820a6066e102e0ca6456579", "crates/alife_core/tests/candidate_memory_retrieval.rs": "817c1e5e082b4ad9f604c104de18761e67df96ebdc5986fc47a768741aa1c197"},
     "baseline_fixture_change": "Only the identical ignored recall benchmark is appended to the baseline test file; baseline production source is unchanged.",
     "benchmark_fixture_sha256": "561bed0be590c2df11d3fdad993df458de3b3c6bab6b9b3dbd442f36ecff8963",
     "core_all_targets_note": "Run on final memory implementation before the backend cherry-pick and two test-only Clippy cleanups; core implementation is unchanged in combined source.",
@@ -33,10 +27,7 @@
     "benchmark_debug_assertions": true,
     "benchmark_process_affinity_cpu": 0,
     "baseline_target_dir": "/workspace/A-Life-memory-baseline/target/cloud-memory-benchmark",
-    "captured_executable_sha256": {
-      "baseline": "7b68d0562a122e0d4d2f617bd313829c5f90dd484c5d32cef0cabe8848bdafd8",
-      "after": "e2fdf567ad2b25a3e4bc9e99ece0be9795727455a4814cdf7fd7c106357d3379"
-    },
+    "captured_executable_sha256": {"baseline": "7b68d0562a122e0d4d2f617bd313829c5f90dd484c5d32cef0cabe8848bdafd8", "after": "e2fdf567ad2b25a3e4bc9e99ece0be9795727455a4814cdf7fd7c106357d3379"},
     "gpu_available": false
   },
   "benchmark": {
@@ -47,319 +38,31 @@
     "alternating_process_pairs": 3,
     "aggregation": "Median of 15 sorted batch wall times per variant/workload, divided by 100 calls. Timing includes return-value destruction.",
     "run_command": "taskset -c 0 <captured-test-executable> memory_cpu_recall_microbenchmark --exact --ignored --nocapture --test-threads=1",
-    "workloads": {
-      "repeated": "32 candidate identities with identical object/action-family query features; one target namespace and one family namespace.",
-      "distinct": "16 distinct tracked objects, one candidate each, 16 records per object; no duplicate candidate query."
-    },
+    "workloads": {"repeated": "32 candidate identities with identical object/action-family query features; one target namespace and one family namespace.", "distinct": "16 distinct tracked objects, one candidate each, 16 records per object; no duplicate candidate query."},
     "artifact_check": "Baseline must report 4096 repeated-case evaluations; after must report 128. Both must report 512 for distinct candidates. A shared-target retry that reused the patched executable was rejected before these retained runs.",
-    "summary": {
-      "repeated": {
-        "median_cpu_microseconds_per_frame": {
-          "baseline": 1733.72,
-          "after": 500.73
-        },
-        "wall_time_reduction_percent": 71.1181736381884,
-        "speedup_ratio": 3.462384918019691
-      },
-      "distinct": {
-        "median_cpu_microseconds_per_frame": {
-          "baseline": 544.55,
-          "after": 550.95
-        },
-        "wall_time_reduction_percent": -1.1752823432191972,
-        "speedup_ratio": 0.9883837008802975
-      }
-    },
+    "summary": {"repeated": {"median_cpu_microseconds_per_frame": {"baseline": 1733.72, "after": 500.73}, "wall_time_reduction_percent": 71.1181736381884, "speedup_ratio": 3.462384918019691}, "distinct": {"median_cpu_microseconds_per_frame": {"baseline": 544.55, "after": 550.95}, "wall_time_reduction_percent": -1.1752823432191972, "speedup_ratio": 0.9883837008802975}},
     "runs": [
-      {
-        "pair": 1,
-        "order_within_pair": 1,
-        "variant": "baseline",
-        "cases": [
-          {
-            "workload": "repeated",
-            "candidate_count": 32,
-            "batch_wall_microseconds_sorted": [
-              173372,
-              174798,
-              174890,
-              175486,
-              176157
-            ],
-            "similarity_evaluations_per_frame": 4096
-          },
-          {
-            "workload": "distinct",
-            "candidate_count": 16,
-            "batch_wall_microseconds_sorted": [
-              53720,
-              54455,
-              54486,
-              54815,
-              56059
-            ],
-            "similarity_evaluations_per_frame": 512
-          }
-        ],
-        "log_sha256": "c5dc6cabe18c86602bb934fc2c9e2b9c3ce4e0b7857d1b1e40bf88a0a1f03dc1"
-      },
-      {
-        "pair": 1,
-        "order_within_pair": 2,
-        "variant": "after",
-        "cases": [
-          {
-            "workload": "repeated",
-            "candidate_count": 32,
-            "batch_wall_microseconds_sorted": [
-              48512,
-              49808,
-              50217,
-              50405,
-              59562
-            ],
-            "similarity_evaluations_per_frame": 128
-          },
-          {
-            "workload": "distinct",
-            "candidate_count": 16,
-            "batch_wall_microseconds_sorted": [
-              53711,
-              55095,
-              55194,
-              56054,
-              56947
-            ],
-            "similarity_evaluations_per_frame": 512
-          }
-        ],
-        "log_sha256": "cc7adfb0854ddfcc1b1d0d848e127d36023fc2861414dd86f340dd1392d9b571"
-      },
-      {
-        "pair": 2,
-        "order_within_pair": 1,
-        "variant": "after",
-        "cases": [
-          {
-            "workload": "repeated",
-            "candidate_count": 32,
-            "batch_wall_microseconds_sorted": [
-              49680,
-              49687,
-              49916,
-              50073,
-              52854
-            ],
-            "similarity_evaluations_per_frame": 128
-          },
-          {
-            "workload": "distinct",
-            "candidate_count": 16,
-            "batch_wall_microseconds_sorted": [
-              53318,
-              54313,
-              54605,
-              55175,
-              58044
-            ],
-            "similarity_evaluations_per_frame": 512
-          }
-        ],
-        "log_sha256": "53fe50443f65300d84a7053bc96bb9a07efd6e0ac6ae2705be769154f20d3bf7"
-      },
-      {
-        "pair": 2,
-        "order_within_pair": 2,
-        "variant": "baseline",
-        "cases": [
-          {
-            "workload": "repeated",
-            "candidate_count": 32,
-            "batch_wall_microseconds_sorted": [
-              169731,
-              170999,
-              172065,
-              173792,
-              174226
-            ],
-            "similarity_evaluations_per_frame": 4096
-          },
-          {
-            "workload": "distinct",
-            "candidate_count": 16,
-            "batch_wall_microseconds_sorted": [
-              53529,
-              53928,
-              54188,
-              54588,
-              55318
-            ],
-            "similarity_evaluations_per_frame": 512
-          }
-        ],
-        "log_sha256": "927e0f8e3f954209c2f89aea66a40ecffde68701cfb9200b7f33616679219b77"
-      },
-      {
-        "pair": 3,
-        "order_within_pair": 1,
-        "variant": "baseline",
-        "cases": [
-          {
-            "workload": "repeated",
-            "candidate_count": 32,
-            "batch_wall_microseconds_sorted": [
-              167437,
-              171188,
-              171618,
-              173262,
-              176076
-            ],
-            "similarity_evaluations_per_frame": 4096
-          },
-          {
-            "workload": "distinct",
-            "candidate_count": 16,
-            "batch_wall_microseconds_sorted": [
-              53496,
-              54344,
-              54432,
-              55436,
-              56843
-            ],
-            "similarity_evaluations_per_frame": 512
-          }
-        ],
-        "log_sha256": "0d3518f9b3fa6995a2d562bca19d774a8127bdc81346d332ffc6d3c3ac40822e"
-      },
-      {
-        "pair": 3,
-        "order_within_pair": 2,
-        "variant": "after",
-        "cases": [
-          {
-            "workload": "repeated",
-            "candidate_count": 32,
-            "batch_wall_microseconds_sorted": [
-              49586,
-              49953,
-              50286,
-              50474,
-              50976
-            ],
-            "similarity_evaluations_per_frame": 128
-          },
-          {
-            "workload": "distinct",
-            "candidate_count": 16,
-            "batch_wall_microseconds_sorted": [
-              53780,
-              54007,
-              54537,
-              55164,
-              55424
-            ],
-            "similarity_evaluations_per_frame": 512
-          }
-        ],
-        "log_sha256": "ac6034b6b39b9f4ce2244026d3ba38f6f65058253c10ca6324b5628d413d8f0d"
-      }
+      {"pair": 1, "order_within_pair": 1, "variant": "baseline", "cases": [{"workload": "repeated", "candidate_count": 32, "batch_wall_microseconds_sorted": [173372, 174798, 174890, 175486, 176157], "similarity_evaluations_per_frame": 4096}, {"workload": "distinct", "candidate_count": 16, "batch_wall_microseconds_sorted": [53720, 54455, 54486, 54815, 56059], "similarity_evaluations_per_frame": 512}], "log_sha256": "c5dc6cabe18c86602bb934fc2c9e2b9c3ce4e0b7857d1b1e40bf88a0a1f03dc1"},
+      {"pair": 1, "order_within_pair": 2, "variant": "after", "cases": [{"workload": "repeated", "candidate_count": 32, "batch_wall_microseconds_sorted": [48512, 49808, 50217, 50405, 59562], "similarity_evaluations_per_frame": 128}, {"workload": "distinct", "candidate_count": 16, "batch_wall_microseconds_sorted": [53711, 55095, 55194, 56054, 56947], "similarity_evaluations_per_frame": 512}], "log_sha256": "cc7adfb0854ddfcc1b1d0d848e127d36023fc2861414dd86f340dd1392d9b571"},
+      {"pair": 2, "order_within_pair": 1, "variant": "after", "cases": [{"workload": "repeated", "candidate_count": 32, "batch_wall_microseconds_sorted": [49680, 49687, 49916, 50073, 52854], "similarity_evaluations_per_frame": 128}, {"workload": "distinct", "candidate_count": 16, "batch_wall_microseconds_sorted": [53318, 54313, 54605, 55175, 58044], "similarity_evaluations_per_frame": 512}], "log_sha256": "53fe50443f65300d84a7053bc96bb9a07efd6e0ac6ae2705be769154f20d3bf7"},
+      {"pair": 2, "order_within_pair": 2, "variant": "baseline", "cases": [{"workload": "repeated", "candidate_count": 32, "batch_wall_microseconds_sorted": [169731, 170999, 172065, 173792, 174226], "similarity_evaluations_per_frame": 4096}, {"workload": "distinct", "candidate_count": 16, "batch_wall_microseconds_sorted": [53529, 53928, 54188, 54588, 55318], "similarity_evaluations_per_frame": 512}], "log_sha256": "927e0f8e3f954209c2f89aea66a40ecffde68701cfb9200b7f33616679219b77"},
+      {"pair": 3, "order_within_pair": 1, "variant": "baseline", "cases": [{"workload": "repeated", "candidate_count": 32, "batch_wall_microseconds_sorted": [167437, 171188, 171618, 173262, 176076], "similarity_evaluations_per_frame": 4096}, {"workload": "distinct", "candidate_count": 16, "batch_wall_microseconds_sorted": [53496, 54344, 54432, 55436, 56843], "similarity_evaluations_per_frame": 512}], "log_sha256": "0d3518f9b3fa6995a2d562bca19d774a8127bdc81346d332ffc6d3c3ac40822e"},
+      {"pair": 3, "order_within_pair": 2, "variant": "after", "cases": [{"workload": "repeated", "candidate_count": 32, "batch_wall_microseconds_sorted": [49586, 49953, 50286, 50474, 50976], "similarity_evaluations_per_frame": 128}, {"workload": "distinct", "candidate_count": 16, "batch_wall_microseconds_sorted": [53780, 54007, 54537, 55164, 55424], "similarity_evaluations_per_frame": 512}], "log_sha256": "ac6034b6b39b9f4ce2244026d3ba38f6f65058253c10ca6324b5628d413d8f0d"}
     ]
   },
   "verification": [
-    {
-      "name": "core_all_targets",
-      "command": "cargo test -p alife_core --all-targets -- --test-threads=1",
-      "passed": 464,
-      "failed": 0,
-      "ignored": 1,
-      "test_binaries": 57,
-      "log_sha256": "3a505a931fc0a745559cccee27fc2c7d923ae95ab59b6de2fb12c5aa9ecd4b58"
-    },
-    {
-      "name": "combined_core_focus",
-      "command": "cargo test -p alife_core --test candidate_memory_retrieval -- --test-threads=1",
-      "passed": 32,
-      "failed": 0,
-      "ignored": 1,
-      "test_binaries": 1,
-      "log_sha256": "29da278ff9900a2548037f6bbd07d379b9fca068a3931dc0f18bdc5654f306a2"
-    },
-    {
-      "name": "combined_backend_debug",
-      "command": "cargo test -p alife_gpu_backend --test closed_loop_memory_context -- --test-threads=1",
-      "passed": 14,
-      "failed": 0,
-      "ignored": 0,
-      "test_binaries": 1,
-      "log_sha256": "4c28eea87d52c7caa80141e912bf0241ae59da324dc389296208e952eb0d17d7"
-    },
-    {
-      "name": "combined_backend_debug_assertions_disabled",
-      "command": "CARGO_PROFILE_TEST_DEBUG_ASSERTIONS=false cargo test -p alife_gpu_backend --test closed_loop_memory_context -- --test-threads=1",
-      "passed": 14,
-      "failed": 0,
-      "ignored": 0,
-      "test_binaries": 1,
-      "log_sha256": "2ae1ac8a6986d90d4e700279d3aab902a89e97f743ff05c50866d2647030c3f1"
-    },
-    {
-      "name": "rustfmt",
-      "command": "cargo fmt --all -- --check",
-      "status": "pass",
-      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    {
-      "name": "core_boundaries",
-      "command": "bash scripts/check_core_boundaries.sh",
-      "status": "pass",
-      "log_sha256": "b6554fa6b151aea699671a9b5cad329ec249203f6fa858015600843929aff070"
-    },
-    {
-      "name": "documentation",
-      "command": "bash scripts/docs_check.sh",
-      "status": "pass",
-      "log_sha256": "6b52febcfc5f42aa1917fc1c9ede094625c522d266e4e96ef8f411c5710d8c58"
-    },
-    {
-      "name": "core_clippy",
-      "command": "cargo clippy -p alife_core --all-targets -- -D warnings",
-      "status": "pass",
-      "log_sha256": "059735dcfb877995413dc22086a0bf5ddbb787f87e6d067d9d2d1fd18ea871c0"
-    }
+    {"name": "core_all_targets", "command": "cargo test -p alife_core --all-targets -- --test-threads=1", "passed": 464, "failed": 0, "ignored": 1, "test_binaries": 57, "log_sha256": "3a505a931fc0a745559cccee27fc2c7d923ae95ab59b6de2fb12c5aa9ecd4b58"},
+    {"name": "combined_core_focus", "command": "cargo test -p alife_core --test candidate_memory_retrieval -- --test-threads=1", "passed": 32, "failed": 0, "ignored": 1, "test_binaries": 1, "log_sha256": "29da278ff9900a2548037f6bbd07d379b9fca068a3931dc0f18bdc5654f306a2"},
+    {"name": "combined_backend_debug", "command": "cargo test -p alife_gpu_backend --test closed_loop_memory_context -- --test-threads=1", "passed": 14, "failed": 0, "ignored": 0, "test_binaries": 1, "log_sha256": "4c28eea87d52c7caa80141e912bf0241ae59da324dc389296208e952eb0d17d7"},
+    {"name": "combined_backend_debug_assertions_disabled", "command": "CARGO_PROFILE_TEST_DEBUG_ASSERTIONS=false cargo test -p alife_gpu_backend --test closed_loop_memory_context -- --test-threads=1", "passed": 14, "failed": 0, "ignored": 0, "test_binaries": 1, "log_sha256": "2ae1ac8a6986d90d4e700279d3aab902a89e97f743ff05c50866d2647030c3f1"},
+    {"name": "rustfmt", "command": "cargo fmt --all -- --check", "status": "pass", "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+    {"name": "core_boundaries", "command": "bash scripts/check_core_boundaries.sh", "status": "pass", "log_sha256": "b6554fa6b151aea699671a9b5cad329ec249203f6fa858015600843929aff070"},
+    {"name": "documentation", "command": "bash scripts/docs_check.sh", "status": "pass", "log_sha256": "6b52febcfc5f42aa1917fc1c9ede094625c522d266e4e96ef8f411c5710d8c58"},
+    {"name": "core_clippy", "command": "cargo clippy -p alife_core --all-targets -- -D warnings", "status": "pass", "log_sha256": "059735dcfb877995413dc22086a0bf5ddbb787f87e6d067d9d2d1fd18ea871c0"}
   ],
   "focused_passed_test_names": [
-    "boring_ticks_do_not_fill_or_refresh_memory_and_remain_replay_guarded",
-    "bounded_index_reports_eligible_records_above_the_similarity_search_cap",
-    "bounded_index_retrieves_the_only_match_after_memory_id_sixty_four",
-    "changed_context_cannot_replace_a_known_individual_exception_with_category_reward",
-    "compaction_is_prepared_offline_committed_once_and_replay_safe",
-    "consecutive_sleep_compactions_do_not_require_an_intervening_memory_write",
-    "contradictory_outcomes_keep_distinct_episodes_through_compaction",
-    "corroborated_retrieval_refreshes_retention_without_amplifying_belief",
-    "decision_deserialization_rejects_evidence_detached_from_episodic_key",
-    "deserialization_rejects_a_mixed_legacy_and_candidate_bank",
-    "duplicate_sealed_sequence_is_rejected_without_mutating_memory",
-    "empty_recall_finalizes_exact_candidate_keys_and_rejects_a_changed_draft",
-    "later_approach_does_not_erase_ingest_target_evidence",
-    "legacy_diagnostic_and_candidate_memory_modes_cannot_mix",
-    "low_value_events_cannot_displace_a_bank_of_strong_outcomes",
-    "measured_meal_and_blocked_attempt_keep_biological_value_in_memory",
-    "memory_bank_roundtrip_rebuilds_indices_and_preserves_recall",
-    "million_record_capacity_index_keeps_similarity_work_bounded",
-    "perceptual_category_fallback_preserves_individual_poison_and_does_not_equate_fruit",
-    "poisoned_target_memory_is_candidate_and_target_specific",
-    "populated_recall_keys_match_singular_queries_and_reject_changed_context",
-    "portable_memory_assets_roundtrip_private_indices_and_reject_tampering",
-    "portable_memory_restore_finishes_each_crash_phase_exactly_once",
-    "repeated_candidates_reuse_evidence_without_changing_candidate_keys",
-    "repeated_untracked_look_is_not_perpetually_novel",
-    "same_tick_outcome_order_uses_causal_sequence_after_merging",
-    "saturated_bank_accepts_a_direct_reversal_without_displacing_unrelated_harm",
-    "saturation_merge_evict_and_compaction_are_bounded_and_deterministic",
-    "sealed_neural_decision_accepts_only_its_selected_finalized_memory_key",
-    "stopped_meal_recall_preserves_identity_and_similarity_boundaries",
-    "stopped_meal_recall_survives_motion_changes_and_persistence_rebuild",
-    "unused_low_value_evidence_fades_but_strong_danger_and_reward_survive"
+    "boring_ticks_do_not_fill_or_refresh_memory_and_remain_replay_guarded", "bounded_index_reports_eligible_records_above_the_similarity_search_cap", "bounded_index_retrieves_the_only_match_after_memory_id_sixty_four", "changed_context_cannot_replace_a_known_individual_exception_with_category_reward", "compaction_is_prepared_offline_committed_once_and_replay_safe", "consecutive_sleep_compactions_do_not_require_an_intervening_memory_write", "contradictory_outcomes_keep_distinct_episodes_through_compaction", "corroborated_retrieval_refreshes_retention_without_amplifying_belief", "decision_deserialization_rejects_evidence_detached_from_episodic_key", "deserialization_rejects_a_mixed_legacy_and_candidate_bank", "duplicate_sealed_sequence_is_rejected_without_mutating_memory", "empty_recall_finalizes_exact_candidate_keys_and_rejects_a_changed_draft", "later_approach_does_not_erase_ingest_target_evidence", "legacy_diagnostic_and_candidate_memory_modes_cannot_mix", "low_value_events_cannot_displace_a_bank_of_strong_outcomes", "measured_meal_and_blocked_attempt_keep_biological_value_in_memory",
+    "memory_bank_roundtrip_rebuilds_indices_and_preserves_recall", "million_record_capacity_index_keeps_similarity_work_bounded", "perceptual_category_fallback_preserves_individual_poison_and_does_not_equate_fruit", "poisoned_target_memory_is_candidate_and_target_specific", "populated_recall_keys_match_singular_queries_and_reject_changed_context", "portable_memory_assets_roundtrip_private_indices_and_reject_tampering", "portable_memory_restore_finishes_each_crash_phase_exactly_once", "repeated_candidates_reuse_evidence_without_changing_candidate_keys", "repeated_untracked_look_is_not_perpetually_novel", "same_tick_outcome_order_uses_causal_sequence_after_merging", "saturated_bank_accepts_a_direct_reversal_without_displacing_unrelated_harm", "saturation_merge_evict_and_compaction_are_bounded_and_deterministic", "sealed_neural_decision_accepts_only_its_selected_finalized_memory_key", "stopped_meal_recall_preserves_identity_and_similarity_boundaries", "stopped_meal_recall_survives_motion_changes_and_persistence_rebuild", "unused_low_value_evidence_fades_but_strong_danger_and_reward_survive"
   ],
   "independent_review": {
     "reviewer": "gpt-6.1-sol",
@@ -370,9 +73,6 @@
     "nonblocking_note": "Compaction compares at most 64 newer records per exact identity when marking superseded contradictory contexts; very dense histories are approximate."
   },
   "limits": [
-    "CPU microbenchmark uses an unoptimized test profile and synthetic bounded bank, not live GPU gameplay.",
-    "No GPU causal-action, Windows/RTX frame time, or population scaling claim is made.",
-    "Category fallback is conservative perceptual similarity over current observable cues, not complete learned concept semantics.",
-    "Full core test success does not certify all AOA gameplay capabilities."
+    "CPU microbenchmark uses an unoptimized test profile and synthetic bounded bank, not live GPU gameplay.", "No GPU causal-action, Windows/RTX frame time, or population scaling claim is made.", "Category fallback is conservative perceptual similarity over current observable cues, not complete learned concept semantics.", "Full core test success does not certify all AOA gameplay capabilities."
   ]
 }

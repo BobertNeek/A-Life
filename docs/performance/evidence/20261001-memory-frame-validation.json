@@ -2,20 +2,8 @@
   "scope": "CPU-only repeated memory recall/finalization/finalized validation on one immutable synthetic GroundedObjectSlots draft/bank; no GPU device/dispatch, live simulation tick, or gameplay benchmark",
   "baseline_source_head": "a9fefbc4a1f5a135afec26384408449813f241a8",
   "baseline_comparison_blobs": {
-    "crates/alife_core/src/memory.rs": {
-      "c050013d": "fb29bf56a0f62215ff17e9efc1340a5d2eb83114",
-      "e76e9e12": "fb29bf56a0f62215ff17e9efc1340a5d2eb83114",
-      "ad99ac1c": "fb29bf56a0f62215ff17e9efc1340a5d2eb83114",
-      "f8ccfb13": "fb29bf56a0f62215ff17e9efc1340a5d2eb83114",
-      "a9fefbc4": "fb29bf56a0f62215ff17e9efc1340a5d2eb83114"
-    },
-    "crates/alife_core/src/memory_query.rs": {
-      "c050013d": "df4c8544b423be3a557a35b293394021c0ead33d",
-      "e76e9e12": "df4c8544b423be3a557a35b293394021c0ead33d",
-      "ad99ac1c": "df4c8544b423be3a557a35b293394021c0ead33d",
-      "f8ccfb13": "df4c8544b423be3a557a35b293394021c0ead33d",
-      "a9fefbc4": "df4c8544b423be3a557a35b293394021c0ead33d"
-    }
+    "crates/alife_core/src/memory.rs": {"c050013d": "fb29bf56a0f62215ff17e9efc1340a5d2eb83114", "e76e9e12": "fb29bf56a0f62215ff17e9efc1340a5d2eb83114", "ad99ac1c": "fb29bf56a0f62215ff17e9efc1340a5d2eb83114", "f8ccfb13": "fb29bf56a0f62215ff17e9efc1340a5d2eb83114", "a9fefbc4": "fb29bf56a0f62215ff17e9efc1340a5d2eb83114"},
+    "crates/alife_core/src/memory_query.rs": {"c050013d": "df4c8544b423be3a557a35b293394021c0ead33d", "e76e9e12": "df4c8544b423be3a557a35b293394021c0ead33d", "ad99ac1c": "df4c8544b423be3a557a35b293394021c0ead33d", "f8ccfb13": "df4c8544b423be3a557a35b293394021c0ead33d", "a9fefbc4": "df4c8544b423be3a557a35b293394021c0ead33d"}
   },
   "patched_source_blobs": {
     "crates/alife_core/src/memory.rs": "b5a0091fe79d9976a61015033b6f1325cbfa50ac",
@@ -27,30 +15,12 @@
     "baseline_sha256": "45f583fd73f855be5cb9c1dc78d7577a6c7ef26e0f9005097d2517624b48dc06",
     "patched_sha256": "8fef989c1b9c3a9449524181faaae061cba0dde3689efe9aed17f7d50f5098b8",
     "executed_helpers_sha256": {
-      "slot": {
-        "baseline": "12f6e111ddbc77ef2aa9a1a1eaa864d60111536d4e7ce6614817aedecffc3a47",
-        "patched": "12f6e111ddbc77ef2aa9a1a1eaa864d60111536d4e7ce6614817aedecffc3a47"
-      },
-      "candidate": {
-        "baseline": "a4e84c7d18682a4402527ce8e3b79c643e258a376cf9ae4009259a4a14f58937",
-        "patched": "a4e84c7d18682a4402527ce8e3b79c643e258a376cf9ae4009259a4a14f58937"
-      },
-      "candidate_for_family": {
-        "baseline": "773e9318afd9f0e2451ac67a57016761fd90b44ae42594c1e7d08e697d57c0cb",
-        "patched": "773e9318afd9f0e2451ac67a57016761fd90b44ae42594c1e7d08e697d57c0cb"
-      },
-      "grounded_draft": {
-        "baseline": "b0c5d397704c0bfcd12c2f8e17b645ed216b457033a1640438e3a94fb1337260",
-        "patched": "b0c5d397704c0bfcd12c2f8e17b645ed216b457033a1640438e3a94fb1337260"
-      },
-      "empty_bank": {
-        "baseline": "7bd3b9eac09c46171c3077620b452bf7162933e0abf10554df814759df8192da",
-        "patched": "7bd3b9eac09c46171c3077620b452bf7162933e0abf10554df814759df8192da"
-      },
-      "sequenced_patch_for_object": {
-        "baseline": "85dd6b8dc5b33473ae29bdcd17ecf1e836b995aef3b3c6bc854333ddfbe29219",
-        "patched": "85dd6b8dc5b33473ae29bdcd17ecf1e836b995aef3b3c6bc854333ddfbe29219"
-      }
+      "slot": {"baseline": "12f6e111ddbc77ef2aa9a1a1eaa864d60111536d4e7ce6614817aedecffc3a47", "patched": "12f6e111ddbc77ef2aa9a1a1eaa864d60111536d4e7ce6614817aedecffc3a47"},
+      "candidate": {"baseline": "a4e84c7d18682a4402527ce8e3b79c643e258a376cf9ae4009259a4a14f58937", "patched": "a4e84c7d18682a4402527ce8e3b79c643e258a376cf9ae4009259a4a14f58937"},
+      "candidate_for_family": {"baseline": "773e9318afd9f0e2451ac67a57016761fd90b44ae42594c1e7d08e697d57c0cb", "patched": "773e9318afd9f0e2451ac67a57016761fd90b44ae42594c1e7d08e697d57c0cb"},
+      "grounded_draft": {"baseline": "b0c5d397704c0bfcd12c2f8e17b645ed216b457033a1640438e3a94fb1337260", "patched": "b0c5d397704c0bfcd12c2f8e17b645ed216b457033a1640438e3a94fb1337260"},
+      "empty_bank": {"baseline": "7bd3b9eac09c46171c3077620b452bf7162933e0abf10554df814759df8192da", "patched": "7bd3b9eac09c46171c3077620b452bf7162933e0abf10554df814759df8192da"},
+      "sequenced_patch_for_object": {"baseline": "85dd6b8dc5b33473ae29bdcd17ecf1e836b995aef3b3c6bc854333ddfbe29219", "patched": "85dd6b8dc5b33473ae29bdcd17ecf1e836b995aef3b3c6bc854333ddfbe29219"}
     },
     "difference": "Added #[test] regression is excluded from standalone probe compilation; all executed fixture helpers unchanged."
   },
@@ -59,18 +29,9 @@
   "build": "test-profile alife_core rlib with existing opt-level 2 and lean debug settings; probe rustc --edition=2021 -O; Cargo artifact JSON selects matching dependencies",
   "method": {
     "variant_order": [
-      [
-        "baseline",
-        "patched"
-      ],
-      [
-        "patched",
-        "baseline"
-      ],
-      [
-        "baseline",
-        "patched"
-      ]
+      ["baseline", "patched"],
+      ["patched", "baseline"],
+      ["baseline", "patched"]
     ],
     "processes_per_variant": 3,
     "warmup_eight_call_cohorts_per_operation": 20,
@@ -78,37 +39,18 @@
     "eight_call_cohorts_per_sample": 20
   },
   "fixture": {
-    "candidate_counts": [
-      2,
-      8,
-      26
-    ],
-    "learned_record_counts": [
-      0,
-      64
-    ],
+    "candidate_counts": [2, 8, 26],
+    "learned_record_counts": [0, 64],
     "sensor_profile": "GroundedObjectSlotsV1",
     "tick": 1000,
     "organism": 811,
-    "tracked_targets": [
-      71,
-      72
-    ],
-    "families": [
-      "Approach",
-      "Avoid",
-      "Contact",
-      "Ingest"
-    ],
+    "tracked_targets": [71, 72],
+    "families": ["Approach", "Avoid", "Contact", "Ingest"],
     "cognitive_context": "Memory expectancies attached from actual fixture recall; no topology or predictor execution"
   },
   "output_proof": "BLAKE3 and length of serialized frame, recall context, all candidate keys, receipt, cognitive context, and complete memory bank after repeated read-only operations",
   "limitations": [
-    "Eight repeated calls on one draft and bank, not eight live residents or the original save.",
-    "Synthetic valid candidate sets and sealed-patch test fixtures; no causal GPU neural execution is claimed.",
-    "Recall includes boundary/query validation and bank digest. Finalize includes cloning/destruction and all finalization checks. Finalized validation excludes upload byte conversion.",
-    "Original measured candidate count and memory/topology occupancy not supplied; no projected Windows TPS/FPS result.",
-    "No caching, validation bypass at public boundaries, learning/population/cadence reduction, or operational launch change."
+    "Eight repeated calls on one draft and bank, not eight live residents or the original save.", "Synthetic valid candidate sets and sealed-patch test fixtures; no causal GPU neural execution is claimed.", "Recall includes boundary/query validation and bank digest. Finalize includes cloning/destruction and all finalization checks. Finalized validation excludes upload byte conversion.", "Original measured candidate count and memory/topology occupancy not supplied; no projected Windows TPS/FPS result.", "No caching, validation bypass at public boundaries, learning/population/cadence reduction, or operational launch change."
   ],
   "windows_existing_receipt": {
     "provenance": "Coordinator supplied extracted existing receipt fields in task message; raw Windows file is unavailable in cloud. No new hardware measurement.",
@@ -146,277 +88,61 @@
       "candidates": 2,
       "learned_records": 0,
       "samples_per_variant_per_operation": 15,
-      "baseline": {
-        "recall": {
-          "median_ns": 206908,
-          "min_ns": 195153,
-          "max_ns": 286038
-        },
-        "finalize": {
-          "median_ns": 325870,
-          "min_ns": 312742,
-          "max_ns": 357821
-        },
-        "validate": {
-          "median_ns": 138891,
-          "min_ns": 134959,
-          "max_ns": 155879
-        }
-      },
-      "patched": {
-        "recall": {
-          "median_ns": 113679,
-          "min_ns": 111449,
-          "max_ns": 121577
-        },
-        "finalize": {
-          "median_ns": 219615,
-          "min_ns": 208532,
-          "max_ns": 263491
-        },
-        "validate": {
-          "median_ns": 87576,
-          "min_ns": 85428,
-          "max_ns": 96722
-        }
-      },
+      "baseline": {"recall": {"median_ns": 206908, "min_ns": 195153, "max_ns": 286038}, "finalize": {"median_ns": 325870, "min_ns": 312742, "max_ns": 357821}, "validate": {"median_ns": 138891, "min_ns": 134959, "max_ns": 155879}},
+      "patched": {"recall": {"median_ns": 113679, "min_ns": 111449, "max_ns": 121577}, "finalize": {"median_ns": 219615, "min_ns": 208532, "max_ns": 263491}, "validate": {"median_ns": 87576, "min_ns": 85428, "max_ns": 96722}},
       "proof_bytes": 10676,
       "proof_blake3": "93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2",
-      "observed_median_reduction_percent": {
-        "recall": 45.05819011348039,
-        "finalize": 32.60656089851781,
-        "validate": 36.94623841717606
-      }
+      "observed_median_reduction_percent": {"recall": 45.05819011348039, "finalize": 32.60656089851781, "validate": 36.94623841717606}
     },
     {
       "candidates": 2,
       "learned_records": 64,
       "samples_per_variant_per_operation": 15,
-      "baseline": {
-        "recall": {
-          "median_ns": 782150,
-          "min_ns": 751162,
-          "max_ns": 832559
-        },
-        "finalize": {
-          "median_ns": 325766,
-          "min_ns": 313535,
-          "max_ns": 361706
-        },
-        "validate": {
-          "median_ns": 147114,
-          "min_ns": 145683,
-          "max_ns": 161060
-        }
-      },
-      "patched": {
-        "recall": {
-          "median_ns": 693864,
-          "min_ns": 649868,
-          "max_ns": 779000
-        },
-        "finalize": {
-          "median_ns": 218666,
-          "min_ns": 213546,
-          "max_ns": 236752
-        },
-        "validate": {
-          "median_ns": 91326,
-          "min_ns": 86969,
-          "max_ns": 98672
-        }
-      },
+      "baseline": {"recall": {"median_ns": 782150, "min_ns": 751162, "max_ns": 832559}, "finalize": {"median_ns": 325766, "min_ns": 313535, "max_ns": 361706}, "validate": {"median_ns": 147114, "min_ns": 145683, "max_ns": 161060}},
+      "patched": {"recall": {"median_ns": 693864, "min_ns": 649868, "max_ns": 779000}, "finalize": {"median_ns": 218666, "min_ns": 213546, "max_ns": 236752}, "validate": {"median_ns": 91326, "min_ns": 86969, "max_ns": 98672}},
       "proof_bytes": 65362,
       "proof_blake3": "b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5",
-      "observed_median_reduction_percent": {
-        "recall": 11.287604679409323,
-        "finalize": 32.87635910438781,
-        "validate": 37.921611811248425
-      }
+      "observed_median_reduction_percent": {"recall": 11.287604679409323, "finalize": 32.87635910438781, "validate": 37.921611811248425}
     },
     {
       "candidates": 8,
       "learned_records": 0,
       "samples_per_variant_per_operation": 15,
-      "baseline": {
-        "recall": {
-          "median_ns": 1025269,
-          "min_ns": 985940,
-          "max_ns": 1175942
-        },
-        "finalize": {
-          "median_ns": 1506167,
-          "min_ns": 1458487,
-          "max_ns": 1562777
-        },
-        "validate": {
-          "median_ns": 785551,
-          "min_ns": 766403,
-          "max_ns": 855098
-        }
-      },
-      "patched": {
-        "recall": {
-          "median_ns": 374063,
-          "min_ns": 362654,
-          "max_ns": 424455
-        },
-        "finalize": {
-          "median_ns": 647304,
-          "min_ns": 623817,
-          "max_ns": 677145
-        },
-        "validate": {
-          "median_ns": 291139,
-          "min_ns": 275895,
-          "max_ns": 398193
-        }
-      },
+      "baseline": {"recall": {"median_ns": 1025269, "min_ns": 985940, "max_ns": 1175942}, "finalize": {"median_ns": 1506167, "min_ns": 1458487, "max_ns": 1562777}, "validate": {"median_ns": 785551, "min_ns": 766403, "max_ns": 855098}},
+      "patched": {"recall": {"median_ns": 374063, "min_ns": 362654, "max_ns": 424455}, "finalize": {"median_ns": 647304, "min_ns": 623817, "max_ns": 677145}, "validate": {"median_ns": 291139, "min_ns": 275895, "max_ns": 398193}},
       "proof_bytes": 26592,
       "proof_blake3": "6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81",
-      "observed_median_reduction_percent": {
-        "recall": 63.51562370460826,
-        "finalize": 57.023092392809026,
-        "validate": 62.93824334766298
-      }
+      "observed_median_reduction_percent": {"recall": 63.51562370460826, "finalize": 57.023092392809026, "validate": 62.93824334766298}
     },
     {
       "candidates": 8,
       "learned_records": 64,
       "samples_per_variant_per_operation": 15,
-      "baseline": {
-        "recall": {
-          "median_ns": 1579148,
-          "min_ns": 1537709,
-          "max_ns": 1963366
-        },
-        "finalize": {
-          "median_ns": 1463738,
-          "min_ns": 1418407,
-          "max_ns": 1561421
-        },
-        "validate": {
-          "median_ns": 797586,
-          "min_ns": 765060,
-          "max_ns": 887455
-        }
-      },
-      "patched": {
-        "recall": {
-          "median_ns": 926718,
-          "min_ns": 896284,
-          "max_ns": 1016502
-        },
-        "finalize": {
-          "median_ns": 654816,
-          "min_ns": 634006,
-          "max_ns": 694041
-        },
-        "validate": {
-          "median_ns": 284558,
-          "min_ns": 276226,
-          "max_ns": 294196
-        }
-      },
+      "baseline": {"recall": {"median_ns": 1579148, "min_ns": 1537709, "max_ns": 1963366}, "finalize": {"median_ns": 1463738, "min_ns": 1418407, "max_ns": 1561421}, "validate": {"median_ns": 797586, "min_ns": 765060, "max_ns": 887455}},
+      "patched": {"recall": {"median_ns": 926718, "min_ns": 896284, "max_ns": 1016502}, "finalize": {"median_ns": 654816, "min_ns": 634006, "max_ns": 694041}, "validate": {"median_ns": 284558, "min_ns": 276226, "max_ns": 294196}},
       "proof_bytes": 81482,
       "proof_blake3": "44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca",
-      "observed_median_reduction_percent": {
-        "recall": 41.315316867070095,
-        "finalize": 55.264125137148866,
-        "validate": 64.32259342566194
-      }
+      "observed_median_reduction_percent": {"recall": 41.315316867070095, "finalize": 55.264125137148866, "validate": 64.32259342566194}
     },
     {
       "candidates": 26,
       "learned_records": 0,
       "samples_per_variant_per_operation": 15,
-      "baseline": {
-        "recall": {
-          "median_ns": 5826487,
-          "min_ns": 5668035,
-          "max_ns": 6624189
-        },
-        "finalize": {
-          "median_ns": 8282325,
-          "min_ns": 8022357,
-          "max_ns": 8712433
-        },
-        "validate": {
-          "median_ns": 4836587,
-          "min_ns": 4609122,
-          "max_ns": 5166527
-        }
-      },
-      "patched": {
-        "recall": {
-          "median_ns": 1077948,
-          "min_ns": 1047255,
-          "max_ns": 1138563
-        },
-        "finalize": {
-          "median_ns": 1987451,
-          "min_ns": 1899407,
-          "max_ns": 2110781
-        },
-        "validate": {
-          "median_ns": 875066,
-          "min_ns": 855242,
-          "max_ns": 967166
-        }
-      },
+      "baseline": {"recall": {"median_ns": 5826487, "min_ns": 5668035, "max_ns": 6624189}, "finalize": {"median_ns": 8282325, "min_ns": 8022357, "max_ns": 8712433}, "validate": {"median_ns": 4836587, "min_ns": 4609122, "max_ns": 5166527}},
+      "patched": {"recall": {"median_ns": 1077948, "min_ns": 1047255, "max_ns": 1138563}, "finalize": {"median_ns": 1987451, "min_ns": 1899407, "max_ns": 2110781}, "validate": {"median_ns": 875066, "min_ns": 855242, "max_ns": 967166}},
       "proof_bytes": 74438,
       "proof_blake3": "4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4",
-      "observed_median_reduction_percent": {
-        "recall": 81.49917780645525,
-        "finalize": 76.00370668864117,
-        "validate": 81.90736566922088
-      }
+      "observed_median_reduction_percent": {"recall": 81.49917780645525, "finalize": 76.00370668864117, "validate": 81.90736566922088}
     },
     {
       "candidates": 26,
       "learned_records": 64,
       "samples_per_variant_per_operation": 15,
-      "baseline": {
-        "recall": {
-          "median_ns": 6473649,
-          "min_ns": 6196848,
-          "max_ns": 6699963
-        },
-        "finalize": {
-          "median_ns": 8330038,
-          "min_ns": 7923839,
-          "max_ns": 9010451
-        },
-        "validate": {
-          "median_ns": 4703639,
-          "min_ns": 4556911,
-          "max_ns": 5576796
-        }
-      },
-      "patched": {
-        "recall": {
-          "median_ns": 1683021,
-          "min_ns": 1628665,
-          "max_ns": 1753264
-        },
-        "finalize": {
-          "median_ns": 1921215,
-          "min_ns": 1903005,
-          "max_ns": 2107508
-        },
-        "validate": {
-          "median_ns": 849823,
-          "min_ns": 833529,
-          "max_ns": 919920
-        }
-      },
+      "baseline": {"recall": {"median_ns": 6473649, "min_ns": 6196848, "max_ns": 6699963}, "finalize": {"median_ns": 8330038, "min_ns": 7923839, "max_ns": 9010451}, "validate": {"median_ns": 4703639, "min_ns": 4556911, "max_ns": 5576796}},
+      "patched": {"recall": {"median_ns": 1683021, "min_ns": 1628665, "max_ns": 1753264}, "finalize": {"median_ns": 1921215, "min_ns": 1903005, "max_ns": 2107508}, "validate": {"median_ns": 849823, "min_ns": 833529, "max_ns": 919920}},
       "proof_bytes": 129873,
       "proof_blake3": "1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9",
-      "observed_median_reduction_percent": {
-        "recall": 74.00197323024464,
-        "finalize": 76.93629969034956,
-        "validate": 81.93264831761111
-      }
+      "observed_median_reduction_percent": {"recall": 74.00197323024464, "finalize": 76.93629969034956, "validate": 81.93264831761111}
     }
   ],
   "variants": {
@@ -426,506 +152,35 @@
       "runs": [
         {
           "process": 1,
-          "raw_stdout": "candidates=2 learned_records=0 recall_ns=[211389, 203456, 275331, 219651, 197520] finalize_ns=[328051, 313144, 333543, 312742, 313831] validate_ns=[135900, 136436, 136207, 135176, 140169] proof_bytes=10676 proof_blake3=93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2\ncandidates=2 learned_records=64 recall_ns=[823834, 824284, 782150, 761937, 820647] finalize_ns=[328290, 338853, 339175, 361706, 329093] validate_ns=[152436, 155341, 146915, 161060, 154241] proof_bytes=65362 proof_blake3=b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5\ncandidates=8 learned_records=0 recall_ns=[1175942, 1134093, 1139542, 1012331, 1005656] finalize_ns=[1562777, 1560453, 1521348, 1461570, 1477064] validate_ns=[792036, 770122, 772782, 770644, 770660] proof_bytes=26592 proof_blake3=6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81\ncandidates=8 learned_records=64 recall_ns=[1634343, 1656567, 1963366, 1726118, 1564366] finalize_ns=[1475147, 1466697, 1463738, 1493221, 1491111] validate_ns=[850127, 818470, 863570, 866321, 797586] proof_bytes=81482 proof_blake3=44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca\ncandidates=26 learned_records=0 recall_ns=[6624189, 6458236, 5997990, 6207985, 5975741] finalize_ns=[8450986, 8535225, 8710297, 8712433, 8537589] validate_ns=[4934676, 5166527, 5056651, 4922577, 4905933] proof_bytes=74438 proof_blake3=4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4\ncandidates=26 learned_records=64 recall_ns=[6691704, 6484190, 6662636, 6699963, 6517156] finalize_ns=[8791425, 8495898, 8452034, 8338063, 8450001] validate_ns=[4703639, 4633424, 4743183, 4789075, 4851562] proof_bytes=129873 proof_blake3=1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9\n",
           "cases": [
-            {
-              "candidates": 2,
-              "learned_records": 0,
-              "recall_ns": [
-                211389,
-                203456,
-                275331,
-                219651,
-                197520
-              ],
-              "finalize_ns": [
-                328051,
-                313144,
-                333543,
-                312742,
-                313831
-              ],
-              "validate_ns": [
-                135900,
-                136436,
-                136207,
-                135176,
-                140169
-              ],
-              "proof_bytes": 10676,
-              "proof_blake3": "93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2"
-            },
-            {
-              "candidates": 2,
-              "learned_records": 64,
-              "recall_ns": [
-                823834,
-                824284,
-                782150,
-                761937,
-                820647
-              ],
-              "finalize_ns": [
-                328290,
-                338853,
-                339175,
-                361706,
-                329093
-              ],
-              "validate_ns": [
-                152436,
-                155341,
-                146915,
-                161060,
-                154241
-              ],
-              "proof_bytes": 65362,
-              "proof_blake3": "b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5"
-            },
-            {
-              "candidates": 8,
-              "learned_records": 0,
-              "recall_ns": [
-                1175942,
-                1134093,
-                1139542,
-                1012331,
-                1005656
-              ],
-              "finalize_ns": [
-                1562777,
-                1560453,
-                1521348,
-                1461570,
-                1477064
-              ],
-              "validate_ns": [
-                792036,
-                770122,
-                772782,
-                770644,
-                770660
-              ],
-              "proof_bytes": 26592,
-              "proof_blake3": "6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81"
-            },
-            {
-              "candidates": 8,
-              "learned_records": 64,
-              "recall_ns": [
-                1634343,
-                1656567,
-                1963366,
-                1726118,
-                1564366
-              ],
-              "finalize_ns": [
-                1475147,
-                1466697,
-                1463738,
-                1493221,
-                1491111
-              ],
-              "validate_ns": [
-                850127,
-                818470,
-                863570,
-                866321,
-                797586
-              ],
-              "proof_bytes": 81482,
-              "proof_blake3": "44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca"
-            },
-            {
-              "candidates": 26,
-              "learned_records": 0,
-              "recall_ns": [
-                6624189,
-                6458236,
-                5997990,
-                6207985,
-                5975741
-              ],
-              "finalize_ns": [
-                8450986,
-                8535225,
-                8710297,
-                8712433,
-                8537589
-              ],
-              "validate_ns": [
-                4934676,
-                5166527,
-                5056651,
-                4922577,
-                4905933
-              ],
-              "proof_bytes": 74438,
-              "proof_blake3": "4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4"
-            },
-            {
-              "candidates": 26,
-              "learned_records": 64,
-              "recall_ns": [
-                6691704,
-                6484190,
-                6662636,
-                6699963,
-                6517156
-              ],
-              "finalize_ns": [
-                8791425,
-                8495898,
-                8452034,
-                8338063,
-                8450001
-              ],
-              "validate_ns": [
-                4703639,
-                4633424,
-                4743183,
-                4789075,
-                4851562
-              ],
-              "proof_bytes": 129873,
-              "proof_blake3": "1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9"
-            }
+            {"candidates": 2, "learned_records": 0, "recall_ns": [211389, 203456, 275331, 219651, 197520], "finalize_ns": [328051, 313144, 333543, 312742, 313831], "validate_ns": [135900, 136436, 136207, 135176, 140169], "proof_bytes": 10676, "proof_blake3": "93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2"},
+            {"candidates": 2, "learned_records": 64, "recall_ns": [823834, 824284, 782150, 761937, 820647], "finalize_ns": [328290, 338853, 339175, 361706, 329093], "validate_ns": [152436, 155341, 146915, 161060, 154241], "proof_bytes": 65362, "proof_blake3": "b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5"},
+            {"candidates": 8, "learned_records": 0, "recall_ns": [1175942, 1134093, 1139542, 1012331, 1005656], "finalize_ns": [1562777, 1560453, 1521348, 1461570, 1477064], "validate_ns": [792036, 770122, 772782, 770644, 770660], "proof_bytes": 26592, "proof_blake3": "6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81"},
+            {"candidates": 8, "learned_records": 64, "recall_ns": [1634343, 1656567, 1963366, 1726118, 1564366], "finalize_ns": [1475147, 1466697, 1463738, 1493221, 1491111], "validate_ns": [850127, 818470, 863570, 866321, 797586], "proof_bytes": 81482, "proof_blake3": "44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca"},
+            {"candidates": 26, "learned_records": 0, "recall_ns": [6624189, 6458236, 5997990, 6207985, 5975741], "finalize_ns": [8450986, 8535225, 8710297, 8712433, 8537589], "validate_ns": [4934676, 5166527, 5056651, 4922577, 4905933], "proof_bytes": 74438, "proof_blake3": "4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4"},
+            {"candidates": 26, "learned_records": 64, "recall_ns": [6691704, 6484190, 6662636, 6699963, 6517156], "finalize_ns": [8791425, 8495898, 8452034, 8338063, 8450001], "validate_ns": [4703639, 4633424, 4743183, 4789075, 4851562], "proof_bytes": 129873, "proof_blake3": "1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9"}
           ]
         },
         {
           "process": 2,
-          "raw_stdout": "candidates=2 learned_records=0 recall_ns=[208037, 197345, 195985, 195516, 213001] finalize_ns=[342643, 318484, 315749, 327423, 325870] validate_ns=[155879, 154289, 141635, 134959, 138891] proof_bytes=10676 proof_blake3=93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2\ncandidates=2 learned_records=64 recall_ns=[807241, 768558, 758118, 773143, 751162] finalize_ns=[314465, 313854, 327792, 313535, 314026] validate_ns=[149985, 146936, 146607, 145683, 146396] proof_bytes=65362 proof_blake3=b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5\ncandidates=8 learned_records=0 recall_ns=[1016204, 985940, 1025269, 996039, 996257] finalize_ns=[1512358, 1491936, 1477745, 1530993, 1519164] validate_ns=[815493, 785551, 789149, 778068, 839582] proof_bytes=26592 proof_blake3=6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81\ncandidates=8 learned_records=64 recall_ns=[1576213, 1555311, 1623531, 1557408, 1579148] finalize_ns=[1435767, 1418407, 1465855, 1549012, 1561421] validate_ns=[786966, 807749, 780496, 777437, 771563] proof_bytes=81482 proof_blake3=44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca\ncandidates=26 learned_records=0 recall_ns=[5999324, 6145106, 5826487, 5808913, 5823800] finalize_ns=[8371564, 8221216, 8178288, 8633455, 8282325] validate_ns=[4844516, 4853854, 4666052, 4759735, 4743701] proof_bytes=74438 proof_blake3=4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4\ncandidates=26 learned_records=64 recall_ns=[6312189, 6330214, 6495010, 6358444, 6289280] finalize_ns=[8279063, 8016333, 8045086, 8088076, 7923839] validate_ns=[4684126, 4644937, 4723132, 4593709, 4556911] proof_bytes=129873 proof_blake3=1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9\n",
           "cases": [
-            {
-              "candidates": 2,
-              "learned_records": 0,
-              "recall_ns": [
-                208037,
-                197345,
-                195985,
-                195516,
-                213001
-              ],
-              "finalize_ns": [
-                342643,
-                318484,
-                315749,
-                327423,
-                325870
-              ],
-              "validate_ns": [
-                155879,
-                154289,
-                141635,
-                134959,
-                138891
-              ],
-              "proof_bytes": 10676,
-              "proof_blake3": "93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2"
-            },
-            {
-              "candidates": 2,
-              "learned_records": 64,
-              "recall_ns": [
-                807241,
-                768558,
-                758118,
-                773143,
-                751162
-              ],
-              "finalize_ns": [
-                314465,
-                313854,
-                327792,
-                313535,
-                314026
-              ],
-              "validate_ns": [
-                149985,
-                146936,
-                146607,
-                145683,
-                146396
-              ],
-              "proof_bytes": 65362,
-              "proof_blake3": "b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5"
-            },
-            {
-              "candidates": 8,
-              "learned_records": 0,
-              "recall_ns": [
-                1016204,
-                985940,
-                1025269,
-                996039,
-                996257
-              ],
-              "finalize_ns": [
-                1512358,
-                1491936,
-                1477745,
-                1530993,
-                1519164
-              ],
-              "validate_ns": [
-                815493,
-                785551,
-                789149,
-                778068,
-                839582
-              ],
-              "proof_bytes": 26592,
-              "proof_blake3": "6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81"
-            },
-            {
-              "candidates": 8,
-              "learned_records": 64,
-              "recall_ns": [
-                1576213,
-                1555311,
-                1623531,
-                1557408,
-                1579148
-              ],
-              "finalize_ns": [
-                1435767,
-                1418407,
-                1465855,
-                1549012,
-                1561421
-              ],
-              "validate_ns": [
-                786966,
-                807749,
-                780496,
-                777437,
-                771563
-              ],
-              "proof_bytes": 81482,
-              "proof_blake3": "44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca"
-            },
-            {
-              "candidates": 26,
-              "learned_records": 0,
-              "recall_ns": [
-                5999324,
-                6145106,
-                5826487,
-                5808913,
-                5823800
-              ],
-              "finalize_ns": [
-                8371564,
-                8221216,
-                8178288,
-                8633455,
-                8282325
-              ],
-              "validate_ns": [
-                4844516,
-                4853854,
-                4666052,
-                4759735,
-                4743701
-              ],
-              "proof_bytes": 74438,
-              "proof_blake3": "4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4"
-            },
-            {
-              "candidates": 26,
-              "learned_records": 64,
-              "recall_ns": [
-                6312189,
-                6330214,
-                6495010,
-                6358444,
-                6289280
-              ],
-              "finalize_ns": [
-                8279063,
-                8016333,
-                8045086,
-                8088076,
-                7923839
-              ],
-              "validate_ns": [
-                4684126,
-                4644937,
-                4723132,
-                4593709,
-                4556911
-              ],
-              "proof_bytes": 129873,
-              "proof_blake3": "1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9"
-            }
+            {"candidates": 2, "learned_records": 0, "recall_ns": [208037, 197345, 195985, 195516, 213001], "finalize_ns": [342643, 318484, 315749, 327423, 325870], "validate_ns": [155879, 154289, 141635, 134959, 138891], "proof_bytes": 10676, "proof_blake3": "93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2"},
+            {"candidates": 2, "learned_records": 64, "recall_ns": [807241, 768558, 758118, 773143, 751162], "finalize_ns": [314465, 313854, 327792, 313535, 314026], "validate_ns": [149985, 146936, 146607, 145683, 146396], "proof_bytes": 65362, "proof_blake3": "b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5"},
+            {"candidates": 8, "learned_records": 0, "recall_ns": [1016204, 985940, 1025269, 996039, 996257], "finalize_ns": [1512358, 1491936, 1477745, 1530993, 1519164], "validate_ns": [815493, 785551, 789149, 778068, 839582], "proof_bytes": 26592, "proof_blake3": "6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81"},
+            {"candidates": 8, "learned_records": 64, "recall_ns": [1576213, 1555311, 1623531, 1557408, 1579148], "finalize_ns": [1435767, 1418407, 1465855, 1549012, 1561421], "validate_ns": [786966, 807749, 780496, 777437, 771563], "proof_bytes": 81482, "proof_blake3": "44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca"},
+            {"candidates": 26, "learned_records": 0, "recall_ns": [5999324, 6145106, 5826487, 5808913, 5823800], "finalize_ns": [8371564, 8221216, 8178288, 8633455, 8282325], "validate_ns": [4844516, 4853854, 4666052, 4759735, 4743701], "proof_bytes": 74438, "proof_blake3": "4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4"},
+            {"candidates": 26, "learned_records": 64, "recall_ns": [6312189, 6330214, 6495010, 6358444, 6289280], "finalize_ns": [8279063, 8016333, 8045086, 8088076, 7923839], "validate_ns": [4684126, 4644937, 4723132, 4593709, 4556911], "proof_bytes": 129873, "proof_blake3": "1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9"}
           ]
         },
         {
           "process": 3,
-          "raw_stdout": "candidates=2 learned_records=0 recall_ns=[195153, 206908, 286038, 211418, 199584] finalize_ns=[357821, 319823, 321746, 340490, 338594] validate_ns=[144746, 142487, 135779, 139712, 135257] proof_bytes=10676 proof_blake3=93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2\ncandidates=2 learned_records=64 recall_ns=[783789, 774043, 805890, 832559, 772172] finalize_ns=[315856, 316148, 325766, 318215, 338558] validate_ns=[146209, 147114, 147059, 155165, 150780] proof_bytes=65362 proof_blake3=b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5\ncandidates=8 learned_records=0 recall_ns=[1037840, 1029526, 1032367, 1036017, 1024699] finalize_ns=[1525505, 1467360, 1458487, 1480950, 1506167] validate_ns=[766403, 788086, 855098, 814299, 780325] proof_bytes=26592 proof_blake3=6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81\ncandidates=8 learned_records=64 recall_ns=[1586075, 1537709, 1563280, 1608567, 1558310] finalize_ns=[1438616, 1456745, 1455444, 1441676, 1461266] validate_ns=[769771, 808198, 785853, 765060, 887455] proof_bytes=81482 proof_blake3=44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca\ncandidates=26 learned_records=0 recall_ns=[5695120, 5687659, 5683425, 5685223, 5668035] finalize_ns=[8102134, 8134821, 8022357, 8058432, 8028005] validate_ns=[4651874, 4684458, 4836587, 4696872, 4609122] proof_bytes=74438 proof_blake3=4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4\ncandidates=26 learned_records=64 recall_ns=[6196848, 6251787, 6291213, 6473649, 6580611] finalize_ns=[8330038, 8458720, 9010451, 8217524, 8232510] validate_ns=[4880952, 4701971, 5576796, 5073657, 4621044] proof_bytes=129873 proof_blake3=1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9\n",
           "cases": [
-            {
-              "candidates": 2,
-              "learned_records": 0,
-              "recall_ns": [
-                195153,
-                206908,
-                286038,
-                211418,
-                199584
-              ],
-              "finalize_ns": [
-                357821,
-                319823,
-                321746,
-                340490,
-                338594
-              ],
-              "validate_ns": [
-                144746,
-                142487,
-                135779,
-                139712,
-                135257
-              ],
-              "proof_bytes": 10676,
-              "proof_blake3": "93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2"
-            },
-            {
-              "candidates": 2,
-              "learned_records": 64,
-              "recall_ns": [
-                783789,
-                774043,
-                805890,
-                832559,
-                772172
-              ],
-              "finalize_ns": [
-                315856,
-                316148,
-                325766,
-                318215,
-                338558
-              ],
-              "validate_ns": [
-                146209,
-                147114,
-                147059,
-                155165,
-                150780
-              ],
-              "proof_bytes": 65362,
-              "proof_blake3": "b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5"
-            },
-            {
-              "candidates": 8,
-              "learned_records": 0,
-              "recall_ns": [
-                1037840,
-                1029526,
-                1032367,
-                1036017,
-                1024699
-              ],
-              "finalize_ns": [
-                1525505,
-                1467360,
-                1458487,
-                1480950,
-                1506167
-              ],
-              "validate_ns": [
-                766403,
-                788086,
-                855098,
-                814299,
-                780325
-              ],
-              "proof_bytes": 26592,
-              "proof_blake3": "6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81"
-            },
-            {
-              "candidates": 8,
-              "learned_records": 64,
-              "recall_ns": [
-                1586075,
-                1537709,
-                1563280,
-                1608567,
-                1558310
-              ],
-              "finalize_ns": [
-                1438616,
-                1456745,
-                1455444,
-                1441676,
-                1461266
-              ],
-              "validate_ns": [
-                769771,
-                808198,
-                785853,
-                765060,
-                887455
-              ],
-              "proof_bytes": 81482,
-              "proof_blake3": "44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca"
-            },
-            {
-              "candidates": 26,
-              "learned_records": 0,
-              "recall_ns": [
-                5695120,
-                5687659,
-                5683425,
-                5685223,
-                5668035
-              ],
-              "finalize_ns": [
-                8102134,
-                8134821,
-                8022357,
-                8058432,
-                8028005
-              ],
-              "validate_ns": [
-                4651874,
-                4684458,
-                4836587,
-                4696872,
-                4609122
-              ],
-              "proof_bytes": 74438,
-              "proof_blake3": "4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4"
-            },
-            {
-              "candidates": 26,
-              "learned_records": 64,
-              "recall_ns": [
-                6196848,
-                6251787,
-                6291213,
-                6473649,
-                6580611
-              ],
-              "finalize_ns": [
-                8330038,
-                8458720,
-                9010451,
-                8217524,
-                8232510
-              ],
-              "validate_ns": [
-                4880952,
-                4701971,
-                5576796,
-                5073657,
-                4621044
-              ],
-              "proof_bytes": 129873,
-              "proof_blake3": "1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9"
-            }
+            {"candidates": 2, "learned_records": 0, "recall_ns": [195153, 206908, 286038, 211418, 199584], "finalize_ns": [357821, 319823, 321746, 340490, 338594], "validate_ns": [144746, 142487, 135779, 139712, 135257], "proof_bytes": 10676, "proof_blake3": "93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2"},
+            {"candidates": 2, "learned_records": 64, "recall_ns": [783789, 774043, 805890, 832559, 772172], "finalize_ns": [315856, 316148, 325766, 318215, 338558], "validate_ns": [146209, 147114, 147059, 155165, 150780], "proof_bytes": 65362, "proof_blake3": "b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5"},
+            {"candidates": 8, "learned_records": 0, "recall_ns": [1037840, 1029526, 1032367, 1036017, 1024699], "finalize_ns": [1525505, 1467360, 1458487, 1480950, 1506167], "validate_ns": [766403, 788086, 855098, 814299, 780325], "proof_bytes": 26592, "proof_blake3": "6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81"},
+            {"candidates": 8, "learned_records": 64, "recall_ns": [1586075, 1537709, 1563280, 1608567, 1558310], "finalize_ns": [1438616, 1456745, 1455444, 1441676, 1461266], "validate_ns": [769771, 808198, 785853, 765060, 887455], "proof_bytes": 81482, "proof_blake3": "44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca"},
+            {"candidates": 26, "learned_records": 0, "recall_ns": [5695120, 5687659, 5683425, 5685223, 5668035], "finalize_ns": [8102134, 8134821, 8022357, 8058432, 8028005], "validate_ns": [4651874, 4684458, 4836587, 4696872, 4609122], "proof_bytes": 74438, "proof_blake3": "4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4"},
+            {"candidates": 26, "learned_records": 64, "recall_ns": [6196848, 6251787, 6291213, 6473649, 6580611], "finalize_ns": [8330038, 8458720, 9010451, 8217524, 8232510], "validate_ns": [4880952, 4701971, 5576796, 5073657, 4621044], "proof_bytes": 129873, "proof_blake3": "1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9"}
           ]
         }
       ]
@@ -936,506 +191,35 @@
       "runs": [
         {
           "process": 1,
-          "raw_stdout": "candidates=2 learned_records=0 recall_ns=[111449, 118056, 112756, 113706, 116863] finalize_ns=[228103, 219615, 257562, 234419, 215496] validate_ns=[86419, 93839, 85428, 93293, 96722] proof_bytes=10676 proof_blake3=93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2\ncandidates=2 learned_records=64 recall_ns=[738678, 661842, 672502, 772303, 693864] finalize_ns=[221912, 228903, 218592, 236752, 218666] validate_ns=[98672, 93709, 91845, 88388, 94231] proof_bytes=65362 proof_blake3=b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5\ncandidates=8 learned_records=0 recall_ns=[380315, 424455, 377284, 400159, 376376] finalize_ns=[635820, 658769, 652984, 660863, 645092] validate_ns=[288372, 398193, 332975, 296122, 293809] proof_bytes=26592 proof_blake3=6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81\ncandidates=8 learned_records=64 recall_ns=[962410, 923601, 926718, 936458, 953137] finalize_ns=[684559, 638206, 634006, 694041, 683652] validate_ns=[276226, 288254, 284605, 288335, 284558] proof_bytes=81482 proof_blake3=44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca\ncandidates=26 learned_records=0 recall_ns=[1047255, 1067242, 1064022, 1138563, 1107034] finalize_ns=[2087345, 2002737, 1934821, 1957835, 2110781] validate_ns=[877517, 875431, 865449, 933037, 967166] proof_bytes=74438 proof_blake3=4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4\ncandidates=26 learned_records=64 recall_ns=[1718300, 1698354, 1753264, 1712266, 1708013] finalize_ns=[2107508, 1918576, 1921215, 1924148, 1915965] validate_ns=[867390, 845783, 843370, 846648, 835713] proof_bytes=129873 proof_blake3=1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9\n",
           "cases": [
-            {
-              "candidates": 2,
-              "learned_records": 0,
-              "recall_ns": [
-                111449,
-                118056,
-                112756,
-                113706,
-                116863
-              ],
-              "finalize_ns": [
-                228103,
-                219615,
-                257562,
-                234419,
-                215496
-              ],
-              "validate_ns": [
-                86419,
-                93839,
-                85428,
-                93293,
-                96722
-              ],
-              "proof_bytes": 10676,
-              "proof_blake3": "93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2"
-            },
-            {
-              "candidates": 2,
-              "learned_records": 64,
-              "recall_ns": [
-                738678,
-                661842,
-                672502,
-                772303,
-                693864
-              ],
-              "finalize_ns": [
-                221912,
-                228903,
-                218592,
-                236752,
-                218666
-              ],
-              "validate_ns": [
-                98672,
-                93709,
-                91845,
-                88388,
-                94231
-              ],
-              "proof_bytes": 65362,
-              "proof_blake3": "b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5"
-            },
-            {
-              "candidates": 8,
-              "learned_records": 0,
-              "recall_ns": [
-                380315,
-                424455,
-                377284,
-                400159,
-                376376
-              ],
-              "finalize_ns": [
-                635820,
-                658769,
-                652984,
-                660863,
-                645092
-              ],
-              "validate_ns": [
-                288372,
-                398193,
-                332975,
-                296122,
-                293809
-              ],
-              "proof_bytes": 26592,
-              "proof_blake3": "6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81"
-            },
-            {
-              "candidates": 8,
-              "learned_records": 64,
-              "recall_ns": [
-                962410,
-                923601,
-                926718,
-                936458,
-                953137
-              ],
-              "finalize_ns": [
-                684559,
-                638206,
-                634006,
-                694041,
-                683652
-              ],
-              "validate_ns": [
-                276226,
-                288254,
-                284605,
-                288335,
-                284558
-              ],
-              "proof_bytes": 81482,
-              "proof_blake3": "44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca"
-            },
-            {
-              "candidates": 26,
-              "learned_records": 0,
-              "recall_ns": [
-                1047255,
-                1067242,
-                1064022,
-                1138563,
-                1107034
-              ],
-              "finalize_ns": [
-                2087345,
-                2002737,
-                1934821,
-                1957835,
-                2110781
-              ],
-              "validate_ns": [
-                877517,
-                875431,
-                865449,
-                933037,
-                967166
-              ],
-              "proof_bytes": 74438,
-              "proof_blake3": "4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4"
-            },
-            {
-              "candidates": 26,
-              "learned_records": 64,
-              "recall_ns": [
-                1718300,
-                1698354,
-                1753264,
-                1712266,
-                1708013
-              ],
-              "finalize_ns": [
-                2107508,
-                1918576,
-                1921215,
-                1924148,
-                1915965
-              ],
-              "validate_ns": [
-                867390,
-                845783,
-                843370,
-                846648,
-                835713
-              ],
-              "proof_bytes": 129873,
-              "proof_blake3": "1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9"
-            }
+            {"candidates": 2, "learned_records": 0, "recall_ns": [111449, 118056, 112756, 113706, 116863], "finalize_ns": [228103, 219615, 257562, 234419, 215496], "validate_ns": [86419, 93839, 85428, 93293, 96722], "proof_bytes": 10676, "proof_blake3": "93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2"},
+            {"candidates": 2, "learned_records": 64, "recall_ns": [738678, 661842, 672502, 772303, 693864], "finalize_ns": [221912, 228903, 218592, 236752, 218666], "validate_ns": [98672, 93709, 91845, 88388, 94231], "proof_bytes": 65362, "proof_blake3": "b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5"},
+            {"candidates": 8, "learned_records": 0, "recall_ns": [380315, 424455, 377284, 400159, 376376], "finalize_ns": [635820, 658769, 652984, 660863, 645092], "validate_ns": [288372, 398193, 332975, 296122, 293809], "proof_bytes": 26592, "proof_blake3": "6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81"},
+            {"candidates": 8, "learned_records": 64, "recall_ns": [962410, 923601, 926718, 936458, 953137], "finalize_ns": [684559, 638206, 634006, 694041, 683652], "validate_ns": [276226, 288254, 284605, 288335, 284558], "proof_bytes": 81482, "proof_blake3": "44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca"},
+            {"candidates": 26, "learned_records": 0, "recall_ns": [1047255, 1067242, 1064022, 1138563, 1107034], "finalize_ns": [2087345, 2002737, 1934821, 1957835, 2110781], "validate_ns": [877517, 875431, 865449, 933037, 967166], "proof_bytes": 74438, "proof_blake3": "4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4"},
+            {"candidates": 26, "learned_records": 64, "recall_ns": [1718300, 1698354, 1753264, 1712266, 1708013], "finalize_ns": [2107508, 1918576, 1921215, 1924148, 1915965], "validate_ns": [867390, 845783, 843370, 846648, 835713], "proof_bytes": 129873, "proof_blake3": "1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9"}
           ]
         },
         {
           "process": 2,
-          "raw_stdout": "candidates=2 learned_records=0 recall_ns=[113679, 112481, 111578, 113251, 112882] finalize_ns=[216495, 208532, 209303, 208665, 208905] validate_ns=[86449, 86463, 86191, 87347, 85739] proof_bytes=10676 proof_blake3=93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2\ncandidates=2 learned_records=64 recall_ns=[655801, 649868, 667676, 677908, 762145] finalize_ns=[217546, 220077, 215950, 218298, 233082] validate_ns=[87602, 91326, 86969, 91566, 88059] proof_bytes=65362 proof_blake3=b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5\ncandidates=8 learned_records=0 recall_ns=[363890, 365179, 369490, 377992, 364656] finalize_ns=[657068, 677145, 671160, 647304, 645968] validate_ns=[307228, 279376, 275895, 295493, 281009] proof_bytes=26592 proof_blake3=6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81\ncandidates=8 learned_records=64 recall_ns=[906109, 909330, 940597, 989396, 967170] finalize_ns=[644307, 654816, 658714, 657500, 638750] validate_ns=[277590, 277432, 294196, 290496, 277795] proof_bytes=81482 proof_blake3=44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca\ncandidates=26 learned_records=0 recall_ns=[1067143, 1073315, 1050174, 1105978, 1082428] finalize_ns=[2017105, 1987451, 1989751, 1976256, 2011965] validate_ns=[869597, 856906, 871891, 870057, 855242] proof_bytes=74438 proof_blake3=4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4\ncandidates=26 learned_records=64 recall_ns=[1640988, 1711101, 1683021, 1663036, 1690291] finalize_ns=[1974178, 1905743, 1915455, 1903005, 1929664] validate_ns=[849823, 834417, 833529, 866371, 835359] proof_bytes=129873 proof_blake3=1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9\n",
           "cases": [
-            {
-              "candidates": 2,
-              "learned_records": 0,
-              "recall_ns": [
-                113679,
-                112481,
-                111578,
-                113251,
-                112882
-              ],
-              "finalize_ns": [
-                216495,
-                208532,
-                209303,
-                208665,
-                208905
-              ],
-              "validate_ns": [
-                86449,
-                86463,
-                86191,
-                87347,
-                85739
-              ],
-              "proof_bytes": 10676,
-              "proof_blake3": "93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2"
-            },
-            {
-              "candidates": 2,
-              "learned_records": 64,
-              "recall_ns": [
-                655801,
-                649868,
-                667676,
-                677908,
-                762145
-              ],
-              "finalize_ns": [
-                217546,
-                220077,
-                215950,
-                218298,
-                233082
-              ],
-              "validate_ns": [
-                87602,
-                91326,
-                86969,
-                91566,
-                88059
-              ],
-              "proof_bytes": 65362,
-              "proof_blake3": "b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5"
-            },
-            {
-              "candidates": 8,
-              "learned_records": 0,
-              "recall_ns": [
-                363890,
-                365179,
-                369490,
-                377992,
-                364656
-              ],
-              "finalize_ns": [
-                657068,
-                677145,
-                671160,
-                647304,
-                645968
-              ],
-              "validate_ns": [
-                307228,
-                279376,
-                275895,
-                295493,
-                281009
-              ],
-              "proof_bytes": 26592,
-              "proof_blake3": "6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81"
-            },
-            {
-              "candidates": 8,
-              "learned_records": 64,
-              "recall_ns": [
-                906109,
-                909330,
-                940597,
-                989396,
-                967170
-              ],
-              "finalize_ns": [
-                644307,
-                654816,
-                658714,
-                657500,
-                638750
-              ],
-              "validate_ns": [
-                277590,
-                277432,
-                294196,
-                290496,
-                277795
-              ],
-              "proof_bytes": 81482,
-              "proof_blake3": "44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca"
-            },
-            {
-              "candidates": 26,
-              "learned_records": 0,
-              "recall_ns": [
-                1067143,
-                1073315,
-                1050174,
-                1105978,
-                1082428
-              ],
-              "finalize_ns": [
-                2017105,
-                1987451,
-                1989751,
-                1976256,
-                2011965
-              ],
-              "validate_ns": [
-                869597,
-                856906,
-                871891,
-                870057,
-                855242
-              ],
-              "proof_bytes": 74438,
-              "proof_blake3": "4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4"
-            },
-            {
-              "candidates": 26,
-              "learned_records": 64,
-              "recall_ns": [
-                1640988,
-                1711101,
-                1683021,
-                1663036,
-                1690291
-              ],
-              "finalize_ns": [
-                1974178,
-                1905743,
-                1915455,
-                1903005,
-                1929664
-              ],
-              "validate_ns": [
-                849823,
-                834417,
-                833529,
-                866371,
-                835359
-              ],
-              "proof_bytes": 129873,
-              "proof_blake3": "1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9"
-            }
+            {"candidates": 2, "learned_records": 0, "recall_ns": [113679, 112481, 111578, 113251, 112882], "finalize_ns": [216495, 208532, 209303, 208665, 208905], "validate_ns": [86449, 86463, 86191, 87347, 85739], "proof_bytes": 10676, "proof_blake3": "93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2"},
+            {"candidates": 2, "learned_records": 64, "recall_ns": [655801, 649868, 667676, 677908, 762145], "finalize_ns": [217546, 220077, 215950, 218298, 233082], "validate_ns": [87602, 91326, 86969, 91566, 88059], "proof_bytes": 65362, "proof_blake3": "b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5"},
+            {"candidates": 8, "learned_records": 0, "recall_ns": [363890, 365179, 369490, 377992, 364656], "finalize_ns": [657068, 677145, 671160, 647304, 645968], "validate_ns": [307228, 279376, 275895, 295493, 281009], "proof_bytes": 26592, "proof_blake3": "6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81"},
+            {"candidates": 8, "learned_records": 64, "recall_ns": [906109, 909330, 940597, 989396, 967170], "finalize_ns": [644307, 654816, 658714, 657500, 638750], "validate_ns": [277590, 277432, 294196, 290496, 277795], "proof_bytes": 81482, "proof_blake3": "44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca"},
+            {"candidates": 26, "learned_records": 0, "recall_ns": [1067143, 1073315, 1050174, 1105978, 1082428], "finalize_ns": [2017105, 1987451, 1989751, 1976256, 2011965], "validate_ns": [869597, 856906, 871891, 870057, 855242], "proof_bytes": 74438, "proof_blake3": "4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4"},
+            {"candidates": 26, "learned_records": 64, "recall_ns": [1640988, 1711101, 1683021, 1663036, 1690291], "finalize_ns": [1974178, 1905743, 1915455, 1903005, 1929664], "validate_ns": [849823, 834417, 833529, 866371, 835359], "proof_bytes": 129873, "proof_blake3": "1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9"}
           ]
         },
         {
           "process": 3,
-          "raw_stdout": "candidates=2 learned_records=0 recall_ns=[113098, 117460, 118427, 121577, 119289] finalize_ns=[230029, 244516, 244290, 263491, 218808] validate_ns=[87576, 87813, 87994, 93965, 89861] proof_bytes=10676 proof_blake3=93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2\ncandidates=2 learned_records=64 recall_ns=[686295, 779000, 730505, 742716, 749466] finalize_ns=[222086, 213546, 216461, 218013, 219000] validate_ns=[91919, 96112, 89534, 87506, 88533] proof_bytes=65362 proof_blake3=b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5\ncandidates=8 learned_records=0 recall_ns=[370333, 362654, 383902, 364933, 374063] finalize_ns=[646623, 632047, 625391, 653835, 623817] validate_ns=[303661, 280629, 283558, 291139, 277336] proof_bytes=26592 proof_blake3=6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81\ncandidates=8 learned_records=64 recall_ns=[1016502, 920272, 904087, 906407, 896284] finalize_ns=[640546, 693166, 656628, 648362, 645674] validate_ns=[280477, 285794, 282730, 286366, 279188] proof_bytes=81482 proof_blake3=44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca\ncandidates=26 learned_records=0 recall_ns=[1112770, 1084856, 1073994, 1129491, 1077948] finalize_ns=[1958529, 1940412, 1899407, 1992416, 1926732] validate_ns=[866593, 880276, 878879, 900294, 875066] proof_bytes=74438 proof_blake3=4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4\ncandidates=26 learned_records=64 recall_ns=[1656678, 1664215, 1628665, 1653109, 1653211] finalize_ns=[1915295, 1922820, 1940347, 1933492, 1909273] validate_ns=[919920, 874577, 864952, 855546, 854487] proof_bytes=129873 proof_blake3=1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9\n",
           "cases": [
-            {
-              "candidates": 2,
-              "learned_records": 0,
-              "recall_ns": [
-                113098,
-                117460,
-                118427,
-                121577,
-                119289
-              ],
-              "finalize_ns": [
-                230029,
-                244516,
-                244290,
-                263491,
-                218808
-              ],
-              "validate_ns": [
-                87576,
-                87813,
-                87994,
-                93965,
-                89861
-              ],
-              "proof_bytes": 10676,
-              "proof_blake3": "93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2"
-            },
-            {
-              "candidates": 2,
-              "learned_records": 64,
-              "recall_ns": [
-                686295,
-                779000,
-                730505,
-                742716,
-                749466
-              ],
-              "finalize_ns": [
-                222086,
-                213546,
-                216461,
-                218013,
-                219000
-              ],
-              "validate_ns": [
-                91919,
-                96112,
-                89534,
-                87506,
-                88533
-              ],
-              "proof_bytes": 65362,
-              "proof_blake3": "b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5"
-            },
-            {
-              "candidates": 8,
-              "learned_records": 0,
-              "recall_ns": [
-                370333,
-                362654,
-                383902,
-                364933,
-                374063
-              ],
-              "finalize_ns": [
-                646623,
-                632047,
-                625391,
-                653835,
-                623817
-              ],
-              "validate_ns": [
-                303661,
-                280629,
-                283558,
-                291139,
-                277336
-              ],
-              "proof_bytes": 26592,
-              "proof_blake3": "6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81"
-            },
-            {
-              "candidates": 8,
-              "learned_records": 64,
-              "recall_ns": [
-                1016502,
-                920272,
-                904087,
-                906407,
-                896284
-              ],
-              "finalize_ns": [
-                640546,
-                693166,
-                656628,
-                648362,
-                645674
-              ],
-              "validate_ns": [
-                280477,
-                285794,
-                282730,
-                286366,
-                279188
-              ],
-              "proof_bytes": 81482,
-              "proof_blake3": "44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca"
-            },
-            {
-              "candidates": 26,
-              "learned_records": 0,
-              "recall_ns": [
-                1112770,
-                1084856,
-                1073994,
-                1129491,
-                1077948
-              ],
-              "finalize_ns": [
-                1958529,
-                1940412,
-                1899407,
-                1992416,
-                1926732
-              ],
-              "validate_ns": [
-                866593,
-                880276,
-                878879,
-                900294,
-                875066
-              ],
-              "proof_bytes": 74438,
-              "proof_blake3": "4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4"
-            },
-            {
-              "candidates": 26,
-              "learned_records": 64,
-              "recall_ns": [
-                1656678,
-                1664215,
-                1628665,
-                1653109,
-                1653211
-              ],
-              "finalize_ns": [
-                1915295,
-                1922820,
-                1940347,
-                1933492,
-                1909273
-              ],
-              "validate_ns": [
-                919920,
-                874577,
-                864952,
-                855546,
-                854487
-              ],
-              "proof_bytes": 129873,
-              "proof_blake3": "1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9"
-            }
+            {"candidates": 2, "learned_records": 0, "recall_ns": [113098, 117460, 118427, 121577, 119289], "finalize_ns": [230029, 244516, 244290, 263491, 218808], "validate_ns": [87576, 87813, 87994, 93965, 89861], "proof_bytes": 10676, "proof_blake3": "93408b07f2e9353a4987d1df23e1e07080ff45830257186591c63cbb1a865fc2"},
+            {"candidates": 2, "learned_records": 64, "recall_ns": [686295, 779000, 730505, 742716, 749466], "finalize_ns": [222086, 213546, 216461, 218013, 219000], "validate_ns": [91919, 96112, 89534, 87506, 88533], "proof_bytes": 65362, "proof_blake3": "b516c87223d2cccc769802b54caed3c191de6461ad9af922481657316b58d2b5"},
+            {"candidates": 8, "learned_records": 0, "recall_ns": [370333, 362654, 383902, 364933, 374063], "finalize_ns": [646623, 632047, 625391, 653835, 623817], "validate_ns": [303661, 280629, 283558, 291139, 277336], "proof_bytes": 26592, "proof_blake3": "6b65896a72285702d9ae1c9ccf095c6da597c58ba453a071e442459586140b81"},
+            {"candidates": 8, "learned_records": 64, "recall_ns": [1016502, 920272, 904087, 906407, 896284], "finalize_ns": [640546, 693166, 656628, 648362, 645674], "validate_ns": [280477, 285794, 282730, 286366, 279188], "proof_bytes": 81482, "proof_blake3": "44b31542608e72d01e67cae1257fbf0ca0e012bddc4a31645244b53c51b478ca"},
+            {"candidates": 26, "learned_records": 0, "recall_ns": [1112770, 1084856, 1073994, 1129491, 1077948], "finalize_ns": [1958529, 1940412, 1899407, 1992416, 1926732], "validate_ns": [866593, 880276, 878879, 900294, 875066], "proof_bytes": 74438, "proof_blake3": "4e1c80c21f589f6d3d5e8bbfb1d4ba8b919b9d461f6342f3f854d2e92c46a1b4"},
+            {"candidates": 26, "learned_records": 64, "recall_ns": [1656678, 1664215, 1628665, 1653109, 1653211], "finalize_ns": [1915295, 1922820, 1940347, 1933492, 1909273], "validate_ns": [919920, 874577, 864952, 855546, 854487], "proof_bytes": 129873, "proof_blake3": "1634b0c2fc6b356aa9753f599ee828e437476d167ae6ee8333c2efef1e25fbe9"}
           ]
         }
       ]
