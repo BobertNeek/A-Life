@@ -12,7 +12,9 @@ original vectors remain in Git at `a11dae6a`.
 
 The subsequent [prepared-attention comparison](20261001-attention-preparation.md)
 has separate fixtures and source `770ef12a`; its report, samples and probe remain
-unchanged in the successor. Later topology measurements are separately owned.
+unchanged in the successor. The later [topology comparison](20261001-topology-preparation.md)
+times observations separately and excludes that attention chain. These independent
+measurements cannot be combined into a frame-speedup estimate.
 
 ## Results and measured sources
 

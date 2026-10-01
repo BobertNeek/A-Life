@@ -21,65 +21,19 @@
   "proof": "Every sample compares complete serialized receipt and sidecar vectors with the source-derived baseline implementation. Initial map, input patch and final full result hashes also match across both variants and both process pairs. JSON proof serialization is outside clocks.",
   "stage_clock": "Instant wall time in source-derived baseline copy, never optimized-stage timings",
   "official_clock": "clock_gettime(CLOCK_THREAD_CPUTIME_ID), also Instant wall time; clocks include receipt collection",
-  "stage_order": ["private patch validation", "planned map clone", "planned full validation plus final digest", "generation private diff reconstruction validation", "commit private diff reconstruction validation", "checked replacement application"],
+  "stage_order": [
+    "private patch validation", "planned map clone", "planned full validation plus final digest", "generation private diff reconstruction validation", "commit private diff reconstruction validation", "checked replacement application"
+  ],
   "excluded": "Fixture clone/reset, serialization/proof, world/perception, actual resident state, neural/GPU inference/readback/learning/synchronization, save I/O, lifecycle and presentation. Context calls use identical empty-memory recall and the pre-observation map; not a baseline-to-routed chain.",
   "target_20fps_50_creatures": "Unknown",
   "builds": {
     "before": {
       "baseline": "471c55dfc2a29e760669e8bb6252865464e064fa",
       "linked": {
-        "alife_core": {
-          "filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libalife_core-d0449f47ed26a3f1.rlib",
-          "profile": {
-            "opt_level": "3",
-            "debuginfo": 0,
-            "debug_assertions": false,
-            "overflow_checks": false,
-            "test": false
-          },
-          "package_id": "path+file:///workspace/A-Life-attention-preparation/crates/alife_core#0.1.0",
-          "features": [],
-          "sha256": "4b69973857fa448e4acb59f764038a39629df23c115c5751f12f4602fca47014"
-        },
-        "serde": {
-          "filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libserde-8578775fa93ce530.rlib",
-          "profile": {
-            "opt_level": "3",
-            "debuginfo": 0,
-            "debug_assertions": false,
-            "overflow_checks": false,
-            "test": false
-          },
-          "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "features": ["alloc", "default", "derive", "serde_derive", "std"],
-          "sha256": "c08c4641c4d8486e0665ccb13be8f21da49ff0983c87c68bd2efac89c49ed042"
-        },
-        "serde_json": {
-          "filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libserde_json-c9f04f714bdc14ef.rlib",
-          "profile": {
-            "opt_level": "3",
-            "debuginfo": 0,
-            "debug_assertions": false,
-            "overflow_checks": false,
-            "test": false
-          },
-          "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
-          "features": ["default", "std"],
-          "sha256": "9a4469d7ac127049ad6aadf3eb932b535f44d2569c3b9b5b470f5a44535f422b"
-        },
-        "blake3": {
-          "filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libblake3-0b331522bd80572d.rlib",
-          "profile": {
-            "opt_level": "3",
-            "debuginfo": 0,
-            "debug_assertions": false,
-            "overflow_checks": false,
-            "test": false
-          },
-          "package_id": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "features": ["default", "std"],
-          "sha256": "ac325f44d3b3609af7fd93c0ceb00425b34bf42d5f2ebdb43a125f3e11229b03"
-        }
+        "alife_core": {"filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libalife_core-d0449f47ed26a3f1.rlib", "profile": {"opt_level": "3", "debuginfo": 0, "debug_assertions": false, "overflow_checks": false, "test": false}, "package_id": "path+file:///workspace/A-Life-attention-preparation/crates/alife_core#0.1.0", "features": [], "sha256": "4b69973857fa448e4acb59f764038a39629df23c115c5751f12f4602fca47014"},
+        "serde": {"filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libserde-8578775fa93ce530.rlib", "profile": {"opt_level": "3", "debuginfo": 0, "debug_assertions": false, "overflow_checks": false, "test": false}, "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228", "features": ["alloc", "default", "derive", "serde_derive", "std"], "sha256": "c08c4641c4d8486e0665ccb13be8f21da49ff0983c87c68bd2efac89c49ed042"},
+        "serde_json": {"filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libserde_json-c9f04f714bdc14ef.rlib", "profile": {"opt_level": "3", "debuginfo": 0, "debug_assertions": false, "overflow_checks": false, "test": false}, "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150", "features": ["default", "std"], "sha256": "9a4469d7ac127049ad6aadf3eb932b535f44d2569c3b9b5b470f5a44535f422b"},
+        "blake3": {"filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libblake3-0b331522bd80572d.rlib", "profile": {"opt_level": "3", "debuginfo": 0, "debug_assertions": false, "overflow_checks": false, "test": false}, "package_id": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5", "features": ["default", "std"], "sha256": "ac325f44d3b3609af7fd93c0ceb00425b34bf42d5f2ebdb43a125f3e11229b03"}
       },
       "baseline_topology_sha256": "db3fe4a32b97137090967952e89597ed39b3b7235705f19eb0d8f5de2bfe4afa",
       "profiled_topology_sha256": "543c3c07af1242bb6c9d2fbf342416ffffc4ec9fd6cacc7e7f935897f8e4c4a3",
@@ -91,58 +45,10 @@
     "after": {
       "baseline": "471c55dfc2a29e760669e8bb6252865464e064fa",
       "linked": {
-        "alife_core": {
-          "filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libalife_core-ebcb4803987dac66.rlib",
-          "profile": {
-            "opt_level": "3",
-            "debuginfo": 0,
-            "debug_assertions": false,
-            "overflow_checks": false,
-            "test": false
-          },
-          "package_id": "path+file:///workspace/A-Life-topology-preparation/crates/alife_core#0.1.0",
-          "features": [],
-          "sha256": "fdcd0da708abc5994f31c0a1055f62fe4453918e49ea00314dd946f7f64a32e3"
-        },
-        "serde": {
-          "filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libserde-060b378a43e3035a.rlib",
-          "profile": {
-            "opt_level": "3",
-            "debuginfo": 0,
-            "debug_assertions": false,
-            "overflow_checks": false,
-            "test": false
-          },
-          "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "features": ["alloc", "default", "derive", "serde_derive", "std"],
-          "sha256": "b74ad173bff3366ad734e099fd0f565529f3fef6a636bf06c6f377177ebc9e4e"
-        },
-        "serde_json": {
-          "filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libserde_json-c9f04f714bdc14ef.rlib",
-          "profile": {
-            "opt_level": "3",
-            "debuginfo": 0,
-            "debug_assertions": false,
-            "overflow_checks": false,
-            "test": false
-          },
-          "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
-          "features": ["default", "std"],
-          "sha256": "9a4469d7ac127049ad6aadf3eb932b535f44d2569c3b9b5b470f5a44535f422b"
-        },
-        "blake3": {
-          "filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libblake3-ba375ea2cd180a5a.rlib",
-          "profile": {
-            "opt_level": "3",
-            "debuginfo": 0,
-            "debug_assertions": false,
-            "overflow_checks": false,
-            "test": false
-          },
-          "package_id": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "features": ["default", "std"],
-          "sha256": "36562e9ec544daa6e6970f51d2a1075cf6adb61255372e7d2b3010ee7cd17014"
-        }
+        "alife_core": {"filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libalife_core-ebcb4803987dac66.rlib", "profile": {"opt_level": "3", "debuginfo": 0, "debug_assertions": false, "overflow_checks": false, "test": false}, "package_id": "path+file:///workspace/A-Life-topology-preparation/crates/alife_core#0.1.0", "features": [], "sha256": "fdcd0da708abc5994f31c0a1055f62fe4453918e49ea00314dd946f7f64a32e3"},
+        "serde": {"filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libserde-060b378a43e3035a.rlib", "profile": {"opt_level": "3", "debuginfo": 0, "debug_assertions": false, "overflow_checks": false, "test": false}, "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228", "features": ["alloc", "default", "derive", "serde_derive", "std"], "sha256": "b74ad173bff3366ad734e099fd0f565529f3fef6a636bf06c6f377177ebc9e4e"},
+        "serde_json": {"filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libserde_json-c9f04f714bdc14ef.rlib", "profile": {"opt_level": "3", "debuginfo": 0, "debug_assertions": false, "overflow_checks": false, "test": false}, "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150", "features": ["default", "std"], "sha256": "9a4469d7ac127049ad6aadf3eb932b535f44d2569c3b9b5b470f5a44535f422b"},
+        "blake3": {"filename": "/workspace/A-Life/target/cloud-cpu/release/deps/libblake3-ba375ea2cd180a5a.rlib", "profile": {"opt_level": "3", "debuginfo": 0, "debug_assertions": false, "overflow_checks": false, "test": false}, "package_id": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5", "features": ["default", "std"], "sha256": "36562e9ec544daa6e6970f51d2a1075cf6adb61255372e7d2b3010ee7cd17014"}
       },
       "baseline_topology_sha256": "db3fe4a32b97137090967952e89597ed39b3b7235705f19eb0d8f5de2bfe4afa",
       "profiled_topology_sha256": "543c3c07af1242bb6c9d2fbf342416ffffc4ec9fd6cacc7e7f935897f8e4c4a3",
@@ -153,166 +59,29 @@
     }
   },
   "fixtures": {
-    "observations8-candidates1": {
-      "seed_observations": 8,
-      "map_counts": {
-        "concepts": 9,
-        "edges": 8,
-        "simplexes": 8,
-        "unresolved_gaps": 8
-      },
-      "candidates": 1,
-      "owner": 811,
-      "map_json_blake3": "7bf8aebbf6a781798986208ae4a61487b8306b14fdfd442f2ef5d253ec6ecdd6",
-      "next_patch_json_blake3": "64c72ead6136d1d704ec65ed34b8582cb2aac8605e75a4a0c63b61f39a874a5f"
-    },
-    "observations8-candidates26": {
-      "seed_observations": 8,
-      "map_counts": {
-        "concepts": 9,
-        "edges": 8,
-        "simplexes": 8,
-        "unresolved_gaps": 8
-      },
-      "candidates": 26,
-      "owner": 811,
-      "map_json_blake3": "7bf8aebbf6a781798986208ae4a61487b8306b14fdfd442f2ef5d253ec6ecdd6",
-      "next_patch_json_blake3": "11d3eeddaabaa4e5d35066f86ae9e30ec449fee86791d6bd4ae8d878927eeba2"
-    },
-    "observations64-candidates1": {
-      "seed_observations": 64,
-      "map_counts": {
-        "concepts": 65,
-        "edges": 64,
-        "simplexes": 64,
-        "unresolved_gaps": 64
-      },
-      "candidates": 1,
-      "owner": 811,
-      "map_json_blake3": "f09c0947370df06321606f06e87049bdfa6db1affcad4fb61012c8fd1dc986b0",
-      "next_patch_json_blake3": "33b8d761ed562807c83a031f07894c81e847c3b86bd1adddf64996bb70b704b2"
-    },
-    "observations64-candidates26": {
-      "seed_observations": 64,
-      "map_counts": {
-        "concepts": 65,
-        "edges": 64,
-        "simplexes": 64,
-        "unresolved_gaps": 64
-      },
-      "candidates": 26,
-      "owner": 811,
-      "map_json_blake3": "f09c0947370df06321606f06e87049bdfa6db1affcad4fb61012c8fd1dc986b0",
-      "next_patch_json_blake3": "555b6ac997c8a8312be0d42b9e8aa9c9c1dadfc1f815afeffcc17c05d3540ef3"
-    },
-    "observations256-candidates1": {
-      "seed_observations": 256,
-      "map_counts": {
-        "concepts": 256,
-        "edges": 255,
-        "simplexes": 256,
-        "unresolved_gaps": 64
-      },
-      "candidates": 1,
-      "owner": 811,
-      "map_json_blake3": "06d6b6bc8d8308fe1c7c9626817755cfb604c266503dd4154ee91a800662a179",
-      "next_patch_json_blake3": "6890a3ed05282fbaf325ea965aabcccd49e8b3da7a938b9eb3600f74b02bd5e6"
-    },
-    "observations256-candidates26": {
-      "seed_observations": 256,
-      "map_counts": {
-        "concepts": 256,
-        "edges": 255,
-        "simplexes": 256,
-        "unresolved_gaps": 64
-      },
-      "candidates": 26,
-      "owner": 811,
-      "map_json_blake3": "06d6b6bc8d8308fe1c7c9626817755cfb604c266503dd4154ee91a800662a179",
-      "next_patch_json_blake3": "f12a62a41282ce9c254b7a106c3b0ce7341a0e1f4c522a59cfc622821f3967d3"
-    }
+    "observations8-candidates1": {"seed_observations": 8, "map_counts": {"concepts": 9, "edges": 8, "simplexes": 8, "unresolved_gaps": 8}, "candidates": 1, "owner": 811, "map_json_blake3": "7bf8aebbf6a781798986208ae4a61487b8306b14fdfd442f2ef5d253ec6ecdd6", "next_patch_json_blake3": "64c72ead6136d1d704ec65ed34b8582cb2aac8605e75a4a0c63b61f39a874a5f"},
+    "observations8-candidates26": {"seed_observations": 8, "map_counts": {"concepts": 9, "edges": 8, "simplexes": 8, "unresolved_gaps": 8}, "candidates": 26, "owner": 811, "map_json_blake3": "7bf8aebbf6a781798986208ae4a61487b8306b14fdfd442f2ef5d253ec6ecdd6", "next_patch_json_blake3": "11d3eeddaabaa4e5d35066f86ae9e30ec449fee86791d6bd4ae8d878927eeba2"},
+    "observations64-candidates1": {"seed_observations": 64, "map_counts": {"concepts": 65, "edges": 64, "simplexes": 64, "unresolved_gaps": 64}, "candidates": 1, "owner": 811, "map_json_blake3": "f09c0947370df06321606f06e87049bdfa6db1affcad4fb61012c8fd1dc986b0", "next_patch_json_blake3": "33b8d761ed562807c83a031f07894c81e847c3b86bd1adddf64996bb70b704b2"},
+    "observations64-candidates26": {"seed_observations": 64, "map_counts": {"concepts": 65, "edges": 64, "simplexes": 64, "unresolved_gaps": 64}, "candidates": 26, "owner": 811, "map_json_blake3": "f09c0947370df06321606f06e87049bdfa6db1affcad4fb61012c8fd1dc986b0", "next_patch_json_blake3": "555b6ac997c8a8312be0d42b9e8aa9c9c1dadfc1f815afeffcc17c05d3540ef3"},
+    "observations256-candidates1": {"seed_observations": 256, "map_counts": {"concepts": 256, "edges": 255, "simplexes": 256, "unresolved_gaps": 64}, "candidates": 1, "owner": 811, "map_json_blake3": "06d6b6bc8d8308fe1c7c9626817755cfb604c266503dd4154ee91a800662a179", "next_patch_json_blake3": "6890a3ed05282fbaf325ea965aabcccd49e8b3da7a938b9eb3600f74b02bd5e6"},
+    "observations256-candidates26": {"seed_observations": 256, "map_counts": {"concepts": 256, "edges": 255, "simplexes": 256, "unresolved_gaps": 64}, "candidates": 26, "owner": 811, "map_json_blake3": "06d6b6bc8d8308fe1c7c9626817755cfb604c266503dd4154ee91a800662a179", "next_patch_json_blake3": "f12a62a41282ce9c254b7a106c3b0ce7341a0e1f4c522a59cfc622821f3967d3"}
   },
   "cases": [
     {
       "fixture": "observations8-candidates1",
       "instances": 8,
       "result_json_blake3": "73af2ed1bb0edb189fd60708cc8371f2a762142cd97bd823d17ca87fa4155418",
-      "median_official_thread_cpu_ns": {
-        "before": 719907.0,
-        "after": 432731.5
-      },
-      "median_official_wall_ns": {
-        "before": 720948.5,
-        "after": 434246.5
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 10531.0,
-        "after": 11166.5
-      },
+      "median_official_thread_cpu_ns": {"before": 719907.0, "after": 432731.5},
+      "median_official_wall_ns": {"before": 720948.5, "after": 434246.5},
+      "median_two_context_summary_thread_cpu_ns": {"before": 10531.0, "after": 11166.5},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [741074, 715315, 734154, 726582, 710008],
-            "official_thread_cpu_ns": [739536, 714169, 731625, 725645, 708690],
-            "baseline_instrumented_wall_ns": [755466, 2592557, 748385, 720964, 723087],
-            "baseline_stage_wall_ns": [
-              [99639, 8473, 69216, 187522, 147041, 7250],
-              [111657, 9033, 70045, 174902, 1973308, 9714],
-              [101464, 9326, 70016, 147994, 148042, 7972],
-              [100030, 22323, 69375, 147612, 147171, 8554],
-              [100530, 8382, 69373, 160602, 147751, 11839]
-            ],
-            "two_context_summary_wall_ns": [12779, 15574, 11387, 10857, 10707],
-            "two_context_summary_thread_cpu_ns": [12278, 13209, 10866, 10476, 10165]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [743665, 732990, 709794, 707891, 691557],
-            "official_thread_cpu_ns": [741849, 731985, 708660, 706677, 690192],
-            "baseline_instrumented_wall_ns": [760541, 724907, 729735, 724416, 724146],
-            "baseline_stage_wall_ns": [
-              [100281, 8725, 69251, 173872, 146288, 7242],
-              [113611, 8272, 69215, 149113, 148353, 8082],
-              [99739, 8683, 69205, 147892, 168652, 8074],
-              [99891, 8723, 69304, 146709, 164267, 8561],
-              [101161, 8843, 69064, 147319, 147714, 8492]
-            ],
-            "two_context_summary_wall_ns": [12719, 10756, 11066, 10766, 10616],
-            "two_context_summary_thread_cpu_ns": [12148, 10285, 10586, 10215, 10094]
-          }
+          {"process_pair": 1, "official_wall_ns": [741074, 715315, 734154, 726582, 710008], "official_thread_cpu_ns": [739536, 714169, 731625, 725645, 708690], "baseline_instrumented_wall_ns": [755466, 2592557, 748385, 720964, 723087], "baseline_stage_wall_ns": [[99639, 8473, 69216, 187522, 147041, 7250], [111657, 9033, 70045, 174902, 1973308, 9714], [101464, 9326, 70016, 147994, 148042, 7972], [100030, 22323, 69375, 147612, 147171, 8554], [100530, 8382, 69373, 160602, 147751, 11839]], "two_context_summary_wall_ns": [12779, 15574, 11387, 10857, 10707], "two_context_summary_thread_cpu_ns": [12278, 13209, 10866, 10476, 10165]},
+          {"process_pair": 2, "official_wall_ns": [743665, 732990, 709794, 707891, 691557], "official_thread_cpu_ns": [741849, 731985, 708660, 706677, 690192], "baseline_instrumented_wall_ns": [760541, 724907, 729735, 724416, 724146], "baseline_stage_wall_ns": [[100281, 8725, 69251, 173872, 146288, 7242], [113611, 8272, 69215, 149113, 148353, 8082], [99739, 8683, 69205, 147892, 168652, 8074], [99891, 8723, 69304, 146709, 164267, 8561], [101161, 8843, 69064, 147319, 147714, 8492]], "two_context_summary_wall_ns": [12719, 10756, 11066, 10766, 10616], "two_context_summary_thread_cpu_ns": [12148, 10285, 10586, 10215, 10094]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [437247, 457197, 434863, 427333, 441644],
-            "official_thread_cpu_ns": [435285, 454794, 433142, 426272, 440583],
-            "baseline_instrumented_wall_ns": [797529, 859242, 801765, 734554, 711109],
-            "baseline_stage_wall_ns": [
-              [101463, 9085, 71488, 166070, 152078, 7923],
-              [101801, 10387, 69555, 151258, 167081, 8784],
-              [100580, 9283, 155415, 147694, 149375, 8302],
-              [100459, 8623, 68835, 167953, 150065, 8183],
-              [100781, 8915, 69424, 146542, 149695, 7801]
-            ],
-            "two_context_summary_wall_ns": [13851, 13089, 12148, 11096, 11347],
-            "two_context_summary_thread_cpu_ns": [12939, 12077, 11487, 10466, 10736]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [426420, 423966, 433630, 443185, 417005],
-            "official_thread_cpu_ns": [424689, 422646, 432321, 442175, 416106],
-            "baseline_instrumented_wall_ns": [746499, 805267, 721432, 759880, 797496],
-            "baseline_stage_wall_ns": [
-              [100210, 8995, 70213, 160402, 166921, 7622],
-              [124055, 9685, 72810, 204588, 151229, 8622],
-              [112749, 8922, 69215, 146250, 149463, 8161],
-              [100631, 9114, 69356, 147581, 150888, 8410],
-              [100681, 9056, 68693, 220279, 164186, 7873]
-            ],
-            "two_context_summary_wall_ns": [12679, 12458, 11367, 11237, 11908],
-            "two_context_summary_thread_cpu_ns": [12008, 11227, 10916, 10725, 11106]
-          }
+          {"process_pair": 1, "official_wall_ns": [437247, 457197, 434863, 427333, 441644], "official_thread_cpu_ns": [435285, 454794, 433142, 426272, 440583], "baseline_instrumented_wall_ns": [797529, 859242, 801765, 734554, 711109], "baseline_stage_wall_ns": [[101463, 9085, 71488, 166070, 152078, 7923], [101801, 10387, 69555, 151258, 167081, 8784], [100580, 9283, 155415, 147694, 149375, 8302], [100459, 8623, 68835, 167953, 150065, 8183], [100781, 8915, 69424, 146542, 149695, 7801]], "two_context_summary_wall_ns": [13851, 13089, 12148, 11096, 11347], "two_context_summary_thread_cpu_ns": [12939, 12077, 11487, 10466, 10736]},
+          {"process_pair": 2, "official_wall_ns": [426420, 423966, 433630, 443185, 417005], "official_thread_cpu_ns": [424689, 422646, 432321, 442175, 416106], "baseline_instrumented_wall_ns": [746499, 805267, 721432, 759880, 797496], "baseline_stage_wall_ns": [[100210, 8995, 70213, 160402, 166921, 7622], [124055, 9685, 72810, 204588, 151229, 8622], [112749, 8922, 69215, 146250, 149463, 8161], [100631, 9114, 69356, 147581, 150888, 8410], [100681, 9056, 68693, 220279, 164186, 7873]], "two_context_summary_wall_ns": [12679, 12458, 11367, 11237, 11908], "two_context_summary_thread_cpu_ns": [12008, 11227, 10916, 10725, 11106]}
         ]
       },
       "cpu_reduction_percent": 39.89063865193698
@@ -321,82 +90,17 @@
       "fixture": "observations8-candidates1",
       "instances": 16,
       "result_json_blake3": "d308e7822a108a4da16ed49d4dfb1334707d0bcf3f214b835e7afe7dbb6c845b",
-      "median_official_thread_cpu_ns": {
-        "before": 1377727.0,
-        "after": 832974.5
-      },
-      "median_official_wall_ns": {
-        "before": 1379230.5,
-        "after": 835315.5
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 19233.5,
-        "after": 20124.5
-      },
+      "median_official_thread_cpu_ns": {"before": 1377727.0, "after": 832974.5},
+      "median_official_wall_ns": {"before": 1379230.5, "after": 835315.5},
+      "median_two_context_summary_thread_cpu_ns": {"before": 19233.5, "after": 20124.5},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [1378383, 1379183, 1365292, 1460176, 1370581],
-            "official_thread_cpu_ns": [1377341, 1377461, 1364401, 1458631, 1369259],
-            "baseline_instrumented_wall_ns": [1457982, 1426244, 1422399, 1457191, 1720667],
-            "baseline_stage_wall_ns": [
-              [263036, 17056, 136827, 288734, 292453, 15381],
-              [200962, 16996, 138138, 289875, 307401, 16336],
-              [199700, 16805, 137287, 300189, 294985, 15943],
-              [200671, 16793, 138287, 296694, 318341, 16202],
-              [200939, 17177, 138027, 552930, 296488, 16009]
-            ],
-            "two_context_summary_wall_ns": [19609, 46020, 20611, 19799, 20391],
-            "two_context_summary_thread_cpu_ns": [19008, 45167, 19809, 19169, 19418]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [1388893, 1379278, 1362354, 1584726, 1442964],
-            "official_thread_cpu_ns": [1387536, 1377993, 1361408, 1583157, 1441146],
-            "baseline_instrumented_wall_ns": [1438187, 1430926, 1424756, 1498687, 1448703],
-            "baseline_stage_wall_ns": [
-              [201303, 17658, 135684, 307621, 293610, 15675],
-              [213271, 17484, 151895, 288917, 294730, 16697],
-              [200380, 16986, 136754, 300737, 294475, 15950],
-              [256213, 17766, 137405, 310384, 307452, 16114],
-              [218237, 16824, 149421, 288695, 293231, 16002]
-            ],
-            "two_context_summary_wall_ns": [18378, 19119, 19349, 20260, 20531],
-            "two_context_summary_thread_cpu_ns": [17866, 18508, 18647, 19298, 19539]
-          }
+          {"process_pair": 1, "official_wall_ns": [1378383, 1379183, 1365292, 1460176, 1370581], "official_thread_cpu_ns": [1377341, 1377461, 1364401, 1458631, 1369259], "baseline_instrumented_wall_ns": [1457982, 1426244, 1422399, 1457191, 1720667], "baseline_stage_wall_ns": [[263036, 17056, 136827, 288734, 292453, 15381], [200962, 16996, 138138, 289875, 307401, 16336], [199700, 16805, 137287, 300189, 294985, 15943], [200671, 16793, 138287, 296694, 318341, 16202], [200939, 17177, 138027, 552930, 296488, 16009]], "two_context_summary_wall_ns": [19609, 46020, 20611, 19799, 20391], "two_context_summary_thread_cpu_ns": [19008, 45167, 19809, 19169, 19418]},
+          {"process_pair": 2, "official_wall_ns": [1388893, 1379278, 1362354, 1584726, 1442964], "official_thread_cpu_ns": [1387536, 1377993, 1361408, 1583157, 1441146], "baseline_instrumented_wall_ns": [1438187, 1430926, 1424756, 1498687, 1448703], "baseline_stage_wall_ns": [[201303, 17658, 135684, 307621, 293610, 15675], [213271, 17484, 151895, 288917, 294730, 16697], [200380, 16986, 136754, 300737, 294475, 15950], [256213, 17766, 137405, 310384, 307452, 16114], [218237, 16824, 149421, 288695, 293231, 16002]], "two_context_summary_wall_ns": [18378, 19119, 19349, 20260, 20531], "two_context_summary_thread_cpu_ns": [17866, 18508, 18647, 19298, 19539]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [812160, 842566, 824369, 828065, 914865],
-            "official_thread_cpu_ns": [811042, 840525, 822208, 825424, 912743],
-            "baseline_instrumented_wall_ns": [1436348, 1495437, 1782088, 1449649, 1542027],
-            "baseline_stage_wall_ns": [
-              [215503, 18999, 135733, 287884, 310817, 16544],
-              [222114, 18939, 194652, 290714, 296294, 16196],
-              [201955, 18777, 138209, 342594, 600994, 18407],
-              [201742, 18826, 136997, 307780, 315577, 17295],
-              [201622, 19489, 141975, 382213, 299633, 17523]
-            ],
-            "two_context_summary_wall_ns": [19490, 21612, 21823, 20480, 21802],
-            "two_context_summary_thread_cpu_ns": [18808, 20490, 20670, 19759, 20991]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [822934, 822003, 961011, 935653, 873480],
-            "official_thread_cpu_ns": [821898, 820896, 959552, 933604, 871091],
-            "baseline_instrumented_wall_ns": [1463155, 1423194, 1562213, 1499259, 1440501],
-            "baseline_stage_wall_ns": [
-              [233297, 33343, 135670, 288126, 294659, 16603],
-              [199547, 17890, 137053, 303034, 297886, 16427],
-              [207654, 19110, 137094, 289452, 322876, 59749],
-              [202494, 18176, 159747, 309361, 338849, 16885],
-              [201642, 18518, 136966, 293931, 300111, 16205]
-            ],
-            "two_context_summary_wall_ns": [20160, 19740, 20290, 22213, 22514],
-            "two_context_summary_thread_cpu_ns": [19539, 19218, 19359, 21562, 21882]
-          }
+          {"process_pair": 1, "official_wall_ns": [812160, 842566, 824369, 828065, 914865], "official_thread_cpu_ns": [811042, 840525, 822208, 825424, 912743], "baseline_instrumented_wall_ns": [1436348, 1495437, 1782088, 1449649, 1542027], "baseline_stage_wall_ns": [[215503, 18999, 135733, 287884, 310817, 16544], [222114, 18939, 194652, 290714, 296294, 16196], [201955, 18777, 138209, 342594, 600994, 18407], [201742, 18826, 136997, 307780, 315577, 17295], [201622, 19489, 141975, 382213, 299633, 17523]], "two_context_summary_wall_ns": [19490, 21612, 21823, 20480, 21802], "two_context_summary_thread_cpu_ns": [18808, 20490, 20670, 19759, 20991]},
+          {"process_pair": 2, "official_wall_ns": [822934, 822003, 961011, 935653, 873480], "official_thread_cpu_ns": [821898, 820896, 959552, 933604, 871091], "baseline_instrumented_wall_ns": [1463155, 1423194, 1562213, 1499259, 1440501], "baseline_stage_wall_ns": [[233297, 33343, 135670, 288126, 294659, 16603], [199547, 17890, 137053, 303034, 297886, 16427], [207654, 19110, 137094, 289452, 322876, 59749], [202494, 18176, 159747, 309361, 338849, 16885], [201642, 18518, 136966, 293931, 300111, 16205]], "two_context_summary_wall_ns": [20160, 19740, 20290, 22213, 22514], "two_context_summary_thread_cpu_ns": [19539, 19218, 19359, 21562, 21882]}
         ]
       },
       "cpu_reduction_percent": 39.53994514152659
@@ -405,82 +109,17 @@
       "fixture": "observations8-candidates1",
       "instances": 32,
       "result_json_blake3": "78d4f21b83d8c0ee4090611622da4ab3f0b6ed52bff89abf9c86a60ab88d757e",
-      "median_official_thread_cpu_ns": {
-        "before": 2744332.0,
-        "after": 1700354.5
-      },
-      "median_official_wall_ns": {
-        "before": 2746323.5,
-        "after": 1702751.0
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 36564.0,
-        "after": 37476.0
-      },
+      "median_official_thread_cpu_ns": {"before": 2744332.0, "after": 1700354.5},
+      "median_official_wall_ns": {"before": 2746323.5, "after": 1702751.0},
+      "median_two_context_summary_thread_cpu_ns": {"before": 36564.0, "after": 37476.0},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [3033421, 2746208, 3334373, 2838989, 2731076],
-            "official_thread_cpu_ns": [3031132, 2743876, 3332238, 2835833, 2729065],
-            "baseline_instrumented_wall_ns": [3208063, 2867711, 2993651, 2888043, 2890436],
-            "baseline_stage_wall_ns": [
-              [632492, 37885, 277040, 580203, 626932, 32680],
-              [418328, 38258, 274523, 589666, 598472, 30556],
-              [426480, 36326, 278099, 677429, 591531, 30053],
-              [402856, 36235, 276134, 615075, 590976, 30017],
-              [401754, 37880, 295942, 597977, 594403, 30034]
-            ],
-            "two_context_summary_wall_ns": [37296, 38207, 37567, 38848, 39089],
-            "two_context_summary_thread_cpu_ns": [36454, 37586, 36584, 38047, 37235]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [2731436, 2729464, 2735492, 2763334, 2746439],
-            "official_thread_cpu_ns": [2730186, 2728233, 2734101, 2761693, 2744788],
-            "baseline_instrumented_wall_ns": [2843515, 2870775, 2839749, 2865167, 2847220],
-            "baseline_stage_wall_ns": [
-              [402315, 36683, 272327, 571441, 611895, 31270],
-              [419979, 38145, 273259, 588795, 594570, 31103],
-              [402121, 36844, 274209, 572549, 608955, 30263],
-              [432936, 36151, 273192, 576793, 605228, 29973],
-              [416862, 36744, 273689, 587380, 594530, 30306]
-            ],
-            "two_context_summary_wall_ns": [35113, 36766, 37276, 35694, 185318],
-            "two_context_summary_thread_cpu_ns": [34230, 35542, 36544, 34641, 183372]
-          }
+          {"process_pair": 1, "official_wall_ns": [3033421, 2746208, 3334373, 2838989, 2731076], "official_thread_cpu_ns": [3031132, 2743876, 3332238, 2835833, 2729065], "baseline_instrumented_wall_ns": [3208063, 2867711, 2993651, 2888043, 2890436], "baseline_stage_wall_ns": [[632492, 37885, 277040, 580203, 626932, 32680], [418328, 38258, 274523, 589666, 598472, 30556], [426480, 36326, 278099, 677429, 591531, 30053], [402856, 36235, 276134, 615075, 590976, 30017], [401754, 37880, 295942, 597977, 594403, 30034]], "two_context_summary_wall_ns": [37296, 38207, 37567, 38848, 39089], "two_context_summary_thread_cpu_ns": [36454, 37586, 36584, 38047, 37235]},
+          {"process_pair": 2, "official_wall_ns": [2731436, 2729464, 2735492, 2763334, 2746439], "official_thread_cpu_ns": [2730186, 2728233, 2734101, 2761693, 2744788], "baseline_instrumented_wall_ns": [2843515, 2870775, 2839749, 2865167, 2847220], "baseline_stage_wall_ns": [[402315, 36683, 272327, 571441, 611895, 31270], [419979, 38145, 273259, 588795, 594570, 31103], [402121, 36844, 274209, 572549, 608955, 30263], [432936, 36151, 273192, 576793, 605228, 29973], [416862, 36744, 273689, 587380, 594530, 30306]], "two_context_summary_wall_ns": [35113, 36766, 37276, 35694, 185318], "two_context_summary_thread_cpu_ns": [34230, 35542, 36544, 34641, 183372]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [1668767, 1694015, 1950942, 1714026, 1932244],
-            "official_thread_cpu_ns": [1666810, 1691226, 1947987, 1711176, 1929769],
-            "baseline_instrumented_wall_ns": [3203434, 2881059, 3155091, 2871155, 3072157],
-            "baseline_stage_wall_ns": [
-              [580265, 39170, 341524, 580141, 593720, 30525],
-              [407324, 37190, 290852, 600591, 609452, 31679],
-              [449516, 39169, 273562, 590737, 653742, 33573],
-              [402837, 36981, 271882, 604901, 610865, 28452],
-              [534754, 38589, 291406, 632539, 603078, 31628]
-            ],
-            "two_context_summary_wall_ns": [36685, 38087, 39579, 37907, 38769],
-            "two_context_summary_thread_cpu_ns": [35513, 37346, 37886, 37054, 37616]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [1645639, 1660471, 1691657, 1711487, 1714010],
-            "official_thread_cpu_ns": [1644027, 1657416, 1689583, 1709483, 1712588],
-            "baseline_instrumented_wall_ns": [3354431, 2897666, 2894672, 2933870, 2882333],
-            "baseline_stage_wall_ns": [
-              [403514, 37748, 273740, 608706, 835732, 30619],
-              [414918, 37887, 274873, 592746, 599131, 30880],
-              [419098, 49871, 271988, 626409, 601442, 30858],
-              [405840, 37838, 291878, 606422, 592176, 29264],
-              [430564, 37056, 272535, 580492, 595964, 30658]
-            ],
-            "two_context_summary_wall_ns": [95543, 38218, 38708, 37657, 37236],
-            "two_context_summary_thread_cpu_ns": [94089, 37606, 37856, 36844, 36454]
-          }
+          {"process_pair": 1, "official_wall_ns": [1668767, 1694015, 1950942, 1714026, 1932244], "official_thread_cpu_ns": [1666810, 1691226, 1947987, 1711176, 1929769], "baseline_instrumented_wall_ns": [3203434, 2881059, 3155091, 2871155, 3072157], "baseline_stage_wall_ns": [[580265, 39170, 341524, 580141, 593720, 30525], [407324, 37190, 290852, 600591, 609452, 31679], [449516, 39169, 273562, 590737, 653742, 33573], [402837, 36981, 271882, 604901, 610865, 28452], [534754, 38589, 291406, 632539, 603078, 31628]], "two_context_summary_wall_ns": [36685, 38087, 39579, 37907, 38769], "two_context_summary_thread_cpu_ns": [35513, 37346, 37886, 37054, 37616]},
+          {"process_pair": 2, "official_wall_ns": [1645639, 1660471, 1691657, 1711487, 1714010], "official_thread_cpu_ns": [1644027, 1657416, 1689583, 1709483, 1712588], "baseline_instrumented_wall_ns": [3354431, 2897666, 2894672, 2933870, 2882333], "baseline_stage_wall_ns": [[403514, 37748, 273740, 608706, 835732, 30619], [414918, 37887, 274873, 592746, 599131, 30880], [419098, 49871, 271988, 626409, 601442, 30858], [405840, 37838, 291878, 606422, 592176, 29264], [430564, 37056, 272535, 580492, 595964, 30658]], "two_context_summary_wall_ns": [95543, 38218, 38708, 37657, 37236], "two_context_summary_thread_cpu_ns": [94089, 37606, 37856, 36844, 36454]}
         ]
       },
       "cpu_reduction_percent": 38.041224604020215
@@ -489,82 +128,17 @@
       "fixture": "observations8-candidates1",
       "instances": 50,
       "result_json_blake3": "f3af92aa54e27e05c7920b7d89a480712783b87a191035b63d7238650b3bd9ea",
-      "median_official_thread_cpu_ns": {
-        "before": 4282802.0,
-        "after": 2709174.5
-      },
-      "median_official_wall_ns": {
-        "before": 4286294.5,
-        "after": 2712258.5
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 54085.5,
-        "after": 57099.5
-      },
+      "median_official_thread_cpu_ns": {"before": 4282802.0, "after": 2709174.5},
+      "median_official_wall_ns": {"before": 4286294.5, "after": 2712258.5},
+      "median_two_context_summary_thread_cpu_ns": {"before": 54085.5, "after": 57099.5},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [4268016, 4344382, 4282128, 4290461, 5416363],
-            "official_thread_cpu_ns": [4265651, 4341634, 4278881, 4286723, 5412471],
-            "baseline_instrumented_wall_ns": [4459344, 4500146, 4541638, 4510071, 5081880],
-            "baseline_stage_wall_ns": [
-              [628766, 57714, 426292, 949470, 923254, 45756],
-              [628565, 57793, 430120, 926622, 974866, 47574],
-              [644937, 57416, 439804, 1003539, 927748, 46076],
-              [643116, 59662, 429798, 924065, 979595, 47268],
-              [740912, 58635, 433970, 984319, 1044360, 49547]
-            ],
-            "two_context_summary_wall_ns": [56996, 55303, 55644, 70726, 214162],
-            "two_context_summary_thread_cpu_ns": [56053, 54411, 54782, 69203, 210932]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [4252347, 4264786, 4292918, 4400640, 4257965],
-            "official_thread_cpu_ns": [4250770, 4262196, 4290047, 4398318, 4255707],
-            "baseline_instrumented_wall_ns": [4462913, 4496303, 4973458, 4588882, 4472237],
-            "baseline_stage_wall_ns": [
-              [642179, 57501, 423514, 900721, 934246, 45302],
-              [629515, 71820, 425154, 931636, 957468, 46739],
-              [645330, 58623, 613942, 1063656, 1055928, 48446],
-              [630396, 86407, 430346, 929697, 941842, 46454],
-              [642652, 55941, 439376, 919181, 972607, 46463]
-            ],
-            "two_context_summary_wall_ns": [52468, 54632, 55202, 54121, 54111],
-            "two_context_summary_thread_cpu_ns": [51807, 53760, 53709, 53239, 53159]
-          }
+          {"process_pair": 1, "official_wall_ns": [4268016, 4344382, 4282128, 4290461, 5416363], "official_thread_cpu_ns": [4265651, 4341634, 4278881, 4286723, 5412471], "baseline_instrumented_wall_ns": [4459344, 4500146, 4541638, 4510071, 5081880], "baseline_stage_wall_ns": [[628766, 57714, 426292, 949470, 923254, 45756], [628565, 57793, 430120, 926622, 974866, 47574], [644937, 57416, 439804, 1003539, 927748, 46076], [643116, 59662, 429798, 924065, 979595, 47268], [740912, 58635, 433970, 984319, 1044360, 49547]], "two_context_summary_wall_ns": [56996, 55303, 55644, 70726, 214162], "two_context_summary_thread_cpu_ns": [56053, 54411, 54782, 69203, 210932]},
+          {"process_pair": 2, "official_wall_ns": [4252347, 4264786, 4292918, 4400640, 4257965], "official_thread_cpu_ns": [4250770, 4262196, 4290047, 4398318, 4255707], "baseline_instrumented_wall_ns": [4462913, 4496303, 4973458, 4588882, 4472237], "baseline_stage_wall_ns": [[642179, 57501, 423514, 900721, 934246, 45302], [629515, 71820, 425154, 931636, 957468, 46739], [645330, 58623, 613942, 1063656, 1055928, 48446], [630396, 86407, 430346, 929697, 941842, 46454], [642652, 55941, 439376, 919181, 972607, 46463]], "two_context_summary_wall_ns": [52468, 54632, 55202, 54121, 54111], "two_context_summary_thread_cpu_ns": [51807, 53760, 53709, 53239, 53159]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [2575810, 2754189, 2743833, 2586547, 2700118],
-            "official_thread_cpu_ns": [2572933, 2750637, 2740251, 2583479, 2696476],
-            "baseline_instrumented_wall_ns": [4713153, 4639311, 4568626, 5222509, 4629417],
-            "baseline_stage_wall_ns": [
-              [658327, 139274, 472306, 933151, 968817, 46290],
-              [635041, 60822, 452762, 979365, 968959, 47505],
-              [631253, 57687, 426555, 935595, 973239, 51896],
-              [631931, 61403, 1018373, 1008433, 963331, 46432],
-              [629917, 57608, 481610, 981102, 969366, 46468]
-            ],
-            "two_context_summary_wall_ns": [57847, 59630, 73521, 58979, 56294],
-            "two_context_summary_thread_cpu_ns": [56394, 57735, 71666, 57505, 54591]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [2726910, 2859219, 2616805, 2724016, 2700501],
-            "official_thread_cpu_ns": [2723355, 2856974, 2614104, 2721072, 2697277],
-            "baseline_instrumented_wall_ns": [4631296, 4491477, 5019839, 4560521, 6278917],
-            "baseline_stage_wall_ns": [
-              [636311, 56214, 436682, 910296, 929100, 46716],
-              [626758, 56851, 442934, 927542, 976574, 47734],
-              [980909, 109576, 504707, 920507, 970785, 48643],
-              [667923, 56984, 424199, 960037, 947601, 45732],
-              [642302, 61796, 509392, 944656, 976246, 47911]
-            ],
-            "two_context_summary_wall_ns": [56225, 57135, 58668, 57927, 60651],
-            "two_context_summary_thread_cpu_ns": [54621, 56293, 57315, 56884, 58447]
-          }
+          {"process_pair": 1, "official_wall_ns": [2575810, 2754189, 2743833, 2586547, 2700118], "official_thread_cpu_ns": [2572933, 2750637, 2740251, 2583479, 2696476], "baseline_instrumented_wall_ns": [4713153, 4639311, 4568626, 5222509, 4629417], "baseline_stage_wall_ns": [[658327, 139274, 472306, 933151, 968817, 46290], [635041, 60822, 452762, 979365, 968959, 47505], [631253, 57687, 426555, 935595, 973239, 51896], [631931, 61403, 1018373, 1008433, 963331, 46432], [629917, 57608, 481610, 981102, 969366, 46468]], "two_context_summary_wall_ns": [57847, 59630, 73521, 58979, 56294], "two_context_summary_thread_cpu_ns": [56394, 57735, 71666, 57505, 54591]},
+          {"process_pair": 2, "official_wall_ns": [2726910, 2859219, 2616805, 2724016, 2700501], "official_thread_cpu_ns": [2723355, 2856974, 2614104, 2721072, 2697277], "baseline_instrumented_wall_ns": [4631296, 4491477, 5019839, 4560521, 6278917], "baseline_stage_wall_ns": [[636311, 56214, 436682, 910296, 929100, 46716], [626758, 56851, 442934, 927542, 976574, 47734], [980909, 109576, 504707, 920507, 970785, 48643], [667923, 56984, 424199, 960037, 947601, 45732], [642302, 61796, 509392, 944656, 976246, 47911]], "two_context_summary_wall_ns": [56225, 57135, 58668, 57927, 60651], "two_context_summary_thread_cpu_ns": [54621, 56293, 57315, 56884, 58447]}
         ]
       },
       "cpu_reduction_percent": 36.742943054570354
@@ -573,82 +147,17 @@
       "fixture": "observations8-candidates26",
       "instances": 8,
       "result_json_blake3": "6cdc95cf4dfa11436ffa4234f13a1d122299610d0b4d47b83e27cc24755f78b4",
-      "median_official_thread_cpu_ns": {
-        "before": 1221290.0,
-        "after": 947444.5
-      },
-      "median_official_wall_ns": {
-        "before": 1223587.5,
-        "after": 949091.0
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 11322.0,
-        "after": 11011.5
-      },
+      "median_official_thread_cpu_ns": {"before": 1221290.0, "after": 947444.5},
+      "median_official_wall_ns": {"before": 1223587.5, "after": 949091.0},
+      "median_two_context_summary_thread_cpu_ns": {"before": 11322.0, "after": 11011.5},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [1223139, 1257120, 1359154, 1274706, 1752234],
-            "official_thread_cpu_ns": [1219868, 1255431, 1353886, 1273387, 1750494],
-            "baseline_instrumented_wall_ns": [1399184, 1218062, 1239954, 1436439, 1384321],
-            "baseline_stage_wall_ns": [
-              [447111, 10075, 129014, 149946, 148792, 8313],
-              [363867, 8772, 69384, 146861, 147974, 8001],
-              [345258, 8573, 69845, 152209, 148322, 7703],
-              [348985, 9845, 73111, 222124, 148202, 8202],
-              [345652, 9654, 69715, 162005, 304336, 9814]
-            ],
-            "two_context_summary_wall_ns": [13430, 11627, 14842, 13441, 13390],
-            "two_context_summary_thread_cpu_ns": [12498, 11177, 14061, 12078, 12379]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [1201802, 1224036, 1193040, 1201963, 1198608],
-            "official_thread_cpu_ns": [1199758, 1222712, 1192317, 1200909, 1197594],
-            "baseline_instrumented_wall_ns": [1217446, 1214552, 1274481, 1242563, 1244677],
-            "baseline_stage_wall_ns": [
-              [344657, 8705, 69293, 161540, 148152, 8163],
-              [358627, 8703, 68814, 147458, 149676, 8275],
-              [345608, 8362, 69924, 224397, 146809, 7923],
-              [363015, 9062, 68762, 173750, 147424, 8009],
-              [362442, 8743, 68673, 160638, 147061, 8033]
-            ],
-            "two_context_summary_wall_ns": [12369, 11778, 11147, 11126, 10716],
-            "two_context_summary_thread_cpu_ns": [11467, 11137, 10576, 10596, 10075]
-          }
+          {"process_pair": 1, "official_wall_ns": [1223139, 1257120, 1359154, 1274706, 1752234], "official_thread_cpu_ns": [1219868, 1255431, 1353886, 1273387, 1750494], "baseline_instrumented_wall_ns": [1399184, 1218062, 1239954, 1436439, 1384321], "baseline_stage_wall_ns": [[447111, 10075, 129014, 149946, 148792, 8313], [363867, 8772, 69384, 146861, 147974, 8001], [345258, 8573, 69845, 152209, 148322, 7703], [348985, 9845, 73111, 222124, 148202, 8202], [345652, 9654, 69715, 162005, 304336, 9814]], "two_context_summary_wall_ns": [13430, 11627, 14842, 13441, 13390], "two_context_summary_thread_cpu_ns": [12498, 11177, 14061, 12078, 12379]},
+          {"process_pair": 2, "official_wall_ns": [1201802, 1224036, 1193040, 1201963, 1198608], "official_thread_cpu_ns": [1199758, 1222712, 1192317, 1200909, 1197594], "baseline_instrumented_wall_ns": [1217446, 1214552, 1274481, 1242563, 1244677], "baseline_stage_wall_ns": [[344657, 8705, 69293, 161540, 148152, 8163], [358627, 8703, 68814, 147458, 149676, 8275], [345608, 8362, 69924, 224397, 146809, 7923], [363015, 9062, 68762, 173750, 147424, 8009], [362442, 8743, 68673, 160638, 147061, 8033]], "two_context_summary_wall_ns": [12369, 11778, 11147, 11126, 10716], "two_context_summary_thread_cpu_ns": [11467, 11137, 10576, 10596, 10075]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [965270, 1082767, 932912, 930929, 928054],
-            "official_thread_cpu_ns": [962677, 1080581, 932212, 930108, 927284],
-            "baseline_instrumented_wall_ns": [1518032, 1262818, 1246523, 1245742, 1240504],
-            "baseline_stage_wall_ns": [
-              [345219, 10713, 69674, 148283, 185138, 9994],
-              [344249, 9592, 68714, 147963, 173431, 8313],
-              [344026, 9313, 68721, 162713, 150265, 8383],
-              [346280, 9034, 68873, 164206, 150537, 8163],
-              [344746, 9125, 68713, 159227, 148645, 7951]
-            ],
-            "two_context_summary_wall_ns": [13690, 12219, 11297, 11017, 11337],
-            "two_context_summary_thread_cpu_ns": [12679, 11337, 10606, 10475, 10686]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [1125018, 979850, 925909, 920811, 1097546],
-            "official_thread_cpu_ns": [1122023, 978270, 925191, 919994, 1096154],
-            "baseline_instrumented_wall_ns": [1259259, 1339710, 1278888, 1230896, 1251166],
-            "baseline_stage_wall_ns": [
-              [393800, 10276, 69515, 147702, 150385, 8873],
-              [397636, 9492, 70435, 146570, 149817, 8540],
-              [344305, 9624, 68724, 148031, 150869, 8432],
-              [345798, 9003, 68884, 145529, 149653, 7780],
-              [370496, 9796, 68754, 145288, 152256, 8205]
-            ],
-            "two_context_summary_wall_ns": [13180, 13290, 11077, 10927, 13660],
-            "two_context_summary_thread_cpu_ns": [12509, 12388, 10515, 10375, 12629]
-          }
+          {"process_pair": 1, "official_wall_ns": [965270, 1082767, 932912, 930929, 928054], "official_thread_cpu_ns": [962677, 1080581, 932212, 930108, 927284], "baseline_instrumented_wall_ns": [1518032, 1262818, 1246523, 1245742, 1240504], "baseline_stage_wall_ns": [[345219, 10713, 69674, 148283, 185138, 9994], [344249, 9592, 68714, 147963, 173431, 8313], [344026, 9313, 68721, 162713, 150265, 8383], [346280, 9034, 68873, 164206, 150537, 8163], [344746, 9125, 68713, 159227, 148645, 7951]], "two_context_summary_wall_ns": [13690, 12219, 11297, 11017, 11337], "two_context_summary_thread_cpu_ns": [12679, 11337, 10606, 10475, 10686]},
+          {"process_pair": 2, "official_wall_ns": [1125018, 979850, 925909, 920811, 1097546], "official_thread_cpu_ns": [1122023, 978270, 925191, 919994, 1096154], "baseline_instrumented_wall_ns": [1259259, 1339710, 1278888, 1230896, 1251166], "baseline_stage_wall_ns": [[393800, 10276, 69515, 147702, 150385, 8873], [397636, 9492, 70435, 146570, 149817, 8540], [344305, 9624, 68724, 148031, 150869, 8432], [345798, 9003, 68884, 145529, 149653, 7780], [370496, 9796, 68754, 145288, 152256, 8205]], "two_context_summary_wall_ns": [13180, 13290, 11077, 10927, 13660], "two_context_summary_thread_cpu_ns": [12509, 12388, 10515, 10375, 12629]}
         ]
       },
       "cpu_reduction_percent": 22.422643270640062
@@ -657,82 +166,17 @@
       "fixture": "observations8-candidates26",
       "instances": 16,
       "result_json_blake3": "4f71ed65623aa202147da59ef7228def83d4980b7407ad40db5709b581b1aaa6",
-      "median_official_thread_cpu_ns": {
-        "before": 2396156.0,
-        "after": 2033212.5
-      },
-      "median_official_wall_ns": {
-        "before": 2397995.5,
-        "after": 2035172.0
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 19444.0,
-        "after": 21427.0
-      },
+      "median_official_thread_cpu_ns": {"before": 2396156.0, "after": 2033212.5},
+      "median_official_wall_ns": {"before": 2397995.5, "after": 2035172.0},
+      "median_two_context_summary_thread_cpu_ns": {"before": 19444.0, "after": 21427.0},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [2910856, 2421911, 2480559, 2391606, 3130917],
-            "official_thread_cpu_ns": [2909061, 2420217, 2478403, 2389280, 3128346],
-            "baseline_instrumented_wall_ns": [2555943, 2487830, 2709714, 2561471, 2624496],
-            "baseline_stage_wall_ns": [
-              [820081, 18058, 158227, 297837, 295477, 16055],
-              [770367, 18496, 138006, 290416, 295204, 15731],
-              [728073, 18857, 141480, 295835, 296126, 16988],
-              [719190, 17909, 138169, 287902, 438118, 16856],
-              [758322, 20190, 138300, 289714, 308516, 17046]
-            ],
-            "two_context_summary_wall_ns": [20321, 20731, 26170, 20931, 21402],
-            "two_context_summary_thread_cpu_ns": [19279, 19679, 23816, 19609, 20390]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [2390445, 2404385, 2382573, 2360540, 2380350],
-            "official_thread_cpu_ns": [2389341, 2402971, 2381079, 2359216, 2379216],
-            "baseline_instrumented_wall_ns": [2433169, 2436845, 2449884, 2443354, 2438317],
-            "baseline_stage_wall_ns": [
-              [695573, 17115, 137518, 287701, 309443, 16242],
-              [692718, 17063, 137294, 289084, 317426, 16681],
-              [703758, 17326, 137829, 289082, 312660, 16846],
-              [720819, 17798, 138047, 288502, 308493, 16437],
-              [704105, 17945, 136946, 288102, 310627, 17106]
-            ],
-            "two_context_summary_wall_ns": [19470, 19419, 20090, 18658, 19569],
-            "two_context_summary_thread_cpu_ns": [18698, 18798, 19670, 17867, 18407]
-          }
+          {"process_pair": 1, "official_wall_ns": [2910856, 2421911, 2480559, 2391606, 3130917], "official_thread_cpu_ns": [2909061, 2420217, 2478403, 2389280, 3128346], "baseline_instrumented_wall_ns": [2555943, 2487830, 2709714, 2561471, 2624496], "baseline_stage_wall_ns": [[820081, 18058, 158227, 297837, 295477, 16055], [770367, 18496, 138006, 290416, 295204, 15731], [728073, 18857, 141480, 295835, 296126, 16988], [719190, 17909, 138169, 287902, 438118, 16856], [758322, 20190, 138300, 289714, 308516, 17046]], "two_context_summary_wall_ns": [20321, 20731, 26170, 20931, 21402], "two_context_summary_thread_cpu_ns": [19279, 19679, 23816, 19609, 20390]},
+          {"process_pair": 2, "official_wall_ns": [2390445, 2404385, 2382573, 2360540, 2380350], "official_thread_cpu_ns": [2389341, 2402971, 2381079, 2359216, 2379216], "baseline_instrumented_wall_ns": [2433169, 2436845, 2449884, 2443354, 2438317], "baseline_stage_wall_ns": [[695573, 17115, 137518, 287701, 309443, 16242], [692718, 17063, 137294, 289084, 317426, 16681], [703758, 17326, 137829, 289082, 312660, 16846], [720819, 17798, 138047, 288502, 308493, 16437], [704105, 17945, 136946, 288102, 310627, 17106]], "two_context_summary_wall_ns": [19470, 19419, 20090, 18658, 19569], "two_context_summary_thread_cpu_ns": [18698, 18798, 19670, 17867, 18407]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [1817010, 2145344, 3262232, 2718515, 1841026],
-            "official_thread_cpu_ns": [1816182, 2142445, 3259050, 2714923, 1837523],
-            "baseline_instrumented_wall_ns": [2584845, 3561252, 2731595, 2508879, 2580038],
-            "baseline_stage_wall_ns": [
-              [721150, 20312, 214191, 293929, 302488, 17415],
-              [698419, 20341, 145617, 310044, 325511, 18777],
-              [736856, 20430, 139209, 347863, 437927, 17926],
-              [731610, 18971, 138687, 310767, 336014, 16975],
-              [736317, 19459, 138298, 292572, 314372, 17096]
-            ],
-            "two_context_summary_wall_ns": [21382, 25909, 27321, 23745, 23435],
-            "two_context_summary_thread_cpu_ns": [19789, 24306, 25878, 22363, 22363]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [1853680, 1848303, 2107481, 2193260, 1962863],
-            "official_thread_cpu_ns": [1852575, 1846557, 2105109, 2190426, 1961316],
-            "baseline_instrumented_wall_ns": [2518988, 2424977, 2539449, 3005638, 2485798],
-            "baseline_stage_wall_ns": [
-              [700893, 19480, 137018, 350145, 300562, 17038],
-              [701765, 18076, 137627, 287964, 297138, 16442],
-              [704704, 18198, 141090, 368674, 299790, 16885],
-              [1149583, 22330, 192030, 321265, 334521, 16842],
-              [719919, 18697, 138067, 289547, 297317, 17379]
-            ],
-            "two_context_summary_wall_ns": [20110, 20130, 21222, 23546, 21522],
-            "two_context_summary_thread_cpu_ns": [19108, 19579, 20450, 22304, 20550]
-          }
+          {"process_pair": 1, "official_wall_ns": [1817010, 2145344, 3262232, 2718515, 1841026], "official_thread_cpu_ns": [1816182, 2142445, 3259050, 2714923, 1837523], "baseline_instrumented_wall_ns": [2584845, 3561252, 2731595, 2508879, 2580038], "baseline_stage_wall_ns": [[721150, 20312, 214191, 293929, 302488, 17415], [698419, 20341, 145617, 310044, 325511, 18777], [736856, 20430, 139209, 347863, 437927, 17926], [731610, 18971, 138687, 310767, 336014, 16975], [736317, 19459, 138298, 292572, 314372, 17096]], "two_context_summary_wall_ns": [21382, 25909, 27321, 23745, 23435], "two_context_summary_thread_cpu_ns": [19789, 24306, 25878, 22363, 22363]},
+          {"process_pair": 2, "official_wall_ns": [1853680, 1848303, 2107481, 2193260, 1962863], "official_thread_cpu_ns": [1852575, 1846557, 2105109, 2190426, 1961316], "baseline_instrumented_wall_ns": [2518988, 2424977, 2539449, 3005638, 2485798], "baseline_stage_wall_ns": [[700893, 19480, 137018, 350145, 300562, 17038], [701765, 18076, 137627, 287964, 297138, 16442], [704704, 18198, 141090, 368674, 299790, 16885], [1149583, 22330, 192030, 321265, 334521, 16842], [719919, 18697, 138067, 289547, 297317, 17379]], "two_context_summary_wall_ns": [20110, 20130, 21222, 23546, 21522], "two_context_summary_thread_cpu_ns": [19108, 19579, 20450, 22304, 20550]}
         ]
       },
       "cpu_reduction_percent": 15.146906127981651
@@ -741,82 +185,17 @@
       "fixture": "observations8-candidates26",
       "instances": 32,
       "result_json_blake3": "a7bf7c79f25efd67fa77188e4f737590c5d252ecc673197b6b1799aeb2c8c36f",
-      "median_official_thread_cpu_ns": {
-        "before": 4835816.0,
-        "after": 3691626.0
-      },
-      "median_official_wall_ns": {
-        "before": 4838235.5,
-        "after": 3696234.0
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 36935.0,
-        "after": 38918.0
-      },
+      "median_official_thread_cpu_ns": {"before": 4835816.0, "after": 3691626.0},
+      "median_official_wall_ns": {"before": 4838235.5, "after": 3696234.0},
+      "median_two_context_summary_thread_cpu_ns": {"before": 36935.0, "after": 38918.0},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [5570094, 5111204, 5062211, 4807859, 5129672],
-            "official_thread_cpu_ns": [5567701, 5108791, 5059899, 4805371, 5126717],
-            "baseline_instrumented_wall_ns": [5222331, 5090614, 5287409, 5555543, 5051184],
-            "baseline_stage_wall_ns": [
-              [1612293, 39381, 277145, 586290, 667662, 31343],
-              [1454327, 38261, 294163, 598570, 601727, 43904],
-              [1579267, 40499, 385368, 637249, 621440, 31961],
-              [1520563, 41421, 352629, 658057, 734534, 34068],
-              [1450200, 41084, 297776, 603657, 606872, 30276]
-            ],
-            "two_context_summary_wall_ns": [37666, 38538, 72358, 39589, 40852],
-            "two_context_summary_thread_cpu_ns": [36745, 37305, 71116, 38597, 39639]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [4698697, 4769323, 4751496, 4868612, 4782381],
-            "official_thread_cpu_ns": [4697742, 4767445, 4749749, 4866261, 4780705],
-            "baseline_instrumented_wall_ns": [4933599, 4884155, 4849894, 5103163, 4887900],
-            "baseline_stage_wall_ns": [
-              [1464351, 37641, 272549, 602065, 614060, 30388],
-              [1375893, 36750, 278177, 600801, 603042, 44935],
-              [1376582, 37749, 287303, 589065, 611838, 30824],
-              [1434140, 38865, 278711, 676627, 603256, 32067],
-              [1413011, 37466, 274680, 595316, 606827, 31071]
-            ],
-            "two_context_summary_wall_ns": [36905, 37536, 37927, 37437, 37716],
-            "two_context_summary_thread_cpu_ns": [35643, 36714, 37125, 36344, 36454]
-          }
+          {"process_pair": 1, "official_wall_ns": [5570094, 5111204, 5062211, 4807859, 5129672], "official_thread_cpu_ns": [5567701, 5108791, 5059899, 4805371, 5126717], "baseline_instrumented_wall_ns": [5222331, 5090614, 5287409, 5555543, 5051184], "baseline_stage_wall_ns": [[1612293, 39381, 277145, 586290, 667662, 31343], [1454327, 38261, 294163, 598570, 601727, 43904], [1579267, 40499, 385368, 637249, 621440, 31961], [1520563, 41421, 352629, 658057, 734534, 34068], [1450200, 41084, 297776, 603657, 606872, 30276]], "two_context_summary_wall_ns": [37666, 38538, 72358, 39589, 40852], "two_context_summary_thread_cpu_ns": [36745, 37305, 71116, 38597, 39639]},
+          {"process_pair": 2, "official_wall_ns": [4698697, 4769323, 4751496, 4868612, 4782381], "official_thread_cpu_ns": [4697742, 4767445, 4749749, 4866261, 4780705], "baseline_instrumented_wall_ns": [4933599, 4884155, 4849894, 5103163, 4887900], "baseline_stage_wall_ns": [[1464351, 37641, 272549, 602065, 614060, 30388], [1375893, 36750, 278177, 600801, 603042, 44935], [1376582, 37749, 287303, 589065, 611838, 30824], [1434140, 38865, 278711, 676627, 603256, 32067], [1413011, 37466, 274680, 595316, 606827, 31071]], "two_context_summary_wall_ns": [36905, 37536, 37927, 37437, 37716], "two_context_summary_thread_cpu_ns": [35643, 36714, 37125, 36344, 36454]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [3980281, 4960163, 3721342, 3651597, 3670605],
-            "official_thread_cpu_ns": [3976963, 4955143, 3716308, 3648116, 3666233],
-            "baseline_instrumented_wall_ns": [5474517, 9838355, 4884420, 4871480, 4879492],
-            "baseline_stage_wall_ns": [
-              [1489089, 39161, 274283, 646843, 624958, 31756],
-              [3269894, 48000, 280850, 959589, 1419636, 35768],
-              [1401046, 38440, 274935, 626126, 610578, 30569],
-              [1426033, 38147, 272571, 601063, 592387, 31189],
-              [1434505, 37397, 273721, 597126, 598781, 31170]
-            ],
-            "two_context_summary_wall_ns": [40952, 42744, 40752, 40230, 39469],
-            "two_context_summary_thread_cpu_ns": [38838, 40810, 39679, 38797, 38036]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [4238507, 3671126, 3804727, 3662773, 3625899],
-            "official_thread_cpu_ns": [4235406, 3666944, 3802234, 3660564, 3623370],
-            "baseline_instrumented_wall_ns": [5441001, 4919388, 5289464, 4851627, 5102654],
-            "baseline_stage_wall_ns": [
-              [1515593, 42135, 314475, 695467, 752229, 32214],
-              [1388597, 37832, 273746, 603352, 609115, 31191],
-              [1389302, 38500, 274530, 589728, 636382, 31597],
-              [1401693, 37486, 273155, 581423, 605826, 31248],
-              [1574540, 38657, 286971, 609724, 628443, 31952]
-            ],
-            "two_context_summary_wall_ns": [41112, 40560, 40000, 37947, 131237],
-            "two_context_summary_thread_cpu_ns": [38998, 39739, 38737, 37395, 129222]
-          }
+          {"process_pair": 1, "official_wall_ns": [3980281, 4960163, 3721342, 3651597, 3670605], "official_thread_cpu_ns": [3976963, 4955143, 3716308, 3648116, 3666233], "baseline_instrumented_wall_ns": [5474517, 9838355, 4884420, 4871480, 4879492], "baseline_stage_wall_ns": [[1489089, 39161, 274283, 646843, 624958, 31756], [3269894, 48000, 280850, 959589, 1419636, 35768], [1401046, 38440, 274935, 626126, 610578, 30569], [1426033, 38147, 272571, 601063, 592387, 31189], [1434505, 37397, 273721, 597126, 598781, 31170]], "two_context_summary_wall_ns": [40952, 42744, 40752, 40230, 39469], "two_context_summary_thread_cpu_ns": [38838, 40810, 39679, 38797, 38036]},
+          {"process_pair": 2, "official_wall_ns": [4238507, 3671126, 3804727, 3662773, 3625899], "official_thread_cpu_ns": [4235406, 3666944, 3802234, 3660564, 3623370], "baseline_instrumented_wall_ns": [5441001, 4919388, 5289464, 4851627, 5102654], "baseline_stage_wall_ns": [[1515593, 42135, 314475, 695467, 752229, 32214], [1388597, 37832, 273746, 603352, 609115, 31191], [1389302, 38500, 274530, 589728, 636382, 31597], [1401693, 37486, 273155, 581423, 605826, 31248], [1574540, 38657, 286971, 609724, 628443, 31952]], "two_context_summary_wall_ns": [41112, 40560, 40000, 37947, 131237], "two_context_summary_thread_cpu_ns": [38998, 39739, 38737, 37395, 129222]}
         ]
       },
       "cpu_reduction_percent": 23.6607430886535
@@ -825,82 +204,17 @@
       "fixture": "observations8-candidates26",
       "instances": 50,
       "result_json_blake3": "8081c316e3b49242e02bd01443dc96d2f06905104eb702902a7b3b89207ac03f",
-      "median_official_thread_cpu_ns": {
-        "before": 7900984.0,
-        "after": 5702080.0
-      },
-      "median_official_wall_ns": {
-        "before": 7904063.5,
-        "after": 5705098.5
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 56018.5,
-        "after": 57600.0
-      },
+      "median_official_thread_cpu_ns": {"before": 7900984.0, "after": 5702080.0},
+      "median_official_wall_ns": {"before": 7904063.5, "after": 5705098.5},
+      "median_two_context_summary_thread_cpu_ns": {"before": 56018.5, "after": 57600.0},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [7981720, 8377936, 8634452, 7911655, 7924134],
-            "official_thread_cpu_ns": [7978804, 8374500, 8630700, 7907348, 7920818],
-            "baseline_instrumented_wall_ns": [8367119, 8076443, 8546730, 9115955, 8276434],
-            "baseline_stage_wall_ns": [
-              [2296209, 60363, 430822, 997361, 974936, 49358],
-              [2167989, 58998, 451625, 1057021, 1079831, 49286],
-              [2467410, 62121, 432660, 1019328, 1094417, 51901],
-              [2348694, 62416, 471070, 1029369, 1198341, 52367],
-              [2218154, 58765, 435777, 1290797, 933214, 47004]
-            ],
-            "two_context_summary_wall_ns": [58648, 73240, 57176, 59409, 57747],
-            "two_context_summary_thread_cpu_ns": [56354, 71286, 55432, 57616, 56373]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [7462832, 7896472, 7397864, 7442512, 7430914],
-            "official_thread_cpu_ns": [7460416, 7894620, 7395330, 7440266, 7428288],
-            "baseline_instrumented_wall_ns": [7766287, 7631455, 7621769, 7610143, 7652797],
-            "baseline_stage_wall_ns": [
-              [2227650, 60029, 495088, 910196, 1026195, 46522],
-              [2236270, 57565, 426879, 930617, 945928, 46388],
-              [2186658, 57849, 463456, 918827, 957096, 48083],
-              [2174289, 58702, 428683, 937295, 953123, 48812],
-              [2180676, 56528, 462135, 938256, 940805, 46029]
-            ],
-            "two_context_summary_wall_ns": [58318, 55934, 55923, 57016, 55764],
-            "two_context_summary_thread_cpu_ns": [56894, 54831, 54611, 55683, 54691]
-          }
+          {"process_pair": 1, "official_wall_ns": [7981720, 8377936, 8634452, 7911655, 7924134], "official_thread_cpu_ns": [7978804, 8374500, 8630700, 7907348, 7920818], "baseline_instrumented_wall_ns": [8367119, 8076443, 8546730, 9115955, 8276434], "baseline_stage_wall_ns": [[2296209, 60363, 430822, 997361, 974936, 49358], [2167989, 58998, 451625, 1057021, 1079831, 49286], [2467410, 62121, 432660, 1019328, 1094417, 51901], [2348694, 62416, 471070, 1029369, 1198341, 52367], [2218154, 58765, 435777, 1290797, 933214, 47004]], "two_context_summary_wall_ns": [58648, 73240, 57176, 59409, 57747], "two_context_summary_thread_cpu_ns": [56354, 71286, 55432, 57616, 56373]},
+          {"process_pair": 2, "official_wall_ns": [7462832, 7896472, 7397864, 7442512, 7430914], "official_thread_cpu_ns": [7460416, 7894620, 7395330, 7440266, 7428288], "baseline_instrumented_wall_ns": [7766287, 7631455, 7621769, 7610143, 7652797], "baseline_stage_wall_ns": [[2227650, 60029, 495088, 910196, 1026195, 46522], [2236270, 57565, 426879, 930617, 945928, 46388], [2186658, 57849, 463456, 918827, 957096, 48083], [2174289, 58702, 428683, 937295, 953123, 48812], [2180676, 56528, 462135, 938256, 940805, 46029]], "two_context_summary_wall_ns": [58318, 55934, 55923, 57016, 55764], "two_context_summary_thread_cpu_ns": [56894, 54831, 54611, 55683, 54691]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [5700317, 5709880, 5685854, 5739135, 5788169],
-            "official_thread_cpu_ns": [5697353, 5706807, 5683152, 5735700, 5784152],
-            "baseline_instrumented_wall_ns": [7671078, 7909516, 7750207, 7708994, 7727703],
-            "baseline_stage_wall_ns": [
-              [2229152, 57954, 424082, 951711, 943537, 45774],
-              [2202359, 59426, 545500, 1030254, 932543, 46713],
-              [2187750, 59115, 443359, 993330, 930290, 47100],
-              [2253034, 59316, 425681, 938398, 933593, 47089],
-              [2204114, 60641, 427554, 969586, 983310, 48866]
-            ],
-            "two_context_summary_wall_ns": [60371, 58598, 59490, 58959, 60060],
-            "two_context_summary_thread_cpu_ns": [58707, 57074, 57345, 57595, 57605]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [5685688, 5664697, 5879920, 5836885, 5689904],
-            "official_thread_cpu_ns": [5683562, 5661761, 5876979, 5834256, 5687208],
-            "baseline_instrumented_wall_ns": [8159248, 8035363, 7620270, 7748301, 7889373],
-            "baseline_stage_wall_ns": [
-              [2415291, 58953, 429018, 1122232, 1027504, 47468],
-              [2243134, 59962, 427063, 919841, 952506, 46550],
-              [2200208, 74480, 423607, 915430, 974702, 46093],
-              [2200312, 58847, 424114, 989618, 1014879, 48193],
-              [2300219, 84918, 424954, 997657, 949284, 48791]
-            ],
-            "two_context_summary_wall_ns": [60561, 57717, 56685, 59159, 59910],
-            "two_context_summary_thread_cpu_ns": [59298, 56423, 56063, 58066, 58817]
-          }
+          {"process_pair": 1, "official_wall_ns": [5700317, 5709880, 5685854, 5739135, 5788169], "official_thread_cpu_ns": [5697353, 5706807, 5683152, 5735700, 5784152], "baseline_instrumented_wall_ns": [7671078, 7909516, 7750207, 7708994, 7727703], "baseline_stage_wall_ns": [[2229152, 57954, 424082, 951711, 943537, 45774], [2202359, 59426, 545500, 1030254, 932543, 46713], [2187750, 59115, 443359, 993330, 930290, 47100], [2253034, 59316, 425681, 938398, 933593, 47089], [2204114, 60641, 427554, 969586, 983310, 48866]], "two_context_summary_wall_ns": [60371, 58598, 59490, 58959, 60060], "two_context_summary_thread_cpu_ns": [58707, 57074, 57345, 57595, 57605]},
+          {"process_pair": 2, "official_wall_ns": [5685688, 5664697, 5879920, 5836885, 5689904], "official_thread_cpu_ns": [5683562, 5661761, 5876979, 5834256, 5687208], "baseline_instrumented_wall_ns": [8159248, 8035363, 7620270, 7748301, 7889373], "baseline_stage_wall_ns": [[2415291, 58953, 429018, 1122232, 1027504, 47468], [2243134, 59962, 427063, 919841, 952506, 46550], [2200208, 74480, 423607, 915430, 974702, 46093], [2200312, 58847, 424114, 989618, 1014879, 48193], [2300219, 84918, 424954, 997657, 949284, 48791]], "two_context_summary_wall_ns": [60561, 57717, 56685, 59159, 59910], "two_context_summary_thread_cpu_ns": [59298, 56423, 56063, 58066, 58817]}
         ]
       },
       "cpu_reduction_percent": 27.83076133301877
@@ -909,82 +223,17 @@
       "fixture": "observations64-candidates1",
       "instances": 8,
       "result_json_blake3": "356f8d5d2307d0012e03dfb819a2a0f2bd3a4851ba3954191fdcc1ba4ca02d17",
-      "median_official_thread_cpu_ns": {
-        "before": 3369944.0,
-        "after": 1368868.5
-      },
-      "median_official_wall_ns": {
-        "before": 3372559.0,
-        "after": 1371774.5
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 67856.0,
-        "after": 65677.5
-      },
+      "median_official_thread_cpu_ns": {"before": 3369944.0, "after": 1368868.5},
+      "median_official_wall_ns": {"before": 3372559.0, "after": 1371774.5},
+      "median_two_context_summary_thread_cpu_ns": {"before": 67856.0, "after": 65677.5},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [3947645, 3664489, 3878301, 3513432, 3913914],
-            "official_thread_cpu_ns": [3944175, 3660765, 3874471, 3510582, 3910415],
-            "baseline_instrumented_wall_ns": [3885181, 4890463, 3642165, 3726272, 3554574],
-            "baseline_stage_wall_ns": [
-              [104297, 66057, 492711, 1275677, 1120103, 37296],
-              [103114, 86718, 466181, 1068295, 1122968, 36423],
-              [176355, 102553, 495104, 1088929, 1023981, 36604],
-              [102764, 64567, 464518, 1204542, 1115179, 36684],
-              [104085, 71658, 494312, 1026041, 1031500, 34251]
-            ],
-            "two_context_summary_wall_ns": [68993, 74863, 310688, 87943, 70966],
-            "two_context_summary_thread_cpu_ns": [67550, 72958, 309088, 86318, 69383]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [3212428, 3224756, 3212457, 3231686, 3220230],
-            "official_thread_cpu_ns": [3208645, 3222405, 3210658, 3229306, 3218149],
-            "baseline_instrumented_wall_ns": [3442252, 3404726, 3402883, 3439839, 3413620],
-            "baseline_stage_wall_ns": [
-              [103105, 64027, 459709, 1015654, 1040303, 36073],
-              [103576, 63324, 460310, 989375, 1034980, 39309],
-              [101463, 61722, 459585, 1010235, 1018627, 35272],
-              [103646, 62382, 496275, 993398, 1024046, 53511],
-              [102453, 62634, 473600, 1018638, 1020058, 34153]
-            ],
-            "two_context_summary_wall_ns": [66620, 67021, 68834, 68252, 69394],
-            "two_context_summary_thread_cpu_ns": [65376, 66459, 67911, 67440, 67801]
-          }
+          {"process_pair": 1, "official_wall_ns": [3947645, 3664489, 3878301, 3513432, 3913914], "official_thread_cpu_ns": [3944175, 3660765, 3874471, 3510582, 3910415], "baseline_instrumented_wall_ns": [3885181, 4890463, 3642165, 3726272, 3554574], "baseline_stage_wall_ns": [[104297, 66057, 492711, 1275677, 1120103, 37296], [103114, 86718, 466181, 1068295, 1122968, 36423], [176355, 102553, 495104, 1088929, 1023981, 36604], [102764, 64567, 464518, 1204542, 1115179, 36684], [104085, 71658, 494312, 1026041, 1031500, 34251]], "two_context_summary_wall_ns": [68993, 74863, 310688, 87943, 70966], "two_context_summary_thread_cpu_ns": [67550, 72958, 309088, 86318, 69383]},
+          {"process_pair": 2, "official_wall_ns": [3212428, 3224756, 3212457, 3231686, 3220230], "official_thread_cpu_ns": [3208645, 3222405, 3210658, 3229306, 3218149], "baseline_instrumented_wall_ns": [3442252, 3404726, 3402883, 3439839, 3413620], "baseline_stage_wall_ns": [[103105, 64027, 459709, 1015654, 1040303, 36073], [103576, 63324, 460310, 989375, 1034980, 39309], [101463, 61722, 459585, 1010235, 1018627, 35272], [103646, 62382, 496275, 993398, 1024046, 53511], [102453, 62634, 473600, 1018638, 1020058, 34153]], "two_context_summary_wall_ns": [66620, 67021, 68834, 68252, 69394], "two_context_summary_thread_cpu_ns": [65376, 66459, 67911, 67440, 67801]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [1330740, 1374986, 1377490, 1349428, 1684782],
-            "official_thread_cpu_ns": [1327608, 1372003, 1374637, 1346375, 1681051],
-            "baseline_instrumented_wall_ns": [3548743, 3439229, 3665118, 3472017, 3793941],
-            "baseline_stage_wall_ns": [
-              [103817, 65178, 481724, 1020082, 1066774, 38676],
-              [103287, 63884, 479321, 999051, 1026682, 38308],
-              [102834, 64677, 461444, 1185379, 1062055, 39029],
-              [103104, 64294, 477956, 1009118, 1022146, 38409],
-              [103425, 63577, 465870, 1154715, 1098410, 38237]
-            ],
-            "two_context_summary_wall_ns": [62414, 67010, 69464, 66750, 71768],
-            "two_context_summary_thread_cpu_ns": [61210, 66148, 68161, 65207, 69473]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [1419449, 1342233, 1368563, 1323856, 1380510],
-            "official_thread_cpu_ns": [1416199, 1338934, 1365734, 1321198, 1377391],
-            "baseline_instrumented_wall_ns": [3395834, 3494651, 3722674, 3576274, 4017445],
-            "baseline_stage_wall_ns": [
-              [102504, 62707, 459630, 983365, 1022564, 37705],
-              [102103, 63183, 530705, 1002572, 1024246, 38286],
-              [104838, 62335, 479397, 1246189, 1082454, 39148],
-              [121582, 97135, 461681, 1085529, 1044387, 38608],
-              [103026, 63173, 516435, 1337195, 1150596, 39281]
-            ],
-            "two_context_summary_wall_ns": [78407, 65959, 65428, 64176, 88713],
-            "two_context_summary_thread_cpu_ns": [77144, 64926, 63984, 62823, 87059]
-          }
+          {"process_pair": 1, "official_wall_ns": [1330740, 1374986, 1377490, 1349428, 1684782], "official_thread_cpu_ns": [1327608, 1372003, 1374637, 1346375, 1681051], "baseline_instrumented_wall_ns": [3548743, 3439229, 3665118, 3472017, 3793941], "baseline_stage_wall_ns": [[103817, 65178, 481724, 1020082, 1066774, 38676], [103287, 63884, 479321, 999051, 1026682, 38308], [102834, 64677, 461444, 1185379, 1062055, 39029], [103104, 64294, 477956, 1009118, 1022146, 38409], [103425, 63577, 465870, 1154715, 1098410, 38237]], "two_context_summary_wall_ns": [62414, 67010, 69464, 66750, 71768], "two_context_summary_thread_cpu_ns": [61210, 66148, 68161, 65207, 69473]},
+          {"process_pair": 2, "official_wall_ns": [1419449, 1342233, 1368563, 1323856, 1380510], "official_thread_cpu_ns": [1416199, 1338934, 1365734, 1321198, 1377391], "baseline_instrumented_wall_ns": [3395834, 3494651, 3722674, 3576274, 4017445], "baseline_stage_wall_ns": [[102504, 62707, 459630, 983365, 1022564, 37705], [102103, 63183, 530705, 1002572, 1024246, 38286], [104838, 62335, 479397, 1246189, 1082454, 39148], [121582, 97135, 461681, 1085529, 1044387, 38608], [103026, 63173, 516435, 1337195, 1150596, 39281]], "two_context_summary_wall_ns": [78407, 65959, 65428, 64176, 88713], "two_context_summary_thread_cpu_ns": [77144, 64926, 63984, 62823, 87059]}
         ]
       },
       "cpu_reduction_percent": 59.38008168681734
@@ -993,82 +242,17 @@
       "fixture": "observations64-candidates1",
       "instances": 16,
       "result_json_blake3": "44801fd9966f2cc95d029655dce57c7d917eefdc750fff2119fcf82e734076f6",
-      "median_official_thread_cpu_ns": {
-        "before": 6607416.5,
-        "after": 2716786.0
-      },
-      "median_official_wall_ns": {
-        "before": 6611578.0,
-        "after": 2720538.5
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 129982.0,
-        "after": 128680.5
-      },
+      "median_official_thread_cpu_ns": {"before": 6607416.5, "after": 2716786.0},
+      "median_official_wall_ns": {"before": 6611578.0, "after": 2720538.5},
+      "median_two_context_summary_thread_cpu_ns": {"before": 129982.0, "after": 128680.5},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [6899442, 6833694, 7006153, 6905402, 6768516],
-            "official_thread_cpu_ns": [6896400, 6830792, 7001516, 6902419, 6763833],
-            "baseline_instrumented_wall_ns": [7419495, 7027295, 8076543, 7489119, 6959674],
-            "baseline_stage_wall_ns": [
-              [204577, 138337, 923447, 2125627, 2265545, 70797],
-              [206067, 158069, 1034304, 2015911, 2108260, 86732],
-              [205548, 137698, 1162946, 2379167, 2047928, 72590],
-              [206452, 128382, 1079934, 2107106, 2397764, 76716],
-              [204395, 127790, 920012, 2045085, 2048118, 72660]
-            ],
-            "two_context_summary_wall_ns": [276595, 126380, 133912, 120431, 133550],
-            "two_context_summary_thread_cpu_ns": [274807, 124735, 132326, 118816, 132136]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [6402652, 6411485, 6454640, 6445316, 6411526],
-            "official_thread_cpu_ns": [6399794, 6408697, 6451000, 6441687, 6408897],
-            "baseline_instrumented_wall_ns": [6838866, 6848461, 6943933, 6832467, 6823704],
-            "baseline_stage_wall_ns": [
-              [202795, 141491, 946178, 2001503, 2072089, 70574],
-              [205357, 129783, 932918, 1978491, 2064298, 90444],
-              [204168, 127164, 943950, 2000740, 2105535, 73193],
-              [207871, 144548, 917156, 1978768, 2080991, 72467],
-              [206528, 123974, 956023, 1974911, 2001883, 72518]
-            ],
-            "two_context_summary_wall_ns": [132328, 125809, 165939, 117817, 130325],
-            "two_context_summary_thread_cpu_ns": [130653, 124775, 164604, 116613, 129311]
-          }
+          {"process_pair": 1, "official_wall_ns": [6899442, 6833694, 7006153, 6905402, 6768516], "official_thread_cpu_ns": [6896400, 6830792, 7001516, 6902419, 6763833], "baseline_instrumented_wall_ns": [7419495, 7027295, 8076543, 7489119, 6959674], "baseline_stage_wall_ns": [[204577, 138337, 923447, 2125627, 2265545, 70797], [206067, 158069, 1034304, 2015911, 2108260, 86732], [205548, 137698, 1162946, 2379167, 2047928, 72590], [206452, 128382, 1079934, 2107106, 2397764, 76716], [204395, 127790, 920012, 2045085, 2048118, 72660]], "two_context_summary_wall_ns": [276595, 126380, 133912, 120431, 133550], "two_context_summary_thread_cpu_ns": [274807, 124735, 132326, 118816, 132136]},
+          {"process_pair": 2, "official_wall_ns": [6402652, 6411485, 6454640, 6445316, 6411526], "official_thread_cpu_ns": [6399794, 6408697, 6451000, 6441687, 6408897], "baseline_instrumented_wall_ns": [6838866, 6848461, 6943933, 6832467, 6823704], "baseline_stage_wall_ns": [[202795, 141491, 946178, 2001503, 2072089, 70574], [205357, 129783, 932918, 1978491, 2064298, 90444], [204168, 127164, 943950, 2000740, 2105535, 73193], [207871, 144548, 917156, 1978768, 2080991, 72467], [206528, 123974, 956023, 1974911, 2001883, 72518]], "two_context_summary_wall_ns": [132328, 125809, 165939, 117817, 130325], "two_context_summary_thread_cpu_ns": [130653, 124775, 164604, 116613, 129311]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [2746227, 2667238, 2694850, 2813058, 3252478],
-            "official_thread_cpu_ns": [2742754, 2662967, 2690818, 2809093, 3247613],
-            "baseline_instrumented_wall_ns": [7151758, 6881751, 7026469, 7457677, 7934244],
-            "baseline_stage_wall_ns": [
-              [207290, 136325, 1078000, 1991080, 2087917, 73770],
-              [205992, 142946, 943305, 1988858, 2102018, 72899],
-              [207361, 126828, 1041135, 2034888, 2017543, 72456],
-              [213522, 210557, 999831, 2071652, 2330931, 75727],
-              [212388, 142684, 942177, 1992003, 2794739, 98430]
-            ],
-            "two_context_summary_wall_ns": [128663, 133070, 138869, 122454, 147952],
-            "two_context_summary_thread_cpu_ns": [127188, 131775, 136292, 120478, 144844]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [2684587, 2671497, 2629805, 2968653, 2819078],
-            "official_thread_cpu_ns": [2681984, 2667784, 2626682, 2964343, 2813950],
-            "baseline_instrumented_wall_ns": [7019869, 6840090, 7355632, 7269132, 7101952],
-            "baseline_stage_wall_ns": [
-              [229967, 132358, 1019449, 2019829, 2108973, 72717],
-              [203594, 127390, 918677, 1983915, 2076084, 71677],
-              [291590, 152780, 1174494, 1993702, 2148614, 73248],
-              [207182, 181393, 920561, 2117174, 2214950, 123776],
-              [207492, 128130, 944847, 2204636, 2050098, 74250]
-            ],
-            "two_context_summary_wall_ns": [125999, 128923, 131197, 121953, 149144],
-            "two_context_summary_thread_cpu_ns": [124715, 127589, 129772, 120388, 146838]
-          }
+          {"process_pair": 1, "official_wall_ns": [2746227, 2667238, 2694850, 2813058, 3252478], "official_thread_cpu_ns": [2742754, 2662967, 2690818, 2809093, 3247613], "baseline_instrumented_wall_ns": [7151758, 6881751, 7026469, 7457677, 7934244], "baseline_stage_wall_ns": [[207290, 136325, 1078000, 1991080, 2087917, 73770], [205992, 142946, 943305, 1988858, 2102018, 72899], [207361, 126828, 1041135, 2034888, 2017543, 72456], [213522, 210557, 999831, 2071652, 2330931, 75727], [212388, 142684, 942177, 1992003, 2794739, 98430]], "two_context_summary_wall_ns": [128663, 133070, 138869, 122454, 147952], "two_context_summary_thread_cpu_ns": [127188, 131775, 136292, 120478, 144844]},
+          {"process_pair": 2, "official_wall_ns": [2684587, 2671497, 2629805, 2968653, 2819078], "official_thread_cpu_ns": [2681984, 2667784, 2626682, 2964343, 2813950], "baseline_instrumented_wall_ns": [7019869, 6840090, 7355632, 7269132, 7101952], "baseline_stage_wall_ns": [[229967, 132358, 1019449, 2019829, 2108973, 72717], [203594, 127390, 918677, 1983915, 2076084, 71677], [291590, 152780, 1174494, 1993702, 2148614, 73248], [207182, 181393, 920561, 2117174, 2214950, 123776], [207492, 128130, 944847, 2204636, 2050098, 74250]], "two_context_summary_wall_ns": [125999, 128923, 131197, 121953, 149144], "two_context_summary_thread_cpu_ns": [124715, 127589, 129772, 120388, 146838]}
         ]
       },
       "cpu_reduction_percent": 58.88277967644389
@@ -1077,82 +261,17 @@
       "fixture": "observations64-candidates1",
       "instances": 32,
       "result_json_blake3": "a826de7862620faf038ed2185295f848cfaeff9cbf5641bc6af92925231bba67",
-      "median_official_thread_cpu_ns": {
-        "before": 13358561.5,
-        "after": 5330880.0
-      },
-      "median_official_wall_ns": {
-        "before": 13362975.5,
-        "after": 5334789.0
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 254967.5,
-        "after": 253280.5
-      },
+      "median_official_thread_cpu_ns": {"before": 13358561.5, "after": 5330880.0},
+      "median_official_wall_ns": {"before": 13362975.5, "after": 5334789.0},
+      "median_two_context_summary_thread_cpu_ns": {"before": 254967.5, "after": 253280.5},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [14151957, 16149570, 13707548, 18503239, 14303315],
-            "official_thread_cpu_ns": [14138311, 16143904, 13703107, 18487066, 14297688],
-            "baseline_instrumented_wall_ns": [14729224, 14189153, 18654967, 15213001, 15262256],
-            "baseline_stage_wall_ns": [
-              [412318, 322520, 1905142, 4130547, 4551987, 145404],
-              [483917, 273071, 1870258, 4101557, 4088070, 143273],
-              [1596909, 365888, 2376600, 4838635, 4807802, 149940],
-              [420233, 291667, 2264613, 4197859, 4291225, 148892],
-              [565749, 299389, 2048088, 4251161, 4408281, 147280]
-            ],
-            "two_context_summary_wall_ns": [262495, 249354, 259550, 257567, 261934],
-            "two_context_summary_thread_cpu_ns": [260286, 247918, 255950, 254677, 260115]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [12878062, 12877942, 13018403, 12835949, 12873857],
-            "official_thread_cpu_ns": [12874198, 12874379, 13014016, 12816383, 12870433],
-            "baseline_instrumented_wall_ns": [13772524, 13774718, 13791632, 14820085, 14845063],
-            "baseline_stage_wall_ns": [
-              [409383, 267863, 1899384, 4023432, 3953148, 168048],
-              [413482, 269055, 1880195, 3989212, 3972608, 141633],
-              [436871, 269836, 1847843, 4006849, 4007066, 143274],
-              [457956, 288612, 1901901, 4054081, 3966398, 141890],
-              [417694, 271217, 1905298, 4096545, 3981800, 193984]
-            ],
-            "two_context_summary_wall_ns": [253731, 251287, 269724, 256004, 258488],
-            "two_context_summary_thread_cpu_ns": [252124, 249490, 267306, 253225, 255258]
-          }
+          {"process_pair": 1, "official_wall_ns": [14151957, 16149570, 13707548, 18503239, 14303315], "official_thread_cpu_ns": [14138311, 16143904, 13703107, 18487066, 14297688], "baseline_instrumented_wall_ns": [14729224, 14189153, 18654967, 15213001, 15262256], "baseline_stage_wall_ns": [[412318, 322520, 1905142, 4130547, 4551987, 145404], [483917, 273071, 1870258, 4101557, 4088070, 143273], [1596909, 365888, 2376600, 4838635, 4807802, 149940], [420233, 291667, 2264613, 4197859, 4291225, 148892], [565749, 299389, 2048088, 4251161, 4408281, 147280]], "two_context_summary_wall_ns": [262495, 249354, 259550, 257567, 261934], "two_context_summary_thread_cpu_ns": [260286, 247918, 255950, 254677, 260115]},
+          {"process_pair": 2, "official_wall_ns": [12878062, 12877942, 13018403, 12835949, 12873857], "official_thread_cpu_ns": [12874198, 12874379, 13014016, 12816383, 12870433], "baseline_instrumented_wall_ns": [13772524, 13774718, 13791632, 14820085, 14845063], "baseline_stage_wall_ns": [[409383, 267863, 1899384, 4023432, 3953148, 168048], [413482, 269055, 1880195, 3989212, 3972608, 141633], [436871, 269836, 1847843, 4006849, 4007066, 143274], [457956, 288612, 1901901, 4054081, 3966398, 141890], [417694, 271217, 1905298, 4096545, 3981800, 193984]], "two_context_summary_wall_ns": [253731, 251287, 269724, 256004, 258488], "two_context_summary_thread_cpu_ns": [252124, 249490, 267306, 253225, 255258]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [5535468, 5292053, 5609209, 5324371, 5301937],
-            "official_thread_cpu_ns": [5531838, 5287997, 5603615, 5320355, 5297691],
-            "baseline_instrumented_wall_ns": [14448372, 13935011, 14267320, 14040219, 14174541],
-            "baseline_stage_wall_ns": [
-              [412185, 285910, 1928721, 4344685, 4120223, 148742],
-              [430913, 287152, 1907469, 4040722, 4009661, 145930],
-              [483576, 280643, 1886825, 4200540, 4091147, 147786],
-              [464854, 315827, 1847179, 4022445, 4082535, 144229],
-              [410527, 282593, 1857611, 4089025, 4065281, 146797]
-            ],
-            "two_context_summary_wall_ns": [253100, 251247, 254112, 263065, 257787],
-            "two_context_summary_thread_cpu_ns": [250982, 248518, 250992, 261438, 253796]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [5371397, 5532819, 5291456, 5345207, 5254712],
-            "official_thread_cpu_ns": [5367735, 5529113, 5286785, 5341405, 5251032],
-            "baseline_instrumented_wall_ns": [14094530, 14248691, 14276273, 14134109, 13806038],
-            "baseline_stage_wall_ns": [
-              [433838, 296376, 1896284, 4183943, 4124606, 148397],
-              [433091, 310326, 1936633, 4295007, 4047002, 145040],
-              [416312, 276112, 1850318, 4299733, 4126260, 148338],
-              [409432, 270203, 1827272, 4303146, 4091468, 143122],
-              [447143, 270633, 1877166, 3990584, 4026989, 145865]
-            ],
-            "two_context_summary_wall_ns": [256285, 251958, 272669, 269374, 264337],
-            "two_context_summary_thread_cpu_ns": [252765, 249720, 269709, 267466, 261578]
-          }
+          {"process_pair": 1, "official_wall_ns": [5535468, 5292053, 5609209, 5324371, 5301937], "official_thread_cpu_ns": [5531838, 5287997, 5603615, 5320355, 5297691], "baseline_instrumented_wall_ns": [14448372, 13935011, 14267320, 14040219, 14174541], "baseline_stage_wall_ns": [[412185, 285910, 1928721, 4344685, 4120223, 148742], [430913, 287152, 1907469, 4040722, 4009661, 145930], [483576, 280643, 1886825, 4200540, 4091147, 147786], [464854, 315827, 1847179, 4022445, 4082535, 144229], [410527, 282593, 1857611, 4089025, 4065281, 146797]], "two_context_summary_wall_ns": [253100, 251247, 254112, 263065, 257787], "two_context_summary_thread_cpu_ns": [250982, 248518, 250992, 261438, 253796]},
+          {"process_pair": 2, "official_wall_ns": [5371397, 5532819, 5291456, 5345207, 5254712], "official_thread_cpu_ns": [5367735, 5529113, 5286785, 5341405, 5251032], "baseline_instrumented_wall_ns": [14094530, 14248691, 14276273, 14134109, 13806038], "baseline_stage_wall_ns": [[433838, 296376, 1896284, 4183943, 4124606, 148397], [433091, 310326, 1936633, 4295007, 4047002, 145040], [416312, 276112, 1850318, 4299733, 4126260, 148338], [409432, 270203, 1827272, 4303146, 4091468, 143122], [447143, 270633, 1877166, 3990584, 4026989, 145865]], "two_context_summary_wall_ns": [256285, 251958, 272669, 269374, 264337], "two_context_summary_thread_cpu_ns": [252765, 249720, 269709, 267466, 261578]}
         ]
       },
       "cpu_reduction_percent": 60.09390681773632
@@ -1161,82 +280,17 @@
       "fixture": "observations64-candidates1",
       "instances": 50,
       "result_json_blake3": "03ae69d861d631e849007adbe7fc133c7f9e70a96850213b8d226e33eb2cb689",
-      "median_official_thread_cpu_ns": {
-        "before": 21168680.5,
-        "after": 8402216.0
-      },
-      "median_official_wall_ns": {
-        "before": 21173894.5,
-        "after": 8407086.5
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 439025.5,
-        "after": 389262.0
-      },
+      "median_official_thread_cpu_ns": {"before": 21168680.5, "after": 8402216.0},
+      "median_official_wall_ns": {"before": 21173894.5, "after": 8407086.5},
+      "median_two_context_summary_thread_cpu_ns": {"before": 439025.5, "after": 389262.0},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [21070478, 21170830, 21176959, 21376158, 21555788],
-            "official_thread_cpu_ns": [21066349, 21125396, 21172837, 21372202, 21550847],
-            "baseline_instrumented_wall_ns": [22531205, 24502929, 23151968, 25001269, 23591098],
-            "baseline_stage_wall_ns": [
-              [696501, 458911, 2982758, 6628436, 6602740, 227964],
-              [665871, 687178, 3218480, 6843559, 6655134, 253212],
-              [657664, 455776, 3036863, 6989572, 6677839, 250013],
-              [706335, 693893, 3696296, 6830719, 6883695, 261742],
-              [670609, 582011, 2988249, 6846711, 6649537, 227927]
-            ],
-            "two_context_summary_wall_ns": [986003, 403607, 462035, 691880, 392680],
-            "two_context_summary_thread_cpu_ns": [983468, 400563, 459030, 687378, 388676]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [21754655, 21670699, 20852722, 20879797, 21168718],
-            "official_thread_cpu_ns": [21750633, 21665657, 20848006, 20874464, 21164524],
-            "baseline_instrumented_wall_ns": [23019512, 22188885, 21986823, 22311404, 23331426],
-            "baseline_stage_wall_ns": [
-              [729588, 459141, 2952498, 6525909, 6991030, 233688],
-              [675901, 449546, 2976352, 6402815, 6480018, 223105],
-              [656774, 452695, 2940387, 6441151, 6307015, 226078],
-              [696395, 459282, 3069198, 6372685, 6304763, 225531],
-              [682730, 517015, 2946519, 6609194, 7139319, 231432]
-            ],
-            "two_context_summary_wall_ns": [968883, 406229, 421582, 661207, 392826],
-            "two_context_summary_thread_cpu_ns": [966332, 402777, 419021, 657474, 389397]
-          }
+          {"process_pair": 1, "official_wall_ns": [21070478, 21170830, 21176959, 21376158, 21555788], "official_thread_cpu_ns": [21066349, 21125396, 21172837, 21372202, 21550847], "baseline_instrumented_wall_ns": [22531205, 24502929, 23151968, 25001269, 23591098], "baseline_stage_wall_ns": [[696501, 458911, 2982758, 6628436, 6602740, 227964], [665871, 687178, 3218480, 6843559, 6655134, 253212], [657664, 455776, 3036863, 6989572, 6677839, 250013], [706335, 693893, 3696296, 6830719, 6883695, 261742], [670609, 582011, 2988249, 6846711, 6649537, 227927]], "two_context_summary_wall_ns": [986003, 403607, 462035, 691880, 392680], "two_context_summary_thread_cpu_ns": [983468, 400563, 459030, 687378, 388676]},
+          {"process_pair": 2, "official_wall_ns": [21754655, 21670699, 20852722, 20879797, 21168718], "official_thread_cpu_ns": [21750633, 21665657, 20848006, 20874464, 21164524], "baseline_instrumented_wall_ns": [23019512, 22188885, 21986823, 22311404, 23331426], "baseline_stage_wall_ns": [[729588, 459141, 2952498, 6525909, 6991030, 233688], [675901, 449546, 2976352, 6402815, 6480018, 223105], [656774, 452695, 2940387, 6441151, 6307015, 226078], [696395, 459282, 3069198, 6372685, 6304763, 225531], [682730, 517015, 2946519, 6609194, 7139319, 231432]], "two_context_summary_wall_ns": [968883, 406229, 421582, 661207, 392826], "two_context_summary_thread_cpu_ns": [966332, 402777, 419021, 657474, 389397]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [9440486, 8413593, 8762687, 8307794, 8452362],
-            "official_thread_cpu_ns": [9435814, 8409061, 8758069, 8303695, 8449011],
-            "baseline_instrumented_wall_ns": [22562305, 22119750, 22616017, 22296556, 21815384],
-            "baseline_stage_wall_ns": [
-              [665242, 627306, 3138355, 6401393, 6503364, 227596],
-              [672717, 520122, 2953020, 6372693, 6360718, 231610],
-              [673770, 535068, 3193001, 6500376, 6450615, 224700],
-              [695529, 444751, 2982719, 6661209, 6350187, 228935],
-              [654986, 446243, 2932277, 6437286, 6325061, 260071]
-            ],
-            "two_context_summary_wall_ns": [432791, 412570, 395454, 411518, 387152],
-            "two_context_summary_thread_cpu_ns": [430518, 409687, 393052, 408796, 383488]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [8338157, 8240961, 8400580, 8448372, 8344756],
-            "official_thread_cpu_ns": [8332999, 8236956, 8395371, 8443472, 8317196],
-            "baseline_instrumented_wall_ns": [21701000, 21711565, 21966487, 21752927, 22199687],
-            "baseline_stage_wall_ns": [
-              [644557, 442440, 2894397, 6281963, 6270061, 224716],
-              [664373, 456156, 2884052, 6334338, 6334228, 243703],
-              [661254, 667992, 2920051, 6329152, 6328299, 222369],
-              [703704, 441635, 2941223, 6304247, 6263856, 225259],
-              [709186, 450564, 2939387, 6440851, 6574485, 244792]
-            ],
-            "two_context_summary_wall_ns": [389975, 392088, 383956, 391136, 383275],
-            "two_context_summary_thread_cpu_ns": [388315, 390209, 381996, 388265, 380765]
-          }
+          {"process_pair": 1, "official_wall_ns": [9440486, 8413593, 8762687, 8307794, 8452362], "official_thread_cpu_ns": [9435814, 8409061, 8758069, 8303695, 8449011], "baseline_instrumented_wall_ns": [22562305, 22119750, 22616017, 22296556, 21815384], "baseline_stage_wall_ns": [[665242, 627306, 3138355, 6401393, 6503364, 227596], [672717, 520122, 2953020, 6372693, 6360718, 231610], [673770, 535068, 3193001, 6500376, 6450615, 224700], [695529, 444751, 2982719, 6661209, 6350187, 228935], [654986, 446243, 2932277, 6437286, 6325061, 260071]], "two_context_summary_wall_ns": [432791, 412570, 395454, 411518, 387152], "two_context_summary_thread_cpu_ns": [430518, 409687, 393052, 408796, 383488]},
+          {"process_pair": 2, "official_wall_ns": [8338157, 8240961, 8400580, 8448372, 8344756], "official_thread_cpu_ns": [8332999, 8236956, 8395371, 8443472, 8317196], "baseline_instrumented_wall_ns": [21701000, 21711565, 21966487, 21752927, 22199687], "baseline_stage_wall_ns": [[644557, 442440, 2894397, 6281963, 6270061, 224716], [664373, 456156, 2884052, 6334338, 6334228, 243703], [661254, 667992, 2920051, 6329152, 6328299, 222369], [703704, 441635, 2941223, 6304247, 6263856, 225259], [709186, 450564, 2939387, 6440851, 6574485, 244792]], "two_context_summary_wall_ns": [389975, 392088, 383956, 391136, 383275], "two_context_summary_thread_cpu_ns": [388315, 390209, 381996, 388265, 380765]}
         ]
       },
       "cpu_reduction_percent": 60.308267678753054
@@ -1245,82 +299,17 @@
       "fixture": "observations64-candidates26",
       "instances": 8,
       "result_json_blake3": "da884c8b4ee51becbbd38bcc22cc9d278790da40276ae0dac6078074b05ffa7f",
-      "median_official_thread_cpu_ns": {
-        "before": 3866560.0,
-        "after": 1911863.0
-      },
-      "median_official_wall_ns": {
-        "before": 3869977.0,
-        "after": 1916102.0
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 70935.5,
-        "after": 68156.0
-      },
+      "median_official_thread_cpu_ns": {"before": 3866560.0, "after": 1911863.0},
+      "median_official_wall_ns": {"before": 3869977.0, "after": 1916102.0},
+      "median_two_context_summary_thread_cpu_ns": {"before": 70935.5, "after": 68156.0},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [4354326, 3847835, 3874906, 4068807, 3870639],
-            "official_thread_cpu_ns": [4351148, 3845069, 3870476, 4063972, 3866901],
-            "baseline_instrumented_wall_ns": [4485834, 4168577, 4153635, 4490871, 5084054],
-            "baseline_stage_wall_ns": [
-              [502245, 68353, 642054, 1040325, 1108626, 41244],
-              [348904, 64807, 512570, 1186626, 1054334, 35845],
-              [351768, 89514, 613512, 1052763, 1006283, 35845],
-              [351838, 66058, 763208, 1027873, 1175319, 35903],
-              [348876, 67231, 636778, 1079595, 1940507, 34430]
-            ],
-            "two_context_summary_wall_ns": [77637, 71737, 74232, 101943, 76645],
-            "two_context_summary_thread_cpu_ns": [76113, 70315, 72067, 71556, 75201]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [3859701, 4131126, 3869315, 3766262, 3755866],
-            "official_thread_cpu_ns": [3857116, 4126876, 3866219, 3762736, 3751699],
-            "baseline_instrumented_wall_ns": [4323653, 4235512, 3983175, 3922665, 3933781],
-            "baseline_stage_wall_ns": [
-              [348060, 63505, 461689, 1055544, 1382474, 43124],
-              [349343, 123906, 502310, 1076807, 1071809, 36904],
-              [348961, 63825, 460826, 1001044, 1114533, 35753],
-              [349331, 62573, 460096, 984509, 1051981, 49534],
-              [363751, 64858, 460126, 982316, 1022707, 34130]
-            ],
-            "two_context_summary_wall_ns": [69553, 71126, 72768, 66569, 68473],
-            "two_context_summary_thread_cpu_ns": [68161, 69813, 71726, 65797, 67510]
-          }
+          {"process_pair": 1, "official_wall_ns": [4354326, 3847835, 3874906, 4068807, 3870639], "official_thread_cpu_ns": [4351148, 3845069, 3870476, 4063972, 3866901], "baseline_instrumented_wall_ns": [4485834, 4168577, 4153635, 4490871, 5084054], "baseline_stage_wall_ns": [[502245, 68353, 642054, 1040325, 1108626, 41244], [348904, 64807, 512570, 1186626, 1054334, 35845], [351768, 89514, 613512, 1052763, 1006283, 35845], [351838, 66058, 763208, 1027873, 1175319, 35903], [348876, 67231, 636778, 1079595, 1940507, 34430]], "two_context_summary_wall_ns": [77637, 71737, 74232, 101943, 76645], "two_context_summary_thread_cpu_ns": [76113, 70315, 72067, 71556, 75201]},
+          {"process_pair": 2, "official_wall_ns": [3859701, 4131126, 3869315, 3766262, 3755866], "official_thread_cpu_ns": [3857116, 4126876, 3866219, 3762736, 3751699], "baseline_instrumented_wall_ns": [4323653, 4235512, 3983175, 3922665, 3933781], "baseline_stage_wall_ns": [[348060, 63505, 461689, 1055544, 1382474, 43124], [349343, 123906, 502310, 1076807, 1071809, 36904], [348961, 63825, 460826, 1001044, 1114533, 35753], [349331, 62573, 460096, 984509, 1051981, 49534], [363751, 64858, 460126, 982316, 1022707, 34130]], "two_context_summary_wall_ns": [69553, 71126, 72768, 66569, 68473], "two_context_summary_thread_cpu_ns": [68161, 69813, 71726, 65797, 67510]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [1905133, 2414679, 1920556, 1982880, 2072604],
-            "official_thread_cpu_ns": [1900416, 2410442, 1915989, 1979654, 2068175],
-            "baseline_instrumented_wall_ns": [4286121, 4922607, 4036566, 4674024, 4289235],
-            "baseline_stage_wall_ns": [
-              [369275, 77575, 489625, 1084742, 1069237, 40150],
-              [437597, 84448, 528113, 1428707, 1110296, 35595],
-              [353019, 65379, 463707, 1016146, 1122327, 39459],
-              [383476, 68152, 467560, 1131982, 1281136, 43143],
-              [357726, 67181, 497526, 1052060, 1138100, 39148]
-            ],
-            "two_context_summary_wall_ns": [66230, 69936, 209345, 69865, 73400],
-            "two_context_summary_thread_cpu_ns": [64726, 67720, 207658, 68592, 72067]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [1851807, 1855383, 1835623, 1911648, 1923395],
-            "official_thread_cpu_ns": [1849180, 1852475, 1832665, 1907737, 1919665],
-            "baseline_instrumented_wall_ns": [4108802, 3932378, 4046840, 3947051, 3929624],
-            "baseline_stage_wall_ns": [
-              [347760, 62903, 459509, 1020000, 1216345, 38538],
-              [360540, 63675, 462404, 989353, 1028563, 34031],
-              [366891, 67190, 476413, 1030536, 1008563, 37756],
-              [348252, 76835, 481542, 986840, 1028204, 38066],
-              [378637, 64144, 461121, 983684, 1024768, 37928]
-            ],
-            "two_context_summary_wall_ns": [64677, 65168, 245378, 70025, 63124],
-            "two_context_summary_thread_cpu_ns": [63464, 63925, 243401, 69022, 62312]
-          }
+          {"process_pair": 1, "official_wall_ns": [1905133, 2414679, 1920556, 1982880, 2072604], "official_thread_cpu_ns": [1900416, 2410442, 1915989, 1979654, 2068175], "baseline_instrumented_wall_ns": [4286121, 4922607, 4036566, 4674024, 4289235], "baseline_stage_wall_ns": [[369275, 77575, 489625, 1084742, 1069237, 40150], [437597, 84448, 528113, 1428707, 1110296, 35595], [353019, 65379, 463707, 1016146, 1122327, 39459], [383476, 68152, 467560, 1131982, 1281136, 43143], [357726, 67181, 497526, 1052060, 1138100, 39148]], "two_context_summary_wall_ns": [66230, 69936, 209345, 69865, 73400], "two_context_summary_thread_cpu_ns": [64726, 67720, 207658, 68592, 72067]},
+          {"process_pair": 2, "official_wall_ns": [1851807, 1855383, 1835623, 1911648, 1923395], "official_thread_cpu_ns": [1849180, 1852475, 1832665, 1907737, 1919665], "baseline_instrumented_wall_ns": [4108802, 3932378, 4046840, 3947051, 3929624], "baseline_stage_wall_ns": [[347760, 62903, 459509, 1020000, 1216345, 38538], [360540, 63675, 462404, 989353, 1028563, 34031], [366891, 67190, 476413, 1030536, 1008563, 37756], [348252, 76835, 481542, 986840, 1028204, 38066], [378637, 64144, 461121, 983684, 1024768, 37928]], "two_context_summary_wall_ns": [64677, 65168, 245378, 70025, 63124], "two_context_summary_thread_cpu_ns": [63464, 63925, 243401, 69022, 62312]}
         ]
       },
       "cpu_reduction_percent": 50.553903211123064
@@ -1329,82 +318,17 @@
       "fixture": "observations64-candidates26",
       "instances": 16,
       "result_json_blake3": "b20de00b7d08963742988c15f671cb501fc602428e442ba8f436f7433707e22f",
-      "median_official_thread_cpu_ns": {
-        "before": 7663006.0,
-        "after": 3848959.0
-      },
-      "median_official_wall_ns": {
-        "before": 7666599.0,
-        "after": 3853210.0
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 131600.5,
-        "after": 129812.5
-      },
+      "median_official_thread_cpu_ns": {"before": 7663006.0, "after": 3848959.0},
+      "median_official_wall_ns": {"before": 7666599.0, "after": 3853210.0},
+      "median_two_context_summary_thread_cpu_ns": {"before": 131600.5, "after": 129812.5},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [7806437, 7485023, 8153659, 9174324, 7839736],
-            "official_thread_cpu_ns": [7801701, 7481407, 8147494, 9170681, 7835792],
-            "baseline_instrumented_wall_ns": [8334461, 8697707, 10106484, 9320864, 8312007],
-            "baseline_stage_wall_ns": [
-              [706343, 129795, 1111963, 2157204, 2136894, 74892],
-              [711509, 147171, 947445, 2059187, 2766000, 95395],
-              [708644, 154652, 1136989, 3337317, 2514079, 71497],
-              [1044152, 142366, 1164719, 2012395, 2240728, 72576],
-              [751040, 135133, 921473, 2007899, 2424252, 73775]
-            ],
-            "two_context_summary_wall_ns": [136845, 124948, 132339, 139329, 152699],
-            "two_context_summary_thread_cpu_ns": [134840, 123162, 130704, 136392, 149942]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [7507446, 7437792, 7636078, 7697120, 7536911],
-            "official_thread_cpu_ns": [7504140, 7433856, 7632130, 7693882, 7531782],
-            "baseline_instrumented_wall_ns": [8714538, 9141155, 8302293, 7964528, 8372658],
-            "baseline_stage_wall_ns": [
-              [727895, 179417, 983356, 2371380, 2239284, 76363],
-              [759111, 135864, 939895, 1980358, 2182380, 72456],
-              [753836, 132267, 1179719, 2051493, 2164020, 70404],
-              [696721, 145708, 939924, 2076229, 1995466, 71698],
-              [755146, 136824, 1105442, 2053465, 2226374, 73200]
-            ],
-            "two_context_summary_wall_ns": [136394, 127019, 126288, 134031, 127320],
-            "two_context_summary_thread_cpu_ns": [134168, 124855, 124405, 132497, 124875]
-          }
+          {"process_pair": 1, "official_wall_ns": [7806437, 7485023, 8153659, 9174324, 7839736], "official_thread_cpu_ns": [7801701, 7481407, 8147494, 9170681, 7835792], "baseline_instrumented_wall_ns": [8334461, 8697707, 10106484, 9320864, 8312007], "baseline_stage_wall_ns": [[706343, 129795, 1111963, 2157204, 2136894, 74892], [711509, 147171, 947445, 2059187, 2766000, 95395], [708644, 154652, 1136989, 3337317, 2514079, 71497], [1044152, 142366, 1164719, 2012395, 2240728, 72576], [751040, 135133, 921473, 2007899, 2424252, 73775]], "two_context_summary_wall_ns": [136845, 124948, 132339, 139329, 152699], "two_context_summary_thread_cpu_ns": [134840, 123162, 130704, 136392, 149942]},
+          {"process_pair": 2, "official_wall_ns": [7507446, 7437792, 7636078, 7697120, 7536911], "official_thread_cpu_ns": [7504140, 7433856, 7632130, 7693882, 7531782], "baseline_instrumented_wall_ns": [8714538, 9141155, 8302293, 7964528, 8372658], "baseline_stage_wall_ns": [[727895, 179417, 983356, 2371380, 2239284, 76363], [759111, 135864, 939895, 1980358, 2182380, 72456], [753836, 132267, 1179719, 2051493, 2164020, 70404], [696721, 145708, 939924, 2076229, 1995466, 71698], [755146, 136824, 1105442, 2053465, 2226374, 73200]], "two_context_summary_wall_ns": [136394, 127019, 126288, 134031, 127320], "two_context_summary_thread_cpu_ns": [134168, 124855, 124405, 132497, 124875]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [4416186, 5551011, 4096196, 3794552, 5384501],
-            "official_thread_cpu_ns": [4412288, 5546419, 4091443, 3791479, 5379272],
-            "baseline_instrumented_wall_ns": [10951267, 9741169, 8704270, 8664281, 10320489],
-            "baseline_stage_wall_ns": [
-              [740933, 147081, 1823597, 3606719, 2415141, 77156],
-              [755427, 208536, 1449928, 2577735, 2248888, 77698],
-              [763539, 145448, 1116508, 2103119, 2239745, 95456],
-              [757919, 140641, 922344, 2000757, 2601169, 80212],
-              [780370, 140073, 995495, 3945888, 2198416, 74059]
-            ],
-            "two_context_summary_wall_ns": [132689, 158398, 134963, 134462, 124347],
-            "two_context_summary_thread_cpu_ns": [130203, 154909, 133178, 132877, 121610]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [3647551, 3903255, 3707781, 3680820, 3803165],
-            "official_thread_cpu_ns": [3644591, 3898918, 3703529, 3676949, 3799000],
-            "baseline_instrumented_wall_ns": [7899238, 8245788, 8181832, 7915062, 7981181],
-            "baseline_stage_wall_ns": [
-              [698018, 130396, 917376, 1971639, 2135352, 74584],
-              [808332, 134846, 941654, 2023242, 2267991, 73190],
-              [710156, 130875, 964996, 2023003, 2213560, 73413],
-              [702465, 129413, 940922, 2068011, 2010034, 74400],
-              [700861, 134464, 941329, 2089355, 2037044, 72671]
-            ],
-            "two_context_summary_wall_ns": [124897, 120711, 133830, 130766, 123585],
-            "two_context_summary_thread_cpu_ns": [123694, 118826, 132156, 129422, 121150]
-          }
+          {"process_pair": 1, "official_wall_ns": [4416186, 5551011, 4096196, 3794552, 5384501], "official_thread_cpu_ns": [4412288, 5546419, 4091443, 3791479, 5379272], "baseline_instrumented_wall_ns": [10951267, 9741169, 8704270, 8664281, 10320489], "baseline_stage_wall_ns": [[740933, 147081, 1823597, 3606719, 2415141, 77156], [755427, 208536, 1449928, 2577735, 2248888, 77698], [763539, 145448, 1116508, 2103119, 2239745, 95456], [757919, 140641, 922344, 2000757, 2601169, 80212], [780370, 140073, 995495, 3945888, 2198416, 74059]], "two_context_summary_wall_ns": [132689, 158398, 134963, 134462, 124347], "two_context_summary_thread_cpu_ns": [130203, 154909, 133178, 132877, 121610]},
+          {"process_pair": 2, "official_wall_ns": [3647551, 3903255, 3707781, 3680820, 3803165], "official_thread_cpu_ns": [3644591, 3898918, 3703529, 3676949, 3799000], "baseline_instrumented_wall_ns": [7899238, 8245788, 8181832, 7915062, 7981181], "baseline_stage_wall_ns": [[698018, 130396, 917376, 1971639, 2135352, 74584], [808332, 134846, 941654, 2023242, 2267991, 73190], [710156, 130875, 964996, 2023003, 2213560, 73413], [702465, 129413, 940922, 2068011, 2010034, 74400], [700861, 134464, 941329, 2089355, 2037044, 72671]], "two_context_summary_wall_ns": [124897, 120711, 133830, 130766, 123585], "two_context_summary_thread_cpu_ns": [123694, 118826, 132156, 129422, 121150]}
         ]
       },
       "cpu_reduction_percent": 49.77220427597212
@@ -1413,18 +337,9 @@
       "fixture": "observations64-candidates26",
       "instances": 32,
       "result_json_blake3": "3b88697a7023ac5dea2e0dabe230189cc463bdf4c9ead3e11b8283c6747a802e",
-      "median_official_thread_cpu_ns": {
-        "before": 15529103.0,
-        "after": 7544345.5
-      },
-      "median_official_wall_ns": {
-        "before": 15532950.5,
-        "after": 7548603.0
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 264222.0,
-        "after": 256120.0
-      },
+      "median_official_thread_cpu_ns": {"before": 15529103.0, "after": 7544345.5},
+      "median_official_wall_ns": {"before": 15532950.5, "after": 7548603.0},
+      "median_two_context_summary_thread_cpu_ns": {"before": 264222.0, "after": 256120.0},
       "samples": {
         "before": [
           {
@@ -1459,36 +374,8 @@
           }
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [7739371, 7837007, 8094063, 7629345, 7785389],
-            "official_thread_cpu_ns": [7735653, 7832868, 8090479, 7624349, 7781572],
-            "baseline_instrumented_wall_ns": [16894909, 16544362, 16960458, 19375166, 18344377],
-            "baseline_stage_wall_ns": [
-              [1500435, 307900, 2033670, 4288172, 4249014, 202785],
-              [1428454, 295679, 1926578, 4237925, 4377911, 151808],
-              [1446073, 561948, 1923496, 4326743, 4288244, 147661],
-              [1772883, 346417, 1884381, 4423148, 5215728, 902759],
-              [1757940, 330059, 2122408, 4514995, 4707353, 153092]
-            ],
-            "two_context_summary_wall_ns": [259170, 256596, 262024, 333842, 330307],
-            "two_context_summary_thread_cpu_ns": [256060, 254156, 258903, 330399, 327215]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [7374821, 7467861, 7361642, 7416334, 7373550],
-            "official_thread_cpu_ns": [7370022, 7464342, 7348520, 7412165, 7369881],
-            "baseline_instrumented_wall_ns": [16314180, 16648371, 16260809, 15960519, 16328632],
-            "baseline_stage_wall_ns": [
-              [1469472, 337345, 1861003, 4194292, 4069905, 146009],
-              [1481433, 281774, 1869754, 4194974, 4511516, 146188],
-              [1672488, 280420, 1834309, 4173680, 3960897, 145278],
-              [1427682, 280935, 1853923, 4253999, 3973399, 143273],
-              [1491093, 297308, 1923621, 4261092, 4123519, 147971]
-            ],
-            "two_context_summary_wall_ns": [261241, 257967, 258418, 252358, 259359],
-            "two_context_summary_thread_cpu_ns": [258473, 254837, 256180, 250160, 255639]
-          }
+          {"process_pair": 1, "official_wall_ns": [7739371, 7837007, 8094063, 7629345, 7785389], "official_thread_cpu_ns": [7735653, 7832868, 8090479, 7624349, 7781572], "baseline_instrumented_wall_ns": [16894909, 16544362, 16960458, 19375166, 18344377], "baseline_stage_wall_ns": [[1500435, 307900, 2033670, 4288172, 4249014, 202785], [1428454, 295679, 1926578, 4237925, 4377911, 151808], [1446073, 561948, 1923496, 4326743, 4288244, 147661], [1772883, 346417, 1884381, 4423148, 5215728, 902759], [1757940, 330059, 2122408, 4514995, 4707353, 153092]], "two_context_summary_wall_ns": [259170, 256596, 262024, 333842, 330307], "two_context_summary_thread_cpu_ns": [256060, 254156, 258903, 330399, 327215]},
+          {"process_pair": 2, "official_wall_ns": [7374821, 7467861, 7361642, 7416334, 7373550], "official_thread_cpu_ns": [7370022, 7464342, 7348520, 7412165, 7369881], "baseline_instrumented_wall_ns": [16314180, 16648371, 16260809, 15960519, 16328632], "baseline_stage_wall_ns": [[1469472, 337345, 1861003, 4194292, 4069905, 146009], [1481433, 281774, 1869754, 4194974, 4511516, 146188], [1672488, 280420, 1834309, 4173680, 3960897, 145278], [1427682, 280935, 1853923, 4253999, 3973399, 143273], [1491093, 297308, 1923621, 4261092, 4123519, 147971]], "two_context_summary_wall_ns": [261241, 257967, 258418, 252358, 259359], "two_context_summary_thread_cpu_ns": [258473, 254837, 256180, 250160, 255639]}
         ]
       },
       "cpu_reduction_percent": 51.41802137573561
@@ -1497,18 +384,9 @@
       "fixture": "observations64-candidates26",
       "instances": 50,
       "result_json_blake3": "f3d42d297a9b0582c847c09a3e4244e80e9148574b2c5ac135c8c14f14cc999e",
-      "median_official_thread_cpu_ns": {
-        "before": 24356610.0,
-        "after": 11691175.0
-      },
-      "median_official_wall_ns": {
-        "before": 24362747.5,
-        "after": 11694355.0
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 405326.0,
-        "after": 407699.5
-      },
+      "median_official_thread_cpu_ns": {"before": 24356610.0, "after": 11691175.0},
+      "median_official_wall_ns": {"before": 24362747.5, "after": 11694355.0},
+      "median_two_context_summary_thread_cpu_ns": {"before": 405326.0, "after": 407699.5},
       "samples": {
         "before": [
           {
@@ -1581,82 +459,17 @@
       "fixture": "observations256-candidates1",
       "instances": 8,
       "result_json_blake3": "1df2cea8c158cd84447bb470ee543f9a8ce704e55dea103aed850b0d701007f2",
-      "median_official_thread_cpu_ns": {
-        "before": 11705822.5,
-        "after": 4270153.0
-      },
-      "median_official_wall_ns": {
-        "before": 11712084.0,
-        "after": 4274038.0
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 104384.5,
-        "after": 101861.0
-      },
+      "median_official_thread_cpu_ns": {"before": 11705822.5, "after": 4270153.0},
+      "median_official_wall_ns": {"before": 11712084.0, "after": 4274038.0},
+      "median_two_context_summary_thread_cpu_ns": {"before": 104384.5, "after": 101861.0},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [11943797, 11231976, 11631718, 11970497, 11792450],
-            "official_thread_cpu_ns": [11938502, 11195861, 11626340, 11963419, 11785305],
-            "baseline_instrumented_wall_ns": [13135577, 12816899, 12733573, 12876659, 12550319],
-            "baseline_stage_wall_ns": [
-              [123174, 266711, 1949558, 3970885, 4148515, 101662],
-              [124407, 266332, 1864522, 3924609, 3876833, 91918],
-              [130416, 265719, 1912743, 3864629, 3844366, 92880],
-              [134792, 291379, 1885913, 3823216, 3806430, 106149],
-              [127382, 349846, 1811853, 3727101, 3806209, 92098]
-            ],
-            "two_context_summary_wall_ns": [111398, 107402, 108723, 140111, 113530],
-            "two_context_summary_thread_cpu_ns": [107018, 103763, 105006, 135391, 108961]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [11850167, 13945428, 11594483, 11620863, 11471329],
-            "official_thread_cpu_ns": [11835469, 13941660, 11589985, 11617436, 11467514],
-            "baseline_instrumented_wall_ns": [12423156, 13009926, 12582014, 18919837, 12977648],
-            "baseline_stage_wall_ns": [
-              [112531, 256184, 2000651, 3704894, 3860507, 90969],
-              [165329, 267489, 2104316, 3963583, 4006947, 91368],
-              [110297, 265639, 1824768, 3872767, 4102410, 92919],
-              [113930, 349574, 1879196, 7576227, 6121957, 116506],
-              [113110, 262893, 1940101, 4092688, 3990564, 91998]
-            ],
-            "two_context_summary_wall_ns": [98508, 96575, 117255, 102283, 97556],
-            "two_context_summary_thread_cpu_ns": [96603, 94631, 114380, 98836, 95481]
-          }
+          {"process_pair": 1, "official_wall_ns": [11943797, 11231976, 11631718, 11970497, 11792450], "official_thread_cpu_ns": [11938502, 11195861, 11626340, 11963419, 11785305], "baseline_instrumented_wall_ns": [13135577, 12816899, 12733573, 12876659, 12550319], "baseline_stage_wall_ns": [[123174, 266711, 1949558, 3970885, 4148515, 101662], [124407, 266332, 1864522, 3924609, 3876833, 91918], [130416, 265719, 1912743, 3864629, 3844366, 92880], [134792, 291379, 1885913, 3823216, 3806430, 106149], [127382, 349846, 1811853, 3727101, 3806209, 92098]], "two_context_summary_wall_ns": [111398, 107402, 108723, 140111, 113530], "two_context_summary_thread_cpu_ns": [107018, 103763, 105006, 135391, 108961]},
+          {"process_pair": 2, "official_wall_ns": [11850167, 13945428, 11594483, 11620863, 11471329], "official_thread_cpu_ns": [11835469, 13941660, 11589985, 11617436, 11467514], "baseline_instrumented_wall_ns": [12423156, 13009926, 12582014, 18919837, 12977648], "baseline_stage_wall_ns": [[112531, 256184, 2000651, 3704894, 3860507, 90969], [165329, 267489, 2104316, 3963583, 4006947, 91368], [110297, 265639, 1824768, 3872767, 4102410, 92919], [113930, 349574, 1879196, 7576227, 6121957, 116506], [113110, 262893, 1940101, 4092688, 3990564, 91998]], "two_context_summary_wall_ns": [98508, 96575, 117255, 102283, 97556], "two_context_summary_thread_cpu_ns": [96603, 94631, 114380, 98836, 95481]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [5064450, 4741285, 4294043, 4434534, 4254033],
-            "official_thread_cpu_ns": [5059628, 4737190, 4290017, 4430346, 4250289],
-            "baseline_instrumented_wall_ns": [14739129, 14659810, 13879798, 14961203, 12836741],
-            "baseline_stage_wall_ns": [
-              [116894, 346200, 2677053, 4118719, 4228622, 92678],
-              [117196, 342824, 2004461, 4092721, 5208088, 83795],
-              [159939, 286409, 1848307, 3827733, 5278976, 109864],
-              [121093, 440754, 2818294, 4830701, 4028522, 92481],
-              [109925, 257516, 1864664, 3977237, 4296325, 92310]
-            ],
-            "two_context_summary_wall_ns": [107041, 109645, 97767, 101583, 97857],
-            "two_context_summary_thread_cpu_ns": [100799, 107029, 95261, 98847, 95672]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [4087248, 4080679, 4135490, 4142561, 12092141],
-            "official_thread_cpu_ns": [4082811, 4077162, 4131272, 4138804, 12087853],
-            "baseline_instrumented_wall_ns": [11920972, 11935174, 12132029, 12225399, 12485829],
-            "baseline_stage_wall_ns": [
-              [107531, 247521, 1819728, 3680348, 3787198, 104237],
-              [106639, 248641, 1839399, 3689712, 3819828, 80510],
-              [111517, 274351, 1825647, 3690983, 3808141, 91187],
-              [111217, 258457, 1829334, 3677164, 3846085, 92400],
-              [119999, 262764, 1796383, 3760048, 3921331, 91808]
-            ],
-            "two_context_summary_wall_ns": [107130, 103745, 115453, 101442, 121913],
-            "two_context_summary_thread_cpu_ns": [105446, 102923, 113598, 99788, 118616]
-          }
+          {"process_pair": 1, "official_wall_ns": [5064450, 4741285, 4294043, 4434534, 4254033], "official_thread_cpu_ns": [5059628, 4737190, 4290017, 4430346, 4250289], "baseline_instrumented_wall_ns": [14739129, 14659810, 13879798, 14961203, 12836741], "baseline_stage_wall_ns": [[116894, 346200, 2677053, 4118719, 4228622, 92678], [117196, 342824, 2004461, 4092721, 5208088, 83795], [159939, 286409, 1848307, 3827733, 5278976, 109864], [121093, 440754, 2818294, 4830701, 4028522, 92481], [109925, 257516, 1864664, 3977237, 4296325, 92310]], "two_context_summary_wall_ns": [107041, 109645, 97767, 101583, 97857], "two_context_summary_thread_cpu_ns": [100799, 107029, 95261, 98847, 95672]},
+          {"process_pair": 2, "official_wall_ns": [4087248, 4080679, 4135490, 4142561, 12092141], "official_thread_cpu_ns": [4082811, 4077162, 4131272, 4138804, 12087853], "baseline_instrumented_wall_ns": [11920972, 11935174, 12132029, 12225399, 12485829], "baseline_stage_wall_ns": [[107531, 247521, 1819728, 3680348, 3787198, 104237], [106639, 248641, 1839399, 3689712, 3819828, 80510], [111517, 274351, 1825647, 3690983, 3808141, 91187], [111217, 258457, 1829334, 3677164, 3846085, 92400], [119999, 262764, 1796383, 3760048, 3921331, 91808]], "two_context_summary_wall_ns": [107130, 103745, 115453, 101442, 121913], "two_context_summary_thread_cpu_ns": [105446, 102923, 113598, 99788, 118616]}
         ]
       },
       "cpu_reduction_percent": 63.52111951125177
@@ -1665,82 +478,17 @@
       "fixture": "observations256-candidates1",
       "instances": 16,
       "result_json_blake3": "a5faf7b56cdcd014074cae34c72434bcd2df5bb58f7b548fef4de820bb50b937",
-      "median_official_thread_cpu_ns": {
-        "before": 23317815.5,
-        "after": 8262634.5
-      },
-      "median_official_wall_ns": {
-        "before": 23326603.5,
-        "after": 8267650.5
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 166296.5,
-        "after": 163572.0
-      },
+      "median_official_thread_cpu_ns": {"before": 23317815.5, "after": 8262634.5},
+      "median_official_wall_ns": {"before": 23326603.5, "after": 8267650.5},
+      "median_two_context_summary_thread_cpu_ns": {"before": 166296.5, "after": 163572.0},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [22429242, 22820891, 23299400, 22384805, 23469015],
-            "official_thread_cpu_ns": [22423180, 22816212, 23292718, 22378843, 23464001],
-            "baseline_instrumented_wall_ns": [28753415, 25085132, 25242259, 25906728, 25345545],
-            "baseline_stage_wall_ns": [
-              [251427, 917220, 3836251, 8221514, 9419343, 220441],
-              [224047, 595513, 3692917, 7473022, 8049808, 186329],
-              [238546, 596066, 3632648, 7430083, 7778258, 183164],
-              [240834, 624169, 3774442, 7544858, 8177398, 182522],
-              [217626, 618458, 3687748, 7608092, 8179258, 182234]
-            ],
-            "two_context_summary_wall_ns": [172630, 187211, 171108, 174743, 169444],
-            "two_context_summary_thread_cpu_ns": [169221, 183882, 167498, 170883, 165856]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [23479524, 23565882, 23340825, 23575357, 23312382],
-            "official_thread_cpu_ns": [23474508, 23531743, 23328181, 23570109, 23307450],
-            "baseline_instrumented_wall_ns": [25927183, 27604248, 26639941, 26075325, 25826823],
-            "baseline_stage_wall_ns": [
-              [233632, 616505, 3902480, 7846826, 8122550, 185588],
-              [415945, 603075, 3894779, 8666245, 8330910, 290087],
-              [223685, 582722, 3837071, 8372631, 8250712, 184658],
-              [235774, 619248, 3654050, 7735490, 8646672, 182695],
-              [237428, 587172, 3606810, 8237021, 8053156, 184137]
-            ],
-            "two_context_summary_wall_ns": [165017, 168403, 164817, 168012, 169454],
-            "two_context_summary_thread_cpu_ns": [162291, 164664, 161650, 163673, 166737]
-          }
+          {"process_pair": 1, "official_wall_ns": [22429242, 22820891, 23299400, 22384805, 23469015], "official_thread_cpu_ns": [22423180, 22816212, 23292718, 22378843, 23464001], "baseline_instrumented_wall_ns": [28753415, 25085132, 25242259, 25906728, 25345545], "baseline_stage_wall_ns": [[251427, 917220, 3836251, 8221514, 9419343, 220441], [224047, 595513, 3692917, 7473022, 8049808, 186329], [238546, 596066, 3632648, 7430083, 7778258, 183164], [240834, 624169, 3774442, 7544858, 8177398, 182522], [217626, 618458, 3687748, 7608092, 8179258, 182234]], "two_context_summary_wall_ns": [172630, 187211, 171108, 174743, 169444], "two_context_summary_thread_cpu_ns": [169221, 183882, 167498, 170883, 165856]},
+          {"process_pair": 2, "official_wall_ns": [23479524, 23565882, 23340825, 23575357, 23312382], "official_thread_cpu_ns": [23474508, 23531743, 23328181, 23570109, 23307450], "baseline_instrumented_wall_ns": [25927183, 27604248, 26639941, 26075325, 25826823], "baseline_stage_wall_ns": [[233632, 616505, 3902480, 7846826, 8122550, 185588], [415945, 603075, 3894779, 8666245, 8330910, 290087], [223685, 582722, 3837071, 8372631, 8250712, 184658], [235774, 619248, 3654050, 7735490, 8646672, 182695], [237428, 587172, 3606810, 8237021, 8053156, 184137]], "two_context_summary_wall_ns": [165017, 168403, 164817, 168012, 169454], "two_context_summary_thread_cpu_ns": [162291, 164664, 161650, 163673, 166737]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [9168117, 8205671, 9622200, 9065373, 10809705],
-            "official_thread_cpu_ns": [9164341, 8201835, 9617893, 9061088, 10803960],
-            "baseline_instrumented_wall_ns": [26029076, 25728403, 26147383, 27023380, 34283981],
-            "baseline_stage_wall_ns": [
-              [222938, 606883, 3685738, 8193044, 7957007, 185989],
-              [262183, 686971, 3641811, 7999774, 8075766, 183369],
-              [220061, 617056, 3987023, 7870375, 8419784, 207710],
-              [224449, 692870, 3761503, 7998279, 8592238, 186162],
-              [230966, 736036, 3833213, 9586965, 13923121, 190737]
-            ],
-            "two_context_summary_wall_ns": [185479, 165749, 161974, 167732, 258429],
-            "two_context_summary_thread_cpu_ns": [181860, 162080, 158745, 164603, 222691]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [8293614, 8216329, 8241687, 8223819, 8113314],
-            "official_thread_cpu_ns": [8288303, 8211539, 8236966, 8219741, 8110229],
-            "baseline_instrumented_wall_ns": [24895245, 24356788, 24441334, 24498861, 24340664],
-            "baseline_stage_wall_ns": [
-              [256443, 582124, 3694700, 7464952, 7777823, 180741],
-              [218907, 547332, 3653861, 7444491, 7777198, 181053],
-              [215713, 557076, 3650363, 7494603, 7779797, 181420],
-              [214079, 641592, 3592756, 7457461, 7826977, 182403],
-              [215023, 597846, 3607329, 7458214, 7751813, 178316]
-            ],
-            "two_context_summary_wall_ns": [190155, 166159, 165248, 167281, 164567],
-            "two_context_summary_thread_cpu_ns": [186466, 163432, 163423, 163712, 161599]
-          }
+          {"process_pair": 1, "official_wall_ns": [9168117, 8205671, 9622200, 9065373, 10809705], "official_thread_cpu_ns": [9164341, 8201835, 9617893, 9061088, 10803960], "baseline_instrumented_wall_ns": [26029076, 25728403, 26147383, 27023380, 34283981], "baseline_stage_wall_ns": [[222938, 606883, 3685738, 8193044, 7957007, 185989], [262183, 686971, 3641811, 7999774, 8075766, 183369], [220061, 617056, 3987023, 7870375, 8419784, 207710], [224449, 692870, 3761503, 7998279, 8592238, 186162], [230966, 736036, 3833213, 9586965, 13923121, 190737]], "two_context_summary_wall_ns": [185479, 165749, 161974, 167732, 258429], "two_context_summary_thread_cpu_ns": [181860, 162080, 158745, 164603, 222691]},
+          {"process_pair": 2, "official_wall_ns": [8293614, 8216329, 8241687, 8223819, 8113314], "official_thread_cpu_ns": [8288303, 8211539, 8236966, 8219741, 8110229], "baseline_instrumented_wall_ns": [24895245, 24356788, 24441334, 24498861, 24340664], "baseline_stage_wall_ns": [[256443, 582124, 3694700, 7464952, 7777823, 180741], [218907, 547332, 3653861, 7444491, 7777198, 181053], [215713, 557076, 3650363, 7494603, 7779797, 181420], [214079, 641592, 3592756, 7457461, 7826977, 182403], [215023, 597846, 3607329, 7458214, 7751813, 178316]], "two_context_summary_wall_ns": [190155, 166159, 165248, 167281, 164567], "two_context_summary_thread_cpu_ns": [186466, 163432, 163423, 163712, 161599]}
         ]
       },
       "cpu_reduction_percent": 64.56514333428875
@@ -1749,18 +497,9 @@
       "fixture": "observations256-candidates1",
       "instances": 32,
       "result_json_blake3": "67317ef1efb4f4d2c3fe68c2fcc0853acdf59e61fe992868e9e5e3267fad0996",
-      "median_official_thread_cpu_ns": {
-        "before": 47425250.5,
-        "after": 17075023.5
-      },
-      "median_official_wall_ns": {
-        "before": 47444913.0,
-        "after": 17080183.0
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 307816.0,
-        "after": 316604.0
-      },
+      "median_official_thread_cpu_ns": {"before": 47425250.5, "after": 17075023.5},
+      "median_official_wall_ns": {"before": 47444913.0, "after": 17080183.0},
+      "median_two_context_summary_thread_cpu_ns": {"before": 307816.0, "after": 316604.0},
       "samples": {
         "before": [
           {
@@ -1833,18 +572,9 @@
       "fixture": "observations256-candidates1",
       "instances": 50,
       "result_json_blake3": "0670f8dde5023ba7eaf9a89cd0068f869459c7be0f64a6462c65858c4815919b",
-      "median_official_thread_cpu_ns": {
-        "before": 73392036.5,
-        "after": 28384899.0
-      },
-      "median_official_wall_ns": {
-        "before": 73398037.0,
-        "after": 28390051.5
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 551322.0,
-        "after": 536740.0
-      },
+      "median_official_thread_cpu_ns": {"before": 73392036.5, "after": 28384899.0},
+      "median_official_wall_ns": {"before": 73398037.0, "after": 28390051.5},
+      "median_two_context_summary_thread_cpu_ns": {"before": 551322.0, "after": 536740.0},
       "samples": {
         "before": [
           {
@@ -1917,82 +647,17 @@
       "fixture": "observations256-candidates26",
       "instances": 8,
       "result_json_blake3": "ece09c214eb5b7a510e93ba43284ee5f2150775d535b76a941e3b2194644e2a2",
-      "median_official_thread_cpu_ns": {
-        "before": 12106666.5,
-        "after": 4730190.0
-      },
-      "median_official_wall_ns": {
-        "before": 12111662.5,
-        "after": 4734933.5
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 98401.0,
-        "after": 99827.5
-      },
+      "median_official_thread_cpu_ns": {"before": 12106666.5, "after": 4730190.0},
+      "median_official_wall_ns": {"before": 12111662.5, "after": 4734933.5},
+      "median_two_context_summary_thread_cpu_ns": {"before": 98401.0, "after": 99827.5},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [12120641, 12318718, 11756655, 12102684, 12361221],
-            "official_thread_cpu_ns": [12116105, 12314158, 11751905, 12097228, 12356591],
-            "baseline_instrumented_wall_ns": [14077611, 13078415, 12611676, 12658206, 13287008],
-            "baseline_stage_wall_ns": [
-              [385455, 291346, 2165834, 3902384, 3980982, 92821],
-              [357205, 266639, 2062909, 3790446, 3927210, 92028],
-              [353950, 292708, 1833956, 3683046, 3842685, 90626],
-              [430785, 277396, 1800866, 3719080, 3830999, 88601],
-              [358609, 260449, 1840627, 3829064, 4018618, 91717]
-            ],
-            "two_context_summary_wall_ns": [98668, 96405, 97826, 94852, 100440],
-            "two_context_summary_thread_cpu_ns": [96333, 94410, 95511, 93179, 97064]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [12084768, 13550365, 12021573, 13697414, 11644257],
-            "official_thread_cpu_ns": [12079471, 13547116, 12017088, 13691960, 11639800],
-            "baseline_instrumented_wall_ns": [12826750, 13414080, 12642775, 13343385, 13131146],
-            "baseline_stage_wall_ns": [
-              [366570, 254212, 1832697, 3680538, 3815050, 92888],
-              [363694, 268023, 2035682, 3816021, 3982721, 92037],
-              [381402, 257017, 1804797, 3696491, 3762101, 110285],
-              [403424, 329063, 1855372, 3856371, 3926297, 89824],
-              [371687, 266189, 1783494, 3828560, 3946437, 92329]
-            ],
-            "two_context_summary_wall_ns": [102334, 105157, 104216, 108352, 122043],
-            "two_context_summary_thread_cpu_ns": [99738, 102251, 102212, 104034, 118946]
-          }
+          {"process_pair": 1, "official_wall_ns": [12120641, 12318718, 11756655, 12102684, 12361221], "official_thread_cpu_ns": [12116105, 12314158, 11751905, 12097228, 12356591], "baseline_instrumented_wall_ns": [14077611, 13078415, 12611676, 12658206, 13287008], "baseline_stage_wall_ns": [[385455, 291346, 2165834, 3902384, 3980982, 92821], [357205, 266639, 2062909, 3790446, 3927210, 92028], [353950, 292708, 1833956, 3683046, 3842685, 90626], [430785, 277396, 1800866, 3719080, 3830999, 88601], [358609, 260449, 1840627, 3829064, 4018618, 91717]], "two_context_summary_wall_ns": [98668, 96405, 97826, 94852, 100440], "two_context_summary_thread_cpu_ns": [96333, 94410, 95511, 93179, 97064]},
+          {"process_pair": 2, "official_wall_ns": [12084768, 13550365, 12021573, 13697414, 11644257], "official_thread_cpu_ns": [12079471, 13547116, 12017088, 13691960, 11639800], "baseline_instrumented_wall_ns": [12826750, 13414080, 12642775, 13343385, 13131146], "baseline_stage_wall_ns": [[366570, 254212, 1832697, 3680538, 3815050, 92888], [363694, 268023, 2035682, 3816021, 3982721, 92037], [381402, 257017, 1804797, 3696491, 3762101, 110285], [403424, 329063, 1855372, 3856371, 3926297, 89824], [371687, 266189, 1783494, 3828560, 3946437, 92329]], "two_context_summary_wall_ns": [102334, 105157, 104216, 108352, 122043], "two_context_summary_thread_cpu_ns": [99738, 102251, 102212, 104034, 118946]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [6144724, 5623360, 5093124, 5654467, 4834835],
-            "official_thread_cpu_ns": [6137815, 5618576, 5088851, 5649352, 4830168],
-            "baseline_instrumented_wall_ns": [23446498, 13952236, 13516051, 13302770, 14577866],
-            "baseline_stage_wall_ns": [
-              [392721, 1448899, 4080251, 7034344, 4303938, 96135],
-              [396566, 263507, 1941048, 4141293, 4333291, 94741],
-              [368765, 279210, 1957982, 3923116, 4130467, 120170],
-              [403267, 307822, 1922257, 3968393, 3810834, 93181],
-              [382796, 290278, 1781787, 4331077, 4475313, 95295]
-            ],
-            "two_context_summary_wall_ns": [118848, 103846, 219109, 103646, 121132],
-            "two_context_summary_thread_cpu_ns": [114350, 99327, 216150, 100328, 116523]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [4563551, 4603182, 4618324, 4604623, 4635032],
-            "official_thread_cpu_ns": [4560848, 4599596, 4614339, 4600417, 4630212],
-            "baseline_instrumented_wall_ns": [12949615, 13370827, 12524467, 12598558, 12857965],
-            "baseline_stage_wall_ns": [
-              [352480, 287422, 1937344, 3729811, 3938475, 91969],
-              [367020, 266520, 1853389, 3844194, 3911093, 181133],
-              [352360, 255372, 1897585, 3673600, 3825606, 90756],
-              [353780, 261873, 1856533, 3672724, 3813199, 91268],
-              [371926, 271127, 1817877, 3774411, 3808213, 92059]
-            ],
-            "two_context_summary_wall_ns": [90926, 106440, 92669, 94151, 99549],
-            "two_context_summary_thread_cpu_ns": [88791, 102993, 90975, 92076, 96974]
-          }
+          {"process_pair": 1, "official_wall_ns": [6144724, 5623360, 5093124, 5654467, 4834835], "official_thread_cpu_ns": [6137815, 5618576, 5088851, 5649352, 4830168], "baseline_instrumented_wall_ns": [23446498, 13952236, 13516051, 13302770, 14577866], "baseline_stage_wall_ns": [[392721, 1448899, 4080251, 7034344, 4303938, 96135], [396566, 263507, 1941048, 4141293, 4333291, 94741], [368765, 279210, 1957982, 3923116, 4130467, 120170], [403267, 307822, 1922257, 3968393, 3810834, 93181], [382796, 290278, 1781787, 4331077, 4475313, 95295]], "two_context_summary_wall_ns": [118848, 103846, 219109, 103646, 121132], "two_context_summary_thread_cpu_ns": [114350, 99327, 216150, 100328, 116523]},
+          {"process_pair": 2, "official_wall_ns": [4563551, 4603182, 4618324, 4604623, 4635032], "official_thread_cpu_ns": [4560848, 4599596, 4614339, 4600417, 4630212], "baseline_instrumented_wall_ns": [12949615, 13370827, 12524467, 12598558, 12857965], "baseline_stage_wall_ns": [[352480, 287422, 1937344, 3729811, 3938475, 91969], [367020, 266520, 1853389, 3844194, 3911093, 181133], [352360, 255372, 1897585, 3673600, 3825606, 90756], [353780, 261873, 1856533, 3672724, 3813199, 91268], [371926, 271127, 1817877, 3774411, 3808213, 92059]], "two_context_summary_wall_ns": [90926, 106440, 92669, 94151, 99549], "two_context_summary_thread_cpu_ns": [88791, 102993, 90975, 92076, 96974]}
         ]
       },
       "cpu_reduction_percent": 60.92904681895715
@@ -2001,82 +666,17 @@
       "fixture": "observations256-candidates26",
       "instances": 16,
       "result_json_blake3": "a03561d419136d1c1122641448cd0ff24ee19a554c5db9f189ffa162f51af18d",
-      "median_official_thread_cpu_ns": {
-        "before": 23890093.5,
-        "after": 9846036.0
-      },
-      "median_official_wall_ns": {
-        "before": 23894973.5,
-        "after": 9850742.5
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 169466.0,
-        "after": 166121.0
-      },
+      "median_official_thread_cpu_ns": {"before": 23890093.5, "after": 9846036.0},
+      "median_official_wall_ns": {"before": 23894973.5, "after": 9850742.5},
+      "median_two_context_summary_thread_cpu_ns": {"before": 169466.0, "after": 166121.0},
       "samples": {
         "before": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [24346789, 24563205, 23892319, 24978251, 23927171],
-            "official_thread_cpu_ns": [24342433, 24559064, 23886848, 24974100, 23922422],
-            "baseline_instrumented_wall_ns": [28076806, 26079796, 27818389, 27446431, 28514616],
-            "baseline_stage_wall_ns": [
-              [765997, 845998, 4207441, 8193038, 8139340, 183653],
-              [744546, 614180, 3648194, 7460722, 7964598, 183434],
-              [740467, 645064, 4063517, 7630094, 8732428, 186209],
-              [723510, 661082, 4122798, 8201496, 8099511, 215605],
-              [746743, 656434, 3907343, 8264221, 8632672, 189575]
-            ],
-            "two_context_summary_wall_ns": [168422, 164637, 174121, 172699, 174613],
-            "two_context_summary_thread_cpu_ns": [165596, 161178, 170001, 170212, 170592]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [23875113, 23315355, 23802525, 23897628, 23522564],
-            "official_thread_cpu_ns": [23870074, 23310945, 23797786, 23893339, 23517792],
-            "baseline_instrumented_wall_ns": [26447640, 25746890, 26026159, 25535132, 26996603],
-            "baseline_stage_wall_ns": [
-              [736513, 613079, 3726440, 7472985, 7991368, 186050],
-              [744677, 592738, 3617437, 7444262, 7950648, 180861],
-              [729924, 620770, 3758554, 7569440, 7978733, 185298],
-              [788373, 596392, 3607919, 7407227, 7734266, 181143],
-              [734592, 634271, 3676080, 8118422, 8019732, 183755]
-            ],
-            "two_context_summary_wall_ns": [172919, 184106, 170476, 164978, 173060],
-            "two_context_summary_thread_cpu_ns": [169411, 182260, 166907, 162511, 169521]
-          }
+          {"process_pair": 1, "official_wall_ns": [24346789, 24563205, 23892319, 24978251, 23927171], "official_thread_cpu_ns": [24342433, 24559064, 23886848, 24974100, 23922422], "baseline_instrumented_wall_ns": [28076806, 26079796, 27818389, 27446431, 28514616], "baseline_stage_wall_ns": [[765997, 845998, 4207441, 8193038, 8139340, 183653], [744546, 614180, 3648194, 7460722, 7964598, 183434], [740467, 645064, 4063517, 7630094, 8732428, 186209], [723510, 661082, 4122798, 8201496, 8099511, 215605], [746743, 656434, 3907343, 8264221, 8632672, 189575]], "two_context_summary_wall_ns": [168422, 164637, 174121, 172699, 174613], "two_context_summary_thread_cpu_ns": [165596, 161178, 170001, 170212, 170592]},
+          {"process_pair": 2, "official_wall_ns": [23875113, 23315355, 23802525, 23897628, 23522564], "official_thread_cpu_ns": [23870074, 23310945, 23797786, 23893339, 23517792], "baseline_instrumented_wall_ns": [26447640, 25746890, 26026159, 25535132, 26996603], "baseline_stage_wall_ns": [[736513, 613079, 3726440, 7472985, 7991368, 186050], [744677, 592738, 3617437, 7444262, 7950648, 180861], [729924, 620770, 3758554, 7569440, 7978733, 185298], [788373, 596392, 3607919, 7407227, 7734266, 181143], [734592, 634271, 3676080, 8118422, 8019732, 183755]], "two_context_summary_wall_ns": [172919, 184106, 170476, 164978, 173060], "two_context_summary_thread_cpu_ns": [169411, 182260, 166907, 162511, 169521]}
         ],
         "after": [
-          {
-            "process_pair": 1,
-            "official_wall_ns": [9289299, 10687881, 10817583, 10024551, 12080149],
-            "official_thread_cpu_ns": [9283197, 10682891, 10813395, 10019408, 12075275],
-            "baseline_instrumented_wall_ns": [26741735, 28120317, 28389464, 26116358, 29704350],
-            "baseline_stage_wall_ns": [
-              [766845, 705630, 3787699, 7527404, 7909035, 183765],
-              [775435, 617109, 4202594, 8134893, 8475773, 184940],
-              [888917, 712201, 3987443, 8269966, 8572819, 185832],
-              [747796, 610797, 3660970, 7542102, 7954609, 183334],
-              [830478, 921558, 4307762, 8312098, 8972449, 191929]
-            ],
-            "two_context_summary_wall_ns": [170076, 165739, 168513, 184016, 171437],
-            "two_context_summary_thread_cpu_ns": [165896, 162571, 165095, 180076, 168089]
-          },
-          {
-            "process_pair": 2,
-            "official_wall_ns": [10397314, 9676934, 9636724, 9174849, 9201780],
-            "official_thread_cpu_ns": [10392240, 9672664, 9632074, 9170830, 9196889],
-            "baseline_instrumented_wall_ns": [26966215, 25442359, 25889971, 26160113, 25814905],
-            "baseline_stage_wall_ns": [
-              [912953, 667110, 3742552, 7467759, 8222512, 187321],
-              [725488, 577895, 3645260, 7375853, 7802743, 180533],
-              [726400, 592109, 3647700, 7716785, 7887621, 221231],
-              [837396, 578777, 3636319, 7687531, 8093459, 182293],
-              [716130, 603612, 3735354, 7523875, 7865967, 182814]
-            ],
-            "two_context_summary_wall_ns": [171887, 168352, 186620, 168833, 170125],
-            "two_context_summary_thread_cpu_ns": [168469, 165044, 166346, 165305, 167438]
-          }
+          {"process_pair": 1, "official_wall_ns": [9289299, 10687881, 10817583, 10024551, 12080149], "official_thread_cpu_ns": [9283197, 10682891, 10813395, 10019408, 12075275], "baseline_instrumented_wall_ns": [26741735, 28120317, 28389464, 26116358, 29704350], "baseline_stage_wall_ns": [[766845, 705630, 3787699, 7527404, 7909035, 183765], [775435, 617109, 4202594, 8134893, 8475773, 184940], [888917, 712201, 3987443, 8269966, 8572819, 185832], [747796, 610797, 3660970, 7542102, 7954609, 183334], [830478, 921558, 4307762, 8312098, 8972449, 191929]], "two_context_summary_wall_ns": [170076, 165739, 168513, 184016, 171437], "two_context_summary_thread_cpu_ns": [165896, 162571, 165095, 180076, 168089]},
+          {"process_pair": 2, "official_wall_ns": [10397314, 9676934, 9636724, 9174849, 9201780], "official_thread_cpu_ns": [10392240, 9672664, 9632074, 9170830, 9196889], "baseline_instrumented_wall_ns": [26966215, 25442359, 25889971, 26160113, 25814905], "baseline_stage_wall_ns": [[912953, 667110, 3742552, 7467759, 8222512, 187321], [725488, 577895, 3645260, 7375853, 7802743, 180533], [726400, 592109, 3647700, 7716785, 7887621, 221231], [837396, 578777, 3636319, 7687531, 8093459, 182293], [716130, 603612, 3735354, 7523875, 7865967, 182814]], "two_context_summary_wall_ns": [171887, 168352, 186620, 168833, 170125], "two_context_summary_thread_cpu_ns": [168469, 165044, 166346, 165305, 167438]}
         ]
       },
       "cpu_reduction_percent": 58.78611358302135
@@ -2085,18 +685,9 @@
       "fixture": "observations256-candidates26",
       "instances": 32,
       "result_json_blake3": "3c15cb911ffbb37363cf15ede7fec258a194c8f3235b35b77a0fe26bbf12cbb1",
-      "median_official_thread_cpu_ns": {
-        "before": 49220726.5,
-        "after": 19878859.0
-      },
-      "median_official_wall_ns": {
-        "before": 49230959.5,
-        "after": 19884026.5
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 307701.0,
-        "after": 311827.0
-      },
+      "median_official_thread_cpu_ns": {"before": 49220726.5, "after": 19878859.0},
+      "median_official_wall_ns": {"before": 49230959.5, "after": 19884026.5},
+      "median_two_context_summary_thread_cpu_ns": {"before": 307701.0, "after": 311827.0},
       "samples": {
         "before": [
           {
@@ -2169,18 +760,9 @@
       "fixture": "observations256-candidates26",
       "instances": 50,
       "result_json_blake3": "c5dbd26eaf392a3153ceeb6783582d0cef2ad6650a8d2b01fd1265f1ce61cff6",
-      "median_official_thread_cpu_ns": {
-        "before": 78187863.0,
-        "after": 31218469.0
-      },
-      "median_official_wall_ns": {
-        "before": 78194879.5,
-        "after": 31223753.0
-      },
-      "median_two_context_summary_thread_cpu_ns": {
-        "before": 547451.0,
-        "after": 566970.0
-      },
+      "median_official_thread_cpu_ns": {"before": 78187863.0, "after": 31218469.0},
+      "median_official_wall_ns": {"before": 78194879.5, "after": 31223753.0},
+      "median_two_context_summary_thread_cpu_ns": {"before": 547451.0, "after": 566970.0},
       "samples": {
         "before": [
           {

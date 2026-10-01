@@ -7,6 +7,29 @@ The [CPU performance record](../performance/20261001-cpu-preparation.md) retains
 measurement conditions and links to source-bound samples/probes; no game-speed
 claim follows from the tests below.
 
+## Topology successor
+
+The successor extends `851c3a6ffcc498d6b2b3e9a43969cc57aa1308ec` with reviewed
+topology `bf8f6b48` and evidence `b94c9f12`, picked without conflicts as
+`035d76fa` and `0815e41c`. Source, report and probes match the originals;
+the JSON is formatting-only compaction from 2,258 to 840 lines, preserving
+every field and ordered sample. The predecessor's CI and fast gates are green.
+
+Checks bind source `0815e41c8db2ed906cf6ee01898630e8aee51eb6`: debug and true
+release each pass 12 map, eight sidecar and one private-plan diagnostic test.
+App object-bound attention/upload equivalence and tier-1/tier-10 headless smoke
+also pass: **44 passing executions, zero failures**. Strict Rust 1.99 workspace,
+production/GPU-test all-target and release Core all-target Clippy pass with
+`-D warnings`. Formatting, static boundaries, 77/77 documentation assertions and
+changed local links pass. Jobs/tests were one/serial; observed memory peaked at
+10.67 GiB, disk stayed above 11.60 GiB and no guard fired.
+
+The final edit changes documentation/JSON formatting only. The separate
+[topology CPU evidence](../performance/20261001-topology-preparation.md) is
+preserved; its observation timing excludes the earlier attention chain.
+Neither timing was repeated or combined into a gameplay estimate. Final-source
+GPU/Windows gameplay, training and remote successor CI remain separately owned.
+
 ## Prepared-attention successor
 
 The successor combines reviewed attention source
