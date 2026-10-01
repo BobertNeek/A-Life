@@ -1,0 +1,113 @@
+{
+  "scope": "CPU source/test verification; no new performance measurement",
+  "base_commit": "e540e82094870fd40d5bc1a0d8030462ac4698ea",
+  "source_commit": "5a8000a8dd093c550145cb6a04e293d40253ed71",
+  "source_sha256": {
+    "crates/alife_game_app/src/gpu_live_runtime/cpu_preparation.rs": "344aed506a57cb4ad6ac425389a6d488b6d6cc5627d0d7f7bb7106fc02160045",
+    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": "0c53639f3549b4ff186c6e26426dc30026199fe4465a2f919c64136e28d3c7b6",
+    "crates/alife_game_app/src/gpu_live_runtime/cpu_preparation_tests.rs": "bb73a62811e76861d67a61050c71005eaab60312a8c13e537cdc62c05a88e1ec",
+    "crates/alife_game_app/src/gpu_live_runtime/terrain_hint_tests.rs": "b13e9bcf436d35f1e3aca64be5cc825a4fddae56fb845f70c0b14f8182ac5bfc"
+  },
+  "unchanged_identity_sources_sha256": {
+    "crates/alife_game_app/src/gpu_live_runtime/semantic_prior.rs": "0d37ee61dc7e3dffc39c597c92446ba61b28b7f9f09fc85145205367a27d30df",
+    "crates/alife_semantic/src/local_slm_prior.rs": "3dbbba2bd860295a3e377c32b560956c9ed6d1548054483e1db53955ef7d8b78",
+    "crates/alife_core/src/language.rs": "a2f39fc7cdc67978a049c8367a1b20d77a968cf819b2e89c49a9df7b80f8aa76"
+  },
+  "environment": {
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "setup": "/workspace/cloud-cpu-validation/env.sh",
+    "test_threads": 1,
+    "build_jobs": 2
+  },
+  "terrain_fixture": {
+    "sensor_profile": "GroundedTerrainVisionV1",
+    "brain_class": "N2048",
+    "construction": "Existing native procedural reference asset, strict N2048 candidate/compiler-input admission",
+    "owners": [
+      3,
+      11,
+      28,
+      37,
+      52,
+      86,
+      111,
+      205
+    ],
+    "visible_food_objects_per_owner": 2,
+    "episodic_records_per_owner": 0,
+    "predictors": "Mixed acquired and cold",
+    "hints": "Controlled typed per-owner mpsc inboxes: ready, absent, disconnected, late, later-owner readiness during capture"
+  },
+  "proof": "Full preparation outcomes match frozen serial oracle, serial runner and two participants; reversed owner isolation; spawn fallback once; caller/child panics joined with no continuation, mutation or repoll",
+  "checks": [
+    {
+      "command": "cargo test -p alife_game_app --lib --features gpu-runtime terrain_hint_tests -- --test-threads=1",
+      "status": "PASS",
+      "log_path": "/tmp/alife-terrain-hint-debug-final.log",
+      "log_sha256": "7486bc6405008ff71040c955d61f89f8a865bddf6ba3ce477b6c40e25a37766c"
+    },
+    {
+      "command": "cargo test -p alife_game_app --lib --features gpu-runtime cpu_re_admission -- --test-threads=1",
+      "status": "PASS",
+      "log_path": "/tmp/alife-terrain-hint-debug-admission.log",
+      "log_sha256": "85eb2307b81b44bb4ed972f8cbd00a1654f2d065574043c3538bd66a6935a0bc"
+    },
+    {
+      "command": "cargo test -p alife_game_app --release --lib --features gpu-runtime cpu_ -- --test-threads=1",
+      "status": "PASS",
+      "log_path": "/tmp/alife-terrain-hint-release.log",
+      "log_sha256": "b73a120aedbb30559e5e5ed4adc9ddd3c22fba08a2225d83e0309beeb9c40377"
+    },
+    {
+      "command": "cargo clippy -p alife_game_app --all-targets --features gpu-runtime -- -D warnings",
+      "status": "PASS",
+      "log_path": "/tmp/alife-terrain-hint-clippy-debug.log",
+      "log_sha256": "52c2b1ce1efe149723c2c9e14310198080dc1ab453fb9cfdb9e045b9d4aea2f0"
+    },
+    {
+      "command": "cargo clippy -p alife_game_app --release --all-targets --features gpu-runtime -- -D warnings",
+      "status": "PASS",
+      "log_path": "/tmp/alife-terrain-hint-clippy-release.log",
+      "log_sha256": "38c58b70d087d3073ef25bd1983f5a4748bf404c7f10ad97daac183006f215ee"
+    },
+    {
+      "command": "cargo check -p alife_game_app --features foundation-training",
+      "status": "PASS",
+      "log_path": "/tmp/alife-terrain-hint-foundation-check.log",
+      "log_sha256": "d00cf30552c29fc146f809cb786cb0ce74e7f42fd13218caf9457f2462a532de"
+    },
+    {
+      "command": "bash scripts/check_core_boundaries.sh",
+      "status": "PASS",
+      "log_path": "/tmp/alife-terrain-hint-boundaries.log",
+      "log_sha256": "b6554fa6b151aea699671a9b5cad329ec249203f6fa858015600843929aff070"
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "status": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS"
+    },
+    {
+      "command": "bash scripts/docs_check.sh",
+      "status": "PASS (77/77)",
+      "log_path": "/tmp/alife-terrain-hint-docs.log",
+      "log_sha256": "6b52febcfc5f42aa1917fc1c9ede094625c522d266e4e96ef8f411c5710d8c58"
+    }
+  ],
+  "diagnostics": {
+    "initial_debug": "Nine unchanged preparation cases passed; three new fixtures failed before capture because builtin Terrain assets are unsupported",
+    "second_focused_debug": "Three fixtures failed before capture because old object-slot food geometry was behind Terrain gaze",
+    "resolution": "Native Terrain candidate admission and two visible forward objects; final three debug cases and all thirteen release cases pass"
+  },
+  "unrun": [
+    "Actual LocalSLM provider/cache queue tests",
+    "Live neural GPU/learning/recovery",
+    "Whole admitted tick and renderer throughput",
+    "50-owner current trained Terrain founder fixture",
+    "Any new timing benchmark"
+  ],
+  "hardware_handoff": "Blocked: New Game max8; LoadExisting cannot change saved population; current trained v3 package and matching current 50-owner save/config/asset/environment manifest missing"
+}
