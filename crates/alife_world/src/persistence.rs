@@ -1493,6 +1493,7 @@ impl PortableSaveFile {
         };
         let mut save: Self = serde_json::from_value(migrated)?;
         save.world.migrate_legacy_habitats(&save.creatures)?;
+        save.world.validate_organism_records()?;
         Ok(save)
     }
 
@@ -1763,6 +1764,7 @@ impl PortableSaveFile {
     }
 
     pub fn restore_headless_world(&self) -> Result<HeadlessWorld, PersistenceError> {
+        self.validate_creature_summaries_against_organism_records()?;
         self.world
             .habitats
             .validate_at_tick(&creature_ids(&self.creatures)?, self.world.tick)?;
@@ -2211,6 +2213,16 @@ impl WorldSaveState {
         // biological/neural registration. Every registered life still binds
         // exactly once; extra objects must not become implicit newborns.
         if !registered_ids.is_subset(&agent_ids) {
+            return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+        }
+        // Habitat membership declares biological creatures, unlike external
+        // teacher objects. A present registry cannot silently lose their state.
+        if self
+            .habitats
+            .memberships()
+            .iter()
+            .any(|membership| !registered_ids.contains(&membership.organism_id.raw()))
+        {
             return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
         }
         for record in registry.iter() {
