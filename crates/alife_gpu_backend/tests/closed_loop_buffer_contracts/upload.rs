@@ -299,7 +299,21 @@ fn upload_is_an_exact_projection_encoder_dynamics_and_decoder_translation() {
             upload.decoder_weight_index_word_base + decoder_local_cursor * 4
         );
         assert_eq!(gpu.weight_index_count, source.decoder_synapse_count());
-        assert_eq!((gpu.reserved0, gpu.reserved1), (0, 0));
+        assert_eq!(gpu.reserved0 & 0xffff, source.innate_drive_mask());
+        assert_eq!(
+            (gpu.reserved0 >> 16) & 0xff,
+            u32::from(source.innate_cue_lane().map_or(0, |lane| lane + 1))
+        );
+        assert_eq!(
+            (gpu.reserved0 >> 24) & 1,
+            u32::from(source.innate_requires_reach())
+        );
+        assert_eq!(
+            (gpu.reserved0 >> 25) & 1,
+            u32::from(source.innate_cue_inverted())
+        );
+        assert_eq!(gpu.reserved0 >> 26, 0);
+        assert_eq!(gpu.reserved1, source.innate_gain().to_bits());
         decoder_local_cursor += source.decoder_synapse_count();
     }
     assert_eq!(decoder_local_cursor, compiled.decoder_synapse_count());
@@ -484,10 +498,12 @@ fn upload_has_one_immutable_owner_full_identity_and_zeroed_reserved_lanes() {
         .route_metadata
         .iter()
         .all(|row| row.reserved0 == 0 && row.reserved1 == 0));
+    // Decoder family lanes now contain innate salience; only the unused high
+    // bits of the packed drive/cue/reach/inversion word remain reserved.
     assert!(upload
         .decoder_families
         .iter()
-        .all(|row| row.reserved0 == 0 && row.reserved1 == 0));
+        .all(|row| row.reserved0 >> 26 == 0));
     assert!(upload
         .decoder_weight_indices
         .iter()
@@ -540,6 +556,14 @@ fn phenotype_upload_validation_rejects_every_task4_corruption_category() {
     let mut reserved = valid.clone();
     reserved.decoder_weight_indices[0].reserved0 = 1;
     assert!(reserved.validate_against(&phenotype).is_err());
+
+    let mut innate_mask = valid.clone();
+    innate_mask.decoder_families[0].reserved0 ^= 1;
+    assert!(innate_mask.validate_against(&phenotype).is_err());
+
+    let mut innate_gain = valid.clone();
+    innate_gain.decoder_families[0].reserved1 ^= 1;
+    assert!(innate_gain.validate_against(&phenotype).is_err());
 
     let mut sentinel = valid;
     sentinel.extension_record_offset = 0;

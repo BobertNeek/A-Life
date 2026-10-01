@@ -832,8 +832,141 @@ fn outcome_credit_record_matches_the_frozen_abi() {
     );
     assert_eq!(
         std::mem::offset_of!(GpuOutcomeCreditRecord, biochemical_aversive),
+        164
+    );
+    assert_eq!(
+        std::mem::offset_of!(GpuOutcomeCreditRecord, biochemical_appetitive),
         160
     );
+    assert_eq!(std::mem::offset_of!(GpuOutcomeCreditRecord, reserved), 168);
+
+    let fields = [
+        (
+            "schema_version",
+            0,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, schema_version),
+        ),
+        (
+            "selected_candidate_and_family",
+            4,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, selected_candidate_and_family),
+        ),
+        (
+            "organism_id",
+            8,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, organism_id),
+        ),
+        (
+            "phenotype_hash",
+            16,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, phenotype_hash),
+        ),
+        (
+            "sequence_id",
+            48,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, sequence_id),
+        ),
+        (
+            "originating_tick",
+            56,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, originating_tick),
+        ),
+        (
+            "outcome_tick",
+            64,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, outcome_tick),
+        ),
+        (
+            "selected_action",
+            72,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, selected_action),
+        ),
+        (
+            "active_activation_side",
+            76,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, active_activation_side),
+        ),
+        (
+            "candidate_feature_digest",
+            80,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, candidate_feature_digest),
+        ),
+        (
+            "frame_digest",
+            96,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, frame_digest),
+        ),
+        (
+            "dispatch_generation",
+            128,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, dispatch_generation),
+        ),
+        (
+            "prediction_residual",
+            136,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, prediction_residual),
+        ),
+        (
+            "pain",
+            140,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, pain),
+        ),
+        (
+            "homeostatic_improvement",
+            144,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, homeostatic_improvement),
+        ),
+        (
+            "frustration",
+            148,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, frustration),
+        ),
+        (
+            "novelty",
+            152,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, novelty),
+        ),
+        (
+            "social_consequence",
+            156,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, social_consequence),
+        ),
+        (
+            "biochemical_appetitive",
+            160,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, biochemical_appetitive),
+        ),
+        (
+            "biochemical_aversive",
+            164,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, biochemical_aversive),
+        ),
+        (
+            "reserved",
+            168,
+            std::mem::offset_of!(GpuOutcomeCreditRecord, reserved),
+        ),
+    ];
+    let module = naga::front::wgsl::parse_str(alife_gpu_backend::CLOSED_LOOP_PLASTICITY_WGSL)
+        .expect("plasticity WGSL must parse");
+    let (handle, ty) = module
+        .types
+        .iter()
+        .find(|(_, ty)| ty.name.as_deref() == Some("GpuOutcomeCreditRecord"))
+        .expect("outcome credit WGSL record exists");
+    let naga::TypeInner::Struct { members, span } = &ty.inner else {
+        panic!("outcome credit WGSL record must be a struct");
+    };
+    let mut layouter = naga::proc::Layouter::default();
+    layouter.update(module.to_ctx()).unwrap();
+    assert_eq!(*span, 176);
+    assert_eq!(layouter[handle].size, 176);
+    assert_eq!(members.len(), fields.len());
+    for (member, (name, expected_offset, rust_offset)) in members.iter().zip(fields) {
+        assert_eq!(member.name.as_deref(), Some(name));
+        assert_eq!(member.offset, expected_offset, "WGSL {name} offset");
+        assert_eq!(rust_offset, expected_offset as usize, "Rust {name} offset");
+    }
 }
 
 #[test]
@@ -1323,7 +1456,7 @@ fn fast_plasticity_canonicalizes_zero_before_gpu_storage() {
         .0;
     assert!(source.contains("fn canonicalize_state_zero(value:f32) -> f32"));
     assert!(
-        body.contains("store_state_f32(inactive_fast_index,canonicalize_state_zero(next_fast))")
+        body.contains("store_state_f32(evaluation.inactive_fast_index,canonicalize_state_zero(evaluation.next_fast))")
     );
 }
 

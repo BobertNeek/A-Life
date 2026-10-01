@@ -3,7 +3,7 @@ use std::ops::Range;
 use alife_core::{BrainCapacityClass, MAX_ACTION_CANDIDATES};
 use alife_gpu_backend::{
     GpuClassBucketPlan, GpuClosedLoopError, GpuDecoderFamilyRecord, GpuDecoderPlanRecord,
-    GpuEncoderPlanRecord, GPU_NO_EXTENSION_SENTINEL,
+    GpuEncoderPlanRecord, GPU_JOINT_SELECTION_V1_MARKER, GPU_NO_EXTENSION_SENTINEL,
 };
 
 use super::support::{compile, ranges_are_disjoint};
@@ -246,8 +246,20 @@ fn two_slots_cover_pairwise_disjoint_ranges_in_each_shared_heap() {
     let left = bucket.insert_phenotype(0, 7, &first).unwrap();
     let right = bucket.insert_phenotype(1, 9, &second).unwrap();
 
-    assert_eq!(left.record().reserved, [0; 3]);
-    assert_eq!(right.record().reserved, [0; 3]);
+    for (slot, phenotype) in [(&left, &first), (&right, &second)] {
+        assert_eq!(
+            phenotype
+                .candidate_decoder()
+                .factorized_motor_channels(phenotype)
+                .unwrap(),
+            vec![alife_core::MotorChannel::Locomotion],
+        );
+        // The first former reserved lane carries the tagged locomotion mask.
+        assert_eq!(
+            slot.record().reserved,
+            [GPU_JOINT_SELECTION_V1_MARKER | 1, 0, 0]
+        );
+    }
     assert_eq!(
         left.record().extension_record_offset,
         left.word_ranges().extension_words.start

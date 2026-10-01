@@ -6898,9 +6898,11 @@ mod selector_diagnostic_binding_tests {
 #[cfg(test)]
 mod curated_founder_gpu_cutover_tests {
     use super::*;
+    #[cfg(feature = "training-rollout")]
+    use alife_core::{BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler, Tick};
     use alife_core::{
-        BrainGenome, DevelopmentState, FoundationWeightAsset, NormalizedScalar, PhenotypeCompiler,
-        Tick,
+        CreatureGenome, FoundationGeneticIdentity, FoundationWeightAsset,
+        N512FounderFoundationProjection,
     };
 
     #[test]
@@ -6983,25 +6985,32 @@ mod curated_founder_gpu_cutover_tests {
         assert_eq!(backend.snapshot(), old_snapshot);
     }
 
-    fn test_phenotype(_seed: u64) -> BrainPhenotype {
-        let capacity = BrainCapacityClass::n512();
-        let genome = BrainGenome::scaffold(0x4E35_3132_5F00_0001, capacity.id());
-        let development = DevelopmentState::new(
-            genome.id,
-            Tick::ZERO,
-            NormalizedScalar::new(1.0).expect("fixture maturation is valid"),
-        );
+    fn test_phenotype(seed: u64) -> BrainPhenotype {
         let foundation =
             FoundationWeightAsset::builtin_nano512_v1(SensorProfile::PrivilegedAffordanceV1)
                 .expect("fixture foundation is valid");
-        PhenotypeCompiler::compile_from_foundation_asset(
-            &genome,
-            &capacity,
-            &development,
+        let manifest = foundation.manifest();
+        let identity = FoundationGeneticIdentity::new(
+            manifest.foundation_id().raw(),
+            manifest.foundation_version().raw(),
+            manifest.compatibility_family_id().raw(),
+            BrainCapacityClass::N512_ID,
+        )
+        .expect("fixture foundation identity is valid");
+        let founder = CreatureGenome::early_mammal_founder(seed, identity)
+            .expect("fixture founder genome is valid")
+            .express()
+            .expect("fixture founder expression is valid");
+        // Curated founders use the explicit frozen-foundation projection;
+        // the source asset cannot be relabeled as the canonical runtime ABI.
+        N512FounderFoundationProjection::compile(
+            &founder,
             SensorProfile::PrivilegedAffordanceV1,
             &foundation,
         )
-        .expect("fixture phenotype is valid")
+        .expect("fixture founder projection is valid")
+        .compiled_phenotype()
+        .clone()
     }
 
     #[cfg(feature = "training-rollout")]
@@ -7133,6 +7142,10 @@ mod curated_founder_gpu_cutover_tests {
                 .foundation_payload_digest()
                 .expect("fixture foundation digest");
             assert_eq!(foundation_one, foundation_two);
+            assert_ne!(
+                phenotype_one.phenotype_hash(),
+                phenotype_two.phenotype_hash()
+            );
             let first_handle = GpuBrainHandle {
                 backend_instance_id: NonZeroU64::new(41).unwrap(),
                 class_id,
@@ -7205,6 +7218,7 @@ mod curated_founder_gpu_cutover_tests {
         fn ordered_cohort(&self) -> GpuCuratedResidencyCohort {
             let first = test_phenotype(11);
             let second = test_phenotype(12);
+            assert_ne!(first.phenotype_hash(), second.phenotype_hash());
             let foundation = first
                 .foundation_abi()
                 .foundation_payload_digest()

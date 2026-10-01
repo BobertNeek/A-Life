@@ -596,7 +596,15 @@ fn perception_payload_uses_the_compiled_memory_decoder_stride() {
     assert_eq!(slot.decoder_input_stride(), 36);
     assert_eq!(upload.candidates[0].feature_offset, 77);
     assert_eq!(upload.candidates[1].feature_offset, 113);
-    assert_eq!(upload.frame_payload_words.len(), 77 + 2 * 36);
+    let context_start = 77 + 2 * 36;
+    assert_eq!(upload.frame_payload_words.len(), context_start + 256);
+    assert_eq!(
+        upload.frame_payload_words[context_start..],
+        frame
+            .sensory()
+            .language_prior_neural_lanes()
+            .map(f32::to_bits),
+    );
     for candidate in 0..2 {
         let start = 77 + candidate * 36;
         assert!(upload.frame_payload_words[start + 24..start + 36]

@@ -4626,20 +4626,30 @@ mod fixed_arena_tests {
             GpuFixedClassArenaPlan::new(capacity, u32::MAX, u64::MAX),
             Err(GpuClosedLoopError::CapacityExceeded | GpuClosedLoopError::ArithmeticOverflow)
         ));
-        let default_total = [
-            (BrainCapacityClass::n512(), 64),
-            (BrainCapacityClass::n1024(), 16),
-            (BrainCapacityClass::n2048(), 4),
-        ]
-        .into_iter()
-        .try_fold(0_u64, |total, (capacity, slots)| {
-            let plan = GpuFixedClassArenaPlan::new(capacity, slots, u64::MAX)?;
-            total
-                .checked_add(plan.aggregate_resident_bytes())
-                .ok_or(GpuClosedLoopError::ArithmeticOverflow)
-        })
-        .unwrap();
-        assert!(default_total <= 128 * 1024 * 1024);
+        let profile = crate::GpuRuntimeProfile::production_v1();
+        let default_total = BrainCapacityClass::production_classes()
+            .into_iter()
+            .try_fold(0_u64, |total, capacity| {
+                let slots = u32::from(profile.growth_chunk_slots);
+                let plan = GpuFixedClassArenaPlan::new(capacity, slots, u64::MAX)?;
+                let exact_ceiling = plan.aggregate_resident_bytes();
+                assert_eq!(
+                    GpuFixedClassArenaPlan::new(capacity, slots, exact_ceiling)?
+                        .aggregate_resident_bytes(),
+                    exact_ceiling,
+                );
+                assert_eq!(
+                    GpuFixedClassArenaPlan::new(capacity, slots, exact_ceiling - 1).unwrap_err(),
+                    GpuClosedLoopError::CapacityExceeded,
+                );
+                total
+                    .checked_add(exact_ceiling)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)
+            })
+            .unwrap();
+        // One initial chunk per promoted class must fit the actual production
+        // profile, including the complete immutable, mutable, and shared heaps.
+        assert!(default_total <= profile.physical_allocation_ceiling_bytes);
     }
 
     #[test]

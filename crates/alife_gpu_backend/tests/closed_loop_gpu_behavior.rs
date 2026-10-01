@@ -262,7 +262,8 @@ fn decode_wgsl_parses_and_abi_remains_compact_candidate_conditioned_and_entity_b
         .unwrap()
         + header_start;
     let header = &CLOSED_LOOP_DECODE_WGSL[header_start..header_end];
-    assert!(CLOSED_LOOP_DECODE_WGSL.contains("GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 3u"));
+    assert_eq!(alife_gpu_backend::GPU_CLOSED_LOOP_LAYOUT_VERSION, 4);
+    assert!(CLOSED_LOOP_DECODE_WGSL.contains("GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 4u"));
     assert!(header.contains("dispatch_generation_lo"));
     assert!(header.contains("dispatch_generation_hi"));
     assert!(!header.contains("reserved:array<u32,3>"));

@@ -86,7 +86,20 @@ fn learning_header_and_pending_record_have_the_exact_shared_abi() {
         std::mem::offset_of!(GpuEligibilityDiscardRecord, transaction_generation),
         40
     );
-    assert_eq!(GPU_CLOSED_LOOP_TICK_READBACK_BYTES, 64);
+    assert_eq!(
+        std::mem::size_of::<alife_gpu_backend::GpuSelectionRecord>(),
+        64
+    );
+    assert_eq!(
+        std::mem::size_of::<alife_gpu_backend::GpuSpeechPayloadRecord>(),
+        16
+    );
+    assert_eq!(GPU_CLOSED_LOOP_TICK_READBACK_BYTES, 80);
+    assert_eq!(
+        GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
+        std::mem::size_of::<alife_gpu_backend::GpuSelectionRecord>()
+            + std::mem::size_of::<alife_gpu_backend::GpuSpeechPayloadRecord>(),
+    );
 }
 
 #[test]

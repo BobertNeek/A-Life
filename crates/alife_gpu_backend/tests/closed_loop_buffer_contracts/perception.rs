@@ -108,7 +108,7 @@ fn perception_upload_translates_the_validated_same_tick_frame_without_scores() {
 
     let mut expected_payload = Vec::new();
     expected_payload.extend(frame.sensory().channels.as_flat_array().map(f32::to_bits));
-    let body = frame.body();
+    let body = frame.body().neural_projection(frame.sensor_profile());
     expected_payload.extend(
         [
             body.pose.translation.x,
@@ -144,7 +144,13 @@ fn perception_upload_translates_the_validated_same_tick_frame_without_scores() {
             decoder_input_stride - CANDIDATE_FEATURE_COUNT,
         ));
     }
-    assert_eq!(expected_payload.len(), 77 + 2 * decoder_input_stride);
+    let language_prior = frame
+        .sensory()
+        .language_prior_neural_lanes()
+        .map(f32::to_bits);
+    assert_eq!(language_prior, [0; 256]);
+    expected_payload.extend(language_prior);
+    assert_eq!(expected_payload.len(), 77 + 2 * decoder_input_stride + 256);
     assert_eq!(upload.frame_payload_words, expected_payload);
     assert_eq!(upload.candidates.len(), 2);
 
