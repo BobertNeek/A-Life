@@ -7,10 +7,12 @@ use std::{
 
 use alife_core::BrainScaleTier;
 use alife_game_app::{
-    default_environment_manifest_path, stage_phase3_new_game, CanonicalNewGameLaunchRequest,
-    EnvironmentManifest, ProductionVoxelLaunchConfig,
+    default_environment_manifest_path, EnvironmentManifest, ProductionVoxelLaunchConfig,
 };
-use alife_world::{AssetManifest, RuntimeConfig};
+use alife_world::RuntimeConfig;
+
+#[path = "untrained_population_save.rs"]
+mod untrained_population_save;
 
 /// A current file-backed launch input, independent of the historical saved
 /// source. Keep this owner alive until the launch and its output checks finish.
@@ -54,28 +56,20 @@ impl CurrentProductionLaunchFixture {
         entry.fixture_root = PathBuf::from("current_scene");
         let mut config = RuntimeConfig::deterministic_default(4242, BrainScaleTier::Nano512);
         config.features.gpu_backend_enabled = true;
-        // Both the default and minimum production profiles own 30 founders.
-        // The canonical birth path supplies current genetics and biochemistry;
-        // it does not claim historical trained cognition or a GPU checkpoint.
-        let staged = stage_phase3_new_game(CanonicalNewGameLaunchRequest {
-            world_seed: config.deterministic_seed,
-            population: 30,
-            disable_age_death: false,
-            save_path: scene_root.join(&entry.save_file),
-            asset_root: scene_root.clone(),
-            config,
-            assets: AssetManifest::empty(),
-        })
-        .unwrap();
-        staged.save.to_json_file(&staged.save_path).unwrap();
+        // Both profiles load an existing population of 30 fresh founders. This
+        // does not alter the separate Phase 3 New Game cohort limit.
+        let save = untrained_population_save::untrained_population_save(config, 30);
+        save.validate_with_asset_root(&scene_root).unwrap();
+        save.to_json_file(scene_root.join(&entry.save_file))
+            .unwrap();
         fs::write(
             scene_root.join(&entry.config_file),
-            serde_json::to_vec_pretty(&staged.save.config).unwrap(),
+            serde_json::to_vec_pretty(&save.config).unwrap(),
         )
         .unwrap();
         fs::write(
             scene_root.join(&entry.asset_manifest_file),
-            serde_json::to_vec_pretty(&staged.save.assets).unwrap(),
+            serde_json::to_vec_pretty(&save.assets).unwrap(),
         )
         .unwrap();
         let manifest_path = manifest_dir.join("environment_manifest.json");

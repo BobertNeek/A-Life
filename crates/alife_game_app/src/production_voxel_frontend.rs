@@ -1718,6 +1718,13 @@ fn production_voxel_backend_evidence(
 mod tests {
     use super::*;
 
+    mod untrained_population_fixture {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/support/untrained_population_save.rs"
+        ));
+    }
+
     fn gpu_alpha_fixture_root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../alife_world/tests/fixtures/gpu_alpha")
     }
@@ -1752,30 +1759,22 @@ mod tests {
         let root = fixture.root.join("crates/alife_game_app");
         fs::create_dir_all(&root).unwrap();
         let app_launch = AppShellLaunchConfig::from_p34_fixture_root(&root);
-        // These are new, untrained canonical founders, not a migration of the
-        // historical tiny save or a fabricated acquired GPU checkpoint.
+        // Load a current existing population of fresh founders; this does not
+        // use or extend the bounded Phase 3 New Game cohort API.
         let config =
             RuntimeConfig::from_json_file(gpu_alpha_fixture_root().join("tiny_config.json"))
                 .unwrap();
-        let staged = stage_phase3_new_game(CanonicalNewGameLaunchRequest {
-            world_seed: config.deterministic_seed,
-            population: 30,
-            disable_age_death: false,
-            save_path: app_launch.save_path.clone(),
-            asset_root: root.clone(),
-            config,
-            assets: AssetManifest::empty(),
-        })
-        .unwrap();
-        staged.save.to_json_file(&app_launch.save_path).unwrap();
+        let save = untrained_population_fixture::untrained_population_save(config, 30);
+        save.validate_with_asset_root(&root).unwrap();
+        save.to_json_file(&app_launch.save_path).unwrap();
         fs::write(
             &app_launch.config_path,
-            serde_json::to_vec_pretty(&staged.save.config).unwrap(),
+            serde_json::to_vec_pretty(&save.config).unwrap(),
         )
         .unwrap();
         fs::write(
             &app_launch.asset_manifest_path,
-            serde_json::to_vec_pretty(&staged.save.assets).unwrap(),
+            serde_json::to_vec_pretty(&save.assets).unwrap(),
         )
         .unwrap();
         let launch = ProductionVoxelLaunchConfig {
@@ -1832,6 +1831,18 @@ mod tests {
         restored.validate_organism_bindings().unwrap();
         assert_eq!(restored.organism_registry().len(), 30);
         assert_eq!(save.creatures.len(), 30);
+        let genome_ids = restored
+            .organism_registry()
+            .iter()
+            .map(|record| record.genome().id.raw())
+            .collect::<std::collections::BTreeSet<_>>();
+        let entity_ids = restored
+            .organism_registry()
+            .iter()
+            .map(|record| record.world_entity_id().raw())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(genome_ids.len(), 30);
+        assert_eq!(entity_ids.len(), 30);
         let profile = alife_core::SensorProfile::GroundedObjectSlotsV1;
         let foundation = alife_core::FoundationWeightAsset::builtin_nano512_v1(profile).unwrap();
         for creature in &save.creatures {
