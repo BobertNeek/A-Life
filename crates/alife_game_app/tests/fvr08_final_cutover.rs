@@ -13,9 +13,18 @@ fn fvr08_production_launcher_uses_finished_feature_stack() {
     assert!(launcher.contains("A-Life Voxel Frontend"));
     assert!(launcher.contains("[string]$Profile = \"MinSpecComfort1080p\""));
     assert!(launcher.contains("[string]$BrainPolicy = \"gpu-required\""));
-    assert!(
-        launcher.contains("$FeatureList = \"bevy-app gpu-runtime production-assets vfx-hanabi\"")
-    );
+    assert!(launcher.contains("$FeatureList = \"production-voxel-frontend\""));
+    let cargo = std::fs::read_to_string(root.join("crates/alife_game_app/Cargo.toml")).unwrap();
+    let production_feature = cargo
+        .split("production-voxel-frontend = [")
+        .nth(1)
+        .unwrap()
+        .split(']')
+        .next()
+        .unwrap();
+    for feature in ["bevy-app", "gpu-runtime", "production-assets", "vfx-hanabi"] {
+        assert!(production_feature.contains(&format!("\"{feature}\"")));
+    }
     assert!(launcher.contains("MinimumSettings30x30"));
     assert!(launcher.contains("--record-performance"));
     assert!(!launcher.contains("auto-with-cpu-fallback"));

@@ -1723,7 +1723,7 @@ mod tests {
     }
 
     fn gpu_alpha_save() -> PortableSaveFile {
-        PortableSaveFile::from_json_file(gpu_alpha_fixture_root().join("tiny_save.json")).unwrap()
+        crate::tests::fixtures::current_scene_save(&gpu_alpha_fixture_root(), 30)
     }
 
     fn fvr05_test_launch() -> ProductionVoxelLaunchConfig {
@@ -2092,16 +2092,9 @@ mod tests {
     }
 
     #[test]
-    fn fvr04_population_target_materializes_real_save_state_and_voxel_anchors() {
+    fn fvr04_population_view_preserves_real_save_state_and_voxel_anchors() {
         let root = gpu_alpha_fixture_root();
         let save = gpu_alpha_save();
-        let first_generated_spawn_sequence = save.world.next_spawn_sequence;
-        let existing_agent_count = save
-            .world
-            .objects
-            .iter()
-            .filter(|object| object.kind == WorldObjectKind::Agent)
-            .count();
         let production = production_voxel_save_with_population(
             &save,
             &root,
@@ -2115,69 +2108,62 @@ mod tests {
         assert_eq!(visible.kind_count(WorldObjectKind::Agent), 30);
         assert_eq!(production.creatures.len(), 30);
         assert_eq!(production.world.habitats.memberships().len(), 30);
-        assert!(production.creatures.iter().all(|creature| production
-            .world
-            .habitats
-            .membership(creature.organism_id)
-            .is_some()));
         assert_eq!(backend.creature_anchors.len(), 30);
-        let generated_agents = production
-            .world
-            .objects
-            .iter()
-            .filter(|object| object.label.starts_with("production-creature-"))
-            .collect::<Vec<_>>();
-        assert_eq!(generated_agents.len(), 30 - existing_agent_count);
+        assert_eq!(production.creatures, save.creatures);
+        assert_eq!(production.world.objects, save.world.objects);
+        assert_eq!(
+            production.world.organism_records,
+            save.world.organism_records
+        );
         assert_eq!(
             production.world.next_spawn_sequence,
-            first_generated_spawn_sequence + generated_agents.len() as u64
+            save.world.next_spawn_sequence
         );
-        for (offset, object) in generated_agents.into_iter().enumerate() {
+        for creature in &production.creatures {
+            assert!(production
+                .world
+                .habitats
+                .membership(creature.organism_id)
+                .is_some());
+            let record = production
+                .world
+                .organism_records
+                .as_ref()
+                .unwrap()
+                .iter()
+                .find(|record| record.organism_id() == creature.organism_id)
+                .unwrap();
+            assert_eq!(creature.mind.homeostasis, record.biochemistry().homeostasis);
+            let object = production
+                .world
+                .objects
+                .iter()
+                .find(|object| object.organism_id == Some(creature.organism_id))
+                .unwrap();
+            assert_eq!(object.id, record.world_entity_id());
             assert_eq!(
                 object.schema_version,
                 alife_world::persistence::WORLD_OBJECT_SAVE_SCHEMA_VERSION
             );
             assert_eq!(object.tracking_provenance.world_seed, production.world.seed);
             assert_eq!(
-                object.tracking_provenance.spawn_sequence,
-                first_generated_spawn_sequence + offset as u64
-            );
-            assert_eq!(
-                object.tracking_provenance.lineage_key,
-                object.organism_id.unwrap().raw()
-            );
-            assert_eq!(
-                object.tracking_provenance.zone_id,
-                production
-                    .world
-                    .ecology
-                    .zone_at(object.position)
-                    .map_or(0, |zone| zone.id.raw())
-            );
-            assert_eq!(
                 object.tracking_key,
                 object.tracking_provenance.canonical_key()
             );
-            assert_eq!(
-                object.grounded_physical,
-                alife_world::GroundedPhysicalProperties::deterministic_default(
-                    object.tracking_provenance.spawn_sequence
-                )
-            );
         }
-        assert!(backend.validate().is_ok());
-        assert!(production.creatures.iter().any(|creature| creature
-            .mind
-            .homeostasis
-            .drives
-            .hunger
-            > 0.70));
-        assert!(production.creatures.iter().any(|creature| creature
-            .mind
-            .homeostasis
-            .hormones
-            .sleep_pressure
-            > 0.65));
+        backend.validate().unwrap();
+
+        let error = production_voxel_save_with_population(
+            &save,
+            &root,
+            ProductionFrontendProfileId::MinimumSettings30x30,
+            1,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("canonical save owns 30"));
+        assert!(error.contains("organism lifecycle authority"));
+        assert_eq!(save.creatures.len(), 30);
     }
 
     #[test]
@@ -2288,9 +2274,9 @@ mod tests {
     }
 
     #[test]
-    fn fvr04_population_target_supports_one_and_scale_up_500_without_renderer_tokens() {
+    fn fvr04_population_view_supports_owned_one_and_500_without_renderer_tokens() {
         let root = gpu_alpha_fixture_root();
-        let save = gpu_alpha_save();
+        let save = crate::tests::fixtures::current_scene_save(&root, 1);
         let one = production_voxel_save_with_population(
             &save,
             &root,
@@ -2311,8 +2297,9 @@ mod tests {
             1
         );
 
+        let scale_save = crate::tests::fixtures::current_scene_save(&root, 500);
         let scale_up = production_voxel_save_with_population(
-            &save,
+            &scale_save,
             &root,
             ProductionFrontendProfileId::HighSpecScaleUp,
             500,
@@ -2374,7 +2361,7 @@ mod tests {
     }
 
     #[test]
-    fn production_population_backfills_legacy_appearance_without_rewriting_saved_genes() {
+    fn production_population_preserves_saved_appearance_genes() {
         let root = gpu_alpha_fixture_root();
         let mut save = gpu_alpha_save();
         let preserved = CreatureAppearanceGenome::offspring_from_parents(

@@ -8,21 +8,119 @@ use alife_core::predictive::GroundedSuccessorPredictor;
 use alife_core::sleep::{SleepWorkReceipt, SleepWorkStatus};
 use alife_core::structural_plasticity::CoactivationEvidence;
 use alife_core::{
-    select_focal_targets, ActionId, AttentionSelectionPolicy, ChannelCommand,
-    CognitiveContextFrame, CognitiveWorkReceipt, DendriticBranch, DendriticBranchSet,
-    DendriticInputRef, DurationTicks, ExperienceSequenceId, HysteresisState, Intensity,
-    JointMotorCondition, MotorChannel, MotorChannelFactor, MotorCommandBundle, NormalizedScalar,
-    OrganismId, PredictionTargetReceipt, SemanticStateVector, SleepState, SleepTrigger,
-    StableFocusIdentity, StructuralPlasticityConfig, StructuralPlasticityState, Validate, Vec3f,
+    select_focal_targets, ActionId, AttentionSelectionPolicy, BrainActivityPolicyV1,
+    BrainCapacityClass, ChannelCommand, CognitiveContextFrame, CognitiveWorkReceipt, Confidence,
+    DendriticBranch, DendriticBranchSet, DendriticInputRef, DurationTicks, ExperienceSequenceId,
+    HysteresisState, Intensity, JointMotorCondition, MemoryBankConfig, MemorySidecarState,
+    MotorChannel, MotorChannelFactor, MotorCommandBundle, NormalizedScalar, OrganismId,
+    PredictionTargetReceipt, SemanticStateVector, SensorProfile, SensorProfileIdentity,
+    SensoryAbiVersion, SleepState, SleepTrigger, StableFocusIdentity, StructuralPlasticityConfig,
+    StructuralPlasticityState, TopologicalMapConfig, TopologySidecar, Validate, Vec3f,
     SLEEP_CONSOLIDATION_SCHEMA_VERSION,
 };
 use alife_game_app::{
     merge_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite, GpuCheckpointAssetStore,
 };
 use alife_world::persistence::{
-    AssetManifest, ExactCognitiveCheckpointState, GpuBrainSaveState, PortableSaveFile,
+    AssetManifest, ExactCognitiveCheckpointState, GpuBrainAssetRef, GpuBrainSaveState,
+    GpuSleepAssetState, MemorySidecarSaveState, PortableAssetDigest, PortableSaveFile,
+    ThrottleReplaySaveState, TopologySidecarSaveSummary, GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
     V11_EXACT_COGNITIVE_STATE_SCHEMA_VERSION,
 };
+use alife_world::TrackedObjectRegistry;
+
+#[path = "../src/test_fixtures.rs"]
+mod test_fixtures;
+
+// Only metadata and the exact cognitive sidecar are exercised in this CPU test.
+// Bulk asset references/provenance come from the historical fixture; sidecar
+// contracts and world organism authority are constructed at current versions.
+fn checkpoint_metadata(save: &PortableSaveFile, fixture: &std::path::Path) -> GpuBrainSaveState {
+    let source: serde_json::Value =
+        serde_json::from_slice(&fs::read(fixture.join("tiny_save.json")).unwrap()).unwrap();
+    let brain = &source["creatures"][0]["gpu_brain"];
+    let asset =
+        |field: &str| -> GpuBrainAssetRef { serde_json::from_value(brain[field].clone()).unwrap() };
+    let organism_id = save.creatures[0].organism_id;
+    let tick = save.world.tick;
+    let profile = SensorProfileIdentity {
+        profile_id: SensorProfile::GroundedObjectSlotsV1.into(),
+        profile_schema_version: 1,
+        sensory_abi_version: SensoryAbiVersion::CURRENT.raw(),
+    };
+    let memory = MemorySidecarState::new_profiled(
+        organism_id,
+        profile,
+        MemoryBankConfig::new(64, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap(),
+    )
+    .unwrap();
+    let topology =
+        TopologySidecar::new_profiled(organism_id, profile, TopologicalMapConfig::default())
+            .unwrap();
+    let reference = |label: &str| GpuBrainAssetRef {
+        asset_id: label.to_string(),
+        digest: PortableAssetDigest::for_bytes(label.as_bytes()),
+    };
+    let policy = BrainActivityPolicyV1::production_v1();
+    let state = GpuBrainSaveState {
+        schema_version: GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
+        organism_id,
+        phenotype_hash: serde_json::from_value(brain["phenotype_hash"].clone()).unwrap(),
+        capacity_class_id: BrainCapacityClass::N512_ID,
+        sensor_profile: profile,
+        immutable_phenotype: asset("immutable_phenotype"),
+        phenotype_compiler_inputs: asset("phenotype_compiler_inputs"),
+        live_structural_topology: Some(reference("metadata-only-live-topology")),
+        legacy_nano512_compatibility_receipt: None,
+        active_weight_generation: 1,
+        active_weight_bank: 0,
+        active_eligibility_bank: 0,
+        learning_transaction_generation: 1,
+        lifetime_weights: asset("lifetime_weights"),
+        fast_weights: asset("fast_weights"),
+        eligibility: asset("eligibility"),
+        replay_journal: asset("replay_journal"),
+        replay_journal_generation: 1,
+        replay_journal_cursor: 0,
+        replay_journal_event_count: 0,
+        activation_state: asset("activation_state"),
+        neuron_homeostasis: asset("neuron_homeostasis"),
+        checkpoint_tick: tick,
+        exact_cognitive_state: None,
+        last_learning_replay_key: None,
+        pending_eligibility: None,
+        pending_experience_transaction: None,
+        memory: MemorySidecarSaveState::from_sidecar(
+            &memory,
+            reference("metadata-only-memory"),
+            None,
+            None,
+        )
+        .unwrap(),
+        topology: TopologySidecarSaveSummary::from_sidecar(
+            &topology,
+            reference("metadata-only-topology"),
+        )
+        .unwrap(),
+        tracked_objects: TrackedObjectRegistry::new(save.world.seed, 1_024)
+            .unwrap()
+            .save_state(organism_id)
+            .unwrap(),
+        language_grounding: Default::default(),
+        life_statistics: None,
+        sleep: SleepState::awake_at(tick),
+        sleep_assets: GpuSleepAssetState::default(),
+        backend_provenance: serde_json::from_value(brain["backend_provenance"].clone()).unwrap(),
+        runtime_profile_id: 1,
+        runtime_profile_digest: [31, 32, 33, 34],
+        activity_policy_version: policy.policy_version,
+        activity_policy_digest: policy.policy_digest,
+        throttle_replay: ThrottleReplaySaveState::bootstrap(reference("metadata-only-throttle"))
+            .unwrap(),
+    };
+    state.validate().unwrap();
+    state
+}
 
 fn unique_asset_root() -> PathBuf {
     let nonce = SystemTime::now()
@@ -37,14 +135,10 @@ fn unique_asset_root() -> PathBuf {
 
 #[test]
 fn exact_checkpoint_manifest_restore_preserves_control_path() {
-    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../alife_world/tests/fixtures/p34/tiny_save.json");
-    let save = PortableSaveFile::from_json_file(fixture).expect("checkpoint fixture");
-    let mut save_state = save
-        .creatures
-        .into_iter()
-        .find_map(|creature| creature.gpu_brain)
-        .expect("fixture GPU brain checkpoint");
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../alife_world/tests/fixtures/p34");
+    let save = test_fixtures::current_scene_save(&fixture, 1);
+    let mut save_state = checkpoint_metadata(&save, &fixture);
     let organism_id = save_state.organism_id;
     let checkpoint_tick = save_state.checkpoint_tick;
     let sequence_id = ExperienceSequenceId(3);

@@ -525,8 +525,13 @@ pub fn run_school_mode_smoke_with_config(
                 world_teacher.emit_perceptual_cue(
                     &mut world,
                     &format!("teacher-social-cue-{}", index + 1),
-                    900_000_u32
+                    // Synthetic smoke cues still enter the ordinary bounded
+                    // language codebook through world perception.
+                    200_u32
                         .checked_add(u32::try_from(index).unwrap_or(u32::MAX))
+                        .filter(|token| {
+                            *token < u32::from(alife_core::LanguageCodebookV1::CODE_COUNT)
+                        })
                         .ok_or(ScaffoldContractError::InvalidId)?,
                     event.channel,
                     None,

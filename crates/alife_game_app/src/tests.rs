@@ -2,8 +2,123 @@ use crate::prelude::*;
 
 use super::*;
 
+#[path = "test_fixtures.rs"]
+pub(crate) mod fixtures;
+
+struct CurrentAppFixtures {
+    root: PathBuf,
+}
+
+impl CurrentAppFixtures {
+    fn new() -> Self {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let root = ca12_workspace_root().join("target").join(format!(
+            "app-test-fixtures-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        for name in ["p34", "production_voxel"] {
+            let relative = PathBuf::from("crates/alife_world/tests/fixtures").join(name);
+            let source = ca12_workspace_root().join(&relative);
+            let destination = root.join(&relative);
+            copy_test_fixture_tree(&source, &destination);
+            let population = if name == "p34" { 1 } else { 3 };
+            let save = fixtures::current_scene_save(&source, population);
+            std::fs::write(
+                destination.join("tiny_save.json"),
+                serde_json::to_vec(&save).unwrap(),
+            )
+            .unwrap();
+        }
+        let mut environment: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(default_environment_manifest_path()).unwrap())
+                .unwrap();
+        environment["scenarios"][0]["fixture_root"] =
+            serde_json::json!(root.join("crates/alife_world/tests/fixtures/production_voxel"));
+        std::fs::write(
+            root.join("environment_manifest.json"),
+            serde_json::to_vec_pretty(&environment).unwrap(),
+        )
+        .unwrap();
+        let mut bundle: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(default_app_bundle_manifest_path()).unwrap())
+                .unwrap();
+        bundle["environment_manifest"] = serde_json::json!(root
+            .join("environment_manifest.json")
+            .strip_prefix(ca12_workspace_root())
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/"));
+        for entry in bundle["entries"].as_array_mut().unwrap() {
+            let relative = entry["relative_path"].as_str().unwrap();
+            entry["relative_path"] = serde_json::json!(root
+                .join(relative)
+                .strip_prefix(ca12_workspace_root())
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/"));
+        }
+        std::fs::write(
+            root.join("app_bundle_manifest.json"),
+            serde_json::to_vec_pretty(&bundle).unwrap(),
+        )
+        .unwrap();
+        Self { root }
+    }
+
+    fn p34_launch(&self) -> AppShellLaunchConfig {
+        AppShellLaunchConfig::from_p34_fixture_root(
+            self.root.join("crates/alife_world/tests/fixtures/p34"),
+        )
+    }
+
+    fn environment_manifest(&self) -> PathBuf {
+        self.root.join("environment_manifest.json")
+    }
+
+    fn bundle_manifest(&self) -> PathBuf {
+        self.root.join("app_bundle_manifest.json")
+    }
+}
+
+impl Drop for CurrentAppFixtures {
+    fn drop(&mut self) {
+        std::fs::remove_dir_all(&self.root).unwrap();
+    }
+}
+
+fn copy_test_fixture_tree(source: &Path, destination: &Path) {
+    std::fs::create_dir_all(destination).unwrap();
+    for entry in std::fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        let destination = destination.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_test_fixture_tree(&entry.path(), &destination);
+        } else {
+            std::fs::copy(entry.path(), destination).unwrap();
+        }
+    }
+}
+
 fn p34_fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../alife_world/tests/fixtures/p34")
+}
+
+#[test]
+fn historical_p34_save_fails_closed_without_authoritative_organism_state() {
+    let error =
+        PortableSaveFile::from_json_file(p34_fixture_root().join("tiny_save.json")).unwrap_err();
+    assert!(matches!(
+        error,
+        PersistenceError::ArchitectureMigration(
+            alife_core::ArchitectureMigrationError::MissingAuthoritativeState {
+                field: "genetic_biochemical_graph"
+            }
+        )
+    ));
 }
 
 fn path_ends_with(path: &Path, suffix: &str) -> bool {
@@ -40,7 +155,8 @@ fn ca10_environment_manifest_validates_and_selects_default_production_voxel() {
     assert_eq!(manifest.default_scenario_id, "production-voxel");
     assert_eq!(manifest.scenario_ids(), vec!["production-voxel"]);
 
-    let summary = run_environment_launcher_smoke(&manifest_path, None).unwrap();
+    let fixtures = CurrentAppFixtures::new();
+    let summary = run_environment_launcher_smoke(fixtures.environment_manifest(), None).unwrap();
     assert_eq!(summary.schema, CA10_ENVIRONMENT_MANIFEST_SCHEMA);
     assert_eq!(summary.selected_scenario_id, "production-voxel");
     assert_eq!(summary.scenario_count, 1);
@@ -71,7 +187,8 @@ fn ca10_environment_manifest_reports_known_scenarios_for_bad_selection() {
 
 #[test]
 fn ca11_player_sandbox_editor_edits_default_manifest_scenario() {
-    let manifest_path = default_environment_manifest_path();
+    let fixtures = CurrentAppFixtures::new();
+    let manifest_path = fixtures.environment_manifest();
     let summary = run_player_sandbox_editor_smoke(&manifest_path, None, None).unwrap();
     assert_eq!(summary.schema, CA11_PLAYER_SANDBOX_EDITOR_SCHEMA);
     assert_eq!(
@@ -95,7 +212,8 @@ fn ca11_player_sandbox_editor_edits_default_manifest_scenario() {
 
 #[test]
 fn ca11_player_sandbox_editor_can_write_optional_save_output() {
-    let manifest_path = default_environment_manifest_path();
+    let fixtures = CurrentAppFixtures::new();
+    let manifest_path = fixtures.environment_manifest();
     let output = std::env::temp_dir().join("alife_ca11_player_sandbox_editor_save.json");
     let _ = std::fs::remove_file(&output);
     let summary = run_player_sandbox_editor_smoke(&manifest_path, None, Some(&output)).unwrap();
@@ -109,7 +227,8 @@ fn ca11_player_sandbox_editor_can_write_optional_save_output() {
 
 #[test]
 fn ca12_app_bundle_manifest_discovers_production_assets_and_shaders() {
-    let summary = validate_app_bundle_manifest(default_app_bundle_manifest_path()).unwrap();
+    let fixtures = CurrentAppFixtures::new();
+    let summary = validate_app_bundle_manifest(fixtures.bundle_manifest()).unwrap();
     assert_eq!(summary.schema, CA12_APP_BUNDLE_MANIFEST_SCHEMA);
     assert_eq!(
         summary.schema_version,
@@ -154,7 +273,8 @@ fn ca12_app_bundle_manifest_rejects_missing_required_entries() {
 
 #[test]
 fn ca12_app_bundle_manifest_rejects_missing_shader_assets() {
-    let source = std::fs::read_to_string(default_app_bundle_manifest_path()).unwrap();
+    let fixtures = CurrentAppFixtures::new();
+    let source = std::fs::read_to_string(fixtures.bundle_manifest()).unwrap();
     let broken = source.replace(
         "crates/alife_gpu_backend/shaders/closed_loop_recurrent.wgsl",
         "crates/alife_gpu_backend/shaders/missing_recurrent.wgsl",
@@ -208,7 +328,8 @@ fn invalid_state_transition_is_rejected() {
 
 #[test]
 fn visible_world_signature_loads_from_p34_save_without_bevy() {
-    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let fixtures = CurrentAppFixtures::new();
+    let launch = fixtures.p34_launch();
     let presentation = load_visible_world_from_p34_save(&launch).unwrap();
     compare_visible_world_to_headless(&presentation).unwrap();
     assert_eq!(presentation.schema, G02_VISIBLE_WORLD_SCHEMA);
@@ -336,7 +457,8 @@ fn sleep_and_pain_override_action_visual_states_without_cognitive_mutation() {
 
 #[test]
 fn g04_creature_visual_smoke_derives_from_g03_tick_summary() {
-    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let fixtures = CurrentAppFixtures::new();
+    let launch = fixtures.p34_launch();
     let visual = run_creature_visual_smoke(&launch).unwrap();
     assert_eq!(visual.organism_id, OrganismId(1));
     assert_eq!(visual.stable_id, WorldEntityId(1));
@@ -368,7 +490,8 @@ fn g05_camera_controls_are_bounded_and_deterministic() {
 
 #[test]
 fn g05_selection_uses_stable_ids_from_visible_world() {
-    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let fixtures = CurrentAppFixtures::new();
+    let launch = fixtures.p34_launch();
     let presentation = load_visible_world_from_p34_save(&launch).unwrap();
     let selection = select_visible_world_entity(&presentation, WorldEntityId(1)).unwrap();
     assert_eq!(selection.schema, G05_CAMERA_INSPECTOR_SCHEMA);
@@ -387,7 +510,8 @@ fn g05_selection_uses_stable_ids_from_visible_world() {
 
 #[test]
 fn g05_inspector_snapshot_is_read_only_and_covers_expected_fields() {
-    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let fixtures = CurrentAppFixtures::new();
+    let launch = fixtures.p34_launch();
     let inspector = run_creature_inspector_smoke(&launch).unwrap();
     assert_eq!(inspector.schema, G05_CAMERA_INSPECTOR_SCHEMA);
     assert_eq!(

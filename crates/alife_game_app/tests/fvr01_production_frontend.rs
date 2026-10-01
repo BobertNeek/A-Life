@@ -208,7 +208,18 @@ fn fvr01_windows_scripts_default_to_production_voxel_frontend() {
         std::fs::read_to_string(root.join("scripts/run_production_voxel_frontend.ps1")).unwrap();
     assert!(production.contains("production-voxel"));
     assert!(production.contains("MinSpecComfort1080p"));
-    assert!(production.contains("bevy-app gpu-runtime production-assets vfx-hanabi"));
+    assert!(production.contains("$FeatureList = \"production-voxel-frontend\""));
+    let cargo = std::fs::read_to_string(root.join("crates/alife_game_app/Cargo.toml")).unwrap();
+    let production_feature = cargo
+        .split("production-voxel-frontend = [")
+        .nth(1)
+        .unwrap()
+        .split(']')
+        .next()
+        .unwrap();
+    for feature in ["bevy-app", "gpu-runtime", "production-assets", "vfx-hanabi"] {
+        assert!(production_feature.contains(&format!("\"{feature}\"")));
+    }
     assert!(production.contains("A-Life Voxel Frontend"));
     assert!(production.contains("-DryRun"));
 
