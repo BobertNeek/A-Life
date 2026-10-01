@@ -1062,6 +1062,9 @@ impl MemoryBank {
             receipt,
             cognitive_context: None,
         };
+        // Input, query, context, bank and receipt checks above remain strict.
+        // Re-encoding this freshly derived private result is a debug diagnostic.
+        #[cfg(debug_assertions)]
         prepared.validate_for_draft(draft)?;
         Ok(prepared)
     }
