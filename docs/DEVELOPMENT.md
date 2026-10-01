@@ -113,6 +113,11 @@ the worker directly.
 Optional systems must remain optional. A typed GPU unavailability result is a
 failure state, not permission to substitute a reference brain.
 
+The readiness resume test checks acquired-state restoration and later gameplay.
+Set `ALIFE_PERSISTENCE_EXACT_DIAGNOSTICS=1` to additionally require identical
+post-wake receipts, memory metadata, and complete neural snapshots. Differences
+limited to inactive external hints are reported separately from gameplay failure.
+
 ## GPU gates
 
 GPU claims require a physical adapter/backend receipt. Run the existing serialized hardware gate only when the source identity, worktree, process state, target path, and output path are explicit:

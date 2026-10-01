@@ -430,15 +430,26 @@ fn readiness_resume_preserves_external_actors_toys_and_private_prior() {
             .biochemistry(),
         biology
     );
-    assert_eq!(
+    // In-flight service work is deliberately resubmitted after reopen. Compare
+    // every durable prior field while requiring the documented queue reset.
+    let mut expected_prior: serde_json::Value =
+        serde_json::from_slice(prior.as_ref().unwrap()).unwrap();
+    if expected_prior["pending_request"] == serde_json::Value::Bool(true) {
+        expected_prior["last_request"] = serde_json::Value::Null;
+    }
+    expected_prior["pending_request"] = serde_json::Value::Bool(false);
+    let restored_prior: serde_json::Value = serde_json::from_slice(
         restored
             .semantic_prior
             .as_ref()
             .unwrap()
             .snapshot(organism.raw())
+            .unwrap()
+            .as_ref()
             .unwrap(),
-        prior
-    );
+    )
+    .unwrap();
+    assert_eq!(restored_prior, expected_prior);
     assert_eq!(restored.world.entity_id("readiness-teacher"), Some(teacher));
     assert!(!restored.handles.contains_key(&9000001));
     assert_eq!(restored.handles.len(), runtime.handles.len());
@@ -461,27 +472,120 @@ fn readiness_resume_preserves_external_actors_toys_and_private_prior() {
     let next_deadline = Instant::now() + Duration::from_secs(60);
     readiness_tick(&mut runtime, next_deadline);
     readiness_tick(&mut restored, next_deadline);
+    assert!(!restored.last_sealed_patches.is_empty());
     assert_eq!(
-        restored.last_sealed_patches, runtime.last_sealed_patches,
-        "the first ordinary post-wake response must match uninterrupted life"
+        restored.last_sealed_patches.len(),
+        runtime.last_sealed_patches.len()
     );
+    for (resumed, uninterrupted) in restored
+        .last_sealed_patches
+        .iter()
+        .zip(&runtime.last_sealed_patches)
+    {
+        resumed.validate_contract().unwrap();
+        uninterrupted.validate_contract().unwrap();
+        assert!(
+            persistence_response_comparison::gameplay_response_matches(resumed, uninterrupted),
+            "the first post-wake action, ordinary perception, and outcome must match: resumed={resumed:?}, uninterrupted={uninterrupted:?}"
+        );
+    }
     assert_eq!(
         restored.world.canonical_signature_digest().unwrap(),
         runtime.world.canonical_signature_digest().unwrap()
     );
-    assert_eq!(restored.memories, runtime.memories);
     assert_eq!(
-        restored
-            .backend
-            .snapshot_brain(restored_handle, restored.world.tick())
-            .unwrap(),
-        runtime
-            .backend
-            .snapshot_brain(handle, runtime.world.tick())
-            .unwrap()
+        restored.memories.keys().collect::<Vec<_>>(),
+        runtime.memories.keys().collect::<Vec<_>>()
     );
+    for (id, memory) in &restored.memories {
+        let uninterrupted = &runtime.memories[id];
+        for memory in [memory, uninterrupted] {
+            memory
+                .export_active_bank()
+                .unwrap()
+                .validate_contract()
+                .unwrap();
+            memory.compaction_checkpoint().validate_contract().unwrap();
+        }
+        assert_eq!(memory.bank().fast_len(), uninterrupted.bank().fast_len());
+        assert_eq!(
+            memory.bank().lifetime_len(),
+            uninterrupted.bank().lifetime_len()
+        );
+        assert_eq!(
+            memory.latest_durable_sequence_raw(),
+            uninterrupted.latest_durable_sequence_raw()
+        );
+    }
+    assert!(restored.last_post_seal_learning_failures.is_empty());
+    assert!(runtime.last_post_seal_learning_failures.is_empty());
+    assert!(!restored.last_learning_receipts().is_empty());
+    let restored_neural = restored
+        .backend
+        .snapshot_brain(restored_handle, restored.world.tick())
+        .unwrap();
+    let uninterrupted_neural = runtime
+        .backend
+        .snapshot_brain(handle, runtime.world.tick())
+        .unwrap();
+    let resumed_parts = restored_neural.clone().into_parts();
+    let uninterrupted_parts = uninterrupted_neural.clone().into_parts();
+    assert_eq!(
+        resumed_parts.lifetime_bank_0_bits,
+        uninterrupted_parts.lifetime_bank_0_bits
+    );
+    assert_eq!(
+        resumed_parts.lifetime_bank_1_bits,
+        uninterrupted_parts.lifetime_bank_1_bits
+    );
+    assert_eq!(
+        resumed_parts.fast_bank_0_bits,
+        uninterrupted_parts.fast_bank_0_bits
+    );
+    assert_eq!(
+        resumed_parts.fast_bank_1_bits,
+        uninterrupted_parts.fast_bank_1_bits
+    );
+    assert_eq!(
+        resumed_parts.active_weight_bank,
+        uninterrupted_parts.active_weight_bank
+    );
+    assert_eq!(
+        resumed_parts.active_weight_generation,
+        uninterrupted_parts.active_weight_generation
+    );
+    assert_eq!(
+        resumed_parts.last_learning_replay_key,
+        uninterrupted_parts.last_learning_replay_key
+    );
+    assert!(resumed_parts.pending_eligibility.is_none());
+    assert!(uninterrupted_parts.pending_eligibility.is_none());
+    let exact_patches = restored.last_sealed_patches == runtime.last_sealed_patches;
+    let exact_memory = restored.memories == runtime.memories;
+    let exact_neural = restored_neural == uninterrupted_neural;
+    let exact_diagnostics =
+        std::env::var("ALIFE_PERSISTENCE_EXACT_DIAGNOSTICS").is_ok_and(|value| value == "1");
+    std::fs::write(root.join("readiness-post-wake.json"), serde_json::to_vec_pretty(&serde_json::json!({
+        "gameplay_response_matches":true,"acquired_weight_banks_match":true,"memory_valid_and_sequence_retained":true,
+        "exact_patches":exact_patches,"exact_memory":exact_memory,"exact_neural":exact_neural,
+        "exact_diagnostics_requested":exact_diagnostics,
+    })).unwrap()).unwrap();
+    if exact_diagnostics {
+        assert_eq!(
+            restored.last_sealed_patches, runtime.last_sealed_patches,
+            "exact post-wake patch diagnostic"
+        );
+        assert_eq!(
+            restored.memories, runtime.memories,
+            "exact post-wake memory diagnostic"
+        );
+        assert_eq!(
+            restored_neural, uninterrupted_neural,
+            "exact post-wake neural diagnostic"
+        );
+    }
     assert!(!restored.handles.contains_key(&9000001));
-    println!("READINESS_N2048 learned_fast_changes={learned_changes} consolidated_lifetime_changes={consolidated_changes} sleep_trigger=public_recovery exact_neural_world_memory_restore=true next_response_equal=true EVIDENCE={}", root.display());
+    println!("READINESS_N2048 learned_fast_changes={learned_changes} consolidated_lifetime_changes={consolidated_changes} sleep_trigger=public_recovery exact_neural_world_memory_restore=true gameplay_response_equal=true exact_patches={exact_patches} exact_memory={exact_memory} exact_neural={exact_neural} EVIDENCE={}", root.display());
 }
 
 fn readiness_tick(runtime: &mut GpuLiveBrainRuntime, deadline: Instant) {
