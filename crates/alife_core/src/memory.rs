@@ -210,7 +210,7 @@ impl PreparedMemoryRecall {
             .zip(draft.candidates())
             .enumerate()
         {
-            let expected = MemoryQueryEncoderV2::encode_candidate(draft, candidate)?;
+            let expected = MemoryQueryEncoderV2::encode_validated_candidate(draft, candidate)?;
             let (target_key, family_key) = keys_for_query(query);
             let receipt = &self.receipt.candidates[index];
             if *query != expected
@@ -315,7 +315,8 @@ impl FinalizedMemoryRecall {
             .enumerate()
         {
             key.validate_contract()?;
-            key.query().validate_against_frame(frame, candidate)?;
+            key.query()
+                .validate_against_validated_frame(frame, candidate)?;
             if usize::from(key.query().candidate_index()) != index
                 || key.retrieval_context_digest() != self.context_digest
                 || key.final_frame_digest() != self.final_frame_digest
@@ -880,7 +881,7 @@ impl MemoryBank {
         let mut degradations = Vec::new();
 
         for candidate in draft.candidates() {
-            let query = MemoryQueryEncoderV2::encode_candidate(draft, candidate)?;
+            let query = MemoryQueryEncoderV2::encode_validated_candidate(draft, candidate)?;
             let (target_bucket, family_bucket) = keys_for_query(&query);
             let has_target = query.tracked_object_id().is_some();
             exact_bucket_reads = exact_bucket_reads.saturating_add(if has_target { 2 } else { 1 });
