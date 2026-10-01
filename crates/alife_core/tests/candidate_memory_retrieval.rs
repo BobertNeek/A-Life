@@ -436,6 +436,7 @@ fn sequenced_patch_for_object(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn observation_patch(
     recall_bank: &MemoryBank,
     sequence_raw: u64,
@@ -1863,7 +1864,7 @@ fn changed_context_cannot_replace_a_known_individual_exception_with_category_rew
     bank.observe_sealed_patch(&sequenced_patch_for_object(1, 1, poison, -0.8, 0.9))
         .unwrap();
     let source = probe_for_object(2, poison);
-    let mut selected = source.candidates()[0].clone();
+    let mut selected = source.candidates()[0];
     selected.sensor_confidence = Confidence::new(0.0).unwrap();
     let shifted = PerceptionFrameDraft::new(
         ORGANISM,
