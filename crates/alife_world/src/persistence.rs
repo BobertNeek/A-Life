@@ -1041,6 +1041,10 @@ pub struct WorldSaveState {
     pub player_hold: Option<crate::headless::player_hand::PlayerHold>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub organism_records: Option<Vec<WorldOrganismRecord>>,
+    /// Exact saves distinguish external actors from lives whose biology must
+    /// be present. Older complete registries need no external-actor migration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_actor_ids: Option<Vec<OrganismId>>,
     #[serde(default)]
     pub ecology: EcologyState,
     #[serde(default)]
@@ -1231,6 +1235,8 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             #[serde(default, deserialize_with = "deserialize_present_organism_records")]
             organism_records: Option<Vec<WorldOrganismRecord>>,
             #[serde(default)]
+            external_actor_ids: Option<Vec<OrganismId>>,
+            #[serde(default)]
             ecology: EcologyState,
             #[serde(default)]
             voxel_backend: Option<PersistentVoxelWorldSaveState>,
@@ -1317,6 +1323,7 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             pending_player_care: wire.pending_player_care,
             player_hold: wire.player_hold,
             organism_records: wire.organism_records,
+            external_actor_ids: wire.external_actor_ids,
             ecology: wire.ecology,
             voxel_backend: wire.voxel_backend,
             habitats: wire.habitats.unwrap_or_default(),
@@ -2074,6 +2081,22 @@ impl WorldSaveState {
         if let Some(records) = &mut organism_records {
             records.sort_unstable_by_key(|record| record.organism_id().raw());
         }
+        let external_actor_ids = organism_records.as_ref().map(|records| {
+            let registered_ids = records
+                .iter()
+                .map(|record| record.organism_id().raw())
+                .collect::<BTreeSet<_>>();
+            parts
+                .objects
+                .iter()
+                .filter(|object| object.kind == WorldObjectKind::Agent)
+                .filter_map(|object| object.organism_id.map(OrganismId::raw))
+                .filter(|id| !registered_ids.contains(id))
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .map(OrganismId)
+                .collect()
+        });
         Self {
             seed: parts.seed,
             disable_age_death: parts.disable_age_death,
@@ -2095,6 +2118,7 @@ impl WorldSaveState {
             pending_player_care: parts.pending_player_care,
             player_hold: parts.player_hold,
             organism_records,
+            external_actor_ids,
             ecology: parts.ecology,
             voxel_backend: None,
             habitats: parts.habitats,
@@ -2124,6 +2148,9 @@ impl WorldSaveState {
             return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
         }
         let Some(records) = &self.organism_records else {
+            if self.external_actor_ids.is_some() {
+                return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            }
             return Ok(());
         };
         let registry = WorldOrganismRegistry::from_exact_records(records.clone())
@@ -2153,10 +2180,21 @@ impl WorldSaveState {
             .map(|record| record.organism_id().raw())
             .collect::<BTreeSet<_>>();
         let agent_ids = agent_bindings.keys().copied().collect::<BTreeSet<_>>();
-        // External embodied teachers remain ordinary Agent objects, without
-        // biological/neural registration. Every registered life still binds
-        // exactly once; extra objects must not become implicit newborns.
-        if !registered_ids.is_subset(&agent_ids) {
+        // An omitted biological record must never turn its Agent into a
+        // teacher. Old saves without this seal are valid only if their registry
+        // is complete; ambiguous partial cohorts require explicit migration.
+        let mut external_ids = BTreeSet::new();
+        for id in self.external_actor_ids.iter().flatten() {
+            id.validate()?;
+            if !external_ids.insert(id.raw()) || registered_ids.contains(&id.raw()) {
+                return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            }
+        }
+        let sealed_ids = registered_ids
+            .union(&external_ids)
+            .copied()
+            .collect::<BTreeSet<_>>();
+        if sealed_ids != agent_ids {
             return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
         }
         // Habitat membership declares biological creatures, unlike external

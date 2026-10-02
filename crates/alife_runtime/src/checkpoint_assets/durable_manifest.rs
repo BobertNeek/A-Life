@@ -678,8 +678,10 @@ pub struct GpuLoadedSaveManifest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-// One authority record per loaded checkpoint; keep it inline without a heap allocation.
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "this infrequent durable snapshot keeps its generation evidence inline"
+)]
 enum GpuCheckpointAuthoritySource {
     LegacyDirectV1,
     GenerationV1(GpuCheckpointAuthorityPointerV1),

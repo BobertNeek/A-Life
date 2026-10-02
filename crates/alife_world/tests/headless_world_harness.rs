@@ -239,7 +239,7 @@ fn movement_sweeps_obstacles_between_clear_endpoints() {
 
     let mut endpoint_blocked = HeadlessScenarioBuilder::new(125)
         .agent("agent", organism(), Vec3f::ZERO)
-        .obstacle("blocker", pos(0.8, 0.0), 0.5)
+        .obstacle("blocker", pos(0.8, 0.0), 0.75)
         .build()
         .unwrap();
     let endpoint_result = move_to(&mut endpoint_blocked, pos(1.0, 0.0));
@@ -299,8 +299,6 @@ fn food_biology_and_hazard_pain_are_measured_without_host_reward() {
     let mut world = world_with_food_and_hazard();
     let berry = world.entity_id("berry").unwrap();
     let thorn = world.entity_id("thorn").unwrap();
-    // Start outside contact and enter it within one 0.1-unit world interval.
-    world.editor_move_object(thorn, pos(0.0, 0.8)).unwrap();
 
     let food = world
         .apply_command(&HeadlessWorldCommand::eat(organism(), berry).unwrap())
@@ -309,14 +307,19 @@ fn food_biology_and_hazard_pain_are_measured_without_host_reward() {
     assert!(food.observation.homeostatic_delta.drives.hunger < 0.0);
     assert!(food.observation.energy_delta.raw() > 0.0);
 
-    let pain = world
-        .apply_command(&command(
-            HeadlessActionIds::APPROACH,
-            ActionKind::Move,
-            Some(thorn),
-            None,
-        ))
-        .unwrap();
+    let approach = command(
+        HeadlessActionIds::APPROACH,
+        ActionKind::Move,
+        Some(thorn),
+        None,
+    );
+    // The hazard is one unit away; a single walking interval is not contact.
+    for _ in 0..2 {
+        let transit = world.apply_command(&approach).unwrap();
+        assert_eq!(transit.observation.pain_delta.raw(), 0.0);
+        world.advance_tick();
+    }
+    let pain = world.apply_command(&approach).unwrap();
     assert_eq!(pain.observation.reward_valence.raw(), 0.0);
     assert!(pain.observation.pain_delta.raw() > 0.0);
     assert!(pain.observation.homeostatic_delta.drives.fear > 0.0);

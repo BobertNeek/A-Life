@@ -978,8 +978,10 @@ impl LineageLibrary {
         Ok(())
     }
 
-    // Keep transaction rollback and each owned publication cleanup boundary explicit.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "rollback needs the transaction and every owned filesystem artifact for cleanup"
+    )]
     fn fail_composite_batch(
         &self,
         transaction: Transaction<'_>,

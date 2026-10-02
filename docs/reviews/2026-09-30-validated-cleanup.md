@@ -198,3 +198,151 @@ failures and the documented biology, graph-evolution, and neural-signal gaps
 remain unresolved. N4096 growth remains research-only and its CI failure is
 not grounds to delete its persistent-address migration test. No new rendered
 playtest or physical-GPU execution is claimed by this integration review.
+
+## GitHub comment follow-up — 2026-10-02
+
+Source baseline: `main` at
+`ace5b9a7662f69f5b0e12b699511140969a95bc4`. Reviewed the
+[follow-up CI comment on f8c9b35](https://github.com/BobertNeek/A-Life/commit/f8c9b35382f17c925cc6cab1083d18de6613e6b8#commitcomment-202867442)
+against current code and the newer diagnostics in GitHub Actions run
+`36931482191`. The comment correctly identifies the N4096 research-growth
+failure and strict lint failures. Its opening claim that all the later checks
+pass conflicts with its own lint details; it is not evidence of a green suite.
+
+### Confirmed repairs and reviewed fixture debt
+
+- **N4096 growth:** migration retains source sensory ports by logical lobe
+  address, but phenotype assembly validated that encoder as if it had been
+  freshly compiled from the target genome. Added an explicit internal encoder
+  origin and source-bound validation of the remapped assignments, including
+  profile, scales, biases, clamps, and canonical digest. Ordinary genome
+  compilation retains its original validation path. Migration also discarded
+  candidate-family bias and innate drive/cue settings; it now preserves them.
+  The existing growth test now checks inherited sensory ports, innate hunger
+  response, and mismatched source inputs as well as persistent addresses and
+  serialization. N4096 remains research-only and production admission still
+  rejects it.
+- **Biological records versus external teachers:** the old registry check
+  allowed any additional Agent object without biology, because external
+  teachers legitimately have no biological record. That also allowed removal
+  of a creature's record to turn it into an apparent external actor. Exact
+  world saves now carry `external_actor_ids`; the registered and external ID
+  sets must be disjoint and cover the Agent objects exactly. Direct portable
+  restore also validates creature summaries against biological records before
+  constructing the world. Existing corruption tests now exercise direct
+  restore, and focused regressions cover teacher round trips, missing biology,
+  duplicate/overlapping/unknown external IDs, and absent actor metadata.
+  Teachers remain ordinary perception sources and acquire no biological or
+  neural authority from this metadata.
+- **Save compatibility limit:** old saves with a complete biological registry
+  still load without external-actor metadata. Legacy saves with neither field
+  retain the existing empty-registry path. An old mixed cohort containing both
+  biological creatures and unregistered external actors is ambiguous without
+  explicit provenance; it now fails validation and needs an explicit
+  migration. This repair cannot safely infer which missing records were
+  teachers. No automatic migration for that ambiguous case is claimed.
+  Loading an old complete registry preserves its absent optional field and
+  exact serialized save anchor. The durable checkpoint comparison accepts the
+  equivalent empty external cohort produced by a validated live snapshot;
+  other world differences still fail. Existing journal-anchor checks now cover
+  this older representation instead of rewriting its persisted bytes.
+- **Physics and action fixtures:** traced the reported failures to current
+  duration-limited movement, contact radii, and action contracts before changing
+  expectations. Walking fixtures now exercise the actual 0.1-unit interval;
+  obstacle tests still require a swept collision between clear endpoints, and
+  hazard tests distinguish travel from physical contact. Carry/save tests use
+  the carrier's measured displacement. Rest does not fabricate an energy
+  credit, and negative social affinity does not become positive affiliation.
+  Grounded object groups include the existing Play action and still reject
+  partial groups. These repairs retain the behavioral checks rather than
+  removing them or changing production physics to fit old fixtures.
+- **Allocator and lifecycle fixtures:** actor spawning already reserves
+  organism IDs before biological registration. Overflow checks now test that
+  reservation boundary, and the signature test constructs genuinely different
+  future allocator states. The malformed lifecycle fixture now alters the
+  actual serialized `Dead.death_tick` field. No allocator or lifecycle
+  production behavior was changed for these fixtures.
+- **Legacy gaze fixture:** the old-object migration fixture retained current
+  gaze fields while deleting its other modern identity fields. It now removes
+  `body_yaw`, `head_yaw`, and `optical_opacity` together to represent an actual
+  legacy object, checks their migrated defaults, and verifies that current
+  objects reject missing gaze fields. Production deserialization guards remain
+  intact.
+- **Strict CI lints:** five receipt/arena/digest functions retain their explicit
+  validated arguments with function-scoped, reasoned
+  `clippy::too_many_arguments` expectations. The Era 1 corruption fixture uses
+  a named mutation alias, and the measured-physiology fixture rounds its
+  widened `u32` maturation duration with the equivalent integer `div_ceil`.
+  Two unchanged private test modules moved after
+  production items. Five atomic counter calls use the equivalent `try_update`
+  name reported by the newer compiler; a compatibility probe confirmed that
+  signature on the installed Rust 1.96 toolchain. No toolchain requirement was
+  raised and no broad lint suppression was added.
+  Further diagnostics exposed equivalent Copy, borrowing, arithmetic, and
+  iteration repairs in GPU fixtures and training code; checkpoint, scheduler,
+  imitation, and archive rollback signatures retain narrowly reasoned
+  expectations. The durable authority enum keeps its infrequent snapshot
+  evidence inline. Speech labels include silence as one supervised step, so
+  their new `is_empty()` method is always false. New Game imports now match
+  the GPU feature that uses them.
+- **Experimental founder asset incompatibility:** the meaningful
+  `new_game_base_save_matches_every_canonical_founder` test passes its default
+  BuiltinNano512 staging and save assertions before failing at the explicit
+  `ScaledChoiceNociceptiveV1` selection. A read-only diagnostic linked against
+  freshly rebuilt core code confirms that the bundled candidate fails canonical
+  decoding before world construction. The survival-urgency change `cbf22ad6`
+  changed its action decoder contract: the bundled `action_decoder_digest` is
+  `[10692070626024972832, 1033931365391295994, 1631642021198394214,
+  2994609197215179484]`, while the current compiler produces
+  `[3752274248244230604, 11910143686153284588, 15918497978615614238,
+  9890794923746952423]`.
+  All 1,799 weight values match bit for bit. The layout, route, plasticity,
+  persistent-address, memory-decoder, schema, foundation-version, and
+  training-stage fields also match. The changed decoder and source-phenotype
+  provenance alter the receipt and asset identity: the retained asset digest is
+  `a2cdb86da20f8804c878e85369c299e796b5cac8e6613ba4aef43441a7a6ee1e`,
+  while a diagnostic reconstruction with the same weights produces
+  `af133b466bc8b7286562ee7f666057e1c675d09eb1c6cda2c8f04cbc84d73cbd`.
+  That reconstruction was not saved or admitted. No existing candidate
+  migration covers this changed contract, and historical evaluation cannot
+  certify the changed decoder. The test and historical asset remain intact;
+  rejection preserves the explicit incompatible-asset boundary required by
+  AOA-PRIOR-008. A replacement requires explicit identity/provenance and current
+  behavioral evaluation, rather than an automatic rebase or inferred evidence.
+- **Remaining strict lint debt:** fresh strict workspace Clippy also reports
+  existing app dead-code, large-error, and type diagnostics for `gpu-runtime`
+  without Bevy. These extend beyond the six reviewed locations. No broad
+  suppression or test deletion was applied to hide them.
+
+### Verification for this follow-up
+
+Fresh Windows verification uses Rust 1.96, locked dependencies, the existing
+target directory, and `CARGO_INCREMENTAL=0`. The first cached growth result was
+misleading; the nonincremental baseline reproduced the migration failure before
+the repair, and the repaired test passes.
+
+Focused results: **162 distinct tests passed; one remains failed**:
+
+- Core growth and N2048 foundation contracts: 16 passed.
+- World actions, grounded sensors, signatures, organism registry/bindings,
+  persistence, save/load, and canonical New Game: 135 passed.
+- Runtime checkpoint publication/CAS and journal authority: 10 passed.
+- GPU-feature checkpoint world compatibility helper: one passed without a GPU.
+- The app founder lifecycle test remains failed only at the incompatible
+  opt-in asset described above, after its builtin staging assertions pass.
+
+Bookkeeping runtime/app tests use local unoptimized package overrides for the
+GPU backend, runtime, and app. Repository profile settings are unchanged. No
+hardware execution or performance result is inferred from these CPU checks.
+
+Strict workspace Clippy remains failed on the app configuration debt described
+above; the six original review diagnostics and the additional bounded repairs
+are addressed. Passed: strict Clippy for the core, world, and GPU backend
+libraries plus the Era 1 receipt test; `cargo check --workspace --all-targets`;
+`cargo fmt --all -- --check`; `git diff --check`; static core-boundary checks;
+and documentation checks (77/77 assertions). Workspace compilation still emits
+the documented app feature warnings. Earlier full-suite counts certify their
+historical runs only; this follow-up did not repeat the
+full suite or claim Linux equivalence, physical GPU execution, or a rendered
+gameplay test. The previously documented training, graph-evolution, and
+neural-signal integration gaps remain outside these repairs.

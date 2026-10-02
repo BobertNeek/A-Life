@@ -9,6 +9,25 @@ pub(super) type ExactCheckpointJournalWritesV1 = (
     Vec<(u64, SleepJournalNeuralAuthority)>,
 );
 
+fn durable_world_snapshots_match(
+    base: &alife_world::persistence::WorldSaveState,
+    mut normalized: alife_world::persistence::WorldSaveState,
+) -> bool {
+    // The caller has restored and validated the base. An old complete registry
+    // without this optional seal means the same empty external cohort, while
+    // its serialized representation must remain unchanged for journal anchors.
+    if base.organism_records.is_some()
+        && base.external_actor_ids.is_none()
+        && normalized
+            .external_actor_ids
+            .as_ref()
+            .is_some_and(Vec::is_empty)
+    {
+        normalized.external_actor_ids = None;
+    }
+    normalized == *base
+}
+
 impl GpuLiveBrainRuntime {
     fn sleep_journal_pending_capacity(&self) -> Result<usize, ScaffoldContractError> {
         self.prospective_sleep_journal_capacity(self.handles.len())
@@ -165,7 +184,7 @@ impl GpuLiveBrainRuntime {
         // state that the save authority does not persist.
         let mut normalized_base = base.clone();
         normalized_base.replace_headless_world_snapshot(&self.world)?;
-        if normalized_base.world != base.world {
+        if !durable_world_snapshots_match(&base.world, normalized_base.world) {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "durable checkpoint base does not match the canonical live world"
                     .to_string(),
@@ -1210,5 +1229,59 @@ impl GpuLiveBrainRuntime {
             }),
         };
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod checkpoint_world_compatibility_tests {
+    use super::durable_world_snapshots_match;
+    use alife_core::{BrainScaleTier, OrganismId, Tick, Vec3f};
+    use alife_world::{
+        persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
+        HeadlessScenarioBuilder,
+    };
+
+    #[test]
+    fn durable_world_comparison_accepts_only_the_old_empty_external_seal() {
+        let world = HeadlessScenarioBuilder::new(73_128)
+            .food("checkpoint-comparison-food", Vec3f::ZERO, 0.25)
+            .build()
+            .unwrap();
+        let mut base = PortableSaveFile::from_headless_world(
+            "checkpoint-comparison",
+            &world,
+            RuntimeConfig::deterministic_default(world.seed(), BrainScaleTier::Nano512),
+            AssetManifest::empty(),
+            Vec::new(),
+        )
+        .unwrap();
+        base.world.external_actor_ids = None;
+        let restored = base.restore_headless_world().unwrap();
+        let mut normalized = base.clone();
+        normalized
+            .replace_headless_world_snapshot(&restored)
+            .unwrap();
+        assert_eq!(normalized.world.external_actor_ids, Some(Vec::new()));
+        assert!(durable_world_snapshots_match(
+            &base.world,
+            normalized.world.clone()
+        ));
+        assert_eq!(base.world.external_actor_ids, None);
+
+        let mut different_tick = normalized.world.clone();
+        different_tick.tick = Tick::new(1);
+        assert!(!durable_world_snapshots_match(&base.world, different_tick));
+        let mut nonempty_external = normalized.world.clone();
+        nonempty_external.external_actor_ids = Some(vec![OrganismId(9)]);
+        assert!(!durable_world_snapshots_match(
+            &base.world,
+            nonempty_external
+        ));
+        let mut absent_registry = base.world.clone();
+        absent_registry.organism_records = None;
+        assert!(!durable_world_snapshots_match(
+            &absent_registry,
+            normalized.world
+        ));
     }
 }

@@ -97,11 +97,16 @@ fn save_manifest_compare_and_swap_is_atomic_idempotent_and_conflict_typed() {
         fs::remove_dir_all(&root).unwrap();
     }
     fs::create_dir_all(&root).unwrap();
-    let save_path = root.join("current.json");
-    GpuDurableSaveManifest::publish_snapshot(&save_path, &root, &current_organism_save("base"))
-        .unwrap();
-    let durable = GpuDurableSaveManifest::open(&save_path, &root).unwrap();
+    // Exercise legacy direct-manifest admission with a current valid world,
+    // then require CAS to publish the replacement through generation authority.
+    fs::write(
+        root.join("tiny_save.json"),
+        serde_json::to_vec_pretty(&current_organism_save("gpu-cas-base")).unwrap(),
+    )
+    .unwrap();
+    let durable = GpuDurableSaveManifest::open(root.join("tiny_save.json"), &root).unwrap();
     let loaded = durable.load().unwrap();
+    assert_eq!(loaded.authority_generation(), None);
     let mut replacement = loaded.save.clone();
     replacement.save_id = "gpu-cas-replacement".to_string();
 
@@ -112,7 +117,9 @@ fn save_manifest_compare_and_swap_is_atomic_idempotent_and_conflict_typed() {
         GpuSaveManifestCasOutcome::Replaced { replacement_digest } => replacement_digest,
         other => panic!("first CAS must replace, got {other:?}"),
     };
-    assert_eq!(durable.load().unwrap().save, replacement);
+    let published = durable.load().unwrap();
+    assert_eq!(published.save, replacement);
+    assert_eq!(published.authority_generation(), Some(1));
 
     assert_eq!(
         durable
@@ -224,14 +231,18 @@ fn journal_generations_advance_while_the_exact_save_anchor_stays_stable() {
     }
     fs::create_dir_all(&root).unwrap();
     let save_path = root.join("current.json");
-    let first = GpuDurableSaveManifest::publish_snapshot(
-        &save_path,
-        &root,
-        &current_save("journal-generation-anchor"),
-    )
-    .unwrap();
+    let mut historical_save = current_organism_save("journal-generation-anchor");
+    // Complete registries from before the external-actor seal must retain their
+    // exact serialized anchor when loading and publishing journal generations.
+    historical_save.world.external_actor_ids = None;
+    let historical_anchor =
+        PortableAssetDigest::for_bytes(&serde_json::to_vec_pretty(&historical_save).unwrap());
+    let first =
+        GpuDurableSaveManifest::publish_snapshot(&save_path, &root, &historical_save).unwrap();
     let durable = GpuDurableSaveManifest::open(&save_path, &root).unwrap();
     let anchor = first.exact_save_anchor_digest().unwrap().0;
+    assert_eq!(first.save.world.external_actor_ids, None);
+    assert_eq!(anchor, historical_anchor.0);
     let save_artifact_count = || {
         fs::read_dir(&root)
             .unwrap()

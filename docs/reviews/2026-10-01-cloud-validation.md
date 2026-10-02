@@ -368,3 +368,71 @@ failure and publication receipts remain under ignored `target/artifacts/`:
 `cloud-post-wake-persistence-2bad5e0`, `cloud-repairs-graphics-candidate-e912bf0`,
 and `cloud-memory-graphics-candidate-20261001`. These paths refer to this cloud
 worker. Durable promotion/training artifacts and their validators are untouched.
+
+## 2026-10-02 main reconciliation candidate
+
+`codex/cloud-main-readiness-preparation-candidate-20261002` merges main
+`9f5df3ed2fe9cd743fcf666d9909e63a68cc4950` into combined readiness/copy checkpoint
+`13585fcef6e3bc9a99420824bb16808db1defe28`, preserving both histories. The latter
+passed complete workspace CI run `37038307449` and fast run `37038307436`.
+This candidate does not merge or push main.
+
+Main run `37037644535` failed two retired N512 identity snapshots and Clippy's
+constant `chunks_exact(4)` diagnostic. The combined checkpoint already contains
+the reviewed current-state receptor/innate-priority assertions and equivalent
+`as_chunks` cleanup; no founder bytes or substantive validator are changed to
+satisfy those failures.
+
+The integration retains main's explicit external-actor cohort seal: registered
+biology and external actors are disjoint and together exactly cover Agent
+objects. Direct restore validates creature summaries before constructing the
+world. The combined habitat-membership guard also remains. Complete historical
+registries without the optional seal restore, and durable comparison normalizes
+only an owned clone. Their serialized save anchors remain unchanged through
+journal publication. Older ambiguous mixed creature/teacher saves without actor
+provenance still require explicit migration (AOA-PERSIST-001/002/003/004).
+
+Both histories preserve family bias and every innate drive/cue field in research
+growth. The combined four-file constructor/encoder implementation remains intact
+because it additionally authenticates source compiler inputs and reconstructs
+the exact remapped sensory plan. Main's measured innate-contribution and
+mismatched-input regressions are added alongside the combined source/inputs
+immutability, numeric-bit, dynamics, replay and address assertions. N4096 remains
+research-only and unpromoted (AOA-ID-004, AOA-GROW-008).
+
+Terrain calibration, optimizer-age/policy-version handoff, and preparation-copy
+source/test files are byte-identical to `13585fc`. The newer island tree/water
+pack is retained coherently with its builder and manifest. Independent read-only
+inspection matched all 16 island/hand asset digests and sizes; retained overview
+tree counts are 88/172/56. This is source/asset consistency, not rendered or GPU
+performance evidence.
+
+Two separate Sol6.1 read-only reviewers provided R2 review. Review caught and
+closed two automatic-merge fixture mismatches: the hazard relocation conflicted
+with main's two pain-free transit intervals, and a positive social affinity
+conflicted with main's negative-affinity assertion. The corrected fixtures retain
+the stronger contact/transit and positive/negative affiliation coverage. Neither
+reviewer found an open substantive blocker.
+
+At publication, 23 focused Core, 91 World and 10 durable-checkpoint tests passed,
+plus formatting, static boundaries and all 77 documentation assertions. Further
+App CPU/readiness/copy, checkpoint compatibility, replay codec, founder admission,
+headless benchmark, strict affected-crate/production-feature Clippy, and final
+exact-commit remote CI are recorded in the cloud worker's
+`target/artifacts/cloud-main-readiness-preparation-candidate-20261002/` receipts;
+pending publication-time checks are not claimed as passes here. Local commands
+disable incremental/dev/test debug output, use one build job and serial tests,
+and stop below 5 GiB free disk or above 14 GiB cgroup memory. No full workspace
+test/link is repeated locally.
+
+The rebound founder retains all 1,799 historical weight bits, archived original
+bytes and explicit rebind provenance. It remains bootstrap, unpromoted and
+behaviorally Unknown; canonical admission does not establish competence. No GPU
+dispatch, training, desktop interaction or real GPU performance claim is made.
+
+The cloud environment remains ready after explicitly sourcing
+`/workspace/cloud-cpu-validation/env_graphics.sh`. A fresh shell has neither Rust
+on PATH nor the required Rust/Cargo lean-build settings. Boot execution of the
+saved setup draft remains unverified. Exact settings and the validated official
+dependency/setup recipe are retained in `validated-environment-recipe.json` in
+the same receipt directory for the coordinator to save in this environment.

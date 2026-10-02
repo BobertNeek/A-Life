@@ -1,6 +1,7 @@
 use alife_core::{
-    BrainCapacityClass, BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler,
-    PhenotypeCompilerInputs, PhenotypeGrowthMigration, SensorProfile, Tick,
+    BrainCapacityClass, BrainGenome, CandidateActionFamily, CandidateFeatureVector,
+    DevelopmentState, DriveSnapshot, NormalizedScalar, PhenotypeCompiler, PhenotypeCompilerInputs,
+    PhenotypeGrowthMigration, SensorProfile, Tick,
 };
 
 #[test]
@@ -44,6 +45,11 @@ fn n4096_growth_preserves_n2048_addresses_and_stays_unpromoted() {
     assert!(!grown.receipt.promoted);
     assert!(BrainCapacityClass::production_for_id(BrainCapacityClass::N4096_RESEARCH_ID).is_err());
 
+    let mut drives = DriveSnapshot::baseline();
+    drives.hunger = 0.98;
+    drives.pain = 0.98;
+    let mut food = CandidateFeatureVector::zero();
+    food.0[15] = 0.8;
     for (old, new) in source
         .candidate_decoder()
         .families()
@@ -57,6 +63,13 @@ fn n4096_growth_preserves_n2048_addresses_and_stays_unpromoted() {
         assert_eq!(old.innate_cue_lane(), new.innate_cue_lane());
         assert_eq!(old.innate_cue_inverted(), new.innate_cue_inverted());
         assert_eq!(old.innate_requires_reach(), new.innate_requires_reach());
+        assert_eq!(
+            old.innate_contribution(drives, food).to_bits(),
+            new.innate_contribution(drives, food).to_bits(),
+        );
+        if old.family() == CandidateActionFamily::Ingest {
+            assert!(new.innate_contribution(drives, food) > 0.0);
+        }
     }
     assert_eq!(
         source.sensor_encoder().assignments().len(),
@@ -136,4 +149,19 @@ fn n4096_growth_preserves_n2048_addresses_and_stays_unpromoted() {
     let json = serde_json::to_vec(&grown).unwrap();
     let restored: PhenotypeGrowthMigration = serde_json::from_slice(&json).unwrap();
     assert_eq!(restored, grown);
+
+    let mismatched_genome = BrainGenome::scaffold(0x4096_2049, source_capacity.id());
+    let mismatched_development = DevelopmentState::new(
+        mismatched_genome.id,
+        Tick::ZERO,
+        NormalizedScalar::new(1.0).unwrap(),
+    );
+    let mismatched_inputs = PhenotypeCompilerInputs::try_new(
+        mismatched_genome,
+        &source_capacity,
+        mismatched_development,
+        source.sensor_profile(),
+    )
+    .unwrap();
+    assert!(PhenotypeGrowthMigration::compile_n2048_to_n4096(&source, &mismatched_inputs).is_err());
 }

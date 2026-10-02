@@ -109,7 +109,7 @@ fn canonical_signature_binds_optional_terrain_identity() {
 }
 
 #[test]
-fn organism_registration_advances_allocator_and_overflow_is_atomic() {
+fn organism_identity_reservation_and_overflow_are_atomic() {
     let mut world = HeadlessScenarioBuilder::new(44_004)
         .agent("organism-2", OrganismId(2), Vec3f::ZERO)
         .agent("organism-900", OrganismId(900), Vec3f::new(4.0, 0.0, 0.0))
@@ -146,6 +146,8 @@ fn organism_registration_advances_allocator_and_overflow_is_atomic() {
     let before_objects = overflow_world.object_snapshots();
     assert_eq!(save(&overflow_world).world.next_organism_id, exhausted);
 
+    // Spawn reserves actor IDs before biological registration, so exhaustion
+    // must reject there as well as at the record-registration boundary.
     assert_eq!(
         overflow_world.spawn_social_agent(
             "exhausted",

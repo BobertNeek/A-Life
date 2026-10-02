@@ -594,11 +594,23 @@ fn canonical_new_game_meadow_is_safe_until_actual_hazard_contact() {
     );
     assert_eq!(meadow_step.action_result.body_event.damage, 0.0);
     assert_eq!(meadow_step.biology_after.body.health, 1.0);
+    // Bound the journey by its measured physical interval, rather than assuming
+    // a command moves one world unit regardless of the simulation tick rate.
+    let displacement = meadow_step.action_result.execution.physical.displacement;
+    let interval_distance =
+        (displacement.x.powi(2) + displacement.y.powi(2) + displacement.z.powi(2)).sqrt();
+    assert!(interval_distance > 0.0);
+    let position = game.world.entity(founder.world_entity_id).unwrap().position;
+    let hazard_position = game.world.entity(hazard).unwrap().position;
+    let remaining_distance = ((position.x - hazard_position.x).powi(2)
+        + (position.y - hazard_position.y).powi(2)
+        + (position.z - hazard_position.z).powi(2))
+    .sqrt();
+    let final_tick = 2 + (remaining_distance / interval_distance).ceil() as u64;
     game.world.try_advance_tick().unwrap();
 
     let mut hazard_step = None;
-    // Allow thirty seconds of physical walking at the 20 Hz world cadence.
-    for tick in 2..=u64::from(alife_world::WORLD_TICKS_PER_SECOND) * 30 {
+    for tick in 2..=final_tick {
         let step = game
             .world
             .apply_registered_command(&command, founder.world_entity_id, Tick(tick))

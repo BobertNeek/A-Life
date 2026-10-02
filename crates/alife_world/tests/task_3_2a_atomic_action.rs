@@ -466,7 +466,7 @@ fn registered_hazard_and_agent_contact_preserves_hazard_observation_and_social_e
     let mut world = HeadlessScenarioBuilder::new(32_004)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
         .hazard("hazard", Vec3f::new(0.8, 0.0, 0.0), 0.7)
-        .social_agent("other", OrganismId(8), Vec3f::new(0.8, 0.0, 0.0), 1.0)
+        .social_agent("other", OrganismId(8), Vec3f::new(0.8, 0.0, 0.0), 1.4)
         .build()
         .unwrap();
     let agent = world.entity_id("agent").unwrap();
@@ -498,10 +498,10 @@ fn registered_hazard_and_agent_contact_preserves_hazard_observation_and_social_e
 }
 
 #[test]
-fn registered_approach_contact_reports_social_affinity_magnitude() {
+fn registered_approach_does_not_turn_negative_affinity_into_affiliation() {
     let mut world = HeadlessScenarioBuilder::new(32_006)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
-        .social_agent("other", OrganismId(8), Vec3f::new(0.5, 0.0, 0.0), 0.6)
+        .social_agent("other", OrganismId(8), Vec3f::new(0.5, 0.0, 0.0), -0.6)
         .build()
         .unwrap();
     let agent = world.entity_id("agent").unwrap();
@@ -516,7 +516,7 @@ fn registered_approach_contact_reports_social_affinity_magnitude() {
         )
         .unwrap();
 
-    assert_eq!(receipt.action_result.body_event.social_contact, 0.6);
+    assert_eq!(receipt.action_result.body_event.social_contact, 0.0);
     assert_eq!(receipt.action_result.body_event.energy, -0.04);
     assert_eq!(receipt.action_result.observation.reward_valence.raw(), 0.0);
     assert_eq!(receipt.action_result.body_event.damage, 0.0);
@@ -659,7 +659,7 @@ fn registered_zero_only_event_profiles_keep_unmodeled_fields_zero() {
 
     let mut blocked_world = HeadlessScenarioBuilder::new(32_011)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
-        .obstacle("obstacle", Vec3f::new(0.8, 0.0, 0.0), 0.5)
+        .obstacle("obstacle", Vec3f::new(0.8, 0.0, 0.0), 0.75)
         .build()
         .unwrap();
     let blocked_agent = blocked_world.entity_id("agent").unwrap();

@@ -622,8 +622,10 @@ impl GpuCheckpointAssetStore {
         })
     }
 
-    // Keep the checkpoint boundary and borrowed cognitive sidecars explicit.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "capture binds exact neural state to its compiler inputs, sealed tick, and sidecars"
+    )]
     pub fn capture_brain(
         &self,
         backend: &mut GpuAuthoritativeSession,
@@ -1597,8 +1599,10 @@ impl GpuCheckpointAssetStore {
         Ok(assets)
     }
 
-    // Each live synapse count validates a distinct restored asset boundary.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "restore validates sleep assets against the exact live brain and synapse capacities"
+    )]
     fn restore_sleep_assets(
         &self,
         backend: &mut GpuClosedLoopBackend,

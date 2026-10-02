@@ -486,8 +486,10 @@ impl GpuSleepScheduler {
         self.last_sleep_work_ticks = [None; 5];
     }
 
-    // Assemble one receipt from the scheduler's already resolved tick state.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the event records the phase transition and exact scheduled work receipt fields"
+    )]
     fn event(
         &self,
         tick: Tick,
