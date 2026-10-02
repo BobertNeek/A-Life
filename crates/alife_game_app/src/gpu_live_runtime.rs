@@ -4149,14 +4149,14 @@ fn apply_predecision_attention_evidence(
 }
 
 fn route_focal_candidates(
-    draft: PerceptionFrameDraft,
+    draft: &PerceptionFrameDraft,
     attention: &AttentionFrame,
 ) -> Result<PerceptionFrameDraft, ScaffoldContractError> {
     attention.validate_contract()?;
     let Some(alife_core::StableFocusIdentity::TrackedObject(focal_id)) =
         attention.focal_targets.first().copied()
     else {
-        return Ok(draft);
+        return Ok(draft.clone());
     };
     let Some(focal_slot) = draft
         .grounded_object_slots()
@@ -4164,7 +4164,7 @@ fn route_focal_candidates(
         .position(|slot| slot.tracked_object_id == focal_id)
         .and_then(|index| u16::try_from(index).ok())
     else {
-        return Ok(draft);
+        return Ok(draft.clone());
     };
 
     let mut candidates = draft.candidates().to_vec();
@@ -4199,7 +4199,6 @@ fn cognitive_context_with_attention(
     mut context: CognitiveContextFrame,
     attention: AttentionFrame,
 ) -> Result<CognitiveContextFrame, ScaffoldContractError> {
-    context.attention = attention.clone();
     context.peripheral.summaries = attention.peripheral_summaries.clone();
     context.focal.identities = attention.focal_targets.clone();
     context.focal.salience = attention.salience_components.clone();
@@ -4208,6 +4207,7 @@ fn cognitive_context_with_attention(
     context.budget.focal_capacity = attention.budget_receipt.focal_capacity;
     context.budget.work_used = attention.budget_receipt.work_units;
     context.budget.work_limit = attention.budget_receipt.work_units;
+    context.attention = attention;
     context.validate_contract()?;
     Ok(context)
 }
@@ -10918,7 +10918,7 @@ mod tests {
                         _ => None,
                     })
                     .unwrap_or(0.0);
-                let routed = route_focal_candidates(draft.clone(), &attention)
+                let routed = route_focal_candidates(&draft, &attention)
                     .unwrap()
                     .with_remembered_novelty(novelty)
                     .unwrap();
@@ -11161,7 +11161,7 @@ mod tests {
         assert_eq!(changed_attention.focal_targets, vec![second_identity]);
 
         let mut finalize_with_attention = |attention: AttentionFrame| {
-            let routed_draft = route_focal_candidates(draft.clone(), &attention)?;
+            let routed_draft = route_focal_candidates(&draft, &attention)?;
             let routed_recall = memory.recall_frame(&routed_draft)?;
             let context =
                 cognitive_context_for_recall(organism_id, sequence_id, &routed_recall, &topology)?;

@@ -8,6 +8,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 #[path = "terrain_hint_tests.rs"]
 mod terrain_hint_tests;
 
+#[path = "copy_contract_tests.rs"]
+mod copy_contract_tests;
+
 struct OwnerFixture {
     input: CapturedCpuPreparation,
     memory: MemorySidecarState,
@@ -750,7 +753,8 @@ fn legacy_serial_reference(job: &CpuPreparationJob<'_>) -> CpuPreparationOutcome
         )?;
         hysteresis = Some(attention.hysteresis);
         preparation_stage = "focal routing";
-        let routed_draft = route_focal_candidates(draft.clone(), &attention)?;
+        let routed_draft =
+            copy_contract_tests::legacy_route_focal_candidates(draft.clone(), &attention)?;
         let novelty = attention
             .focal_targets
             .first()
@@ -774,7 +778,10 @@ fn legacy_serial_reference(job: &CpuPreparationJob<'_>) -> CpuPreparationOutcome
             &routed_recall,
             topology,
         )?;
-        let cognitive_context = cognitive_context_with_attention(cognitive_context, attention)?;
+        let cognitive_context = copy_contract_tests::legacy_cognitive_context_with_attention(
+            cognitive_context,
+            attention,
+        )?;
         preparation_stage = "cognitive projection";
         let cognitive_projection = cognitive_projection_for_draft(
             &routed_draft,

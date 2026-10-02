@@ -148,7 +148,7 @@ fn prepare_cpu_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPreparation
         )?;
         hysteresis = Some(attention.hysteresis);
         preparation_stage = "focal routing";
-        let routed_draft = route_focal_candidates(draft.clone(), &attention)?;
+        let routed_draft = route_focal_candidates(draft, &attention)?;
         let novelty = attention
             .focal_targets
             .first()
