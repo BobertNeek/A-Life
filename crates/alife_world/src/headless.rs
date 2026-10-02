@@ -660,6 +660,29 @@ pub struct WorldEditorSpawnSpec {
     pub token_id: Option<u32>,
 }
 
+/// A physical taste sample, retained through the next sensory tick only.
+/// Stores sampled chemistry rather than a reference to food that may disappear.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct IngestionObservation {
+    pub ingested_at: Tick,
+    pub taste: f32,
+}
+
+impl IngestionObservation {
+    pub(crate) fn active_at(self, tick: Tick) -> bool {
+        tick.raw()
+            .checked_sub(self.ingested_at.raw())
+            .is_some_and(|age| age <= 1)
+    }
+
+    pub(crate) fn validate_at(self, tick: Tick) -> Result<(), ScaffoldContractError> {
+        if !self.taste.is_finite() || !(-1.0..=1.0).contains(&self.taste) || !self.active_at(tick) {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct HeadlessWorld {
     seed: u64,
@@ -674,6 +697,7 @@ pub struct HeadlessWorld {
     labels: BTreeMap<String, WorldEntityId>,
     last_touched_entities: Vec<WorldEntityId>,
     last_action_result: Option<HeadlessActionResult>,
+    ingestion_observations: BTreeMap<u64, IngestionObservation>,
     ecology: EcologyState,
     speech: SpatialSpeechBus,
     last_creature_utterance_ticks: BTreeMap<u64, Tick>,
@@ -777,6 +801,7 @@ pub(crate) struct HeadlessWorldPersistenceParts {
     pub audible_utterances: Vec<AudibleUtterance>,
     pub last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
     pub pending_player_care: BTreeMap<u64, BodyEventDelta>,
+    pub ingestion_observations: BTreeMap<u64, IngestionObservation>,
     pub player_hold: Option<player_hand::PlayerHold>,
     pub habitats: HabitatAuthority,
     pub organism_records: Option<Vec<WorldOrganismRecord>>,
@@ -896,6 +921,7 @@ impl HeadlessWorld {
             labels: BTreeMap::new(),
             last_touched_entities: Vec::new(),
             last_action_result: None,
+            ingestion_observations: BTreeMap::new(),
             ecology: EcologyState::default(),
             speech: SpatialSpeechBus::default(),
             last_creature_utterance_ticks: BTreeMap::new(),
@@ -1231,6 +1257,7 @@ impl HeadlessWorld {
                     .mark_dead(organism_id, next_tick)
                     .map_err(map_organism_registry_error)?;
                 candidate.detach_carried_objects(organism_id);
+                candidate.ingestion_observations.remove(&organism_id.raw());
             }
 
             #[cfg(test)]
@@ -1314,6 +1341,7 @@ impl HeadlessWorld {
         // staged world's causal clock before admitting a next-tick newborn or
         // its habitat membership. The transaction still publishes atomically.
         candidate.tick = next_tick;
+        candidate.prune_ingestion_observations();
 
         if let Some(pair) = conception_pair {
             let maternal_id = pair.maternal_id;
@@ -1847,6 +1875,13 @@ impl HeadlessWorld {
             digest.write_u64(*organism_id);
             digest.write_u64(tick.raw());
         }
+        if !self.ingestion_observations.is_empty() {
+            digest.write_bytes(b"ingestion-observations-v1");
+            digest.write_bytes(
+                &serde_json::to_vec(&self.ingestion_observations)
+                    .map_err(|_| ScaffoldContractError::InvalidId)?,
+            );
+        }
         if !self.pending_player_care.is_empty() {
             digest.write_bytes(b"player-care-v1");
             digest.write_bytes(
@@ -2097,6 +2132,7 @@ impl HeadlessWorld {
             .remove(&object.id.raw())
             .ok_or(ScaffoldContractError::InvalidId)?;
         candidate.detach_carried_objects(organism_id);
+        candidate.ingestion_observations.remove(&organism_id.raw());
         candidate.habitats.retire_creature(organism_id);
         candidate.labels.remove(&final_object.label);
         candidate
@@ -2114,6 +2150,31 @@ impl HeadlessWorld {
         candidate.validate_organism_bindings()?;
         *self = candidate;
         Ok((final_record, final_object))
+    }
+
+    fn prune_ingestion_observations(&mut self) {
+        self.ingestion_observations.retain(|id, observation| {
+            observation.active_at(self.tick)
+                && self
+                    .organism_registry
+                    .get(OrganismId(*id))
+                    .is_none_or(|record| record.lifecycle().is_alive())
+        });
+    }
+
+    fn validate_ingestion_observations(&self) -> Result<(), ScaffoldContractError> {
+        for (id, observation) in &self.ingestion_observations {
+            observation.validate_at(self.tick)?;
+            self.agent_entity_id(OrganismId(*id))?;
+            if self
+                .organism_registry
+                .get(OrganismId(*id))
+                .is_some_and(|record| !record.lifecycle().is_alive())
+            {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
+        Ok(())
     }
 
     pub fn replace_organism_registry_exact<I>(
@@ -2137,6 +2198,7 @@ impl HeadlessWorld {
             .transpose()?;
         let mut replacement = self.clone();
         replacement.organism_registry = registry;
+        replacement.prune_ingestion_observations();
         if let Some(next_organism_id) = replacement_next_organism_id {
             replacement.next_organism_id = replacement.next_organism_id.max(next_organism_id);
         }
@@ -2173,7 +2235,9 @@ impl HeadlessWorld {
 
         self.organism_registry
             .replace_existing_exact(replacement)
-            .map_err(map_organism_registry_error)
+            .map_err(map_organism_registry_error)?;
+        self.prune_ingestion_observations();
+        Ok(())
     }
 
     fn validate_complete_organism_bindings(
@@ -2299,6 +2363,7 @@ impl HeadlessWorld {
         }
         if let Some(organism_id) = object.organism_id {
             self.detach_carried_objects(organism_id);
+            self.ingestion_observations.remove(&organism_id.raw());
         }
         Ok(object)
     }
@@ -2371,6 +2436,7 @@ impl HeadlessWorld {
         }
         if let Some(organism_id) = object.organism_id {
             self.detach_carried_objects(organism_id);
+            self.ingestion_observations.remove(&organism_id.raw());
         }
         self.rebuild_ecology_metrics();
         Ok(object)
@@ -2497,6 +2563,7 @@ impl HeadlessWorld {
             ecology: self.ecology.clone(),
             audible_utterances: self.speech.snapshot(),
             pending_player_care: self.pending_player_care.clone(),
+            ingestion_observations: self.ingestion_observations.clone(),
             player_hold: self.player_hold.clone(),
             last_creature_utterance_ticks: self
                 .last_creature_utterance_ticks
@@ -2654,6 +2721,7 @@ impl HeadlessWorld {
             labels,
             last_touched_entities: parts.last_touched_entities,
             last_action_result: None,
+            ingestion_observations: parts.ingestion_observations,
             ecology: parts.ecology,
             speech: SpatialSpeechBus::restore(parts.audible_utterances, parts.tick)?,
             pending_player_care: parts.pending_player_care,
@@ -2677,6 +2745,7 @@ impl HeadlessWorld {
         if has_authoritative_organism_records {
             world.validate_complete_organism_bindings(true)?;
         }
+        world.validate_ingestion_observations()?;
         world.validate_player_hold()?;
         Ok(world)
     }
@@ -3011,20 +3080,15 @@ impl HeadlessWorld {
                     .clamp(0.0, 1.0),
             )?;
         }
-        if let Some(action) = self.last_action_result.as_ref().filter(|action| {
-            Some(action.command.organism_id) == observer.organism_id
-                && action.execution.succeeded
-                && classify_action(&action.command) == HeadlessAction::Eat
-        }) {
-            if let Some(food) = action
-                .command
-                .target_entity
-                .and_then(|id| self.objects.get(&id.raw()))
-            {
-                let taste = food.grounded_physical.chemical[2] * gain(SensorCapability::Chemical);
-                sensory.channels.tactile_contact[5] = taste.max(0.0);
-                sensory.channels.tactile_contact[6] = (-taste).max(0.0);
-            }
+        if let Some(observation) = observer
+            .organism_id
+            .and_then(|id| self.ingestion_observations.get(&id.raw()))
+            .filter(|observation| observation.active_at(sensory.tick))
+            .filter(|_| record.is_none_or(|record| record.lifecycle().is_alive()))
+        {
+            let taste = observation.taste * gain(SensorCapability::Chemical);
+            sensory.channels.tactile_contact[5] = taste.max(0.0);
+            sensory.channels.tactile_contact[6] = (-taste).max(0.0);
         }
         for value in &mut sensory.channels.smell_chemistry {
             *value = (*value * gain(SensorCapability::Chemical)).clamp(0.0, 1.0);
@@ -4488,8 +4552,16 @@ impl HeadlessWorld {
             .ok_or(ScaffoldContractError::InvalidId)?;
         let nutrition = object.nutrition;
         let pain = object.hazard_pain;
+        let taste = object.grounded_physical.chemical[2];
         object.consumed = true;
         object.carried_by = None;
+        self.ingestion_observations.insert(
+            command.organism_id.raw(),
+            IngestionObservation {
+                ingested_at: self.tick,
+                taste,
+            },
+        );
         self.ecology.record_consumed(target, self.tick);
         self.rebuild_ecology_metrics();
         self.finish_action(

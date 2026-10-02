@@ -1037,6 +1037,9 @@ pub struct WorldSaveState {
     pub last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub pending_player_care: BTreeMap<u64, BodyEventDelta>,
+    /// Older saves predate post-ingestion sensory continuity and have no sample.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub ingestion_observations: BTreeMap<u64, crate::IngestionObservation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub player_hold: Option<crate::headless::player_hand::PlayerHold>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1231,6 +1234,8 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             #[serde(default)]
             pending_player_care: BTreeMap<u64, BodyEventDelta>,
             #[serde(default)]
+            ingestion_observations: BTreeMap<u64, crate::IngestionObservation>,
+            #[serde(default)]
             player_hold: Option<crate::headless::player_hand::PlayerHold>,
             #[serde(default, deserialize_with = "deserialize_present_organism_records")]
             organism_records: Option<Vec<WorldOrganismRecord>>,
@@ -1321,6 +1326,7 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             audible_utterances: wire.audible_utterances,
             last_creature_utterance_ticks: wire.last_creature_utterance_ticks,
             pending_player_care: wire.pending_player_care,
+            ingestion_observations: wire.ingestion_observations,
             player_hold: wire.player_hold,
             organism_records: wire.organism_records,
             external_actor_ids: wire.external_actor_ids,
@@ -2116,6 +2122,7 @@ impl WorldSaveState {
             audible_utterances: parts.audible_utterances,
             last_creature_utterance_ticks: parts.last_creature_utterance_ticks,
             pending_player_care: parts.pending_player_care,
+            ingestion_observations: parts.ingestion_observations,
             player_hold: parts.player_hold,
             organism_records,
             external_actor_ids,
@@ -2302,6 +2309,18 @@ impl WorldSaveState {
             }
         }
         self.validate_organism_records()?;
+        for (id, observation) in &self.ingestion_observations {
+            observation.validate_at(self.tick)?;
+            if !self.objects.iter().any(|object| {
+                object.kind == WorldObjectKind::Agent && object.organism_id == Some(OrganismId(*id))
+            }) || self.organism_records.as_ref().is_some_and(|records| {
+                records.iter().any(|record| {
+                    record.organism_id() == OrganismId(*id) && !record.lifecycle().is_alive()
+                })
+            }) {
+                return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            }
+        }
         for (id, event) in &self.pending_player_care {
             event.validate_contract()?;
             if !self.organism_records.as_ref().is_some_and(|records| {
@@ -2355,6 +2374,7 @@ impl WorldSaveState {
             audible_utterances: self.audible_utterances.clone(),
             last_creature_utterance_ticks: self.last_creature_utterance_ticks.clone(),
             pending_player_care: self.pending_player_care.clone(),
+            ingestion_observations: self.ingestion_observations.clone(),
             player_hold: self.player_hold.clone(),
             habitats: self.habitats.clone(),
             organism_records: self.organism_records.clone(),
