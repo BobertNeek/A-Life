@@ -22,10 +22,12 @@ guard entered that measured production revision; its threaded timings remain an
 evidence-only prototype. The successor [bounded production split](20261001-two-worker-production.md)
 uses one scoped child plus the caller for eligible CPU preparation. Serial
 housekeeping, draft capture and ordered backend/commit authority remain intact;
-live terrain priors retain interleaved serial preparation. Its CPU checks and
-measurements cannot certify Windows/RTX performance.
-The [combined validation](../reviews/2026-10-01-cloud-validation.md#production-two-worker-successor)
-preserves that reviewed source and original receipt after the serial checkpoint.
+the later [Terrain hint extension](20261001-terrain-hint-workers.md) admits
+TerrainVision after each owner's serial hint capture. Its documented asynchronous
+timing tradeoff does not move prior/cache or neural/commit authority to workers.
+These CPU checks and measurements cannot certify Windows/RTX performance.
+The [combined validation](../reviews/2026-10-01-cloud-validation.md#terrain-hint-successor--2026-10-02)
+preserves the reviewed source and all original receipts after the serial checkpoint.
 
 ## Integrated serial guard comparison
 

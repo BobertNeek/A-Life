@@ -7,6 +7,47 @@ The [CPU performance record](../performance/20261001-cpu-preparation.md) retains
 measurement conditions and links to source-bound samples/probes; no game-speed
 claim follows from the tests below.
 
+## Terrain hint successor — 2026-10-02
+
+Combined source `df8520a2f62102184dfd7a8cf072ae5aff154fc5` extends green
+`f73564ba` with reviewed Terrain source `5a8000a8` and evidence `acbf586`,
+picked cleanly as `4ba552ef` and `df8520a2`. Existing finalization and production
+runner prerequisites remain present once. All crates, assets, manifests and
+workflows match reviewed `acbf586` byte-for-byte. The original
+[Terrain report](../performance/20261001-terrain-hint-workers.md), raw receipt
+and updated worker-report note are unchanged. Integration review is R0;
+the unchanged source retains its documented independent R2 clearance.
+
+Debug and true release each pass 13 preparation/hint/failure/re-admission tests,
+one existing attention test and two persistence-response regressions. The
+tier-1/tier-10 headless smoke also passes: **33 passing executions, zero failures**.
+The dated timing benchmark is ignored in each profile; no new timing claim is
+made. Fresh debug/release executables, compiler profiles, source hashes and all
+command/resource receipts are retained under ignored
+`target/artifacts/cloud-terrain-workers-combined-candidate-20261002/`.
+
+Strict Rust 1.99 workspace, production/GPU-test and release app all-target
+Clippy pass with `-D warnings`. Normal app and `foundation-training` library
+compilation pass; no training executes. Formatting, full Core dependency/source
+boundaries, 77/77 documentation assertions and local links pass. One build job,
+serial tests and disabled incremental/dev/test debug output were used. No guard
+fired; observed memory stays below 11.27 GiB and disk above 15.69 GiB. Core and
+backend source remain identical to the prior validated candidate; their earlier
+focused test receipts retain that source and are not counted as new executions.
+
+Terrain hints now use the authorized per-owner serial capture boundary before
+bounded CPU computation. Late replies wait for later preparation; outputs match
+for identical captures, while old interleaved wall-clock reply schedules can
+produce different captures. This documented tradeoff is the only intended
+semantic change. Two participants remain bounded to one child plus the caller;
+small cohorts, one CPU and spawn failure still compute serially. Prior/provider/
+language identity bytes, strict re-admission, learning, persistence and graphics
+are preserved. Host rollback retains its existing limits for prior request/cache
+effects; this is not exact provider-state rollback or live GPU recovery proof.
+No source conflicts or local verification blockers remain. Real provider/cache,
+GPU/training/PC execution and 50-owner trained Terrain gameplay remain Unrun;
+the report retains the missing founder/save/config/manifest hardware inputs.
+
 ## Production two-worker successor
 
 Combined source `c9d324a51b01a48d533fe875c0fe9110a7224144` extends serial
