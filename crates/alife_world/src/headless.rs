@@ -2787,6 +2787,9 @@ impl HeadlessWorld {
                 if terrain_vision {
                     let observer = self.agent_for(organism_id)?;
                     sensory.channels.visual_affordance = self.terrain_vision_fan(observer);
+                    let vision_gain =
+                        embodiment.map_or(1.0, |body| body.sensor_gain(SensorCapability::Vision));
+                    scale_sensory_group(&mut sensory.channels.visual_affordance, vision_gain);
                     self.grounded_nonvisual_channels(observer, &mut sensory)?;
                 }
                 let heard = self

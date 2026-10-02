@@ -123,6 +123,31 @@ fn digest(asset: &FoundationWeightAsset) -> String {
         .collect()
 }
 
+fn validate_cycle_optimizer_handoff(
+    receipt: &FoundationCycleReceipt,
+    asset: &FoundationWeightAsset,
+    actor: &alife_training::FoundationTrainerCheckpoint,
+    value: &alife_training::PpoValueHeadCheckpoint,
+) -> Result<()> {
+    if !receipt.next_cohort_optimizer_rebound || !receipt.next_cohort_tick_captured {
+        return Err("previous cycle is not an exact sealed cohort handoff".into());
+    }
+    if actor.source_foundation_digest != asset.digest()
+        || actor.optimizer_step != receipt.actor_optimizer_step
+        || value.optimizer_step != receipt.value_optimizer_step
+        || actor.weights.len() != asset.weights().len()
+        || actor
+            .weights
+            .iter()
+            .zip(asset.weights())
+            .any(|(trained, exported)| trained.to_bits() != exported.to_bits())
+        || value.last_updated_policy_version != Some(receipt.policy_version)
+    {
+        return Err("previous optimizer/value checkpoint does not match exported actor".into());
+    }
+    Ok(())
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct FoundationAdaptationReceipt {
     pub source_directory: std::path::PathBuf,
@@ -367,6 +392,165 @@ fn prepare_terrain_founder_refresh(
 #[cfg(test)]
 mod founder_refresh_tests {
     use super::*;
+
+    fn cycle_handoff() -> (
+        FoundationCycleReceipt,
+        FoundationWeightAsset,
+        alife_training::FoundationTrainerCheckpoint,
+        alife_training::PpoValueHeadCheckpoint,
+    ) {
+        let (directory, source_receipt, source) = sealed_source();
+        let (asset, adaptation, _) =
+            prepare_terrain_founder_refresh(&directory, &source_receipt, &source).unwrap();
+        let mut config =
+            alife_world::CanonicalNewGameConfig::phase3(adaptation.founder_seed_base, 1).unwrap();
+        config.brain_class = BrainScaleTier::Standard2048;
+        config.founder_seed_base = adaptation.founder_seed_base;
+        config.sensor_profile = asset.manifest().sensor_profile();
+        let game =
+            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset).unwrap();
+        let record = game.world.organism_registry().iter().next().unwrap();
+        let genome = record.phenotype().brain_genome.clone();
+        let development = crate::gpu_live_runtime::foundation_construction_development(
+            &genome,
+            &alife_core::BrainCapacityClass::n2048(),
+            &record
+                .phenotype()
+                .development_state_at(alife_core::Tick::ZERO)
+                .unwrap(),
+        )
+        .unwrap();
+        let (phenotype, _) = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
+            genome,
+            development,
+            asset.clone(),
+        )
+        .unwrap();
+        let receipt = serde_json::from_value(serde_json::json!({
+            "biological_objective_version": BIOLOGICAL_OBJECTIVE_VERSION,
+            "seed": 17,
+            "founder_seed_base": adaptation.founder_seed_base,
+            "policy_version": 4,
+            "training_ticks": 32,
+            "collection_seconds": 1.0,
+            "update_seconds": 1.0,
+            "old_asset_digest": digest(&asset),
+            "new_asset_digest": digest(&asset),
+            "actor_optimizer_step": 7,
+            "value_optimizer_step": 5,
+            "completed_epochs": 1,
+            "next_cohort_tick_captured": true,
+            "next_cohort_optimizer_rebound": true
+        }))
+        .unwrap();
+        let count = asset.weights().len();
+        let mask = StageTrainableMask::recurrent_only(&phenotype).unwrap();
+        let ages = (0..count)
+            .map(|index| if mask.is_trainable(index) { 7 } else { 0 })
+            .collect::<Vec<_>>();
+        let actor = alife_training::FoundationTrainerCheckpoint {
+            schema_version: 2,
+            phenotype_hash: phenotype.phenotype_hash(),
+            source_foundation_digest: asset.digest(),
+            optimizer_step: 7,
+            config: AdamWConfig::default(),
+            stage_mask: mask,
+            weights: asset.weights().to_vec(),
+            first_moment: ages
+                .iter()
+                .map(|age| if *age > 0 { 0.1 } else { 0.0 })
+                .collect(),
+            second_moment: ages
+                .iter()
+                .map(|age| if *age > 0 { 0.01 } else { 0.0 })
+                .collect(),
+            update_ages: ages,
+        };
+        let width = phenotype.neuron_count() as usize + 1;
+        let mut parameters = vec![0.2; width];
+        parameters.extend(vec![0.1; width]);
+        parameters.extend(vec![0.01; width]);
+        let value = alife_training::PpoValueHeadCheckpoint {
+            feature_count: phenotype.neuron_count(),
+            optimizer_step: 5,
+            parameters,
+            last_updated_policy_version: Some(4),
+        };
+        (receipt, asset, actor, value)
+    }
+
+    #[test]
+    fn cycle_handoff_preserves_valid_learned_optimizer_state() {
+        let (receipt, asset, actor, value) = cycle_handoff();
+        let original_actor = actor.clone();
+        let original_value = value.clone();
+        let actor = serde_json::from_slice(&serde_json::to_vec(&actor).unwrap()).unwrap();
+        let value = serde_json::from_slice(&serde_json::to_vec(&value).unwrap()).unwrap();
+        validate_cycle_optimizer_handoff(&receipt, &asset, &actor, &value).unwrap();
+        assert_eq!(actor, original_actor);
+        assert_eq!(value, original_value);
+        PpoTrainingState::from_checkpoint(value).unwrap();
+    }
+
+    #[test]
+    fn cycle_handoff_value_age_mismatch_changes_next_adam_update() {
+        let (receipt, asset, actor, value) = cycle_handoff();
+        // Scalar bias-correction diagnostic of foundation_ppo.wgsl's value
+        // update, not a CPU training or neural execution path.
+        let next_weight = |checkpoint: &alife_training::PpoValueHeadCheckpoint| {
+            let adam = PpoConfig::default().value_optimizer;
+            let width = checkpoint.feature_count as usize + 1;
+            let gradient = 0.25_f32;
+            let moment = adam.beta1 * checkpoint.parameters[width] + (1.0 - adam.beta1) * gradient;
+            let variance = adam.beta2 * checkpoint.parameters[width * 2]
+                + (1.0 - adam.beta2) * gradient * gradient;
+            let step = (checkpoint.optimizer_step + 1) as i32;
+            checkpoint.parameters[0]
+                - adam.learning_rate
+                    * ((moment / (1.0 - adam.beta1.powi(step)))
+                        / ((variance / (1.0 - adam.beta2.powi(step))).sqrt() + adam.epsilon)
+                        + adam.weight_decay * checkpoint.parameters[0])
+        };
+        let mut altered = value.clone();
+        altered.optimizer_step = 0;
+        // The ordinary value checkpoint decoder admits both finite states.
+        PpoTrainingState::from_checkpoint(value.clone()).unwrap();
+        PpoTrainingState::from_checkpoint(altered.clone()).unwrap();
+        assert!((next_weight(&value) - next_weight(&altered)).abs() > 1.0e-5);
+        validate_cycle_optimizer_handoff(&receipt, &asset, &actor, &value).unwrap();
+        assert!(validate_cycle_optimizer_handoff(&receipt, &asset, &actor, &altered).is_err());
+    }
+
+    #[test]
+    fn cycle_handoff_rejects_optimizer_age_changes_with_identical_actor_weights() {
+        let (receipt, asset, actor, value) = cycle_handoff();
+        // Advancing the actor batch counter can pass the per-weight age bound;
+        // at u32::MAX even preparing the next replay would overflow.
+        for step in [0, 6, 8, u32::MAX] {
+            let mut altered_actor = actor.clone();
+            altered_actor.optimizer_step = step;
+            assert!(
+                validate_cycle_optimizer_handoff(&receipt, &asset, &altered_actor, &value).is_err()
+            );
+        }
+        for step in [0, 4, 6] {
+            let mut altered_value = value.clone();
+            altered_value.optimizer_step = step;
+            assert!(
+                validate_cycle_optimizer_handoff(&receipt, &asset, &actor, &altered_value).is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn cycle_handoff_rejects_incomplete_next_cohort_admission() {
+        let (mut receipt, asset, actor, value) = cycle_handoff();
+        receipt.next_cohort_tick_captured = false;
+        assert!(validate_cycle_optimizer_handoff(&receipt, &asset, &actor, &value).is_err());
+        receipt.next_cohort_tick_captured = true;
+        receipt.next_cohort_optimizer_rebound = false;
+        assert!(validate_cycle_optimizer_handoff(&receipt, &asset, &actor, &value).is_err());
+    }
 
     fn sealed_source() -> (
         std::path::PathBuf,
@@ -795,9 +979,6 @@ fn run_foundation_training_cycle_from(
                 }
                 objective_state_reset =
                     receipt.biological_objective_version != BIOLOGICAL_OBJECTIVE_VERSION;
-                if !receipt.next_cohort_optimizer_rebound {
-                    return Err("previous cycle is not an exact sealed cohort handoff".into());
-                }
                 let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
                     previous.join("trained.alife-foundation"),
                 )?)?;
@@ -810,19 +991,7 @@ fn run_foundation_training_cycle_from(
                 let value: alife_training::PpoValueHeadCheckpoint = serde_json::from_slice(
                     &std::fs::read(previous.join("value-checkpoint.json"))?,
                 )?;
-                if actor.source_foundation_digest != asset.digest()
-                    || actor.weights.len() != asset.weights().len()
-                    || actor
-                        .weights
-                        .iter()
-                        .zip(asset.weights())
-                        .any(|(trained, exported)| trained.to_bits() != exported.to_bits())
-                    || value.last_updated_policy_version != Some(receipt.policy_version)
-                {
-                    return Err(
-                        "previous optimizer/value checkpoint does not match exported actor".into(),
-                    );
-                }
+                validate_cycle_optimizer_handoff(&receipt, &asset, &actor, &value)?;
                 let founder_seed_base = if receipt.founder_seed_base == 0 {
                     receipt.seed
                 } else {

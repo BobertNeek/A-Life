@@ -1,8 +1,9 @@
 use alife_core::{
     ActionKind, BiochemistryState, BodyEventDelta, BrainCapacityClass, ChannelCommand, Confidence,
     CreatureGenome, DurationTicks, EmbodimentState, ExperienceSequenceId,
-    FoundationGeneticIdentity, Intensity, MotorChannel, MotorCommandBundle, OrganismId,
-    TeacherPerceptionChannel, Tick, Vec3f, WorldEntityId,
+    FoundationGeneticIdentity, HomeostaticSnapshot, Intensity, MotorChannel, MotorCommandBundle,
+    OrganismId, SensorCapability, SensorProfile, TeacherPerceptionChannel, Tick, Vec3f,
+    WorldEntityId,
 };
 use alife_world::{HeadlessScenarioBuilder, WorldOrganismRecord};
 
@@ -201,6 +202,81 @@ fn registered_world() -> (alife_world::HeadlessWorld, WorldEntityId) {
     .unwrap();
     world.replace_organism_registry_exact([organism]).unwrap();
     (world, entity_id)
+}
+
+#[test]
+fn grounded_terrain_vision_consumes_embodiment_calibration_in_both_perception_paths() {
+    let (baseline_world, _) = registered_world();
+    let calibrated_world = |calibration: f32| {
+        let mut world = baseline_world.clone();
+        let mut organism = world
+            .organism_registry()
+            .get(OrganismId(44))
+            .unwrap()
+            .clone();
+        let mut embodiment = organism.embodiment().clone();
+        embodiment
+            .replace_calibration(
+                Tick::ZERO,
+                vec![calibration; embodiment.sensor_calibration().len()],
+                embodiment.effector_controllability().to_vec(),
+                embodiment.body_schema().to_vec(),
+            )
+            .unwrap();
+        organism.replace_embodiment_state(embodiment).unwrap();
+        world.replace_organism_registry_exact([organism]).unwrap();
+        world
+    };
+    let mut reference_world = calibrated_world(0.0);
+    let reference = reference_world
+        .perception_frame_draft(
+            OrganismId(44),
+            Tick::ZERO,
+            SensorProfile::GroundedTerrainVisionV1,
+            HomeostaticSnapshot::baseline(Tick::ZERO),
+        )
+        .unwrap();
+    let reference_rays = reference.sensory().channels.visual_affordance;
+    assert!(reference_rays.iter().any(|ray| *ray > 0.0 && *ray < 0.5));
+
+    for calibration in [-1.0, 0.0, 1.0] {
+        let mut world = calibrated_world(calibration);
+        let gain = world
+            .organism_registry()
+            .get(OrganismId(44))
+            .unwrap()
+            .embodiment()
+            .sensor_gain(SensorCapability::Vision);
+        let mut indexed_world = world.clone();
+        let index = indexed_world.build_perception_batch_index().unwrap();
+        let ordinary = world
+            .perception_frame_draft(
+                OrganismId(44),
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap();
+        let indexed = indexed_world
+            .perception_frame_draft_indexed(
+                OrganismId(44),
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+                &index,
+            )
+            .unwrap();
+        assert_eq!(ordinary, indexed);
+        for (actual, reference) in ordinary
+            .sensory()
+            .channels
+            .visual_affordance
+            .iter()
+            .zip(reference_rays)
+        {
+            assert_eq!(*actual, (reference * gain).clamp(0.0, 1.0));
+        }
+    }
 }
 
 #[test]
