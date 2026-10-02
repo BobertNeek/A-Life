@@ -109,7 +109,7 @@ fn canonical_signature_binds_optional_terrain_identity() {
 }
 
 #[test]
-fn organism_registration_advances_allocator_and_overflow_is_atomic() {
+fn organism_identity_reservation_and_overflow_are_atomic() {
     let mut world = HeadlessScenarioBuilder::new(44_004)
         .agent("organism-2", OrganismId(2), Vec3f::ZERO)
         .agent("organism-900", OrganismId(900), Vec3f::new(4.0, 0.0, 0.0))
@@ -135,23 +135,28 @@ fn organism_registration_advances_allocator_and_overflow_is_atomic() {
             OrganismId(almost_exhausted),
             Vec3f::ZERO,
         )
-        .agent(
-            "exhausted",
-            OrganismId(exhausted),
-            Vec3f::new(4.0, 0.0, 0.0),
-        )
         .build()
         .unwrap();
     let almost_entity = overflow_world.entity_id("almost-exhausted").unwrap();
-    let exhausted_entity = overflow_world.entity_id("exhausted").unwrap();
     overflow_world
         .register_organism_record(record(almost_exhausted, almost_entity.raw()))
         .unwrap();
     let before_signature = overflow_world.canonical_signature_digest().unwrap();
     let before_records: Vec<_> = overflow_world.organism_registry().iter().cloned().collect();
 
+    // Spawn reserves actor IDs before biological registration, so exhaustion
+    // must reject there as well as at the record-registration boundary.
     assert_eq!(
-        overflow_world.register_organism_record(record(exhausted, exhausted_entity.raw())),
+        overflow_world.spawn_social_agent(
+            "exhausted",
+            OrganismId(exhausted),
+            Vec3f::new(4.0, 0.0, 0.0),
+            0.0,
+        ),
+        Err(ScaffoldContractError::InvalidId)
+    );
+    assert_eq!(
+        overflow_world.register_organism_record(record(exhausted, almost_entity.raw())),
         Err(ScaffoldContractError::InvalidId)
     );
     assert_eq!(
@@ -236,7 +241,7 @@ fn canonical_signature_includes_future_organism_identity_state() {
     advanced.retire_dead_organism(OrganismId(900)).unwrap();
 
     let mut baseline = HeadlessScenarioBuilder::new(44_008)
-        .agent("resident", OrganismId(900), Vec3f::ZERO)
+        .agent("resident", OrganismId(899), Vec3f::ZERO)
         .build()
         .unwrap();
     baseline.remove_agent_entity(resident).unwrap();
@@ -244,6 +249,8 @@ fn canonical_signature_includes_future_organism_identity_state() {
     assert_eq!(advanced.object_snapshots(), baseline.object_snapshots());
     assert!(advanced.organism_registry().is_empty());
     assert!(baseline.organism_registry().is_empty());
+    assert_eq!(save(&advanced).world.next_organism_id, 901);
+    assert_eq!(save(&baseline).world.next_organism_id, 900);
     assert_ne!(
         advanced.canonical_signature_digest().unwrap(),
         baseline.canonical_signature_digest().unwrap()

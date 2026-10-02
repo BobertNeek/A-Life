@@ -145,7 +145,7 @@ fn registered_move_transaction_advances_authoritative_biology_once() {
     );
     assert_eq!(
         world.entity(agent).unwrap().position,
-        Vec3f::new(0.5, 0.0, 0.0)
+        Vec3f::new(0.1, 0.0, 0.0)
     );
     assert_eq!(receipt.action_result.body_event.nutrition, 0.0);
     assert_eq!(receipt.action_result.body_event.damage, 0.0);
@@ -189,7 +189,7 @@ fn registered_food_transaction_reports_actual_nutrition() {
 fn registered_hazard_contact_reports_measured_damage() {
     let mut world = HeadlessScenarioBuilder::new(32_003)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
-        .hazard("hazard", Vec3f::new(1.0, 0.0, 0.0), 0.7)
+        .hazard("hazard", Vec3f::new(0.8, 0.0, 0.0), 0.7)
         .build()
         .unwrap();
     let agent = world.entity_id("agent").unwrap();
@@ -229,7 +229,7 @@ fn stored_object_radius_bounds_grounded_contact_and_movement_collision() {
                 label: "radius-hazard".to_string(),
                 kind: WorldObjectKind::Hazard,
                 organism_id: None,
-                position: Vec3f::new(1.0, 0.0, 0.0),
+                position: Vec3f::new(0.85, 0.0, 0.0),
                 nutrition: 0.0,
                 hazard_pain: 0.2,
                 radius,
@@ -362,8 +362,8 @@ fn cognitive_energy_setter_preserves_routed_body_projection() {
 fn registered_hazard_and_agent_contact_preserves_hazard_observation_and_social_event() {
     let mut world = HeadlessScenarioBuilder::new(32_004)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
-        .hazard("hazard", Vec3f::new(1.0, 0.0, 0.0), 0.7)
-        .social_agent("other", OrganismId(8), Vec3f::new(1.0, 0.0, 0.0), -1.4)
+        .hazard("hazard", Vec3f::new(0.8, 0.0, 0.0), 0.7)
+        .social_agent("other", OrganismId(8), Vec3f::new(0.8, 0.0, 0.0), 1.4)
         .build()
         .unwrap();
     let agent = world.entity_id("agent").unwrap();
@@ -395,7 +395,7 @@ fn registered_hazard_and_agent_contact_preserves_hazard_observation_and_social_e
 }
 
 #[test]
-fn registered_approach_contact_reports_social_affinity_magnitude() {
+fn registered_approach_does_not_turn_negative_affinity_into_affiliation() {
     let mut world = HeadlessScenarioBuilder::new(32_006)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
         .social_agent("other", OrganismId(8), Vec3f::new(0.5, 0.0, 0.0), -0.6)
@@ -413,7 +413,7 @@ fn registered_approach_contact_reports_social_affinity_magnitude() {
         )
         .unwrap();
 
-    assert_eq!(receipt.action_result.body_event.social_contact, 0.6);
+    assert_eq!(receipt.action_result.body_event.social_contact, 0.0);
     assert_eq!(receipt.action_result.body_event.energy, -0.04);
     assert_eq!(receipt.action_result.observation.reward_valence.raw(), 0.0);
     assert_eq!(receipt.action_result.body_event.damage, 0.0);
@@ -434,7 +434,7 @@ fn registered_specialized_events_preserve_physical_and_physiological_fields() {
             Tick(1),
         )
         .unwrap();
-    assert_eq!(rest.action_result.body_event.energy, 0.08);
+    assert_eq!(rest.action_result.body_event.energy, 0.0);
     assert_eq!(rest.action_result.observation.reward_valence.raw(), 0.0);
     assert_eq!(rest.action_result.body_event.damage, 0.0);
     assert_eq!(rest.action_result.body_event.temperature_stress, 0.0);
@@ -445,7 +445,7 @@ fn registered_specialized_events_preserve_physical_and_physiological_fields() {
 
     let mut hazard_world = HeadlessScenarioBuilder::new(32_007)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
-        .hazard("hazard", Vec3f::new(1.0, 0.0, 0.0), 0.7)
+        .hazard("hazard", Vec3f::new(0.8, 0.0, 0.0), 0.7)
         .build()
         .unwrap();
     let hazard_agent = hazard_world.entity_id("agent").unwrap();
@@ -481,7 +481,7 @@ fn registered_specialized_events_preserve_physical_and_physiological_fields() {
     );
 
     for (seed, affinity, expected_energy) in
-        [(32_008, 0.6_f32, -0.02_f32), (32_009, -0.6_f32, -0.04_f32)]
+        [(32_008, 0.6_f32, -0.02_f32), (32_009, -0.6_f32, -0.02_f32)]
     {
         let mut social_world = HeadlessScenarioBuilder::new(seed)
             .agent("agent", ORGANISM_ID, Vec3f::ZERO)
@@ -501,7 +501,7 @@ fn registered_specialized_events_preserve_physical_and_physiological_fields() {
         assert_eq!(social.action_result.observation.reward_valence.raw(), 0.0);
         assert_eq!(
             social.action_result.body_event.social_contact,
-            affinity.abs()
+            affinity.max(0.0)
         );
         assert_eq!(social.action_result.body_event.damage, 0.0);
         assert_eq!(social.action_result.body_event.temperature_stress, 0.0);
@@ -546,7 +546,7 @@ fn registered_zero_only_event_profiles_keep_unmodeled_fields_zero() {
 
     let mut blocked_world = HeadlessScenarioBuilder::new(32_011)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
-        .obstacle("obstacle", Vec3f::new(1.0, 0.0, 0.0), 0.5)
+        .obstacle("obstacle", Vec3f::new(0.8, 0.0, 0.0), 0.75)
         .build()
         .unwrap();
     let blocked_agent = blocked_world.entity_id("agent").unwrap();

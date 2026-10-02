@@ -24,6 +24,11 @@ use super::{
 const PHENOTYPE_SCHEMA_VERSION: u16 = 5;
 const PHENOTYPE_DOMAIN: &[u8] = b"alife.brain.phenotype.v5";
 
+pub(super) enum SensorEncoderOrigin<'a> {
+    Genome,
+    N2048ResearchGrowth(&'a BrainPhenotype),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct CognitiveArchitecturePlan {
     parameters: CognitiveArchitectureGenomeParameters,
@@ -403,6 +408,7 @@ impl BrainPhenotype {
         synapses: Vec<CompiledSynapse>,
         neuron_dynamics: Vec<NeuronDynamics>,
         sensor_encoder: SensorEncoderPlan,
+        sensor_encoder_origin: SensorEncoderOrigin<'_>,
         decoder: CandidateDecoderPlan,
         speech_decoder: Option<AuxiliaryDecoderPlan>,
         memory_decoder: Option<AuxiliaryDecoderPlan>,
@@ -477,9 +483,14 @@ impl BrainPhenotype {
             budgets,
             phenotype_hash: PhenotypeHash([0; 4]),
         };
-        value
-            .sensor_encoder
-            .validate_against_inputs(&value, inputs)?;
+        match sensor_encoder_origin {
+            SensorEncoderOrigin::Genome => value
+                .sensor_encoder
+                .validate_against_inputs(&value, inputs)?,
+            SensorEncoderOrigin::N2048ResearchGrowth(source) => value
+                .sensor_encoder
+                .validate_against_n2048_growth(&value, source)?,
+        }
         value.phenotype_hash = value.recompute_phenotype_hash()?;
         value.validate_against(capacity)?;
         Ok(value)

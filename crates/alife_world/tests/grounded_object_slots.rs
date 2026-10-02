@@ -165,12 +165,13 @@ fn grounded_draft(
         .unwrap()
 }
 
-fn generic_families() -> [CandidateActionFamily; 5] {
+fn generic_families() -> [CandidateActionFamily; 6] {
     [
         CandidateActionFamily::Inspect,
         CandidateActionFamily::Approach,
         CandidateActionFamily::Avoid,
         CandidateActionFamily::Ingest,
+        CandidateActionFamily::Contact,
         CandidateActionFamily::Contact,
     ]
 }
@@ -205,6 +206,7 @@ fn grounded_profile_exposes_physics_not_world_object_kind() {
         HeadlessActionIds::FLEE,
         HeadlessActionIds::EAT,
         HeadlessActionIds::GRAB,
+        HeadlessActionIds::PLAY,
     ];
     assert_eq!(action_ids_for_target(&frame, cyan), expected);
     assert_eq!(action_ids_for_target(&frame, amber), expected);
@@ -256,7 +258,7 @@ fn relabelling_private_world_semantics_cannot_change_a_grounded_frame() {
 }
 
 #[test]
-fn sixteen_slots_yield_five_complete_family_groups_and_never_a_partial_group() {
+fn sixteen_slots_yield_four_complete_action_groups_and_never_a_partial_group() {
     let mut builder = HeadlessScenarioBuilder::new(4_305).agent("agent", ORGANISM, Vec3f::ZERO);
     for index in 0..16 {
         let label = format!("object-{index}");
@@ -273,12 +275,12 @@ fn sixteen_slots_yield_five_complete_family_groups_and_never_a_partial_group() {
     let frame = grounded_draft(&mut world, Tick::new(5));
 
     assert_eq!(frame.grounded_object_slots().len(), 16);
-    let object_choices_end = 3 + 5 * 5;
+    let object_choices_end = 3 + 4 * 6;
     assert_eq!(frame.candidates().len(), object_choices_end + 3);
     assert_eq!(frame.candidates()[0].family, CandidateActionFamily::Idle);
     assert_eq!(frame.candidates()[1].family, CandidateActionFamily::Rest);
     assert_eq!(frame.candidates()[2].kind, alife_core::ActionKind::Vocalize);
-    for group in frame.candidates()[3..object_choices_end].chunks_exact(5) {
+    for group in frame.candidates()[3..object_choices_end].chunks_exact(6) {
         assert_eq!(
             group
                 .iter()
@@ -324,11 +326,11 @@ fn duplicate_looking_objects_keep_distinct_tracked_bindings() {
 
     assert_eq!(
         frame.candidates()[3].features,
-        frame.candidates()[8].features
+        frame.candidates()[9].features
     );
     assert_ne!(
         frame.candidates()[3].observation,
-        frame.candidates()[8].observation
+        frame.candidates()[9].observation
     );
     assert_ne!(
         frame.grounded_object_slots()[0].tracked_object_id,

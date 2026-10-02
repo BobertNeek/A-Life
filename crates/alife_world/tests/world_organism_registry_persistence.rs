@@ -200,6 +200,10 @@ fn assert_rejected(value: serde_json::Value, label: &str) {
 fn assert_validation_rejected(value: serde_json::Value, label: &str) {
     let text = serde_json::to_string(&value).unwrap();
     let save = PortableSaveFile::from_json_str(&text).unwrap();
+    assert!(
+        save.restore_headless_world().is_err(),
+        "corruption case {label} unexpectedly restored"
+    );
     let error = save
         .validate_with_asset_root(".")
         .expect_err("JSON corruption unexpectedly passed portable validation");
@@ -300,6 +304,109 @@ fn registered_agents_survive_portable_json_restore_with_exact_identity_and_signa
 }
 
 #[test]
+fn external_actor_cohort_roundtrips_without_permitting_missing_biology() {
+    let mut world = world_with_nontrivial_registry();
+    world
+        .spawn_social_agent(
+            "external-teacher",
+            OrganismId(9),
+            Vec3f::new(8.0, 0.0, 0.0),
+            0.5,
+        )
+        .unwrap();
+    let value = serialized_world(&world);
+    assert_eq!(value["world"]["external_actor_ids"], serde_json::json!([9]));
+    let restored = PortableSaveFile::from_json_str(&value.to_string())
+        .unwrap()
+        .restore_headless_world()
+        .unwrap();
+    assert_eq!(restored.object_snapshots(), world.object_snapshots());
+    assert_eq!(registry_records(&restored), registry_records(&world));
+    assert!(restored.organism_registry().get(OrganismId(9)).is_none());
+    restored
+        .grounded_teacher_actor(restored.entity_id("external-teacher").unwrap())
+        .unwrap();
+    assert_eq!(
+        restored.canonical_signature_digest().unwrap(),
+        world.canonical_signature_digest().unwrap()
+    );
+
+    let mut missing_life = value.clone();
+    missing_life["world"]["organism_records"]
+        .as_array_mut()
+        .unwrap()
+        .pop();
+    assert_rejected(missing_life, "missing life beside an external teacher");
+    let mut directly_corrupted = save(&world);
+    directly_corrupted
+        .world
+        .organism_records
+        .as_mut()
+        .unwrap()
+        .pop();
+    assert!(directly_corrupted.restore_headless_world().is_err());
+    for (label, external_ids) in [
+        ("duplicate external identity", serde_json::json!([9, 9])),
+        (
+            "biological and external identity overlap",
+            serde_json::json!([7, 9]),
+        ),
+        ("unknown external identity", serde_json::json!([9, 99])),
+    ] {
+        let mut malformed = value.clone();
+        malformed["world"]["external_actor_ids"] = external_ids;
+        assert_rejected(malformed, label);
+    }
+    let mut null_seal_with_missing_life = value.clone();
+    null_seal_with_missing_life["world"]["external_actor_ids"] = serde_json::Value::Null;
+    null_seal_with_missing_life["world"]["organism_records"]
+        .as_array_mut()
+        .unwrap()
+        .pop();
+    assert_rejected(
+        null_seal_with_missing_life,
+        "null actor seal with missing biology",
+    );
+    let mut missing_registry = value.clone();
+    missing_registry["world"]
+        .as_object_mut()
+        .unwrap()
+        .remove("organism_records");
+    assert_rejected(missing_registry, "sealed cohort without its registry");
+    let mut ambiguous_legacy = value;
+    ambiguous_legacy["world"]
+        .as_object_mut()
+        .unwrap()
+        .remove("external_actor_ids");
+    assert_rejected(
+        ambiguous_legacy,
+        "legacy partial cohort lacks actor provenance",
+    );
+}
+
+#[test]
+fn old_complete_registry_remains_restorable_without_external_actor_metadata() {
+    let world = world_with_nontrivial_registry();
+    let mut legacy = serialized_world(&world);
+    legacy["world"]
+        .as_object_mut()
+        .unwrap()
+        .remove("external_actor_ids");
+    let decoded = PortableSaveFile::from_json_str(&legacy.to_string()).unwrap();
+    assert_eq!(serde_json::to_value(&decoded).unwrap(), legacy);
+    assert!(decoded.world.external_actor_ids.is_none());
+    let restored = decoded.restore_headless_world().unwrap();
+    assert_eq!(registry_records(&restored), registry_records(&world));
+    assert_eq!(
+        restored.canonical_signature_digest().unwrap(),
+        world.canonical_signature_digest().unwrap()
+    );
+    legacy["world"]["external_actor_ids"] = serde_json::Value::Null;
+    let null_marker = PortableSaveFile::from_json_str(&legacy.to_string()).unwrap();
+    assert_eq!(null_marker.world, decoded.world);
+}
+
+#[test]
 fn registry_insertion_order_has_identical_json_and_restored_identity() {
     let base = world_with_agents();
     let agent_a = base.entity_id("agent-a").unwrap();
@@ -394,6 +501,10 @@ fn absent_registry_field_is_legacy_empty_without_changing_world_object_identity(
         .as_object_mut()
         .unwrap()
         .remove("organism_records");
+    value["world"]
+        .as_object_mut()
+        .unwrap()
+        .remove("external_actor_ids");
 
     let restored = PortableSaveFile::from_json_str(&serde_json::to_string(&value).unwrap())
         .unwrap()
@@ -443,7 +554,7 @@ fn malformed_present_registry_records_are_rejected_before_restore() {
         (
             "invalid lifecycle",
             Box::new(|value| {
-                value["world"]["organism_records"][0]["lifecycle"]["death_tick"] =
+                value["world"]["organism_records"][0]["lifecycle"]["Dead"]["death_tick"] =
                     serde_json::json!(1);
             }),
         ),

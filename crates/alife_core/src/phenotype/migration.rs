@@ -8,6 +8,7 @@ use crate::{
 };
 
 use super::learning::compute_plasticity_plan_digest;
+use super::record::SensorEncoderOrigin;
 use super::{
     AuxiliaryDecoderPlan, BrainCapacityClass, BrainPhenotype, CandidateDecoderFamilyPlan,
     CandidateDecoderPlan, CompiledBudgets, CompiledProjection, CompiledSynapse,
@@ -281,12 +282,27 @@ impl PhenotypeGrowthMigration {
                 }
                 synapses.push(row);
             }
-            families.push(CandidateDecoderFamilyPlan::new(
-                family,
-                0.0,
-                family_start,
-                u32::try_from(synapses.len()).map_err(|_| compile_error())? - family_start,
-            ));
+            let old_family = source
+                .candidate_decoder()
+                .families()
+                .iter()
+                .find(|plan| plan.family() == family)
+                .ok_or_else(compile_error)?;
+            families.push(
+                CandidateDecoderFamilyPlan::new(
+                    family,
+                    old_family.bias(),
+                    family_start,
+                    u32::try_from(synapses.len()).map_err(|_| compile_error())? - family_start,
+                )
+                .with_innate_priority(
+                    old_family.innate_drive_mask(),
+                    old_family.innate_gain(),
+                    old_family.innate_cue_lane(),
+                    old_family.innate_cue_inverted(),
+                    old_family.innate_requires_reach(),
+                ),
+            );
         }
         let memory_channel = MemoryChannelPlan::try_new_v1(8_192)?;
         let candidate = CandidateDecoderPlan::try_new(
@@ -497,6 +513,7 @@ impl PhenotypeGrowthMigration {
             synapses,
             dynamics,
             sensor_encoder,
+            SensorEncoderOrigin::N2048ResearchGrowth(source),
             candidate,
             Some(speech),
             Some(memory),

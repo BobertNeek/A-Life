@@ -201,6 +201,53 @@ impl SensorEncoderPlan {
             Err(ScaffoldContractError::PhenotypeCompile)
         }
     }
+
+    pub(super) fn validate_against_n2048_growth(
+        &self,
+        phenotype: &BrainPhenotype,
+        source: &BrainPhenotype,
+    ) -> Result<(), ScaffoldContractError> {
+        source.validate_against(&crate::BrainCapacityClass::n2048())?;
+        self.validate_against(phenotype)?;
+        if phenotype.brain_class_id() != crate::BrainCapacityClass::N4096_RESEARCH_ID
+            || phenotype.lobe_layout() != &super::N4096ResearchLayoutV1::lobe_layout()?
+            || self.sensor_profile != source.sensor_profile()
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        // Growth retains each source port's logical neuron address. It must not
+        // resample ports from the expanded lobes or the target scaffold's seed.
+        let mut expected = source.sensor_encoder().clone();
+        for assignment in &mut expected.assignments {
+            let old = source
+                .lobe_layout()
+                .lobe_by_neuron_index(assignment.target_neuron)
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            let new = phenotype
+                .lobe_layout()
+                .region(old.kind)
+                .filter(|region| region.enabled)
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            let ordinal = assignment.target_neuron - old.start;
+            if ordinal >= new.len {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+            assignment.target_neuron = new.start + ordinal;
+        }
+        expected.assignments.sort_by_key(|assignment| {
+            (
+                assignment.target_neuron,
+                assignment.source_group.raw(),
+                assignment.source_index,
+            )
+        });
+        expected.canonical_digest = expected.recompute_digest()?;
+        if self != &expected {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Ok(())
+    }
+
     fn validate_shape(&self) -> Result<(), ScaffoldContractError> {
         if self.schema_version != ENCODER_SCHEMA_VERSION
             || SensorProfile::try_from_raw(self.sensor_profile.raw()).is_err()

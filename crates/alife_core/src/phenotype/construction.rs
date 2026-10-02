@@ -2,6 +2,8 @@
 
 use crate::{ActivationFunction, AlphaStoragePolicy, BrainGenome, ScaffoldContractError};
 
+use super::record::SensorEncoderOrigin;
+
 use super::{
     BrainCapacityClass, BrainPhenotype, CompiledBudgets, GlobalPhenotypeBudgetReceipt,
     NeuronDynamics, PhenotypeCompilerInputs,
@@ -260,6 +262,7 @@ fn compile_inner(
                 synapses.clone(),
                 dynamics.clone(),
                 encoder.clone(),
+                SensorEncoderOrigin::Genome,
                 decoders.candidate.clone(),
                 decoders.speech.clone(),
                 decoders.memory.clone(),
@@ -327,6 +330,7 @@ fn compile_inner(
         synapses,
         dynamics,
         encoder,
+        SensorEncoderOrigin::Genome,
         decoders.candidate,
         decoders.speech,
         decoders.memory,

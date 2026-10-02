@@ -215,13 +215,15 @@ fn movement_sweeps_obstacles_between_clear_endpoints() {
             .unwrap()
     };
 
-    let crossing_start = Vec3f::new(-0.5, 0.0, 0.95);
+    // A 50ms walking interval spans .1 units. Both endpoints stay outside the
+    // sphere, while the middle of this short segment crosses its boundary.
+    let crossing_start = Vec3f::new(-0.05, 0.0, 0.9995);
     let mut crossing = HeadlessScenarioBuilder::new(124)
         .agent("agent", organism(), crossing_start)
         .obstacle("blocker", Vec3f::ZERO, 1.0)
         .build()
         .unwrap();
-    let crossing_result = move_to(&mut crossing, Vec3f::new(0.5, 0.0, 0.95));
+    let crossing_result = move_to(&mut crossing, Vec3f::new(0.05, 0.0, 0.9995));
     assert!(!crossing_result.execution.succeeded);
     assert_eq!(
         crossing_result.execution.failure,
@@ -237,7 +239,7 @@ fn movement_sweeps_obstacles_between_clear_endpoints() {
 
     let mut endpoint_blocked = HeadlessScenarioBuilder::new(125)
         .agent("agent", organism(), Vec3f::ZERO)
-        .obstacle("blocker", pos(1.0, 0.0), 0.5)
+        .obstacle("blocker", pos(0.8, 0.0), 0.75)
         .build()
         .unwrap();
     let endpoint_result = move_to(&mut endpoint_blocked, pos(1.0, 0.0));
@@ -263,7 +265,7 @@ fn movement_sweeps_obstacles_between_clear_endpoints() {
             .entity(clear.entity_id("agent").unwrap())
             .unwrap()
             .position,
-        pos(1.0, 0.0)
+        pos(0.1, 0.0)
     );
 }
 
@@ -305,14 +307,19 @@ fn food_biology_and_hazard_pain_are_measured_without_host_reward() {
     assert!(food.observation.homeostatic_delta.drives.hunger < 0.0);
     assert!(food.observation.energy_delta.raw() > 0.0);
 
-    let pain = world
-        .apply_command(&command(
-            HeadlessActionIds::APPROACH,
-            ActionKind::Move,
-            Some(thorn),
-            None,
-        ))
-        .unwrap();
+    let approach = command(
+        HeadlessActionIds::APPROACH,
+        ActionKind::Move,
+        Some(thorn),
+        None,
+    );
+    // The hazard is one unit away; a single walking interval is not contact.
+    for _ in 0..2 {
+        let transit = world.apply_command(&approach).unwrap();
+        assert_eq!(transit.observation.pain_delta.raw(), 0.0);
+        world.advance_tick();
+    }
+    let pain = world.apply_command(&approach).unwrap();
     assert_eq!(pain.observation.reward_valence.raw(), 0.0);
     assert!(pain.observation.pain_delta.raw() > 0.0);
     assert!(pain.observation.homeostatic_delta.drives.fear > 0.0);
@@ -447,12 +454,12 @@ fn carried_object_follows_carrier_across_move_and_save_restore() {
             Some(pos(1.0, 0.0)),
         ))
         .unwrap();
-    assert_eq!(world.entity(agent).unwrap().position, pos(1.0, 0.0));
-    assert_eq!(world.entity(berry).unwrap().position, pos(1.5, 0.25));
+    assert_eq!(world.entity(agent).unwrap().position, pos(0.1, 0.0));
+    assert_eq!(world.entity(berry).unwrap().position, pos(0.6, 0.25));
     assert_eq!(world.entity(berry).unwrap().carried_by, Some(organism()));
     assert_eq!(
         world.entity(berry).unwrap().grounded_physical.velocity,
-        pos(1.0, 0.0)
+        pos(0.1, 0.0)
     );
 
     let save = PortableSaveFile::from_headless_world(
@@ -467,7 +474,7 @@ fn carried_object_follows_carrier_across_move_and_save_restore() {
         .unwrap()
         .restore_headless_world()
         .unwrap();
-    assert_eq!(restored.entity(berry).unwrap().position, pos(1.5, 0.25));
+    assert_eq!(restored.entity(berry).unwrap().position, pos(0.6, 0.25));
     assert_eq!(restored.entity(berry).unwrap().carried_by, Some(organism()));
 
     restored
@@ -478,8 +485,11 @@ fn carried_object_follows_carrier_across_move_and_save_restore() {
             Some(pos(2.0, 0.0)),
         ))
         .unwrap();
-    assert_eq!(restored.entity(agent).unwrap().position, pos(2.0, 0.0));
-    assert_eq!(restored.entity(berry).unwrap().position, pos(2.5, 0.25));
+    assert_eq!(restored.entity(agent).unwrap().position, pos(0.2, 0.0));
+    assert_eq!(
+        restored.entity(berry).unwrap().position,
+        pos(0.6 + 0.1, 0.25)
+    );
     assert_eq!(restored.entity(berry).unwrap().carried_by, Some(organism()));
 }
 
