@@ -7,6 +7,61 @@ The [CPU performance record](../performance/20261001-cpu-preparation.md) retains
 measurement conditions and links to source-bound samples/probes; no game-speed
 claim follows from the tests below.
 
+## Creature sensing and training handoff — 2026-10-02
+
+Source `e24c5b38cdc7877128c6eedb7c3a6891c08e9bff` extends green combined
+`5abafe1961efaf099cd07287bd7ca09e8ea754cd`. Terrain depth rays now apply the
+organism's existing Vision gain once, matching the other calibrated modalities.
+The ordinary and indexed perception paths share this operation. It changes
+bounded sensory measurement, without choosing an action or adding CPU cognition.
+
+Training cycle admission now binds actor and value optimizer counters to the
+published handoff and requires the recorded successor decision. A changed value
+counter with retained Adam moments changes WGSL bias correction and the next
+coefficient; an actor counter at `u32::MAX` cannot prepare the next replay.
+Actor bias correction still uses per-weight update ages. These checks run once
+when admitting a previous training cycle, not per organism tick, and do not
+gate ordinary creature saves or foundation loading. Matching handoffs retain
+all weights, moments, ages, masks and value parameters.
+
+Both defects were reproduced with failing CPU regressions before repair.
+Seven world state/embodiment tests and six training founder/handoff tests pass.
+The valid training fixture uses a compiled current N2048 founder, its correct
+seed, real recurrent mask and a 2048-feature value head; checkpoint JSON
+roundtrips preserve learned data and enter the normal value restore decoder.
+A test-only scalar diagnostic of the existing value shader demonstrates the
+counter's numerical consequence. It is not CPU neural training or executed GPU
+resume evidence. Two independent blank-context Sol6.1 reviews accepted the final
+bounded patches. The review corrected the terrain reference calibration and
+training fixture founder seed before final validation.
+
+The tier-1/tier-10 headless benchmark smoke passes: **14 final passing test
+executions, zero failures**. Strict Rust 1.99 world/app all-target production
+Clippy, formatting, full Core boundaries and 77/77 documentation assertions
+pass. Across this round the observed cgroup memory stays below 11.8 GiB and
+disk free above 15.4 GiB; no resource guard fires. Full workspace linking/testing
+is not repeated in this 32 GiB environment.
+
+Strict Rust 1.99 all-target `foundation-training` Clippy fails on 14 existing
+warnings in unchanged `foundation_training.rs` and `gpu_live_runtime.rs`.
+No warning suppression or unrelated repair is included. Actual training-feature
+compilation and the six selected CPU tests pass. Raw command logs, source hashes,
+patch snapshots and resource/review receipts are retained under ignored
+`target/artifacts/cloud-creature-readiness-20261002/`.
+
+The environment has stable Rust 1.98.1 and Rust 1.99 with rustfmt/Clippy, four
+CPU quota cores and 16 GiB memory. Fresh shells do not load Rust paths or lean
+Cargo settings automatically: source
+`/workspace/cloud-cpu-validation/env_graphics.sh`, then set `CARGO_BUILD_JOBS=1`.
+That recipe disables incremental/dev/test debug output, selects the shared
+CPU target, uses serial tests and supplies the local official native dependency
+path. Every Cargo command here used it with disk/memory guards.
+
+GPU behavior, GPU training/resume and desktop work remain Unrun. Founder archive
+reconstruction and per-organism gustatory evidence remain separate follow-ups;
+neither is declared fixed. Performance-worker and CI-comment remediation source
+are outside this patch.
+
 ## Terrain hint successor — 2026-10-02
 
 Combined source `df8520a2f62102184dfd7a8cf072ae5aff154fc5` extends green
