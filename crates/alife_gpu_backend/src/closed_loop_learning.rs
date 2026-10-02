@@ -254,6 +254,10 @@ pub struct GpuAuthorityReceiptV1 {
 }
 
 impl GpuAuthorityReceiptV1 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the receipt seals independently validated handle, transaction, and outcome evidence"
+    )]
     pub(crate) fn from_backend_validated(
         handle: crate::GpuBrainHandle,
         pending: &PendingEligibilityReceipt,

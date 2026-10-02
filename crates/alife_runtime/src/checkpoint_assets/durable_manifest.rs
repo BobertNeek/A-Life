@@ -678,6 +678,10 @@ pub struct GpuLoadedSaveManifest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "this infrequent durable snapshot keeps its generation evidence inline"
+)]
 enum GpuCheckpointAuthoritySource {
     LegacyDirectV1,
     GenerationV1(GpuCheckpointAuthorityPointerV1),

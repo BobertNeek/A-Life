@@ -63,6 +63,10 @@ impl ReplaySpeechTarget {
             1 + self.continuation.iter().take_while(|v| **v != 0).count()
         }
     }
+    /// Even a silence label supervises one decoder step.
+    pub const fn is_empty(self) -> bool {
+        false
+    }
     pub fn step_logits(self, step: usize) -> [f32; 32] {
         let mut logits = [0.0; 32];
         let token = if step == 0 {

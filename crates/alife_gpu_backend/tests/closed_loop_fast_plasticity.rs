@@ -491,6 +491,10 @@ fn controlled_learning_fixture(
     (genome, development, phenotype)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the fixture seals matching GPU selection, inherited inputs, and measured biology"
+)]
 fn sealed_measured_event(
     handle: alife_gpu_backend::GpuBrainHandle,
     brain: &alife_core::BrainPhenotype,
@@ -1676,7 +1680,7 @@ fn reward_and_pain_change_the_next_decision_in_opposite_directions() {
         support::test_physiology(42, &control_phenotype).unwrap(),
     ];
     let phenotype_for = |index: usize| {
-        if index % 2 == 0 {
+        if index.is_multiple_of(2) {
             &learning_phenotype
         } else {
             &control_phenotype

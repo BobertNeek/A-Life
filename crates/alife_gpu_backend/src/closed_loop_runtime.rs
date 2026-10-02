@@ -1403,7 +1403,7 @@ thread_local! {
 
 fn take_atomic_nonzero(allocator: &AtomicU64) -> Result<NonZeroU64, GpuClosedLoopError> {
     let value = allocator
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
             current.checked_add(1)
         })
         .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
@@ -2360,6 +2360,10 @@ fn selector_detail_f32(
     Ok(f32::from_bits(selector_detail_word(words, base, offset)?))
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "diagnostics bind the GPU capture to frame, slot, and dispatch evidence with failure outputs"
+)]
 fn build_selector_diagnostic(
     frame: &PerceptionFrame,
     phenotype: &BrainPhenotype,

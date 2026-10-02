@@ -978,6 +978,10 @@ impl LineageLibrary {
         Ok(())
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "rollback needs the transaction and every owned filesystem artifact for cleanup"
+    )]
     fn fail_composite_batch(
         &self,
         transaction: Transaction<'_>,

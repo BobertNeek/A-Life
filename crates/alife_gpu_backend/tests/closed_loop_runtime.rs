@@ -895,7 +895,7 @@ mod hardware {
                 original.sensor_profile(),
                 original.sensory().clone(),
                 original.body(),
-                original.homeostasis().clone(),
+                *original.homeostasis(),
                 vec![primary, vocal],
                 original.profile_provenance(),
                 Vec::new(),

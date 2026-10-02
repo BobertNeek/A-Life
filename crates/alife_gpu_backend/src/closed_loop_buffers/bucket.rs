@@ -238,7 +238,7 @@ impl GpuClassBucketPlan {
             .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
         phenotype_identities.resize(slot_count, GpuPhenotypeIdentityRecord::zeroed());
         let bucket_ownership_token = NEXT_BUCKET_OWNERSHIP_TOKEN
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
                 value.checked_add(1)
             })
             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
@@ -1727,7 +1727,7 @@ impl GpuClassBucketBuffers {
         let frame_payload_capacity_words = usize::try_from(frame_payload_words.size() / 4)
             .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
         let buffer_set_token = NEXT_BUFFER_SET_TOKEN
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
                 value.checked_add(1)
             })
             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
@@ -2290,7 +2290,7 @@ impl GpuFixedClassArenaPlan {
             return Err(GpuClosedLoopError::CapacityExceeded);
         }
         let arena_ownership_token = NEXT_BUCKET_OWNERSHIP_TOKEN
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
                 value.checked_add(1)
             })
             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
@@ -3932,7 +3932,7 @@ impl GpuFixedClassArenaBuffers {
             | wgpu::BufferUsages::COPY_SRC;
         let storage_mutable = storage_read_only;
         let buffer_set_token = NEXT_BUFFER_SET_TOKEN
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
                 value.checked_add(1)
             })
             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;

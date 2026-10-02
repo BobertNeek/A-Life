@@ -1895,25 +1895,25 @@ mod selector_diagnostic_receipt_tests {
                 lifetime_weight_offset: 9,
                 fast_weight_offset: 10,
             }),
-            contributions: detailed
-                .then(|| {
-                    vec![GpuSelectorSynapseContribution {
-                        synapse_index: 0,
-                        global_synapse_id: 11,
-                        input_lane: 0,
-                        motor_index: 0,
-                        motor: 1.0,
-                        feature: pre - 0.125,
-                        genetic: 1.0,
-                        lifetime: 0.0,
-                        alpha: 0.0,
-                        fast: 1.0,
-                        effective_weight: 1.0,
-                        signed_contribution: pre - 0.125,
-                        running_logit: pre,
-                    }]
-                })
-                .unwrap_or_default(),
+            contributions: if detailed {
+                vec![GpuSelectorSynapseContribution {
+                    synapse_index: 0,
+                    global_synapse_id: 11,
+                    input_lane: 0,
+                    motor_index: 0,
+                    motor: 1.0,
+                    feature: pre - 0.125,
+                    genetic: 1.0,
+                    lifetime: 0.0,
+                    alpha: 0.0,
+                    fast: 1.0,
+                    effective_weight: 1.0,
+                    signed_contribution: pre - 0.125,
+                    running_logit: pre,
+                }]
+            } else {
+                Vec::new()
+            },
             pre_context_logit: Some(pre),
             memory_context_delta: Some(final_logit - pre),
             final_logit: Some(final_logit),

@@ -2914,6 +2914,26 @@ fn write_words_at_offset(
 const _: () = assert!(LEARNING_STATE_WORDS == 24);
 const _: () = assert!(REPLAY_EVENT_WORDS == 28);
 
+fn validate_pending_joint_payload(
+    receipt: PendingEligibilityReceipt,
+    words: &[u32],
+    base: u32,
+    range: &std::ops::Range<u32>,
+) -> Result<(), ScaffoldContractError> {
+    let payload = local_slice(words, base, range)?;
+    let packed = payload
+        .get(2..4)
+        .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
+    if let Some(joint) = receipt.identity().joint_selection() {
+        if packed != crate::pack_joint_motor_candidates(joint.candidate_slots()) {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
+    } else if packed[1] & 0xffff_0000 == crate::GPU_JOINT_SELECTION_V1_MARKER {
+        return Err(ScaffoldContractError::LearningEvidenceMismatch);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2943,24 +2963,4 @@ mod tests {
         state.replay_event_count += 1;
         assert!(!learning_state_identity_matches(&state, expected));
     }
-}
-
-fn validate_pending_joint_payload(
-    receipt: PendingEligibilityReceipt,
-    words: &[u32],
-    base: u32,
-    range: &std::ops::Range<u32>,
-) -> Result<(), ScaffoldContractError> {
-    let payload = local_slice(words, base, range)?;
-    let packed = payload
-        .get(2..4)
-        .ok_or(ScaffoldContractError::LearningEvidenceMismatch)?;
-    if let Some(joint) = receipt.identity().joint_selection() {
-        if packed != crate::pack_joint_motor_candidates(joint.candidate_slots()) {
-            return Err(ScaffoldContractError::LearningEvidenceMismatch);
-        }
-    } else if packed[1] & 0xffff_0000 == crate::GPU_JOINT_SELECTION_V1_MARKER {
-        return Err(ScaffoldContractError::LearningEvidenceMismatch);
-    }
-    Ok(())
 }

@@ -17,7 +17,7 @@ fn discard(
     tick: &GpuClosedLoopTick,
 ) -> Result<(), alife_core::ScaffoldContractError> {
     backend
-        .discard_pending_eligibility(tick.handle, &tick.pending_eligibility.identity())
+        .discard_pending_eligibility(tick.handle, tick.pending_eligibility.identity())
         .map(|_| ())
 }
 

@@ -208,6 +208,10 @@ fn log_probability(
     Ok(result)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the rollout receipt binds GPU logits and motor choices to their sampling and weight generation"
+)]
 pub(crate) fn build_receipt(
     frame: &PerceptionFrame,
     dispatch_generation: u64,

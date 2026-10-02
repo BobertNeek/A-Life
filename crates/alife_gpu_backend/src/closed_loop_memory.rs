@@ -194,6 +194,10 @@ impl GpuMemoryContextUpload {
         Ok(())
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each packed arena offset is checked against the frame and slot binding"
+    )]
     pub(crate) fn rebase_for_batch(
         &mut self,
         frame: &PerceptionFrame,

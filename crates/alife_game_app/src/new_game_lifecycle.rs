@@ -1,8 +1,6 @@
-use std::{
-    collections::BTreeSet,
-    fs,
-    path::{Path, PathBuf},
-};
+#[cfg(feature = "gpu-runtime")]
+use std::{collections::BTreeSet, path::Path};
+use std::{fs, path::PathBuf};
 
 #[cfg(feature = "gpu-runtime")]
 use alife_archive::LineageLibraryConfig;

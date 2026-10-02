@@ -131,6 +131,10 @@ fn painful_memory_patch(
 }
 
 #[cfg(feature = "gpu-tests")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the fixture binds memory recall and measured pain to the matching GPU tick"
+)]
 fn painful_patch_for_gpu_tick(
     handle: alife_gpu_backend::GpuBrainHandle,
     brain: &alife_core::BrainPhenotype,

@@ -1162,18 +1162,6 @@ const fn replay_journal_has_events(event_count: u32) -> bool {
     event_count > 0
 }
 
-#[cfg(test)]
-mod tests {
-    use super::replay_journal_has_events;
-
-    #[test]
-    fn replay_availability_tracks_the_host_event_count() {
-        assert!(!replay_journal_has_events(0));
-        assert!(replay_journal_has_events(1));
-        assert!(replay_journal_has_events(u32::MAX));
-    }
-}
-
 pub(crate) fn sleep_commit_key(handle: GpuBrainHandle, cycle_id: u64) -> (u16, u32, u32, u64) {
     (
         handle.class_id().raw(),
@@ -1835,4 +1823,16 @@ fn join_digest(values: [u32; 8]) -> [u64; 4] {
 
 fn join_digest2(values: [u32; 4]) -> [u64; 2] {
     std::array::from_fn(|index| join_pair([values[index * 2], values[index * 2 + 1]]))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::replay_journal_has_events;
+
+    #[test]
+    fn replay_availability_tracks_the_host_event_count() {
+        assert!(!replay_journal_has_events(0));
+        assert!(replay_journal_has_events(1));
+        assert!(replay_journal_has_events(u32::MAX));
+    }
 }

@@ -84,7 +84,8 @@ fn exact_gpu_offspring_receipt_validates_and_unknown_stays_unknown() {
 
 #[test]
 fn receipt_rejects_wrong_authority_identity_and_fabricated_measurement() {
-    let mutations: Vec<Box<dyn Fn(&mut Era1TrialReceipt)>> = vec![
+    type ReceiptMutation = Box<dyn Fn(&mut Era1TrialReceipt)>;
+    let mutations: Vec<ReceiptMutation> = vec![
         Box::new(|receipt| receipt.identity.seed = 0),
         Box::new(|receipt| receipt.identity.organism_id = OrganismId::INVALID),
         Box::new(|receipt| receipt.identity.brain_class_id = BrainClassId(2)),
