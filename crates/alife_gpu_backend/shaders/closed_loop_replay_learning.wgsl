@@ -116,7 +116,8 @@ fn replay_sleep_learning(@builtin(global_invocation_id) gid:vec3<u32>) {
   let inactive = direct_weight_banks.staging_bases;
   let fast_index = inactive.fast+span.local_synapse_id;
   let previous = load_state_f32(fast_index);
-  let next = clamp(previous+receptor.sleep_replay_rate*alpha*replay_credit,receptor.fast_min,receptor.fast_max);
+  let replay_rate = developmental_plasticity_rate(brain, span.local_synapse_id, receptor.sleep_replay_rate, 2u, header.replay_sample_offset + header.replay_sample_count);
+  let next = clamp(previous+replay_rate*alpha*replay_credit,receptor.fast_min,receptor.fast_max);
   if (!sleep_finite(replay_credit) || !sleep_finite(previous) || !sleep_finite(next)) {
     sleep_reject(completion); return;
   }

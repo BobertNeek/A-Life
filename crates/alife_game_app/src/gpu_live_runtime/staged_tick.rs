@@ -202,6 +202,14 @@ impl GpuLiveBrainRuntime {
                 .get_mut(&raw)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
             synchronize_resident_from_record(resident, &record, tick_before)?;
+            // Sleep replay applies at current biological age. This also
+            // reconstructs derived modulation after exact restore; historical
+            // replay experiences never restore their original critical period.
+            self.backend.set_developmental_plasticity(
+                handle,
+                &resident.development,
+                resident.compiler_inputs.genome().plasticity_parameters(),
+            )?;
             let sleep_before = resident.sleep_scheduler.state();
             let phase_before = sleep_before.phase;
             let completed_waiting_for_durable_permit = matches!(
