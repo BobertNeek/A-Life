@@ -1,0 +1,987 @@
+{
+  "date_utc": "2026-10-02",
+  "baseline_commit": "5abafe1961efaf099cd07287bd7ca09e8ea754cd",
+  "implementation_commit": "4b48c4c9d438b1dd43894aca68e64267a9c633d1",
+  "host": {
+    "kernel": "Linux 6.18.44",
+    "cpu": "AMD EPYC 9V74/KVM",
+    "exposed_cpus": 5,
+    "cgroup_cpu_max": "400000 100000",
+    "rust": "1.98.1",
+    "profile": "release, opt-level 3, debug assertions off",
+    "build_jobs": 2,
+    "whole_suffix_affinity": "0-3",
+    "isolated_and_allocation_affinity": "0",
+    "other_host_tenants": "uncontrolled",
+    "build_during_accepted_timing": false
+  },
+  "whole_suffix_process_order": [
+    "before1",
+    "after1",
+    "after2",
+    "before2"
+  ],
+  "whole_suffix_trials": [
+    {
+      "implementation": "before",
+      "trial": 1,
+      "cases": [
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            8654402,
+            4828945
+          ],
+          "owners": 8,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              9315705,
+              8067570,
+              8282302,
+              8851608,
+              8259388,
+              9170167,
+              8654402,
+              8850446,
+              8470276
+            ],
+            [
+              4850868,
+              4298738,
+              4729055,
+              4307061,
+              5521876,
+              5514624,
+              4695905,
+              5278971,
+              4828945
+            ]
+          ]
+        },
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            17536766,
+            11285585
+          ],
+          "owners": 16,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              17001122,
+              17510656,
+              18724570,
+              18172150,
+              17603706,
+              17536766,
+              17343586,
+              18972432,
+              17390216
+            ],
+            [
+              9957229,
+              10134386,
+              11357052,
+              13596767,
+              11500849,
+              9515926,
+              8787491,
+              11285585,
+              11454438
+            ]
+          ]
+        },
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            35545879,
+            18600407
+          ],
+          "owners": 32,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              34853238,
+              39530553,
+              36528464,
+              35545879,
+              35531046,
+              37304890,
+              37397610,
+              34905567,
+              34988250
+            ],
+            [
+              17262668,
+              18349480,
+              18600407,
+              22189568,
+              17738352,
+              22202717,
+              18811705,
+              22427174,
+              18033215
+            ]
+          ]
+        },
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            52934586,
+            28762401
+          ],
+          "owners": 50,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              55685188,
+              52092501,
+              51125979,
+              51440281,
+              53031942,
+              55380210,
+              52845122,
+              52934586,
+              55566691
+            ],
+            [
+              36274297,
+              36255048,
+              34550917,
+              28000987,
+              28762401,
+              34708274,
+              28612626,
+              26323558,
+              27790231
+            ]
+          ]
+        }
+      ],
+      "raw_sha256": "5931557d3e04ec269bb652e0315c3eea69cfa37b8521ae003c2b0e47bb790f7e"
+    },
+    {
+      "implementation": "before",
+      "trial": 2,
+      "cases": [
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            8960731,
+            4847873
+          ],
+          "owners": 8,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              8697476,
+              9439521,
+              9872270,
+              9657228,
+              8960731,
+              8441121,
+              8233248,
+              9207561,
+              8177505
+            ],
+            [
+              5801626,
+              4451437,
+              5082125,
+              4847873,
+              5631339,
+              4673651,
+              4412639,
+              5605861,
+              4195263
+            ]
+          ]
+        },
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            16870022,
+            9175143
+          ],
+          "owners": 16,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              16299515,
+              16736442,
+              17838117,
+              16870022,
+              17590665,
+              17263354,
+              16458724,
+              17700380,
+              16463381
+            ],
+            [
+              10171260,
+              9084627,
+              8612678,
+              12679757,
+              11175227,
+              10149007,
+              9175143,
+              8872088,
+              9075794
+            ]
+          ]
+        },
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            33664059,
+            17595582
+          ],
+          "owners": 32,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              34671272,
+              31978716,
+              32161822,
+              36414472,
+              33777919,
+              33664059,
+              34655539,
+              33130067,
+              33654584
+            ],
+            [
+              17216463,
+              17103057,
+              17595582,
+              17204124,
+              18061141,
+              18461033,
+              17524515,
+              24323573,
+              18604498
+            ]
+          ]
+        },
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            55312814,
+            28378207
+          ],
+          "owners": 50,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              53271023,
+              55214017,
+              55567318,
+              55312814,
+              53494534,
+              53742877,
+              56068272,
+              56005794,
+              56257983
+            ],
+            [
+              29027798,
+              28166013,
+              31252681,
+              30961883,
+              27344159,
+              30991178,
+              27485394,
+              28378207,
+              27639156
+            ]
+          ]
+        }
+      ],
+      "raw_sha256": "617edff096694ab018356361ac085457df5dc243f92d75689de96971b33c0dfb"
+    },
+    {
+      "implementation": "after",
+      "trial": 1,
+      "cases": [
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            9027188,
+            4690616
+          ],
+          "owners": 8,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              8043551,
+              8262750,
+              8519055,
+              8218565,
+              9027188,
+              9108170,
+              9549859,
+              9235031,
+              9523545
+            ],
+            [
+              5673442,
+              4202763,
+              5039759,
+              4382072,
+              5121041,
+              4453409,
+              4690616,
+              5727222,
+              4655083
+            ]
+          ]
+        },
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            16726493,
+            9675543
+          ],
+          "owners": 16,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              15716757,
+              16233182,
+              16140583,
+              16088014,
+              16726493,
+              18026406,
+              20110285,
+              18521339,
+              20345859
+            ],
+            [
+              10252380,
+              8342871,
+              8718575,
+              9914972,
+              8705426,
+              9643024,
+              9675543,
+              12737321,
+              10001102
+            ]
+          ]
+        },
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            34988273,
+            19131552
+          ],
+          "owners": 32,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              33654370,
+              34223355,
+              34531918,
+              34988273,
+              35098248,
+              35290207,
+              34733260,
+              35351189,
+              37894941
+            ],
+            [
+              17977097,
+              19802799,
+              19131552,
+              17037676,
+              21409138,
+              18725271,
+              22150678,
+              22275995,
+              17882165
+            ]
+          ]
+        },
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            56066223,
+            28765768
+          ],
+          "owners": 50,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              57538806,
+              54765430,
+              56066223,
+              54216244,
+              59802618,
+              55486593,
+              55897340,
+              58539039,
+              59118890
+            ],
+            [
+              30887735,
+              27864904,
+              26949720,
+              30890480,
+              28852448,
+              28959649,
+              28681141,
+              27874363,
+              28765768
+            ]
+          ]
+        }
+      ],
+      "raw_sha256": "26ca06380a978f9fd5b05463a1eed09383f2b80d74b3d6434c79d5ee3aa0c7e6"
+    },
+    {
+      "implementation": "after",
+      "trial": 2,
+      "cases": [
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            8365900,
+            5662096
+          ],
+          "owners": 8,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              8109964,
+              8331878,
+              8455424,
+              10091822,
+              9235786,
+              8294712,
+              8195233,
+              8365900,
+              9165330
+            ],
+            [
+              4371468,
+              5662096,
+              5780765,
+              7982438,
+              5794515,
+              5708486,
+              4602254,
+              5109997,
+              4994494
+            ]
+          ]
+        },
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            17661614,
+            9597430
+          ],
+          "owners": 16,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              16354291,
+              17676257,
+              19448660,
+              17163496,
+              17777839,
+              17551089,
+              18292633,
+              17661614,
+              16916535
+            ],
+            [
+              11223231,
+              9597430,
+              9236487,
+              9584029,
+              9883329,
+              11076741,
+              8825429,
+              11185815,
+              8538949
+            ]
+          ]
+        },
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            32844537,
+            18156313
+          ],
+          "owners": 32,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              31796222,
+              33249504,
+              32336353,
+              32509963,
+              32844537,
+              32345056,
+              33075783,
+              34195194,
+              33380752
+            ],
+            [
+              17467689,
+              18606619,
+              18025577,
+              18156313,
+              18034770,
+              19220992,
+              19419781,
+              18466789,
+              17042219
+            ]
+          ]
+        },
+        {
+          "candidates": 26,
+          "device_created": false,
+          "full_trace_equal": true,
+          "median_ns": [
+            54066560,
+            32237809
+          ],
+          "owners": 50,
+          "retained_records": 64,
+          "row_visits_once": true,
+          "runner": "production_prepare_cpu_rows",
+          "samples_ns": [
+            [
+              54395314,
+              53430745,
+              54066560,
+              52324664,
+              54836446,
+              55947024,
+              54278178,
+              53997176,
+              53072717
+            ],
+            [
+              34355409,
+              34756952,
+              27694604,
+              34657703,
+              27471899,
+              32237809,
+              28812042,
+              28017779,
+              34677964
+            ]
+          ]
+        }
+      ],
+      "raw_sha256": "bbffce701b2f1349f465846f43c4cefbf15892159aa19a0116ef470b0508d855"
+    }
+  ],
+  "whole_suffix_medians": [
+    {
+      "owners": 8,
+      "before_ms": [
+        8.773961,
+        4.838409
+      ],
+      "after_ms": [
+        8.4872395,
+        5.074878
+      ]
+    },
+    {
+      "owners": 16,
+      "before_ms": [
+        17.450436,
+        10.1416965
+      ],
+      "after_ms": [
+        17.6063515,
+        9.6592835
+      ]
+    },
+    {
+      "owners": 32,
+      "before_ms": [
+        34.8794025,
+        18.2053105
+      ],
+      "after_ms": [
+        33.924782,
+        18.536704
+      ]
+    },
+    {
+      "owners": 50,
+      "before_ms": [
+        54.478447,
+        28.6875135
+      ],
+      "after_ms": [
+        54.800938,
+        28.832245
+      ]
+    }
+  ],
+  "isolated_helper_cases": [
+    {
+      "candidates": 26,
+      "complete_typed_output_equal": true,
+      "device_created": false,
+      "object_slots": 2,
+      "operation": "routing_attention_copy_helpers",
+      "owners": 8,
+      "samples_ns": [
+        [
+          107154,
+          110030,
+          108666,
+          107518,
+          109553,
+          106813,
+          108050,
+          108573,
+          108231
+        ],
+        [
+          101635,
+          103646,
+          105165,
+          100775,
+          103341,
+          101813,
+          109342,
+          106850,
+          105584
+        ]
+      ]
+    },
+    {
+      "candidates": 26,
+      "complete_typed_output_equal": true,
+      "device_created": false,
+      "object_slots": 2,
+      "operation": "routing_attention_copy_helpers",
+      "owners": 16,
+      "samples_ns": [
+        [
+          213311,
+          214373,
+          214706,
+          204766,
+          218805,
+          212206,
+          212565,
+          211433,
+          215033
+        ],
+        [
+          214683,
+          210444,
+          204868,
+          209194,
+          206293,
+          206736,
+          214886,
+          215100,
+          206869
+        ]
+      ]
+    },
+    {
+      "candidates": 26,
+      "complete_typed_output_equal": true,
+      "device_created": false,
+      "object_slots": 2,
+      "operation": "routing_attention_copy_helpers",
+      "owners": 32,
+      "samples_ns": [
+        [
+          460177,
+          451079,
+          454706,
+          462245,
+          457022,
+          502289,
+          466858,
+          450916,
+          460862
+        ],
+        [
+          483396,
+          439370,
+          441378,
+          458914,
+          451272,
+          439234,
+          437842,
+          474282,
+          464645
+        ]
+      ]
+    },
+    {
+      "candidates": 26,
+      "complete_typed_output_equal": true,
+      "device_created": false,
+      "object_slots": 2,
+      "operation": "routing_attention_copy_helpers",
+      "owners": 50,
+      "samples_ns": [
+        [
+          739919,
+          773190,
+          731711,
+          743788,
+          728104,
+          721835,
+          754073,
+          771960,
+          745850
+        ],
+        [
+          720077,
+          716601,
+          714020,
+          745760,
+          754404,
+          729750,
+          721906,
+          777315,
+          739810
+        ]
+      ]
+    }
+  ],
+  "isolated_cohorts_per_sample": 200,
+  "isolated_samples_per_implementation_case": 9,
+  "allocation_cases": [
+    {
+      "implementation": 0,
+      "rows": 8,
+      "allocations": 177,
+      "requested_bytes": 307256
+    },
+    {
+      "implementation": 1,
+      "rows": 8,
+      "allocations": 137,
+      "requested_bytes": 270712
+    },
+    {
+      "implementation": 0,
+      "rows": 16,
+      "allocations": 353,
+      "requested_bytes": 614512
+    },
+    {
+      "implementation": 1,
+      "rows": 16,
+      "allocations": 273,
+      "requested_bytes": 541424
+    },
+    {
+      "implementation": 0,
+      "rows": 32,
+      "allocations": 705,
+      "requested_bytes": 1229024
+    },
+    {
+      "implementation": 1,
+      "rows": 32,
+      "allocations": 545,
+      "requested_bytes": 1082848
+    },
+    {
+      "implementation": 0,
+      "rows": 50,
+      "allocations": 1101,
+      "requested_bytes": 1920350
+    },
+    {
+      "implementation": 1,
+      "rows": 50,
+      "allocations": 851,
+      "requested_bytes": 1691950
+    }
+  ],
+  "allocation_fixture": "C26, two grounded slots; repeated calls on one immutable owner; empty memory/topology and CognitiveContextFrame::empty; no retained-RAM claim",
+  "allocation_replay_build": {
+    "source_sha256": "5af932438161797daf5241c3a1ff87483be071270375c4f032d32e8270b5bc9d",
+    "executable_sha256": "9fb66c733e83ffd7fc05e612891ece88ef657e82dae43dc1fbe94a0e908021da",
+    "libraries": {
+      "alife_core": {
+        "path": "/workspace/A-Life/target/cloud-cpu/release/deps/libalife_core-d0449f47ed26a3f1.rlib",
+        "sha256": "98654a30a74891df15077c26ffb6c040e2a4a6296b2704f4e533f7e7125cf18e"
+      },
+      "alife_world": {
+        "path": "/workspace/A-Life/target/cloud-cpu/release/deps/libalife_world-6ecf5725b8f2cd1d.rlib",
+        "sha256": "e2fedc0247d18e0789a8106296f7d130a98993171d077317fc3569524f00681c"
+      },
+      "serde_json": {
+        "path": "/workspace/A-Life/target/cloud-cpu/release/deps/libserde_json-c9f04f714bdc14ef.rlib",
+        "sha256": "9a4469d7ac127049ad6aadf3eb932b535f44d2569c3b9b5b470f5a44535f422b"
+      }
+    },
+    "app_sha256": "441fbda2d59710e888570074097e257748851618b854887a6468bbfc64617fb1",
+    "frozen_helpers_sha256": "460862df9e5311b0184bcff4fc6adf8d9d733c18e0b4e325b7d18a4388225320",
+    "fixture_sha256": "6958506e452e3374b8e1971274a261f862b2201ab086d1b754b9d0384b789ddc",
+    "generated_source_equal_to_original": true,
+    "executable_path_differs_from_original": true
+  },
+  "allocation_original_build": {
+    "source_sha256": "5af932438161797daf5241c3a1ff87483be071270375c4f032d32e8270b5bc9d",
+    "executable_sha256": "84d2ef5dbb72335ace179dde3305eaaec7980c94020c6e39c9b6b125d0a05076",
+    "libraries": {
+      "alife_core": "/workspace/A-Life/target/cloud-cpu/release/deps/libalife_core-d0449f47ed26a3f1.rlib",
+      "alife_world": "/workspace/A-Life/target/cloud-cpu/release/deps/libalife_world-6ecf5725b8f2cd1d.rlib"
+    }
+  },
+  "original_builder_sha256": "10065f336e88816d5639b6057a8cc70503291fa94fe363448b967f9edc8080d7",
+  "replay_builder_sha256": "c4d024dedb0b299182a46414e0a1ab575f36da4a55ec13019a11e71523f5ed8c",
+  "baseline_build": {
+    "source": "5abafe1961efaf099cd07287bd7ca09e8ea754cd",
+    "executable": "/workspace/cloud-cpu-validation/preparation-copy-20261002/before-test",
+    "sha256": "402864a75eec922dc02ff07dbdbba66cc53f7698e8cd919753244cd334a427ae",
+    "artifact": {
+      "reason": "compiler-artifact",
+      "package_id": "path+file:///workspace/A-Life-preparation-scaling/crates/alife_game_app#0.1.0",
+      "manifest_path": "/workspace/A-Life-preparation-scaling/crates/alife_game_app/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "alife_game_app",
+        "src_path": "/workspace/A-Life-preparation-scaling/crates/alife_game_app/src/lib.rs",
+        "edition": "2021",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "features": [
+        "default",
+        "gpu-runtime"
+      ],
+      "filenames": [
+        "/workspace/A-Life/target/cloud-cpu/release/deps/alife_game_app-ff198f4eae3b0a02"
+      ],
+      "executable": "/workspace/A-Life/target/cloud-cpu/release/deps/alife_game_app-ff198f4eae3b0a02",
+      "fresh": false
+    }
+  },
+  "final_build": {
+    "source_commit": "4b48c4c9d438b1dd43894aca68e64267a9c633d1",
+    "executable": "/workspace/cloud-cpu-validation/preparation-copy-20261002/final-test",
+    "executable_sha256": "63c6f5857ba5991dec7920fe43d8dd51cb4a6178d26dfa02f92603e0d2e14797",
+    "runtime_files_sha256": {
+      "crates/alife_game_app/src/gpu_live_runtime.rs": "441fbda2d59710e888570074097e257748851618b854887a6468bbfc64617fb1",
+      "crates/alife_game_app/src/gpu_live_runtime/cpu_preparation.rs": "d75a487f36dd00204a9223a8a62f8b10cf3515a2b4c322a67577b36d387f9c85",
+      "crates/alife_game_app/src/gpu_live_runtime/copy_contract_tests.rs": "294c0fb3b469fd16275beaca5cc123053df051ed951547f84dd94f37c6388400"
+    }
+  },
+  "checks": {
+    "cpu_preparation_suite": "14 passed, 2 ignored (timing); full frozen helper reference used",
+    "final_strengthened_rejection_tests": "2 passed, 1 ignored",
+    "object_bound_concepts_and_gaps": "1 passed",
+    "strict_release_clippy": "passed --lib --tests gpu-runtime",
+    "fmt": "passed",
+    "core_boundaries": "passed",
+    "docs": "DOCS_ASSERTIONS=PASS (77/77)",
+    "independent_review": "R2 clear, two Sol6.1 agents; rejection nit resolved",
+    "ci_at_20261002T164300Z": {
+      "source_ci": {
+        "id": 37035365974,
+        "status": "in_progress"
+      },
+      "source_fast_gates": {
+        "id": 37035366234,
+        "conclusion": "success"
+      }
+    }
+  },
+  "claims": {
+    "removed_per_fixture_row": {
+      "allocation_or_reallocation_calls": 5,
+      "requested_bytes": 4568
+    },
+    "whole_suffix_speedup": "not established",
+    "windows_rtx_fps_or_tps": "Unknown",
+    "hardware_or_gpu_campaign_run": false
+  }
+}

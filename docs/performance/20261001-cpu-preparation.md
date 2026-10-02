@@ -29,6 +29,10 @@ These CPU checks and measurements cannot certify Windows/RTX performance.
 The [combined validation](../reviews/2026-10-01-cloud-validation.md#terrain-hint-successor--2026-10-02)
 preserves the reviewed source and all original receipts after the serial checkpoint.
 
+The later [routing/attention copy removal](20261002-preparation-copy.md) starts
+from combined `5abafe19`. It measures fewer allocations; its complete CPU suffix
+sweep does not establish a throughput improvement.
+
 ## Integrated serial guard comparison
 
 The [combined receipt](evidence/20261001-integrated-serial-preparation.json) and
