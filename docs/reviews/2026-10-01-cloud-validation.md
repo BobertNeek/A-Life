@@ -7,6 +7,33 @@ The [CPU performance record](../performance/20261001-cpu-preparation.md) retains
 measurement conditions and links to source-bound samples/probes; no game-speed
 claim follows from the tests below.
 
+## Combined readiness and preparation — 2026-10-02
+
+Combined source `706eec8fb39ff89b59601b5e993ad962b278ba8f` extends readiness
+checkpoint `de9c307c0de7e4cad82ab03fb5da1322091502b6`. Reviewed performance
+source `4b48c4c9` and evidence `9ac88fc2` are picked once as `51ef0d8` and
+`706eec8`; their common `5abafe19` prerequisites are already present.
+The two branches have no overlapping files. Each source patch and the original
+performance report, builder and raw receipt retain their original bytes.
+Integration review is R0; the independent R2 source reviews remain applicable.
+
+On this combined source, 15 preparation/copy/fallback/rollback/re-admission
+tests, six founder/handoff tests, one existing attention test, seven world
+state/embodiment tests and the tier-1/tier-10 headless smoke pass:
+**30 passing executions, zero failures**. Two CPU timing tests are deliberately
+ignored. Strict Rust 1.99 world/app all-target production Clippy, formatting,
+full Core boundaries and 77/77 documentation assertions pass. Training-feature
+compilation and admission tests pass; the pre-existing strict training-feature
+Clippy warnings reported below remain outside the repair scope.
+
+The [performance report](../performance/20261002-preparation-copy.md) measures
+five fewer allocation/reallocation calls and 4,568 fewer requested bytes for
+the C26/two-slot fixture row. Whole-preparation timing remains inconclusive.
+No new speed, 50-creature FPS, GPU or desktop claim follows from integration.
+Source hashes, clean-composition checks and guarded command/resource receipts
+are retained under ignored
+`target/artifacts/cloud-readiness-preparation-combined-20261002/`.
+
 ## Creature sensing and training handoff — 2026-10-02
 
 Source `e24c5b38cdc7877128c6eedb7c3a6891c08e9bff` extends green combined
