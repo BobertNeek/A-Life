@@ -23,6 +23,19 @@ pub(super) struct HandInteraction {
 pub(super) struct GodHand;
 #[derive(Component)]
 struct HandSource(Handle<Gltf>);
+
+fn grab_intent_target(
+    hovered: Option<StableVoxelObjectRef>,
+    world: Option<&alife_world::HeadlessWorld>,
+) -> Option<StableVoxelObjectRef> {
+    let target = hovered?;
+    let id = target.stable_id?;
+    (matches!(
+        target.kind,
+        StableVoxelRefKind::Creature | StableVoxelRefKind::Resource
+    ) && world?.can_begin_player_hold(id))
+    .then_some(target)
+}
 #[derive(Component)]
 pub(super) struct HandPlayer {
     clips: Vec<AnimationNodeIndex>,
@@ -115,9 +128,14 @@ pub(super) fn input(
     };
     let now = time.elapsed_secs_f64();
     if mouse.just_pressed(MouseButton::Left) && window.focused {
-        hand.pressed = selection
-            .hovered
-            .and_then(|s| window.cursor_position().map(|p| (s, now, p)));
+        #[cfg(feature = "gpu-runtime")]
+        let grab_target = grab_intent_target(
+            selection.hovered,
+            runtime.as_deref().map(|runtime| runtime.runtime.world()),
+        );
+        #[cfg(not(feature = "gpu-runtime"))]
+        let grab_target = None::<StableVoxelObjectRef>;
+        hand.pressed = grab_target.and_then(|s| window.cursor_position().map(|p| (s, now, p)));
         if let Some(s) = selection
             .hovered
             .filter(|s| s.kind == StableVoxelRefKind::Creature)
@@ -354,6 +372,106 @@ pub(super) fn highlight(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn target(kind: StableVoxelRefKind, id: Option<WorldEntityId>) -> StableVoxelObjectRef {
+        let tile = VoxelTileCoord::new(0, 0);
+        StableVoxelObjectRef {
+            kind,
+            stable_id: id,
+            chunk: VoxelChunkCoord::for_tile(16, tile),
+            tile: Some(tile),
+        }
+    }
+
+    #[test]
+    fn terrain_misses_and_ui_captured_pointer_samples_never_start_grab() {
+        let world = alife_world::HeadlessScenarioBuilder::new(17)
+            .agent("walker", OrganismId(1), Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let creature = target(StableVoxelRefKind::Creature, world.entity_id("walker"));
+        let terrain = target(StableVoxelRefKind::Tile, None);
+        assert_eq!(grab_intent_target(Some(terrain), Some(&world)), None);
+        assert_eq!(grab_intent_target(None, Some(&world)), None);
+        assert_eq!(grab_intent_target(Some(creature), None), None);
+
+        let mut selection = Fvr03ProductionVoxelSelectionResource {
+            hovered: Some(creature),
+            selected: Some(terrain),
+        };
+        // UI capture and ray misses supply no hover; the prior selection remains.
+        apply_fvr03_pointer_sample(&mut selection, None, true);
+        assert_eq!(grab_intent_target(selection.hovered, Some(&world)), None);
+        assert_eq!(selection.selected, Some(terrain));
+        apply_fvr03_pointer_sample(&mut selection, Some(terrain), true);
+        assert_eq!(selection.selected, Some(terrain));
+        assert_eq!(grab_intent_target(selection.hovered, Some(&world)), None);
+    }
+
+    #[test]
+    fn pending_grab_accepts_creatures_and_movable_objects_but_not_fixed_scenery() {
+        let mut world = alife_world::HeadlessScenarioBuilder::new(17)
+            .agent("walker", OrganismId(1), Vec3f::ZERO)
+            .food("food", Vec3f::new(2.0, 0.0, 0.0), 0.5)
+            .toy("ball", Vec3f::new(4.0, 0.0, 0.0), true)
+            .token("token", Vec3f::new(6.0, 0.0, 0.0), 1)
+            .toy("fixed toy", Vec3f::new(8.0, 0.0, 0.0), false)
+            .build()
+            .unwrap();
+        for label in ["walker", "food", "ball", "token"] {
+            let kind = if label == "walker" {
+                StableVoxelRefKind::Creature
+            } else {
+                StableVoxelRefKind::Resource
+            };
+            let selected = target(kind, world.entity_id(label));
+            assert_eq!(
+                grab_intent_target(Some(selected), Some(&world)),
+                Some(selected)
+            );
+        }
+        assert_eq!(
+            grab_intent_target(
+                Some(target(
+                    StableVoxelRefKind::Resource,
+                    world.entity_id("fixed toy")
+                )),
+                Some(&world)
+            ),
+            None
+        );
+        assert_eq!(
+            grab_intent_target(
+                Some(target(
+                    StableVoxelRefKind::Resource,
+                    Some(WorldEntityId(u64::MAX))
+                )),
+                Some(&world)
+            ),
+            None
+        );
+        assert_eq!(
+            grab_intent_target(
+                Some(target(StableVoxelRefKind::Creature, None)),
+                Some(&world)
+            ),
+            None
+        );
+        world
+            .begin_player_hold(world.entity_id("walker").unwrap())
+            .unwrap();
+        assert_eq!(
+            grab_intent_target(
+                Some(target(
+                    StableVoxelRefKind::Resource,
+                    world.entity_id("ball")
+                )),
+                Some(&world)
+            ),
+            None
+        );
+    }
+
     #[test]
     fn zoom_keeps_pointer_coverage_and_carry_world_scale() {
         for extent in [9.8, 28.0, 400.0, 1600.0, 9.8] {
