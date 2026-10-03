@@ -170,12 +170,6 @@ impl BodyState {
         );
         let mut organs = self.organs;
         for organ in &mut organs {
-            let cadence_steps = crossed_boundaries(
-                previous_tick,
-                next_tick,
-                organ.cadence_ticks,
-                max_catch_up_steps,
-            );
             let local_damage = match organ.kind {
                 OrganKind::Circulatory | OrganKind::Locomotor => injury_gain,
                 OrganKind::NeuralSupport => injury_gain * 0.35,
@@ -183,6 +177,18 @@ impl BodyState {
             };
             organ.damage = clamp01(organ.damage + local_damage);
             organ.integrity = clamp01(organ.integrity - local_damage);
+        }
+        // Ordinary repair cannot revive a globally terminal body before the
+        // world checks death. A locally exhausted organ can still recover when
+        // another organ retains integrity.
+        let can_repair = organs.iter().any(|organ| organ.integrity > 0.0);
+        for organ in &mut organs {
+            let cadence_steps = crossed_boundaries(
+                previous_tick,
+                next_tick,
+                organ.cadence_ticks,
+                max_catch_up_steps,
+            );
             let event_share = match organ.kind {
                 OrganKind::Locomotor => event.energy * 0.35,
                 OrganKind::NeuralSupport => event.energy * 0.25,
@@ -215,16 +221,12 @@ impl BodyState {
                 * sleep_metabolic_rate;
             // Sleep is not nutrition, including for genomes without repair receptors.
             organ.energy = clamp01(organ.energy + event_share + nutrition_gain - periodic_upkeep);
-            if let Some(signal) = repair_signal {
-                let repair = (signal * organ.repair_capacity * cadence_steps as f32 * turnover)
-                    .min(organ.damage.max(1.0 - organ.integrity))
-                    .min(organ.energy);
-                organ.damage = clamp01(organ.damage - repair);
-                organ.integrity = clamp01(organ.integrity + repair);
-                organ.energy -= repair;
-            } else {
-                // The legacy repair path also pays from existing local reserve.
-                let repair = (recovery * organ.repair_capacity)
+            if can_repair {
+                // Both chemical and legacy repair pay from local reserve.
+                let repair = repair_signal.map_or(recovery * organ.repair_capacity, |signal| {
+                    signal * organ.repair_capacity * cadence_steps as f32 * turnover
+                });
+                let repair = repair
                     .min(organ.damage.max(1.0 - organ.integrity))
                     .min(organ.energy);
                 organ.damage = clamp01(organ.damage - repair);
@@ -1217,6 +1219,95 @@ mod tests {
         let recovered = sleeping(exhausted);
         assert_eq!(recovered.health, exhausted.health);
         assert_eq!(recovered.energy, 0.0);
+    }
+
+    #[test]
+    fn globally_fatal_damage_cannot_be_repaired_before_terminal_check() {
+        let phenotype = CreatureGenome::early_mammal_founder(
+            0xE10_3202,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap()
+        .express()
+        .unwrap();
+        let mut body = BodyState::baseline(&phenotype);
+        body.set_health(0.01).unwrap();
+        body.set_energy(0.8).unwrap();
+        let event = BodyEventDelta {
+            damage: 1.0,
+            sleep_recovery: 1.0,
+            ..BodyEventDelta::zero()
+        };
+        let run = |body: BodyState, event, repair| {
+            body.apply_event(
+                Tick(0),
+                Tick(12),
+                event,
+                &phenotype,
+                MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
+                Some(0.0),
+                repair,
+                1.0,
+            )
+        };
+        let without_repair = run(body, event, Some(0.0));
+        assert_eq!(without_repair.health, 0.0);
+        assert!(without_repair.energy > 0.0);
+        for repair in [Some(1.0), None] {
+            let after = run(body, event, repair);
+            assert_eq!(after, without_repair);
+            assert!(PassiveBodyUpkeepPolicy::is_terminal(&after, 12, &phenotype));
+
+            // Loading or advancing an already terminal body cannot revive it.
+            let after = run(
+                without_repair,
+                BodyEventDelta {
+                    sleep_recovery: 1.0,
+                    ..BodyEventDelta::zero()
+                },
+                repair,
+            );
+            assert_eq!(after.health, 0.0);
+        }
+    }
+
+    #[test]
+    fn surviving_body_can_repair_a_zero_integrity_organ_from_its_reserve() {
+        let phenotype = CreatureGenome::early_mammal_founder(
+            0xE10_3202,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap()
+        .express()
+        .unwrap();
+        let mut body = BodyState::baseline(&phenotype);
+        body.set_energy(0.8).unwrap();
+        let organ = &mut body.organs[OrganKind::Circulatory as usize];
+        organ.integrity = 0.0;
+        organ.damage = 1.0;
+        body.refresh_compatibility_projections();
+        assert!(body.health > 0.0);
+        for repair in [Some(1.0), None] {
+            let after = body.apply_event(
+                Tick(0),
+                Tick(12),
+                BodyEventDelta {
+                    sleep_recovery: 1.0,
+                    ..BodyEventDelta::zero()
+                },
+                &phenotype,
+                MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
+                Some(0.0),
+                repair,
+                1.0,
+            );
+            let before_organ = body.organ(OrganKind::Circulatory);
+            let after_organ = after.organ(OrganKind::Circulatory);
+            assert!(after_organ.integrity > 0.0);
+            let repaired = after_organ.integrity - before_organ.integrity;
+            let spent = before_organ.energy - after_organ.energy;
+            assert!((repaired - spent).abs() < 1e-6);
+        }
     }
 
     #[test]
