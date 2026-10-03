@@ -138,6 +138,7 @@ pub struct PreparedMemoryRecall {
     base_frame_digest: PerceptionBaseDigest,
     receipt: MemoryRecallReceipt,
     cognitive_context: Option<CognitiveContextFrame>,
+    social_recognition: std::collections::BTreeMap<crate::TrackedObjectId, crate::NeuralEmission>,
 }
 
 impl PreparedMemoryRecall {
@@ -182,6 +183,7 @@ impl PreparedMemoryRecall {
             candidate_keys,
             receipt: self.receipt,
             cognitive_context: self.cognitive_context,
+            social_recognition: self.social_recognition,
         };
         // Draft, context, receipt and every key are checked above. Revalidating
         // this freshly constructed private result is a debug diagnostic.
@@ -323,9 +325,32 @@ pub struct FinalizedMemoryRecall {
     candidate_keys: Vec<EpisodicDecisionKeyV2>,
     receipt: MemoryRecallReceipt,
     cognitive_context: Option<CognitiveContextFrame>,
+    social_recognition: std::collections::BTreeMap<crate::TrackedObjectId, crate::NeuralEmission>,
 }
 
 impl FinalizedMemoryRecall {
+    /// Learned positive social expectancy for a currently observed, attended
+    /// individual. Derived from the frozen recall, never from the action winner.
+    /// This is transient evidence; only its ordinary chemical consequence persists.
+    pub fn recognized_social_emission(&self) -> Option<crate::NeuralEmission> {
+        let attention = &self.cognitive_context.as_ref()?.attention;
+        attention
+            .focal_targets
+            .iter()
+            .filter_map(|identity| {
+                let crate::StableFocusIdentity::TrackedObject(id) = identity else {
+                    return None;
+                };
+                self.social_recognition.get(id).copied()
+            })
+            .max_by(|left, right| {
+                (left.activity * left.confidence)
+                    .total_cmp(&(right.activity * right.confidence))
+                    .then_with(|| left.activity.total_cmp(&right.activity))
+                    .then_with(|| left.confidence.total_cmp(&right.confidence))
+            })
+    }
+
     pub fn validate_for_frame(&self, frame: &PerceptionFrame) -> Result<(), ScaffoldContractError> {
         frame
             .validate_contract()
@@ -944,6 +969,7 @@ impl MemoryBank {
         let mut neighbor_bucket_reads = 0_u32;
         let mut similarity_evaluations = 0_u32;
         let mut degradations = Vec::new();
+        let mut social_recognition = std::collections::BTreeMap::new();
 
         for candidate in draft.candidates() {
             let query = MemoryQueryEncoderV2::encode_validated_candidate(draft, candidate)?;
@@ -1012,6 +1038,47 @@ impl MemoryBank {
                     searched: family.searched,
                 });
             }
+            if let (
+                Some(tracked),
+                Some(emission),
+                crate::CandidateObservationRef::ObjectSlot(slot),
+            ) = (
+                query.tracked_object_id(),
+                target.social_emission,
+                candidate.observation,
+            ) {
+                let observed_creature = candidate.target.entity.is_some_and(|entity| {
+                    draft
+                        .sensory()
+                        .social_context
+                        .nearest_agents
+                        .iter()
+                        .flatten()
+                        .any(|agent| agent.body_entity == Some(entity))
+                });
+                if observed_creature {
+                    let confidence = emission.confidence
+                        * draft.grounded_object_slots()[usize::from(slot)]
+                            .confidence
+                            .raw();
+                    if confidence > 0.0 {
+                        let emission = crate::NeuralEmission::new(
+                            crate::NeuralEmissionClass::SocialState,
+                            emission.activity,
+                            confidence,
+                        )?;
+                        let retained = social_recognition.entry(tracked).or_insert(emission);
+                        if (emission.activity * emission.confidence)
+                            .total_cmp(&(retained.activity * retained.confidence))
+                            .then_with(|| emission.activity.total_cmp(&retained.activity))
+                            .then_with(|| emission.confidence.total_cmp(&retained.confidence))
+                            .is_gt()
+                        {
+                            *retained = emission;
+                        }
+                    }
+                }
+            }
             candidate_contexts.push(CandidateMemoryContextV1 {
                 candidate_index: candidate.candidate_index,
                 target_latent: target.values,
@@ -1064,6 +1131,7 @@ impl MemoryBank {
             base_frame_digest: draft.base_digest(),
             receipt,
             cognitive_context: None,
+            social_recognition,
         };
         // Input, query, context, bank and receipt checks above remain strict.
         // Re-encoding this freshly derived private result is a debug diagnostic.

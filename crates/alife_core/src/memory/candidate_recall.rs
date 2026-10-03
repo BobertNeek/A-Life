@@ -135,6 +135,7 @@ pub(super) struct TargetRecallResult {
     pub(super) searched: u32,
     pub(super) matches: u16,
     pub(super) category_read: bool,
+    pub(super) social_emission: Option<crate::NeuralEmission>,
 }
 
 #[derive(Clone)]
@@ -164,6 +165,7 @@ pub(super) fn recall_target_channel(
             searched: 0,
             matches: 0,
             category_read: false,
+            social_emission: None,
         });
     }
     let ids = collect_shortlist(
@@ -184,6 +186,44 @@ pub(super) fn recall_target_channel(
             (score >= MEMORY_MIN_SIMILARITY).then_some((id, score))
         })
         .collect::<Vec<_>>();
+    // Recognition borrows no stranger/category evidence. Reuse this exact
+    // individual's already bounded search before ordinary target truncation.
+    let mut social_matches = matches
+        .iter()
+        .copied()
+        .filter(|(id, _)| {
+            let record = &store.records[&id.raw()];
+            matches!(
+                CandidateActionFamily::try_from_raw(record.family_raw as u8),
+                Ok(CandidateActionFamily::Inspect
+                    | CandidateActionFamily::Approach
+                    | CandidateActionFamily::Contact)
+            ) || (record.family_raw == u16::from(CandidateActionFamily::Other.raw())
+                && record.action_kind_raw == ActionKind::Hold.raw())
+        })
+        .collect::<Vec<_>>();
+    social_matches.sort_by(|(left, left_score), (right, right_score)| {
+        right_score
+            .total_cmp(left_score)
+            .then_with(|| {
+                store.records[&right.raw()]
+                    .last_tick
+                    .cmp(&store.records[&left.raw()].last_tick)
+            })
+            .then_with(|| right.raw().cmp(&left.raw()))
+    });
+    social_matches.truncate(MEMORY_RECALL_TOP_K);
+    let (social_values, social_confidence, _, _) =
+        aggregate_family_matches(store, &social_matches, query.tick())?;
+    let social_emission = (social_values[0] > 0.0 && social_confidence.raw() > 0.0)
+        .then(|| {
+            crate::NeuralEmission::new(
+                crate::NeuralEmissionClass::SocialState,
+                social_values[0],
+                social_confidence.raw(),
+            )
+        })
+        .transpose()?;
     // A matching individual's episodes win. Only an unknown/mismatching
     // individual may borrow evidence from equivalent observable properties.
     let generalized = eligible == 0 && has_category_cues(query.features());
@@ -220,6 +260,7 @@ pub(super) fn recall_target_channel(
         matches: u16::try_from(matches.len())
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?,
         category_read: generalized,
+        social_emission,
     })
 }
 
