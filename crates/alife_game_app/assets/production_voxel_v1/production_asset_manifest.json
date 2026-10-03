@@ -4778,22 +4778,22 @@
     {
       "asset_id": "approved-wizard-god-hand",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:ee03933e16255faa",
+      "digest": "fnv1a64:e7d7bfb9e36c7d85",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
         "config_path": "scripts/build_wizard_hand.py",
-        "date": "2026-09-30",
-        "seed": "approved-wiry-wizard-hand",
-        "tool": "Blender-5.2.1-LTS"
+        "date": "2026-10-03",
+        "seed": "approved-right-hand-fuller-relaxed-rounded-back",
+        "tool": "Blender-5.2.1 LTS"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
       "local_path": "crates/alife_game_app/assets/hand/wizard-god-hand.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 412108,
+      "size_bytes": 409064,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     }
