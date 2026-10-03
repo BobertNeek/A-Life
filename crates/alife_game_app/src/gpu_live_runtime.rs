@@ -559,6 +559,18 @@ pub fn legacy_nano512_compatibility_receipt_for_record_for_test(
         .ok_or(ScaffoldContractError::PhenotypeCompile)
 }
 
+// Learning uses biological age at the actual update, not the age encoded in an
+// old experience. Derive it from the authoritative record so a just-sealed
+// outcome can cross a period boundary before the global tick is advanced.
+fn learning_development_at(
+    record: &WorldOrganismRecord,
+    update_tick: Tick,
+) -> Result<DevelopmentState, ScaffoldContractError> {
+    record
+        .phenotype()
+        .development_state_at(record.age_at(update_tick)?)
+}
+
 fn synchronize_resident_from_record(
     resident: &mut ResidentCognition,
     record: &WorldOrganismRecord,
@@ -7509,12 +7521,14 @@ impl GpuLiveBrainRuntime {
             }
         };
         let result = if pending_matches {
-            self.backend
-                .apply_sealed_outcome_batch(&[(
-                    current_handle,
-                    &recovery_patch,
-                    &recovery_receptors,
-                )])
+            self.bind_learning_development(current_handle, tick)
+                .and_then(|()| {
+                    self.backend.apply_sealed_outcome_batch(&[(
+                        current_handle,
+                        &recovery_patch,
+                        &recovery_receptors,
+                    )])
+                })
                 .and_then(|mut receipts| {
                     receipts
                         .pop()
@@ -9257,6 +9271,29 @@ impl GpuLiveBrainRuntime {
         })
     }
 
+    fn bind_learning_development(
+        &mut self,
+        handle: GpuBrainHandle,
+        update_tick: Tick,
+    ) -> Result<(), ScaffoldContractError> {
+        let raw = handle.organism_id().raw();
+        let record = self
+            .world
+            .organism_registry()
+            .get(handle.organism_id())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let development = learning_development_at(record, update_tick)?;
+        let resident = self
+            .residents
+            .get(&raw)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        self.backend.set_developmental_plasticity(
+            handle,
+            &development,
+            resident.compiler_inputs.genome().plasticity_parameters(),
+        )
+    }
+
     fn commit_sealed_batch(
         &mut self,
         mut sealed: Vec<SealedLiveSelection>,
@@ -9278,7 +9315,18 @@ impl GpuLiveBrainRuntime {
             })
             .collect::<Vec<_>>();
         let learning_started = Instant::now();
-        let learning_result = self.backend.apply_sealed_outcome_batch(&learning_batch);
+        // Developmental binding is part of the fallible learning attempt:
+        // failures must retain eligibility and still reach both post-seal
+        // sidecars, just like a rejected GPU learning dispatch.
+        let learning_result = sealed
+            .iter()
+            .try_for_each(|selection| {
+                self.bind_learning_development(
+                    selection.handle,
+                    selection.patch.outcome().outcome_tick,
+                )
+            })
+            .and_then(|()| self.backend.apply_sealed_outcome_batch(&learning_batch));
         self.performance_metrics.learning_batches =
             self.performance_metrics.learning_batches.saturating_add(1);
         self.performance_metrics.learning_rows = self
@@ -10356,6 +10404,10 @@ fn place_food_in_world(
         world_signature,
     })
 }
+
+#[cfg(test)]
+#[path = "gpu_live_runtime/sensitive_period_audit.rs"]
+mod sensitive_period_audit;
 
 #[cfg(test)]
 mod tests {

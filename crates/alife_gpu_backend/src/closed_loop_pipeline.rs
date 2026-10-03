@@ -492,6 +492,7 @@ pub const CLOSED_LOOP_REPLAY_LEARNING_WGSL: &str = concat!(
 );
 
 pub(crate) struct GpuFastPlasticityBatchEntry<'a> {
+    pub developmental_plasticity: &'a crate::GpuDevelopmentalPlasticity,
     pub slot: &'a GpuBrainSlot,
     pub pending: &'a GpuPendingEligibilityRecord,
     pub outcome: GpuOutcomeCreditRecord,
@@ -2625,10 +2626,11 @@ impl GpuClosedLoopPipelines {
             let replay_span_count = replay_span_words / 4;
             max_synapse_count = max_synapse_count.max(record.synapse_count);
             max_replay_span_count = max_replay_span_count.max(replay_span_count);
-            let outcome_offset = u32::try_from(row)
-                .map_err(|_| GpuClosedLoopError::CapacityExceeded)?
-                .checked_mul(GPU_OUTCOME_CREDIT_WORDS as u32)
-                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+            let outcome_offset = crate::closed_loop_development::append_developmental_outcome(
+                &mut frame_words,
+                &outcome,
+                entry.developmental_plasticity,
+            )?;
             let header = GpuLearningHeader {
                 schema_version: u32::from(SchemaVersions::CURRENT.learning.raw()),
                 class_id: record.class_id,
@@ -2659,7 +2661,6 @@ impl GpuClosedLoopPipelines {
                 row * GPU_ACTIVE_DISPATCH_ROW_WORDS + GPU_PERCEPTION_DISPATCH_ROW_WORDS;
             dispatch_words[dispatch_base..dispatch_base + GPU_LEARNING_HEADER_WORDS]
                 .copy_from_slice(header.words());
-            frame_words.extend_from_slice(outcome.words());
         }
         let readback_bytes = entries
             .len()

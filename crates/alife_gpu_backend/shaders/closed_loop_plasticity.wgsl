@@ -232,8 +232,8 @@ fn evaluate_fast_plasticity_synapse(
   let metadata = load_synapse_learning_metadata(metadata_base);
   let receptor_base = load_state_u32(extension_base + 4u) + metadata.receptor_index*16u;
   let receptor = load_plasticity_receptor(receptor_base);
-  let learning_rate = receptor.learning_rate;
-  let normalization_rate = receptor.normalization_rate;
+  let learning_rate = developmental_plasticity_rate(brain, local_synapse, receptor.learning_rate, 1u, header.outcome_offset + 44u);
+  let normalization_rate = developmental_plasticity_rate(brain, local_synapse, receptor.normalization_rate, 3u, header.outcome_offset + 44u);
   let fast_min = receptor.fast_min;
   let fast_max = receptor.fast_max;
   let weight_pair = load_weight_bank_pair_direct(brain);

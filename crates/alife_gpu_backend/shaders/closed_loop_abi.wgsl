@@ -587,3 +587,15 @@ fn validate_slice_a_slot(slot_index:u32, header:GpuPerceptionHeader) -> bool {
     && learning.pending_eligibility_offset == extension.pending_eligibility_offset
     && learning.replay_plan_identity_offset == extension.replay_plan_identity_offset;
 }
+
+// Submission-local current-age modulation; immutable receptor rows remain shared.
+// Decoder scales are already capped. Fixed recurrent rates stay zero.
+fn developmental_plasticity_rate(brain:GpuBrainSlotRecord, local_synapse:u32,
+    rate:f32, ceiling_lane:u32, payload_base:u32) -> f32 {
+  let route_count = frame_payload_words[payload_base];
+  if (route_count == 0u || local_synapse >= brain.recurrent_synapse_count) { return rate; }
+  let route = immutable_plan_words[brain.route_indices_offset + local_synapse];
+  let multiplier = bitcast<f32>(frame_payload_words[payload_base + 4u + route]);
+  let ceiling = bitcast<f32>(frame_payload_words[payload_base + ceiling_lane]);
+  return min(rate * multiplier, ceiling);
+}
