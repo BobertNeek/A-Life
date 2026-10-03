@@ -5,8 +5,8 @@ use std::{collections::HashSet, path::Path};
 use alife_core::{BrainScaleTier, FoundationWeightAsset, TrainingStageManifest};
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile, GpuTrainingSamplingConfig};
 use alife_training::{
-    train_recurrent_imitation, AdamWConfig, FoundationTrainer, ImitationExample, ImitationTarget,
-    ImitationTrainingWindow, PpoTrainingState, StageTrainableMask,
+    train_recurrent_imitation_with_diagnostics, AdamWConfig, FoundationTrainer, ImitationExample,
+    ImitationTarget, ImitationTrainingWindow, PpoTrainingState, StageTrainableMask,
 };
 
 use crate::{
@@ -43,6 +43,11 @@ pub struct FoundationWarmupReceipt {
     #[serde(default)]
     pub episode_loss_normalization: String,
     pub losses: Vec<f32>,
+    /// Existing losses remain action-only; payload losses are aligned by update.
+    #[serde(default)]
+    pub speech_payload_losses: Option<Vec<alife_training::ReplaySpeechPayloadDiagnostics>>,
+    #[serde(default)]
+    pub corpus_lesson_budgets: Option<Vec<crate::FoundationLessonBudget>>,
     pub next_cohort_optimizer_rebound: bool,
 }
 
@@ -225,6 +230,19 @@ pub fn run_foundation_imitation_warmup(
         .parent()
         .ok_or("manifest has no parent directory")?;
     let mut category_counts = vec![0usize; 8];
+    let mut corpus_lesson_budgets = [
+        FoundationTeacherLesson::Feeding,
+        FoundationTeacherLesson::HazardAvoidance,
+        FoundationTeacherLesson::ObstacleNavigation,
+        FoundationTeacherLesson::Recovery,
+        FoundationTeacherLesson::VisionSearch,
+        FoundationTeacherLesson::MazeNavigation,
+        FoundationTeacherLesson::VocabularyReception,
+        FoundationTeacherLesson::VocabularyProduction,
+    ]
+    .into_iter()
+    .map(crate::FoundationLessonBudget::new)
+    .collect::<Vec<_>>();
     let mut seen_seeds = HashSet::new();
     let mut demos = Vec::with_capacity(32);
     let mut lessons = Vec::with_capacity(manifest.pilots.len());
@@ -276,6 +294,7 @@ pub fn run_foundation_imitation_warmup(
             return Err("speech labels are not bound to the captured demonstration".into());
         }
         lessons.push((lesson, references.len()));
+        corpus_lesson_budgets[lesson_index(lesson)].observe_labels(&labels.targets);
         demos.push((directory.join("replay"), references, labels.targets));
     }
     if let Some(expected) = &manifest.category_counts {
@@ -286,8 +305,15 @@ pub fn run_foundation_imitation_warmup(
     let expected_source = expected_source.ok_or("warm-up has no replay source")?;
     let budget = FoundationReplayBudget::default();
     let spans = imitation_spans(&lessons);
+    for span in &spans {
+        let budget = &mut corpus_lesson_budgets[lesson_index(lessons[span.demo].0)];
+        budget.loss_windows += 1;
+        budget.burn_in_replay_rows += span.start - span.burn_start;
+        budget.episode_loss_budget += f64::from(span.episode_weight);
+    }
+    let mut measured_windows = vec![false; spans.len()];
     let mut state = PpoTrainingState::default();
-    let losses = train_recurrent_imitation(
+    let diagnostics = train_recurrent_imitation_with_diagnostics(
         &mut trainer,
         &mut state,
         spans.len(),
@@ -321,6 +347,23 @@ pub fn run_foundation_imitation_warmup(
                     alife_core::ScaffoldContractError::InvalidDecisionEvidence,
                 )
             })?;
+            if !measured_windows[index] {
+                let selected = replay.behavior[start - burn_start..]
+                    .iter()
+                    .filter(|behavior| {
+                        crate::foundation_training::diagnostics::vocalize_action_evidence(
+                            &behavior.forced_motor_slots,
+                            behavior.representative_index,
+                            &behavior.motor_indices,
+                            behavior.representative_mask | behavior.motor_masks[3],
+                        )
+                        .1
+                    })
+                    .count();
+                corpus_lesson_budgets[lesson_index(lessons[demo].0)].selected_vocalize_rows +=
+                    selected;
+                measured_windows[index] = true;
+            }
             let examples = replay.behavior[start - burn_start..]
                 .iter()
                 .map(imitation_example)
@@ -403,7 +446,9 @@ pub fn run_foundation_imitation_warmup(
             "equal positive/silence budgets per replay window; normalized active outputs".into(),
         episode_loss_normalization:
             "loss-row fraction per demonstration; category/window round-robin; fixed full-batch gradient divisor; losses are actual-weight batch means".into(),
-        losses,
+        losses: diagnostics.action_losses,
+        speech_payload_losses: Some(diagnostics.speech_payload_losses),
+        corpus_lesson_budgets: Some(corpus_lesson_budgets),
         next_cohort_optimizer_rebound: true,
     };
     std::fs::write(
@@ -416,6 +461,21 @@ pub fn run_foundation_imitation_warmup(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn old_warmup_receipts_do_not_fabricate_missing_diagnostics() {
+        let receipt: FoundationWarmupReceipt = serde_json::from_value(serde_json::json!({
+            "founder_seed_base": 1, "demonstration_count": 1,
+            "demonstration_records": 20, "category_counts": [1,0,0,0,0,0,0,0],
+            "source_asset_digest": "source", "trained_asset_digest": "candidate",
+            "actor_optimizer_step": 1, "losses": [6.5],
+            "next_cohort_optimizer_rebound": true
+        }))
+        .unwrap();
+        assert_eq!(receipt.losses, [6.5]);
+        assert!(receipt.speech_payload_losses.is_none());
+        assert!(receipt.corpus_lesson_budgets.is_none());
+    }
 
     #[test]
     fn long_demonstrations_keep_one_loss_budget_and_mix_with_short_lessons() {

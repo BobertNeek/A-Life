@@ -1439,6 +1439,13 @@ pub struct ImitationTrainingWindow {
     pub episode_weight: f32,
 }
 
+#[derive(Debug, Default)]
+pub struct ImitationTrainingDiagnostics {
+    pub action_losses: Vec<f32>,
+    /// Episode-weighted means aligned with action_losses, before each update.
+    pub speech_payload_losses: Vec<crate::ReplaySpeechPayloadDiagnostics>,
+}
+
 /// Warmup on the same recurrent graph. Labels are only consumed by the GPU
 /// objective. Adam steps once per effective batch; value parameters stay frozen.
 // Preserve the caller API with its explicit batch and optimizer controls.
@@ -1451,8 +1458,65 @@ pub fn train_recurrent_imitation<F>(
     epochs: u32,
     temperature: f32,
     coefficient: f32,
-    mut load_window: F,
+    load_window: F,
 ) -> Result<Vec<f32>, TrainingError>
+where
+    F: FnMut(usize) -> Result<ImitationTrainingWindow, TrainingError>,
+{
+    Ok(train_recurrent_imitation_inner(
+        trainer,
+        state,
+        window_count,
+        effective_batch_size,
+        epochs,
+        temperature,
+        coefficient,
+        load_window,
+        false,
+    )?
+    .action_losses)
+}
+
+/// Opt-in payload telemetry; the legacy entry point performs no added readback.
+#[allow(clippy::too_many_arguments)]
+pub fn train_recurrent_imitation_with_diagnostics<F>(
+    trainer: &mut crate::FoundationTrainer,
+    state: &mut PpoTrainingState,
+    window_count: usize,
+    effective_batch_size: usize,
+    epochs: u32,
+    temperature: f32,
+    coefficient: f32,
+    load_window: F,
+) -> Result<ImitationTrainingDiagnostics, TrainingError>
+where
+    F: FnMut(usize) -> Result<ImitationTrainingWindow, TrainingError>,
+{
+    train_recurrent_imitation_inner(
+        trainer,
+        state,
+        window_count,
+        effective_batch_size,
+        epochs,
+        temperature,
+        coefficient,
+        load_window,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn train_recurrent_imitation_inner<F>(
+    trainer: &mut crate::FoundationTrainer,
+    state: &mut PpoTrainingState,
+    window_count: usize,
+    effective_batch_size: usize,
+    epochs: u32,
+    temperature: f32,
+    coefficient: f32,
+    mut load_window: F,
+    speech_diagnostics: bool,
+) -> Result<ImitationTrainingDiagnostics, TrainingError>
 where
     F: FnMut(usize) -> Result<ImitationTrainingWindow, TrainingError>,
 {
@@ -1467,7 +1531,7 @@ where
     {
         return Err(invalid());
     }
-    let mut losses = Vec::new();
+    let mut diagnostics = ImitationTrainingDiagnostics::default();
     for _ in 0..epochs {
         for start in (0..window_count).step_by(effective_batch_size) {
             let end = (start + effective_batch_size).min(window_count);
@@ -1486,6 +1550,7 @@ where
             let result = (|| -> Result<(), TrainingError> {
                 let mut loss = 0.0f64;
                 let mut loss_weight = 0.0f64;
+                let mut speech = crate::ReplaySpeechPayloadDiagnostics::default();
                 for index in start..end {
                     let window = load_window(index)?;
                     if (window.examples.len(), window.episode_weight) != counts[index - start] {
@@ -1518,12 +1583,28 @@ where
                     loss += f64::from(imitation_mean_loss(&metrics)?)
                         * f64::from(window.episode_weight);
                     loss_weight += f64::from(window.episode_weight);
+                    if speech_diagnostics {
+                        let measured =
+                            trainer.read_replay_speech_diagnostics(&window.speech_targets)?;
+                        speech.positive_loss +=
+                            measured.positive_loss * f64::from(window.episode_weight);
+                        speech.silence_loss +=
+                            measured.silence_loss * f64::from(window.episode_weight);
+                        speech.positive_label_rows += measured.positive_label_rows;
+                        speech.silence_label_rows += measured.silence_label_rows;
+                        speech.positive_token_steps += measured.positive_token_steps;
+                    }
                     let encoder = new_encoder(trainer.session(), "imitation-accumulate")?;
                     trainer.accumulate_replay_gradients(encoder, &objective.output, 0, scale)?;
                 }
                 let encoder = new_encoder(trainer.session(), "imitation-effective-batch-update")?;
                 trainer.apply_accumulated_gradients(encoder)?;
-                losses.push((loss / loss_weight) as f32);
+                diagnostics.action_losses.push((loss / loss_weight) as f32);
+                if speech_diagnostics {
+                    speech.positive_loss /= loss_weight;
+                    speech.silence_loss /= loss_weight;
+                    diagnostics.speech_payload_losses.push(speech);
+                }
                 Ok(())
             })();
             if let Err(error) = result {
@@ -1532,7 +1613,7 @@ where
             }
         }
     }
-    Ok(losses)
+    Ok(diagnostics)
 }
 
 pub fn imitation_mean_loss(metrics: &[f32]) -> Result<f32, TrainingError> {
@@ -1623,6 +1704,16 @@ fn read_gpu_f32(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn imitation_loss_uses_only_the_action_metric_and_rejects_invalid_status() {
+        let mut metrics = [123.0, 6.5, 999.0, 1.0, 456.0, 7.5, 888.0, 1.0];
+        assert_eq!(imitation_mean_loss(&metrics).unwrap(), 7.0);
+        metrics[7] = 0.0;
+        assert!(imitation_mean_loss(&metrics).is_err());
+        assert!(imitation_mean_loss(&[]).is_err());
+        assert!(imitation_mean_loss(&[0.0, f32::NAN, 0.0, 1.0]).is_err());
+    }
 
     #[test]
     fn ppo_rollout_keeps_bootstrap_boundaries_masks_and_policy_version() {

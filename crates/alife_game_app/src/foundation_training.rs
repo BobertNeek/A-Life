@@ -20,7 +20,9 @@ use alife_training::{
 use crate::{FoundationTrainingStep, GpuLiveBrainRuntime};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+pub(crate) mod diagnostics;
 mod maze;
+pub use diagnostics::{FoundationLessonBudget, FoundationSpeechBehaviorDiagnostics};
 
 fn invalid() -> ScaffoldContractError {
     ScaffoldContractError::InvalidDecisionEvidence
@@ -474,6 +476,8 @@ pub struct FoundationPilotReceipt {
     pub unprompted_correct_utterances: usize,
     #[serde(default)]
     pub speech_opportunities: usize,
+    #[serde(default)]
+    pub speech_behavior: Option<FoundationSpeechBehaviorDiagnostics>,
     #[serde(default)]
     pub maze_nodes_reached: usize,
     #[serde(default)]
@@ -1448,6 +1452,7 @@ fn run_foundation_training_pilot_with_request(
     let mut correct_utterances = 0;
     let mut unprompted_correct_utterances = 0;
     let mut speech_opportunities = 0;
+    let mut speech_behavior = FoundationSpeechBehaviorDiagnostics::default();
     for tick in 0..tick_count {
         if tick != 0 {
             close_foundation_navigation_gate(&mut runtime, &scenario)?;
@@ -1469,31 +1474,37 @@ fn run_foundation_training_pilot_with_request(
             )
             .into());
         }
-        if let Some(label) = grounded_speech_label(
+        let speech_label = grounded_speech_label(
             &collected[0].frame,
             scenario.vocabulary_token,
             scenario.vocabulary_noun,
             scenario.vocabulary_target,
             steps.last().map(|s: &FoundationTrainingStep| &s.patch),
             scenario_lesson == Some(FoundationTeacherLesson::VocabularyProduction),
-        ) {
-            if let Some(first) = label.token {
+        );
+        let behavior = &collected[0].behavior;
+        let (available, selected) = diagnostics::vocalize_action_evidence(
+            &behavior.forced_motor_slots,
+            behavior.representative_index,
+            &behavior.motor_indices,
+            behavior.representative_mask | behavior.motor_masks[3],
+        );
+        let (valid, matched) = diagnostics::speech_output_evidence(
+            &runtime.world().audible_utterances(),
+            collected[0].frame.organism_id(),
+            collected[0].frame.tick(),
+            speech_label,
+        );
+        speech_behavior.observe(
+            available,
+            selected,
+            speech_label.is_some_and(|l| l.token.is_some()),
+            valid,
+            matched,
+        );
+        if let Some(label) = speech_label {
+            if label.token.is_some() {
                 speech_opportunities += 1;
-                let mut expected = vec![first];
-                expected.extend(label.continuation.into_iter().take_while(|v| *v != 0));
-                let matched = runtime
-                    .world()
-                    .audible_utterances()
-                    .iter()
-                    .any(|utterance| {
-                        utterance.speaker_id == Some(collected[0].frame.organism_id())
-                            && utterance.emitted_tick.raw() == collected[0].frame.tick().raw()
-                            && utterance
-                                .tokens
-                                .iter()
-                                .map(|t| t.raw())
-                                .eq(expected.iter().copied())
-                    });
                 if matched {
                     correct_utterances += 1;
                     if collected[0]
@@ -2034,6 +2045,7 @@ fn run_foundation_training_pilot_with_request(
         correct_utterances,
         unprompted_correct_utterances,
         speech_opportunities,
+        speech_behavior: Some(speech_behavior),
         maze_nodes_reached,
         maze_route_nodes: scenario.demonstration_route.len(),
     };

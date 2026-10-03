@@ -27,6 +27,124 @@ pub fn replay_speech_loss_scales(targets: &[Option<ReplaySpeechTarget>]) -> [f32
     })
 }
 
+/// Diagnostic contributions to the existing normalized speech MSE objective.
+/// These are payload losses, not action imitation losses or emitted utterances.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ReplaySpeechPayloadDiagnostics {
+    pub positive_loss: f64,
+    pub silence_loss: f64,
+    pub positive_label_rows: usize,
+    pub silence_label_rows: usize,
+    pub positive_token_steps: usize,
+}
+
+/// Reduce the already computed GPU speech outputs without another forward pass.
+/// Uses the same class scales and supervised outputs as the existing objective.
+pub fn replay_speech_payload_diagnostics(
+    logits: &[f32],
+    targets: &[Option<ReplaySpeechTarget>],
+) -> Result<ReplaySpeechPayloadDiagnostics, crate::TrainingError> {
+    if logits.len() != targets.len().saturating_mul(192) {
+        return Err(crate::TrainingError::MalformedReadback);
+    }
+    for target in targets.iter().flatten() {
+        target.validate()?;
+    }
+    let scales = replay_speech_loss_scales(targets);
+    let mut result = ReplaySpeechPayloadDiagnostics::default();
+    for (tick, target) in targets.iter().enumerate() {
+        let Some(target) = target else { continue };
+        let silence = target.token.is_none();
+        if silence {
+            result.silence_label_rows += 1;
+        } else {
+            result.positive_label_rows += 1;
+            result.positive_token_steps += target.len();
+        }
+        for step in 0..target.len() {
+            for (output, expected) in target.step_logits(step).into_iter().enumerate() {
+                let weight = target.output_weight(output) * scales[usize::from(silence)];
+                if weight == 0.0 {
+                    continue;
+                }
+                let error = f64::from(logits[(tick * 6 + step) * 32 + output] - expected);
+                let loss = f64::from(weight) * error * error;
+                if !loss.is_finite() {
+                    return Err(crate::TrainingError::MalformedReadback);
+                }
+                if silence {
+                    result.silence_loss += loss;
+                } else {
+                    result.positive_loss += loss;
+                }
+            }
+        }
+    }
+    Ok(result)
+}
+
+#[cfg(test)]
+mod speech_payload_diagnostic_tests {
+    use super::*;
+
+    fn positive() -> ReplaySpeechTarget {
+        ReplaySpeechTarget {
+            token: Some(11),
+            continuation: [1, 0, 0, 0, 0],
+            act: alife_core::SpeechActKind::Declare,
+            weight: 1.0,
+        }
+    }
+
+    #[test]
+    fn speech_payload_diagnostics_preserve_equal_class_budgets() {
+        let positive = positive();
+        let silence = ReplaySpeechTarget {
+            token: None,
+            continuation: [0; 5],
+            weight: 0.25,
+            ..positive
+        };
+        let measured =
+            replay_speech_payload_diagnostics(&[0.0; 384], &[Some(positive), Some(silence)])
+                .unwrap();
+        // Every supervised target is +/-0.8. Each present class receives half
+        // the objective budget, regardless of token length or relative weight.
+        assert!((measured.positive_loss - 0.32).abs() < 1.0e-6);
+        assert!((measured.silence_loss - 0.32).abs() < 1.0e-6);
+        assert_eq!(measured.positive_label_rows, 1);
+        assert_eq!(measured.silence_label_rows, 1);
+        assert_eq!(measured.positive_token_steps, 2);
+    }
+
+    #[test]
+    fn speech_payload_diagnostics_ignore_unsupervised_outputs() {
+        let target = ReplaySpeechTarget {
+            token: None,
+            continuation: [0; 5],
+            ..positive()
+        };
+        let mut logits = vec![f32::NAN; 384];
+        logits[16] = -0.8;
+        logits[17] = 0.8;
+        let measured = replay_speech_payload_diagnostics(&logits, &[Some(target), None]).unwrap();
+        assert_eq!(measured.silence_loss, 0.0);
+        assert_eq!(measured.positive_loss, 0.0);
+        logits[16] = f32::NAN;
+        assert!(replay_speech_payload_diagnostics(&logits, &[Some(target), None]).is_err());
+    }
+
+    #[test]
+    fn speech_payload_diagnostics_reject_bad_shapes_and_labels() {
+        assert!(replay_speech_payload_diagnostics(&[], &[None]).is_err());
+        let invalid = ReplaySpeechTarget {
+            token: Some(0),
+            ..positive()
+        };
+        assert!(replay_speech_payload_diagnostics(&[0.0; 192], &[Some(invalid)]).is_err());
+    }
+}
+
 /// Grounded bounded utterance label, never an input or policy probability.
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct ReplaySpeechTarget {
