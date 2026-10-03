@@ -2204,15 +2204,38 @@ impl TopologySidecar {
     /// pre-decision context. The pass is bounded to one split and one merge.
     pub fn advance_lifecycle(&mut self, tick: Tick) -> Result<(), ScaffoldContractError> {
         let mut candidate = self.clone();
-        candidate.decay_active_state(1)?;
+        // Each map mutation validates before returning success; failed split
+        // and merge attempts leave the already validated map untouched. Keep
+        // the outer rollback transaction, but publish diagnostics only once
+        // after its final mutation rather than revalidating and hashing every
+        // intermediate map. No cached digest is used as validation evidence.
+        candidate.map.decay_active_state(1)?;
         if let Some((source_id, salience)) = candidate.map.lifecycle_split_candidate() {
-            let _ = candidate.split_concept(source_id, tick, salience);
+            let _ = candidate.map.split_concept(source_id, tick, salience);
         }
         if let Some((survivor_id, absorbed_id)) = candidate.map.lifecycle_merge_candidate() {
-            let _ = candidate.merge_concepts(survivor_id, absorbed_id, tick);
+            let _ = candidate.map.merge_concepts(survivor_id, absorbed_id, tick);
         }
-        candidate.validate_contract()?;
+        candidate.organism_id.validate()?;
+        candidate.profile.validate_contract()?;
+        let final_digest = candidate.map.canonical_digest()?;
+        candidate.diagnostics.canonical_digest = final_digest;
+        candidate.validate_diagnostics(final_digest)?;
         *self = candidate;
+        Ok(())
+    }
+
+    fn validate_diagnostics(&self, map_digest: [u64; 4]) -> Result<(), ScaffoldContractError> {
+        if self.diagnostics.organism_id_raw != self.organism_id.raw()
+            || self.diagnostics.canonical_digest != map_digest
+            || self.diagnostics.terminal_errors != 0
+            || self.last_observed_sequence_id.is_some() != self.last_observed_key_digest.is_some()
+        {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        if let Some(sequence) = self.last_observed_sequence_id {
+            sequence.validate()?;
+        }
         Ok(())
     }
 
@@ -2474,17 +2497,7 @@ impl Validate for TopologySidecar {
         self.organism_id.validate()?;
         self.profile.validate_contract()?;
         self.map.validate_contract()?;
-        if self.diagnostics.organism_id_raw != self.organism_id.raw()
-            || self.diagnostics.canonical_digest != self.map.canonical_digest()?
-            || self.diagnostics.terminal_errors != 0
-            || self.last_observed_sequence_id.is_some() != self.last_observed_key_digest.is_some()
-        {
-            return Err(ScaffoldContractError::InvalidMemoryQuery);
-        }
-        if let Some(sequence) = self.last_observed_sequence_id {
-            sequence.validate()?;
-        }
-        Ok(())
+        self.validate_diagnostics(self.map.canonical_digest()?)
     }
 }
 
@@ -3687,6 +3700,296 @@ mod gap_portability_tests {
         .unwrap();
         assert_eq!(gap.source_concepts, vec![concept]);
         assert_eq!(domain_gap(&portable_gap(&gap)).unwrap(), gap);
+    }
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+
+    // Frozen pre-optimization transaction: compare complete learned state,
+    // persistence, errors, and rollback rather than only concept counts.
+    fn reference_lifecycle(
+        sidecar: &mut TopologySidecar,
+        tick: Tick,
+    ) -> Result<(), ScaffoldContractError> {
+        let mut candidate = sidecar.clone();
+        candidate.decay_active_state(1)?;
+        if let Some((source_id, salience)) = candidate.map.lifecycle_split_candidate() {
+            let _ = candidate.split_concept(source_id, tick, salience);
+        }
+        if let Some((survivor_id, absorbed_id)) = candidate.map.lifecycle_merge_candidate() {
+            let _ = candidate.merge_concepts(survivor_id, absorbed_id, tick);
+        }
+        candidate.validate_contract()?;
+        *sidecar = candidate;
+        Ok(())
+    }
+
+    fn mature_sidecar(owner: u64, size: usize) -> TopologySidecar {
+        let mut sidecar =
+            TopologySidecar::new(OrganismId(owner), TopologicalMapConfig::default()).unwrap();
+        for raw in 1..=size as u64 {
+            let id = ConceptCellId(raw);
+            let bindings = ConceptBindings {
+                objects: vec![TrackedObjectId(raw)],
+                ..ConceptBindings::default()
+            };
+            let mut concept = ConceptCell::new(id, bindings).unwrap();
+            concept.observation_count = 4;
+            concept.confidence = Confidence(0.9);
+            concept.salience = NormalizedScalar(0.8);
+            concept.first_tick = Tick(10);
+            concept.last_tick = Tick(20);
+            sidecar.map.concepts.push(concept);
+            sidecar.map.simplexes.push(
+                CognitiveSimplex::new(
+                    CognitiveSimplexId(raw),
+                    vec![id],
+                    SignedValence(0.2),
+                    NormalizedScalar(0.1),
+                    NormalizedScalar(0.8),
+                    Tick(20),
+                )
+                .unwrap(),
+            );
+            if raw > 1 {
+                sidecar.map.edges.push(
+                    CognitiveEdge::with_id(
+                        CognitiveEdgeId(raw - 1),
+                        ConceptCellId(raw - 1),
+                        id,
+                        EdgeRelationKind::CoOccurs,
+                        NormalizedScalar(0.8),
+                        Tick(20),
+                    )
+                    .unwrap(),
+                );
+            }
+            if raw <= 64 {
+                sidecar.map.unresolved_gaps.push(
+                    UnresolvedGap::new(
+                        UnresolvedGapId(raw),
+                        vec![id],
+                        ContradictionType::PredictionError,
+                        NormalizedScalar(0.8),
+                        NormalizedScalar(0.8),
+                        NormalizedScalar(0.8),
+                        Tick(20),
+                    )
+                    .unwrap(),
+                );
+            }
+        }
+        sidecar.map.next_concept_id = size as u64 + 1;
+        sidecar.map.next_edge_id = size.max(1) as u64;
+        sidecar.map.next_simplex_id = size as u64 + 1;
+        sidecar.map.next_gap_id = size.min(64) as u64 + 1;
+        sidecar.last_observed_sequence_id = Some(ExperienceSequenceId(7));
+        sidecar.last_observed_key_digest = Some([1, 2, 3, 4]);
+        sidecar.diagnostics.observations = 7;
+        sidecar.refresh_diagnostics_after_map_mutation().unwrap();
+        sidecar.validate_contract().unwrap();
+        sidecar
+    }
+
+    fn prepare_split(sidecar: &mut TopologySidecar, source: usize, action: usize) {
+        sidecar.map.concepts[source]
+            .bindings
+            .emotions
+            .mean_prediction_error = NormalizedScalar(0.8);
+        sidecar.map.concepts[action].observation_count = 1;
+        sidecar.map.concepts[action].bindings.actions = vec![ActionObservationFact {
+            action_id: ActionId(200),
+            kind: ActionKind::Idle,
+            confidence: Confidence(0.8),
+        }];
+        sidecar.map.concepts[action].bindings.action_families = vec![CandidateActionFamily::Idle];
+        let gap = &mut sidecar.map.unresolved_gaps[source];
+        gap.source_concepts = vec![
+            sidecar.map.concepts[source].id,
+            sidecar.map.concepts[action].id,
+        ];
+        gap.first_tick = Tick(10);
+        sidecar.refresh_diagnostics_after_map_mutation().unwrap();
+    }
+
+    fn prepare_merge(sidecar: &mut TopologySidecar) {
+        let survivor = sidecar.map.concepts[0].id;
+        sidecar.map.concepts[1].bindings.objects = sidecar.map.concepts[0].bindings.objects.clone();
+        sidecar.map.concepts[1].bindings.semantic_refs = vec![survivor];
+        for gap in &mut sidecar.map.unresolved_gaps {
+            gap.status = GapResolutionStatus::Resolved;
+        }
+        sidecar.map.simplexes[0].concept_ids = vec![survivor, sidecar.map.concepts[1].id];
+        sidecar.map.unresolved_gaps[0].source_concepts = vec![survivor, sidecar.map.concepts[1].id];
+        sidecar.refresh_diagnostics_after_map_mutation().unwrap();
+    }
+
+    fn compare_tick(sidecar: &mut TopologySidecar, tick: Tick) {
+        let mut reference = sidecar.clone();
+        assert_eq!(
+            sidecar.advance_lifecycle(tick),
+            reference_lifecycle(&mut reference, tick)
+        );
+        assert_eq!(sidecar, &reference);
+        sidecar.validate_contract().unwrap();
+        let portable = sidecar.export_portable().unwrap();
+        assert_eq!(portable, reference.export_portable().unwrap());
+        assert_eq!(
+            TopologySidecar::restore_portable(portable).unwrap(),
+            *sidecar
+        );
+    }
+
+    #[test]
+    fn lifecycle_matches_reference_across_owners_decay_and_gap_dismissal() {
+        for owner in 1..=6 {
+            for size in [0, 8, 64, 256] {
+                let mut sidecar = mature_sidecar(owner, size);
+                for tick in [30, 31, 32, 1_000] {
+                    compare_tick(&mut sidecar, Tick(tick));
+                }
+            }
+        }
+        let mut sidecar = mature_sidecar(1, 2);
+        sidecar.map.unresolved_gaps[0].curiosity_voltage = NormalizedScalar(0.1005);
+        sidecar.refresh_diagnostics_after_map_mutation().unwrap();
+        compare_tick(&mut sidecar, Tick(30));
+        assert_eq!(
+            sidecar.map.unresolved_gaps[0].status,
+            GapResolutionStatus::Dismissed
+        );
+    }
+
+    #[test]
+    fn lifecycle_matches_reference_for_split_merge_pruning_and_capacity() {
+        let mut split = mature_sidecar(1, 2);
+        prepare_split(&mut split, 0, 1);
+        compare_tick(&mut split, Tick(30));
+        assert_eq!(split.map.concepts.len(), 3);
+        assert_eq!(split.map.next_concept_id, 4);
+
+        let mut saturated = mature_sidecar(1, 2);
+        prepare_split(&mut saturated, 0, 1);
+        saturated.map.config.max_concepts = 2;
+        saturated.refresh_diagnostics_after_map_mutation().unwrap();
+        compare_tick(&mut saturated, Tick(30));
+        assert_eq!(saturated.map.concepts.len(), 2);
+
+        let mut failed_split = mature_sidecar(1, 2);
+        prepare_split(&mut failed_split, 0, 1);
+        failed_split.map.next_concept_id = u64::MAX;
+        failed_split
+            .refresh_diagnostics_after_map_mutation()
+            .unwrap();
+        compare_tick(&mut failed_split, Tick(30));
+        assert_eq!(failed_split.map.concepts.len(), 2);
+        assert_eq!(failed_split.map.next_concept_id, u64::MAX);
+
+        let mut merged = mature_sidecar(1, 3);
+        prepare_merge(&mut merged);
+        compare_tick(&mut merged, Tick(30));
+        assert_eq!(merged.map.concepts.len(), 2);
+        assert!(merged.map.edges.iter().all(|edge| edge.from != edge.to));
+        assert_eq!(merged.map.simplexes[0].concept_ids, vec![ConceptCellId(1)]);
+        assert_eq!(
+            merged.map.unresolved_gaps[0].source_concepts,
+            vec![ConceptCellId(1)]
+        );
+
+        let mut failed_merge = mature_sidecar(1, 3);
+        prepare_merge(&mut failed_merge);
+        compare_tick(&mut failed_merge, Tick(9));
+        assert_eq!(failed_merge.map.concepts.len(), 3);
+
+        let mut both = mature_sidecar(1, 4);
+        prepare_merge(&mut both);
+        prepare_split(&mut both, 2, 3);
+        both.map.unresolved_gaps[2].status = GapResolutionStatus::Open;
+        both.refresh_diagnostics_after_map_mutation().unwrap();
+        compare_tick(&mut both, Tick(30));
+        assert_eq!(both.map.concepts.len(), 4);
+        assert_eq!(both.map.next_concept_id, 6);
+    }
+
+    #[test]
+    fn lifecycle_preserves_rejection_rollback_and_public_digest_validation() {
+        let original = mature_sidecar(1, 8);
+        let corruptions: [fn(&mut TopologySidecar); 9] = [
+            |s| s.organism_id = OrganismId(0),
+            |s| s.profile.profile_schema_version = 0,
+            |s| s.diagnostics.organism_id_raw = 2,
+            |s| s.diagnostics.terminal_errors = 1,
+            |s| s.last_observed_key_digest = None,
+            |s| s.last_observed_sequence_id = Some(ExperienceSequenceId(0)),
+            |s| s.map.next_concept_id = 1,
+            |s| s.map.config.max_edges = 0,
+            |s| s.map.edges[0].to = ConceptCellId(999),
+        ];
+        for corrupt in corruptions {
+            let mut sidecar = original.clone();
+            corrupt(&mut sidecar);
+            let before = serde_json::to_vec(&sidecar).unwrap();
+            let mut reference = sidecar.clone();
+            let result = sidecar.advance_lifecycle(Tick(30));
+            assert!(result.is_err());
+            assert_eq!(result, reference_lifecycle(&mut reference, Tick(30)));
+            assert_eq!(serde_json::to_vec(&sidecar).unwrap(), before);
+        }
+        let mut stale = original;
+        stale.diagnostics.canonical_digest[0] ^= 1;
+        assert!(stale.validate_contract().is_err());
+        assert!(stale.export_portable().is_err());
+        compare_tick(&mut stale, Tick(30)); // Existing lifecycle refresh repairs stale diagnostics.
+        let mut asset = stale.export_portable().unwrap();
+        asset.map_digest[0] ^= 1;
+        asset.canonical_digest = asset.recompute_canonical_digest().unwrap();
+        assert!(TopologySidecar::restore_portable(asset).is_err());
+    }
+
+    #[test]
+    #[ignore = "manual matched CPU lifecycle timing; no GPU or FPS claim"]
+    fn lifecycle_matched_timing_probe() {
+        use std::{hint::black_box, time::Instant};
+        const CALLS: usize = 200;
+        for size in [8, 64, 256] {
+            let seed = mature_sidecar(1, size);
+            let mut old_ns = Vec::new();
+            let mut new_ns = Vec::new();
+            for round in 0..8 {
+                let mut old = seed.clone();
+                let mut new = seed.clone();
+                let measure = |sidecar: &mut TopologySidecar, reference: bool| {
+                    let start = Instant::now();
+                    for tick in 30..30 + CALLS as u64 {
+                        if reference {
+                            reference_lifecycle(sidecar, Tick(tick)).unwrap();
+                        } else {
+                            sidecar.advance_lifecycle(Tick(tick)).unwrap();
+                        }
+                        black_box(sidecar.diagnostics());
+                    }
+                    start.elapsed().as_nanos()
+                };
+                let (old_elapsed, new_elapsed) = if round % 2 == 0 {
+                    let old_elapsed = measure(&mut old, true);
+                    (old_elapsed, measure(&mut new, false))
+                } else {
+                    let new_elapsed = measure(&mut new, false);
+                    (measure(&mut old, true), new_elapsed)
+                };
+                assert_eq!(
+                    old.export_portable().unwrap(),
+                    new.export_portable().unwrap()
+                );
+                old_ns.push(old_elapsed);
+                new_ns.push(new_elapsed);
+            }
+            old_ns.sort_unstable();
+            new_ns.sort_unstable();
+            println!("lifecycle_matched size={size} calls={CALLS} rounds=8 old_ns={old_ns:?} new_ns={new_ns:?} old_median_ns={} new_median_ns={}", old_ns[4], new_ns[4]);
+        }
     }
 }
 
