@@ -13,7 +13,13 @@ impl HeadlessWorld {
         self.player_hold.as_ref().map(|hold| hold.object_id)
     }
 
-    pub fn begin_player_hold(&mut self, id: WorldEntityId) -> Result<Vec3f, ScaffoldContractError> {
+    /// Whether this object is available for the player's pending pickup gesture.
+    /// Beginning the hold still validates the terrain support before moving it.
+    pub fn can_begin_player_hold(&self, id: WorldEntityId) -> bool {
+        self.player_hold_target(id).is_ok()
+    }
+
+    fn player_hold_target(&self, id: WorldEntityId) -> Result<&WorldObject, ScaffoldContractError> {
         if self.player_hold.is_some() {
             return Err(ScaffoldContractError::InvalidActionDecision);
         }
@@ -35,7 +41,11 @@ impl HeadlessWorld {
         {
             return Err(ScaffoldContractError::InvalidActionDecision);
         }
-        let ground = object.position;
+        Ok(object)
+    }
+
+    pub fn begin_player_hold(&mut self, id: WorldEntityId) -> Result<Vec3f, ScaffoldContractError> {
+        let ground = self.player_hold_target(id)?.position;
         self.player_hold = Some(PlayerHold {
             object_id: id,
             last_ground: ground,
@@ -154,6 +164,69 @@ impl HeadlessWorld {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn player_can_pick_move_persist_and_release_creatures_and_movable_objects() {
+        let mut world = HeadlessScenarioBuilder::new(17)
+            .agent("walker", OrganismId(1), Vec3f::ZERO)
+            .food("food", Vec3f::new(2.0, 0.0, 0.0), 0.5)
+            .toy("ball", Vec3f::new(4.0, 0.0, 0.0), true)
+            .token("token", Vec3f::new(6.0, 0.0, 0.0), 1)
+            .build()
+            .unwrap();
+        for label in ["walker", "food", "ball", "token"] {
+            let id = world.entity_id(label).unwrap();
+            assert!(world.can_begin_player_hold(id), "{label}");
+            let original = world.entity(id).unwrap().position;
+            let raised = world.begin_player_hold(id).unwrap();
+            assert_eq!(raised, Vec3f::new(original.x, original.y, 1.3));
+            assert!(!world.can_begin_player_hold(id));
+            let destination = Vec3f::new(original.x + 1.0, original.y + 2.0, 0.0);
+            world.move_player_hold(destination).unwrap();
+            assert_eq!(world.entity(id).unwrap().position.z, 1.3);
+            assert_eq!(
+                world.entity(id).unwrap().grounded_physical.velocity,
+                Vec3f::ZERO
+            );
+            let mut restored =
+                HeadlessWorld::from_persistence_parts(world.persistence_parts()).unwrap();
+            assert_eq!(restored.player_held_object(), Some(id));
+            assert_eq!(
+                restored.entity(id).unwrap().position,
+                world.entity(id).unwrap().position
+            );
+            assert_eq!(restored.release_player_hold().unwrap(), Some(id));
+            assert_eq!(restored.entity(id).unwrap().position, destination);
+            assert_eq!(world.release_player_hold().unwrap(), Some(id));
+            assert_eq!(world.entity(id).unwrap().position, destination);
+        }
+    }
+
+    #[test]
+    fn fixed_scenery_missing_and_unavailable_objects_are_not_pickup_targets() {
+        let mut world = HeadlessScenarioBuilder::new(17)
+            .agent("walker", OrganismId(1), Vec3f::ZERO)
+            .toy("fixed toy", Vec3f::new(2.0, 0.0, 0.0), false)
+            .obstacle("rock", Vec3f::new(4.0, 0.0, 0.0), 0.5)
+            .hazard("hazard", Vec3f::new(6.0, 0.0, 0.0), 0.5)
+            .food("food", Vec3f::new(8.0, 0.0, 0.0), 0.5)
+            .build()
+            .unwrap();
+        for label in ["fixed toy", "rock", "hazard"] {
+            let id = world.entity_id(label).unwrap();
+            assert!(!world.can_begin_player_hold(id), "{label}");
+            assert!(world.begin_player_hold(id).is_err(), "{label}");
+        }
+        assert!(!world.can_begin_player_hold(WorldEntityId(u64::MAX)));
+        let food = world.entity_id("food").unwrap();
+        world.objects.get_mut(&food.raw()).unwrap().consumed = true;
+        assert!(!world.can_begin_player_hold(food));
+        let object = world.objects.get_mut(&food.raw()).unwrap();
+        object.consumed = false;
+        object.carried_by = Some(OrganismId(1));
+        assert!(!world.can_begin_player_hold(food));
+        assert_eq!(world.player_held_object(), None);
+    }
 
     #[test]
     fn player_carry_blocks_self_movement_and_releases_on_selected_terrain() {
