@@ -713,6 +713,8 @@ pub struct HeadlessWorld {
 }
 
 pub(crate) mod player_hand;
+#[cfg(test)]
+mod prediction_residual_pulse_tests;
 
 /// A world-validated embodied endpoint for learner-visible teacher signals.
 /// The raw teacher speech/cue mutators are private so production callers must

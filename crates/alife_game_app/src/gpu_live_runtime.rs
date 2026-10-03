@@ -4892,6 +4892,25 @@ fn seal_prepared_selection_core(
         cognitive_work,
         cognitive_work_cost_policy,
     )?;
+    // The outcome error becomes chemistry on the next biology transition.
+    // Stage it before the measured receipt so its exact post-state remains
+    // world-authoritative. The enclosing tick also rolls back this pulse.
+    let mut record = world
+        .organism_registry()
+        .get(organism_id)
+        .cloned()
+        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+    record
+        .stage_prediction_residual_pulse(
+            sequence_id,
+            neural_evidence.dispatch_generation,
+            combined_prediction_error,
+            1.0,
+        )
+        .map_err(|error| GameAppShellError::InvalidProductionFrontend {
+            message: error.to_string(),
+        })?;
+    replace_canonical_organism_record(world, record)?;
     let biology_after = *world
         .organism_registry()
         .get(organism_id)
@@ -13955,6 +13974,20 @@ mod tests {
             Some(&expected_pre_action_context)
         );
         let measured = sealed.patch.outcome().measured_physiology.unwrap();
+        let pulse =
+            serde_json::to_value(world_after).unwrap()["pending_prediction_residual"].clone();
+        assert_eq!(
+            pulse["source_tick"],
+            serde_json::json!(sealed.patch.outcome().outcome_tick.raw())
+        );
+        assert_eq!(
+            pulse["source_sequence_id"],
+            serde_json::json!(sequence_id.raw())
+        );
+        assert_eq!(
+            pulse["activity"],
+            serde_json::json!(sealed.patch.outcome().prediction_error.raw())
+        );
         assert_eq!(
             measured.after, world_after,
             "learning must include the cognitive debit"

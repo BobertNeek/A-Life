@@ -3,9 +3,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    validate_finite, BiochemicalGraphState, BiochemicalWorkReceipt, CreaturePhenotype, GenomeId,
-    HomeostaticSnapshot, NeuralEmissionFrame, NeuralReceptorFrame, ScaffoldContractError, Tick,
-    Validate,
+    validate_finite, BiochemicalGraphState, BiochemicalWorkReceipt, CreaturePhenotype,
+    ExperienceSequenceId, GenomeId, HomeostaticSnapshot, NeuralEmission, NeuralEmissionClass,
+    NeuralEmissionFrame, NeuralReceptorFrame, ScaffoldContractError, Tick, Validate,
 };
 
 pub const MAX_BIOCHEMISTRY_CATCH_UP_STEPS: u32 = 64;
@@ -654,6 +654,16 @@ impl Validate for ReproductionReadiness {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+struct PendingPredictionResidualV1 {
+    schema_version: u16,
+    source_tick: Tick,
+    source_sequence_id: ExperienceSequenceId,
+    graph_epoch: u64,
+    activity: f32,
+    confidence: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct BiochemistryState {
     // A snapshot of inherited valuation makes sealed credit reproducible without
     // a registry lookup. It cannot drift independently of the phenotype.
@@ -668,6 +678,8 @@ pub struct BiochemistryState {
     pub homeostasis: HomeostaticSnapshot,
     graph_state: BiochemicalGraphState,
     biochemical_work: BiochemicalWorkReceipt,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pending_prediction_residual: Option<PendingPredictionResidualV1>,
     pub development: DevelopmentReadiness,
     pub reproduction: ReproductionReadiness,
     pub cadence: BiochemistryCadence,
@@ -714,6 +726,7 @@ impl BiochemistryState {
             homeostasis,
             graph_state,
             biochemical_work: BiochemicalWorkReceipt::default(),
+            pending_prediction_residual: None,
             development,
             reproduction,
             cadence,
@@ -729,6 +742,34 @@ impl BiochemistryState {
         phenotype: &CreaturePhenotype,
     ) -> Result<Self, ScaffoldContractError> {
         self.advance_with_age(next_tick, next_tick, event, phenotype)
+    }
+
+    /// Stage measured successor error for the next successful biology update.
+    /// The enclosing world transaction seals the source experience or rolls back.
+    pub fn with_prediction_residual_pulse(
+        &self,
+        source_sequence_id: ExperienceSequenceId,
+        graph_epoch: u64,
+        activity: f32,
+        confidence: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.validate_contract()?;
+        if self.pending_prediction_residual.is_some() {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
+        let value = Self {
+            pending_prediction_residual: Some(PendingPredictionResidualV1 {
+                schema_version: 1,
+                source_tick: self.tick,
+                source_sequence_id,
+                graph_epoch,
+                activity,
+                confidence,
+            }),
+            ..*self
+        };
+        value.validate_contract()?;
+        Ok(value)
     }
 
     pub fn advance_with_age(
@@ -829,11 +870,30 @@ impl BiochemistryState {
             }
         };
         let biochemical_expression = development.biochemical_expression;
+        let pending_frame = self
+            .pending_prediction_residual
+            .map(|pulse| {
+                if let Some(frame) = neural {
+                    frame.validate_contract()?;
+                }
+                let mut emissions = neural.map_or_else(Vec::new, |frame| frame.emissions.clone());
+                emissions.push(NeuralEmission::new(
+                    NeuralEmissionClass::PredictionResidual,
+                    pulse.activity,
+                    pulse.confidence,
+                )?);
+                NeuralEmissionFrame::new(
+                    neural.map_or(self.tick, |frame| frame.source_tick),
+                    neural.map_or(pulse.graph_epoch, |frame| frame.graph_epoch),
+                    emissions,
+                )
+            })
+            .transpose()?;
         let (graph_state, biochemical_work) = self.graph_state.advance(
             next_tick,
             body,
             event,
-            neural,
+            pending_frame.as_ref().or(neural),
             &phenotype.chemistry.biochemical,
             biochemical_expression,
         )?;
@@ -858,6 +918,7 @@ impl BiochemistryState {
             homeostasis,
             graph_state,
             biochemical_work,
+            pending_prediction_residual: None,
             development,
             reproduction,
             cadence: self.cadence,
@@ -936,6 +997,20 @@ impl Validate for BiochemistryState {
         self.development.validate_contract()?;
         self.reproduction.validate_contract()?;
         self.cadence.validate_contract()?;
+        if let Some(pulse) = self.pending_prediction_residual {
+            if pulse.schema_version != 1 || pulse.graph_epoch == 0 {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+            pulse.source_sequence_id.validate()?;
+            NeuralEmission::new(
+                NeuralEmissionClass::PredictionResidual,
+                pulse.activity,
+                pulse.confidence,
+            )?;
+            if pulse.source_tick != self.tick {
+                return Err(ScaffoldContractError::NonMonotonicTick);
+            }
+        }
         if self.homeostasis.tick != self.tick
             || self.graph_state.tick() != self.tick
             || self.development.age_ticks.raw() > self.tick.raw()
