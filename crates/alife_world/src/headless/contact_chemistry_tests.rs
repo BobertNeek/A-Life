@@ -47,6 +47,94 @@ fn biology(world: &HeadlessWorld) -> BiochemistryState {
     *world.organism_registry.get(OWN).unwrap().biochemistry()
 }
 
+#[test]
+fn same_tick_death_preserves_contact_exposure_across_order_and_action_paths() {
+    for expiring in [OWN, PEER] {
+        let survivor = if expiring == OWN { PEER } else { OWN };
+        let mut base = founders();
+        touch(&mut base);
+        let next = PassiveBodyUpkeepPolicy::maximum_lifespan_ticks(
+            base.organism_registry.get(expiring).unwrap().phenotype(),
+        );
+        base.tick = Tick(next - 1);
+        for id in [OWN, PEER] {
+            let record = base.organism_registry.get(id).unwrap();
+            let age = if id == expiring { next - 1 } else { 600 };
+            let replacement = crate::WorldOrganismRecord::new(
+                id,
+                record.world_entity_id(),
+                record.genome().clone(),
+                record.phenotype().clone(),
+                BiochemistryState::new_with_age(record.phenotype(), base.tick, Tick(age)).unwrap(),
+                Tick(base.tick.raw() - age),
+            )
+            .unwrap();
+            base.organism_registry
+                .replace_existing_exact(replacement)
+                .unwrap();
+        }
+        let mut passive = base.clone();
+        passive.try_advance_tick().unwrap();
+        let mut idle = base.clone();
+        let receipt = idle
+            .apply_registered_command(
+                &HeadlessWorldCommand::idle(survivor).unwrap(),
+                entity(&idle, survivor),
+                Tick(next),
+            )
+            .unwrap();
+        assert_eq!(
+            receipt.action_result.body_event.social_contact,
+            PEER_TOUCH_PER_INTERVAL
+        );
+        idle.try_advance_tick().unwrap();
+        let observed = |world: &HeadlessWorld| {
+            let h = world
+                .organism_registry
+                .get(survivor)
+                .unwrap()
+                .biochemistry()
+                .homeostasis;
+            (
+                h.drives.loneliness,
+                h.hormones.oxytocin,
+                h.hormones.serotonin,
+            )
+        };
+        assert_eq!(observed(&passive), observed(&idle), "expiring {expiring:?}");
+        let mut staged = base.clone();
+        staged
+            .try_advance_tick_with_body_events_in_staged_tick(&BTreeMap::new())
+            .unwrap();
+        assert_eq!(
+            staged.canonical_signature_digest().unwrap(),
+            passive.canonical_signature_digest().unwrap()
+        );
+        assert!(!passive
+            .organism_registry
+            .get(expiring)
+            .unwrap()
+            .lifecycle()
+            .is_alive());
+
+        // A corpse contributes no exposure in the following biological interval.
+        let mut separated = passive.clone();
+        place(&mut separated, expiring, Vec3f::new(100.0, 0.0, 0.0));
+        passive.try_advance_tick().unwrap();
+        separated.try_advance_tick().unwrap();
+        assert_eq!(observed(&passive), observed(&separated));
+
+        let mut failed = base.clone();
+        let before = failed.canonical_signature_digest().unwrap();
+        failed.injected_tick_late_failure_after_first_organism = true;
+        assert!(failed.try_advance_tick().is_err());
+        failed.injected_tick_late_failure_after_first_organism = false;
+        assert_eq!(failed.canonical_signature_digest().unwrap(), before);
+        failed.try_advance_tick().unwrap();
+        assert_eq!(observed(&failed), observed(&idle));
+    }
+}
+
 fn bundle(world: &HeadlessWorld, duplicate_channels: bool, duration: u32) -> MotorCommandBundle {
     let peer = entity(world, PEER);
     let command = HeadlessWorldCommand::approach(OWN, peer).unwrap();

@@ -1189,7 +1189,7 @@ impl HeadlessWorld {
 
         #[cfg(test)]
         let mut advanced_organism = false;
-        for organism_id in alive_organism_ids {
+        for organism_id in alive_organism_ids.iter().copied() {
             let biology_tick = candidate
                 .organism_registry
                 .get(organism_id)
@@ -1254,6 +1254,16 @@ impl HeadlessWorld {
                 _ => return Err(ScaffoldContractError::NonMonotonicTick),
             }
 
+            #[cfg(test)]
+            if advanced_organism && candidate.injected_tick_late_failure_after_first_organism {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+        }
+
+        // All interval exposure observes the same pre-boundary living peers.
+        // Retire terminal bodies only after every due biology update, using the
+        // already collected IDs without another snapshot or contact traversal.
+        for organism_id in alive_organism_ids {
             let terminal = {
                 let record = candidate
                     .organism_registry
@@ -1274,11 +1284,6 @@ impl HeadlessWorld {
                     .map_err(map_organism_registry_error)?;
                 candidate.detach_carried_objects(organism_id);
                 candidate.ingestion_observations.remove(&organism_id.raw());
-            }
-
-            #[cfg(test)]
-            if advanced_organism && candidate.injected_tick_late_failure_after_first_organism {
-                return Err(ScaffoldContractError::InvalidDecisionEvidence);
             }
         }
 
@@ -9049,7 +9054,12 @@ mod task_3_2a_tests {
             .biochemistry()
             .advance(
                 next_tick,
-                alife_core::BodyEventDelta::zero(),
+                // The touching low-energy peer is alive during this interval,
+                // even though upkeep retires it at the boundary.
+                alife_core::BodyEventDelta {
+                    social_contact: PEER_TOUCH_PER_INTERVAL,
+                    ..alife_core::BodyEventDelta::zero()
+                },
                 before_high.phenotype(),
             )
             .unwrap();

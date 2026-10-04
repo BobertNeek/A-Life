@@ -41,6 +41,15 @@ so simultaneous reports do not stack. A player stroke retains its existing
 same source. Organisms already advanced by an action are skipped at world tick
 finalization, as before.
 
+Review correction: all due biology updates now complete before terminal bodies
+are retired. This keeps living-peer exposure at the same interval boundary for
+passive and registered-action paths, regardless of organism ID order. Retirement
+still precedes population capacity/conception decisions. The correction reuses
+the existing alive-ID vector, moves the existing terminal checks to a second
+pass, and adds no allocation, contact scan or persistent state. It also prevents
+same-tick corpse-release geometry from leaking into a later peer's exposure.
+The extra ID-vector traversal is linear; its wall-time overhead is unmeasured.
+
 Touch ignores gaze, attention and static affinity; it requires unconsumed peer
 geometry within the smaller of the peer radius and canonical touch radius,
 solid/terrain reachability, and a living peer when that peer has a registered
@@ -89,6 +98,17 @@ late transaction failure followed by exact retry. No new persistent field,
 contact queue or legacy migration is introduced. Exact acquired GPU checkpoint
 continuation and ecological relationship quality remain Unknown.
 
+The review regression uses unchanged canonical founder genetics with an
+age-terminal touching peer, swaps which ID expires, and compares passive touch
+with registered Idle. Before the correction, expiration of ID 1 yielded survivor
+loneliness/oxytocin/serotonin `(0.15, 0.5, 0.6)` versus Idle's
+`(0.14250001, 0.505625, 0.60150003)`. The test compares only contact-sensitive
+lanes because passive mating opportunities and action effort legitimately differ.
+It also checks the production staged-tick path, no corpse exposure next interval,
+and exact rollback/retry. The app mixed-history test explicitly confirms the
+positive and negative patches name the same personally tracked peer.
+Requirements additionally traced: AOA-TIME-001, AOA-TIME-002, AOA-INV-011.
+
 ## Cost and verification
 
 The endpoint helper allocates no contact list or index. Bundle overlap reuses
@@ -128,7 +148,7 @@ There is no changed-file overlap with GeneForge PR3 commit `2d1849cb7131e251b402
 The shared `headless.rs` interface may need coordination with the separate island
 work; no terrain construction, art, renderer, or asset file is edited.
 
-Final CPU validation passed: all 359 world tests, 77 selected core chemistry and
+Initial CPU validation passed: all 359 world tests, 77 selected core chemistry and
 memory tests, and four app sealing/recognition/late-retry tests (440 total).
 Three existing/manual benchmarks remain ignored in those normal invocations;
 the contact endpoint benchmark was run separately and passed. Both strict
@@ -136,6 +156,14 @@ workspace all-target Clippy and `gpu-runtime` app all-target Clippy pass with
 warnings denied. Formatting, `git diff --check`, dependency/source core
 boundaries and all 77 documentation assertions pass. No training features,
 neural execution, graphical workloads or PC work were run.
+
+Review correction validation passed: 360 world tests (two existing/manual tests
+ignored), the actual contact-memory sealing test, and the late-sealing retry
+test. Both strict Clippy configurations, formatting, diff checks, core
+boundaries and all 77 documentation assertions pass again. The prior core
+chemistry/memory checks remain relevant; those sources were not changed by
+the correction. The upkeep regression now includes the living peer's final
+interval exposure even when passive energy loss retires it at that boundary.
 
 ```sh
 cargo test -p alife_world --all-targets

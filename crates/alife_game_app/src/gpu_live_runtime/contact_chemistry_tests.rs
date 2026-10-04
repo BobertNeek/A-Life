@@ -395,6 +395,23 @@ fn contact_chemistry_bootstraps_signed_personal_memory_from_real_founder_experie
         HeadlessActionIds::APPROACH,
         ExperienceSequenceId(3),
     );
+    let tracked_peer = positive
+        .decision()
+        .episodic_key()
+        .unwrap()
+        .query()
+        .tracked_object_id()
+        .unwrap();
+    assert_eq!(
+        negative
+            .decision()
+            .episodic_key()
+            .unwrap()
+            .query()
+            .tracked_object_id(),
+        Some(tracked_peer),
+        "mixed signed history must refer to the same personally tracked peer"
+    );
     assert!(
         negative
             .outcome()
