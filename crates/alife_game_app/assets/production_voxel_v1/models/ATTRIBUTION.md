@@ -1,22 +1,22 @@
 # Creature Source And Production Asset Attribution
 
-The production creature roster is generated from the GeneForge Norn, Ettin,
-and Grendel assets by Eem Foo.
+Production creatures use the approved Hearthling GLB under
+`assets/creatures/hearthling/`. GeneForge generated meshes, sockets and masks
+are retired from the production pack.
 
-- Source: https://eem.foo/geneforge/
+The unchanged `../creature_parts/geneforge_recipes.json` retains the historical
+family catalog, source attribution, source hashes and offline authoring paths.
+Its generated output paths do not identify required shipped assets.
+
+- GeneForge source: https://eem.foo/geneforge/
+- Author: Eem Foo
 - Permission record: `GENEFORGE_LICENSE_RECEIPT.md`
 - License asserted by the A-Life project owner: MIT
-- Blender version: 5.1.0
-- Importer: `alife.geneforge_importer.v2`
-- Recipe and source SHA-256 values:
-  `../creature_parts/geneforge_recipes.json`
+- Historical Blender version: 5.1.0
+- Historical importer: `alife.geneforge_importer.v2`
 
-A-Life selects named neutral adult geometry, separates reusable head, torso,
-arm, leg, and tail groups, prepares canonical and cross-torso sockets, creates
-Full/Compact/Impostor LODs, and generates semantic/anatomy masks used to bake
-one cohesive inherited coat per assembled creature. The committed production
-pack contains only generated OBJ, socket JSON, and PNG masks. It excludes
-source `.blend` files, archives, source textures, previews, and screenshots.
+Original donor sources and license records are preserved. The external source
+`.blend` files are not bundled in this repository.
 
 The developer-only Quirky animal source pack remains documented under
 `assets/source_creature_meshes/`; it is not part of the production roster or

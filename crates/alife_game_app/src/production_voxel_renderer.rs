@@ -33,7 +33,7 @@ use bevy::{
     prelude::{
         default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, ChildOf, Children,
         Color, Commands, Component, Cuboid, DetectChanges, DirectionalLight, Entity, EulerRot,
-        GlobalTransform, Handle, Image, KeyCode, Local, Mat4, Mesh, Mesh3d, MeshMaterial3d,
+        GlobalTransform, Handle, Image, KeyCode, Local, Mesh, Mesh3d, MeshMaterial3d,
         MessageReader, MessageWriter, MouseButton, Name, Node, NonSend, NonSendMut, ParamSet,
         PositionType, Projection, Quat, Res, ResMut, Resource, StandardMaterial, Text, Text2d,
         TextColor, TextFont, Time, Torus, Transform, Update, Val, Vec3, ViewVisibility, Visibility,
@@ -64,12 +64,9 @@ use crate::RuntimePlaybackState;
 #[cfg(test)]
 use crate::SocketFrame;
 use crate::{
-    creature_face_style_from_landmarks, creature_part_pose, creature_root_pose,
-    grounded_root_height, load_geneforge_assembly_preparation_index,
-    load_geneforge_creature_part_catalog, remap_creature_face_landmarks,
-    resolve_geneforge_creature_assembly, CreatureAssemblyRecipe, CreatureCoatAssetHandles,
-    CreatureCoatKey, CreaturePartAssetLibrary, CreaturePartLodId, CreaturePartSlot,
-    CreatureVisualBounds, GeneForgeAssemblyPreparationIndex, GeneForgeCreaturePartCatalog,
+    creature_part_pose, creature_root_pose, grounded_root_height,
+    load_geneforge_creature_part_catalog, resolve_creature_part_display_sources, CreaturePartSlot,
+    CreatureVisualBounds, GeneForgeCreaturePartCatalog,
 };
 
 mod camera_navigation;
@@ -78,6 +75,8 @@ mod creature_grounding;
 mod god_hand;
 mod graphics_capture;
 mod hearthling;
+#[cfg(test)]
+mod hearthling_asset_retirement_tests;
 mod highlands;
 mod landscape;
 mod live_creature_projection;
@@ -1066,9 +1065,6 @@ pub struct ProductionCreatureAssemblyRoot {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
-pub(crate) struct ProductionCreatureCoatKey(pub CreatureCoatKey);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
 struct Fvr04ProductionRuntimeSceneRoot;
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1366,15 +1362,6 @@ struct Fvr04CreatureVisualRecord {
 pub(crate) struct Fvr04CreatureSpawnContext {
     settings: Fvr04ProductionCreatureRendererSettings,
     catalog: GeneForgeCreaturePartCatalog,
-    preparations: GeneForgeAssemblyPreparationIndex,
-    assets_root: PathBuf,
-    creature_part_assets: CreaturePartAssetLibrary,
-}
-
-impl Fvr04CreatureSpawnContext {
-    pub(crate) fn release_coat(&mut self, key: CreatureCoatKey) {
-        let _ = self.creature_part_assets.release_coat(key);
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -1424,8 +1411,7 @@ struct Fvr04RuntimeSceneCandidate {
 
 struct Fvr04PreparedCreature {
     record: Fvr04CreatureVisualRecord,
-    recipe: CreatureAssemblyRecipe,
-    coat: CreatureCoatAssetHandles,
+    displayed_sources: alife_world::CreaturePartSources,
     root_transform: Transform,
     root_visual: Fvr04ProductionCreatureVisualMarker,
 }
@@ -1775,16 +1761,6 @@ fn despawn_production_entity_hierarchy(world: &mut World, entity: Entity) {
 
 #[cfg(feature = "gpu-runtime")]
 fn despawn_fvr04_runtime_scene(world: &mut World) {
-    let coat_keys = {
-        let mut query = world
-            .query_filtered::<&ProductionCreatureCoatKey, With<ProductionCreatureAssemblyRoot>>();
-        query.iter(world).map(|key| key.0).collect::<Vec<_>>()
-    };
-    if let Some(mut context) = world.get_resource_mut::<Fvr04CreatureSpawnContext>() {
-        for key in coat_keys {
-            context.release_coat(key);
-        }
-    }
     let roots = production_entities_with::<Fvr04ProductionRuntimeSceneRoot>(world);
     for root in roots {
         if let Some(mut map) = world.get_resource_mut::<BevyEntityMap>() {
@@ -2052,36 +2028,9 @@ pub fn spawn_fvr03_production_voxel_scene(
             message: error.to_string(),
         }
     })?;
-    let creature_assets_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
-    let creature_preparations =
-        load_geneforge_assembly_preparation_index(&creature_assets_root, &creature_part_catalog)
-            .map_err(|error| GameAppShellError::InvalidProductionFrontend {
-                message: error.to_string(),
-            })?;
-    let creature_part_assets = {
-        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        let active_lod = match creature_settings.lod {
-            Fvr04CreatureLod::FullVoxel => CreaturePartLodId::Full,
-            Fvr04CreatureLod::CompactVoxel => CreaturePartLodId::Compact,
-            Fvr04CreatureLod::ImpostorVoxel => CreaturePartLodId::Impostor,
-        };
-        CreaturePartAssetLibrary::load_geneforge_lod_for_profile(
-            &creature_assets_root,
-            &creature_part_catalog,
-            &mut meshes,
-            summary.profile_id,
-            active_lod,
-        )
-        .map_err(|error| GameAppShellError::InvalidProductionFrontend {
-            message: error.to_string(),
-        })?
-    };
     let mut creature_spawn_context = Fvr04CreatureSpawnContext {
         settings: creature_settings,
         catalog: creature_part_catalog,
-        preparations: creature_preparations,
-        assets_root: creature_assets_root,
-        creature_part_assets,
     };
     let candidate = prepare_fvr04_runtime_scene_candidate(
         runtime_state,
@@ -2474,105 +2423,14 @@ fn validate_fvr04_creature_spawn_inputs(
     creatures: &[Fvr04CreatureVisualRecord],
     context: &Fvr04CreatureSpawnContext,
 ) -> Result<(), GameAppShellError> {
-    let lod = match context.settings.lod {
-        Fvr04CreatureLod::FullVoxel => CreaturePartLodId::Full,
-        Fvr04CreatureLod::CompactVoxel => CreaturePartLodId::Compact,
-        Fvr04CreatureLod::ImpostorVoxel => CreaturePartLodId::Impostor,
-    };
-
     for creature in creatures {
-        let visual = &creature.visual;
-        let coat_key = CreatureCoatKey::new(
-            visual.appearance.part_sources,
-            visual.appearance.palette_family,
-            visual.appearance.fur_pattern,
-            visual.appearance.marking_density,
-        );
-        let recipe = resolve_geneforge_creature_assembly(
-            visual.appearance.part_sources,
-            lod,
-            coat_key,
+        creature.visual.validate()?;
+        // Preserve catalog family fallback without loading retired geometry or coats.
+        resolve_creature_part_display_sources(
+            creature.visual.appearance.part_sources,
             &context.catalog,
-            &context.preparations,
         )
-        .map_err(|error| GameAppShellError::InvalidProductionFrontend {
-            message: format!(
-                "FVR04 saved creature {} assembly validation failed: {}",
-                visual.stable_id.raw(),
-                error
-            ),
-        })?;
-        if recipe.parts.is_empty() {
-            return Err(GameAppShellError::InvalidProductionFrontend {
-                message: format!(
-                    "FVR04 saved creature {} has no visible assembly parts",
-                    visual.stable_id.raw()
-                ),
-            });
-        }
-        for part in recipe.parts.values() {
-            let key = part.mesh_key();
-            if context.creature_part_assets.bounds(key.clone()).is_none()
-                || context.creature_part_assets.mesh(key.clone()).is_none()
-            {
-                return Err(GameAppShellError::InvalidProductionFrontend {
-                    message: format!(
-                        "FVR04 saved creature {} has unloaded mesh {:?}",
-                        visual.stable_id.raw(),
-                        key
-                    ),
-                });
-            }
-        }
-
-        if !matches!(context.settings.lod, Fvr04CreatureLod::ImpostorVoxel) {
-            let head = recipe.parts.get(&CreaturePartSlot::Head).ok_or_else(|| {
-                GameAppShellError::InvalidProductionFrontend {
-                    message: format!(
-                        "FVR04 saved creature {} assembly has no head",
-                        visual.stable_id.raw()
-                    ),
-                }
-            })?;
-            let head_asset = context.catalog.asset(&head.asset_id).ok_or_else(|| {
-                GameAppShellError::InvalidProductionFrontend {
-                    message: format!(
-                        "FVR04 saved creature {} head asset is missing",
-                        visual.stable_id.raw()
-                    ),
-                }
-            })?;
-            let emitted_head_bounds = context
-                .creature_part_assets
-                .bounds(head.mesh_key())
-                .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
-                    message: format!(
-                        "FVR04 saved creature {} head bounds are missing",
-                        visual.stable_id.raw()
-                    ),
-                })?;
-            let face_landmarks = remap_creature_face_landmarks(
-                head_asset.canonical_bounds,
-                emitted_head_bounds,
-                &head.landmarks,
-            )
-            .map_err(|error| GameAppShellError::InvalidProductionFrontend {
-                message: format!(
-                    "FVR04 saved creature {} face landmarks invalid: {}",
-                    visual.stable_id.raw(),
-                    error
-                ),
-            })?;
-            creature_face_style_from_landmarks(visual.appearance, &face_landmarks).map_err(
-                |error| GameAppShellError::InvalidProductionFrontend {
-                    message: format!(
-                        "FVR04 saved creature {} face style invalid: {}",
-                        visual.stable_id.raw(),
-                        error
-                    ),
-                },
-            )?;
-        }
+        .map_err(|error| fvr04_scene_preflight_error(error.to_string()))?;
     }
     Ok(())
 }
@@ -2765,151 +2623,60 @@ fn fvr04_scene_preflight_error(message: impl Into<String>) -> GameAppShellError 
 }
 
 fn prepare_fvr04_creature_batch(
-    world: &mut World,
     creatures: &[Fvr04CreatureVisualRecord],
     tile_summaries: &BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
-    context: &mut Fvr04CreatureSpawnContext,
+    context: &Fvr04CreatureSpawnContext,
 ) -> Result<Fvr04PreparedCreatureBatch, GameAppShellError> {
+    validate_fvr04_creature_spawn_inputs(creatures, context)?;
     let settings = context.settings.clone();
-    let lod = match settings.lod {
-        Fvr04CreatureLod::FullVoxel => CreaturePartLodId::Full,
-        Fvr04CreatureLod::CompactVoxel => CreaturePartLodId::Compact,
-        Fvr04CreatureLod::ImpostorVoxel => CreaturePartLodId::Impostor,
-    };
     let mut prepared = Vec::new();
-    let preparation_result = (|| -> Result<(), GameAppShellError> {
-        for (index, creature) in creatures
-            .iter()
-            .take(usize::from(settings.max_visible_creatures))
-            .enumerate()
-        {
-            let visual = &creature.visual;
-            let coat_key = CreatureCoatKey::new(
-                visual.appearance.part_sources,
-                visual.appearance.palette_family,
-                visual.appearance.fur_pattern,
-                visual.appearance.marking_density,
-            );
-            let recipe = resolve_geneforge_creature_assembly(
-                visual.appearance.part_sources,
-                lod,
-                coat_key,
-                &context.catalog,
-                &context.preparations,
-            )
-            .map_err(|error| {
-                fvr04_scene_preflight_error(format!(
-                    "FVR04 saved creature {} assembly preparation failed: {error}",
-                    visual.stable_id.raw()
-                ))
-            })?;
-            if recipe.parts.is_empty() {
-                return Err(fvr04_scene_preflight_error(format!(
-                    "FVR04 saved creature {} has no visible assembly parts",
-                    visual.stable_id.raw()
-                )));
-            }
-            let mut local_bounds = None::<CreatureVisualBounds>;
-            for part in recipe.parts.values() {
-                let key = part.mesh_key();
-                let bounds = context
-                    .creature_part_assets
-                    .bounds(key.clone())
-                    .ok_or_else(|| {
-                        fvr04_scene_preflight_error(format!(
-                            "FVR04 saved creature {} part {:?} has no finite bounds",
-                            visual.stable_id.raw(),
-                            part.slot
-                        ))
-                    })?;
-                context.creature_part_assets.mesh(key).ok_or_else(|| {
-                    fvr04_scene_preflight_error(format!(
-                        "FVR04 saved creature {} part {:?} mesh is not loaded",
-                        visual.stable_id.raw(),
-                        part.slot
-                    ))
-                })?;
-                let transform = geneforge_authored_transform_to_bevy(part.authored_transform);
-                let transformed = transform_creature_visual_bounds(bounds, transform);
-                if let Some(current) = &mut local_bounds {
-                    current.include(transformed);
-                } else {
-                    local_bounds = Some(transformed);
-                }
-            }
-            let local_bounds = local_bounds.ok_or_else(|| {
-                fvr04_scene_preflight_error(format!(
-                    "FVR04 saved creature {} produced no visible bounds",
-                    visual.stable_id.raw()
-                ))
-            })?;
-            let coat = world
-                .resource_scope(|world, mut images: bevy::prelude::Mut<Assets<Image>>| {
-                    world.resource_scope(
-                        |_world, mut materials: bevy::prelude::Mut<Assets<StandardMaterial>>| {
-                            context.creature_part_assets.acquire_geneforge_coat(
-                                &context.assets_root,
-                                &context.catalog,
-                                &recipe,
-                                &mut images,
-                                &mut materials,
-                            )
-                        },
-                    )
-                })
-                .map_err(|error| {
-                    fvr04_scene_preflight_error(format!(
-                        "FVR04 saved creature {} coat preparation failed: {error}",
-                        visual.stable_id.raw()
-                    ))
-                })?;
-            let surface_height = tile_summaries
-                .get(&creature.tile)
-                .map(|tile| tile.height_units)
-                .unwrap_or(0.44);
-            let base_scale = fvr04_creature_scale(visual, settings.lod);
-            let base_height = grounded_root_height(
-                surface_height,
-                0.04,
+    for (index, creature) in creatures
+        .iter()
+        .take(usize::from(settings.max_visible_creatures))
+        .enumerate()
+    {
+        let visual = &creature.visual;
+        let displayed_sources =
+            resolve_creature_part_display_sources(visual.appearance.part_sources, &context.catalog)
+                .map_err(|error| fvr04_scene_preflight_error(error.to_string()))?
+                .displayed_sources;
+        let surface_height = tile_summaries
+            .get(&creature.tile)
+            .map(|tile| tile.height_units)
+            .unwrap_or(0.44);
+        let base_scale = hearthling::scale(visual.appearance);
+        let local_bounds = hearthling::LOCAL_BOUNDS;
+        let base_height = grounded_root_height(
+            surface_height,
+            0.04,
+            local_bounds,
+            base_scale.to_array(),
+            bevy::math::Mat3::IDENTITY.to_cols_array(),
+        );
+        let base_translation = Vec3::new(visual.position.x, base_height, visual.position.y);
+        let root_transform = Transform::from_translation(base_translation).with_scale(base_scale);
+        let phase = (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11;
+        prepared.push(Fvr04PreparedCreature {
+            record: creature.clone(),
+            displayed_sources,
+            root_transform,
+            root_visual: Fvr04ProductionCreatureVisualMarker {
+                stable_id: visual.stable_id,
+                organism_id: visual.organism_id,
+                tile: creature.tile,
+                expression: visual.expression,
+                animation: visual.animation,
+                lod: settings.lod,
+                base_translation,
+                local_offset: Vec3::ZERO,
+                base_scale,
                 local_bounds,
-                base_scale.to_array(),
-                bevy::math::Mat3::IDENTITY.to_cols_array(),
-            );
-            let base_translation = Vec3::new(visual.position.x, base_height, visual.position.y);
-            let root_transform = Transform::from_translation(base_translation)
-                .with_rotation(Quat::from_rotation_y(std::f32::consts::PI))
-                .with_scale(base_scale);
-            let phase = (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11;
-            prepared.push(Fvr04PreparedCreature {
-                record: creature.clone(),
-                recipe,
-                coat,
-                root_transform,
-                root_visual: Fvr04ProductionCreatureVisualMarker {
-                    stable_id: visual.stable_id,
-                    organism_id: visual.organism_id,
-                    tile: creature.tile,
-                    expression: visual.expression,
-                    animation: visual.animation,
-                    lod: settings.lod,
-                    base_translation,
-                    local_offset: Vec3::ZERO,
-                    base_scale,
-                    local_bounds,
-                    surface_height,
-                    body_yaw: 0.0,
-                    head_yaw: 0.0,
-                    phase,
-                },
-            });
-        }
-        Ok(())
-    })();
-    if let Err(error) = preparation_result {
-        for creature in &prepared {
-            context.release_coat(creature.coat.selected_key);
-        }
-        return Err(error);
+                surface_height,
+                body_yaw: 0.0,
+                head_yaw: 0.0,
+                phase,
+            },
+        });
     }
     Ok(Fvr04PreparedCreatureBatch {
         settings,
@@ -3098,7 +2865,6 @@ fn prepare_fvr04_runtime_scene(
     context: &mut Fvr04CreatureSpawnContext,
 ) -> Result<Fvr04PreparedRuntimeScene, GameAppShellError> {
     let creatures = prepare_fvr04_creature_batch(
-        world,
         &candidate.runtime_state.creatures,
         &candidate.tile_summaries_by_tile,
         context,
@@ -4527,7 +4293,7 @@ fn spawn_fvr04_prepared_creature_batch(
     let mut part_families = BTreeSet::new();
     let mut species_archetypes = BTreeSet::new();
     let scene_mesh_handles = BTreeSet::<bevy::asset::AssetId<Mesh>>::new();
-    let mut scene_material_handles = BTreeSet::new();
+    let scene_material_handles = BTreeSet::<bevy::asset::AssetId<StandardMaterial>>::new();
     let part_entity_count = 0_usize;
     let mut mixed_assembly_count = 0_usize;
 
@@ -4535,10 +4301,10 @@ fn spawn_fvr04_prepared_creature_batch(
         let visual = &creature.record.visual;
         species_archetypes.insert(visual.appearance.species_archetype);
         let recipe_families = creature
-            .recipe
-            .parts
-            .values()
-            .map(|part| part.source_family)
+            .displayed_sources
+            .iter_slots()
+            .into_iter()
+            .map(|(_, family)| family)
             .collect::<BTreeSet<_>>();
         mixed_assembly_count += usize::from(recipe_families.len() > 1);
         part_families.extend(recipe_families);
@@ -4566,30 +4332,14 @@ fn spawn_fvr04_prepared_creature_batch(
                     caveman_furry_design: true,
                     heritable_appearance: true,
                 },
-                creature.recipe.display_only,
+                true,
             ))
             .id();
-        world
-            .entity_mut(root)
-            .insert(ProductionCreatureCoatKey(creature.coat.selected_key));
         world
             .resource_mut::<BevyEntityMap>()
             .bind(root, visual.stable_id)
             .expect("validated creature root stable ID must bind");
-        let coat_material = creature.coat.material;
-        scene_material_handles.insert(coat_material.id());
         hearthling::spawn(world, root, visual.appearance);
-        if let Ok(mut entity) = world.get_entity_mut(root) {
-            let scale = hearthling::scale(visual.appearance);
-            let mut marker = entity
-                .get_mut::<Fvr04ProductionCreatureVisualMarker>()
-                .unwrap();
-            marker.base_scale = scale;
-            marker.local_bounds = CreatureVisualBounds::new([-0.85, 0.0, -0.45], [0.85, 2.61, 0.9]);
-            let mut transform = entity.get_mut::<Transform>().unwrap();
-            transform.scale = scale;
-            transform.rotation = Quat::IDENTITY;
-        }
         stable_lookup_by_raw_id.insert(visual.stable_id.raw(), expression_buffer.len());
         expression_buffer.push(Fvr04CreatureExpressionSample {
             stable_id: visual.stable_id,
@@ -4653,14 +4403,6 @@ fn socket_translation_to_bevy([x, depth, height]: [f32; 3]) -> Vec3 {
     Vec3::new(x, height, -depth)
 }
 
-fn geneforge_authored_transform_to_bevy(matrix: [f64; 16]) -> Transform {
-    let matrix = matrix.map(|value| value as f32);
-    Transform::from_matrix(Mat4::from_cols_array(&[
-        matrix[0], matrix[4], matrix[8], matrix[12], matrix[1], matrix[5], matrix[9], matrix[13],
-        matrix[2], matrix[6], matrix[10], matrix[14], matrix[3], matrix[7], matrix[11], matrix[15],
-    ]))
-}
-
 #[cfg(test)]
 fn canonical_vec_to_bevy(vector: Vec3) -> Vec3 {
     Vec3::new(vector.x, vector.z, -vector.y)
@@ -4683,23 +4425,6 @@ fn socket_scale_to_bevy([x, depth, height]: [f32; 3]) -> Vec3 {
     Vec3::new(x, height, depth)
 }
 
-fn transform_creature_visual_bounds(
-    bounds: CreatureVisualBounds,
-    transform: Transform,
-) -> CreatureVisualBounds {
-    let affine = transform.compute_affine();
-    let mut min = [f32::INFINITY; 3];
-    let mut max = [f32::NEG_INFINITY; 3];
-    for corner in bounds.corners() {
-        let point = affine.transform_point3(Vec3::from_array(corner)).to_array();
-        for axis in 0..3 {
-            min[axis] = min[axis].min(point[axis]);
-            max[axis] = max[axis].max(point[axis]);
-        }
-    }
-    CreatureVisualBounds::new(min, max)
-}
-
 #[cfg(test)]
 fn socket_transform_to_bevy(
     _slot: CreaturePartSlot,
@@ -4709,23 +4434,6 @@ fn socket_transform_to_bevy(
     Transform::from_translation(socket_translation_to_bevy(socket.translation))
         .with_rotation(socket_rotation_to_bevy(socket.rotation_xyzw))
         .with_scale(socket_scale_to_bevy(socket.scale) * socket_scale_to_bevy(local_scale))
-}
-
-fn fvr04_creature_scale(visual: &CreatureVisualSnapshot, lod: Fvr04CreatureLod) -> Vec3 {
-    let fatigue_squash = 1.0 - visual.cues.fatigue.value * 0.18;
-    let fear_narrow = 1.0 - visual.cues.fear.value * 0.10;
-    let energy = 0.92 + visual.cues.energy.value * 0.14;
-    match lod {
-        Fvr04CreatureLod::FullVoxel => {
-            Vec3::new(1.32 * fear_narrow, 1.32 * fatigue_squash * energy, 1.32)
-        }
-        Fvr04CreatureLod::CompactVoxel => {
-            Vec3::new(1.22 * fear_narrow, 1.22 * fatigue_squash, 1.22)
-        }
-        Fvr04CreatureLod::ImpostorVoxel => {
-            Vec3::new(0.98 * fear_narrow, 0.98 * fatigue_squash, 0.86)
-        }
-    }
 }
 
 fn project_authoritative_creature_root_transform(
@@ -4753,7 +4461,7 @@ fn project_authoritative_creature_root_transform(
     true
 }
 
-#[cfg(feature = "gpu-runtime")]
+#[cfg(any(feature = "gpu-runtime", test))]
 fn fvr04_live_creature_visual_record(
     frame: &LiveBrainPresentationFrame,
     world_seed: u64,
