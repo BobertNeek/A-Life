@@ -855,12 +855,9 @@ impl HeadlessWorld {
         self.terrain.as_ref()
     }
 
-    /// New-game placement only. Existing saves never silently change geography.
-    pub fn enable_highlands_for_new_game(&mut self) -> Result<(), ScaffoldContractError> {
-        self.enable_terrain_for_new_game(
-            crate::WorldTerrain::highlands(),
-            Vec3f::new(32.0, 0.0, 70.0),
-        )
+    /// Place a newly created world on the playable island.
+    pub fn enable_island_for_new_game(&mut self) -> Result<(), ScaffoldContractError> {
+        self.enable_terrain_for_new_game(crate::island_terrain(), Vec3f::new(80.0, 0.0, 250.0))
     }
 
     /// Convert the existing flat scenario's X/Y layout into this heightfield's

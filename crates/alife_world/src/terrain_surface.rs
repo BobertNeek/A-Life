@@ -2,12 +2,9 @@
 //! The baked samples come from the same vertices as the visible near terrain.
 use alife_core::{ScaffoldContractError, Vec3f};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::OnceLock};
+use std::collections::HashMap;
 
-const BYTES: &[u8] = include_bytes!("../assets/highlands-v1.bin");
 pub(crate) const CELL: f32 = 10.0;
-pub const HIGHLANDS_WATER_HEIGHT: f32 = 0.25;
-pub const HIGHLANDS_BODY_RADIUS: f32 = 0.2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TerrainBinding {
@@ -45,21 +42,22 @@ mod tests {
             .agent("walker", OrganismId(1), Vec3f::ZERO)
             .build()
             .unwrap();
-        world.enable_highlands_for_new_game().unwrap();
+        world.enable_island_for_new_game().unwrap();
         world
     }
     #[test]
-    fn highlands_triangles_and_vertical_pick_agree() {
-        let s = highlands();
+    fn island_triangles_and_vertical_pick_agree() {
+        let terrain = crate::island_terrain();
+        let s = terrain.surface();
         // Interior samples on both sides of a deliberately non-planar grid cell.
-        let fixture = HighlandsSurface {
+        let fixture = TerrainSurface {
             width: 2,
             depth: 2,
             origin_x: 0.0,
             origin_z: 0.0,
             spacing: 1.0,
             digest: 0,
-            water_level: Some(HIGHLANDS_WATER_HEIGHT),
+            water_level: Some(0.0),
             heights: vec![0.0, 2.0, 4.0, 10.0],
             obstacles: vec![],
             cells: HashMap::new(),
@@ -73,11 +71,12 @@ mod tests {
                 .unwrap();
             assert!((hit.y - h).abs() < 0.001);
         }
-        assert!(s.height(-401.0, 0.0).is_none());
+        assert!(s.height(-501.0, 0.0).is_none());
     }
     #[test]
-    fn highlands_actual_move_updates_authoritative_height_and_displacement() {
-        let s = highlands();
+    fn island_actual_move_updates_authoritative_height_and_displacement() {
+        let terrain = crate::island_terrain();
+        let s = terrain.surface();
         let mut w = world();
         let id = w.entity_id("walker").unwrap();
         // Find a real sloping, unobstructed portion of the exported surface.
@@ -99,8 +98,9 @@ mod tests {
         assert!((result.execution.physical.displacement.y - (actual.y - start.y)).abs() < 0.0001);
     }
     #[test]
-    fn highlands_actual_move_reports_blocked_at_a_baked_rock_or_trunk() {
-        let s = highlands();
+    fn island_actual_move_reports_blocked_at_a_baked_rock_or_trunk() {
+        let terrain = crate::island_terrain();
+        let s = terrain.surface();
         let mut w = world();
         let id = w.entity_id("walker").unwrap();
         let (start, end) = s
@@ -108,11 +108,12 @@ mod tests {
             .iter()
             .find_map(|b| {
                 let z = (b[1] + b[3]) * 0.5;
-                let x = b[0] - HIGHLANDS_BODY_RADIUS - 0.04;
+                let x = b[0] - crate::LocomotionLimits::default().body_radius - 0.04;
                 let a = Vec3f::new(x, s.height(x, z)?, z);
                 let e = Vec3f::new(x + 0.2, s.height(x + 0.2, z)?, z);
-                (s.walkable(x, z) && s.obstacle_at(e.x, e.z, HIGHLANDS_BODY_RADIUS))
-                    .then_some((a, e))
+                (s.walkable(x, z)
+                    && s.obstacle_at(e.x, e.z, crate::LocomotionLimits::default().body_radius))
+                .then_some((a, e))
             })
             .expect("accessible collider boundary");
         w.editor_move_object(id, start).unwrap();
@@ -126,15 +127,15 @@ mod tests {
         assert_eq!(w.entity(id).unwrap().position, start);
     }
     #[test]
-    fn highlands_sweep_rejects_thin_obstacle_and_water_and_steep_ground() {
-        let mut s = HighlandsSurface {
+    fn island_sweep_rejects_thin_obstacle_and_water_and_steep_ground() {
+        let mut s = TerrainSurface {
             width: 2,
             depth: 2,
             origin_x: 0.0,
             origin_z: 0.0,
             spacing: 10.0,
             digest: 0,
-            water_level: Some(HIGHLANDS_WATER_HEIGHT),
+            water_level: Some(0.0),
             heights: vec![1.0; 4],
             obstacles: vec![[4.95, 0.0, 5.05, 10.0, 1.0, 4.0]],
             cells: HashMap::from([((0, 0), vec![0])]),
@@ -153,15 +154,9 @@ mod tests {
 }
 
 impl TerrainBinding {
-    pub fn highlands() -> Self {
-        Self {
-            version: 1,
-            digest: highlands().digest,
-        }
-    }
     /// Check the identity format. `WorldTerrain::restore` also verifies its data.
     pub fn validate(self) -> Result<(), ScaffoldContractError> {
-        if !matches!(self.version, 1 | 2) || self.digest == 0 {
+        if self.version != 2 || self.digest == 0 {
             return Err(ScaffoldContractError::InvalidId);
         }
         Ok(())
@@ -180,52 +175,6 @@ pub struct TerrainSurface {
     pub(crate) obstacles: Vec<[f32; 6]>,
     pub(crate) cells: HashMap<(i32, i32), Vec<usize>>,
     pub(crate) water_level: Option<f32>,
-}
-
-pub type HighlandsSurface = TerrainSurface;
-
-pub fn highlands() -> &'static TerrainSurface {
-    static SURFACE: OnceLock<HighlandsSurface> = OnceLock::new();
-    SURFACE.get_or_init(|| {
-        assert_eq!(&BYTES[..8], b"HLAND001");
-        let u32_at = |i| u32::from_le_bytes(BYTES[i..i + 4].try_into().unwrap());
-        let f32_at = |i| f32::from_le_bytes(BYTES[i..i + 4].try_into().unwrap());
-        let width = u32_at(8) as usize;
-        let depth = u32_at(12) as usize;
-        let count = u32_at(28) as usize;
-        assert_eq!(BYTES.len(), 32 + width * depth * 4 + count * 24);
-        let heights = (0..width * depth)
-            .map(|i| f32_at(32 + i * 4))
-            .collect::<Vec<_>>();
-        assert!(heights.iter().all(|h| h.is_finite()));
-        let obstacles = (0..count)
-            .map(|i| std::array::from_fn(|j| f32_at(32 + width * depth * 4 + i * 24 + j * 4)))
-            .collect::<Vec<_>>();
-        let mut cells: HashMap<(i32, i32), Vec<usize>> = HashMap::new();
-        for (i, b) in obstacles.iter().enumerate() {
-            for z in ((b[1] - 0.5) / CELL).floor() as i32..=((b[3] + 0.5) / CELL).floor() as i32 {
-                for x in ((b[0] - 0.5) / CELL).floor() as i32..=((b[2] + 0.5) / CELL).floor() as i32
-                {
-                    cells.entry((x, z)).or_default().push(i);
-                }
-            }
-        }
-        let digest = BYTES.iter().fold(0xcbf29ce484222325u64, |h, b| {
-            (h ^ u64::from(*b)).wrapping_mul(0x100000001b3)
-        });
-        HighlandsSurface {
-            width,
-            depth,
-            origin_x: f32_at(16),
-            origin_z: f32_at(20),
-            spacing: f32_at(24),
-            digest,
-            heights,
-            water_level: Some(HIGHLANDS_WATER_HEIGHT),
-            obstacles,
-            cells,
-        }
-    })
 }
 
 impl TerrainSurface {
