@@ -4,9 +4,9 @@ Source: main `482948ec116bad505cee0225cad74c1ab110acb7`, plus this focused test-
 
 ## Correction
 
-The six active-battery GPU success tests and four Era 1 GPU success tests unwrap
-constructors that deliberately return `CanonicalBiologyUnavailable` before GPU
-initialization. Mark these ten tests explicitly ignored until canonical
+The six active-battery, five Era 1 (including learning), and one evolutionary
+hardening GPU success tests unwrap constructors that deliberately return `CanonicalBiologyUnavailable` before GPU
+initialization. Mark these twelve tests explicitly ignored until canonical
 organism biology and sealed receptor-gated learning are integrated. Keep their
 assertions and bodies intact for that future integration.
 
@@ -17,11 +17,13 @@ legacy evaluation, training, or promotion.
 
 ## Evidence and limits
 
-Before the change, the selected active-battery and Era 1 success tests both
-failed immediately with the expected `CanonicalBiologyUnavailable` error;
-neither reached GPU initialization. After the change, those three integration
-test targets with `gpu-tests` enabled pass three CPU/contract tests and report
-ten explicit ignores. The default-feature headless legacy guard also passes.
+Before the change, the selected active-battery, Era 1, learning and evolution
+success tests all failed immediately with the expected `CanonicalBiologyUnavailable` error;
+none reached GPU initialization. After the change, the four safe integration
+test targets with `gpu-tests` enabled pass five CPU/contract tests and report
+eleven explicit ignores. The selected blocked evolution test reports the twelfth
+ignore; its separate GPU foundation regression is not run. The default-feature
+headless legacy guard also passes.
 Optional-feature all-targets Cargo check and strict Clippy, formatting, static
 core boundaries, and documentation assertions pass.
 
@@ -41,6 +43,6 @@ performance measurement was needed or made.
 - AOA-LEARN-002: the prerequisite includes sealing and applying or discarding
   the matching eligibility transaction.
 
-The controlling architecture is unchanged. This work touches only the two
+The controlling architecture is unchanged. This work touches only four
 training integration test files and this dated report; it has no file overlap
 with the contact, newborn, GeneForge, or island/art changes.
