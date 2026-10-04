@@ -11,8 +11,8 @@ use alife_archive::{
 };
 use alife_core::{
     ArchiveCheckpointDisposition, ArchiveCheckpointRetention, Blake3Digest, BrainCapacityClass,
-    BrainClassId, DevelopmentState, FoundationWeightAsset, FounderMode, FounderSelection, GenomeId,
-    LanguageCodebookV1, LineageId, MetricReading, NormalizedScalar, OrganismId,
+    BrainClassId, FoundationWeightAsset, FounderMode, FounderSelection, GenomeId,
+    LanguageCodebookV1, LineageId, MetricReading, N512FounderFoundationProjection, OrganismId,
     PassiveLifeStatistics, PassiveMetricKind, PolicyBackend, SensorProfile, SpeechTranslationInput,
     SpeechTranslationReceipt, SpeechTranslationRequest, SurfaceTokenBinding, Tick, UtteranceId,
     UtteranceSourceKind, Validate, Vec3f, WorldEntityId,
@@ -47,8 +47,7 @@ use crate::bevy_shell::{
 use crate::{
     curated_founder_reset::CuratedFounderAgentInput,
     gpu_live_runtime::{
-        compile_gpu_components_from_genome, CuratedFounderGpuResidencyState,
-        CuratedFounderResetDispatchResult, LiveAgentResetIntent,
+        CuratedFounderGpuResidencyState, CuratedFounderResetDispatchResult, LiveAgentResetIntent,
     },
     Fvr03ProductionVoxelSceneResource, Fvr03ProductionVoxelSelectionResource,
     Fvr04ProductionCreatureSceneResource, Fvr05ProductionUxStateResource, GameAppShellError,
@@ -1561,6 +1560,7 @@ fn map_lineage_cohort(
             return Err(LineageResetMappingError::FounderMode { digest });
         }
         validate_resolved_genetic_founder(
+            &library,
             founder,
             sensor_profile,
             &foundation_asset,
@@ -1591,6 +1591,7 @@ fn map_lineage_cohort(
 }
 
 fn validate_resolved_genetic_founder(
+    library: &LineageLibrary,
     founder: &ResolvedFounder,
     sensor_profile: SensorProfile,
     expected_foundation: &FoundationWeightAsset,
@@ -1646,30 +1647,40 @@ fn validate_resolved_genetic_founder(
             field: "foundation identity/version/compatibility/payload",
         });
     }
-    let development = DevelopmentState::new(
-        founder.genome.id,
-        Tick::ZERO,
-        NormalizedScalar::new(0.25).map_err(|error| {
-            LineageResetMappingError::RuntimeCompatibility {
-                reason: format!("genetic founder development baseline is invalid: {error}"),
-            }
-        })?,
-    );
-    // Compile the exact checked builtin through the same admission and stable
-    // construction inputs as the live runtime; incompatible genomes still fail.
-    let (phenotype, _) =
-        compile_gpu_components_from_genome(founder.genome.clone(), development, sensor_profile)
+    let genome = library
+        .load_creature_genome(&founder.manifest)
+        .map_err(|error| LineageResetMappingError::ArchiveManifest {
+            digest,
+            reason: format!("archived composite founder genotype is invalid: {error}"),
+        })?;
+    let expressed =
+        genome
+            .express()
             .map_err(|error| LineageResetMappingError::ArchiveManifest {
                 digest,
-                reason: format!("archived genetic founder cannot compile against Nano512: {error}"),
+                reason: format!("archived composite founder cannot express: {error}"),
             })?;
+    if expressed.brain_genome != founder.genome {
+        return Err(LineageResetMappingError::FoundationMismatch {
+            digest,
+            field: "composite/source brain genome",
+        });
+    }
+    let projection =
+        N512FounderFoundationProjection::compile(&expressed, sensor_profile, &foundation).map_err(
+            |error| LineageResetMappingError::ArchiveManifest {
+                digest,
+                reason: format!("archived genetic founder cannot project against Nano512: {error}"),
+            },
+        )?;
+    let phenotype = projection.compiled_phenotype();
     phenotype.validate_against(&capacity).map_err(|error| {
         LineageResetMappingError::ArchiveManifest {
             digest,
             reason: format!("compiled genetic founder phenotype is invalid: {error}"),
         }
     })?;
-    foundation.validate_against(&phenotype).map_err(|_error| {
+    foundation.validate_against(phenotype).map_err(|_error| {
         LineageResetMappingError::FoundationMismatch {
             digest,
             field: "foundation ABI/route/plasticity/address-map contract",
@@ -3463,6 +3474,7 @@ mod tests {
     use bevy::prelude::{Children, Entity};
 
     use crate::curated_founder_staging::CuratedFounderSaveState;
+    use crate::gpu_live_runtime::compile_gpu_components_from_genome;
 
     #[test]
     fn selected_hand_speech_reaches_nearby_listeners_in_flat_and_elevated_worlds() {
@@ -3669,13 +3681,52 @@ mod tests {
         foundation: &FoundationWeightAsset,
         sensor_profile: SensorProfile,
     ) -> Blake3Digest {
-        // The immutable Nano512 graph admits only its fixed coordinate topology.
-        let coordinate_seed = if capacity.id() == BrainCapacityClass::N512_ID {
-            alife_core::LEGACY_NANO512_V1_COORDINATE_SEED
-        } else {
-            812_100 + organism_id.raw()
-        };
-        let genome = BrainGenome::scaffold(coordinate_seed, capacity.id());
+        if capacity.id() == BrainCapacityClass::N512_ID {
+            let manifest = foundation.manifest();
+            let identity = alife_core::FoundationGeneticIdentity::new(
+                manifest.foundation_id().raw(),
+                manifest.foundation_version().raw() as u16,
+                manifest.compatibility_family_id().raw(),
+                capacity.id(),
+            )
+            .unwrap();
+            let genome = alife_core::CreatureGenome::early_mammal_founder(
+                812_100 + organism_id.raw(),
+                identity,
+            )
+            .unwrap();
+            let expressed = genome.express().unwrap();
+            let projection = alife_core::N512FounderFoundationProjection::compile(
+                &expressed,
+                sensor_profile,
+                foundation,
+            )
+            .unwrap();
+            let foundation_bytes = foundation.encode_canonical().unwrap();
+            let prepared = library
+                .prepare_composite_birth_batch(&[
+                    alife_archive::CompositeGeneticArchiveBatchInput {
+                        source_run_id: "lineage-causal-test-run",
+                        organism_id,
+                        genome_id: genome.id,
+                        lineage_id: genome.lineage_id,
+                        birth_tick: Tick::new(4),
+                        foundation: genome.foundation,
+                        foundation_content_digest: foundation.digest(),
+                        sensor_profile,
+                        projection_receipt: Some(projection.receipt()),
+                        phenotype_hash: projection.compiled_phenotype().phenotype_hash(),
+                        creature_genome: &genome,
+                        phenotype: projection.compiled_phenotype(),
+                        foundation_asset_bytes: &foundation_bytes,
+                    },
+                ])
+                .unwrap();
+            let digest = prepared.manifest_digests()[0];
+            library.commit_composite_birth_batch(prepared).unwrap();
+            return digest;
+        }
+        let genome = BrainGenome::scaffold(812_100 + organism_id.raw(), capacity.id());
         let development =
             DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.25).unwrap());
         let (phenotype, _) =
@@ -3692,6 +3743,82 @@ mod tests {
                 foundation_asset_bytes: Some(&foundation_bytes),
             })
             .unwrap()
+    }
+
+    #[test]
+    fn lineage_composite_founder_preserves_source_and_rejects_identity_or_hash_mismatch() {
+        let root = temp_lineage_root("composite-admission");
+        let mut library =
+            LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+        let profile = SensorProfile::PrivilegedAffordanceV1;
+        let capacity = BrainCapacityClass::n512();
+        let foundation = FoundationWeightAsset::builtin_nano512_v1(profile).unwrap();
+        let bytes = foundation.encode_canonical().unwrap();
+        let digest = archive_agent_record(
+            &mut library,
+            OrganismId::new(77).unwrap(),
+            &capacity,
+            &foundation,
+            profile,
+        );
+        let resolved = library
+            .resolve_founder_cohort(
+                "composite-admission-target",
+                913_777,
+                &[FounderSelection {
+                    source_manifest_digest: digest,
+                    mode: FounderMode::GeneticFounder,
+                }],
+            )
+            .unwrap();
+        let founder = &resolved.founders[0];
+        let source = library.load_creature_genome(&founder.manifest).unwrap();
+        assert_eq!(source.express().unwrap().brain_genome, founder.genome);
+        validate_resolved_genetic_founder(&library, founder, profile, &foundation, &bytes).unwrap();
+
+        let mut wrong_source = founder.clone();
+        wrong_source.genome =
+            BrainGenome::scaffold(alife_core::LEGACY_NANO512_V1_COORDINATE_SEED, capacity.id());
+        wrong_source.genome.id = founder.genome.id;
+        wrong_source.genome.lineage_id = founder.genome.lineage_id;
+        assert!(matches!(
+            validate_resolved_genetic_founder(
+                &library,
+                &wrong_source,
+                profile,
+                &foundation,
+                &bytes
+            ),
+            Err(LineageResetMappingError::FoundationMismatch {
+                field: "composite/source brain genome",
+                ..
+            })
+        ));
+
+        let mut wrong_hash = founder.clone();
+        wrong_hash.manifest.genetic.phenotype_hash = alife_core::PhenotypeHash([1, 2, 3, 4]);
+        assert!(matches!(
+            validate_resolved_genetic_founder(&library, &wrong_hash, profile, &foundation, &bytes),
+            Err(LineageResetMappingError::FoundationMismatch {
+                field: "manifest phenotype/ABI/address-map/language compatibility",
+                ..
+            })
+        ));
+
+        let mut missing_composite = founder.clone();
+        missing_composite.manifest.genetic.composite_genome_asset = None;
+        assert!(matches!(
+            validate_resolved_genetic_founder(
+                &library,
+                &missing_composite,
+                profile,
+                &foundation,
+                &bytes
+            ),
+            Err(LineageResetMappingError::ArchiveManifest { .. })
+        ));
+        drop(library);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

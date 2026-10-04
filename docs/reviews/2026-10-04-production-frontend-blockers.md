@@ -9,21 +9,27 @@ discovered issues. This repair is separate from all five candidate changes.
 ## Selected resolution
 
 The lineage Enter path requires the exact checked builtin Nano512 foundation.
-Its generic canonical compiler call rejected that asset's explicitly identified
-ABI before a valid archived founder could enter. The path now uses the existing
-live-runtime construction helper after checking the asset's exact bytes and
-identity. That helper performs the established builtin admission and normalizes
-construction maturation to 1.0 while preserving world developmental state. The
-fixture uses the builtin graph's fixed coordinate seed. The N2048 mismatch case
-still uses its existing runtime construction route and remains rejected by the
-Nano512-only Enter contract. Exact genome, phenotype, foundation, address-map,
-language, sensor and live-agent binding checks remain enforced.
+Current curated founders archive their complete composite genotype, its
+expressed source brain genome, and the phenotype produced by
+`N512FounderFoundationProjection`. Enter now loads the content-addressed
+`CreatureGenome`, expresses it, requires that its brain genome equals the
+resolved archived source genome, and reconstructs the same authoritative
+projection used by curated staging and live runtime admission. A generic brain
+compiler cannot reconstruct this phenotype from the source brain genome alone.
+
+The source genotype and brain genome remain unchanged. Missing composite data
+fails explicitly; there is no standalone-scaffold substitution. Exact foundation
+bytes and identity, phenotype hash, persistent address map, language, sensor,
+and live-agent binding checks remain enforced. The N2048 mismatch case still
+uses its existing construction route and remains rejected by the Nano512-only
+Enter contract.
 
 This changes no compiler validation or foundation format. It follows
 `AOA-GEN-008` and `AOA-PRIOR-008`: the checked content-addressed asset must match,
 and incompatible genome/asset combinations still fail explicitly. Sources:
 [lineage admission](../../crates/alife_game_app/src/production_conversation_lineage_ui.rs),
-[live construction](../../crates/alife_game_app/src/gpu_live_runtime.rs), and
+[curated archive preparation](../../crates/alife_game_app/src/curated_founder_staging.rs),
+[live admission](../../crates/alife_game_app/src/gpu_live_runtime.rs), and
 [immutable Nano512 ABI tests](../../crates/alife_core/tests/n512_legacy_compatibility_abi.rs).
 
 The renderer reset test formerly expected a retained-operation retry after a
@@ -139,3 +145,27 @@ not proven production defects by a mode that omits those systems. No failing
 assertion was weakened or blanket-ignored to claim acceptance.
 
 Strict production/GPU-test all-target Clippy passes after the fixture repair.
+
+## Current composite-founder admission
+
+The lineage fixture now writes actual composite birth records through
+`prepare_composite_birth_batch` and `commit_composite_birth_batch`, with a real
+early mammal `CreatureGenome`, source brain genome, canonical foundation bytes,
+and `N512FounderFoundationProjection` receipt and phenotype. This is the same
+archive batch contract consumed by current curated staging.
+
+Before the final admission repair, that archive prepares and commits successfully,
+but the existing Enter/live-binding test fails with `phenotype compilation
+failed`. After the repair, all 17 lineage tests pass. A new admission test proves
+that the archived source equals the composite expression and rejects a changed
+source brain genome, a changed manifest phenotype hash, and a missing composite
+payload. The existing live-binding test continues to reject missing and
+ambiguous agents, sensor mismatches and incompatible foundation classes.
+
+The final combined PRs #3–#10 tree passes the complete production-feature library
+run: 337 passed, zero failed and two existing ignored CPU timing benchmarks.
+Formatting, patch whitespace and documentation assertions (77/77) also pass.
+
+These are CPU archive/admission checks. They do not prove an end-to-end GPU reset
+or graphical acceptance. The 35 unavailable-backend failures and the separate
+corrupt-derived-save contract mismatch reported above remain unresolved.
