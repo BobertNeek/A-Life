@@ -1959,7 +1959,9 @@ impl HeadlessWorld {
         self.objects.values().cloned().collect()
     }
 
-    pub(crate) fn set_food_nutrition(
+    /// Intentional recipe changes also define tracked resource regrowth.
+    /// Consumption and decay do not pass through this construction boundary.
+    pub(crate) fn set_food_recipe_nutrition(
         &mut self,
         id: WorldEntityId,
         nutrition: f32,
@@ -1975,6 +1977,9 @@ impl HeadlessWorld {
             return Err(ScaffoldContractError::InvalidActionDecision);
         }
         object.nutrition = nutrition;
+        if let Some(resource) = self.ecology.resource_by_object_mut(id) {
+            resource.base_nutrition = nutrition;
+        }
         Ok(())
     }
 
