@@ -388,13 +388,13 @@ mod tests {
             Quat::from_euler(EulerRot::YXZ, -2.2, -1.1, -0.4),
         ] {
             for extent in [2.4, 24.0, 240.0] {
-                for state in 0..5 {
+                for (state, pose_contact) in POSE_CONTACTS.iter().enumerate() {
                     let transform = pose_transform(camera, contact, extent, state);
                     let camera_relative = camera.inverse() * transform.rotation;
                     assert!((camera_relative * Vec3::Y - Vec3::Y).length() < 1e-5);
                     assert!((camera_relative * -Vec3::Z - Vec3::Z).length() < 1e-5);
                     assert!((camera_relative * Vec3::X + Vec3::X).length() < 1e-5);
-                    let actual = transform.transform_point(POSE_CONTACTS[state]);
+                    let actual = transform.transform_point(*pose_contact);
                     let lift = if matches!(state, 2 | 3) {
                         0.0
                     } else {

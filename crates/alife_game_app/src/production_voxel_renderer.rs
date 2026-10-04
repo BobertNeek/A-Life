@@ -7732,12 +7732,12 @@ mod tests {
                 retryable,
             } => {
                 assert!(cause.contains("durable publication refresh failed"));
-                assert!(cause.contains("retry the retained operation"));
+                assert!(cause.contains("manual recovery is required"));
                 assert_eq!(proposed_save_digest, "refresh-proposed-digest");
                 assert_eq!(*archive_count, 4);
                 assert_eq!(*save_state, CuratedFounderSaveState::Unknown);
                 assert_eq!(*gpu_residency, CuratedFounderGpuResidencyState::Pending);
-                assert!(*retryable);
+                assert!(!retryable);
             }
             other => panic!("durable refresh must not project as pre-commit: {other:?}"),
         }

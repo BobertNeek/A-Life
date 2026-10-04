@@ -13,9 +13,9 @@ use alife_core::{
     ArchiveCheckpointDisposition, ArchiveCheckpointRetention, Blake3Digest, BrainCapacityClass,
     BrainClassId, DevelopmentState, FoundationWeightAsset, FounderMode, FounderSelection, GenomeId,
     LanguageCodebookV1, LineageId, MetricReading, NormalizedScalar, OrganismId,
-    PassiveLifeStatistics, PassiveMetricKind, PhenotypeCompiler, PolicyBackend, SensorProfile,
-    SpeechTranslationInput, SpeechTranslationReceipt, SpeechTranslationRequest,
-    SurfaceTokenBinding, Tick, UtteranceId, UtteranceSourceKind, Validate, Vec3f, WorldEntityId,
+    PassiveLifeStatistics, PassiveMetricKind, PolicyBackend, SensorProfile, SpeechTranslationInput,
+    SpeechTranslationReceipt, SpeechTranslationRequest, SurfaceTokenBinding, Tick, UtteranceId,
+    UtteranceSourceKind, Validate, Vec3f, WorldEntityId,
 };
 use alife_semantic::{
     BoundedSpeechTranslator, LlamaCppSpeechTranslationConfig, LlamaCppSpeechTranslator,
@@ -46,8 +46,10 @@ use crate::bevy_shell::{
 };
 use crate::{
     curated_founder_reset::CuratedFounderAgentInput,
-    gpu_live_runtime::CuratedFounderGpuResidencyState,
-    gpu_live_runtime::CuratedFounderResetDispatchResult, gpu_live_runtime::LiveAgentResetIntent,
+    gpu_live_runtime::{
+        compile_gpu_components_from_genome, CuratedFounderGpuResidencyState,
+        CuratedFounderResetDispatchResult, LiveAgentResetIntent,
+    },
     Fvr03ProductionVoxelSceneResource, Fvr03ProductionVoxelSelectionResource,
     Fvr04ProductionCreatureSceneResource, Fvr05ProductionUxStateResource, GameAppShellError,
     ProductionVoxelLaunchSummary,
@@ -1653,17 +1655,14 @@ fn validate_resolved_genetic_founder(
             }
         })?,
     );
-    let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
-        &founder.genome,
-        &capacity,
-        &development,
-        sensor_profile,
-        &foundation,
-    )
-    .map_err(|error| LineageResetMappingError::ArchiveManifest {
-        digest,
-        reason: format!("archived genetic founder cannot compile against Nano512: {error}"),
-    })?;
+    // Compile the exact checked builtin through the same admission and stable
+    // construction inputs as the live runtime; incompatible genomes still fail.
+    let (phenotype, _) =
+        compile_gpu_components_from_genome(founder.genome.clone(), development, sensor_profile)
+            .map_err(|error| LineageResetMappingError::ArchiveManifest {
+                digest,
+                reason: format!("archived genetic founder cannot compile against Nano512: {error}"),
+            })?;
     phenotype.validate_against(&capacity).map_err(|error| {
         LineageResetMappingError::ArchiveManifest {
             digest,
@@ -3670,17 +3669,18 @@ mod tests {
         foundation: &FoundationWeightAsset,
         sensor_profile: SensorProfile,
     ) -> Blake3Digest {
-        let genome = BrainGenome::scaffold(812_100 + organism_id.raw(), capacity.id());
+        // The immutable Nano512 graph admits only its fixed coordinate topology.
+        let coordinate_seed = if capacity.id() == BrainCapacityClass::N512_ID {
+            alife_core::LEGACY_NANO512_V1_COORDINATE_SEED
+        } else {
+            812_100 + organism_id.raw()
+        };
+        let genome = BrainGenome::scaffold(coordinate_seed, capacity.id());
         let development =
             DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.25).unwrap());
-        let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
-            &genome,
-            capacity,
-            &development,
-            sensor_profile,
-            foundation,
-        )
-        .unwrap();
+        let (phenotype, _) =
+            compile_gpu_components_from_genome(genome.clone(), development, sensor_profile)
+                .unwrap();
         let foundation_bytes = foundation.encode_canonical().unwrap();
         library
             .archive_birth(GeneticArchiveInput {
