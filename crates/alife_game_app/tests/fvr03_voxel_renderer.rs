@@ -12,8 +12,8 @@ use alife_game_app::bevy_shell::{LiveBrainPresentationFrame, LiveBrainPresentati
 #[cfg(not(feature = "vfx-hanabi"))]
 use alife_game_app::Fvr07ProductionVfxKind;
 use alife_game_app::{
-    default_environment_manifest_path, run_production_voxel_frontend_dry_run, CreaturePartSlot,
-    Fvr03ProductionVoxelCamera, Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelCreatureMarker,
+    run_production_voxel_frontend_dry_run, CreaturePartSlot, Fvr03ProductionVoxelCamera,
+    Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelCreatureMarker,
     Fvr03ProductionVoxelMaterialKind, Fvr03ProductionVoxelSceneResource,
     Fvr03ProductionVoxelSelectionMarker, Fvr03ProductionVoxelSelectionResource,
     Fvr03ProductionVoxelTerrainBatch, Fvr04ProductionCreatureFollowResource,
@@ -42,6 +42,9 @@ use bevy::{
         Mesh3d, MeshMaterial3d, Projection, StandardMaterial, Text, Transform, Vec3, Visibility,
     },
 };
+
+#[path = "support/current_production_launch.rs"]
+mod current_production_launch;
 
 fn successful_gpu_move_summary(
     organism_id: alife_core::OrganismId,
@@ -89,17 +92,19 @@ fn production_voxel_center(world_position: Vec3f) -> (f32, f32) {
     )
 }
 
-fn production_launch(profile_id: ProductionFrontendProfileId) -> ProductionVoxelLaunchConfig {
-    let mut launch = ProductionVoxelLaunchConfig::from_manifest(
-        default_environment_manifest_path(),
-        None,
-        profile_id,
-    )
-    .unwrap();
+fn production_launch(
+    profile_id: ProductionFrontendProfileId,
+) -> (
+    current_production_launch::CurrentProductionLaunchFixture,
+    ProductionVoxelLaunchConfig,
+) {
+    let fixture = current_production_launch::CurrentProductionLaunchFixture::new();
+    let mut launch = fixture.launch.clone();
+    launch.profile_id = profile_id;
     launch.population = Some(profile_id.budget().default_population);
     launch.smoke_seconds = Some(1);
     launch.dry_run = true;
-    launch
+    (fixture, launch)
 }
 
 fn quantized_rgba(color: [f32; 4]) -> [i32; 4] {
@@ -121,7 +126,8 @@ fn dry_run_rebuilds_an_incompatible_derived_runtime_save_before_gpu_launch() {
         "alife-fvr03-incompatible-runtime-save-{}-{nonce}",
         std::process::id()
     ));
-    let mut launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, mut launch) =
+        production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     launch.manifest_path = root.join("crates/alife_game_app/environment_manifest.json");
 
     let summary = run_production_voxel_frontend_dry_run(&launch).unwrap();
@@ -146,7 +152,7 @@ fn dry_run_rebuilds_an_incompatible_derived_runtime_save_before_gpu_launch() {
 
 #[test]
 fn modular_creature_renderer_spawns_shared_heritable_part_hierarchies() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -231,7 +237,7 @@ fn modular_creature_renderer_spawns_shared_heritable_part_hierarchies() {
 
 #[test]
 fn fvr11_terrain_contract_is_display_only() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -250,7 +256,7 @@ fn fvr11_terrain_contract_is_display_only() {
 
 #[test]
 fn fvr11_terrain_contract_is_display_only_and_layered() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -283,7 +289,7 @@ fn fvr11_terrain_contract_is_display_only_and_layered() {
 
 #[test]
 fn fvr11_terrain_material_contract_binds_lit_layers_and_water() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -335,7 +341,7 @@ fn fvr11_terrain_material_contract_binds_lit_layers_and_water() {
 #[test]
 fn fvr11_profile_lighting_preserves_minimum_floor_and_comfort_depth() {
     let lighting = |profile_id| {
-        let launch = production_launch(profile_id);
+        let (_fixture, launch) = production_launch(profile_id);
         let (mut app, _summary) =
             alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
         app.update();
@@ -412,7 +418,7 @@ fn fvr11_profile_lighting_preserves_minimum_floor_and_comfort_depth() {
 
 #[test]
 fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -597,7 +603,7 @@ fn fvr03_profiles_scale_renderer_residency_lod_and_camera_modes() {
 
 #[test]
 fn fvr03_stable_selection_returns_tile_coords_without_renderer_tokens() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -629,7 +635,7 @@ fn fvr03_stable_selection_returns_tile_coords_without_renderer_tokens() {
 
 #[test]
 fn fvr04_live_world_projection_moves_matching_creature_and_creates_newborn_by_stable_id() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -874,9 +880,10 @@ fn fvr04_live_world_projection_moves_matching_creature_and_creates_newborn_by_st
 }
 
 #[test]
+#[cfg(feature = "gpu-runtime")]
 fn curated_first_gpu_action_consumes_receipt_updates_registered_world_and_publishes_matching_live_frame(
 ) {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -987,7 +994,7 @@ fn curated_first_gpu_action_consumes_receipt_updates_registered_world_and_publis
 
 #[test]
 fn fvr04_live_world_projection_ignores_unmatched_and_non_agent_objects() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -1099,7 +1106,7 @@ fn fvr04_live_world_projection_ignores_unmatched_and_non_agent_objects() {
 
 #[test]
 fn fvr04_selection_marker_follows_the_moved_projected_creature_root() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -1184,7 +1191,7 @@ fn fvr04_selection_marker_follows_the_moved_projected_creature_root() {
 
 #[test]
 fn fvr04_camera_follow_recomputes_from_the_moved_projected_creature_root() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -1265,7 +1272,7 @@ fn fvr04_camera_follow_recomputes_from_the_moved_projected_creature_root() {
 
 #[test]
 fn fvr04_missing_selected_creature_root_hides_marker_without_stale_scene_coordinates() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -1340,7 +1347,7 @@ fn fvr04_missing_selected_creature_root_hides_marker_without_stale_scene_coordin
 
 #[test]
 fn fvr04_live_world_label_tracks_projected_root_by_stable_id() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -1426,7 +1433,7 @@ fn fvr04_live_world_label_tracks_projected_root_by_stable_id() {
 
 #[test]
 fn fvr04_live_world_label_hides_when_selected_creature_root_missing() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -1485,7 +1492,7 @@ fn fvr04_live_world_label_hides_when_selected_creature_root_missing() {
 
 #[test]
 fn fvr04_live_creature_inspectors_report_current_authoritative_position_and_tick() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     {
@@ -1554,7 +1561,7 @@ fn fvr04_live_creature_inspectors_report_current_authoritative_position_and_tick
 
 #[test]
 fn fvr04_live_creature_inspectors_reject_stable_id_mismatch() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     {
@@ -1633,7 +1640,7 @@ fn fvr04_live_creature_inspectors_reject_stable_id_mismatch() {
 
 #[test]
 fn fvr04_non_creature_selection_keeps_the_static_scene_coordinate_path() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -1675,7 +1682,7 @@ fn fvr04_non_creature_selection_keeps_the_static_scene_coordinate_path() {
 
 #[test]
 fn fvr04_selection_marker_has_explicit_visibility_for_root_readers() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     let marker_entity = {
@@ -1696,7 +1703,7 @@ fn fvr04_selection_marker_has_explicit_visibility_for_root_readers() {
 
 #[test]
 fn v0_default_player_view_is_compact_and_uses_real_selected_creature_state() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -1738,7 +1745,7 @@ fn v0_default_player_view_is_compact_and_uses_real_selected_creature_state() {
 
 #[test]
 fn v0_recovery_key_restores_the_clean_isometric_player_view() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -1781,7 +1788,7 @@ fn v0_recovery_key_restores_the_clean_isometric_player_view() {
 
 #[test]
 fn v0_render_world_direction_is_warm_readable_and_creature_led() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -1856,7 +1863,7 @@ fn v0_render_world_direction_is_warm_readable_and_creature_led() {
 
 #[test]
 fn fvr09_layered_grid_mesher_records_visible_face_reduction() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -1929,7 +1936,7 @@ fn fvr09_material_palette_uses_natural_top_side_texture_slots_not_debug_colors()
 
 #[test]
 fn fvr09_creatures_are_cute_bipedal_real_state_visuals() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -1971,7 +1978,7 @@ fn fvr09_creatures_are_cute_bipedal_real_state_visuals() {
 
 #[test]
 fn fvr10_terrain_meshes_have_bound_visible_face_variation_not_texture_labels_only() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -2019,7 +2026,7 @@ fn fvr10_terrain_meshes_have_bound_visible_face_variation_not_texture_labels_onl
 
 #[test]
 fn fvr10_creature_mesh_is_readable_low_poly_rig_not_cuboid_stack() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -2081,7 +2088,7 @@ fn fvr10_creature_mesh_is_readable_low_poly_rig_not_cuboid_stack() {
 
 #[test]
 fn fvr10_creatures_use_all_selected_bipedal_caveman_species_not_color_swaps() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -2140,7 +2147,7 @@ fn fvr10_creatures_use_all_selected_bipedal_caveman_species_not_color_swaps() {
 
 #[test]
 fn fvr12_creatures_render_only_the_seven_authored_body_parts() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -2223,7 +2230,7 @@ fn fvr10_creature_appearance_genes_cover_sixteen_species_and_mutate_offspring() 
 
 #[test]
 fn fvr10_default_product_view_starts_clean_without_debug_panels_or_overlays() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -2245,7 +2252,7 @@ fn fvr10_default_product_view_starts_clean_without_debug_panels_or_overlays() {
 
 #[test]
 fn fvr10_product_camera_and_authored_heads_are_composed_for_readable_creatures() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -2285,7 +2292,7 @@ fn fvr10_product_camera_and_authored_heads_are_composed_for_readable_creatures()
 
 #[test]
 fn fvr03_geneforge_children_preserve_real_asset_groups_and_one_coat_handle() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -2336,7 +2343,7 @@ fn fvr03_geneforge_children_preserve_real_asset_groups_and_one_coat_handle() {
 
 #[test]
 fn fvr03_geneforge_head_owns_face_and_renderer_is_display_only() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -2387,7 +2394,7 @@ fn fvr03_geneforge_head_owns_face_and_renderer_is_display_only() {
 
 #[test]
 fn fvr10_scene_dressing_uses_composite_vertical_props_not_unit_debug_cubes() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
