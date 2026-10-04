@@ -544,7 +544,7 @@ fn canonical_new_game_meadow_is_safe_until_actual_hazard_contact() {
     for elevated in [false, true] {
         let mut nursery = phase3_game(8);
         if elevated {
-            nursery.world.enable_highlands_for_new_game().unwrap();
+            nursery.world.enable_island_for_new_game().unwrap();
         }
         let hazard_id = nursery.world.entity_id("hazard-01").unwrap();
         let hazard = nursery.world.entity(hazard_id).unwrap().position;

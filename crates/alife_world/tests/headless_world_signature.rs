@@ -83,7 +83,7 @@ fn canonical_signature_distinguishes_same_seed_wrong_and_later_worlds() {
 #[test]
 fn canonical_signature_binds_optional_terrain_identity() {
     let mut source_world = HeadlessScenarioBuilder::new(44_002).build().unwrap();
-    source_world.enable_highlands_for_new_game().unwrap();
+    source_world.enable_island_for_new_game().unwrap();
     let terrain_save = save(&source_world);
     let terrain_world = terrain_save.clone().restore_headless_world().unwrap();
     let terrain_clone = terrain_save.clone().restore_headless_world().unwrap();

@@ -1,4 +1,4 @@
-//! Shared chunk/prop rendering for approved terrain datasets, including old saves.
+//! Island chunk and prop rendering for the playable world.
 use super::*;
 use bevy::{
     gltf::{Gltf, GltfMesh},
@@ -7,51 +7,19 @@ use bevy::{
 };
 
 #[derive(Resource)]
-pub(super) struct HighlandsActive;
-#[derive(Clone, Copy)]
-enum Pack {
-    Highlands,
-    Island,
-}
-impl Pack {
-    fn folder(self) -> &'static str {
-        match self {
-            Self::Highlands => "landscape/highlands",
-            Self::Island => "landscape/island",
-        }
-    }
-    fn prefix(self) -> &'static str {
-        match self {
-            Self::Highlands => "Highlands",
-            Self::Island => "Island",
-        }
-    }
-    fn placements(self) -> Vec<Prop> {
-        serde_json::from_str(match self {
-            Self::Highlands => include_str!("../../assets/landscape/highlands/props.json"),
-            Self::Island => include_str!("../../assets/landscape/island/props.json"),
-        })
-        .expect("validated approved prop placements")
-    }
-}
-fn pack(terrain: &alife_world::WorldTerrain) -> Option<Pack> {
-    if terrain.binding() == alife_world::TerrainBinding::highlands() {
-        Some(Pack::Highlands)
-    } else if terrain.binding() == alife_world::island_terrain().binding() {
-        Some(Pack::Island)
-    } else {
-        None
-    }
+pub(super) struct IslandActive;
+fn placements() -> Vec<Prop> {
+    serde_json::from_str(include_str!("../../assets/landscape/island/props.json"))
+        .expect("validated island prop placements")
 }
 pub(super) fn has_baked_art(terrain: Option<&alife_world::WorldTerrain>) -> bool {
-    terrain.and_then(pack).is_some()
+    terrain.is_some_and(|terrain| terrain.binding() == alife_world::island_terrain().binding())
 }
 
 #[derive(Resource)]
-pub(super) struct HighlandsAssets {
+pub(super) struct IslandAssets {
     terrain: Handle<Gltf>,
     props: BTreeMap<String, Handle<Gltf>>,
-    pack: Pack,
     surface: std::sync::Arc<alife_world::TerrainSurface>,
     spawned: bool,
     next_update: f64,
@@ -84,17 +52,17 @@ struct Prop {
 }
 
 pub(super) fn stop(world: &mut World) {
-    world.remove_resource::<HighlandsAssets>();
+    world.remove_resource::<IslandAssets>();
 }
 pub(super) fn start(world: &mut World) {
     let Some(selected) = world.get_resource::<creature_grounding::SelectedTerrain>() else {
         return;
     };
-    let Some(pack) = pack(&selected.0) else {
+    if !has_baked_art(Some(&selected.0)) {
         return;
-    };
+    }
     let surface = selected.0.surface().clone();
-    world.insert_resource(HighlandsActive);
+    world.insert_resource(IslandActive);
     let mut lights = world.query_filtered::<(
         Entity,
         &DirectionalLight,
@@ -119,55 +87,29 @@ pub(super) fn start(world: &mut World) {
         return;
     };
     let mut handles = BTreeMap::new();
-    for p in pack.placements() {
-        handles.entry(p.kind.clone()).or_insert_with(|| {
-            server.load(match pack {
-                Pack::Highlands => format!("landscape/{}.glb", p.kind),
-                Pack::Island => format!("{}/{}.glb", pack.folder(), p.kind),
-            })
-        });
+    for p in placements() {
+        handles
+            .entry(p.kind.clone())
+            .or_insert_with(|| server.load(format!("landscape/island/{}.glb", p.kind)));
     }
-    let terrain = server.load(format!("{}/terrain-chunks.glb", pack.folder()));
-    let water_height = match pack {
-        Pack::Highlands => 0.25,
-        Pack::Island => 0.0,
-    };
-    let size = match pack {
-        Pack::Highlands => Vec2::new(800.0, 1050.0),
-        Pack::Island => Vec2::splat(10000.0),
-    };
+    let terrain = server.load("landscape/island/terrain-chunks.glb");
+    let size = Vec2::splat(10000.0);
     let center = Vec3::new(
         surface.origin_x + (surface.width - 1) as f32 * surface.spacing * 0.5,
-        water_height,
+        0.0,
         surface.origin_z + (surface.depth - 1) as f32 * surface.spacing * 0.5,
     );
-    world.insert_resource(HighlandsAssets {
+    world.insert_resource(IslandAssets {
         terrain,
         props: handles,
-        pack,
         surface: surface.clone(),
         spawned: false,
         next_update: 0.0,
     });
-    let (mesh, material) = match pack {
-        Pack::Island => {
-            let (mesh, mut material, images) = terrain_water::island_water(&surface, size, center);
-            let [shore, ripple] =
-                images.map(|image| world.resource_mut::<Assets<Image>>().add(image));
-            material.base_color_texture = Some(shore);
-            material.normal_map_texture = Some(ripple);
-            (mesh, material)
-        }
-        Pack::Highlands => (
-            Plane3d::default().mesh().size(size.x, size.y).build(),
-            StandardMaterial {
-                base_color: Color::linear_rgb(0.025, 0.24, 0.33),
-                perceptual_roughness: 0.28,
-                reflectance: 0.42,
-                ..default()
-            },
-        ),
-    };
+    let (mesh, mut material, images) = terrain_water::island_water(&surface, size, center);
+    let [shore, ripple] = images.map(|image| world.resource_mut::<Assets<Image>>().add(image));
+    material.base_color_texture = Some(shore);
+    material.normal_map_texture = Some(ripple);
     let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
     let water = world
         .resource_mut::<Assets<StandardMaterial>>()
@@ -214,7 +156,7 @@ pub(super) fn focus_on_surface(camera: &Transform, surface: &alife_world::Terrai
 pub(super) fn update(
     mut commands: Commands,
     time: Res<Time>,
-    assets: Option<ResMut<HighlandsAssets>>,
+    assets: Option<ResMut<IslandAssets>>,
     gltfs: Option<Res<Assets<Gltf>>>,
     gltf_meshes: Option<Res<Assets<GltfMesh>>>,
     mut chunks: Query<(&mut Mesh3d, &mut TerrainLod), Without<PropRange>>,
@@ -249,7 +191,7 @@ pub(super) fn update(
         for z in 0..nz {
             for x in 0..nx {
                 let mesh_for = |level| {
-                    let name = format!("{}_{x}_{z}_L{level}", assets.pack.prefix());
+                    let name = format!("Island_{x}_{z}_L{level}");
                     gltf_meshes
                         .get(&terrain.named_meshes[name.as_str()])
                         .expect("approved chunk")
@@ -262,7 +204,7 @@ pub(super) fn update(
                     + (z * 32 + 16).min(surface.depth - 1) as f32 * surface.spacing;
                 let center = Vec3::new(cx, surface.height(cx, cz).unwrap_or(0.0), cz);
                 commands.spawn((
-                    Name::new(format!("{} chunk {x}/{z}", assets.pack.prefix())),
+                    Name::new(format!("Island chunk {x}/{z}")),
                     Mesh3d(levels[0].clone()),
                     MeshMaterial3d(mesh_for(0).primitives[0].material.clone().unwrap()),
                     Transform::default(),
@@ -276,15 +218,11 @@ pub(super) fn update(
             }
         }
         let mut shared_prop_material = None;
-        for p in assets.pack.placements() {
+        for p in placements() {
             let gltf = gltfs.get(&assets.props[&p.kind]).unwrap();
             let position = Vec3::from_array(p.position);
-            let tree = p.kind.starts_with("Oak")
-                || matches!(p.kind.as_str(), "Broadleaf" | "Conifer" | "Sapling");
-            let small = matches!(
-                p.kind.as_str(),
-                "Grass_clump" | "Fern_patch" | "Wildflower_patch" | "Grass" | "Fern" | "Flowers"
-            );
+            let tree = matches!(p.kind.as_str(), "Broadleaf" | "Conifer" | "Sapling");
+            let small = matches!(p.kind.as_str(), "Grass" | "Fern" | "Flowers");
             let distance = if small {
                 45.0
             } else if tree {
@@ -292,62 +230,43 @@ pub(super) fn update(
             } else {
                 210.0
             };
-            let meshes: Vec<_> = match assets.pack {
-                Pack::Highlands => gltf
-                    .meshes
-                    .iter()
-                    .map(|h| gltf_meshes.get(h).unwrap())
-                    .collect(),
-                Pack::Island => vec![gltf_meshes
-                    .get(&gltf.named_meshes[format!("{}_L0", p.kind).as_str()])
-                    .unwrap()],
-            };
-            for source in meshes {
-                for primitive in &source.primitives {
-                    let levels = match assets.pack {
-                        Pack::Highlands => std::array::from_fn(|_| primitive.mesh.clone()),
-                        Pack::Island => std::array::from_fn(|level| {
-                            gltf_meshes
-                                .get(&gltf.named_meshes[format!("{}_L{level}", p.kind).as_str()])
-                                .unwrap()
-                                .primitives[0]
-                                .mesh
-                                .clone()
-                        }),
-                    };
-                    let material = match assets.pack {
-                        Pack::Highlands => primitive.material.clone().unwrap(),
-                        Pack::Island => shared_prop_material
-                            .get_or_insert_with(|| primitive.material.clone().unwrap())
-                            .clone(),
-                    };
-                    let mut entity = commands.spawn((
-                        Name::new(format!("{} {}", assets.pack.prefix(), p.kind)),
-                        Mesh3d(levels[0].clone()),
-                        MeshMaterial3d(material),
-                        Transform::from_translation(position)
-                            .with_scale(Vec3::splat(p.scale))
-                            .with_rotation(Quat::from_rotation_y(p.yaw)),
-                        PropRange {
-                            position,
-                            distance,
-                            meshes: levels,
-                            current: 0,
-                            tree,
-                        },
-                        Visibility::Hidden,
-                        Fvr04ProductionRuntimeSceneRoot,
-                    ));
-                    if small {
-                        entity.insert(NotShadowCaster);
-                    }
-                }
+            let primitive = &gltf_meshes
+                .get(&gltf.named_meshes[format!("{}_L0", p.kind).as_str()])
+                .unwrap()
+                .primitives[0];
+            let levels = std::array::from_fn(|level| {
+                gltf_meshes
+                    .get(&gltf.named_meshes[format!("{}_L{level}", p.kind).as_str()])
+                    .unwrap()
+                    .primitives[0]
+                    .mesh
+                    .clone()
+            });
+            let material = shared_prop_material
+                .get_or_insert_with(|| primitive.material.clone().unwrap())
+                .clone();
+            let mut entity = commands.spawn((
+                Name::new(format!("Island {}", p.kind)),
+                Mesh3d(levels[0].clone()),
+                MeshMaterial3d(material),
+                Transform::from_translation(position)
+                    .with_scale(Vec3::splat(p.scale))
+                    .with_rotation(Quat::from_rotation_y(p.yaw)),
+                PropRange {
+                    position,
+                    distance,
+                    meshes: levels,
+                    current: 0,
+                    tree,
+                },
+                Visibility::Hidden,
+                Fvr04ProductionRuntimeSceneRoot,
+            ));
+            if small {
+                entity.insert(NotShadowCaster);
             }
         }
-        info!(
-            "{} loaded: {nx}x{nz} terrain chunks, shared prop meshes, 3 LODs",
-            assets.pack.prefix()
-        );
+        info!("Island loaded: {nx}x{nz} terrain chunks, shared prop meshes, 3 LODs");
         assets.spawned = true;
     }
     if time.elapsed_secs_f64() < assets.next_update {
