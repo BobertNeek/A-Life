@@ -21,7 +21,6 @@ fn staged() -> crate::StagedCanonicalNewGame {
 fn context(profile: ProductionFrontendProfileId, population: u16) -> Fvr04CreatureSpawnContext {
     Fvr04CreatureSpawnContext {
         settings: Fvr04ProductionCreatureRendererSettings::for_profile(profile, population),
-        catalog: load_geneforge_creature_part_catalog().unwrap(),
     }
 }
 
@@ -109,7 +108,6 @@ fn high_and_mixed_family_save_fields_survive_every_presentation_lod() {
         let batch =
             prepare_fvr04_creature_batch(&records, &BTreeMap::new(), &context(profile, population))
                 .unwrap();
-        assert_eq!(batch.creatures[0].displayed_sources, sources);
         assert_eq!(
             batch.creatures[0].record.visual.appearance.part_sources,
             sources
@@ -118,29 +116,13 @@ fn high_and_mixed_family_save_fields_survive_every_presentation_lod() {
             batch.creatures[0].root_visual.local_bounds,
             hearthling::LOCAL_BOUNDS
         );
+        let mut world = World::new();
+        world.insert_resource(BevyEntityMap::default());
+        let scene = spawn_fvr04_prepared_creature_batch(&mut world, batch);
+        assert_eq!(scene.creature_part_family_count, 5);
+        assert_eq!(scene.creature_mixed_assembly_count, 1);
     }
     assert_eq!(serde_json::to_vec(&restored).unwrap(), before);
-}
-
-#[test]
-fn unknown_saved_family_fallback_remains_display_only() {
-    let mut records = records(&staged().save);
-    let saved = CreaturePartSources::coherent(CreaturePartFamilyId(999));
-    records[0].visual.appearance.part_sources = saved;
-    let batch = prepare_fvr04_creature_batch(
-        &records,
-        &BTreeMap::new(),
-        &context(ProductionFrontendProfileId::Balanced1080p, 2),
-    )
-    .unwrap();
-    assert_eq!(
-        batch.creatures[0].record.visual.appearance.part_sources,
-        saved
-    );
-    assert_eq!(
-        batch.creatures[0].displayed_sources,
-        CreaturePartSources::coherent(CreaturePartFamilyId(0))
-    );
 }
 
 #[test]

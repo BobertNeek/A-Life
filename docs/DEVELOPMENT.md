@@ -108,9 +108,9 @@ Validate the committed content pack with `validate-pack` before using it in a
 tutorial or package. Optional GPU demonstrations remain manual.
 Production creatures use the approved Hearthling GLB. The generated GeneForge
 OBJ, socket and mask pack is retired and is not required for launch or packaging.
-The compiled `geneforge_recipes.json` remains unchanged for family IDs, saved
-appearance compatibility and mutation; its output paths and source hashes are
-legacy authoring metadata, not shipped asset requirements.
+The compiled `geneforge_recipes.json` supplies current appearance family IDs
+and birth/mutation metadata; its output paths and source hashes are historical
+authoring metadata, not shipped asset requirements.
 
 For optional offline GeneForge authoring, `scripts/build_geneforge_creature_parts.py`
 launches `scripts/geneforge_blender_worker.py` inside Blender. Supply the original

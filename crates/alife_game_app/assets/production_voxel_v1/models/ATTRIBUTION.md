@@ -4,8 +4,8 @@ Production creatures use the approved Hearthling GLB under
 `assets/creatures/hearthling/`. GeneForge generated meshes, sockets and masks
 are retired from the production pack.
 
-The unchanged `../creature_parts/geneforge_recipes.json` retains the historical
-family catalog, source attribution, source hashes and offline authoring paths.
+The unchanged `../creature_parts/geneforge_recipes.json` retains the current
+family catalog and historical source attribution, hashes and offline authoring paths.
 Its generated output paths do not identify required shipped assets.
 
 - GeneForge source: https://eem.foo/geneforge/

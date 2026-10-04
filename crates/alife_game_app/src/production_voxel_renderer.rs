@@ -64,9 +64,8 @@ use crate::RuntimePlaybackState;
 #[cfg(test)]
 use crate::SocketFrame;
 use crate::{
-    creature_part_pose, creature_root_pose, grounded_root_height,
-    load_geneforge_creature_part_catalog, resolve_creature_part_display_sources, CreaturePartSlot,
-    CreatureVisualBounds, GeneForgeCreaturePartCatalog,
+    creature_part_pose, creature_root_pose, grounded_root_height, CreaturePartSlot,
+    CreatureVisualBounds,
 };
 
 mod camera_navigation;
@@ -1361,7 +1360,6 @@ struct Fvr04CreatureVisualRecord {
 #[derive(Debug, Resource)]
 pub(crate) struct Fvr04CreatureSpawnContext {
     settings: Fvr04ProductionCreatureRendererSettings,
-    catalog: GeneForgeCreaturePartCatalog,
 }
 
 #[derive(Debug, Clone)]
@@ -1411,7 +1409,6 @@ struct Fvr04RuntimeSceneCandidate {
 
 struct Fvr04PreparedCreature {
     record: Fvr04CreatureVisualRecord,
-    displayed_sources: alife_world::CreaturePartSources,
     root_transform: Transform,
     root_visual: Fvr04ProductionCreatureVisualMarker,
 }
@@ -1868,15 +1865,15 @@ fn apply_production_runtime_load(world: &mut World) {
         }
         let renderer_settings =
             Fvr03ProductionVoxelRendererSettings::for_profile(current_ux.profile_id);
+        if !world.contains_resource::<Fvr04CreatureSpawnContext>() {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "FVR04 spawn context missing during runtime load".to_string(),
+            });
+        }
         let candidate_scene = prepare_fvr04_runtime_scene_candidate(
             candidate_runtime_state,
             renderer_settings,
             &candidate_settings,
-            world
-                .get_resource::<Fvr04CreatureSpawnContext>()
-                .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
-                    message: "FVR04 spawn context missing during runtime load".to_string(),
-                })?,
         )?;
         let prepared_scene = world.resource_scope(|world, mut context| {
             prepare_fvr04_runtime_scene(world, candidate_scene, &mut context)
@@ -2023,20 +2020,13 @@ pub fn spawn_fvr03_production_voxel_scene(
     );
     let runtime_state = load_fvr04_runtime_state(summary)?;
     let scene_assets = create_fvr04_runtime_scene_assets(app, &settings);
-    let creature_part_catalog = load_geneforge_creature_part_catalog().map_err(|error| {
-        GameAppShellError::InvalidProductionFrontend {
-            message: error.to_string(),
-        }
-    })?;
     let mut creature_spawn_context = Fvr04CreatureSpawnContext {
         settings: creature_settings,
-        catalog: creature_part_catalog,
     };
     let candidate = prepare_fvr04_runtime_scene_candidate(
         runtime_state,
         settings.clone(),
         &summary.ui_settings,
-        &creature_spawn_context,
     )?;
     let selected =
         fvr04_runtime_scene_selection(&candidate.runtime_state, &candidate.visible_tiles);
@@ -2421,16 +2411,9 @@ fn fvr04_sleep_phase_from_creature_save(creature: &CreatureSaveState) -> alife_c
 
 fn validate_fvr04_creature_spawn_inputs(
     creatures: &[Fvr04CreatureVisualRecord],
-    context: &Fvr04CreatureSpawnContext,
 ) -> Result<(), GameAppShellError> {
     for creature in creatures {
         creature.visual.validate()?;
-        // Preserve catalog family fallback without loading retired geometry or coats.
-        resolve_creature_part_display_sources(
-            creature.visual.appearance.part_sources,
-            &context.catalog,
-        )
-        .map_err(|error| fvr04_scene_preflight_error(error.to_string()))?;
     }
     Ok(())
 }
@@ -2479,9 +2462,8 @@ fn prepare_fvr04_runtime_scene_candidate(
     runtime_state: Fvr04RuntimeSceneState,
     settings: Fvr03ProductionVoxelRendererSettings,
     ux_settings: &Fvr05ProductionUxSettings,
-    context: &Fvr04CreatureSpawnContext,
 ) -> Result<Fvr04RuntimeSceneCandidate, GameAppShellError> {
-    validate_fvr04_creature_spawn_inputs(&runtime_state.creatures, context)?;
+    validate_fvr04_creature_spawn_inputs(&runtime_state.creatures)?;
     let snapshot = &runtime_state.snapshot;
     let visible_chunks = snapshot
         .visible_chunks
@@ -2616,18 +2598,12 @@ fn prepare_fvr04_runtime_scene_candidate(
     })
 }
 
-fn fvr04_scene_preflight_error(message: impl Into<String>) -> GameAppShellError {
-    GameAppShellError::InvalidProductionFrontend {
-        message: message.into(),
-    }
-}
-
 fn prepare_fvr04_creature_batch(
     creatures: &[Fvr04CreatureVisualRecord],
     tile_summaries: &BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
     context: &Fvr04CreatureSpawnContext,
 ) -> Result<Fvr04PreparedCreatureBatch, GameAppShellError> {
-    validate_fvr04_creature_spawn_inputs(creatures, context)?;
+    validate_fvr04_creature_spawn_inputs(creatures)?;
     let settings = context.settings.clone();
     let mut prepared = Vec::new();
     for (index, creature) in creatures
@@ -2636,10 +2612,6 @@ fn prepare_fvr04_creature_batch(
         .enumerate()
     {
         let visual = &creature.visual;
-        let displayed_sources =
-            resolve_creature_part_display_sources(visual.appearance.part_sources, &context.catalog)
-                .map_err(|error| fvr04_scene_preflight_error(error.to_string()))?
-                .displayed_sources;
         let surface_height = tile_summaries
             .get(&creature.tile)
             .map(|tile| tile.height_units)
@@ -2658,7 +2630,6 @@ fn prepare_fvr04_creature_batch(
         let phase = (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11;
         prepared.push(Fvr04PreparedCreature {
             record: creature.clone(),
-            displayed_sources,
             root_transform,
             root_visual: Fvr04ProductionCreatureVisualMarker {
                 stable_id: visual.stable_id,
@@ -4300,14 +4271,15 @@ fn spawn_fvr04_prepared_creature_batch(
     for creature in creatures {
         let visual = &creature.record.visual;
         species_archetypes.insert(visual.appearance.species_archetype);
-        let recipe_families = creature
-            .displayed_sources
+        let appearance_families = visual
+            .appearance
+            .part_sources
             .iter_slots()
             .into_iter()
             .map(|(_, family)| family)
             .collect::<BTreeSet<_>>();
-        mixed_assembly_count += usize::from(recipe_families.len() > 1);
-        part_families.extend(recipe_families);
+        mixed_assembly_count += usize::from(appearance_families.len() > 1);
+        part_families.extend(appearance_families);
         let root = world
             .spawn(fvr04_creature_root_bundle(
                 (visual.stable_id, visual.organism_id),
