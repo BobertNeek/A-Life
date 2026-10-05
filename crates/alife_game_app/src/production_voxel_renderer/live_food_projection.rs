@@ -101,11 +101,7 @@ mod tests {
     #[test]
     fn care_feedback_projection_tracks_placement_and_consumption_without_advancing_time() {
         for highlands in [false, true] {
-            let position = if highlands {
-                Vec3f::new(2.5, 4.0, -3.5)
-            } else {
-                Vec3f::new(2.5, -3.5, 0.0)
-            };
+            let position = Vec3f::new(2.5, 4.0, -3.5);
             let world = alife_world::HeadlessScenarioBuilder::new(7)
                 .food("apple", position, 0.25)
                 .toy("player-plaything", position, true)
@@ -135,7 +131,7 @@ mod tests {
             let fruit = query.iter(app.world()).next().unwrap();
             assert_eq!(fruit.translation.x, 2.5);
             assert_eq!(fruit.translation.z, -3.5);
-            assert!((fruit.translation.y - if highlands { 4.30 } else { 0.74 }).abs() < 1e-5);
+            assert!((fruit.translation.y - if highlands { 4.30 } else { 4.74 }).abs() < 1e-5);
             let mut objects = world.object_snapshots();
             let toy = objects
                 .iter_mut()

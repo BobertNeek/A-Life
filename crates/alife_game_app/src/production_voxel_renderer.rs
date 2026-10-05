@@ -2623,6 +2623,27 @@ fn prepare_fvr04_runtime_scene_candidate(
     ux_settings: &Fvr05ProductionUxSettings,
     context: &Fvr04CreatureSpawnContext,
 ) -> Result<Fvr04RuntimeSceneCandidate, GameAppShellError> {
+    let occupied_tiles = runtime_state
+        .creatures
+        .iter()
+        .map(|creature| creature.tile)
+        .collect::<BTreeSet<_>>();
+    prepare_fvr04_runtime_scene_candidate_with_occupied(
+        runtime_state,
+        settings,
+        ux_settings,
+        context,
+        &occupied_tiles,
+    )
+}
+
+fn prepare_fvr04_runtime_scene_candidate_with_occupied(
+    runtime_state: Fvr04RuntimeSceneState,
+    settings: Fvr03ProductionVoxelRendererSettings,
+    ux_settings: &Fvr05ProductionUxSettings,
+    context: &Fvr04CreatureSpawnContext,
+    occupied_tiles: &BTreeSet<VoxelTileCoord>,
+) -> Result<Fvr04RuntimeSceneCandidate, GameAppShellError> {
     validate_fvr04_creature_spawn_inputs(&runtime_state.creatures, context)?;
     let snapshot = &runtime_state.snapshot;
     let visible_chunks = snapshot
@@ -2716,17 +2737,12 @@ fn prepare_fvr04_runtime_scene_candidate(
             )
         })
         .collect::<BTreeMap<_, _>>();
-    let occupied_tiles = runtime_state
-        .creatures
-        .iter()
-        .map(|creature| creature.tile)
-        .collect::<BTreeSet<_>>();
     let dressing_spawns = if runtime_state.terrain.is_some() {
         Vec::new()
     } else {
         plan_production_terrain_dressing(
             &dressing_tiles,
-            &occupied_tiles,
+            occupied_tiles,
             settings.production_dressing_cap,
             settings.tile_stride,
             settings.minimum_floor,
@@ -2875,7 +2891,7 @@ fn prepare_fvr04_creature_batch(
                 base_scale.to_array(),
                 bevy::math::Mat3::IDENTITY.to_cols_array(),
             );
-            let base_translation = Vec3::new(visual.position.x, base_height, visual.position.y);
+            let base_translation = Vec3::new(visual.position.x, base_height, visual.position.z);
             let root_transform = Transform::from_translation(base_translation)
                 .with_rotation(Quat::from_rotation_y(std::f32::consts::PI))
                 .with_scale(base_scale);
@@ -4741,9 +4757,9 @@ fn project_authoritative_creature_root_transform(
         return false;
     }
 
-    // The simulation moves in XY; Bevy uses XZ for the ground plane.
+    // Current world objects and Bevy both use a Y-up, X/Z ground plane.
     let x = object.position.x;
-    let z = object.position.y;
+    let z = object.position.z;
     if transform.translation.x != x {
         transform.translation.x = x;
     }
@@ -4954,13 +4970,9 @@ fn advance_fvr04_animation_phase(
     current_seconds + delta_seconds.max(0.0) * speed.max(0.0)
 }
 
-// Legacy saves use X/Y ground coordinates; bound Highlands worlds are Y-up.
-fn world_position_for_render(position: Vec3f, highlands: bool) -> Vec3 {
-    if highlands {
-        Vec3::new(position.x, position.y, position.z)
-    } else {
-        Vec3::new(position.x, position.z, position.y)
-    }
+// Terrain binding selects grounding, not the current world's coordinate convention.
+fn world_position_for_render(position: Vec3f, _terrain_bound: bool) -> Vec3 {
+    Vec3::new(position.x, position.y, position.z)
 }
 
 fn live_agent_ground_position(
@@ -8136,14 +8148,14 @@ mod tests {
     }
 
     #[test]
-    fn authoritative_projection_preserves_fractional_xy_motion_and_root_state() {
+    fn authoritative_projection_preserves_fractional_xz_motion_and_root_state() {
         let stable_id = WorldEntityId(41);
         let organism_id = OrganismId(7);
         let frame = presentation_frame(
             WorldObjectKind::Agent,
             stable_id,
             Some(organism_id),
-            Vec3f::new(1.6, -2.6, 99.0),
+            Vec3f::new(1.6, 99.0, -2.6),
         );
         let rotation = Quat::from_rotation_x(0.4);
         let scale = Vec3::new(2.0, 3.0, 4.0);
@@ -8164,7 +8176,7 @@ mod tests {
             WorldObjectKind::Agent,
             stable_id,
             Some(organism_id),
-            Vec3f::new(1.6, -2.5, 99.0),
+            Vec3f::new(1.6, 99.0, -2.5),
         );
         assert!(project_authoritative_creature_root_transform(
             stable_id,

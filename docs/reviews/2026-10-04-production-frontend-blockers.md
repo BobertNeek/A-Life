@@ -1,171 +1,126 @@
-# Production frontend admission and test repairs — 2026-10-04
+# Production frontend admission and test repairs — 2026-10-04–05
 
-The production-feature validation of PRs #3–#7 exposed two library failures and
-one strict Clippy failure. Their relevant source functions are byte-identical to
-main `482948ec116bad505cee0225cad74c1ab110acb7`; these defects predate the combined
-candidate `7bc05bd49b1121bf4f3f07251e8acfedd9af0d3f`. Cassidy authorized fixing
-discovered issues. This repair is separate from all five candidate changes.
+This report covers PR #10 on the combined PRs #3–#10 candidate. Its source
+baseline is main `482948ec116bad505cee0225cad74c1ab110acb7`. The coordinated
+candidate retains all eight reviewed heads, including the separate GeneForge
+retirement. The repair changes presentation and its tests; it does not change
+organism genomes, acquired state, neural execution, persistence publication,
+terrain height/collision, or exported art bytes.
 
-## Selected resolution
+## Composite founder admission
 
-The lineage Enter path requires the exact checked builtin Nano512 foundation.
-Current curated founders archive their complete composite genotype, its
-expressed source brain genome, and the phenotype produced by
-`N512FounderFoundationProjection`. Enter now loads the content-addressed
-`CreatureGenome`, expresses it, requires that its brain genome equals the
-resolved archived source genome, and reconstructs the same authoritative
-projection used by curated staging and live runtime admission. A generic brain
-compiler cannot reconstruct this phenotype from the source brain genome alone.
+Current curated founders archive the complete content-addressed `CreatureGenome`,
+its expressed source brain genome, and the phenotype produced by
+`N512FounderFoundationProjection`. Enter now loads and expresses that composite,
+requires that its brain genome equals the archived source, and reconstructs the
+same foundation projection used by curated staging and live runtime admission.
+A generic compiler cannot reproduce that phenotype from the brain genome alone.
 
-The source genotype and brain genome remain unchanged. Missing composite data
-fails explicitly; there is no standalone-scaffold substitution. Exact foundation
-bytes and identity, phenotype hash, persistent address map, language, sensor,
-and live-agent binding checks remain enforced. The N2048 mismatch case still
-uses its existing construction route and remains rejected by the Nano512-only
-Enter contract.
+Exact foundation bytes and identity, phenotype hash, persistent address map,
+language, sensor, and live-agent binding checks remain enforced. Missing composite
+payloads fail explicitly. Negative tests reject a changed source brain genome,
+a changed manifest phenotype hash, missing or ambiguous live agents, sensor
+mismatches, and an incompatible N2048 foundation. The test archive uses actual
+`prepare_composite_birth_batch` / `commit_composite_birth_batch` records.
 
-This changes no compiler validation or foundation format. It follows
-`AOA-GEN-008` and `AOA-PRIOR-008`: the checked content-addressed asset must match,
-and incompatible genome/asset combinations still fail explicitly. Sources:
+This follows `AOA-GEN-008` and `AOA-PRIOR-008`; it introduces no foundation format,
+compiler bypass, or substitute scaffold. Sources:
 [lineage admission](../../crates/alife_game_app/src/production_conversation_lineage_ui.rs),
-[curated archive preparation](../../crates/alife_game_app/src/curated_founder_staging.rs),
-[live admission](../../crates/alife_game_app/src/gpu_live_runtime.rs), and
-[immutable Nano512 ABI tests](../../crates/alife_core/tests/n512_legacy_compatibility_abi.rs).
+[curated staging](../../crates/alife_game_app/src/curated_founder_staging.rs), and
+[live admission](../../crates/alife_game_app/src/gpu_live_runtime.rs).
 
-The renderer reset test formerly expected a retained-operation retry after a
-successful durable publication whose refresh failed. The runtime deliberately
-clears that operation, projects Unknown and requires manual recovery with
-`retryable=false`. The assertion now matches that existing behavior, consistent
-with `AOA-INV-010`. The authority test already verifies that a retry receives
-`NoRetainedOperation`; production recovery behavior is unchanged.
+The existing reset recovery test now expects `retryable=false` after a durable
+publication whose refresh failed. The runtime clears the retained operation and
+requires explicit manual recovery; the authority test still rejects retry with
+`NoRetainedOperation`. Hand-contact enumeration fixes strict Clippy without
+changing contact values, poses, or the approved hand asset.
 
-The hand pose test enumerates the existing contact array rather than indexing it
-with a range. The poses, transforms, contact points and approved hand assets are
-unchanged.
+## Current saves and CPU scene failures
 
-## Validation
+Renderer launch sites now retain `CurrentProductionLaunchFixture`, which writes
+and validates 30 current untrained founders. Tests no longer launch from a
+historical save missing `genetic_biochemical_graph`. No legacy migration or
+production validation relaxation is introduced.
 
-Validated on the combined candidate plus this repair:
+The earlier CPU scene run reached 36 cases: 16 passed and 20 failed. These were
+actual fixture/contract defects, not evidence that projection or inspectors
+require a GPU: their read-only ECS readers are registered in the CPU scene mode.
+The 20 failures were traced as follows:
+
+| Original failing cases | Count | Actual cause and final resolution |
+| --- | ---: | --- |
+| Modular hierarchy; GeneForge children/head; cute-biped profile; low-poly modular rig; sixteen separate species meshes; authored separate head; seven body parts | 8 | Retired generated-part expectations conflict with the approved shared Hearthling skin. Tests now check 30 unique stable roots, saved species/body-plan identity, inherited proportions, absence of retired parts, and the shipping skin/material/animation contract. |
+| Corrupt derived-runtime rebuild | 1 | `runtime_save_path` is the authoritative resume/manual-save/autosave checkpoint. Rebuilding corrupt authority would weaken persistence. The test instead requires exact schema rejection and unchanged corrupt and source bytes. |
+| Both live inspectors | 2 | The test never opened the debug inspector; refresh correctly returns while its panel is closed. Tests explicitly open it and retain live tick/position and identity-mismatch assertions. |
+| Both live world projection cases | 2 | Production still swapped Y and Z for unbound terrain, although current world objects are always Y-up. The renderer now preserves authoritative X/Z continuously, including startup, live roots, newborn tile lookup, care objects and hand ground coordinates. Identity mismatch and non-agent rejection remain checked. |
+| Selection marker | 1 | The retired tile ring is hidden by current selection highlighting. Test checks the selected stable ID's current root position and hidden ring. |
+| Camera follow | 1 | Obsolete absolute follow matrix. Test checks continuous root/camera displacement, unchanged framing and focus on the same selected root. |
+| World label | 1 | Obsolete absolute height. Test checks the current root-relative label height and matching stable ID. |
+| Compact player HUD | 1 | Obsolete debug headings, recovery-key text and assumed energy. Tests check current compact controls, actual needs, explicit unavailable energy, and no invented learning/social readings. |
+| Profile lighting | 1 | Obsolete 6,000-lux limit; current configured sun is 8,500 lux. Profile shadow, grounding, contact and capability budgets remain checked. |
+| Terrain/world colors | 1 | White material tint was mistaken for terrain albedo. Tests read actual mesh vertex colors, lit white tint, cool ambient and warm sun. |
+| Terrain dressing | 1 | Camera rebuilds cleared creature records to avoid respawning roots, also losing occupied tiles for dressing. Rebuilds now receive existing root occupancy separately. The old twelve-enlarged-hero-props rule is absent from the current planner; tests retain composite mesh/upright geometry, nearby flora, all biome kinds, lit materials and clearance. |
+| **Total** | **20** | **17 stale fixture/contract cases; two coordinate cases; one dressing case with both a code defect and a retired expectation.** |
+
+Current world coordinate evidence is in
+[headless movement and bearing](../../crates/alife_world/src/headless.rs).
+The repair preserves the existing grounding-height calculation and terrain
+backend. Terrain binding selects the height source, not a coordinate convention.
+The camera stream uses existing visual tiles only as read-only clearance input;
+it neither fabricates organisms nor stages replacement creature roots.
+
+The new camera-pan regression first projects correctly bound agents onto previous
+prop tiles. Moving the camera across a chunk boundary must rebuild terrain,
+keep prop children outside creature clearance, retain all 30 exact ECS roots and
+poses, and leave the source save bytes unchanged. Reinstating the empty occupied
+set makes this test fail with `streamed prop overlaps a live creature tile`.
+The fixed path passes. The complete library run also exposed a care-object
+fixture still expecting zero elevation after its position changed to Y-up height
+4. Its corrected assertion preserves both terrain-bound absolute height and the
+unbound surface offset, movement, consumption and unchanged authoritative tick.
+Only that failing case was rerun; the other 336 library cases already passed.
+
+Hearthling checks inspect the shipping GLB JSON bytes: one skin, matching inverse
+bind/joint counts, six primitives/materials, authored head/face/feet/tail joints,
+position/normal/UV/color/joint/weight attributes, and the three existing clips.
+They are static CPU asset checks, not proof of scene loading or rendering.
+
+The presentation changes follow `AOA-INV-003`, `AOA-INV-011` and `AOA-OBS-004`:
+views remain derived from authoritative identity, positions and ticks. The
+checkpoint test preserves `AOA-INV-010` explicit failure. These checks do not
+certify all player-facing capabilities in `AOA-OBS-001`.
+
+## Validation and limits
 
 | Check | Result |
 | --- | --- |
-| Production-feature library tests | 334 passed, 0 failed, 2 existing ignored benchmarks |
-| Production-feature all targets, `--no-fail-fast` | All 30 targets executed; 398 passed, 36 failed, 2 ignored |
-| Strict production-feature all-target Clippy | Passed with `-D warnings` |
-| Focused lineage Enter/archive mapping | Passed, including live binding, sensor and foundation rejection cases |
-| Formatting and patch whitespace | Passed |
+| CPU scene target, `bevy-app,production-assets,vfx-hanabi` | 37 passed, zero failed, zero ignored |
+| Camera clearance regression with old empty occupancy | Fails on an actual overlapping prop; fixed path passes |
+| Production-feature exact corrupt-checkpoint rejection | One passed; rejects before backend creation and retains exact corrupt/source bytes |
+| Production-feature library coverage | Full run: 336 passed, one care-height fixture failed, two existing ignored CPU benchmarks. Corrected care-height test: one passed; all 337 active cases covered successfully. |
+| Strict app/training production and GPU-test all-target Clippy | Passed with `-D warnings` |
+| Formatting, patch whitespace and docs gate | Passed; documentation assertions 77/77 |
+| Combined production manifest | All 48 paths, sizes and FNV digests valid; 16,112,065 bytes |
 
-Before the renderer fixture follow-up below, the complete app command exited
-101 with three integration targets failing.
-`canonical_new_game_lifecycle` and `phase3_capture_presentation` each have one
-failure reporting `NeuralBackendUnavailable`. `fvr03_voxel_renderer` has 34
-failures before its renderer assertions because the shipped fixture lacks the
-authoritative `genetic_biochemical_graph`; three tests in that target pass.
-At that point, those three test files and the fixture were byte-identical to main. They remain
-separate inherited blockers; this result does not establish graphical or
-production integration acceptance. The old renderer expectations, including
-GeneForge expectations, were not rewritten during this focused repair.
-
-The combined candidate's preceding default full workspace validation passed
-1,670 tests with zero failures and 20 existing ignored tests. The feature repair
-was then checked with:
+Manifest SHA-256:
+`9e3512abe67c25386d10d0120b70e284858911c572d331f5687773ad62ba11e8`.
 
 ```sh
-cargo test -p alife_game_app --features production-voxel-frontend --all-targets --no-fail-fast
-cargo clippy -p alife_game_app --features production-voxel-frontend --all-targets -- -D warnings
-cargo fmt --all --check
-git diff --check
+cargo test -p alife_game_app --features bevy-app,production-assets,vfx-hanabi --test fvr03_voxel_renderer
+cargo test -p alife_game_app --features production-voxel-frontend --test fvr03_voxel_renderer runtime_checkpoint_corruption_is_explicit_and_never_overwritten
+cargo test -p alife_game_app --features production-voxel-frontend --lib
+cargo clippy -p alife_game_app -p alife_training --features alife_game_app/production-voxel-frontend,alife_game_app/gpu-tests,alife_training/gpu-tests --all-targets -- -D warnings
 ```
 
-No training, user-PC activity, art transfer, graphical acceptance run or live
-neural execution was performed. GPU-dependent acceptance remains unverified in
-this executor. The repair and all candidate PRs remain unmerged.
+The earlier production-feature three-target rerun reported 35
+`NeuralBackendUnavailable` failures. Those runs are **Blocked** environment
+checks, not accepted gameplay. They were not repeated to obtain the same unavailable
+backend failures. The focused corrupt-checkpoint test must reject before backend
+creation. CPU scene mode has no neural fallback and performs no graphics work.
 
-## Follow-up: current renderer fixture
-
-The 34 shared renderer launch sites now use the existing
-`CurrentProductionLaunchFixture`, which creates and validates a fresh file-backed
-population of 30 current untrained founders. Each test retains the fixture owner
-until its assertions finish. The historical source save is no longer their
-launch input. No migration or production validation rule changes are made.
-All 323 original assertion macros are unchanged. The one test calling a GPU
-runtime method directly now declares its `gpu-runtime` feature prerequisite;
-it remains enabled in the production-feature run and is not ignored.
-
-The targeted production rerun executes all three previously failing targets:
-
-| Target | Result | Remaining failure class |
-| --- | --- | --- |
-| `canonical_new_game_lifecycle` | 1 passed, 1 failed | `NeuralBackendUnavailable`: environment |
-| `phase3_capture_presentation` | 0 passed, 1 failed | `NeuralBackendUnavailable`: environment |
-| `fvr03_voxel_renderer` | 3 passed, 34 failed | 33 unavailable GPU backends; 1 corrupt-derived-save contract failure |
-
-There are zero `genetic_biochemical_graph` errors. The separate derived-save
-test deliberately writes `stale-derived-runtime`. The durable publisher loads
-the existing public manifest before publishing and rejects it with
-`Schema { expected: "alife.p34.save_file.v1", actual: "stale-derived-runtime" }`.
-That mismatch between the test's rebuild expectation and strict publication is
-a code/test contract failure, not an environment limitation. Its assertion and
-the publisher's explicit rejection remain intact, consistent with `AOA-INV-010`.
-
-A CPU scene run with `bevy-app,production-assets,vfx-hanabi` and no GPU runtime
-executes 36 cases: 16 pass, 20 fail, zero are ignored. It uses MinimalPlugins and
-performs no graphical or neural execution. This mode reaches the assertions
-below, but cannot establish behavior of the absent GPU-owned live projection
-systems. The direct GPU-action case is outside this feature configuration.
-
-| Failing CPU scene case | Exact failure or mismatched value |
-| --- | --- |
-| `dry_run_rebuilds_an_incompatible_derived_runtime_save_before_gpu_launch` | Save schema is `stale-derived-runtime` |
-| `fvr03_geneforge_children_preserve_real_asset_groups_and_one_coat_handle` | `!parts.is_empty()` |
-| `fvr03_geneforge_head_owns_face_and_renderer_is_display_only` | `!head_bounds.is_empty()` |
-| `fvr04_camera_follow_recomputes_from_the_moved_projected_creature_root` | Camera transform tolerance `< 1.0e-5` |
-| `fvr04_live_creature_inspectors_reject_stable_id_mismatch` | Inspector lacks explicit stable-ID mismatch |
-| `fvr04_live_creature_inspectors_report_current_authoritative_position_and_tick` | Inspector lacks live tick |
-| `fvr04_live_world_label_tracks_projected_root_by_stable_id` | Height `2.03`, expected `2.35` |
-| `fvr04_live_world_projection_ignores_unmatched_and_non_agent_objects` | Yaw `0.0 == 0.0` where change is required |
-| `fvr04_live_world_projection_moves_matching_creature_and_creates_newborn_by_stable_id` | Stable creature 4 stays at `(-3.000,0.480,0.000)`, expected `(-2.500,0.480,1.500)` |
-| `fvr04_selection_marker_follows_the_moved_projected_creature_root` | `(-4.5,0.5)`, expected `(-2.5,1.5)` |
-| `fvr09_creatures_are_cute_bipedal_real_state_visuals` | `approved-hearthling-skinned-v2`, expected `modular-heritable-part-assembly-v1` |
-| `fvr10_creature_mesh_is_readable_low_poly_rig_not_cuboid_stack` | Same approved Hearthling versus modular assembly mismatch |
-| `fvr10_creatures_use_all_selected_bipedal_caveman_species_not_color_swaps` | `approved-blender-vertex-color-v2`, expected `modular-textured-part-material-v1` |
-| `fvr10_product_camera_and_authored_heads_are_composed_for_readable_creatures` | No legacy `CreaturePartSlot::Head` marker |
-| `fvr10_scene_dressing_uses_composite_vertical_props_not_unit_debug_cubes` | Hero prop count `0` |
-| `fvr11_profile_lighting_preserves_minimum_floor_and_comfort_depth` | Minimum sun illuminance exceeds `6_000.0` |
-| `fvr12_creatures_render_only_the_seven_authored_body_parts` | Legacy part count `0`, expected `210` |
-| `modular_creature_renderer_spawns_shared_heritable_part_hierarchies` | Legacy part hierarchy count `0`, expected `30` |
-| `v0_default_player_view_is_compact_and_uses_real_selected_creature_state` | Card reports `Energy unavailable` |
-| `v0_render_world_direction_is_warm_readable_and_creature_led` | Grass green-channel ratio assertion fails |
-
-The explicit old modular/GeneForge expectations conflict with the approved
-Hearthling renderer metadata. The lighting, dressing and color failures are
-non-environment assertion mismatches in this CPU mode. The live projection/HUD
-failures require checking the corresponding runtime-enabled systems; they are
-not proven production defects by a mode that omits those systems. No failing
-assertion was weakened or blanket-ignored to claim acceptance.
-
-Strict production/GPU-test all-target Clippy passes after the fixture repair.
-
-## Current composite-founder admission
-
-The lineage fixture now writes actual composite birth records through
-`prepare_composite_birth_batch` and `commit_composite_birth_batch`, with a real
-early mammal `CreatureGenome`, source brain genome, canonical foundation bytes,
-and `N512FounderFoundationProjection` receipt and phenotype. This is the same
-archive batch contract consumed by current curated staging.
-
-Before the final admission repair, that archive prepares and commits successfully,
-but the existing Enter/live-binding test fails with `phenotype compilation
-failed`. After the repair, all 17 lineage tests pass. A new admission test proves
-that the archived source equals the composite expression and rejects a changed
-source brain genome, a changed manifest phenotype hash, and a missing composite
-payload. The existing live-binding test continues to reject missing and
-ambiguous agents, sensor mismatches and incompatible foundation classes.
-
-The final combined PRs #3–#10 tree passes the complete production-feature library
-run: 337 passed, zero failed and two existing ignored CPU timing benchmarks.
-Formatting, patch whitespace and documentation assertions (77/77) also pass.
-
-These are CPU archive/admission checks. They do not prove an end-to-end GPU reset
-or graphical acceptance. The 35 unavailable-backend failures and the separate
-corrupt-derived-save contract mismatch reported above remain unresolved.
+Physical GPU gameplay, graphical asset loading, animation appearance, save/resume
+with a live GPU, and GPU reset acceptance remain **Blocked/Unrun**. No training,
+physical GPU workloads, user-PC activity or new asset download was performed.
+The requested refined Blender ZIP integration remains blocked by the previously
+reported Library download DNS failure; this follow-up changes no art bytes.
+PRs #3, #6 and #10 remain held for owner review and are not merged by this task.
