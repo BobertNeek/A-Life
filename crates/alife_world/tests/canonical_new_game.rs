@@ -117,8 +117,17 @@ fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() 
     let (organism, entity) = world.organism_entity_ids()[0];
     let position = world.entity(entity).unwrap().position;
     let food = world.entity_id("food-01").unwrap();
+    assert_eq!(
+        FoodVariety::from_seed(world.seed() / 12),
+        FoodVariety::Fruit,
+        "the scenario recipe changes this world's initial Seed food to Fruit"
+    );
+    assert_eq!(
+        world.entity(food).unwrap().nutrition,
+        FoodVariety::Seed.nutrition()
+    );
     let mut foods = Vec::new();
-    for variety in [FoodVariety::Root, FoodVariety::Fruit, FoodVariety::Seed] {
+    for variety in [FoodVariety::Fruit, FoodVariety::Root, FoodVariety::Seed] {
         let mut trial = world.clone();
         trial.set_food_variety(food, variety).unwrap();
         trial.editor_move_object(food, position).unwrap();
@@ -146,6 +155,71 @@ fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() 
             variety.nutrition()
         );
         assert!(trial.entity(food).unwrap().consumed);
+        let first_body_event = receipt.action_result.body_event;
+        trial.try_advance_tick().unwrap();
+        // Reload while consumed: regrowth must retain the changed recipe too.
+        let mut creatures = game.creatures.clone();
+        for creature in &mut creatures {
+            let record = trial.organism_registry().get(creature.organism_id).unwrap();
+            creature.mind.tick = record.biochemistry().tick;
+            creature.mind.homeostasis = record.biochemistry().homeostasis;
+            creature.development_tick = record.biochemistry().development.last_update_tick;
+        }
+        let save = alife_world::PortableSaveFile::from_headless_world(
+            "regrowing-variety",
+            &trial,
+            alife_world::RuntimeConfig::deterministic_default(
+                trial.seed(),
+                alife_core::BrainScaleTier::Nano512,
+            ),
+            alife_world::AssetManifest::empty(),
+            creatures,
+        )
+        .unwrap();
+        let mut restored =
+            alife_world::PortableSaveFile::from_json_str(&serde_json::to_string(&save).unwrap())
+                .unwrap()
+                .restore_headless_world()
+                .unwrap();
+        let resource = trial
+            .ecology()
+            .resources
+            .iter()
+            .find(|r| r.object_id == food)
+            .unwrap();
+        let regrow_tick =
+            resource.consumed_at_tick.unwrap().raw() + u64::from(resource.regrow_after_ticks);
+        while trial.tick().raw() < regrow_tick {
+            trial.try_advance_tick().unwrap();
+            restored.try_advance_tick().unwrap();
+        }
+        assert!(!trial.entity(food).unwrap().consumed);
+        assert_eq!(trial.entity(food).unwrap().nutrition, variety.nutrition());
+        assert_eq!(
+            trial.entity(food).unwrap().grounded_physical,
+            object.grounded_physical
+        );
+        assert_eq!(
+            trial.canonical_signature_digest().unwrap(),
+            restored.canonical_signature_digest().unwrap()
+        );
+        let next_tick = Tick(trial.tick().raw() + 1);
+        let second = trial
+            .apply_registered_command(&command, entity, next_tick)
+            .unwrap();
+        let loaded_second = restored
+            .apply_registered_command(&command, entity, next_tick)
+            .unwrap();
+        assert!(second.action_result.execution.succeeded);
+        assert_eq!(
+            second.action_result.body_event.nutrition,
+            variety.nutrition()
+        );
+        assert_eq!(
+            second.action_result.body_event.energy,
+            first_body_event.energy
+        );
+        assert_eq!(second.biology_after, loaded_second.biology_after);
         foods.push((object.nutrition, object.grounded_physical));
     }
     assert!(foods.windows(2).all(|pair| pair[0].0 != pair[1].0

@@ -59,8 +59,11 @@ to `off` in each child environment without changing the calling shell.
 
 Both arms start fresh from the same manifest source asset/founder and use the same
 binary, corpus, compiled default rate/masks/objective and ordering. Only epoch
-count differs. All eight lessons use matching world/founder seeds, tick budgets
-and language request token. Inputs (binary, manifest, build receipt, source asset
+count differs. All eight lessons use matching world/founder seeds and tick budgets
+(1–2048). Only vocabulary reception uses the controlled request token, which must
+be 1, 2, 9, 13, 15 or 16 (food/toy, get/play, root/fruit pairs). Vocabulary
+production uses its ordinary scenario utterance; its evaluator does not accept
+`--request-token`. Inputs (binary, manifest, build receipt, source asset
 and every pilot file) are SHA256 checked before and after each command. A shared
 40-minute monotonic cap includes input verification, both warm-ups and all
 evaluations; timeout kills and waits for the runner's own child. Partial outputs

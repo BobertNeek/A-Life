@@ -3,6 +3,8 @@ use super::*;
 use bevy::{camera::primitives::Aabb, gltf::Gltf, prelude::*, scene::SceneInstanceReady};
 
 const PATH: &str = "creatures/hearthling/hearthling.glb";
+pub(super) const LOCAL_BOUNDS: CreatureVisualBounds =
+    CreatureVisualBounds::new([-0.85, 0.0, -0.45], [0.85, 2.61, 0.9]);
 
 // export_hearthling.py: each foot travels from -0.36 to +0.36 model units.
 // Two steps cover 1.44 units per 24-frame cycle. The GLB contains three cycles,
